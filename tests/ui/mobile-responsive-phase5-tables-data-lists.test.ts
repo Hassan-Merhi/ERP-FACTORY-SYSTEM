@@ -32,7 +32,7 @@ describe("Mobile responsiveness Phase 5 tables and data lists", () => {
     expect(dataList).toContain('data-mobile-data-list="true"');
     expect(dataList).toContain("<dt");
     expect(dataList).toContain("<dd");
-    expect(dataList).toContain("[&>*]:min-h-11");
+    expect(dataList).toContain("*:min-h-11");
   });
 
   it("keeps pagination usable on narrow touch screens", () => {

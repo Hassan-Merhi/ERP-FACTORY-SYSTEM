@@ -85,12 +85,12 @@ export function StockMovementDialog({
         <DialogHeader>
           <DialogTitle>Stock Movement — {historyItem?.name}</DialogTitle>
           <DialogDescription className="flex items-center gap-1.5 text-sm">
-            <MapPin className="h-3.5 w-3.5 flex-shrink-0" />
+            <MapPin className="h-3.5 w-3.5 shrink-0" />
             {historyLocation?.name}
           </DialogDescription>
         </DialogHeader>
 
-        <div className="flex justify-end flex-shrink-0 pb-1">
+        <div className="flex justify-end shrink-0 pb-1">
           <PeriodFilter value={historyPeriod} onChange={setHistoryPeriod} />
         </div>
 
@@ -267,7 +267,7 @@ export function StockMovementDialog({
           )}
         </div>
 
-        <DialogFooter className="flex-shrink-0 pt-2">
+        <DialogFooter className="shrink-0 pt-2">
           <Button variant="outline" onClick={() => setHistoryDialogOpen(false)} data-testid="button-history-close">
             Close
           </Button>

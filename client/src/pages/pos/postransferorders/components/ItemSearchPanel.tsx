@@ -120,7 +120,7 @@ function ItemSearchPanel({
                   </span>
                 ) : (
                   <span
-                    className="shrink-0 rounded-sm bg-muted px-1.5 py-0.5 text-xs font-medium text-muted-foreground"
+                    className="shrink-0 rounded-xs bg-muted px-1.5 py-0.5 text-xs font-medium text-muted-foreground"
                     data-i18n-ui
                   >
                     {copy.out}

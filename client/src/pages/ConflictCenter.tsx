@@ -82,7 +82,7 @@ function ConflictCard({ conflict, onResolved }: { conflict: Conflict; onResolved
         <div className="flex flex-wrap items-start justify-between gap-2">
           <div className="flex flex-col gap-1">
             <CardTitle className="text-sm font-semibold flex items-center gap-2">
-              <AlertTriangle className="h-4 w-4 text-amber-500 flex-shrink-0" />
+              <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0" />
               {conflict.entityType}
               <Badge variant="outline" className="text-xs capitalize">
                 {conflict.operation}

@@ -284,7 +284,7 @@ export default function FactoryDispatchBatchScan() {
           <div className="flex flex-wrap items-center gap-2">
             <span className="break-all font-mono font-semibold">{batch.batchNumber}</span>
             <span className="text-muted-foreground">·</span>
-            <span className="break-words text-sm text-muted-foreground">{batchData.customerName}</span>
+            <span className="wrap-break-word text-sm text-muted-foreground">{batchData.customerName}</span>
             <span className="text-muted-foreground">·</span>
             <span className="text-sm">Ride #{thisRide.rideNumber}</span>
             {thisRide.truckPlate && <span className="text-muted-foreground text-sm">({thisRide.truckPlate})</span>}
@@ -301,7 +301,7 @@ export default function FactoryDispatchBatchScan() {
             </Badge>
           </div>
           {batchData.proforma && (
-            <p className="mt-0.5 break-words text-xs text-muted-foreground">{batchData.proforma.name}</p>
+            <p className="mt-0.5 wrap-break-word text-xs text-muted-foreground">{batchData.proforma.name}</p>
           )}
         </div>
         {!isDispatched && !isCancelled && batch.status !== "INVOICED" && (
@@ -345,7 +345,7 @@ export default function FactoryDispatchBatchScan() {
                   <div className="flex items-center gap-1.5 text-muted-foreground text-xs mb-1">
                     <DollarSign className="w-3.5 h-3.5" /> Est. Value
                   </div>
-                  <p className="break-words text-2xl font-bold" data-testid="text-scan-value">
+                  <p className="wrap-break-word text-2xl font-bold" data-testid="text-scan-value">
                     {batch.currency} {fmt(totalAmount)}
                   </p>
                 </CardContent>
@@ -384,7 +384,7 @@ export default function FactoryDispatchBatchScan() {
                 ) : (
                   <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
                 )}
-                <span className="min-w-0 break-words">{flashMsg}</span>
+                <span className="min-w-0 wrap-break-word">{flashMsg}</span>
               </div>
             )}
 
@@ -467,7 +467,7 @@ export default function FactoryDispatchBatchScan() {
           >
             <div className="px-3 py-2 border-b">
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Proforma</p>
-              <p className="mt-0.5 break-words text-xs text-muted-foreground">{batchData.proforma?.name}</p>
+              <p className="mt-0.5 wrap-break-word text-xs text-muted-foreground">{batchData.proforma?.name}</p>
             </div>
             <div className="flex-1 overflow-y-auto p-2 space-y-1.5">
               {proformaProgress.map((p) => (

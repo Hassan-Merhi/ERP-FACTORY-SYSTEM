@@ -268,7 +268,7 @@ export default function RetailStockOperations() {
             }}
             className={cn(
               "flex flex-col items-center gap-0.5 rounded-md px-2 py-2 text-xs font-medium sm:flex-row sm:justify-center sm:gap-2 sm:text-sm",
-              mode === id ? "bg-background shadow" : "text-muted-foreground"
+              mode === id ? "bg-background shadow-sm" : "text-muted-foreground"
             )}
           >
             <Icon className="h-4 w-4" />
@@ -317,7 +317,11 @@ export default function RetailStockOperations() {
         <Card data-testid="stock-variant">
           <CardContent className="flex gap-3 p-3">
             {variant.imageUrls[0] ? (
-              <img src={normalizeRetailImageUrl(variant.imageUrls[0])} alt="" className="h-24 w-24 shrink-0 rounded-md border object-cover" />
+              <img
+                src={normalizeRetailImageUrl(variant.imageUrls[0])}
+                alt=""
+                className="h-24 w-24 shrink-0 rounded-md border object-cover"
+              />
             ) : (
               <div className="flex h-24 w-24 shrink-0 items-center justify-center rounded-md bg-muted">
                 <ImageIcon className="h-6 w-6 text-muted-foreground" />

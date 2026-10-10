@@ -48,7 +48,7 @@ for (const token of [
   'data-mobile-data-list="true"',
   "<dt",
   "<dd",
-  "[&>*]:min-h-11",
+  "*:min-h-11",
 ]) {
   if (!dataList.includes(token)) failures.push(`Responsive data-list contract missing: ${token}`);
 }

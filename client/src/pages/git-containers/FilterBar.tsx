@@ -181,7 +181,7 @@ export function FilterBar({
         className={
           inSheet
             ? "space-y-3"
-            : "rounded-lg border border-border/50 bg-card/60 backdrop-blur-sm p-3 space-y-2.5 animate-in fade-in slide-in-from-top-1 duration-150"
+            : "rounded-lg border border-border/50 bg-card/60 backdrop-blur-xs p-3 space-y-2.5 animate-in fade-in slide-in-from-top-1 duration-150"
         }
       >
         {/* ── Row 1: entity filters ─────────────────────────────────── */}

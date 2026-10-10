@@ -31,7 +31,7 @@ export default function FactoryContainerLoadingScan() {
     >
       <ScanOverlays model={model} />
 
-      <div className="mb-4 rounded-2xl border bg-background/90 px-4 py-3 shadow-sm sm:px-5 sm:py-4">
+      <div className="mb-4 rounded-2xl border bg-background/90 px-4 py-3 shadow-xs sm:px-5 sm:py-4">
         <div className="flex min-w-0 flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex min-w-0 items-center gap-3">
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border bg-primary/10">
@@ -39,7 +39,9 @@ export default function FactoryContainerLoadingScan() {
             </div>
             <div className="min-w-0">
               <div className="flex min-w-0 flex-wrap items-center gap-2">
-                <h1 className="truncate text-lg font-semibold leading-tight sm:text-xl">{model.tr("containerLoading")}</h1>
+                <h1 className="truncate text-lg font-semibold leading-tight sm:text-xl">
+                  {model.tr("containerLoading")}
+                </h1>
                 {isResuming && orderId && (
                   <Badge
                     variant="secondary"
@@ -56,9 +58,7 @@ export default function FactoryContainerLoadingScan() {
                   </Badge>
                 )}
               </div>
-              <p className="mt-0.5 text-xs text-muted-foreground sm:text-sm">
-                {model.tr("containerLoadingSubtitle")}
-              </p>
+              <p className="mt-0.5 text-xs text-muted-foreground sm:text-sm">{model.tr("containerLoadingSubtitle")}</p>
             </div>
           </div>
 
@@ -69,7 +69,9 @@ export default function FactoryContainerLoadingScan() {
                   <Package className="h-4 w-4 text-muted-foreground" />
                 </div>
                 <div>
-                  <div className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">{model.tr("bales")}</div>
+                  <div className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                    {model.tr("bales")}
+                  </div>
                   <div className="font-mono text-sm font-semibold">{model.bales.length}</div>
                 </div>
               </div>
@@ -78,8 +80,12 @@ export default function FactoryContainerLoadingScan() {
                   <Scale className="h-4 w-4 text-muted-foreground" />
                 </div>
                 <div>
-                  <div className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">{model.tr("weight")}</div>
-                  <div className="font-mono text-sm font-semibold">{formatNumber(model.totalWeight, 2)} {model.tr("kgUnit")}</div>
+                  <div className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                    {model.tr("weight")}
+                  </div>
+                  <div className="font-mono text-sm font-semibold">
+                    {formatNumber(model.totalWeight, 2)} {model.tr("kgUnit")}
+                  </div>
                 </div>
               </div>
             </div>
@@ -95,7 +101,7 @@ export default function FactoryContainerLoadingScan() {
           <ProformaProgressPanel model={model} />
 
           {orderId && (
-            <div className="mobile-action-bar grid grid-cols-1 gap-2 rounded-2xl border bg-background/95 p-2 shadow-sm backdrop-blur sm:grid-cols-2 xl:static xl:m-0 xl:grid-cols-1 xl:bg-background/90">
+            <div className="mobile-action-bar grid grid-cols-1 gap-2 rounded-2xl border bg-background/95 p-2 shadow-xs backdrop-blur-sm sm:grid-cols-2 xl:static xl:m-0 xl:grid-cols-1 xl:bg-background/90">
               <Button
                 variant="outline"
                 className="h-11 w-full"

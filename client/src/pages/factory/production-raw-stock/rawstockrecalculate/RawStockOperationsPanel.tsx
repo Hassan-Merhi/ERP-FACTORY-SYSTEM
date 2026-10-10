@@ -147,7 +147,7 @@ export function RawStockOperationsPanel({ rawStock }: RawStockOperationsPanelPro
                       ? ` — ${unchangedCount} other container(s) are already correct and hidden.`
                       : "."}
                   </div>
-                  <div className="border rounded-md overflow-hidden bg-card shadow-sm">
+                  <div className="border rounded-md overflow-hidden bg-card shadow-xs">
                     <Table mobileLayout="cards">
                       <TableHeader className="bg-muted/50">
                         <TableRow>
@@ -219,7 +219,7 @@ export function RawStockOperationsPanel({ rawStock }: RawStockOperationsPanelPro
                       {!includeCompletedBatches ? " (that are still open)." : "."}
                     </div>
                   ) : (
-                    <div className="border rounded-md overflow-hidden bg-card shadow-sm">
+                    <div className="border rounded-md overflow-hidden bg-card shadow-xs">
                       <Table mobileLayout="cards">
                         <TableHeader className="bg-muted/50">
                           <TableRow>
@@ -358,7 +358,7 @@ export function RawStockOperationsPanel({ rawStock }: RawStockOperationsPanelPro
             </div>
           ) : (
             <>
-              <div className="border rounded-md overflow-hidden bg-card shadow-sm">
+              <div className="border rounded-md overflow-hidden bg-card shadow-xs">
                 <Table mobileLayout="cards">
                   <TableHeader className="bg-muted/50">
                     <TableRow>
@@ -414,7 +414,7 @@ export function RawStockOperationsPanel({ rawStock }: RawStockOperationsPanelPro
                               type="number"
                               step="0.000001"
                               placeholder="Enter $/kg USD"
-                              className="w-28 text-right text-xs border rounded px-1.5 py-0.5 bg-background"
+                              className="w-28 text-right text-xs border rounded-sm px-1.5 py-0.5 bg-background"
                               value={manualRates[r.sourceId] || ""}
                               onChange={(e) => setManualRates((prev) => ({ ...prev, [r.sourceId]: e.target.value }))}
                             />
@@ -542,7 +542,7 @@ export function RawStockOperationsPanel({ rawStock }: RawStockOperationsPanelPro
               )}
 
               {/* Audit rows table */}
-              <div className="border rounded-md overflow-hidden bg-card shadow-sm">
+              <div className="border rounded-md overflow-hidden bg-card shadow-xs">
                 <Table mobileLayout="cards">
                   <TableHeader className="bg-muted/50">
                     <TableRow>

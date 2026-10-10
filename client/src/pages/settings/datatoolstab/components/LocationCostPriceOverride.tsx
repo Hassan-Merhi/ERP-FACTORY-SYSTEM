@@ -183,7 +183,7 @@ export function LocationCostPriceOverride({ locations }: LocationCostPriceOverri
 
   return (
     <>
-      <Card className="group flex h-full flex-col overflow-hidden border-amber-500/30 bg-card/80 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-amber-500/50 hover:shadow-md">
+      <Card className="group flex h-full flex-col overflow-hidden border-amber-500/30 bg-card/80 shadow-xs transition-all duration-200 hover:-translate-y-0.5 hover:border-amber-500/50 hover:shadow-md">
         <CardHeader className="space-y-3 pb-3">
           <div className="flex items-center justify-between gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-amber-500/20 bg-amber-500/10 text-amber-600 dark:text-amber-400">

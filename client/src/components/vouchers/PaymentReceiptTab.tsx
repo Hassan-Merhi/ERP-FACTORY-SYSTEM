@@ -325,7 +325,7 @@ export function PaymentReceiptTab({
                       <FormControl>
                         <Input
                           type="date"
-                          className="w-[9.5rem] h-8 text-xs"
+                          className="w-38 h-8 text-xs"
                           value={
                             field.value instanceof Date
                               ? format(field.value, "yyyy-MM-dd")
@@ -351,7 +351,7 @@ export function PaymentReceiptTab({
                       <span className="text-xs text-muted-foreground whitespace-nowrap">Eff.</span>
                       <Input
                         type="date"
-                        className="w-[9.5rem] h-8 text-xs"
+                        className="w-38 h-8 text-xs"
                         value={effectiveDate || ""}
                         onChange={(e) => onEffectiveDateChange(e.target.value)}
                         data-testid="input-effective-date"
@@ -664,7 +664,7 @@ export function PaymentReceiptTab({
 
               {/* ── Action bar — the total stays with Save, pinned to the bottom of the card ── */}
               <div
-                className="sticky bottom-0 z-20 rounded-b-lg border-t bg-card/95 px-4 sm:px-5 py-3 backdrop-blur supports-[backdrop-filter]:bg-card/80 max-sm:bg-card max-sm:shadow-[0_-4px_12px_-8px_hsl(var(--foreground)/0.25)] max-sm:supports-[backdrop-filter]:bg-card max-sm:py-2"
+                className="sticky bottom-0 z-20 rounded-b-lg border-t bg-card/95 px-4 sm:px-5 py-3 backdrop-blur-sm supports-backdrop-filter:bg-card/80 max-sm:bg-card max-sm:shadow-[0_-4px_12px_-8px_hsl(var(--foreground)/0.25)] max-sm:supports-backdrop-filter:bg-card max-sm:py-2"
                 data-voucher-sticky-actions=""
               >
                 <div className="flex items-center justify-between gap-4 flex-wrap">
@@ -749,8 +749,8 @@ export function PaymentReceiptTab({
                         </span>
                       ) : (
                         <span className="text-[11px] text-muted-foreground hidden sm:block">
-                          <kbd className="px-1 py-0.5 bg-muted rounded text-[10px]">⌘</kbd>
-                          <kbd className="px-1 py-0.5 bg-muted rounded text-[10px] ml-1">↵</kbd> to save
+                          <kbd className="px-1 py-0.5 bg-muted rounded-sm text-[10px]">⌘</kbd>
+                          <kbd className="px-1 py-0.5 bg-muted rounded-sm text-[10px] ml-1">↵</kbd> to save
                         </span>
                       )}
                     </div>

@@ -1,5 +1,4 @@
-import autoprefixer from "autoprefixer";
-import tailwindcss from "tailwindcss";
+import tailwindcss from "@tailwindcss/postcss";
 
 const inheritGeneratedNodeSources = {
   postcssPlugin: "inherit-generated-node-sources",
@@ -25,9 +24,5 @@ const inheritGeneratedNodeSources = {
 };
 
 export default {
-  plugins: [
-    tailwindcss(),
-    inheritGeneratedNodeSources,
-    autoprefixer(),
-  ],
+  plugins: [tailwindcss(), inheritGeneratedNodeSources],
 };

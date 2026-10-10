@@ -361,7 +361,7 @@ export default function Login() {
       };
 
   return (
-    <div className="flex min-h-screen min-h-[100dvh] flex-col xl:flex-row">
+    <div className="flex min-h-screen min-h-dvh flex-col xl:flex-row">
       {/* ══════════════════════════════════════════
           LEFT — Always-dark branding panel (desktop)
       ══════════════════════════════════════════ */}
@@ -377,7 +377,7 @@ export default function Login() {
           }}
         />
         <div
-          className="pointer-events-none absolute top-1/3 -left-24 w-[28rem] h-[28rem] rounded-full"
+          className="pointer-events-none absolute top-1/3 -left-24 w-md h-112 rounded-full"
           style={{ background: "rgba(212,175,55,0.055)", filter: "blur(70px)" }}
         />
         <div
@@ -623,7 +623,7 @@ export default function Login() {
                     onChange={(e) => setUsername(e.target.value)}
                     data-testid="input-username"
                     autoComplete="username"
-                    className="focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:outline-none"
+                    className="focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:outline-hidden"
                   />
                 </div>
               </div>
@@ -657,7 +657,7 @@ export default function Login() {
                     }}
                     data-testid="input-password"
                     autoComplete="current-password"
-                    className="pr-9 focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:outline-none"
+                    className="pr-9 focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:outline-hidden"
                   />
                   <button
                     type="button"

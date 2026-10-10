@@ -232,7 +232,7 @@ export default function FactoryNetPosition() {
                 value={asOf}
                 max={todayStr()}
                 onChange={(e) => e.target.value && setAsOf(e.target.value)}
-                className="text-sm bg-transparent border-none outline-none cursor-pointer w-[120px]"
+                className="text-sm bg-transparent border-none outline-hidden cursor-pointer w-[120px]"
                 data-testid="input-as-of-date"
               />
             </div>

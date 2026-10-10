@@ -99,7 +99,7 @@ export function StockTransferDesktopSourceCell({ model, index }: { model: StockT
           }
         }}
         placeholder="Type location..."
-        className="w-full h-full px-3 bg-transparent outline-none focus:bg-accent/20"
+        className="w-full h-full px-3 bg-transparent outline-hidden focus:bg-accent/20"
         data-testid={`input-source-${index}`}
       />
     </div>

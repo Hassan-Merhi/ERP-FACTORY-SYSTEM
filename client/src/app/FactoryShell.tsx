@@ -66,10 +66,10 @@ const factoryWorkspaceClasses = [
   "[&_form]:max-w-full",
   "[&_fieldset]:min-w-0",
   "[&_img]:max-w-full",
-  "[&_[role=tablist]]:max-w-full",
-  "[&_[role=listbox]]:max-h-[min(24rem,70dvh)]",
-  "[&_[data-mobile-data-list]]:max-w-full",
-  "[&_[data-table-scroll-region]]:max-w-full",
+  "**:[[role=tablist]]:max-w-full",
+  "**:[[role=listbox]]:max-h-[min(24rem,70dvh)]",
+  "**:data-mobile-data-list:max-w-full",
+  "**:data-table-scroll-region:max-w-full",
 ].join(" ");
 
 export function FactoryShell({
@@ -121,7 +121,7 @@ export function FactoryShell({
               tabIndex={-1}
               aria-label="Factory and inventory workspace"
               data-factory-workspace="true"
-              className={`flex-1 overflow-y-auto overscroll-y-contain p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] outline-none sm:p-6 ${factoryWorkspaceClasses}`}
+              className={`flex-1 overflow-y-auto overscroll-y-contain p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] outline-hidden sm:p-6 ${factoryWorkspaceClasses}`}
             >
               <WorkspaceRouteBoundary
                 resetKey={currentLocation}

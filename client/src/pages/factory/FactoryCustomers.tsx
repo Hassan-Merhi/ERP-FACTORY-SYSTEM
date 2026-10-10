@@ -243,7 +243,7 @@ export default function FactoryCustomers() {
             onClick={openCreate}
             data-testid="button-add-customer"
             size="sm"
-            className="h-9 gap-2 rounded-lg px-4 shadow-sm"
+            className="h-9 gap-2 rounded-lg px-4 shadow-xs"
           >
             <Plus className="h-4 w-4" />
             Add Customer

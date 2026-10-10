@@ -127,7 +127,7 @@ export default function StockItemHistory() {
         onBack={handleBack}
         meta={
           data?.stockItem && (
-            <span className="break-words" data-testid="text-item-name">
+            <span className="wrap-break-word" data-testid="text-item-name">
               {data.stockItem.name} ({data.stockItem.code})
             </span>
           )
@@ -155,7 +155,7 @@ export default function StockItemHistory() {
 
       <Card>
         <CardHeader className="pb-2">
-          <CardTitle className="break-words text-lg">Monthly Summary - {selectedYear}</CardTitle>
+          <CardTitle className="wrap-break-word text-lg">Monthly Summary - {selectedYear}</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="hidden md:block">
@@ -300,21 +300,21 @@ export default function StockItemHistory() {
                 <CoreErpSummaryItem>
                   <CoreErpSummaryLabel>Total inwards</CoreErpSummaryLabel>
                   <CoreErpSummaryValue>{formatNumber(data.grandTotal.inwardQty, 0)}</CoreErpSummaryValue>
-                  <p className="mt-1 break-words text-xs text-muted-foreground">
+                  <p className="mt-1 wrap-break-word text-xs text-muted-foreground">
                     {formatAmount(data.grandTotal.inwardValue)}
                   </p>
                 </CoreErpSummaryItem>
                 <CoreErpSummaryItem>
                   <CoreErpSummaryLabel>Total outwards</CoreErpSummaryLabel>
                   <CoreErpSummaryValue>{formatNumber(data.grandTotal.outwardQty, 0)}</CoreErpSummaryValue>
-                  <p className="mt-1 break-words text-xs text-muted-foreground">
+                  <p className="mt-1 wrap-break-word text-xs text-muted-foreground">
                     {formatAmount(data.grandTotal.outwardValue)}
                   </p>
                 </CoreErpSummaryItem>
                 <CoreErpSummaryItem>
                   <CoreErpSummaryLabel>Closing balance</CoreErpSummaryLabel>
                   <CoreErpSummaryValue>{formatNumber(data.grandTotal.closingQty, 0)}</CoreErpSummaryValue>
-                  <p className="mt-1 break-words text-xs text-muted-foreground">
+                  <p className="mt-1 wrap-break-word text-xs text-muted-foreground">
                     {formatAmount(data.grandTotal.closingValue)}
                   </p>
                 </CoreErpSummaryItem>

@@ -14,7 +14,7 @@ describe("Mobile responsiveness Phase 4 forms and dialogs", () => {
     expect(dialog).toContain("data-dialog-body");
     expect(dialog).toContain("max-h-[calc(var(--app-viewport-height)-1rem)]");
     expect(dialog).toContain("overflow-y-auto overscroll-contain");
-    expect(dialog).toContain("[&>*]:min-h-11");
+    expect(dialog).toContain("*:min-h-11");
     expect(workflowDialog).toContain("<DialogBody");
     expect(workflowDialog).toContain("var(--app-viewport-height)");
   });
@@ -25,14 +25,14 @@ describe("Mobile responsiveness Phase 4 forms and dialogs", () => {
 
     expect(alertDialog).toContain("w-[calc(100vw-1rem)]");
     expect(alertDialog).toContain("var(--app-viewport-height)");
-    expect(alertDialog).toContain("[&>*]:min-h-11");
+    expect(alertDialog).toContain("*:min-h-11");
     expect(alertDialog).toContain("motion-reduce:animate-none");
 
-    expect(sheet).toContain("h-[var(--app-viewport-height)]");
+    expect(sheet).toContain("h-(--app-viewport-height)");
     expect(sheet).toContain("w-[calc(100vw-0.75rem)]");
     expect(sheet).toContain('aria-label="Close panel"');
     expect(sheet).toContain("min-h-11 min-w-11");
-    expect(sheet).toContain("[&>*]:min-h-11");
+    expect(sheet).toContain("*:min-h-11");
     expect(sheet).toContain('data-slot="sheet-content"');
   });
 
@@ -46,7 +46,7 @@ describe("Mobile responsiveness Phase 4 forms and dialogs", () => {
     expect(form).toContain("FormSectionLegend");
     expect(form).toContain("scroll-mt-24");
     expect(form).toContain("aria-errormessage");
-    expect(form).toContain("break-words");
+    expect(form).toContain("wrap-break-word");
 
     expect(select).toContain("h-11");
     expect(select).toContain("sm:h-9");

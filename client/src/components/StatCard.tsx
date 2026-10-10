@@ -92,14 +92,14 @@ function StatCardComponent({
     >
       <div className="flex min-w-0 items-start justify-between gap-3">
         <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-          <span className="min-w-0 break-words text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+          <span className="min-w-0 wrap-break-word text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
             {title}
           </span>
           {loading ? (
             <Skeleton className="h-7 w-24 max-w-full" />
           ) : (
             <span
-              className="min-w-0 break-words text-xl font-semibold leading-tight tracking-tight tabular-nums min-[360px]:text-2xl sm:text-3xl"
+              className="min-w-0 wrap-break-word text-xl font-semibold leading-tight tracking-tight tabular-nums min-[360px]:text-2xl sm:text-3xl"
               data-testid={`text-stat-value-${slug}`}
             >
               {value}
@@ -108,7 +108,7 @@ function StatCardComponent({
           {!loading && change && (
             <span
               className={cn(
-                "inline-flex min-w-0 items-start gap-0.5 break-words text-xs font-medium tabular-nums",
+                "inline-flex min-w-0 items-start gap-0.5 wrap-break-word text-xs font-medium tabular-nums",
                 changeType === "positive"
                   ? "text-success"
                   : changeType === "negative"
@@ -118,11 +118,11 @@ function StatCardComponent({
               data-testid={`text-stat-delta-${slug}`}
             >
               <ChangeIcon className="mt-0.5 h-3 w-3 shrink-0" />
-              <span className="min-w-0 break-words">{change}</span>
+              <span className="min-w-0 wrap-break-word">{change}</span>
             </span>
           )}
           {!loading && hint && !change && (
-            <span className="min-w-0 break-words text-xs text-muted-foreground">{hint}</span>
+            <span className="min-w-0 wrap-break-word text-xs text-muted-foreground">{hint}</span>
           )}
         </div>
         {Icon && (

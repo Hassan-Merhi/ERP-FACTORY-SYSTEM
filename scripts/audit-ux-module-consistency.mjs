@@ -64,8 +64,8 @@ for (const token of [
   "LoadingState",
   "max-sm:[&_button]:min-h-11",
   "max-sm:[&_input]:text-base",
-  "[&_[data-table-scroll-region]]:max-w-full",
-  "[&_[role=dialog]]:max-w-[calc(100vw-1rem)]",
+  "**:data-table-scroll-region:max-w-full",
+  "**:[[role=dialog]]:max-w-[calc(100vw-1rem)]",
 ]) {
   if (!boundary.includes(token)) failures.push(`Shared UX boundary is missing: ${token}`);
 }

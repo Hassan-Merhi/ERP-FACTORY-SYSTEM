@@ -118,8 +118,8 @@ function Stat({ label, value, sub }: { label: string; value: string; sub?: strin
     <Card className="min-w-0">
       <CardContent className="p-4">
         <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
-        <p className="mt-1 break-words text-xl font-bold tabular-nums">{value}</p>
-        {sub ? <p className="mt-1 break-words text-xs text-muted-foreground">{sub}</p> : null}
+        <p className="mt-1 wrap-break-word text-xl font-bold tabular-nums">{value}</p>
+        {sub ? <p className="mt-1 wrap-break-word text-xs text-muted-foreground">{sub}</p> : null}
       </CardContent>
     </Card>
   );
@@ -180,7 +180,7 @@ const ProductChartCard = memo(function ProductChartCard({
     >
       <div className="mb-3 flex min-w-0 items-start justify-between gap-3">
         <div className="min-w-0">
-          <h3 className="break-words text-base font-semibold">{localizedName}</h3>
+          <h3 className="wrap-break-word text-base font-semibold">{localizedName}</h3>
         </div>
         {product.active === false ? (
           <Badge variant="outline" className="shrink-0">

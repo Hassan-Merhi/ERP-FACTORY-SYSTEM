@@ -42,16 +42,16 @@ export function HistoricalReplayNetEffectPanel() {
   const impact = data?.financialImpact;
   if (!impact || impact.balanceOnTableDifference == null) return null;
 
-  const totalEffect = impact.totalNetPositionEffect
-    ?? impact.rawMaterialDifference + (impact.otherNetPositionEffect ?? 0);
+  const totalEffect =
+    impact.totalNetPositionEffect ?? impact.rawMaterialDifference + (impact.otherNetPositionEffect ?? 0);
 
   return (
-    <div className="mb-5 rounded-xl border bg-card p-4 shadow-sm">
+    <div className="mb-5 rounded-xl border bg-card p-4 shadow-xs">
       <div className="mb-3">
         <div className="font-semibold">Why the projected Net Position changes</div>
         <p className="text-xs text-muted-foreground">
-          The replay can change two non-ledger asset calculations. Supplier liabilities, vouchers, cash/bank and
-          every accounting ledger remain unchanged.
+          The replay can change two non-ledger asset calculations. Supplier liabilities, vouchers, cash/bank and every
+          accounting ledger remain unchanged.
         </p>
       </div>
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">

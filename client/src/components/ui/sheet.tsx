@@ -39,9 +39,9 @@ const sheetVariants = cva(
         top: "inset-x-0 top-0 max-h-[calc(var(--app-viewport-height)-0.5rem)] w-full border-b data-[state=closed]:slide-out-to-top data-[state=open]:slide-in-from-top",
         bottom:
           "inset-x-0 bottom-0 max-h-[calc(var(--app-viewport-height)-0.5rem)] w-full border-t data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom",
-        left: "inset-y-0 left-0 h-[var(--app-viewport-height)] w-[calc(100vw-0.75rem)] max-w-sm border-r data-[state=closed]:slide-out-to-left data-[state=open]:slide-in-from-left sm:w-3/4",
+        left: "inset-y-0 left-0 h-(--app-viewport-height) w-[calc(100vw-0.75rem)] max-w-sm border-r data-[state=closed]:slide-out-to-left data-[state=open]:slide-in-from-left sm:w-3/4",
         right:
-          "inset-y-0 right-0 h-[var(--app-viewport-height)] w-[calc(100vw-0.75rem)] max-w-sm border-l data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right sm:w-3/4",
+          "inset-y-0 right-0 h-(--app-viewport-height) w-[calc(100vw-0.75rem)] max-w-sm border-l data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right sm:w-3/4",
       },
     },
     defaultVariants: {
@@ -68,7 +68,7 @@ const SheetContent = React.forwardRef<React.ElementRef<typeof SheetPrimitive.Con
         <SheetPrimitive.Close
           data-slot="sheet-close"
           aria-label="Close panel"
-          className="absolute right-2 top-2 flex min-h-11 min-w-11 items-center justify-center rounded-md opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-secondary motion-reduce:transition-none sm:right-4 sm:top-4"
+          className="absolute right-2 top-2 flex min-h-11 min-w-11 items-center justify-center rounded-md opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-secondary motion-reduce:transition-none sm:right-4 sm:top-4"
         >
           <X className="h-4 w-4" aria-hidden="true" />
           <span className="sr-only">Close panel</span>
@@ -92,7 +92,7 @@ const SheetFooter = ({ className, ...props }: React.HTMLAttributes<HTMLDivElemen
   <div
     data-slot="sheet-footer"
     className={cn(
-      "mt-auto flex flex-col-reverse gap-2 border-t pt-4 sm:flex-row sm:justify-end [&>*]:min-h-11 [&>*]:w-full sm:[&>*]:w-auto",
+      "mt-auto flex flex-col-reverse gap-2 border-t pt-4 sm:flex-row sm:justify-end *:min-h-11 *:w-full sm:*:w-auto",
       className
     )}
     {...props}
@@ -107,7 +107,7 @@ const SheetTitle = React.forwardRef<
   <SheetPrimitive.Title
     ref={ref}
     data-slot="sheet-title"
-    className={cn("break-words text-lg font-semibold leading-snug text-foreground", className)}
+    className={cn("wrap-break-word text-lg font-semibold leading-snug text-foreground", className)}
     {...props}
   />
 ));
@@ -120,7 +120,7 @@ const SheetDescription = React.forwardRef<
   <SheetPrimitive.Description
     ref={ref}
     data-slot="sheet-description"
-    className={cn("break-words text-sm leading-relaxed text-muted-foreground", className)}
+    className={cn("wrap-break-word text-sm leading-relaxed text-muted-foreground", className)}
     {...props}
   />
 ));

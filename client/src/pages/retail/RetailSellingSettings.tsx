@@ -111,7 +111,7 @@ export default function RetailSellingSettings() {
   return (
     <div className="mx-auto flex w-full max-w-[1200px] flex-col gap-4 p-3 pb-24 md:p-5 xl:pb-5">
       <RetailNav />
-      <div className="rounded-xl border bg-card p-4 shadow-sm">
+      <div className="rounded-xl border bg-card p-4 shadow-xs">
         <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight">
           <Settings2 className="h-6 w-6" /> Selling settings
         </h1>

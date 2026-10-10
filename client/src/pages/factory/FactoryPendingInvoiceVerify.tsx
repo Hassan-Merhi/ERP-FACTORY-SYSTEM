@@ -541,7 +541,7 @@ export default function FactoryPendingInvoiceVerify() {
                         <span className="text-sm font-medium">{charge.name}</span>
                         {acct && <span className="text-xs text-muted-foreground">{acct.name}</span>}
                       </div>
-                      <div className="flex items-center gap-1 flex-shrink-0">
+                      <div className="flex items-center gap-1 shrink-0">
                         <span className="font-mono text-sm" data-testid={`text-charge-amount-${charge.id}`}>
                           {fmtNum(parseFloat(charge.amount))}
                         </span>

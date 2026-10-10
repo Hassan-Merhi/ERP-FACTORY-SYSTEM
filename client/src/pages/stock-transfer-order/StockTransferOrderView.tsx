@@ -89,7 +89,7 @@ export function StockTransferOrderView({ model, onSwitchToNormalView }: StockTra
           <span className="text-amber-800 dark:text-amber-300">
             You have an unsaved draft. Restore it to continue where you left off.
           </span>
-          <div className="flex gap-2 flex-shrink-0">
+          <div className="flex gap-2 shrink-0">
             <Button size="sm" variant="outline" onClick={discardDraft} data-testid="button-discard-draft">
               Discard
             </Button>

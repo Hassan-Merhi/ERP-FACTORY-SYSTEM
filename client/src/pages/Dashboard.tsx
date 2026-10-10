@@ -182,7 +182,7 @@ export default function Dashboard() {
             change="All income accounts combined"
             changeType="positive"
             icon={DollarSign}
-            stripeClass="bg-gradient-to-r from-chart-2 via-chart-2/60 to-chart-2/20"
+            stripeClass="bg-linear-to-r from-chart-2 via-chart-2/60 to-chart-2/20"
             iconBgClass="bg-chart-2/15"
             iconFgClass="text-chart-2"
             onClick={() => setLocation("/sales-report")}
@@ -197,8 +197,8 @@ export default function Dashboard() {
           icon={TrendingUp}
           stripeClass={
             (profitData?.netPosition ?? 0) >= 0
-              ? "bg-gradient-to-r from-chart-2 via-chart-2/60 to-chart-2/20"
-              : "bg-gradient-to-r from-destructive via-destructive/60 to-destructive/20"
+              ? "bg-linear-to-r from-chart-2 via-chart-2/60 to-chart-2/20"
+              : "bg-linear-to-r from-destructive via-destructive/60 to-destructive/20"
           }
           iconBgClass={(profitData?.netPosition ?? 0) >= 0 ? "bg-chart-2/15" : "bg-destructive/15"}
           iconFgClass={(profitData?.netPosition ?? 0) >= 0 ? "text-chart-2" : "text-destructive"}
@@ -237,10 +237,10 @@ export default function Dashboard() {
           icon={importCycleIsError ? Truck : isImportCycleBalanced ? CheckCircle2 : Truck}
           stripeClass={
             isImportCycleBalanced
-              ? "bg-gradient-to-r from-chart-2 via-chart-2/60 to-chart-2/20"
+              ? "bg-linear-to-r from-chart-2 via-chart-2/60 to-chart-2/20"
               : importCycleIsError
                 ? "bg-muted"
-                : "bg-gradient-to-r from-destructive via-destructive/60 to-destructive/20"
+                : "bg-linear-to-r from-destructive via-destructive/60 to-destructive/20"
           }
           iconBgClass={isImportCycleBalanced ? "bg-chart-2/15" : importCycleIsError ? "bg-muted" : "bg-destructive/15"}
           iconFgClass={

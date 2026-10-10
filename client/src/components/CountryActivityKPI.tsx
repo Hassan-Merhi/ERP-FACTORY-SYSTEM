@@ -212,7 +212,7 @@ function ContainerTags({ containers }: { containers: ContainerEntry[] }) {
         {containers.map((c) => (
           <div key={c.id} className="flex flex-col items-center gap-0">
             <button
-              className="inline-flex items-center gap-1 text-[10px] bg-primary/10 text-primary rounded px-1.5 py-0.5 whitespace-nowrap hover:bg-primary/20 transition-colors cursor-pointer"
+              className="inline-flex items-center gap-1 text-[10px] bg-primary/10 text-primary rounded-sm px-1.5 py-0.5 whitespace-nowrap hover:bg-primary/20 transition-colors cursor-pointer"
               data-testid={`tag-container-${c.id}`}
               onClick={() => setSelectedId(c.id)}
               title="Click to view offload charges"
@@ -227,7 +227,7 @@ function ContainerTags({ containers }: { containers: ContainerEntry[] }) {
               )}
             </button>
             {c.locationName && (
-              <span className="inline-flex items-center gap-0.5 text-[10px] bg-muted text-muted-foreground rounded px-1.5 py-0.5 whitespace-nowrap mt-0.5">
+              <span className="inline-flex items-center gap-0.5 text-[10px] bg-muted text-muted-foreground rounded-sm px-1.5 py-0.5 whitespace-nowrap mt-0.5">
                 <MapPin className="h-2.5 w-2.5 shrink-0" />
                 {c.locationName}
               </span>
@@ -249,7 +249,7 @@ function ImportedContainerTags({ containers }: { containers: ImportedContainerEn
       {containers.map((c) => (
         <div key={c.id} className="flex flex-col items-center gap-0">
           <span
-            className="inline-flex items-center gap-1 text-[10px] bg-primary/10 text-primary rounded px-1.5 py-0.5 whitespace-nowrap"
+            className="inline-flex items-center gap-1 text-[10px] bg-primary/10 text-primary rounded-sm px-1.5 py-0.5 whitespace-nowrap"
             data-testid={`tag-imported-${c.id}`}
           >
             <Container className="h-2.5 w-2.5 shrink-0" />
@@ -262,7 +262,7 @@ function ImportedContainerTags({ containers }: { containers: ImportedContainerEn
             )}
           </span>
           {c.shopName && (
-            <span className="inline-flex items-center gap-0.5 text-[10px] bg-muted text-muted-foreground rounded px-1.5 py-0.5 whitespace-nowrap mt-0.5">
+            <span className="inline-flex items-center gap-0.5 text-[10px] bg-muted text-muted-foreground rounded-sm px-1.5 py-0.5 whitespace-nowrap mt-0.5">
               <MapPin className="h-2.5 w-2.5 shrink-0" />
               {c.shopName}
             </span>
@@ -434,7 +434,7 @@ export function CountryActivityKPI() {
         <button
           type="button"
           aria-expanded={expanded}
-          className="flex flex-1 min-w-0 items-center gap-2 rounded-md text-left max-sm:basis-full hover-elevate focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="flex flex-1 min-w-0 items-center gap-2 rounded-md text-left max-sm:basis-full hover-elevate focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
           onClick={() => setExpanded((v) => !v)}
           data-testid="button-country-activity-expand"
         >

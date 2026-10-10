@@ -58,7 +58,7 @@ export function SkipLink({
       href={href}
       data-slot="skip-link"
       className={cn(
-        "sr-only z-50 rounded-md bg-background px-4 py-2 text-sm font-medium text-foreground shadow-lg transition focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 motion-reduce:transition-none",
+        "sr-only z-50 rounded-md bg-background px-4 py-2 text-sm font-medium text-foreground shadow-lg transition focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:outline-hidden focus:ring-2 focus:ring-ring focus:ring-offset-2 motion-reduce:transition-none",
         className
       )}
       onClick={handleClick}
@@ -105,7 +105,7 @@ export function ResponsiveActions({ className, label = "Page actions", ...props 
       role="group"
       aria-label={label}
       className={cn(
-        "flex w-full flex-col-reverse gap-2 sm:w-auto sm:flex-row sm:flex-wrap sm:items-center sm:justify-end [&>*]:min-h-10 [&>*]:w-full sm:[&>*]:w-auto",
+        "flex w-full flex-col-reverse gap-2 sm:w-auto sm:flex-row sm:flex-wrap sm:items-center sm:justify-end *:min-h-10 *:w-full sm:*:w-auto",
         className
       )}
       {...props}
@@ -124,7 +124,7 @@ export function ResponsiveToolbar({ className, label = "Page filters and tools",
       role="search"
       aria-label={label}
       className={cn(
-        "flex w-full flex-col gap-3 rounded-lg border bg-card p-3 sm:flex-row sm:flex-wrap sm:items-end [&>*]:min-w-0 [&_button]:touch-manipulation",
+        "flex w-full flex-col gap-3 rounded-lg border bg-card p-3 sm:flex-row sm:flex-wrap sm:items-end *:min-w-0 [&_button]:touch-manipulation",
         className
       )}
       {...props}
@@ -199,7 +199,7 @@ export function HorizontalScrollRegion({
       data-horizontal-scroll="true"
       data-horizontal-scroll-region="true"
       className={cn(
-        "max-w-full touch-pan-x overflow-x-auto overscroll-x-contain rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+        "max-w-full touch-pan-x overflow-x-auto overscroll-x-contain rounded-xs focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
         className
       )}
       onKeyDown={handleKeyDown}

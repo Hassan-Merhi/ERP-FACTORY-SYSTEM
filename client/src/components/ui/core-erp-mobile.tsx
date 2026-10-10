@@ -32,7 +32,7 @@ const CoreErpHeaderActions = React.forwardRef<HTMLDivElement, React.HTMLAttribut
       aria-label="Page actions"
       data-core-erp-actions="true"
       className={cn(
-        "grid w-full grid-cols-1 gap-2 min-[360px]:grid-cols-2 sm:flex sm:w-auto sm:flex-wrap sm:justify-end [&>*]:min-h-11 [&>*]:w-full sm:[&>*]:min-h-9 sm:[&>*]:w-auto",
+        "grid w-full grid-cols-1 gap-2 min-[360px]:grid-cols-2 sm:flex sm:w-auto sm:flex-wrap sm:justify-end *:min-h-11 *:w-full sm:*:min-h-9 sm:*:w-auto",
         className
       )}
       {...props}
@@ -53,7 +53,7 @@ const CoreErpFilterGrid = React.forwardRef<HTMLDivElement, CoreErpFilterGridProp
       aria-label={label}
       data-core-erp-filters="true"
       className={cn(
-        "grid min-w-0 grid-cols-1 gap-3 rounded-lg border bg-card p-3 min-[420px]:grid-cols-2 lg:grid-cols-[repeat(auto-fit,minmax(12rem,1fr))] [&>*]:min-w-0 [&_button]:touch-manipulation",
+        "grid min-w-0 grid-cols-1 gap-3 rounded-lg border bg-card p-3 min-[420px]:grid-cols-2 lg:grid-cols-[repeat(auto-fit,minmax(12rem,1fr))] *:min-w-0 [&_button]:touch-manipulation",
         className
       )}
       {...props}
@@ -76,7 +76,7 @@ CoreErpSummaryGrid.displayName = "CoreErpSummaryGrid";
 
 const CoreErpSummaryItem = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
   ({ className, ...props }, ref) => (
-    <div ref={ref} className={cn("min-w-0 rounded-lg border bg-card p-3 shadow-xs sm:p-4", className)} {...props} />
+    <div ref={ref} className={cn("min-w-0 rounded-lg border bg-card p-3 shadow-2xs sm:p-4", className)} {...props} />
   )
 );
 CoreErpSummaryItem.displayName = "CoreErpSummaryItem";
@@ -85,7 +85,7 @@ const CoreErpSummaryLabel = React.forwardRef<HTMLParagraphElement, React.HTMLAtt
   ({ className, ...props }, ref) => (
     <p
       ref={ref}
-      className={cn("break-words text-xs font-medium uppercase tracking-wide text-muted-foreground", className)}
+      className={cn("wrap-break-word text-xs font-medium uppercase tracking-wide text-muted-foreground", className)}
       {...props}
     />
   )
@@ -96,7 +96,7 @@ const CoreErpSummaryValue = React.forwardRef<HTMLParagraphElement, React.HTMLAtt
   ({ className, ...props }, ref) => (
     <p
       ref={ref}
-      className={cn("mt-1 min-w-0 break-words text-xl font-semibold tabular-nums sm:text-2xl", className)}
+      className={cn("mt-1 min-w-0 wrap-break-word text-xl font-semibold tabular-nums sm:text-2xl", className)}
       {...props}
     />
   )

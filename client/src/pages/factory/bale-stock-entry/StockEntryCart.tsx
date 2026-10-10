@@ -134,7 +134,7 @@ export function StockEntryCart({
                       <div className="min-w-0">
                         <ResponsiveDataListTitle className="text-base">{item.product?.name}</ResponsiveDataListTitle>
                         <div className="mt-1 flex min-w-0 flex-wrap items-center gap-1.5">
-                          <code className="max-w-full break-all rounded bg-muted px-1.5 py-0.5 font-mono text-xs text-muted-foreground">
+                          <code className="max-w-full break-all rounded-sm bg-muted px-1.5 py-0.5 font-mono text-xs text-muted-foreground">
                             {item.product?.articleCode || item.product?.code}
                           </code>
                           {item.product?.categoryName && (
@@ -284,7 +284,7 @@ export function StockEntryCart({
                           {item.product?.name}
                         </div>
                         <div className="flex items-center gap-1.5">
-                          <code className="rounded bg-muted px-1 font-mono text-[10px] text-muted-foreground">
+                          <code className="rounded-sm bg-muted px-1 font-mono text-[10px] text-muted-foreground">
                             {item.product?.articleCode || item.product?.code}
                           </code>
                           {item.product?.categoryName && (

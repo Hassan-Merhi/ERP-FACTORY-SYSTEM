@@ -202,7 +202,7 @@ export function PriorityScanLoadingControl({ load }: PriorityScanLoadingControlP
               title={canManagePriority ? tr("editPriorityTitle") : tr("editColorTitle")}
             >
               <span
-                className="h-3.5 w-3.5 rounded-full border border-black/15 shadow-sm"
+                className="h-3.5 w-3.5 rounded-full border border-black/15 shadow-xs"
                 style={{ backgroundColor: activeConfig.color }}
                 aria-hidden="true"
               />

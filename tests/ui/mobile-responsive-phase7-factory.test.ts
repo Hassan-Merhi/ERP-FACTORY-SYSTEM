@@ -37,7 +37,7 @@ describe("Mobile responsiveness Phase 7 Factory workflows", () => {
       "max-sm:[&_input]:min-h-11",
       "max-sm:[&_input]:text-base",
       "[&_form]:max-w-full",
-      "[&_[data-mobile-data-list]]:max-w-full",
+      "**:data-mobile-data-list:max-w-full",
       "env(safe-area-inset-bottom)",
     ]) {
       expect(shell).toContain(token);
@@ -73,7 +73,7 @@ describe("Mobile responsiveness Phase 7 Factory workflows", () => {
       'role="listbox"',
       'role="option"',
       'type="button"',
-      "enterKeyHint=\"done\"",
+      'enterKeyHint="done"',
       "max-sm:relative",
       "FactoryMobileStatus",
     ]) {
@@ -96,8 +96,8 @@ describe("Mobile responsiveness Phase 7 Factory workflows", () => {
       'className="hidden overflow-hidden rounded-xl border bg-card/50 md:block"',
       'scrollLabel="Bales ready for stock entry"',
       'minimumWidth="56rem"',
-      "inputMode=\"numeric\"",
-      "inputMode=\"decimal\"",
+      'inputMode="numeric"',
+      'inputMode="decimal"',
     ]) {
       expect(cart).toContain(token);
     }

@@ -42,7 +42,7 @@ describe("Mobile responsiveness Phase 9 dashboards and reports", () => {
       "minHeight={1}",
       "max-w-[min(20rem,calc(100vw-2rem))]",
       "flex-wrap items-center justify-center",
-      "break-words",
+      "wrap-break-word",
     ]) {
       expect(chart).toContain(token);
     }
@@ -54,7 +54,7 @@ describe("Mobile responsiveness Phase 9 dashboards and reports", () => {
     for (const token of [
       'data-responsive-stat-card="true"',
       "min-w-0 max-w-full",
-      "break-words",
+      "wrap-break-word",
       "min-[360px]:text-2xl",
       'role={isClickable ? "button" : undefined}',
       'event.key !== "Enter"',

@@ -3,7 +3,7 @@
  *
  * Extracted from FactoryWorkerAttendanceReport.tsx during the Phase 4 god-file split.
  */
-import {cn} from "@/lib/utils";
+import { cn } from "@/lib/utils";
 
 export /* ── Status Cell ────────────────────────────────────────────────────────────── */
 function StatusPill({
@@ -28,7 +28,7 @@ function StatusPill({
         className={cn(
           "text-muted-foreground/30 text-xs select-none",
           editable &&
-            "cursor-pointer hover:text-muted-foreground/60 focus:outline-none focus:ring-1 focus:ring-ring rounded-sm"
+            "cursor-pointer hover:text-muted-foreground/60 focus:outline-hidden focus:ring-1 focus:ring-ring rounded-xs"
         )}
       >
         —
@@ -42,8 +42,8 @@ function StatusPill({
         onClick={onClick}
         onKeyDown={onKeyDown}
         className={cn(
-          "inline-flex items-center justify-center w-5 h-5 rounded-sm status-success text-[10px] font-bold select-none",
-          editable && "cursor-pointer focus:outline-none focus:ring-1 focus:ring-ring"
+          "inline-flex items-center justify-center w-5 h-5 rounded-xs status-success text-[10px] font-bold select-none",
+          editable && "cursor-pointer focus:outline-hidden focus:ring-1 focus:ring-ring"
         )}
       >
         P
@@ -57,8 +57,8 @@ function StatusPill({
         onClick={onClick}
         onKeyDown={onKeyDown}
         className={cn(
-          "inline-flex items-center justify-center w-5 h-5 rounded-sm status-danger text-[10px] font-bold select-none",
-          editable && "cursor-pointer focus:outline-none focus:ring-1 focus:ring-ring"
+          "inline-flex items-center justify-center w-5 h-5 rounded-xs status-danger text-[10px] font-bold select-none",
+          editable && "cursor-pointer focus:outline-hidden focus:ring-1 focus:ring-ring"
         )}
       >
         A
@@ -72,8 +72,8 @@ function StatusPill({
         onClick={onClick}
         onKeyDown={onKeyDown}
         className={cn(
-          "inline-flex items-center justify-center w-5 h-5 rounded-sm status-warning text-[10px] font-bold select-none",
-          editable && "cursor-pointer focus:outline-none focus:ring-1 focus:ring-ring"
+          "inline-flex items-center justify-center w-5 h-5 rounded-xs status-warning text-[10px] font-bold select-none",
+          editable && "cursor-pointer focus:outline-hidden focus:ring-1 focus:ring-ring"
         )}
       >
         L
@@ -87,8 +87,8 @@ function StatusPill({
         onClick={onClick}
         onKeyDown={onKeyDown}
         className={cn(
-          "inline-flex items-center justify-center w-5 h-5 rounded-sm status-info text-[10px] font-bold select-none",
-          editable && "cursor-pointer focus:outline-none focus:ring-1 focus:ring-ring"
+          "inline-flex items-center justify-center w-5 h-5 rounded-xs status-info text-[10px] font-bold select-none",
+          editable && "cursor-pointer focus:outline-hidden focus:ring-1 focus:ring-ring"
         )}
       >
         H
@@ -101,8 +101,8 @@ function StatusPill({
       onClick={onClick}
       onKeyDown={onKeyDown}
       className={cn(
-        "inline-flex items-center justify-center w-5 h-5 rounded-sm bg-muted text-muted-foreground text-[10px] font-bold select-none",
-        editable && "cursor-pointer focus:outline-none focus:ring-1 focus:ring-ring"
+        "inline-flex items-center justify-center w-5 h-5 rounded-xs bg-muted text-muted-foreground text-[10px] font-bold select-none",
+        editable && "cursor-pointer focus:outline-hidden focus:ring-1 focus:ring-ring"
       )}
     >
       {status.charAt(0)}

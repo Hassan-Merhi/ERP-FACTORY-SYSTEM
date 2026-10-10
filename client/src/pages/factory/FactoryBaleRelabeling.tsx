@@ -223,7 +223,7 @@ export default function FactoryBaleRelabeling() {
   return (
     <div className="flex h-full min-w-0 flex-col" data-testid="factory-bale-relabeling-page">
       {/* Sub-nav tabs */}
-      <div className="flex-shrink-0 overflow-x-auto border-b px-3 pt-3 overscroll-x-contain sm:px-6 sm:pt-4">
+      <div className="shrink-0 overflow-x-auto border-b px-3 pt-3 overscroll-x-contain sm:px-6 sm:pt-4">
         <div className="flex min-w-max items-center gap-1">
           <button
             className="shrink-0 rounded-t-md border-b-2 border-primary px-4 py-2 text-sm font-medium text-primary"
@@ -302,7 +302,7 @@ export default function FactoryBaleRelabeling() {
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
-              <p className="break-words text-sm text-muted-foreground">
+              <p className="wrap-break-word text-sm text-muted-foreground">
                 Upload a <code>.xlsx</code>, <code>.xls</code>, or <code>.csv</code> file with a column containing
                 current bale reference codes. Accepted column names: <code>current_reference_code</code>,{" "}
                 <code>reference_code</code>, <code>barcode</code>, <code>ref</code>, etc.
@@ -311,7 +311,7 @@ export default function FactoryBaleRelabeling() {
               {/* Template hint */}
               <div className="flex items-start gap-2 rounded-md bg-muted/50 border p-3 text-sm text-muted-foreground">
                 <FileSpreadsheet className="h-4 w-4 mt-0.5 shrink-0 text-primary" />
-                <span className="min-w-0 break-words">
+                <span className="min-w-0 wrap-break-word">
                   Not sure of the format? Click <strong>Download Template</strong> above to get a pre-formatted Excel
                   file. Fill in your bale reference codes in the <code>current_reference_code</code> column and upload
                   it here.
@@ -339,7 +339,7 @@ export default function FactoryBaleRelabeling() {
               {parseError && (
                 <div className="flex items-start gap-2 rounded-md border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
                   <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
-                  <span className="min-w-0 break-words">{parseError}</span>
+                  <span className="min-w-0 wrap-break-word">{parseError}</span>
                 </div>
               )}
 

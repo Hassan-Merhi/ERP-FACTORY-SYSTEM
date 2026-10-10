@@ -65,7 +65,7 @@ for (const [name, source] of [
     "HorizontalScrollRegion",
     "aria-labelledby",
     "React.useId()",
-    "break-words",
+    "wrap-break-word",
     "grid-cols-1",
   ]) {
     if (!source.includes(token)) failures.push(`${name} responsive screen contract missing: ${token}`);
@@ -79,7 +79,7 @@ for (const token of [
   "motion-reduce:transition-none",
   'aria-label="Close dialog"',
   "VisuallyHidden",
-  "[&>*]:w-full",
+  "*:w-full",
   'data-slot="dialog-content"',
   'data-slot="dialog-close"',
 ]) {

@@ -89,7 +89,7 @@ export function VoucherSidebarPanel({
   const isFinancialTab = ["payment", "receipt", "journal"].includes(activeTab);
 
   return (
-    <aside className="w-full lg:w-64 flex-shrink-0 space-y-6">
+    <aside className="w-full lg:w-64 shrink-0 space-y-6">
       <nav className="space-y-6">
         {visibleSidebarGroups.map((group) => (
           <div key={group.label} className="space-y-2">
@@ -102,7 +102,7 @@ export function VoucherSidebarPanel({
                   className={cn(
                     "w-full flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-md transition-all duration-200",
                     activeTab === item.key
-                      ? "bg-primary text-primary-foreground shadow-sm scale-[1.02]"
+                      ? "bg-primary text-primary-foreground shadow-xs scale-[1.02]"
                       : "text-muted-foreground hover:bg-muted hover:text-foreground"
                   )}
                   data-testid={`button-tab-${item.key}`}

@@ -1,5 +1,14 @@
 import * as React from "react";
-import { AlertTriangle, CheckCircle2, Info, Loader2, RotateCcw, ShieldAlert, XCircle, type LucideIcon } from "lucide-react";
+import {
+  AlertTriangle,
+  CheckCircle2,
+  Info,
+  Loader2,
+  RotateCcw,
+  ShieldAlert,
+  XCircle,
+  type LucideIcon,
+} from "lucide-react";
 
 import { Button, type ButtonProps } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -17,11 +26,29 @@ type ActionFeedbackProps = React.HTMLAttributes<HTMLDivElement> & {
   icon?: LucideIcon;
 };
 
-const toneConfig: Record<ActionFeedbackTone, { icon: LucideIcon; className: string; role: "status" | "alert"; live: "polite" | "assertive" }> = {
+const toneConfig: Record<
+  ActionFeedbackTone,
+  { icon: LucideIcon; className: string; role: "status" | "alert"; live: "polite" | "assertive" }
+> = {
   progress: { icon: Loader2, className: "border-info/30 bg-info/5 text-info", role: "status", live: "polite" },
-  success: { icon: CheckCircle2, className: "border-success/30 bg-success/5 text-success", role: "status", live: "polite" },
-  warning: { icon: AlertTriangle, className: "border-warning/30 bg-warning/5 text-warning", role: "status", live: "polite" },
-  error: { icon: XCircle, className: "border-destructive/30 bg-destructive/5 text-destructive", role: "alert", live: "assertive" },
+  success: {
+    icon: CheckCircle2,
+    className: "border-success/30 bg-success/5 text-success",
+    role: "status",
+    live: "polite",
+  },
+  warning: {
+    icon: AlertTriangle,
+    className: "border-warning/30 bg-warning/5 text-warning",
+    role: "status",
+    live: "polite",
+  },
+  error: {
+    icon: XCircle,
+    className: "border-destructive/30 bg-destructive/5 text-destructive",
+    role: "alert",
+    live: "assertive",
+  },
   info: { icon: Info, className: "border-info/30 bg-info/5 text-info", role: "status", live: "polite" },
 };
 
@@ -50,7 +77,7 @@ export function ActionFeedback({
         "flex min-w-0 flex-col gap-3 rounded-lg border sm:flex-row sm:items-start",
         compact ? "px-3 py-2" : "p-4",
         config.className,
-        className,
+        className
       )}
       {...props}
     >
@@ -60,12 +87,19 @@ export function ActionFeedback({
           aria-hidden="true"
         />
         <div className="min-w-0 flex-1 text-foreground">
-          <p className="break-words text-sm font-semibold">{title}</p>
-          {description ? <p className="mt-0.5 break-words text-sm leading-5 text-muted-foreground">{description}</p> : null}
+          <p className="wrap-break-word text-sm font-semibold">{title}</p>
+          {description ? (
+            <p className="mt-0.5 wrap-break-word text-sm leading-5 text-muted-foreground">{description}</p>
+          ) : null}
         </div>
       </div>
       {actionLabel && onAction ? (
-        <Button className="w-full shrink-0 sm:w-auto" size={compact ? "sm" : "default"} variant={actionVariant} onClick={onAction}>
+        <Button
+          className="w-full shrink-0 sm:w-auto"
+          size={compact ? "sm" : "default"}
+          variant={actionVariant}
+          onClick={onAction}
+        >
           {actionLabel}
         </Button>
       ) : null}

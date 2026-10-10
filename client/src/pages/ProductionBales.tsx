@@ -810,7 +810,7 @@ export default function ProductionBales() {
                         </div>
                       )}
                     </div>
-                    <ArrowLeft className="h-4 w-4 text-muted-foreground rotate-180 flex-shrink-0 mt-1" />
+                    <ArrowLeft className="h-4 w-4 text-muted-foreground rotate-180 shrink-0 mt-1" />
                   </div>
                 </CardContent>
               </Card>

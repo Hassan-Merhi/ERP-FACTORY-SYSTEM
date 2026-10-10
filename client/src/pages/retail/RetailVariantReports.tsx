@@ -117,8 +117,8 @@ export function RetailVariantReports({ companyKey }: { companyKey: number }) {
                 type="button"
                 onClick={() => setKind(value)}
                 className={cn(
-                  "rounded px-3 py-1 text-sm",
-                  kind === value ? "bg-background shadow" : "text-muted-foreground"
+                  "rounded-sm px-3 py-1 text-sm",
+                  kind === value ? "bg-background shadow-sm" : "text-muted-foreground"
                 )}
               >
                 {value === "stock" ? "Stock by variant" : "Sales by variant"}

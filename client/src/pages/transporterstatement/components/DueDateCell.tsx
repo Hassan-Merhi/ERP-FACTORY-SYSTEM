@@ -3,14 +3,14 @@
  *
  * Extracted from TransporterStatement.tsx during the Phase 4 god-file split.
  */
-import {useState} from "react";
-import {useDateFormat} from "@/contexts/DateFormatContext";
-import {Button} from "@/components/ui/button";
-import {Pencil, Check, X} from "lucide-react";
-import {cn} from "@/lib/utils";
+import { useState } from "react";
+import { useDateFormat } from "@/contexts/DateFormatContext";
+import { Button } from "@/components/ui/button";
+import { Pencil, Check, X } from "lucide-react";
+import { cn } from "@/lib/utils";
 
-import type {StatementRow} from "../types";
-import {today} from "../utils";
+import type { StatementRow } from "../types";
+import { today } from "../utils";
 
 export function DueDateCell({
   row,
@@ -43,7 +43,7 @@ export function DueDateCell({
           value={value}
           autoFocus
           onChange={(e) => setValue(e.target.value)}
-          className="w-[130px] h-8 rounded-md border border-input bg-background px-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+          className="w-[130px] h-8 rounded-md border border-input bg-background px-2 text-sm focus:outline-hidden focus:ring-1 focus:ring-ring"
           data-testid={`input-due-date-${row.id}`}
         />
         <Button size="icon" variant="ghost" onClick={handleSave} data-testid={`btn-due-save-${row.id}`}>

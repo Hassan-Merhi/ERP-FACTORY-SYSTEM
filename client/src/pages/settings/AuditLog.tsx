@@ -326,7 +326,7 @@ export function AuditLog({
 
         if (inline) {
           return (
-            <div className="flex flex-wrap items-center gap-2 rounded-xl border bg-card/70 p-3 shadow-sm">
+            <div className="flex flex-wrap items-center gap-2 rounded-xl border bg-card/70 p-3 shadow-xs">
               {searchControl}
               {filterControls}
 
@@ -459,7 +459,7 @@ export function AuditLog({
           ))}
         </div>
       ) : (
-        <div className="overflow-hidden rounded-xl border bg-card shadow-sm">
+        <div className="overflow-hidden rounded-xl border bg-card shadow-xs">
           <Table>
             <TableHeader>
               <TableRow className="bg-muted/30 hover:bg-muted/30">
@@ -508,7 +508,7 @@ export function AuditLog({
                       <TableCell className="py-3">
                         <Badge
                           variant={actionBadgeVariant(log.action)}
-                          className="text-[10px] min-h-5 max-w-[140px] whitespace-normal break-words leading-tight"
+                          className="text-[10px] min-h-5 max-w-[140px] whitespace-normal wrap-break-word leading-tight"
                         >
                           {actionLabel(log.action)}
                         </Badge>

@@ -97,7 +97,7 @@ export function MixBatchList({
   const blendedCost = sumTotal > 0 ? weightedCost / sumTotal : 0;
 
   return (
-    <Card className="min-w-0 shadow-sm" data-testid="mix-batch-list">
+    <Card className="min-w-0 shadow-xs" data-testid="mix-batch-list">
       <CardHeader className="flex flex-col gap-4 pb-4 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
         <div className="min-w-0 space-y-1">
           <CardTitle className="flex items-center gap-2 text-lg">
@@ -112,7 +112,7 @@ export function MixBatchList({
             type="date"
             value={mixBatchDate}
             onChange={(e) => setMixBatchDate(e.target.value)}
-            className="min-h-11 min-w-0 w-full rounded-md border border-input bg-background px-2 py-1 text-base font-medium outline-none focus:ring-1 focus:ring-ring sm:min-h-0 sm:w-auto sm:border-none sm:bg-transparent sm:text-sm sm:focus:ring-0"
+            className="min-h-11 min-w-0 w-full rounded-md border border-input bg-background px-2 py-1 text-base font-medium outline-hidden focus:ring-1 focus:ring-ring sm:min-h-0 sm:w-auto sm:border-none sm:bg-transparent sm:text-sm sm:focus:ring-0"
             data-testid="input-mix-batch-date"
           />
           <Button
@@ -317,7 +317,7 @@ export function MixBatchList({
                 return (
                   <div
                     key={`mobile-${batch.id}`}
-                    className="rounded-xl border bg-card p-3 shadow-sm"
+                    className="rounded-xl border bg-card p-3 shadow-xs"
                     data-testid={`card-mix-batch-mobile-${batch.id}`}
                   >
                     <div className="flex items-start justify-between gap-3">
@@ -328,7 +328,7 @@ export function MixBatchList({
                         data-testid={`link-mix-batch-mobile-${batch.id}`}
                       >
                         <div className="break-all font-mono text-sm font-semibold text-primary">{batch.batchCode}</div>
-                        <div className="mt-0.5 break-words text-xs text-muted-foreground">
+                        <div className="mt-0.5 wrap-break-word text-xs text-muted-foreground">
                           {batch.name || "Unnamed batch"}
                         </div>
                         <div className="mt-1 text-[11px] text-muted-foreground">

@@ -45,7 +45,7 @@ const FactoryMobileHeaderActions = React.forwardRef<HTMLDivElement, React.HTMLAt
       aria-label="Factory page actions"
       data-factory-mobile-actions="true"
       className={cn(
-        "grid w-full min-w-0 grid-cols-1 gap-2 min-[360px]:grid-cols-2 sm:flex sm:w-auto sm:flex-wrap sm:justify-end [&>*]:min-h-11 [&>*]:w-full sm:[&>*]:min-h-9 sm:[&>*]:w-auto",
+        "grid w-full min-w-0 grid-cols-1 gap-2 min-[360px]:grid-cols-2 sm:flex sm:w-auto sm:flex-wrap sm:justify-end *:min-h-11 *:w-full sm:*:min-h-9 sm:*:w-auto",
         className
       )}
       {...props}
@@ -71,7 +71,7 @@ const FactoryMobileScannerPanel = React.forwardRef<HTMLDivElement, React.HTMLAtt
     <div
       ref={ref}
       data-factory-mobile-scanner="true"
-      className={cn("min-w-0 rounded-xl border bg-card p-3 shadow-sm sm:p-4", className)}
+      className={cn("min-w-0 rounded-xl border bg-card p-3 shadow-xs sm:p-4", className)}
       {...props}
     />
   )
@@ -100,7 +100,7 @@ const FactoryMobileActionBar = React.forwardRef<HTMLDivElement, React.HTMLAttrib
       aria-label="Factory workflow actions"
       data-factory-mobile-action-bar="true"
       className={cn(
-        "fixed inset-x-0 bottom-0 z-40 grid min-w-0 grid-cols-1 gap-2 border-t bg-background/95 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 backdrop-blur min-[360px]:grid-cols-2 sm:static sm:flex sm:flex-wrap sm:justify-end sm:border-0 sm:bg-transparent sm:p-0 sm:backdrop-blur-none [&>*]:min-h-11 [&>*]:w-full sm:[&>*]:min-h-9 sm:[&>*]:w-auto",
+        "fixed inset-x-0 bottom-0 z-40 grid min-w-0 grid-cols-1 gap-2 border-t bg-background/95 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 backdrop-blur-sm min-[360px]:grid-cols-2 sm:static sm:flex sm:flex-wrap sm:justify-end sm:border-0 sm:bg-transparent sm:p-0 sm:backdrop-blur-none *:min-h-11 *:w-full sm:*:min-h-9 sm:*:w-auto",
         className
       )}
       {...props}

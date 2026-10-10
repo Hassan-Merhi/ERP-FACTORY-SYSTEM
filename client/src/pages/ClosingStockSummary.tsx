@@ -162,9 +162,7 @@ export default function ClosingStockSummary() {
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Current Inventory Value:</span>
-                <span className="font-mono font-medium tabular-nums">
-                  {formatAmount(data?.grandTotal?.value ?? 0)}
-                </span>
+                <span className="font-mono font-medium tabular-nums">{formatAmount(data?.grandTotal?.value ?? 0)}</span>
               </div>
             </div>
           </div>
@@ -208,12 +206,12 @@ export default function ClosingStockSummary() {
               <button
                 type="button"
                 key={group.id}
-                className="grid w-full grid-cols-2 p-2 text-left hover-elevate focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset sm:grid-cols-4 sm:p-3"
+                className="grid w-full grid-cols-2 p-2 text-left hover-elevate focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset sm:grid-cols-4 sm:p-3"
                 onClick={() => handleGroupClick(group.id, group.name)}
                 data-testid={`row-stock-group-${group.id}`}
               >
                 <span className="flex min-w-0 items-center gap-1 truncate text-xs font-medium sm:text-sm">
-                  <ChevronRight className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
+                  <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
                   <span className="truncate">{group.name}</span>
                 </span>
                 <span className={cn(financialNumberClassName, "text-sm")}>{formatQty(group.closing.quantity)}</span>
@@ -239,8 +237,12 @@ export default function ClosingStockSummary() {
             <div className="grid grid-cols-2 p-2 font-bold sm:grid-cols-4 sm:p-3">
               <div className="text-xs sm:text-sm">Grand Total</div>
               <div className={financialNumberClassName}>{formatNumber(data.grandTotal.quantity)} BL</div>
-              <div className={cn(financialNumberClassName, "hidden sm:block")}>{formatAmount(data.grandTotal.rate)}</div>
-              <div className={cn(financialNumberClassName, "hidden sm:block")}>{formatAmount(data.grandTotal.value)}</div>
+              <div className={cn(financialNumberClassName, "hidden sm:block")}>
+                {formatAmount(data.grandTotal.rate)}
+              </div>
+              <div className={cn(financialNumberClassName, "hidden sm:block")}>
+                {formatAmount(data.grandTotal.value)}
+              </div>
             </div>
           </div>
         ) : null}

@@ -12,7 +12,15 @@ type DashboardShellProps = React.HTMLAttributes<HTMLElement> & {
   filters?: React.ReactNode;
 };
 
-export function DashboardShell({ title, description, actions, filters, className, children, ...props }: DashboardShellProps) {
+export function DashboardShell({
+  title,
+  description,
+  actions,
+  filters,
+  className,
+  children,
+  ...props
+}: DashboardShellProps) {
   const titleId = React.useId();
 
   return (
@@ -20,8 +28,12 @@ export function DashboardShell({ title, description, actions, filters, className
       <header className="space-y-3">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0">
-            <h1 id={titleId} className="break-words text-2xl font-semibold tracking-tight sm:text-3xl">{title}</h1>
-            {description ? <p className="mt-1 max-w-3xl text-sm leading-6 text-muted-foreground">{description}</p> : null}
+            <h1 id={titleId} className="wrap-break-word text-2xl font-semibold tracking-tight sm:text-3xl">
+              {title}
+            </h1>
+            {description ? (
+              <p className="mt-1 max-w-3xl text-sm leading-6 text-muted-foreground">{description}</p>
+            ) : null}
           </div>
           {actions ? <ResponsiveActions label="Dashboard actions">{actions}</ResponsiveActions> : null}
         </div>
@@ -46,7 +58,7 @@ export function DashboardMetric({ label, value, detail, icon: Icon, className, .
         <div className="flex min-w-0 items-start justify-between gap-3">
           <div className="min-w-0">
             <p className="text-sm font-medium text-muted-foreground">{label}</p>
-            <div className="mt-1 break-words text-2xl font-semibold tabular-nums">{value}</div>
+            <div className="mt-1 wrap-break-word text-2xl font-semibold tabular-nums">{value}</div>
             {detail ? <div className="mt-1 text-xs leading-5 text-muted-foreground">{detail}</div> : null}
           </div>
           {Icon ? <Icon className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden="true" /> : null}
@@ -60,7 +72,14 @@ export function DashboardMetricGrid({ className, ...props }: React.HTMLAttribute
   return <ResponsiveGrid minColumnWidth="15rem" className={cn("gap-3", className)} {...props} />;
 }
 
-export function DashboardSection({ title, description, actions, className, children, ...props }: React.HTMLAttributes<HTMLElement> & {
+export function DashboardSection({
+  title,
+  description,
+  actions,
+  className,
+  children,
+  ...props
+}: React.HTMLAttributes<HTMLElement> & {
   title: string;
   description?: string;
   actions?: React.ReactNode;
@@ -70,7 +89,9 @@ export function DashboardSection({ title, description, actions, className, child
     <section aria-labelledby={titleId} className={cn("min-w-0 space-y-3", className)} {...props}>
       <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
         <div className="min-w-0">
-          <h2 id={titleId} className="text-lg font-semibold tracking-tight">{title}</h2>
+          <h2 id={titleId} className="text-lg font-semibold tracking-tight">
+            {title}
+          </h2>
           {description ? <p className="mt-1 text-sm text-muted-foreground">{description}</p> : null}
         </div>
         {actions ? <ResponsiveActions label={`${title} actions`}>{actions}</ResponsiveActions> : null}

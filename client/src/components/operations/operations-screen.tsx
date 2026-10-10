@@ -66,9 +66,18 @@ export function OperationsScreenHeader({
             <Icon className="h-5 w-5" aria-hidden="true" />
           </div>
           <div className="min-w-0 flex-1">
-            {eyebrow ? <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{eyebrow}</p> : null}
-            <h1 id={titleId} className="break-words text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">{title}</h1>
-            {description ? <p className="mt-1 max-w-3xl text-sm leading-6 text-muted-foreground">{description}</p> : null}
+            {eyebrow ? (
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{eyebrow}</p>
+            ) : null}
+            <h1
+              id={titleId}
+              className="wrap-break-word text-2xl font-semibold tracking-tight text-foreground sm:text-3xl"
+            >
+              {title}
+            </h1>
+            {description ? (
+              <p className="mt-1 max-w-3xl text-sm leading-6 text-muted-foreground">{description}</p>
+            ) : null}
           </div>
         </div>
         {actions ? <ResponsiveActions label={actionsLabel}>{actions}</ResponsiveActions> : null}
@@ -95,9 +104,15 @@ export function OperationsSectionHeading({
 }: OperationsSectionHeadingProps) {
   const titleId = React.useId();
   return (
-    <section aria-labelledby={titleId} className={cn("flex min-w-0 flex-col gap-3 sm:flex-row sm:items-end sm:justify-between", className)} {...props}>
+    <section
+      aria-labelledby={titleId}
+      className={cn("flex min-w-0 flex-col gap-3 sm:flex-row sm:items-end sm:justify-between", className)}
+      {...props}
+    >
       <div className="min-w-0">
-        <h2 id={titleId} className="break-words text-lg font-semibold tracking-tight text-foreground sm:text-xl">{title}</h2>
+        <h2 id={titleId} className="wrap-break-word text-lg font-semibold tracking-tight text-foreground sm:text-xl">
+          {title}
+        </h2>
         {description ? <p className="mt-1 max-w-3xl text-sm leading-6 text-muted-foreground">{description}</p> : null}
       </div>
       {actions ? <ResponsiveActions label={actionsLabel}>{actions}</ResponsiveActions> : null}
@@ -113,16 +128,28 @@ type OperationsMetricCardProps = React.HTMLAttributes<HTMLDivElement> & {
   emphasize?: boolean;
 };
 
-export function OperationsMetricCard({ label, value, detail, icon: Icon = PackageSearch, emphasize = false, className, ...props }: OperationsMetricCardProps) {
+export function OperationsMetricCard({
+  label,
+  value,
+  detail,
+  icon: Icon = PackageSearch,
+  emphasize = false,
+  className,
+  ...props
+}: OperationsMetricCardProps) {
   return (
     <Card className={cn("min-w-0", emphasize && "border-[hsl(var(--module-factory)/0.45)]", className)} {...props}>
       <CardContent className="flex items-start justify-between gap-3 p-4 sm:gap-4 sm:p-5">
         <div className="min-w-0 flex-1">
-          <p className="break-words text-sm font-medium text-muted-foreground">{label}</p>
-          <div className="mt-1 break-words text-xl font-semibold tabular-nums text-foreground sm:text-2xl">{value}</div>
-          {detail ? <div className="mt-1 break-words text-xs leading-5 text-muted-foreground">{detail}</div> : null}
+          <p className="wrap-break-word text-sm font-medium text-muted-foreground">{label}</p>
+          <div className="mt-1 wrap-break-word text-xl font-semibold tabular-nums text-foreground sm:text-2xl">
+            {value}
+          </div>
+          {detail ? <div className="mt-1 wrap-break-word text-xs leading-5 text-muted-foreground">{detail}</div> : null}
         </div>
-        <div className="shrink-0 rounded-md bg-muted p-2 text-muted-foreground"><Icon className="h-4 w-4" aria-hidden="true" /></div>
+        <div className="shrink-0 rounded-md bg-muted p-2 text-muted-foreground">
+          <Icon className="h-4 w-4" aria-hidden="true" />
+        </div>
       </CardContent>
     </Card>
   );
@@ -145,19 +172,29 @@ const statusToneClasses = {
   info: "border-info/30 bg-info/10 text-info",
 } as const;
 
-export function OperationsStatusStrip({ label, value, tone = "default", className, ...props }: OperationsStatusStripProps) {
+export function OperationsStatusStrip({
+  label,
+  value,
+  tone = "default",
+  className,
+  ...props
+}: OperationsStatusStripProps) {
   const StatusIcon = tone === "success" ? CheckCircle2 : tone === "warning" ? AlertTriangle : Info;
   return (
     <div
       role="status"
       aria-atomic="true"
-      className={cn("flex min-w-0 items-start gap-3 rounded-lg border px-3 py-2.5 text-sm", statusToneClasses[tone], className)}
+      className={cn(
+        "flex min-w-0 items-start gap-3 rounded-lg border px-3 py-2.5 text-sm",
+        statusToneClasses[tone],
+        className
+      )}
       {...props}
     >
       <StatusIcon className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
       <div className="min-w-0 flex-1 sm:flex sm:items-center sm:justify-between sm:gap-4">
         <span className="font-medium">{label}</span>
-        <span className="mt-0.5 block break-words tabular-nums sm:mt-0 sm:text-right">{value}</span>
+        <span className="mt-0.5 block wrap-break-word tabular-nums sm:mt-0 sm:text-right">{value}</span>
       </div>
     </div>
   );
@@ -167,17 +204,19 @@ type OperationsTableShellProps = React.HTMLAttributes<HTMLDivElement> & {
   label?: string;
 };
 
-export function OperationsTableShell({ label = "Operations data table", className, ...props }: OperationsTableShellProps) {
-  return (
-    <HorizontalScrollRegion
-      label={label}
-      className={cn("rounded-lg border bg-card", className)}
-      {...props}
-    />
-  );
+export function OperationsTableShell({
+  label = "Operations data table",
+  className,
+  ...props
+}: OperationsTableShellProps) {
+  return <HorizontalScrollRegion label={label} className={cn("rounded-lg border bg-card", className)} {...props} />;
 }
 
-export function OperationsTableScroll({ label = "Operations data table", className, ...props }: OperationsTableShellProps) {
+export function OperationsTableScroll({
+  label = "Operations data table",
+  className,
+  ...props
+}: OperationsTableShellProps) {
   return <HorizontalScrollRegion label={label} className={cn("w-full", className)} {...props} />;
 }
 

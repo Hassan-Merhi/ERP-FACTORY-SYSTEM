@@ -367,7 +367,7 @@ export default function PurchaseOrderEdit() {
         title="Edit Purchase Order"
         onBack={handleBack}
         meta={
-          <span className="break-words">
+          <span className="wrap-break-word">
             {po.supplierName} ({po.supplierCode}) | Container: {po.containerNumber}
           </span>
         }
@@ -529,7 +529,7 @@ export default function PurchaseOrderEdit() {
                               }
                             }}
                             placeholder="Type to search..."
-                            className="w-full h-9 px-3 rounded-md border bg-background outline-none focus:ring-2 focus:ring-ring"
+                            className="w-full h-9 px-3 rounded-md border bg-background outline-hidden focus:ring-2 focus:ring-ring"
                             data-testid={`input-item-name-${index}`}
                           />
                         </TableCell>
@@ -775,7 +775,7 @@ export default function PurchaseOrderEdit() {
 
         {showItemSidebar && (
           <Card
-            className="w-full sm:w-80 flex-shrink-0 sm:absolute sm:right-0 z-10"
+            className="w-full sm:w-80 shrink-0 sm:absolute sm:right-0 z-10"
             style={{ top: `${sidebarTop}px` }}
             ref={sidebarRef}
           >

@@ -139,7 +139,7 @@ export function StockMovementDialog({
           }
         }}
       >
-        <DialogHeader className="flex-shrink-0 border-b border-border/60 bg-gradient-to-b from-muted/30 to-card px-5 py-5 pr-14 md:px-7 md:py-6 md:pr-16">
+        <DialogHeader className="shrink-0 border-b border-border/60 bg-linear-to-b from-muted/30 to-card px-5 py-5 pr-14 md:px-7 md:py-6 md:pr-16">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex min-w-0 items-center gap-3.5">
               <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 ring-1 ring-primary/15">
@@ -151,7 +151,7 @@ export function StockMovementDialog({
                     Stock Movement
                   </DialogTitle>
                   {drillMonth && (
-                    <span className="rounded-full border border-border/60 bg-background/80 px-2.5 py-1 text-[11px] font-medium text-muted-foreground shadow-sm">
+                    <span className="rounded-full border border-border/60 bg-background/80 px-2.5 py-1 text-[11px] font-medium text-muted-foreground shadow-xs">
                       {drillMonth.monthName} {drillMonth.year}
                     </span>
                   )}
@@ -176,7 +176,7 @@ export function StockMovementDialog({
         </DialogHeader>
 
         <div className="min-h-0 flex-1 overflow-hidden bg-muted/10 p-3 md:p-5">
-          <div className="h-full overflow-auto rounded-xl border border-border/60 bg-background shadow-sm scrollbar-thin">
+          <div className="h-full overflow-auto rounded-xl border border-border/60 bg-background shadow-xs scrollbar-thin">
             {drillMonth ? (
               smDrillLoading ? (
                 <div className="space-y-3 p-6">
@@ -191,7 +191,7 @@ export function StockMovementDialog({
                   style={{ minWidth: 1240 }}
                 >
                   <thead className="sticky top-0 z-20 shadow-[0_1px_0_0_hsl(var(--border))]">
-                    <tr className="bg-muted/95 backdrop-blur">
+                    <tr className="bg-muted/95 backdrop-blur-sm">
                       <th
                         rowSpan={2}
                         className="w-24 border-r border-border/50 px-4 py-3 text-left align-bottom text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground"
@@ -212,24 +212,24 @@ export function StockMovementDialog({
                       </th>
                       <th
                         colSpan={3}
-                        className="border-r border-border/50 bg-emerald-500/[0.06] px-3 py-2 text-center text-[11px] font-semibold uppercase tracking-[0.12em] text-emerald-600 dark:text-emerald-400"
+                        className="border-r border-border/50 bg-emerald-500/6 px-3 py-2 text-center text-[11px] font-semibold uppercase tracking-[0.12em] text-emerald-600 dark:text-emerald-400"
                       >
                         Inward
                       </th>
                       <th
                         colSpan={3}
-                        className="border-r border-border/50 bg-rose-500/[0.06] px-3 py-2 text-center text-[11px] font-semibold uppercase tracking-[0.12em] text-rose-600 dark:text-rose-400"
+                        className="border-r border-border/50 bg-rose-500/6 px-3 py-2 text-center text-[11px] font-semibold uppercase tracking-[0.12em] text-rose-600 dark:text-rose-400"
                       >
                         Outward
                       </th>
                       <th
                         colSpan={3}
-                        className="bg-blue-500/[0.06] px-3 py-2 text-center text-[11px] font-semibold uppercase tracking-[0.12em] text-blue-600 dark:text-blue-400"
+                        className="bg-blue-500/6 px-3 py-2 text-center text-[11px] font-semibold uppercase tracking-[0.12em] text-blue-600 dark:text-blue-400"
                       >
                         Closing
                       </th>
                     </tr>
-                    <tr className="bg-muted/95 text-[11px] backdrop-blur">
+                    <tr className="bg-muted/95 text-[11px] backdrop-blur-sm">
                       {["Qty", "Rate", "Value", "Qty", "Rate", "Value", "Qty", "Rate", "Value"].map((h, i) => (
                         <th
                           key={`${h}-${i}`}
@@ -352,7 +352,7 @@ export function StockMovementDialog({
                         const t = smDrillData.totals;
                         const lastTxn = smDrillData.transactions[smDrillData.transactions.length - 1];
                         return (
-                          <tr className="sticky bottom-0 z-10 bg-card/95 font-semibold shadow-[0_-1px_0_0_hsl(var(--border))] backdrop-blur">
+                          <tr className="sticky bottom-0 z-10 bg-card/95 font-semibold shadow-[0_-1px_0_0_hsl(var(--border))] backdrop-blur-sm">
                             <td colSpan={3} className="border-r border-border/50 px-4 py-3.5 text-sm">
                               Total
                             </td>
@@ -384,7 +384,7 @@ export function StockMovementDialog({
                 style={{ minWidth: 1180 }}
               >
                 <thead className="sticky top-0 z-20 shadow-[0_1px_0_0_hsl(var(--border))]">
-                  <tr className="bg-muted/95 backdrop-blur">
+                  <tr className="bg-muted/95 backdrop-blur-sm">
                     <th
                       rowSpan={2}
                       className="w-36 border-r border-border/50 px-5 py-3 text-left align-bottom text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground"
@@ -399,24 +399,24 @@ export function StockMovementDialog({
                     </th>
                     <th
                       colSpan={3}
-                      className="border-r border-border/50 bg-emerald-500/[0.06] px-3 py-2 text-center text-[11px] font-semibold uppercase tracking-[0.12em] text-emerald-600 dark:text-emerald-400"
+                      className="border-r border-border/50 bg-emerald-500/6 px-3 py-2 text-center text-[11px] font-semibold uppercase tracking-[0.12em] text-emerald-600 dark:text-emerald-400"
                     >
                       Stock In
                     </th>
                     <th
                       colSpan={3}
-                      className="border-r border-border/50 bg-rose-500/[0.06] px-3 py-2 text-center text-[11px] font-semibold uppercase tracking-[0.12em] text-rose-600 dark:text-rose-400"
+                      className="border-r border-border/50 bg-rose-500/6 px-3 py-2 text-center text-[11px] font-semibold uppercase tracking-[0.12em] text-rose-600 dark:text-rose-400"
                     >
                       Stock Out
                     </th>
                     <th
                       colSpan={3}
-                      className="bg-blue-500/[0.06] px-3 py-2 text-center text-[11px] font-semibold uppercase tracking-[0.12em] text-blue-600 dark:text-blue-400"
+                      className="bg-blue-500/6 px-3 py-2 text-center text-[11px] font-semibold uppercase tracking-[0.12em] text-blue-600 dark:text-blue-400"
                     >
                       Closing
                     </th>
                   </tr>
-                  <tr className="bg-muted/95 text-[11px] backdrop-blur">
+                  <tr className="bg-muted/95 text-[11px] backdrop-blur-sm">
                     {[
                       "Qty",
                       "Rate",
@@ -532,7 +532,7 @@ export function StockMovementDialog({
                         n === 0 ? <span className="text-muted-foreground/35">—</span> : <>{formatAmount(n)}</>;
 
                       return (
-                        <tr className="sticky bottom-0 z-10 bg-card/95 font-semibold shadow-[0_-1px_0_0_hsl(var(--border))] backdrop-blur">
+                        <tr className="sticky bottom-0 z-10 bg-card/95 font-semibold shadow-[0_-1px_0_0_hsl(var(--border))] backdrop-blur-sm">
                           <td className="border-r border-border/50 px-5 py-4 text-sm">Total</td>
                           <td className={mutedNumberCell}>{fmtQ(smRowsWithYear[0]?.openingQty ?? 0)}</td>
                           <td className={mutedNumberCell}>{fmtR(smRowsWithYear[0]?.openingRate ?? 0)}</td>
@@ -557,7 +557,7 @@ export function StockMovementDialog({
           </div>
         </div>
 
-        <div className="flex flex-shrink-0 flex-col gap-3 border-t border-border/60 bg-card px-5 py-4 sm:flex-row sm:items-center sm:justify-between md:px-7">
+        <div className="flex shrink-0 flex-col gap-3 border-t border-border/60 bg-card px-5 py-4 sm:flex-row sm:items-center sm:justify-between md:px-7">
           <div className="min-h-4">
             {drillMonth && (
               <span className="text-xs text-muted-foreground">Press Esc to return to monthly summary</span>
@@ -587,7 +587,7 @@ export function StockMovementDialog({
 
             {stockMovementItem && (
               <Button
-                className="rounded-lg shadow-sm"
+                className="rounded-lg shadow-xs"
                 onClick={() => {
                   const locId = stockMovementItem.locationId;
                   const sid = stockMovementItem.stockItemId;

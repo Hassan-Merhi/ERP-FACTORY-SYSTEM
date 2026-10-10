@@ -320,7 +320,7 @@ export function CompaniesTab() {
                           data-testid="checkbox-company-active"
                         />
                       </FormControl>
-                      <FormLabel className="!mt-0">Active</FormLabel>
+                      <FormLabel className="mt-0!">Active</FormLabel>
                     </FormItem>
                   )}
                 />

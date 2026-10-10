@@ -124,7 +124,7 @@ export function RetailCatalogList({
                         </span>{" "}
                         <strong>{styleQuantity}</strong>
                         {!product.active && (
-                          <span className="ml-2 rounded bg-muted px-1.5 py-0.5 text-xs" data-i18n-ui>
+                          <span className="ml-2 rounded-sm bg-muted px-1.5 py-0.5 text-xs" data-i18n-ui>
                             Archived
                           </span>
                         )}
@@ -185,17 +185,21 @@ export function RetailCatalogList({
                                 <RetailImage
                                   key={src || `empty-${variant.id}`}
                                   src={src}
-                                  alt={src ? `${product.name} · ${variant.color} · ${variant.size} photo ${imageIndex + 1}` : ""}
-                                  className="h-10 w-10 rounded border-2 border-background"
+                                  alt={
+                                    src
+                                      ? `${product.name} · ${variant.color} · ${variant.size} photo ${imageIndex + 1}`
+                                      : ""
+                                  }
+                                  className="h-10 w-10 rounded-sm border-2 border-background"
                                 />
                               ))}
                               {images.length > 3 && (
-                                <span className="flex h-10 w-10 items-center justify-center rounded border-2 border-background bg-muted text-[10px] font-bold">
+                                <span className="flex h-10 w-10 items-center justify-center rounded-sm border-2 border-background bg-muted text-[10px] font-bold">
                                   +{images.length - 3}
                                 </span>
                               )}
                             </div>
-                            <div className="min-w-[7rem] flex-1" data-no-translate>
+                            <div className="min-w-28 flex-1" data-no-translate>
                               <div className="font-semibold">
                                 {variant.color} / {variant.size}
                                 {!variant.active && <span className="ml-1 text-xs font-normal">(archived)</span>}
@@ -205,10 +209,7 @@ export function RetailCatalogList({
                               </div>
                             </div>
                             <StockBadge quantity={quantity} lowThreshold={variant.lowStockThreshold} />
-                            <div
-                              className="hidden min-w-[8rem] text-xs text-muted-foreground md:block"
-                              data-no-translate
-                            >
+                            <div className="hidden min-w-32 text-xs text-muted-foreground md:block" data-no-translate>
                               {variant.stocks
                                 .filter((stock) => stock.quantity !== 0)
                                 .map((stock) => `${stock.locationName}: ${stock.quantity}`)

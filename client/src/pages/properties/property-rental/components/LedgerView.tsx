@@ -259,22 +259,22 @@ function LedgerView({
     <div className="space-y-3 pt-3">
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm flex-1 min-w-0">
-          <div className="bg-muted/40 rounded p-2">
+          <div className="bg-muted/40 rounded-sm p-2">
             <div className="text-xs text-muted-foreground">Tenant</div>
             <div className="font-semibold truncate">{contract.tenantName}</div>
           </div>
-          <div className="bg-muted/40 rounded p-2">
+          <div className="bg-muted/40 rounded-sm p-2">
             <div className="text-xs text-muted-foreground">Monthly Rent</div>
             <div className="font-semibold">{fmtMoneyCurrency(contract.rentalAmount, contract.currency)}</div>
           </div>
-          <div className="bg-muted/40 rounded p-2">
+          <div className="bg-muted/40 rounded-sm p-2">
             <div className="text-xs text-muted-foreground">Billing Day</div>
             <div className="font-semibold flex items-center gap-1">
               <CalendarDays className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
               {billingDayLabel(contract.startDate) ?? "—"}
             </div>
           </div>
-          <div className="bg-muted/40 rounded p-2">
+          <div className="bg-muted/40 rounded-sm p-2">
             <div className="text-xs text-muted-foreground">Balance</div>
             <div
               className={`font-bold ${balance > 0 ? "text-red-600 dark:text-red-400" : balance < 0 ? "text-green-600 dark:text-green-400" : ""}`}

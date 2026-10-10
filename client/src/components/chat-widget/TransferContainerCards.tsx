@@ -115,7 +115,7 @@ export function StockTransferConfirmCard({
             type="date"
             value={editDate}
             onChange={(e) => setEditDate(e.target.value)}
-            className="text-xs font-medium text-foreground bg-background border rounded px-1.5 py-0.5"
+            className="text-xs font-medium text-foreground bg-background border rounded-sm px-1.5 py-0.5"
             data-testid="input-transfer-date"
           />
         </div>
@@ -142,7 +142,7 @@ export function StockTransferConfirmCard({
             value={editNotes}
             onChange={(e) => setEditNotes(e.target.value)}
             placeholder="Optional notes"
-            className="text-xs font-medium text-foreground bg-background border rounded px-1.5 py-0.5 max-w-[170px] w-full"
+            className="text-xs font-medium text-foreground bg-background border rounded-sm px-1.5 py-0.5 max-w-[170px] w-full"
             data-testid="input-transfer-notes"
           />
         </div>
@@ -158,11 +158,14 @@ export function StockTransferConfirmCard({
               const candidates = item.candidates ?? [];
               const hasChoice = candidates.length > 1;
               return (
-                <div key={i} className={cn("rounded border border-border/50 p-1.5", isAnalysis && "bg-background/40")}>
+                <div
+                  key={i}
+                  className={cn("rounded-sm border border-border/50 p-1.5", isAnalysis && "bg-background/40")}
+                >
                   <div className="grid grid-cols-[1fr_50px_60px_auto] gap-1 items-center">
                     {hasChoice ? (
                       <select
-                        className="text-xs font-medium text-foreground bg-background border rounded px-1.5 py-0.5 w-full"
+                        className="text-xs font-medium text-foreground bg-background border rounded-sm px-1.5 py-0.5 w-full"
                         value={item.selectedId}
                         onChange={(e) => {
                           const id = Number(e.target.value);
@@ -197,7 +200,7 @@ export function StockTransferConfirmCard({
                           prev.map((it, idx) => (idx === i ? { ...it, qtyStr: e.target.value } : it))
                         )
                       }
-                      className={`text-right text-foreground bg-background border rounded px-1 py-0.5 text-[11px] w-full ${insufficient ? "border-destructive" : ""}`}
+                      className={`text-right text-foreground bg-background border rounded-sm px-1 py-0.5 text-[11px] w-full ${insufficient ? "border-destructive" : ""}`}
                       data-testid={`input-transfer-qty-${i}`}
                     />
                     <span

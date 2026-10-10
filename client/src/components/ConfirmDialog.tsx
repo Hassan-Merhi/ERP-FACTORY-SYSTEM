@@ -138,9 +138,9 @@ export function ConfirmDialog({
                 </div>
               )}
               <div className="min-w-0 flex-1 text-left">
-                <AlertDialogTitle className="break-words">{headerTitle}</AlertDialogTitle>
+                <AlertDialogTitle className="wrap-break-word">{headerTitle}</AlertDialogTitle>
                 {headerDescription && (
-                  <AlertDialogDescription className="mt-1 whitespace-pre-line break-words leading-5">
+                  <AlertDialogDescription className="mt-1 whitespace-pre-line wrap-break-word leading-5">
                     {headerDescription}
                   </AlertDialogDescription>
                 )}

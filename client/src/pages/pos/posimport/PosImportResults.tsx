@@ -34,7 +34,7 @@ export function PosImportValidationErrors({ model }: { model: PosImportModel }) 
           {validationResult.errors.map((error: string, index: number) => (
             <li
               key={index}
-              className="flex items-start gap-2 text-sm text-destructive bg-destructive/5 rounded px-2 py-1"
+              className="flex items-start gap-2 text-sm text-destructive bg-destructive/5 rounded-sm px-2 py-1"
             >
               <span className="font-mono text-xs text-muted-foreground shrink-0 mt-0.5 w-6 text-right">
                 {index + 1}.

@@ -78,8 +78,7 @@ export function BulkAdvanceDialog({
     refetchOnWindowFocus: false,
   });
 
-  const fmtDue = (n: number) =>
-    n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const fmtDue = (n: number) => n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const fmtDate = (s: string) =>
     new Date(s + "T00:00:00").toLocaleDateString(undefined, { month: "short", day: "numeric" });
 
@@ -239,7 +238,7 @@ export function BulkAdvanceDialog({
                                 <PopoverTrigger asChild>
                                   <button
                                     className={[
-                                      "flex items-center gap-1 ml-auto rounded px-1.5 py-0.5 transition-colors",
+                                      "flex items-center gap-1 ml-auto rounded-sm px-1.5 py-0.5 transition-colors",
                                       "hover:bg-muted/60 cursor-pointer select-none",
                                       due.net > 0
                                         ? "text-emerald-600 dark:text-emerald-400"

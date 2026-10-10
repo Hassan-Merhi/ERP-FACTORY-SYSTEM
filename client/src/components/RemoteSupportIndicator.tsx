@@ -44,7 +44,7 @@ export function RemoteSupportIndicator() {
       <RemoteKeyboardControlTarget session={session} tabId={tabId} />
       {session && inputControlActive && (
         <div
-          className="fixed bottom-4 right-4 z-[100] flex max-w-[min(92vw,390px)] items-center gap-2 rounded-lg border bg-background/95 px-3 py-2 shadow-lg backdrop-blur"
+          className="fixed bottom-4 right-4 z-100 flex max-w-[min(92vw,390px)] items-center gap-2 rounded-lg border bg-background/95 px-3 py-2 shadow-lg backdrop-blur-sm"
           role="status"
           aria-live="polite"
           data-screenfeed-ignore="true"

@@ -190,7 +190,7 @@ export function PriceListSearchRow({ model }: { model: PosPriceListModel }) {
           {zeroQtyCount > 0 && (
             <span
               className={cn(
-                "inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1 rounded text-[11px] font-semibold",
+                "inline-flex items-center justify-center min-w-5 h-5 px-1 rounded-sm text-[11px] font-semibold",
                 hideZeroQty ? "bg-primary-foreground/20 text-primary-foreground" : "bg-foreground/10 text-foreground"
               )}
             >
@@ -215,7 +215,7 @@ export function PriceListSearchRow({ model }: { model: PosPriceListModel }) {
           {unpricedCount > 0 && (
             <span
               className={cn(
-                "inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1 rounded text-[11px] font-semibold",
+                "inline-flex items-center justify-center min-w-5 h-5 px-1 rounded-sm text-[11px] font-semibold",
                 showUnpriced ? "bg-primary-foreground/20 text-primary-foreground" : "bg-foreground/10 text-foreground"
               )}
             >
@@ -253,7 +253,7 @@ export function PriceListUnpricedGroups({ model }: { model: PosPriceListModel })
               <span>{name}</span>
               <span
                 className={cn(
-                  "inline-flex items-center justify-center min-w-[1.1rem] h-4 px-1 rounded text-[10px] font-bold",
+                  "inline-flex items-center justify-center min-w-[1.1rem] h-4 px-1 rounded-sm text-[10px] font-bold",
                   isHidden
                     ? "bg-muted-foreground/15 text-muted-foreground"
                     : "bg-amber-500/20 text-amber-700 dark:text-amber-400"

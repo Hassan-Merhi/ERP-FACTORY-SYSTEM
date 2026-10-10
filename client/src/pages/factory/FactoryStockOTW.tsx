@@ -142,7 +142,7 @@ function NotesCell({
 
   return (
     <span
-      className={`text-xs cursor-pointer rounded px-1 py-0.5 hover-elevate ${current ? "text-foreground" : "text-muted-foreground italic"}`}
+      className={`text-xs cursor-pointer rounded-sm px-1 py-0.5 hover-elevate ${current ? "text-foreground" : "text-muted-foreground italic"}`}
       onClick={startEdit}
       data-testid={`text-notes-${containerId}`}
       title="Click to edit"

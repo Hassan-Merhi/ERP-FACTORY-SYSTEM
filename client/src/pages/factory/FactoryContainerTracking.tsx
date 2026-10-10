@@ -41,7 +41,7 @@ function InvoiceStatus({ status }: { status: string }) {
   };
   const cls = colors[status] ?? "bg-gray-100 text-gray-600 dark:bg-gray-800/50 dark:text-gray-400";
   return (
-    <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${cls}`}>
+    <span className={`inline-flex items-center px-2 py-0.5 rounded-sm text-xs font-medium ${cls}`}>
       {labels[status] ?? status}
     </span>
   );

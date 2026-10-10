@@ -123,7 +123,7 @@ function FileDropZone({ label, file, onFile, testId }: FileDropZoneProps) {
       />
       {file ? (
         <div className="flex items-center gap-2 w-full">
-          <FileSpreadsheet className="w-5 h-5 text-primary flex-shrink-0" />
+          <FileSpreadsheet className="w-5 h-5 text-primary shrink-0" />
           <span className="text-sm font-medium truncate flex-1">{file.name}</span>
           <Button
             size="icon"

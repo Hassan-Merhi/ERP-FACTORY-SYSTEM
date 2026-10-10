@@ -19,7 +19,7 @@ export function MergeStockItemsLauncher() {
 
   return (
     <>
-      <Card className="group flex h-full flex-col overflow-hidden border-border/70 bg-card/80 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-md">
+      <Card className="group flex h-full flex-col overflow-hidden border-border/70 bg-card/80 shadow-xs transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-md">
         <CardHeader className="space-y-3 pb-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-border/60 bg-primary/10 text-primary">
             <ArrowLeftRight className="h-5 w-5" />

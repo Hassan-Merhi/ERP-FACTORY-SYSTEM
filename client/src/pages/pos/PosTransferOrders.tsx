@@ -110,7 +110,7 @@ export default function PosTransferOrders({ posUser }: PosTransferOrdersProps) {
               type="date"
               value={dateFilter}
               onChange={(event) => setDateFilter(event.target.value)}
-              className="min-h-11 w-full min-w-0 rounded-lg border bg-background pl-10 pr-2 text-base outline-none focus:ring-2 focus:ring-ring lg:min-h-9 lg:text-sm"
+              className="min-h-11 w-full min-w-0 rounded-lg border bg-background pl-10 pr-2 text-base outline-hidden focus:ring-2 focus:ring-ring lg:min-h-9 lg:text-sm"
               data-testid="input-date-filter"
             />
           </div>
@@ -200,7 +200,7 @@ export default function PosTransferOrders({ posUser }: PosTransferOrdersProps) {
           {transfers.map((transfer) => (
             <article
               key={transfer.voucherId}
-              className="min-w-0 rounded-xl border bg-card p-3 shadow-sm transition-shadow hover:shadow-md sm:p-4"
+              className="min-w-0 rounded-xl border bg-card p-3 shadow-xs transition-shadow hover:shadow-md sm:p-4"
               data-testid={`row-transfer-${transfer.voucherId}`}
             >
               <div className="flex min-w-0 items-start gap-3">
@@ -243,9 +243,9 @@ export default function PosTransferOrders({ posUser }: PosTransferOrdersProps) {
                   </div>
 
                   <div className="mt-2 grid min-w-0 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 text-sm">
-                    <span className="min-w-0 break-words text-muted-foreground">{transfer.sourceLocationName}</span>
+                    <span className="min-w-0 wrap-break-word text-muted-foreground">{transfer.sourceLocationName}</span>
                     <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-                    <span className="min-w-0 break-words font-medium">{transfer.destinationLocationName}</span>
+                    <span className="min-w-0 wrap-break-word font-medium">{transfer.destinationLocationName}</span>
                   </div>
                 </div>
 

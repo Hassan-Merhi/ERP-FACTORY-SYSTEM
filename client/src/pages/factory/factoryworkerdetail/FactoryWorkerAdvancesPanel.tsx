@@ -533,7 +533,7 @@ export function FactoryWorkerAdvancesPanel({ model }: FactoryWorkerDetailModelPr
                                   type="date"
                                   value={repayDate}
                                   onChange={(e) => setBulkRepayDates((prev) => ({ ...prev, [a.id]: e.target.value }))}
-                                  className="h-7 rounded border border-input bg-transparent px-2 text-xs w-32"
+                                  className="h-7 rounded-sm border border-input bg-transparent px-2 text-xs w-32"
                                   data-testid={`input-bulk-repay-date-${a.id}`}
                                 />
                               </div>

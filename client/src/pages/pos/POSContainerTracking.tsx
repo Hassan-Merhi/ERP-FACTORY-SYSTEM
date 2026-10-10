@@ -243,21 +243,21 @@ export default function POSContainerTracking({ posUser }: { posUser?: PosUserCon
       </div>
 
       <div className="grid shrink-0 grid-cols-2 gap-2 lg:grid-cols-4">
-        <div className="rounded-xl border bg-card/60 px-3 py-2.5 shadow-sm">
+        <div className="rounded-xl border bg-card/60 px-3 py-2.5 shadow-xs">
           <div className="flex items-center justify-between gap-2">
             <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Active</p>
             <PackageSearch className="h-4 w-4 text-primary" aria-hidden="true" />
           </div>
           <p className="mt-0.5 text-xl font-semibold tabular-nums sm:text-2xl">{isLoading ? "—" : summary.total}</p>
         </div>
-        <div className="rounded-xl border bg-card/60 px-3 py-2.5 shadow-sm">
+        <div className="rounded-xl border bg-card/60 px-3 py-2.5 shadow-xs">
           <div className="flex items-center justify-between gap-2">
             <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Truck Assigned</p>
             <Truck className="h-4 w-4 text-primary" aria-hidden="true" />
           </div>
           <p className="mt-0.5 text-xl font-semibold tabular-nums sm:text-2xl">{isLoading ? "—" : summary.withTruck}</p>
         </div>
-        <div className="rounded-xl border bg-card/60 px-3 py-2.5 shadow-sm">
+        <div className="rounded-xl border bg-card/60 px-3 py-2.5 shadow-xs">
           <div className="flex items-center justify-between gap-2">
             <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Docs Received</p>
             <CheckCircle2 className="h-4 w-4 text-primary" aria-hidden="true" />
@@ -266,7 +266,7 @@ export default function POSContainerTracking({ posUser }: { posUser?: PosUserCon
             {isLoading ? "—" : summary.docsReceived}
           </p>
         </div>
-        <div className="rounded-xl border bg-card/60 px-3 py-2.5 shadow-sm">
+        <div className="rounded-xl border bg-card/60 px-3 py-2.5 shadow-xs">
           <div className="flex items-center justify-between gap-2">
             <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Docs To Send</p>
             <FileClock className="h-4 w-4 text-primary" aria-hidden="true" />
@@ -277,7 +277,7 @@ export default function POSContainerTracking({ posUser }: { posUser?: PosUserCon
         </div>
       </div>
 
-      <div className="shrink-0 rounded-xl border bg-card/40 p-2.5 shadow-sm">
+      <div className="shrink-0 rounded-xl border bg-card/40 p-2.5 shadow-xs">
         <div className="flex items-center gap-2">
           <div className="relative min-w-0 flex-1">
             <Search
@@ -399,7 +399,7 @@ export default function POSContainerTracking({ posUser }: { posUser?: PosUserCon
       </div>
 
       <div
-        className="min-h-[320px] flex-1 overflow-auto rounded-xl border bg-card/30 shadow-sm"
+        className="min-h-[320px] flex-1 overflow-auto rounded-xl border bg-card/30 shadow-xs"
         data-table-scroll-region
       >
         {isLoading ? (
@@ -419,7 +419,7 @@ export default function POSContainerTracking({ posUser }: { posUser?: PosUserCon
           </div>
         ) : (
           <Table className="min-w-[1120px]">
-            <TableHeader className="sticky top-0 z-10 bg-background/95 backdrop-blur">
+            <TableHeader className="sticky top-0 z-10 bg-background/95 backdrop-blur-sm">
               <TableRow>
                 {isColumnVisible("container") ? <TableHead className="whitespace-nowrap">Container #</TableHead> : null}
                 {isColumnVisible("supplier") ? <TableHead className="whitespace-nowrap">Supplier</TableHead> : null}

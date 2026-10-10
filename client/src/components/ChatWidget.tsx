@@ -438,9 +438,9 @@ export function ChatWidget() {
           className="group flex items-center gap-2 rounded-full bg-primary text-primary-foreground shadow-md
             px-3 py-2 opacity-30 hover:opacity-100
             transition-all duration-300 ease-in-out
-            overflow-hidden max-w-[2.25rem] hover:max-w-[160px]"
+            overflow-hidden max-w-9 hover:max-w-[160px]"
         >
-          <MessageCircle className="h-4 w-4 flex-shrink-0" />
+          <MessageCircle className="h-4 w-4 shrink-0" />
           <span className="text-sm font-medium whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-200 delay-100">
             AI Assistant
           </span>
@@ -654,7 +654,7 @@ export function ChatWidget() {
                     {sessionReadFiles.map((fp) => (
                       <span
                         key={fp}
-                        className="inline-flex items-center gap-1 text-[10px] font-mono bg-muted rounded px-1.5 py-0.5 text-muted-foreground"
+                        className="inline-flex items-center gap-1 text-[10px] font-mono bg-muted rounded-sm px-1.5 py-0.5 text-muted-foreground"
                       >
                         <FileCode className="h-2.5 w-2.5 shrink-0" />
                         {fp.replace(/^.*\//, "")}

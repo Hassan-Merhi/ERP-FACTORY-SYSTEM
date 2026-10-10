@@ -230,7 +230,7 @@ export default function RetailStockCount() {
   return (
     <div className="mx-auto flex w-full max-w-[1600px] flex-col gap-4 p-3 pb-24 md:p-5 xl:pb-5">
       <RetailNav />
-      <div className="flex flex-col gap-3 rounded-xl border bg-card p-4 shadow-sm md:flex-row md:items-end md:justify-between">
+      <div className="flex flex-col gap-3 rounded-xl border bg-card p-4 shadow-xs md:flex-row md:items-end md:justify-between">
         <div>
           <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight">
             <ClipboardList className="h-6 w-6" /> Physical stock count
@@ -381,24 +381,24 @@ export default function RetailStockCount() {
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-2 text-xs sm:grid-cols-4">
-                  <div className="rounded border p-2">
+                  <div className="rounded-sm border p-2">
                     <div className="text-muted-foreground">Lines</div>
                     <strong>{session.lineCount}</strong>
                   </div>
-                  <div className="rounded border p-2">
+                  <div className="rounded-sm border p-2">
                     <div className="text-muted-foreground">Counted</div>
                     <strong>
                       {session.countedLineCount}
                       {session.uncountedLineCount > 0 ? ` · ${session.uncountedLineCount} uncounted` : ""}
                     </strong>
                   </div>
-                  <div className="rounded border p-2">
+                  <div className="rounded-sm border p-2">
                     <div className="text-muted-foreground">Variance</div>
                     <strong className={session.varianceQuantityTotal !== 0 ? "text-amber-700 dark:text-amber-400" : ""}>
                       {session.varianceQuantityTotal} · {session.varianceValueTotal}
                     </strong>
                   </div>
-                  <div className="rounded border p-2">
+                  <div className="rounded-sm border p-2">
                     <div className="text-muted-foreground">Unexpected</div>
                     <strong>{session.unexpectedLineCount}</strong>
                   </div>
@@ -593,19 +593,19 @@ export default function RetailStockCount() {
             <CardContent className="space-y-2">
               {report && (
                 <div className="grid grid-cols-2 gap-2 text-xs sm:grid-cols-4">
-                  <div className="rounded border p-2">
+                  <div className="rounded-sm border p-2">
                     <div className="text-muted-foreground">Sessions</div>
                     <strong>{report.summary.sessionCount}</strong>
                   </div>
-                  <div className="rounded border p-2">
+                  <div className="rounded-sm border p-2">
                     <div className="text-muted-foreground">Finalized</div>
                     <strong>{report.summary.finalizedCount}</strong>
                   </div>
-                  <div className="rounded border p-2">
+                  <div className="rounded-sm border p-2">
                     <div className="text-muted-foreground">Net variance (units)</div>
                     <strong>{report.summary.varianceQuantityTotal}</strong>
                   </div>
-                  <div className="rounded border p-2">
+                  <div className="rounded-sm border p-2">
                     <div className="text-muted-foreground">Variance value</div>
                     <strong>{report.summary.varianceValueTotal}</strong>
                   </div>

@@ -111,7 +111,7 @@ export function Stage2StepRunner({
         </p>
       )}
       {result && (
-        <div className="text-xs space-y-1 bg-muted/50 rounded p-2">
+        <div className="text-xs space-y-1 bg-muted/50 rounded-sm p-2">
           {(result.summary ?? []).map((s: string, i: number) => (
             <p key={i}>{s}</p>
           ))}

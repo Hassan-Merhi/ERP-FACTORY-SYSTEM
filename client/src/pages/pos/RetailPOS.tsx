@@ -507,7 +507,7 @@ export default function RetailPOS() {
     <div className="mx-auto flex w-full max-w-[1600px] flex-col gap-4 p-3 pb-24 md:p-5 xl:pb-5">
       {receiptPortal}
       {!isPosRole && <RetailNav />}
-      <div className="flex flex-col gap-3 rounded-xl border bg-card p-4 shadow-sm md:flex-row md:items-end md:justify-between">
+      <div className="flex flex-col gap-3 rounded-xl border bg-card p-4 shadow-xs md:flex-row md:items-end md:justify-between">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Retail POS</h1>
           <p className="text-sm text-muted-foreground">
@@ -815,7 +815,7 @@ export default function RetailPOS() {
       </div>
 
       {cart.length > 0 && (
-        <div className="fixed inset-x-0 bottom-0 z-30 border-t bg-background/95 p-3 backdrop-blur xl:hidden">
+        <div className="fixed inset-x-0 bottom-0 z-30 border-t bg-background/95 p-3 backdrop-blur-sm xl:hidden">
           <div className="mx-auto flex max-w-3xl items-center gap-3">
             <button
               type="button"
