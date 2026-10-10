@@ -31,6 +31,7 @@ import { recalculateOrderTotals } from "../factory/_helpers";
 import { checkAccountWhatsAppRule } from "../factoryWhatsappRoutes";
 import { readVoucherAuditState, writeVoucherAuditTx } from "../helpers/voucherAuditTrail";
 import { allocateCents, sumMoney, toMoney } from "../../lib/money";
+import { getAccessibleCompanyIds } from "../../security/companyAccessBoundary";
 import type Decimal from "decimal.js";
 
 const postingDependencies = createDatabasePostingDependencies();
@@ -428,6 +429,18 @@ async function updateActiveJournal(req: Request, res: Response, next: NextFuncti
     // the transfer, so the transaction is scoped to both (as the intercompany
     // POS mirror is).
     const counterpart = await findIntercompanyCounterpart(voucherId, companyId);
+    // The counterpart is the other company's posted voucher: the editor must
+    // have access to that company too, or the edit is refused (it would
+    // otherwise rewrite books the user cannot see).
+    if (counterpart && counterpart.otherCompanyId !== companyId) {
+      const accessible = userId ? await getAccessibleCompanyIds(String(userId)) : new Set<number>();
+      if (!accessible.has(counterpart.otherCompanyId)) {
+        throw new HttpError(
+          403,
+          "This journal has an intercompany counterpart in a company you cannot access; it cannot be edited here."
+        );
+      }
+    }
     const inEditScope = <T>(work: () => Promise<T>): Promise<T> =>
       counterpart && counterpart.otherCompanyId !== companyId
         ? runWithDatabaseScopeRuntimeContext(

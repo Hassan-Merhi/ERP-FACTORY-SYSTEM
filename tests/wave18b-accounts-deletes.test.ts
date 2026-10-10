@@ -158,6 +158,7 @@ afterAll(async () => {
       `${PREFIX}%`,
     ]);
     await client.query(`DELETE FROM ledger_accounts WHERE company_id = ANY($1::int[])`, [extraCompanyIds]);
+    await client.query(`DELETE FROM user_company_roles WHERE company_id = ANY($1::int[])`, [extraCompanyIds]);
   });
   await deleteAuditLogRowsForTests(pool, "company_id = ANY($1::int[]) OR username = 'scheduler:soft-delete-purge'", [
     ids,
@@ -490,6 +491,11 @@ describe("journal edit intercompany counterpart", () => {
     otherCompany = await newCompany("JC");
     otherDebitId = await ledgerAccount(`${PREFIX}-ICDR`, "Asset", { companyId: otherCompany });
     otherCreditId = await ledgerAccount(`${PREFIX}-ICCR`, "Liability", { companyId: otherCompany });
+    // The editor has access to both companies of the transfer.
+    await pool.query(
+      `INSERT INTO user_company_roles (user_id, company_id, role) VALUES ($1, $2, 'Admin') ON CONFLICT DO NOTHING`,
+      [ctx.userId, otherCompany]
+    );
   });
 
   /** Source journal (USD, 100) in the test company, counterpart in the other company at 600 CFA per USD. */
@@ -598,6 +604,39 @@ describe("journal edit intercompany counterpart", () => {
     ).rows[0];
     expect(audit.company_id).toBe(otherCompany);
     expect(audit.changes.interCompanyCounterpartOf).toEqual({ new: { voucherId: source } });
+  }, 60000);
+
+  it("refuses the edit, and changes nothing, when the editor cannot access the counterpart's company", async () => {
+    const { source, other } = await linkedPair();
+    await pool.query(`DELETE FROM user_company_roles WHERE user_id = $1 AND company_id = $2`, [
+      ctx.userId,
+      otherCompany,
+    ]);
+    try {
+      const before = (
+        await pool.query(`SELECT debit_amount, credit_amount FROM voucher_entries WHERE voucher_id = $1 ORDER BY id`, [
+          other,
+        ])
+      ).rows;
+      const refused = await agent.patch(`/api/vouchers/${source}/journal`).send(editBody("150"));
+      expect(refused.status).toBe(403);
+      expect(
+        (await pool.query(`SELECT total_amount FROM vouchers WHERE id = $1`, [source])).rows[0].total_amount
+      ).toMatch(/^100(\.0+)?$/);
+      expect(
+        (
+          await pool.query(
+            `SELECT debit_amount, credit_amount FROM voucher_entries WHERE voucher_id = $1 ORDER BY id`,
+            [other]
+          )
+        ).rows
+      ).toEqual(before);
+    } finally {
+      await pool.query(
+        `INSERT INTO user_company_roles (user_id, company_id, role) VALUES ($1, $2, 'Admin') ON CONFLICT DO NOTHING`,
+        [ctx.userId, otherCompany]
+      );
+    }
   }, 60000);
 
   it("refuses the edit, and changes nothing, when the counterpart cannot be rescaled", async () => {

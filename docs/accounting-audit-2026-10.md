@@ -1241,3 +1241,53 @@ Section 10's three CRITICAL items are fixed: no boot step rewrites vouchers, the
 ### Proposed wave 18
 
 Scheduler and GET posting out of maintenance scope (tenant scope, closed-period and audit respected); payroll migrate routes and bank account routes behind Admin/Owner with audit; journal counterpart sync inside the transaction; `/api/accounts/all` and statement PDF/Excel on the engine; bale import routes guarded and journalled; INVENTORY lookup by code only, never retyped.
+
+## 12. Re-audit (2026-10-10, branch at `259c70f`, after wave 18)
+
+Method as in sections 8, 10 and 11: three independent read-only code reviews checked each section-11 finding against the code and looked for new defects; a fourth measured production read-only.
+
+### Score
+
+| Category | 10-06 | 10-07 | 10-08 | 10-09 | 10-10 a.m. | Now |
+|---|---|---|---|---|---|---|
+| Chart of Accounts | 20 | 40 | 45 | 50 | 55 | 60 |
+| Double Entry | 35 | 35 | 46 | 60 | 66 | 68 |
+| General Ledger | 25 | 40 | 45 | 50 | 54 | 58 |
+| Posting Engine | 40 | 40 | 45 | 52 | 58 | 64 |
+| AR/AP | 30 | 25 | 40 | 52 | 58 | 63 |
+| Inventory | 15 | 36 | 50 | 58 | 62 | 64 |
+| Factory Accounting | 15 | 30 | 42 | 50 | 55 | 57 |
+| Multi-Currency | 40 | 28 | 35 | 45 | 54 | 56 |
+| Multi-Company | 55 | 45 | 48 | 54 | 60 | 64 |
+| Reporting | 10 | 22 | 33 | 46 | 57 | 61 |
+| Data Integrity | 30 | 45 | 48 | 52 | 56 | 61 |
+| Audit Trail | 40 | 28 | 32 | 42 | 50 | 54 |
+
+**ACCOUNTING SCORE — branch code: 61/100** (57 in section 11). **Production: about 30/100, unchanged.** No CRITICAL finding remains.
+
+Fixed since section 11: the scheduler posts per company in tenant scope and respects closed periods; the legacy prepaid repair left the daily job; the rental units GET reads only; bank account guards (role, opening, linked ledger, database trigger); ledger code/active gated and reserved codes refused on edit; permanent deletes and purge transactional and audited, retired vouchers kept; INVENTORY by code only; journal counterpart inside the edit transaction; accounts list and statement exports on the engine; aging with factory suppliers at USD base; recurring journals in Decimal; stock-entry guard on the business date; payroll city-split and salary-group migrations retired.
+
+**Fixed after this review (before merge):** the journal edit widened its database scope to the counterpart's company without checking the editor's access to it (`centralJournalLifecycleRoute.ts`). It now refuses with 403 unless the editor can access both companies (test in `tests/wave18b-accounts-deletes.test.ts`).
+
+### HIGH
+
+- `GET {rental}/units/:id/detail` and the rental statement export still write monthly rent rows (client-dated, unaudited); `/accrue`, `/payments/post-scheduled` and `/run-monthly` are sign-in only and client-dated, and their audit names a system actor.
+- `migrate-worker-names` still rewrites posted lines with floats and hard-deletes accounts, unaudited (gated and company-scoped).
+- Bale `import-excel` and `import-company-data` are sign-in only with no cut-over check; `import/opening-raw-stock` is unguarded; reimport accepts an unchecked mix-batch id, which bypasses the no-mix blocker.
+- Container, offload and receipt writers still post at fetched, unrecorded rates; one path falls back to rate 1 at today's date; three rate-precedence rules.
+- Two amount bases: the trial balance and PDF sum debit/credit, the Excel statement and aging sum the stored base; they differ on the 462 legacy factory lines. The on-screen bank, fixed-asset and employee statements still list every line naming the account, so they disagree with the accounts list and exports.
+
+### MEDIUM
+
+- 103 audit calls still outside a transaction (unchanged by wave 18), including POS sale create, purchase update, transfer, stock adjustment lifecycle, factory payroll generation, fiscal reopen, raw-stock offload and reverse.
+- Creating a ledger account with a reserved system code is still allowed (only edits are refused); the rental account helper posts to a wrong-typed account with only a log line; bulk-assign-parent unaudited.
+- Counterpart rescale rounds each line to 2 decimals separately (up to a cent passes the guard); `inter_company_transfers.amount` and the counterpart date are not updated.
+- Catch-up rental accruals are dated on the business date, not the month they cover; a recurring journal skipped for a closed period retries hourly.
+- Purge history check is narrow (linked ledgers, templates); factory masters and employees purged without a history check; restores unaudited.
+- Garbage HMD16 bales are listed as unvalued and block the cut-over; RETAIL-GRNI never cleared; retail opening plugs to equity; retail fails in non-USD base companies; intercompany POS mirror after commit.
+
+### Production (2026-10-10, read-only)
+
+- Render now auto-deploys **`main`** (live `5a17020`, 08:41; the printing feature was merged as #2134). A manual deploy of branch commit `715f8cd` at 08:08 was cancelled. Nothing from this branch is live; merging the PR into `main` will deploy it.
+- Unchanged since section 11: 0 unbalanced vouchers; plug writer last wrote 10-09 18:58; FX-REVAL last 10-09; no new guards; every cut-over blocker the same to the cent. Five new vouchers with no lines in two days (companies 1, 9, 10).
+- The month-start rental run on 10-01 created 34 back-dated LEGACY-PREPAID-RECLASS vouchers (companies 1, 12, 17); it will run again on 11-01 unless this branch is deployed first.
