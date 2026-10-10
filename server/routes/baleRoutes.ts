@@ -389,8 +389,16 @@ export function registerBaleRoutes(app: Express) {
         const baleCompanyIds = [...new Set(owners.map((row) => row.companyId))].sort((a, b) => a - b);
         // Priority Scan queue locks come first (ascending company), matching
         // Stock Entry, before any bale/reference-sequence row locks below.
-        for (const ownerCompanyId of baleCompanyIds) {
-          await tx.execute(sql`SELECT pg_advisory_xact_lock(${PRIORITY_SCAN_LOCK_NAMESPACE}, ${ownerCompanyId})`);
+        // One statement takes every lock, in ascending company order.
+        if (baleCompanyIds.length > 0) {
+          await tx.execute(sql`
+            SELECT pg_advisory_xact_lock(${PRIORITY_SCAN_LOCK_NAMESPACE}, company_id)
+              FROM (
+                SELECT company_id
+                  FROM unnest(string_to_array(${baleCompanyIds.join(",")}, ',')::int[]) AS company_id
+                 ORDER BY company_id
+              ) ordered_companies
+          `);
         }
 
         const results = [];
