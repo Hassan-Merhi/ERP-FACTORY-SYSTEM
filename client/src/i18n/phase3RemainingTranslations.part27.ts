@@ -380,4 +380,14 @@ export const phase3RemainingTranslationsPart27: readonly Phase3SharedUiEntry[] =
     ar: "قاعدة التحويل التلقائي {{0}}: الحساب {{1}} ليس حساباً نشطاً للشركة {{2}}",
     fr: "Règle de transfert automatique {{0}} : le compte {{1}} n'est pas un compte actif de la société {{2}}",
   },
+  {
+    en: "Freight FX rate must be a positive number",
+    ar: "يجب أن يكون سعر صرف الشحن رقمًا موجبًا",
+    fr: "Le taux de change du fret doit être un nombre positif",
+  },
+  {
+    en: "Other charges FX rate must be a positive number",
+    ar: "يجب أن يكون سعر صرف الرسوم الأخرى رقمًا موجبًا",
+    fr: "Le taux de change des autres frais doit être un nombre positif",
+  },
 ];
