@@ -1,4 +1,5 @@
 import type { Express, Request, Response } from "express";
+import { RentalAutoTransferScopeError } from "../../services/rental/autoTransferScope";
 import { requireAuth } from "../../auth";
 import { getErrorMessage } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
@@ -27,6 +28,9 @@ export function registerCentralRentalPaymentDeletionRoute(app: Express, module: 
         paymentGroupId: result.paymentGroupId,
       });
     } catch (error: unknown) {
+      if (error instanceof RentalAutoTransferScopeError) {
+        return res.status(error.status).json({ message: error.message });
+      }
       logger.error(`[${module}/rental] atomic delete-payment failed`, { error });
       return res.status(500).json({ message: getErrorMessage(error) });
     }

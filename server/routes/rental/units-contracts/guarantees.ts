@@ -4,6 +4,11 @@
  * Registered by ./index.ts in the original order; Express resolves
  * first-match, so that order is behaviour.
  */
+import {
+  autoTransferCounterpartiesForPayments,
+  RentalAutoTransferScopeError,
+  runWithAutoTransferCounterparties,
+} from "../../../services/rental/autoTransferScope";
 import type { RentalRoutesContext } from "./_helpers";
 import type { Express, Request, Response } from "express";
 import { getErrorMessage } from "../../../lib/httpHandlers";
@@ -11,6 +16,7 @@ import {
   getCompanyId,
   findOrCreateLedgerAccount,
   maybeRunAutoTransfer,
+  reverseAutoTransfersTx,
   ensureMonthlyLedgerRows,
   buildAllocations,
 } from "../shared";
@@ -26,7 +32,6 @@ import {
   propertyPayments,
   vouchers,
   voucherEntries,
-  interCompanyTransfers,
 } from "@shared/schema";
 import { parseId } from "../../../lib/parseId";
 import { parseMoneyInput } from "../../../lib/money";
@@ -571,58 +576,53 @@ export function registerRentalGuaranteeRoutes(app: Express, ctx: RentalRoutesCon
 
       let totalReversed = 0;
 
-      await db.transaction(async (tx) => {
-        for (const payment of appliedPayments) {
-          // 1. Reverse the monthly ledger paid_amount
-          if (payment.ledgerRowId) {
-            await tx.execute(sql`
+      await runWithAutoTransferCounterparties(
+        await autoTransferCounterpartiesForPayments(
+          companyId,
+          appliedPayments.map((payment) => payment.id)
+        ),
+        () =>
+          db.transaction(async (tx) => {
+            for (const payment of appliedPayments) {
+              // 1. Reverse the monthly ledger paid_amount
+              if (payment.ledgerRowId) {
+                await tx.execute(sql`
               UPDATE property_monthly_ledger
               SET paid_amount = GREATEST(0, paid_amount - ${payment.amount}::numeric)
               WHERE id = ${payment.ledgerRowId}
             `);
-          }
+              }
 
-          // 2. Soft-delete the voucher only if no other payment shares it
-          if (payment.voucherId) {
-            const siblings = await tx
-              .select({ id: propertyPayments.id })
-              .from(propertyPayments)
-              .where(
-                and(eq(propertyPayments.voucherId, payment.voucherId), sql`${propertyPayments.id} != ${payment.id}`)
-              );
-            if (siblings.length === 0) {
-              await tx.execute(sql`UPDATE vouchers SET deleted_at = NOW() WHERE id = ${payment.voucherId}`);
+              // 2. Soft-delete the voucher only if no other payment shares it
+              if (payment.voucherId) {
+                const siblings = await tx
+                  .select({ id: propertyPayments.id })
+                  .from(propertyPayments)
+                  .where(
+                    and(eq(propertyPayments.voucherId, payment.voucherId), sql`${propertyPayments.id} != ${payment.id}`)
+                  );
+                if (siblings.length === 0) {
+                  await tx.execute(sql`UPDATE vouchers SET deleted_at = NOW() WHERE id = ${payment.voucherId}`);
+                }
+              }
+
+              // 3. Reverse any auto-transfers created for this payment (both sides
+              //    soft-deleted, as the other payment deletion paths do).
+              await reverseAutoTransfersTx(tx, [payment.id]);
+
+              // 4. Delete the payment row
+              await tx.delete(propertyPayments).where(eq(propertyPayments.id, payment.id));
+              totalReversed++;
             }
-          }
 
-          // 3. Reverse any auto-transfers created for this payment
-          const linkedTransfers = await tx
-            .select()
-            .from(interCompanyTransfers)
-            .where(eq(interCompanyTransfers.sourcePaymentId, payment.id));
-          for (const transfer of linkedTransfers) {
-            await tx.delete(interCompanyTransfers).where(eq(interCompanyTransfers.id, transfer.id));
-            if (transfer.fromVoucherId) {
-              await tx.delete(voucherEntries).where(eq(voucherEntries.voucherId, transfer.fromVoucherId));
-              await tx.delete(vouchers).where(eq(vouchers.id, transfer.fromVoucherId));
-            }
-            if (transfer.toVoucherId) {
-              await tx.delete(voucherEntries).where(eq(voucherEntries.voucherId, transfer.toVoucherId));
-              await tx.delete(vouchers).where(eq(vouchers.id, transfer.toVoucherId));
-            }
-          }
-
-          // 4. Delete the payment row
-          await tx.delete(propertyPayments).where(eq(propertyPayments.id, payment.id));
-          totalReversed++;
-        }
-
-        // guarantee_posted_amount is only managed by "Post to Statement" / "Move to Cash".
-        // Applied-as-rent amounts are tracked via payment records ([Guarantee applied] notes).
-      });
+            // guarantee_posted_amount is only managed by "Post to Statement" / "Move to Cash".
+            // Applied-as-rent amounts are tracked via payment records ([Guarantee applied] notes).
+          })
+      );
 
       res.json({ ok: true, reversed: totalReversed });
     } catch (e: unknown) {
+      if (e instanceof RentalAutoTransferScopeError) return res.status(e.status).json({ message: e.message });
       res.status(500).json({ message: getErrorMessage(e) });
     }
   });
