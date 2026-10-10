@@ -258,7 +258,17 @@ Verified with the rendered harness: tablet portrait captures show the sidebar co
 | 768px overlap | `index.css` mobile block `@media (max-width: 768px)` → `767px` so it no longer overlaps Tailwind `md:` at exactly 768. | No rule from the phone block applies at 768 wide. |
 | Single breakpoint source | Export `PHONE_QUERY`, `TABLET_QUERY` from one module and use them in `use-mobile.tsx`, `use-erp-phone-layout.ts` and the CSS custom media (via PostCSS `@custom-media` or documented constants). | One place defines 639/767/1023. |
 
-### Phase 4 — Vouchers layout (one to two days)
+### Phase 4 — Vouchers layout (one to two days) — DONE
+
+Shipped on this branch:
+
+- **Phone header.** The title block in the payment/receipt header keeps a 9rem minimum, so the already-wrapping row now moves the date input to the next line instead of painting it over "Payment Voucher".
+- **Three columns from `xl`, not `lg`.** The form / account-picker split in the payment/receipt, journal, stock-transfer and stock-adjustment forms moved from `lg:` (1024px, where a pinned sidebar leaves ~450px for the form) to `xl:`. At 1024×768 the picker now stacks under a full-width form; at 1440 and above the layout is unchanged.
+- **Entry table minimum widths.** The desktop entries table gives Account a 10rem and Amount a 6.5rem minimum and scrolls sideways below that instead of squeezing the inputs to "Typ" / "0.(".
+- Tablet portrait was already fixed by Phase 3 (sidebar collapsed → full-width form). No container-query plugin is installed, so the split is keyed off viewport breakpoints; the Tailwind `container-queries` plugin remains the better long-term tool if more pages need content-width layouts.
+
+Verified with the rendered harness on all four voucher tabs at phone, tablet, tablet landscape, desktop and wide (ERP), plus Factory and Properties vouchers: no overflow, no off-screen controls, title and inputs readable at every size. `tsc --noEmit`, prettier, eslint and the voucher suites pass.
+
 
 The single page with defects at three sizes.
 

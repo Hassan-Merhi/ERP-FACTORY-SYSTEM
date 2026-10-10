@@ -33,7 +33,7 @@ export function AdjustmentItemSidebar({ model }: { model: StockAdjustmentFormMod
   if (!showAdjustmentSidebar) return null;
 
   return (
-    <Card className="hidden sm:flex flex-col w-full lg:w-80 lg:sticky lg:top-4 max-h-[60vh] lg:max-h-[calc(100vh-12rem)] self-start">
+    <Card className="hidden sm:flex flex-col w-full xl:w-80 xl:sticky xl:top-4 max-h-[60vh] xl:max-h-[calc(100vh-12rem)] self-start">
       <div className="p-4 border-b">
         <div className="flex items-center justify-between gap-2 mb-2">
           <h3 className="text-sm font-semibold">Search Items</h3>

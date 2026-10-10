@@ -266,7 +266,9 @@ export function PaymentReceiptTab({
   };
 
   return (
-    <div className="flex flex-col lg:flex-row gap-4">
+    // Three columns (type nav, form, account picker) only from xl: at lg with the sidebar pinned the
+    // form had ~450px and its labels wrapped letter by letter.
+    <div className="flex flex-col xl:flex-row gap-4">
       {/* ── Left column: form ── */}
       <div className="flex-1 min-w-0">
         <Card>
@@ -302,7 +304,8 @@ export function PaymentReceiptTab({
                 </div>
 
                 {/* Title + badges */}
-                <div className="flex items-center gap-2 flex-1 min-w-0">
+                {/* min-w keeps the title readable: the row wraps the date input instead of covering it. */}
+                <div className="flex items-center gap-2 flex-1 min-w-[9rem]">
                   <span className="text-sm font-medium">{title}</span>
                   {isEditMode && (
                     <Badge variant="secondary" className="text-xs" data-testid="badge-editing">
@@ -764,7 +767,7 @@ export function PaymentReceiptTab({
 
       {/* ── Right column: Account Sidebar — hidden on mobile, visible on sm+ ── */}
       <div
-        className="hidden sm:block w-full lg:w-[40%] lg:sticky lg:top-4 h-fit"
+        className="hidden sm:block w-full xl:w-[40%] xl:sticky xl:top-4 h-fit"
         style={{ maxHeight: "calc(100vh - 2rem)" }}
       >
         <AccountSidebar {...sidebarProps} />

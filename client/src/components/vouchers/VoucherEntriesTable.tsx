@@ -290,15 +290,16 @@ export function VoucherEntriesTable({
 
   return (
     <>
-      <div className="hidden sm:block border rounded-md overflow-hidden">
+      {/* Scrolls sideways below ~22rem rather than squeezing the inputs to a few characters. */}
+      <div className="hidden sm:block border rounded-md overflow-x-auto">
         <table className="w-full">
           {/* Below the form's sticky save footer (z-20), which it otherwise paints over on short screens. */}
           <thead className="bg-muted sticky top-0 z-10">
             <tr className="text-[10px] uppercase tracking-wider text-muted-foreground">
               <th className="text-center px-2 py-2 font-semibold w-8">#</th>
-              <th className="text-left px-2 py-2 font-semibold">Account</th>
+              <th className="text-left px-2 py-2 font-semibold min-w-[10rem]">Account</th>
               <th className="text-left px-2 py-2 font-semibold w-24 hidden lg:table-cell">Type</th>
-              <th className="text-right px-2 py-2 font-semibold w-[22%]">Amount</th>
+              <th className="text-right px-2 py-2 font-semibold w-[22%] min-w-[6.5rem]">Amount</th>
               <th className="text-left px-2 py-2 font-semibold w-[24%] hidden md:table-cell">Narration</th>
               <th className="text-right px-2 py-2 font-semibold w-28 hidden lg:table-cell">Running</th>
               <th className="w-10"></th>

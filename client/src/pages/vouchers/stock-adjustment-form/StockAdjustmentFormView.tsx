@@ -110,7 +110,7 @@ export function StockAdjustmentFormView({ model }: { model: StockAdjustmentFormM
               </div>
 
               {/* Unified Production/Consumption Table + Sidebar */}
-              <div className="flex flex-col lg:flex-row gap-4">
+              <div className="flex flex-col xl:flex-row gap-4">
                 {/* Phones: the entry cards sit directly in the form card (no card-in-card padding). */}
                 <Card className="flex-1 overflow-hidden min-w-0 max-sm:border-0 max-sm:shadow-none max-sm:bg-transparent">
                   {/* Mobile: card-per-row */}

@@ -44,7 +44,7 @@ export function JournalFormView({ model }: { model: Model }) {
         </div>
       )}
 
-      <div className="flex flex-col lg:flex-row gap-4">
+      <div className="flex flex-col xl:flex-row gap-4">
         <Card className="flex-1 min-w-0">
           <CardContent className="pt-5">
             <div className="flex items-center gap-2 mb-5">
