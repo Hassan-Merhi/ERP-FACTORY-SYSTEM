@@ -444,12 +444,18 @@ export function registerPriorityScanConfigRoutes(app: Express) {
       const orderId = parseId(req.params.id);
       if (orderId === null) return res.status(400).json({ message: "Invalid loading id" });
 
-      const normalizedColor = normalizeColor(req.body?.color);
-      if (!normalizedColor) {
+      // An existing legacy priority may be moved without recoloring it.
+      // Every create, re-enable or color edit still requires an approved color.
+      const moveOnly = req.body?.color === undefined && req.body?.enabled === true;
+      const normalizedRequestedColor = moveOnly ? null : normalizeColor(req.body?.color);
+      if (!moveOnly && !normalizedRequestedColor) {
         return res.status(400).json({ message: "Priority color must be one of the 11 approved HEX colors." });
       }
 
       const canManagePriority = canManagePriorityPosition(req);
+      if (moveOnly && !canManagePriority) {
+        return res.status(403).json({ code: "PRIORITY_POSITION_ADMIN_ONLY", message: "Access denied" });
+      }
       if (!canManagePriority && req.body?.priority !== undefined) {
         return res.status(403).json({ code: "PRIORITY_POSITION_ADMIN_ONLY", message: "Access denied" });
       }
@@ -517,6 +523,8 @@ export function registerPriorityScanConfigRoutes(app: Express) {
             createdBy: customerOrderPriorityScanConfigs.createdBy,
             createdByName: customerOrderPriorityScanConfigs.createdByName,
             priority: customerOrderPriorityScanConfigs.priority,
+            color: customerOrderPriorityScanConfigs.color,
+            colorKey: customerOrderPriorityScanConfigs.colorKey,
             enabled: customerOrderPriorityScanConfigs.enabled,
           })
           .from(customerOrderPriorityScanConfigs)
@@ -527,6 +535,13 @@ export function registerPriorityScanConfigRoutes(app: Express) {
             )
           )
           .limit(1);
+
+        if (moveOnly && !existing[0]?.enabled) {
+          throw new PriorityScanConfigError(409, "Only an existing active priority can be moved without choosing a new color.");
+        }
+        const normalizedColor = moveOnly
+          ? { color: existing[0].color, colorKey: existing[0].colorKey }
+          : normalizedRequestedColor!;
 
         const activeRows = await loadActivePriorityRows(tx, companyId);
         if (enabled && activeRows.some((row) => row.orderId !== orderId && row.colorKey === normalizedColor.colorKey)) {
