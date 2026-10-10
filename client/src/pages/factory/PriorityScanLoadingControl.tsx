@@ -19,7 +19,11 @@ import { apiRequest } from "@/lib/queryClient";
 import { visibleTabInterval } from "@/lib/queryPolicies";
 import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
 import { translatePriorityScanText, type PriorityScanTranslationKey } from "@/i18n/priorityScanTranslations";
-import { DEFAULT_PRIORITY_SCAN_COLOR, PRIORITY_SCAN_COLORS, isApprovedPriorityScanColor } from "@shared/priorityScanColors";
+import {
+  DEFAULT_PRIORITY_SCAN_COLOR,
+  PRIORITY_SCAN_COLORS,
+  isApprovedPriorityScanColor,
+} from "@shared/priorityScanColors";
 
 const PRIORITY_SCAN_CONFIGS_URL = "/api/factory/customer-orders/loading-list/priority-scan-configs";
 const DEFAULT_COLOR = DEFAULT_PRIORITY_SCAN_COLOR;
@@ -153,12 +157,15 @@ export function PriorityScanLoadingControl({ load }: PriorityScanLoadingControlP
   });
 
   const openEditor = () => {
-    const availableDefault = PRIORITY_SCAN_COLORS.find((color) => !usedColorKeys.has(normalizeColorKey(color))) ?? DEFAULT_COLOR;
+    const availableDefault =
+      PRIORITY_SCAN_COLORS.find((color) => !usedColorKeys.has(normalizeColorKey(color))) ?? DEFAULT_COLOR;
     // Existing unsupported colors are retained in records, but may not be resaved.
     // Force an explicit approved selection when editing an old priority.
-    const initialColor = config?.color && isApprovedPriorityScanColor(config.color)
-      ? PRIORITY_SCAN_COLORS.find((color) => normalizeColorKey(color) === normalizeColorKey(config.color)) ?? availableDefault
-      : availableDefault;
+    const initialColor =
+      config?.color && isApprovedPriorityScanColor(config.color)
+        ? (PRIORITY_SCAN_COLORS.find((color) => normalizeColorKey(color) === normalizeColorKey(config.color)) ??
+          availableDefault)
+        : availableDefault;
     setSelectedColor(initialColor);
     setSelectedPriority(Math.min(config?.priority ?? maxSelectablePriority, maxSelectablePriority));
     setDialogOpen(true);

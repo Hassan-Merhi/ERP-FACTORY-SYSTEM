@@ -82,13 +82,16 @@ export async function preparePriorityPrintLabels(
       }
       return { ...label, priorityColor: undefined, priorityOrderId: null, priorityNumber: null };
     }
-    if (assignment.baleId !== matched.baleId || !assignment.color) {
+    if (assignment.baleId !== matched.baleId || !resolvePriorityLabelColor(assignment.color)) {
       throw new Error(`Invalid priority assignment for ${label.referenceNumber}`);
     }
     if (label.priorityOrderId && label.priorityOrderId !== assignment.orderId) {
       throw new Error(`Loading changed for ${label.referenceNumber}. Refresh before printing.`);
     }
-    if (label.priorityColor && resolvePriorityLabelColor(label.priorityColor) !== resolvePriorityLabelColor(assignment.color)) {
+    if (
+      label.priorityColor &&
+      resolvePriorityLabelColor(label.priorityColor) !== resolvePriorityLabelColor(assignment.color)
+    ) {
       throw new Error(`Priority color changed for ${label.referenceNumber}. Refresh before printing.`);
     }
     return {
@@ -142,7 +145,11 @@ export async function assertReprintMatchesPrepared(response: Response, label: La
   }
   const savedColor = resolvePriorityLabelColor(label.priorityColor);
   const recordedColor = resolvePriorityLabelColor(body.priorityAllocation?.color);
-  if ((label.priorityColor && !savedColor) || (body.priorityAllocation?.color && !recordedColor) || savedColor !== recordedColor) {
+  if (
+    (label.priorityColor && !savedColor) ||
+    (body.priorityAllocation?.color && !recordedColor) ||
+    savedColor !== recordedColor
+  ) {
     throw new Error(`Priority color changed for ${label.referenceNumber}. Refresh before printing.`);
   }
 }

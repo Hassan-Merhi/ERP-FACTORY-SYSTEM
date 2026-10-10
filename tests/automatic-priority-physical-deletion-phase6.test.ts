@@ -89,7 +89,7 @@ beforeAll(async () => {
   orderId = order.rows[0].id;
   const config = await agent
     .put(`/api/factory/customer-orders/${orderId}/loading-list/priority-scan-config`)
-    .send({ enabled: true, priority: 1, color: "#dc2626" });
+    .send({ enabled: true, priority: 1, color: "#B22222" });
   expect(config.status).toBe(200);
   const product = await pool.query<{ id: number }>(
     `INSERT INTO factory_bale_products
@@ -187,7 +187,7 @@ describe("Phase 6: physical deletion is atomic and permanent-history safe", () =
     expect(history.status).toBe(200);
     expect(history.body.items[0]).toMatchObject({
       originalPriority: 1,
-      originalColor: "#dc2626",
+      originalColor: "#B22222",
       active: false,
       reversedBy: `${PREFIX}_testuser`,
       reversalReason: "Production bale damaged",

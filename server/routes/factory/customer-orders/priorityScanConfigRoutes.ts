@@ -537,7 +537,10 @@ export function registerPriorityScanConfigRoutes(app: Express) {
           .limit(1);
 
         if (moveOnly && !existing[0]?.enabled) {
-          throw new PriorityScanConfigError(409, "Only an existing active priority can be moved without choosing a new color.");
+          throw new PriorityScanConfigError(
+            409,
+            "Only an existing active priority can be moved without choosing a new color."
+          );
         }
         const normalizedColor = moveOnly
           ? { color: existing[0]!.color, colorKey: existing[0]!.colorKey }
