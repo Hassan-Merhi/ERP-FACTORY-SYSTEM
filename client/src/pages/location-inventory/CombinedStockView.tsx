@@ -237,7 +237,7 @@ export function CombinedStockView({
             ref={allStockTableRef as React.RefObject<HTMLDivElement>}
           >
             <table {...mobileCards.tableProps} className="w-full text-sm border-collapse">
-              <thead className="sticky top-0 z-30 bg-muted/50">
+              <thead className="sticky top-0 z-30 bg-muted">
                 <tr className="bg-muted/60 border-b">
                   <th className="text-left px-4 py-2.5 font-medium text-muted-foreground whitespace-nowrap sticky left-0 bg-muted/60 z-10">
                     Item Name

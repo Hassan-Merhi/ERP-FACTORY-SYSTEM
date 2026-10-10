@@ -37,7 +37,8 @@ function getKindMeta(row: RawStockHistoryRow) {
   if (row.kind === "receipt") {
     return {
       icon: Container,
-      badgeClass: "bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400 border-blue-200 dark:border-blue-800",
+      badgeClass:
+        "bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400 border-blue-200 dark:border-blue-800",
       label: "Offload / Receipt",
       sign: "+" as const,
     };
@@ -79,9 +80,7 @@ export function SupplierMixBatchHistoryDialog({
     enabled: open && supplierId !== null,
   });
 
-  const totalIn = history
-    .filter((r) => r.kind === "receipt" || r.type === "ADD")
-    .reduce((s, r) => s + (r.kg || 0), 0);
+  const totalIn = history.filter((r) => r.kind === "receipt" || r.type === "ADD").reduce((s, r) => s + (r.kg || 0), 0);
   // Note: DEDUCT adjustments reduce receivedKg directly on the container/receipt record
   // (history-only entry, not a separate movement against the balance) — see
   // rawStockReceiptRoutes.ts's DEDUCT-skip logic. Counting it here too would double-subtract
@@ -127,7 +126,7 @@ export function SupplierMixBatchHistoryDialog({
             </div>
           ) : (
             <Table>
-              <TableHeader className="bg-muted/50 sticky top-0">
+              <TableHeader className="bg-muted sticky top-0">
                 <TableRow className="hover:bg-transparent">
                   <TableHead className="py-3">Entry</TableHead>
                   <TableHead className="py-3">Date</TableHead>

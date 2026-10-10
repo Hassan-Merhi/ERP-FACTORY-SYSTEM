@@ -147,7 +147,7 @@ function BulkPaymentDialog({
 
         <div className="overflow-auto flex-1 mt-3 rounded-md border">
           <table className="w-full text-sm">
-            <thead className="bg-muted/50 border-b sticky top-0">
+            <thead className="bg-muted border-b sticky top-0">
               <tr>
                 <th className="text-left px-3 py-2 font-semibold">Unit</th>
                 <th className="text-left px-3 py-2 font-semibold">Tenant</th>

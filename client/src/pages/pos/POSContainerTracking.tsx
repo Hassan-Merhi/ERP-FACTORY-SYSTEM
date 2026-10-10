@@ -419,7 +419,7 @@ export default function POSContainerTracking({ posUser }: { posUser?: PosUserCon
           </div>
         ) : (
           <Table className="min-w-[1120px]">
-            <TableHeader className="sticky top-0 z-10 bg-background/95 backdrop-blur">
+            <TableHeader className="sticky top-0 z-10 bg-background">
               <TableRow>
                 {isColumnVisible("container") ? <TableHead className="whitespace-nowrap">Container #</TableHead> : null}
                 {isColumnVisible("supplier") ? <TableHead className="whitespace-nowrap">Supplier</TableHead> : null}

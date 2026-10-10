@@ -62,7 +62,7 @@ export function CompanySelector({ showMobileName = false }: { showMobileName?: b
   const singleCompanyLabelClassName = showMobileName
     ? "max-w-[7rem] truncate text-xs sm:max-w-[120px]"
     : "hidden max-w-[120px] truncate sm:inline";
-  const selectorClassName = `h-10 gap-1 px-1.5 sm:h-8 sm:max-w-[8rem] sm:pr-1.5 ${
+  const selectorClassName = `h-10 min-w-0 gap-1 px-1.5 sm:h-8 sm:max-w-[8rem] sm:pr-1.5 ${
     showMobileName ? "max-w-[10rem]" : "max-w-[4.5rem]"
   }`;
   const selectorLabelClassName = showMobileName

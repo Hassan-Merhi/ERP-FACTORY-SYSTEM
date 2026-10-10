@@ -109,7 +109,7 @@ export function RawStockHistoryPanel({ rawStock }: RawStockHistoryPanelProps) {
 
                 <div className="border rounded-md overflow-hidden bg-card shadow-sm">
                   <Table mobileLayout="cards">
-                    <TableHeader className="bg-muted/50">
+                    <TableHeader className="bg-muted">
                       <TableRow>
                         <TableHead className="w-8">
                           <input
@@ -216,7 +216,7 @@ export function RawStockHistoryPanel({ rawStock }: RawStockHistoryPanelProps) {
             ) : (
               <div className="border rounded-md overflow-hidden bg-card shadow-sm">
                 <Table mobileLayout="cards">
-                  <TableHeader className="bg-muted/50">
+                  <TableHeader className="bg-muted">
                     <TableRow>
                       <TableHead>Applied at</TableHead>
                       <TableHead>By</TableHead>

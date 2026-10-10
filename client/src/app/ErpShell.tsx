@@ -3,6 +3,7 @@ import { useLocation } from "wouter";
 import { useDocumentAppShell } from "@/hooks/use-document-app-shell";
 import { useMainContentFocus } from "@/hooks/use-main-content-focus";
 import { useWorkspaceWheelScroll } from "@/hooks/use-workspace-wheel-scroll";
+import { useScrollOverflowProbe } from "@/hooks/use-scroll-overflow-probe";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
 import { AppModeProvider } from "@/contexts/AppModeContext";
@@ -56,6 +57,8 @@ export function ErpShell({ user, hasErpAccess, handleLogout, leaveConfirmDialog 
   const routePath = currentLocation.split("?")[0] || "/";
   useMainContentFocus(currentLocation);
   useWorkspaceWheelScroll(erpContainerRef);
+  // Fades the trailing edge of tab strips that still hide tabs (data-scroll-overflow).
+  useScrollOverflowProbe(erpContainerRef);
 
   useEffect(() => installErpNavigationHistory(), []);
   // ERP-only dialog styling must not follow the user into Factory, POS or Properties.

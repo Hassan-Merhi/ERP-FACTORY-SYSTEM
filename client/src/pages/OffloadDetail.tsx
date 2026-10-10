@@ -315,7 +315,7 @@ export default function OffloadDetail() {
               <p className="text-sm font-medium mb-2 text-muted-foreground uppercase tracking-wide">Stock Items</p>
               <div className="border rounded-md overflow-x-auto">
                 <table className="w-full text-sm">
-                  <thead className="sticky top-0 z-30 bg-muted/50">
+                  <thead className="sticky top-0 z-30 bg-muted">
                     <tr className="border-b bg-muted/40">
                       <th className="text-left p-3 font-medium">Item</th>
                       <th className="text-right p-3 font-medium">Qty</th>

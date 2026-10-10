@@ -62,13 +62,15 @@ export function UserMenu({ accentColor, user, onLogout }: UserMenuProps) {
           >
             {getInitials(user.username)}
           </span>
-          <span className="hidden min-w-0 items-center gap-2 md:flex">
+          {/* Name from lg, role from xl: at md (iPad portrait with the sidebar pinned) the header
+              row has ~500px for six controls and the name pushed the theme toggle off-screen. */}
+          <span className="hidden min-w-0 items-center gap-2 lg:flex">
             <span className="max-w-[8rem] truncate text-sm font-medium leading-none" data-business-value="true">
               {user.username}
             </span>
             {roleLabel ? (
               <span
-                className="hidden border-l border-border/50 pl-2 text-xs leading-none text-muted-foreground lg:inline"
+                className="hidden border-l border-border/50 pl-2 text-xs leading-none text-muted-foreground xl:inline"
                 data-business-value="true"
               >
                 {roleLabel}

@@ -715,7 +715,7 @@ function ItemsTable({
       {/* Desktop table */}
       <div className="hidden md:block">
         <Table wrapperClassName="max-h-[calc(100vh-300px)]">
-          <TableHeader className="bg-muted/40">
+          <TableHeader className="bg-muted">
             <TableRow>
               <TableHead>Item Name</TableHead>
               <TableHead className="text-right">OTW Qty</TableHead>

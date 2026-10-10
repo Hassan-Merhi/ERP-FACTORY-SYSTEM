@@ -137,7 +137,8 @@ const TableHeader = React.forwardRef<HTMLTableSectionElement, React.HTMLAttribut
     <thead
       ref={ref}
       className={cn(
-        "sticky top-0 z-30 bg-muted/95 backdrop-blur supports-[backdrop-filter]:bg-muted/80 [&_tr]:border-b [&_tr]:border-slate-300 dark:[&_tr]:border-slate-600",
+        // Opaque: rows scrolling under a translucent header read through it.
+        "sticky top-0 z-30 bg-muted [&_tr]:border-b [&_tr]:border-slate-300 dark:[&_tr]:border-slate-600",
         className
       )}
       {...props}
@@ -186,7 +187,9 @@ const TableHead = React.forwardRef<HTMLTableCellElement, React.ThHTMLAttributes<
     <th
       ref={ref}
       className={cn(
-        "h-10 whitespace-nowrap border-r border-slate-300 px-3 text-left align-middle text-[11px] font-semibold uppercase tracking-wider text-muted-foreground last:border-r-0 dark:border-slate-600 sm:h-8 sm:px-2 sm:text-[10px] [&:has([role=checkbox])]:pr-0",
+        // 11px at every width (10px uppercase labels were hard to read on 1080p) and a stronger
+        // foreground tone so headers stay legible on the opaque muted background.
+        "h-10 whitespace-nowrap border-r border-slate-300 px-3 text-left align-middle text-[11px] font-semibold uppercase tracking-wider text-foreground/80 last:border-r-0 dark:border-slate-600 sm:h-8 sm:px-2 [&:has([role=checkbox])]:pr-0",
         className
       )}
       {...props}

@@ -58,7 +58,7 @@ function ItemsTable({
         fontVariantNumeric: "tabular-nums",
       }}
     >
-      <thead className="sticky top-0 z-30 bg-muted/50">
+      <thead className="sticky top-0 z-30 bg-muted">
         <tr style={{ borderBottom: "2px solid black" }}>
           <th
             style={{

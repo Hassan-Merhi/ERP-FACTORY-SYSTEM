@@ -149,7 +149,7 @@ function BaleDetailRows({
       <TableCell colSpan={colSpan} className="py-0 px-0">
         <div className="pl-8 pr-3 py-2">
           <table className="w-full text-xs">
-            <thead className="sticky top-0 z-30 bg-muted/50">
+            <thead className="sticky top-0 z-30 bg-muted">
               <tr className="border-b border-border/50">
                 <th className="text-left py-1 pr-4 font-medium text-muted-foreground">Ref #</th>
                 <th className="text-right py-1 pr-4 font-medium text-muted-foreground">Weight (kg)</th>

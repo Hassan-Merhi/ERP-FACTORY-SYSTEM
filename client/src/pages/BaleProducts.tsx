@@ -321,7 +321,7 @@ export default function BaleProducts() {
                             <p className="text-xs text-muted-foreground px-4 py-2">No products in this category.</p>
                           ) : (
                             <table className="w-full text-sm">
-                              <thead className="sticky top-0 z-30 bg-muted/50">
+                              <thead className="sticky top-0 z-30 bg-muted">
                                 <tr className="border-b bg-muted/10">
                                   <th className="text-left px-4 py-1.5 text-xs font-medium text-muted-foreground">
                                     Code

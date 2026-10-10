@@ -293,7 +293,7 @@ export function VoucherEntriesTable({
       <div className="hidden sm:block border rounded-md overflow-hidden">
         <table className="w-full">
           {/* Below the form's sticky save footer (z-20), which it otherwise paints over on short screens. */}
-          <thead className="bg-muted/50 sticky top-0 z-10">
+          <thead className="bg-muted sticky top-0 z-10">
             <tr className="text-[10px] uppercase tracking-wider text-muted-foreground">
               <th className="text-center px-2 py-2 font-semibold w-8">#</th>
               <th className="text-left px-2 py-2 font-semibold">Account</th>

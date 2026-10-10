@@ -214,7 +214,7 @@ export default function RentalPaymentsLog({
               </div>
             ) : (
               <table className="w-full text-sm" {...cardTableProps} data-testid={`table-${testIdPrefix}-payments`}>
-                <thead className="sticky top-0 z-30 bg-muted/50 border-b">
+                <thead className="sticky top-0 z-30 bg-muted border-b">
                   <tr>
                     <th className="text-left px-3 py-2 font-semibold">Date</th>
                     <th className="text-left px-3 py-2 font-semibold">Client Name</th>

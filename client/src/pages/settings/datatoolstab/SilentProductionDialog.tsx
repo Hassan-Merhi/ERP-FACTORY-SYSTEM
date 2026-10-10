@@ -505,7 +505,7 @@ export function SilentProductionDialog({ model }: Props) {
                     <div className="border rounded-md overflow-hidden text-sm">
                       <div className="max-h-[280px] overflow-y-auto">
                         <table className="w-full">
-                          <thead className="bg-muted/50 sticky top-0">
+                          <thead className="bg-muted sticky top-0">
                             <tr>
                               <th className="text-left p-2 font-medium">Item</th>
                               <th className="text-right p-2 font-medium">Current</th>

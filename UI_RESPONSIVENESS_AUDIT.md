@@ -198,7 +198,18 @@ Note on "controls off-screen" at 768×1024: the one control is the theme toggle 
 
 Each phase is independently shippable and verifiable with the existing rendered smoke scripts. Effort is for one engineer. "Done when" is what the viewport harness or a manual check must show.
 
-### Phase 1 — CSS-only fixes (half a day)
+### Phase 1 — CSS-only fixes (half a day) — DONE
+
+Shipped on this branch. What actually landed, with the deviations from the plan:
+
+- Opaque `TableHeader` (`bg-muted`) in the primitive, **plus** the 46 pages that overrode it with their own translucent `bg-muted/40`–`/50` or `bg-background/95 backdrop-blur` sticky headers (`tailwind-merge` let those overrides win, so fixing the primitive alone changed nothing on Stock Items).
+- `TableHead` at 11px / `text-foreground/80` at every width.
+- Factory payroll workers table: `min-w-[56rem]`; the outer panel already scrolled sideways.
+- 44px header controls on `(pointer: coarse)`, scoped to `[data-slot="app-top-bar"]`. That pushed the row ~20px over at 768px, so the actions group is now shrinkable, the company switcher truncates, the search pill is pinned, and the user name shows from `lg` (role from `xl`) instead of `md`. Result: no control past the viewport on any ERP, Factory or Properties tablet capture.
+- Tab-strip edge fade driven by a small `useScrollOverflowProbe` hook (one capture-phase scroll listener + ResizeObserver per shell) that sets `data-scroll-overflow` on `.erp-mobile-scroll-tabs` and the shared `TabsList`; the mask only applies while the strip can scroll. Unit-tested.
+- POS payment row spans the full width from `sm`, so the cash-account select no longer shrinks to "Sele…".
+
+Verified with the rendered harness: tablet captures report 0 off-screen controls and 0 sub-40px header buttons; `/stock?tab=items` header is opaque at 1440; related vitest suites (21 files) and `tsc --noEmit` pass.
 
 No component logic changes; every item is a class or a few lines of CSS.
 

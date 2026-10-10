@@ -257,7 +257,7 @@ export function JournalEditForm({
 
             <div className="hidden md:block border rounded-md overflow-hidden">
               <table className="w-full">
-                <thead className="bg-muted/50 sticky top-0 z-30">
+                <thead className="bg-muted sticky top-0 z-30">
                   <tr>
                     <th className="text-left p-3 font-medium w-[10%]">Type</th>
                     <th className="text-left p-3 font-medium w-[35%]">Account</th>

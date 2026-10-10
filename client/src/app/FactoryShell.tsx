@@ -2,6 +2,7 @@ import { Suspense, useState, useRef } from "react";
 import { useLocation } from "wouter";
 import { useMainContentFocus } from "@/hooks/use-main-content-focus";
 import { useWorkspaceWheelScroll } from "@/hooks/use-workspace-wheel-scroll";
+import { useScrollOverflowProbe } from "@/hooks/use-scroll-overflow-probe";
 import { useButtonClickFeedback } from "@/hooks/use-button-click-feedback";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
@@ -95,6 +96,8 @@ export function FactoryShell({
     /^\/factory\/invoices\/\d+\/loading-scan(?:\?|$)/.test(currentLocation);
   useMainContentFocus(currentLocation);
   useWorkspaceWheelScroll(factoryContainerRef);
+  // Fades the trailing edge of tab strips that still hide tabs (data-scroll-overflow).
+  useScrollOverflowProbe(factoryContainerRef);
   // Phone dialogs open as bottom sheets sized to the visible viewport (mobile-shell-dialogs.css),
   // so the on-screen keyboard never hides their actions.
   useDocumentAppShell("factory");

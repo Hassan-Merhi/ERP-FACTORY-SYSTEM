@@ -27,6 +27,8 @@
   min-width: max-content;
 }
 
+/* Edge fades for strips that can scroll live in mobile-browser-compat.css (data-scroll-overflow). */
+
 .erp-mobile-action-row {
   display: flex;
   flex-wrap: wrap;

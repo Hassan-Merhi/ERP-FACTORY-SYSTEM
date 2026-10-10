@@ -170,11 +170,15 @@ export function RawStockTable({ rawStock, onAdjust, onDeduct, onAddToBatch }: Ra
                           <div className="grid grid-cols-2 gap-2 text-xs">
                             <div className="rounded-lg bg-muted/40 p-2">
                               <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Received</div>
-                              <div className="mt-0.5 font-mono font-medium">{formatNumber(parseFloat(row.receivedKg))} kg</div>
+                              <div className="mt-0.5 font-mono font-medium">
+                                {formatNumber(parseFloat(row.receivedKg))} kg
+                              </div>
                             </div>
                             <div className="rounded-lg bg-muted/40 p-2">
                               <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Used</div>
-                              <div className="mt-0.5 font-mono font-medium">{formatNumber(parseFloat(row.usedKg))} kg</div>
+                              <div className="mt-0.5 font-mono font-medium">
+                                {formatNumber(parseFloat(row.usedKg))} kg
+                              </div>
                             </div>
                             <div className="rounded-lg bg-muted/40 p-2">
                               <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Value</div>
@@ -237,7 +241,7 @@ export function RawStockTable({ rawStock, onAdjust, onDeduct, onAddToBatch }: Ra
 
         <div className="hidden overflow-hidden rounded-md border bg-card shadow-sm md:block">
           <Table>
-            <TableHeader className="bg-muted/50">
+            <TableHeader className="bg-muted">
               <TableRow className="hover:bg-transparent">
                 <TableHead className="w-[300px] py-4">Source / Supplier</TableHead>
                 <TableHead className="text-right py-4">Total Received</TableHead>

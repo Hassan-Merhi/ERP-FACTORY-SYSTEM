@@ -350,7 +350,9 @@ export function PosMobileLayout({
               </PopoverContent>
             </Popover>
           ) : (
-            <div className={`grid min-w-0 grid-cols-[7rem_minmax(0,1fr)] gap-2 ${isSpCompany ? "sm:col-span-2" : ""}`}>
+            /* Full row from sm: in a half-width cell the account select shrank to ~90px on
+               tablets and showed "Sele…" instead of the account name. */
+            <div className="grid min-w-0 grid-cols-[7rem_minmax(0,1fr)] gap-2 sm:col-span-2">
               <Select
                 value={paymentAccountType}
                 onValueChange={posUser ? undefined : (value: "bank" | "cash") => setPaymentAccountType(value)}

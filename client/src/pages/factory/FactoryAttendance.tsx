@@ -683,7 +683,7 @@ export default function FactoryAttendance() {
                     {/* Desktop table */}
                     <div className="hidden overflow-x-auto sm:block">
                       <table className="w-full text-sm">
-                        <thead className="sticky top-0 z-30 bg-muted/30 backdrop-blur">
+                        <thead className="sticky top-0 z-30 bg-muted">
                           <tr className="border-b border-border/60">
                             <th className="text-left px-4 py-2 font-medium text-muted-foreground w-8">#</th>
                             <th className="text-left px-4 py-2 font-medium text-muted-foreground w-24">Code</th>

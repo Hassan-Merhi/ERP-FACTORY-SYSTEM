@@ -25,7 +25,7 @@ export function AdjustmentEditFormRows({
   return (
     <div className="hidden md:block border rounded-md overflow-hidden">
       <table className="w-full">
-        <thead className="bg-muted/50 sticky top-0 z-30">
+        <thead className="bg-muted sticky top-0 z-30">
           <tr>
             <th className="text-left p-3 font-medium w-[40%]">Stock Item</th>
             <th className="text-left p-3 font-medium w-[15%]">Quantity</th>

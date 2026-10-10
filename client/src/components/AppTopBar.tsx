@@ -89,7 +89,9 @@ export function AppTopBar({
 
       <div
         data-slot="app-top-bar-actions"
-        className="ml-auto flex min-w-0 shrink-0 flex-nowrap items-center gap-0.5 sm:gap-1.5"
+        // Shrinkable: with 44px touch controls on a pinned-sidebar tablet the row is ~20px over,
+        // so the company switcher truncates instead of the theme toggle leaving the viewport.
+        className="ml-auto flex min-w-0 flex-nowrap items-center gap-0.5 sm:gap-1.5"
       >
         {extraActions && <div className="hidden items-center sm:flex">{extraActions}</div>}
 
@@ -98,7 +100,7 @@ export function AppTopBar({
             onClick={onSearchOpen}
             data-testid="button-open-palette"
             aria-label={t("accessibility.openSearch")}
-            className="hidden h-8 items-center gap-2 rounded-full border border-border/60 bg-muted/40 px-3 text-xs text-muted-foreground transition-colors hover-elevate sm:flex"
+            className="hidden h-8 shrink-0 items-center gap-2 whitespace-nowrap rounded-full border border-border/60 bg-muted/40 px-3 text-xs text-muted-foreground transition-colors hover-elevate sm:flex"
           >
             <Search className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
             <span className="hidden lg:inline">Search</span>
@@ -131,7 +133,7 @@ export function AppTopBar({
         </Suspense>
 
         {simplifyMobileNavigation ? (
-          <span className="hidden sm:block">
+          <span className="hidden min-w-0 sm:block">
             <CompanySelector />
           </span>
         ) : (

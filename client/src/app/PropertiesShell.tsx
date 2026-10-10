@@ -1,6 +1,7 @@
 import { useState, useRef } from "react";
 import { useMainContentFocus } from "@/hooks/use-main-content-focus";
 import { useWorkspaceWheelScroll } from "@/hooks/use-workspace-wheel-scroll";
+import { useScrollOverflowProbe } from "@/hooks/use-scroll-overflow-probe";
 import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
 import { AppModeProvider } from "@/contexts/AppModeContext";
 import { SidebarProvider } from "@/components/ui/sidebar";
@@ -28,6 +29,8 @@ export function PropertiesShell({ user, currentLocation, handleLogout, leaveConf
   const propertiesContainerRef = useRef<HTMLDivElement>(null);
   useMainContentFocus(currentLocation);
   useWorkspaceWheelScroll(propertiesContainerRef);
+  // Fades the trailing edge of tab strips that still hide tabs (data-scroll-overflow).
+  useScrollOverflowProbe(propertiesContainerRef);
   const hasAdminSearch = canUseAdminSearch(user);
 
   return (

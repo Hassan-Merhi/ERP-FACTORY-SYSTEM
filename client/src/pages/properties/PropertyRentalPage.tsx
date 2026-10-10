@@ -400,7 +400,7 @@ export default function PropertyRentalPage({
                   </div>
                 ) : (
                   <table className="w-full text-sm">
-                    <thead className="bg-muted/50 border-b sticky top-0 z-30">
+                    <thead className="bg-muted border-b sticky top-0 z-30">
                       <tr>
                         <th className="px-3 py-2 w-8" onClick={(e) => e.stopPropagation()}>
                           <Checkbox

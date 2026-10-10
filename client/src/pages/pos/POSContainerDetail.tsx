@@ -392,7 +392,7 @@ export default function POSContainerDetail() {
 
       <div className="min-h-0 flex-1 overflow-auto rounded-xl border bg-card/30 shadow-sm" data-table-scroll-region>
         <Table>
-          <TableHeader className="sticky top-0 z-10 bg-background/95 backdrop-blur">
+          <TableHeader className="sticky top-0 z-10 bg-background">
             <TableRow>
               <TableHead className="w-16 text-center">No.</TableHead>
               <TableHead>Item Name</TableHead>

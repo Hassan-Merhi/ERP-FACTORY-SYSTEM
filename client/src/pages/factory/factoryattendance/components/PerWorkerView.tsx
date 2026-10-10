@@ -4,24 +4,24 @@ import type { ClientErrorLike } from "@/lib/clientError";
  *
  * Extracted from FactoryAttendance.tsx during the Phase 4 god-file split.
  */
-import {useState, useEffect} from "react";
-import {useQuery, useMutation} from "@tanstack/react-query";
-import {queryClient, apiRequest} from "@/lib/queryClient";
-import {Button} from "@/components/ui/button";
-import {Card, CardContent, CardHeader, CardTitle} from "@/components/ui/card";
-import {Badge} from "@/components/ui/badge";
-import {Input} from "@/components/ui/input";
-import {Label} from "@/components/ui/label";
-import {Checkbox} from "@/components/ui/checkbox";
-import {Skeleton} from "@/components/ui/skeleton";
-import {Popover, PopoverContent, PopoverTrigger} from "@/components/ui/popover";
-import {Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList} from "@/components/ui/command";
-import {useToast} from "@/hooks/use-toast";
-import {CalendarDays, CheckCircle, XCircle, Save, UserCheck, UserX, User, ChevronsUpDown, Check} from "lucide-react";
+import { useState, useEffect } from "react";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { queryClient, apiRequest } from "@/lib/queryClient";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { useToast } from "@/hooks/use-toast";
+import { CalendarDays, CheckCircle, XCircle, Save, UserCheck, UserX, User, ChevronsUpDown, Check } from "lucide-react";
 
-import type {AttendanceRecord, WorkerRow} from "../types";
-import {generateDateRange, todayStr} from "../utils";
-import {SummaryCard} from "./SummaryCard";
+import type { AttendanceRecord, WorkerRow } from "../types";
+import { generateDateRange, todayStr } from "../utils";
+import { SummaryCard } from "./SummaryCard";
 
 export function PerWorkerView() {
   const { toast } = useToast();
@@ -304,7 +304,7 @@ export function PerWorkerView() {
           ) : (
             <div className="table-responsive">
               <table className="w-full text-sm">
-                <thead className="sticky top-0 z-30 bg-muted/30 backdrop-blur">
+                <thead className="sticky top-0 z-30 bg-muted">
                   <tr className="border-b border-border/60">
                     <th className="text-left px-4 py-2 font-medium text-muted-foreground w-8">#</th>
                     <th className="text-left px-4 py-2 font-medium text-muted-foreground">Date</th>
