@@ -19,23 +19,13 @@ import { apiRequest } from "@/lib/queryClient";
 import { visibleTabInterval } from "@/lib/queryPolicies";
 import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
 import { translatePriorityScanText, type PriorityScanTranslationKey } from "@/i18n/priorityScanTranslations";
+import { DEFAULT_PRIORITY_SCAN_COLOR, PRIORITY_SCAN_COLORS } from "@shared/priorityScanColors";
 
 const PRIORITY_SCAN_CONFIGS_URL = "/api/factory/customer-orders/loading-list/priority-scan-configs";
 const FACTORY_SETTINGS_URL = "/api/factory/settings";
-const DEFAULT_COLOR_PRESETS = [
-  "#2563eb",
-  "#16a34a",
-  "#dc2626",
-  "#f59e0b",
-  "#7c3aed",
-  "#0891b2",
-  "#db2777",
-  "#111827",
-  "#eab308",
-  "#64748b",
-] as const;
-const DEFAULT_COLOR = DEFAULT_COLOR_PRESETS[0];
-const PRIORITY_SCAN_PALETTE_SIZE = 10;
+const DEFAULT_COLOR_PRESETS = PRIORITY_SCAN_COLORS;
+const DEFAULT_COLOR = DEFAULT_PRIORITY_SCAN_COLOR;
+const PRIORITY_SCAN_PALETTE_SIZE = PRIORITY_SCAN_COLORS.length;
 
 interface PriorityScanConfig {
   id: number;
