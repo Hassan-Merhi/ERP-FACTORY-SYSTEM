@@ -2,7 +2,31 @@
 
 **Date:** 2026-10-10 · **Branch audited:** `main` at `86a5aa3` · **Scope:** rendered web app (not the Capacitor builds)
 
-## Score: **73 / 100**
+## Score: **88 / 100** after Phases 1–8 (was **73 / 100** on `main` at `86a5aa3`)
+
+| Area | Weight | Before | After | What changed / what is left |
+| --- | --- | --- | --- | --- |
+| Desktop (1440×900, 1920×1080) | 25 | 21 | **23** | Opaque sticky headers at the true top of the workspace, legible column labels, notes launcher inside the content column, page scroll with native wheel on every list route. Left: 10px chip/badge text (≈6 nodes per route), wide tables still clip at 1440 (now with an edge fade), no frozen reference column applied, no content max-width at 1920. |
+| Tablet (768×1024, 1024×768) | 20 | 11 | **17** | Sidebar collapsed by default below 1024px (user pin remembered, parked links inert), Vouchers usable in both orientations, payroll table scrolls instead of collapsing, Properties tiles fixed, 44px header controls, theme toggle on screen. Left: wide tables scroll sideways inside the page (by design), Daybook keeps its own scroll region for windowed rendering. |
+| Phone (390×844 portrait, 844×390 landscape) | 25 | 20 | **22** | Voucher title no longer clipped, Properties on the ERP phone contract (header, cards, summary grid, no floating launcher), Customers cards, POS checkout bar above the bottom nav, tab-strip and table edge fades, landscape phones keep the phone lists via `phone-land:` and hide keyboard hints. Left: landscape keeps the drawer-plus-hamburger chrome (deliberate), three Factory hubs have no title strip. |
+| Scrolling behaviour | 15 | 10 | **14** | Workspace tables let the page scroll (narrow ones keep a page-sticky header), zero `calc(100vh - N)` in the client, the synthetic wheel forwarder and the body scroll-lock sweep are gone with rendered evidence, voucher pickers and chat use `dvh`. Left: wide tables cannot have both a page-sticky header and a sideways scroller. |
+| Consistency and design system | 10 | 7 | **8** | One breakpoints module, `touch` and `phone-land` Tailwind variants so components declare their own touch/landscape behaviour, route-scoped overrides removed (`!important` 147 → 122, class-string selectors 53 → 9), Properties shares the ERP contracts, Payroll/Invoicing hubs on `PageHeader`. Left: four mobile stylesheets remain, the `index.css` `.flex.gap-*` wrap rule and its two undo blocks, most mobile tests still assert source text. |
+| Accessibility and touch ergonomics | 5 | 4 | **4** | Collapsed sidebar is inert, 44px header controls on coarse pointers, shortcut badges hidden on touch, launcher hidden until anchored. Left: 10px text, web fonts from the network. |
+
+### Re-audit evidence (branch `claude/fervent-hopper-wzfayi` at `2238e0e`, same harness and seeded data as §1)
+
+| Pass | Routes × sizes | Doc or workspace overflow | Controls off-screen | Sub-40px touch controls | Nested vertical scrollers | Wheel / swipe moved the page |
+| --- | --- | --- | --- | --- | --- | --- |
+| ERP (clean profile) | 16 × 6 (phone, phone landscape, tablet, tablet landscape, desktop, wide) | 0 / 96 | 0 | only the visually hidden skip link and in-table reference links | 0.13 avg (tab strips, not tables) | 25 / 25 on desktop and wide, 42 / 42 swipes on touch sizes |
+| Factory | 10 × 5 | 0 / 50 | 0 | skip link only | 0 | 24 / 24 |
+| Properties | 7 × 3 | 0 / 21 | 0 | skip link only | 0 | 6 / 6 |
+| POS sale screen | 4 sizes | 0 | 0 | 0 on phone and tablet | — | — |
+
+Before the phases, the same ERP matrix reported 11–23 off-screen controls per tablet route, two 32px header buttons on every touch capture, a nested scroller on every stock list route, and no page movement from a wheel on three list routes at every size. Tables that still scroll sideways: Containers OTW below 1920, and the Factory stock-entry cart, raw-stock and payroll tables at 768 (all with the edge fade, none with a trapped page scroll).
+
+The repository's own `run-responsive-browser-smoke.mjs` now dismisses the first-run prompts; against this dev server it still reports the loading boundary on heavy routes because the per-route settle time is shorter than Vite's first transform, so the documented runbook (run it against a build) stands.
+
+Score as it was on `main` before any change, for reference:
 
 | Area | Weight | Score | One-line verdict |
 | --- | --- | --- | --- |
@@ -337,7 +361,16 @@ Verified with the rendered harness on ERP, Factory and Properties at phone, phon
 | Fix dialog lifecycle instead of `useDialogScrollFix` | Find the dialogs unmounted mid-close (rapid open/close, route changes while open) and keep them mounted until `onAnimationEnd`; then delete the MutationObserver hook. | Body never left with `overflow: hidden` after 50 open/close cycles; hook removed. |
 | Phone landscape top bar | Apply the phone top-bar variant (no shortcut hint, 44px controls) when `ERP_PHONE_LAYOUT_QUERY` matches, not only below 640px. | 844×390 capture shows the simplified bar. |
 
-### Phase 8 — Consolidate the mobile layer and the tests (two to four weeks, incremental)
+### Phase 8 — Consolidate the mobile layer and the tests (two to four weeks, incremental) — STARTED (first increment shipped)
+
+Shipped on this branch:
+
+- **Named variants instead of attribute-matched overrides.** Tailwind gained `touch` (`(hover: none) and (pointer: coarse)`) and `phone-land` (short coarse-pointer screens) screens. The 44 hover-revealed row controls declare `touch:opacity-100` / `touch:visible` themselves; the nine landscape-phone list/table pairs declare `phone-land:block` / `phone-land:hidden`; the opening/closing stock grids and the Settings two-column editors carry their own responsive classes. The route-scoped `[data-erp-route="…"] [class*="…"]` rules, the ERP and Factory hover blocks, the shared attribute rule and the duplicated ERP touch floors were deleted: `!important` 147 → 122, class-string selectors 53 → 9. The `index.css` `.flex.gap-*` wrap rule and its undo blocks stay for a later increment because every page row depends on them.
+- **Tests:** the four source-text tests that pinned the removed rules now assert the component contract (the variant on the control, the page classes, the absence of the override), and the Table scroll modes, overflow probe and sidebar default have behaviour tests. The remaining `mobile-responsive-phase*` files are still source-text assertions.
+- **Smoke runbook:** `run-responsive-browser-smoke.mjs` dismisses the language onboarding and daily-rate prompts after login.
+
+Not done (next increments): fold `mobile-shell-dialogs.css` and `mobile-card-table.css` into the dialog and table primitives, retire the `.flex.gap-*` wrap rule by giving action rows an explicit `flex-wrap`, and convert the rest of the phase tests.
+
 
 | Item | Change | Done when |
 | --- | --- | --- |

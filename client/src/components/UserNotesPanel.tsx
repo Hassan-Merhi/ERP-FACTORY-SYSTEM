@@ -52,6 +52,8 @@ export function UserNotesPanel() {
   const [draft, setDraft] = useState<string | null>(null);
   const [savedRecently, setSavedRecently] = useState(false);
   const [pos, setPos] = useState<{ x: number; y: number }>(getSavedPos);
+  // Hidden until the workspace exists, so it never floats over the app loading screen.
+  const [anchored, setAnchored] = useState(false);
   const [currentLocation] = useLocation();
 
   // Keep the launcher inside the content column. The default (and any saved) position sat at
@@ -82,6 +84,7 @@ export function UserNotesPanel() {
         return;
       }
       relocate();
+      setAnchored(true);
       if (typeof ResizeObserver !== "undefined") {
         observer = new ResizeObserver(relocate);
         observer.observe(main);
@@ -216,7 +219,7 @@ export function UserNotesPanel() {
             data-testid="button-open-user-notes"
             aria-label="My notes"
             style={{ left: pos.x, top: pos.y }}
-            className="group fixed z-50 flex items-center gap-2 rounded-full bg-primary text-primary-foreground shadow-md px-3 py-2 opacity-30 hover:opacity-100 transition-all duration-300 ease-in-out overflow-hidden max-w-[2.25rem] hover:max-w-[120px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring select-none cursor-grab active:cursor-grabbing"
+            className={`${anchored ? "" : "invisible "}group fixed z-50 flex items-center gap-2 rounded-full bg-primary text-primary-foreground shadow-md px-3 py-2 opacity-30 hover:opacity-100 transition-all duration-300 ease-in-out overflow-hidden max-w-[2.25rem] hover:max-w-[120px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring select-none cursor-grab active:cursor-grabbing`}
           >
             <NotebookPen className="h-4 w-4 flex-shrink-0" />
             <span className="text-sm font-medium whitespace-nowrap opacity-0 group-hover:opacity-100 touch:opacity-100 transition-opacity duration-200 delay-100">
