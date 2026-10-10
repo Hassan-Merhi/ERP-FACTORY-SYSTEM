@@ -281,7 +281,7 @@ export function PriorityScanLoadingControl({ load }: PriorityScanLoadingControlP
               </div>
               {config?.color && !isApprovedPriorityScanColor(config.color) && (
                 <p className="text-xs text-muted-foreground" data-testid={`legacy-priority-color-${load.id}`}>
-                  Existing priority color {config.color} is preserved until you select and save one of the 11 approved colors.
+                  {tr("legacyPriorityColorNotice", { color: config.color })}
                 </p>
               )}
               {selectedColorInUse && <p className="text-xs text-destructive">{tr("colorAlreadyAssigned")}</p>}
