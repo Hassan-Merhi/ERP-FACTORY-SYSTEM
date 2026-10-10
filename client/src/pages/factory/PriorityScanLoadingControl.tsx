@@ -19,13 +19,10 @@ import { apiRequest } from "@/lib/queryClient";
 import { visibleTabInterval } from "@/lib/queryPolicies";
 import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
 import { translatePriorityScanText, type PriorityScanTranslationKey } from "@/i18n/priorityScanTranslations";
-import { DEFAULT_PRIORITY_SCAN_COLOR, PRIORITY_SCAN_COLORS } from "@shared/priorityScanColors";
+import { DEFAULT_PRIORITY_SCAN_COLOR, PRIORITY_SCAN_COLORS, isApprovedPriorityScanColor } from "@shared/priorityScanColors";
 
 const PRIORITY_SCAN_CONFIGS_URL = "/api/factory/customer-orders/loading-list/priority-scan-configs";
-const FACTORY_SETTINGS_URL = "/api/factory/settings";
-const DEFAULT_COLOR_PRESETS = PRIORITY_SCAN_COLORS;
 const DEFAULT_COLOR = DEFAULT_PRIORITY_SCAN_COLOR;
-const PRIORITY_SCAN_PALETTE_SIZE = PRIORITY_SCAN_COLORS.length;
 
 interface PriorityScanConfig {
   id: number;
@@ -33,11 +30,6 @@ interface PriorityScanConfig {
   color: string;
   priority: number;
   enabled: boolean;
-}
-
-interface FactorySettingsResponse {
-  priorityScanColorPresets?: unknown;
-  [key: string]: unknown;
 }
 
 interface PriorityScanLoadingControlProps {
@@ -48,33 +40,8 @@ interface PriorityScanLoadingControlProps {
   };
 }
 
-function isHexColor(value: string | null | undefined): value is string {
-  return typeof value === "string" && /^#[0-9a-f]{6}$/i.test(value);
-}
-
 function normalizeColorKey(value: string): string {
   return value.trim().replace(/\s+/g, " ").toLocaleLowerCase("en-US");
-}
-
-function resolveColorPresets(raw: unknown): string[] {
-  const saved = Array.isArray(raw) ? raw.filter((value): value is string => isHexColor(value)) : [];
-  const colors = saved.slice(0, PRIORITY_SCAN_PALETTE_SIZE);
-
-  for (const fallback of DEFAULT_COLOR_PRESETS) {
-    if (colors.length >= PRIORITY_SCAN_PALETTE_SIZE) break;
-    if (!colors.some((color) => normalizeColorKey(color) === normalizeColorKey(fallback))) {
-      colors.push(fallback);
-    }
-  }
-
-  return colors.slice(0, PRIORITY_SCAN_PALETTE_SIZE);
-}
-
-function samePalette(left: string[], right: string[]): boolean {
-  return (
-    left.length === right.length &&
-    left.every((color, index) => normalizeColorKey(color) === normalizeColorKey(right[index] ?? ""))
-  );
 }
 
 export function PriorityScanLoadingControl({ load }: PriorityScanLoadingControlProps) {
@@ -89,16 +56,9 @@ export function PriorityScanLoadingControl({ load }: PriorityScanLoadingControlP
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedColor, setSelectedColor] = useState<string>(DEFAULT_COLOR);
   const [selectedPriority, setSelectedPriority] = useState(1);
-  const [selectedPresetIndex, setSelectedPresetIndex] = useState<number | null>(0);
-  const [draftColorPresets, setDraftColorPresets] = useState<string[]>([...DEFAULT_COLOR_PRESETS]);
 
   const { data: configs = [] } = useQuery<PriorityScanConfig[]>({
     queryKey: [PRIORITY_SCAN_CONFIGS_URL],
-    refetchInterval: visibleTabInterval(60_000),
-  });
-
-  const { data: factorySettings } = useQuery<FactorySettingsResponse>({
-    queryKey: [FACTORY_SETTINGS_URL],
     refetchInterval: visibleTabInterval(60_000),
   });
 
@@ -107,11 +67,6 @@ export function PriorityScanLoadingControl({ load }: PriorityScanLoadingControlP
   });
   const effectiveRole = currentUser?.currentRole ?? currentUser?.role ?? "";
   const canManagePriority = effectiveRole === "Admin" || effectiveRole === "Developer" || effectiveRole === "Owner";
-
-  const colorPresets = useMemo(
-    () => resolveColorPresets(factorySettings?.priorityScanColorPresets),
-    [factorySettings?.priorityScanColorPresets]
-  );
 
   const activeConfigs = useMemo(
     () => configs.filter((config) => config.enabled).sort((a, b) => a.priority - b.priority || a.orderId - b.orderId),
@@ -126,19 +81,16 @@ export function PriorityScanLoadingControl({ load }: PriorityScanLoadingControlP
     [activeConfigs, load.id]
   );
   const selectedColorInUse = usedColorKeys.has(normalizeColorKey(selectedColor));
+  const selectedColorApproved = isApprovedPriorityScanColor(selectedColor);
 
   const refreshQueue = async () => {
     await queryClient.invalidateQueries({ queryKey: [PRIORITY_SCAN_CONFIGS_URL] });
   };
 
   const saveMutation = useMutation({
-    mutationFn: async ({ color, priority, palette }: { color: string; priority?: number; palette: string[] }) => {
-      if (canManagePriority && !samePalette(palette, colorPresets)) {
-        const paletteRes = await apiRequest("PUT", FACTORY_SETTINGS_URL, {
-          priorityScanColorPresets: palette,
-        });
-        const savedSettings = (await paletteRes.json()) as FactorySettingsResponse;
-        queryClient.setQueryData([FACTORY_SETTINGS_URL], savedSettings);
+    mutationFn: async ({ color, priority }: { color: string; priority?: number }) => {
+      if (!isApprovedPriorityScanColor(color)) {
+        throw new Error("Select one of the eleven approved Priority Scan colors.");
       }
 
       const payload: { color: string; enabled: boolean; priority?: number } = {
@@ -155,7 +107,7 @@ export function PriorityScanLoadingControl({ load }: PriorityScanLoadingControlP
       return res.json() as Promise<PriorityScanConfig>;
     },
     onSuccess: async (saved) => {
-      await Promise.all([refreshQueue(), queryClient.invalidateQueries({ queryKey: [FACTORY_SETTINGS_URL] })]);
+      await refreshQueue();
       setDialogOpen(false);
       toast({
         title: canManagePriority ? tr("prioritySaved", { priority: saved.priority }) : tr("colorSaved"),
@@ -201,39 +153,20 @@ export function PriorityScanLoadingControl({ load }: PriorityScanLoadingControlP
   });
 
   const openEditor = () => {
-    const currentPalette = [...colorPresets];
-    const configuredColor = isHexColor(config?.color) ? config.color : null;
-    const availableDefault =
-      currentPalette.find((color) => !usedColorKeys.has(normalizeColorKey(color))) ??
-      currentPalette[0] ??
-      DEFAULT_COLOR;
-    const initialColor = configuredColor ?? availableDefault;
-    const initialPresetIndex = currentPalette.findIndex(
-      (color) => normalizeColorKey(color) === normalizeColorKey(initialColor)
-    );
-
-    setDraftColorPresets(currentPalette);
+    const availableDefault = PRIORITY_SCAN_COLORS.find((color) => !usedColorKeys.has(normalizeColorKey(color))) ?? DEFAULT_COLOR;
+    // Existing unsupported colors are retained in records, but may not be resaved.
+    // Force an explicit approved selection when editing an old priority.
+    const initialColor = config?.color && isApprovedPriorityScanColor(config.color)
+      ? PRIORITY_SCAN_COLORS.find((color) => normalizeColorKey(color) === normalizeColorKey(config.color)) ?? availableDefault
+      : availableDefault;
     setSelectedColor(initialColor);
-    setSelectedPresetIndex(initialPresetIndex >= 0 ? initialPresetIndex : null);
     setSelectedPriority(Math.min(config?.priority ?? maxSelectablePriority, maxSelectablePriority));
     setDialogOpen(true);
   };
 
-  const selectPreset = (color: string, index: number) => {
-    if (usedColorKeys.has(normalizeColorKey(color))) return;
-    setSelectedPresetIndex(index);
+  const selectPreset = (color: string) => {
+    if (!isApprovedPriorityScanColor(color) || usedColorKeys.has(normalizeColorKey(color))) return;
     setSelectedColor(color);
-  };
-
-  const updateSelectedPresetColor = (color: string) => {
-    setSelectedColor(color);
-
-    if (selectedPresetIndex === null) return;
-    setDraftColorPresets((current) => {
-      const next = [...current];
-      next[selectedPresetIndex] = color;
-      return next;
-    });
   };
 
   const busy = saveMutation.isPending || moveMutation.isPending || removeMutation.isPending;
@@ -326,36 +259,25 @@ export function PriorityScanLoadingControl({ load }: PriorityScanLoadingControlP
             <div className="space-y-2">
               <Label>{tr("priorityColorLabel")}</Label>
               <div className="flex flex-wrap items-center gap-2">
-                {draftColorPresets.map((color, index) => {
+                {PRIORITY_SCAN_COLORS.map((color) => {
                   const unavailable = usedColorKeys.has(normalizeColorKey(color));
-                  const selected =
-                    selectedPresetIndex === index && normalizeColorKey(selectedColor) === normalizeColorKey(color);
+                  const selected = normalizeColorKey(selectedColor) === normalizeColorKey(color);
                   return (
                     <button
-                      key={index}
+                      key={color}
                       type="button"
                       className={`h-8 w-8 rounded-full border-2 transition-transform ${selected ? "border-foreground scale-110" : "border-border"} ${unavailable ? "opacity-30 cursor-not-allowed" : "hover:scale-105"}`}
                       style={{ backgroundColor: color }}
-                      onClick={() => selectPreset(color, index)}
+                      onClick={() => selectPreset(color)}
                       disabled={unavailable}
                       aria-label={tr("useColor", { color })}
                       title={unavailable ? tr("colorUsed") : color}
                     />
                   );
                 })}
-                <div className="ml-1 flex items-center gap-2">
-                  <input
-                    type="color"
-                    value={isHexColor(selectedColor) ? selectedColor : DEFAULT_COLOR}
-                    onChange={(event) => updateSelectedPresetColor(event.target.value)}
-                    className="h-9 w-12 cursor-pointer rounded border border-border bg-transparent p-0.5"
-                    data-testid={`input-priority-color-${load.id}`}
-                    aria-label={tr("chooseCustomColor")}
-                  />
-                  <Badge variant="outline" className="font-mono text-xs">
-                    {selectedColor.toUpperCase()}
-                  </Badge>
-                </div>
+                <Badge variant="outline" className="font-mono text-xs" aria-live="polite">
+                  {selectedColor.toUpperCase()}
+                </Badge>
               </div>
               {selectedColorInUse && <p className="text-xs text-destructive">{tr("colorAlreadyAssigned")}</p>}
             </div>
@@ -406,10 +328,9 @@ export function PriorityScanLoadingControl({ load }: PriorityScanLoadingControlP
                   saveMutation.mutate({
                     color: selectedColor,
                     priority: canManagePriority ? selectedPriority : undefined,
-                    palette: draftColorPresets,
                   })
                 }
-                disabled={busy || !load.proformaIdUsed || selectedColorInUse}
+                disabled={busy || !load.proformaIdUsed || selectedColorInUse || !selectedColorApproved}
                 data-testid={`button-save-priority-${load.id}`}
               >
                 {saveMutation.isPending
