@@ -548,8 +548,35 @@ export function StockEntryTab({ showHistory = false, onOpenHistory }: StockEntry
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["/api/factory/stock-entry/in-stock"] });
       queryClient.invalidateQueries({ queryKey: ["/api/factory/bales/daily-summary"] });
-      toast({ title: "Stock Entry Recorded", description: `${totalQty} bale(s) added to inventory.` });
-      printLabels(data.bales, cart, baleProducts, selectedLogoId, modeApiRequest, toast, preOpenedWindowsRef);
+      const allocated = Number(data.autoPrioritySummary?.allocated ?? 0);
+      const leftInStock = Number(data.autoPrioritySummary?.leftInStock ?? data.bales.length - allocated);
+      toast({
+        title: "Stock Entry Recorded",
+        description:
+          allocated > 0
+            ? `${data.bales.length} bale(s) received; ${allocated} automatically loaded, ${leftInStock} kept unallocated in stock.`
+            : `${data.bales.length} bale(s) received into inventory; no automatic loading required.`,
+      });
+      if (data.automaticPriorityModeEnabled && allocated > 0) {
+        void queryClient.invalidateQueries({
+          queryKey: ["/api/factory/customer-orders/loading-list/priority-scan-configs"],
+        });
+        void queryClient.invalidateQueries({
+          queryKey: ["/api/factory/customer-orders/loading-list/priority-scan-route"],
+        });
+        void queryClient.invalidateQueries({ queryKey: ["/api/factory/customer-orders/loading-list"] });
+      }
+      void printLabels(
+        data.bales,
+        cart,
+        baleProducts,
+        selectedLogoId,
+        modeApiRequest,
+        toast,
+        preOpenedWindowsRef,
+        data.autoPriorityAllocations ?? [],
+        data.automaticPriorityModeEnabled === true
+      );
       setCart([]);
       setProductionPositionByProduct({});
       setConfirmDialogOpen(false);
