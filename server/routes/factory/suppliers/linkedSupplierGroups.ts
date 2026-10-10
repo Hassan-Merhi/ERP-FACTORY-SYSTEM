@@ -6,7 +6,9 @@ import {
   factorySupplierFxTransfers,
   factorySupplierPayments,
 } from "@shared/schema";
+import type Decimal from "decimal.js";
 import { db } from "../../../db";
+import { MoneyDecimal, lineAmount, sumMoney, toMoney } from "../../../lib/money";
 import { resolveStoredFxRate } from "../../../services/factory/currencyConversion";
 
 /**
@@ -57,21 +59,25 @@ export async function buildLinkedSupplierGroups(
         )
       );
 
-    const linkedByCurrency: Record<string, { containers: unknown[]; totalValue: number; totalCommission: number }> = {};
+    const linkedByCurrency: Record<string, { containers: unknown[]; totalValue: Decimal; totalCommission: Decimal }> =
+      {};
     for (const c of linkedContainers) {
-      const kg = parseFloat(c.actualReceivedKg || c.totalKg || "0");
-      const rate = parseFloat(c.ratePerKg || "0");
-      const freight = parseFloat(c.freight || "0");
+      const freight = toMoney(c.freight);
       const cc = c.currencyCode || "USD";
       // Use freightCurrencyCode directly (DB default is "USD", so AUD containers correctly separate USD freight)
       const freightCc = c.freightCurrencyCode || cc;
       const freightSameCcy = freightCc === cc;
       // Only include freight in this currency's value when it shares the container's currency
-      const value = kg * rate + (freightSameCcy ? freight : 0);
+      const value = lineAmount(c.actualReceivedKg || c.totalKg, c.ratePerKg).plus(freightSameCcy ? freight : 0);
       const cComms = commissions.filter((cm) => cm.containerId === c.id);
-      const totalComm = cComms.reduce((s: number, cm) => s + parseFloat(cm.commissionTotal || "0"), 0);
+      const totalComm = sumMoney(cComms.map((cm) => cm.commissionTotal));
       const commCc = c.commissionCurrencyCode || "USD";
-      if (!linkedByCurrency[cc]) linkedByCurrency[cc] = { containers: [], totalValue: 0, totalCommission: 0 };
+      if (!linkedByCurrency[cc])
+        linkedByCurrency[cc] = {
+          containers: [],
+          totalValue: new MoneyDecimal(0),
+          totalCommission: new MoneyDecimal(0),
+        };
       linkedByCurrency[cc].containers.push({
         id: c.id,
         containerNumber: c.containerNumber,
@@ -91,39 +97,47 @@ export async function buildLinkedSupplierGroups(
         commissionNotes: c.commissionNotes || null,
         notes: c.notes,
       });
-      linkedByCurrency[cc].totalValue += value;
+      linkedByCurrency[cc].totalValue = linkedByCurrency[cc].totalValue.plus(value);
       // Cross-currency freight (e.g. USD freight on an AUD container) belongs to the
       // child supplier's own statement — NOT to the broker's linked-supplier view.
       // Once the child transfers it via an FX transfer, it settles on the child's
       // statement and disappears. The broker does not need to track it here.
       // Commission goes into its own currency bucket
-      if (totalComm > 0) {
-        if (!linkedByCurrency[commCc]) linkedByCurrency[commCc] = { containers: [], totalValue: 0, totalCommission: 0 };
-        linkedByCurrency[commCc].totalCommission += totalComm;
+      if (totalComm.gt(0)) {
+        if (!linkedByCurrency[commCc])
+          linkedByCurrency[commCc] = {
+            containers: [],
+            totalValue: new MoneyDecimal(0),
+            totalCommission: new MoneyDecimal(0),
+          };
+        linkedByCurrency[commCc].totalCommission = linkedByCurrency[commCc].totalCommission.plus(totalComm);
       }
     }
 
-    const linkedPaidByCurrency: Record<string, number> = {};
+    const linkedPaidByCurrency: Record<string, Decimal> = {};
+    const addPaid = (cc: string, amount: Decimal) => {
+      linkedPaidByCurrency[cc] = (linkedPaidByCurrency[cc] ?? new MoneyDecimal(0)).plus(amount);
+    };
     for (const p of linkedPayments) {
       const cc = p.currencyCode || "USD";
-      linkedPaidByCurrency[cc] = (linkedPaidByCurrency[cc] || 0) + parseFloat(p.amount || "0");
+      addPaid(cc, toMoney(p.amount));
     }
     for (const t of linkedFxTransfers) {
       if (t.fromSupplierId === linked.id) {
         // Linked supplier sent funds out (FX Out) — counts as settled against their balance
         const cc = t.fromCurrencyCode || "USD";
-        linkedPaidByCurrency[cc] = (linkedPaidByCurrency[cc] || 0) + parseFloat(t.fromAmount || "0");
+        addPaid(cc, toMoney(t.fromAmount));
       }
       if (t.toSupplierId === linked.id) {
         // Linked supplier received USD back (e.g. round-trip return from broker) —
         // reduces net-settled so the exposure is correctly restored.
-        linkedPaidByCurrency["USD"] = (linkedPaidByCurrency["USD"] || 0) - parseFloat(t.toAmountUsd || "0");
+        addPaid("USD", toMoney(t.toAmountUsd).negated());
       }
     }
 
     const linkedCurrencyGroups = Object.entries(linkedByCurrency).map(([cc, data]) => {
-      const paid = linkedPaidByCurrency[cc] || 0;
-      const netPayable = data.totalValue - data.totalCommission - paid;
+      const paid = linkedPaidByCurrency[cc] ?? new MoneyDecimal(0);
+      const netPayable = data.totalValue.minus(data.totalCommission).minus(paid);
       return {
         currencyCode: cc,
         containers: data.containers,

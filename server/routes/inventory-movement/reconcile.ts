@@ -11,6 +11,7 @@ import { eq } from "drizzle-orm";
 import { db } from "../../db";
 import { requireAuth, requireRole } from "../../auth";
 import { inventory } from "@shared/schema";
+import { lineAmount, moneyString, sumMoney, toMoney } from "../../lib/money";
 
 export function registerInventoryReconcileRoutes(app: Express) {
   app.get("/api/inventory/reconcile", requireAuth, requireRole("Admin"), async (req, res) => {
@@ -21,10 +22,11 @@ export function registerInventoryReconcileRoutes(app: Express) {
       const allInventory = await db.select().from(inventory).where(eq(inventory.companyId, companyId));
 
       for (const inv of allInventory) {
-        const qty = parseFloat(inv.quantity || "0");
-        const rate = parseFloat(inv.averageRate || "0");
-        const totalValue = parseFloat(inv.totalValue || "0");
-        const expectedValue = qty * rate;
+        const qty = toMoney(inv.quantity).toNumber();
+        const rate = toMoney(inv.averageRate).toNumber();
+        const totalValue = toMoney(inv.totalValue).toNumber();
+        const expectedValue = lineAmount(inv.quantity, inv.averageRate);
+        const differenceExact = toMoney(inv.totalValue).minus(expectedValue);
 
         if (qty < 0) {
           issues.push({
@@ -37,7 +39,7 @@ export function registerInventoryReconcileRoutes(app: Express) {
           });
         }
 
-        if (qty > 0 && Math.abs(totalValue - expectedValue) > 0.02) {
+        if (qty > 0 && differenceExact.abs().gt("0.02")) {
           issues.push({
             type: "value_mismatch",
             severity: "error",
@@ -46,8 +48,8 @@ export function registerInventoryReconcileRoutes(app: Express) {
             quantity: qty,
             averageRate: rate,
             totalValue,
-            expectedValue: parseFloat(expectedValue.toFixed(2)),
-            difference: parseFloat((totalValue - expectedValue).toFixed(2)),
+            expectedValue: Number(moneyString(expectedValue)),
+            difference: Number(moneyString(differenceExact)),
             message: `Value mismatch: stored=${totalValue}, expected=${expectedValue.toFixed(2)}`,
           });
         }
@@ -107,7 +109,7 @@ export function registerInventoryReconcileRoutes(app: Express) {
         errorIssues: issues.filter((i) => i.severity === "error").length,
         warningIssues: issues.filter((i) => i.severity === "warning").length,
         infoIssues: issues.filter((i) => i.severity === "info").length,
-        totalInventoryValue: allInventory.reduce((sum, inv) => sum + parseFloat(inv.totalValue || "0"), 0).toFixed(2),
+        totalInventoryValue: moneyString(sumMoney(allInventory.map((inv) => inv.totalValue))),
       };
 
       res.json({ summary, issues });
