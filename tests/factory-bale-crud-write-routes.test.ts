@@ -163,6 +163,10 @@ beforeAll(async () => {
 }, 120000);
 
 afterAll(async () => {
+  await pool.query(`DELETE FROM factory_physical_bale_deletions WHERE company_id = $1`, [ctx.companyId]);
+  await pool.query(`DELETE FROM factory_daybook_entries WHERE company_id = $1 AND tx_type = 'BALE_REMOVAL'`, [
+    ctx.companyId,
+  ]);
   await pool.query(`DELETE FROM factory_bale_production_attributions WHERE company_id IN ($1, $2)`, [
     ctx.companyId,
     foreignCompanyId,
@@ -269,7 +273,7 @@ describe("DELETE /api/factory/bales/:id", () => {
     const id = await createBale({ status: "LABEL_PRINTED" });
 
     const response = await agent.delete(`/api/factory/bales/${id}`);
-    expect(response.status).toBe(200);
+    expect(response.status, JSON.stringify(response.body)).toBe(200);
 
     const row = await baleRow(id);
     // Both have to move. Stock queries exclude on one or the other depending on
@@ -312,6 +316,32 @@ describe("PATCH /api/factory/bales/bulk-status", () => {
       (await agent.patch("/api/factory/bales/bulk-status").send({ ids: [deleted], status: "IN_STOCK" })).status
     ).toBe(409);
     expect((await baleRow(deleted))?.status).toBe("DELETED");
+  });
+
+  // Merge of main #2134: a bulk DELETED of pre-stock bales runs the one
+  // physical-deletion service (deletion record), audited per bale in its transaction.
+  it("deletes pre-stock bales through the physical-deletion service, audited", async () => {
+    const ids = [await createBale({ status: "LABEL_PRINTED" }), await createBale({ status: "PRESSED" })];
+
+    const response = await agent.patch("/api/factory/bales/bulk-status").send({ ids, status: "DELETED" });
+    expect(response.status, JSON.stringify(response.body)).toBe(200);
+    expect(response.body.updated).toBe(2);
+    for (const id of ids) {
+      const row = await baleRow(id);
+      expect(row?.status).toBe("DELETED");
+      expect(row?.deleted_at).not.toBeNull();
+    }
+    const deletions = await pool.query(
+      `SELECT bale_id FROM factory_physical_bale_deletions WHERE company_id = $1 AND bale_id = ANY($2::int[])`,
+      [ctx.companyId, ids]
+    );
+    expect(deletions.rows).toHaveLength(2);
+    const audit = await pool.query(
+      `SELECT record_id FROM audit_log WHERE table_name = 'factory_bales' AND action = 'delete'
+          AND record_id = ANY($1::int[])`,
+      [ids]
+    );
+    expect(audit.rows).toHaveLength(2);
   });
 
   it("rejects an empty id list or a status outside the allowed set", async () => {

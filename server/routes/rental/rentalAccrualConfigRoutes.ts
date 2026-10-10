@@ -1,4 +1,8 @@
 import type { Express, Request, Response } from "express";
+import {
+  RentalAutoTransferScopeError,
+  runWithAutoTransferCounterparties,
+} from "../../services/rental/autoTransferScope";
 import { getErrorMessage } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
 import {
@@ -650,6 +654,43 @@ export function registerRentalAccrualConfigRoutes(
         })
         .parse(req.body);
 
+      // The rule decides which company and account receive money, so both are
+      // checked here: the user must hold the destination company, the account
+      // must be a live account of it, and the source cash accounts must be this
+      // company's own.
+      const destAccountValid = await runWithAutoTransferCounterparties([data.destCompanyId], async () => {
+        const [account] = await db
+          .select({ id: ledgerAccounts.id })
+          .from(ledgerAccounts)
+          .where(
+            and(
+              eq(ledgerAccounts.id, data.destLedgerAccountId),
+              eq(ledgerAccounts.companyId, data.destCompanyId),
+              isNull(ledgerAccounts.deletedAt)
+            )
+          );
+        return Boolean(account);
+      });
+      if (!destAccountValid) {
+        return res.status(400).json({ message: "The destination account does not belong to the destination company" });
+      }
+      const sourceIds = [...new Set(data.sourceCashAccountIds)];
+      if (sourceIds.length > 0) {
+        const owned = await db
+          .select({ id: ledgerAccounts.id })
+          .from(ledgerAccounts)
+          .where(
+            and(
+              inArray(ledgerAccounts.id, sourceIds),
+              eq(ledgerAccounts.companyId, companyId),
+              isNull(ledgerAccounts.deletedAt)
+            )
+          );
+        if (owned.length !== sourceIds.length) {
+          return res.status(400).json({ message: "Every source cash account must belong to this company" });
+        }
+      }
+
       // Always insert a new rule (multiple rules per company+module are supported)
       const [created] = await db
         .insert(rentalAutoTransferConfigs)
@@ -663,6 +704,7 @@ export function registerRentalAccrualConfigRoutes(
     } catch (e: unknown) {
       if (e instanceof z.ZodError)
         return res.status(400).json({ message: e.issues.map((err) => err.message).join(", ") });
+      if (e instanceof RentalAutoTransferScopeError) return res.status(e.status).json({ message: e.message });
       res.status(500).json({ message: getErrorMessage(e) });
     }
   });

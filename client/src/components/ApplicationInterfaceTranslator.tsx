@@ -22,6 +22,7 @@ import {
 } from "@/i18n/backendMessagesPhase7Translations";
 import { translateFactoryProductionPlannerText } from "@/i18n/factoryProductionPlannerTranslations";
 import { translateFactoryInsuranceText } from "@/i18n/factoryInsuranceTranslations";
+import { translateAutomaticPriorityPrintingText } from "@/i18n/automaticPriorityPrintingTranslations";
 import {
   isPosItemReplacementText,
   translatePosItemReplacementLiteral,
@@ -143,6 +144,7 @@ export function translateApprovedInterfaceText(value: string, language: Applicat
     translatePosItemReplacementLiteral(value, language) ??
     translateFactoryProductionPlannerText(value, language) ??
     translateFactoryInsuranceText(value, language) ??
+    translateAutomaticPriorityPrintingText(value, language) ??
     translatePhase6ReportsExportsText(value, language) ??
     translatePhase5PropertiesRentalsText(value, language) ??
     translatePhase4SupplierPartnerText(value, language) ??

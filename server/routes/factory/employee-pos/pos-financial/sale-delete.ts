@@ -9,11 +9,11 @@ import { getErrorMessage } from "../../../../lib/httpHandlers";
 import { logger } from "../../../../lib/logger";
 import { db } from "../../../../db";
 import { requireAuth } from "../../../../auth";
-import { customerBalances, factoryBales, factoryPosSales, factoryPosSaleItems } from "@shared/schema";
-import { eq, and, desc, inArray, or } from "drizzle-orm";
+import { factoryBales, factoryPosSales, factoryPosSaleItems } from "@shared/schema";
+import { eq, and, desc, inArray } from "drizzle-orm";
 import { removeFactoryPosCogsTx } from "../../../../services/accounting/perpetualInventory/factoryPosCogs";
 import { releasePosSaleBalesTx } from "../../../../services/factory/factoryPosSaleBales";
-import { removeFactoryPosReceiptTx } from "../../../../services/accounting/factoryPosReceipt";
+import { reverseFactoryPosSaleFinancialsTx } from "./sale-financials";
 
 export function registerPosSaleDeleteRoutes(app: Express) {
   // DELETE /api/factory/pos/sales/:id — void a factory POS sale
@@ -32,9 +32,6 @@ export function registerPosSaleDeleteRoutes(app: Express) {
       await db.transaction(async (tx) => {
         // Perpetual inventory (wave 8.4): a voided sale takes its cost-of-sales journal with it.
         await removeFactoryPosCogsTx(tx, companyId, saleId);
-        // Wave 8.4 continuation: and its revenue/receipt voucher (FPOS-RCPT-{sale},
-        // or a legacy FPOS-{sale}-{timestamp} one), which a void used to leave posted.
-        await removeFactoryPosReceiptTx(tx, companyId, saleId);
         // Wave 11: put back exactly the bales the sale recorded. A sale written
         // before that record falls back to re-opening the most recent SOLD bales
         // of each product at its location.
@@ -68,21 +65,10 @@ export function registerPosSaleDeleteRoutes(app: Express) {
             }
           }
         }
-        // Wave 14: the sale's operational receivable rows (FACTORY_POS_SALE /
-        // FACTORY_POS_DEPOSIT in customer_balances) go with it, as an edit
-        // removes them before re-writing; a void used to leave them in place.
-        await tx
-          .delete(customerBalances)
-          .where(
-            and(
-              eq(customerBalances.referenceId, saleId),
-              eq(customerBalances.companyId, companyId),
-              or(
-                eq(customerBalances.referenceType, "FACTORY_POS_SALE"),
-                eq(customerBalances.referenceType, "FACTORY_POS_DEPOSIT")
-              )
-            )
-          );
+        // Take the sale's daybook rows (main #2129), its operational receivable
+        // rows (wave 14) and its revenue/receipt voucher (wave 8.4: FPOS-RCPT-{sale}
+        // or a legacy FPOS-{sale}-{timestamp}, retired) back out of the books.
+        await reverseFactoryPosSaleFinancialsTx(tx, companyId, saleId);
         // Mark sale as voided
         await tx.update(factoryPosSales).set({ status: "VOIDED" }).where(eq(factoryPosSales.id, saleId));
       });

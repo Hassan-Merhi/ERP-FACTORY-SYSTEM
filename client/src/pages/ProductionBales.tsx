@@ -36,6 +36,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { formatNumber } from "@/lib/formatNumber";
+import { priorityLogoTextStyleAttr } from "@/lib/labelHtml";
+import { withRecordedPriorityAllocations, type PriorityPrintAssignment } from "@/lib/priorityPrintPreflight";
 import type { Location, FactoryMixBatch } from "@shared/schema";
 import { useEscapeBack } from "@/hooks/use-escape-back";
 import { CreateMixBatchDialog } from "@/components/CreateMixBatchDialog";
@@ -54,6 +56,7 @@ function generateFinalLabelHtml(
     approxWeightKg: string;
     productName: string;
     locationName?: string;
+    priorityColor?: string | null;
   }>
 ) {
   let labelsHtml = "";
@@ -63,7 +66,7 @@ function generateFinalLabelHtml(
         <div class="code-label">
           <div class="label-top">
             <div class="logo-section">
-              <div class="logo-text">HMD</div>
+              <div class="logo-text"${priorityLogoTextStyleAttr(label)}>HMD</div>
               <div class="logo-subtitle">INTERNATIONAL GROUP</div>
             </div>
             <div class="info-section">
@@ -291,6 +294,7 @@ function BatchDetailView({ batch, onBack }: { batch: PressingBatch; onBack: () =
         if (labelResponse.ok) {
           const {
             labelPrints,
+            priorityAllocations = [],
           }: {
             labelPrints: {
               productionBaleId: number;
@@ -299,21 +303,28 @@ function BatchDetailView({ batch, onBack }: { batch: PressingBatch; onBack: () =
               pieces?: number | null;
               approxWeightKg?: string | number | null;
             }[];
+            priorityAllocations?: PriorityPrintAssignment[];
           } = await labelResponse.json();
 
           const baleMap = new Map(finalizedBales.map((b) => [b.id, b]));
-          const labels = labelPrints.map((lp) => {
-            const bale = baleMap.get(lp.productionBaleId) || {};
-            return {
-              referenceNumber: String(lp.referenceNumber ?? ""),
-              articleCode: String(lp.articleCode ?? (bale as { articleCode?: unknown }).articleCode ?? ""),
-              pieces: lp.pieces || 1,
-              approxWeightKg: String(lp.approxWeightKg ?? (bale as { weightKg?: unknown }).weightKg ?? "0"),
-              productName: String((bale as { productName?: unknown }).productName ?? ""),
-              locationName: locName,
-            };
-          });
+          const labels = withRecordedPriorityAllocations(
+            labelPrints.map((lp) => {
+              const bale = baleMap.get(lp.productionBaleId) || {};
+              return {
+                referenceNumber: String(lp.referenceNumber ?? ""),
+                articleCode: String(lp.articleCode ?? (bale as { articleCode?: unknown }).articleCode ?? ""),
+                pieces: lp.pieces || 1,
+                approxWeightKg: String(lp.approxWeightKg ?? (bale as { weightKg?: unknown }).weightKg ?? "0"),
+                productName: String((bale as { productName?: unknown }).productName ?? ""),
+                locationName: locName,
+              };
+            }),
+            labelPrints.map((lp) => lp.productionBaleId),
+            priorityAllocations
+          );
 
+          // Same finalization label for every bale; a priority bale only shows
+          // its small "HMD" text in the saved priority color.
           const printWindow = window.open("", "_blank");
           if (printWindow) {
             printWindow.document.write(generateFinalLabelHtml(labels));

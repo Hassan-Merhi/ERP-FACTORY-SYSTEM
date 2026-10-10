@@ -47,7 +47,7 @@ import type { FactoryBale, FactoryBaleProduct, Location, FactoryCategory } from 
 import type { CartItem, CreatedBale } from "./wipersreentry/types";
 import { exportCreatedBalesWorkbook } from "./wipersreentry/exportWorkbook";
 import { isWipers, isWipersBale } from "./wipersreentry/utils";
-import { buildLabelData, printLabelsInBrowser } from "./wipersreentry/printUtils";
+import { preparePriorityWipersLabels, printLabelsInBrowser } from "./wipersreentry/printUtils";
 import { productMatchesSearch } from "@shared/factoryProductSearch";
 import type { FactoryMyAccess } from "@shared/apiTypes";
 export default function WipersReEntry() {
@@ -230,7 +230,7 @@ export default function WipersReEntry() {
       queryClient.invalidateQueries({ queryKey: ["/api/factory/bales"], refetchType: "active" });
       toast({
         title: "Bales Removed",
-        description: `${data.removedCount || cleanupSelectedIds.size} bales removed from stock`,
+        description: `${data.removed} bales removed from stock`,
       });
     },
     onError: (err: Error) => {
@@ -246,9 +246,10 @@ export default function WipersReEntry() {
 
   const handlePrint = async (format: "A4" | "A5" | "sticker") => {
     if (!createdBales || createdBales.length === 0) return;
-    const labels = buildLabelData(createdBales);
+    const labels = await preparePriorityWipersLabels(createdBales, modeApiRequest, toast);
+    if (!labels) return;
 
-    if (isZebraMode() && format === "sticker") {
+    if (isZebraMode() && format === "sticker" && !labels.some((label) => label.priorityColor)) {
       try {
         const zpl = buildZplBatch(labels, true);
         await printRawZpl(zpl);
@@ -267,7 +268,8 @@ export default function WipersReEntry() {
 
   const handlePrintAll = async () => {
     if (!createdBales || createdBales.length === 0) return;
-    const labels = buildLabelData(createdBales);
+    const labels = await preparePriorityWipersLabels(createdBales, modeApiRequest, toast);
+    if (!labels) return;
     const paperFormat = getPaperFormat();
     if (paperFormat === "A4") {
       setPendingLabels(labels);
@@ -294,7 +296,9 @@ export default function WipersReEntry() {
     return <Redirect to="/factory/bale-relabeling" />;
   }
   if (!showWipersReEntry) {
-    return <div className="p-6 text-sm text-muted-foreground">No Bale Relabeling tabs are available for this user.</div>;
+    return (
+      <div className="p-6 text-sm text-muted-foreground">No Bale Relabeling tabs are available for this user.</div>
+    );
   }
 
   return (

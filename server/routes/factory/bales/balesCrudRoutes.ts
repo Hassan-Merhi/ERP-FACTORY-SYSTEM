@@ -13,15 +13,11 @@ import { logger } from "../../../lib/logger";
 import { parseId } from "../../../lib/parseId";
 import { db } from "../../../db";
 import { requireAuth, requireRole } from "../../../auth";
-import type { DbTransaction } from "../../../db";
 import { writeAuditEvent } from "../../../services/audit/auditService";
 import {
   BaleStatusChangeRefusal,
-  FACTORY_BALE_DELETE_CHANGES_VALUE_MESSAGE,
   FACTORY_BALE_STATUS_CHANGES_VALUE_MESSAGE,
-  isValueNeutralBaleDelete,
   isValueNeutralBaleStatusChange,
-  KNOWN_BALE_STATUSES,
 } from "../../../services/factory/baleStatusPolicy";
 
 import {
@@ -30,7 +26,6 @@ import {
   factoryBales,
   factoryBaleSequences,
   baleLabelPrints,
-  customerOrders,
   customerOrderBales,
   factoryWorkers,
   factoryV3LoadBales,
@@ -38,41 +33,14 @@ import {
   factoryBaleProductionAttributions,
 } from "@shared/schema";
 import { eq, and, desc, sql, inArray, not } from "drizzle-orm";
-
-/** The status vocabulary the routes accept (an unknown status is 400). */
-const ALLOWED = KNOWN_BALE_STATUSES;
-
-const BALE_ON_FINALIZED_ORDER_MESSAGE =
-  "Cannot set status to IN_STOCK: this bale is on a finalized order. Use the Return to Stock action to remove it from the order first.";
-
-class BaleOnFinalizedOrderError extends Error {}
-
-/**
- * A bale on a finalized, dispatched or sold order is not set back to IN_STOCK
- * here (the valuation does not count it as stock); the Return to Stock action
- * takes it off the order first.
- */
-async function assertNotOnFinalizedOrderTx(
-  tx: DbTransaction,
-  companyId: number,
-  status: string,
-  baleIds: number[]
-): Promise<void> {
-  if (status !== "IN_STOCK" || baleIds.length === 0) return;
-  const [onOrder] = await tx
-    .select({ baleId: customerOrderBales.baleId })
-    .from(customerOrderBales)
-    .innerJoin(customerOrders, eq(customerOrders.id, customerOrderBales.orderId))
-    .where(
-      and(
-        inArray(customerOrderBales.baleId, baleIds),
-        eq(customerOrders.companyId, companyId),
-        inArray(customerOrders.status, ["FINALIZED", "DISPATCHED", "SOLD"])
-      )
-    )
-    .limit(1);
-  if (onOrder) throw new BaleOnFinalizedOrderError(BALE_ON_FINALIZED_ORDER_MESSAGE);
-}
+import {
+  ALLOWED,
+  assertNoLiveLoadingLinkOutsideLoadingStatusTx,
+  assertNotOnFinalizedOrderTx,
+  baleWriteErrorResponse,
+  deletePreStockBalesTx,
+  lockPriorityScanQueueTx,
+} from "./baleStatusWriteGuards";
 
 export function registerBalesCrudRoutes(app: Express) {
   app.get("/api/factory/bales", requireAuth, async (req: Request, res: Response) => {
@@ -237,7 +205,9 @@ export function registerBalesCrudRoutes(app: Express) {
   // Phase 19 C (F3): Admin/Owner; only value-neutral changes (baleStatusPolicy:
   // within finished goods, or within the pre-stock statuses); any other bale in
   // the set refuses the whole change (409, nothing written). One transaction
-  // with one audit row per bale changed.
+  // with one audit row per bale changed. DELETED (main #2134) deletes pre-stock
+  // bales through the physical-deletion service; REMOVED and any revival of a
+  // deleted bale are refused by the policy.
   app.patch(
     "/api/factory/bales/bulk-status",
     requireAuth,
@@ -256,8 +226,20 @@ export function registerBalesCrudRoutes(app: Express) {
         const baleIds = [...new Set(ids.map(Number))];
         if (baleIds.some((id) => !Number.isInteger(id) || id <= 0))
           return res.status(400).json({ message: "ids must be bale ids" });
+        if (baleIds.length > 200) return res.status(400).json({ message: "Provide 1–200 unique physical bale IDs" });
 
         const updated = await db.transaction(async (tx) => {
+          await lockPriorityScanQueueTx(tx, companyId);
+          if (status === "DELETED") {
+            const removed = await deletePreStockBalesTx(
+              tx,
+              req,
+              companyId,
+              baleIds,
+              "Physical bales deleted via bulk status change"
+            );
+            return removed.length;
+          }
           const bales = await tx
             .select({
               id: factoryBales.id,
@@ -277,6 +259,12 @@ export function registerBalesCrudRoutes(app: Express) {
             companyId,
             status,
             bales.map((bale) => bale.id)
+          );
+          await assertNoLiveLoadingLinkOutsideLoadingStatusTx(
+            tx,
+            companyId,
+            bales.map((bale) => bale.id),
+            status
           );
           const changed = bales.filter((bale) => bale.status !== status);
           if (changed.length === 0) return 0;
@@ -313,9 +301,7 @@ export function registerBalesCrudRoutes(app: Express) {
 
         res.json({ updated });
       } catch (error: unknown) {
-        if (error instanceof BaleStatusChangeRefusal) return res.status(409).json(error.body);
-        if (error instanceof BaleOnFinalizedOrderError) return res.status(409).json({ message: error.message });
-        res.status(500).json({ message: getErrorMessage(error) });
+        baleWriteErrorResponse(res, error);
       }
     }
   );
@@ -364,7 +350,8 @@ export function registerBalesCrudRoutes(app: Express) {
 
   // Phase 19 C (F3): Admin/Owner; only a value-neutral change (baleStatusPolicy),
   // otherwise 409 pointing to the sale, removal and pressing flows. The change
-  // and its audit row commit together.
+  // and its audit row commit together. DELETED deletes a pre-stock bale through
+  // the physical-deletion service (main #2134), as DELETE does.
   app.patch(
     "/api/factory/bales/:id/status",
     requireAuth,
@@ -383,6 +370,11 @@ export function registerBalesCrudRoutes(app: Express) {
           return res.status(400).json({ message: `Invalid status. Allowed: ${ALLOWED.join(", ")}` });
 
         const updated = await db.transaction(async (tx) => {
+          await lockPriorityScanQueueTx(tx, companyId);
+          if (status === "DELETED") {
+            await deletePreStockBalesTx(tx, req, companyId, [id], "Physical bale deleted via status change");
+            return { id, status: "DELETED" };
+          }
           const [bale] = await tx
             .select({
               id: factoryBales.id,
@@ -400,6 +392,7 @@ export function registerBalesCrudRoutes(app: Express) {
             ]);
           }
           await assertNotOnFinalizedOrderTx(tx, companyId, status, [id]);
+          await assertNoLiveLoadingLinkOutsideLoadingStatusTx(tx, companyId, [id], status);
           if (bale.status === status) return { id, status };
           const [row] = await tx
             .update(factoryBales)
@@ -425,16 +418,16 @@ export function registerBalesCrudRoutes(app: Express) {
         if (!updated) return res.status(404).json({ message: "Bale not found" });
         res.json(updated);
       } catch (error: unknown) {
-        if (error instanceof BaleStatusChangeRefusal) return res.status(409).json(error.body);
-        if (error instanceof BaleOnFinalizedOrderError) return res.status(409).json({ message: error.message });
-        res.status(500).json({ message: getErrorMessage(error) });
+        baleWriteErrorResponse(res, error);
       }
     }
   );
 
   // Phase 19 C (F3): Admin/Owner; only a pre-stock bale (no value) is deleted
   // here; a valued or sold bale is removed or written off through Stock Removal
-  // (409). The delete and its audit row (the bale as it was) commit together.
+  // (409). The delete runs through the physical-deletion service (main #2134:
+  // loading links, Priority Scan reversal, deletion record, daybook) and commits
+  // with its audit row (the bale as it was).
   app.delete(
     "/api/factory/bales/:id",
     requireAuth,
@@ -447,44 +440,14 @@ export function registerBalesCrudRoutes(app: Express) {
         const id = parseId(req.params.id);
         if (id === null) return res.status(400).json({ message: "Invalid id" });
 
-        const deleted = await db.transaction(async (tx) => {
-          const [bale] = await tx
-            .select()
-            .from(factoryBales)
-            .where(and(eq(factoryBales.id, id), eq(factoryBales.companyId, companyId)))
-            .for("update");
-          if (!bale) return false;
-          if (!isValueNeutralBaleDelete(bale.status, bale.deletedAt)) {
-            throw new BaleStatusChangeRefusal(FACTORY_BALE_DELETE_CHANGES_VALUE_MESSAGE, [
-              { id, from: bale.status, to: "DELETED" },
-            ]);
-          }
-          const now = new Date();
-          await tx
-            .update(factoryBales)
-            .set({ status: "DELETED", deletedAt: now, updatedAt: now })
-            .where(and(eq(factoryBales.id, id), eq(factoryBales.companyId, companyId)));
-          await writeAuditEvent(
-            {
-              userId: String(req.session.userId ?? "unknown"),
-              username: req.session.username || String(req.session.userId ?? "unknown"),
-              companyId,
-              action: "delete",
-              tableName: "factory_bales",
-              recordId: id,
-              recordIdentifier: bale.referenceNumber || `Bale #${id}`,
-              changes: { status: { old: bale.status, new: "DELETED" }, bale: { old: bale } },
-            },
-            tx
-          );
-          return true;
+        await db.transaction(async (tx) => {
+          await lockPriorityScanQueueTx(tx, companyId);
+          await deletePreStockBalesTx(tx, req, companyId, [id], "Bale removed from Factory Bale History");
         });
 
-        if (!deleted) return res.status(404).json({ message: "Bale not found" });
         res.json({ message: "Bale deleted" });
       } catch (error: unknown) {
-        if (error instanceof BaleStatusChangeRefusal) return res.status(409).json(error.body);
-        res.status(500).json({ message: getErrorMessage(error) });
+        baleWriteErrorResponse(res, error);
       }
     }
   );

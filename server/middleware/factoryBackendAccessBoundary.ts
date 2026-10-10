@@ -30,6 +30,9 @@ function isFactoryAccessBoundaryExempt(req: Request, path: string): boolean {
   // Shared read-only configuration/assets are consumed by multiple permitted
   // Factory pages. Their mutations are still explicitly protected by Settings.
   if (path === "/settings") return true;
+  // Read-only company switch state; changing it requires Settings access and
+  // an Admin/Owner role (enforced by the route itself).
+  if (path === "/automatic-priority-mode") return true;
   if (path === "/label-design-colors" || path === "/label-banners") return true;
   if (/^\/customer-logos\/\d+\/image$/.test(path)) return true;
   return false;
@@ -369,6 +372,25 @@ export function resolveFactoryBackendAccessRequirement(req: Request): FactoryApi
     return requirement("factory/stock-allocation-v5");
   }
 
+  // Automatic Priority Printing & Loading. The company switch is a Factory
+  // Settings control; the print preflight is shared by every page that prints
+  // or reprints physical factory bale labels.
+  if (path === "/automatic-priority-mode") {
+    return requirement("factory/settings");
+  }
+  if (
+    path === "/customer-orders/loading-list/automatic-print-preflight-batch" ||
+    path === "/customer-orders/loading-list/automatic-print-preflight"
+  ) {
+    return anyOf(
+      requirement("factory/bales-hub"),
+      requirement("factory/bale-relabeling"),
+      requirement("factory/location-inventory"),
+      requirement("factory/stock-entry"),
+      requirement("factory/invoicing", ["hide_invoicing_loadings_tab"])
+    );
+  }
+
   // Invoicing and loading families.
   if (
     hasPrefix(path, "/customer-proformas") ||
@@ -489,7 +511,9 @@ export function resolveFactoryBackendAccessRequirement(req: Request): FactoryApi
   }
 
   if (hasPrefix(path, "/location-inventory")) {
-    return requirement("factory/location-inventory");
+    if (isWrite(req)) return requirement("factory/location-inventory");
+    // Factory POS reads the selling location's stock to build its product picker.
+    return anyOf(requirement("factory/location-inventory"), requirement("factory/pos"));
   }
   if (hasPrefix(path, "/bale-stock-list")) {
     return requirement("factory/stock-bale-list");
@@ -625,7 +649,8 @@ export function resolveFactoryBackendAccessRequirement(req: Request): FactoryApi
     return anyOf(
       requirement("factory/parties", ["hide_tab_parties_customers"]),
       requirement("factory/invoicing"),
-      requirement("factory/stock-entry")
+      requirement("factory/stock-entry"),
+      requirement("factory/pos")
     );
   }
 
@@ -670,7 +695,8 @@ export function resolveFactoryBackendAccessRequirement(req: Request): FactoryApi
   }
 
   if (hasPrefix(path, "/pos")) {
-    return requirement("factory/production-report");
+    // Factory POS owns its API. Overview keeps the access it had while POS was its alias.
+    return anyOf(requirement("factory/pos"), requirement("factory/production-report"));
   }
 
   if (hasPrefix(path, "/monthly-salary-summary")) {

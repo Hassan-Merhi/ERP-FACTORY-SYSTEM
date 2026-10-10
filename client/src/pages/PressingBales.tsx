@@ -14,6 +14,8 @@ import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { formatNumber } from "@/lib/formatNumber";
 import type { FactoryBaleProduct } from "@shared/schema";
+import { priorityLogoTextStyleAttr, type LabelData } from "@/lib/labelHtml";
+import { withRecordedPriorityAllocations, type PriorityPrintAssignment } from "@/lib/priorityPrintPreflight";
 
 interface CartItem {
   productId: number;
@@ -35,6 +37,7 @@ function generatePressingLabelHtml(
     pieces: number;
     approxWeightKg: string;
     productName: string;
+    priorityColor?: string | null;
   }>
 ) {
   let labelsHtml = "";
@@ -44,7 +47,7 @@ function generatePressingLabelHtml(
         <div class="code-label">
           <div class="label-top">
             <div class="logo-section">
-              <div class="logo-text">HMD</div>
+              <div class="logo-text"${priorityLogoTextStyleAttr(label)}>HMD</div>
               <div class="logo-subtitle">INTERNATIONAL GROUP</div>
             </div>
             <div class="info-section">
@@ -188,23 +191,32 @@ export default function PressingBales() {
         throw new Error(err.message || "Failed to create label print records");
       }
 
-      const { labelPrints } = (await labelPrintResponse.json()) as {
+      const { labelPrints, priorityAllocations = [] } = (await labelPrintResponse.json()) as {
         labelPrints: Array<{
+          productionBaleId: number;
           referenceNumber: string;
           articleCode: string;
           pieces: number;
           approxWeightKg: string;
         }>;
+        priorityAllocations?: PriorityPrintAssignment[];
       };
 
-      const labels = labelPrints.map((lp, idx: number) => ({
-        referenceNumber: lp.referenceNumber,
-        articleCode: lp.articleCode,
-        pieces: lp.pieces,
-        approxWeightKg: lp.approxWeightKg,
-        productName: products[idx]?.name || "",
-      }));
+      const productByBale = new Map(bales.map((bale, index) => [bale.id, products[index]]));
+      const labels: LabelData[] = withRecordedPriorityAllocations(
+        labelPrints.map((lp) => ({
+          referenceNumber: lp.referenceNumber,
+          articleCode: lp.articleCode,
+          pieces: lp.pieces,
+          approxWeightKg: lp.approxWeightKg,
+          productName: productByBale.get(lp.productionBaleId)?.name || "",
+        })),
+        labelPrints.map((lp) => lp.productionBaleId),
+        priorityAllocations
+      );
 
+      // Same 76mm Pressing label for every bale; a priority bale only shows
+      // its small "HMD" text in the saved priority color.
       const printWindow = window.open("", "_blank");
       if (!printWindow) {
         toast({ title: "Error", description: "Please allow pop-ups to print labels", variant: "destructive" });

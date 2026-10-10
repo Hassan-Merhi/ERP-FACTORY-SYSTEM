@@ -306,6 +306,8 @@ export function useFactoryLocationInventory() {
       queryClient.invalidateQueries({ queryKey: [`/api/factory/location-inventory/${selectedLocation?.id}`] });
       queryClient.invalidateQueries({ queryKey: ["/api/factory/bales"], refetchType: "active" });
       queryClient.invalidateQueries({ queryKey: ["/api/factory/daybook"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/factory/customer-orders/loading-list/priority-scan-configs"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/factory/customer-orders/loading-list"] });
       setDeleteDialogOpen(false);
       setDeleteProduct(null);
       setDeleteQty(1);

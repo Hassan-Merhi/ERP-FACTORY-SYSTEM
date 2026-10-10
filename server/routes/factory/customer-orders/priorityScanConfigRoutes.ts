@@ -19,6 +19,8 @@ import {
   rewriteActivePriorityQueue,
 } from "./priorityScanQueue";
 import { customerOrderPriorityScanConfigs, customerOrders, factoryBales } from "@shared/schema";
+import { runAutomaticPriorityPrintBatch, runAutomaticPriorityReprint } from "./priorityAutoAllocation";
+import { registerPriorityAllocationHistoryRoutes } from "./priorityAllocationHistoryRoutes";
 
 const MAX_COLOR_LENGTH = 64;
 const MAX_PRIORITY = 10_000;
@@ -60,26 +62,39 @@ function sendPriorityConflict(res: Response, constraint: string | null) {
 }
 
 async function disableStalePriorityScanConfigs(companyId: number): Promise<void> {
-  // A finished/cancelled/deleted loading must never keep a color or priority
-  // reserved forever. Cleanup runs before queue reads and writes so the active
-  // uniqueness constraints continue to describe the pending-loading queue.
-  await db.execute(sql`
-    UPDATE customer_order_priority_scan_configs AS config
-    SET enabled = FALSE,
-        updated_by = NULL,
-        updated_by_name = 'system',
-        updated_at = now()
-    FROM customer_orders AS order_row
-    WHERE config.order_id = order_row.id
-      AND config.company_id = ${companyId}
-      AND order_row.company_id = ${companyId}
-      AND config.enabled = TRUE
-      AND (
-        order_row.status <> 'LOADING'
-        OR order_row.deleted_at IS NOT NULL
-        OR order_row.proforma_id_used IS NULL
-      )
-  `);
+  // Stale cleanup is a QUEUE WRITE, even when triggered by a GET request.
+  // Serialize it with stock-entry routing, manual scan, deletion/recovery,
+  // and configuration edits. A read must never race a queue rewrite.
+  await db.transaction(async (tx) => {
+    await tx.execute(sql`SELECT pg_advisory_xact_lock(${PRIORITY_SCAN_LOCK_NAMESPACE}, ${companyId})`);
+    const disabled = await tx.execute(sql`
+      UPDATE customer_order_priority_scan_configs AS config
+      SET enabled = FALSE,
+          updated_by = NULL,
+          updated_by_name = 'system:stale-disabled',
+          updated_at = now()
+      FROM customer_orders AS order_row
+      WHERE config.order_id = order_row.id
+        AND config.company_id = ${companyId}
+        AND order_row.company_id = ${companyId}
+        AND config.enabled = TRUE
+        AND (
+          order_row.status <> 'LOADING'
+          OR order_row.deleted_at IS NOT NULL
+          OR order_row.proforma_id_used IS NULL
+        )
+      RETURNING config.id
+    `);
+    if (resultRows(disabled).length === 0) return;
+    const active = await loadActivePriorityRows(tx, companyId);
+    await rewriteActivePriorityQueue(
+      tx,
+      companyId,
+      active.map((row) => row.id),
+      null,
+      "system:stale-compact"
+    );
+  });
 }
 
 class PriorityScanConfigError extends Error {
@@ -92,6 +107,89 @@ class PriorityScanConfigError extends Error {
 }
 
 export function registerPriorityScanConfigRoutes(app: Express) {
+  registerPriorityAllocationHistoryRoutes(app);
+  // Prepare whole sets of existing factory bales before any label is rendered.
+  // Each request is atomic: a bad reference cannot leave half the set newly
+  // allocated. Existing snapshot colors are returned even when the switch is OFF.
+  app.post(
+    "/api/factory/customer-orders/loading-list/automatic-print-preflight-batch",
+    requireAuth,
+    async (req: Request, res: Response) => {
+      try {
+        const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
+        const items = req.body?.items;
+        if (
+          !Array.isArray(items) ||
+          items.length === 0 ||
+          items.length > 200 ||
+          items.some(
+            (item) =>
+              !item ||
+              typeof item !== "object" ||
+              ((item.baleId === undefined || !Number.isSafeInteger(item.baleId) || item.baleId < 1) &&
+                (typeof item.referenceNumber !== "string" || !item.referenceNumber.trim()))
+          )
+        ) {
+          return res.status(400).json({ message: "Provide 1–200 valid bale IDs or reference numbers" });
+        }
+        const results = await runAutomaticPriorityPrintBatch(
+          companyId,
+          items,
+          String(req.session.username || req.session.userId || "automatic"),
+          req.session.userId == null ? null : String(req.session.userId)
+        );
+        res.set("Cache-Control", "private, no-store");
+        return res.json({ results });
+      } catch (error) {
+        logger.error("Automatic Priority Print batch preflight failed", { error });
+        const message = getErrorMessage(error);
+        if (/Bale not found|Print reference does not match|Invalid|requires|must contain/i.test(message)) {
+          return res.status(400).json({ message });
+        }
+        return res.status(500).json({ message: "Failed to prepare priority labels" });
+      }
+    }
+  );
+
+  // Used by specialist relabel screens where the API returns a REF but not a
+  // physical bale ID. Resolve server-side, never trusting the client to choose
+  // a loading or a priority color.
+  app.post(
+    "/api/factory/customer-orders/loading-list/automatic-print-preflight",
+    requireAuth,
+    async (req: Request, res: Response) => {
+      try {
+        const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
+        const referenceNumber = String(req.body?.referenceNumber || "").trim();
+        if (!referenceNumber) return res.status(400).json({ message: "referenceNumber required" });
+        const [bale] = await db
+          .select({ id: factoryBales.id })
+          .from(factoryBales)
+          .where(
+            and(
+              eq(factoryBales.companyId, companyId),
+              isNull(factoryBales.deletedAt),
+              sql`LOWER(${factoryBales.referenceNumber}) = ${referenceNumber.toLowerCase()}`
+            )
+          )
+          .limit(1);
+        if (!bale) return res.status(404).json({ message: "Bale not found" });
+        const priorityAllocation = await runAutomaticPriorityReprint(
+          companyId,
+          bale.id,
+          String(req.session.username || req.session.userId || "automatic"),
+          req.session.userId == null ? null : String(req.session.userId)
+        );
+        return res.json({ priorityAllocation });
+      } catch (error) {
+        logger.error("Automatic Priority Print preflight failed", { error });
+        return res.status(500).json({ message: getErrorMessage(error) });
+      }
+    }
+  );
+
   app.get(PRIORITY_SCAN_ROUTE_PATH, requireAuth, async (req: Request, res: Response) => {
     try {
       const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
@@ -108,6 +206,7 @@ export function registerPriorityScanConfigRoutes(app: Express) {
           FROM factory_priority_scan_history
           WHERE company_id = ${companyId}
             AND business_date = ${businessDate}
+            AND reversed_at IS NULL
         `);
         const [signatureRow] = resultRows(signatureResult) as Array<{ count: number; maxId: string }>;
         const signature = `${businessDate}:${signatureRow?.count ?? 0}:${signatureRow?.maxId ?? 0}`;
@@ -128,6 +227,7 @@ export function registerPriorityScanConfigRoutes(app: Express) {
           FROM factory_priority_scan_history
           WHERE company_id = ${companyId}
             AND business_date = ${businessDate}
+            AND reversed_at IS NULL
           ORDER BY scanned_at DESC, id DESC
         `);
         return res.json({

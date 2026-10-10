@@ -164,9 +164,13 @@ import { startupMigrations } from "../server/startup-schema";
  * Re-pinned when 004-post-deploy-tables gained customer_orders.booking_info
  * (#2109), taking the count from 1415 to 1416. The ADD COLUMN sits beside the
  * table's other ADD COLUMNs; nothing else moved.
+ *
+ * Re-pinned when 001-core-tables-and-columns stopped folding factory/pos page
+ * permissions into Overview (Factory POS is its own page again). Three
+ * statements were edited in place; the count is unchanged.
  */
 const EXPECTED_STATEMENT_COUNT = 1422;
-const EXPECTED_CONTENT_HASH = "798ebd2dc26f8fa89cd2ba79cf84f667ae655c5659f16f2a67ad13ac603735ff";
+const EXPECTED_CONTENT_HASH = "0fa96fd2b4d9c68ac55bc95b29a12a9c5509bcddd2691124c03cc07760b1dcbc";
 /**
  * sha256 of JSON.stringify(startupMigrations) for the reviewed composed array.
  *
@@ -263,6 +267,12 @@ const EXPECTED_CONTENT_HASH = "798ebd2dc26f8fa89cd2ba79cf84f667ae655c5659f16f2a6
  * lines (their foreign keys are added NOT VALID instead), and 006's
  * accrued-rent-soft-delete-v1 no longer soft-deletes accounts by name. Every
  * statement was edited in place, so the count is unchanged at 1422.
+ *
+ * Re-pinned when origin/main (Factory POS restored, #2129) was merged into the
+ * accounting audit branch: main's three in-place edits to
+ * 001-core-tables-and-columns (factory/pos permissions no longer folded into
+ * Overview) were combined with this branch's edits. No statement was added or
+ * moved, so the count stays at 1422; only the content hash changed.
  */
 
 function contentHash(statements: string[]): string {

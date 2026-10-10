@@ -1,4 +1,9 @@
 import type { Express, Request, Response } from "express";
+import {
+  autoTransferCounterpartiesForPayments,
+  RentalAutoTransferScopeError,
+  runWithAutoTransferCounterparties,
+} from "../../services/rental/autoTransferScope";
 import { softDeleteVoucherTx } from "../../services/accounting/voucherSoftDelete";
 import { getErrorMessage } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
@@ -269,69 +274,74 @@ export function registerRentalPaymentsAccrualRoutes(
         );
       if (!payment) return res.status(404).json({ message: "Payment not found" });
 
-      await db.transaction(async (tx) => {
-        // 1. Reverse the monthly ledger paid_amount
-        if (payment.ledgerRowId) {
-          await tx.execute(sql`
+      await runWithAutoTransferCounterparties(await autoTransferCounterpartiesForPayments(companyId, [paymentId]), () =>
+        db.transaction(async (tx) => {
+          // 1. Reverse the monthly ledger paid_amount
+          if (payment.ledgerRowId) {
+            await tx.execute(sql`
             UPDATE property_monthly_ledger
             SET paid_amount = GREATEST(0, paid_amount - ${payment.amount}::numeric)
             WHERE id = ${payment.ledgerRowId}
           `);
-        }
+          }
 
-        // 2. Soft-delete the linked payment voucher ONLY if no other payment row
-        //    references the same voucherId (split payments share one voucher)
-        if (payment.voucherId) {
-          const siblings = await tx
-            .select({ id: propertyPayments.id })
-            .from(propertyPayments)
-            .where(and(eq(propertyPayments.voucherId, payment.voucherId), sql`${propertyPayments.id} != ${paymentId}`));
-          if (siblings.length === 0) {
-            await tx.execute(sql`
+          // 2. Soft-delete the linked payment voucher ONLY if no other payment row
+          //    references the same voucherId (split payments share one voucher)
+          if (payment.voucherId) {
+            const siblings = await tx
+              .select({ id: propertyPayments.id })
+              .from(propertyPayments)
+              .where(
+                and(eq(propertyPayments.voucherId, payment.voucherId), sql`${propertyPayments.id} != ${paymentId}`)
+              );
+            if (siblings.length === 0) {
+              await tx.execute(sql`
               UPDATE vouchers SET deleted_at = NOW() WHERE id = ${payment.voucherId}
             `);
-            // Also soft-delete the AP-CLEAR auto-clearing journal created alongside this payment
-            await tx.execute(sql`
+              // Also soft-delete the AP-CLEAR auto-clearing journal created alongside this payment
+              await tx.execute(sql`
               UPDATE vouchers SET deleted_at = NOW()
               WHERE voucher_number = ${"AP-CLEAR-" + payment.voucherId}
                 AND company_id = ${companyId}
                 AND deleted_at IS NULL
             `);
+            }
           }
-        }
 
-        // 3. Reverse any auto-transfers that were created for this payment
-        //    Both sides are soft-deleted: they leave every balance but keep their
-        //    entries for the audit trail.
-        const linkedTransfers = await tx
-          .select()
-          .from(interCompanyTransfers)
-          .where(eq(interCompanyTransfers.sourcePaymentId, paymentId));
+          // 3. Reverse any auto-transfers that were created for this payment
+          //    Both sides are soft-deleted: they leave every balance but keep their
+          //    entries for the audit trail.
+          const linkedTransfers = await tx
+            .select()
+            .from(interCompanyTransfers)
+            .where(eq(interCompanyTransfers.sourcePaymentId, paymentId));
 
-        for (const transfer of linkedTransfers) {
-          const fvid = transfer.fromVoucherId;
-          const tvid = transfer.toVoucherId;
-          // Delete the transfer record FIRST to release FK "restrict" constraints
-          // on fromVoucherId / toVoucherId before hard-deleting those voucher rows.
-          await tx.delete(interCompanyTransfers).where(eq(interCompanyTransfers.id, transfer.id));
-          if (fvid) await softDeleteVoucherTx(tx, fvid);
-          if (tvid) await softDeleteVoucherTx(tx, tvid);
-        }
+          for (const transfer of linkedTransfers) {
+            const fvid = transfer.fromVoucherId;
+            const tvid = transfer.toVoucherId;
+            // Delete the transfer record FIRST to release FK "restrict" constraints
+            // on fromVoucherId / toVoucherId before hard-deleting those voucher rows.
+            await tx.delete(interCompanyTransfers).where(eq(interCompanyTransfers.id, transfer.id));
+            if (fvid) await softDeleteVoucherTx(tx, fvid);
+            if (tvid) await softDeleteVoucherTx(tx, tvid);
+          }
 
-        // 4. Delete the payment row itself
-        await tx.delete(propertyPayments).where(eq(propertyPayments.id, paymentId));
+          // 4. Delete the payment row itself
+          await tx.delete(propertyPayments).where(eq(propertyPayments.id, paymentId));
 
-        // 5. If this was a guarantee-release payment, reset guaranteePostedToStatement on the contract
-        if (payment.notes && payment.notes.includes("[Guarantee release]") && payment.contractId) {
-          await tx
-            .update(propertyContracts)
-            .set({ guaranteePostedToStatement: false })
-            .where(eq(propertyContracts.id, payment.contractId));
-        }
-      });
+          // 5. If this was a guarantee-release payment, reset guaranteePostedToStatement on the contract
+          if (payment.notes && payment.notes.includes("[Guarantee release]") && payment.contractId) {
+            await tx
+              .update(propertyContracts)
+              .set({ guaranteePostedToStatement: false })
+              .where(eq(propertyContracts.id, payment.contractId));
+          }
+        })
+      );
 
       res.json({ ok: true });
     } catch (e: unknown) {
+      if (e instanceof RentalAutoTransferScopeError) return res.status(e.status).json({ message: e.message });
       logger.error(`${tag} delete-payment:`, { error: e });
       res.status(500).json({ message: getErrorMessage(e) });
     }

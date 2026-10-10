@@ -313,8 +313,6 @@ const SENSITIVE_WRITE_ROUTES = [
   "POST /api/factory/shipping-container-rows/:id/restore",
   "POST /api/factory/shipping-container-rows/sync",
   "POST /api/factory/stock-entry",
-  "POST /api/factory/stock-entry/remove",
-  "POST /api/factory/stock-entry/remove-by-product",
   "POST /api/factory/supplier-payments",
   "POST /api/factory/transporters",
   "POST /api/factory/transporters/:id/charges",
@@ -471,6 +469,11 @@ afterAll(() => {
  * The factory V3 load routes joined them in wave 17 B: the load finalize (bales
  * SOLD, the invoice and its journal) moved to services/factory/v3LoadInvoice.ts,
  * so the route file no longer names the bale tables; the routes still write them.
+ *
+ * The two supervised stock-removal routes joined them with Automatic Priority
+ * Printing & Loading: every physical bale deletion now goes through
+ * server/routes/factory/stock/physicalBaleDeletion.ts, so the route files no
+ * longer name the inventory table themselves, but the routes still move stock.
  */
 const DELEGATED_WRITE_ROUTES = [
   "DELETE /api/factory/v3/loads/:id/bales/:baleId",
@@ -486,6 +489,8 @@ const DELEGATED_WRITE_ROUTES = [
   "POST /api/factory/customer-orders/:id/auto-recover-bales",
   "POST /api/factory/customer-orders/:id/recover-bales",
   "POST /api/factory/customer-proformas/:id/create-loading",
+  "POST /api/factory/stock-entry/remove",
+  "POST /api/factory/stock-entry/remove-by-product",
   "POST /api/stock-adjustments",
   "POST /api/waste-dispatches",
   "PUT /api/stock-adjustments/:id",

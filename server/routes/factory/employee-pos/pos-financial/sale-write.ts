@@ -25,7 +25,7 @@ import {
   factoryPosSales,
   factoryPosSaleItems,
 } from "@shared/schema";
-import { eq, and, or, desc, sql, inArray } from "drizzle-orm";
+import { eq, and, desc, sql, inArray } from "drizzle-orm";
 import { MoneyDecimal, parseMoneyInput, sumMoney, toMoney } from "../../../../lib/money";
 import { postFactoryPosCogsTx } from "../../../../services/accounting/perpetualInventory/factoryPosCogs";
 import {
@@ -45,6 +45,7 @@ import {
   postFactoryPosReceiptTx,
   type FactoryPosSaleAmounts,
 } from "../../../../services/accounting/factoryPosReceipt";
+import { removeFactoryPosCustomerBalancesTx } from "./sale-financials";
 
 /** A request amount at cents, read as parseFloat reads it; blank is zero, anything else unparsable is null. */
 function requestCents(value: unknown) {
@@ -643,22 +644,9 @@ export function registerPosSaleWriteRoutes(app: Express) {
           });
         }
 
-        // Step 6: Update customer balance entries. The old SALE and DEPOSIT rows
-        // are removed on every edit (they used to stay when an edit turned the
-        // sale into a cash sale or dropped its customer), then re-written for a
-        // credit sale with a customer.
-        await tx
-          .delete(customerBalances)
-          .where(
-            and(
-              eq(customerBalances.referenceId, saleId),
-              eq(customerBalances.companyId, companyId),
-              or(
-                eq(customerBalances.referenceType, "FACTORY_POS_SALE"),
-                eq(customerBalances.referenceType, "FACTORY_POS_DEPOSIT")
-              )
-            )
-          );
+        // Step 6: Replace customer balance entries. The old ones always go, so an
+        // edit from credit to cash (or to another customer) leaves no stale debt.
+        await removeFactoryPosCustomerBalancesTx(tx, companyId, saleId);
         if (isCredit && parsedCustomerId) {
           // Re-compute running balance and re-insert
           const [balRow] = await tx

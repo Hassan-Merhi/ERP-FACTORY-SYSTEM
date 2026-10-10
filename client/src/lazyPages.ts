@@ -177,6 +177,7 @@ export const FactoryBrokerVisualStatement = lazy(() => import("@/pages/factory/F
 export const FactoryCustomers = lazy(() => import("@/pages/factory/FactoryCustomers"));
 export const FactoryCustomerStatement = lazy(() => import("@/pages/factory/FactoryCustomerStatement"));
 export const FactoryInvoicing = lazy(() => import("@/pages/factory/FactoryInvoicing"));
+export const FactoryPOS = lazy(() => import("@/pages/factory/FactoryPOS"));
 export const FactoryInvoices = lazy(() => import("@/pages/factory/FactoryInvoices"));
 export const FactoryInvoiceCreate = lazy(() => import("@/pages/factory/FactoryInvoiceCreate"));
 export const FactoryInvoiceDetail = lazy(() => import("@/pages/factory/FactoryInvoiceDetail"));

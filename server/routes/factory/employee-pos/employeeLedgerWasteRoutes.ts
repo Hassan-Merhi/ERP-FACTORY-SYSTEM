@@ -8,6 +8,7 @@ import { adjustInventory } from "../../../inventoryHelper";
 import { createDatabaseStockMovementAdapter } from "../../../services/inventory/databaseStockMovementAdapter";
 import { postStockMovementTx } from "../../../services/inventory/stockMovementIntegrityService";
 import { writeDaybookEntry } from "../_helpers";
+import { assertNoBaleOnLiveLoadingTx } from "../stock/liveLoadingBales";
 import { recordFactoryStockValueEventTx, valuedBalesCostTx } from "../../../services/factory/factoryStockValueEvents";
 import {
   factoryCategories,
@@ -753,6 +754,12 @@ export function registerEmployeeLedgerWasteRoutes(app: Express) {
             throw new Error(`Bale ${bale.referenceNumber} is not available (status: ${bale.status})`);
           }
         }
+        // V5 loaded bales on a live loading are refused (main #2134).
+        await assertNoBaleOnLiveLoadingTx(
+          tx,
+          companyId,
+          balesToDispose.map((bale) => bale.id)
+        );
 
         // Perpetual inventory: the bales' cost is a write-off in the daily
         // factory stock journal (wave 11).

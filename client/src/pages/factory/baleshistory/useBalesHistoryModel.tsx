@@ -182,6 +182,8 @@ export function useBalesHistoryModel() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/factory/bales"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/factory/customer-orders/loading-list/priority-scan-configs"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/factory/customer-orders/loading-list"] });
       queryClient.invalidateQueries({ queryKey: ["/api/factory/location-inventory"] });
       queryClient.invalidateQueries({ queryKey: ["/api/factory/daybook"] });
       toast({ title: "Bale deleted" });
@@ -200,6 +202,8 @@ export function useBalesHistoryModel() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/factory/bales"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/factory/customer-orders/loading-list/priority-scan-configs"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/factory/customer-orders/loading-list"] });
       toast({ title: "Status updated" });
     },
     onError: (error: ClientErrorLike) => {
@@ -214,6 +218,8 @@ export function useBalesHistoryModel() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/factory/bales"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/factory/customer-orders/loading-list/priority-scan-configs"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/factory/customer-orders/loading-list"] });
       setSelectedIds(new Set());
       setBulkStatus("");
       toast({ title: "Bulk status updated" });
@@ -446,13 +452,27 @@ export function useBalesHistoryModel() {
     };
 
     try {
-      await modeApiRequest("POST", "/api/bale-label-prints/reprint", { baleId: baleRow.bale.id });
+      const response = await modeApiRequest("POST", "/api/bale-label-prints/reprint", { baleId: baleRow.bale.id });
+      if (!response.ok) throw new Error("Could not prepare reprint");
+      const result = (await response.json()) as {
+        priorityAllocation?: { color: string; orderId: number; priority: number } | null;
+      };
+      if (result.priorityAllocation) {
+        label.priorityColor = result.priorityAllocation.color;
+        label.priorityOrderId = result.priorityAllocation.orderId;
+        label.priorityNumber = result.priorityAllocation.priority;
+      }
       queryClient.invalidateQueries({ queryKey: ["/api/factory/bales"] });
-    } catch {
-      // Cache invalidation is best-effort; the next fetch corrects it and a failure here is not worth surfacing.
+    } catch (error) {
+      toast({
+        title: "Reprint preparation failed",
+        description: getErrorDetails(error).message,
+        variant: "destructive",
+      });
+      return;
     }
 
-    if (isZebraMode()) {
+    if (isZebraMode() && !label.priorityColor) {
       try {
         const zpl = buildZplBatch([label], true);
         await printRawZpl(zpl);
