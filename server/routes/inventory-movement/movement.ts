@@ -12,6 +12,7 @@ import { db } from "../../db";
 import { requireAuth } from "../../auth";
 import { calculateHistoricalLocationInventory } from "../helpers/inventoryHistoryHelpers";
 import { inventory, locations } from "@shared/schema";
+import { plusMoney, toMoney } from "../../lib/money";
 
 import { MONTH_NAMES_INV, dayBefore, fetchStockMovements, type StockMovementTx } from "./_helpers";
 
@@ -27,11 +28,23 @@ type InventoryBalance = {
   totalValue: number;
 };
 
+/** `base + plus - minus`, computed exactly so running stock values do not drift. */
+function net(base: number, plus: number, minus: number): number {
+  return toMoney(base).plus(toMoney(plus)).minus(toMoney(minus)).toNumber();
+}
+
+function sumField(
+  movements: StockMovementTx[],
+  field: keyof Pick<StockMovementTx, "inwardQty" | "inwardValue" | "outwardQty" | "outwardValue">
+): number {
+  return movements.reduce((total, movement) => plusMoney(total, movement[field]), 0);
+}
+
 function movementDelta(movements: StockMovementTx[]): InventoryBalance {
   return movements.reduce(
     (total, movement) => ({
-      quantity: total.quantity + movement.inwardQty - movement.outwardQty,
-      totalValue: total.totalValue + movement.inwardValue - movement.outwardValue,
+      quantity: net(total.quantity, movement.inwardQty, movement.outwardQty),
+      totalValue: net(total.totalValue, movement.inwardValue, movement.outwardValue),
     }),
     { quantity: 0, totalValue: 0 }
   );
@@ -52,16 +65,12 @@ async function getLiveCompanyInventoryBalance(companyId: number, stockItemId: nu
     .from(inventory)
     .innerJoin(locations, eq(inventory.locationId, locations.id))
     .where(
-      and(
-        eq(inventory.companyId, companyId),
-        eq(inventory.stockItemId, stockItemId),
-        isNull(locations.deletedAt)
-      )
+      and(eq(inventory.companyId, companyId), eq(inventory.stockItemId, stockItemId), isNull(locations.deletedAt))
     );
 
   return {
-    quantity: Number.parseFloat(row?.quantity ?? "0") || 0,
-    totalValue: Number.parseFloat(row?.totalValue ?? "0") || 0,
+    quantity: toMoney(row?.quantity).toNumber(),
+    totalValue: toMoney(row?.totalValue).toNumber(),
   };
 }
 
@@ -85,8 +94,8 @@ async function getCompanyInventoryBalanceAsOf(
   const delta = movementDelta(afterCutoff);
 
   return {
-    quantity: current.quantity - delta.quantity,
-    totalValue: current.totalValue - delta.totalValue,
+    quantity: net(current.quantity, 0, delta.quantity),
+    totalValue: net(current.totalValue, 0, delta.totalValue),
   };
 }
 
@@ -185,14 +194,14 @@ export function registerInventoryMovementReportRoutes(app: Express) {
           const lastDay = new Date(year, month, 0).getDate();
           const mEnd = `${year}-${String(month).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
           const mTx = periodMovements.filter((t) => t.date >= mStart && t.date <= mEnd);
-          const inQty = mTx.reduce((s, t) => s + t.inwardQty, 0);
-          const inVal = mTx.reduce((s, t) => s + t.inwardValue, 0);
-          const outQty = mTx.reduce((s, t) => s + t.outwardQty, 0);
-          const outVal = mTx.reduce((s, t) => s + t.outwardValue, 0);
+          const inQty = sumField(mTx, "inwardQty");
+          const inVal = sumField(mTx, "inwardValue");
+          const outQty = sumField(mTx, "outwardQty");
+          const outVal = sumField(mTx, "outwardValue");
           const cQty = runQty;
           const cVal = runValue;
-          const oQty = cQty - inQty + outQty;
-          const oVal = cVal - inVal + outVal;
+          const oQty = net(cQty, outQty, inQty);
+          const oVal = net(cVal, outVal, inVal);
 
           rows.push({
             year,
@@ -222,22 +231,22 @@ export function registerInventoryMovementReportRoutes(app: Express) {
         // reconstruction. Keep that behavior and roll the selected period forward.
         const historical = await calculateHistoricalLocationInventory(locationId, companyId, dayBefore(sd));
         const row = historical.find((historicalRow) => historicalRow.stockItemId === stockItemId);
-        let runQty = row ? Number.parseFloat(row.quantity) || 0 : 0;
-        let runValue = row ? Number.parseFloat(row.totalValue) || 0 : 0;
+        let runQty = row ? toMoney(row.quantity).toNumber() : 0;
+        let runValue = row ? toMoney(row.totalValue).toNumber() : 0;
 
         monthlySummary = months.map(({ year, month, monthName }) => {
           const mStart = `${year}-${String(month).padStart(2, "0")}-01`;
           const lastDay = new Date(year, month, 0).getDate();
           const mEnd = `${year}-${String(month).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
           const mTx = periodMovements.filter((t) => t.date >= mStart && t.date <= mEnd);
-          const inQty = mTx.reduce((s, t) => s + t.inwardQty, 0);
-          const inVal = mTx.reduce((s, t) => s + t.inwardValue, 0);
-          const outQty = mTx.reduce((s, t) => s + t.outwardQty, 0);
-          const outVal = mTx.reduce((s, t) => s + t.outwardValue, 0);
+          const inQty = sumField(mTx, "inwardQty");
+          const inVal = sumField(mTx, "inwardValue");
+          const outQty = sumField(mTx, "outwardQty");
+          const outVal = sumField(mTx, "outwardValue");
           const oQty = runQty;
           const oVal = runValue;
-          const cQty = oQty + inQty - outQty;
-          const cVal = oVal + inVal - outVal;
+          const cQty = net(oQty, inQty, outQty);
+          const cVal = net(oVal, inVal, outVal);
           runQty = cQty;
           runValue = cVal;
 
@@ -265,10 +274,10 @@ export function registerInventoryMovementReportRoutes(app: Express) {
       }
 
       const gt = {
-        inwardQty: monthlySummary.reduce((s, month) => s + month.inwardQty, 0),
-        inwardValue: monthlySummary.reduce((s, month) => s + month.inwardValue, 0),
-        outwardQty: monthlySummary.reduce((s, month) => s + month.outwardQty, 0),
-        outwardValue: monthlySummary.reduce((s, month) => s + month.outwardValue, 0),
+        inwardQty: monthlySummary.reduce((s, month) => plusMoney(s, month.inwardQty), 0),
+        inwardValue: monthlySummary.reduce((s, month) => plusMoney(s, month.inwardValue), 0),
+        outwardQty: monthlySummary.reduce((s, month) => plusMoney(s, month.outwardQty), 0),
+        outwardValue: monthlySummary.reduce((s, month) => plusMoney(s, month.outwardValue), 0),
         closingQty: closingQtyForPeriod,
         closingValue: closingValueForPeriod,
       };
@@ -325,8 +334,8 @@ export function registerInventoryMovementReportRoutes(app: Express) {
       if (locationId !== null) {
         const historical = await calculateHistoricalLocationInventory(locationId, companyId, dayBefore(mStart));
         const row = historical.find((historicalRow) => historicalRow.stockItemId === stockItemId);
-        runQty = row ? Number.parseFloat(row.quantity) || 0 : 0;
-        runValue = row ? Number.parseFloat(row.totalValue) || 0 : 0;
+        runQty = row ? toMoney(row.quantity).toNumber() : 0;
+        runValue = row ? toMoney(row.totalValue).toNumber() : 0;
       } else {
         const openingBalance = await getCompanyInventoryBalanceAsOf(companyId, stockItemId, dayBefore(mStart), today);
         runQty = openingBalance.quantity;
@@ -365,12 +374,12 @@ export function registerInventoryMovementReportRoutes(app: Express) {
         totOutQty = 0,
         totOutVal = 0;
       for (const movement of monthMovements) {
-        runQty += movement.inwardQty - movement.outwardQty;
-        runValue += movement.inwardValue - movement.outwardValue;
-        totInQty += movement.inwardQty;
-        totInVal += movement.inwardValue;
-        totOutQty += movement.outwardQty;
-        totOutVal += movement.outwardValue;
+        runQty = net(runQty, movement.inwardQty, movement.outwardQty);
+        runValue = net(runValue, movement.inwardValue, movement.outwardValue);
+        totInQty = plusMoney(totInQty, movement.inwardQty);
+        totInVal = plusMoney(totInVal, movement.inwardValue);
+        totOutQty = plusMoney(totOutQty, movement.outwardQty);
+        totOutVal = plusMoney(totOutVal, movement.outwardValue);
         transactions.push({
           ...movement,
           closingQty: runQty,
