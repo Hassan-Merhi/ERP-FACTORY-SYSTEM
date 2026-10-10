@@ -100,8 +100,7 @@ export function registerStockTransferCreateRoutes(app: Express) {
           if (!item.stockItemId || isNaN(Number(item.stockItemId))) {
             return res.status(400).json({ message: `Invalid stockItemId: ${item.stockItemId}` });
           }
-          const qty = parseFloat(item.quantity);
-          if (isNaN(qty) || !isFinite(qty) || qty <= 0) {
+          if (toMoney(item.quantity).lte(0)) {
             return res.status(400).json({ message: `Invalid quantity for item ${item.stockItemId}: ${item.quantity}` });
           }
         }
@@ -342,7 +341,7 @@ export function registerStockTransferCreateRoutes(app: Express) {
                 destLocationName: destLocation.name,
                 items: txResult.transferItems.map((i) => ({
                   stockItemId: i.stockItemId,
-                  quantity: parseFloat(i.quantity),
+                  quantity: toMoney(i.quantity).toNumber(),
                 })),
                 voucherNumber: txResult.newVoucher.voucherNumber,
                 voucherDate: txResult.newVoucher.voucherDate,
@@ -388,10 +387,10 @@ export function registerStockTransferCreateRoutes(app: Express) {
         if (!item.stockItemId) {
           return res.status(400).json({ message: "Stock item ID is required for all items" });
         }
-        if (!item.quantity || parseFloat(item.quantity) <= 0) {
+        if (!item.quantity || toMoney(item.quantity).lte(0)) {
           return res.status(400).json({ message: "Quantity must be positive for all items" });
         }
-        if (!item.rate || parseFloat(item.rate) < 0) {
+        if (!item.rate || toMoney(item.rate).lt(0)) {
           return res.status(400).json({ message: "Rate must be non-negative for all items" });
         }
 
@@ -420,7 +419,7 @@ export function registerStockTransferCreateRoutes(app: Express) {
       // Auto-fill rate from inventory for items with no rate (e.g. POS users who don't see cost)
       const itemsWithRate = await Promise.all(
         items.map(async (item) => {
-          if (!item.rate || parseFloat(item.rate) === 0) {
+          if (!item.rate || toMoney(item.rate).isZero()) {
             const [invRow] = await db
               .select({ averageRate: inventory.averageRate })
               .from(inventory)
@@ -479,7 +478,7 @@ export function registerStockTransferCreateRoutes(app: Express) {
               destLocationName: destLocation.name,
               items: transfer.items.map((i) => ({
                 stockItemId: i.stockItemId,
-                quantity: parseFloat(i.quantity),
+                quantity: toMoney(i.quantity).toNumber(),
               })),
               voucherNumber: voucher.voucherNumber,
               voucherDate: voucher.voucherDate,

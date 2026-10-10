@@ -7,6 +7,7 @@
  */
 import type { Express, Request, Response } from "express";
 import { getErrorMessage } from "../lib/httpHandlers";
+import { toMoney } from "../lib/money";
 import { logger } from "../lib/logger";
 import { eq, and, isNull } from "drizzle-orm";
 import { db, pool } from "../db";
@@ -111,7 +112,7 @@ export function registerAccountTransactionRoutes(app: Express) {
              ${bfCompanyFilter}`,
           bfParams
         );
-        preNetBalance = parseFloat(bfResult.rows[0]?.net ?? "0");
+        preNetBalance = toMoney(bfResult.rows[0]?.net).toNumber();
       }
 
       return res.json(
@@ -181,7 +182,7 @@ export function registerAccountTransactionRoutes(app: Express) {
              AND COALESCE(v.effective_date::date, v.voucher_date::date) < $3::date`,
           [bankAccountId, companyId, rawStart]
         );
-        preNetBalance = parseFloat(bfResult.rows[0]?.net ?? "0");
+        preNetBalance = toMoney(bfResult.rows[0]?.net).toNumber();
       }
 
       return res.json(
@@ -251,7 +252,7 @@ export function registerAccountTransactionRoutes(app: Express) {
              AND COALESCE(v.effective_date::date, v.voucher_date::date) < $3::date`,
           [fixedAssetId, companyId, rawStart]
         );
-        preNetBalance = parseFloat(bfResult.rows[0]?.net ?? "0");
+        preNetBalance = toMoney(bfResult.rows[0]?.net).toNumber();
       }
 
       return res.json(
@@ -333,7 +334,7 @@ export function registerAccountTransactionRoutes(app: Express) {
            WHERE ${conditions.join(" AND ")}`,
           params
         );
-        preNetBalance = parseFloat(bfResult.rows[0]?.net ?? "0");
+        preNetBalance = toMoney(bfResult.rows[0]?.net).toNumber();
       }
 
       return res.json(
@@ -391,7 +392,7 @@ export function registerAccountTransactionRoutes(app: Express) {
              AND COALESCE(v.effective_date::date, v.voucher_date::date) < $3::date`,
           [employeeId, companyId, rawStart]
         );
-        preNetBalance = parseFloat(bfResult.rows[0]?.net ?? "0");
+        preNetBalance = toMoney(bfResult.rows[0]?.net).toNumber();
       }
 
       return res.json(
@@ -473,7 +474,7 @@ export function registerAccountTransactionRoutes(app: Express) {
              AND cb.transaction_date < $3::date`,
           [customerId, companyId, rawStart]
         );
-        preNetBalance = parseFloat(bfResult.rows[0]?.net ?? "0");
+        preNetBalance = toMoney(bfResult.rows[0]?.net).toNumber();
       }
 
       return res.json(
