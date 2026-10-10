@@ -73,9 +73,14 @@ export const backendMessagesPhase7TranslationsPart13: readonly Phase7BackendMess
     fr: "Identifiant de chargement non valide",
   },
   {
-    en: "Color is required and must be 64 characters or fewer.",
-    ar: "اللون مطلوب ويجب ألا يتجاوز 64 حرفًا.",
-    fr: "La couleur est requise et doit contenir au maximum 64 caractères.",
+    en: "Priority color must be one of the 11 approved HEX colors.",
+    ar: "يجب أن يكون لون الأولوية أحد الألوان الأحد عشر المعتمدة بصيغة HEX.",
+    fr: "La couleur de priorité doit être l’une des 11 couleurs HEX approuvées.",
+  },
+  {
+    en: "Only an existing active priority can be moved without choosing a new color.",
+    ar: "لا يمكن نقل سوى أولوية نشطة موجودة دون اختيار لون جديد.",
+    fr: "Seule une priorité active existante peut être déplacée sans choisir de nouvelle couleur.",
   },
   {
     en: "Priority must be a whole number between 1 and 10000.",
