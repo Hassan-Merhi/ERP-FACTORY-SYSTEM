@@ -7,6 +7,7 @@ import { logger } from "../lib/logger";
 import { storage } from "../storage";
 import { getAccessibleCompanyIds } from "../security/companyAccessBoundary";
 import { poLineItems, purchaseOrders, voucherEntries, vouchers } from "@shared/schema";
+import { debitMinusCredit, plusMoney, signedOpeningBalance, toMoney } from "../lib/money";
 
 /**
  * Cross-company dashboard container tracking report.
@@ -134,14 +135,12 @@ export function registerReportsContainerTrackingRoutes(app: Express) {
               )
             );
 
-          let balance = parseFloat(agentAccount.openingBalance || "0");
-          if (agentAccount.openingBalanceSide === "Cr") balance = -balance;
+          const balance = signedOpeningBalance(
+            agentAccount.openingBalance,
+            agentAccount.openingBalanceSide === "Cr" ? "Cr" : "Dr"
+          ).plus(debitMinusCredit(entries));
 
-          for (const entry of entries) {
-            balance += parseFloat(entry.debitAmount || "0") - parseFloat(entry.creditAmount || "0");
-          }
-
-          agentBalances[agent] = (agentBalances[agent] || 0) + balance;
+          agentBalances[agent] = plusMoney(agentBalances[agent] || 0, balance);
         }
       }
 
@@ -171,7 +170,7 @@ export function registerReportsContainerTrackingRoutes(app: Express) {
           };
         }
         byAgent[agent].offloadedContainers.push(container);
-        byAgent[agent].offloadedTotal += parseFloat(container.dutyFee || "0");
+        byAgent[agent].offloadedTotal = plusMoney(byAgent[agent].offloadedTotal, container.dutyFee);
       }
 
       for (const container of otwContainers) {
@@ -179,7 +178,7 @@ export function registerReportsContainerTrackingRoutes(app: Express) {
         const route = container.shopName || "Unassigned";
         const agent = container.agent || "Unassigned";
         const location = container.trackingLocation || "Unknown";
-        const amount = parseFloat(container.grandTotal || "0");
+        const amount = toMoney(container.grandTotal);
 
         if (!byRoute[route]) byRoute[route] = [];
         byRoute[route].push(container);
@@ -195,13 +194,13 @@ export function registerReportsContainerTrackingRoutes(app: Express) {
             };
           }
           byAgent[agent].containers.push(container);
-          byAgent[agent].total += amount;
+          byAgent[agent].total = plusMoney(byAgent[agent].total, amount);
         }
 
         if (!byLocation[location]) byLocation[location] = { count: 0, total: 0 };
         byLocation[location].count++;
-        byLocation[location].total += amount;
-        totalAmount += amount;
+        byLocation[location].total = plusMoney(byLocation[location].total, amount);
+        totalAmount = plusMoney(totalAmount, amount);
       }
 
       const byTransporter: Record<
@@ -215,7 +214,7 @@ export function registerReportsContainerTrackingRoutes(app: Express) {
           byTransporter[transporter] = { otw: [], offloaded: [], otwTotal: 0, offloadedTotal: 0 };
         }
         byTransporter[transporter].otw.push(container);
-        byTransporter[transporter].otwTotal += parseFloat(container.transportFee || "0");
+        byTransporter[transporter].otwTotal = plusMoney(byTransporter[transporter].otwTotal, container.transportFee);
       }
 
       for (const container of offloadedContainers) {
@@ -224,7 +223,10 @@ export function registerReportsContainerTrackingRoutes(app: Express) {
           byTransporter[transporter] = { otw: [], offloaded: [], otwTotal: 0, offloadedTotal: 0 };
         }
         byTransporter[transporter].offloaded.push(container);
-        byTransporter[transporter].offloadedTotal += parseFloat(container.transportFee || "0");
+        byTransporter[transporter].offloadedTotal = plusMoney(
+          byTransporter[transporter].offloadedTotal,
+          container.transportFee
+        );
       }
 
       const totalItems = otwContainers.reduce((sum, container) => sum + (container.itemCount || 0), 0);

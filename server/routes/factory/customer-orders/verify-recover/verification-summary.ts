@@ -14,6 +14,7 @@ import {} from "../../_helpers";
 import { factoryBaleProducts } from "@shared/schema";
 import { eq, and, sql, inArray } from "drizzle-orm";
 import { resultRows } from "../../../../lib/queryResult";
+import { plusMoney } from "../../../../lib/money";
 
 // Raw-row contracts for the SELECT * queries in this route. The columns are
 // snake_case because they come straight from PostgreSQL, and every field is
@@ -244,8 +245,8 @@ export function registerOrderVerificationSummaryRoutes(app: Express) {
           };
         }
         loadedByArticle[code].qty += 1;
-        loadedByArticle[code].totalWeight += parseFloat(weight) || 0;
-        loadedByArticle[code].totalPrice += parseFloat(priceUsed) || 0;
+        loadedByArticle[code].totalWeight = plusMoney(loadedByArticle[code].totalWeight, weight);
+        loadedByArticle[code].totalPrice = plusMoney(loadedByArticle[code].totalPrice, priceUsed);
       }
 
       let proformaLines: RawProformaLineRow[] = [];

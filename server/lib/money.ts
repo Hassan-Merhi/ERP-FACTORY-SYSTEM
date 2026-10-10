@@ -92,6 +92,16 @@ export function sumMoney(values: Iterable<MoneyInput>): Decimal {
   return total;
 }
 
+/**
+ * Adds `value` to a running number total exactly and returns a number, for
+ * report totals that are kept as numbers in response objects. Each step goes
+ * through the total's shortest decimal form, so cents never drift
+ * (0.1 + 0.2 is 0.3, not 0.30000000000000004).
+ */
+export function plusMoney(total: number, value: MoneyInput): number {
+  return toMoney(total).plus(toMoney(value)).toNumber();
+}
+
 /** Exact debit minus credit over ledger lines (positive = debit balance). */
 export function debitMinusCredit(lines: Iterable<{ debitAmount?: MoneyInput; creditAmount?: MoneyInput }>): Decimal {
   let total = new MoneyDecimal(0);

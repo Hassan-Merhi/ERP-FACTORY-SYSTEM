@@ -21,6 +21,7 @@ import {
 
 import { checkFactoryWorkerContractAccess, getFactoryCompanyId, writeDaybookEntry } from "./_helpers";
 import { removeFactoryWorkerFromCategories } from "../../lib/factoryWorkerCategoryMembership";
+import { sumMoney } from "../../lib/money";
 
 export function registerFactoryWorkerCrudRoutes(app: Express, requireAuth: RequestHandler, db: Database) {
   // GET /api/factory/workers/:id - Get single worker with computed stats
@@ -45,14 +46,14 @@ export function registerFactoryWorkerCrudRoutes(app: Express, requireAuth: Reque
         .where(and(eq(factoryBales.finalizedBy, id), eq(factoryBales.companyId, companyId)));
 
       const totalBales = bales.length;
-      const totalKg = bales.reduce((sum: number, b) => sum + parseFloat(b.weightKg || "0"), 0);
+      const totalKg = sumMoney(bales.map((b) => b.weightKg));
 
       const payrolls = await db
         .select()
         .from(factoryPayrolls)
         .where(and(eq(factoryPayrolls.workerId, id), eq(factoryPayrolls.companyId, companyId)));
 
-      const totalEarnings = payrolls.reduce((sum: number, p) => sum + parseFloat(p.netSalary || "0"), 0);
+      const totalEarnings = sumMoney(payrolls.map((p) => p.netSalary));
 
       res.json({
         ...worker,
