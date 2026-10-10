@@ -133,7 +133,7 @@ export function ActiveContainersTable({
                       <Button
                         size="icon"
                         variant="ghost"
-                        className="erp-mobile-touch-visible erp-mobile-touch-target opacity-0 group-hover:opacity-100 transition-opacity"
+                        className="erp-mobile-touch-visible erp-mobile-touch-target opacity-0 group-hover:opacity-100 touch:opacity-100 transition-opacity"
                         onClick={(e) => {
                           e.stopPropagation();
                           onEditNumberStart(container.id, container.containerNumber);

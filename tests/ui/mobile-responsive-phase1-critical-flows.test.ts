@@ -72,13 +72,16 @@ describe("Mobile repair Phase 1 critical flows", () => {
 
   it("makes hover-hidden interactive actions visible to coarse pointers without changing desktop hover behavior", () => {
     const compat = source("client/src/mobile-browser-compat.css");
+    const tailwind = source("tailwind.config.ts");
     const rawStock = source("client/src/pages/factory/production-raw-stock/RawStockTable.tsx");
 
+    // The behaviour is declared on the control itself through the `touch` variant; no stylesheet
+    // matches Tailwind class strings any more.
+    expect(tailwind).toContain('touch: { raw: "(hover: none) and (pointer: coarse)" }');
+    expect(compat).not.toContain('[class*="opacity-0"]');
     expect(compat).toContain("@media (max-width: 767px), (pointer: coarse)");
-    expect(compat).toContain('[class*="opacity-0"][class*="group-hover:opacity-100"]');
-    expect(compat).toContain("opacity: 1 !important");
 
-    expect(rawStock).toContain("opacity-0 group-hover:opacity-100");
+    expect(rawStock).toContain("opacity-0 group-hover:opacity-100 touch:opacity-100");
     expect(rawStock).toContain("data-testid={`button-adjust-${row.supplierId}`}");
     expect(rawStock).toContain("data-testid={`button-deduct-${row.supplierId}`}");
     expect(rawStock).toContain("data-testid={`button-batch-${row.supplierId}`}");

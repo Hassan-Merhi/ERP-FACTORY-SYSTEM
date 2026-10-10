@@ -329,7 +329,7 @@ export default function BarcodeManager() {
           </div>
         ) : (
           <>
-            <div className="hidden md:block">
+            <div className="hidden md:block phone-land:hidden">
               <Table>
                 <TableHeader className="sticky top-0 z-30 bg-background">
                   <TableRow>
@@ -382,7 +382,7 @@ export default function BarcodeManager() {
                 </TableBody>
               </Table>
             </div>
-            <div className="md:hidden space-y-3">
+            <div className="md:hidden phone-land:block space-y-3">
               <div className="flex items-center gap-2 mb-2">
                 <Checkbox
                   checked={selectedIds.length === unusedBarcodes.length && unusedBarcodes.length > 0}

@@ -58,50 +58,19 @@
     visibility: visible !important;
   }
 
-  .erp-mobile-touch-target,
-  [data-erp-route] button,
-  [data-erp-route] input,
-  [data-erp-route] select {
-    min-height: 44px !important;
-  }
-
-  .erp-mobile-touch-target,
-  [data-erp-route] button {
+  .erp-mobile-touch-target {
+    min-height: 44px;
     min-width: 44px;
   }
 
-  [data-erp-route] input,
-  [data-erp-route] textarea,
-  [data-erp-route] select {
-    font-size: 16px !important;
+  [data-erp-route] button {
+    min-width: 44px;
   }
 
   .erp-mobile-card-grid {
     display: grid;
     grid-template-columns: minmax(0, 1fr);
     gap: 0.75rem;
-  }
-
-  /*
-   * Settings contains several compact desktop two-column editors. On phones,
-   * including the add-user access cards, forcing one safe column prevents
-   * labels/selects/switches from squeezing each other or overflowing.
-   */
-  [data-erp-route="/settings"] .grid.grid-cols-2 {
-    grid-template-columns: minmax(0, 1fr) !important;
-  }
-
-  /* These operational rows expose real edit/delete actions only on hover on desktop. */
-  [data-erp-route="/accounts"] button[class*="opacity-0"][class*="group-hover"],
-  [data-erp-route="/accounts"] div[class*="opacity-0"][class*="group-hover"],
-  [data-erp-route="/parties"] button[class*="opacity-0"][class*="group-hover"],
-  [data-erp-route="/parties"] div[class*="opacity-0"][class*="group-hover"],
-  [data-erp-route="/containers"] button[class*="opacity-0"][class*="group-hover"],
-  [data-erp-route="/settings"] button[class*="opacity-0"][class*="group-hover"],
-  [data-erp-route="/settings"] div[class*="opacity-0"][class*="group-hover"],
-  [data-erp-route="/settings"] div[class*="invisible"][class*="group-hover"] {
-    opacity: 1 !important;
-    visibility: visible !important;
   }
 }
 
@@ -124,86 +93,19 @@
     visibility: visible !important;
   }
 
-  .erp-mobile-touch-target,
-  [data-erp-route] button,
-  [data-erp-route] input,
-  [data-erp-route] select {
-    min-height: 44px !important;
-  }
-
-  .erp-mobile-touch-target,
-  [data-erp-route] button {
+  .erp-mobile-touch-target {
+    min-height: 44px;
     min-width: 44px;
   }
 
-  [data-erp-route] input,
-  [data-erp-route] textarea,
-  [data-erp-route] select {
-    font-size: 16px !important;
+  [data-erp-route] button {
+    min-width: 44px;
   }
 
   .erp-mobile-card-grid {
     display: grid !important;
     grid-template-columns: minmax(0, 1fr) !important;
     gap: 0.75rem;
-  }
-
-  [data-erp-route="/accounts"] button[class*="opacity-0"][class*="group-hover"],
-  [data-erp-route="/accounts"] div[class*="opacity-0"][class*="group-hover"],
-  [data-erp-route="/parties"] button[class*="opacity-0"][class*="group-hover"],
-  [data-erp-route="/parties"] div[class*="opacity-0"][class*="group-hover"],
-  [data-erp-route="/containers"] button[class*="opacity-0"][class*="group-hover"],
-  [data-erp-route="/settings"] button[class*="opacity-0"][class*="group-hover"],
-  [data-erp-route="/settings"] div[class*="opacity-0"][class*="group-hover"],
-  [data-erp-route="/settings"] div[class*="invisible"][class*="group-hover"] {
-    opacity: 1 !important;
-    visibility: visible !important;
-  }
-
-  /* Keep existing phone card/list UIs active on landscape phones wider than 768px. */
-  [data-erp-route="/inventory"] [class~="md:hidden"],
-  [data-erp-route="/stock"] [class~="md:hidden"],
-  [data-erp-route="/sales-tools"] [class~="md:hidden"],
-  [data-erp-route="/optional-vouchers"] [class~="md:hidden"],
-  [data-erp-route^="/stock-items/"] [class~="md:hidden"],
-  [data-erp-route="/barcode-manager"] [class~="md:hidden"],
-  [data-erp-route="/orphaned-records"] [class~="md:hidden"],
-  [data-erp-route="/deleted-items"] [class~="md:hidden"] {
-    display: block !important;
-  }
-
-  [data-erp-route="/inventory"] [class~="hidden"][class~="md:block"],
-  [data-erp-route="/stock"] [class~="hidden"][class~="md:block"],
-  [data-erp-route="/sales-tools"] [class~="hidden"][class~="md:block"],
-  [data-erp-route="/optional-vouchers"] [class~="hidden"][class~="md:block"],
-  [data-erp-route^="/stock-items/"] [class~="hidden"][class~="md:block"],
-  [data-erp-route="/barcode-manager"] [class~="hidden"][class~="md:block"],
-  [data-erp-route="/orphaned-records"] [class~="hidden"][class~="md:block"],
-  [data-erp-route="/deleted-items"] [class~="hidden"][class~="md:block"] {
-    display: none !important;
-  }
-
-  /* Opening/closing stock use sm columns; keep compact phone columns in landscape. */
-  [data-erp-route="/opening-stock"] [class*="sm:grid-cols-7"],
-  [data-erp-route="/closing-stock-summary"] [class*="sm:grid-cols-4"] {
-    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-  }
-
-  [data-erp-route="/opening-stock"] [class~="hidden"][class~="sm:block"],
-  [data-erp-route="/closing-stock-summary"] [class~="hidden"][class~="sm:block"] {
-    display: none !important;
-  }
-
-  [data-erp-route="/closing-stock-summary"] [class~="sm:hidden"] {
-    display: block !important;
-  }
-
-  /* Literal desktop viewport caps are replaced by the shared visual viewport on phone-class devices. */
-  [data-erp-route="/daybook"] [data-table-scroll-region],
-  [data-erp-route="/transaction-journal"] [data-table-scroll-region],
-  [data-erp-route="/vouchers"] [data-table-scroll-region],
-  [data-erp-route="/optional-vouchers"] [data-table-scroll-region] {
-    max-height: calc(var(--app-viewport-height) - 10rem) !important;
   }
 }
 
@@ -304,22 +206,6 @@
 
   html[dir="rtl"] [data-erp-route] :is(.text-\[9px\], .text-\[10px\], .text-\[11px\]) {
     font-size: 0.75rem !important;
-  }
-}
-
-/*
- * Hover-revealed row actions (edit/delete icons with opacity-0 + group-hover) cannot be
- * discovered without a pointer that hovers. On touch devices they are always visible, on
- * every ERP route (Phase 1 covered a handful of routes explicitly).
- */
-@media (hover: none) {
-  [data-erp-route] :is(button, a, div, span)[class*="opacity-0"][class*="group-hover"],
-  [data-erp-route] :is(button, a, div, span)[class*="opacity-0"][class*="group-focus-within"] {
-    opacity: 1 !important;
-  }
-
-  [data-erp-route] :is(button, a, div, span)[class~="invisible"][class*="group-hover:visible"] {
-    visibility: visible !important;
   }
 }
 

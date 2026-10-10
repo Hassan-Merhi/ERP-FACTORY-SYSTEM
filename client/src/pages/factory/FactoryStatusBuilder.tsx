@@ -629,7 +629,7 @@ export default function FactoryStatusBuilder() {
                             onClick={() =>
                               setPendingDelete({ type: "row", idx: ri, label: fmtLabel(row.label) || `Row ${ri + 1}` })
                             }
-                            className="text-muted-foreground hover:text-destructive shrink-0 transition-colors opacity-0 group-hover:opacity-100"
+                            className="text-muted-foreground hover:text-destructive shrink-0 transition-colors opacity-0 group-hover:opacity-100 touch:opacity-100"
                             style={{ visibility: "visible" }}
                           >
                             <X className="h-3 w-3" />

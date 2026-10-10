@@ -121,7 +121,10 @@ export function DashboardFinancePanel({ dashboard }: DashboardFinancePanelProps)
           </div>
         )}
         {profitData?.currency && Object.keys(profitData.currency.nativeDebitByCurrency).length > 0 && (
-          <div className="mb-4 rounded-md border border-border/60 bg-muted/20 px-3 py-2" data-testid="net-position-currency-summary">
+          <div
+            className="mb-4 rounded-md border border-border/60 bg-muted/20 px-3 py-2"
+            data-testid="net-position-currency-summary"
+          >
             <div className="flex items-center justify-between gap-2 flex-wrap">
               <span className="text-xs font-semibold">Native currency balances</span>
               <span className="text-[11px] text-muted-foreground">{profitData.currency.rateConvention}</span>
@@ -425,7 +428,7 @@ export function DashboardFinancePanel({ dashboard }: DashboardFinancePanelProps)
                         <Button
                           size="icon"
                           variant="ghost"
-                          className="ml-1 opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+                          className="ml-1 opacity-100 md:opacity-0 group-hover:opacity-100 touch:opacity-100 transition-opacity shrink-0"
                           onClick={() => removeAccountMutation.mutate(dca.id)}
                           data-testid={`button-remove-cash-account-${dca.id}`}
                         >
@@ -557,7 +560,7 @@ export function DashboardFinancePanel({ dashboard }: DashboardFinancePanelProps)
                       <Button
                         size="icon"
                         variant="ghost"
-                        className="ml-1 opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+                        className="ml-1 opacity-100 md:opacity-0 group-hover:opacity-100 touch:opacity-100 transition-opacity shrink-0"
                         onClick={() => removePayableAccountMutation.mutate(account.id)}
                         data-testid={`button-remove-payable-account-${account.id}`}
                       >

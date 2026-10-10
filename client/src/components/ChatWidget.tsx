@@ -441,7 +441,7 @@ export function ChatWidget() {
             overflow-hidden max-w-[2.25rem] hover:max-w-[160px]"
         >
           <MessageCircle className="h-4 w-4 flex-shrink-0" />
-          <span className="text-sm font-medium whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-200 delay-100">
+          <span className="text-sm font-medium whitespace-nowrap opacity-0 group-hover:opacity-100 touch:opacity-100 transition-opacity duration-200 delay-100">
             AI Assistant
           </span>
         </button>

@@ -14,8 +14,11 @@ describe("Mobile Wave 3 ERP operational workflows", () => {
     expect(shell).toContain("data-erp-route={routePath}");
     expect(css).toContain("@media (max-width: 767px)");
     expect(css).toContain("@media (hover: none) and (pointer: coarse) and (max-height: 500px)");
-    expect(css).toContain("min-height: 44px !important");
+    // Touch floors are owned by the shared mobile stylesheet (one rule for every shell).
+    const compat = source("client/src/mobile-browser-compat.css");
+    expect(compat).toContain("--mobile-control-min-height: 2.75rem");
     expect(css).toContain("min-width: 44px");
+    expect(css).not.toContain("min-height: 44px !important");
   });
 
   it("keeps the main ERP hubs horizontally contained on phones", () => {
@@ -52,12 +55,21 @@ describe("Mobile Wave 3 ERP operational workflows", () => {
   });
 
   it("keeps existing mobile data alternatives active on landscape phones", () => {
+    // Each page declares it with the `phone-land` variant instead of a route-scoped override.
+    const tailwind = source("tailwind.config.ts");
+    expect(tailwind).toContain('"phone-land": { raw: "(hover: none) and (pointer: coarse) and (max-height: 500px)" }');
+    for (const file of [
+      "client/src/pages/stockitems/StockItemsView.tsx",
+      "client/src/pages/StockQuery.tsx",
+      "client/src/pages/OptionalVouchers.tsx",
+      "client/src/pages/DeletedItems.tsx",
+    ]) {
+      const contents = source(file);
+      expect(contents).toContain("md:hidden phone-land:block");
+      expect(contents).toContain("hidden md:block phone-land:hidden");
+    }
     const css = source("client/src/erp-mobile-operations.css");
-    expect(css).toContain('[data-erp-route="/inventory"] [class~="md:hidden"]');
-    expect(css).toContain('[data-erp-route="/stock"] [class~="md:hidden"]');
-    expect(css).toContain('[data-erp-route="/sales-tools"] [class~="md:hidden"]');
-    expect(css).toContain('[data-erp-route="/optional-vouchers"] [class~="md:hidden"]');
-    expect(css).toContain('[class~="hidden"][class~="md:block"]');
+    expect(css).not.toContain('[class~="md:hidden"]');
   });
 
   it("does not move accounting or inventory business rules into Wave 3 mobile code", () => {

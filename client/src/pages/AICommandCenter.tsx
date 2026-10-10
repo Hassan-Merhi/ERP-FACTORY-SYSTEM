@@ -132,7 +132,7 @@ function StepRow({ step }: { step: PlanStep }) {
           <p className="text-xs text-red-500 max-w-[180px] truncate">{step.error}</p>
         )}
         {hasResult && (
-          <Eye className="h-3.5 w-3.5 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity shrink-0 mt-0.5" />
+          <Eye className="h-3.5 w-3.5 text-muted-foreground opacity-0 group-hover:opacity-100 touch:opacity-100 transition-opacity shrink-0 mt-0.5" />
         )}
       </div>
 

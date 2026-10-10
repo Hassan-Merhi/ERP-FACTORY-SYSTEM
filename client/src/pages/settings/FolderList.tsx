@@ -82,7 +82,7 @@ export function FolderList({
                 {fileCountForFolder(folder.id)}
               </Badge>
             </button>
-            <div className="invisible group-hover:visible [@media(hover:none)]:visible flex items-center gap-0.5 shrink-0">
+            <div className="invisible group-hover:visible touch:visible [@media(hover:none)]:visible flex items-center gap-0.5 shrink-0">
               <Button
                 size="icon"
                 variant="ghost"

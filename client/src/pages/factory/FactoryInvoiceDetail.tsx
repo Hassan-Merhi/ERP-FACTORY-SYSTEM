@@ -554,7 +554,7 @@ export default function FactoryInvoiceDetail() {
                                     maximumFractionDigits: 4,
                                   })}
                                 </span>
-                                <Pencil className="h-3 w-3 text-muted-foreground invisible group-hover:visible" />
+                                <Pencil className="h-3 w-3 text-muted-foreground invisible group-hover:visible touch:visible" />
                               </button>
                             )
                           ) : (

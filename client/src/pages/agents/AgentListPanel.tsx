@@ -145,7 +145,7 @@ export function AgentListPanel({
                   </div>
                 </button>
                 <button
-                  className="p-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive hover:bg-destructive/10 shrink-0"
+                  className="p-1.5 rounded-lg opacity-0 group-hover:opacity-100 touch:opacity-100 transition-opacity text-muted-foreground hover:text-destructive hover:bg-destructive/10 shrink-0"
                   onClick={() => onRemove(account.id)}
                   data-testid={`button-remove-agent-${account.id}`}
                   title="Remove from Agent Ledger"

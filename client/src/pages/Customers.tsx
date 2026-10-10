@@ -476,7 +476,7 @@ export default function Customers() {
                       )}
                   </TableCell>
                   <TableCell className="py-3">
-                    <div className="flex items-center justify-end opacity-0 group-hover:opacity-100 transition-opacity">
+                    <div className="flex items-center justify-end opacity-0 group-hover:opacity-100 touch:opacity-100 transition-opacity">
                       <Button
                         variant="ghost"
                         size="icon"

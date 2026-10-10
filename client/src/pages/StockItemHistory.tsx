@@ -158,7 +158,7 @@ export default function StockItemHistory() {
           <CardTitle className="break-words text-lg">Monthly Summary - {selectedYear}</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="hidden md:block">
+          <div className="hidden md:block phone-land:hidden">
             <Table minimumWidth="52rem" scrollLabel="Stock item monthly summary">
               <TableHeader className="sticky top-0 z-30 bg-background">
                 <TableRow>
@@ -242,7 +242,7 @@ export default function StockItemHistory() {
             </Table>
           </div>
 
-          <div className="space-y-3 md:hidden">
+          <div className="space-y-3 md:hidden phone-land:block">
             <ResponsiveDataList>
               {data?.monthlyData.map((month) => {
                 const hasData = month.inwardQty > 0 || month.outwardQty > 0 || month.closingQty !== 0;

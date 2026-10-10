@@ -723,7 +723,7 @@ export function FactoryWorkersRosterPanel({ model }: FactoryWorkersModelProps) {
                     </TableCell>
                     <TableCell className="py-3">
                       <div
-                        className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                        className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 touch:opacity-100 transition-opacity"
                         onClick={(e) => e.stopPropagation()}
                       >
                         <Button

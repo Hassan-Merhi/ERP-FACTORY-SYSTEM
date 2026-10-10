@@ -49,7 +49,9 @@ export function AccountSearchResults({ model }: { model: AccountsLegacyModel }) 
                 <span
                   className={cn(
                     "font-mono tabular-nums text-sm font-medium shrink-0",
-                    balanceSide === "Dr" ? "text-emerald-600 dark:text-emerald-400" : "text-amber-600 dark:text-amber-400"
+                    balanceSide === "Dr"
+                      ? "text-emerald-600 dark:text-emerald-400"
+                      : "text-amber-600 dark:text-amber-400"
                   )}
                 >
                   {model.formatAmountForAccount(Math.abs(acc.balance), acc.type)}
@@ -60,7 +62,7 @@ export function AccountSearchResults({ model }: { model: AccountsLegacyModel }) 
             {acc.type === "ledger" && (
               <button
                 type="button"
-                className="opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground shrink-0"
+                className="opacity-0 group-hover:opacity-100 touch:opacity-100 focus-visible:opacity-100 transition-opacity p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground shrink-0"
                 onClick={() => model.openEditAccountDialog(acc)}
                 title="Edit account"
                 aria-label={`Edit ${acc.name}`}
@@ -69,7 +71,7 @@ export function AccountSearchResults({ model }: { model: AccountsLegacyModel }) 
                 <Pencil className="h-3.5 w-3.5" />
               </button>
             )}
-            <ArrowRight className="h-3.5 w-3.5 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
+            <ArrowRight className="h-3.5 w-3.5 text-muted-foreground opacity-0 group-hover:opacity-100 touch:opacity-100 transition-opacity shrink-0" />
           </div>
         );
       })}

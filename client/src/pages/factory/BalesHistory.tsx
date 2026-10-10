@@ -627,7 +627,7 @@ export default function BalesHistory() {
                                     data-testid={`text-product-name-${bale.id}`}
                                   >
                                     <span>{product?.name || bale.productName || "-"}</span>
-                                    <Pencil className="h-3 w-3 text-muted-foreground visible md:invisible md:group-hover:visible" />
+                                    <Pencil className="h-3 w-3 text-muted-foreground visible md:invisible md:group-hover:visible touch:visible" />
                                   </div>
                                 )}
                               </TableCell>

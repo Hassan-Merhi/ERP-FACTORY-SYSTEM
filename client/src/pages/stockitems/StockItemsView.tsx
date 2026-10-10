@@ -317,7 +317,10 @@ export function StockItemsView({ stockItems }: { stockItems: StockItemsModel }) 
         />
       ) : (
         <>
-          <div data-horizontal-scroll="true" className="hidden md:block border rounded-xl overflow-x-auto">
+          <div
+            data-horizontal-scroll="true"
+            className="hidden md:block phone-land:hidden border rounded-xl overflow-x-auto"
+          >
             <table className="w-full text-sm">
               <thead className="sticky top-0 z-30 bg-muted">
                 <tr className="h-11 bg-muted/40 border-b">
@@ -470,7 +473,7 @@ export function StockItemsView({ stockItems }: { stockItems: StockItemsModel }) 
             </table>
           </div>
 
-          <div className="md:hidden space-y-2">
+          <div className="md:hidden phone-land:block space-y-2">
             <div className="flex items-center gap-2 pb-2 border-b">
               <Checkbox
                 checked={allPageSelected}

@@ -417,7 +417,7 @@ export default function AccountGroups() {
                             <Button
                               variant="ghost"
                               size="icon"
-                              className="opacity-0 group-hover:opacity-100 shrink-0"
+                              className="opacity-0 group-hover:opacity-100 touch:opacity-100 shrink-0"
                               onClick={() => removeMutation.mutate(child.id)}
                               disabled={removeMutation.isPending}
                               data-testid={`button-remove-child-${child.id}`}

@@ -332,7 +332,7 @@ export default function FactoryFinancialSnapshot() {
                               }
                               data-testid={`button-advance-account-${acct.id}`}
                             >
-                              <ExternalLink className="h-3 w-3 text-muted-foreground shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" />
+                              <ExternalLink className="h-3 w-3 text-muted-foreground shrink-0 opacity-0 group-hover:opacity-100 touch:opacity-100 transition-opacity" />
                               <span className="text-sm text-foreground truncate">{acct.name}</span>
                               {acct.code && <span className="text-xs text-muted-foreground shrink-0">{acct.code}</span>}
                             </button>
@@ -343,7 +343,7 @@ export default function FactoryFinancialSnapshot() {
                               <Button
                                 size="icon"
                                 variant="ghost"
-                                className="h-6 w-6 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity"
+                                className="h-6 w-6 opacity-0 group-hover:opacity-100 touch:opacity-100 focus-visible:opacity-100 transition-opacity"
                                 onClick={() =>
                                   removeAccountMutation.mutate({ type: "advance", accountId: acct.compositeId })
                                 }
@@ -441,7 +441,7 @@ export default function FactoryFinancialSnapshot() {
                               }
                               data-testid={`button-cashbank-account-${acct.id}`}
                             >
-                              <ExternalLink className="h-3 w-3 text-muted-foreground shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" />
+                              <ExternalLink className="h-3 w-3 text-muted-foreground shrink-0 opacity-0 group-hover:opacity-100 touch:opacity-100 transition-opacity" />
                               <span className="text-sm text-foreground truncate">{acct.name}</span>
                               {acct.code && <span className="text-xs text-muted-foreground shrink-0">{acct.code}</span>}
                             </button>
@@ -454,7 +454,7 @@ export default function FactoryFinancialSnapshot() {
                               <Button
                                 size="icon"
                                 variant="ghost"
-                                className="h-6 w-6 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity"
+                                className="h-6 w-6 opacity-0 group-hover:opacity-100 touch:opacity-100 focus-visible:opacity-100 transition-opacity"
                                 onClick={() =>
                                   removeAccountMutation.mutate({ type: "cashbank", accountId: acct.compositeId })
                                 }
@@ -544,7 +544,7 @@ export default function FactoryFinancialSnapshot() {
                               }
                               data-testid={`button-agent-account-${acct.id}`}
                             >
-                              <ExternalLink className="h-3 w-3 text-muted-foreground shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" />
+                              <ExternalLink className="h-3 w-3 text-muted-foreground shrink-0 opacity-0 group-hover:opacity-100 touch:opacity-100 transition-opacity" />
                               <span className="text-sm text-foreground truncate">{acct.name}</span>
                               {acct.code && <span className="text-xs text-muted-foreground shrink-0">{acct.code}</span>}
                             </button>
@@ -557,7 +557,7 @@ export default function FactoryFinancialSnapshot() {
                               <Button
                                 size="icon"
                                 variant="ghost"
-                                className="h-6 w-6 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity"
+                                className="h-6 w-6 opacity-0 group-hover:opacity-100 touch:opacity-100 focus-visible:opacity-100 transition-opacity"
                                 onClick={() =>
                                   removeAccountMutation.mutate({ type: "agent", accountId: acct.compositeId })
                                 }
@@ -647,7 +647,7 @@ export default function FactoryFinancialSnapshot() {
                               }
                               data-testid={`button-freight-account-${acct.id}`}
                             >
-                              <ExternalLink className="h-3 w-3 text-muted-foreground shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" />
+                              <ExternalLink className="h-3 w-3 text-muted-foreground shrink-0 opacity-0 group-hover:opacity-100 touch:opacity-100 transition-opacity" />
                               <span className="text-sm text-foreground truncate">{acct.name}</span>
                               {acct.code && <span className="text-xs text-muted-foreground shrink-0">{acct.code}</span>}
                             </button>
@@ -660,7 +660,7 @@ export default function FactoryFinancialSnapshot() {
                               <Button
                                 size="icon"
                                 variant="ghost"
-                                className="h-6 w-6 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity"
+                                className="h-6 w-6 opacity-0 group-hover:opacity-100 touch:opacity-100 focus-visible:opacity-100 transition-opacity"
                                 onClick={() =>
                                   removeAccountMutation.mutate({ type: "freight", accountId: acct.compositeId })
                                 }

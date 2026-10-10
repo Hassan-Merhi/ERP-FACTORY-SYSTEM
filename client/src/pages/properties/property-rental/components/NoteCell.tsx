@@ -88,7 +88,7 @@ function NoteCell({ contractId, note, testId }: { contractId: number; note: stri
       ) : (
         <span className="text-xs text-muted-foreground italic">Add note…</span>
       )}
-      <Pencil className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 shrink-0 mt-0.5 transition-opacity" />
+      <Pencil className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 touch:opacity-100 shrink-0 mt-0.5 transition-opacity" />
     </div>
   );
 }

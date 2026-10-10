@@ -5,6 +5,13 @@ export default {
   content: ["./client/index.html", "./client/src/**/*.{js,jsx,ts,tsx}"],
   theme: {
     extend: {
+      screens: {
+        // Touch-first devices: hover-revealed controls stay visible, shortcut hints hide.
+        touch: { raw: "(hover: none) and (pointer: coarse)" },
+        // Landscape phones are wider than `sm`/`md` but still short touch screens: keep the phone
+        // card/list presentation there (same query as ERP_PHONE_LAYOUT_QUERY's second clause).
+        "phone-land": { raw: "(hover: none) and (pointer: coarse) and (max-height: 500px)" },
+      },
       borderRadius: {
         lg: ".5rem",
         md: ".375rem",

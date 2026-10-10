@@ -3,7 +3,8 @@
  *
  * This file is imported after index.css so these compatibility rules can
  * protect every ERP shell and page without duplicating responsive fixes in
- * hundreds of feature components. Keep desktop layout behavior unchanged.
+ * hundreds of feature components. Keep desktop layout behavior unchanged. Selectors stay within
+ * the documented Firefox 110+ baseline (no :has()).
  */
 :root {
   --app-viewport-height: 100vh;
@@ -129,16 +130,6 @@ body {
 
   #main-content :where(button:not([data-compact-control="true"]), [role="button"]:not([data-compact-control="true"])) {
     min-height: var(--mobile-control-min-height);
-  }
-
-  /*
-   * Hover-only actions are inaccessible on touch screens. Keep the existing
-   * desktop hover treatment, but make hover-hidden affordances permanently
-   * visible when the primary pointer is coarse. Avoid relational selectors here
-   * so this remains compatible with the documented Firefox 110+ baseline.
-   */
-  #main-content [class*="opacity-0"][class*="group-hover:opacity-100"] {
-    opacity: 1 !important;
   }
 
   #main-content {

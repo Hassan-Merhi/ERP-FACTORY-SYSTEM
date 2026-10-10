@@ -361,7 +361,7 @@ export function RawStockTable({ rawStock, onAdjust, onDeduct, onAddToBatch }: Ra
                               </div>
                             </TableCell>
                             <TableCell className="py-3 text-right pr-4">
-                              <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 touch:opacity-100 transition-opacity">
                                 <Button
                                   size="icon"
                                   variant="ghost"

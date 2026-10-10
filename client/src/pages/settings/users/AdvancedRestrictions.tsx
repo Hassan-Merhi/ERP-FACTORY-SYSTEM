@@ -215,7 +215,7 @@ export function AdvancedRestrictions({
                                 </Badge>
                               )}
                             </div>
-                            <div className="ml-6 grid grid-cols-2 gap-1">
+                            <div className="ml-6 grid grid-cols-1 md:grid-cols-2 gap-1">
                               {groupPages.map((page) => (
                                 <div key={page.key} className="flex items-center gap-2">
                                   <Checkbox
@@ -293,7 +293,7 @@ export function AdvancedRestrictions({
                                 </Badge>
                               )}
                             </div>
-                            <div className="ml-6 grid grid-cols-2 gap-1">
+                            <div className="ml-6 grid grid-cols-1 md:grid-cols-2 gap-1">
                               {groupPages.map((page) => (
                                 <div key={page.key} className="flex items-center gap-2">
                                   <Checkbox
@@ -391,7 +391,7 @@ export function AdvancedRestrictions({
                               </div>
                             </CollapsibleTrigger>
                             <CollapsibleContent>
-                              <div className="grid grid-cols-2 gap-1 px-2 py-1.5 pl-8">
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-1 px-2 py-1.5 pl-8">
                                 {groupTabs.map((tab) => (
                                   <div key={tab.key} className="flex items-center gap-2">
                                     <Checkbox

@@ -3,14 +3,14 @@
  *
  * Extracted from TransporterStatement.tsx during the Phase 4 god-file split.
  */
-import {useState} from "react";
-import {useDateFormat} from "@/contexts/DateFormatContext";
-import {Button} from "@/components/ui/button";
-import {Pencil, Check, X} from "lucide-react";
-import {cn} from "@/lib/utils";
+import { useState } from "react";
+import { useDateFormat } from "@/contexts/DateFormatContext";
+import { Button } from "@/components/ui/button";
+import { Pencil, Check, X } from "lucide-react";
+import { cn } from "@/lib/utils";
 
-import type {StatementRow} from "../types";
-import {today} from "../utils";
+import type { StatementRow } from "../types";
+import { today } from "../utils";
 
 export function DueDateCell({
   row,
@@ -73,7 +73,7 @@ export function DueDateCell({
       ) : (
         <span className="text-xs text-muted-foreground/60 italic">set date</span>
       )}
-      <Pencil className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 shrink-0 print:hidden" />
+      <Pencil className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 touch:opacity-100 shrink-0 print:hidden" />
     </div>
   );
 }

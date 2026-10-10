@@ -156,7 +156,7 @@ function CategoryGroup({
                     {side === "equity" && acc.balanceSide && (
                       <span className="text-xs text-muted-foreground font-normal ml-1">({acc.balanceSide})</span>
                     )}
-                    <ExternalLink className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 shrink-0 transition-opacity" />
+                    <ExternalLink className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 touch:opacity-100 shrink-0 transition-opacity" />
                   </button>
                 ) : (
                   <span className="text-foreground flex items-center gap-1">

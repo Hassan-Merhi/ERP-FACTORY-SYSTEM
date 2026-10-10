@@ -166,7 +166,7 @@ export default function StockItemVouchers() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="hidden md:block overflow-x-auto">
+          <div className="hidden md:block phone-land:hidden overflow-x-auto">
             <Table className="text-sm">
               <TableHeader className="sticky top-0 z-30 bg-background">
                 <TableRow>
@@ -277,7 +277,7 @@ export default function StockItemVouchers() {
             </Table>
           </div>
 
-          <div className="md:hidden space-y-2">
+          <div className="md:hidden phone-land:block space-y-2">
             {data?.transactions.length === 0 && (
               <p className="text-center text-muted-foreground py-8">No transactions found for this month</p>
             )}

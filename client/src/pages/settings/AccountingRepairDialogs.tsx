@@ -247,7 +247,7 @@ export function InitializeBalancesDialog({ open, onOpenChange }: InitializeBalan
                             )}
                           </Button>
                           {expandedId === r.companyId && (
-                            <div className="mt-2 grid grid-cols-2 gap-4 p-2 bg-muted/50 rounded">
+                            <div className="mt-2 grid grid-cols-1 md:grid-cols-2 gap-4 p-2 bg-muted/50 rounded">
                               <div>
                                 <div className="font-medium text-green-600 dark:text-green-400 mb-1">
                                   Assets (Debit)

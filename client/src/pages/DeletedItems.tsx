@@ -443,7 +443,7 @@ export default function DeletedItems() {
             </div>
           ) : (
             <>
-              <div className="hidden md:block">
+              <div className="hidden md:block phone-land:hidden">
                 <Table>
                   <TableHeader className="sticky top-0 z-30 bg-background">
                     <TableRow>
@@ -559,7 +559,7 @@ export default function DeletedItems() {
                   </TableBody>
                 </Table>
               </div>
-              <div className="md:hidden space-y-3">
+              <div className="md:hidden phone-land:block space-y-3">
                 {items.map((item) => {
                   const IconComponent = typeIcons[item.type] || Package;
                   return (
