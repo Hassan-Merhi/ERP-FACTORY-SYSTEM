@@ -265,6 +265,7 @@ export function registerRentalUnitsReadRoutes(app: Express, ctx: RentalRoutesCon
 
             const sharedContractIds = sharedContracts.map((c) => c.id);
             const sharedOutstanding = new Map<number, number>();
+            const sharedExpected = new Map<number, number>();
             const sharedPaid = new Map<number, number>();
             const sharedScheduled = new Map<number, number>();
 
@@ -294,6 +295,7 @@ export function registerRentalUnitsReadRoutes(app: Express, ctx: RentalRoutesCon
                   .map((row) => row.expectedAmount as string)
               );
               // Will set outstanding after loading paid
+              sharedExpected.set(c.id, expected.toNumber());
               sharedOutstanding.set(c.id, expected.toNumber());
             }
 
@@ -322,7 +324,7 @@ export function registerRentalUnitsReadRoutes(app: Express, ctx: RentalRoutesCon
 
             // Finalize outstanding = expected - paid
             for (const c of sharedContracts) {
-              const expected = sharedOutstanding.get(c.id) ?? 0;
+              const expected = sharedExpected.get(c.id) ?? 0;
               const paid = sharedPaid.get(c.id) ?? 0;
               sharedOutstanding.set(c.id, toMoney(expected).minus(paid).toNumber());
             }
@@ -360,7 +362,7 @@ export function registerRentalUnitsReadRoutes(app: Express, ctx: RentalRoutesCon
                 const guaranteeRemaining = Math.max(0, toMoney(c.guaranteeAmount).minus(appliedAsRent).toNumber());
                 // FIX #8: separate non-negative outstanding and credit fields for shared contracts
                 const rawOutstanding = sharedOutstanding.get(c.id) ?? 0;
-                const expectedAsOf = rawOutstanding + (sharedPaid.get(c.id) ?? 0); // reverse: outstanding = expected - paid
+                const expectedAsOf = sharedExpected.get(c.id) ?? 0;
                 const paidAsOf = sharedPaid.get(c.id) ?? 0;
                 const scheduledAmount = sharedScheduled.get(c.id) ?? 0;
                 const outstanding = Math.max(0, rawOutstanding);
