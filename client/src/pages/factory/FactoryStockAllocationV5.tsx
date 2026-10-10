@@ -148,7 +148,6 @@ export default function FactoryStockAllocationV5() {
         </div>
       </div>
 
-
       {/* ── Row 2: Toolbar (search + filters + icon buttons) ──────────────── */}
       <div className="flex min-w-0 flex-wrap items-center justify-between gap-3 border-b bg-muted/30 px-3 py-2.5 sm:px-4">
         {/* Left: search + category */}
@@ -165,7 +164,7 @@ export default function FactoryStockAllocationV5() {
             {searchQuery && (
               <button
                 onClick={() => setSearchQuery("")}
-                className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground rounded"
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground rounded-sm"
                 data-testid="button-v5-clear-search"
                 aria-label="Clear search"
               >
@@ -212,7 +211,7 @@ export default function FactoryStockAllocationV5() {
                   >
                     <div
                       className={cn(
-                        "flex h-4 w-4 items-center justify-center rounded border transition-colors",
+                        "flex h-4 w-4 items-center justify-center rounded-sm border transition-colors",
                         categoryFilter.length === allCategories.length ? "border-primary bg-primary" : "border-input"
                       )}
                     >
@@ -220,7 +219,7 @@ export default function FactoryStockAllocationV5() {
                         <CheckCircle2 className="h-2.5 w-2.5 text-primary-foreground" />
                       )}
                       {categoryFilter.length > 0 && categoryFilter.length < allCategories.length && (
-                        <div className="h-1.5 w-1.5 rounded-sm bg-primary" />
+                        <div className="h-1.5 w-1.5 rounded-xs bg-primary" />
                       )}
                     </div>
                     Select all
@@ -238,7 +237,7 @@ export default function FactoryStockAllocationV5() {
                       >
                         <div
                           className={cn(
-                            "flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-colors",
+                            "flex h-4 w-4 shrink-0 items-center justify-center rounded-sm border transition-colors",
                             checked ? "border-primary bg-primary" : "border-input"
                           )}
                         >
@@ -264,7 +263,7 @@ export default function FactoryStockAllocationV5() {
               className={cn(
                 "rounded-md px-2 py-1.5 text-xs font-semibold transition-all sm:px-3",
                 !hideZero
-                  ? "bg-primary text-primary-foreground shadow-sm"
+                  ? "bg-primary text-primary-foreground shadow-xs"
                   : "text-muted-foreground hover:bg-accent hover:text-foreground"
               )}
             >
@@ -276,7 +275,7 @@ export default function FactoryStockAllocationV5() {
               className={cn(
                 "rounded-md px-2 py-1.5 text-xs font-semibold transition-all sm:px-3",
                 showNegativeOnly
-                  ? "bg-destructive text-destructive-foreground shadow-sm"
+                  ? "bg-destructive text-destructive-foreground shadow-xs"
                   : "text-muted-foreground hover:bg-accent hover:text-foreground"
               )}
             >
@@ -288,7 +287,7 @@ export default function FactoryStockAllocationV5() {
               className={cn(
                 "rounded-md px-2 py-1.5 text-xs font-semibold transition-all sm:px-3",
                 showGarbageWipers
-                  ? "bg-secondary text-secondary-foreground shadow-sm"
+                  ? "bg-secondary text-secondary-foreground shadow-xs"
                   : "text-muted-foreground hover:bg-accent hover:text-foreground"
               )}
             >

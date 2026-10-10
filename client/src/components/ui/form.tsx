@@ -98,7 +98,7 @@ const FormSectionLegend = React.forwardRef<HTMLLegendElement, React.HTMLAttribut
   ({ className, ...props }, ref) => (
     <legend
       ref={ref}
-      className={cn("max-w-full break-words px-1 text-sm font-semibold leading-snug", className)}
+      className={cn("max-w-full wrap-break-word px-1 text-sm font-semibold leading-snug", className)}
       {...props}
     />
   )
@@ -127,7 +127,7 @@ const FormLabel = React.forwardRef<
   return (
     <Label
       ref={ref}
-      className={cn("break-words text-xs font-medium text-foreground", error && "text-destructive", className)}
+      className={cn("wrap-break-word text-xs font-medium text-foreground", error && "text-destructive", className)}
       htmlFor={formItemId}
       {...props}
     />
@@ -162,7 +162,7 @@ const FormDescription = React.forwardRef<HTMLParagraphElement, React.HTMLAttribu
       <p
         ref={ref}
         id={formDescriptionId}
-        className={cn("break-words text-xs leading-relaxed text-muted-foreground", className)}
+        className={cn("wrap-break-word text-xs leading-relaxed text-muted-foreground", className)}
         {...props}
       />
     );
@@ -185,7 +185,7 @@ const FormMessage = React.forwardRef<HTMLParagraphElement, React.HTMLAttributes<
         id={formMessageId}
         role="alert"
         aria-live="polite"
-        className={cn("break-words text-xs font-medium leading-relaxed text-destructive", className)}
+        className={cn("wrap-break-word text-xs font-medium leading-relaxed text-destructive", className)}
         {...props}
       >
         {body}

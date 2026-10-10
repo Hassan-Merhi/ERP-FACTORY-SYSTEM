@@ -67,7 +67,7 @@ export function WorkerSummaryHover({
           type="button"
           aria-expanded={open}
           onClick={() => setOpen((current) => !current)}
-          className="inline-flex items-center rounded-md border border-border bg-background px-2 py-1 text-xs font-medium whitespace-nowrap hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="inline-flex items-center rounded-md border border-border bg-background px-2 py-1 text-xs font-medium whitespace-nowrap hover:bg-accent focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
           aria-label={`${workers.length} worker${workers.length === 1 ? "" : "s"}. Show bale details.`}
         >
           {workers.length} worker{workers.length === 1 ? "" : "s"}

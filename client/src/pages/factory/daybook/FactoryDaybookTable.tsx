@@ -121,13 +121,13 @@ function CondensedGroupRow({
           ) : (
             <ChevronRight className="h-3 w-3 shrink-0 text-muted-foreground" />
           )}
-          <Badge variant={bv} className={cn(bc, "min-w-0 whitespace-normal break-words sm:whitespace-nowrap")}>
+          <Badge variant={bv} className={cn(bc, "min-w-0 whitespace-normal wrap-break-word sm:whitespace-nowrap")}>
             {formatTxType(row.txType)}
           </Badge>
         </div>
         <div className="text-center text-muted-foreground text-sm font-mono">{row.count}</div>
         {model.showAmounts && (
-          <div className="min-w-0 break-words text-right font-mono text-sm font-medium">
+          <div className="min-w-0 wrap-break-word text-right font-mono text-sm font-medium">
             {currencySymbol(row.currencyCode)}
             {formatNumber(row.totalAmountCurrency)}
             {row.currencyCode !== "USD" && (
@@ -172,10 +172,12 @@ function CondensedRows({ model }: { model: FactoryDaybookModel }) {
           <div key={date} className="w-full">
             {/* Date separator row */}
             <div className={cn("grid w-full gap-x-2 border-b bg-muted/40 px-3 py-1.5 sm:gap-x-0 sm:px-4", colsClass)}>
-              <span className="min-w-0 break-words text-sm font-semibold">{formatDisplayDate(date + "T00:00:00")}</span>
+              <span className="min-w-0 wrap-break-word text-sm font-semibold">
+                {formatDisplayDate(date + "T00:00:00")}
+              </span>
               <span />
               {showAmounts && (
-                <span className="min-w-0 break-words text-right font-mono text-sm font-medium">
+                <span className="min-w-0 wrap-break-word text-right font-mono text-sm font-medium">
                   {currencySymbol(dayCcy)}
                   {formatNumber(dayTotal)}
                 </span>

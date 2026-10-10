@@ -82,11 +82,14 @@ export function AgentCard({
       return null;
     }
   });
-  const saveOrder = useCallback((order: number[] | null) => {
-    if (order === null) localStorage.removeItem(storageKey);
-    else localStorage.setItem(storageKey, JSON.stringify(order));
-    setCustomOrder(order);
-  }, [storageKey]);
+  const saveOrder = useCallback(
+    (order: number[] | null) => {
+      if (order === null) localStorage.removeItem(storageKey);
+      else localStorage.setItem(storageKey, JSON.stringify(order));
+      setCustomOrder(order);
+    },
+    [storageKey]
+  );
   const resetOrder = () => saveOrder(null);
 
   // ── Prepaid designations ──────────────────────────────────────────────────
@@ -158,7 +161,7 @@ export function AgentCard({
   // ── Adjustments ──────────────────────────────────────────────────────────
   const adjQKey = [`/api/git/agent-adjustments/${companyId}/${encodeURIComponent(agent.agentName)}`];
   const { data: adjData } = useQuery<AdjEntry[]>({ queryKey: adjQKey, initialData: [], staleTime: 120_000 });
-  const adjustments: AdjEntry[] = useMemo(() => (adjData ?? []), [adjData]);
+  const adjustments: AdjEntry[] = useMemo(() => adjData ?? [], [adjData]);
   const createAdjMutation = useMutation({
     mutationFn: (body: { description: string; amount: number; type: "debit" | "credit" }) =>
       apiRequest("POST", `/api/git/agent-adjustments/${companyId}/${encodeURIComponent(agent.agentName)}`, body),
@@ -169,13 +172,15 @@ export function AgentCard({
       setNewType("debit");
       setShowAdjForm(false);
     },
-    onError: (e: ClientErrorLike) => toast({ title: "Failed to add entry", description: e.message, variant: "destructive" }),
+    onError: (e: ClientErrorLike) =>
+      toast({ title: "Failed to add entry", description: e.message, variant: "destructive" }),
   });
   const deleteAdjMutation = useMutation({
     mutationFn: (id: number) =>
       apiRequest("DELETE", `/api/git/agent-adjustments/${companyId}/${encodeURIComponent(agent.agentName)}/${id}`),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: adjQKey }),
-    onError: (e: ClientErrorLike) => toast({ title: "Failed to delete", description: e.message, variant: "destructive" }),
+    onError: (e: ClientErrorLike) =>
+      toast({ title: "Failed to delete", description: e.message, variant: "destructive" }),
   });
   const saveAdj = () => {
     const amt = parseFloat(newAmount);
@@ -341,7 +346,7 @@ export function AgentCard({
     if (staleIds.length === 0) return;
     setPendingGraduationIds((prev) => [...new Set([...prev, ...staleIds])]);
     setAllPrepaidMutation.mutate(dbPrepaidIds.filter((id) => validTransitIdSet.has(id)));
-  }, [dbPrepaidIds, isDbOverride, setAllPrepaidMutation, validTransitIdSet]); 
+  }, [dbPrepaidIds, isDbOverride, setAllPrepaidMutation, validTransitIdSet]);
   useEffect(() => {
     if (pendingGraduationIds.length === 0) return;
     const openPartialIdSet = new Set(allOpenPartial.map((r) => r.id));
@@ -350,7 +355,7 @@ export function AgentCard({
     setPendingGraduationIds((prev) => prev.filter((id) => !openPartialIdSet.has(id)));
     const existing = customOrder ?? allOpenPartial.map((r) => r.id);
     saveOrder([...toPromote, ...existing.filter((id) => !toPromote.includes(id))]);
-  }, [allOpenPartial, customOrder, pendingGraduationIds, saveOrder]); 
+  }, [allOpenPartial, customOrder, pendingGraduationIds, saveOrder]);
 
   const confidenceBadge = {
     exact: { label: "Exact match", cls: "bg-green-700 text-white" },
@@ -369,7 +374,7 @@ export function AgentCard({
               disabled={waSending}
               title={`Send ${agentName} balance to WhatsApp`}
               data-testid={`button-wa-send-${agentName}`}
-              className="flex items-center gap-1.5 px-3 py-1 rounded-md bg-green-600 text-white text-xs font-semibold disabled:opacity-60 shadow-sm"
+              className="flex items-center gap-1.5 px-3 py-1 rounded-md bg-green-600 text-white text-xs font-semibold disabled:opacity-60 shadow-xs"
             >
               {waSending ? (
                 <span className="animate-spin inline-block w-3 h-3 border-2 border-white border-t-transparent rounded-full" />
@@ -381,9 +386,9 @@ export function AgentCard({
           </div>
         )}
 
-        <div className="rounded-md border border-border overflow-hidden shadow-sm">
+        <div className="rounded-md border border-border overflow-hidden shadow-xs">
           <div
-            className="bg-slate-800 dark:bg-slate-900 text-white px-4 py-2.5 grid min-h-[2.75rem]"
+            className="bg-slate-800 dark:bg-slate-900 text-white px-4 py-2.5 grid min-h-11"
             style={{ gridTemplateColumns: "1fr auto 1fr" }}
           >
             <span />
@@ -407,7 +412,7 @@ export function AgentCard({
           })}
 
           {(editingNote || note) && (
-            <div className="px-3 py-2 border-b bg-amber-50/60 dark:bg-amber-950/15 flex items-start gap-2 min-h-[2rem]">
+            <div className="px-3 py-2 border-b bg-amber-50/60 dark:bg-amber-950/15 flex items-start gap-2 min-h-8">
               <StickyNote className="h-3.5 w-3.5 shrink-0 mt-0.5 text-amber-600 dark:text-amber-400" />
               {editingNote ? (
                 <div className="flex-1 flex items-start gap-1.5">
@@ -424,7 +429,7 @@ export function AgentCard({
                     }}
                     placeholder="e.g. Peage $400 · Road fees $530"
                     rows={2}
-                    className="flex-1 text-xs rounded border border-amber-300 dark:border-amber-700 bg-white dark:bg-amber-950/30 px-2 py-1 text-amber-900 dark:text-amber-200 resize-none focus:outline-none focus:ring-1 focus:ring-amber-400"
+                    className="flex-1 text-xs rounded-sm border border-amber-300 dark:border-amber-700 bg-white dark:bg-amber-950/30 px-2 py-1 text-amber-900 dark:text-amber-200 resize-none focus:outline-hidden focus:ring-1 focus:ring-amber-400"
                     data-testid={`input-note-${agentName}`}
                   />
                   <button
@@ -508,7 +513,7 @@ export function AgentCard({
                   onChange={(e) => setNewDesc(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && saveAdj()}
                   placeholder="Description (e.g. Peage, Road fees…)"
-                  className="flex-1 min-w-[140px] text-xs rounded border border-input bg-background px-2 py-1 focus:outline-none focus:ring-1 focus:ring-ring"
+                  className="flex-1 min-w-[140px] text-xs rounded-sm border border-input bg-background px-2 py-1 focus:outline-hidden focus:ring-1 focus:ring-ring"
                   data-testid={`input-adj-desc-${agentName}`}
                 />
                 <input
@@ -519,10 +524,10 @@ export function AgentCard({
                   onChange={(e) => setNewAmount(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && saveAdj()}
                   placeholder="Amount"
-                  className="w-24 text-xs rounded border border-input bg-background px-2 py-1 focus:outline-none focus:ring-1 focus:ring-ring text-right"
+                  className="w-24 text-xs rounded-sm border border-input bg-background px-2 py-1 focus:outline-hidden focus:ring-1 focus:ring-ring text-right"
                   data-testid={`input-adj-amount-${agentName}`}
                 />
-                <div className="flex rounded border border-input overflow-hidden text-[10px] font-bold shrink-0">
+                <div className="flex rounded-sm border border-input overflow-hidden text-[10px] font-bold shrink-0">
                   <button
                     type="button"
                     onClick={() => setNewType("debit")}
@@ -554,7 +559,7 @@ export function AgentCard({
                   type="button"
                   onClick={saveAdj}
                   disabled={createAdjMutation.isPending}
-                  className="px-2.5 py-1 rounded bg-primary text-primary-foreground text-[10px] font-semibold disabled:opacity-50 shrink-0"
+                  className="px-2.5 py-1 rounded-sm bg-primary text-primary-foreground text-[10px] font-semibold disabled:opacity-50 shrink-0"
                   data-testid={`button-adj-save-${agentName}`}
                 >
                   {createAdjMutation.isPending ? "…" : "Save"}
@@ -601,7 +606,7 @@ export function AgentCard({
               <span className="text-blue-600 dark:text-blue-400">— overpayment will be allocated top-to-bottom</span>
               <button
                 onClick={resetOrder}
-                className="ml-auto flex items-center gap-1 px-2 py-0.5 rounded border border-blue-300 dark:border-blue-700 hover:bg-blue-100 dark:hover:bg-blue-900/40 text-blue-700 dark:text-blue-300 font-medium"
+                className="ml-auto flex items-center gap-1 px-2 py-0.5 rounded-sm border border-blue-300 dark:border-blue-700 hover:bg-blue-100 dark:hover:bg-blue-900/40 text-blue-700 dark:text-blue-300 font-medium"
                 data-testid={`button-reset-order-${agentName}`}
               >
                 <RotateCcw className="h-3 w-3" />
@@ -613,7 +618,7 @@ export function AgentCard({
             <div className="flex justify-end px-3 py-1 border-b">
               <button
                 onClick={() => setAllPrepaidMutation.mutate([])}
-                className="flex items-center gap-1 px-2 py-0.5 rounded border border-muted text-xs text-muted-foreground hover:border-primary hover:text-primary transition-colors"
+                className="flex items-center gap-1 px-2 py-0.5 rounded-sm border border-muted text-xs text-muted-foreground hover:border-primary hover:text-primary transition-colors"
                 data-testid={`button-reset-prepaid-transit-${agentName}`}
               >
                 <RotateCcw className="h-3 w-3" />

@@ -294,7 +294,9 @@ export default function WipersReEntry() {
     return <Redirect to="/factory/bale-relabeling" />;
   }
   if (!showWipersReEntry) {
-    return <div className="p-6 text-sm text-muted-foreground">No Bale Relabeling tabs are available for this user.</div>;
+    return (
+      <div className="p-6 text-sm text-muted-foreground">No Bale Relabeling tabs are available for this user.</div>
+    );
   }
 
   return (
@@ -881,7 +883,7 @@ export default function WipersReEntry() {
                 data-testid={`button-design-${opt.value}`}
               >
                 <span
-                  className="inline-block h-2.5 w-2.5 rounded-full mr-2 flex-shrink-0 border border-border/50"
+                  className="inline-block h-2.5 w-2.5 rounded-full mr-2 shrink-0 border border-border/50"
                   style={{ background: opt.color }}
                 />
                 {opt.label}

@@ -31,13 +31,21 @@ export default function FactorySupplierHub() {
   });
 
   if (sections.length === 0) {
-    return <div className="p-6 text-sm text-muted-foreground">No Supplier Intelligence tabs are available for this user.</div>;
+    return (
+      <div className="p-6 text-sm text-muted-foreground">
+        No Supplier Intelligence tabs are available for this user.
+      </div>
+    );
   }
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
-      <Tabs value={section} onValueChange={(value) => setSection(value as Section)} className="flex flex-col h-full overflow-hidden">
-        <div className="border-b px-4 pt-3 flex-shrink-0 overflow-x-auto">
+      <Tabs
+        value={section}
+        onValueChange={(value) => setSection(value as Section)}
+        className="flex flex-col h-full overflow-hidden"
+      >
+        <div className="border-b px-4 pt-3 shrink-0 overflow-x-auto">
           <TabsList className="flex-nowrap">
             {sections.includes("report") && (
               <TabsTrigger value="report" data-testid="tab-supplier-hub-report">

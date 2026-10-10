@@ -204,7 +204,7 @@ export function WorkerDialogs({
                         data-testid="checkbox-new-worker-active"
                       />
                     </FormControl>
-                    <FormLabel className="!mt-0">Active</FormLabel>
+                    <FormLabel className="mt-0!">Active</FormLabel>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -331,7 +331,7 @@ export function WorkerDialogs({
                         data-testid="checkbox-edit-worker-active"
                       />
                     </FormControl>
-                    <FormLabel className="!mt-0">Active</FormLabel>
+                    <FormLabel className="mt-0!">Active</FormLabel>
                     <FormMessage />
                   </FormItem>
                 )}

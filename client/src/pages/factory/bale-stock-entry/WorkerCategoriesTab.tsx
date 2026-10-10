@@ -217,7 +217,7 @@ export function WorkerCategoriesManager({ compact = false }: { compact?: boolean
                         data-testid={`worker-option-${w.id}`}
                       >
                         <div
-                          className={`h-4 w-4 rounded-sm border flex items-center justify-center ${selected ? "bg-primary border-primary" : "bg-background border-input"}`}
+                          className={`h-4 w-4 rounded-xs border flex items-center justify-center ${selected ? "bg-primary border-primary" : "bg-background border-input"}`}
                         >
                           {selected && <CheckCircle className="h-3 w-3 text-white" />}
                         </div>

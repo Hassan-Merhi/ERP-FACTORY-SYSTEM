@@ -377,7 +377,7 @@ export function LocationWhatsappDeliveryHistoryDialog({ location, companyId, can
                           </p>
 
                           {delivery.error && (
-                            <div className="rounded-md bg-destructive/5 border border-destructive/20 px-3 py-2 text-xs text-destructive break-words">
+                            <div className="rounded-md bg-destructive/5 border border-destructive/20 px-3 py-2 text-xs text-destructive wrap-break-word">
                               {delivery.error}
                             </div>
                           )}

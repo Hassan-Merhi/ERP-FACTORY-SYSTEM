@@ -147,7 +147,7 @@ export function RawStockReplayPanel({ rawStock }: RawStockReplayPanelProps) {
 
               {/* Supplier rows */}
               {replayPreview.supplierRows.length > 0 && (
-                <div className="border rounded-md overflow-hidden bg-card shadow-sm">
+                <div className="border rounded-md overflow-hidden bg-card shadow-xs">
                   <div className="bg-muted/50 px-3 py-1.5 text-xs font-medium text-muted-foreground flex items-center gap-2">
                     Supplier Timelines
                     <Badge variant="outline" className="text-[10px]">

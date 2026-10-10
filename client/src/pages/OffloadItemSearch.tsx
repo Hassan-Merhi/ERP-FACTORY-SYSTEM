@@ -153,7 +153,7 @@ export default function OffloadItemSearch() {
                   <tr key={i} className="border-t hover:bg-muted/30 transition-colors" data-testid={`row-result-${i}`}>
                     <td className="px-4 py-3 font-medium">{row.itemName}</td>
                     <td className="px-4 py-3">
-                      <span className="font-mono text-xs bg-muted px-1.5 py-0.5 rounded">{row.containerNumber}</span>
+                      <span className="font-mono text-xs bg-muted px-1.5 py-0.5 rounded-sm">{row.containerNumber}</span>
                     </td>
                     <td className="px-4 py-3 text-muted-foreground">
                       {row.offloadDate ? format(new Date(row.offloadDate), "dd MMM yyyy") : "—"}

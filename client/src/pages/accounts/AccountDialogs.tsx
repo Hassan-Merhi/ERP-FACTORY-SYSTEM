@@ -459,7 +459,7 @@ export function AccountDialogs({
                 control={editForm.control}
                 name="active"
                 render={({ field }) => (
-                  <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
+                  <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-xs">
                     <div className="space-y-0.5">
                       <FormLabel>Active Status</FormLabel>
                       <div className="text-[10px] text-muted-foreground">Account is available for new entries</div>

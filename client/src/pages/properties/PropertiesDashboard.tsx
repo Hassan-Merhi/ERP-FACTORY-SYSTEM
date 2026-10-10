@@ -570,7 +570,7 @@ export default function PropertiesDashboard() {
                       }}
                       onDragOver={(e) => e.preventDefault()}
                       onDrop={() => handleCashDrop(dca.id)}
-                      className="flex items-center gap-2 py-2 px-2 rounded hover-elevate group cursor-grab active:cursor-grabbing"
+                      className="flex items-center gap-2 py-2 px-2 rounded-sm hover-elevate group cursor-grab active:cursor-grabbing"
                       data-testid={`cash-account-row-${dca.id}`}
                     >
                       <GripVertical className="h-4 w-4 text-muted-foreground/40 shrink-0" />
@@ -593,7 +593,7 @@ export default function PropertiesDashboard() {
                     </div>
                   );
                 })}
-                <div className="flex items-center justify-between py-2 px-2 bg-green-50 dark:bg-green-950/30 rounded font-bold mt-1">
+                <div className="flex items-center justify-between py-2 px-2 bg-green-50 dark:bg-green-950/30 rounded-sm font-bold mt-1">
                   <span className="text-sm">Total Available</span>
                   <span className="text-sm font-mono text-green-600">
                     {formatAmount(
@@ -711,7 +711,7 @@ export default function PropertiesDashboard() {
                     }}
                     onDragOver={(e) => e.preventDefault()}
                     onDrop={() => handlePayableDrop(account.id)}
-                    className="flex items-center gap-2 py-2 px-2 rounded hover-elevate group cursor-grab active:cursor-grabbing"
+                    className="flex items-center gap-2 py-2 px-2 rounded-sm hover-elevate group cursor-grab active:cursor-grabbing"
                     data-testid={`payable-account-row-${account.id}`}
                   >
                     <GripVertical className="h-4 w-4 text-muted-foreground/40 shrink-0" />
@@ -733,7 +733,7 @@ export default function PropertiesDashboard() {
                     </Button>
                   </div>
                 ))}
-                <div className="flex items-center justify-between py-2 px-2 bg-red-50 dark:bg-red-950/30 rounded font-bold mt-1">
+                <div className="flex items-center justify-between py-2 px-2 bg-red-50 dark:bg-red-950/30 rounded-sm font-bold mt-1">
                   <span className="text-sm">Total To Pay</span>
                   <span className="text-sm font-mono text-red-600">
                     {formatAmount(dashboardPayableAccounts.reduce((s, a) => s + Math.abs(a.balance), 0))}

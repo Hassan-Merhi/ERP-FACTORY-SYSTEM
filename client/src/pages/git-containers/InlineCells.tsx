@@ -50,7 +50,7 @@ export function EtaCell({ container }: { container: EnrichedContainerRow }) {
           }
         }}
         onClick={(e) => e.stopPropagation()}
-        className="w-[128px] h-8 rounded-md border border-input bg-background px-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+        className="w-[128px] h-8 rounded-md border border-input bg-background px-2 text-sm focus:outline-hidden focus:ring-1 focus:ring-ring"
       />
     );
   }
@@ -114,7 +114,7 @@ export function InlineTextCell({
         }}
         onClick={(e) => e.stopPropagation()}
         style={{ width: width ?? "110px" }}
-        className="h-7 rounded-md border border-input bg-background px-2 text-xs focus:outline-none focus:ring-1 focus:ring-ring"
+        className="h-7 rounded-md border border-input bg-background px-2 text-xs focus:outline-hidden focus:ring-1 focus:ring-ring"
       />
     );
   return (
@@ -159,7 +159,7 @@ export function InlineDateCell({ id, field, value }: { id: number; field: string
           }
         }}
         onClick={(e) => e.stopPropagation()}
-        className="w-[128px] h-7 rounded-md border border-input bg-background px-2 text-xs focus:outline-none focus:ring-1 focus:ring-ring"
+        className="w-[128px] h-7 rounded-md border border-input bg-background px-2 text-xs focus:outline-hidden focus:ring-1 focus:ring-ring"
       />
     );
   return (
@@ -214,7 +214,7 @@ export function InlineNumberCell({
         }}
         onClick={(e) => e.stopPropagation()}
         style={{ width: width ?? "80px" }}
-        className="h-7 rounded-md border border-input bg-background px-2 text-xs text-right focus:outline-none focus:ring-1 focus:ring-ring"
+        className="h-7 rounded-md border border-input bg-background px-2 text-xs text-right focus:outline-hidden focus:ring-1 focus:ring-ring"
       />
     );
   const num = parseNum(value);
@@ -248,7 +248,7 @@ export function InlineTransporterCell({ id, value }: { id: number; value: string
         onChange={(e) => save(e.target.value)}
         onBlur={() => setEditing(false)}
         onClick={(e) => e.stopPropagation()}
-        className="h-7 rounded-md border border-input bg-background px-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-ring"
+        className="h-7 rounded-md border border-input bg-background px-1.5 text-xs focus:outline-hidden focus:ring-1 focus:ring-ring"
       >
         <option value="">—</option>
         {TRANSPORTER_OPTIONS.map((t) => (
@@ -322,7 +322,7 @@ export function SummaryCard({
   accent?: string;
 }) {
   return (
-    <div className="flex !flex-nowrap items-center gap-3 rounded-lg border bg-card px-3 py-2.5 min-w-0 sm:px-4 sm:py-3">
+    <div className="flex flex-nowrap! items-center gap-3 rounded-lg border bg-card px-3 py-2.5 min-w-0 sm:px-4 sm:py-3">
       <div className={cn("flex items-center justify-center h-9 w-9 rounded-md shrink-0", accent ?? "bg-muted")}>
         {icon}
       </div>

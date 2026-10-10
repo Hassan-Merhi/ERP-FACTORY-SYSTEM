@@ -374,7 +374,7 @@ export default function CreateProformaV5Drawer({ open, onClose, articleRows, onS
                   {containerNames.length > 1 && (
                     <button
                       onClick={() => removeContainer(idx)}
-                      className="text-muted-foreground/60 hover-elevate rounded"
+                      className="text-muted-foreground/60 hover-elevate rounded-sm"
                       data-testid={`button-v5-remove-container-${idx}`}
                     >
                       <Trash2 className="h-3 w-3" />
@@ -406,7 +406,7 @@ export default function CreateProformaV5Drawer({ open, onClose, articleRows, onS
             {articleSearch && (
               <button
                 onClick={() => setArticleSearch("")}
-                className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover-elevate rounded"
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover-elevate rounded-sm"
                 data-testid="button-v5-create-clear-search"
               >
                 <X className="h-3.5 w-3.5" />
@@ -560,7 +560,7 @@ export default function CreateProformaV5Drawer({ open, onClose, articleRows, onS
                         const mode = pricingModes[row.articleCode] ?? "per_bale";
                         return (
                           <div className="flex items-center gap-1">
-                            <div className="flex rounded border shrink-0 overflow-hidden text-[9px] font-semibold">
+                            <div className="flex rounded-sm border shrink-0 overflow-hidden text-[9px] font-semibold">
                               <button
                                 className={cn(
                                   "px-1.5 py-0.5 transition-colors",

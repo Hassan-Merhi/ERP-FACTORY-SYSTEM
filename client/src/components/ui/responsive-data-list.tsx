@@ -13,7 +13,7 @@ const ResponsiveDataListItem = React.forwardRef<HTMLLIElement, React.HTMLAttribu
   ({ className, ...props }, ref) => (
     <li
       ref={ref}
-      className={cn("min-w-0 rounded-lg border bg-card p-3 text-card-foreground shadow-sm sm:p-4", className)}
+      className={cn("min-w-0 rounded-lg border bg-card p-3 text-card-foreground shadow-xs sm:p-4", className)}
       {...props}
     />
   )
@@ -33,7 +33,7 @@ ResponsiveDataListHeader.displayName = "ResponsiveDataListHeader";
 
 const ResponsiveDataListTitle = React.forwardRef<HTMLHeadingElement, React.HTMLAttributes<HTMLHeadingElement>>(
   ({ className, ...props }, ref) => (
-    <h3 ref={ref} className={cn("min-w-0 break-words text-sm font-semibold leading-snug", className)} {...props} />
+    <h3 ref={ref} className={cn("min-w-0 wrap-break-word text-sm font-semibold leading-snug", className)} {...props} />
   )
 );
 ResponsiveDataListTitle.displayName = "ResponsiveDataListTitle";
@@ -44,7 +44,7 @@ const ResponsiveDataListDescription = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <p
     ref={ref}
-    className={cn("min-w-0 break-words text-xs leading-relaxed text-muted-foreground", className)}
+    className={cn("min-w-0 wrap-break-word text-xs leading-relaxed text-muted-foreground", className)}
     {...props}
   />
 ));
@@ -72,8 +72,8 @@ type ResponsiveDataListFieldProps = React.HTMLAttributes<HTMLDivElement> & {
 const ResponsiveDataListField = React.forwardRef<HTMLDivElement, ResponsiveDataListFieldProps>(
   ({ className, label, value, children, ...props }, ref) => (
     <div ref={ref} className={cn("min-w-0", className)} {...props}>
-      <dt className="break-words text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{label}</dt>
-      <dd className="mt-1 min-w-0 break-words text-sm text-foreground">{children ?? value ?? "—"}</dd>
+      <dt className="wrap-break-word text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{label}</dt>
+      <dd className="mt-1 min-w-0 wrap-break-word text-sm text-foreground">{children ?? value ?? "—"}</dd>
     </div>
   )
 );
@@ -86,7 +86,7 @@ const ResponsiveDataListActions = React.forwardRef<HTMLDivElement, React.HTMLAtt
       role="group"
       aria-label="Row actions"
       className={cn(
-        "mt-3 grid grid-cols-1 gap-2 border-t pt-3 min-[360px]:grid-cols-2 sm:flex sm:flex-wrap sm:justify-end [&>*]:min-h-11 [&>*]:w-full sm:[&>*]:min-h-9 sm:[&>*]:w-auto",
+        "mt-3 grid grid-cols-1 gap-2 border-t pt-3 min-[360px]:grid-cols-2 sm:flex sm:flex-wrap sm:justify-end *:min-h-11 *:w-full sm:*:min-h-9 sm:*:w-auto",
         className
       )}
       {...props}

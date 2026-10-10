@@ -32,7 +32,7 @@ export interface NavSection {
 
 const baseLinkClasses = "relative flex items-center gap-2.5 rounded-md py-1.5 pl-3 pr-2.5 text-sm transition-colors";
 const inactiveClasses = "text-muted-foreground hover:bg-sidebar-accent/40 hover:text-foreground";
-const activeClasses = "bg-sidebar-accent text-sidebar-accent-foreground font-semibold shadow-xs";
+const activeClasses = "bg-sidebar-accent text-sidebar-accent-foreground font-semibold shadow-2xs";
 
 function canonicalSidebarPath(url: string): string {
   const queryIndex = url.indexOf("?");
@@ -95,7 +95,7 @@ export function SidebarNavLink({ item, color, testId, trailing, draggable }: Sid
       ) : (
         <Icon className="h-3.5 w-3.5 shrink-0" />
       )}
-      <span className="min-w-0 flex-1 break-words leading-tight">{item.title}</span>
+      <span className="min-w-0 flex-1 wrap-break-word leading-tight">{item.title}</span>
       {trailing}
     </Link>
   );
@@ -139,7 +139,7 @@ export function SidebarFlatLink({
       ) : (
         <Icon className="h-3.5 w-3.5 shrink-0" />
       )}
-      <span className="min-w-0 flex-1 break-words leading-tight">{label}</span>
+      <span className="min-w-0 flex-1 wrap-break-word leading-tight">{label}</span>
       {badge != null && badge > 0 && (
         <Badge variant="default" className="text-xs min-w-5 justify-center">
           {badge}
@@ -326,7 +326,7 @@ export function PinnedNavList({ items, color, onReorder, isVisible, testIdFor, t
               aria-hidden="true"
               // Mouse-only reordering: touch browsers cannot start HTML drag-and-drop, so the handle
               // is dropped there rather than left as an invisible control that does nothing.
-              className="flex items-center justify-center w-5 py-1.5 cursor-grab opacity-0 group-hover:opacity-40 shrink-0 [@media(pointer:coarse)]:hidden"
+              className="flex items-center justify-center w-5 py-1.5 cursor-grab opacity-0 group-hover:opacity-40 shrink-0 pointer-coarse:hidden"
               title="Drag to reorder"
             >
               <GripVertical className="h-3.5 w-3.5 text-muted-foreground" />
@@ -348,7 +348,7 @@ export function PinnedNavList({ items, color, onReorder, isVisible, testIdFor, t
               ) : (
                 <Icon className="h-3.5 w-3.5 shrink-0" />
               )}
-              <span className="min-w-0 flex-1 break-words leading-tight">{item.title}</span>
+              <span className="min-w-0 flex-1 wrap-break-word leading-tight">{item.title}</span>
               {trailingFor?.(item)}
             </Link>
           </div>
@@ -389,7 +389,7 @@ export function ModuleHeader({ icon: Icon, label, tagline, accent }: ModuleHeade
             boxShadow: `0 3px 16px ${accent}66, inset 0 1px 0 rgba(255,255,255,0.22), inset 0 -1px 0 rgba(0,0,0,0.15)`,
           }}
         >
-          <Icon className="h-5 w-5 drop-shadow-sm" />
+          <Icon className="h-5 w-5 drop-shadow-xs" />
         </div>
         <div className="flex flex-col min-w-0 gap-0.5">
           <span className="text-sm font-bold leading-tight">{label}</span>

@@ -253,7 +253,7 @@ export function SilentTransferDialog({ model }: Props) {
                             checked={silentIncludeWarnings}
                             onChange={(event) => setSilentIncludeWarnings(event.target.checked)}
                             data-testid="checkbox-include-warnings"
-                            className="h-3.5 w-3.5 rounded"
+                            className="h-3.5 w-3.5 rounded-sm"
                           />
                           <span className="text-xs text-muted-foreground">Include anyway</span>
                         </label>

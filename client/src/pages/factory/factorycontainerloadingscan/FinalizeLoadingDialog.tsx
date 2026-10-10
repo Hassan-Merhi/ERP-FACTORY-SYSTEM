@@ -18,7 +18,9 @@ function ReviewTable({ model }: { model: FactoryContainerLoadingScanModel }) {
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead>{model.tr("article")} / {model.tr("product")}</TableHead>
+            <TableHead>
+              {model.tr("article")} / {model.tr("product")}
+            </TableHead>
             <TableHead className="text-right">{model.tr("proforma")}</TableHead>
             <TableHead className="text-right">{model.tr("loadedKpi")}</TableHead>
             <TableHead className="text-right">{model.tr("remaining")}</TableHead>
@@ -108,16 +110,28 @@ function ReviewTotals({ model }: { model: FactoryContainerLoadingScanModel }) {
   return (
     <div className="flex flex-wrap items-center justify-between gap-2 gap-y-1 rounded-xl border bg-muted/20 px-3 py-2.5 text-sm">
       <div className="flex items-center gap-3 flex-wrap">
-        <span className="text-green-600 dark:text-green-400 font-medium">{loaded} {model.tr("loaded").toLowerCase()}</span>
+        <span className="text-green-600 dark:text-green-400 font-medium">
+          {loaded} {model.tr("loaded").toLowerCase()}
+        </span>
         {overloaded > 0 && (
-          <span className="text-orange-600 dark:text-orange-400 font-medium">{overloaded} {model.tr("overloaded").toLowerCase()}</span>
+          <span className="text-orange-600 dark:text-orange-400 font-medium">
+            {overloaded} {model.tr("overloaded").toLowerCase()}
+          </span>
         )}
         {lessLoaded > 0 && (
-          <span className="text-yellow-700 dark:text-yellow-300 font-medium">{lessLoaded} {model.tr("lessLoaded").toLowerCase()}</span>
+          <span className="text-yellow-700 dark:text-yellow-300 font-medium">
+            {lessLoaded} {model.tr("lessLoaded").toLowerCase()}
+          </span>
         )}
-        {missing > 0 && <span className="text-red-600 dark:text-red-400 font-medium">{missing} {model.tr("missing").toLowerCase()}</span>}
+        {missing > 0 && (
+          <span className="text-red-600 dark:text-red-400 font-medium">
+            {missing} {model.tr("missing").toLowerCase()}
+          </span>
+        )}
         {extraArticles.length > 0 && (
-          <span className="text-muted-foreground font-medium">{extraArticles.length} {model.tr("notOnProformaAllowed").toLowerCase()}</span>
+          <span className="text-muted-foreground font-medium">
+            {extraArticles.length} {model.tr("notOnProformaAllowed").toLowerCase()}
+          </span>
         )}
       </div>
       <span className="text-muted-foreground">
@@ -145,9 +159,7 @@ export function FinalizeLoadingDialog({ model }: { model: FactoryContainerLoadin
             </>
           ) : (
             <>
-              <p className="text-sm text-muted-foreground">
-                {model.tr("completeSendVerification")}
-              </p>
+              <p className="text-sm text-muted-foreground">{model.tr("completeSendVerification")}</p>
               <div className="space-y-1 text-sm">
                 <div className="flex items-center justify-between gap-2">
                   <span>{model.tr("totalBales")}</span>
@@ -170,7 +182,7 @@ export function FinalizeLoadingDialog({ model }: { model: FactoryContainerLoadin
               type="date"
               value={model.finalizeDate}
               onChange={(e) => model.setFinalizeDate(e.target.value)}
-              className="flex h-10 w-full rounded-xl border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              className="flex h-10 w-full rounded-xl border border-input bg-background px-3 py-1 text-sm shadow-xs transition-colors focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring"
               data-testid="input-finalize-date"
             />
           </div>

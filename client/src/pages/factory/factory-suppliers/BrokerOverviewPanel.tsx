@@ -208,7 +208,7 @@ export function BrokerOverviewPanel({
                       {pills.map((p) => (
                         <span
                           key={p.label}
-                          className="inline-flex items-center gap-0.5 text-[10px] font-medium px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300"
+                          className="inline-flex items-center gap-0.5 text-[10px] font-medium px-1.5 py-0.5 rounded-sm bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300"
                           data-testid={`text-otw-${p.label.toLowerCase()}`}
                         >
                           {p.label} {p.count}
@@ -281,7 +281,7 @@ export function BrokerOverviewPanel({
           {directContainersLoading ? (
             <div className="p-4 space-y-2">
               {[1, 2, 3].map((i) => (
-                <div key={i} className="h-10 rounded bg-muted animate-pulse" />
+                <div key={i} className="h-10 rounded-sm bg-muted animate-pulse" />
               ))}
             </div>
           ) : (
@@ -290,7 +290,7 @@ export function BrokerOverviewPanel({
                 <div key={c.id} className="flex items-center gap-3 px-4 py-2.5">
                   <span className="font-mono font-semibold text-sm">{c.containerNumber}</span>
                   <span
-                    className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${STATUS_COLORS[c.status] || "bg-muted text-muted-foreground"}`}
+                    className={`text-[10px] font-medium px-1.5 py-0.5 rounded-sm ${STATUS_COLORS[c.status] || "bg-muted text-muted-foreground"}`}
                   >
                     {c.status}
                   </span>
@@ -343,7 +343,7 @@ export function BrokerOverviewPanel({
                 >
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <GitBranch className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
+                      <GitBranch className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
                       <button
                         onClick={() => openChildStatement(child.id)}
                         className="font-semibold hover:underline text-left"

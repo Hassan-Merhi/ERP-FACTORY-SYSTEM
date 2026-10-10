@@ -184,7 +184,7 @@ export function ErpFilterSheet({
         side="bottom"
         // flex-nowrap: the global phone rule that wraps `.flex.gap-*` rows would otherwise wrap this
         // height-capped column into side-by-side columns. mx-auto centres it under the dialog width cap.
-        className="mx-auto max-h-[min(85dvh,calc(var(--erp-visual-viewport-height,var(--app-viewport-height))-2rem))] !flex-nowrap gap-3 rounded-t-2xl px-4 pb-[max(1rem,var(--safe-area-bottom))] pt-4"
+        className="mx-auto max-h-[min(85dvh,calc(var(--erp-visual-viewport-height,var(--app-viewport-height))-2rem))] flex-nowrap! gap-3 rounded-t-2xl px-4 pb-[max(1rem,var(--safe-area-bottom))] pt-4"
         data-testid={`${testId}-sheet`}
       >
         <SheetHeader>
@@ -193,9 +193,9 @@ export function ErpFilterSheet({
         </SheetHeader>
         <div
           className={cn(
-            "flex min-h-0 min-w-0 flex-col !flex-nowrap gap-3 overflow-y-auto",
+            "flex min-h-0 min-w-0 flex-col flex-nowrap! gap-3 overflow-y-auto",
             // Desktop filter widths do not apply inside the phone sheet.
-            "[&>*]:w-full [&_[role=combobox]]:w-full [&_input]:w-full [&_button[aria-haspopup]]:w-full",
+            "*:w-full **:[[role=combobox]]:w-full [&_input]:w-full [&_button[aria-haspopup]]:w-full",
             // The sheet portals outside #main-content, so restate the phone touch-target floor.
             "[&_button]:min-h-11 [&_button]:text-sm [&_input]:min-h-11 [&_input]:text-base"
           )}

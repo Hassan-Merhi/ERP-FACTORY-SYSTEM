@@ -73,7 +73,7 @@ export function AdjustmentMobileRows({ model }: { model: StockAdjustmentFormMode
                   }}
                   placeholder="p / c"
                   data-testid={`input-adjustment-type-mobile-${index}`}
-                  className="w-full px-3 py-2 text-sm border rounded-md bg-background outline-none focus:ring-1 focus:ring-ring"
+                  className="w-full px-3 py-2 text-sm border rounded-md bg-background outline-hidden focus:ring-1 focus:ring-ring"
                 />
               </div>
               {currentEntry?.stockItemId > 0 && (
@@ -118,7 +118,7 @@ export function AdjustmentMobileRows({ model }: { model: StockAdjustmentFormMode
                 }}
                 placeholder="Type to search item..."
                 data-testid={`input-adjustment-item-mobile-${index}`}
-                className="w-full px-3 py-2 text-sm border rounded-md bg-background outline-none focus:ring-1 focus:ring-ring"
+                className="w-full px-3 py-2 text-sm border rounded-md bg-background outline-hidden focus:ring-1 focus:ring-ring"
               />
               {mobileAdjItems.length > 0 && (
                 <div className="border rounded-md bg-popover shadow-md max-h-40 overflow-y-auto z-20 relative">
@@ -154,7 +154,7 @@ export function AdjustmentMobileRows({ model }: { model: StockAdjustmentFormMode
                   onChange={(e) => stockAdjustmentForm.setValue(`entries.${index}.quantity`, e.target.value)}
                   placeholder="0"
                   data-testid={`input-adjustment-qty-mobile-${index}`}
-                  className="w-full px-3 py-2 text-sm border rounded-md bg-background outline-none focus:ring-1 focus:ring-ring font-mono text-right"
+                  className="w-full px-3 py-2 text-sm border rounded-md bg-background outline-hidden focus:ring-1 focus:ring-ring font-mono text-right"
                 />
               </div>
               <div className="space-y-1">
@@ -166,7 +166,7 @@ export function AdjustmentMobileRows({ model }: { model: StockAdjustmentFormMode
                   onChange={(e) => stockAdjustmentForm.setValue(`entries.${index}.rate`, e.target.value)}
                   placeholder="0.00"
                   data-testid={`input-adjustment-rate-mobile-${index}`}
-                  className="w-full px-3 py-2 text-sm border rounded-md bg-background outline-none focus:ring-1 focus:ring-ring font-mono text-right"
+                  className="w-full px-3 py-2 text-sm border rounded-md bg-background outline-hidden focus:ring-1 focus:ring-ring font-mono text-right"
                 />
               </div>
             </div>

@@ -76,7 +76,7 @@ export function FactoryStockAllocationV5MobileList({ model }: { model: Model }) 
                 <div className="min-w-0">
                   <div className="flex min-w-0 items-center gap-1.5">
                     {isShortage && <AlertTriangle className="h-4 w-4 shrink-0 text-destructive" />}
-                    <span className="break-words text-sm font-semibold">{row.productName}</span>
+                    <span className="wrap-break-word text-sm font-semibold">{row.productName}</span>
                   </div>
                   <div className="mt-0.5 break-all font-mono text-[11px] text-muted-foreground">{row.articleCode}</div>
                   {row.categoryName && (
@@ -156,10 +156,10 @@ export function FactoryStockAllocationV5MobileList({ model }: { model: Model }) 
                         data-testid={`detail-v5-mobile-proforma-${proforma.proformaId}`}
                       >
                         <div className="min-w-0">
-                          <div className={cn("break-words text-xs font-semibold", isFocused && "text-primary")}>
+                          <div className={cn("wrap-break-word text-xs font-semibold", isFocused && "text-primary")}>
                             {proforma.proformaName}
                           </div>
-                          <div className="mt-0.5 break-words text-[11px] text-muted-foreground">
+                          <div className="mt-0.5 wrap-break-word text-[11px] text-muted-foreground">
                             {proforma.customerName}
                           </div>
                           <div className="mt-1 text-[11px] text-muted-foreground">

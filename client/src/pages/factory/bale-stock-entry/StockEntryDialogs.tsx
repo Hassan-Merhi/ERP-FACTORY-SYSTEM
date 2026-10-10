@@ -103,7 +103,7 @@ export function ConfirmStockEntryDialog({
               <img
                 src={`/api/factory/customer-logos/${selectedLogoId}/image`}
                 alt="Selected logo"
-                className="h-6 w-10 object-contain rounded"
+                className="h-6 w-10 object-contain rounded-sm"
               />
               <span>Custom logo will be used on labels</span>
             </div>

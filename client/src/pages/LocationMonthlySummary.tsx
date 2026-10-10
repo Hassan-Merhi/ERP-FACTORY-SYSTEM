@@ -397,7 +397,7 @@ export default function LocationMonthlySummary({ posUser }: { posUser?: AuthMe }
 
       {/* Tally-style Stock Movement Table */}
       <Card className="overflow-hidden flex flex-col" style={{ maxHeight: "calc(100vh - 340px)" }}>
-        <CardHeader className="pb-2 flex-shrink-0">
+        <CardHeader className="pb-2 shrink-0">
           <CardTitle className="text-base">
             Monthly Stock Movement
             <span className="ml-2 text-sm font-normal text-muted-foreground">({uom})</span>
@@ -668,7 +668,7 @@ export default function LocationMonthlySummary({ posUser }: { posUser?: AuthMe }
       {/* ── Drill-down detail dialog ── */}
       <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
         <DialogContent className="max-w-2xl flex flex-col" style={{ maxHeight: "75vh" }}>
-          <DialogHeader className="flex-shrink-0">
+          <DialogHeader className="shrink-0">
             <DialogTitle className="flex items-center gap-2">
               {detailDirection === "in" ? (
                 <span className="text-green-700 dark:text-green-400">Stock In</span>
@@ -778,7 +778,7 @@ export default function LocationMonthlySummary({ posUser }: { posUser?: AuthMe }
             )}
           </div>
 
-          <DialogFooter className="flex-shrink-0 pt-2">
+          <DialogFooter className="shrink-0 pt-2">
             <Button variant="outline" onClick={() => setDetailOpen(false)}>
               Close
             </Button>

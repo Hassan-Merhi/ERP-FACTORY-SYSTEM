@@ -12,7 +12,7 @@ export function Toaster() {
             <div className="grid gap-1">
               {title && <ToastTitle>{title}</ToastTitle>}
               {description && (
-                <ToastDescription className="max-h-24 overflow-y-auto break-words">{description}</ToastDescription>
+                <ToastDescription className="max-h-24 overflow-y-auto wrap-break-word">{description}</ToastDescription>
               )}
             </div>
             {action}

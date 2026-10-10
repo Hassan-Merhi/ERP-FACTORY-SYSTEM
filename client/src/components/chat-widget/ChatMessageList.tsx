@@ -197,7 +197,7 @@ export function ChatMessageList({
             data-testid={`chat-message-${msg.id}`}
           >
             {msg.role === "assistant" && (
-              <div className="flex-shrink-0 h-7 w-7 rounded-full bg-blue-500 dark:bg-blue-600 flex items-center justify-center mt-1">
+              <div className="shrink-0 h-7 w-7 rounded-full bg-blue-500 dark:bg-blue-600 flex items-center justify-center mt-1">
                 <Sparkles className="h-3.5 w-3.5 text-white" />
               </div>
             )}
@@ -217,7 +217,7 @@ export function ChatMessageList({
                 )}
               >
                 {msg.role === "assistant" ? (
-                  <div className="prose prose-sm dark:prose-invert max-w-none break-words [&>*:first-child]:mt-0 [&>*:last-child]:mb-0">
+                  <div className="prose prose-sm dark:prose-invert max-w-none wrap-break-word [&>*:first-child]:mt-0 [&>*:last-child]:mb-0">
                     <ReactMarkdown
                       remarkPlugins={[remarkGfm]}
                       components={{
@@ -237,7 +237,9 @@ export function ChatMessageList({
                         code: ({ children, className }) => {
                           const isInline = !className;
                           if (isInline) {
-                            return <code className="bg-muted px-1 py-0.5 rounded text-xs font-mono">{children}</code>;
+                            return (
+                              <code className="bg-muted px-1 py-0.5 rounded-sm text-xs font-mono">{children}</code>
+                            );
                           }
                           const lang = (className ?? "").replace("language-", "");
                           const codeStr = Array.isArray(children) ? children.join("") : String(children ?? "");
@@ -250,7 +252,7 @@ export function ChatMessageList({
                     </ReactMarkdown>
                   </div>
                 ) : (
-                  <p className="whitespace-pre-wrap break-words">{msg.message}</p>
+                  <p className="whitespace-pre-wrap wrap-break-word">{msg.message}</p>
                 )}
               </div>
 
@@ -289,7 +291,7 @@ export function ChatMessageList({
               )}
             </div>
             {msg.role === "user" && (
-              <div className="flex-shrink-0 h-7 w-7 rounded-full bg-gray-200 dark:bg-zinc-700 flex items-center justify-center mt-1 text-xs font-semibold text-gray-600 dark:text-zinc-300">
+              <div className="shrink-0 h-7 w-7 rounded-full bg-gray-200 dark:bg-zinc-700 flex items-center justify-center mt-1 text-xs font-semibold text-gray-600 dark:text-zinc-300">
                 U
               </div>
             )}
@@ -298,7 +300,7 @@ export function ChatMessageList({
 
         {isPending && (
           <div className="flex gap-2.5 justify-start">
-            <div className="flex-shrink-0 h-7 w-7 rounded-full bg-blue-500 dark:bg-blue-600 flex items-center justify-center">
+            <div className="shrink-0 h-7 w-7 rounded-full bg-blue-500 dark:bg-blue-600 flex items-center justify-center">
               <Sparkles className="h-3.5 w-3.5 text-white" />
             </div>
             <div className="bg-gray-50 dark:bg-zinc-800/80 rounded-2xl rounded-tl-sm px-4 py-2.5">

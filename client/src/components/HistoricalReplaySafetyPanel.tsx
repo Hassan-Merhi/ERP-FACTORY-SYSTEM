@@ -186,7 +186,7 @@ export function HistoricalReplaySafetyPanel() {
   ];
 
   return (
-    <div className="mb-5 space-y-4 rounded-xl border bg-card p-4 shadow-sm">
+    <div className="mb-5 space-y-4 rounded-xl border bg-card p-4 shadow-xs">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <div className="flex items-center gap-2 font-semibold">
@@ -253,7 +253,7 @@ export function HistoricalReplaySafetyPanel() {
             {preview.missingSupplierTimelineRows?.map((row) => (
               <div
                 key={row.supplierId}
-                className="flex flex-wrap justify-between gap-2 rounded border bg-card px-2 py-1.5"
+                className="flex flex-wrap justify-between gap-2 rounded-sm border bg-card px-2 py-1.5"
               >
                 <span className="font-medium">{row.supplierName}</span>
                 <span className="text-red-700 dark:text-red-400">
@@ -350,7 +350,7 @@ export function HistoricalReplaySafetyPanel() {
             {preview.blockedBatches?.map((batch) => (
               <div
                 key={batch.batchId}
-                className="flex flex-wrap justify-between gap-2 rounded border bg-card px-2 py-1.5"
+                className="flex flex-wrap justify-between gap-2 rounded-sm border bg-card px-2 py-1.5"
               >
                 <span className="font-mono">{batch.batchCode}</span>
                 <span className="text-red-700 dark:text-red-400">{batch.reasons.join(", ")}</span>

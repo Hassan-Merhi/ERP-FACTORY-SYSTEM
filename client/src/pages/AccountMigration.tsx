@@ -91,7 +91,9 @@ function CompanyBadge({ company }: { company?: Company }) {
         ? "Factory"
         : "Properties";
   return (
-    <span className={`text-xs font-medium px-1.5 py-0.5 rounded ${typeColors[company.companyType] ?? typeColors.erp}`}>
+    <span
+      className={`text-xs font-medium px-1.5 py-0.5 rounded-sm ${typeColors[company.companyType] ?? typeColors.erp}`}
+    >
       {label}
     </span>
   );
@@ -151,7 +153,7 @@ function AccountMultiSelect({ accounts, selectedIds, onChange, disabled }: Accou
                     >
                       <div
                         className={cn(
-                          "flex h-4 w-4 shrink-0 items-center justify-center rounded border",
+                          "flex h-4 w-4 shrink-0 items-center justify-center rounded-sm border",
                           selected ? "bg-primary border-primary" : "border-muted-foreground/40"
                         )}
                       >
@@ -321,13 +323,10 @@ export default function AccountMigration() {
   } = useQuery<LedgerAccount[]>({
     queryKey: ["/api/admin/account-migration/accounts", srcCompanyId],
     queryFn: async () => {
-      const res = await fetch(
-        `/api/ledger-accounts?companyId=${encodeURIComponent(srcCompanyId)}&includeHidden=true`,
-        {
-          credentials: "include",
-          cache: "no-store",
-        }
-      );
+      const res = await fetch(`/api/ledger-accounts?companyId=${encodeURIComponent(srcCompanyId)}&includeHidden=true`, {
+        credentials: "include",
+        cache: "no-store",
+      });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
         throw new Error(body.message || `Failed to load accounts (${res.status})`);

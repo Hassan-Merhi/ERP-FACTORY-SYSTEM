@@ -53,7 +53,7 @@ export function UserMenu({ accentColor, user, onLogout }: UserMenuProps) {
           size="sm"
           data-testid="button-user-menu"
           aria-label={t("user.menu")}
-          className="h-8 max-w-[15rem] gap-2 rounded-full border border-border/40 bg-muted/30 px-1.5 md:px-2.5"
+          className="h-8 max-w-60 gap-2 rounded-full border border-border/40 bg-muted/30 px-1.5 md:px-2.5"
         >
           <span
             className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[9px] font-bold text-white"
@@ -63,7 +63,7 @@ export function UserMenu({ accentColor, user, onLogout }: UserMenuProps) {
             {getInitials(user.username)}
           </span>
           <span className="hidden min-w-0 items-center gap-2 md:flex">
-            <span className="max-w-[8rem] truncate text-sm font-medium leading-none" data-business-value="true">
+            <span className="max-w-32 truncate text-sm font-medium leading-none" data-business-value="true">
               {user.username}
             </span>
             {roleLabel ? (

@@ -174,10 +174,10 @@ export default function ConvergenceReconciliation() {
                             {entry.domain === "accounting" ? "Accounting" : "Inventory"}
                           </Badge>
                         </TableCell>
-                        <TableCell className="font-mono text-xs [[data-mobile-cards=true]_&]:break-all">
+                        <TableCell className="font-mono text-xs in-data-[mobile-cards=true]:break-all">
                           {entry.identity}
                         </TableCell>
-                        <TableCell className="font-mono text-xs [[data-mobile-cards=true]_&]:break-all">
+                        <TableCell className="font-mono text-xs in-data-[mobile-cards=true]:break-all">
                           {entry.code}
                         </TableCell>
                         <TableCell className="text-right font-mono text-xs">{entry.expected}</TableCell>

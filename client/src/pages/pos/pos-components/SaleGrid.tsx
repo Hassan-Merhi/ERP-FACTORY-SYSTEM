@@ -54,7 +54,7 @@ export function SaleGrid({
       <div className="table-responsive">
         <div className="min-w-[340px] sm:min-w-[500px]">
           {/* Header */}
-          <div className="flex bg-foreground/[0.06] dark:bg-muted/40 border-b border-border sticky top-0 z-30">
+          <div className="flex bg-foreground/6 dark:bg-muted/40 border-b border-border sticky top-0 z-30">
             <div className="w-8 sm:w-12 flex items-center justify-center border-r border-border/50 h-9 text-[11px] font-semibold text-muted-foreground">
               #
             </div>
@@ -195,7 +195,7 @@ export function SaleGrid({
                             }
                           }}
                           readOnly={col.key === "amount"}
-                          className={`w-full h-full px-1.5 sm:px-3 bg-transparent outline-none focus:bg-accent/20 text-xs sm:text-sm ${
+                          className={`w-full h-full px-1.5 sm:px-3 bg-transparent outline-hidden focus:bg-accent/20 text-xs sm:text-sm ${
                             col.key === "quantity" || col.key === "rate" || col.key === "amount"
                               ? "font-mono text-right"
                               : ""

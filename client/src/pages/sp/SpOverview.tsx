@@ -33,7 +33,7 @@ function NavigationCard({ item, testId }: { item: (typeof dailyWork)[number]; te
     <Link href={item.href}>
       <a
         data-testid={testId}
-        className="block h-full rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className="block h-full rounded-lg focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
       >
         <Card className="h-full transition-colors hover:bg-muted/40">
           <CardHeader className="pb-2">

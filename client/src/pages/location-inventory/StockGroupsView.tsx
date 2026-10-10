@@ -176,7 +176,7 @@ export function StockGroupsView({
       <div className="space-y-3" data-testid="stock-groups-phone">
         <div className="flex items-start gap-2">
           <div className="min-w-0 flex-1">
-            <h2 className="break-words text-xl font-bold leading-snug">{selectedLocationLocal.name}</h2>
+            <h2 className="wrap-break-word text-xl font-bold leading-snug">{selectedLocationLocal.name}</h2>
             <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Stock Groups</p>
           </div>
           <ErpMobileActionsMenu

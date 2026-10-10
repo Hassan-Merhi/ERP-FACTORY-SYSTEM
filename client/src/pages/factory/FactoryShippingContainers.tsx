@@ -142,7 +142,6 @@ export default function FactoryShippingContainers() {
     syncShippingContainers();
   }, [me?.id, me?.currentCompanyId, me?.companyId, syncShippingContainers]);
 
-
   const rows = useMemo(() => [...activeRows, ...done], [activeRows, done]);
 
   // Current row for docs modal (search real rows only)
@@ -437,7 +436,7 @@ export default function FactoryShippingContainers() {
                     {colVis.status && (
                       <TableCell>
                         <button
-                          className="focus:outline-none"
+                          className="focus:outline-hidden"
                           title="Open order"
                           onClick={() => {
                             if (!r.customerOrderId) return;

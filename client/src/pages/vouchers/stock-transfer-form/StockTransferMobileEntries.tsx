@@ -115,7 +115,7 @@ export function StockTransferMobileEntries({ model }: { model: StockTransferForm
                   }}
                   placeholder="Type location..."
                   data-testid={`input-source-mobile-${index}`}
-                  className="w-full px-3 py-2 text-sm border rounded-md bg-background outline-none focus:ring-1 focus:ring-ring"
+                  className="w-full px-3 py-2 text-sm border rounded-md bg-background outline-hidden focus:ring-1 focus:ring-ring"
                 />
                 {mobileFilteredLocs.length > 0 && (
                   <div className="border rounded-md bg-popover shadow-md max-h-36 overflow-y-auto z-20 relative">
@@ -182,7 +182,7 @@ export function StockTransferMobileEntries({ model }: { model: StockTransferForm
                 }}
                 placeholder="Type to search item..."
                 data-testid={`input-item-name-mobile-${index}`}
-                className="w-full px-3 py-2 text-sm border rounded-md bg-background outline-none focus:ring-1 focus:ring-ring"
+                className="w-full px-3 py-2 text-sm border rounded-md bg-background outline-hidden focus:ring-1 focus:ring-ring"
               />
               {mobileFilteredItems.length > 0 && (
                 <div className="border rounded-md bg-popover shadow-md max-h-40 overflow-y-auto z-20 relative">
@@ -211,7 +211,9 @@ export function StockTransferMobileEntries({ model }: { model: StockTransferForm
                       }}
                     >
                       <div className="font-medium truncate">{item.stockItemName}</div>
-                      <div className="text-xs text-muted-foreground">Qty: {formatNumber(typeof item.quantity === "number" ? item.quantity : undefined, 0)}</div>
+                      <div className="text-xs text-muted-foreground">
+                        Qty: {formatNumber(typeof item.quantity === "number" ? item.quantity : undefined, 0)}
+                      </div>
                     </button>
                   ))}
                 </div>
@@ -262,7 +264,7 @@ export function StockTransferMobileEntries({ model }: { model: StockTransferForm
                   }}
                   placeholder={voucherIdToEdit ? "-1 to reduce, 2 to add" : "0"}
                   data-testid={`input-transfer-quantity-mobile-${index}`}
-                  className="w-full px-3 py-2 text-sm border rounded-md bg-background outline-none focus:ring-1 focus:ring-ring font-mono text-right"
+                  className="w-full px-3 py-2 text-sm border rounded-md bg-background outline-hidden focus:ring-1 focus:ring-ring font-mono text-right"
                 />
               </div>
               {!isPOS && (
@@ -275,7 +277,7 @@ export function StockTransferMobileEntries({ model }: { model: StockTransferForm
                     onChange={(e) => stockTransferForm.setValue(`entries.${index}.rate`, e.target.value)}
                     placeholder="0.00"
                     data-testid={`input-transfer-rate-mobile-${index}`}
-                    className="w-full px-3 py-2 text-sm border rounded-md bg-background outline-none focus:ring-1 focus:ring-ring font-mono text-right"
+                    className="w-full px-3 py-2 text-sm border rounded-md bg-background outline-hidden focus:ring-1 focus:ring-ring font-mono text-right"
                   />
                 </div>
               )}

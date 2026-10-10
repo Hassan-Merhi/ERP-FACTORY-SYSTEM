@@ -84,7 +84,7 @@ export function ErpShell({ user, hasErpAccess, handleLogout, leaveConfirmDialog 
                 id="main-content"
                 tabIndex={-1}
                 aria-label={t("workspace.controls")}
-                className="flex-1 overflow-y-auto overscroll-y-contain p-3 outline-none sm:p-6"
+                className="flex-1 overflow-y-auto overscroll-y-contain p-3 outline-hidden sm:p-6"
               >
                 <WorkspaceRouteBoundary
                   resetKey={currentLocation}

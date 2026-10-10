@@ -109,7 +109,7 @@ export function DateJumpDialog() {
               data-testid="input-date-jump"
               className="text-base"
             />
-            <p className="text-xs text-muted-foreground min-h-[1.25rem]">
+            <p className="text-xs text-muted-foreground min-h-5">
               {displayDate ? (
                 <span className="text-foreground font-medium">{displayDate}</span>
               ) : value.trim() ? (

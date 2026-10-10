@@ -463,11 +463,11 @@ export default function FactoryOtwTrackingTab({ onEdit }: OtwTrackingTabProps = 
         </p>
         <div className="flex items-center gap-3 flex-wrap text-xs text-muted-foreground">
           <span className="flex items-center gap-1">
-            <span className="inline-block w-3 h-3 rounded-sm bg-red-200 dark:bg-red-900/40" />
+            <span className="inline-block w-3 h-3 rounded-xs bg-red-200 dark:bg-red-900/40" />
             Overdue
           </span>
           <span className="flex items-center gap-1">
-            <span className="inline-block w-3 h-3 rounded-sm bg-amber-200 dark:bg-amber-900/40" />
+            <span className="inline-block w-3 h-3 rounded-xs bg-amber-200 dark:bg-amber-900/40" />
             Tracking Error
           </span>
           <span className="text-muted-foreground">{docsReceived} docs received</span>
@@ -486,7 +486,7 @@ export default function FactoryOtwTrackingTab({ onEdit }: OtwTrackingTabProps = 
           wrapperClassName="max-h-[calc(100vh-340px)] overflow-x-auto"
         >
           <TableHeader className="sticky top-0 z-10">
-            <TableRow className="!bg-amber-100 dark:!bg-amber-900/40">
+            <TableRow className="bg-amber-100! dark:bg-amber-900/40!">
               <TableHead className="w-8">#</TableHead>
               <TableHead>Container #</TableHead>
               <TableHead>Supplier</TableHead>
@@ -516,11 +516,7 @@ export default function FactoryOtwTrackingTab({ onEdit }: OtwTrackingTabProps = 
               const location = c.destination || null;
               const rowBg = overdue ? "bg-red-50/50 dark:bg-red-950/20" : "";
               return (
-                <TableRow
-                  key={c.id}
-                  className={cn(rowBg)}
-                  data-testid={`row-otw-container-${c.id}`}
-                >
+                <TableRow key={c.id} className={cn(rowBg)} data-testid={`row-otw-container-${c.id}`}>
                   {/* # */}
                   <TableCell className="text-muted-foreground">{idx + 1}</TableCell>
                   {/* Container # */}
@@ -636,7 +632,6 @@ export default function FactoryOtwTrackingTab({ onEdit }: OtwTrackingTabProps = 
           </TableBody>
         </Table>
       )}
-
     </div>
   );
 }

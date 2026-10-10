@@ -52,7 +52,10 @@ export function ContainerPlannerPhase1() {
 
   if (query.isLoading) {
     return (
-      <div className="flex min-h-48 items-center justify-center border-b bg-muted/10" data-testid="container-planner-loading">
+      <div
+        className="flex min-h-48 items-center justify-center border-b bg-muted/10"
+        data-testid="container-planner-loading"
+      >
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <Loader2 className="h-4 w-4 animate-spin" />
           Loading the complete stock picture…
@@ -100,7 +103,10 @@ export function ContainerPlannerPhase1() {
 
           <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
             <div>
-              <label htmlFor="container-planner-capacity" className="mb-1 block text-xs font-medium text-muted-foreground">
+              <label
+                htmlFor="container-planner-capacity"
+                className="mb-1 block text-xs font-medium text-muted-foreground"
+              >
                 Target capacity (bales)
               </label>
               <Input
@@ -248,7 +254,10 @@ export function ContainerPlannerPhase1() {
                     </th>
                     <th className="min-w-[90px] border-b border-r px-3 py-2 text-right font-medium">Free stock</th>
                     {preview.containers.map((container) => (
-                      <th key={container.index} className="min-w-[78px] border-b border-r px-2 py-2 text-right font-medium">
+                      <th
+                        key={container.index}
+                        className="min-w-[78px] border-b border-r px-2 py-2 text-right font-medium"
+                      >
                         C{container.index + 1}
                       </th>
                     ))}
@@ -257,7 +266,7 @@ export function ContainerPlannerPhase1() {
                 <tbody>
                   {preview.products.map((product, rowIndex) => (
                     <tr key={product.articleCode} className={rowIndex % 2 === 0 ? "bg-background" : "bg-muted/20"}>
-                      <td className="sticky left-0 z-[5] border-b border-r bg-inherit px-3 py-2">
+                      <td className="sticky left-0 z-5 border-b border-r bg-inherit px-3 py-2">
                         <div className="font-medium">{product.productName}</div>
                         <div className="font-mono text-[10px] text-muted-foreground">{product.articleCode}</div>
                       </td>
@@ -278,7 +287,9 @@ export function ContainerPlannerPhase1() {
                 <tfoot>
                   <tr className="sticky bottom-0 bg-muted font-semibold">
                     <td className="sticky left-0 z-20 border-r bg-muted px-3 py-2">TOTAL</td>
-                    <td className="border-r px-3 py-2 text-right font-mono tabular-nums">{fmt(preview.totalPlannable)}</td>
+                    <td className="border-r px-3 py-2 text-right font-mono tabular-nums">
+                      {fmt(preview.totalPlannable)}
+                    </td>
                     {preview.containers.map((container) => (
                       <td key={container.index} className="border-r px-2 py-2 text-right font-mono tabular-nums">
                         {fmt(container.totalBales)}

@@ -348,13 +348,11 @@ export default function FactoryReprintLabels() {
 
                 <div className="max-h-52 overflow-y-auto space-y-0.5">
                   {uniqueArticleCodes
-                    .filter(
-                      (c) => !articleCodeSearch.trim() || searchAny(articleCodeSearch, c)
-                    )
+                    .filter((c) => !articleCodeSearch.trim() || searchAny(articleCodeSearch, c))
                     .map((code) => (
                       <label
                         key={code}
-                        className="flex items-center gap-2 px-2 py-1.5 rounded-sm cursor-pointer hover-elevate text-sm"
+                        className="flex items-center gap-2 px-2 py-1.5 rounded-xs cursor-pointer hover-elevate text-sm"
                         data-testid={`option-article-${code}`}
                       >
                         <Checkbox
@@ -372,9 +370,8 @@ export default function FactoryReprintLabels() {
                         <span>{code}</span>
                       </label>
                     ))}
-                  {uniqueArticleCodes.filter(
-                    (c) => !articleCodeSearch.trim() || searchAny(articleCodeSearch, c)
-                  ).length === 0 && (
+                  {uniqueArticleCodes.filter((c) => !articleCodeSearch.trim() || searchAny(articleCodeSearch, c))
+                    .length === 0 && (
                     <p className="text-sm text-muted-foreground text-center py-2">No article codes found</p>
                   )}
                 </div>
@@ -582,7 +579,7 @@ export default function FactoryReprintLabels() {
                 data-testid={`button-design-${opt.value}`}
               >
                 <span
-                  className="inline-block h-2.5 w-2.5 rounded-full mr-2 flex-shrink-0 border border-border/50"
+                  className="inline-block h-2.5 w-2.5 rounded-full mr-2 shrink-0 border border-border/50"
                   style={{ background: opt.color }}
                 />
                 {opt.label}

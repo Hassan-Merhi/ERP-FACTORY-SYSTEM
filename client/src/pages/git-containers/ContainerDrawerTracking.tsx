@@ -246,7 +246,7 @@ export function ContainerDrawerTracking({
             <p className="text-xs font-medium text-muted-foreground">Auto-update scheduler</p>
             <div
               className={cn(
-                "text-[10px] font-bold px-1.5 py-0.5 rounded-sm uppercase",
+                "text-[10px] font-bold px-1.5 py-0.5 rounded-xs uppercase",
                 priority.tier === "high"
                   ? "bg-red-100 text-red-700"
                   : priority.tier === "medium"
@@ -429,7 +429,7 @@ export function ContainerDrawerTracking({
                 </p>
               )}
               {container.trackingError && (
-                <div className="mt-1 flex items-start gap-1.5 text-[10px] text-red-600 bg-red-50 dark:bg-red-900/20 p-1.5 rounded border border-red-100 dark:border-red-900/40">
+                <div className="mt-1 flex items-start gap-1.5 text-[10px] text-red-600 bg-red-50 dark:bg-red-900/20 p-1.5 rounded-sm border border-red-100 dark:border-red-900/40">
                   <AlertTriangle className="h-3 w-3 shrink-0 mt-0.5" />
                   <span>{container.trackingError}</span>
                 </div>

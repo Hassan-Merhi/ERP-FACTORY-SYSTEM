@@ -45,7 +45,7 @@ export function CurrencyPools({
     <div className="rounded-xl border overflow-hidden">
       <div className="flex items-center justify-between gap-2 flex-wrap px-4 py-3 border-b bg-muted/20">
         <span
-          className="flex items-center gap-2 cursor-pointer hover-elevate rounded px-1 py-0.5 flex-1"
+          className="flex items-center gap-2 cursor-pointer hover-elevate rounded-sm px-1 py-0.5 flex-1"
           onClick={() => toggleStmtSection("currencyPools")}
         >
           <span className="text-sm font-semibold">Currency Pools</span>

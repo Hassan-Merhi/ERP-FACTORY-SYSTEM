@@ -463,7 +463,7 @@ export default function PressingBales() {
                 type="date"
                 value={pressDate}
                 onChange={(e) => setPressDate(e.target.value)}
-                className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-xs transition-colors focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring"
                 data-testid="input-press-date"
               />
             </CardContent>

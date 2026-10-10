@@ -230,7 +230,7 @@ export function TabTruckLocation() {
                             badges={
                               <span
                                 className={cn(
-                                  "rounded px-1.5 py-0.5 text-[11px] font-medium",
+                                  "rounded-sm px-1.5 py-0.5 text-[11px] font-medium",
                                   (STATUS_BADGE_MAP as Record<string, string>)[r.status] ?? "bg-muted text-foreground"
                                 )}
                               >
@@ -327,7 +327,7 @@ export function TabTruckLocation() {
                             <td className="py-0.5 px-3 text-center">
                               <span
                                 className={cn(
-                                  "px-1.5 py-0.5 rounded text-[10px] font-medium",
+                                  "px-1.5 py-0.5 rounded-sm text-[10px] font-medium",
                                   (STATUS_BADGE_MAP as Record<string, string>)[r.status] ?? "bg-muted text-foreground"
                                 )}
                               >

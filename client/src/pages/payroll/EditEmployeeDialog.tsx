@@ -97,7 +97,7 @@ export function EditEmployeeDialog({
             className="flex max-h-[calc(92vh-94px)] flex-col"
           >
             <div className="flex-1 space-y-5 overflow-y-auto px-6 py-5">
-              <section className="rounded-xl border bg-card p-5 shadow-sm">
+              <section className="rounded-xl border bg-card p-5 shadow-xs">
                 <SectionTitle
                   icon={UserRound}
                   title="Employee details"
@@ -206,7 +206,7 @@ export function EditEmployeeDialog({
                 </div>
               </section>
 
-              <section className="rounded-xl border bg-card p-5 shadow-sm">
+              <section className="rounded-xl border bg-card p-5 shadow-xs">
                 <SectionTitle
                   icon={BriefcaseBusiness}
                   title="Employment settings"
@@ -267,7 +267,7 @@ export function EditEmployeeDialog({
                 </div>
               </section>
 
-              <section className="rounded-xl border bg-card p-5 shadow-sm">
+              <section className="rounded-xl border bg-card p-5 shadow-xs">
                 <SectionTitle
                   icon={BadgeDollarSign}
                   title="Sales bonus"
@@ -311,7 +311,9 @@ export function EditEmployeeDialog({
                                     <SelectValue placeholder={selectedCompany?.name || "This company"} />
                                   </SelectTrigger>
                                   <SelectContent>
-                                    <SelectItem value="__current__">{selectedCompany?.name || "This company"}</SelectItem>
+                                    <SelectItem value="__current__">
+                                      {selectedCompany?.name || "This company"}
+                                    </SelectItem>
                                     {otherCompanies.map((company) => (
                                       <SelectItem key={company.id} value={String(company.id)}>
                                         {company.name}
@@ -353,7 +355,7 @@ export function EditEmployeeDialog({
                 </div>
               </section>
 
-              <section className="rounded-xl border bg-card p-5 shadow-sm">
+              <section className="rounded-xl border bg-card p-5 shadow-xs">
                 <SectionTitle
                   icon={MapPin}
                   title="Location bonus rules"
@@ -417,7 +419,10 @@ export function EditEmployeeDialog({
                                   )
                                 }
                               >
-                                <SelectTrigger className="h-9 min-w-0 text-xs" data-testid={`select-bale-rate-company-${index}`}>
+                                <SelectTrigger
+                                  className="h-9 min-w-0 text-xs"
+                                  data-testid={`select-bale-rate-company-${index}`}
+                                >
                                   <SelectValue placeholder={selectedCompany?.name || "Company"} />
                                 </SelectTrigger>
                                 <SelectContent>
@@ -549,7 +554,10 @@ export function EditEmployeeDialog({
                                   )
                                 }
                               >
-                                <SelectTrigger className="h-9 min-w-0 text-xs" data-testid={`select-bale-pct-rate-company-${index}`}>
+                                <SelectTrigger
+                                  className="h-9 min-w-0 text-xs"
+                                  data-testid={`select-bale-pct-rate-company-${index}`}
+                                >
                                   <SelectValue placeholder={selectedCompany?.name || "Company"} />
                                 </SelectTrigger>
                                 <SelectContent>
@@ -577,7 +585,10 @@ export function EditEmployeeDialog({
                                 )
                               }
                             >
-                              <SelectTrigger className="h-9 min-w-0" data-testid={`select-bale-pct-rate-location-${index}`}>
+                              <SelectTrigger
+                                className="h-9 min-w-0"
+                                data-testid={`select-bale-pct-rate-location-${index}`}
+                              >
                                 <SelectValue placeholder="Location" />
                               </SelectTrigger>
                               <SelectContent>
@@ -612,7 +623,9 @@ export function EditEmployeeDialog({
                               variant="ghost"
                               className="h-9 w-9 text-muted-foreground hover:text-destructive"
                               onClick={() =>
-                                setEditBalePctRates((previous) => previous.filter((_, rateIndex) => rateIndex !== index))
+                                setEditBalePctRates((previous) =>
+                                  previous.filter((_, rateIndex) => rateIndex !== index)
+                                )
                               }
                               aria-label="Remove percentage bale rate"
                               data-testid={`button-remove-bale-pct-rate-${index}`}
@@ -628,7 +641,7 @@ export function EditEmployeeDialog({
               </section>
             </div>
 
-            <div className="flex shrink-0 items-center justify-between gap-3 border-t bg-background/95 px-6 py-4 backdrop-blur">
+            <div className="flex shrink-0 items-center justify-between gap-3 border-t bg-background/95 px-6 py-4 backdrop-blur-sm">
               <p className="hidden text-xs text-muted-foreground sm:block">Changes are saved to this employee only.</p>
               <div className="ml-auto flex items-center gap-2">
                 <Button type="button" variant="outline" onClick={closeDialog} disabled={editEmployeeMutation.isPending}>

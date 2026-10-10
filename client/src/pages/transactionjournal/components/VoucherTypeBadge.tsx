@@ -8,7 +8,7 @@ import { VOUCHER_TYPE_COLORS } from "../utils";
 
 export function VoucherTypeBadge({ type }: { type: string }) {
   const cls = VOUCHER_TYPE_COLORS[type] || "bg-muted text-muted-foreground";
-  return <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${cls}`}>{type}</span>;
+  return <span className={`inline-flex items-center px-2 py-0.5 rounded-sm text-xs font-medium ${cls}`}>{type}</span>;
 }
 
 // ─── Company colour pill ───────────────────────────────────────────────────────

@@ -283,7 +283,7 @@ export default function POSContainerDetail() {
       </div>
 
       <div className="grid shrink-0 grid-cols-2 gap-2 lg:grid-cols-4">
-        <div className="rounded-xl border bg-card/60 p-3 shadow-sm">
+        <div className="rounded-xl border bg-card/60 p-3 shadow-xs">
           <div className="flex items-center justify-between gap-2">
             <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Total Qty</p>
             <Boxes className="h-4 w-4 text-primary" aria-hidden="true" />
@@ -292,20 +292,20 @@ export default function POSContainerDetail() {
             {formatQty(data.totalQty)}
           </p>
         </div>
-        <div className="rounded-xl border bg-card/60 p-3 shadow-sm">
+        <div className="rounded-xl border bg-card/60 p-3 shadow-xs">
           <div className="flex items-center justify-between gap-2">
             <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Item Lines</p>
             <Package className="h-4 w-4 text-primary" aria-hidden="true" />
           </div>
           <p className="mt-1 text-2xl font-semibold tabular-nums">{data.items.length}</p>
         </div>
-        <div className="rounded-xl border bg-card/60 p-3 shadow-sm">
+        <div className="rounded-xl border bg-card/60 p-3 shadow-xs">
           <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Supplier</p>
           <p className="mt-2 truncate text-base font-semibold" title={supplier}>
             {supplier}
           </p>
         </div>
-        <div className="rounded-xl border bg-card/60 p-3 shadow-sm">
+        <div className="rounded-xl border bg-card/60 p-3 shadow-xs">
           <div className="flex items-center justify-between gap-2">
             <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Truck</p>
             <Truck className="h-4 w-4 text-primary" aria-hidden="true" />
@@ -316,7 +316,7 @@ export default function POSContainerDetail() {
         </div>
       </div>
 
-      <div className="shrink-0 rounded-xl border bg-card/40 p-3 shadow-sm">
+      <div className="shrink-0 rounded-xl border bg-card/40 p-3 shadow-xs">
         <div className="grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
           <div>
             <p className="text-xs text-muted-foreground">ETA</p>
@@ -369,7 +369,7 @@ export default function POSContainerDetail() {
         </div>
       </div>
 
-      <div className="shrink-0 rounded-xl border bg-card/40 p-3 shadow-sm">
+      <div className="shrink-0 rounded-xl border bg-card/40 p-3 shadow-xs">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div className="relative w-full sm:max-w-md">
             <Search
@@ -390,9 +390,9 @@ export default function POSContainerDetail() {
         </div>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-auto rounded-xl border bg-card/30 shadow-sm" data-table-scroll-region>
+      <div className="min-h-0 flex-1 overflow-auto rounded-xl border bg-card/30 shadow-xs" data-table-scroll-region>
         <Table>
-          <TableHeader className="sticky top-0 z-10 bg-background/95 backdrop-blur">
+          <TableHeader className="sticky top-0 z-10 bg-background/95 backdrop-blur-sm">
             <TableRow>
               <TableHead className="w-16 text-center">No.</TableHead>
               <TableHead>Item Name</TableHead>

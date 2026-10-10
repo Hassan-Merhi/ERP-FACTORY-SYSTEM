@@ -31,7 +31,8 @@ function parseFrameViewport(value: unknown): RemoteMouseCommandView["frameViewpo
     typeof viewport.scrollX !== "number" ||
     typeof viewport.scrollY !== "number" ||
     typeof viewport.visualScale !== "number"
-  ) return undefined;
+  )
+    return undefined;
   return {
     width: viewport.width,
     height: viewport.height,
@@ -51,7 +52,8 @@ function parseCommand(value: unknown): RemoteMouseCommandView | null {
     typeof command.x !== "number" ||
     typeof command.y !== "number" ||
     typeof command.sequence !== "number"
-  ) return null;
+  )
+    return null;
   return { ...command, frameViewport: parseFrameViewport(command.frameViewport) } as RemoteMouseCommandView;
 }
 
@@ -187,14 +189,14 @@ export function RemoteMouseControlTarget({
 
   return (
     <div
-      className="pointer-events-none fixed z-[2147483646]"
+      className="pointer-events-none fixed z-2147483646"
       style={{ left: pointer.x, top: pointer.y, transform: "translate(-2px, -2px)" }}
       aria-hidden="true"
       data-screenfeed-ignore="true"
       data-testid="remote-support-mouse-pointer"
     >
       <div className="relative h-5 w-5">
-        <svg viewBox="0 0 24 24" className="h-5 w-5 drop-shadow" fill="none" aria-hidden="true">
+        <svg viewBox="0 0 24 24" className="h-5 w-5 drop-shadow-sm" fill="none" aria-hidden="true">
           <path
             d="M4 3.5v14.8l4.2-4.1 2.8 6.3 3-1.4-2.8-6.1h5.9L4 3.5Z"
             fill="white"

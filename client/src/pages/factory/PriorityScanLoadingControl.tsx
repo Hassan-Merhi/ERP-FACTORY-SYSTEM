@@ -264,7 +264,7 @@ export function PriorityScanLoadingControl({ load }: PriorityScanLoadingControlP
               title={canManagePriority ? tr("editPriorityTitle") : tr("editColorTitle")}
             >
               <span
-                className="h-3.5 w-3.5 rounded-full border border-black/15 shadow-sm"
+                className="h-3.5 w-3.5 rounded-full border border-black/15 shadow-xs"
                 style={{ backgroundColor: activeConfig.color }}
                 aria-hidden="true"
               />
@@ -358,7 +358,7 @@ export function PriorityScanLoadingControl({ load }: PriorityScanLoadingControlP
                     type="color"
                     value={isHexColor(selectedColor) ? selectedColor : DEFAULT_COLOR}
                     onChange={(event) => updateSelectedPresetColor(event.target.value)}
-                    className="h-9 w-12 cursor-pointer rounded border border-border bg-transparent p-0.5"
+                    className="h-9 w-12 cursor-pointer rounded-sm border border-border bg-transparent p-0.5"
                     data-testid={`input-priority-color-${load.id}`}
                     aria-label={tr("chooseCustomColor")}
                   />

@@ -95,7 +95,7 @@ export default function AccountingCreate() {
                       data-testid={`tab-${item.key === "stockGroup" ? "stock-group" : item.key === "stockItem" ? "stock-item" : item.key}`}
                       className={`w-full flex items-center gap-3 px-3 py-2 text-sm rounded-md transition-colors ${
                         isActive
-                          ? "bg-background shadow-sm font-medium"
+                          ? "bg-background shadow-xs font-medium"
                           : "text-muted-foreground hover:text-foreground hover:bg-background/50"
                       }`}
                     >

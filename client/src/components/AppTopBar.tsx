@@ -74,7 +74,7 @@ export function AppTopBar({
           className={
             simplifyMobileNavigation
               ? "hidden h-10 w-10 shrink-0 text-foreground sm:inline-flex sm:h-8 sm:w-8"
-              : "!inline-flex h-10 w-10 shrink-0 text-foreground sm:h-8 sm:w-8"
+              : "inline-flex! h-10 w-10 shrink-0 text-foreground sm:h-8 sm:w-8"
           }
           aria-label={t("accessibility.toggleSidebar")}
         />
@@ -102,7 +102,7 @@ export function AppTopBar({
           >
             <Search className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
             <span className="hidden lg:inline">Search</span>
-            <kbd className="inline-flex h-4 items-center rounded border border-border bg-background px-1.5 font-mono text-[9px] leading-none">
+            <kbd className="inline-flex h-4 items-center rounded-sm border border-border bg-background px-1.5 font-mono text-[9px] leading-none">
               {typeof navigator !== "undefined" && /Mac|iPod|iPhone|iPad/.test(navigator.platform) ? "⌘ /" : "Ctrl /"}
             </kbd>
           </button>

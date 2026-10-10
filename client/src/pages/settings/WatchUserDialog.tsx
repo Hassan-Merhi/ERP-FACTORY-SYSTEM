@@ -391,7 +391,7 @@ export function WatchUserDialog({
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent
-        className="!fixed !inset-0 !left-0 !top-0 !translate-x-0 !translate-y-0 !max-w-none !w-screen !h-screen !rounded-none p-0 overflow-hidden flex flex-col"
+        className="fixed! inset-0! left-0! top-0! translate-x-0! translate-y-0! max-w-none! w-screen! h-screen! rounded-none! p-0 overflow-hidden flex flex-col"
         data-testid="dialog-watch-user"
         data-watched-user-id={String(userId)}
         data-screenfeed-ignore="true"
@@ -463,7 +463,7 @@ export function WatchUserDialog({
                   ? "Full page capture failed; a simplified fallback is shown."
                   : "The viewer is recovering the live connection."}
               </p>
-              <p className="opacity-90 break-words">
+              <p className="opacity-90 wrap-break-word">
                 {frameMetadata.failureReason || streamError || "Waiting for the next full frame."}
               </p>
             </div>
@@ -563,7 +563,7 @@ export function WatchUserDialog({
             </div>
 
             {clicks.length > 0 && (
-              <div className="border-t px-3 py-1.5 shrink-0 bg-background/80 backdrop-blur-sm">
+              <div className="border-t px-3 py-1.5 shrink-0 bg-background/80 backdrop-blur-xs">
                 <div className="flex items-center gap-4 flex-wrap">
                   <span className="text-xs text-muted-foreground font-medium uppercase tracking-wide flex items-center gap-1 shrink-0">
                     <Eye className="h-3 w-3" /> Clicks

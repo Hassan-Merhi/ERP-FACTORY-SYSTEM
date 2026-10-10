@@ -8,7 +8,7 @@ import type { StatCardProps } from "../types";
 
 export function StatCard({ icon, label, value, sub, accent }: StatCardProps) {
   return (
-    <div className="min-w-0 rounded-xl border bg-card/40 shadow-sm">
+    <div className="min-w-0 rounded-xl border bg-card/40 shadow-xs">
       <div className="flex min-h-[82px] items-center gap-3 px-3.5 py-3">
         <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${accent ?? "bg-muted"}`}>
           {icon}

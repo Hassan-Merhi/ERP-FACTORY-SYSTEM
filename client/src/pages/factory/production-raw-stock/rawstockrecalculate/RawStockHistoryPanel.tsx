@@ -107,7 +107,7 @@ export function RawStockHistoryPanel({ rawStock }: RawStockHistoryPanelProps) {
                   </div>
                 )}
 
-                <div className="border rounded-md overflow-hidden bg-card shadow-sm">
+                <div className="border rounded-md overflow-hidden bg-card shadow-xs">
                   <Table mobileLayout="cards">
                     <TableHeader className="bg-muted/50">
                       <TableRow>
@@ -214,7 +214,7 @@ export function RawStockHistoryPanel({ rawStock }: RawStockHistoryPanelProps) {
                 No recalculation history yet. Apply a recalculation and it will appear here.
               </div>
             ) : (
-              <div className="border rounded-md overflow-hidden bg-card shadow-sm">
+              <div className="border rounded-md overflow-hidden bg-card shadow-xs">
                 <Table mobileLayout="cards">
                   <TableHeader className="bg-muted/50">
                     <TableRow>

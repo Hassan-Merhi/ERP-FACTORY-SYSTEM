@@ -246,7 +246,8 @@ export function RemoteMouseControllerOverlay() {
       if (pointerQueueSessionRef.current !== expectedSessionId) return;
       pointerQueueActiveRef.current = false;
       pointerQueueSessionRef.current = null;
-      if (pointerLatestRef.current && activeSessionIdRef.current === expectedSessionId) schedulePointerDrainRef.current();
+      if (pointerLatestRef.current && activeSessionIdRef.current === expectedSessionId)
+        schedulePointerDrainRef.current();
     });
   }, [controlEnabled, sendCommandNow, sessionId]);
 
@@ -263,7 +264,8 @@ export function RemoteMouseControllerOverlay() {
     scrollTimerRef.current = null;
     const pending = scrollPendingRef.current;
     scrollPendingRef.current = null;
-    if (pending && (pending.deltaX !== 0 || pending.deltaY !== 0)) enqueueOrderedCommand({ type: "scroll", ...pending });
+    if (pending && (pending.deltaX !== 0 || pending.deltaY !== 0))
+      enqueueOrderedCommand({ type: "scroll", ...pending });
   }, [enqueueOrderedCommand]);
 
   useEffect(() => {
@@ -311,7 +313,8 @@ export function RemoteMouseControllerOverlay() {
       const point = pointFromEvent(event.clientX, event.clientY);
       if (!point) return;
       pointerLatestRef.current = point;
-      if (pointerTimerRef.current === null) pointerTimerRef.current = window.setTimeout(flushPointer, POINTER_COALESCE_MS);
+      if (pointerTimerRef.current === null)
+        pointerTimerRef.current = window.setTimeout(flushPointer, POINTER_COALESCE_MS);
     };
     const onClick = (event: MouseEvent) => {
       if (event.button !== 0) return;
@@ -362,8 +365,10 @@ export function RemoteMouseControllerOverlay() {
     (reason: string | null, status: string): string | null => {
       if (status === "executed") return null;
       if (reason === "protected-element") return t("That control is protected and cannot be activated remotely.");
-      if (reason === "action-not-allowlisted") return t("This control isn't on the allowlist — it needs a data-remote-control-action from the registry.");
-      if (reason === "frame-point-offscreen") return t("That part of the screen has scrolled out of view. Wait for a fresh frame and try again.");
+      if (reason === "action-not-allowlisted")
+        return t("This control isn't on the allowlist — it needs a data-remote-control-action from the registry.");
+      if (reason === "frame-point-offscreen")
+        return t("That part of the screen has scrolled out of view. Wait for a fresh frame and try again.");
       if (reason === "invalid-coordinates") return t("Click position is outside the screen image.");
       if (reason === "no-target") return t("No element at that position.");
       if (reason === "no-clickable-target") return t("No clickable control at that position.");
@@ -372,7 +377,9 @@ export function RemoteMouseControllerOverlay() {
       if (reason === "command-timeout") return t("Command timed out — the employee tab didn't respond.");
       if (reason === "duplicate-command") return t("Duplicate command ignored.");
       if (reason) return t(`Action ${status}: ${reason}`);
-      return t(status === "blocked" ? "That control is protected and cannot be activated remotely." : "Action ignored.");
+      return t(
+        status === "blocked" ? "That control is protected and cannot be activated remotely." : "Action ignored."
+      );
     },
     [t]
   );
@@ -382,9 +389,12 @@ export function RemoteMouseControllerOverlay() {
     let cancelled = false;
     const bind = () => {
       if (cancelled) return;
-      void requestRemoteControlRealtime({ type: "remote-control:bind-mouse-controller", sessionId }).catch((bindError) => {
-        if (!cancelled && bindError instanceof RemoteControlRealtimeError && bindError.status > 0) setError(t(bindError.message));
-      });
+      void requestRemoteControlRealtime({ type: "remote-control:bind-mouse-controller", sessionId }).catch(
+        (bindError) => {
+          if (!cancelled && bindError instanceof RemoteControlRealtimeError && bindError.status > 0)
+            setError(t(bindError.message));
+        }
+      );
     };
     const unsubscribeReady = subscribeRemoteControlRealtimeReady((ready) => {
       if (ready) bind();
@@ -414,7 +424,7 @@ export function RemoteMouseControllerOverlay() {
 
   return createPortal(
     <section
-      className="w-full rounded-xl border bg-background/95 p-3 shadow-sm"
+      className="w-full rounded-xl border bg-background/95 p-3 shadow-xs"
       data-screenfeed-ignore="true"
       data-testid="remote-mouse-controller-overlay"
       data-remote-control-panel-section="mouse"
@@ -424,9 +434,12 @@ export function RemoteMouseControllerOverlay() {
           {controlEnabled ? <MousePointer2 className="h-4 w-4" /> : <ShieldCheck className="h-4 w-4" />}
         </div>
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-semibold">{t("Mouse control")} · {session.targetUsername}</p>
+          <p className="truncate text-sm font-semibold">
+            {t("Mouse control")} · {session.targetUsername}
+          </p>
           <p className="text-xs text-muted-foreground">
-            {translateRemoteSupportPhase4Text("ERP tab only", language)} · {t("Safe viewing and navigation")} · {t("Keyboard disabled")}
+            {translateRemoteSupportPhase4Text("ERP tab only", language)} · {t("Safe viewing and navigation")} ·{" "}
+            {t("Keyboard disabled")}
           </p>
         </div>
         {controlEnabled ? (
@@ -463,7 +476,9 @@ export function RemoteMouseControllerOverlay() {
             void confirmPasswordAndAuthorize();
           }}
         >
-          <p className="text-xs font-medium">{t("Confirm your password to enable mouse control for up to 5 minutes.")}</p>
+          <p className="text-xs font-medium">
+            {t("Confirm your password to enable mouse control for up to 5 minutes.")}
+          </p>
           <div className="flex gap-2">
             <Input
               autoFocus
@@ -483,10 +498,18 @@ export function RemoteMouseControllerOverlay() {
       )}
 
       <div className="mt-2 flex items-center justify-between gap-2 text-[11px] text-muted-foreground">
-        <span>{controlEnabled ? t("Active: click and scroll on allowlisted controls") : t("Read-only until explicitly enabled")}</span>
+        <span>
+          {controlEnabled
+            ? t("Active: click and scroll on allowlisted controls")
+            : t("Read-only until explicitly enabled")}
+        </span>
         {statusLabel && <span className="shrink-0">{statusLabel}</span>}
       </div>
-      {error && <p className="mt-2 text-xs text-destructive" role="alert">{error}</p>}
+      {error && (
+        <p className="mt-2 text-xs text-destructive" role="alert">
+          {error}
+        </p>
+      )}
     </section>,
     portalHost
   );
