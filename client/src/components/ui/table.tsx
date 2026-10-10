@@ -3,6 +3,7 @@ import * as React from "react";
 import { cn } from "@/lib/utils";
 
 import { useMobileCardTable } from "./mobile-card-table";
+import { usePhoneSheet } from "./phone-sheet";
 
 type TableProps = React.TableHTMLAttributes<HTMLTableElement> & {
   wrapperClassName?: string;
@@ -58,6 +59,9 @@ const Table = React.forwardRef<HTMLTableElement, TableProps>(
       [ref, setCardTable]
     );
     const wrapperRef = React.useRef<HTMLDivElement>(null);
+    // Inside a phone bottom sheet the sheet is the one scroll container, so entry lists never
+    // scroll inside it.
+    const phoneSheet = usePhoneSheet();
     // How the region scrolls:
     //  - "capped": its own 70vh scroll region (dialogs, sheets, and anything outside a workspace);
     //  - "parent": the element directly above it already scrolls, so it must not;
@@ -105,8 +109,12 @@ const Table = React.forwardRef<HTMLTableElement, TableProps>(
       // a long list never pushes the dialog's actions out of reach.
       const inOverlay = wrapper.closest('[role="dialog"], [role="alertdialog"], [data-slot="sheet-content"]');
       const inWorkspace = wrapper.closest("#main-content");
+      if (inOverlay && phoneSheet) {
+        setScrollMode("parent");
+        return;
+      }
       setScrollMode(inWorkspace && !inOverlay ? "page" : "capped");
-    }, [maxHeight, unclipped, callerScroll, wrapperClassName]);
+    }, [maxHeight, unclipped, callerScroll, wrapperClassName, phoneSheet]);
 
     React.useEffect(() => {
       const wrapper = wrapperRef.current;

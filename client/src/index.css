@@ -735,20 +735,11 @@
     flex-direction: column;
   }
 
-  /* ── 3. Dialogs / modals fit within viewport ────────────────────────────
-     Shadcn DialogContent renders with [role="dialog"]. These rules make
-     every dialog fit within the visible viewport on narrow screens without
-     touching any component's JSX. max-height uses dvh (dynamic viewport
-     height) so the keyboard collapsing doesn't break dialog height. */
-  /* Sidebar SheetContent also carries [role="dialog"] (verified: data-sidebar="sidebar"
-     is set on the SheetContent element in sidebar.tsx line 187). Exclude it so the
-     full-height drawer is not clipped by the max-height rule. */
-  [role="dialog"]:not([data-sidebar="sidebar"]) {
-    max-width: calc(100vw - 1rem) !important;
-    max-height: calc(100dvh - 1rem) !important;
-    overflow-y: auto !important;
-    /* keep dialog centred — Radix already provides this via transform */
-  }
+  /* ── 3. Dialogs / modals ────────────────────────────────────────────────
+     The dialog and sheet primitives size themselves to the viewport
+     (`var(--app-viewport-height)`, `calc(100vw-1rem)`) and phone sheets to
+     the visible viewport (phone-sheet.tsx); the remaining catch-all for other
+     `[role="dialog"]` surfaces lives in mobile-browser-compat.css. */
 
   /* ── 4. Buttons and form action rows ────────────────────────────────────
      Rows of buttons (e.g. Save / Cancel / Export) wrap rather than clip off the

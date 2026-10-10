@@ -1,5 +1,6 @@
 import { Suspense, lazy, useEffect, useState, useRef } from "react";
 import { useLocation } from "wouter";
+import { PhoneSheetDialogs } from "@/components/ui/phone-sheet";
 import { useDocumentAppShell } from "@/hooks/use-document-app-shell";
 import { useMainContentFocus } from "@/hooks/use-main-content-focus";
 import { useScrollOverflowProbe } from "@/hooks/use-scroll-overflow-probe";
@@ -22,7 +23,6 @@ import { canUseAdminSearch, type ShellUser } from "./shellUser";
 import { ErpAccessBoundary } from "./ErpAccessBoundary";
 import { MODULE_ACCENT } from "@/components/sidebar/sidebarPrimitives";
 import "@/erp-mobile-operations.css";
-import "@/mobile-shell-dialogs.css";
 
 interface ErpShellProps {
   user: ShellUser;
@@ -62,79 +62,81 @@ export function ErpShell({ user, hasErpAccess, handleLogout, leaveConfirmDialog 
   useScrollOverflowProbe(erpContainerRef);
 
   useEffect(() => installErpNavigationHistory(), []);
-  // ERP-only dialog styling must not follow the user into Factory, POS or Properties.
+  // Shell-scoped CSS (the phone notes launcher rule) keys off this marker.
   useDocumentAppShell("erp");
   // Phone sheets and dialogs size to the visible viewport, so the keyboard never hides their actions.
   useVisualViewportMetrics();
 
   return (
-    <AppModeProvider mode="erp">
-      <ErpAccessBoundary user={user}>
-        <SkipLink>{t("accessibility.skipToMainContent")}</SkipLink>
-        <SidebarProvider style={style as React.CSSProperties}>
-          <div ref={erpContainerRef} data-erp-shell="" className="flex h-full w-full min-w-0 overflow-hidden">
-            <CompanyDailyRateModal />
-            <AppSidebar user={user} onLogout={handleLogout} />
-            <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-              <OfflineBanner />
-              <AppTopBar
-                accentColor={MODULE_ACCENT.erp}
-                user={{ username: user.username, role: user.role ?? "" }}
-                onLogout={handleLogout}
-                onSearchOpen={() => setPaletteOpen(true)}
-                simplifyMobileNavigation
-              />
-              <main
-                id="main-content"
-                tabIndex={-1}
-                aria-label={t("workspace.controls")}
-                className="flex-1 overflow-y-auto overscroll-y-contain outline-none"
-              >
-                <WorkspaceRouteBoundary
-                  resetKey={currentLocation}
-                  loadingTitle="Loading workspace"
-                  loadingDescription="Preparing the latest ERP information."
-                  fill={isPosCanvasRoute}
+    <PhoneSheetDialogs>
+      <AppModeProvider mode="erp">
+        <ErpAccessBoundary user={user}>
+          <SkipLink>{t("accessibility.skipToMainContent")}</SkipLink>
+          <SidebarProvider style={style as React.CSSProperties}>
+            <div ref={erpContainerRef} data-erp-shell="" className="flex h-full w-full min-w-0 overflow-hidden">
+              <CompanyDailyRateModal />
+              <AppSidebar user={user} onLogout={handleLogout} />
+              <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+                <OfflineBanner />
+                <AppTopBar
+                  accentColor={MODULE_ACCENT.erp}
+                  user={{ username: user.username, role: user.role ?? "" }}
+                  onLogout={handleLogout}
+                  onSearchOpen={() => setPaletteOpen(true)}
+                  simplifyMobileNavigation
+                />
+                <main
+                  id="main-content"
+                  tabIndex={-1}
+                  aria-label={t("workspace.controls")}
+                  className="flex-1 overflow-y-auto overscroll-y-contain outline-none"
                 >
-                  <div
-                    data-workspace-route={routePath}
-                    data-erp-route={routePath}
-                    className={
-                      isPosCanvasRoute
-                        ? "h-full w-full min-w-0 max-w-full p-3 sm:p-6"
-                        : "w-full min-w-0 max-w-full p-3 sm:p-6"
-                    }
+                  <WorkspaceRouteBoundary
+                    resetKey={currentLocation}
+                    loadingTitle="Loading workspace"
+                    loadingDescription="Preparing the latest ERP information."
+                    fill={isPosCanvasRoute}
                   >
-                    <Router user={user} />
-                  </div>
-                </WorkspaceRouteBoundary>
-              </main>
-              <ErpMobileBottomNav
-                user={user}
-                onMore={() => {
-                  setMobileNavLoaded(true);
-                  setMobileNavOpen(true);
-                }}
-                moreOpen={mobileNavOpen}
-              />
-              {mobileNavLoaded && (
-                <Suspense fallback={null}>
-                  <ErpMobileNavSheet user={user} open={mobileNavOpen} onOpenChange={setMobileNavOpen} />
-                </Suspense>
-              )}
+                    <div
+                      data-workspace-route={routePath}
+                      data-erp-route={routePath}
+                      className={
+                        isPosCanvasRoute
+                          ? "h-full w-full min-w-0 max-w-full p-3 sm:p-6"
+                          : "w-full min-w-0 max-w-full p-3 sm:p-6"
+                      }
+                    >
+                      <Router user={user} />
+                    </div>
+                  </WorkspaceRouteBoundary>
+                </main>
+                <ErpMobileBottomNav
+                  user={user}
+                  onMore={() => {
+                    setMobileNavLoaded(true);
+                    setMobileNavOpen(true);
+                  }}
+                  moreOpen={mobileNavOpen}
+                />
+                {mobileNavLoaded && (
+                  <Suspense fallback={null}>
+                    <ErpMobileNavSheet user={user} open={mobileNavOpen} onOpenChange={setMobileNavOpen} />
+                  </Suspense>
+                )}
+              </div>
             </div>
-          </div>
-        </SidebarProvider>
-        <CommandPalette
-          open={paletteOpen}
-          onOpenChange={setPaletteOpen}
-          hasErpAccess={hasErpAccess}
-          hasFactoryAccess={false}
-          isAdminOwner={hasAdminSearch}
-          user={user}
-        />
-        {leaveConfirmDialog}
-      </ErpAccessBoundary>
-    </AppModeProvider>
+          </SidebarProvider>
+          <CommandPalette
+            open={paletteOpen}
+            onOpenChange={setPaletteOpen}
+            hasErpAccess={hasErpAccess}
+            hasFactoryAccess={false}
+            isAdminOwner={hasAdminSearch}
+            user={user}
+          />
+          {leaveConfirmDialog}
+        </ErpAccessBoundary>
+      </AppModeProvider>
+    </PhoneSheetDialogs>
   );
 }

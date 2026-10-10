@@ -38,7 +38,7 @@ const sheetVariants = cva(
       side: {
         top: "inset-x-0 top-0 max-h-[calc(var(--app-viewport-height)-0.5rem)] w-full border-b data-[state=closed]:slide-out-to-top data-[state=open]:slide-in-from-top",
         bottom:
-          "inset-x-0 bottom-0 max-h-[calc(var(--app-viewport-height)-0.5rem)] w-full border-t data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom",
+          "inset-x-0 bottom-[var(--erp-keyboard-inset,0px)] max-h-[calc(var(--app-viewport-height)-0.5rem)] w-full border-t data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom",
         left: "inset-y-0 left-0 h-[var(--app-viewport-height)] w-[calc(100vw-0.75rem)] max-w-sm border-r data-[state=closed]:slide-out-to-left data-[state=open]:slide-in-from-left sm:w-3/4",
         right:
           "inset-y-0 right-0 h-[var(--app-viewport-height)] w-[calc(100vw-0.75rem)] max-w-sm border-l data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right sm:w-3/4",

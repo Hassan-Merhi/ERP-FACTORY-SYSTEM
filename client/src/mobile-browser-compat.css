@@ -277,9 +277,12 @@ body {
 }
 
 @media (max-width: 639px) {
-  [role="dialog"] {
-    max-width: calc(100vw - 1rem) !important;
-    max-height: calc(var(--app-viewport-height) - 1rem - var(--safe-area-top) - var(--safe-area-bottom)) !important;
+  /* Any `[role="dialog"]` surface fits the phone screen (popovers, command palettes, legacy
+     modals). Loaded after the Tailwind utilities, so equal-specificity caller classes lose by
+     order and no !important is needed. Phone bottom sheets size themselves (phone-sheet.tsx). */
+  [role="dialog"]:not([data-phone-sheet="true"]) {
+    max-width: calc(100vw - 1rem);
+    max-height: calc(var(--app-viewport-height) - 1rem - var(--safe-area-top) - var(--safe-area-bottom));
     overflow-y: auto;
     overscroll-behavior: contain;
   }
@@ -308,8 +311,8 @@ body {
 }
 
 @media (max-height: 500px) and (orientation: landscape) {
-  [role="dialog"] {
-    max-height: calc(var(--app-viewport-height) - 0.5rem) !important;
+  [role="dialog"]:not([data-phone-sheet="true"]) {
+    max-height: calc(var(--app-viewport-height) - 0.5rem);
   }
 }
 
@@ -475,4 +478,16 @@ body {
   .flex.flex-col:is(.sm\:flex-row, .md\:flex-row):is(.gap-2, .gap-3, .gap-4) {
     flex-wrap: wrap;
   }
+}
+
+/*
+ * Radix Select renders a visually hidden native <select> (for form autofill) with inline
+ * absolute positioning. Without a positioned ancestor it is placed at its static position and
+ * can extend the document below the shell, letting the whole page scroll on phones. Pinning
+ * it to the viewport keeps it inert for layout (inline style, so the override needs !important).
+ */
+select[aria-hidden="true"][tabindex="-1"] {
+  position: fixed !important;
+  top: 0;
+  left: 0;
 }

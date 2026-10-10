@@ -10,7 +10,7 @@
 | Tablet (768×1024, 1024×768) | 20 | 11 | **17** | Sidebar collapsed by default below 1024px (user pin remembered, parked links inert), Vouchers usable in both orientations, payroll table scrolls instead of collapsing, Properties tiles fixed, 44px header controls, theme toggle on screen. Left: wide tables scroll sideways inside the page (by design), Daybook keeps its own scroll region for windowed rendering. |
 | Phone (390×844 portrait, 844×390 landscape) | 25 | 20 | **22** | Voucher title no longer clipped, Properties on the ERP phone contract (header, cards, summary grid, no floating launcher), Customers cards, POS checkout bar above the bottom nav, tab-strip and table edge fades, landscape phones keep the phone lists via `phone-land:` and hide keyboard hints. Left: landscape keeps the drawer-plus-hamburger chrome (deliberate), three Factory hubs have no title strip. |
 | Scrolling behaviour | 15 | 10 | **14** | Workspace tables let the page scroll (narrow ones keep a page-sticky header), zero `calc(100vh - N)` in the client, the synthetic wheel forwarder and the body scroll-lock sweep are gone with rendered evidence, voucher pickers and chat use `dvh`. Left: wide tables cannot have both a page-sticky header and a sideways scroller. |
-| Consistency and design system | 10 | 7 | **8** | One breakpoints module, `touch` and `phone-land` Tailwind variants so components declare their own touch/landscape behaviour, route-scoped overrides removed (`!important` 147 → 120, class-string selectors 53 → 5), one scoped action-row wrap rule instead of a global rule plus two undo blocks, Properties shares the ERP contracts and phone bottom-sheet dialogs, Payroll/Invoicing hubs on `PageHeader`. Left: four mobile stylesheets remain, seven mobile phase tests still assert source text. |
+| Consistency and design system | 10 | 7 | **8** | One breakpoints module, `touch` and `phone-land` Tailwind variants so components declare their own touch/landscape behaviour, route-scoped overrides removed (`!important` 147 → 102, class-string selectors 53 → 1), one scoped action-row wrap rule instead of a global rule plus two undo blocks, phone bottom-sheet dialogs are the dialog primitives' own behaviour (opt-in per shell, no document marker, no `!important`), one `[role="dialog"]` catch-all instead of three competing ones, Properties shares the ERP contracts, Payroll/Invoicing hubs on `PageHeader`. Left: the card-table stylesheet, six mobile phase tests still assert source text. |
 | Accessibility and touch ergonomics | 5 | 4 | **4** | Collapsed sidebar is inert, 44px header controls on coarse pointers, shortcut badges hidden on touch, launcher hidden until anchored. Left: 10px text, web fonts from the network. |
 
 ### Re-audit evidence (branch `claude/fervent-hopper-wzfayi` at `2238e0e`, same harness and seeded data as §1)
@@ -361,7 +361,7 @@ Verified with the rendered harness on ERP, Factory and Properties at phone, phon
 | Fix dialog lifecycle instead of `useDialogScrollFix` | Find the dialogs unmounted mid-close (rapid open/close, route changes while open) and keep them mounted until `onAnimationEnd`; then delete the MutationObserver hook. | Body never left with `overflow: hidden` after 50 open/close cycles; hook removed. |
 | Phone landscape top bar | Apply the phone top-bar variant (no shortcut hint, 44px controls) when `ERP_PHONE_LAYOUT_QUERY` matches, not only below 640px. | 844×390 capture shows the simplified bar. |
 
-### Phase 8 — Consolidate the mobile layer and the tests (two to four weeks, incremental) — IN PROGRESS (two increments shipped)
+### Phase 8 — Consolidate the mobile layer and the tests (two to four weeks, incremental) — IN PROGRESS (three increments shipped)
 
 Shipped on this branch:
 
@@ -377,7 +377,15 @@ Second increment:
 
 Verified with the rendered harness: ERP (6 routes), Factory (5) and Properties (3) at phone, phone landscape and tablet report no document or workspace overflow and no off-screen controls; `tsc --noEmit`, prettier, eslint and the frontend suites pass.
 
-Not done (next increments): fold `mobile-shell-dialogs.css` and `mobile-card-table.css` into the dialog and table primitives, and convert the seven remaining `mobile-responsive-phase*` source-text tests.
+Third increment:
+
+- **Phone bottom sheets belong to the dialog primitives.** `DialogContent`, `AlertDialogContent`, their headers, footers and close control now carry the phone-sheet presentation as their own classes (anchored above the keyboard, sized to the visible viewport, rounded top, sticky title/close/actions, two actions on one row), switched by `usePhoneSheet()`: a shell opts in with `PhoneSheetDialogs` (ERP, Factory, Properties), and the phone media query decides. The sheet classes come after the caller's, so per-dialog desktop sizing (`max-w-2xl`, `max-h-[90vh]`, `w-[95vw]`) is replaced wholesale on phones without `!important`. React context reaches portalled dialogs, so the `html[data-app-shell]` gating and the 13 `!important` rules of `mobile-shell-dialogs.css` are gone; what remains of that file (now imported by the primitive, not the shells) is the `:has()` rule that pins the button-only action rows of dialogs that predate `DialogFooter`. Tables inside a phone sheet let the sheet scroll (`Table` picks its parent mode there) and bottom sheets sit above the keyboard through the sheet variant itself.
+- **One dialog catch-all.** The three competing `[role="dialog"]` sizing rules (index.css ≤767, mobile-browser-compat.css ≤639 and landscape, all `!important`) are one non-important rule in `mobile-browser-compat.css` that exempts phone sheets; the primitives already size themselves, so the catch-all only serves popovers and legacy modals. The Radix hidden-select pin moved there too, unscoped.
+- **Tests:** the Phase 4 forms/dialogs test renders dialogs inside and outside a phone-sheet shell at phone and desktop widths and asserts the presentation (sheet vs centred, caller classes replaced, sticky parts, two-action row, `p-0` frames left alone), alert dialogs, sheets, a table inside a sheet, form grids and select controls, instead of reading source text.
+
+Verified: ERP New Customer (a pre-`DialogFooter` dialog), Properties Add Shop and Factory Print Settings open as full-width bottom sheets at 390×844 and 844×390 with the title, close control and actions pinned; the same dialog is the centred modal at 1440×900; the ERP, Factory and Properties matrix at phone, phone landscape and tablet reports no overflow and no off-screen controls; `tsc --noEmit`, prettier, eslint and the full frontend suite (240 files) pass.
+
+Not done (next increments): fold `mobile-card-table.css` into the table primitive, and convert the six remaining `mobile-responsive-phase*` source-text tests.
 
 
 | Item | Change | Done when |

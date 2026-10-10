@@ -2,6 +2,14 @@ import * as React from "react";
 import * as AlertDialogPrimitive from "@radix-ui/react-alert-dialog";
 
 import { buttonVariants } from "@/components/ui/button";
+import {
+  DialogFrameContext,
+  countActions,
+  dialogFrameClasses,
+  isUnpadded,
+  useDialogFrame,
+  usePhoneSheet,
+} from "@/components/ui/phone-sheet";
 import { cn } from "@/lib/utils";
 
 const AlertDialog = AlertDialogPrimitive.Root;
@@ -28,37 +36,57 @@ AlertDialogOverlay.displayName = AlertDialogPrimitive.Overlay.displayName;
 const AlertDialogContent = React.forwardRef<
   React.ElementRef<typeof AlertDialogPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof AlertDialogPrimitive.Content>
->(({ className, ...props }, ref) => (
-  <AlertDialogPortal>
-    <AlertDialogOverlay />
-    <AlertDialogPrimitive.Content
-      ref={ref}
-      data-slot="alert-dialog-content"
-      className={cn(
-        "fixed left-1/2 top-1/2 z-50 grid max-h-[calc(var(--app-viewport-height)-1rem)] w-[calc(100vw-1rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 gap-4 overflow-y-auto overscroll-contain border bg-background p-4 shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 sm:w-[calc(100vw-2rem)] sm:rounded-lg sm:p-6 motion-reduce:animate-none motion-reduce:transition-none",
-        className
-      )}
-      {...props}
-    />
-  </AlertDialogPortal>
-));
+>(({ className, children, ...props }, ref) => {
+  const sheet = usePhoneSheet();
+  const frame = React.useMemo(() => ({ sheet, padded: !isUnpadded(className) }), [sheet, className]);
+  return (
+    <AlertDialogPortal>
+      <AlertDialogOverlay />
+      <AlertDialogPrimitive.Content
+        ref={ref}
+        data-slot="alert-dialog-content"
+        data-phone-sheet={sheet ? "true" : undefined}
+        className={cn(
+          dialogFrameClasses.base,
+          !sheet && dialogFrameClasses.centred,
+          className,
+          sheet && dialogFrameClasses.sheet
+        )}
+        {...props}
+      >
+        <DialogFrameContext.Provider value={frame}>{children}</DialogFrameContext.Provider>
+      </AlertDialogPrimitive.Content>
+    </AlertDialogPortal>
+  );
+});
 AlertDialogContent.displayName = AlertDialogPrimitive.Content.displayName;
 
 const AlertDialogHeader = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
-  <div className={cn("flex min-w-0 flex-col space-y-2 text-left", className)} {...props} />
-);
-AlertDialogHeader.displayName = "AlertDialogHeader";
-
-const AlertDialogFooter = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
   <div
-    data-slot="alert-dialog-footer"
-    className={cn(
-      "flex flex-col-reverse gap-2 border-t pt-4 sm:flex-row sm:justify-end sm:border-t-0 sm:pt-0 [&>*]:min-h-11 [&>*]:w-full sm:[&>*]:w-auto",
-      className
-    )}
+    data-slot="alert-dialog-header"
+    className={cn("flex min-w-0 flex-col space-y-2 text-left", className)}
     {...props}
   />
 );
+AlertDialogHeader.displayName = "AlertDialogHeader";
+
+const AlertDialogFooter = ({ className, children, ...props }: React.HTMLAttributes<HTMLDivElement>) => {
+  const { sheet } = useDialogFrame();
+  return (
+    <div
+      data-slot="alert-dialog-footer"
+      className={cn(
+        "flex flex-col-reverse gap-2 border-t pt-4 sm:flex-row sm:justify-end sm:border-t-0 sm:pt-0 [&>*]:min-h-11 [&>*]:w-full sm:[&>*]:w-auto",
+        sheet && dialogFrameClasses.sheetFooter,
+        sheet && countActions(children) === 2 && dialogFrameClasses.sheetFooterPair,
+        className
+      )}
+      {...props}
+    >
+      {children}
+    </div>
+  );
+};
 AlertDialogFooter.displayName = "AlertDialogFooter";
 
 const AlertDialogTitle = React.forwardRef<

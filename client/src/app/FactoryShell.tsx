@@ -21,9 +21,9 @@ import { WorkspaceRouteBoundary } from "@/components/ui/workspace-route-boundary
 import type { MyAccess } from "./factoryAccessGuard";
 import { canUseAdminSearch, type ShellUser } from "./shellUser";
 import { lazyRetry as lazy } from "@/lib/lazyRetry";
+import { PhoneSheetDialogs } from "@/components/ui/phone-sheet";
 import { useDocumentAppShell } from "@/hooks/use-document-app-shell";
 import { useVisualViewportMetrics } from "@/hooks/use-visual-viewport-metrics";
-import "@/mobile-shell-dialogs.css";
 import "@/factory-mobile-operations.css";
 
 const FactoryFrenchCatalogManager = lazy(() =>
@@ -96,68 +96,70 @@ export function FactoryShell({
   useMainContentFocus(currentLocation);
   // Fades the trailing edge of tab strips that still hide tabs (data-scroll-overflow).
   useScrollOverflowProbe(factoryContainerRef);
-  // Phone dialogs open as bottom sheets sized to the visible viewport (mobile-shell-dialogs.css),
-  // so the on-screen keyboard never hides their actions.
+  // Phone dialogs open as bottom sheets (PhoneSheetDialogs) sized to the visible viewport, so the
+  // on-screen keyboard never hides their actions.
   useDocumentAppShell("factory");
   useVisualViewportMetrics();
   const hasAdminSearch = canUseAdminSearch(user);
 
   return (
-    <AppModeProvider mode="factory">
-      <SkipLink>{t("accessibility.skipToMainContent")}</SkipLink>
-      <SidebarProvider style={style as React.CSSProperties}>
-        <div ref={factoryContainerRef} className="flex h-full w-full min-w-0 overflow-hidden">
-          {selectedCompany?.id && <DailyRateModal companyId={selectedCompany.id} />}
-          <FactorySidebar user={user} onLogout={handleLogout} />
-          <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-            <OfflineBanner />
-            <AppTopBar
-              accentColor={MODULE_ACCENT.factory}
-              user={{ username: user.username, role: user.role ?? "" }}
-              onLogout={handleLogout}
-              onSearchOpen={() => setPaletteOpen(true)}
-            />
-            <main
-              id="main-content"
-              tabIndex={-1}
-              aria-label="Factory and inventory workspace"
-              data-factory-workspace="true"
-              className={`flex-1 overflow-y-auto overscroll-y-contain outline-none ${factoryWorkspaceClasses}`}
-            >
-              <WorkspaceRouteBoundary
-                resetKey={currentLocation}
-                loadingTitle="Loading factory workspace"
-                loadingDescription="Preparing the latest factory and inventory information."
-                className="p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:p-6"
+    <PhoneSheetDialogs>
+      <AppModeProvider mode="factory">
+        <SkipLink>{t("accessibility.skipToMainContent")}</SkipLink>
+        <SidebarProvider style={style as React.CSSProperties}>
+          <div ref={factoryContainerRef} className="flex h-full w-full min-w-0 overflow-hidden">
+            {selectedCompany?.id && <DailyRateModal companyId={selectedCompany.id} />}
+            <FactorySidebar user={user} onLogout={handleLogout} />
+            <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+              <OfflineBanner />
+              <AppTopBar
+                accentColor={MODULE_ACCENT.factory}
+                user={{ username: user.username, role: user.role ?? "" }}
+                onLogout={handleLogout}
+                onSearchOpen={() => setPaletteOpen(true)}
+              />
+              <main
+                id="main-content"
+                tabIndex={-1}
+                aria-label="Factory and inventory workspace"
+                data-factory-workspace="true"
+                className={`flex-1 overflow-y-auto overscroll-y-contain outline-none ${factoryWorkspaceClasses}`}
               >
-                <FactoryCatalogLanguageSwitch />
-                <Suspense fallback={null}>
-                  {language === "fr" ? <FactoryFrenchCatalogManager /> : null}
-                  {isBilingualDocumentRoute ? <FactoryBilingualDocumentActions /> : null}
-                  <ErrorBoundary resetKey={`${currentLocation}:historical-replay-preview`}>
-                    {isRawStockRecalculateRoute ? (
-                      <>
-                        <HistoricalReplaySafetyPanel />
-                        <HistoricalReplayNetEffectPanel />
-                      </>
-                    ) : null}
-                  </ErrorBoundary>
-                </Suspense>
-                <FactoryRoutes user={user} myAccess={myAccess} factoryDefaultPage={factoryDefaultPage} />
-              </WorkspaceRouteBoundary>
-            </main>
+                <WorkspaceRouteBoundary
+                  resetKey={currentLocation}
+                  loadingTitle="Loading factory workspace"
+                  loadingDescription="Preparing the latest factory and inventory information."
+                  className="p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:p-6"
+                >
+                  <FactoryCatalogLanguageSwitch />
+                  <Suspense fallback={null}>
+                    {language === "fr" ? <FactoryFrenchCatalogManager /> : null}
+                    {isBilingualDocumentRoute ? <FactoryBilingualDocumentActions /> : null}
+                    <ErrorBoundary resetKey={`${currentLocation}:historical-replay-preview`}>
+                      {isRawStockRecalculateRoute ? (
+                        <>
+                          <HistoricalReplaySafetyPanel />
+                          <HistoricalReplayNetEffectPanel />
+                        </>
+                      ) : null}
+                    </ErrorBoundary>
+                  </Suspense>
+                  <FactoryRoutes user={user} myAccess={myAccess} factoryDefaultPage={factoryDefaultPage} />
+                </WorkspaceRouteBoundary>
+              </main>
+            </div>
           </div>
-        </div>
-      </SidebarProvider>
-      <CommandPalette
-        open={paletteOpen}
-        onOpenChange={setPaletteOpen}
-        hasErpAccess={false}
-        hasFactoryAccess={true}
-        isAdminOwner={hasAdminSearch}
-        user={user}
-      />
-      {leaveConfirmDialog}
-    </AppModeProvider>
+        </SidebarProvider>
+        <CommandPalette
+          open={paletteOpen}
+          onOpenChange={setPaletteOpen}
+          hasErpAccess={false}
+          hasFactoryAccess={true}
+          isAdminOwner={hasAdminSearch}
+          user={user}
+        />
+        {leaveConfirmDialog}
+      </AppModeProvider>
+    </PhoneSheetDialogs>
   );
 }

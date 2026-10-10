@@ -1,8 +1,8 @@
 import { useState, useRef } from "react";
 import { useMainContentFocus } from "@/hooks/use-main-content-focus";
+import { PhoneSheetDialogs } from "@/components/ui/phone-sheet";
 import { useDocumentAppShell } from "@/hooks/use-document-app-shell";
 import { useVisualViewportMetrics } from "@/hooks/use-visual-viewport-metrics";
-import "@/mobile-shell-dialogs.css";
 import { useScrollOverflowProbe } from "@/hooks/use-scroll-overflow-probe";
 import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
 import { AppModeProvider } from "@/contexts/AppModeContext";
@@ -32,54 +32,56 @@ export function PropertiesShell({ user, currentLocation, handleLogout, leaveConf
   useMainContentFocus(currentLocation);
   // Lets shell-scoped CSS (the phone notes launcher rule) target Properties like ERP and Factory.
   useDocumentAppShell("properties");
-  // Phone dialogs open as bottom sheets sized to the visible viewport (mobile-shell-dialogs.css).
+  // Phone dialogs open as bottom sheets (PhoneSheetDialogs) sized to the visible viewport.
   useVisualViewportMetrics();
   // Fades the trailing edge of tab strips that still hide tabs (data-scroll-overflow).
   useScrollOverflowProbe(propertiesContainerRef);
   const hasAdminSearch = canUseAdminSearch(user);
 
   return (
-    <AppModeProvider mode="properties">
-      <SkipLink>{t("accessibility.skipToMainContent")}</SkipLink>
-      <SidebarProvider style={style as React.CSSProperties}>
-        <div ref={propertiesContainerRef} className="flex h-full w-full min-w-0 overflow-hidden">
-          <PropertiesSidebar user={user} onLogout={handleLogout} />
-          <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-            <OfflineBanner />
-            <AppTopBar
-              accentColor={MODULE_ACCENT.properties}
-              user={{ username: user.username, role: user.role ?? "" }}
-              onLogout={handleLogout}
-              onSearchOpen={() => setPaletteOpen(true)}
-            />
-            <main
-              id="main-content"
-              tabIndex={-1}
-              aria-label="Properties workspace"
-              className="flex-1 overflow-y-auto overscroll-y-contain outline-none"
-            >
-              <WorkspaceRouteBoundary
-                resetKey={currentLocation}
-                loadingTitle="Loading properties workspace"
-                loadingDescription="Preparing the latest property and rental information."
-                className="p-3 sm:p-6"
+    <PhoneSheetDialogs>
+      <AppModeProvider mode="properties">
+        <SkipLink>{t("accessibility.skipToMainContent")}</SkipLink>
+        <SidebarProvider style={style as React.CSSProperties}>
+          <div ref={propertiesContainerRef} className="flex h-full w-full min-w-0 overflow-hidden">
+            <PropertiesSidebar user={user} onLogout={handleLogout} />
+            <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+              <OfflineBanner />
+              <AppTopBar
+                accentColor={MODULE_ACCENT.properties}
+                user={{ username: user.username, role: user.role ?? "" }}
+                onLogout={handleLogout}
+                onSearchOpen={() => setPaletteOpen(true)}
+              />
+              <main
+                id="main-content"
+                tabIndex={-1}
+                aria-label="Properties workspace"
+                className="flex-1 overflow-y-auto overscroll-y-contain outline-none"
               >
-                <PropertiesRoutes user={user} />
-              </WorkspaceRouteBoundary>
-            </main>
+                <WorkspaceRouteBoundary
+                  resetKey={currentLocation}
+                  loadingTitle="Loading properties workspace"
+                  loadingDescription="Preparing the latest property and rental information."
+                  className="p-3 sm:p-6"
+                >
+                  <PropertiesRoutes user={user} />
+                </WorkspaceRouteBoundary>
+              </main>
+            </div>
           </div>
-        </div>
-      </SidebarProvider>
-      <CommandPalette
-        open={paletteOpen}
-        onOpenChange={setPaletteOpen}
-        hasErpAccess={false}
-        hasFactoryAccess={false}
-        hasPropertiesAccess={true}
-        isAdminOwner={hasAdminSearch}
-        user={user}
-      />
-      {leaveConfirmDialog}
-    </AppModeProvider>
+        </SidebarProvider>
+        <CommandPalette
+          open={paletteOpen}
+          onOpenChange={setPaletteOpen}
+          hasErpAccess={false}
+          hasFactoryAccess={false}
+          hasPropertiesAccess={true}
+          isAdminOwner={hasAdminSearch}
+          user={user}
+        />
+        {leaveConfirmDialog}
+      </AppModeProvider>
+    </PhoneSheetDialogs>
   );
 }
