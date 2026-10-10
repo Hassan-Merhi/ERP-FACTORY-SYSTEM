@@ -31,7 +31,7 @@ concurrency:
 jobs:
   production-health:
     name: Production dependency / toolchain health
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 20
     steps:
       - name: Harden Runner (audit mode)
@@ -70,7 +70,7 @@ jobs:
   full-tooling-audit:
     name: Full dependency audit including dev tooling
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 20
     steps:
       - name: Harden Runner (audit mode)
