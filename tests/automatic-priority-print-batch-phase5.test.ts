@@ -74,7 +74,7 @@ beforeAll(async () => {
   orderId = loading.rows[0].id;
   const configured = await agent
     .put(`/api/factory/customer-orders/${orderId}/loading-list/priority-scan-config`)
-    .send({ color: "#dc2626", priority: 1, enabled: true });
+    .send({ color: "#B22222", priority: 1, enabled: true });
   expect(configured.status).toBe(200);
   const product = await pool.query<{ id: number }>(
     `INSERT INTO factory_bale_products
@@ -139,7 +139,7 @@ describe("Phase 5: atomic existing-bale print and reprint", () => {
     expect(res.body.results[0].priorityAllocation).toMatchObject({
       orderId,
       baleId: firstBale.id,
-      color: "#dc2626",
+      color: "#B22222",
       priority: 1,
       source: "reprint",
       existing: false,
@@ -158,7 +158,7 @@ describe("Phase 5: atomic existing-bale print and reprint", () => {
       expect(res.body.results).toHaveLength(1);
       expect(res.body.results[0].priorityAllocation).toMatchObject({
         orderId,
-        color: "#dc2626",
+        color: "#B22222",
         priority: 1,
         existing: true,
       });
@@ -175,7 +175,7 @@ describe("Phase 5: atomic existing-bale print and reprint", () => {
     expect(res.status).toBe(200);
     expect(res.body.results[0].priorityAllocation).toMatchObject({
       orderId,
-      color: "#dc2626",
+      color: "#B22222",
       priority: 1,
       existing: true,
     });
@@ -224,7 +224,7 @@ describe("Phase 5 review fixes: label-print endpoints and stale snapshots", () =
     ]);
     // Mode is OFF: the saved Red snapshot is returned, nothing new is allocated.
     expect(res.body.priorityAllocations).toHaveLength(1);
-    expect(res.body.priorityAllocations[0]).toMatchObject({ baleId: firstBale.id, orderId, color: "#dc2626" });
+    expect(res.body.priorityAllocations[0]).toMatchObject({ baleId: firstBale.id, orderId, color: "#B22222" });
     expect(await labelPrints()).toBe(before + 2);
     expect(await allocations()).toBe(1);
   }, 60000);
@@ -244,7 +244,7 @@ describe("Phase 5 review fixes: label-print endpoints and stale snapshots", () =
   it("/reprint returns the same saved assignment as the preflight", async () => {
     const res = await agent.post("/api/bale-label-prints/reprint").send({ baleId: firstBale.id });
     expect(res.status).toBe(200);
-    expect(res.body.priorityAllocation).toMatchObject({ orderId, color: "#dc2626", existing: true });
+    expect(res.body.priorityAllocation).toMatchObject({ orderId, color: "#B22222", existing: true });
     expect(await allocations()).toBe(1);
   }, 60000);
 
@@ -261,7 +261,7 @@ describe("Phase 5 review fixes: label-print endpoints and stale snapshots", () =
     );
     // Original evidence is kept (still Red) and marked reversed.
     expect(rows).toHaveLength(1);
-    expect(rows[0].color).toBe("#dc2626");
+    expect(rows[0].color).toBe("#B22222");
     expect(rows[0].reversed_at).not.toBeNull();
   }, 60000);
 });

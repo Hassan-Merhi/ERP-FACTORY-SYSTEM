@@ -22,17 +22,18 @@ import { customerOrderPriorityScanConfigs, customerOrders, factoryBales } from "
 import { runAutomaticPriorityPrintBatch, runAutomaticPriorityReprint } from "./priorityAutoAllocation";
 import { registerPriorityAllocationHistoryRoutes } from "./priorityAllocationHistoryRoutes";
 
-const MAX_COLOR_LENGTH = 64;
+import { isApprovedPriorityScanColor, PRIORITY_SCAN_COLORS } from "@shared/priorityScanColors";
+
 const MAX_PRIORITY = 10_000;
 const PRIORITY_SCAN_LIST_PATH = "/api/factory/customer-orders/loading-list/priority-scan-configs";
 const PRIORITY_SCAN_ORDER_PATH = "/api/factory/customer-orders/:id/loading-list/priority-scan-config";
 const PRIORITY_SCAN_ROUTE_PATH = "/api/factory/customer-orders/loading-list/priority-scan-route";
 
 function normalizeColor(raw: unknown): { color: string; colorKey: string } | null {
-  if (typeof raw !== "string") return null;
-  const color = raw.trim().replace(/\s+/g, " ");
-  if (!color || color.length > MAX_COLOR_LENGTH) return null;
-  return { color, colorKey: color.toLocaleLowerCase("en-US") };
+  if (!isApprovedPriorityScanColor(raw)) return null;
+  // Persist the approved canonical uppercase HEX value regardless of input casing.
+  const color = PRIORITY_SCAN_COLORS.find((preset) => preset.toLowerCase() === raw.toLowerCase())!;
+  return { color, colorKey: color.toLowerCase() };
 }
 
 function parsePriority(raw: unknown): number | null {
@@ -443,12 +444,18 @@ export function registerPriorityScanConfigRoutes(app: Express) {
       const orderId = parseId(req.params.id);
       if (orderId === null) return res.status(400).json({ message: "Invalid loading id" });
 
-      const normalizedColor = normalizeColor(req.body?.color);
-      if (!normalizedColor) {
-        return res.status(400).json({ message: "Color is required and must be 64 characters or fewer." });
+      // An existing legacy priority may be moved without recoloring it.
+      // Every create, re-enable or color edit still requires an approved color.
+      const moveOnly = req.body?.color === undefined && req.body?.enabled === true;
+      const normalizedRequestedColor = moveOnly ? null : normalizeColor(req.body?.color);
+      if (!moveOnly && !normalizedRequestedColor) {
+        return res.status(400).json({ message: "Priority color must be one of the 11 approved HEX colors." });
       }
 
       const canManagePriority = canManagePriorityPosition(req);
+      if (moveOnly && !canManagePriority) {
+        return res.status(403).json({ code: "PRIORITY_POSITION_ADMIN_ONLY", message: "Access denied" });
+      }
       if (!canManagePriority && req.body?.priority !== undefined) {
         return res.status(403).json({ code: "PRIORITY_POSITION_ADMIN_ONLY", message: "Access denied" });
       }
@@ -516,6 +523,8 @@ export function registerPriorityScanConfigRoutes(app: Express) {
             createdBy: customerOrderPriorityScanConfigs.createdBy,
             createdByName: customerOrderPriorityScanConfigs.createdByName,
             priority: customerOrderPriorityScanConfigs.priority,
+            color: customerOrderPriorityScanConfigs.color,
+            colorKey: customerOrderPriorityScanConfigs.colorKey,
             enabled: customerOrderPriorityScanConfigs.enabled,
           })
           .from(customerOrderPriorityScanConfigs)
@@ -526,6 +535,16 @@ export function registerPriorityScanConfigRoutes(app: Express) {
             )
           )
           .limit(1);
+
+        if (moveOnly && !existing[0]?.enabled) {
+          throw new PriorityScanConfigError(
+            409,
+            "Only an existing active priority can be moved without choosing a new color."
+          );
+        }
+        const normalizedColor = moveOnly
+          ? { color: existing[0]!.color, colorKey: existing[0]!.colorKey }
+          : normalizedRequestedColor!;
 
         const activeRows = await loadActivePriorityRows(tx, companyId);
         if (enabled && activeRows.some((row) => row.orderId !== orderId && row.colorKey === normalizedColor.colorKey)) {
