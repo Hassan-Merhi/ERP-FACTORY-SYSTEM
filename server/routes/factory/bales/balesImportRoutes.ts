@@ -5,7 +5,6 @@
  * first-match, so that order is behaviour.
  */
 import type { Express, Request, Response } from "express";
-import { toMoney } from "../../../lib/money";
 import { getErrorMessage } from "../../../lib/httpHandlers";
 import { logger } from "../../../lib/logger";
 import { parseId } from "../../../lib/parseId";
@@ -25,7 +24,7 @@ import {
   factoryBaleImportBatches,
 } from "@shared/schema";
 import { eq, and, asc, desc, sql, inArray, ilike } from "drizzle-orm";
-import { MoneyDecimal, parseMoneyInput } from "../../../lib/money";
+import { lineAmount, MoneyDecimal, parseMoneyInput } from "../../../lib/money";
 
 export function registerBalesImportRoutes(app: Express) {
   // ───────────────────────────────────────────────
@@ -260,7 +259,7 @@ export function registerBalesImportRoutes(app: Express) {
           // An imported bale's cost per kg is read as USD (the bale cost basis).
           const costPerKg = bale.costPerKg || "0";
           const weight = parseFloat(bale.weightKg);
-          const totalCost = toMoney(bale.weightKg).times(toMoney(costPerKg)).toDecimalPlaces(7).toFixed(7);
+          const totalCost = lineAmount(bale.weightKg, costPerKg).toDecimalPlaces(7).toFixed(7);
 
           await db.insert(factoryBales).values({
             companyId,

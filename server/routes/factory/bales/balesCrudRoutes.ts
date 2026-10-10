@@ -1,3 +1,4 @@
+import { lineAmount } from "../../../lib/money";
 import { normalizeSearchText } from "@shared/searchNormalization";
 /**
  * factoryBalesRoutes: BalesCrud endpoints.
@@ -570,8 +571,8 @@ export function registerBalesCrudRoutes(app: Express) {
 
         if (!bale) throw new Error("Bale not found");
 
-        const costPerKg = parseFloat(bale.costPerKg || "0");
-        const newTotalCost = (rawWeight * costPerKg).toFixed(2);
+        // Exact weight x rate, rounded once: 3.000 kg at 1.115 is 3.35, not 3.34.
+        const newTotalCost = lineAmount(newWeightStr, bale.costPerKg).toFixed(2);
         const oldWeight = parseFloat(bale.weightKg || "0");
 
         // 1. Update the bale itself

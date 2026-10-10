@@ -30,6 +30,7 @@ import {
 import { resolvePoImportCreditTarget } from "../../services/accounting/poImportAccounting";
 import { supplierService } from "../suppliers/supplierService";
 import { collectPreviewItemErrors, findPreviewContainer, type PoImportPreviewItem } from "./po-import-preview";
+import { allocatePoCharges } from "./poChargeAllocation";
 
 export function registerPoImportRoutes(app: Express) {
   app.post("/api/po-import/validate", requireAuth, async (req, res) => {
@@ -335,65 +336,37 @@ export function registerPoImportRoutes(app: Express) {
         containerDiscount > 0 ||
         containerOtherCharges > 0;
 
-      // Calculate total items value across all POs for pro-rating charges
-      const totalAllItemsValue = Object.values(poGroups).reduce(
-        (sum, items) => sum + items.reduce((s, item) => s + item.lineTotal, 0),
-        0
-      );
-
-      // Track allocated charges for remainder reconciliation
-      let allocatedFreight = 0,
-        allocatedSurcharge = 0,
-        allocatedFumigation = 0;
-      let allocatedDocCharges = 0,
-        allocatedDiscount = 0,
-        allocatedOtherCharges = 0;
+      // Split each container charge across the POs by item value, exact to the cent.
       const poEntries = Object.entries(poGroups);
+      const chargeSplits = allocatePoCharges(
+        poEntries.map(([, items]) => items.map((item) => item.lineTotal)),
+        {
+          freight: containerFreight,
+          surcharge: containerSurcharge,
+          fumigation: containerFumigation,
+          documentCharges: containerDocumentCharges,
+          discount: containerDiscount,
+          otherCharges: containerOtherCharges,
+        },
+        resolvedFreightPaidBy === "parent"
+      );
 
       // Create POs and line items
       for (let poIndex = 0; poIndex < poEntries.length; poIndex++) {
         const [poNumber, items] = poEntries[poIndex];
-        const isLastPO = poIndex === poEntries.length - 1;
         const poItems = items;
-        const poItemsTotal = poItems.reduce((sum, item) => sum + item.lineTotal, 0);
-
-        // Pro-rate charges based on this PO's items proportion of total
-        const proportion = totalAllItemsValue > 0 ? poItemsTotal / totalAllItemsValue : 0;
-
-        // For last PO, assign remainder to ensure totals match exactly
-        let poFreight, poSurcharge, poFumigation, poDocumentCharges, poDiscount, poOtherCharges;
-        if (isLastPO) {
-          poFreight = Math.round((containerFreight - allocatedFreight) * 100) / 100;
-          poSurcharge = Math.round((containerSurcharge - allocatedSurcharge) * 100) / 100;
-          poFumigation = Math.round((containerFumigation - allocatedFumigation) * 100) / 100;
-          poDocumentCharges = Math.round((containerDocumentCharges - allocatedDocCharges) * 100) / 100;
-          poDiscount = Math.round((containerDiscount - allocatedDiscount) * 100) / 100;
-          poOtherCharges = Math.round((containerOtherCharges - allocatedOtherCharges) * 100) / 100;
-        } else {
-          poFreight = Math.round(containerFreight * proportion * 100) / 100;
-          poSurcharge = Math.round(containerSurcharge * proportion * 100) / 100;
-          poFumigation = Math.round(containerFumigation * proportion * 100) / 100;
-          poDocumentCharges = Math.round(containerDocumentCharges * proportion * 100) / 100;
-          poDiscount = Math.round(containerDiscount * proportion * 100) / 100;
-          poOtherCharges = Math.round(containerOtherCharges * proportion * 100) / 100;
-          // Track allocated amounts
-          allocatedFreight += poFreight;
-          allocatedSurcharge += poSurcharge;
-          allocatedFumigation += poFumigation;
-          allocatedDocCharges += poDocumentCharges;
-          allocatedDiscount += poDiscount;
-          allocatedOtherCharges += poOtherCharges;
-        }
-
-        // Calculate grand total (items + all charges - discount)
-        const poChargesTotal = poFreight + poSurcharge + poFumigation + poDocumentCharges - poDiscount + poOtherCharges;
-        const poGrandTotal = poItemsTotal + poChargesTotal;
-
-        // When freight is paid by parent, exclude freight from the subsidiary's supplier balance
-        const poIntercoTotal =
-          resolvedFreightPaidBy === "parent" && poFreight > 0
-            ? poItemsTotal + poSurcharge + poFumigation + poDocumentCharges - poDiscount + poOtherCharges
-            : poGrandTotal;
+        const {
+          itemsTotal: poItemsTotal,
+          freight: poFreight,
+          surcharge: poSurcharge,
+          fumigation: poFumigation,
+          documentCharges: poDocumentCharges,
+          discount: poDiscount,
+          otherCharges: poOtherCharges,
+          grandTotal: poGrandTotal,
+          // When freight is paid by parent, exclude freight from the subsidiary's supplier balance
+          intercoTotal: poIntercoTotal,
+        } = chargeSplits[poIndex];
 
         // Create voucher for this PO
         // If subsidiary with parent credit account: entries created here at import time
@@ -437,7 +410,7 @@ export function registerPoImportRoutes(app: Express) {
           }
 
           const hasParentFreight =
-            resolvedFreightPaidBy === "parent" && resolvedFreightParentAccountId && poFreight > 0;
+            resolvedFreightPaidBy === "parent" && resolvedFreightParentAccountId && poFreight.gt(0);
           if (hasParentFreight) {
             const freightAccount = await storage.getLedgerAccountById(resolvedFreightParentAccountId);
             if (!freightAccount || freightAccount.companyId !== linkedParentCompanyId || freightAccount.deletedAt) {
@@ -494,7 +467,7 @@ export function registerPoImportRoutes(app: Express) {
                 voucherType: "Journal",
                 voucherDate: importDate,
                 description: `${containerNumber} ${supplier?.legalName || "Unknown"}`,
-                totalAmount: intercoParentTotal.toString(),
+                totalAmount: intercoParentTotal.toFixed(2),
                 optional: false,
                 sourceModule: "ERP",
                 currency: "USD",
@@ -643,7 +616,7 @@ export function registerPoImportRoutes(app: Express) {
             // When freight is parent-paid, the full grossTotal (including freight) is credited
             // to the parent account — the parent will settle freight with the freight company.
             const subsidiaryVoucherAmount =
-              resolvedFreightPaidBy === "parent" && poFreight > 0 ? poGrandTotal : poIntercoTotal;
+              resolvedFreightPaidBy === "parent" && poFreight.gt(0) ? poGrandTotal : poIntercoTotal;
             localEntries.push({
               ledgerAccountId: purchasesAccount.id,
               debitAmount: subsidiaryVoucherAmount.toFixed(2),
@@ -683,7 +656,7 @@ export function registerPoImportRoutes(app: Express) {
           //   DR Purchases (freight)       CR FreightAccount (freight)  ← freight payable
           // Otherwise use grandTotal for both legs (supplier carries freight in their price).
           const hasParentFreight =
-            resolvedFreightPaidBy === "parent" && resolvedFreightParentAccountId && poFreight > 0;
+            resolvedFreightPaidBy === "parent" && resolvedFreightParentAccountId && poFreight.gt(0);
           const goodsAmount = hasParentFreight ? poIntercoTotal : poGrandTotal;
 
           // DR Purchases — goods portion
@@ -747,7 +720,7 @@ export function registerPoImportRoutes(app: Express) {
             voucherType: "Purchase",
             voucherDate: importDate,
             description: `${containerNumber} ${supplier?.legalName || "Unknown"}`,
-            totalAmount: (resolvedFreightPaidBy === "parent" ? poGrandTotal : poIntercoTotal).toString(),
+            totalAmount: (resolvedFreightPaidBy === "parent" ? poGrandTotal : poIntercoTotal).toFixed(2),
             optional: false,
             sourceModule: "ERP",
           };
@@ -781,13 +754,13 @@ export function registerPoImportRoutes(app: Express) {
             supplierId,
             voucherId: voucher.id,
             currency: poItems[0]?.currency,
-            itemsTotal: poItemsTotal.toString(),
-            freight: poFreight.toString(),
-            surcharge: poSurcharge.toString(),
-            fumigation: poFumigation.toString(),
-            documentCharges: poDocumentCharges.toString(),
-            discount: poDiscount.toString(),
-            otherCharges: poOtherCharges.toString(),
+            itemsTotal: poItemsTotal.toFixed(),
+            freight: poFreight.toFixed(2),
+            surcharge: poSurcharge.toFixed(2),
+            fumigation: poFumigation.toFixed(2),
+            documentCharges: poDocumentCharges.toFixed(2),
+            discount: poDiscount.toFixed(2),
+            otherCharges: poOtherCharges.toFixed(2),
             chargesEdited: hasAnyCharges,
             freightPaidBy: resolvedFreightPaidBy,
             freightParentAccountId: resolvedFreightPaidBy === "parent" ? resolvedFreightParentAccountId : null,

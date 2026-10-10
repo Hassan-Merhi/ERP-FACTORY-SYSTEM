@@ -857,6 +857,18 @@ main brought Retail Wave 2 (customers, discounts, tax, stock counts, #2069), 2bf
 - **Tests:** `tests/stock-adjustment-inventory-side.test.ts` rewritten (periodic posting before the cut-over, one Mixed net line through an edit, nothing for an optional; not a boot step; unauthenticated refused; plan/stale hash/closed period/apply/audit/second plan empty; a credit-note INVENTORY row blocks the plan and is not renamed or retyped). Gate tests, all `tests/wave*`, retail*, stock-adjustment*, stock-transfer*, perpetual-inventory*, voucher-balance-guard, account-statement*, accounts-all*, pos-*, factory-agent* and every test main added or changed pass.
 - **Production steps:** none required. An Owner may preview `GET /api/accounting/stock-adjustment-inventory-side/plan` per company and apply it if the balanced shape is wanted for the old vouchers; main's boot step must not be deployed.
 
+### Merge of main 059230f (2026-10-10)
+
+main brought #2135 "PO import charge split, bale costs and offload reversal in exact decimals": `server/routes/import/poChargeAllocation.ts` (`allocatePoCharges`, largest-remainder cents per charge), bale cost through `lineAmount` in the weight correction, the bale import and the re-import, and an exact legacy offload reversal. Our accounting semantics were kept where they conflicted.
+
+- **Conflicted files.**
+  - `server/routes/import/po-import.ts`: main's exact charge split (Decimal `poFreight` … `poIntercoTotal`) inside our flow: the local Purchase voucher header and its entries are still written together in one transaction (`localEntries` + `insertInfrastructureVoucherTx`); main's separate `storage.createVoucher` / `createVoucherEntry` calls were not kept. Voucher totals are written with `toFixed(2)`.
+  - `server/routes/containers/offload/recalc.ts`: ours (already exact through `buildItemMap`, with the sub-ledger delta, perpetual sync and voucher retirement); main's duplicate money imports dropped.
+  - `server/routes/factory/bales/balesImportRoutes.ts`: main's `lineAmount` at our 7 dp (wave 11: bale cost columns are numeric(20,7), not main's `toFixed(2)`), inside wave 16 B's one-transaction supplier import with audit.
+  - `config/float-money-baseline.json`: recounted, each file at most min(ours, main): total 926 -> 923 (`balesCrudRoutes.ts` 2, `balesReimportRoutes.ts` 4).
+- **Auto-merged, kept from main:** `balesCrudRoutes.ts` weight correction and `balesReimportRoutes.ts` re-import cost via `lineAmount`; `tests/po-charge-allocation.test.ts`, `tests/factory-bale-crud-write-routes.test.ts`.
+- **Production steps:** none.
+
 ## 7. Re-audit (2026-10-07, branch `claude/erp-accounting-audit-27nl3e` at `d151801`)
 
 Method: three independent read-only reviews of the code on the branch (posting and integrity; inventory and factory; chart of accounts, AR/AP, currency, multi-company and reporting). They verified the wave log against the code rather than taking it as given, and ran the targeted tests. The production database could not be queried: its IP allowlist is empty, so the 2026-10-06 production figures are the latest. **Production runs `main` (`9f2e4ce`); nothing on this branch is deployed.**
