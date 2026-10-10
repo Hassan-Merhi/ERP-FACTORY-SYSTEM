@@ -24,6 +24,7 @@ import {
   uniqueIndex,
   date,
   bigserial,
+  bigint,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { companies } from "../common";
@@ -510,6 +511,67 @@ export const factoryReplayConsumedTokens = pgTable(
   ]
 );
 
+/**
+ * Audit trail of physical stock deletion. The historical row has no foreign
+ * keys to bale or customer order, so cleanup cannot destroy this evidence.
+ * A unique company/bale key makes a second physical deletion impossible.
+ */
+export const factoryPhysicalBaleDeletions = pgTable(
+  "factory_physical_bale_deletions",
+  {
+    id: bigserial({ mode: "number" }).primaryKey().notNull(),
+    companyId: integer("company_id").notNull(),
+    baleId: integer("bale_id").notNull(),
+    referenceNumber: varchar("reference_number", { length: 100 }).notNull(),
+    previousStatus: text("previous_status").notNull(),
+    originalLocationId: integer("original_location_id"),
+    removedByUserId: text("removed_by_user_id"),
+    removedByName: text("removed_by_name").notNull(),
+    reason: text("reason").notNull(),
+    removedAt: timestamp("removed_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex("fpbd_company_bale_unique").on(table.companyId, table.baleId),
+    index("fpbd_company_removed_idx").on(table.companyId, table.removedAt.desc(), table.id.desc()),
+  ]
+);
+
+/**
+ * Permanent original assignment of an automatically allocated physical bale.
+ * Reversals annotate the old row without deleting it. If a still-physical bale\n * is later allocated again, that becomes a new timeline entry; at most one\n * active record exists per company/bale.
+ */
+export const factoryPriorityAutoAllocations = pgTable(
+  "factory_priority_auto_allocations",
+  {
+    id: bigserial({ mode: "number" }).primaryKey().notNull(),
+    companyId: integer("company_id").notNull(),
+    baleId: integer("bale_id").notNull(),
+    orderId: integer("order_id").notNull(),
+    referenceNumber: varchar("reference_number", { length: 100 }).notNull(),
+    priority: integer().notNull(),
+    color: varchar({ length: 64 }).notNull(),
+    allocationSource: varchar("allocation_source", { length: 32 }).notNull(),
+    proformaId: integer("proforma_id"),
+    articleCode: varchar("article_code", { length: 50 }),
+    assignedByUserId: text("assigned_by_user_id"),
+    assignedByName: text("assigned_by_name"),
+    historyId: bigint("history_id", { mode: "number" }),
+    allocatedAt: timestamp("allocated_at", { withTimezone: true }).defaultNow().notNull(),
+    reversedAt: timestamp("reversed_at", { withTimezone: true }),
+    reversedBy: text("reversed_by"),
+    reversedByUserId: text("reversed_by_user_id"),
+    reversalReason: text("reversal_reason"),
+  },
+  (table) => [
+    uniqueIndex("fpaa_company_bale_active_unique")
+      .on(table.companyId, table.baleId)
+      .where(sql`${table.reversedAt} IS NULL`),
+    index("fpaa_company_order_active_idx")
+      .on(table.companyId, table.orderId)
+      .where(sql`${table.reversedAt} IS NULL`),
+  ]
+);
+
 /** One Priority Scan per row: which bale was scanned into which loading, at which priority, on which day. */
 export const factoryPriorityScanHistory = pgTable(
   "factory_priority_scan_history",
@@ -525,6 +587,13 @@ export const factoryPriorityScanHistory = pgTable(
     color: varchar({ length: 64 }).notNull(),
     businessDate: date("business_date").notNull(),
     scannedBy: text("scanned_by"),
+    assignedByUserId: text("assigned_by_user_id"),
+    proformaId: integer("proforma_id"),
+    allocationSource: varchar("allocation_source", { length: 32 }).default("manual").notNull(),
+    reversedAt: timestamp("reversed_at", { withTimezone: true }),
+    reversedBy: text("reversed_by"),
+    reversedByUserId: text("reversed_by_user_id"),
+    reversalReason: text("reversal_reason"),
     scannedAt: timestamp("scanned_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [
@@ -535,5 +604,7 @@ export const factoryPriorityScanHistory = pgTable(
       table.scannedAt.desc().nullsFirst(),
       table.id.desc().nullsFirst()
     ),
+    index("fpsh_company_bale_timeline_idx").on(table.companyId, table.baleId, table.id.desc()),
+    index("fpsh_company_order_timeline_idx").on(table.companyId, table.orderId, table.id.desc()),
   ]
 );

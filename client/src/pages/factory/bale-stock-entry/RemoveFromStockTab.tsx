@@ -79,7 +79,9 @@ export function RemoveFromStockTab() {
   const { formatDisplayDate } = useDateFormat();
 
   const { data: workers = [] } = useQuery<WorkerOption[]>({ queryKey: ["/api/factory/workers?profile=picker"] });
-  const { data: baleProducts } = useQuery<FactoryBaleProduct[]>({ queryKey: ["/api/factory/bale-products?profile=picker"] });
+  const { data: baleProducts } = useQuery<FactoryBaleProduct[]>({
+    queryKey: ["/api/factory/bale-products?profile=picker"],
+  });
 
   const bulkUpdateNamesMutation = useMutation({
     mutationFn: async (file: File) => {
@@ -230,17 +232,28 @@ export function RemoveFromStockTab() {
         ],
       });
       if (!labelResponse.ok) throw new Error("Failed to create label");
-      const { labelPrints } = await labelResponse.json();
+      const { labelPrints, priorityAllocations = [] } = (await labelResponse.json()) as {
+        labelPrints: LabelPrintResult[];
+        priorityAllocations?: Array<{ baleId: number; color: string; orderId: number; priority: number }>;
+      };
+      const assignment = priorityAllocations.find((row) => row.baleId === bale.id);
       const labels: LabelData[] = labelPrints.map((lp: LabelPrintResult) => ({
         referenceNumber: lp.referenceNumber,
         articleCode: lp.articleCode || bale.articleCode || "",
         pieces: lp.pieces || 1,
-        approxWeightKg: lp.approxWeightKg || bale.weightKg || "0",
+        approxWeightKg: String(lp.approxWeightKg || bale.weightKg || "0"),
         productName: bale.productName || "",
+        ...(assignment
+          ? {
+              priorityColor: assignment.color,
+              priorityOrderId: assignment.orderId,
+              priorityNumber: assignment.priority,
+            }
+          : {}),
       }));
       const product = baleProducts?.find((p) => p.id === bale.productId);
-      const assignedColor = product?.labelDesignColor as A4DesignColor | null | undefined;
-      if (isZebraMode()) {
+      const assignedColor = (product?.labelDesignColor as A4DesignColor | null | undefined) ?? undefined;
+      if (isZebraMode() && !labels.some((label) => label.priorityColor)) {
         try {
           await printRawZpl(buildZplBatch(labels, true));
           toast({ title: "Label sent to Zebra printer" });
@@ -377,7 +390,7 @@ export function RemoveFromStockTab() {
 
   const removeMutation = useMutation({
     mutationFn: async () => {
-      const res = await modeApiRequest("POST", "/api/factory/bales/bulk-remove", {
+      const res = await modeApiRequest("POST", "/api/factory/stock-entry/remove", {
         baleIds: Array.from(selectedBaleIds),
         supervisorUsername,
         supervisorPassword,
@@ -390,11 +403,14 @@ export function RemoveFromStockTab() {
       return res.json();
     },
     onSuccess: (data) => {
-      toast({ title: "Success", description: `Removed ${data.removedCount} bale(s) from stock.` });
+      toast({ title: "Success", description: `Removed ${data.removed} bale(s) from stock.` });
       setSelectedBaleIds(new Set());
       setRemoveDialogOpen(false);
       queryClient.invalidateQueries({ queryKey: ["/api/factory/stock-entry/in-stock"] });
       queryClient.invalidateQueries({ queryKey: ["/api/factory/bales/daily-summary"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/factory/customer-orders/loading-list/priority-scan-configs"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/factory/customer-orders/loading-list"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/factory/customer-orders/loading-list/priority-scan-route"] });
     },
     onError: (err: Error) => {
       setAuthError(err.message);

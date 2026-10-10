@@ -8,6 +8,7 @@ import { Switch } from "@/components/ui/switch";
 import { ArrowRight, CheckCircle, Images, Loader2, MessageCircle, Save, ToggleRight, WifiOff } from "lucide-react";
 import type { FactorySettingsData } from "./types";
 import { FactorySettingsAdminTools } from "./FactorySettingsAdminTools";
+import { AutomaticPriorityPrintingCard } from "./AutomaticPriorityPrintingCard";
 import { MigrateVoucherDescriptionsCard } from "./components/MigrateVoucherDescriptionsCard";
 import { RecalculateBaleCostsCard } from "./components/RecalculateBaleCostsCard";
 import type { useFactorySettingsModel } from "./useFactorySettingsModel";
@@ -100,6 +101,8 @@ export function FactorySettingsView({ model }: Props) {
           </Button>
         </div>
       </div>
+
+      <AutomaticPriorityPrintingCard />
 
       <div className="grid gap-6 md:grid-cols-2">
         <Card>

@@ -14,6 +14,9 @@ import { db } from "../db";
 import { storage } from "../storage";
 import { requireAuth, requireRole } from "../auth";
 import { logAudit } from "./_helpers";
+import { getClientDate } from "../lib/dateUtils";
+import { deletePhysicalFactoryBalesTx, PhysicalBaleDeletionError } from "./factory/stock/physicalBaleDeletion";
+import { PRIORITY_SCAN_LOCK_NAMESPACE } from "./factory/customer-orders/priorityScanQueue";
 import {
   auditLog,
   baleLabelPrints,
@@ -699,37 +702,22 @@ export function registerBaleLookupRoutes(app: Express) {
           bale = baleMatches[0];
         }
 
-        // Guard: refuse if bale is on any finalized/locked non-deleted customer order.
-        // A deleted test/order must not keep a bale permanently locked.
-        const orderBaleRows = await db
-          .select({ orderId: customerOrderBales.orderId })
-          .from(customerOrderBales)
-          .where(sql`LOWER(TRIM(${customerOrderBales.baleReference})) = LOWER(TRIM(${referenceNumber}))`);
-
-        if (orderBaleRows.length > 0) {
-          const orderIds = [...new Set(orderBaleRows.map((row) => row.orderId))];
-          const orders = await db
-            .select({ status: customerOrders.status })
-            .from(customerOrders)
-            .where(
-              and(
-                inArray(customerOrders.id, orderIds),
-                eq(customerOrders.companyId, companyId),
-                isNull(customerOrders.deletedAt)
-              )
-            );
-          if (orders.some((order) => ["FINALIZED", "VERIFIED", "DISPATCHED", "SOLD"].includes(order.status))) {
-            return res
-              .status(409)
-              .json({ message: "This bale is linked to a finalized/locked order and cannot be deleted from here." });
-          }
-        }
-
-        const deletedAt = new Date();
-        await db
-          .update(factoryBales)
-          .set({ status: "DELETED", deletedAt, updatedAt: deletedAt })
-          .where(and(eq(factoryBales.id, bale.id), eq(factoryBales.companyId, companyId)));
+        // Same authoritative physical deletion as every other route: it refuses
+        // bales on verified/finalized loadings (409), reverses open loading links,
+        // totals and Priority Scan state, and posts one ERP decrement, canonical
+        // movement and daybook entry, all in one transaction.
+        const baleId = bale.id;
+        await db.transaction(async (tx) => {
+          await tx.execute(sql`SELECT pg_advisory_xact_lock(${PRIORITY_SCAN_LOCK_NAMESPACE}, ${companyId})`);
+          await deletePhysicalFactoryBalesTx(tx, {
+            companyId,
+            baleIds: [baleId],
+            actorId: req.session.userId == null ? null : String(req.session.userId),
+            actorName: String(req.session.username || req.session.userId || "unknown"),
+            reason: "Bale deleted everywhere from Barcode Lookup",
+            businessDate: getClientDate(req),
+          });
+        });
 
         // Write audit entry so "Deleted by" info is available on the barcode lookup
         await logAudit({
@@ -745,6 +733,9 @@ export function registerBaleLookupRoutes(app: Express) {
 
         res.json({ message: "Bale deleted from linked records" });
       } catch (error: unknown) {
+        if (error instanceof PhysicalBaleDeletionError) {
+          return res.status(error.status).json({ message: error.message });
+        }
         logger.error("Error deleting bale everywhere:", { error: error });
         res.status(500).json({ message: getErrorMessage(error) });
       }

@@ -1,3 +1,4 @@
+import { assertReprintMatchesPrepared, preparePriorityPrintLabels } from "@/lib/priorityPrintPreflight";
 import { useState } from "react";
 import { useAppMode } from "@/contexts/AppModeContext";
 import { getApiRequest } from "@/lib/factoryApi";
@@ -117,7 +118,7 @@ export function useFactoryLocationReprint(selectedLocation: Location | null) {
 
   const handleDoPrint = async () => {
     if (reprintBales.length === 0) return;
-    const labels: LabelData[] = reprintBales.map((row) => ({
+    let labels: LabelData[] = reprintBales.map((row) => ({
       referenceNumber: row.bale.referenceNumber || row.bale.baleCode || "",
       articleCode: row.product?.articleCode || row.bale.articleCode || row.bale.category || "",
       pieces: row.bale.quantity || 1,
@@ -125,16 +126,23 @@ export function useFactoryLocationReprint(selectedLocation: Location | null) {
       productName: row.bale.productName || row.product?.name || row.bale.category || "",
     }));
 
-    for (const row of reprintBales) {
-      try {
-        await modeApiRequest("POST", "/api/bale-label-prints/reprint", { baleId: row.bale.id });
-      } catch {
-        // Reprint audit failure is non-fatal and the existing print flow continues.
+    try {
+      labels = await preparePriorityPrintLabels(
+        labels,
+        modeApiRequest,
+        reprintBales.map((row) => row.bale.id)
+      );
+      for (const [index, row] of reprintBales.entries()) {
+        const response = await modeApiRequest("POST", "/api/bale-label-prints/reprint", { baleId: row.bale.id });
+        await assertReprintMatchesPrepared(response, labels[index]);
       }
+    } catch (error) {
+      toast({ title: "Reprint preparation failed", description: errorMessage(error), variant: "destructive" });
+      return;
     }
 
     setReprintDialogOpen(false);
-    if (isZebraMode()) {
+    if (isZebraMode() && !labels.some((label) => label.priorityColor)) {
       try {
         await printRawZpl(buildZplBatch(labels, true));
         toast({ title: `${labels.length} label(s) sent to Zebra printer` });
