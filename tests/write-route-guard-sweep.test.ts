@@ -60,6 +60,15 @@
  * supplier with any history and removes only the supplier row and its score
  * snapshots (tested in tests/phase19b-guards.test.ts).
  *
+ * The same phase 19 (A) change also removed three user-settings routes:
+ * PUT /api/erp-user-hidden-costs/:userId, PUT /api/erp-user-page-access/:userId
+ * and PUT /api/settings/role-permissions. They write user and role settings
+ * only, and were sensitive only because their owner file
+ * (admin/userManagementRoutes.ts) also held the EMP-* migration's direct
+ * voucher_entries update; that write now lives in
+ * services/accounting/legacyEmployeeAccountMigration.ts. Narrowing is right
+ * here, as with the stock-transfer revisions above.
+ *
  * The inventory below is written out rather than derived from the manifest at
  * runtime, for two reasons: the coverage audit looks for path literals in test
  * sources, and an explicit list is reviewable in a diff. The first test keeps
@@ -410,13 +419,10 @@ const SENSITIVE_WRITE_ROUTES = [
   "POST /api/vouchers/journal",
   "POST /api/vouchers/payment-receipt",
   "POST /api/vouchers/with-entries",
-  "PUT /api/erp-user-hidden-costs/:userId",
-  "PUT /api/erp-user-page-access/:userId",
   "PUT /api/factory/daybook/:entryId",
   "PUT /api/factory/pos/sales/:id",
   "PUT /api/intercompany-links/:id",
   "PUT /api/ledger-accounts/:id",
-  "PUT /api/settings/role-permissions",
   "PUT /api/sp/migration/cutover",
   "PUT /api/stock-transfers/:id",
   "PUT /api/vouchers/:id/with-entries",
