@@ -16,6 +16,8 @@
 import { db } from "../db";
 import { customers, customerOrders, customerBalances, vouchers, voucherEntries } from "@shared/schema";
 import { eq, and, sql } from "drizzle-orm";
+import type Decimal from "decimal.js";
+import { sumMoney } from "./money";
 
 export interface FactoryCustomerLedgerEntry {
   id: string;
@@ -207,15 +209,11 @@ export async function getFactoryCustomerLedgerPrePeriodTotals(
   ledgerAccountId: number | null,
   companyId: number,
   startDate: string
-): Promise<{ debit: number; credit: number }> {
+): Promise<{ debit: Decimal; credit: Decimal }> {
   const entries = await buildFactoryCustomerLedgerEntries(customerId, ledgerAccountId, companyId, undefined, undefined);
-  let d = 0;
-  let c = 0;
-  for (const e of entries) {
-    if (e.voucherDate < startDate) {
-      d += parseFloat(e.debitAmount || "0") || 0;
-      c += parseFloat(e.creditAmount || "0") || 0;
-    }
-  }
-  return { debit: d, credit: c };
+  const prior = entries.filter((e) => e.voucherDate < startDate);
+  return {
+    debit: sumMoney(prior.map((e) => e.debitAmount)),
+    credit: sumMoney(prior.map((e) => e.creditAmount)),
+  };
 }

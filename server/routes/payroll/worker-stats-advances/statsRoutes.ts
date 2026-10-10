@@ -7,6 +7,7 @@ import { requireAuth } from "../../../auth";
 import { eq, and, desc } from "drizzle-orm";
 import { factoryWorkers, factoryBales, factoryPayrolls } from "@shared/schema";
 import { getFactoryCompanyId } from "./helpers";
+import { MoneyDecimal, lineAmount, sumMoney, toMoney } from "../../../lib/money";
 
 export function registerWorkerStatsRoutes(app: Express) {
   app.get("/api/factory/workers/:id/stats", requireAuth, async (req: Request, res: Response) => {
@@ -31,17 +32,17 @@ export function registerWorkerStatsRoutes(app: Express) {
         .where(and(eq(factoryBales.finalizedBy, id), eq(factoryBales.companyId, companyId)));
 
       const totalBales = bales.length;
-      const totalKg = bales.reduce((sum: number, b) => sum + parseFloat(b.weightKg || "0"), 0);
+      const totalKg = sumMoney(bales.map((b) => b.weightKg));
 
-      let estimatedEarnings = 0;
+      let estimatedEarnings = new MoneyDecimal(0);
       const salaryType = worker.salaryType || "Monthly";
 
       if (salaryType === "Per Bale") {
-        estimatedEarnings = totalBales * parseFloat(worker.perBaleRate || "0");
+        estimatedEarnings = lineAmount(totalBales, worker.perBaleRate);
       } else if (salaryType === "Per KG") {
-        estimatedEarnings = totalKg * parseFloat(worker.perKgRate || "0");
+        estimatedEarnings = lineAmount(totalKg, worker.perKgRate);
       } else if (salaryType === "Monthly" || salaryType === "Daily") {
-        estimatedEarnings = parseFloat(worker.baseSalary || "0");
+        estimatedEarnings = toMoney(worker.baseSalary);
       }
 
       const payrolls = await db
@@ -50,7 +51,7 @@ export function registerWorkerStatsRoutes(app: Express) {
         .where(and(eq(factoryPayrolls.workerId, id), eq(factoryPayrolls.companyId, companyId)))
         .orderBy(desc(factoryPayrolls.periodEnd));
 
-      const totalPaid = payrolls.reduce((sum: number, p) => sum + parseFloat(p.netSalary || "0"), 0);
+      const totalPaid = sumMoney(payrolls.map((p) => p.netSalary));
 
       res.json({
         workerId: id,

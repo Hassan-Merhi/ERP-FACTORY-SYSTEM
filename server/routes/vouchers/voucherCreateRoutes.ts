@@ -19,6 +19,7 @@ import { eq, and } from "drizzle-orm";
 
 import Decimal from "decimal.js";
 import { normalizeVoucherEntryAmounts } from "../../services/accounting/currencyAmounts";
+import { toMoney } from "../../lib/money";
 import { PostingValidationError } from "../../services/accounting/centralPostingEngine";
 import {
   validateManualVoucherEntryAmounts,
@@ -233,8 +234,7 @@ export function registerVoucherCreateRoutes(app: Express) {
             try {
               const debitAmt = String(entry.debitAmount || "0");
               const creditAmt = String(entry.creditAmount || "0");
-              const totalAmt = parseFloat(debitAmt) + parseFloat(creditAmt);
-              if (totalAmt > 0) {
+              if (toMoney(debitAmt).plus(toMoney(creditAmt)).gt(0)) {
                 const norm = normalizeVoucherEntryAmounts({
                   transactionCurrency: voucherCurrency,
                   baseCurrency: "USD",

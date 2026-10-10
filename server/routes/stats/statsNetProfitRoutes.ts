@@ -23,6 +23,7 @@ import { storage } from "../../storage";
 import { getSupplierPartnerPosProfit } from "./realizedProfit";
 import { loadSalaryAdvanceNetPositionAdjustments } from "../../helpers/salaryAdvanceNetPosition";
 import { isInventoryValuationOnlyAccount } from "../../lib/inventoryPnlAccounts";
+import { sumMoney, toMoney } from "../../lib/money";
 
 export function registerStatsNetProfitRoutes(app: Express) {
   app.get("/api/stats/net-profit", requireAuth, requireNonPOS, async (req, res) => {
@@ -372,7 +373,7 @@ export function registerStatsNetProfitRoutes(app: Express) {
       // that cannot be reconstructed reliably from voucher history/opening_balance_side.
       // Keep it as one net control account, scoped to Employee rows only.
       const payrollSignedBalance = round2(
-        payrollEmployees.reduce((sum, employee) => sum + parseFloat(employee.currentBalance || "0"), 0)
+        sumMoney(payrollEmployees.map((employee) => employee.currentBalance)).toNumber()
       );
 
       // Worker advances have their own authoritative lifecycle table. Do not rebuild
@@ -529,14 +530,13 @@ export function registerStatsNetProfitRoutes(app: Express) {
           .where(otwContainersQuery)
           .execute();
 
-        let stockOtwValue = 0;
-        for (const container of otwContainers) {
-          // Use numeric OR so that grandTotal="0" (DB default) falls through to itemsTotal.
-          // String OR ("0" || itemsTotal) would never reach itemsTotal because "0" is truthy.
-          const gTotal = parseFloat(container.grandTotal ?? "0");
-          const containerValue = gTotal || parseFloat(container.itemsTotal ?? "0");
-          stockOtwValue += containerValue;
-        }
+        // A zero grandTotal (the DB default) falls through to itemsTotal.
+        const stockOtwValue = sumMoney(
+          otwContainers.map((container) => {
+            const gTotal = toMoney(container.grandTotal);
+            return gTotal.isZero() ? toMoney(container.itemsTotal) : gTotal;
+          })
+        ).toNumber();
 
         if (stockOtwValue > 0) {
           forUsTotal += stockOtwValue;
