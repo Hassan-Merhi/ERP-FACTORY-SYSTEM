@@ -335,8 +335,8 @@ export default function Customers() {
         </Dialog>
       </PageHeader>
 
-      {/* Stats pills */}
-      <div className="flex flex-wrap gap-3">
+      {/* Stats pills: a two-column grid on phones so no pill is orphaned on its own row. */}
+      <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:gap-3 [&>*]:min-w-0">
         {isLoading ? (
           <>
             <Skeleton className="h-10 w-40 rounded-lg" />
@@ -399,7 +399,7 @@ export default function Customers() {
 
       {/* Table */}
       <div className="border rounded-xl overflow-hidden">
-        <Table>
+        <Table mobileLayout="cards">
           <TableHeader>
             <TableRow className="bg-muted/40 hover:bg-muted/40">
               <TableHead className="text-xs h-9 font-semibold">Customer</TableHead>

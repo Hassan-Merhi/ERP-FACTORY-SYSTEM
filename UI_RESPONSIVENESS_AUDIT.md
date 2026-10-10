@@ -279,7 +279,18 @@ The single page with defects at three sizes.
 | Entry inputs | `min-w-[10rem]` on the account cell and `min-w-[7rem]` on the amount cell; let the entry table scroll sideways rather than shrink. | No "Typ" / "0.(" at any size. |
 | Apply to all three modules | The same components serve `/vouchers`, `/factory/vouchers`, `/properties/vouchers`; verify all three. | Rendered smoke passes on all three at the six sizes. |
 
-### Phase 5 — Properties and Factory phone parity (two to three days)
+### Phase 5 — Properties and Factory phone parity (two to three days) — DONE (scoped)
+
+Shipped on this branch:
+
+- **Properties now uses the ERP phone contract.** The rental and payments-log pages were already built on the shared ERP components but gated them to ERP/Factory mode; Properties mode now gets the same `PageHeader` (accent bar, icon, subtitle), the phone card lists with one primary action plus an Actions menu, and the two-column summary grid. `useMobileCardTable` accepts Properties as a card-table mode, so every `mobileLayout="cards"` table restacks on Properties phones as it does in ERP and Factory.
+- **Properties KPI tiles.** The combined Outstanding/Credit card that overflowed at tablet widths is two tiles; the desktop grid is six equal tiles (`2 / sm:3 / xl:6`).
+- **Customers** uses card rows on phones (the empty state and the populated list now match Stock Items) and lays its KPI chips out as a two-column grid below `sm`, so no chip is orphaned.
+- **Containers OTW** KPI tiles: an odd last tile spans the phone row instead of sitting alone.
+- **Factory hubs:** Payroll & Benefits and Invoicing render their title through the shared `PageHeader` inside the hub strip. The Parties, Bales and Containers hubs have no title strip at all (tabs only), so they were left as they are; converting them is a design decision for the Factory owners rather than a parity fix.
+
+Verified with the rendered harness on Properties (phone, tablet), ERP Customers and Containers (phone) and the two Factory hubs (phone, tablet, desktop): no overflow, no off-screen controls, cards and headers present. `tsc --noEmit`, prettier, eslint and the related suites (18 files, ~700 tests) pass; one card-table test was updated to expect Properties cards and to use POS as the non-card mode.
+
 
 | Item | Change | Done when |
 | --- | --- | --- |

@@ -13,7 +13,7 @@ import "@/mobile-card-table.css";
  * through `labelMobileCardCells`, so pages keep a single table markup for every breakpoint.
  */
 
-const CARD_TABLE_MODES: ReadonlySet<string> = new Set(["erp", "factory"]);
+const CARD_TABLE_MODES: ReadonlySet<string> = new Set(["erp", "factory", "properties"]);
 
 const normalise = (text: string | null | undefined) => (text ?? "").replace(/\s+/g, " ").trim();
 
@@ -124,7 +124,7 @@ export function labelMobileCardCells(table: HTMLTableElement) {
 export function useMobileCardTable(enabled = true) {
   const isPhone = useErpPhoneLayout();
   const appMode = useAppMode();
-  // ERP and Factory share the card presentation; other modes keep their established tables.
+  // ERP, Factory and Properties share the card presentation; POS keeps its established tables.
   const cards = enabled && isPhone && CARD_TABLE_MODES.has(appMode);
   const [table, setTable] = React.useState<HTMLTableElement | null>(null);
 

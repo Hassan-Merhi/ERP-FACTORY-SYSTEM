@@ -82,8 +82,9 @@ export default function RentalPaymentsLog({
   const { selectedCompany } = useCompany();
   const { toast } = useToast();
   const appMode = useAppMode();
-  const isErp = appMode === "erp";
-  // ERP and Factory phones restack the payments table as cards (Properties keeps the table).
+  // ERP and Properties share the page-header contract; Factory keeps its hub strip.
+  const isErp = appMode === "erp" || appMode === "properties";
+  // Phones restack the payments table as cards in every mode.
   const { tableProps: cardTableProps } = useMobileCardTable();
   const [search, setSearch] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<PaymentRow | null>(null);
