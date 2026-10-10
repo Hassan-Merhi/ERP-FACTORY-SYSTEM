@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
+import { useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
@@ -26,7 +27,9 @@ function getSavedPos(): { x: number; y: number } {
   } catch {
     // Storage is unavailable in private mode and can throw on quota; the value is a convenience, not state we need.
   }
-  return { x: 20, y: window.innerHeight - 120 };
+  // High enough to clear the sticky action bars (POS checkout, voucher totals) that sit at the
+  // bottom of the workspace; the x is pushed inside the content column once the shell mounts.
+  return { x: 20, y: window.innerHeight - 170 };
 }
 
 /** Opens the notes panel from other surfaces (the ERP phone workspace menu). */
@@ -49,6 +52,49 @@ export function UserNotesPanel() {
   const [draft, setDraft] = useState<string | null>(null);
   const [savedRecently, setSavedRecently] = useState(false);
   const [pos, setPos] = useState<{ x: number; y: number }>(getSavedPos);
+  const [currentLocation] = useLocation();
+
+  // Keep the launcher inside the content column. The default (and any saved) position sat at
+  // x=20, which is over the pinned sidebar's footer and nav links on desktops and tablets. When
+  // the workspace's left edge is to the right of the button, move it just inside that edge; the
+  // ResizeObserver covers sidebar expand/collapse, which changes the edge without a window resize.
+  useEffect(() => {
+    let main: HTMLElement | null = null;
+    let retry: ReturnType<typeof setTimeout> | null = null;
+    let observer: ResizeObserver | null = null;
+    const relocate = () => {
+      if (!main) return;
+      const left = Math.round(main.getBoundingClientRect().left);
+      setPos((current) => {
+        const next = {
+          x: left > 0 && current.x < left + 8 ? left + 16 : current.x,
+          y: Math.min(current.y, window.innerHeight - 56),
+        };
+        return next.x === current.x && next.y === current.y ? current : next;
+      });
+    };
+    // This panel mounts on idle, which on heavier routes can be before the lazy shell has
+    // rendered its workspace; keep looking for it instead of giving up.
+    const attach = () => {
+      main = document.getElementById("main-content");
+      if (!main) {
+        retry = setTimeout(attach, 250);
+        return;
+      }
+      relocate();
+      if (typeof ResizeObserver !== "undefined") {
+        observer = new ResizeObserver(relocate);
+        observer.observe(main);
+      }
+    };
+    attach();
+    window.addEventListener("resize", relocate);
+    return () => {
+      if (retry) clearTimeout(retry);
+      window.removeEventListener("resize", relocate);
+      observer?.disconnect();
+    };
+  }, [currentLocation]);
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const savedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);

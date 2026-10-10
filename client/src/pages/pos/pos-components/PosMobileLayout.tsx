@@ -135,7 +135,7 @@ export function PosMobileLayout({
   return (
     <div
       data-pos-mobile-page="true"
-      className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-y-contain pb-[calc(7.5rem+env(safe-area-inset-bottom))] lg:hidden"
+      className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-y-contain lg:hidden"
     >
       <section
         className="sticky top-0 z-30 border-b bg-background/95 px-3 pb-3 pt-3 shadow-sm backdrop-blur sm:px-4"
@@ -530,9 +530,11 @@ export function PosMobileLayout({
         returnFocusRef={mobileSearchInputRef}
       />
 
+      {/* Sticky inside the POS scroller (not viewport-fixed), so on a tablet with the sidebar pinned the
+          bar spans the content column instead of painting over the sidebar footer. */}
       <div
         data-pos-mobile-checkout="true"
-        className="fixed inset-x-0 bottom-0 z-40 border-t bg-background/95 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 shadow-[0_-8px_24px_rgba(0,0,0,0.08)] backdrop-blur lg:hidden"
+        className="sticky bottom-0 z-40 mt-auto border-t bg-background px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 shadow-[0_-8px_24px_rgba(0,0,0,0.08)] lg:hidden"
       >
         <div className="mx-auto flex w-full max-w-3xl items-center gap-3">
           <div className="min-w-0 flex-1">

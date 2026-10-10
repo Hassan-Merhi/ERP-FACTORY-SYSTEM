@@ -223,7 +223,17 @@ No component logic changes; every item is a class or a few lines of CSS.
 | Tab-strip edge fade | Add a right-edge gradient mask (`mask-image: linear-gradient(to right, #000 90%, transparent)`) to `.erp-mobile-scroll-tabs` and `[data-factory-scroll-tabs]` when scrollable. | "Contai…" on `/inventory` phone shows a visible fade instead of a hard cut. |
 | POS "Select Cash" truncation | Give the cash-account `SelectTrigger` `min-w-[9rem]` and let the row wrap below `md`. | Label fully visible at 768 and 390. |
 
-### Phase 2 — Floating and fixed elements (half a day)
+### Phase 2 — Floating and fixed elements (half a day) — DONE
+
+Shipped on this branch:
+
+- **Notes launcher** keeps itself inside the content column: once the workspace mounts (it retries, because the panel mounts on idle and can beat the lazy shell on heavy routes) it moves any position left of `#main-content` to the column's edge, re-checks on sidebar expand/collapse via a ResizeObserver, and defaults 170px above the bottom so it clears sticky action bars. Measured at x=272 next to a 256px sidebar on every ERP, Factory and Properties tablet/desktop capture (was x=20, over the sidebar footer).
+- **Properties phones** hide the launcher and offer "My notes" in the workspace menu, as ERP and Factory already did (`PropertiesShell` now sets `data-app-shell="properties"`).
+- **POS checkout bar** is a sticky footer of the POS scroller instead of a viewport-fixed bar. Under the ERP shell the `/pos` canvas route now fills the workspace (`WorkspaceRouteBoundary fill`), so the bar pins to the bottom of the content column: it no longer paints over the sidebar on tablets, and on phones it sits above the ERP bottom nav instead of covering it.
+- **Voucher totals footer** is opaque (`bg-card`), so the Payment Total card no longer ghosts through it in phone landscape.
+
+Verified with the rendered harness on phone, phone landscape, tablet and desktop; `tsc --noEmit`, prettier, eslint and the related vitest suites (16 files) pass. One source-text test was updated for the new sticky contract.
+
 
 | Item | Change | Done when |
 | --- | --- | --- |

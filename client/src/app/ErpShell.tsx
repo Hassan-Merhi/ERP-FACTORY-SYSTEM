@@ -55,6 +55,9 @@ export function ErpShell({ user, hasErpAccess, handleLogout, leaveConfirmDialog 
   const hasAdminSearch = canUseAdminSearch(user);
   const erpContainerRef = useRef<HTMLDivElement>(null);
   const routePath = currentLocation.split("?")[0] || "/";
+  // The POS sale screen is a full-height canvas (its cart scrolls inside the page and pins its
+  // checkout bar), so it fills the workspace like it does in the POS shell instead of flowing.
+  const isPosCanvasRoute = routePath === "/pos" || routePath.startsWith("/pos/edit/");
   useMainContentFocus(currentLocation);
   useWorkspaceWheelScroll(erpContainerRef);
   // Fades the trailing edge of tab strips that still hide tabs (data-scroll-overflow).
@@ -93,11 +96,12 @@ export function ErpShell({ user, hasErpAccess, handleLogout, leaveConfirmDialog 
                   resetKey={currentLocation}
                   loadingTitle="Loading workspace"
                   loadingDescription="Preparing the latest ERP information."
+                  fill={isPosCanvasRoute}
                 >
                   <div
                     data-workspace-route={routePath}
                     data-erp-route={routePath}
-                    className="w-full min-w-0 max-w-full"
+                    className={isPosCanvasRoute ? "h-full w-full min-w-0 max-w-full" : "w-full min-w-0 max-w-full"}
                   >
                     <Router user={user} />
                   </div>

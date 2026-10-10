@@ -30,7 +30,7 @@ describe("Mobile responsiveness Phase 8 POS", () => {
     expect(header).toContain('className="hidden px-4 pt-4 lg:block"');
     expect(mobile).toContain('data-pos-mobile-page="true"');
     expect(mobile).toContain('data-pos-mobile-checkout="true"');
-    expect(mobile).toContain("fixed inset-x-0 bottom-0");
+    expect(mobile).toContain("sticky bottom-0 z-40 mt-auto");
     expect(mobile).toContain("env(safe-area-inset-bottom)");
     expect(mobile).toContain('data-testid="button-mobile-checkout"');
   });

@@ -415,3 +415,13 @@ body {
   -webkit-mask-image: linear-gradient(to right, transparent, #000 2.5rem, #000 calc(100% - 2.5rem), transparent);
   mask-image: linear-gradient(to right, transparent, #000 2.5rem, #000 calc(100% - 2.5rem), transparent);
 }
+
+/*
+ * Properties phones: the floating notes launcher covered dashboard and rental cards; the
+ * workspace menu offers "My notes" there instead (same arrangement as the ERP and Factory shells).
+ */
+@media (max-width: 639px), (hover: none) and (pointer: coarse) and (max-height: 500px) {
+  html[data-app-shell="properties"] [data-testid="button-open-user-notes"] {
+    display: none !important;
+  }
+}
