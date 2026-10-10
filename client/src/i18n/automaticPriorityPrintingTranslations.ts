@@ -4,6 +4,11 @@ type Translation = Record<ApplicationLanguage, string>;
 
 /** Automatic Priority Printing & Loading: Factory UI and API messages. */
 const translations: Record<string, Translation> = {
+  "Automatic Priority Printing": {
+    en: "Automatic Priority Printing",
+    ar: "الطباعة التلقائية حسب الأولوية",
+    fr: "Impression automatique par priorité",
+  },
   "Unrecognized Priority Scan label color for ${label.referenceNumber}. Printing cancelled.": {
     en: "Unrecognized Priority Scan label color for ${label.referenceNumber}. Printing cancelled.",
     ar: "لون ملصق المسح حسب الأولوية غير معروف للمرجع ${label.referenceNumber}. تم إلغاء الطباعة.",
