@@ -86,21 +86,27 @@ export function PriorityScanLoadingControl({ load }: PriorityScanLoadingControlP
   );
   const selectedColorInUse = usedColorKeys.has(normalizeColorKey(selectedColor));
   const selectedColorApproved = isApprovedPriorityScanColor(selectedColor);
+  // An active legacy priority keeps its saved color until a swatch is explicitly
+  // chosen; saving it unchanged is a position-only update, never a recolor.
+  const keepsLegacyColor =
+    Boolean(activeConfig) &&
+    !selectedColorApproved &&
+    normalizeColorKey(selectedColor) === normalizeColorKey(activeConfig?.color ?? "");
+  const canSaveColor = selectedColorApproved || (keepsLegacyColor && canManagePriority);
 
   const refreshQueue = async () => {
     await queryClient.invalidateQueries({ queryKey: [PRIORITY_SCAN_CONFIGS_URL] });
   };
 
   const saveMutation = useMutation({
-    mutationFn: async ({ color, priority }: { color: string; priority?: number }) => {
-      if (!isApprovedPriorityScanColor(color)) {
+    mutationFn: async ({ color, priority }: { color?: string; priority?: number }) => {
+      if (color !== undefined && !isApprovedPriorityScanColor(color)) {
         throw new Error("Select one of the eleven approved Priority Scan colors.");
       }
 
-      const payload: { color: string; enabled: boolean; priority?: number } = {
-        color,
-        enabled: true,
-      };
+      // Omitting color asks the server to keep the saved (legacy) color.
+      const payload: { color?: string; enabled: boolean; priority?: number } = { enabled: true };
+      if (color !== undefined) payload.color = color;
       if (canManagePriority && priority !== undefined) payload.priority = priority;
 
       const res = await apiRequest(
@@ -160,12 +166,14 @@ export function PriorityScanLoadingControl({ load }: PriorityScanLoadingControlP
     const availableDefault =
       PRIORITY_SCAN_COLORS.find((color) => !usedColorKeys.has(normalizeColorKey(color))) ?? DEFAULT_COLOR;
     // Existing unsupported colors are retained in records, but may not be resaved.
-    // Force an explicit approved selection when editing an old priority.
-    const initialColor =
-      config?.color && isApprovedPriorityScanColor(config.color)
+    // Start from the saved legacy color with no swatch selected, so a new color
+    // is only ever applied when the operator explicitly picks one.
+    const initialColor = config?.color
+      ? isApprovedPriorityScanColor(config.color)
         ? (PRIORITY_SCAN_COLORS.find((color) => normalizeColorKey(color) === normalizeColorKey(config.color)) ??
           availableDefault)
-        : availableDefault;
+        : config.color
+      : availableDefault;
     setSelectedColor(initialColor);
     setSelectedPriority(Math.min(config?.priority ?? maxSelectablePriority, maxSelectablePriority));
     setDialogOpen(true);
@@ -338,11 +346,11 @@ export function PriorityScanLoadingControl({ load }: PriorityScanLoadingControlP
                 type="button"
                 onClick={() =>
                   saveMutation.mutate({
-                    color: selectedColor,
+                    color: keepsLegacyColor ? undefined : selectedColor,
                     priority: canManagePriority ? selectedPriority : undefined,
                   })
                 }
-                disabled={busy || !load.proformaIdUsed || selectedColorInUse || !selectedColorApproved}
+                disabled={busy || !load.proformaIdUsed || selectedColorInUse || !canSaveColor}
                 data-testid={`button-save-priority-${load.id}`}
               >
                 {saveMutation.isPending

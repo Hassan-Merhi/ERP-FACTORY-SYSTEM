@@ -126,6 +126,58 @@ describe("Priority Scan fixed palette", () => {
     expect(configs[0].color).toBe("Navy");
   });
 
+  it("saves an untouched legacy priority from the editor without recoloring it", async () => {
+    mount([
+      { id: 1, orderId: 42, color: "Navy", priority: 2, enabled: true },
+      { id: 2, orderId: 99, color: "#FFD700", priority: 1, enabled: true },
+    ]);
+    fireEvent.click(screen.getByTestId("button-priority-config-42"));
+    // No approved swatch is preselected in place of the saved legacy color.
+    for (const color of approved) {
+      expect(screen.getByRole("button", { name: `Use color ${color}` }).className).not.toContain("scale-110");
+    }
+    expect(screen.getByTestId("legacy-priority-color-42")).toHaveTextContent("Navy");
+    fireEvent.click(screen.getByTestId("button-save-priority-42"));
+    await waitFor(() =>
+      expect(apiRequest).toHaveBeenCalledWith(
+        "PUT",
+        "/api/factory/customer-orders/42/loading-list/priority-scan-config",
+        { priority: 2, enabled: true }
+      )
+    );
+  });
+
+  it("recolors a legacy priority only after a swatch is explicitly chosen", async () => {
+    mount([{ id: 1, orderId: 42, color: "Navy", priority: 1, enabled: true }]);
+    fireEvent.click(screen.getByTestId("button-priority-config-42"));
+    fireEvent.click(screen.getByRole("button", { name: "Use color #B0E0E6" }));
+    fireEvent.click(screen.getByTestId("button-save-priority-42"));
+    await waitFor(() =>
+      expect(apiRequest).toHaveBeenCalledWith("PUT", expect.any(String), {
+        color: "#B0E0E6",
+        priority: 1,
+        enabled: true,
+      })
+    );
+  });
+
+  it("requires ordinary users to pick a swatch before saving a legacy priority", () => {
+    mount([{ id: 1, orderId: 42, color: "Navy", priority: 1, enabled: true }], "User");
+    fireEvent.click(screen.getByTestId("button-priority-config-42"));
+    expect(screen.getByTestId("button-save-priority-42")).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "Use color #FFD700" }));
+    expect(screen.getByTestId("button-save-priority-42")).toBeEnabled();
+  });
+
+  it("requires a swatch before re-enabling an inactive legacy priority", () => {
+    mount([{ id: 1, orderId: 42, color: "Navy", priority: 1, enabled: false }]);
+    fireEvent.click(screen.getByTestId("button-set-priority-42"));
+    expect(screen.getByTestId("button-save-priority-42")).toBeDisabled();
+    expect(apiRequest).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Use color #7FFF00" }));
+    expect(screen.getByTestId("button-save-priority-42")).toBeEnabled();
+  });
+
   it("restricts ordinary users to color edits without priority controls", async () => {
     mount([{ id: 1, orderId: 42, color: "#FFD700", priority: 1, enabled: true }], "User");
     expect(screen.queryByTestId("button-priority-up-42")).toBeNull();
