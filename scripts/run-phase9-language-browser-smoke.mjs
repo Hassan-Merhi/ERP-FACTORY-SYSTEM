@@ -332,6 +332,7 @@ async function readPageState(page) {
     const sidebar = sidebarRect
       ? {
           declaredSide: sidebarRoot instanceof HTMLElement ? sidebarRoot.dataset.side || "left" : "left",
+          collapsed: sidebarRoot instanceof HTMLElement && sidebarRoot.dataset.state === "collapsed",
           left: sidebarRect.x,
           right: sidebarRect.x + sidebarRect.width,
           width: sidebarRect.width,
@@ -369,6 +370,17 @@ function assertSidebarEdge(state, expectedDirection, label) {
   const expectedPhysicalSide =
     expectedDirection === "rtl" ? (declaredSide === "left" ? "right" : "left") : declaredSide;
   const tolerance = 3;
+  // Since #2173 the sidebar starts collapsed below 1024px: off-canvas, translated past its edge.
+  // It must then sit wholly beyond the expected edge rather than touch it.
+  if (state.sidebar.collapsed) {
+    if (expectedPhysicalSide === "left" && state.sidebar.right > tolerance) {
+      return [`${label}: collapsed ${declaredSide} sidebar is not parked past the left edge`];
+    }
+    if (expectedPhysicalSide === "right" && state.sidebar.left < state.viewport.width - tolerance) {
+      return [`${label}: collapsed ${declaredSide} sidebar is not parked past the right edge`];
+    }
+    return [];
+  }
   if (expectedPhysicalSide === "left" && Math.abs(state.sidebar.left) > tolerance) {
     return [`${label}: ${declaredSide} sidebar is ${Math.round(state.sidebar.left)}px from the left edge`];
   }

@@ -225,7 +225,9 @@ async function readState(page, route, workspace) {
 
     const touchActionProbe = document.createElement("button");
     touchActionProbe.type = "button";
-    touchActionProbe.className = "opacity-0 group-hover:opacity-100";
+    // Since #2173 hover-revealed controls carry the `touch` variant themselves (there is no global
+    // override), so the probe is built the way the real controls are.
+    touchActionProbe.className = "opacity-0 group-hover:opacity-100 touch:opacity-100";
     touchActionProbe.setAttribute("aria-hidden", "true");
     mainContent?.appendChild(touchActionProbe);
     const touchActionOpacity = window.getComputedStyle(touchActionProbe).opacity;
