@@ -20,7 +20,6 @@ import {
 import multer from "multer";
 import path from "path";
 import fs from "fs";
-import type { AttendanceStatusRow } from "../../services/payroll/factoryPayrollGenerationPolicy";
 import {
   factoryWorkers,
   factoryDaybookEntries,
@@ -93,52 +92,6 @@ const _workerUpload = multer({
     },
   }),
 });
-
-function _computeMonthlyPay(salary: number, startStr: string, endStr: string): number {
-  const start = new Date(startStr + "T00:00:00");
-  const end = new Date(endStr + "T00:00:00");
-  let total = 0;
-  let cur = new Date(start.getFullYear(), start.getMonth(), 1);
-  while (cur <= end) {
-    const year = cur.getFullYear();
-    const month = cur.getMonth();
-    const monthLastDay = new Date(year, month + 1, 0);
-    const daysInThisMonth = monthLastDay.getDate();
-    const segStart = new Date(Math.max(cur.getTime(), start.getTime()));
-    const segEnd = new Date(Math.min(monthLastDay.getTime(), end.getTime()));
-    const daysInSeg = Math.floor((segEnd.getTime() - segStart.getTime()) / (1000 * 60 * 60 * 24)) + 1;
-    total += salary * (daysInSeg / daysInThisMonth);
-    cur = new Date(year, month + 1, 1);
-  }
-  return total;
-}
-
-// Helper: Compute monthly pay from actual attendance records.
-// Monthly payroll uses attendance-based calculation (Present/Late = 1 day, Half Day = 0.5 day)
-// rather than calendar-day proration to match actual work performed.
-function _computeMonthlyPayFromAttendance(
-  baseSalary: number,
-  periodStart: string,
-  attendanceRows: readonly AttendanceStatusRow[]
-): number {
-  const daysInMonth = (dateStr: string) => {
-    const d = new Date(dateStr);
-    return new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
-  };
-
-  // Count actual days worked: Present/Late = 1 full day, Half Day = 0.5
-  let attendedDays = 0;
-  for (const row of attendanceRows) {
-    const s = row.status || "Absent";
-    if (s === "Present" || s === "Late") attendedDays += 1;
-    else if (s === "Half Day") attendedDays += 0.5;
-  }
-
-  // Daily rate: salary / days in the month of periodStart
-  const daysInStartMonth = daysInMonth(periodStart);
-  const dailyRate = baseSalary / daysInStartMonth;
-  return attendedDays * dailyRate;
-}
 
 export function registerAdvanceManagementRoutes(app: Express) {
   app.post("/api/factory/advances/reconcile", requireAuth, async (req: Request, res: Response) => {

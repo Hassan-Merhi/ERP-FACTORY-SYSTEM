@@ -242,7 +242,7 @@ export function writeSheet(
 
   for (const [label, value, isBold] of kpiRows) {
     const row = ws.addRow(["", label, "", "", value]);
-    const numVal = typeof value === "number" ? value : parseFloat(String(value).replace(/[^0-9.-]/g, ""));
+    const numVal = typeof value === "number" ? value : toMoney(String(value).replace(/[^0-9.-]/g, "")).toNumber();
     const profColor = numVal >= 0 ? "FF16A34A" : "FFDC2626";
     row.getCell(2).font = { bold: isBold };
     row.getCell(5).font = { bold: isBold, color: { argb: isBold ? profColor : "FF374151" } };
