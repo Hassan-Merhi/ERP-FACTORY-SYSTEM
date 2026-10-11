@@ -11,6 +11,9 @@ const confirmDialog = await read("client/src/components/ConfirmDialog.tsx");
 const confirmationShim = await read("client/src/components/ConfirmationDialog.tsx");
 const dialog = await read("client/src/components/ui/dialog.tsx");
 const alertDialog = await read("client/src/components/ui/alert-dialog.tsx");
+// Since #2173 both dialogs build their frame (viewport bound, width, overflow) from the shared
+// dialogFrameClasses here, so the frame tokens are checked against the dialog plus this file.
+const dialogFrame = await read("client/src/components/ui/phone-sheet.tsx");
 const sheet = await read("client/src/components/ui/sheet.tsx");
 const form = await read("client/src/components/ui/form.tsx");
 const select = await read("client/src/components/ui/select.tsx");
@@ -65,7 +68,7 @@ for (const token of [
   "focus-visible",
   "*:min-h-11",
 ]) {
-  if (!dialog.includes(token)) failures.push(`Base dialog contract missing: ${token}`);
+  if (!`${dialog}\n${dialogFrame}`.includes(token)) failures.push(`Base dialog contract missing: ${token}`);
 }
 
 for (const token of [
@@ -75,7 +78,7 @@ for (const token of [
   "*:min-h-11",
   "motion-reduce:animate-none",
 ]) {
-  if (!alertDialog.includes(token)) failures.push(`Alert dialog contract missing: ${token}`);
+  if (!`${alertDialog}\n${dialogFrame}`.includes(token)) failures.push(`Alert dialog contract missing: ${token}`);
 }
 
 for (const token of [
