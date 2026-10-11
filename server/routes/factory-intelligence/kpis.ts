@@ -8,6 +8,7 @@ import type { Database } from "../../db";
 import type { Express, Request, Response, RequestHandler } from "express";
 import { getErrorMessage } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
+import { plusMoney, toMoney } from "../../lib/money";
 import { eq, and, sql, gte, lte } from "drizzle-orm";
 
 import {
@@ -57,14 +58,14 @@ export function registerFactoryKpiRoutes(app: Express, requireAuth: RequestHandl
         if (!d) continue;
         if (!dailyMap[d]) dailyMap[d] = { balesProduced: 0, kgPressed: 0, wasteKg: 0 };
         dailyMap[d].balesProduced++;
-        dailyMap[d].kgPressed += parseFloat(bale.weightKg || "0");
+        dailyMap[d].kgPressed = plusMoney(dailyMap[d].kgPressed, bale.weightKg);
       }
 
       for (const w of wasteEntries) {
         const d = w.date;
         if (!d) continue;
         if (!dailyMap[d]) dailyMap[d] = { balesProduced: 0, kgPressed: 0, wasteKg: 0 };
-        dailyMap[d].wasteKg += parseFloat(w.kgWaste || "0");
+        dailyMap[d].wasteKg = plusMoney(dailyMap[d].wasteKg, w.kgWaste);
       }
 
       const result = Object.entries(dailyMap)
@@ -118,7 +119,7 @@ export function registerFactoryKpiRoutes(app: Express, requireAuth: RequestHandl
           };
         }
         workerStats[wId].balesCount++;
-        workerStats[wId].totalKg += parseFloat(bale.weightKg || "0");
+        workerStats[wId].totalKg = plusMoney(workerStats[wId].totalKg, bale.weightKg);
       }
 
       const result = Object.values(workerStats).sort((a, b) => b.balesCount - a.balesCount);
@@ -177,13 +178,13 @@ export function registerFactoryKpiRoutes(app: Express, requireAuth: RequestHandl
 
       const result = mixes.map((mix) => {
         const mixSources = sources.filter((s) => s.mixBatchId === mix.id);
-        const totalInputKg = mixSources.reduce((s: number, src) => s + parseFloat(src.weightKg || "0"), 0);
+        const totalInputKg = mixSources.reduce((s: number, src) => plusMoney(s, src.weightKg), 0);
 
         const mixBales = bales.filter((b) => b.mixBatchId === mix.id);
         const outputBalesCount = mixBales.length;
-        const totalOutputKg = mixBales.reduce((s: number, b) => s + parseFloat(b.weightKg || "0"), 0);
+        const totalOutputKg = mixBales.reduce((s: number, b) => plusMoney(s, b.weightKg), 0);
 
-        const wasteKg = totalInputKg - totalOutputKg;
+        const wasteKg = toMoney(totalInputKg).minus(totalOutputKg).toNumber();
         const wastePct = totalInputKg > 0 ? (wasteKg / totalInputKg) * 100 : 0;
 
         return {

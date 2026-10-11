@@ -10,6 +10,7 @@ import { requireAuth, requireNonPOS } from "../../auth";
 import { inventory, stockItems, purchaseOrders, customers, customerBalances, users, aiActionLog } from "@shared/schema";
 import { eq, and, sql } from "drizzle-orm";
 import { requireAIActionPermission } from "../../lib/aiActionPermission";
+import { toMoney } from "../../lib/money";
 
 export function registerChatbotAlertRoutes(app: Express) {
   // ── PROACTIVE ALERTS DIGEST (5a) ──
@@ -34,10 +35,10 @@ export function registerChatbotAlertRoutes(app: Express) {
         .from(stockItems)
         .where(and(eq(stockItems.companyId, companyId), eq(stockItems.active, true)));
 
-      const invMap = new Map(inventoryRows.map((i) => [i.stockItemId, parseFloat(i.quantity || "0")]));
+      const invMap = new Map(inventoryRows.map((i) => [i.stockItemId, toMoney(i.quantity).toNumber()]));
       const lowStock = stockRows
         .filter((s) => {
-          const lvl = parseFloat(s.reorderLevel || "0");
+          const lvl = toMoney(s.reorderLevel).toNumber();
           return lvl > 0 && (invMap.get(s.id) || 0) <= lvl;
         })
         .map((s) => ({
@@ -45,7 +46,7 @@ export function registerChatbotAlertRoutes(app: Express) {
           name: s.name,
           code: s.code,
           qty: invMap.get(s.id) || 0,
-          reorderLevel: parseFloat(s.reorderLevel || "0"),
+          reorderLevel: toMoney(s.reorderLevel).toNumber(),
         }));
 
       // Open POs (awaiting)
@@ -78,7 +79,7 @@ export function registerChatbotAlertRoutes(app: Express) {
 
       const overdueCustomers = customerBalanceRows
         .map((cb) => {
-          const balance = parseFloat(cb.totalDebit) - parseFloat(cb.totalCredit);
+          const balance = toMoney(cb.totalDebit).minus(toMoney(cb.totalCredit)).toNumber();
           return { customerId: cb.customerId, name: custMap.get(cb.customerId) || "Unknown", balance };
         })
         .filter((c) => c.balance > 0.01)
