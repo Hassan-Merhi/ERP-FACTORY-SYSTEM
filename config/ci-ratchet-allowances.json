@@ -23,7 +23,7 @@
       "tests/reusable-proforma-new-loading-lifecycle.test.ts",
       "tests/sales-report-compact-routes.test.ts",
       "tests/ui/factory-account-groups-route.test.ts",
-      "tests/ui/mobile-responsive-phase1-critical-flows.test.ts",
+      "tests/ui/mobile-responsive-phase1-critical-flows.test.tsx",
       "tests/ui/mobile-responsive-wave2-factory-floor.test.ts",
       "tests/ui/mobile-responsive-wave3-erp-operations.test.ts",
       "tests/ui/tracking-continuous-list-cleanup.test.ts",
