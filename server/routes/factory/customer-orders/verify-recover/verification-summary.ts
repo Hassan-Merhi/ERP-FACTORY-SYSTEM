@@ -14,7 +14,7 @@ import {} from "../../_helpers";
 import { factoryBaleProducts } from "@shared/schema";
 import { eq, and, sql, inArray } from "drizzle-orm";
 import { resultRows } from "../../../../lib/queryResult";
-import { MoneyDecimal, plusMoney, toMoney, type MoneyInput } from "../../../../lib/money";
+import { MoneyDecimal, type MoneyInput, plusMoney, toMoney } from "../../../../lib/money";
 
 /** `total` split into `count` decimal strings that add back to `total` exactly. */
 function splitEvenly(total: MoneyInput, count: number): string[] {
@@ -282,7 +282,7 @@ export function registerOrderVerificationSummaryRoutes(app: Express) {
           const articleCode = pl.article_code ?? pl.articleCode ?? "";
           if (!articleCode) continue;
           const pMode = pl.pricing_mode ?? pl.pricingMode ?? "per_bale";
-          const pkgRate = parseFloat(String(pl.price_per_kg ?? pl.pricePerKg ?? "0")) || 0;
+          const pkgRate = toMoney(pl.price_per_kg ?? pl.pricePerKg).toNumber();
           proformaByArticle[articleCode] = {
             articleCode,
             productName: pl.product_name ?? pl.productName ?? articleCode,

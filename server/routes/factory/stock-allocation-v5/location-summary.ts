@@ -12,6 +12,7 @@ import { requireAuth } from "../../../auth";
 import { sql } from "drizzle-orm";
 import { sqlArray } from "../../../lib/sqlArray";
 import { resultRows } from "../../../lib/queryResult";
+import { toMoney } from "../../../lib/money";
 
 export function registerV5LocationSummaryRoutes(app: Express) {
   // ── GET /api/factory/v5/location-summary ──────────────────────────────────
@@ -105,7 +106,8 @@ export function registerV5LocationSummaryRoutes(app: Express) {
           nameRaw
         ).forEach((r) => {
           if (r.name && r.articleCode) productNameMap.set(r.articleCode, r.name);
-          if (r.weightPerBaleKg != null && r.articleCode) weightMap.set(r.articleCode, parseFloat(r.weightPerBaleKg));
+          if (r.weightPerBaleKg != null && r.articleCode)
+            weightMap.set(r.articleCode, toMoney(r.weightPerBaleKg).toNumber());
         });
       }
 

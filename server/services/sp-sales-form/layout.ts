@@ -1,4 +1,5 @@
 import ExcelJS from "exceljs";
+import { parseMoneyInput } from "../../lib/money";
 
 // ── Public interface ──────────────────────────────────────────────────────────
 
@@ -23,7 +24,7 @@ export interface DaySales {
 // ── Pure helpers ──────────────────────────────────────────────────────────────
 
 export function pn(v: unknown): number {
-  const n = parseFloat(String(v ?? "0"));
+  const n = parseMoneyInput(String(v ?? "0"))?.toNumber() ?? NaN;
   return isNaN(n) ? 0 : n;
 }
 export const r2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;

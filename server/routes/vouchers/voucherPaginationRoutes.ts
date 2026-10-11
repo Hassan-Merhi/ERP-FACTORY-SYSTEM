@@ -5,6 +5,7 @@ import { requireAuth } from "../../auth";
 import { db } from "../../db";
 import { getErrorMessage } from "../../lib/httpHandlers";
 import { userLocations, vouchers } from "@shared/schema";
+import { parseMoneyInput } from "../../lib/money";
 
 const DEFAULT_PAGE_SIZE = 100;
 const MAX_PAGE_SIZE = 250;
@@ -110,8 +111,8 @@ export function registerVoucherPaginationRoutes(app: Express): void {
         );
       }
 
-      const minAmount = Number.parseFloat(String(req.query.minAmount ?? ""));
-      const maxAmount = Number.parseFloat(String(req.query.maxAmount ?? ""));
+      const minAmount = parseMoneyInput(String(req.query.minAmount ?? ""))?.toNumber() ?? NaN;
+      const maxAmount = parseMoneyInput(String(req.query.maxAmount ?? ""))?.toNumber() ?? NaN;
       if (Number.isFinite(minAmount)) {
         conditions.push(sql`${vouchers.totalAmount}::numeric >= ${minAmount}`);
       }

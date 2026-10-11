@@ -1,12 +1,6 @@
 import { and, eq, gte, inArray, isNull, lte, sql } from "drizzle-orm";
 import { db } from "../db";
-import {
-  inventory,
-  salesItems,
-  stockTransferItems,
-  stockTransferVouchers,
-  vouchers,
-} from "@shared/schema";
+import { inventory, salesItems, stockTransferItems, stockTransferVouchers, vouchers } from "@shared/schema";
 import {
   buildSmartTransferForecastPreview,
   type SmartTransferForecastPreviewLine,
@@ -14,6 +8,7 @@ import {
 } from "./smartTransferForecasting";
 import type { SmartTransferPreviewOptions, SmartTransferSourceTotal } from "./smartTransferAllocation";
 import { roundNumber } from "./smartTransferPerformance";
+import { parseMoneyInput } from "../lib/money";
 
 export interface SmartTransferSourceOptimizationFields {
   sourceForecastDailyRate: number;
@@ -29,11 +24,9 @@ export interface SmartTransferSourceOptimizationFields {
   sourceSelectionReason: string;
 }
 
-export type SmartTransferSourceOptimizedLine =
-  SmartTransferForecastPreviewLine & SmartTransferSourceOptimizationFields;
+export type SmartTransferSourceOptimizedLine = SmartTransferForecastPreviewLine & SmartTransferSourceOptimizationFields;
 
-export interface SmartTransferSourceOptimizedResult
-  extends Omit<SmartTransferForecastPreviewResult, "lines"> {
+export interface SmartTransferSourceOptimizedResult extends Omit<SmartTransferForecastPreviewResult, "lines"> {
   sourceOptimizationVersion: 2;
   lines: SmartTransferSourceOptimizedLine[];
 }
@@ -69,7 +62,7 @@ interface SourceCandidate {
 }
 
 function parseQuantity(value: unknown): number {
-  const parsed = Number.parseFloat(String(value ?? "0"));
+  const parsed = parseMoneyInput(String(value ?? "0"))?.toNumber() ?? NaN;
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
@@ -143,11 +136,7 @@ function calculateReserveDays(sales: SourceSalesMetrics, targetCoverageDays: num
   return 7;
 }
 
-function calculateReserveQty(
-  currentStock: number,
-  sales: SourceSalesMetrics,
-  reserveDays: number
-): number {
+function calculateReserveQty(currentStock: number, sales: SourceSalesMetrics, reserveDays: number): number {
   if (currentStock <= 0 || reserveDays <= 0) return 0;
   const baseReserve = Math.ceil(sales.forecastRate * reserveDays);
   const accelerationBuffer = Math.ceil(Math.max(0, sales.rate7 - sales.rate30) * 7);
@@ -185,30 +174,37 @@ function calculateSourceScore(input: {
     0,
     20
   );
-  const wholeItemScore = input.availableQty >= input.itemTotal ? 15 : input.availableQty >= input.itemTotal * 0.5 ? 8 : 2;
+  const wholeItemScore =
+    input.availableQty >= input.itemTotal ? 15 : input.availableQty >= input.itemTotal * 0.5 ? 8 : 2;
   const pendingRatio = input.currentStock > 0 ? input.pendingCommitmentQty / input.currentStock : 0;
   const commitmentScore = pendingRatio <= 0 ? 10 : pendingRatio <= 0.1 ? 8 : pendingRatio <= 0.25 ? 5 : 1;
 
-  return Math.round(clamp(overstockScore + localProtectionScore + routeScore + wholeItemScore + commitmentScore, 0, 100));
+  return Math.round(
+    clamp(overstockScore + localProtectionScore + routeScore + wholeItemScore + commitmentScore, 0, 100)
+  );
 }
 
 function buildSourceReason(source: Omit<SourceCandidate, "rank" | "selectionReason">): string {
-  const coverageText = source.coverageDaysAfterCommitments === null
-    ? "no meaningful local sales rate"
-    : `${roundNumber(source.coverageDaysAfterCommitments, 1)} local coverage days before reserve`;
-  const routeText = source.historicalRouteCount > 0
-    ? `${source.historicalRouteCount} completed route transfer(s), ${roundNumber(source.historicalRouteQty, 0)} unit(s)`
-    : "no recent completed route history";
-  return [
-    `source score ${source.selectionScore}/100`,
-    `stock ${source.currentStock}`,
-    `pending commitments ${source.pendingCommitmentQty}`,
-    `dynamic reserve ${source.dynamicReserveQty} for ${source.reserveDays} day(s)`,
-    `available ${source.availableQty}`,
-    coverageText,
-    routeText,
-    source.canCoverWholeItem ? "can fulfill the whole item quantity" : "used only if a split is required",
-  ].join("; ") + ".";
+  const coverageText =
+    source.coverageDaysAfterCommitments === null
+      ? "no meaningful local sales rate"
+      : `${roundNumber(source.coverageDaysAfterCommitments, 1)} local coverage days before reserve`;
+  const routeText =
+    source.historicalRouteCount > 0
+      ? `${source.historicalRouteCount} completed route transfer(s), ${roundNumber(source.historicalRouteQty, 0)} unit(s)`
+      : "no recent completed route history";
+  return (
+    [
+      `source score ${source.selectionScore}/100`,
+      `stock ${source.currentStock}`,
+      `pending commitments ${source.pendingCommitmentQty}`,
+      `dynamic reserve ${source.dynamicReserveQty} for ${source.reserveDays} day(s)`,
+      `available ${source.availableQty}`,
+      coverageText,
+      routeText,
+      source.canCoverWholeItem ? "can fulfill the whole item quantity" : "used only if a split is required",
+    ].join("; ") + "."
+  );
 }
 
 function allocateWithMinimumSplits(sources: SourceCandidate[], requested: number): Map<number, number> {
@@ -402,9 +398,7 @@ export async function buildSmartTransferSourceOptimizedPreview(
     const availableQty = Math.max(0, stockAfterCommitments - dynamicReserveQty);
     if (availableQty <= 0) continue;
     const route = routeBySourceItem.get(key);
-    const coverageDaysAfterCommitments = sales.forecastRate > 0
-      ? stockAfterCommitments / sales.forecastRate
-      : null;
+    const coverageDaysAfterCommitments = sales.forecastRate > 0 ? stockAfterCommitments / sales.forecastRate : null;
     const canCoverWholeItem = availableQty >= itemTotal;
     const selectionScore = calculateSourceScore({
       currentStock,

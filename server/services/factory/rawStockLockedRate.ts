@@ -13,6 +13,7 @@ import { db as sharedDb } from "../../db";
 import { FACTORY_HISTORICAL_REPLAY_V7_SCHEMA_SQL } from "./historicalReplayV7MigrationSql";
 import { calculateCostLine, calculateMovingAverageRate, formatFactoryLockedRate } from "./factoryCostingEngine";
 import type { DatabaseOrTransaction } from "../../db";
+import { toMoney } from "../../lib/money";
 
 /**
  * Authoritative supplier raw-material quantity. This is the same quantity shown by
@@ -202,7 +203,7 @@ export async function getLockedRateDiagnosticsForCompany(companyId: number): Pro
   const reservedBySupplierId = new Map<number, number>();
   for (const row of reservedRows) {
     if (row.supplierId) {
-      reservedBySupplierId.set(row.supplierId, parseFloat(row.reservedKg as string) || 0);
+      reservedBySupplierId.set(row.supplierId, toMoney(row.reservedKg as string).toNumber());
     }
   }
 
@@ -211,7 +212,7 @@ export async function getLockedRateDiagnosticsForCompany(companyId: number): Pro
     for (const supplier of suppliers) {
       const persistedRaw = supplier.currentRawMaterialCostPerKgUsd;
       const persistedLockedRate =
-        persistedRaw !== null && persistedRaw !== undefined ? parseFloat(persistedRaw as string) || 0 : null;
+        persistedRaw !== null && persistedRaw !== undefined ? toMoney(persistedRaw as string).toNumber() : null;
       const { rate } = await getLockedSupplierRateReadOnly(tx, companyId, supplier.id);
       const remainingKg = await getAuthoritativeSupplierRemainingKg(tx, companyId, supplier.id);
       const reservedKg = reservedBySupplierId.get(supplier.id) || 0;

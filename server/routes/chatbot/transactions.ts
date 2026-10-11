@@ -22,6 +22,7 @@ import {
 } from "@shared/schema";
 import { eq, and, or, desc, isNull, ilike } from "drizzle-orm";
 import { requireAIActionPermission, logAIAction } from "../../lib/aiActionPermission";
+import { toMoney } from "../../lib/money";
 
 export function registerChatbotTransactionRoutes(app: Express) {
   // ── Confirm Stock Transfer ────────────────────────────────────────────
@@ -103,7 +104,7 @@ export function registerChatbotTransactionRoutes(app: Express) {
               )
             )
             .limit(1);
-          const currentStock = parseFloat(invRow?.quantity) || 0;
+          const currentStock = toMoney(invRow?.quantity).toNumber();
           // AI-driven confirmation must never authorize negative inventory; that override
           // stays a manual, explicit user action on the normal stock transfer screen.
           if (qty > currentStock) {

@@ -43,6 +43,7 @@ import {
   formatFactoryRate,
   formatFactoryTotal,
 } from "./factoryCostingEngine";
+import { toMoney } from "../../lib/money";
 
 /** Cost recalculation must never mutate inventory or batch quantities. */
 export function assertNoQuantityFields(update: Record<string, unknown>, context = "cost update"): void {
@@ -140,7 +141,7 @@ async function recomputeBatchAndCascadeBalesInner(
   bales: { baleId: number; baleCode?: string }[];
 }> {
   const [batch] = await tx.select().from(factoryMixBatches).where(eq(factoryMixBatches.id, batchId));
-  const oldCostPerKg = batch ? parseFloat(batch.costPerKg || "0") : 0;
+  const oldCostPerKg = batch ? toMoney(batch.costPerKg).toNumber() : 0;
   const wasCompleted = !!batch && COMPLETED_BATCH_STATUSES.includes(batch.status);
   const allSources = await tx
     .select({

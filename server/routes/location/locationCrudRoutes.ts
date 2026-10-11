@@ -15,6 +15,7 @@ import {
   sendWhatsAppTextToChatIdPos,
   type GreenChat,
 } from "../../services/whatsappService";
+import { parseMoneyInput } from "../../lib/money";
 
 const LOCATION_WHATSAPP_PERMISSION = "exp_whatsapp_send";
 
@@ -272,7 +273,7 @@ export function registerLocationCrudRoutes(app: Express) {
         updatePayload.transferWaGroupChatId = transferWaGroupChatId || null;
       }
       if (supplierPartnerPayableDeductionPerQty !== undefined) {
-        const deductionVal = parseFloat(supplierPartnerPayableDeductionPerQty);
+        const deductionVal = parseMoneyInput(supplierPartnerPayableDeductionPerQty)?.toNumber() ?? NaN;
         if (isNaN(deductionVal) || deductionVal < 0) {
           return res.status(400).json({ message: "supplierPartnerPayableDeductionPerQty must be >= 0" });
         }

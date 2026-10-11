@@ -13,18 +13,19 @@ import { logger } from "../../../lib/logger";
 import { locations, vouchers } from "@shared/schema";
 import { eq, and, isNull } from "drizzle-orm";
 import type { HandlerErrorResult, VoucherRow } from "./posEditSaleTypes";
+import { parseMoneyInput } from "../../../lib/money";
 
 type SelectConnection = Pick<typeof db, "select">;
 
 /** Validates all items have positive quantities and prices. Throws (matching the original) rather than returning an error result. */
 export function validateItemsPositive(items: unknown[]): void {
   for (const item of items as Array<{ quantity?: unknown; sellingPrice?: unknown }>) {
-    // Items arrive straight from the JSON body; parseFloat's own coercion is
-    // preserved by stringifying exactly what the request carried. The thrown
+    // Items arrive straight from the JSON body; parseFloat-style coercion is
+    // preserved (parseMoneyInput on exactly what the request carried). The thrown
     // messages keep their historical raw template text so the i18n
     // compatibility inventory still covers them.
-    const qty = parseFloat(String(item.quantity));
-    const price = parseFloat(String(item.sellingPrice));
+    const qty = parseMoneyInput(String(item.quantity))?.toNumber() ?? NaN;
+    const price = parseMoneyInput(String(item.sellingPrice))?.toNumber() ?? NaN;
 
     if (isNaN(qty) || qty <= 0) {
       throw new Error(`Invalid quantity: ${item.quantity}. Must be greater than 0.`);

@@ -3,6 +3,7 @@ import { db } from "../../db";
 import { sql, eq, and, isNull } from "drizzle-orm";
 import { ledgerAccounts } from "@shared/schema";
 import { firstRow } from "../../lib/queryResult";
+import { parseMoneyInput } from "../../lib/money";
 
 // ── Shared SP (Supplier Partner) route helpers ────────────────────────────────
 // Structural-only extraction from the former monolithic spRoutes.ts — logic is
@@ -42,7 +43,7 @@ export async function getSpAccount(companyId: number, subType: string) {
 }
 
 export function parseNum(v: unknown): number {
-  const n = parseFloat(String(v ?? "0"));
+  const n = parseMoneyInput(String(v ?? "0"))?.toNumber() ?? NaN;
   return isNaN(n) ? 0 : n;
 }
 

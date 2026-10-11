@@ -1,3 +1,4 @@
+import { parseMoneyInput } from "../../lib/money";
 type NumericInventoryValue = string | number | null | undefined;
 
 export interface InventoryValuationSnapshot {
@@ -24,7 +25,7 @@ const VALUE_TOLERANCE = 0.01;
 
 function finiteNumber(value: NumericInventoryValue): number | null {
   if (value === null || value === undefined || value === "") return null;
-  const parsed = typeof value === "number" ? value : Number.parseFloat(value);
+  const parsed = typeof value === "number" ? value : (parseMoneyInput(value)?.toNumber() ?? NaN);
   return Number.isFinite(parsed) ? parsed : null;
 }
 

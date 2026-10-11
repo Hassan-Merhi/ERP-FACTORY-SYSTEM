@@ -6,11 +6,12 @@
 import { db } from "../../db";
 import { ledgerAccounts } from "../../../shared/schema";
 import { eq, and, isNull } from "drizzle-orm";
+import { toMoney } from "../../lib/money";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 export function parseNum(v: unknown): number {
-  return parseFloat(String(v ?? "0")) || 0;
+  return toMoney(String(v ?? "")).toNumber();
 }
 
 export async function findOrCreateLedgerAccount(

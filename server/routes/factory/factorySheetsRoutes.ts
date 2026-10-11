@@ -8,6 +8,7 @@ import { eq, and, asc } from "drizzle-orm";
 import multer from "multer";
 import xlsxStyle from "xlsx-js-style";
 import type { WorkBook } from "xlsx-js-style";
+import { parseMoneyInput } from "../../lib/money";
 
 const { read: readExcel, utils: xlsxUtils, write: writeExcel } = xlsxStyle;
 
@@ -48,8 +49,7 @@ function getCellRawValue(cell: unknown): CellVal {
 function toNumber(v: CellVal): number {
   if (typeof v === "number") return isNaN(v) ? 0 : v;
   if (typeof v === "string") {
-    const n = parseFloat(v.replace(/,/g, ""));
-    return isNaN(n) ? 0 : n;
+    return parseMoneyInput(v.replace(/,/g, ""))?.toNumber() ?? 0;
   }
   return 0;
 }

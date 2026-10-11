@@ -23,6 +23,7 @@ import {
 } from "@shared/schema";
 
 import { balePhotoUpload } from "./_helpers";
+import { toMoney } from "../../lib/money";
 
 /** One raw-material source line on a bale trace response. */
 type BaleTraceSource = {
@@ -98,7 +99,7 @@ export function registerFactoryBaleTracePhotoRoutes(app: Express, requireAuth: A
             return {
               supplier: supplier ? { id: supplier.id, name: supplier.name } : null,
               container: container ? { id: container.id, containerNumber: container.containerNumber } : null,
-              kgUsed: parseFloat(s.weightKg || "0"),
+              kgUsed: toMoney(s.weightKg).toNumber(),
             };
           });
         }

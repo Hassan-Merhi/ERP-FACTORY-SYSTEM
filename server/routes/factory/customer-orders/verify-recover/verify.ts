@@ -23,6 +23,7 @@ import {
 } from "@shared/schema";
 import { eq, and, sql } from "drizzle-orm";
 import { buildOrderExcelBuffer } from "../orderHelpers";
+import { toMoney } from "../../../../lib/money";
 
 export function registerOrderVerifyRoutes(app: Express) {
   app.post("/api/factory/customer-orders/:id/verify", requireAuth, async (req: Request, res: Response) => {
@@ -59,7 +60,7 @@ export function registerOrderVerifyRoutes(app: Express) {
           .from(customers)
           .where(eq(customers.id, order.customerId));
         // Use grandTotal (bales + all charges including surcharges), not just bale sum
-        const verifyTotalValue = parseFloat(updated?.grandTotal || order.grandTotal || "0");
+        const verifyTotalValue = toMoney(updated?.grandTotal || order.grandTotal).toNumber();
         const verifyToday = getClientDate(req);
         await db
           .delete(factoryDaybookEntries)

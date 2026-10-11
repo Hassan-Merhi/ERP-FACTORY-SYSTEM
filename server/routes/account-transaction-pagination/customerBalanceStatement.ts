@@ -29,6 +29,7 @@ import {
   statementRowNet,
   summaryFromContinuousMeta,
 } from "./_helpers";
+import { toMoney } from "../../lib/money";
 
 export async function runCustomerBalanceStatement(options: {
   customerId: number;
@@ -212,7 +213,7 @@ export async function runCustomerBalanceStatement(options: {
     ...buildPageResponse(
       rows,
       summaryResult.rows[0],
-      Number.parseFloat(precedingResult.rows[0]?.net || "0") || 0,
+      toMoney(precedingResult.rows[0]?.net).toNumber(),
       prePeriodNet,
       pagination,
       dates

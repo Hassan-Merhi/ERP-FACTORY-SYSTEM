@@ -1,16 +1,10 @@
 import Decimal from "decimal.js";
-import type {
-  BatchCorrection,
-  ReplayQueryExecutor,
-  ReplayScopeInternal,
-  ReplayWriteScope,
-} from "./types";
-import {
-  buildExactHistoricalReplayScopeInternalV6,
-} from "./exactScopeV6";
+import type { BatchCorrection, ReplayQueryExecutor, ReplayScopeInternal, ReplayWriteScope } from "./types";
+import { buildExactHistoricalReplayScopeInternalV6 } from "./exactScopeV6";
 import { classifyReplayBalesForBatches } from "./baleClassification";
 import { normalizeReplayWriteScope } from "./selectedScope";
 import { lockSelectedReplayAuthoritativeInputs } from "./authoritativeLocks";
+import { toMoney } from "../../../lib/money";
 
 function sortNumbers(values: number[]): number[] {
   return [...new Set(values)].sort((left, right) => left - right);
@@ -46,11 +40,7 @@ export async function buildExactHistoricalReplayScopeInternalFinal(params: {
   lockRows?: boolean;
 }): Promise<ReplayScopeInternal> {
   if (params.lockRows) {
-    await lockSelectedReplayAuthoritativeInputs(
-      params.executor,
-      params.companyId,
-      [...params.selectedSupplierIds]
-    );
+    await lockSelectedReplayAuthoritativeInputs(params.executor, params.companyId, [...params.selectedSupplierIds]);
   }
 
   const base = await buildExactHistoricalReplayScopeInternalV6(params);
@@ -80,7 +70,7 @@ export async function buildExactHistoricalReplayScopeInternalFinal(params: {
     for (const row of rawRows.rows) {
       const expected = base._canonicalRateByContainer.get(row.container_id);
       if (expected == null) continue;
-      const stored = Number.parseFloat(row.cost_per_kg_usd ?? "0") || 0;
+      const stored = toMoney(row.cost_per_kg_usd).toNumber();
       if (Math.abs(expected - stored) > 0.000001) {
         rawStockIdToContainer.set(row.id, row.container_id);
       }
@@ -101,12 +91,8 @@ export async function buildExactHistoricalReplayScopeInternalFinal(params: {
   }
 
   const sourceCorrections = base._sourceCorrections ?? new Map();
-  const requiredParentBatchIds = sortNumbers(
-    [...sourceCorrections.values()].map((correction) => correction.batchId)
-  );
-  const missingBatchIds = requiredParentBatchIds.filter(
-    (batchId) => !base.batchIdsToUpdate.includes(batchId)
-  );
+  const requiredParentBatchIds = sortNumbers([...sourceCorrections.values()].map((correction) => correction.batchId));
+  const missingBatchIds = requiredParentBatchIds.filter((batchId) => !base.batchIdsToUpdate.includes(batchId));
 
   if (missingBatchIds.length > 0) {
     const rows = await params.executor.query<{
@@ -145,8 +131,7 @@ export async function buildExactHistoricalReplayScopeInternalFinal(params: {
       let totalCost = new Decimal(0);
       const correctedSourceCosts = new Map<number, number>();
       for (const source of sources) {
-        const expected = sourceCorrections.get(source.sourceId)?.expectedCostPerKg
-          ?? source.storedCostPerKg;
+        const expected = sourceCorrections.get(source.sourceId)?.expectedCostPerKg ?? source.storedCostPerKg;
         correctedSourceCosts.set(source.sourceId, expected);
         totalWeight = totalWeight.plus(source.weightKg);
         totalCost = totalCost.plus(new Decimal(source.weightKg).times(expected));
@@ -170,19 +155,13 @@ export async function buildExactHistoricalReplayScopeInternalFinal(params: {
       });
     }
 
-    base._batchCorrections = [...base._batchCorrections, ...additions]
-      .sort((left, right) => left.batchId - right.batchId);
-    base.batchIdsToUpdate = sortNumbers([
-      ...base.batchIdsToUpdate,
-      ...missingBatchIds,
-    ]);
+    base._batchCorrections = [...base._batchCorrections, ...additions].sort(
+      (left, right) => left.batchId - right.batchId
+    );
+    base.batchIdsToUpdate = sortNumbers([...base.batchIdsToUpdate, ...missingBatchIds]);
   }
 
-  const classification = await classifyReplayBalesForBatches(
-    params.executor,
-    params.companyId,
-    base.batchIdsToUpdate
-  );
+  const classification = await classifyReplayBalesForBatches(params.executor, params.companyId, base.batchIdsToUpdate);
   base.availableBaleIdsToUpdate = classification.availableIds;
   base.finalizedBaleIdsToUpdate = classification.finalizedIds;
 

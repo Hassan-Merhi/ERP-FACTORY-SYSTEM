@@ -20,6 +20,7 @@ import {
   containerDocuments,
   containerDocumentTypes,
 } from "@shared/schema";
+import { plusMoney, toMoney } from "../../lib/money";
 
 export function registerFactoryAlertRoutes(app: Express, requireAuth: AuthMiddleware, db: AppDb) {
   app.get("/api/factory/alerts", requireAuth, async (req: Request, res: Response) => {
@@ -131,10 +132,10 @@ export function registerFactoryAlertRoutes(app: Express, requireAuth: AuthMiddle
         if (!f.dueDate) continue;
         if (f.dueDate >= today) continue;
 
-        const amount = parseFloat(f.freightAmount || "0");
+        const amount = toMoney(f.freightAmount).toNumber();
         const paid = freightPayments
           .filter((p) => p.containerFreightId === f.id)
-          .reduce((s: number, p) => s + parseFloat(p.amount || "0"), 0);
+          .reduce((s: number, p) => plusMoney(s, p.amount), 0);
 
         if (amount - paid > 0.01) {
           if (!alertExists("FREIGHT_OVERDUE", "freight", f.id)) {

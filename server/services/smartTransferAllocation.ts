@@ -8,6 +8,7 @@ import {
   type SmartTransferHistoryResult,
 } from "./smartTransferHistoryAnalysis";
 import { roundNumber, type TransferPerformanceClassification } from "./smartTransferPerformance";
+import { parseMoneyInput } from "../lib/money";
 
 export interface SmartTransferPreviewOptions {
   asOfDate?: string;
@@ -132,7 +133,7 @@ interface SmartTransferItemCandidate {
 }
 
 function parseQuantity(value: unknown): number {
-  const parsed = Number.parseFloat(String(value ?? "0"));
+  const parsed = parseMoneyInput(String(value ?? "0"))?.toNumber() ?? NaN;
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
@@ -198,10 +199,7 @@ export function allocateWholeUnitsByWeight(
         .slice()
         .sort(
           (a, b) =>
-            a.priority - b.priority ||
-            b.weight - a.weight ||
-            b.capacity - a.capacity ||
-            a.id.localeCompare(b.id)
+            a.priority - b.priority || b.weight - a.weight || b.capacity - a.capacity || a.id.localeCompare(b.id)
         );
       for (const input of ordered) {
         if (remaining <= 0) break;
@@ -414,28 +412,29 @@ export async function buildSmartTransferPreview(
     d.setDate(d.getDate() - 30);
     return d.toISOString().slice(0, 10);
   })();
-  const sourceSalesRows = stockItemIds.length > 0
-    ? await db
-        .select({
-          stockItemId: salesItems.stockItemId,
-          locationId: vouchers.locationId,
-          quantity: salesItems.quantity,
-        })
-        .from(salesItems)
-        .innerJoin(vouchers, eq(salesItems.voucherId, vouchers.id))
-        .where(
-          and(
-            eq(vouchers.companyId, companyId),
-            eq(vouchers.voucherType, "Sales"),
-            eq(vouchers.optional, false),
-            isNull(vouchers.deletedAt),
-            inArray(vouchers.locationId, history.selectedSourceLocationIds),
-            inArray(salesItems.stockItemId, stockItemIds),
-            gte(vouchers.voucherDate, thirtyDaysAgo),
-            lte(vouchers.voucherDate, asOfDate)
+  const sourceSalesRows =
+    stockItemIds.length > 0
+      ? await db
+          .select({
+            stockItemId: salesItems.stockItemId,
+            locationId: vouchers.locationId,
+            quantity: salesItems.quantity,
+          })
+          .from(salesItems)
+          .innerJoin(vouchers, eq(salesItems.voucherId, vouchers.id))
+          .where(
+            and(
+              eq(vouchers.companyId, companyId),
+              eq(vouchers.voucherType, "Sales"),
+              eq(vouchers.optional, false),
+              isNull(vouchers.deletedAt),
+              inArray(vouchers.locationId, history.selectedSourceLocationIds),
+              inArray(salesItems.stockItemId, stockItemIds),
+              gte(vouchers.voucherDate, thirtyDaysAgo),
+              lte(vouchers.voucherDate, asOfDate)
+            )
           )
-        )
-    : [];
+      : [];
 
   // Build a map of (stockItemId, locationId) → total units sold in last 30 days at source
   const sourceSalesMap = new Map<string, number>();
@@ -508,7 +507,9 @@ export async function buildSmartTransferPreview(
       continue;
     }
     if (totalAvailable <= 0) {
-      exclude("No whole units remain across the selected sources (sources may be reserved for local sales or out of stock).");
+      exclude(
+        "No whole units remain across the selected sources (sources may be reserved for local sales or out of stock)."
+      );
       continue;
     }
     if (performance.classification === "overstocked") {
@@ -521,13 +522,16 @@ export async function buildSmartTransferPreview(
     }
 
     const effectiveDestinationStock = wholeNonNegative(performance.currentDestinationQty) + otwQty;
-    const recentRate = performance.latestSalesPerDay > 0 ? performance.latestSalesPerDay : performance.averageSalesPerDay;
+    const recentRate =
+      performance.latestSalesPerDay > 0 ? performance.latestSalesPerDay : performance.averageSalesPerDay;
     const coverageNeed = Math.max(0, Math.ceil(recentRate * targetCoverageDays - effectiveDestinationStock));
     const historicalReferenceQty =
       performance.newerTransferQty > 0 ? performance.newerTransferQty : performance.olderTransferQty;
     const historicalNeed = Math.max(
       0,
-      Math.ceil(historicalReferenceQty * classificationMultiplier(performance.classification) - effectiveDestinationStock)
+      Math.ceil(
+        historicalReferenceQty * classificationMultiplier(performance.classification) - effectiveDestinationStock
+      )
     );
 
     let calculatedNeed = Math.max(coverageNeed, historicalNeed);
@@ -601,8 +605,7 @@ export async function buildSmartTransferPreview(
   // strong sellers to take significantly more than average while keeping some
   // balance. Items whose calculatedNeed is below the cap are naturally bounded
   // by that need, so in practice the cap only constrains runaway strong sellers.
-  const fairShareCap =
-    candidates.length > 0 ? Math.ceil((requestedTarget / candidates.length) * 3) : requestedTarget;
+  const fairShareCap = candidates.length > 0 ? Math.ceil((requestedTarget / candidates.length) * 3) : requestedTarget;
 
   const itemAllocations = allocateWholeUnitsByWeight(
     candidates.map((candidate) => ({

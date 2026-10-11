@@ -4,6 +4,7 @@
  * Extracted verbatim from the former single-file factoryCustomerProformaRoutes.ts.
  */
 import { pool } from "../../../db";
+import { parseMoneyInput } from "../../../lib/money";
 
 export async function autoSavePriceToPriceList(
   companyId: number,
@@ -11,7 +12,7 @@ export async function autoSavePriceToPriceList(
   articleCode: string,
   pricePerBale: string | number
 ) {
-  const price = parseFloat(String(pricePerBale));
+  const price = parseMoneyInput(String(pricePerBale))?.toNumber() ?? NaN;
   if (!articleCode || isNaN(price) || price <= 0) return;
   await pool.query(
     `INSERT INTO customer_price_lists (company_id, customer_id, article_code, price_per_bale, updated_at)

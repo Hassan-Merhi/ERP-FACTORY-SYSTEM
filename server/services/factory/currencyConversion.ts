@@ -12,7 +12,7 @@ import Decimal from "decimal.js";
  * this module makes it the one shared, tested implementation. Every place
  * that derives a USD cost/kg (or any USD amount) from an original-currency
  * value and a stored/fallback exchange rate must go through here instead of
- * inlining `parseFloat(x || "1")`, so a genuinely unresolved rate is never
+ * inlining a `x || "1"` fallback parse, so a genuinely unresolved rate is never
  * silently treated as 1.
  */
 

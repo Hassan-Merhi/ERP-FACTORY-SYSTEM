@@ -1,6 +1,7 @@
 import type { Request } from "express";
 
 import { InventoryRouteError } from "./inventoryErrors";
+import { parseMoneyInput } from "../../lib/money";
 
 export interface InventoryListFilters {
   page: number;
@@ -53,7 +54,7 @@ export function parseQuickAdjustmentInput(input: unknown): QuickAdjustmentInput 
 
   const parsedStockItemId = Number(stockItemId);
   const parsedLocationId = Number(locationId);
-  const parsedQuantity = Number.parseFloat(String(quantity));
+  const parsedQuantity = parseMoneyInput(String(quantity))?.toNumber() ?? NaN;
   if (!Number.isInteger(parsedStockItemId) || parsedStockItemId <= 0) {
     throw new InventoryRouteError(400, "Invalid stock item ID");
   }

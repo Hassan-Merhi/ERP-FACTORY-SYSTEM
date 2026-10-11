@@ -5,6 +5,7 @@ import { requireAuth, requireRole } from "../../auth";
 import { db } from "../../db";
 import { fetchActiveContainers, type RawContainerRow } from "../../lib/gitHelpers";
 import { storage } from "../../storage";
+import { parseMoneyInput } from "../../lib/money";
 
 type PosTrackingContext = {
   companyId: number;
@@ -175,7 +176,7 @@ export function registerPosContainerTrackingRoutes(app: Express): void {
         quantity: String(item.quantity ?? "0"),
       }));
       const totalQty = items.reduce((sum, item) => {
-        const quantity = Number.parseFloat(item.quantity);
+        const quantity = parseMoneyInput(item.quantity)?.toNumber() ?? NaN;
         return sum + (Number.isFinite(quantity) ? quantity : 0);
       }, 0);
 

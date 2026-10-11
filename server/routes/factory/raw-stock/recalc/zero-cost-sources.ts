@@ -22,6 +22,7 @@ import {
   REPAIR_TOKEN_TTL_MS,
 } from "../../../../services/factory/repairToken";
 import { ADMIN_ROLES, ZeroCostSourceTokenPayload } from "./_helpers";
+import { parseMoneyInput } from "../../../../lib/money";
 
 export function registerRawStockZeroCostSourceRoutes(app: Express) {
   // Read-only scan for mix-batch-source rows recorded with cost 0 despite real
@@ -76,7 +77,7 @@ export function registerRawStockZeroCostSourceRoutes(app: Express) {
         if (manualRates && typeof manualRates === "object") {
           for (const [key, value] of Object.entries(manualRates)) {
             const id = parseInt(key);
-            const rate = parseFloat(value as string);
+            const rate = parseMoneyInput(value as string)?.toNumber() ?? NaN;
             if (!isNaN(id) && !isNaN(rate) && rate > 0) parsedManualRates[id] = rate;
           }
         }

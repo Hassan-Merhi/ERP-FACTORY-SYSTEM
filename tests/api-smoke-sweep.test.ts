@@ -79,7 +79,7 @@ interface ShapeBaseline {
   /**
    * Routes whose shape varies between identical runs; reported, never asserted.
    *
-   * Both entries today are workbook endpoints. Their bodies parse into an
+   * Every entry today is a workbook endpoint. Their bodies parse into an
    * object keyed by byte offset, so the "shape" is thousands of indices that
    * shift whenever the zip container's timestamps change the file's length.
    * They stay in the sweep — liveness is still checked, and net-profit-excel

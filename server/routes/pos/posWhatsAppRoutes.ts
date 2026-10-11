@@ -7,6 +7,7 @@ import { locations, posShifts, inventory, stockItems, stockGroups, userCompanyRo
 import { eq, and, desc, asc, gte } from "drizzle-orm";
 import { format } from "date-fns";
 import { sendWhatsAppTextToChatIdPos } from "../../services/whatsappService";
+import { toMoney } from "../../lib/money";
 
 export function registerPosWhatsAppRoutes(app: Express): void {
   // ── POS WhatsApp Shift Report ─────────────────────────────────────────────
@@ -79,7 +80,7 @@ export function registerPosWhatsAppRoutes(app: Express): void {
       let lastGroup = "";
       const stockLines: string[] = [];
       for (const row of stockRows) {
-        const qty = parseFloat(row.quantity ?? "0");
+        const qty = toMoney(row.quantity).toNumber();
         const group = row.groupName ?? "General";
         if (group !== lastGroup) {
           stockLines.push(`\n*${group}*`);
@@ -93,7 +94,7 @@ export function registerPosWhatsAppRoutes(app: Express): void {
       const stockSection = stockLines.length ? stockLines.join("\n") : "  No stock data available";
 
       const salesLine = shift
-        ? `*Sales Today:* ${shift.salesCount ?? 0} transactions | ${parseFloat(shift.salesTotal ?? "0").toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+        ? `*Sales Today:* ${shift.salesCount ?? 0} transactions | ${toMoney(shift.salesTotal).toNumber().toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
         : "";
 
       const senderName = req.user?.username || userId;

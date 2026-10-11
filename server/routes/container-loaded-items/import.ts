@@ -13,6 +13,7 @@ import { buildAliasMap, resolveBarcode } from "../helpers/proformaBarcodeHelpers
 import { poLineItems, purchaseOrders, stockItems, supplierContainerLoadedItems } from "@shared/schema";
 
 import { verifyContainerOwnership } from "./_helpers";
+import { toMoney } from "../../lib/money";
 
 export function registerContainerLoadedItemImportRoutes(app: Express, requireAuth: RequestHandler) {
   app.post("/api/containers/:containerId/import-loaded-items", requireAuth, async (req: Request, res: Response) => {
@@ -108,7 +109,7 @@ export function registerContainerLoadedItemImportRoutes(app: Express, requireAut
           containerId,
           barcode: item.stockItemCode!.trim(),
           itemName: item.itemName || null,
-          qty: Math.round(parseFloat(item.quantity || "0")),
+          qty: Math.round(toMoney(item.quantity).toNumber()),
           weightPerBale: null as string | null,
           pricePerBale: item.rate || null,
         }));

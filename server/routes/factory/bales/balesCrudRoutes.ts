@@ -1,4 +1,4 @@
-import { lineAmount } from "../../../lib/money";
+import { lineAmount, parseMoneyInput, toMoney } from "../../../lib/money";
 import { normalizeSearchText } from "@shared/searchNormalization";
 /**
  * factoryBalesRoutes: BalesCrud endpoints.
@@ -628,7 +628,7 @@ export function registerBalesCrudRoutes(app: Express) {
       const id = parseId(req.params.id);
       if (id === null) return res.status(400).json({ message: "Invalid id" });
 
-      const rawWeight = parseFloat(req.body.weightKg);
+      const rawWeight = parseMoneyInput(req.body.weightKg)?.toNumber() ?? NaN;
       if (isNaN(rawWeight) || rawWeight <= 0) {
         return res.status(400).json({ message: "weightKg must be a positive number" });
       }
@@ -645,7 +645,7 @@ export function registerBalesCrudRoutes(app: Express) {
 
         // Exact weight x rate, rounded once: 3.000 kg at 1.115 is 3.35, not 3.34.
         const newTotalCost = lineAmount(newWeightStr, bale.costPerKg).toFixed(2);
-        const oldWeight = parseFloat(bale.weightKg || "0");
+        const oldWeight = toMoney(bale.weightKg).toNumber();
 
         // 1. Update the bale itself
         const [updatedBale] = await tx
