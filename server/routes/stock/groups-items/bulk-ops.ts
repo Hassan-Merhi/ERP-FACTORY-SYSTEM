@@ -12,6 +12,7 @@ import { requireAuth, requireNonPOS } from "../../../auth";
 import { logAudit } from "../../_helpers";
 import { inventory, stockItems, stockItemLocationPrices } from "@shared/schema";
 import { eq, and, or, inArray } from "drizzle-orm";
+import { toMoney } from "../../../lib/money";
 
 export function registerStockItemBulkRoutes(app: Express) {
   // Bulk delete stock items
@@ -275,9 +276,9 @@ export function registerStockItemBulkRoutes(app: Express) {
 
         if (item) {
           // Calculate total value if not provided: qty * rate
-          const qty = parseFloat(openingQty) || 0;
-          const rate = parseFloat(openingRate) || 0;
-          let totalValue = parseFloat(openingValue) || 0;
+          const qty = toMoney(openingQty).toNumber();
+          const rate = toMoney(openingRate).toNumber();
+          let totalValue = toMoney(openingValue).toNumber();
 
           // If total value not provided, calculate from qty * rate
           if (totalValue === 0 && qty > 0 && rate > 0) {

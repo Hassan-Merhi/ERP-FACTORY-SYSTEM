@@ -19,6 +19,7 @@ import {
 import { eq, and, desc, sql, ne } from "drizzle-orm";
 import { resultRows } from "../../../lib/queryResult";
 import { serveAccountListForCompany } from "../../accounts/all";
+import { plusMoney, toMoney } from "../../../lib/money";
 
 export function registerFactoryAnalyticsRoutes(app: Express) {
   // Keep account balances pinned to the Factory company. Shared ERP account
@@ -144,8 +145,8 @@ export function registerFactoryAnalyticsRoutes(app: Express) {
         .where(and(...conditions))
         .orderBy(desc(containerSales.saleDate));
 
-      const total = rows.reduce((sum, r) => sum + parseFloat(r.totalAmount || "0"), 0);
-      const paid = rows.reduce((sum, r) => sum + parseFloat(r.paidAmount || "0"), 0);
+      const total = rows.reduce((sum, r) => plusMoney(sum, r.totalAmount), 0);
+      const paid = rows.reduce((sum, r) => plusMoney(sum, r.paidAmount), 0);
 
       res.json({ rows, summary: { total, paid, outstanding: total - paid, count: rows.length } });
     } catch (error: unknown) {
@@ -779,20 +780,20 @@ export function registerFactoryAnalyticsRoutes(app: Express) {
         .from(factoryBales)
         .where(and(eq(factoryBales.companyId, companyId), eq(factoryBales.status, "IN_STOCK")));
 
-      const openingStock = parseFloat(rawReceived?.totalCost || "0");
-      const closingRaw = parseFloat(rawRemaining?.remainingCost || "0");
-      const closingBales = parseFloat(baleStock?.totalCost || "0");
+      const openingStock = toMoney(rawReceived?.totalCost).toNumber();
+      const closingRaw = toMoney(rawRemaining?.remainingCost).toNumber();
+      const closingBales = toMoney(baleStock?.totalCost).toNumber();
       const closingStock = closingRaw + closingBales;
 
       res.json({
         openingStock,
         closingStock,
         detail: {
-          rawReceived: { cost: openingStock, kg: parseFloat(rawReceived?.totalKg || "0") },
-          rawRemaining: { cost: closingRaw, kg: parseFloat(rawRemaining?.remainingKg || "0") },
+          rawReceived: { cost: openingStock, kg: toMoney(rawReceived?.totalKg).toNumber() },
+          rawRemaining: { cost: closingRaw, kg: toMoney(rawRemaining?.remainingKg).toNumber() },
           balesInStock: {
             cost: closingBales,
-            kg: parseFloat(baleStock?.totalWeightKg || "0"),
+            kg: toMoney(baleStock?.totalWeightKg).toNumber(),
             count: baleStock?.count ?? 0,
           },
         },

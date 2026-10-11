@@ -7,7 +7,6 @@ import { getExportPriceVisibility } from "../../../helpers/exportVisibility";
 import type { Express, Request, Response } from "express";
 import { db } from "../../../db";
 import { requireAuth } from "../../../auth";
-
 import {
   factoryBaleProducts,
   factoryBales,
@@ -27,6 +26,7 @@ import { allocateRemainingProformaLines } from "./proformaCapacityEnforcement";
 import { guardExistingOrderProformaLink, guardProformaOrderCreation } from "./proformaCapacityWriteGuards";
 import { acquireProformaCapacityTransactionLock } from "./proformaCapacityConcurrency";
 import { canViewBookingInfo, isValidBookingInfo } from "./bookingInfo";
+import { toMoney } from "../../../lib/money";
 
 export function registerOrderCrudRoutes(app: Express) {
   app.get("/api/factory/customer-orders", requireAuth, async (req: Request, res: Response) => {
@@ -326,10 +326,10 @@ export function registerOrderCrudRoutes(app: Express) {
 
       const profitLines = lines.map((line) => {
         const qty = Number(line.qty || 0);
-        const selling = parseFloat(line.totalPrice || "0");
+        const selling = toMoney(line.totalPrice).toNumber();
         const product = line.articleCode ? productMap[line.articleCode] : null;
         const hasCost = product !== null && product.productionPrice !== null;
-        const costPerBale = hasCost ? parseFloat(product!.productionPrice!) : 0;
+        const costPerBale = hasCost ? toMoney(product!.productionPrice!).toNumber() : 0;
         const cost = hasCost ? costPerBale * qty : 0;
         const profit = hasCost ? selling - cost : null;
         const profitPctOnCost = hasCost && cost !== 0 ? ((selling - cost) / cost) * 100 : null;
@@ -353,7 +353,7 @@ export function registerOrderCrudRoutes(app: Express) {
           profitPctOnCost: hideCostData ? null : profitPctOnCost,
           marginPct: hideCostData ? null : marginPct,
           missingCost: !hasCost,
-          pricePerBale: parseFloat(line.pricePerBale || "0"),
+          pricePerBale: toMoney(line.pricePerBale).toNumber(),
         };
       });
 

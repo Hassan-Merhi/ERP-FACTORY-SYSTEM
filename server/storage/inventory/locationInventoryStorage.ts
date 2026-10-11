@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { eq, and, isNull, asc, sql } from "drizzle-orm";
 import { logger } from "../../lib/logger";
 import { db, pool, type DatabaseOrTransaction, type DbTransaction } from "../../db";
-import { MoneyDecimal } from "../../lib/money";
+import { MoneyDecimal, toMoney } from "../../lib/money";
 import * as schema from "@shared/schema";
 import { createDatabaseStockMovementAdapter } from "../../services/inventory/databaseStockMovementAdapter";
 import { postStockMovementTx } from "../../services/inventory/stockMovementIntegrityService";
@@ -308,8 +308,8 @@ export async function updateInventoryTx(
       .where(and(eq(schema.inventory.locationId, locationId), eq(schema.inventory.stockItemId, stockItemId)))
       .limit(1)
       .for("update");
-    const previousQuantity = existing ? Number.parseFloat(existing.quantity || "0") : 0;
-    const nextQuantity = Number.parseFloat(quantity || "0");
+    const previousQuantity = existing ? toMoney(existing.quantity).toNumber() : 0;
+    const nextQuantity = toMoney(quantity).toNumber();
     const delta = nextQuantity - previousQuantity;
 
     await tx
@@ -372,7 +372,7 @@ export async function getTotalInventoryValue(companyId: number): Promise<number>
     .select({ total: sql<string>`COALESCE(SUM(CAST(${schema.inventory.totalValue} AS numeric)), 0)` })
     .from(schema.inventory)
     .where(eq(schema.inventory.companyId, companyId));
-  return result ? parseFloat(result.total) : 0;
+  return result ? toMoney(result.total).toNumber() : 0;
 }
 
 export async function getLowStockItems(companyId: number, threshold: number = 10) {

@@ -15,6 +15,7 @@ import {
   findReceiptAdjustmentAmbiguitySupplierIds,
 } from "./timelineAmbiguityV6";
 import { loadMissingSupplierTimelineRows } from "./missingSupplierTimelineV7";
+import { toMoney } from "../../../lib/money";
 
 interface SourceSafetyRow {
   source_id: number;
@@ -153,7 +154,7 @@ async function loadV7SafetyState(
   const incompleteBatchIds = new Set<number>();
 
   for (const row of sourceResult.rows) {
-    const weight = Number.parseFloat(row.weight_kg ?? "0") || 0;
+    const weight = toMoney(row.weight_kg).toNumber();
     if (weight <= 0) {
       addBlockedReason(blockedByBatchId, row.batch_id, row.batch_code, "ZERO_WEIGHT_SOURCE");
     }
@@ -199,8 +200,8 @@ async function loadV7SafetyState(
     supplierId: row.supplier_id,
     supplierName: row.supplier_name,
     date: row.date,
-    kg: Number.parseFloat(row.kg ?? "0") || 0,
-    costPerKg: Number.parseFloat(row.cost_per_kg ?? "0") || 0,
+    kg: toMoney(row.kg).toNumber(),
+    costPerKg: toMoney(row.cost_per_kg).toNumber(),
     currencyCode: row.currency_code || "USD",
     reference: row.reference,
     notes: row.notes,

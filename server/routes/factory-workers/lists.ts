@@ -15,6 +15,7 @@ import { factoryWorkers, factoryPayrolls, factoryWorkerDocuments, factoryWorkerA
 
 import { getFactoryCompanyId } from "./_helpers";
 import { parseListPagination, setListPaginationHeaders } from "../../lib/listPagination";
+import { toMoney } from "../../lib/money";
 
 export function registerFactoryWorkerListRoutes(app: Express, requireAuth: RequestHandler, db: Database) {
   // GET /api/factory/workers/with-balances - List active workers with computed current balances
@@ -52,13 +53,13 @@ export function registerFactoryWorkerListRoutes(app: Express, requireAuth: Reque
       const advanceMap = new Map<number, number>(
         advanceTotals.map((r: { workerId: number; total: string }): [number, number] => [
           r.workerId,
-          parseFloat(r.total),
+          toMoney(r.total).toNumber(),
         ])
       );
       const payrollMap = new Map<number, number>(
         payrollTotals.map((r: { workerId: number; total: string }): [number, number] => [
           r.workerId,
-          parseFloat(r.total),
+          toMoney(r.total).toNumber(),
         ])
       );
 
@@ -188,7 +189,7 @@ export function registerFactoryWorkerListRoutes(app: Express, requireAuth: Reque
         [companyId]
       );
       const advMap: Record<number, number> = {};
-      for (const r of advRows.rows) advMap[r.worker_id] = parseFloat(r.pending_balance);
+      for (const r of advRows.rows) advMap[r.worker_id] = toMoney(r.pending_balance).toNumber();
 
       const enriched = results.map((w: typeof factoryWorkers.$inferSelect) => ({
         ...w,
