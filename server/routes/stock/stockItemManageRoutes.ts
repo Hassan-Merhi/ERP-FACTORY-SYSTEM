@@ -9,6 +9,7 @@ import { sql } from "drizzle-orm";
 import type { RawQueryRow } from "../../db";
 import type { InsertStockItem } from "@shared/schema";
 import { toFiniteNumber } from "@shared/typeGuards";
+import { parseMoneyInput } from "../../lib/money";
 
 export function registerStockItemManageRoutes(app: Express) {
   app.patch("/api/stock-items/:id", requireAuth, requireNonPOS, async (req, res) => {
@@ -432,13 +433,13 @@ export function registerStockItemManageRoutes(app: Express) {
 
       // Validate numeric fields if provided
       if (req.body.quantity !== undefined) {
-        const qty = parseFloat(req.body.quantity);
+        const qty = parseMoneyInput(req.body.quantity)?.toNumber() ?? NaN;
         if (isNaN(qty)) {
           return res.status(400).json({ message: "Quantity must be a valid number" });
         }
       }
       if (req.body.rate !== undefined) {
-        const rate = parseFloat(req.body.rate);
+        const rate = parseMoneyInput(req.body.rate)?.toNumber() ?? NaN;
         if (isNaN(rate) || rate < 0) {
           return res.status(400).json({ message: "Rate must be a valid non-negative number" });
         }

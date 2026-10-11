@@ -22,6 +22,7 @@ import {
 } from "@shared/schema";
 import { eq, and, or, sql, inArray, ne, isNull } from "drizzle-orm";
 import Decimal from "decimal.js";
+import { toMoney } from "../../../../lib/money";
 
 export function registerRawStockRecalculateUsedRoutes(app: Express) {
   // Recalculate usedKg for all factory_raw_stock records based on ACTIVE (non-deleted) mix batch sources.
@@ -102,7 +103,7 @@ export function registerRawStockRecalculateUsedRoutes(app: Express) {
       for (const row of sourceSums) {
         if (row.containerId != null) {
           validByContainer.set(row.containerId, {
-            used: parseFloat(row.totalUsedKg || "0"),
+            used: toMoney(row.totalUsedKg).toNumber(),
             count: parseInt(row.validSourceCount || "0"),
           });
         }
@@ -111,7 +112,7 @@ export function registerRawStockRecalculateUsedRoutes(app: Express) {
       for (const row of excludedSums) {
         if (row.containerId != null) {
           excludedByContainer.set(row.containerId, {
-            weight: parseFloat(row.excludedWeight || "0"),
+            weight: toMoney(row.excludedWeight).toNumber(),
             count: parseInt(row.excludedCount || "0"),
           });
         }

@@ -25,6 +25,7 @@ import {
   stockAdjustmentItems,
   creditNoteItems,
 } from "@shared/schema";
+import { parseMoneyInput } from "../../lib/money";
 
 function dayBefore(dateStr: string): string {
   const d = new Date(`${dateStr}T00:00:00.000Z`);
@@ -34,7 +35,7 @@ function dayBefore(dateStr: string): string {
 
 function finite(value: string | number | null | undefined): number {
   if (value === null || value === undefined || value === "") return 0;
-  const parsed = typeof value === "number" ? value : Number.parseFloat(value);
+  const parsed = typeof value === "number" ? value : (parseMoneyInput(value)?.toNumber() ?? NaN);
   return Number.isFinite(parsed) ? parsed : 0;
 }
 

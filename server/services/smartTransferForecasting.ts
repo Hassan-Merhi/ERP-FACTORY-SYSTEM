@@ -12,6 +12,7 @@ import {
 } from "./smartTransferAllocation";
 import { loadOtwStockByItem, type OtwContainerDetail } from "./stockTransferAnalysis";
 import { roundNumber } from "./smartTransferPerformance";
+import { parseMoneyInput } from "../lib/money";
 
 export type SmartTransferDemandTrend = "accelerating" | "stable" | "declining" | "insufficient_data";
 export type SmartTransferUrgencyBand = "critical" | "high" | "medium" | "low";
@@ -91,7 +92,7 @@ interface ForecastCandidate {
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 function parseQuantity(value: unknown): number {
-  const parsed = Number.parseFloat(String(value ?? "0"));
+  const parsed = parseMoneyInput(String(value ?? "0"))?.toNumber() ?? NaN;
   return Number.isFinite(parsed) ? parsed : 0;
 }
 

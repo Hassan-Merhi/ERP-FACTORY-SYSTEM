@@ -1,5 +1,6 @@
 import type { QueryResultRow } from "pg";
 import { factoryContainers, factoryRawStock } from "@shared/schema";
+import { parseMoneyInput } from "../../../lib/money";
 
 export interface ReplayQueryExecutor {
   // Default row type is pg's own QueryResultRow — a dynamic SQL row whose
@@ -397,6 +398,6 @@ export function rowToCamel<T>(row: Record<string, unknown>): T {
 }
 
 export function numeric(value: unknown): number {
-  const parsed = Number.parseFloat(String(value ?? "0"));
+  const parsed = parseMoneyInput(String(value ?? "0"))?.toNumber() ?? NaN;
   return Number.isFinite(parsed) ? parsed : 0;
 }

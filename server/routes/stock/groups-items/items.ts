@@ -12,6 +12,7 @@ import { requireAuth, requireNonPOS } from "../../../auth";
 import { logAudit } from "../../_helpers";
 import { stockItems, insertStockItemSchema } from "@shared/schema";
 import { eq, and, or, asc, sql, isNull, ilike, type SQL } from "drizzle-orm";
+import { toMoney } from "../../../lib/money";
 
 export function registerStockItemRoutes(app: Express) {
   // Stock Items
@@ -211,8 +212,8 @@ export function registerStockItemRoutes(app: Express) {
 
       // Calculate opening value if qty and rate provided
       if (parsed.openingQty && parsed.openingRate) {
-        const qty = parseFloat(parsed.openingQty);
-        const rate = parseFloat(parsed.openingRate);
+        const qty = toMoney(parsed.openingQty).toNumber();
+        const rate = toMoney(parsed.openingRate).toNumber();
         parsed.openingValue = (qty * rate).toFixed(2);
       }
 

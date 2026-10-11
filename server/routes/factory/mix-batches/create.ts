@@ -378,7 +378,7 @@ export function registerFactoryMixBatchCreateRoutes(app: Express) {
         txType: "MIX_BATCH_CREATED",
         referenceId: result.id,
         referenceTable: "factory_mix_batches",
-        description: `Mix batch created: ${result.batchCode}${result.name ? ` – ${result.name}` : ""} (${parseFloat(result.totalWeightKg || "0").toFixed(1)} kg)`,
+        description: `Mix batch created: ${result.batchCode}${result.name ? ` – ${result.name}` : ""} (${toMoney(result.totalWeightKg).toFixed(1)} kg)`,
         amountCurrency: toMoney(result.totalCost).toNumber(),
         amountUsd: toMoney(result.totalCost).toNumber(),
       });

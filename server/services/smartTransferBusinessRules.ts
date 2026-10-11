@@ -8,6 +8,7 @@ import {
   type SmartTransferSourceOptimizedResult,
 } from "./smartTransferSourceOptimization";
 import { roundNumber } from "./smartTransferPerformance";
+import { parseMoneyInput } from "../lib/money";
 
 export interface SmartTransferBusinessRuleOptions extends SmartTransferPreviewOptions {
   maxItemSharePct?: number;
@@ -87,7 +88,7 @@ interface MixTargets {
 const UNASSIGNED_KEY = 0;
 
 function parseQuantity(value: unknown): number {
-  const parsed = Number.parseFloat(String(value ?? "0"));
+  const parsed = parseMoneyInput(String(value ?? "0"))?.toNumber() ?? NaN;
   return Number.isFinite(parsed) ? parsed : 0;
 }
 

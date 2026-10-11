@@ -2,6 +2,7 @@ import type { Express } from "express";
 import { getErrorMessage } from "../lib/httpHandlers";
 import { pool } from "../db";
 import { requireAuth } from "../auth";
+import { toMoney } from "../lib/money";
 
 // ── Internal: run all alert checks for one company ────────────────────────────
 async function upsertAlert(params: {
@@ -142,8 +143,8 @@ export async function runAlertChecks(companyId: number): Promise<void> {
       alertType: "large_cash_withdrawal",
       severity: "warning",
       targetRecordId: row.id,
-      title: `Large withdrawal: ${parseFloat(row.amount).toLocaleString()}`,
-      message: `Voucher ${row.voucher_number ?? row.id}: "${row.narration ?? "No narration"}" — ${parseFloat(row.amount).toLocaleString()} from ${row.account}`,
+      title: `Large withdrawal: ${toMoney(row.amount).toNumber().toLocaleString()}`,
+      message: `Voucher ${row.voucher_number ?? row.id}: "${row.narration ?? "No narration"}" — ${toMoney(row.amount).toNumber().toLocaleString()} from ${row.account}`,
       metadata: { voucherId: row.id, amount: row.amount },
     });
   }

@@ -4,6 +4,7 @@ import { and, desc, eq, gte, inArray, isNull, lte } from "drizzle-orm";
 import { db } from "../db";
 import { aiActionLog, salesItems, stockTransferItems, stockTransferVouchers, vouchers } from "@shared/schema";
 import { roundNumber } from "./smartTransferPerformance";
+import { parseMoneyInput } from "../lib/money";
 
 const PREVIEW_ACTION = "smart_transfer_preview_v4";
 const IMPORT_ACTION = "smart_transfer_import_v4";
@@ -40,7 +41,7 @@ interface FeedbackComparison {
 }
 
 function numberValue(value: unknown): number {
-  const parsed = Number.parseFloat(String(value ?? "0"));
+  const parsed = parseMoneyInput(String(value ?? "0"))?.toNumber() ?? NaN;
   return Number.isFinite(parsed) ? parsed : 0;
 }
 

@@ -1,3 +1,4 @@
+import { toMoney } from "../lib/money";
 export interface EmployeeBalanceTotals {
   debit: number;
   credit: number;
@@ -32,7 +33,7 @@ export function computeEmployeeNetPosition(
   let liabilities = 0;
 
   for (const employee of employees) {
-    const opening = Number.parseFloat(employee.openingBalance || "0") || 0;
+    const opening = toMoney(employee.openingBalance).toNumber();
     const openingSide = employee.openingBalanceSide === "Dr" ? "Dr" : "Cr";
     const signedOpening = openingSide === "Dr" ? opening : -opening;
     const balance = balances.get(employee.id) || { debit: 0, credit: 0 };
@@ -106,4 +107,3 @@ export function computeEmployeeWorkerNetPosition(
     workers: computeEmployeeNetPositionWithManagedAdvances(workerRows, balances, managedAdvances),
   };
 }
-

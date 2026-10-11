@@ -13,6 +13,7 @@ import {
 } from "@shared/schema";
 import { eq, and } from "drizzle-orm";
 import { getEtaTrackingSummary } from "../../services/jsonCargoTrackingService";
+import { parseMoneyInput } from "../../lib/money";
 
 export function registerContainerTrackingRoutes(app: Express) {
   app.patch("/api/containers/:id/tracking", requireAuth, requireNonPOS, async (req, res) => {
@@ -241,8 +242,8 @@ export function registerContainerTrackingRoutes(app: Express) {
             if (v === null || v === undefined || v === "") return null;
             const s = String(v).trim();
             if (!s || s === "[object Object]") return null;
-            const n = parseFloat(s.replace(/,/g, ""));
-            return isNaN(n) ? null : String(n);
+            const n = parseMoneyInput(s.replace(/,/g, ""));
+            return n === null ? null : String(n.toNumber());
           };
 
           // Build update object

@@ -2,6 +2,7 @@ import { db } from "./db";
 import { getErrorMessage } from "./lib/httpHandlers";
 import { eq, and, sql } from "drizzle-orm";
 import { users, baleProducts, baleLabelPrints, baleSequences, mixBatches } from "@shared/schema";
+import { toMoney } from "./lib/money";
 
 type SeedBaleRow = {
   id: number;
@@ -99,7 +100,7 @@ export async function runDevSeed() {
     const product = createdProducts[i % createdProducts.length];
     const weightKg = (Math.random() * 50 + 10).toFixed(3);
     const costPerKg = "1.50";
-    const totalCost = (parseFloat(weightKg) * 1.5).toFixed(2);
+    const totalCost = toMoney(weightKg).times(1.5).toFixed(2);
     const baleNum = nextNum + i;
     const baleCode = `BL-${String(baleNum).padStart(6, "0")}`;
     const barcodeValue = `${COMPANY_ID}-${baleNum}`;

@@ -28,6 +28,7 @@ import { db } from "../../db";
 import { factoryContainers, factoryOffloadAdditionalCharges, factoryContainerCommissions } from "@shared/schema";
 import type { DatabaseOrTransaction } from "../../db";
 import { syncContainerCommissionJournalTx } from "./containerCommissionJournal";
+import { toMoney } from "../../lib/money";
 
 export type FxResolutionSource = "container" | "offload_additional_charge" | "commission";
 
@@ -153,7 +154,7 @@ function buildPlan(
   row: NonNullable<Awaited<ReturnType<typeof loadRow>>>
 ): FxResolutionPlan {
   const manualReviewRequired = !!(row.containerStatus && CLOSED_STATUSES.has(row.containerStatus));
-  const oldRateNum = parseFloat(row.fxRateToUsd || "0");
+  const oldRateNum = toMoney(row.fxRateToUsd).toNumber();
   const EPS = 1e-9;
   const sameRate = Math.abs(oldRateNum - newFxRateToUsd) < EPS;
   const alreadyResolved = row.fxRateConfirmed && sameRate;

@@ -12,6 +12,7 @@ import { db } from "../../../db";
 import { requireAuth } from "../../../auth";
 import { factoryBaleProducts, factoryBales } from "@shared/schema";
 import { eq, and, sql } from "drizzle-orm";
+import { toMoney } from "../../../lib/money";
 
 const GRADE_TO_PREFIX: Record<string, string> = {
   CREAM: "HMD10",
@@ -196,9 +197,9 @@ export function registerFactoryProductCascadeRoutes(app: Express) {
       if (description !== undefined) productUpdate.description = description;
       if (categoryId !== undefined) productUpdate.categoryId = categoryId;
       if (productionPrice !== undefined && productionPrice !== "")
-        productUpdate.productionPrice = String(parseFloat(productionPrice) || 0);
+        productUpdate.productionPrice = String(toMoney(productionPrice).toNumber());
       if (sellingPrice !== undefined && sellingPrice !== "")
-        productUpdate.sellingPrice = String(parseFloat(sellingPrice) || 0);
+        productUpdate.sellingPrice = String(toMoney(sellingPrice).toNumber());
       if (labelDesignColor !== undefined) productUpdate.labelDesignColor = labelDesignColor || null;
 
       const [updatedProduct] = await db

@@ -410,7 +410,7 @@ export function registerOrderFinalizeRoutes(app: Express) {
             id: b.id,
             baleReference: b.referenceNumber,
             productName: b.productName,
-            weightKg: parseFloat(b.weightKg || "0"),
+            weightKg: toMoney(b.weightKg).toNumber(),
             locationName: (b.erpLocationId != null ? locationMap.get(b.erpLocationId) : undefined) || "Unknown",
             status: b.status,
           })
