@@ -21,6 +21,7 @@ import {
   customerOrderBaleRemovals,
 } from "@shared/schema";
 import { eq, and, sql, ilike } from "drizzle-orm";
+import { toMoney } from "../../../../lib/money";
 
 export function registerOrderBaleSwapRoutes(app: Express) {
   // GET /api/factory/bales/:id/order-info — get the order a bale is allocated to (for the confirmation dialog)
@@ -180,7 +181,7 @@ export function registerOrderBaleSwapRoutes(app: Express) {
             .select({ grandTotal: customerOrders.grandTotal })
             .from(customerOrders)
             .where(eq(customerOrders.id, order.id));
-          const newGrandTotal = parseFloat(recalcOrder?.grandTotal || "0");
+          const newGrandTotal = toMoney(recalcOrder?.grandTotal).toNumber();
 
           const [ledgerEntry] = await tx
             .select({ id: customerBalances.id })
@@ -223,7 +224,7 @@ export function registerOrderBaleSwapRoutes(app: Express) {
             .select({ grandTotal: customerOrders.grandTotal })
             .from(customerOrders)
             .where(eq(customerOrders.id, order.id));
-          const newGrandTotal = parseFloat(recalcOrder?.grandTotal || "0");
+          const newGrandTotal = toMoney(recalcOrder?.grandTotal).toNumber();
 
           const [verifiedEntry] = await tx
             .select({ id: factoryDaybookEntries.id })

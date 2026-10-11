@@ -21,6 +21,7 @@ import {
 } from "@shared/schema";
 import { eq, and, sql } from "drizzle-orm";
 import { requireNonSP } from "./containerHelpers";
+import { parseMoneyInput } from "../../lib/money";
 
 export function registerContainerCrudRoutes(app: Express) {
   app.get("/api/containers", requireAuth, requireNonPOS, async (req, res) => {
@@ -98,8 +99,8 @@ export function registerContainerCrudRoutes(app: Express) {
 
       // Extract manual container cost data from request body (not in base schema)
       const itemName = req.body.itemName?.trim();
-      const ratePerKg = req.body.ratePerKg ? parseFloat(req.body.ratePerKg) : 0;
-      const totalKg = req.body.totalKg ? parseFloat(req.body.totalKg) : 0;
+      const ratePerKg = req.body.ratePerKg ? (parseMoneyInput(req.body.ratePerKg)?.toNumber() ?? NaN) : 0;
+      const totalKg = req.body.totalKg ? (parseMoneyInput(req.body.totalKg)?.toNumber() ?? NaN) : 0;
       const hasManualCostData = itemName && ratePerKg > 0 && totalKg > 0;
 
       // Validate supplier required for manual containers with cost data
@@ -276,7 +277,7 @@ export function registerContainerCrudRoutes(app: Express) {
         return res.status(404).json({ message: "Container not found" });
       }
 
-       const pos = await storage.getPurchaseOrdersByContainerForCompany(containerId, req.session.currentCompanyId!);
+      const pos = await storage.getPurchaseOrdersByContainerForCompany(containerId, req.session.currentCompanyId!);
       const charges = await storage.getChargesByContainer(containerId);
 
       // Get line items for all POs

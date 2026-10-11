@@ -11,6 +11,7 @@ import {
 } from "../lib/continuousCursor";
 import { getErrorMessage } from "../lib/httpHandlers";
 import { userLocations } from "@shared/schema";
+import { parseMoneyInput } from "../lib/money";
 
 const DEFAULT_PAGE_SIZE = 100;
 const MAX_PAGE_SIZE = 250;
@@ -131,8 +132,8 @@ export function registerDaybookPaginationRoutes(app: Express): void {
         );
       }
 
-      const minAmount = Number.parseFloat(String(req.query.minAmount ?? ""));
-      const maxAmount = Number.parseFloat(String(req.query.maxAmount ?? ""));
+      const minAmount = parseMoneyInput(String(req.query.minAmount ?? ""))?.toNumber() ?? NaN;
+      const maxAmount = parseMoneyInput(String(req.query.maxAmount ?? ""))?.toNumber() ?? NaN;
       if (Number.isFinite(minAmount)) {
         voucherConditions.push(`v.total_amount::numeric >= ${bind(minAmount)}`);
       }

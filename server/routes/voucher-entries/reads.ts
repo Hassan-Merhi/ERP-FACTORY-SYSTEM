@@ -23,6 +23,7 @@ import {
   users,
 } from "@shared/schema";
 import { and, eq, inArray } from "drizzle-orm";
+import { toMoney } from "../../lib/money";
 
 export function registerVoucherEntryReadRoutes(app: Express) {
   app.get("/api/vouchers/:id/entries", requireAuth, async (req, res) => {
@@ -318,7 +319,7 @@ export function registerVoucherEntryReadRoutes(app: Express) {
             const itemsWithDetails = adjustmentItemsList.map((item) => {
               // For Mixed vouchers, determine Production vs Consumption by quantity sign
               // Positive quantity = Production (adding stock), Negative = Consumption (removing stock)
-              const qty = parseFloat(item.quantity || "0");
+              const qty = toMoney(item.quantity).toNumber();
               const isProduction = voucher.voucherType === "Production" || (voucher.voucherType === "Mixed" && qty > 0);
               const adjustmentLabel =
                 voucher.voucherType === "Mixed" ? (qty > 0 ? "Production" : "Consumption") : voucher.voucherType;

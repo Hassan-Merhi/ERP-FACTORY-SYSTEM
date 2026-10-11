@@ -12,6 +12,7 @@ import { storage } from "../../storage";
 import { requireAuth, requireNonPOS } from "../../auth";
 import { ledgerAccounts, vouchers, voucherEntries } from "@shared/schema";
 import { eq, and, or, asc, isNull, isNotNull } from "drizzle-orm";
+import { toMoney } from "../../lib/money";
 
 export function registerLedgerAccountReadRoutes(app: Express) {
   app.get("/api/ledger-accounts", requireAuth, async (req, res) => {
@@ -27,10 +28,7 @@ export function registerLedgerAccountReadRoutes(app: Express) {
       // metadata. Project the compact contract in SQL instead of fetching full
       // rows and trimming them later in the response bridge.
       if (req.query.profile === "picker") {
-        const conditions = [
-          eq(ledgerAccounts.companyId, effectiveCompanyId),
-          isNull(ledgerAccounts.deletedAt),
-        ];
+        const conditions = [eq(ledgerAccounts.companyId, effectiveCompanyId), isNull(ledgerAccounts.deletedAt)];
         if (accountType && typeof accountType === "string" && accountType.trim()) {
           conditions.push(eq(ledgerAccounts.accountType, accountType.trim()));
         }
@@ -132,7 +130,7 @@ export function registerLedgerAccountReadRoutes(app: Express) {
       const empty = allAccounts.filter((a) => {
         if (usedIds.has(a.id)) return false;
         if (parentIds.has(a.id)) return false;
-        const ob = parseFloat(a.openingBalance || "0");
+        const ob = toMoney(a.openingBalance).toNumber();
         if (Math.abs(ob) > 0.001) return false;
         return true;
       });

@@ -10,6 +10,7 @@ import { db } from "../../../db";
 import { requireAuth } from "../../../auth";
 import { inventory, stockItems, stockGroups, locations } from "@shared/schema";
 import { eq, and, isNull } from "drizzle-orm";
+import { toMoney } from "../../../lib/money";
 
 export function registerStockQueryRoutes(app: Express) {
   // Stock Query - Aggregated stock data across all locations
@@ -58,8 +59,8 @@ export function registerStockQueryRoutes(app: Express) {
           totalQty: 0,
           totalValue: 0,
         };
-        const qty = parseFloat(record.quantity || "0");
-        const rate = parseFloat(record.averageRate || "0");
+        const qty = toMoney(record.quantity).toNumber();
+        const rate = toMoney(record.averageRate).toNumber();
         existing.totalQty += qty;
         existing.totalValue += qty * rate;
         inventoryMap.set(record.stockItemId, existing);

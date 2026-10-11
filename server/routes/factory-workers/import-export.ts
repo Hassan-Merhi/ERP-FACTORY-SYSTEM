@@ -16,6 +16,7 @@ import ExcelJS from "exceljs";
 import { factoryWorkers } from "@shared/schema";
 
 import { getFactoryCompanyId, workerUpload, writeDaybookEntry } from "./_helpers";
+import { toMoney } from "../../lib/money";
 
 export function registerFactoryWorkerImportExportRoutes(app: Express, requireAuth: AuthMiddleware, db: AppDb) {
   // GET /api/factory/workers/template.xlsx - Download Excel import template
@@ -315,7 +316,8 @@ export function registerFactoryWorkerImportExportRoutes(app: Express, requireAut
               "weeklySalary",
               "biWeeklySalary",
             ]) {
-              if (mapped[f] !== undefined && mapped[f] !== "") mapped[f] = String(parseFloat(String(mapped[f])) || 0);
+              if (mapped[f] !== undefined && mapped[f] !== "")
+                mapped[f] = String(toMoney(String(mapped[f] ?? "")).toNumber());
             }
 
             // Find existing worker

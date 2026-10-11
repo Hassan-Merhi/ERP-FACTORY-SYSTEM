@@ -19,6 +19,7 @@ import { voucherEntries } from "@shared/schema";
 import { logger } from "../../../lib/logger";
 import { normalizeVoucherEntryAmounts } from "../../../services/accounting/currencyAmounts";
 import { saleTotalCents, spDeductionAmount, spPayableAfterDeduction } from "../spDeduction";
+import { toMoney } from "../../../lib/money";
 
 /**
  * Normalize a single entry amount with the voucher's historical currency and rate.
@@ -124,8 +125,8 @@ export async function rebuildSaleAccountingEntries(
   } = params;
 
   // Get original entries for reference
-  const paymentEntry = oldEntries.find((e) => parseFloat(e.debitAmount || "0") > 0);
-  const revenueEntry = oldEntries.find((e) => parseFloat(e.creditAmount || "0") > 0);
+  const paymentEntry = oldEntries.find((e) => toMoney(e.debitAmount).toNumber() > 0);
+  const revenueEntry = oldEntries.find((e) => toMoney(e.creditAmount).toNumber() > 0);
 
   if (!paymentEntry || !revenueEntry) {
     throw new Error("Original voucher entries not found");

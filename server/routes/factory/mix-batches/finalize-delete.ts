@@ -13,6 +13,7 @@ import { db } from "../../../db";
 import { requireAuth } from "../../../auth";
 import { factoryRawStock, factoryMixBatches, factoryMixBatchSources } from "@shared/schema";
 import { eq, and, sql, isNull } from "drizzle-orm";
+import { toMoney } from "../../../lib/money";
 
 export function registerFactoryMixBatchFinalizeDeleteRoutes(app: Express) {
   // ── Finalize a mix batch (mark as fully consumed/completed) ──
@@ -91,7 +92,7 @@ export function registerFactoryMixBatchFinalizeDeleteRoutes(app: Express) {
           .where(eq(factoryMixBatchSources.mixBatchId, id));
 
         for (const src of batchSourceRows) {
-          const weight = parseFloat(src.weightKg) || 0;
+          const weight = toMoney(src.weightKg).toNumber();
           if (weight <= 0) continue;
           if (src.containerId) {
             // Reverse consumption on the underlying raw-stock container. Scoped to

@@ -18,6 +18,7 @@ import {
 } from "@shared/schema";
 import { eq, and, inArray } from "drizzle-orm";
 import { createWorkbook, aoaToSheet, writeWorkbook } from "../../excelHelper";
+import { plusMoney } from "../../lib/money";
 
 export function registerContainerDocumentsRoutes(app: Express) {
   app.get("/api/containers/:id/export", requireAuth, requireNonPOS, async (req, res) => {
@@ -29,14 +30,17 @@ export function registerContainerDocumentsRoutes(app: Express) {
       const containerId = parseId(req.params.id);
 
       if (containerId === null) return res.status(400).json({ message: "Invalid id" });
-       const container = await storage.getContainerByIdForCompany(containerId, req.session.currentCompanyId);
+      const container = await storage.getContainerByIdForCompany(containerId, req.session.currentCompanyId);
 
       if (!container) {
         return res.status(404).json({ message: "Container not found" });
       }
 
       const supplier = await storage.getSupplierById(container.supplierId);
-       const purchaseOrders = await storage.getPurchaseOrdersByContainerForCompany(containerId, req.session.currentCompanyId);
+      const purchaseOrders = await storage.getPurchaseOrdersByContainerForCompany(
+        containerId,
+        req.session.currentCompanyId
+      );
 
       // Batch-fetch all PO line items and offload items in parallel
       const poIds = purchaseOrders.map((po) => po.id);
@@ -175,10 +179,10 @@ export function registerContainerDocumentsRoutes(app: Express) {
 
       for (const container of allContainers) {
         const supplier = await storage.getSupplierById(container.supplierId);
-         const purchaseOrders = await storage.getPurchaseOrdersByContainerForCompany(
-           container.id,
-           req.session.currentCompanyId
-         );
+        const purchaseOrders = await storage.getPurchaseOrdersByContainerForCompany(
+          container.id,
+          req.session.currentCompanyId
+        );
 
         const sheetData: unknown[][] = [];
 
@@ -385,7 +389,7 @@ export function registerContainerDocumentsRoutes(app: Express) {
           }
 
           // Calculate total sales
-          const totalSales = items.reduce((sum, item) => sum + parseFloat(item.totalSales || "0"), 0);
+          const totalSales = items.reduce((sum, item) => plusMoney(sum, item.totalSales), 0);
 
           if (totalSales === 0) {
             logger.warn(`Voucher ${voucher.id} has zero sales, skipping`);

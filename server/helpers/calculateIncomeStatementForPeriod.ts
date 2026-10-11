@@ -11,6 +11,7 @@ import { storage } from "../storage";
 import { vouchers, voucherEntries } from "@shared/schema";
 import { eq, and, isNull, lte, gte } from "drizzle-orm";
 import { round2 } from "../netPositionHelper";
+import { toMoney } from "../lib/money";
 
 export interface IncomeLineItem {
   label: string;
@@ -72,8 +73,8 @@ export async function calculateIncomeStatementForPeriod(
   const accountActivity = new Map<number, { debit: number; credit: number }>();
   for (const e of periodEntries) {
     if (!e.ledgerAccountId) continue;
-    const d = parseFloat(e.debitAmount || "0");
-    const c = parseFloat(e.creditAmount || "0");
+    const d = toMoney(e.debitAmount).toNumber();
+    const c = toMoney(e.creditAmount).toNumber();
     const cur = accountActivity.get(e.ledgerAccountId) || { debit: 0, credit: 0 };
     accountActivity.set(e.ledgerAccountId, { debit: cur.debit + d, credit: cur.credit + c });
   }

@@ -21,6 +21,7 @@ import {
 } from "@shared/schema";
 import { eq, and, inArray, sql, isNull } from "drizzle-orm";
 import { handleLocationSummaryBandwidthProfile } from "./location-summary-bandwidth";
+import { toMoney } from "../../../lib/money";
 
 export function registerLocationSummaryRoutes(app: Express) {
   // Stock Item Monthly Summary - Get aggregated monthly data for a stock item
@@ -71,8 +72,8 @@ export function registerLocationSummaryRoutes(app: Express) {
       const inventoryMap = new Map<string, { quantity: number; rate: number; value: number }>();
       for (const inv of inventoryData) {
         const key = `${inv.locationId}-${inv.stockItemId}`;
-        const qty = parseFloat(inv.quantity || "0");
-        const rate = parseFloat(inv.averageRate || "0");
+        const qty = toMoney(inv.quantity).toNumber();
+        const rate = toMoney(inv.averageRate).toNumber();
         inventoryMap.set(key, {
           quantity: qty,
           rate: rate,

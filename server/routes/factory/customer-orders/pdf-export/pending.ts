@@ -18,6 +18,7 @@ import path from "path";
 import fs from "fs";
 
 import { buildExportFilename } from "../orderHelpers";
+import { toMoney } from "../../../../lib/money";
 
 export function registerOrderPendingExportRoutes(app: Express) {
   app.get("/api/factory/customer-orders/:id/pending-export", requireAuth, async (req: Request, res: Response) => {
@@ -92,7 +93,7 @@ export function registerOrderPendingExportRoutes(app: Express) {
       for (let i = 0; i < baleLinks.length; i++) {
         const link = baleLinks[i];
         const bale = baleMap.get(link.baleId);
-        const weight = parseFloat(link.weight || bale?.weightKg || "0");
+        const weight = toMoney(link.weight || bale?.weightKg).toNumber();
         runningTotal += weight;
         const row = sheet.addRow({
           seq: i + 1,

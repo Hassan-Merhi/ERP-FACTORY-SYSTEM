@@ -10,7 +10,7 @@
  */
 
 import type Decimal from "decimal.js";
-import { toMoney, type MoneyInput } from "./lib/money";
+import { type MoneyInput, toMoney } from "./lib/money";
 import { isAccountMigrationClearingAccount } from "./lib/systemOnlyLedgerAccounts";
 
 export interface AccountLike {
@@ -125,7 +125,7 @@ export const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 10
  * Negative  →  we owe them / it is a liability.
  */
 export function getAccountNetBalance(acc: AccountLike, balanceMap: Map<number, AccountBalance>): number {
-  const opening = parseFloat(acc.openingBalance || "0");
+  const opening = toMoney(acc.openingBalance).toNumber();
   const defaultSide = assetDefaultDrTypes.includes(acc.accountType || "") ? 1 : -1;
   const openingSide = acc.openingBalanceSide === "Dr" ? 1 : acc.openingBalanceSide === "Cr" ? -1 : defaultSide;
   const signedOpening = opening * openingSide;

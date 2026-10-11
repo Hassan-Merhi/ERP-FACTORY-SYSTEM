@@ -69,8 +69,8 @@ export function registerContainerOffloadRecalcRoutes(app: Express) {
 
           if (storedOffloadItems.length > 0) {
             for (const offloadItem of storedOffloadItems) {
-              const quantity = parseFloat(offloadItem.quantity);
-              const totalValue = parseFloat(offloadItem.totalValue);
+              const quantity = toMoney(offloadItem.quantity).toNumber();
+              const totalValue = toMoney(offloadItem.totalValue).toNumber();
               await reverseInventoryByExactValue(
                 tx,
                 offloadRecord.locationId,

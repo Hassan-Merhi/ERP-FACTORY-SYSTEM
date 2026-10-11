@@ -24,6 +24,7 @@ import {
   factoryFxAllocations,
 } from "@shared/schema";
 import { eq, and, or, inArray } from "drizzle-orm";
+import { parseMoneyInput } from "../../../../lib/money";
 
 export function registerFactorySupplierCrudRoutes(app: Express) {
   app.get("/api/factory/suppliers", requireAuth, async (req: Request, res: Response) => {
@@ -136,7 +137,7 @@ export function registerFactorySupplierCrudRoutes(app: Express) {
       if (openingBalance === undefined || openingBalance === null || openingBalance === "") {
         return res.status(400).json({ message: "openingBalance is required" });
       }
-      const val = parseFloat(openingBalance);
+      const val = parseMoneyInput(openingBalance)?.toNumber() ?? NaN;
       if (isNaN(val)) {
         return res.status(400).json({ message: "openingBalance must be a valid number" });
       }

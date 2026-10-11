@@ -11,6 +11,7 @@ import { storage } from "../../../storage";
 import { companies, ledgerAccounts, locations } from "@shared/schema";
 import { eq, and, isNull } from "drizzle-orm";
 import type { HandlerErrorResult, SpEditAccountingContext } from "./posEditSaleTypes";
+import { toMoney } from "../../../lib/money";
 
 type SelectConnection = Pick<typeof db, "select">;
 
@@ -99,5 +100,5 @@ export async function fetchSpEditDeductionPerQty(
     .from(locations)
     .where(eq(locations.id, targetLocationId))
     .limit(1);
-  return parseFloat(String(editTargetLoc?.supplierPartnerPayableDeductionPerQty ?? "0")) || 0;
+  return toMoney(editTargetLoc?.supplierPartnerPayableDeductionPerQty).toNumber();
 }

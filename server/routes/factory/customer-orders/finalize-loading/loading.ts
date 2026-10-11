@@ -27,6 +27,7 @@ import {
 } from "@shared/schema";
 import { eq, and, inArray, isNull, ne } from "drizzle-orm";
 import { isFactorySessionLocation } from "../../../helpers/companyOwnership";
+import { plusMoney, toMoney } from "../../../../lib/money";
 
 export function registerOrderLoadingRoutes(app: Express) {
   app.post("/api/factory/customer-orders-loading", requireAuth, async (req: Request, res: Response) => {
@@ -309,7 +310,7 @@ export function registerOrderLoadingRoutes(app: Express) {
           .from(customers)
           .where(eq(customers.id, order.customerId));
         const txDate = req.body?.txDate || getClientDate(req);
-        const totalValue = bales.reduce((sum: number, b) => sum + parseFloat(b.priceUsed || "0"), 0);
+        const totalValue = bales.reduce((sum: number, b) => plusMoney(sum, b.priceUsed), 0);
 
         await writeDaybookEntry(tx, {
           companyId,
@@ -323,7 +324,7 @@ export function registerOrderLoadingRoutes(app: Express) {
         });
 
         // Also write ORDER_VERIFIED immediately since we skip the Pending step.
-        const verifyTotalValue = parseFloat(updated?.grandTotal || "0") || totalValue;
+        const verifyTotalValue = toMoney(updated?.grandTotal).toNumber() || totalValue;
         await tx
           .delete(factoryDaybookEntries)
           .where(

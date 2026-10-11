@@ -20,6 +20,7 @@ import {
 } from "@shared/schema";
 import { eq, and, sql, inArray, ilike, ne } from "drizzle-orm";
 import { normFactoryEntry } from "./_helpers";
+import { toMoney } from "../../../lib/money";
 
 export function registerFactoryContainerOtherChargesCurrencyAdminRoutes(app: Express) {
   // Preview and apply are both administrative repair operations. Developer is
@@ -227,7 +228,7 @@ export function registerFactoryContainerOtherChargesCurrencyAdminRoutes(app: Exp
               const voucherDate = container.arrivalDate || containerCreatedDate;
 
               for (const charge of tableCharges) {
-                const chargeAmt = parseFloat(charge.amount || "0");
+                const chargeAmt = toMoney(charge.amount).toNumber();
                 if (chargeAmt <= 0 || !charge.ledgerAccountId) continue;
                 const ocVoucherNum = `FACTORY-OC-${containerId}-${charge.id}-${Date.now()}`;
                 const [ocVoucher] = await tx

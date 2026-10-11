@@ -27,6 +27,7 @@ import {
 } from "../../services/security/databaseScopeRuntimeContext";
 import { adjustInventory } from "../../inventoryHelper";
 import { buildVoucherChangesForDelete, logAudit, snapshotVoucherEntries } from "../_helpers";
+import { toMoney } from "../../lib/money";
 
 const GOLDEN_COAST_POS_SETTLEMENT_SOURCE_TYPE = "golden-coast-pos-settlement";
 const canonicalStockMovementAdapter = createDatabaseStockMovementAdapter();
@@ -348,8 +349,8 @@ async function handleGoldenCoastPosDelete(req: Request, res: Response, next: Nex
 
           if (targetLocationId) {
             for (const item of sourceItems) {
-              const quantity = Number.parseFloat(item.quantity);
-              const costPrice = Number.parseFloat(item.costPrice || "0");
+              const quantity = toMoney(item.quantity).toNumber();
+              const costPrice = toMoney(item.costPrice).toNumber();
               const inventoryResult = await adjustInventory(
                 tx,
                 targetLocationId,

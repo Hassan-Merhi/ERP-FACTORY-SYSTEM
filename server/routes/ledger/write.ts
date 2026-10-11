@@ -12,6 +12,7 @@ import { requireAuth, requireNonPOS } from "../../auth";
 import { logAudit } from "../_helpers";
 import { ledgerAccounts, customers, insertLedgerAccountSchema, updateLedgerAccountSchema } from "@shared/schema";
 import { eq } from "drizzle-orm";
+import { toMoney } from "../../lib/money";
 
 const VALID_LEDGER_SUBTYPES: Record<string, string[]> = {
   Expense: ["Direct Expense", "Indirect Expense"],
@@ -99,7 +100,7 @@ export function registerLedgerAccountWriteRoutes(app: Express) {
       }
 
       // Validate opening balance amount and side must both be present or both absent
-      const hasBalance = parsed.openingBalance && parseFloat(parsed.openingBalance) !== 0;
+      const hasBalance = parsed.openingBalance && toMoney(parsed.openingBalance).toNumber() !== 0;
       const hasSide = parsed.openingBalanceSide && (parsed.openingBalanceSide as string) !== "";
 
       if (hasBalance && !hasSide) {
@@ -181,7 +182,7 @@ export function registerLedgerAccountWriteRoutes(app: Express) {
       }
 
       // Validate opening balance amount and side must both be present or both absent
-      const hasBalance = parsed.openingBalance && parseFloat(parsed.openingBalance) !== 0;
+      const hasBalance = parsed.openingBalance && toMoney(parsed.openingBalance).toNumber() !== 0;
       const hasSide = parsed.openingBalanceSide && (parsed.openingBalanceSide as string) !== "";
 
       if (hasBalance && !hasSide) {

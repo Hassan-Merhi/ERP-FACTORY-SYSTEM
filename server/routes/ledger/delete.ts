@@ -12,6 +12,7 @@ import { requireAuth, requireRole, requireNonPOS } from "../../auth";
 import { logAudit } from "../_helpers";
 import { ledgerAccounts, voucherEntries } from "@shared/schema";
 import { eq, and, inArray, isNull } from "drizzle-orm";
+import { toMoney } from "../../lib/money";
 
 export function registerLedgerAccountDeleteRoutes(app: Express) {
   app.delete("/api/ledger-accounts/:id", requireAuth, requireNonPOS, async (req, res) => {
@@ -88,70 +89,64 @@ export function registerLedgerAccountDeleteRoutes(app: Express) {
   });
 
   // Bulk-delete empty ledger accounts
-  app.post(
-    "/api/ledger-accounts/bulk-delete",
-    requireAuth,
-    requireRole("Admin"),
-    requireNonPOS,
-    async (req, res) => {
-      try {
-        const companyId = req.session.currentCompanyId;
-        if (!companyId) return res.status(400).json({ message: "No company selected" });
+  app.post("/api/ledger-accounts/bulk-delete", requireAuth, requireRole("Admin"), requireNonPOS, async (req, res) => {
+    try {
+      const companyId = req.session.currentCompanyId;
+      if (!companyId) return res.status(400).json({ message: "No company selected" });
 
-        const { accountIds } = req.body;
-        if (!accountIds || !Array.isArray(accountIds) || accountIds.length === 0) {
-          return res.status(400).json({ message: "No accounts provided" });
-        }
-
-        const allAccounts = await db
-          .select()
-          .from(ledgerAccounts)
-          .where(and(eq(ledgerAccounts.companyId, companyId), isNull(ledgerAccounts.deletedAt)));
-        const accountMap = new Map(allAccounts.map((a) => [a.id, a]));
-        const allAccountIds = allAccounts.map((a) => a.id);
-
-        // Get IDs that have entries
-        const usedRows =
-          allAccountIds.length > 0
-            ? await db
-                .selectDistinct({ accountId: voucherEntries.ledgerAccountId })
-                .from(voucherEntries)
-                .where(inArray(voucherEntries.ledgerAccountId, allAccountIds))
-            : [];
-        const usedIds = new Set(usedRows.map((r) => r.accountId));
-        const parentIds = new Set(allAccounts.filter((a) => a.parentId !== null).map((a) => a.parentId as number));
-
-        const deleted: number[] = [];
-        const skipped: { id: number; reason: string }[] = [];
-
-        for (const rawId of accountIds) {
-          const id = parseInt(rawId);
-          const account = accountMap.get(id);
-          if (!account) {
-            skipped.push({ id, reason: "Not found or wrong company" });
-            continue;
-          }
-          if (usedIds.has(id)) {
-            skipped.push({ id, reason: "Has voucher entries" });
-            continue;
-          }
-          if (parentIds.has(id)) {
-            skipped.push({ id, reason: "Is a parent account" });
-            continue;
-          }
-          const ob = parseFloat(account.openingBalance || "0");
-          if (Math.abs(ob) > 0.001) {
-            skipped.push({ id, reason: "Has opening balance" });
-            continue;
-          }
-          await storage.deleteLedgerAccount(id);
-          deleted.push(id);
-        }
-
-        res.json({ deleted: deleted.length, skipped: skipped.length, skippedDetails: skipped });
-      } catch (error: unknown) {
-        res.status(500).json({ message: getErrorMessage(error) });
+      const { accountIds } = req.body;
+      if (!accountIds || !Array.isArray(accountIds) || accountIds.length === 0) {
+        return res.status(400).json({ message: "No accounts provided" });
       }
+
+      const allAccounts = await db
+        .select()
+        .from(ledgerAccounts)
+        .where(and(eq(ledgerAccounts.companyId, companyId), isNull(ledgerAccounts.deletedAt)));
+      const accountMap = new Map(allAccounts.map((a) => [a.id, a]));
+      const allAccountIds = allAccounts.map((a) => a.id);
+
+      // Get IDs that have entries
+      const usedRows =
+        allAccountIds.length > 0
+          ? await db
+              .selectDistinct({ accountId: voucherEntries.ledgerAccountId })
+              .from(voucherEntries)
+              .where(inArray(voucherEntries.ledgerAccountId, allAccountIds))
+          : [];
+      const usedIds = new Set(usedRows.map((r) => r.accountId));
+      const parentIds = new Set(allAccounts.filter((a) => a.parentId !== null).map((a) => a.parentId as number));
+
+      const deleted: number[] = [];
+      const skipped: { id: number; reason: string }[] = [];
+
+      for (const rawId of accountIds) {
+        const id = parseInt(rawId);
+        const account = accountMap.get(id);
+        if (!account) {
+          skipped.push({ id, reason: "Not found or wrong company" });
+          continue;
+        }
+        if (usedIds.has(id)) {
+          skipped.push({ id, reason: "Has voucher entries" });
+          continue;
+        }
+        if (parentIds.has(id)) {
+          skipped.push({ id, reason: "Is a parent account" });
+          continue;
+        }
+        const ob = toMoney(account.openingBalance).toNumber();
+        if (Math.abs(ob) > 0.001) {
+          skipped.push({ id, reason: "Has opening balance" });
+          continue;
+        }
+        await storage.deleteLedgerAccount(id);
+        deleted.push(id);
+      }
+
+      res.json({ deleted: deleted.length, skipped: skipped.length, skippedDetails: skipped });
+    } catch (error: unknown) {
+      res.status(500).json({ message: getErrorMessage(error) });
     }
-  );
+  });
 }

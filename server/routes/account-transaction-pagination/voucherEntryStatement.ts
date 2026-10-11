@@ -25,6 +25,7 @@ import {
   statementRowNet,
   summaryFromContinuousMeta,
 } from "./_helpers";
+import { toMoney } from "../../lib/money";
 
 export function genericFilteredCte(
   kind: AccountKind,
@@ -155,7 +156,7 @@ export async function loadVoucherPrePeriodNet(options: {
        AND COALESCE(v.effective_date::date, v.voucher_date::date) < $${preValues.length}::date`,
     preValues
   );
-  return Number.parseFloat(preResult.rows[0]?.net || "0") || 0;
+  return toMoney(preResult.rows[0]?.net).toNumber();
 }
 
 export async function runVoucherEntryStatement(options: {
@@ -297,7 +298,7 @@ export async function runVoucherEntryStatement(options: {
   return buildPageResponse(
     rows,
     summaryResult.rows[0],
-    Number.parseFloat(precedingResult.rows[0]?.net || "0") || 0,
+    toMoney(precedingResult.rows[0]?.net).toNumber(),
     prePeriodNet,
     pagination,
     dates

@@ -18,6 +18,7 @@ import {
   roundNumber,
   type TransferPerformanceClassification,
 } from "./smartTransferPerformance";
+import { parseMoneyInput } from "../lib/money";
 
 export interface HistoricalTransferLine {
   stockItemId: number;
@@ -85,7 +86,7 @@ export interface SmartTransferHistoryOptions {
 }
 
 function parseQuantity(value: unknown): number {
-  const parsed = Number.parseFloat(String(value ?? "0"));
+  const parsed = parseMoneyInput(String(value ?? "0"))?.toNumber() ?? NaN;
   return Number.isFinite(parsed) ? parsed : 0;
 }
 

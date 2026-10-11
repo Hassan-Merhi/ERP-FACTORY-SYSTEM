@@ -42,6 +42,7 @@ import {
   retireGoldenCoastPosAccountingTx,
 } from "../goldenCoastPosAccounting";
 import { spDeductionAmount, spPayableAfterDeduction } from "../spDeduction";
+import { toMoney } from "../../../lib/money";
 
 function err(result: HandlerErrorResult): { status: number; body: PosSaleUpdateResponseBody } {
   // HandlerErrorResult bodies are plain JSON message objects; the response
@@ -315,7 +316,7 @@ export async function updatePosSale(
   let customerAccount = null;
   if (isCreditSale) {
     const updatedEntries = await db.select().from(voucherEntries).where(eq(voucherEntries.voucherId, voucherId));
-    const debitEntry = updatedEntries.find((entry) => parseFloat(entry.debitAmount || "0") > 0);
+    const debitEntry = updatedEntries.find((entry) => toMoney(entry.debitAmount).toNumber() > 0);
     if (debitEntry?.ledgerAccountId) {
       customerAccount = await storage.getLedgerAccountById(debitEntry.ledgerAccountId);
     }

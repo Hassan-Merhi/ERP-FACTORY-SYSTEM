@@ -37,6 +37,7 @@ import {
   financialOperationFingerprint,
   withDurableFinancialOperation,
 } from "../../../services/accounting/durableFinancialOperation";
+import { toMoney } from "../../../lib/money";
 
 const REVERSAL_STATUS_MESSAGE = "Only OFFLOADED or PARTIALLY_RECEIVED containers can be reversed";
 const REVERSAL_SUCCESS_MESSAGE = "Offload reversed successfully. Container is back to its previous status.";
@@ -359,7 +360,7 @@ export function registerRawStockReverseOffloadRoute(app: Express) {
         // posts (`FACTORY-FREIGHT-{containerId}`) rather than carrying a timestamp:
         // this is the same voucher being restored, so it keeps one identity that the
         // next offload's cleanup can find exactly.
-        const restoredFreightAmt = parseFloat(restoredFreight || "0");
+        const restoredFreightAmt = toMoney(restoredFreight).toNumber();
         // A voucher with only a debit leg is an unbalanced posting: it inflates one
         // side of the ledger and reports as VOUCHER_NOT_BALANCED in the convergence
         // reconciliation. The freight credit has to land on somebody — the paying

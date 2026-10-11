@@ -11,6 +11,7 @@ import { getErrorMessage } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
 import { eq, and, desc, sql, gte, lte } from "drizzle-orm";
 import { factoryWasteEntries, factoryWorkers, customerOrders } from "@shared/schema";
+import { toMoney } from "../../lib/money";
 
 export function registerFactoryDashboardWasteRoutes(app: Express, requireAuth: AuthMiddleware, db: AppDb) {
   app.get("/api/factory/dashboard", requireAuth, async (req: Request, res: Response) => {
@@ -29,7 +30,7 @@ export function registerFactoryDashboardWasteRoutes(app: Express, requireAuth: A
       const wasteBreakdownMap: Record<string, number> = {};
       let wasteTotalKg = 0;
       for (const w of wasteOnDate) {
-        const kg = parseFloat(w.kgWaste || "0");
+        const kg = toMoney(w.kgWaste).toNumber();
         wasteTotalKg += kg;
         const wType = w.wasteType ? w.wasteType.toUpperCase() : "OTHER";
         wasteBreakdownMap[wType] = (wasteBreakdownMap[wType] || 0) + kg;

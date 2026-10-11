@@ -32,6 +32,7 @@ import {
   ledgerAccounts,
 } from "@shared/schema";
 import { eq, and, sql, isNotNull } from "drizzle-orm";
+import { toMoney } from "../../../lib/money";
 
 export function registerDeletedItemsRestoreRoutes(app: Express) {
   // Restore a deleted item
@@ -165,7 +166,7 @@ export function registerDeletedItemsRestoreRoutes(app: Express) {
               .where(eq(factoryMixBatchSources.mixBatchId, itemId));
 
             for (const src of batchSourceRows) {
-              const weight = parseFloat(src.weightKg) || 0;
+              const weight = toMoney(src.weightKg).toNumber();
               if (weight <= 0) continue;
               if (src.containerId) {
                 // Scope to companyId too (via a join-equivalent subselect) so a

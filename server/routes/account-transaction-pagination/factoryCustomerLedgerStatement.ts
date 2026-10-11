@@ -24,6 +24,7 @@ import {
   statementRowNet,
   summaryFromContinuousMeta,
 } from "./_helpers";
+import { toMoney } from "../../lib/money";
 
 export function factoryCustomerAllRowsCte(): string {
   return `all_rows AS (
@@ -137,7 +138,7 @@ export async function runFactoryCustomerLedgerStatement(options: {
        WHERE voucher_date < $4::date`,
       [companyId, customerId, ledgerAccountId, dates.rawStart]
     );
-    return Number.parseFloat(preResult.rows[0]?.net || "0") || 0;
+    return toMoney(preResult.rows[0]?.net).toNumber();
   };
 
   if (continuous) {
@@ -263,7 +264,7 @@ export async function runFactoryCustomerLedgerStatement(options: {
   return buildPageResponse(
     rows,
     summaryResult.rows[0],
-    Number.parseFloat(precedingResult.rows[0]?.net || "0") || 0,
+    toMoney(precedingResult.rows[0]?.net).toNumber(),
     prePeriodNet,
     pagination,
     dates

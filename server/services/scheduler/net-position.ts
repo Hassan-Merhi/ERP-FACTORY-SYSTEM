@@ -6,6 +6,7 @@ import { generateNetPositionExcel } from "../../helpers/generateNetPositionExcel
 import { storage } from "../../storage";
 import { getTodayLabel } from "./daily-export";
 import { loadOverdueCustomerBalances } from "./overdueCustomerQuery";
+import { toMoney } from "../../lib/money";
 
 export async function isScheduleEnabled(): Promise<boolean> {
   try {
@@ -96,7 +97,7 @@ export async function checkOverdueCustomers(): Promise<void> {
         const daysOverdue = Math.floor((today.getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24));
         overdue.push({
           name: row.legal_name,
-          balance: parseFloat(row.net_balance),
+          balance: toMoney(row.net_balance).toNumber(),
           dueDate: dueDate.toISOString().substring(0, 10),
           daysOverdue,
         });

@@ -24,6 +24,7 @@ import {
   statementRowNet,
   summaryFromContinuousMeta,
 } from "./_helpers";
+import { toMoney } from "../../lib/money";
 
 export async function runCustomerBalanceStatement(options: {
   customerId: number;
@@ -84,7 +85,7 @@ export async function runCustomerBalanceStatement(options: {
          AND cb.transaction_date < $3::date`,
       [customerId, companyId, dates.rawStart]
     );
-    return Number.parseFloat(preResult.rows[0]?.net || "0") || 0;
+    return toMoney(preResult.rows[0]?.net).toNumber();
   };
 
   if (continuous) {
@@ -194,7 +195,7 @@ export async function runCustomerBalanceStatement(options: {
   return buildPageResponse(
     rows,
     summaryResult.rows[0],
-    Number.parseFloat(precedingResult.rows[0]?.net || "0") || 0,
+    toMoney(precedingResult.rows[0]?.net).toNumber(),
     prePeriodNet,
     pagination,
     dates

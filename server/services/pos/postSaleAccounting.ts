@@ -31,7 +31,7 @@ import type {
 } from "./posSaleTypes";
 import { findLinkedCustomerId } from "./updateCustomerBalance";
 import { normalizeVoucherEntryAmounts } from "../../services/accounting/currencyAmounts";
-import { sumMoney } from "../../lib/money";
+import { sumMoney, toMoney } from "../../lib/money";
 import { saleTotalCents, spDeductionAmount as spDeductionAmountFor, spPayableAfterDeduction } from "./spDeduction";
 
 /**
@@ -78,9 +78,7 @@ export async function fetchSupplierPartnerAccountingContext(
   inventoryValidation: ValidatedInventoryItem[]
 ): Promise<SupplierPartnerAccountingContext | { error: HandlerErrorResult }> {
   // Per-qty deduction that silently reduces Supplier Cash Payable (not income/expense)
-  const spPosDeductionPerQty = isSpCompany
-    ? parseFloat(String(location.supplierPartnerPayableDeductionPerQty ?? "0")) || 0
-    : 0;
+  const spPosDeductionPerQty = isSpCompany ? toMoney(location.supplierPartnerPayableDeductionPerQty).toNumber() : 0;
   const spPosTotalQtySold = isSpCompany ? sumMoney(inventoryValidation.map((v) => v.saleQty)).toNumber() : 0;
 
   if (!isSpCompany) {
@@ -268,7 +266,7 @@ export async function insertSaleAccountingEntries(
    * it to normalizePosEntry.  The normalization then divides by the same rate
    * and recovers the correct USD base.  For USD sales the factor is 1 (no-op).
    */
-  const txRate = exchangeRate ? parseFloat(exchangeRate) : 1;
+  const txRate = exchangeRate ? toMoney(exchangeRate).toNumber() : 1;
   const needsTxConversion = !!(currency && currency !== "USD" && exchangeRate && txRate > 0);
   /** Convert a USD amount → transaction-currency amount for normalizePosEntry. */
   function toTxAmt(usdAmt: number): number {

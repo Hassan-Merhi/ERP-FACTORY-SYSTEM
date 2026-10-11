@@ -23,6 +23,7 @@ import {
 } from "@shared/schema";
 import { eq, and, or, inArray, ilike, isNull } from "drizzle-orm";
 import { normFactoryEntry } from "./_helpers";
+import { lineAmount } from "../../../lib/money";
 
 export function registerFactoryContainerDeleteRoutes(app: Express) {
   // ── Bulk cascade-delete containers ───────────────────────────────────────────
@@ -204,7 +205,7 @@ export function registerFactoryContainerDeleteRoutes(app: Express) {
           skipped++;
           continue;
         }
-        const goodsValue = parseFloat(container.ratePerKg || "0") * parseFloat(container.totalKg || "0");
+        const goodsValue = lineAmount(container.ratePerKg, container.totalKg).toNumber();
         if (goodsValue <= 0) {
           skipped++;
           continue;

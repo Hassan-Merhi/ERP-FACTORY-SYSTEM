@@ -68,7 +68,7 @@ export function registerFactoryCustomerStatementRoutes(app: Express) {
       );
       const totalQtyBalesByOrderId = new Map<number, number>(invoices.map((inv) => [inv.id, inv.totalQtyBales ?? 0]));
       const totalWeightKgByOrderId = new Map<number, number>(
-        invoices.map((inv) => [inv.id, parseFloat(inv.totalWeightKg ?? "0")])
+        invoices.map((inv) => [inv.id, toMoney(inv.totalWeightKg).toNumber()])
       );
 
       // Build a map of orderId → current grandTotal so we can correct stale

@@ -103,7 +103,7 @@ export function registerRawStockRecalculateUsedRoutes(app: Express) {
       for (const row of sourceSums) {
         if (row.containerId != null) {
           validByContainer.set(row.containerId, {
-            used: parseFloat(row.totalUsedKg || "0"),
+            used: toMoney(row.totalUsedKg).toNumber(),
             count: parseInt(row.validSourceCount || "0"),
           });
         }
@@ -112,7 +112,7 @@ export function registerRawStockRecalculateUsedRoutes(app: Express) {
       for (const row of excludedSums) {
         if (row.containerId != null) {
           excludedByContainer.set(row.containerId, {
-            weight: parseFloat(row.excludedWeight || "0"),
+            weight: toMoney(row.excludedWeight).toNumber(),
             count: parseInt(row.excludedCount || "0"),
           });
         }

@@ -25,6 +25,7 @@ import {
   customerOrderBaleRemovals,
 } from "@shared/schema";
 import { eq, and, inArray, sql } from "drizzle-orm";
+import { toMoney } from "../../../../lib/money";
 
 export function registerOrderBaleRemovalRoutes(app: Express) {
   // POST /api/factory/customer-orders/:id/bales/empty — return every scanned bale to stock
@@ -345,7 +346,7 @@ export function registerOrderBaleRemovalRoutes(app: Express) {
             .select({ grandTotal: customerOrders.grandTotal })
             .from(customerOrders)
             .where(eq(customerOrders.id, orderId));
-          const newGrandTotal = parseFloat(recalcOrder?.grandTotal || "0");
+          const newGrandTotal = toMoney(recalcOrder?.grandTotal).toNumber();
 
           const [ledgerEntry] = await tx
             .select({ id: customerBalances.id })
@@ -388,7 +389,7 @@ export function registerOrderBaleRemovalRoutes(app: Express) {
             .select({ grandTotal: customerOrders.grandTotal })
             .from(customerOrders)
             .where(eq(customerOrders.id, orderId));
-          const newGrandTotal = parseFloat(recalcOrder?.grandTotal || "0");
+          const newGrandTotal = toMoney(recalcOrder?.grandTotal).toNumber();
 
           const [verifiedEntry] = await tx
             .select({ id: factoryDaybookEntries.id })
