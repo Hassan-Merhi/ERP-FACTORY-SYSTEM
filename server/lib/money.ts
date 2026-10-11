@@ -38,13 +38,16 @@ function boundedDecimal(decimal: Decimal): Decimal | null {
 /**
  * A finite Decimal for any money input; empty, invalid, non-finite or
  * out-of-range input is zero, and a value too small for a float is zero too.
+ * A string with a leading number is read the way parseFloat reads it
+ * ("25 kg" is 25, "12.50 USD" is 12.5), so spreadsheet and form values that
+ * parseFloat accepted keep their amount instead of becoming zero.
  */
 export function toMoney(value: MoneyInput): Decimal {
   if (value === null || value === undefined || value === "") return new MoneyDecimal(0);
   try {
     return boundedDecimal(new MoneyDecimal(value)) ?? new MoneyDecimal(0);
   } catch {
-    return new MoneyDecimal(0);
+    return (typeof value === "string" ? parseMoneyInput(value) : null) ?? new MoneyDecimal(0);
   }
 }
 
