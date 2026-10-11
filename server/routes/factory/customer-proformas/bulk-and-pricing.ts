@@ -19,11 +19,14 @@ import {
 } from "@shared/schema";
 import { eq, and } from "drizzle-orm";
 import { autoSavePriceToPriceList } from "./_helpers";
+import { toMoney } from "../../../lib/money";
 
 function hasDuplicateNormalizedArticleCodes(lines: Array<{ articleCode?: unknown }>): boolean {
   const seen = new Set<string>();
   for (const line of lines) {
-    const normalized = String(line.articleCode ?? "").trim().toLowerCase();
+    const normalized = String(line.articleCode ?? "")
+      .trim()
+      .toLowerCase();
     if (!normalized) continue;
     if (seen.has(normalized)) return true;
     seen.add(normalized);
@@ -172,7 +175,7 @@ export function registerFactoryCustomerProformaBulkPricingRoutes(app: Express) {
           .where(eq(factoryBaleProducts.companyId, companyId));
         const priceByArticleCode = new Map<string, string>();
         for (const p of products) {
-          if (p.articleCode && p.sellingPrice && parseFloat(String(p.sellingPrice)) > 0) {
+          if (p.articleCode && p.sellingPrice && toMoney(p.sellingPrice).toNumber() > 0) {
             priceByArticleCode.set(p.articleCode.toLowerCase(), String(p.sellingPrice));
           }
         }
@@ -226,7 +229,7 @@ export function registerFactoryCustomerProformaBulkPricingRoutes(app: Express) {
           .where(eq(factoryBaleProducts.companyId, companyId));
         const priceByArticleCode = new Map<string, string>();
         for (const p of products) {
-          if (p.articleCode && p.productionPrice && parseFloat(String(p.productionPrice)) > 0) {
+          if (p.articleCode && p.productionPrice && toMoney(p.productionPrice).toNumber() > 0) {
             priceByArticleCode.set(p.articleCode.toLowerCase(), String(p.productionPrice));
           }
         }

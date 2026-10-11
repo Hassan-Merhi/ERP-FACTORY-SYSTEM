@@ -303,7 +303,7 @@ export default function GITContainers({ embedded = false }: { embedded?: boolean
 
       <div className="flex-1 overflow-hidden p-4 flex flex-col gap-4">
         {/* ── Company Mode ── (narrow phones: two equal segments, count underneath) */}
-        <div className="flex items-center gap-2 flex-wrap max-sm:grid max-sm:grid-cols-2">
+        <div className="flex items-center gap-2 flex-wrap max-sm:grid max-sm:grid-cols-2 max-sm:[&>*:last-child:nth-child(odd)]:col-span-2">
           <button
             onClick={() => {
               setAllCompanies(false);

@@ -713,9 +713,9 @@ function ItemsTable({
   return (
     <>
       {/* Desktop table */}
-      <div className="hidden md:block">
-        <Table wrapperClassName="max-h-[calc(100vh-300px)]">
-          <TableHeader className="bg-muted/40">
+      <div className="hidden md:block phone-land:hidden">
+        <Table>
+          <TableHeader className="bg-muted">
             <TableRow>
               <TableHead>Item Name</TableHead>
               <TableHead className="text-right">OTW Qty</TableHead>
@@ -789,7 +789,7 @@ function ItemsTable({
       </div>
 
       {/* Mobile cards */}
-      <div className="md:hidden space-y-2">
+      <div className="md:hidden phone-land:block space-y-2">
         {rows.map((row) => (
           <div
             key={row.stockItemId ?? row.stockItemName}

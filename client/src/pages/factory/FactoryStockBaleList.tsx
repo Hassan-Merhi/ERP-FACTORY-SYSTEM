@@ -141,14 +141,14 @@ export default function FactoryStockBaleList() {
                     {bale.lockedInLoading ? (
                       <Badge
                         variant="outline"
-                        className="text-[10px] px-1.5 h-5 text-amber-600 dark:text-amber-400 border-amber-500/40"
+                        className="text-[11px] px-1.5 h-5 text-amber-600 dark:text-amber-400 border-amber-500/40"
                       >
                         Loading
                       </Badge>
                     ) : (
                       <Badge
                         variant="outline"
-                        className="text-[10px] px-1.5 h-5 text-green-700 dark:text-green-400 border-green-600/40"
+                        className="text-[11px] px-1.5 h-5 text-green-700 dark:text-green-400 border-green-600/40"
                       >
                         Available
                       </Badge>

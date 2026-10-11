@@ -194,7 +194,7 @@ export function WorkersTable({
                       <span className="truncate">{worker.code || "No code"}</span>
                       <Badge
                         variant={worker.active === false ? "secondary" : "outline"}
-                        className="h-5 px-1.5 text-[10px]"
+                        className="h-5 px-1.5 text-[11px]"
                       >
                         {worker.active === false ? "Inactive" : "Active"}
                       </Badge>
@@ -280,7 +280,7 @@ export function WorkersTable({
                     <span>{worker.code || "No code"}</span>
                     <Badge
                       variant={worker.active === false ? "secondary" : "outline"}
-                      className="h-5 px-1.5 text-[10px]"
+                      className="h-5 px-1.5 text-[11px]"
                     >
                       {worker.active === false ? "Inactive" : "Active"}
                     </Badge>

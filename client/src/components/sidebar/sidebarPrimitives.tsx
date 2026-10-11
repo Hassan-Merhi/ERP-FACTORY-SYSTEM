@@ -183,7 +183,7 @@ export function SidebarSectionGroup({
           style={{ backgroundColor: section.color, opacity: hasActive ? 1 : 0.55 }}
         />
         <span
-          className="flex-1 text-[10px] font-semibold uppercase tracking-widest"
+          className="flex-1 text-[11px] font-semibold uppercase tracking-widest"
           style={{ color: section.color, opacity: hasActive ? 1 : 0.65 }}
         >
           {section.label}
@@ -395,7 +395,7 @@ export function ModuleHeader({ icon: Icon, label, tagline, accent }: ModuleHeade
           <span className="text-sm font-bold leading-tight">{label}</span>
           {/* Module badge beneath title */}
           <span
-            className="inline-flex w-fit items-center px-1.5 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-widest"
+            className="inline-flex w-fit items-center px-1.5 py-0.5 rounded-full text-[11px] font-bold uppercase tracking-widest"
             style={{ backgroundColor: `${accent}22`, color: accent }}
           >
             {badgeLabel}
@@ -480,8 +480,8 @@ export function ModuleFooter({ user, avatarClassName, accent, onLogout }: Module
         </Button>
       </div>
       <div className="mt-2 flex items-center justify-between">
-        <span className="text-[10px] text-muted-foreground/40 font-mono tracking-wide select-none">V.2.5</span>
-        <span className="text-[10px] text-muted-foreground/40 select-none">© Dakzo Systems.</span>
+        <span className="text-[11px] text-muted-foreground/40 font-mono tracking-wide select-none">V.2.5</span>
+        <span className="text-[11px] text-muted-foreground/40 select-none">© Dakzo Systems.</span>
       </div>
     </SidebarFooter>
   );

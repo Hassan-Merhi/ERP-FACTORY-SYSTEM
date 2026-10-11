@@ -15,6 +15,7 @@
  */
 
 import { pool } from "../db";
+import { toMoney } from "../lib/money";
 
 // ── Brand colours (matches generateStockPdf) ──────────────────────────────────
 const CLR_BRAND = "#0f172a"; // dark navy  — header bar, col header, paid box
@@ -209,9 +210,9 @@ export async function generateInvoicePdfMeta(
   );
   const items: InvoiceItem[] = itemsRes.rows.map((r) => ({
     stockItemName: r.stock_item_name,
-    quantity: parseFloat(r.quantity || "0"),
-    rateUSD: parseFloat(r.selling_price || "0"),
-    configuredPrice: parseFloat(r.configured_price || "0"),
+    quantity: toMoney(r.quantity).toNumber(),
+    rateUSD: toMoney(r.selling_price).toNumber(),
+    configuredPrice: toMoney(r.configured_price).toNumber(),
   }));
 
   let customerName: string | null = null;
@@ -249,7 +250,7 @@ export async function generateInvoicePdfMeta(
   const { buffer, pageCount } = await buildPdf({
     voucherDate: formatDbDate(v.voucher_date),
     description: v.description,
-    exchangeRate: v.exchange_rate ? parseFloat(v.exchange_rate) : null,
+    exchangeRate: v.exchange_rate ? toMoney(v.exchange_rate).toNumber() : null,
     isCreditSale: v.is_credit_sale,
     companyName: v.company_name,
     userName,

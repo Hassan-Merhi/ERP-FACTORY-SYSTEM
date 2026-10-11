@@ -3,6 +3,7 @@ import * as schema from "@shared/schema";
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { callAIWithFallback, type AIProvider } from "./aiProviders";
 import { RE_STOCK_ADJ, RE_VOUCHER } from "./intent";
+import { toMoney } from "../lib/money";
 export async function buildVoucherAndStockDrafts(params: {
   userMessage: string;
   companyId: number;
@@ -88,7 +89,7 @@ If the intent is unclear or amounts/accounts are too ambiguous to resolve, respo
                       AND v.company_id = ${companyId}
                     WHERE ve.ledger_account_id = ${entry.accountId}
                   `);
-                entry.balanceBefore = parseFloat((balResult.rows[0] as { net: string })?.net || "0");
+                entry.balanceBefore = toMoney((balResult.rows[0] as { net: string })?.net).toNumber();
               }
             }
           } catch (_) {
@@ -166,7 +167,7 @@ If intent is unclear, respond with exactly: null`;
               .where(
                 and(eq(schema.inventory.locationId, parsedAdj.locationId), eq(schema.inventory.companyId, companyId))
               );
-            const rateMap = new Map(invRows.map((r) => [r.stockItemId, parseFloat(r.averageRate ?? "0")]));
+            const rateMap = new Map(invRows.map((r) => [r.stockItemId, toMoney(r.averageRate).toNumber()]));
             parsedAdj.items = parsedAdj.items.map((item: { stockItemId: number }) => ({
               ...item,
               rate: rateMap.get(item.stockItemId) ?? 0,
@@ -184,10 +185,10 @@ If intent is unclear, respond with exactly: null`;
                         AND location_id = ${parsedAdj.locationId}
                         AND company_id = ${companyId}
                     `);
-                  const currentStock = parseFloat((invResult.rows[0] as { qty: string })?.qty || "0");
-                  item.currentStock = parseFloat(currentStock.toFixed(3));
+                  const currentStock = toMoney((invResult.rows[0] as { qty: string })?.qty).toNumber();
+                  item.currentStock = toMoney(currentStock.toFixed(3)).toNumber();
                   const delta = item.type === "PRODUCE" ? item.quantity : -item.quantity;
-                  item.projectedStock = parseFloat((currentStock + delta).toFixed(3));
+                  item.projectedStock = toMoney((currentStock + delta).toFixed(3)).toNumber();
                 }
               }
             }

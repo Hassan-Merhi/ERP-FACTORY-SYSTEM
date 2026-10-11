@@ -660,9 +660,9 @@ function StockOTWContent({ showCombined, onToggleCombined }: { showCombined: boo
       ) : (
         <>
           {/* Desktop table — borderless card, full-width */}
-          <div className="hidden md:block">
-            <Table wrapperClassName="max-h-[calc(100vh-300px)]">
-              <TableHeader className="bg-muted/40">
+          <div className="hidden md:block phone-land:hidden">
+            <Table>
+              <TableHeader className="bg-muted">
                 <TableRow>
                   <TableHead className="w-10 pl-4"></TableHead>
                   <TableHead>Item Name</TableHead>
@@ -754,7 +754,7 @@ function StockOTWContent({ showCombined, onToggleCombined }: { showCombined: boo
           </div>
 
           {/* Mobile cards */}
-          <div className="md:hidden space-y-2">
+          <div className="md:hidden phone-land:block space-y-2">
             {filteredItems.map((item, index) => {
               const isExpanded = expandedItems.has(item.stockItemName);
               const uniqueSuppliers = Array.from(new Set(item.containers.map((c) => c.supplierName)));

@@ -1,5 +1,6 @@
 import { db, sql } from "./reportShardSupport";
 import type { DataQueryContext, DataQueryResult, ReportImplementationShard } from "../types";
+import { toMoney } from "../../../lib/money";
 
 /**
  * Current-schema implementations for reports whose legacy SQL drifted behind
@@ -52,7 +53,7 @@ async function runSchemaCompatibilityReport(ctx: DataQueryContext): Promise<Data
         r.eta ? String(r.eta).slice(0, 10) : "—",
         r.supplier,
         r.transporter || "—",
-        fmtDec(parseFloat(r.grand_total || "0")),
+        fmtDec(toMoney(r.grand_total).toNumber()),
       ]);
       return {
         queryType: "container_list",
@@ -99,10 +100,10 @@ async function runSchemaCompatibilityReport(ctx: DataQueryContext): Promise<Data
       let totalBale = 0;
       let totalDeductions = 0;
       const tableRows = rows.rows.map((r) => {
-        const net = parseFloat(r.net_salary || "0");
-        const base = parseFloat(r.base_salary || "0");
-        const bale = parseFloat(r.bale_earnings || "0");
-        const deductions = parseFloat(r.deductions || "0");
+        const net = toMoney(r.net_salary).toNumber();
+        const base = toMoney(r.base_salary).toNumber();
+        const bale = toMoney(r.bale_earnings).toNumber();
+        const deductions = toMoney(r.deductions).toNumber();
         totalNet += net;
         totalBase += base;
         totalBale += bale;
@@ -169,9 +170,9 @@ async function runSchemaCompatibilityReport(ctx: DataQueryContext): Promise<Data
       let totalSale = 0;
       let totalProfit = 0;
       const tableRows = rows.rows.map((r) => {
-        const cost = parseFloat(r.cost || "0");
-        const sale = parseFloat(r.sale_amount || "0");
-        const commission = parseFloat(r.commission || "0");
+        const cost = toMoney(r.cost).toNumber();
+        const sale = toMoney(r.sale_amount).toNumber();
+        const commission = toMoney(r.commission).toNumber();
         const profit = sale - cost - commission;
         const margin = sale > 0 ? `${((profit / sale) * 100).toFixed(1)}%` : "—";
         totalCost += cost;
@@ -241,8 +242,8 @@ async function runSchemaCompatibilityReport(ctx: DataQueryContext): Promise<Data
         String(index + 1),
         r.full_name,
         String(r.total_bales),
-        fmtDec(parseFloat(r.total_kg || "0")),
-        fmtDec(parseFloat(r.avg_kg_per_bale || "0")),
+        fmtDec(toMoney(r.total_kg).toNumber()),
+        fmtDec(toMoney(r.avg_kg_per_bale).toNumber()),
       ]);
       return {
         queryType: "worker_productivity",
@@ -384,33 +385,33 @@ async function runSchemaCompatibilityReport(ctx: DataQueryContext): Promise<Data
         { label: "Supplier", value: container.supplier },
         { label: "Status", value: container.status },
         { label: "Import Date", value: container.import_date ? String(container.import_date).slice(0, 10) : "—" },
-        { label: "Total Kg", value: fmtDec(parseFloat(container.total_kg || "0")) },
-        { label: "Rate/Kg", value: fmtDec(parseFloat(container.rate_per_kg || "0")) },
-        { label: "Grand Total", value: fmt(parseFloat(container.grand_total || "0")), highlight: "positive" },
+        { label: "Total Kg", value: fmtDec(toMoney(container.total_kg).toNumber()) },
+        { label: "Rate/Kg", value: fmtDec(toMoney(container.rate_per_kg).toNumber()) },
+        { label: "Grand Total", value: fmt(toMoney(container.grand_total).toNumber()), highlight: "positive" },
       ];
       const breakdownRows: string[][] = [
-        ["Items Total", container.currency, fmt(parseFloat(container.items_total || "0"))],
-        ["Charges Total", container.currency, fmt(parseFloat(container.charges_total || "0"))],
+        ["Items Total", container.currency, fmt(toMoney(container.items_total).toNumber())],
+        ["Charges Total", container.currency, fmt(toMoney(container.charges_total).toNumber())],
       ];
-      if (parseFloat(container.transport_fee || "0") > 0) {
-        breakdownRows.push(["Transport Fee", container.currency, fmt(parseFloat(container.transport_fee || "0"))]);
+      if (toMoney(container.transport_fee).toNumber() > 0) {
+        breakdownRows.push(["Transport Fee", container.currency, fmt(toMoney(container.transport_fee).toNumber())]);
       }
-      if (parseFloat(container.duty_fee || "0") > 0) {
-        breakdownRows.push(["Duty Fee", container.currency, fmt(parseFloat(container.duty_fee || "0"))]);
+      if (toMoney(container.duty_fee).toNumber() > 0) {
+        breakdownRows.push(["Duty Fee", container.currency, fmt(toMoney(container.duty_fee).toNumber())]);
       }
       for (const po of poRows.rows) {
-        if (parseFloat(po.freight || "0") > 0)
-          breakdownRows.push([`Freight (${po.po_number})`, po.currency, fmt(parseFloat(po.freight))]);
-        if (parseFloat(po.fumigation || "0") > 0)
-          breakdownRows.push([`Fumigation (${po.po_number})`, po.currency, fmt(parseFloat(po.fumigation))]);
-        if (parseFloat(po.surcharge || "0") > 0)
-          breakdownRows.push([`Surcharge (${po.po_number})`, po.currency, fmt(parseFloat(po.surcharge))]);
-        if (parseFloat(po.doc_charges || "0") > 0)
-          breakdownRows.push([`Doc Charges (${po.po_number})`, po.currency, fmt(parseFloat(po.doc_charges))]);
-        if (parseFloat(po.discount || "0") > 0)
-          breakdownRows.push([`Discount (${po.po_number})`, po.currency, `(${fmt(parseFloat(po.discount))})`]);
+        if (toMoney(po.freight).toNumber() > 0)
+          breakdownRows.push([`Freight (${po.po_number})`, po.currency, fmt(toMoney(po.freight).toNumber())]);
+        if (toMoney(po.fumigation).toNumber() > 0)
+          breakdownRows.push([`Fumigation (${po.po_number})`, po.currency, fmt(toMoney(po.fumigation).toNumber())]);
+        if (toMoney(po.surcharge).toNumber() > 0)
+          breakdownRows.push([`Surcharge (${po.po_number})`, po.currency, fmt(toMoney(po.surcharge).toNumber())]);
+        if (toMoney(po.doc_charges).toNumber() > 0)
+          breakdownRows.push([`Doc Charges (${po.po_number})`, po.currency, fmt(toMoney(po.doc_charges).toNumber())]);
+        if (toMoney(po.discount).toNumber() > 0)
+          breakdownRows.push([`Discount (${po.po_number})`, po.currency, `(${fmt(toMoney(po.discount).toNumber())})`]);
       }
-      breakdownRows.push(["GRAND TOTAL", container.currency, fmt(parseFloat(container.grand_total || "0"))]);
+      breakdownRows.push(["GRAND TOTAL", container.currency, fmt(toMoney(container.grand_total).toNumber())]);
       return {
         queryType: "container_cost_breakdown",
         title: `Cost Breakdown: ${container.container_number}`,
@@ -475,11 +476,11 @@ async function runSchemaCompatibilityReport(ctx: DataQueryContext): Promise<Data
       let totalQty = 0;
       let totalValue = 0;
       const tableRows = inventoryRows.rows.map((r) => {
-        const qty = parseFloat(r.qty || "0");
-        const value = parseFloat(r.total_value || "0");
+        const qty = toMoney(r.qty).toNumber();
+        const value = toMoney(r.total_value).toNumber();
         totalQty += qty;
         totalValue += value;
-        return [r.location, fmtDec(qty), fmtDec(parseFloat(r.avg_rate || "0")), fmt(value)];
+        return [r.location, fmtDec(qty), fmtDec(toMoney(r.avg_rate).toNumber()), fmt(value)];
       });
       return {
         queryType: "stock_item_detail",
@@ -489,8 +490,8 @@ async function runSchemaCompatibilityReport(ctx: DataQueryContext): Promise<Data
           { label: "Code", value: item.code },
           { label: "Group", value: item.group_name || "—" },
           { label: "UOM", value: item.uom },
-          { label: "Selling Price", value: fmtDec(parseFloat(item.selling_price || "0")) },
-          { label: "Reorder Level", value: `${fmtDec(parseFloat(item.reorder_level || "0"))} ${item.uom}` },
+          { label: "Selling Price", value: fmtDec(toMoney(item.selling_price).toNumber()) },
+          { label: "Reorder Level", value: `${fmtDec(toMoney(item.reorder_level).toNumber())} ${item.uom}` },
           {
             label: "Total Stock",
             value: `${fmtDec(totalQty)} ${item.uom}`,
@@ -545,8 +546,8 @@ async function runSchemaCompatibilityReport(ctx: DataQueryContext): Promise<Data
       let totalKg = 0;
       const statusCounts: Record<string, number> = {};
       const tableRows = rows.rows.map((r) => {
-        const value = parseFloat(r.grand_total || "0");
-        const kg = parseFloat(r.total_kg || "0");
+        const value = toMoney(r.grand_total).toNumber();
+        const kg = toMoney(r.total_kg).toNumber();
         totalValue += value;
         totalKg += kg;
         statusCounts[r.status] = (statusCounts[r.status] || 0) + 1;

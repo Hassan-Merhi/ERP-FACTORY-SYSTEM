@@ -65,7 +65,7 @@ export function RawStockPartialFixPanel({ rawStock }: RawStockPartialFixPanelPro
 
               <div className="border rounded-md overflow-hidden bg-card shadow-xs">
                 <Table mobileLayout="cards">
-                  <TableHeader className="bg-muted/50">
+                  <TableHeader className="bg-muted">
                     <TableRow>
                       <TableHead>Container</TableHead>
                       <TableHead>Supplier</TableHead>
@@ -82,7 +82,7 @@ export function RawStockPartialFixPanel({ rawStock }: RawStockPartialFixPanelPro
                         <TableCell className="font-mono text-xs">{r.containerNumber}</TableCell>
                         <TableCell className="text-xs text-muted-foreground">{r.supplierName || "—"}</TableCell>
                         <TableCell>
-                          <Badge variant="outline" className="text-[10px] text-muted-foreground">
+                          <Badge variant="outline" className="text-[11px] text-muted-foreground">
                             {r.containerStatus}
                           </Badge>
                         </TableCell>
@@ -94,7 +94,7 @@ export function RawStockPartialFixPanel({ rawStock }: RawStockPartialFixPanelPro
                           ${r.next.costPerKgUsd.toFixed(6)}
                         </TableCell>
                         <TableCell className="text-right">
-                          <Badge variant="outline" className="text-red-500 border-red-500/30 bg-red-500/10 text-[10px]">
+                          <Badge variant="outline" className="text-red-500 border-red-500/30 bg-red-500/10 text-[11px]">
                             {r.diffPct > 0 ? "+" : ""}
                             {r.diffPct.toFixed(1)}%
                           </Badge>

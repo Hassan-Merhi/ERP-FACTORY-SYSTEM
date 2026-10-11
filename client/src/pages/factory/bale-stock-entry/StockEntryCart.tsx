@@ -119,7 +119,7 @@ export function StockEntryCart({
   return (
     <div className="min-w-0 max-w-full" data-factory-stock-entry-cart="true">
       {isMobile ? (
-        <div className="md:hidden">
+        <div className="md:hidden phone-land:block">
           {cart.length === 0 ? (
             <ResponsiveDataListEmpty>No items added yet. Scan a code or type to search.</ResponsiveDataListEmpty>
           ) : (
@@ -129,7 +129,7 @@ export function StockEntryCart({
                   <ResponsiveDataListHeader>
                     <div className="flex min-w-0 items-center gap-2">
                       <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10">
-                        <span className="text-[10px] font-bold text-primary">{item.product?.grade || "STK"}</span>
+                        <span className="text-[11px] font-bold text-primary">{item.product?.grade || "STK"}</span>
                       </div>
                       <div className="min-w-0">
                         <ResponsiveDataListTitle className="text-base">{item.product?.name}</ResponsiveDataListTitle>
@@ -138,7 +138,7 @@ export function StockEntryCart({
                             {item.product?.articleCode || item.product?.code}
                           </code>
                           {item.product?.categoryName && (
-                            <Badge variant="outline" className="h-auto max-w-full whitespace-normal py-0.5 text-[10px]">
+                            <Badge variant="outline" className="h-auto max-w-full whitespace-normal py-0.5 text-[11px]">
                               {item.product.categoryName}
                             </Badge>
                           )}
@@ -256,8 +256,8 @@ export function StockEntryCart({
           )}
         </div>
       ) : (
-        <div className="hidden overflow-hidden rounded-xl border bg-card/50 md:block">
-          <Table scrollLabel="Bales ready for stock entry" minimumWidth="56rem">
+        <div className="hidden overflow-hidden rounded-xl border bg-card/50 md:block phone-land:hidden">
+          <Table scrollLabel="Bales ready for stock entry" minimumWidth="56rem" stickyFirstColumn>
             <TableHeader>
               <TableRow className="bg-muted/30">
                 <TableHead className="w-[40%]">Product</TableHead>
@@ -277,18 +277,18 @@ export function StockEntryCart({
                   <TableCell>
                     <div className="flex items-center gap-2">
                       <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10">
-                        <span className="text-[10px] font-bold text-primary">{item.product?.grade || "STK"}</span>
+                        <span className="text-[11px] font-bold text-primary">{item.product?.grade || "STK"}</span>
                       </div>
                       <div className="min-w-0">
                         <div className="truncate text-sm font-bold" data-testid={`text-cart-name-${item.productId}`}>
                           {item.product?.name}
                         </div>
                         <div className="flex items-center gap-1.5">
-                          <code className="rounded-sm bg-muted px-1 font-mono text-[10px] text-muted-foreground">
+                          <code className="rounded-sm bg-muted px-1 font-mono text-[11px] text-muted-foreground">
                             {item.product?.articleCode || item.product?.code}
                           </code>
                           {item.product?.categoryName && (
-                            <Badge variant="outline" className="h-3.5 px-1 py-0 text-[9px] font-medium">
+                            <Badge variant="outline" className="h-3.5 px-1 py-0 text-[11px] font-medium">
                               {item.product.categoryName}
                             </Badge>
                           )}
@@ -337,7 +337,7 @@ export function StockEntryCart({
                         step="0.1"
                         data-testid={`input-weight-${item.productId}`}
                       />
-                      <span className="text-[10px] font-medium uppercase text-muted-foreground">kg</span>
+                      <span className="text-[11px] font-medium uppercase text-muted-foreground">kg</span>
                     </div>
                   </TableCell>
                   <TableCell>

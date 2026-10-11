@@ -69,7 +69,7 @@ export function SaleGrid({
           </div>
 
           {/* Rows */}
-          <div className="overflow-y-auto" style={{ maxHeight: "calc(100vh - 22rem)" }}>
+          <div className="overflow-y-auto" style={{ maxHeight: "calc(100dvh - 22rem)" }}>
             {rows.map((row, rowIndex) => (
               <div key={row.id}>
                 <div className="group flex border-b border-muted/50 hover-elevate">
@@ -99,7 +99,7 @@ export function SaleGrid({
                       }}
                     >
                       {col.key === "delete" ? (
-                        <div className="flex items-center justify-center h-full opacity-0 group-hover:opacity-100 transition-opacity duration-150">
+                        <div className="flex items-center justify-center h-full opacity-0 group-hover:opacity-100 touch:opacity-100 transition-opacity duration-150">
                           {rows.length > 1 && (
                             <Button
                               variant="ghost"

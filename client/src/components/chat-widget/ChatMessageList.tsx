@@ -280,7 +280,7 @@ export function ChatMessageList({
                   </Button>
                   {lastUsedProvider && history[history.length - 1]?.id === msg.id && (
                     <span
-                      className="flex items-center gap-1 text-[10px] text-muted-foreground/70 ml-1"
+                      className="flex items-center gap-1 text-[11px] text-muted-foreground/70 ml-1"
                       data-testid={`provider-badge-${msg.id}`}
                     >
                       <Cpu className="h-2.5 w-2.5" />

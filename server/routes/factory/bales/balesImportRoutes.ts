@@ -32,7 +32,7 @@ import {
   factoryBaleImportBatches,
 } from "@shared/schema";
 import { eq, and, asc, desc, sql, ilike } from "drizzle-orm";
-import { lineAmount, MoneyDecimal, parseMoneyInput } from "../../../lib/money";
+import { lineAmount, MoneyDecimal, parseMoneyInput, toMoney } from "../../../lib/money";
 
 export function registerBalesImportRoutes(app: Express) {
   // ───────────────────────────────────────────────
@@ -320,7 +320,7 @@ export function registerBalesImportRoutes(app: Express) {
             const status = bale.status || "IN_STOCK";
             // An imported bale's cost per kg is read as USD (the bale cost basis).
             const costPerKg = bale.costPerKg || "0";
-            const weight = parseFloat(bale.weightKg);
+            const weight = toMoney(bale.weightKg).toNumber();
             const totalCost = lineAmount(bale.weightKg, costPerKg).toDecimalPlaces(7).toFixed(7);
             try {
               await tx.transaction(async (row) => {

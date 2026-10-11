@@ -618,7 +618,7 @@ export function ContainerPlannerSavedPlans({ capacityBales, includeGarbageWipers
                           }}
                         />
                       </div>
-                      <div className="mt-1 text-[10px] text-muted-foreground">
+                      <div className="mt-1 text-[11px] text-muted-foreground">
                         {container.isLocked ? "Locked · rebalance protected" : "Unlocked"}
                       </div>
                     </CardContent>
@@ -725,7 +725,7 @@ export function ContainerPlannerSavedPlans({ capacityBales, includeGarbageWipers
                       <tr key={product.articleCode} className={rowIndex % 2 === 0 ? "bg-background" : "bg-muted/20"}>
                         <td className="sticky left-0 z-10 border-b border-r bg-inherit px-3 py-2">
                           <div className="font-medium">{product.productName}</div>
-                          <div className="font-mono text-[10px] text-muted-foreground">{product.articleCode}</div>
+                          <div className="font-mono text-[11px] text-muted-foreground">{product.articleCode}</div>
                         </td>
                         {detail.containers.map((container) => {
                           const line = lineLookup.get(`${container.id}__${product.articleCode}`);

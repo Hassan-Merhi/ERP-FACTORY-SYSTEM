@@ -19,6 +19,7 @@ const sources = {
   imports: await read("client/src/pages/factory/FactoryImport.tsx"),
   relabeling: await read("client/src/pages/factory/FactoryBaleRelabeling.tsx"),
   allocation: await read("client/src/pages/factory/FactoryStockAllocationV5.tsx"),
+  indexCss: await read("client/src/index.css"),
   // The phone card list lives in its own component since the page was split under
   // the 900-line god-file cap; the desktop table stayed on the page.
   allocationMobile: await read(
@@ -111,7 +112,9 @@ requireTokens("Bale Relabeling", sources.relabeling, [
 
 requireTokens("Stock Allocation V5", sources.allocation, [
   'data-testid="factory-stock-allocation-v5-page"',
-  "hidden max-h-[calc(100vh-160px)] overflow-auto md:block",
+  // #2173: the table lets the page scroll (no nested viewport-height scroller) and stays
+  // hidden on landscape phones, which keep the card list.
+  "hidden overflow-x-auto md:block phone-land:hidden",
 ]);
 
 requireTokens("Stock Allocation V5 mobile list", sources.allocationMobile, [
@@ -120,15 +123,16 @@ requireTokens("Stock Allocation V5 mobile list", sources.allocationMobile, [
   'data-testid={`button-v5-mobile-expand-${row.articleCode}`}',
 ]);
 
-requireTokens("Landscape phone override", sources.mobileCompat, [
+// Landscape phones keep the card lists: since #2173 this is the phone-land variant on each
+// list and table (defined once in index.css) instead of !important overrides in the
+// mobile stylesheet.
+requireTokens("Landscape phone variant", sources.indexCss, [
+  "@custom-variant phone-land",
   "@media (hover: none) and (pointer: coarse) and (max-height: 500px)",
-  '[data-testid="raw-stock-mobile-list"]',
-  '[data-testid="mix-batch-mobile-list"]',
-  '[data-testid="v5-mobile-list"]',
-  "display: block !important",
-  "display: none !important",
 ]);
-
+requireTokens("Raw stock landscape phone", sources.rawTable, ["md:hidden phone-land:block", "md:block phone-land:hidden"]);
+requireTokens("Mix batch landscape phone", sources.mixBatches, ["md:hidden phone-land:block", "md:block phone-land:hidden"]);
+requireTokens("Stock Allocation V5 landscape phone", sources.allocationMobile, ["md:hidden phone-land:block"]);
 requireTokens("Location Inventory reference implementation", sources.locationProduct, ["renderMobileCard"]);
 
 for (const [name, source] of Object.entries(sources)) {

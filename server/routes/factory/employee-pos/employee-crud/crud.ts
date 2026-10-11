@@ -10,6 +10,7 @@ import { db } from "../../../../db";
 import { requireAuth } from "../../../../auth";
 import { voucherEntries, employees, vouchers } from "@shared/schema";
 import { eq, and, sql } from "drizzle-orm";
+import { toMoney } from "../../../../lib/money";
 
 export function registerFactoryEmployeeCrudRoutes(app: Express) {
   app.get("/api/factory/employees", requireAuth, async (req: Request, res: Response) => {
@@ -208,8 +209,8 @@ export function registerFactoryEmployeeCrudRoutes(app: Express) {
       // Build running balance
       let runningBalance = 0;
       const rows = entries.map((e) => {
-        const credit = parseFloat(e.creditAmount || "0");
-        const debit = parseFloat(e.debitAmount || "0");
+        const credit = toMoney(e.creditAmount).toNumber();
+        const debit = toMoney(e.debitAmount).toNumber();
         runningBalance += credit - debit;
         return {
           ...e,

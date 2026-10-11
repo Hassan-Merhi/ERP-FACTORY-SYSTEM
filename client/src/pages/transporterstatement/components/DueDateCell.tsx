@@ -73,7 +73,7 @@ export function DueDateCell({
       ) : (
         <span className="text-xs text-muted-foreground/60 italic">set date</span>
       )}
-      <Pencil className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 shrink-0 print:hidden" />
+      <Pencil className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 touch:opacity-100 shrink-0 print:hidden" />
     </div>
   );
 }

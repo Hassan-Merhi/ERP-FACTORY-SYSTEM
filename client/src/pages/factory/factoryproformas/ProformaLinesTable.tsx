@@ -193,7 +193,7 @@ export function ProformaLinesTable({
                     >
                       {formatAmount(effectivePricePerBale(line))}
                       {line.pricingMode === "per_kg" && line.pricePerKg && (
-                        <div className="text-[10px] text-muted-foreground font-normal">
+                        <div className="text-[11px] text-muted-foreground font-normal">
                           ${parseFloat(line.pricePerKg).toFixed(2)}/kg
                         </div>
                       )}

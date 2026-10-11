@@ -16,6 +16,7 @@ import { sqlArray } from "../../../lib/sqlArray";
 
 import { ACTIVE_ORDER_STATUSES } from "./_helpers";
 import { resultRows } from "../../../lib/queryResult";
+import { toMoney } from "../../../lib/money";
 
 export function registerV5StockAllocationRoutes(app: Express) {
   // ── GET /api/factory/v5/stock-allocation ────────────────────────────────
@@ -290,7 +291,7 @@ export function registerV5StockAllocationRoutes(app: Express) {
           // Bales stored under the raw `code` still get names via step 9a bidirectional lookup.
           allProductsMap.set(r.articleCode, r.name);
         }
-        const w = r.weightKg ? parseFloat(r.weightKg) : 0;
+        const w = r.weightKg ? toMoney(r.weightKg).toNumber() : 0;
         if (w > 0 && r.articleCode) {
           weightMap.set(r.articleCode, w);
         }
@@ -463,14 +464,10 @@ export function registerV5StockAllocationRoutes(app: Express) {
         filtered = filtered.filter((r) => searchAny(productFilter, r.articleCode, r.productName));
       }
       if (customerFilter) {
-        filtered = filtered.filter((r) =>
-          r.proformaDetails.some((d) => searchAny(customerFilter, d.customerName))
-        );
+        filtered = filtered.filter((r) => r.proformaDetails.some((d) => searchAny(customerFilter, d.customerName)));
       }
       if (proformaFilter) {
-        filtered = filtered.filter((r) =>
-          r.proformaDetails.some((d) => searchAny(proformaFilter, d.proformaName))
-        );
+        filtered = filtered.filter((r) => r.proformaDetails.some((d) => searchAny(proformaFilter, d.proformaName)));
       }
       if (containerFilter) {
         filtered = filtered.filter((r) =>

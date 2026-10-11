@@ -429,7 +429,7 @@ export default function FactoryPriceList() {
                             >
                               {sellingPrice > 0 ? `$${sellingPrice.toFixed(2)}` : "—"}
                             </span>
-                            <Pencil className="h-3 w-3 text-muted-foreground opacity-60 md:opacity-0 md:group-hover:opacity-100" />
+                            <Pencil className="h-3 w-3 text-muted-foreground opacity-60 md:opacity-0 md:group-hover:opacity-100 touch:opacity-100" />
                           </div>
                         )}
                       </TableCell>
@@ -480,7 +480,7 @@ export default function FactoryPriceList() {
                             <span className={`font-mono text-sm text-muted-foreground`}>
                               {productionPrice > 0 ? `$${productionPrice.toFixed(2)}` : "—"}
                             </span>
-                            <Pencil className="h-3 w-3 text-muted-foreground opacity-60 md:opacity-0 md:group-hover:opacity-100" />
+                            <Pencil className="h-3 w-3 text-muted-foreground opacity-60 md:opacity-0 md:group-hover:opacity-100 touch:opacity-100" />
                           </div>
                         )}
                       </TableCell>

@@ -184,19 +184,19 @@ export function ProductionBonusDecisionPanel({
 
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
         <div className="rounded-md border bg-background p-2">
-          <div className="text-[10px] uppercase text-muted-foreground">Suggested</div>
+          <div className="text-[11px] uppercase text-muted-foreground">Suggested</div>
           <div className="font-mono text-sm font-bold">${money(details.totals.totalSuggested)}</div>
         </div>
         <div className="rounded-md border bg-background p-2">
-          <div className="text-[10px] uppercase text-muted-foreground">Approved</div>
+          <div className="text-[11px] uppercase text-muted-foreground">Approved</div>
           <div className="font-mono text-sm font-bold text-green-600">${money(details.totals.approved)}</div>
         </div>
         <div className="rounded-md border bg-background p-2">
-          <div className="text-[10px] uppercase text-muted-foreground">Pending</div>
+          <div className="text-[11px] uppercase text-muted-foreground">Pending</div>
           <div className="font-mono text-sm font-bold">${money(details.totals.pending)}</div>
         </div>
         <div className="rounded-md border bg-background p-2">
-          <div className="text-[10px] uppercase text-muted-foreground">Rejected</div>
+          <div className="text-[11px] uppercase text-muted-foreground">Rejected</div>
           <div className="font-mono text-sm font-bold text-muted-foreground">${money(details.totals.rejected)}</div>
         </div>
       </div>

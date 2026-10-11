@@ -6,6 +6,7 @@ import { cva, VariantProps } from "class-variance-authority";
 import { PanelLeftIcon } from "lucide-react";
 
 import { useIsMobile } from "@/hooks/use-mobile";
+import { SIDEBAR_PINNED_QUERY } from "@/lib/breakpoints";
 import { useErpPhoneLayout } from "@/hooks/use-erp-phone-layout";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -19,7 +20,7 @@ const SIDEBAR_COOKIE_NAME = "sidebar_state";
 const SIDEBAR_COOKIE_MAX_AGE = 60 * 60 * 24 * 7;
 const SIDEBAR_WIDTH = "16rem";
 // Never wider than the phone: a 320px screen keeps a strip of page visible to tap closed.
-const SIDEBAR_WIDTH_MOBILE = "min(18rem, calc(100vw - 1rem))";
+const SIDEBAR_WIDTH_MOBILE = "min(20rem, calc(100vw - 0.5rem))";
 const SIDEBAR_WIDTH_ICON = "3rem";
 const SIDEBAR_KEYBOARD_SHORTCUT = "b";
 
@@ -44,8 +45,24 @@ function useSidebar() {
   return context;
 }
 
+/**
+ * Initial pinned state. The user's last choice (the `sidebar_state` cookie, written by setOpen)
+ * wins; otherwise the sidebar starts pinned from `lg` and collapsed below it, because a tablet
+ * in portrait has only ~440px left beside a 256px sidebar.
+ */
+export function readInitialSidebarOpen(): boolean {
+  if (typeof document === "undefined" || typeof window === "undefined") return true;
+  const saved = document.cookie
+    .split(";")
+    .map((part) => part.trim())
+    .find((part) => part.startsWith(`${SIDEBAR_COOKIE_NAME}=`));
+  if (saved) return saved.slice(SIDEBAR_COOKIE_NAME.length + 1) === "true";
+  if (typeof window.matchMedia !== "function") return true;
+  return window.matchMedia(SIDEBAR_PINNED_QUERY).matches;
+}
+
 function SidebarProvider({
-  defaultOpen = true,
+  defaultOpen,
   open: openProp,
   onOpenChange: setOpenProp,
   className,
@@ -65,7 +82,7 @@ function SidebarProvider({
 
   // This is the internal state of the sidebar.
   // We use openProp and setOpenProp for control from outside the component.
-  const [_open, _setOpen] = React.useState(defaultOpen);
+  const [_open, _setOpen] = React.useState(() => defaultOpen ?? readInitialSidebarOpen());
   const open = openProp ?? _open;
   const setOpen = React.useCallback(
     (value: boolean | ((value: boolean) => boolean)) => {
@@ -172,7 +189,9 @@ function Sidebar({
           data-sidebar="sidebar"
           data-slot="sidebar"
           data-mobile="true"
-          className="bg-sidebar text-sidebar-foreground w-(--sidebar-width) max-w-(--sidebar-width) overflow-x-hidden p-0 [&>button]:hidden"
+          // Safe-area padding keeps the first and last rows clear of the notch and home
+          // indicator; the sheet's close control becomes a bordered 40px button at the top edge.
+          className="w-(--sidebar-width) max-w-(--sidebar-width) overflow-x-hidden overscroll-contain bg-sidebar p-0 pb-[var(--safe-area-bottom)] pt-[var(--safe-area-top)] text-sidebar-foreground [&>button]:right-3 [&>button]:top-[max(0.75rem,var(--safe-area-top))] [&>button]:z-30 [&>button]:inline-flex [&>button]:h-10 [&>button]:w-10 [&>button]:items-center [&>button]:justify-center [&>button]:rounded-lg [&>button]:border [&>button]:border-sidebar-border [&>button]:bg-sidebar/95 [&>button]:opacity-100 [&>button]:backdrop-blur [&_a[data-testid^=link-]]:min-h-11 [&_a[data-testid^=link-]]:touch-manipulation [&_button[data-testid^=button-section-]]:min-h-11 [&_button[data-testid^=button-section-]]:touch-manipulation"
           style={
             {
               "--sidebar-width": SIDEBAR_WIDTH_MOBILE,
@@ -221,6 +240,9 @@ function Sidebar({
       />
       <div
         data-slot="sidebar-container"
+        // An off-canvas sidebar is parked 256px past the viewport edge; without `inert` its links
+        // stay in the tab order and the accessibility tree while invisible.
+        inert={state === "collapsed" && collapsible === "offcanvas"}
         className={cn(
           "fixed inset-y-0 z-10 hidden h-svh w-(--sidebar-width) transition-[left,right,width] duration-200 ease-linear md:flex",
           side === "left"

@@ -19,6 +19,7 @@ import {
 
 import { getCompanyId, getUsername, isAdmin } from "./_helpers";
 import { firstRow, resultRows } from "../../../lib/queryResult";
+import { lineAmount } from "../../../lib/money";
 
 export function registerDispatchBaleScanRoutes(app: Express) {
   // ── POST /api/factory/dispatch-truck-rides/:id/scan-bale ──────────────────
@@ -135,10 +136,7 @@ export function registerDispatchBaleScanRoutes(app: Express) {
         }
 
         // 8. Calculate amount (priceMode is on the batch, not the bale)
-        const amount =
-          batch.priceMode === "PER_KG"
-            ? (parseFloat(priceUsed) * parseFloat(bale.weightKg || "0")).toFixed(2)
-            : priceUsed;
+        const amount = batch.priceMode === "PER_KG" ? lineAmount(priceUsed, bale.weightKg).toFixed(2) : priceUsed;
 
         // 9. Reserve bale
         await tx.execute(sql`

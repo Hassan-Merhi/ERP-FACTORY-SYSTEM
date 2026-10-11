@@ -1,6 +1,7 @@
 import { pool } from "../db";
 import { logger } from "../lib/logger";
 import type { ManagedEmployeeAdvance } from "./employeeNetPosition";
+import { toMoney } from "../lib/money";
 
 type AdvanceRow = {
   employee_id: number | string;
@@ -11,8 +12,8 @@ type AdvanceRow = {
 function parseRows(rows: AdvanceRow[]): ManagedEmployeeAdvance[] {
   return rows.map((row) => ({
     employeeId: Number(row.employee_id),
-    postedDebit: Number.parseFloat(String(row.posted_debit ?? "0")) || 0,
-    remainingBalance: Number.parseFloat(String(row.remaining_balance ?? "0")) || 0,
+    postedDebit: toMoney(row.posted_debit).toNumber(),
+    remainingBalance: toMoney(row.remaining_balance).toNumber(),
   }));
 }
 

@@ -61,7 +61,7 @@ export function registerStockQueryRoutes(app: Express) {
           totalQty: 0,
           totalValue: 0,
         };
-        const qty = parseFloat(record.quantity || "0");
+        const qty = toMoney(record.quantity).toNumber();
         existing.totalQty += qty;
         existing.totalValue = toMoney(existing.totalValue).plus(toMoney(record.totalValue)).toNumber();
         inventoryMap.set(record.stockItemId, existing);

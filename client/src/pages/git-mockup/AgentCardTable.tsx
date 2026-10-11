@@ -105,7 +105,7 @@ export function AgentCardTable(props: AgentCardTableProps) {
               </td>
               <td className="py-0.5 px-2 text-center">{r.supplierCode ?? r.supplierName ?? "—"}</td>
               <td className="py-0.5 px-2 font-mono text-center">{r.numberPlate ?? "—"}</td>
-              <td className="py-0.5 px-2 text-center text-muted-foreground italic text-[10px]">In Transit</td>
+              <td className="py-0.5 px-2 text-center text-muted-foreground italic text-[11px]">In Transit</td>
               <td className="py-0.5 px-2 text-center">{fmtD(r.borderDate)}</td>
               <td className="py-0.5 px-2 text-center">{r.transporter ?? "—"}</td>
               <td className="py-0.5 px-2 text-center">{r.location ?? "—"}</td>
@@ -115,7 +115,7 @@ export function AgentCardTable(props: AgentCardTableProps) {
               <td className="py-0.5 px-2 text-center">
                 <Badge
                   variant="outline"
-                  className="text-[10px] text-emerald-700 border-emerald-500 bg-emerald-50 dark:bg-emerald-950/40 no-default-active-elevate"
+                  className="text-[11px] text-emerald-700 border-emerald-500 bg-emerald-50 dark:bg-emerald-950/40 no-default-active-elevate"
                 >
                   Prepaid
                 </Badge>
@@ -186,12 +186,12 @@ export function AgentCardTable(props: AgentCardTableProps) {
                   {r.allocationStatus === "Partially Cleared" ? (
                     <Badge
                       variant="outline"
-                      className="text-[10px] text-amber-700 border-amber-400 no-default-active-elevate"
+                      className="text-[11px] text-amber-700 border-amber-400 no-default-active-elevate"
                     >
                       Partial
                     </Badge>
                   ) : (
-                    <Badge variant="outline" className="text-[10px] no-default-active-elevate">
+                    <Badge variant="outline" className="text-[11px] no-default-active-elevate">
                       Open
                     </Badge>
                   )}
@@ -312,7 +312,7 @@ export function AgentCardTable(props: AgentCardTableProps) {
                     <td className="py-0.5 px-2 text-center">
                       <Badge
                         variant="outline"
-                        className="text-[10px] text-slate-500 border-slate-300 dark:border-slate-600 no-default-active-elevate"
+                        className="text-[11px] text-slate-500 border-slate-300 dark:border-slate-600 no-default-active-elevate"
                       >
                         Cleared
                       </Badge>
@@ -339,7 +339,7 @@ export function AgentCardTable(props: AgentCardTableProps) {
                     <td className="py-0.5 px-2 text-center">
                       <Badge
                         variant="outline"
-                        className="text-[10px] text-purple-600 dark:text-purple-400 border-purple-300 dark:border-purple-700 no-default-active-elevate"
+                        className="text-[11px] text-purple-600 dark:text-purple-400 border-purple-300 dark:border-purple-700 no-default-active-elevate"
                       >
                         Manual
                       </Badge>

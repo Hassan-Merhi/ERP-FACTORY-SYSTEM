@@ -60,7 +60,7 @@ export function AdjustmentSpreadsheet({ model }: { model: StockAdjustmentFormMod
           </div>
           <div className="w-10 sm:w-12 flex items-center justify-center h-9 sm:h-10" />
         </div>
-        <div className="max-h-[calc(100vh-24rem)] overflow-y-auto">
+        <div className="max-h-[calc(100dvh-24rem)] overflow-y-auto">
           {adjustmentFields.map((field, index) => {
             const currentEntry = adjustmentEntries[index];
             const inventoryItem = adjustmentItemsWithInventory.find(

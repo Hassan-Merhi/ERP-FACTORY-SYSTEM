@@ -112,10 +112,10 @@ export default function MobileWorkspaceControls({
     onLogout();
   };
 
-  // ERP and Factory phones hide the floating notes button, so the workspace menu opens the panel instead.
+  // ERP, Factory and Properties phones hide the floating notes button, so the workspace menu opens the panel instead.
   const appMode = useAppMode();
   const notesAvailable =
-    (simplifyMobileNavigation || appMode === "factory") &&
+    (simplifyMobileNavigation || appMode === "factory" || appMode === "properties") &&
     open &&
     document.documentElement.dataset.userNotes === "available";
   const openNotes = () => {

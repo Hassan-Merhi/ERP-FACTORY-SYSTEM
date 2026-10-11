@@ -5,6 +5,7 @@ import { adjustInventory } from "../../../inventoryHelper";
 import { nextCanonicalSourceRevision } from "../../../services/inventory/canonicalSourceRevision";
 import { createDatabaseStockMovementAdapter } from "../../../services/inventory/databaseStockMovementAdapter";
 import { postStockMovementTx } from "../../../services/inventory/stockMovementIntegrityService";
+import { toMoney } from "../../../lib/money";
 
 const canonicalStockMovementAdapter = createDatabaseStockMovementAdapter();
 type VoucherRow = typeof vouchers.$inferSelect;
@@ -30,8 +31,8 @@ export async function moveSalesVoucherInventoryLocation(
   const evidenceActor = actor ?? { reason: `Move sales voucher ${voucher.voucherNumber} inventory location` };
 
   for (const item of items) {
-    const quantity = parseFloat(item.quantity);
-    const costPrice = parseFloat(item.costPrice);
+    const quantity = toMoney(item.quantity).toNumber();
+    const costPrice = toMoney(item.costPrice).toNumber();
     await adjustInventory(tx, oldLocationId, item.stockItemId, quantity, voucher.companyId, costPrice);
     await postStockMovementTx(
       tx,

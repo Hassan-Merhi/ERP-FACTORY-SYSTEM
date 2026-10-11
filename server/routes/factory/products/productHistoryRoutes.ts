@@ -12,6 +12,7 @@ import { db } from "../../../db";
 import { requireAuth } from "../../../auth";
 import { factoryBaleProducts, factoryBales, customerOrders, customerOrderBales, locations } from "@shared/schema";
 import { eq, and, desc, sql, inArray, not } from "drizzle-orm";
+import { toMoney } from "../../../lib/money";
 
 export function registerFactoryProductHistoryRoutes(app: Express) {
   // Shared implementation for the monthly-overview query (year-level view).
@@ -62,7 +63,7 @@ export function registerFactoryProductHistoryRoutes(app: Express) {
 
       const startDate = new Date(year, 0, 1);
       const endDate = new Date(year + 1, 0, 1);
-      const sellingPricePerBale = parseFloat(product.sellingPrice || "0");
+      const sellingPricePerBale = toMoney(product.sellingPrice).toNumber();
 
       const rows = await db
         .select({

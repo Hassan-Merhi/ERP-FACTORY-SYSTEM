@@ -39,118 +39,15 @@ import {
   validateSmartPreviewLines,
   type SmartPreviewOrderItem,
 } from "./smartTransferPreviewUi";
-
-interface Location {
-  id: number;
-  name: string;
-  code: string;
-}
-
-interface StockMeta {
-  id: number;
-  name: string;
-  active?: boolean;
-}
-
-interface StockItemLight {
-  id: number;
-  name: string;
-  code: string;
-  uom: string;
-}
-
-interface LocationData {
-  quantity: number;
-  rate: number;
-  value: number;
-}
-
-interface LocationSummaryItem {
-  id: number;
-  code: string;
-  name: string;
-  uom: string;
-  locationData: Record<number, LocationData>;
-}
-
-interface LocationSummaryGroup {
-  id: number;
-  name: string;
-  items: LocationSummaryItem[];
-}
-
-interface LocationSummaryResponse {
-  stockGroups: LocationSummaryGroup[];
-}
-
-type PerformanceClassification =
-  | "strong_seller"
-  | "good_seller"
-  | "normal_seller"
-  | "slow_seller"
-  | "overstocked"
-  | "no_recent_sales";
-
-interface SmartPreviewLine {
-  clientId: string;
-  manual?: boolean;
-  stockItemId: number;
-  stockItemName: string;
-  stockItemCode: string;
-  uom: string;
-  stockGroupId: number | null;
-  categoryId: number | null;
-  sourceLocationId: number;
-  sourceLocationName: string;
-  availableAtSource: number;
-  sourceCurrentStock: number;
-  sourceReserveQty: number;
-  sourceAverageRate: number;
-  destinationStock: number;
-  otwQty: number;
-  effectiveDestinationStock: number;
-  olderTransferQty: number;
-  newerTransferQty: number;
-  salesAfterOlderTransfer: number;
-  salesAfterNewerTransfer: number;
-  totalSalesSinceOlderTransfer: number;
-  olderSellThroughPercentage: number;
-  newerSellThroughPercentage: number;
-  overallSellThroughPercentage: number;
-  averageSalesPerDay: number;
-  latestSalesPerDay: number;
-  estimatedDaysOfStockRemaining: number | null;
-  classification: PerformanceClassification;
-  classificationLabel: string;
-  suggestedQuantity: number;
-  itemSuggestedTotal: number;
-  calculatedNeed: number;
-  confidence: number;
-  reason: string;
-}
-
-interface SmartPreviewResponse {
-  readOnly: true;
-  destinationLocationId: number;
-  destinationLocationName: string;
-  sourceLocationIds: number[];
-  sourceLocationNames: string[];
-  targetQuantity: number;
-  achievedQuantity: number;
-  shortfallQuantity: number;
-  shortfall: boolean;
-  lines: Omit<SmartPreviewLine, "clientId" | "manual">[];
-  warnings: string[];
-  excludedItems: Array<{
-    stockItemId: number;
-    stockItemName: string;
-    reason: string;
-  }>;
-  history: {
-    newerTransfer: { voucherNumber: string; voucherDate: string } | null;
-    olderTransfer: { voucherNumber: string; voucherDate: string } | null;
-  };
-}
+import {
+  type Location,
+  type StockMeta,
+  type StockItemLight,
+  type LocationSummaryResponse,
+  type PerformanceClassification,
+  type SmartPreviewLine,
+  type SmartPreviewResponse,
+} from "./smartTransferGeneratorTypes";
 
 interface SmartTransferGeneratorDialogProps {
   open: boolean;
@@ -221,11 +118,16 @@ function MultiSelectPopover({
         <ScrollArea className="h-56">
           <div className="space-y-1 pr-2">
             {items.map((item) => (
-              <label key={item.id} className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-2 hover:bg-muted">
+              <label
+                key={item.id}
+                className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-2 hover:bg-muted"
+              >
                 <Checkbox
                   checked={selected.includes(item.id)}
                   onCheckedChange={() =>
-                    onChange(selected.includes(item.id) ? selected.filter((id) => id !== item.id) : [...selected, item.id])
+                    onChange(
+                      selected.includes(item.id) ? selected.filter((id) => id !== item.id) : [...selected, item.id]
+                    )
                   }
                 />
                 <span className="text-sm">{item.name}</span>
@@ -406,12 +308,16 @@ export default function SmartTransferGeneratorDialog({
 
   const toggleSource = (id: number) => {
     if (id === destinationLocationId) return;
-    setSourceLocationIds((current) => (current.includes(id) ? current.filter((sourceId) => sourceId !== id) : [...current, id]));
+    setSourceLocationIds((current) =>
+      current.includes(id) ? current.filter((sourceId) => sourceId !== id) : [...current, id]
+    );
   };
 
   const updateLineQuantity = (clientId: string, value: string) => {
     const quantity = Math.max(0, Math.floor(numberValue(value, 0)));
-    setLines((current) => current.map((line) => (line.clientId === clientId ? { ...line, suggestedQuantity: quantity } : line)));
+    setLines((current) =>
+      current.map((line) => (line.clientId === clientId ? { ...line, suggestedQuantity: quantity } : line))
+    );
   };
 
   const updateLineSource = (clientId: string, sourceLocationId: number) => {
@@ -541,7 +447,8 @@ export default function SmartTransferGeneratorDialog({
             Smart Multi-Source Transfer Generator
           </DialogTitle>
           <DialogDescription>
-            Compares the last two completed transfers, sales since those orders, live source stock and optional OTW stock.
+            Compares the last two completed transfers, sales since those orders, live source stock and optional OTW
+            stock.
           </DialogDescription>
         </DialogHeader>
 
@@ -601,8 +508,7 @@ export default function SmartTransferGeneratorDialog({
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-2">
                   <Label htmlFor="smart-target">
-                    Target bales{" "}
-                    <span className="text-xs font-normal text-muted-foreground">(blank = auto)</span>
+                    Target bales <span className="text-xs font-normal text-muted-foreground">(blank = auto)</span>
                   </Label>
                   <Input
                     id="smart-target"
@@ -629,8 +535,18 @@ export default function SmartTransferGeneratorDialog({
                 />
               </div>
 
-              <MultiSelectPopover label="stock groups" items={stockGroups} selected={stockGroupIds} onChange={setStockGroupIds} />
-              <MultiSelectPopover label="categories" items={categories} selected={categoryIds} onChange={setCategoryIds} />
+              <MultiSelectPopover
+                label="stock groups"
+                items={stockGroups}
+                selected={stockGroupIds}
+                onChange={setStockGroupIds}
+              />
+              <MultiSelectPopover
+                label="categories"
+                items={categories}
+                selected={categoryIds}
+                onChange={setCategoryIds}
+              />
 
               <div className="flex items-center justify-between rounded-md border px-3 py-2">
                 <div>
@@ -692,7 +608,10 @@ export default function SmartTransferGeneratorDialog({
                   {(preview.warnings.length > 0 || validationErrors.length > 0) && (
                     <div className="mt-3 space-y-2">
                       {[...preview.warnings, ...validationErrors].map((warning, index) => (
-                        <div key={`${warning}-${index}`} className="flex items-start gap-2 rounded-md bg-amber-50 p-2 text-xs text-amber-800 dark:bg-amber-950/30 dark:text-amber-300">
+                        <div
+                          key={`${warning}-${index}`}
+                          className="flex items-start gap-2 rounded-md bg-amber-50 p-2 text-xs text-amber-800 dark:bg-amber-950/30 dark:text-amber-300"
+                        >
                           <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                           <span>{warning}</span>
                         </div>
@@ -736,7 +655,11 @@ export default function SmartTransferGeneratorDialog({
                                     })
                                   }
                                 >
-                                  {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                                  {expanded ? (
+                                    <ChevronDown className="h-4 w-4" />
+                                  ) : (
+                                    <ChevronRight className="h-4 w-4" />
+                                  )}
                                 </Button>
                               </TableCell>
                               <TableCell>
@@ -744,10 +667,17 @@ export default function SmartTransferGeneratorDialog({
                                   <p className="font-medium">{line.stockItemName}</p>
                                   <div className="flex flex-wrap items-center gap-1.5">
                                     <span className="text-xs text-muted-foreground">{line.stockItemCode}</span>
-                                    <Badge variant="outline" className={cn("text-[10px]", classificationBadge(line.classification))}>
+                                    <Badge
+                                      variant="outline"
+                                      className={cn("text-[11px]", classificationBadge(line.classification))}
+                                    >
                                       {line.classificationLabel}
                                     </Badge>
-                                    {line.manual && <Badge variant="secondary" className="text-[10px]">Manual</Badge>}
+                                    {line.manual && (
+                                      <Badge variant="secondary" className="text-[11px]">
+                                        Manual
+                                      </Badge>
+                                    )}
                                   </div>
                                 </div>
                               </TableCell>
@@ -763,7 +693,11 @@ export default function SmartTransferGeneratorDialog({
                                     {sourceLocationIds.map((sourceId) => {
                                       const inventory = getInventory(line.stockItemId, sourceId);
                                       return (
-                                        <SelectItem key={sourceId} value={sourceId.toString()} disabled={inventory.available <= 0}>
+                                        <SelectItem
+                                          key={sourceId}
+                                          value={sourceId.toString()}
+                                          disabled={inventory.available <= 0}
+                                        >
                                           {sourceNameById.get(sourceId)} ({inventory.available})
                                         </SelectItem>
                                       );
@@ -771,7 +705,9 @@ export default function SmartTransferGeneratorDialog({
                                   </SelectContent>
                                 </Select>
                               </TableCell>
-                              <TableCell className="text-right font-mono">{formatNumber(line.availableAtSource, 0)}</TableCell>
+                              <TableCell className="text-right font-mono">
+                                {formatNumber(line.availableAtSource, 0)}
+                              </TableCell>
                               <TableCell className="text-right font-mono">
                                 {formatNumber(line.olderTransferQty + line.newerTransferQty, 0)}
                               </TableCell>
@@ -797,7 +733,11 @@ export default function SmartTransferGeneratorDialog({
                                   variant="ghost"
                                   size="icon"
                                   className="h-8 w-8 text-destructive"
-                                  onClick={() => setLines((current) => current.filter((candidate) => candidate.clientId !== line.clientId))}
+                                  onClick={() =>
+                                    setLines((current) =>
+                                      current.filter((candidate) => candidate.clientId !== line.clientId)
+                                    )
+                                  }
                                 >
                                   <Trash2 className="h-4 w-4" />
                                 </Button>
@@ -808,13 +748,34 @@ export default function SmartTransferGeneratorDialog({
                                 <TableCell></TableCell>
                                 <TableCell colSpan={8}>
                                   <div className="grid gap-3 py-2 text-xs md:grid-cols-4">
-                                    <div><span className="text-muted-foreground">Older transfer:</span> {formatNumber(line.olderTransferQty, 0)}</div>
-                                    <div><span className="text-muted-foreground">Newer transfer:</span> {formatNumber(line.newerTransferQty, 0)}</div>
-                                    <div><span className="text-muted-foreground">Older sell-through:</span> {formatNumber(line.olderSellThroughPercentage, 1)}%</div>
-                                    <div><span className="text-muted-foreground">Newer sell-through:</span> {formatNumber(line.newerSellThroughPercentage, 1)}%</div>
-                                    <div><span className="text-muted-foreground">Latest sales/day:</span> {formatNumber(line.latestSalesPerDay, 2)}</div>
-                                    <div><span className="text-muted-foreground">Calculated need:</span> {formatNumber(line.calculatedNeed, 0)}</div>
-                                    <div><span className="text-muted-foreground">Confidence:</span> {formatNumber(line.confidence * 100, 0)}%</div>
+                                    <div>
+                                      <span className="text-muted-foreground">Older transfer:</span>{" "}
+                                      {formatNumber(line.olderTransferQty, 0)}
+                                    </div>
+                                    <div>
+                                      <span className="text-muted-foreground">Newer transfer:</span>{" "}
+                                      {formatNumber(line.newerTransferQty, 0)}
+                                    </div>
+                                    <div>
+                                      <span className="text-muted-foreground">Older sell-through:</span>{" "}
+                                      {formatNumber(line.olderSellThroughPercentage, 1)}%
+                                    </div>
+                                    <div>
+                                      <span className="text-muted-foreground">Newer sell-through:</span>{" "}
+                                      {formatNumber(line.newerSellThroughPercentage, 1)}%
+                                    </div>
+                                    <div>
+                                      <span className="text-muted-foreground">Latest sales/day:</span>{" "}
+                                      {formatNumber(line.latestSalesPerDay, 2)}
+                                    </div>
+                                    <div>
+                                      <span className="text-muted-foreground">Calculated need:</span>{" "}
+                                      {formatNumber(line.calculatedNeed, 0)}
+                                    </div>
+                                    <div>
+                                      <span className="text-muted-foreground">Confidence:</span>{" "}
+                                      {formatNumber(line.confidence * 100, 0)}%
+                                    </div>
                                     <p className="md:col-span-4 text-muted-foreground">{line.reason}</p>
                                   </div>
                                 </TableCell>
@@ -840,23 +801,43 @@ export default function SmartTransferGeneratorDialog({
                     <p className="text-sm font-medium">Add another item manually</p>
                   </div>
                   <div className="grid gap-2 md:grid-cols-[minmax(180px,1fr)_minmax(150px,220px)_100px_auto]">
-                    <Select value={manualItemId?.toString() ?? ""} onValueChange={(value) => setManualItemId(Number(value))}>
-                      <SelectTrigger><SelectValue placeholder="Stock item" /></SelectTrigger>
+                    <Select
+                      value={manualItemId?.toString() ?? ""}
+                      onValueChange={(value) => setManualItemId(Number(value))}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Stock item" />
+                      </SelectTrigger>
                       <SelectContent>
                         {stockItems.map((item) => (
-                          <SelectItem key={item.id} value={item.id.toString()}>{item.name} ({item.code})</SelectItem>
+                          <SelectItem key={item.id} value={item.id.toString()}>
+                            {item.name} ({item.code})
+                          </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
-                    <Select value={manualSourceId?.toString() ?? ""} onValueChange={(value) => setManualSourceId(Number(value))}>
-                      <SelectTrigger><SelectValue placeholder="Source" /></SelectTrigger>
+                    <Select
+                      value={manualSourceId?.toString() ?? ""}
+                      onValueChange={(value) => setManualSourceId(Number(value))}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Source" />
+                      </SelectTrigger>
                       <SelectContent>
                         {sourceLocationIds.map((sourceId) => (
-                          <SelectItem key={sourceId} value={sourceId.toString()}>{sourceNameById.get(sourceId)}</SelectItem>
+                          <SelectItem key={sourceId} value={sourceId.toString()}>
+                            {sourceNameById.get(sourceId)}
+                          </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
-                    <Input type="number" min="1" step="1" value={manualQuantity} onChange={(event) => setManualQuantity(event.target.value)} />
+                    <Input
+                      type="number"
+                      min="1"
+                      step="1"
+                      value={manualQuantity}
+                      onChange={(event) => setManualQuantity(event.target.value)}
+                    />
                     <Button type="button" variant="outline" onClick={addManualLine}>
                       <Plus className="mr-1 h-4 w-4" /> Add
                     </Button>
@@ -872,7 +853,12 @@ export default function SmartTransferGeneratorDialog({
             Cancel
           </Button>
           {preview && (
-            <Button type="button" variant="outline" onClick={() => previewMutation.mutate()} disabled={previewMutation.isPending}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => previewMutation.mutate()}
+              disabled={previewMutation.isPending}
+            >
               <RefreshCw className={cn("mr-2 h-4 w-4", previewMutation.isPending && "animate-spin")} />
               Regenerate
             </Button>

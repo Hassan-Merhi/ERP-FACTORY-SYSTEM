@@ -67,8 +67,8 @@ export function registerLocationSummaryRoutes(app: Express) {
       const inventoryMap = new Map<string, { quantity: number; rate: number; value: number }>();
       for (const inv of inventoryData) {
         const key = `${inv.locationId}-${inv.stockItemId}`;
-        const qty = parseFloat(inv.quantity || "0");
-        const rate = parseFloat(inv.averageRate || "0");
+        const qty = toMoney(inv.quantity).toNumber();
+        const rate = toMoney(inv.averageRate).toNumber();
         inventoryMap.set(key, {
           quantity: qty,
           rate: rate,

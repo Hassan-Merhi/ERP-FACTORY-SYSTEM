@@ -76,14 +76,14 @@ export function AccountQueryResultCard({ result, onDismiss }: { result: AccountQ
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-1.5 flex-wrap">
                           <span className="text-xs font-semibold">{tx.voucherNumber}</span>
-                          <span className="text-[10px] text-muted-foreground bg-muted rounded-sm px-1 py-0.5">
+                          <span className="text-[11px] text-muted-foreground bg-muted rounded-sm px-1 py-0.5">
                             {tx.voucherType}
                           </span>
                         </div>
                         <p className="text-[11px] text-muted-foreground mt-0.5 truncate">
                           {tx.description || tx.narration || "—"}
                         </p>
-                        <span className="text-[10px] text-muted-foreground">{tx.voucherDate}</span>
+                        <span className="text-[11px] text-muted-foreground">{tx.voucherDate}</span>
                       </div>
                       <div className="text-right shrink-0">
                         <p
@@ -118,15 +118,15 @@ export function AccountQueryResultCard({ result, onDismiss }: { result: AccountQ
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-1.5 flex-wrap">
                         <span className="text-xs font-semibold">{m.voucherNumber}</span>
-                        <span className="text-[10px] text-muted-foreground bg-muted rounded-sm px-1 py-0.5">
+                        <span className="text-[11px] text-muted-foreground bg-muted rounded-sm px-1 py-0.5">
                           {m.voucherType}
                         </span>
                       </div>
                       <p className="text-[11px] text-muted-foreground mt-0.5 truncate">{m.description || "—"}</p>
-                      <span className="text-[10px] text-muted-foreground">{m.voucherDate}</span>
+                      <span className="text-[11px] text-muted-foreground">{m.voucherDate}</span>
                     </div>
                     <div className="text-right shrink-0">
-                      <p className="text-[10px] text-muted-foreground">Balance after</p>
+                      <p className="text-[11px] text-muted-foreground">Balance after</p>
                       <p className="text-xs font-semibold">{fmt(m.balanceAfter)}</p>
                     </div>
                   </div>
@@ -226,7 +226,7 @@ export function VoucherConfirmCard({
 
         <div className="border-t pt-1.5 mt-0.5 space-y-1.5">
           <div
-            className={`grid ${hasBalanceBefore ? "grid-cols-[1fr_60px_60px_60px]" : "grid-cols-[1fr_60px_60px]"} gap-2 text-[10px] font-semibold text-muted-foreground uppercase`}
+            className={`grid ${hasBalanceBefore ? "grid-cols-[1fr_60px_60px_60px]" : "grid-cols-[1fr_60px_60px]"} gap-2 text-[11px] font-semibold text-muted-foreground uppercase`}
           >
             <span>Account</span>
             {hasBalanceBefore && <span className="text-right">Balance</span>}
@@ -280,7 +280,7 @@ export function VoucherConfirmCard({
           </div>
         </div>
         {!balanced && (
-          <p className="text-[10px] text-destructive text-right">Voucher must be balanced (Debit = Credit)</p>
+          <p className="text-[11px] text-destructive text-right">Voucher must be balanced (Debit = Credit)</p>
         )}
       </div>
       <div className="px-3 py-2 border-t flex gap-2 justify-end">

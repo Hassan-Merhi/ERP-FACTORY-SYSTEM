@@ -219,7 +219,7 @@ export function UpdateCategoriesTab() {
           <CardContent>
             <div className="border rounded-md overflow-auto max-h-80">
               <table className="w-full">
-                <thead className="sticky top-0 z-30 bg-muted/50">
+                <thead className="sticky top-0 z-30 bg-muted">
                   <tr className="border-b">
                     <th className="text-left p-2 text-sm font-medium w-8">#</th>
                     <th className="text-left p-2 text-sm font-medium">Item Code</th>

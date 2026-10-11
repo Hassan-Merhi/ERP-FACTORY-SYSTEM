@@ -120,17 +120,17 @@ export default function RawStockRecalculate() {
           >
             {t.label}
             {t.id === "sources" && (sourceMismatches?.length ?? 0) > 0 && (
-              <span className="ml-1.5 rounded-full bg-red-500/15 text-red-600 text-[10px] px-1.5 py-0.5">
+              <span className="ml-1.5 rounded-full bg-red-500/15 text-red-600 text-[11px] px-1.5 py-0.5">
                 {sourceMismatches!.length}
               </span>
             )}
             {t.id === "audit" && (fullAudit?.summary.safeRepairsAvailable ?? 0) > 0 && (
-              <span className="ml-1.5 rounded-full bg-amber-500/15 text-amber-600 text-[10px] px-1.5 py-0.5">
+              <span className="ml-1.5 rounded-full bg-amber-500/15 text-amber-600 text-[11px] px-1.5 py-0.5">
                 {fullAudit!.summary.safeRepairsAvailable}
               </span>
             )}
             {t.id === "partialfix" && (partialOffloadScan?.affected.length ?? 0) > 0 && (
-              <span className="ml-1.5 rounded-full bg-blue-500/15 text-blue-600 text-[10px] px-1.5 py-0.5">
+              <span className="ml-1.5 rounded-full bg-blue-500/15 text-blue-600 text-[11px] px-1.5 py-0.5">
                 {partialOffloadScan!.affected.length}
               </span>
             )}

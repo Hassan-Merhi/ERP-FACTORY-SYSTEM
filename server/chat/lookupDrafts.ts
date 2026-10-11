@@ -3,6 +3,7 @@ import * as schema from "@shared/schema";
 import { and, asc, desc, eq, ilike, inArray, isNull, or, sql, type SQL } from "drizzle-orm";
 import { callAIWithFallback, type AIProvider } from "./aiProviders";
 import { RE_ACCOUNT_QUERY, RE_PRICE_UPDATE, RE_STOCK_ITEM_CREATE, RE_VOUCHER_SEARCH } from "./intent";
+import { parseMoneyInput, plusMoney, toMoney } from "../lib/money";
 export async function buildLookupDrafts(params: {
   userMessage: string;
   companyId: number;
@@ -301,16 +302,16 @@ If intent is not about an account query, respond with exactly: null`;
               )
               .where(eq(schema.voucherEntries.ledgerAccountId, parsed.accountId));
 
-            const dr = parseFloat(rows[0]?.totalDebit || "0");
-            const cr = parseFloat(rows[0]?.totalCredit || "0");
-            const ob = parseFloat(acct.openingBalance || "0");
+            const dr = toMoney(rows[0]?.totalDebit).toNumber();
+            const cr = toMoney(rows[0]?.totalCredit).toNumber();
+            const ob = toMoney(acct.openingBalance).toNumber();
             const obSide = acct.openingBalanceSide || "Dr";
             const balance = (obSide === "Cr" ? -ob : ob) + dr - cr;
             accountQueryResult = {
               queryType: "balance",
               accountId: parsed.accountId,
               accountName: acct.name,
-              balance: parseFloat(balance.toFixed(2)),
+              balance: toMoney(balance.toFixed(2)).toNumber(),
             };
           } else if (parsed.queryType === "transactions") {
             // Search transactions by description and/or amount
@@ -329,12 +330,12 @@ If intent is not about an account query, respond with exactly: null`;
               );
             }
             if (parsed.searchAmount) {
-              const amt = String(parseFloat(parsed.searchAmount).toFixed(2));
+              const amt = String(toMoney(parsed.searchAmount).toFixed(2));
               conditions.push(
                 or(
-                  sql`CAST(${schema.voucherEntries.debitAmount} AS numeric) = ${parseFloat(amt)}`,
-                  sql`CAST(${schema.voucherEntries.creditAmount} AS numeric) = ${parseFloat(amt)}`,
-                  sql`CAST(${schema.vouchers.totalAmount} AS numeric) = ${parseFloat(amt)}`
+                  sql`CAST(${schema.voucherEntries.debitAmount} AS numeric) = ${toMoney(amt).toNumber()}`,
+                  sql`CAST(${schema.voucherEntries.creditAmount} AS numeric) = ${toMoney(amt).toNumber()}`,
+                  sql`CAST(${schema.vouchers.totalAmount} AS numeric) = ${toMoney(amt).toNumber()}`
                 )
               );
             }
@@ -388,17 +389,19 @@ If intent is not about an account query, respond with exactly: null`;
               .where(eq(schema.voucherEntries.ledgerAccountId, parsed.accountId))
               .orderBy(asc(schema.vouchers.voucherDate));
 
-            const ob = parseFloat(acct.openingBalance || "0");
+            const ob = toMoney(acct.openingBalance).toNumber();
             const obSide = acct.openingBalanceSide || "Dr";
             let running = obSide === "Cr" ? -ob : ob;
-            const target = parseFloat(parsed.targetBalance);
+            // A missing or invalid extracted target stays NaN, so it matches nothing
+            // instead of searching for a zero balance.
+            const target = parseMoneyInput(parsed.targetBalance)?.toNumber() ?? NaN;
             const tolerance = Math.max(Math.abs(target) * 0.01, 1); // 1% or ±1
 
             const matches = [];
             for (const row of allRows) {
-              running += parseFloat(row.debitAmount || "0") - parseFloat(row.creditAmount || "0");
+              running = plusMoney(running, toMoney(row.debitAmount).minus(toMoney(row.creditAmount)));
               if (Math.abs(running - target) <= tolerance) {
-                matches.push({ ...row, balanceAfter: parseFloat(running.toFixed(2)) });
+                matches.push({ ...row, balanceAfter: toMoney(running.toFixed(2)).toNumber() });
                 if (matches.length >= 5) break;
               }
             }

@@ -285,26 +285,26 @@ export function MixBatchList({
           </div>
         ) : mixBatches.length > 0 ? (
           <>
-            <div className="space-y-3 md:hidden" data-testid="mix-batch-mobile-list">
+            <div className="space-y-3 md:hidden phone-land:block" data-testid="mix-batch-mobile-list">
               <div className="grid grid-cols-2 gap-2 rounded-xl border bg-muted/30 p-3">
                 <div>
-                  <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Total Weight</div>
+                  <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Total Weight</div>
                   <div className="mt-0.5 font-mono text-sm font-bold" data-testid="text-mix-mobile-summary-total">
                     {fmtKg(sumTotal)} kg
                   </div>
                 </div>
                 <div>
-                  <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Blended Cost</div>
+                  <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Blended Cost</div>
                   <div className="mt-0.5 font-mono text-sm font-bold" data-testid="text-mix-mobile-summary-cost">
                     ${blendedCost.toFixed(4)}/kg
                   </div>
                 </div>
                 <div>
-                  <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Used</div>
+                  <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Used</div>
                   <div className="mt-0.5 font-mono text-xs font-medium">{fmtKg(sumUsed)} kg</div>
                 </div>
                 <div>
-                  <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Remaining</div>
+                  <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Remaining</div>
                   <div className="mt-0.5 font-mono text-xs font-medium">{fmtKg(sumRemaining)} kg</div>
                 </div>
               </div>
@@ -358,19 +358,19 @@ export function MixBatchList({
                     </div>
                     <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
                       <div className="rounded-lg bg-muted/40 p-2">
-                        <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Total</div>
+                        <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Total</div>
                         <div className="mt-0.5 font-mono font-semibold">{formatNumber(total)} kg</div>
                       </div>
                       <div className="rounded-lg bg-muted/40 p-2">
-                        <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Cost / kg</div>
+                        <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Cost / kg</div>
                         <div className="mt-0.5 font-mono font-semibold">${cost.toFixed(4)}</div>
                       </div>
                       <div className="rounded-lg bg-muted/40 p-2">
-                        <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Used</div>
+                        <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Used</div>
                         <div className="mt-0.5 font-mono font-medium">{fmtKg(used)} kg</div>
                       </div>
                       <div className="rounded-lg bg-muted/40 p-2">
-                        <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Remaining</div>
+                        <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Remaining</div>
                         <div className="mt-0.5 font-mono font-medium">{fmtKg(remaining)} kg</div>
                       </div>
                     </div>
@@ -393,7 +393,7 @@ export function MixBatchList({
               )}
             </div>
 
-            <div className="hidden overflow-x-auto md:block">
+            <div className="hidden overflow-x-auto md:block phone-land:hidden">
               <Table>
                 <TableHeader>
                   <TableRow>

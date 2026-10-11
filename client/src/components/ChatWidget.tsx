@@ -441,7 +441,7 @@ export function ChatWidget() {
             overflow-hidden max-w-9 hover:max-w-[160px]"
         >
           <MessageCircle className="h-4 w-4 shrink-0" />
-          <span className="text-sm font-medium whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-200 delay-100">
+          <span className="text-sm font-medium whitespace-nowrap opacity-0 group-hover:opacity-100 touch:opacity-100 transition-opacity duration-200 delay-100">
             AI Assistant
           </span>
         </button>
@@ -496,7 +496,7 @@ export function ChatWidget() {
             "shadow-[0_8px_30px_rgba(0,0,0,0.12)] dark:shadow-[0_8px_30px_rgba(0,0,0,0.4)] transition-all duration-200 flex flex-col overflow-hidden",
             isFullscreen
               ? "w-screen h-screen sm:w-[90vw] sm:h-[90vh] sm:max-w-6xl rounded-none sm:rounded-3xl"
-              : "w-[calc(100vw-24px)] h-[calc(100vh-24px)] sm:w-[580px] sm:h-[80vh] sm:max-h-[760px] rounded-3xl"
+              : "w-[calc(100vw-24px)] h-[calc(100dvh-24px)] sm:w-[580px] sm:h-[80vh] sm:max-h-[760px] rounded-3xl"
           )}
         >
           <CardHeader className="flex flex-row items-center justify-between gap-2 py-4 px-5 border-b shrink-0">
@@ -654,14 +654,14 @@ export function ChatWidget() {
                     {sessionReadFiles.map((fp) => (
                       <span
                         key={fp}
-                        className="inline-flex items-center gap-1 text-[10px] font-mono bg-muted rounded-sm px-1.5 py-0.5 text-muted-foreground"
+                        className="inline-flex items-center gap-1 text-[11px] font-mono bg-muted rounded-sm px-1.5 py-0.5 text-muted-foreground"
                       >
                         <FileCode className="h-2.5 w-2.5 shrink-0" />
                         {fp.replace(/^.*\//, "")}
                       </span>
                     ))}
                     <button
-                      className="text-[10px] text-muted-foreground/60 hover:text-muted-foreground transition-colors px-1"
+                      className="text-[11px] text-muted-foreground/60 hover:text-muted-foreground transition-colors px-1"
                       onClick={() => {
                         setSessionReadFiles([]);
                         setShowSessionFiles(false);

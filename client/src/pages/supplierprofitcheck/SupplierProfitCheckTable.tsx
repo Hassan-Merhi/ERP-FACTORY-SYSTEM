@@ -34,7 +34,7 @@ export function SupplierProfitCheckTable({ model }: { model: ProfitModel }) {
   }
   return (
     <div className="rounded-xl border overflow-hidden">
-      <Table wrapperClassName="max-h-[calc(100vh-340px)]">
+      <Table>
         <TableHeader className="sticky top-0 z-30">
           <TableRow className="bg-muted/60 border-b-2 hover:bg-muted/60">
             {visibility.code && <Header className="min-w-[90px]">Code</Header>}
@@ -48,24 +48,24 @@ export function SupplierProfitCheckTable({ model }: { model: ProfitModel }) {
             {visibility.dubaiPrice && (
               <TableHead className="text-right min-w-[110px] text-[11px] font-bold uppercase tracking-wide">
                 <span className="text-amber-500">Dubai Price</span>
-                <div className="font-normal text-muted-foreground normal-case text-[10px]">PO rate</div>
+                <div className="font-normal text-muted-foreground normal-case text-[11px]">PO rate</div>
               </TableHead>
             )}
             {visibility.extraPerBale && (
               <TableHead className="text-right min-w-[90px] text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
-                Extra / Bale<div className="font-normal normal-case text-[10px]">freight+duties</div>
+                Extra / Bale<div className="font-normal normal-case text-[11px]">freight+duties</div>
               </TableHead>
             )}
             {visibility.landingCost && (
               <TableHead className="text-right min-w-[110px] text-[11px] font-bold uppercase tracking-wide">
                 <span className="text-blue-500">Landing Cost</span>
-                <div className="font-normal text-muted-foreground normal-case text-[10px]">Dubai + Extra</div>
+                <div className="font-normal text-muted-foreground normal-case text-[11px]">Dubai + Extra</div>
               </TableHead>
             )}
             {visibility.costProfit && (
               <TableHead className="text-right min-w-[130px] text-[11px] font-bold uppercase tracking-wide">
                 <span className="text-emerald-500">Cost Profit</span>
-                <div className="font-normal text-muted-foreground normal-case text-[10px]">Sell − Landing</div>
+                <div className="font-normal text-muted-foreground normal-case text-[11px]">Sell − Landing</div>
               </TableHead>
             )}
             {visibility.status && <Header className="min-w-[100px]">Status</Header>}
@@ -129,7 +129,7 @@ function ProfitRow({ row, index, model }: { row: ComputedRow; index: number; mod
       {visibility.name && (
         <TableCell className="font-medium text-sm py-2.5">
           <div>{row.name}</div>
-          {row.unresolved && <div className="text-[10px] text-amber-500 font-medium">Unresolved stock code</div>}
+          {row.unresolved && <div className="text-[11px] text-amber-500 font-medium">Unresolved stock code</div>}
         </TableCell>
       )}
       {visibility.salesQty && (
@@ -244,7 +244,7 @@ function AverageSellValue({ row, model }: { row: ComputedRow; model: ProfitModel
         data-avg-input="true"
       />
       {model.manualAvgPrices[row.stockItemId] && row.avgSellingPrice != null && (
-        <span className="text-[10px] text-muted-foreground leading-tight">auto ${fmt(row.avgSellingPrice)}</span>
+        <span className="text-[11px] text-muted-foreground leading-tight">auto ${fmt(row.avgSellingPrice)}</span>
       )}
     </div>
   );
@@ -264,7 +264,7 @@ function DubaiPriceValue({ row, model }: { row: ComputedRow; model: ProfitModel 
     return row.poPrice != null ? (
       <div className="flex flex-col items-end gap-0.5">
         <span className="font-mono text-sm text-amber-600 dark:text-amber-400">${fmt(row.poPrice)}</span>
-        <span className="text-[10px] text-muted-foreground leading-tight">proforma price</span>
+        <span className="text-[11px] text-muted-foreground leading-tight">proforma price</span>
       </div>
     ) : (
       <span className="text-muted-foreground text-xs">—</span>
@@ -288,10 +288,10 @@ function DubaiPriceValue({ row, model }: { row: ComputedRow; model: ProfitModel 
         />
       </div>
       {model.manualPoPrices[row.stockItemId] && row.poPrice != null && (
-        <span className="text-[10px] text-muted-foreground leading-tight">auto ${fmt(row.poPrice)}</span>
+        <span className="text-[11px] text-muted-foreground leading-tight">auto ${fmt(row.poPrice)}</span>
       )}
       {!model.manualPoPrices[row.stockItemId] && row.poPriceSource === "any_po_fallback" && (
-        <span className="text-[10px] text-amber-500/80 leading-tight">any supplier</span>
+        <span className="text-[11px] text-amber-500/80 leading-tight">any supplier</span>
       )}
     </div>
   );

@@ -16,6 +16,7 @@ import {
   previewHistoricalCostReplayWithExecutor,
 } from "./read-model";
 import { buildSelectedSupplierCorrectionPlan } from "./closure";
+import { toMoney } from "../../../lib/money";
 export { captureReplaySnapshot } from "./scope";
 
 export function buildNotFinalizedClause(includeFinalizedBales: boolean): string {
@@ -318,7 +319,7 @@ export async function buildHistoricalReplayScopeInternal(params: {
     for (const row of rawStockResult.rows) {
       const expected = canonicalRateByContainer.get(row.container_id);
       if (expected == null) continue;
-      const stored = Number.parseFloat(row.cost_per_kg_usd ?? "0") || 0;
+      const stored = toMoney(row.cost_per_kg_usd).toNumber();
       if (Math.abs(expected - stored) > 0.000001) rawStockIdToContainer.set(row.id, row.container_id);
     }
   }

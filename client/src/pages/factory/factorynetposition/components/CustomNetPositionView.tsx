@@ -3,14 +3,14 @@
  *
  * Extracted from FactoryNetPosition.tsx during the Phase 4 god-file split.
  */
-import {useState, useCallback, useMemo} from "react";
-import {Card, CardContent, CardHeader, CardTitle} from "@/components/ui/card";
-import {Badge} from "@/components/ui/badge";
-import {Button} from "@/components/ui/button";
-import {Equal, EyeOff, Eye, RotateCcw} from "lucide-react";
+import { useState, useCallback, useMemo } from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Equal, EyeOff, Eye, RotateCcw } from "lucide-react";
 
-import type {CustomViewAccount, NetPositionData} from "../types";
-import {fmt, loadCustomViewHidden, saveCustomViewHidden} from "../utils";
+import type { CustomViewAccount, NetPositionData } from "../types";
+import { fmt, loadCustomViewHidden, saveCustomViewHidden } from "../utils";
 
 export function CustomNetPositionView({ data }: { data: NetPositionData }) {
   const [hiddenKeys, setHiddenKeys] = useState<Set<string>>(() => loadCustomViewHidden());
@@ -139,7 +139,7 @@ export function CustomNetPositionView({ data }: { data: NetPositionData }) {
                     <div className="flex items-center gap-2 flex-wrap">
                       <Badge
                         variant="outline"
-                        className={`text-[9px] px-1 h-4 shrink-0 ${
+                        className={`text-[11px] px-1 h-4 shrink-0 ${
                           acc.side === "forUs"
                             ? "text-green-700 dark:text-green-400 border-green-600/30"
                             : "text-red-600 dark:text-red-400 border-red-500/30"

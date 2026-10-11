@@ -1,4 +1,5 @@
 import { db, schema, eq, and, desc, sql, isNull, asc, ilike, nonPartyAccountTypesSql } from "./reportShardSupport";
+import { plusMoney, toMoney } from "../../../lib/money";
 import type { DataQueryContext, DataQueryResult, ReportImplementationShard } from "../types";
 import { cashPositionReport, profitLossSummaryReport } from "./financialStatementReports";
 
@@ -65,9 +66,9 @@ async function runPhase1Report(ctx: DataQueryContext): Promise<DataQueryResult> 
         LIMIT ${rowLimit}
       `);
       const tableRows = rows.rows.map((row) => {
-        const ob = parseFloat(row.opening_balance || "0");
+        const ob = toMoney(row.opening_balance).toNumber();
         const obAdj = row.opening_balance_side === "Cr" ? -ob : ob;
-        const bal = obAdj + parseFloat(row.total_debit || "0") - parseFloat(row.total_credit || "0");
+        const bal = plusMoney(obAdj, toMoney(row.total_debit).minus(toMoney(row.total_credit)));
         const lastTx = row.last_tx ? String(row.last_tx).slice(0, 10) : "—";
         return [row.name, fmt(bal), lastTx];
       });
@@ -135,8 +136,8 @@ async function runPhase1Report(ctx: DataQueryContext): Promise<DataQueryResult> 
         r.voucherDate || "—",
         r.voucherType || "—",
         (r.description || "").slice(0, 40),
-        parseFloat(r.debitAmount || "0") > 0 ? fmtDec(parseFloat(r.debitAmount!)) : "—",
-        parseFloat(r.creditAmount || "0") > 0 ? fmtDec(parseFloat(r.creditAmount!)) : "—",
+        toMoney(r.debitAmount).toNumber() > 0 ? fmtDec(toMoney(r.debitAmount!).toNumber()) : "—",
+        toMoney(r.creditAmount).toNumber() > 0 ? fmtDec(toMoney(r.creditAmount!).toNumber()) : "—",
       ]);
       dataQueryResult = {
         queryType: "customer_statement",
@@ -202,8 +203,8 @@ async function runPhase1Report(ctx: DataQueryContext): Promise<DataQueryResult> 
         r.voucherDate || "—",
         r.voucherType || "—",
         (r.description || "").slice(0, 40),
-        parseFloat(r.debitAmount || "0") > 0 ? fmtDec(parseFloat(r.debitAmount!)) : "—",
-        parseFloat(r.creditAmount || "0") > 0 ? fmtDec(parseFloat(r.creditAmount!)) : "—",
+        toMoney(r.debitAmount).toNumber() > 0 ? fmtDec(toMoney(r.debitAmount!).toNumber()) : "—",
+        toMoney(r.creditAmount).toNumber() > 0 ? fmtDec(toMoney(r.creditAmount!).toNumber()) : "—",
       ]);
       dataQueryResult = {
         queryType: "supplier_statement",
@@ -235,7 +236,7 @@ async function runPhase1Report(ctx: DataQueryContext): Promise<DataQueryResult> 
         String(i + 1),
         r.name,
         String(r.tx_count),
-        fmt(parseFloat(r.total_received || "0")),
+        fmt(toMoney(r.total_received).toNumber()),
       ]);
       dataQueryResult = {
         queryType: "top_customers",
@@ -277,9 +278,9 @@ async function runPhase1Report(ctx: DataQueryContext): Promise<DataQueryResult> 
         LIMIT ${rowLimit}
       `);
       const tableRows = rows.rows.map((row) => {
-        const ob = parseFloat(row.opening_balance || "0");
+        const ob = toMoney(row.opening_balance).toNumber();
         const obAdj = row.opening_balance_side === "Cr" ? -ob : ob;
-        const bal = obAdj + parseFloat(row.total_debit || "0") - parseFloat(row.total_credit || "0");
+        const bal = plusMoney(obAdj, toMoney(row.total_debit).minus(toMoney(row.total_credit)));
         return [row.name, fmt(Math.abs(bal))];
       });
       dataQueryResult = {
@@ -327,11 +328,11 @@ async function runPhase1Report(ctx: DataQueryContext): Promise<DataQueryResult> 
         GROUP BY fb.status ORDER BY count DESC
       `);
       const totalBales = rows.rows.reduce((s: number, r) => s + parseInt(r.count || "0"), 0);
-      const totalWeight = rows.rows.reduce((s: number, r) => s + parseFloat(r.total_weight || "0"), 0);
+      const totalWeight = rows.rows.reduce((s: number, r) => plusMoney(s, r.total_weight), 0);
       const tableRows = rows.rows.map((r) => [
         String(r.status).replace(/_/g, " "),
         String(r.count),
-        fmtDec(parseFloat(r.total_weight || "0")) + " kg",
+        fmtDec(toMoney(r.total_weight).toNumber()) + " kg",
       ]);
       dataQueryResult = {
         queryType: "bale_production",

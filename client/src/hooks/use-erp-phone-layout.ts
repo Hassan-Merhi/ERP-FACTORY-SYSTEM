@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 
+import { ERP_PHONE_LAYOUT_QUERY, PHONE_MAX_WIDTH } from "@/lib/breakpoints";
+
 /**
  * Media query for the ERP phone interaction model.
  *
@@ -8,11 +10,11 @@ import { useEffect, useState } from "react";
  * short-height coarse-pointer devices, so they keep the phone model too — the
  * same rule `erp-mobile-operations.css` applies.
  */
-export const ERP_PHONE_LAYOUT_QUERY = "(max-width: 639px), (hover: none) and (pointer: coarse) and (max-height: 500px)";
+export { ERP_PHONE_LAYOUT_QUERY };
 
 function matchesPhoneLayout(): boolean {
   if (typeof window === "undefined") return false;
-  if (typeof window.matchMedia !== "function") return window.innerWidth < 640;
+  if (typeof window.matchMedia !== "function") return window.innerWidth <= PHONE_MAX_WIDTH;
   return window.matchMedia(ERP_PHONE_LAYOUT_QUERY).matches;
 }
 
@@ -22,7 +24,7 @@ export function useErpPhoneLayout(): boolean {
 
   useEffect(() => {
     if (typeof window.matchMedia !== "function") {
-      const update = () => setIsPhone(window.innerWidth < 640);
+      const update = () => setIsPhone(window.innerWidth <= PHONE_MAX_WIDTH);
       update();
       window.addEventListener("resize", update);
       return () => window.removeEventListener("resize", update);

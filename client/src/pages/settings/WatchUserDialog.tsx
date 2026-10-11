@@ -615,7 +615,7 @@ export function WatchUserDialog({
                     <div className="flex items-center gap-2">
                       <p className="font-medium leading-tight truncate">{getPageLabel(event.route)}</p>
                       {event.count > 1 && (
-                        <span className="text-[10px] rounded-full bg-muted px-1.5 py-0.5 shrink-0">×{event.count}</span>
+                        <span className="text-[11px] rounded-full bg-muted px-1.5 py-0.5 shrink-0">×{event.count}</span>
                       )}
                     </div>
                     <div className="flex items-center justify-between gap-2">

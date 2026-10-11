@@ -43,7 +43,7 @@ export function AgentListPanel({
       className={
         phone
           ? "flex w-full min-w-0 flex-col rounded-xl border bg-muted/20"
-          : "w-72 shrink-0 border-r flex flex-col h-full overflow-hidden bg-muted/20"
+          : "w-72 shrink-0 border-r flex flex-col h-full overflow-hidden bg-muted/20 max-md:w-full max-md:max-h-[min(42dvh,22rem)] max-md:flex-none max-md:border-r-0 max-md:border-b"
       }
       data-testid="agent-list-panel"
     >
@@ -145,7 +145,7 @@ export function AgentListPanel({
                   </div>
                 </button>
                 <button
-                  className="p-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive hover:bg-destructive/10 shrink-0"
+                  className="p-1.5 rounded-lg opacity-0 group-hover:opacity-100 touch:opacity-100 transition-opacity text-muted-foreground hover:text-destructive hover:bg-destructive/10 shrink-0"
                   onClick={() => onRemove(account.id)}
                   data-testid={`button-remove-agent-${account.id}`}
                   title="Remove from Agent Ledger"

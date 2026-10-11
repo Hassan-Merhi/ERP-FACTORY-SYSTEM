@@ -10,6 +10,7 @@ import path from "path";
 import fs from "fs";
 import { factoryWorkers, factoryPayrolls, companies } from "@shared/schema";
 import { getFactoryCompanyId } from "./_helpers";
+import { minusMoney, plusMoney, toMoney } from "../../../lib/money";
 import { getProductionBonusTotalsForPayrollIds } from "../../../services/payroll/productionBonusPayrollService";
 
 export function registerPayrollPaymentSummaryPdfRoutes(app: Express) {
@@ -144,12 +145,12 @@ export function registerPayrollPaymentSummaryPdfRoutes(app: Express) {
         const name = (workerMap.get(payroll.workerId) as string) || `Worker #${payroll.workerId}`;
         const present = payroll.presentDays != null ? Number(payroll.presentDays) : null;
         const absent = payroll.absentDays != null ? Number(payroll.absentDays) : null;
-        const net = parseFloat(payroll.netSalary || "0");
+        const net = toMoney(payroll.netSalary).toNumber();
         const production = productionTotals.get(payroll.id)?.approved ?? 0;
-        const other = Math.max(0, parseFloat(payroll.bonuses || "0") - production);
-        totalNet += net;
-        totalProduction += production;
-        totalOther += other;
+        const other = Math.max(0, minusMoney(toMoney(payroll.bonuses).toNumber(), production));
+        totalNet = plusMoney(totalNet, net);
+        totalProduction = plusMoney(totalProduction, production);
+        totalOther = plusMoney(totalOther, other);
 
         if (index % 2 === 1) doc.rect(40, y, 515, rowH).fill("#f5f7fa");
         doc.fillColor("#000000");
@@ -165,9 +166,9 @@ export function registerPayrollPaymentSummaryPdfRoutes(app: Express) {
           width: COL_W.absent,
           align: "center",
         });
-        doc.text(production.toFixed(2), COL.prod, y + 6, { width: COL_W.prod, align: "right" });
-        doc.text(other.toFixed(2), COL.other, y + 6, { width: COL_W.other, align: "right" });
-        doc.text(net.toFixed(2), COL.amount, y + 6, { width: COL_W.amount, align: "right" });
+        doc.text(toMoney(production).toFixed(2), COL.prod, y + 6, { width: COL_W.prod, align: "right" });
+        doc.text(toMoney(other).toFixed(2), COL.other, y + 6, { width: COL_W.other, align: "right" });
+        doc.text(toMoney(net).toFixed(2), COL.amount, y + 6, { width: COL_W.amount, align: "right" });
         const sigY = y + rowH - 5;
         doc
           .moveTo(COL.signature + 5, sigY)
@@ -181,9 +182,9 @@ export function registerPayrollPaymentSummaryPdfRoutes(app: Express) {
       doc.rect(40, y + 2, 515, rowH).fill("#1F3864");
       doc.fillColor("#ffffff").fontSize(7).font("Helvetica-Bold");
       doc.text("TOTAL", COL.name, y + 7, { width: COL_W.name });
-      doc.text(totalProduction.toFixed(2), COL.prod, y + 7, { width: COL_W.prod, align: "right" });
-      doc.text(totalOther.toFixed(2), COL.other, y + 7, { width: COL_W.other, align: "right" });
-      doc.text(totalNet.toFixed(2), COL.amount, y + 7, { width: COL_W.amount, align: "right" });
+      doc.text(toMoney(totalProduction).toFixed(2), COL.prod, y + 7, { width: COL_W.prod, align: "right" });
+      doc.text(toMoney(totalOther).toFixed(2), COL.other, y + 7, { width: COL_W.other, align: "right" });
+      doc.text(toMoney(totalNet).toFixed(2), COL.amount, y + 7, { width: COL_W.amount, align: "right" });
       doc.end();
     } catch (error: unknown) {
       res.status(500).json({ message: getErrorMessage(error) });

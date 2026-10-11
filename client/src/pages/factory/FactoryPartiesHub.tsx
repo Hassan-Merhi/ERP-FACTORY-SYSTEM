@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { PageHeader } from "@/components/PageHeader";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Users, UserRound } from "lucide-react";
 import FactoryCustomers from "@/pages/factory/FactoryCustomers";
@@ -42,7 +43,16 @@ export default function FactoryPartiesHub() {
         onValueChange={(value) => setSection(value as Section)}
         className="flex flex-col h-full overflow-hidden"
       >
-        <div className="border-b px-4 pt-3 shrink-0 overflow-x-auto">
+        {/* Shared page-header grammar (accent bar, icon, subtitle) like the other hubs and the ERP pages. */}
+        <div className="shrink-0 px-4 pt-3 [&>header]:mb-0 [&>header]:border-b-0 [&>header]:pb-2">
+          <PageHeader
+            title="Parties"
+            subtitle="Customers and suppliers of the factory"
+            icon={<Users className="h-5 w-5" />}
+            showBackButton={false}
+          />
+        </div>
+        <div className="border-b px-4 shrink-0 overflow-x-auto">
           <TabsList className="flex-nowrap">
             {showCustomers && (
               <TabsTrigger value="customers" data-testid="tab-parties-customers">

@@ -36,7 +36,7 @@ function getInitials(name: string) {
 
 function CompanyAvatar({ name, type, size = "sm" }: { name: string; type: CompanyType; size?: "sm" | "md" }) {
   const { color } = getTypeMeta(type);
-  const dim = size === "md" ? "h-7 w-7 text-[11px]" : "h-5 w-5 text-[9px]";
+  const dim = size === "md" ? "h-7 w-7 text-[11px]" : "h-5 w-5 text-[11px]";
   return (
     <span
       className={`${dim} flex shrink-0 items-center justify-center rounded-md font-bold text-white`}
@@ -60,7 +60,7 @@ export function CompanySelector({ showMobileName = false }: { showMobileName?: b
   const singleCompanyLabelClassName = showMobileName
     ? "max-w-28 truncate text-xs sm:max-w-[120px]"
     : "hidden max-w-[120px] truncate sm:inline";
-  const selectorClassName = `h-10 gap-1 px-1.5 sm:h-8 sm:max-w-32 sm:pr-1.5 ${
+  const selectorClassName = `h-10 min-w-0 gap-1 px-1.5 sm:h-8 sm:max-w-32 sm:pr-1.5 ${
     showMobileName ? "max-w-40" : "max-w-18"
   }`;
   const selectorLabelClassName = showMobileName
@@ -189,7 +189,7 @@ export function CompanySelector({ showMobileName = false }: { showMobileName?: b
             <Layers className="h-3.5 w-3.5" />
             <span className="text-xs font-semibold uppercase tracking-wider">Switch workspace</span>
           </div>
-          <Badge variant="secondary" className="px-1.5 py-0 text-[10px]">
+          <Badge variant="secondary" className="px-1.5 py-0 text-[11px]">
             {companies.length}
           </Badge>
         </div>
@@ -218,7 +218,7 @@ export function CompanySelector({ showMobileName = false }: { showMobileName?: b
               <CompanyAvatar name={company.name} type={company.companyType} size="md" />
               <div className="flex min-w-0 flex-1 flex-col">
                 <span className="truncate text-sm font-medium leading-tight">{company.name}</span>
-                <span className="text-[10px] leading-tight" style={{ color: `${color}cc` }}>
+                <span className="text-[11px] leading-tight" style={{ color: `${color}cc` }}>
                   {label}
                 </span>
               </div>

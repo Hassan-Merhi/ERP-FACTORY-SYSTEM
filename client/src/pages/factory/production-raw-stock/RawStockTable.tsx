@@ -92,7 +92,7 @@ export function RawStockTable({ rawStock, onAdjust, onDeduct, onAddToBatch }: Ra
           )}
         </div>
 
-        <div className="space-y-3 md:hidden" data-testid="raw-stock-mobile-list">
+        <div className="space-y-3 md:hidden phone-land:block" data-testid="raw-stock-mobile-list">
           {categories.length === 0 ? (
             <div className="rounded-xl border bg-card px-4 py-8 text-center text-sm text-muted-foreground">
               {zeroBalanceCount > 0 ? "All sources currently have a zero free balance." : "No raw stock available"}
@@ -121,7 +121,7 @@ export function RawStockTable({ rawStock, onAdjust, onDeduct, onAddToBatch }: Ra
                         )}
                         <FlaskRound className="h-4 w-4 shrink-0 text-primary/70" />
                         <span className="truncate text-sm font-semibold">{cat}</span>
-                        <Badge variant="outline" className="h-5 shrink-0 px-1.5 text-[10px] font-normal">
+                        <Badge variant="outline" className="h-5 shrink-0 px-1.5 text-[11px] font-normal">
                           {rows.length}
                         </Badge>
                       </div>
@@ -160,7 +160,7 @@ export function RawStockTable({ rawStock, onAdjust, onDeduct, onAddToBatch }: Ra
                               </div>
                             </div>
                             <div className="shrink-0 text-right">
-                              <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Available</div>
+                              <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Available</div>
                               <div className="font-mono text-base font-bold text-foreground">
                                 {formatNumber(parseFloat(row.freeKg || "0"))} kg
                               </div>
@@ -169,25 +169,25 @@ export function RawStockTable({ rawStock, onAdjust, onDeduct, onAddToBatch }: Ra
 
                           <div className="grid grid-cols-2 gap-2 text-xs">
                             <div className="rounded-lg bg-muted/40 p-2">
-                              <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Received</div>
+                              <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Received</div>
                               <div className="mt-0.5 font-mono font-medium">
                                 {formatNumber(parseFloat(row.receivedKg))} kg
                               </div>
                             </div>
                             <div className="rounded-lg bg-muted/40 p-2">
-                              <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Used</div>
+                              <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Used</div>
                               <div className="mt-0.5 font-mono font-medium">
                                 {formatNumber(parseFloat(row.usedKg))} kg
                               </div>
                             </div>
                             <div className="rounded-lg bg-muted/40 p-2">
-                              <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Value</div>
+                              <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Value</div>
                               <div className="mt-0.5 font-mono font-medium">
                                 ${formatNumber(parseFloat(row.valueRemainingUsd))}
                               </div>
                             </div>
                             <div className="rounded-lg bg-muted/40 p-2">
-                              <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Cost / kg</div>
+                              <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Cost / kg</div>
                               <div className="mt-0.5 font-mono font-medium">
                                 ${parseFloat(row.costPerKgUsd || "0").toFixed(6)}
                               </div>
@@ -239,9 +239,9 @@ export function RawStockTable({ rawStock, onAdjust, onDeduct, onAddToBatch }: Ra
           )}
         </div>
 
-        <div className="hidden overflow-hidden rounded-md border bg-card shadow-xs md:block">
-          <Table>
-            <TableHeader className="bg-muted/50">
+        <div className="hidden overflow-hidden rounded-md border bg-card shadow-xs md:block phone-land:hidden">
+          <Table stickyFirstColumn>
+            <TableHeader className="bg-muted">
               <TableRow className="hover:bg-transparent">
                 <TableHead className="w-[300px] py-4">Source / Supplier</TableHead>
                 <TableHead className="text-right py-4">Total Received</TableHead>
@@ -288,7 +288,7 @@ export function RawStockTable({ rawStock, onAdjust, onDeduct, onAddToBatch }: Ra
                           {cat}
                           <Badge
                             variant="outline"
-                            className="ml-2 font-normal text-[10px] px-1.5 h-4.5 bg-background/50"
+                            className="ml-2 font-normal text-[11px] px-1.5 h-4.5 bg-background/50"
                           >
                             {rows.length} source{rows.length !== 1 ? "s" : ""}
                           </Badge>
@@ -327,7 +327,7 @@ export function RawStockTable({ rawStock, onAdjust, onDeduct, onAddToBatch }: Ra
                                 >
                                   {row.supplierName}
                                 </button>
-                                <span className="text-[10px] text-muted-foreground flex items-center gap-2 mt-0.5">
+                                <span className="text-[11px] text-muted-foreground flex items-center gap-2 mt-0.5">
                                   Last offload: {new Date(row.lastOffloaded).toLocaleDateString()}
                                   {row.sourceType === "OPENING_BALANCE" && (
                                     <span className="inline-flex items-center px-1.5 rounded-sm bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 border border-blue-100 dark:border-blue-800 font-medium">
@@ -349,7 +349,7 @@ export function RawStockTable({ rawStock, onAdjust, onDeduct, onAddToBatch }: Ra
                             <TableCell className="text-right font-mono text-xs text-muted-foreground py-3">
                               <div className="flex flex-col items-end">
                                 <span>${formatNumber(parseFloat(row.valueRemainingUsd))}</span>
-                                <span className="text-[10px] opacity-60">
+                                <span className="text-[11px] opacity-60">
                                   {/* Rate is the received-weighted purchase cost/kg — it must only
                                   move when new stock is received (offload/ADD adjustment),
                                   never when existing stock is drawn down by a mix batch. Do
@@ -361,7 +361,7 @@ export function RawStockTable({ rawStock, onAdjust, onDeduct, onAddToBatch }: Ra
                               </div>
                             </TableCell>
                             <TableCell className="py-3 text-right pr-4">
-                              <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 touch:opacity-100 transition-opacity">
                                 <Button
                                   size="icon"
                                   variant="ghost"

@@ -117,7 +117,7 @@ export function registerFactoryProductImportRoutes(app: Express) {
               null;
             const sellingPrice =
               rawSellingPrice !== null && rawSellingPrice !== ""
-                ? String(parseFloat(String(rawSellingPrice)) || 0)
+                ? String(toMoney(String(rawSellingPrice ?? "")).toNumber())
                 : null;
 
             const rawProductionPrice =
@@ -133,7 +133,7 @@ export function registerFactoryProductImportRoutes(app: Express) {
               null;
             const productionPrice =
               rawProductionPrice !== null && rawProductionPrice !== ""
-                ? String(parseFloat(String(rawProductionPrice)) || 0)
+                ? String(toMoney(String(rawProductionPrice ?? "")).toNumber())
                 : null;
 
             let categoryId: number | null = null;
@@ -172,8 +172,8 @@ export function registerFactoryProductImportRoutes(app: Express) {
             }
 
             const hasPriceData =
-              (productionPrice !== null && parseFloat(productionPrice) > 0) ||
-              (sellingPrice !== null && parseFloat(sellingPrice) > 0);
+              (productionPrice !== null && toMoney(productionPrice).toNumber() > 0) ||
+              (sellingPrice !== null && toMoney(sellingPrice).toNumber() > 0);
 
             if (existing) {
               await db
@@ -316,7 +316,7 @@ export function registerFactoryProductImportRoutes(app: Express) {
               skippedRows.push({ rowIndex: i + 2, articleCode, reason: "Invalid quantity (must be > 0)" });
               continue;
             }
-            const weight = parseFloat(String(product.weightPerBaleKg || "25"));
+            const weight = toMoney(product.weightPerBaleKg || "25").toNumber();
 
             let prodDate: Date | null = null;
             const rawDate = getVal(
@@ -470,7 +470,7 @@ export function registerFactoryProductImportRoutes(app: Express) {
               continue;
             }
             const qty = rawQty;
-            const weight = parseFloat(String(product.weightPerBaleKg || "25"));
+            const weight = toMoney(product.weightPerBaleKg || "25").toNumber();
 
             let prodDate: Date | null = null;
             const rawDate = getVal(

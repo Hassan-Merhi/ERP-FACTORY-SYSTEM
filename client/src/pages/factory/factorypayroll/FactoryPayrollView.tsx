@@ -297,7 +297,7 @@ export function FactoryPayrollView({ model }: { model: ReturnType<typeof useFact
                                   {amount(record.productionBonus).toFixed(2)}
                                 </div>
                                 {amount(record.pendingProductionBonus) > 0 && (
-                                  <Badge variant="outline" className="mt-1 whitespace-nowrap text-[10px]">
+                                  <Badge variant="outline" className="mt-1 whitespace-nowrap text-[11px]">
                                     +{amount(record.pendingProductionBonus).toFixed(2)} pending
                                   </Badge>
                                 )}

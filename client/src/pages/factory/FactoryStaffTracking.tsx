@@ -37,103 +37,14 @@ import {
   periodFor,
   statusTranslationKey,
 } from "./factoryProductionTargetsModel";
-
-type TrackingMode = "production" | "attendance";
-type PeriodType = "daily" | "weekly" | "monthly";
-type TrackingStatus = (typeof FACTORY_TRACKING_STATUSES)[keyof typeof FACTORY_TRACKING_STATUSES];
-type PersonType = "worker" | "employee";
-
-interface TrackingRow {
-  personType: PersonType;
-  personId: number;
-  name: string;
-  code: string | null;
-  groupName?: string;
-  category: string;
-  targetBales: number | null;
-  producedBales: number | null;
-  status: TrackingStatus;
-  notes: string;
-  active: boolean;
-}
-
-interface TrackingResponse {
-  page: TrackingMode;
-  periodType: PeriodType;
-  periodStart: string;
-  periodEnd: string;
-  rows: TrackingRow[];
-}
-
-interface TrackingCategoryGroup {
-  label: string;
-  rows: TrackingRow[];
-}
-
-interface AttendanceWhatsappSettings {
-  attendanceWhatsappGroupId?: string | null;
-}
-
-interface WhatsappChat {
-  id: string;
-  name: string;
-  type: string;
-}
-
-function statusClass(status: TrackingStatus) {
-  if (status === FACTORY_TRACKING_STATUSES.absent)
-    return "bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-300";
-  if (status === FACTORY_TRACKING_STATUSES.new)
-    return "bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300";
-  return "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300";
-}
-
-function SummaryTile({ label, value, icon }: { label: string; value: string | number; icon: React.ReactNode }) {
-  return (
-    <Card className="shadow-none">
-      <CardContent className="flex items-center justify-between px-4 py-3">
-        <div>
-          <p className="text-xs text-muted-foreground">{label}</p>
-          <p className="text-xl font-semibold tabular-nums">{value}</p>
-        </div>
-        <div className="text-muted-foreground">{icon}</div>
-      </CardContent>
-    </Card>
-  );
-}
-
-function CategoryInput({
-  value,
-  placeholder,
-  onCommit,
-}: {
-  value: string;
-  placeholder: string;
-  onCommit: (value: string) => void;
-}) {
-  const [draft, setDraft] = useState(value);
-
-  useEffect(() => {
-    setDraft(value);
-  }, [value]);
-
-  const commit = () => {
-    if (draft !== value) onCommit(draft);
-  };
-
-  return (
-    <Input
-      value={draft}
-      onChange={(event) => setDraft(event.target.value)}
-      onBlur={commit}
-      onKeyDown={(event) => {
-        if (event.key === "Enter") event.currentTarget.blur();
-      }}
-      placeholder={placeholder}
-      className="h-8 w-full min-w-0"
-    />
-  );
-}
+import type { PeriodType, TrackingCategoryGroup, TrackingMode, TrackingResponse } from "./factoryStaffTrackingParts";
+import type {
+  AttendanceWhatsappSettings,
+  TrackingRow,
+  TrackingStatus,
+  WhatsappChat,
+} from "./factoryStaffTrackingParts";
+import { CategoryInput, statusClass, SummaryTile } from "./factoryStaffTrackingParts";
 
 export function FactoryStaffTracking({ mode }: { mode: TrackingMode }) {
   const { toast } = useToast();
@@ -262,10 +173,7 @@ export function FactoryStaffTracking({ mode }: { mode: TrackingMode }) {
     },
   });
 
-  const absentRows = useMemo(
-    () => rows.filter((row) => row.status === FACTORY_TRACKING_STATUSES.absent),
-    [rows]
-  );
+  const absentRows = useMemo(() => rows.filter((row) => row.status === FACTORY_TRACKING_STATUSES.absent), [rows]);
 
   const reportAbsentRows = useMemo(
     () =>
@@ -436,9 +344,7 @@ export function FactoryStaffTracking({ mode }: { mode: TrackingMode }) {
             <Button
               variant="outline"
               onClick={() => sendWhatsappImageMutation.mutate()}
-              disabled={
-                !attendanceWaGroupId || rows.length === 0 || isFetching || sendWhatsappImageMutation.isPending
-              }
+              disabled={!attendanceWaGroupId || rows.length === 0 || isFetching || sendWhatsappImageMutation.isPending}
               data-testid="button-send-attendance-whatsapp-image"
             >
               {sendWhatsappImageMutation.isPending ? (
@@ -473,7 +379,8 @@ export function FactoryStaffTracking({ mode }: { mode: TrackingMode }) {
             <div>
               <p className="text-sm font-semibold">Attendance WhatsApp Group</p>
               <p className="text-xs text-muted-foreground">
-                This group is used only for Attendance Register images. It does not change production or weekly report groups.
+                This group is used only for Attendance Register images. It does not change production or weekly report
+                groups.
               </p>
             </div>
             <Input
@@ -509,7 +416,9 @@ export function FactoryStaffTracking({ mode }: { mode: TrackingMode }) {
             </div>
             <div className="flex flex-wrap items-center justify-between gap-2">
               <p className="text-xs text-muted-foreground">
-                {attendanceWaGroupId ? `Selected group: ${attendanceWaGroupId}` : "No Attendance WhatsApp group selected."}
+                {attendanceWaGroupId
+                  ? `Selected group: ${attendanceWaGroupId}`
+                  : "No Attendance WhatsApp group selected."}
               </p>
               <div className="flex gap-2">
                 <Button
@@ -541,7 +450,11 @@ export function FactoryStaffTracking({ mode }: { mode: TrackingMode }) {
       {mode === "production" ? (
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <SummaryTile label={tr("totalTarget")} value={totals.target} icon={<Target className="h-5 w-5" />} />
-          <SummaryTile label={tr("balesProduced")} value={totals.produced} icon={<CheckCircle2 className="h-5 w-5" />} />
+          <SummaryTile
+            label={tr("balesProduced")}
+            value={totals.produced}
+            icon={<CheckCircle2 className="h-5 w-5" />}
+          />
           <SummaryTile
             label={tr("difference")}
             value={totals.difference > 0 ? `+${totals.difference}` : totals.difference}
@@ -633,12 +546,14 @@ export function FactoryStaffTracking({ mode }: { mode: TrackingMode }) {
                         className={!row.active ? "opacity-60" : undefined}
                       >
                         <TableCell>
-                          <div className="font-medium" dir="auto">{row.name}</div>
+                          <div className="font-medium" dir="auto">
+                            {row.name}
+                          </div>
                           <div className="mt-0.5 flex items-center gap-2 text-xs text-muted-foreground">
                             <span>{tr("worker")}</span>
                             {row.code && <span>· {row.code}</span>}
                             {!row.active && (
-                              <Badge variant="outline" className="h-5 px-1.5 text-[10px]">
+                              <Badge variant="outline" className="h-5 px-1.5 text-[11px]">
                                 {tr("inactive")}
                               </Badge>
                             )}
@@ -670,7 +585,9 @@ export function FactoryStaffTracking({ mode }: { mode: TrackingMode }) {
                           </TableCell>
                         )}
                         {mode === "production" && (
-                          <TableCell className="text-right font-semibold tabular-nums">{row.producedBales ?? 0}</TableCell>
+                          <TableCell className="text-right font-semibold tabular-nums">
+                            {row.producedBales ?? 0}
+                          </TableCell>
                         )}
                         {mode === "production" && (
                           <TableCell
@@ -736,7 +653,9 @@ export function FactoryStaffTracking({ mode }: { mode: TrackingMode }) {
               <div style={{ fontSize: "26px", fontWeight: 700 }}>{tr("attendanceReport")}</div>
               <div style={{ marginTop: "5px", color: "#a1a1aa", fontSize: "15px" }}>{referenceDate}</div>
             </div>
-            <div style={{ color: "#a1a1aa", fontSize: "14px" }}>{rows.length} {tr("totalPeople")}</div>
+            <div style={{ color: "#a1a1aa", fontSize: "14px" }}>
+              {rows.length} {tr("totalPeople")}
+            </div>
           </div>
 
           <div
@@ -819,46 +738,156 @@ export function FactoryStaffTracking({ mode }: { mode: TrackingMode }) {
           <table style={{ width: "100%", borderCollapse: "collapse", tableLayout: "fixed", fontSize: "18px" }}>
             <thead>
               <tr style={{ background: "#292c31", color: "#f4f4f5" }}>
-                <th style={{ width: "170px", padding: "16px 14px", textAlign: "left", border: "1px solid #3f444b" }}>Code</th>
+                <th style={{ width: "170px", padding: "16px 14px", textAlign: "left", border: "1px solid #3f444b" }}>
+                  Code
+                </th>
                 <th style={{ padding: "16px 14px", textAlign: "left", border: "1px solid #3f444b" }}>{tr("worker")}</th>
                 <th style={{ width: "95px", padding: "10px", textAlign: "center", border: "1px solid #3f444b" }}>
                   <div style={{ color: "#a1a1aa", fontSize: "14px" }}>{reportDay.weekday}</div>
                   <div style={{ fontSize: "20px" }}>{reportDay.day}</div>
                 </th>
-                <th style={{ width: "105px", padding: "16px 10px", textAlign: "center", border: "1px solid #3f444b", color: "#34d399" }}>P</th>
-                <th style={{ width: "105px", padding: "16px 10px", textAlign: "center", border: "1px solid #3f444b", color: "#f87171" }}>A</th>
-                <th style={{ width: "105px", padding: "16px 10px", textAlign: "center", border: "1px solid #3f444b" }}>%</th>
+                <th
+                  style={{
+                    width: "105px",
+                    padding: "16px 10px",
+                    textAlign: "center",
+                    border: "1px solid #3f444b",
+                    color: "#34d399",
+                  }}
+                >
+                  P
+                </th>
+                <th
+                  style={{
+                    width: "105px",
+                    padding: "16px 10px",
+                    textAlign: "center",
+                    border: "1px solid #3f444b",
+                    color: "#f87171",
+                  }}
+                >
+                  A
+                </th>
+                <th style={{ width: "105px", padding: "16px 10px", textAlign: "center", border: "1px solid #3f444b" }}>
+                  %
+                </th>
               </tr>
             </thead>
             <tbody>
               {reportAbsentRows.length === 0 ? (
                 <tr>
-                  <td colSpan={6} style={{ padding: "30px 14px", textAlign: "center", color: "#a1a1aa", border: "1px solid #3f444b" }}>
+                  <td
+                    colSpan={6}
+                    style={{ padding: "30px 14px", textAlign: "center", color: "#a1a1aa", border: "1px solid #3f444b" }}
+                  >
                     {tr("noAbsentWorkers")}
                   </td>
                 </tr>
               ) : (
                 reportAbsentRows.map((row, index) => (
                   <tr key={`report-${row.personId}`} style={{ background: index % 2 === 0 ? "#111315" : "#181a1e" }}>
-                    <td style={{ padding: "17px 14px", border: "1px solid #34383e", color: "#d4d4d8" }}>{row.code || "—"}</td>
+                    <td style={{ padding: "17px 14px", border: "1px solid #34383e", color: "#d4d4d8" }}>
+                      {row.code || "—"}
+                    </td>
                     <td style={{ padding: "13px 14px", border: "1px solid #34383e" }}>
-                      <div dir="auto" style={{ fontWeight: 600 }}>{row.name}</div>
+                      <div dir="auto" style={{ fontWeight: 600 }}>
+                        {row.name}
+                      </div>
                       <div style={{ marginTop: "4px", color: "#8b9098", fontSize: "13px" }}>{row.groupName || "—"}</div>
                     </td>
                     <td style={{ padding: "12px", textAlign: "center", border: "1px solid #34383e" }}>
-                      <span style={{ display: "inline-block", minWidth: "42px", padding: "8px 10px", borderRadius: "7px", background: "#651919", color: "#ff8a8a", fontWeight: 700 }}>A</span>
+                      <span
+                        style={{
+                          display: "inline-block",
+                          minWidth: "42px",
+                          padding: "8px 10px",
+                          borderRadius: "7px",
+                          background: "#651919",
+                          color: "#ff8a8a",
+                          fontWeight: 700,
+                        }}
+                      >
+                        A
+                      </span>
                     </td>
-                    <td style={{ padding: "12px", textAlign: "center", border: "1px solid #34383e", color: "#34d399", fontWeight: 700 }}>0</td>
-                    <td style={{ padding: "12px", textAlign: "center", border: "1px solid #34383e", color: "#f87171", fontWeight: 700 }}>1</td>
-                    <td style={{ padding: "12px", textAlign: "center", border: "1px solid #34383e", color: "#f87171", fontWeight: 700 }}>0%</td>
+                    <td
+                      style={{
+                        padding: "12px",
+                        textAlign: "center",
+                        border: "1px solid #34383e",
+                        color: "#34d399",
+                        fontWeight: 700,
+                      }}
+                    >
+                      0
+                    </td>
+                    <td
+                      style={{
+                        padding: "12px",
+                        textAlign: "center",
+                        border: "1px solid #34383e",
+                        color: "#f87171",
+                        fontWeight: 700,
+                      }}
+                    >
+                      1
+                    </td>
+                    <td
+                      style={{
+                        padding: "12px",
+                        textAlign: "center",
+                        border: "1px solid #34383e",
+                        color: "#f87171",
+                        fontWeight: 700,
+                      }}
+                    >
+                      0%
+                    </td>
                   </tr>
                 ))
               )}
               <tr style={{ background: "#292c31" }}>
-                <td colSpan={3} style={{ padding: "19px 14px", border: "1px solid #3f444b", fontWeight: 700, fontSize: "19px" }}>{tr("dailyTotal")}</td>
-                <td style={{ padding: "14px", textAlign: "center", border: "1px solid #3f444b", color: "#34d399", fontWeight: 800, fontSize: "21px" }}>{totals.present}</td>
-                <td style={{ padding: "14px", textAlign: "center", border: "1px solid #3f444b", color: "#f87171", fontWeight: 800, fontSize: "21px" }}>{totals.absent}</td>
-                <td style={{ padding: "14px", textAlign: "center", border: "1px solid #3f444b", fontWeight: 800, fontSize: "21px" }}>{totals.attendancePct}%</td>
+                <td
+                  colSpan={3}
+                  style={{ padding: "19px 14px", border: "1px solid #3f444b", fontWeight: 700, fontSize: "19px" }}
+                >
+                  {tr("dailyTotal")}
+                </td>
+                <td
+                  style={{
+                    padding: "14px",
+                    textAlign: "center",
+                    border: "1px solid #3f444b",
+                    color: "#34d399",
+                    fontWeight: 800,
+                    fontSize: "21px",
+                  }}
+                >
+                  {totals.present}
+                </td>
+                <td
+                  style={{
+                    padding: "14px",
+                    textAlign: "center",
+                    border: "1px solid #3f444b",
+                    color: "#f87171",
+                    fontWeight: 800,
+                    fontSize: "21px",
+                  }}
+                >
+                  {totals.absent}
+                </td>
+                <td
+                  style={{
+                    padding: "14px",
+                    textAlign: "center",
+                    border: "1px solid #3f444b",
+                    fontWeight: 800,
+                    fontSize: "21px",
+                  }}
+                >
+                  {totals.attendancePct}%
+                </td>
               </tr>
             </tbody>
           </table>

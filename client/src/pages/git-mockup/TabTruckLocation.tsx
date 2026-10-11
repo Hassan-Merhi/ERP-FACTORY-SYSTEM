@@ -298,7 +298,7 @@ export function TabTruckLocation() {
                           <tr key={`sup-${cg.id}-${shop}-${supName}`} className="bg-muted/40 border-t border-border">
                             <td
                               colSpan={7}
-                              className="py-0.5 px-3 text-center text-[10px] font-bold uppercase tracking-widest text-muted-foreground"
+                              className="py-0.5 px-3 text-center text-[11px] font-bold uppercase tracking-widest text-muted-foreground"
                             >
                               {supName} — {supRows.length}
                             </td>
@@ -327,7 +327,7 @@ export function TabTruckLocation() {
                             <td className="py-0.5 px-3 text-center">
                               <span
                                 className={cn(
-                                  "px-1.5 py-0.5 rounded-sm text-[10px] font-medium",
+                                  "px-1.5 py-0.5 rounded-sm text-[11px] font-medium",
                                   (STATUS_BADGE_MAP as Record<string, string>)[r.status] ?? "bg-muted text-foreground"
                                 )}
                               >

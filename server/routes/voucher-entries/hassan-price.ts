@@ -1,3 +1,4 @@
+import { toMoney } from "../../lib/money";
 export interface HassanPriceMetrics {
   price: number;
   profit: number;
@@ -5,7 +6,7 @@ export interface HassanPriceMetrics {
 }
 
 function toFiniteNumber(value: string | number | null | undefined): number {
-  const parsed = typeof value === "number" ? value : Number.parseFloat(value ?? "0");
+  const parsed = typeof value === "number" ? value : toMoney(value).toNumber();
   return Number.isFinite(parsed) ? parsed : 0;
 }
 

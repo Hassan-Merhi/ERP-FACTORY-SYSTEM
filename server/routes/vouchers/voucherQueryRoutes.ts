@@ -19,6 +19,7 @@ import {
   resolveAuthorizedCompanyId,
   sendCompanyAccessError,
 } from "../../security/companyAccessBoundary";
+import { toMoney } from "../../lib/money";
 
 /**
  * After saving a journal voucher, if it has a customer entry + a ledger account entry,
@@ -293,7 +294,7 @@ export function registerVoucherQueryRoutes(app: Express) {
       // returns accountName, so we just find the debit entry and use its accountName.
       let customerName: string | null = null;
       if (voucher.isCreditSale) {
-        const debitEntry = entries.find((e) => parseFloat(e.debitAmount || "0") > 0);
+        const debitEntry = entries.find((e) => toMoney(e.debitAmount).toNumber() > 0);
         if (debitEntry?.accountName && debitEntry.accountName !== "Unknown Account") {
           customerName = debitEntry.accountName;
         }

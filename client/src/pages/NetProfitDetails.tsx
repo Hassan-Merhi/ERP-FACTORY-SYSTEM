@@ -159,7 +159,7 @@ function CategoryGroup({
                     {side === "equity" && acc.balanceSide && (
                       <span className="text-xs text-muted-foreground font-normal ml-1">({acc.balanceSide})</span>
                     )}
-                    <ExternalLink className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 shrink-0 transition-opacity" />
+                    <ExternalLink className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 touch:opacity-100 shrink-0 transition-opacity" />
                   </button>
                 ) : (
                   <span className="text-foreground flex items-center gap-1">
@@ -531,11 +531,9 @@ export default function NetProfitDetails() {
         )}
       </div>
 
-      {data?.currency && (
-        <Card
-          className={data.currency.totalsProvisional ? "border-amber-500/40 bg-amber-500/5" : "bg-muted/20"}
-          data-testid="net-position-currency-context"
-        >
+      {/* Only provisional totals need the warning; resolved historical rates are not news. */}
+      {data?.currency?.totalsProvisional && (
+        <Card className="border-amber-500/40 bg-amber-500/5" data-testid="net-position-currency-context">
           <CardContent className="p-4 space-y-2">
             <div className="flex items-center justify-between gap-3 flex-wrap">
               <p className="text-sm font-semibold">Currency context</p>

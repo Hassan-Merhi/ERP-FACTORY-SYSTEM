@@ -3,35 +3,45 @@
  * narration when they are loaded and saved again.
  */
 
-/* New payment / receipt voucher: hide the source-account narration field. */
-form:has([data-testid="field-source-picker"])
-  div:has(> label):has(> input[name="paymentAccountNarration"]) {
-  display: none !important;
-}
+/*
+ * Cascade layer: Tailwind v4 emits its utilities inside `@layer utilities`, and unlayered CSS beats
+ * any layered rule whatever its specificity. This file joins the same layer so, as before the
+ * upgrade, specificity and source order decide between these rules and utility classes. The
+ * layer order is restated first because a document orders layers by first mention, and this
+ * file may load before index.css.
+ */
+@layer theme, base, components, utilities;
 
-/* New payment / receipt voucher: hide the per-line Narration column. */
-table:has(input[data-testid^="input-narration-"]) th:nth-child(5),
-table:has(input[data-testid^="input-narration-"]) td:has(input[data-testid^="input-narration-"]) {
-  display: none !important;
-}
+@layer utilities {
+  /* New payment / receipt voucher: hide the source-account narration field. */
+  form:has([data-testid="field-source-picker"]) div:has(> label):has(> input[name="paymentAccountNarration"]) {
+    display: none !important;
+  }
 
-/* New payment / receipt voucher mobile entry editor + cards. */
-div:has(> span):has(> input[data-testid="input-mobile-entry-narration"]),
-[data-testid^="mobile-entry-card-"] p.italic {
-  display: none !important;
-}
+  /* New payment / receipt voucher: hide the per-line Narration column. */
+  table:has(input[data-testid^="input-narration-"]) th:nth-child(5),
+  table:has(input[data-testid^="input-narration-"]) td:has(input[data-testid^="input-narration-"]) {
+    display: none !important;
+  }
 
-/* Legacy payment / receipt edit screen: keep the same narration-free UI. */
-form:has([data-testid="input-payment-account"])
-  div:has(> label):has(> input[name="paymentAccountNarration"]) {
-  display: none !important;
-}
+  /* New payment / receipt voucher mobile entry editor + cards. */
+  div:has(> span):has(> input[data-testid="input-mobile-entry-narration"]),
+  [data-testid^="mobile-entry-card-"] p.italic {
+    display: none !important;
+  }
 
-form:has([data-testid="input-payment-account"])
-  table:has(input[name^="entries."][name$=".narration"]) th:nth-child(3),
-form:has([data-testid="input-payment-account"])
-  table:has(input[name^="entries."][name$=".narration"]) td:has(input[name^="entries."][name$=".narration"]),
-form:has([data-testid="input-payment-account"])
-  div:has(> label):has(> input[name^="entries."][name$=".narration"]) {
-  display: none !important;
+  /* Legacy payment / receipt edit screen: keep the same narration-free UI. */
+  form:has([data-testid="input-payment-account"]) div:has(> label):has(> input[name="paymentAccountNarration"]) {
+    display: none !important;
+  }
+
+  form:has([data-testid="input-payment-account"])
+    table:has(input[name^="entries."][name$=".narration"])
+    th:nth-child(3),
+  form:has([data-testid="input-payment-account"])
+    table:has(input[name^="entries."][name$=".narration"])
+    td:has(input[name^="entries."][name$=".narration"]),
+  form:has([data-testid="input-payment-account"]) div:has(> label):has(> input[name^="entries."][name$=".narration"]) {
+    display: none !important;
+  }
 }

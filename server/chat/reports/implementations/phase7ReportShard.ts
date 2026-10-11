@@ -1,6 +1,7 @@
 import { db, sql, accountTypesOfClassSql } from "./reportShardSupport";
 import type { DataQueryContext, DataQueryResult, ReportImplementationShard } from "../types";
 import { notFiscalClosingVoucher } from "../../../services/accounting/balances/periodReportRules";
+import { toMoney } from "../../../lib/money";
 
 export const phase7QueryTypes = [
   "audit_trail",
@@ -90,9 +91,9 @@ async function runPhase7Report(ctx: DataQueryContext): Promise<DataQueryResult> 
       `);
       let grandBalance = 0;
       const tableRows7 = rows.rows.map((r) => {
-        const ob = parseFloat(r.opening_balance || "0") * (r.opening_balance_side === "Cr" ? -1 : 1);
-        const dr = parseFloat(r.total_dr || "0");
-        const cr = parseFloat(r.total_cr || "0");
+        const ob = toMoney(r.opening_balance).toNumber() * (r.opening_balance_side === "Cr" ? -1 : 1);
+        const dr = toMoney(r.total_dr).toNumber();
+        const cr = toMoney(r.total_cr).toNumber();
         const balance = ob + dr - cr;
         grandBalance += balance;
         const balLabel = balance >= 0 ? fmt(balance) + " Dr" : fmt(Math.abs(balance)) + " Cr";
@@ -161,8 +162,8 @@ async function runPhase7Report(ctx: DataQueryContext): Promise<DataQueryResult> 
       let totalProd = 0,
         totalCons = 0;
       const tableRows7 = rows.rows.map((r) => {
-        const qty = parseFloat(r.qty || "0");
-        const amt = parseFloat(r.total_amount || "0");
+        const qty = toMoney(r.qty).toNumber();
+        const amt = toMoney(r.total_amount).toNumber();
         if (r.adjustment_type === "Production") totalProd += amt;
         else totalCons += amt;
         return [
@@ -298,15 +299,15 @@ async function runPhase7Report(ctx: DataQueryContext): Promise<DataQueryResult> 
       `);
       let totalOutstanding = 0;
       const tableRows7 = rows.rows.map((r) => {
-        const outstanding = parseFloat(r.outstanding || "0");
+        const outstanding = toMoney(r.outstanding).toNumber();
         totalOutstanding += outstanding;
         return [
           String(r.sale_date).slice(0, 10),
           r.invoice_number || "—",
           r.container_number,
           r.customer,
-          fmt(parseFloat(r.total_amount)),
-          fmt(parseFloat(r.paid_amount)),
+          fmt(toMoney(r.total_amount).toNumber()),
+          fmt(toMoney(r.paid_amount).toNumber()),
           fmt(outstanding),
           r.payment_status,
           r.currency,
@@ -376,8 +377,8 @@ async function runPhase7Report(ctx: DataQueryContext): Promise<DataQueryResult> 
         totalKg = 0;
       const statusCounts: Record<string, number> = {};
       const tableRows7 = rows.rows.map((r) => {
-        const val = parseFloat(r.grand_total || "0");
-        const kg = parseFloat(r.total_kg || "0");
+        const val = toMoney(r.grand_total).toNumber();
+        const kg = toMoney(r.total_kg).toNumber();
         totalValue += val;
         totalKg += kg;
         statusCounts[r.status] = (statusCounts[r.status] || 0) + 1;
@@ -435,7 +436,7 @@ async function runPhase7Report(ctx: DataQueryContext): Promise<DataQueryResult> 
       `);
       let grandIncome = 0;
       const tableRows7 = rows.rows.map((r) => {
-        const income = parseFloat(r.net_income || "0");
+        const income = toMoney(r.net_income).toNumber();
         grandIncome += income;
         return [r.name, r.account_type, fmt(income)];
       });
@@ -520,10 +521,10 @@ async function runPhase7Report(ctx: DataQueryContext): Promise<DataQueryResult> 
         { label: "Department", value: w7.department || "—" },
         { label: "Status", value: w7.active ? "Active" : "Inactive" },
         { label: "Salary Type", value: w7.salary_type },
-        { label: "Base Salary", value: fmt(parseFloat(w7.base_salary || "0")) },
-        { label: "Per Bale Rate", value: fmtDec(parseFloat(w7.per_bale_rate || "0")) },
+        { label: "Base Salary", value: fmt(toMoney(w7.base_salary).toNumber()) },
+        { label: "Per Bale Rate", value: fmtDec(toMoney(w7.per_bale_rate).toNumber()) },
         { label: "Bales This Period", value: String(bs7?.total_bales || 0) },
-        { label: "Kg This Period", value: fmtDec(parseFloat(bs7?.total_kg || "0")) },
+        { label: "Kg This Period", value: fmtDec(toMoney(bs7?.total_kg).toNumber()) },
       ];
       const profileRows = [
         ["Phone", w7.phone1 || "—"],
@@ -536,7 +537,7 @@ async function runPhase7Report(ctx: DataQueryContext): Promise<DataQueryResult> 
         ["Payment Method", w7.payment_method || "—"],
         ["Visa Expiry", w7.visa_expiry ? String(w7.visa_expiry).slice(0, 10) : "—"],
         ["Work Permit Expiry", w7.work_permit_expiry ? String(w7.work_permit_expiry).slice(0, 10) : "—"],
-        ["Transport Allowance", fmt(parseFloat(w7.transport_allowance || "0"))],
+        ["Transport Allowance", fmt(toMoney(w7.transport_allowance).toNumber())],
       ];
       dataQueryResult = {
         queryType: "factory_worker_profile",
@@ -572,7 +573,7 @@ async function runPhase7Report(ctx: DataQueryContext): Promise<DataQueryResult> 
       let grandValue = 0,
         grandItems = 0;
       const tableRows7 = rows.rows.map((r) => {
-        const val = parseFloat(r.total_value || "0");
+        const val = toMoney(r.total_value).toNumber();
         const items = parseInt(r.item_count || "0");
         grandValue += val;
         grandItems += items;
@@ -632,9 +633,9 @@ async function runPhase7Report(ctx: DataQueryContext): Promise<DataQueryResult> 
       const qLabels = ["Q1 (Jan-Mar)", "Q2 (Apr-Jun)", "Q3 (Jul-Sep)", "Q4 (Oct-Dec)"];
       const tableRows7 = rows.rows.map((r) => {
         const q = parseInt(r.quarter || "1");
-        const rev = parseFloat(r.revenue || "0");
-        const cost = parseFloat(r.cost || "0");
-        const profit7 = parseFloat(r.profit || "0");
+        const rev = toMoney(r.revenue).toNumber();
+        const cost = toMoney(r.cost).toNumber();
+        const profit7 = toMoney(r.profit).toNumber();
         const margin = rev > 0 ? ((profit7 / rev) * 100).toFixed(1) + "%" : "—";
         totRev += rev;
         totCost += cost;

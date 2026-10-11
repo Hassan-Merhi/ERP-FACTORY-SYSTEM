@@ -131,7 +131,7 @@ export function VoucherDesktopNav({ visibleSidebarGroups, activeTab, setActiveTa
           <div className="flex items-center gap-1.5 px-2 mb-1 mt-0.5">
             <span className="h-1.5 w-1.5 rounded-full shrink-0" style={{ backgroundColor: group.color }} />
             <p
-              className="text-[10px] font-semibold uppercase tracking-widest"
+              className="text-[11px] font-semibold uppercase tracking-widest"
               style={{ color: group.color, opacity: 0.85 }}
             >
               {group.label}

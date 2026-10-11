@@ -701,7 +701,7 @@ export default function SpreadsheetEditor() {
               data-testid="button-rename-spreadsheet"
             >
               <span className="truncate text-sm font-medium">{sheetName}</span>
-              <Pencil className="h-3 w-3 text-muted-foreground opacity-60 md:opacity-0 md:group-hover:opacity-100 transition-opacity" />
+              <Pencil className="h-3 w-3 text-muted-foreground opacity-60 md:opacity-0 md:group-hover:opacity-100 touch:opacity-100 transition-opacity" />
             </button>
           )}
           <div className="hidden items-center gap-1 text-xs text-muted-foreground ml-1 sm:flex">
@@ -835,7 +835,7 @@ export default function SpreadsheetEditor() {
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="shrink-0 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity h-7 w-7"
+                    className="shrink-0 opacity-100 md:opacity-0 md:group-hover:opacity-100 touch:opacity-100 transition-opacity h-7 w-7"
                     onClick={(e) => {
                       e.stopPropagation();
                       setDeleteTarget(sheet.id);

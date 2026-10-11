@@ -394,7 +394,7 @@ export function AgentCard({
             <span />
             <span className="font-bold tracking-widest text-sm uppercase self-center text-center">{agentName}</span>
             <span className="flex justify-end items-center">
-              <Badge className={cn("text-[10px] no-default-active-elevate shrink-0", confidenceBadge.cls)}>
+              <Badge className={cn("text-[11px] no-default-active-elevate shrink-0", confidenceBadge.cls)}>
                 {confidenceBadge.label}
               </Badge>
             </span>
@@ -486,7 +486,7 @@ export function AgentCard({
                     <Badge
                       variant="outline"
                       className={cn(
-                        "text-[10px] shrink-0 no-default-active-elevate",
+                        "text-[11px] shrink-0 no-default-active-elevate",
                         a.type === "debit" ? "text-green-700 border-green-400" : "text-red-600 border-red-400"
                       )}
                     >
@@ -527,7 +527,7 @@ export function AgentCard({
                   className="w-24 text-xs rounded-sm border border-input bg-background px-2 py-1 focus:outline-hidden focus:ring-1 focus:ring-ring text-right"
                   data-testid={`input-adj-amount-${agentName}`}
                 />
-                <div className="flex rounded-sm border border-input overflow-hidden text-[10px] font-bold shrink-0">
+                <div className="flex rounded-sm border border-input overflow-hidden text-[11px] font-bold shrink-0">
                   <button
                     type="button"
                     onClick={() => setNewType("debit")}
@@ -559,7 +559,7 @@ export function AgentCard({
                   type="button"
                   onClick={saveAdj}
                   disabled={createAdjMutation.isPending}
-                  className="px-2.5 py-1 rounded-sm bg-primary text-primary-foreground text-[10px] font-semibold disabled:opacity-50 shrink-0"
+                  className="px-2.5 py-1 rounded-sm bg-primary text-primary-foreground text-[11px] font-semibold disabled:opacity-50 shrink-0"
                   data-testid={`button-adj-save-${agentName}`}
                 >
                   {createAdjMutation.isPending ? "…" : "Save"}

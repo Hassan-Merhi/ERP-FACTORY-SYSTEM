@@ -62,12 +62,12 @@ export const backendMessagesPhase7TranslationsPart5: readonly Phase7BackendMessa
     fr: "{0} action(s) attendent l’examen d’un Administrateur ou d’un Développeur.",
   },
   {
-    en: "Large withdrawal: ${parseFloat(row.amount).toLocaleString()}",
+    en: "Large withdrawal: ${toMoney(row.amount).toNumber().toLocaleString()}",
     ar: "سحب كبير: {0}",
     fr: "Retrait important : {0}",
   },
   {
-    en: 'Voucher ${row.voucher_number ?? row.id}: "${row.narration ?? "No narration"}" — ${parseFloat(row.amount).toLocaleString()} from ${row.account}',
+    en: 'Voucher ${row.voucher_number ?? row.id}: "${row.narration ?? "No narration"}" — ${toMoney(row.amount).toNumber().toLocaleString()} from ${row.account}',
     ar: "السند {0}: «{1}» — {2} من {3}",
     fr: "Pièce {0} : « {1} » — {2} depuis {3}",
   },

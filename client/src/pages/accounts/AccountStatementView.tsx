@@ -215,7 +215,7 @@ export function AccountStatementView({
             <span className="text-xs text-muted-foreground shrink-0">Account</span>
             <span className="font-semibold truncate">{selectedAccount?.name}</span>
             {selectedAccount?.accountId && (
-              <Badge variant="outline" className="font-mono text-[10px] shrink-0">
+              <Badge variant="outline" className="font-mono text-[11px] shrink-0">
                 #{selectedAccount.accountId}
               </Badge>
             )}
@@ -371,7 +371,7 @@ export function AccountStatementView({
                   <span className="text-muted-foreground text-xs shrink-0">|</span>
                   <span className="text-sm font-mono tabular-nums shrink-0">
                     {formatAmount(Math.abs(displayClosingBalance))}
-                    <span className="ml-1 text-[10px] opacity-70">{displayClosingBalance >= 0 ? "Dr" : "Cr"}</span>
+                    <span className="ml-1 text-[11px] opacity-70">{displayClosingBalance >= 0 ? "Dr" : "Cr"}</span>
                   </span>
                 </>
               )}
@@ -419,7 +419,7 @@ export function AccountStatementView({
                   </Button>
                 )}
               {/* Language toggle for PDF */}
-              <div className="flex items-center rounded-sm border text-[10px] font-semibold overflow-hidden">
+              <div className="flex items-center rounded-sm border text-[11px] font-semibold overflow-hidden">
                 {(["en", "fr", "ar"] as const).map((l) => (
                   <button
                     key={l}
@@ -511,31 +511,31 @@ export function AccountStatementView({
           <div className="rounded-lg border bg-muted/30 px-4 py-2.5 flex items-center gap-3 min-w-[130px]">
             <FileText className="w-4 h-4 text-muted-foreground shrink-0" />
             <div>
-              <p className="text-[10px] text-muted-foreground leading-none mb-0.5">Transactions</p>
+              <p className="text-[11px] text-muted-foreground leading-none mb-0.5">Transactions</p>
               <p className="text-base font-semibold leading-none tabular-nums">{transactionCount}</p>
             </div>
           </div>
           <div className="rounded-lg border bg-muted/30 px-4 py-2.5 flex items-center gap-3 min-w-[150px]">
             <TrendingUp className="w-4 h-4 text-muted-foreground shrink-0" />
             <div>
-              <p className="text-[10px] text-muted-foreground leading-none mb-0.5">Total Debit</p>
+              <p className="text-[11px] text-muted-foreground leading-none mb-0.5">Total Debit</p>
               <p className="text-base font-semibold leading-none tabular-nums">{formatAmount(totalDebit)}</p>
             </div>
           </div>
           <div className="rounded-lg border bg-muted/30 px-4 py-2.5 flex items-center gap-3 min-w-[150px]">
             <TrendingDown className="w-4 h-4 text-muted-foreground shrink-0" />
             <div>
-              <p className="text-[10px] text-muted-foreground leading-none mb-0.5">Total Credit</p>
+              <p className="text-[11px] text-muted-foreground leading-none mb-0.5">Total Credit</p>
               <p className="text-base font-semibold leading-none tabular-nums">{formatAmount(totalCredit)}</p>
             </div>
           </div>
           <div className="rounded-lg border bg-muted/30 px-4 py-2.5 flex items-center gap-3 min-w-[160px]">
             <Scale className="w-4 h-4 text-muted-foreground shrink-0" />
             <div>
-              <p className="text-[10px] text-muted-foreground leading-none mb-0.5">Closing Balance</p>
+              <p className="text-[11px] text-muted-foreground leading-none mb-0.5">Closing Balance</p>
               <p className="text-base font-semibold leading-none tabular-nums">
                 {formatAmount(Math.abs(displayClosingBalance))}
-                <span className="ml-1 text-[10px] font-normal opacity-70">{balSide(displayClosingBalance)}</span>
+                <span className="ml-1 text-[11px] font-normal opacity-70">{balSide(displayClosingBalance)}</span>
               </p>
             </div>
           </div>

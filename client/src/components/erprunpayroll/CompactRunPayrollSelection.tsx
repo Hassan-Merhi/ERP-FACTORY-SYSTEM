@@ -175,7 +175,7 @@ export function CompactRunPayrollSelection({ model }: CompactRunPayrollSelection
                       <TableCell className="text-center">
                         <Badge
                           variant={worker.active ? "outline" : "secondary"}
-                          className="text-[10px] no-default-active-elevate"
+                          className="text-[11px] no-default-active-elevate"
                         >
                           {worker.active ? "Active" : "Inactive"}
                         </Badge>
@@ -226,7 +226,7 @@ export function CompactRunPayrollSelection({ model }: CompactRunPayrollSelection
           <History className="mr-2 h-4 w-4" />
           Payroll History
           {draftCount > 0 && (
-            <Badge variant="outline" className="ml-2 text-[10px] no-default-active-elevate">
+            <Badge variant="outline" className="ml-2 text-[11px] no-default-active-elevate">
               {draftCount} draft
             </Badge>
           )}

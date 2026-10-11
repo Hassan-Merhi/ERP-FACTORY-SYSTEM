@@ -21,6 +21,7 @@ import { aiCompanySnapshots } from "@shared/schema";
 import * as schema from "@shared/schema";
 import { eq, and, sql, isNull, desc, inArray } from "drizzle-orm";
 import { getBusinessSummary, getLowStockItems, getPricingHealth } from "../aiTools";
+import { plusMoney, toMoney } from "./money";
 
 // ── Default TTLs (seconds) per snapshot type ──────────────────────────────────
 const DEFAULT_TTLS: Record<string, number> = {
@@ -80,15 +81,15 @@ async function buildInventorySummary(companyId: number) {
   return {
     fetchedAt: new Date().toISOString(),
     totalItems: totals[0]?.totalItems ?? 0,
-    totalValue: parseFloat(totals[0]?.totalValue ?? "0").toFixed(2),
-    totalQty: parseFloat(totals[0]?.totalQty ?? "0").toFixed(3),
+    totalValue: toMoney(totals[0]?.totalValue).toFixed(2),
+    totalQty: toMoney(totals[0]?.totalQty).toFixed(3),
     byGroup: byGroup.map((g) => ({
       groupId: g.groupId,
       groupName: g.groupName,
       groupCode: g.groupCode || "",
       itemCount: g.itemCount ?? 0,
-      totalValue: parseFloat(g.totalValue ?? "0").toFixed(2),
-      totalQty: parseFloat(g.totalQty ?? "0").toFixed(3),
+      totalValue: toMoney(g.totalValue).toFixed(2),
+      totalQty: toMoney(g.totalQty).toFixed(3),
     })),
   };
 }
@@ -153,14 +154,14 @@ async function buildSupplierBalances(companyId: number) {
   for (const e of entries) {
     if (e.supplierId == null) continue;
     const cur = entryTotals.get(e.supplierId) ?? { credit: 0, debit: 0 };
-    cur.credit += parseFloat(e.creditAmount || "0");
-    cur.debit += parseFloat(e.debitAmount || "0");
+    cur.credit = plusMoney(cur.credit, e.creditAmount);
+    cur.debit = plusMoney(cur.debit, e.debitAmount);
     entryTotals.set(e.supplierId, cur);
   }
 
   const balances = suppliers
     .map((s) => {
-      const opening = parseFloat(s.openingBalance ?? "0");
+      const opening = toMoney(s.openingBalance).toNumber();
       const txn = entryTotals.get(s.id);
       const balance = opening + (txn ? txn.credit - txn.debit : 0);
       return {
@@ -172,8 +173,8 @@ async function buildSupplierBalances(companyId: number) {
         status: balance > 0.01 ? "PAYABLE" : balance < -0.01 ? "OVERPAID" : "SETTLED",
       };
     })
-    .filter((s) => Math.abs(parseFloat(s.balance)) > 0.01)
-    .sort((a, b) => parseFloat(b.balance) - parseFloat(a.balance));
+    .filter((s) => Math.abs(toMoney(s.balance).toNumber()) > 0.01)
+    .sort((a, b) => toMoney(b.balance).minus(toMoney(a.balance)).toNumber());
 
   return { fetchedAt: new Date().toISOString(), balances };
 }

@@ -422,7 +422,7 @@ export function RemoveFromStockTab() {
       <div className="flex items-center justify-between gap-4 flex-wrap bg-muted/30 p-4 rounded-xl border">
         <div className="flex items-center gap-4 flex-wrap">
           <div className="w-48">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1 ml-1">Location</p>
+            <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground mb-1 ml-1">Location</p>
             <Select value={selectedLocationId} onValueChange={setSelectedLocationId}>
               <SelectTrigger className="h-9 rounded-lg" data-testid="select-remove-location">
                 <SelectValue placeholder="All Locations" />
@@ -438,7 +438,7 @@ export function RemoveFromStockTab() {
             </Select>
           </div>
           <div className="w-40">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1 ml-1">
+            <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground mb-1 ml-1">
               Date Filter
             </p>
             <Input
@@ -453,7 +453,7 @@ export function RemoveFromStockTab() {
             <Button
               variant={viewMode === "condensed" ? "secondary" : "ghost"}
               size="sm"
-              className="h-7 text-[10px] font-bold px-2 rounded-md"
+              className="h-7 text-[11px] font-bold px-2 rounded-md"
               onClick={() => setViewMode("condensed")}
             >
               <LayoutList className="h-3 w-3 mr-1" />
@@ -462,7 +462,7 @@ export function RemoveFromStockTab() {
             <Button
               variant={viewMode === "detailed" ? "secondary" : "ghost"}
               size="sm"
-              className="h-7 text-[10px] font-bold px-2 rounded-md"
+              className="h-7 text-[11px] font-bold px-2 rounded-md"
               onClick={() => setViewMode("detailed")}
             >
               <List className="h-3 w-3 mr-1" />
@@ -536,13 +536,13 @@ export function RemoveFromStockTab() {
       <div className="flex items-center justify-between px-4 py-3 bg-muted/20 rounded-xl border border-dashed">
         <div className="flex items-center gap-6">
           <div className="flex flex-col">
-            <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Filtered Count</span>
+            <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">Filtered Count</span>
             <span className="text-lg font-black tabular-nums">
               {totalQty} <span className="text-xs font-normal text-muted-foreground">bales</span>
             </span>
           </div>
           <div className="flex flex-col border-l pl-6">
-            <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+            <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">
               Filtered Weight
             </span>
             <span className="text-lg font-black tabular-nums">

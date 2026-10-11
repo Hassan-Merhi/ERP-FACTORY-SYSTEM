@@ -542,13 +542,13 @@ export function JournalEntriesEditor({ model }: { model: Model }) {
 
       <div className="flex flex-wrap gap-3">
         <div className="rounded-lg border bg-muted/40 px-4 py-2 flex flex-col gap-0.5">
-          <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Total Debit</span>
+          <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">Total Debit</span>
           <span className="text-sm font-semibold font-mono text-emerald-600 dark:text-emerald-400">
             {formatAmount(totalDebit)}
           </span>
         </div>
         <div className="rounded-lg border bg-muted/40 px-4 py-2 flex flex-col gap-0.5">
-          <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Total Credit</span>
+          <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">Total Credit</span>
           <span className="text-sm font-semibold font-mono text-red-600 dark:text-red-400">
             {formatAmount(totalCredit)}
           </span>

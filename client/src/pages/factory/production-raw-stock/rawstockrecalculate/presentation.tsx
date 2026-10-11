@@ -37,7 +37,7 @@ export function codeBadge(code: string) {
         ? "text-amber-600 border-amber-500/30 bg-amber-500/10"
         : "text-red-500 border-red-500/30 bg-red-500/10";
   return (
-    <Badge key={code} variant="outline" className={`${className} text-[10px] mr-1`}>
+    <Badge key={code} variant="outline" className={`${className} text-[11px] mr-1`}>
       {code}
     </Badge>
   );

@@ -122,7 +122,19 @@ function assertLayout(layout, mode, label) {
   return failures;
 }
 
+/**
+ * Every navigation reloads the SPA, which shows its "Loading application" boundary until the
+ * session and company bootstrap resolve. Wait for the workspace (or the login form) to exist
+ * before measuring, so a slow bootstrap is not reported as a missing shell; a route that never
+ * settles is still measured and reported after the timeout.
+ */
 async function waitForSettledUi(page) {
+  await page
+    .waitForFunction(
+      () => Boolean(document.getElementById("main-content") || document.querySelector('[data-testid="input-username"]')),
+      { timeout: TIMEOUT_MS },
+    )
+    .catch(() => {});
   await new Promise((resolve) => setTimeout(resolve, 1_500));
   await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
 }
@@ -146,6 +158,30 @@ async function login(page) {
     () => window.location.pathname !== "/login" && Boolean(document.getElementById("main-content")),
     { timeout: TIMEOUT_MS },
   );
+  await waitForSettledUi(page);
+  await dismissFirstRunPrompts(page);
+}
+
+/**
+ * A fresh profile sees the language onboarding dialog (a full-screen sheet on phones, which makes
+ * `#main-content` inert) and, when the company asks for one, the daily rate prompt. Neither is
+ * part of the layout under test, so they are answered the way a user would.
+ */
+async function dismissFirstRunPrompts(page) {
+  const clickIfPresent = async (selector) => {
+    const handle = await page.$(selector);
+    if (!handle) return false;
+    await handle.click().catch(() => {});
+    return true;
+  };
+  try {
+    await page.waitForSelector('[data-testid="language-onboarding-continue"]', { visible: true, timeout: 4000 });
+    await clickIfPresent('[data-testid="language-onboarding-en"]');
+    await clickIfPresent('[data-testid="language-onboarding-continue"]');
+  } catch {
+    // No onboarding dialog for this profile.
+  }
+  await clickIfPresent('[data-testid="button-skip-rate"]');
   await waitForSettledUi(page);
 }
 

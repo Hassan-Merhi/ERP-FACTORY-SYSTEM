@@ -18,7 +18,7 @@ const STATUS_ORDER: Record<ProformaLineStatus, number> = {
   reference: 4,
 };
 
-const BADGE_BASE = "rounded-md text-[10px] no-default-hover-elevate no-default-active-elevate";
+const BADGE_BASE = "rounded-md text-[11px] no-default-hover-elevate no-default-active-elevate";
 
 function StatusBadge({ status, model }: { status: ProformaLineStatus; model: FactoryContainerLoadingScanModel }) {
   if (status === "fulfilled") {
@@ -124,7 +124,7 @@ function ComparisonTable({ model }: { model: FactoryContainerLoadingScanModel })
   return (
     <div className="max-h-[360px] overflow-auto border-t">
       <Table>
-        <TableHeader className="sticky top-0 z-30 bg-background/95 backdrop-blur-sm">
+        <TableHeader className="sticky top-0 z-30 bg-background">
           <TableRow>
             <TableHead className="text-xs">{model.tr("article")}</TableHead>
             <TableHead className="text-xs">{model.tr("product")}</TableHead>
@@ -196,7 +196,7 @@ function LoadedBalesSummary({ model }: { model: FactoryContainerLoadingScanModel
 
   return (
     <div className="border-t px-4 py-3">
-      <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+      <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
         {model.tr("loadedByArticle")}
       </p>
       <div className="max-h-[190px] overflow-auto rounded-xl border">
@@ -241,21 +241,21 @@ function OrderSummaryCard({ model }: { model: FactoryContainerLoadingScanModel }
           <div className="font-mono text-base font-semibold" data-testid="text-total-bales">
             {model.bales.length}
           </div>
-          <div className="text-[10px] uppercase tracking-wide text-muted-foreground">{model.tr("bales")}</div>
+          <div className="text-[11px] uppercase tracking-wide text-muted-foreground">{model.tr("bales")}</div>
         </div>
         <div className="rounded-xl border bg-muted/20 p-3 text-center">
           <Scale className="mx-auto mb-1.5 h-4 w-4 text-muted-foreground" />
           <div className="font-mono text-base font-semibold" data-testid="text-total-weight">
             {formatNumber(model.totalWeight, 2)}
           </div>
-          <div className="text-[10px] uppercase tracking-wide text-muted-foreground">{model.tr("kgUnit")}</div>
+          <div className="text-[11px] uppercase tracking-wide text-muted-foreground">{model.tr("kgUnit")}</div>
         </div>
         <div className="rounded-xl border bg-muted/20 p-3 text-center">
           <Layers3 className="mx-auto mb-1.5 h-4 w-4 text-muted-foreground" />
           <div className="font-mono text-base font-semibold" data-testid="text-article-groups">
             {Object.keys(model.groupedBalesMap).length}
           </div>
-          <div className="text-[10px] uppercase tracking-wide text-muted-foreground">{model.tr("articles")}</div>
+          <div className="text-[11px] uppercase tracking-wide text-muted-foreground">{model.tr("articles")}</div>
         </div>
       </div>
     </div>
@@ -301,17 +301,17 @@ export function ProformaProgressPanel({ model }: { model: FactoryContainerLoadin
         <div className="mt-3 grid grid-cols-3 gap-2">
           <div className="rounded-xl border bg-muted/15 px-2 py-2 text-center">
             <div className="font-mono text-sm font-semibold">{bales.length}</div>
-            <div className="text-[10px] uppercase tracking-wide text-muted-foreground">{model.tr("loadedKpi")}</div>
+            <div className="text-[11px] uppercase tracking-wide text-muted-foreground">{model.tr("loadedKpi")}</div>
           </div>
           <div className="rounded-xl border bg-muted/15 px-2 py-2 text-center">
             <div className="font-mono text-sm font-semibold">{formatNumber(model.remainingProformaBales)}</div>
-            <div className="text-[10px] uppercase tracking-wide text-muted-foreground">{model.tr("remainingKpi")}</div>
+            <div className="text-[11px] uppercase tracking-wide text-muted-foreground">{model.tr("remainingKpi")}</div>
           </div>
           <div className="rounded-xl border bg-muted/15 px-2 py-2 text-center">
             <div className="font-mono text-sm font-semibold">
               {model.fulfilledCount}/{model.totalLines}
             </div>
-            <div className="text-[10px] uppercase tracking-wide text-muted-foreground">{model.tr("linesDone")}</div>
+            <div className="text-[11px] uppercase tracking-wide text-muted-foreground">{model.tr("linesDone")}</div>
           </div>
         </div>
       </div>

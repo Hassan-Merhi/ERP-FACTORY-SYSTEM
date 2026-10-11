@@ -27,7 +27,7 @@ export default function Analytics() {
           <SelectContent>
             {sidebarGroups.map((group) => (
               <Fragment key={group.label}>
-                <div className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                <div className="px-2 py-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                   {group.label}
                 </div>
                 {group.items.map((item) => (

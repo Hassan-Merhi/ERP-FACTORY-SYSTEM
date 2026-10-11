@@ -41,9 +41,20 @@ export function ContainerTable({ containers, colVis, sessionCompanyId, onOpenDra
 
   return (
     <div className="rounded-md border bg-card h-full flex flex-col shadow-xs overflow-clip">
-      <div ref={virtualRows.scrollRef} className="flex-1 overflow-auto custom-scrollbar relative">
+      <div
+        ref={virtualRows.scrollRef}
+        data-horizontal-scroll="true"
+        className="flex-1 overflow-auto custom-scrollbar relative"
+      >
         <div ref={printRef as React.RefObject<HTMLDivElement>}>
-          <Table className="text-xs" wrapperClassName="overflow-visible border-0 rounded-none" mobileLayout="cards">
+          {/* The container number stays in view while the wide table scrolls sideways (the page
+              column scrolls it); the narrow row-number column slides under it. The card layout
+              on phones is left alone. */}
+          <Table
+            className="text-xs [&:not([data-mobile-cards])_tr>*:nth-child(2)]:sticky [&:not([data-mobile-cards])_tr>*:nth-child(2)]:left-0 [&:not([data-mobile-cards])_tr>*:nth-child(2)]:z-20 [&:not([data-mobile-cards])_tr>*:nth-child(2)]:shadow-[1px_0_0_hsl(var(--border))] [&:not([data-mobile-cards])_thead_tr>*:nth-child(2)]:bg-teal-800 dark:[&:not([data-mobile-cards])_thead_tr>*:nth-child(2)]:bg-teal-950 [&:not([data-mobile-cards])_tbody_tr>*:nth-child(2)]:bg-background"
+            wrapperClassName="overflow-visible border-0 rounded-none"
+            mobileLayout="cards"
+          >
             <TableHeader className="sticky top-0 z-50 bg-teal-800 dark:bg-teal-950">
               <TableRow className="bg-transparent! hover:bg-transparent! border-b border-teal-600 dark:border-teal-700">
                 <TableHead className="w-[40px] font-bold h-9 text-teal-50 text-center">#</TableHead>
@@ -126,7 +137,7 @@ export function ContainerTable({ containers, colVis, sessionCompanyId, onOpenDra
                         data-testid={`row-container-${c.id}`}
                       >
                         <TableCell
-                          className="text-center text-muted-foreground font-mono text-[10px] h-10 select-none"
+                          className="text-center text-muted-foreground font-mono text-[11px] h-10 select-none"
                           data-mobile-cell="hidden"
                         >
                           {idx + 1}

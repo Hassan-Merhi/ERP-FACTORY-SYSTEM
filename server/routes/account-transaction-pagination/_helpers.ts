@@ -2,6 +2,7 @@ import type { Request, Response } from "express";
 import { flagFutureDated, statementWindow } from "../helpers/statementWindow";
 import { summarizeAccountStatementCurrency } from "../../services/accounting/accountStatementCurrency";
 import type { NotInLedgerSection } from "../../services/accounting/balances/customerLedgerStatement";
+import { toMoney } from "../../lib/money";
 
 export const DEFAULT_PAGE_SIZE = 100;
 export const MAX_PAGE_SIZE = 250;
@@ -154,8 +155,8 @@ export function statementSummaryNumbers(summary: StatementSummary | null | undef
 } {
   return {
     total: Number(summary?.total ?? 0) || 0,
-    periodDebitTotal: Number.parseFloat(String(summary?.debitTotal ?? "0")) || 0,
-    periodCreditTotal: Number.parseFloat(String(summary?.creditTotal ?? "0")) || 0,
+    periodDebitTotal: toMoney(String(summary?.debitTotal ?? "")).toNumber(),
+    periodCreditTotal: toMoney(String(summary?.creditTotal ?? "")).toNumber(),
   };
 }
 
@@ -190,8 +191,8 @@ export function isContinuousStatementMeta(value: unknown): value is ContinuousSt
 export function statementRowNet(row: unknown): number {
   if (!row || typeof row !== "object") return 0;
   const record = row as Record<string, unknown>;
-  const debit = Number.parseFloat(String(record.debitAmount ?? "0")) || 0;
-  const credit = Number.parseFloat(String(record.creditAmount ?? "0")) || 0;
+  const debit = toMoney(String(record.debitAmount ?? "")).toNumber();
+  const credit = toMoney(String(record.creditAmount ?? "")).toNumber();
   return debit - credit;
 }
 

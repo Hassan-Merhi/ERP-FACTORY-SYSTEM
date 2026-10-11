@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useVisualViewportMetrics } from "./use-visual-viewport-metrics";
 
 /**
- * Phone dialogs (mobile-shell-dialogs.css, ERP and Factory) are lifted above the on-screen
+ * Phone bottom-sheet dialogs (phone-sheet.tsx; ERP, Factory and Properties) are lifted above the on-screen
  * keyboard and capped to the visible height through these CSS variables. Headless browsers cannot
  * open a real keyboard, so the keyboard is simulated here by shrinking the visual viewport.
  */

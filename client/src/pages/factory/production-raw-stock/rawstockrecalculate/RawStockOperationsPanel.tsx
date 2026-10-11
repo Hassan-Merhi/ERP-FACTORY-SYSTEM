@@ -149,7 +149,7 @@ export function RawStockOperationsPanel({ rawStock }: RawStockOperationsPanelPro
                   </div>
                   <div className="border rounded-md overflow-hidden bg-card shadow-xs">
                     <Table mobileLayout="cards">
-                      <TableHeader className="bg-muted/50">
+                      <TableHeader className="bg-muted">
                         <TableRow>
                           <TableHead className="w-10">
                             <Checkbox
@@ -221,7 +221,7 @@ export function RawStockOperationsPanel({ rawStock }: RawStockOperationsPanelPro
                   ) : (
                     <div className="border rounded-md overflow-hidden bg-card shadow-xs">
                       <Table mobileLayout="cards">
-                        <TableHeader className="bg-muted/50">
+                        <TableHeader className="bg-muted">
                           <TableRow>
                             <TableHead className="w-6" />
                             <TableHead>Batch</TableHead>
@@ -307,18 +307,18 @@ export function RawStockOperationsPanel({ rawStock }: RawStockOperationsPanelPro
                                 (b.sourceChanges || []).map((sc) => (
                                   <TableRow key={`${b.batchId}-${sc.containerId}`} className="bg-muted/20">
                                     <TableCell />
-                                    <TableCell colSpan={2} className="font-mono text-[10px] text-muted-foreground pl-8">
+                                    <TableCell colSpan={2} className="font-mono text-[11px] text-muted-foreground pl-8">
                                       ↳ {sc.containerNumber}
                                     </TableCell>
                                     <TableCell />
                                     <TableCell />
-                                    <TableCell className="text-right font-mono text-[10px] text-muted-foreground">
+                                    <TableCell className="text-right font-mono text-[11px] text-muted-foreground">
                                       {formatNumber(sc.weightKg)} kg
                                     </TableCell>
-                                    <TableCell className="text-right font-mono text-[10px] text-muted-foreground">
+                                    <TableCell className="text-right font-mono text-[11px] text-muted-foreground">
                                       ${(sc.oldCostPerKgUsd ?? 0).toFixed(6)}
                                     </TableCell>
-                                    <TableCell className="text-right font-mono text-[10px]">
+                                    <TableCell className="text-right font-mono text-[11px]">
                                       ${(sc.newCostPerKgUsd ?? 0).toFixed(6)}
                                     </TableCell>
                                     <TableCell colSpan={4} />
@@ -360,7 +360,7 @@ export function RawStockOperationsPanel({ rawStock }: RawStockOperationsPanelPro
             <>
               <div className="border rounded-md overflow-hidden bg-card shadow-xs">
                 <Table mobileLayout="cards">
-                  <TableHeader className="bg-muted/50">
+                  <TableHeader className="bg-muted">
                     <TableRow>
                       <TableHead className="w-10">
                         <Checkbox
@@ -517,7 +517,7 @@ export function RawStockOperationsPanel({ rawStock }: RawStockOperationsPanelPro
                 ].map(({ label, value, cls }) => (
                   <div key={label} className="border rounded-md p-3 bg-card text-center space-y-1">
                     <div className={`text-xl font-bold ${cls}`}>{value}</div>
-                    <div className="text-[10px] text-muted-foreground leading-tight">{label}</div>
+                    <div className="text-[11px] text-muted-foreground leading-tight">{label}</div>
                   </div>
                 ))}
               </div>
@@ -544,7 +544,7 @@ export function RawStockOperationsPanel({ rawStock }: RawStockOperationsPanelPro
               {/* Audit rows table */}
               <div className="border rounded-md overflow-hidden bg-card shadow-xs">
                 <Table mobileLayout="cards">
-                  <TableHeader className="bg-muted/50">
+                  <TableHeader className="bg-muted">
                     <TableRow>
                       <TableHead>Container</TableHead>
                       <TableHead>Status</TableHead>

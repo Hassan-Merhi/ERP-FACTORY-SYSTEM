@@ -204,7 +204,7 @@ export function StockTransferConfirmCard({
                       data-testid={`input-transfer-qty-${i}`}
                     />
                     <span
-                      className={`text-right text-[10px] ${insufficient ? "text-destructive font-semibold" : "text-muted-foreground"}`}
+                      className={`text-right text-[11px] ${insufficient ? "text-destructive font-semibold" : "text-muted-foreground"}`}
                     >
                       {item.currentStock !== undefined
                         ? item.currentStock.toLocaleString(undefined, { maximumFractionDigits: 2 })
@@ -223,7 +223,7 @@ export function StockTransferConfirmCard({
                     )}
                   </div>
                   {isAnalysis && (
-                    <div className="mt-1 grid grid-cols-2 gap-x-2 gap-y-0.5 text-[10px] text-muted-foreground">
+                    <div className="mt-1 grid grid-cols-2 gap-x-2 gap-y-0.5 text-[11px] text-muted-foreground">
                       <span>
                         Source qty: <span className="text-foreground">{item.sourceQty ?? "—"}</span>
                       </span>
@@ -260,12 +260,12 @@ export function StockTransferConfirmCard({
           </div>
         )}
         {hasInsufficientStock && (
-          <p className="text-[10px] text-destructive border-t pt-1">
+          <p className="text-[11px] text-destructive border-t pt-1">
             Warning: transfer quantity exceeds available stock for one or more items.
           </p>
         )}
         {!hasNoSuggestions && isDraftIncomplete && (
-          <p className="text-[10px] text-destructive border-t pt-1">
+          <p className="text-[11px] text-destructive border-t pt-1">
             {hasAmbiguousLocation
               ? "Please resolve the location choice above before confirming."
               : !hasValidLocations
@@ -274,7 +274,7 @@ export function StockTransferConfirmCard({
           </p>
         )}
         {isAnalysis && (
-          <p className="text-[10px] text-amber-600 dark:text-amber-400 border-t pt-1">
+          <p className="text-[11px] text-amber-600 dark:text-amber-400 border-t pt-1">
             This is optional. Inventory will not move until approved/posted.
           </p>
         )}

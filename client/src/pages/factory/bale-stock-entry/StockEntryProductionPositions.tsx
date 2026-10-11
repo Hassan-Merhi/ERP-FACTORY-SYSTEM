@@ -78,23 +78,23 @@ export function StockEntryProductionPositions({
                 <div className="truncate text-xs font-semibold">
                   {item.product?.name || `Product #${item.productId}`}
                 </div>
-                <div className="text-[10px] text-muted-foreground">{workerName(item.finalizedBy)}</div>
+                <div className="text-[11px] text-muted-foreground">{workerName(item.finalizedBy)}</div>
               </div>
 
               <div className="text-xs text-muted-foreground">
                 {eligible.length === 0 ? (
-                  <Badge variant="outline" className="whitespace-normal text-[10px]">
+                  <Badge variant="outline" className="whitespace-normal text-[11px]">
                     No production position — bonus ineligible
                   </Badge>
                 ) : eligible.length === 1 ? (
                   <div className="flex flex-wrap items-center gap-1.5">
-                    <Badge variant="secondary" className="text-[10px]">
+                    <Badge variant="secondary" className="text-[11px]">
                       {eligible[0].name}
                     </Badge>
-                    <span className="text-[10px]">Auto</span>
+                    <span className="text-[11px]">Auto</span>
                   </div>
                 ) : (
-                  <span className="text-[10px]">{eligible.length} positions available</span>
+                  <span className="text-[11px]">{eligible.length} positions available</span>
                 )}
               </div>
 

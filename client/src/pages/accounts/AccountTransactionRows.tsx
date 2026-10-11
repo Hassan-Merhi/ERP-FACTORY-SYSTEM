@@ -168,7 +168,7 @@ export function AccountTransactionRows({
               {!hideBalances && (
                 <>
                   {fmt(Math.abs(openingBalance))}
-                  <span className="ml-1 text-[10px] opacity-60">
+                  <span className="ml-1 text-[11px] opacity-60">
                     {isSupplier ? (openingBalance > 0 ? "Cr" : "Dr") : openingBalance >= 0 ? "Dr" : "Cr"}
                   </span>
                 </>
@@ -258,7 +258,7 @@ export function AccountTransactionRows({
                     {v.runningBalance != null ? (
                       <>
                         {fmt(Math.abs(v.runningBalance))}
-                        <span className="ml-1 text-[10px] font-normal opacity-50">
+                        <span className="ml-1 text-[11px] font-normal opacity-50">
                           {v.runningBalance >= 0 ? "Dr" : "Cr"}
                         </span>
                       </>
@@ -330,7 +330,7 @@ export function AccountTransactionRows({
                 <TableCell className="py-2.5" />
                 <TableCell className="py-2.5 text-right font-mono tabular-nums">
                   {fmt(Math.abs(closingBalance))}
-                  <span className="ml-1 text-[10px] font-normal opacity-60">{balSide(closingBalance)}</span>
+                  <span className="ml-1 text-[11px] font-normal opacity-60">{balSide(closingBalance)}</span>
                 </TableCell>
               </TableRow>
             </>

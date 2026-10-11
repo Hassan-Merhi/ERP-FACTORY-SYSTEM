@@ -171,12 +171,12 @@ export default function PropertyRentalPage({
     [units, selectedContractIds]
   );
 
-  // ERP renders the shared ERP page-header contract; Properties keeps its established header.
-  const isErp = appMode === "erp";
+  // ERP and Properties render the shared page-header contract; Factory keeps its hub strip.
+  const isErp = appMode === "erp" || appMode === "properties";
   const isPhoneLayout = useErpPhoneLayout();
-  // ERP and Factory phones: cards instead of the twelve-column table, and one primary action plus
-  // a menu. Properties Mode keeps its established table.
-  const phoneCards = (isErp || appMode === "factory") && isPhoneLayout;
+  // Phones in every mode: cards instead of the twelve-column table, and one primary action plus
+  // a menu.
+  const phoneCards = isPhoneLayout;
   const phoneHeaderActions = (
     <>
       {selectedContractIds.size > 0 && (
@@ -321,11 +321,12 @@ export default function PropertyRentalPage({
             ]}
           />
         ) : (
-          /* Summary tiles */
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
+          /* Summary tiles: six equal tiles; the former Outstanding/Credit pair overflowed its card at
+             tablet widths. */
+          <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-2">
             <Card>
               <CardHeader className="px-3 pt-3 pb-1">
-                <CardTitle className="text-[10px] text-muted-foreground font-normal tracking-wide">
+                <CardTitle className="text-[11px] text-muted-foreground font-normal tracking-wide">
                   TOTAL UNITS
                 </CardTitle>
               </CardHeader>
@@ -337,7 +338,7 @@ export default function PropertyRentalPage({
             </Card>
             <Card>
               <CardHeader className="px-3 pt-3 pb-1">
-                <CardTitle className="text-[10px] text-muted-foreground font-normal tracking-wide">
+                <CardTitle className="text-[11px] text-muted-foreground font-normal tracking-wide">
                   RENT / MONTH
                 </CardTitle>
               </CardHeader>
@@ -348,12 +349,12 @@ export default function PropertyRentalPage({
                 >
                   ${fmtMoney(totals.totalMonthlyRent)}
                 </div>
-                <p className="text-[10px] text-muted-foreground mt-0.5">expected from active leases</p>
+                <p className="text-[11px] text-muted-foreground mt-0.5">expected from active leases</p>
               </CardContent>
             </Card>
             <Card>
               <CardHeader className="px-3 pt-3 pb-1">
-                <CardTitle className="text-[10px] text-muted-foreground font-normal tracking-wide">
+                <CardTitle className="text-[11px] text-muted-foreground font-normal tracking-wide">
                   TOTAL GUARANTEE
                 </CardTitle>
               </CardHeader>
@@ -365,7 +366,7 @@ export default function PropertyRentalPage({
             </Card>
             <Card>
               <CardHeader className="px-3 pt-3 pb-1">
-                <CardTitle className="text-[10px] text-muted-foreground font-normal tracking-wide">
+                <CardTitle className="text-[11px] text-muted-foreground font-normal tracking-wide">
                   TOTAL PAID
                 </CardTitle>
               </CardHeader>
@@ -378,31 +379,34 @@ export default function PropertyRentalPage({
                 </div>
               </CardContent>
             </Card>
-            {/* Two metrics share this card; on ERP phones (portrait 2-column and landscape 3-column
-              grids) it spans two columns so neither is clipped. */}
-            <Card className={phoneCards ? "col-span-2" : undefined}>
-              <CardContent className="p-0 flex h-full">
-                <div className="flex-1 px-3 pt-3 pb-3">
-                  <p className="text-[10px] text-muted-foreground font-normal tracking-wide">OUTSTANDING</p>
-                  <div
-                    className="text-lg font-bold text-red-600 dark:text-red-400 mt-1"
-                    data-testid={`stat-${testIdPrefix}-total-outstanding`}
-                  >
-                    ${fmtMoney(totals.totalOwed)}
-                  </div>
-                  <p className="text-[10px] text-muted-foreground mt-0.5">owed by tenants</p>
+            <Card>
+              <CardHeader className="px-3 pt-3 pb-1">
+                <CardTitle className="text-[11px] text-muted-foreground font-normal tracking-wide">
+                  OUTSTANDING
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="px-3 pb-3">
+                <div
+                  className="text-lg font-bold text-red-600 dark:text-red-400"
+                  data-testid={`stat-${testIdPrefix}-total-outstanding`}
+                >
+                  ${fmtMoney(totals.totalOwed)}
                 </div>
-                <div className="w-px bg-border self-stretch my-2" />
-                <div className="flex-1 px-3 pt-3 pb-3">
-                  <p className="text-[10px] text-muted-foreground font-normal tracking-wide">CREDIT</p>
-                  <div
-                    className="text-lg font-bold text-green-600 dark:text-green-400 mt-1"
-                    data-testid={`stat-${testIdPrefix}-total-credit`}
-                  >
-                    ${fmtMoney(totals.totalCredit)}
-                  </div>
-                  <p className="text-[10px] text-muted-foreground mt-0.5">advance / overpaid</p>
+                <p className="text-[11px] text-muted-foreground mt-0.5">owed by tenants</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="px-3 pt-3 pb-1">
+                <CardTitle className="text-[11px] text-muted-foreground font-normal tracking-wide">CREDIT</CardTitle>
+              </CardHeader>
+              <CardContent className="px-3 pb-3">
+                <div
+                  className="text-lg font-bold text-green-600 dark:text-green-400"
+                  data-testid={`stat-${testIdPrefix}-total-credit`}
+                >
+                  ${fmtMoney(totals.totalCredit)}
                 </div>
+                <p className="text-[11px] text-muted-foreground mt-0.5">advance / overpaid</p>
               </CardContent>
             </Card>
           </div>
@@ -432,7 +436,7 @@ export default function PropertyRentalPage({
           /* Main table */
           <Card>
             <CardContent className="p-0">
-              <div className="overflow-x-auto overflow-y-auto max-h-[calc(100vh-280px)]">
+              <div data-horizontal-scroll="true" className="overflow-x-auto">
                 {isLoading ? (
                   <div className="p-8 text-center text-muted-foreground">Loading units…</div>
                 ) : grouped.length === 0 ? (
@@ -443,7 +447,7 @@ export default function PropertyRentalPage({
                   </div>
                 ) : (
                   <table className="w-full text-sm">
-                    <thead className="bg-muted/50 border-b sticky top-0 z-30">
+                    <thead className="bg-muted border-b sticky top-0 z-30">
                       <tr>
                         <th className="px-3 py-2 w-8" onClick={(e) => e.stopPropagation()}>
                           <Checkbox

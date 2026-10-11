@@ -14,6 +14,7 @@ import { sqlArray } from "../../../lib/sqlArray";
 import { checkFactoryAdmin } from "../_helpers";
 import { factoryBaleProducts } from "@shared/schema";
 import { eq, and, or, sql, inArray, ilike } from "drizzle-orm";
+import { parseMoneyInput } from "../../../lib/money";
 
 export function registerFactoryProductBulkRoutes(app: Express) {
   app.delete("/api/factory/bale-products/:id", requireAuth, async (req: Request, res: Response) => {
@@ -226,7 +227,7 @@ export function registerFactoryProductBulkRoutes(app: Express) {
         const updates: Record<string, unknown> = { updatedAt: new Date() };
 
         if (row.sellingPrice !== undefined && row.sellingPrice !== null && String(row.sellingPrice).trim() !== "") {
-          const sp = parseFloat(String(row.sellingPrice));
+          const sp = parseMoneyInput(String(row.sellingPrice))?.toNumber() ?? NaN;
           if (!isNaN(sp) && sp >= 0) updates.sellingPrice = sp.toFixed(2);
         }
         if (
@@ -234,7 +235,7 @@ export function registerFactoryProductBulkRoutes(app: Express) {
           row.productionPrice !== null &&
           String(row.productionPrice).trim() !== ""
         ) {
-          const pp = parseFloat(String(row.productionPrice));
+          const pp = parseMoneyInput(String(row.productionPrice))?.toNumber() ?? NaN;
           if (!isNaN(pp) && pp >= 0) updates.productionPrice = pp.toFixed(2);
         }
 

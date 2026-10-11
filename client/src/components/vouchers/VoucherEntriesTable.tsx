@@ -266,7 +266,7 @@ export function VoucherEntriesTable({
     if (balance == null) return null;
     return (
       <p
-        className={`text-[10px] font-mono tabular-nums mt-0.5 ${
+        className={`text-[11px] font-mono tabular-nums mt-0.5 ${
           balance < 0
             ? "text-red-500 dark:text-red-400"
             : balance > 0
@@ -290,15 +290,16 @@ export function VoucherEntriesTable({
 
   return (
     <>
-      <div className="hidden sm:block border rounded-md overflow-hidden">
+      {/* Scrolls sideways below ~22rem rather than squeezing the inputs to a few characters. */}
+      <div className="hidden sm:block border rounded-md overflow-x-auto">
         <table className="w-full">
           {/* Below the form's sticky save footer (z-20), which it otherwise paints over on short screens. */}
-          <thead className="bg-muted/50 sticky top-0 z-10">
-            <tr className="text-[10px] uppercase tracking-wider text-muted-foreground">
+          <thead className="bg-muted sticky top-0 z-10">
+            <tr className="text-[11px] uppercase tracking-wider text-muted-foreground">
               <th className="text-center px-2 py-2 font-semibold w-8">#</th>
-              <th className="text-left px-2 py-2 font-semibold">Account</th>
+              <th className="text-left px-2 py-2 font-semibold min-w-[10rem]">Account</th>
               <th className="text-left px-2 py-2 font-semibold w-24 hidden lg:table-cell">Type</th>
-              <th className="text-right px-2 py-2 font-semibold w-[22%]">Amount</th>
+              <th className="text-right px-2 py-2 font-semibold w-[22%] min-w-[6.5rem]">Amount</th>
               <th className="text-left px-2 py-2 font-semibold w-[24%] hidden md:table-cell">Narration</th>
               <th className="text-right px-2 py-2 font-semibold w-28 hidden lg:table-cell">Running</th>
               <th className="w-10"></th>
@@ -346,7 +347,7 @@ export function VoucherEntriesTable({
                           </FormControl>
                           {!isEmpty && typeBadge && (
                             <span
-                              className={`lg:hidden inline-block text-[10px] font-medium px-1.5 py-0 rounded-sm mt-0.5 ${typeBadge.cls}`}
+                              className={`lg:hidden inline-block text-[11px] font-medium px-1.5 py-0 rounded-sm mt-0.5 ${typeBadge.cls}`}
                             >
                               {typeBadge.label}
                             </span>
@@ -359,7 +360,7 @@ export function VoucherEntriesTable({
                   </td>
                   <td className="px-2 py-1.5 align-top pt-3 hidden lg:table-cell">
                     {!isEmpty && typeBadge && (
-                      <span className={`inline-block text-[10px] font-medium px-1.5 py-0 rounded-sm ${typeBadge.cls}`}>
+                      <span className={`inline-block text-[11px] font-medium px-1.5 py-0 rounded-sm ${typeBadge.cls}`}>
                         {typeBadge.label}
                       </span>
                     )}
@@ -449,13 +450,13 @@ export function VoucherEntriesTable({
                     Add Row
                   </Button>
                   <p className="text-[11px] text-muted-foreground hidden xl:block">
-                    <kbd className="px-1 py-0.5 bg-muted rounded-sm text-[10px]">Tab</kbd> next field
-                    <kbd className="px-1 py-0.5 bg-muted rounded-sm text-[10px] ml-2">↵</kbd> new row
-                    <kbd className="px-1 py-0.5 bg-muted rounded-sm text-[10px] ml-2">↑↓</kbd> move
+                    <kbd className="px-1 py-0.5 bg-muted rounded-sm text-[11px]">Tab</kbd> next field
+                    <kbd className="px-1 py-0.5 bg-muted rounded-sm text-[11px] ml-2">↵</kbd> new row
+                    <kbd className="px-1 py-0.5 bg-muted rounded-sm text-[11px] ml-2">↑↓</kbd> move
                   </p>
                   {hasAnyAmount && (
                     <div className="text-right xl:hidden">
-                      <div className="text-[10px] text-muted-foreground uppercase tracking-wider">Subtotal</div>
+                      <div className="text-[11px] text-muted-foreground uppercase tracking-wider">Subtotal</div>
                       <div className="text-sm font-semibold font-mono tabular-nums">{formatAmount(total)}</div>
                     </div>
                   )}
@@ -490,13 +491,13 @@ export function VoucherEntriesTable({
                 </div>
                 {hasAccount && typeBadge && (
                   <span
-                    className={`inline-block text-[10px] font-medium px-1.5 py-0 rounded-sm mt-0.5 ${typeBadge.cls}`}
+                    className={`inline-block text-[11px] font-medium px-1.5 py-0 rounded-sm mt-0.5 ${typeBadge.cls}`}
                   >
                     {typeBadge.label}
                   </span>
                 )}
                 {entry?.narration && (
-                  <p className="text-[10px] text-muted-foreground truncate mt-0.5 italic">{entry.narration}</p>
+                  <p className="text-[11px] text-muted-foreground truncate mt-0.5 italic">{entry.narration}</p>
                 )}
               </div>
               <div className="shrink-0 flex items-center gap-1.5">

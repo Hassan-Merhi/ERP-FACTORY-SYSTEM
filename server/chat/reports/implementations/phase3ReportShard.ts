@@ -1,6 +1,7 @@
 import { db, sql, accountTypesOfClassSql } from "./reportShardSupport";
 import type { DataQueryContext, DataQueryResult, ReportImplementationShard } from "../types";
 import { notFiscalClosingVoucher } from "../../../services/accounting/balances/periodReportRules";
+import { toMoney } from "../../../lib/money";
 
 export const phase3QueryTypes = [
   "sales_analysis",
@@ -53,10 +54,10 @@ async function runPhase3Report(ctx: DataQueryContext): Promise<DataQueryResult> 
         totProfit = 0,
         totQty = 0;
       const tableRows2 = rows.rows.map((r) => {
-        const rev = parseFloat(r.total_revenue || "0");
-        const cost = parseFloat(r.total_cost || "0");
-        const profit3 = parseFloat(r.total_profit || "0");
-        const qty = parseFloat(r.total_qty || "0");
+        const rev = toMoney(r.total_revenue).toNumber();
+        const cost = toMoney(r.total_cost).toNumber();
+        const profit3 = toMoney(r.total_profit).toNumber();
+        const qty = toMoney(r.total_qty).toNumber();
         const margin = rev > 0 ? ((profit3 / rev) * 100).toFixed(1) + "%" : "—";
         totRev += rev;
         totCost += cost;
@@ -106,9 +107,9 @@ async function runPhase3Report(ctx: DataQueryContext): Promise<DataQueryResult> 
         String(i + 1),
         r.item_name,
         r.code,
-        `${fmtDec(parseFloat(r.total_qty || "0"))} ${r.uom}`,
-        fmt(parseFloat(r.total_revenue || "0")),
-        fmt(parseFloat(r.total_profit || "0")),
+        `${fmtDec(toMoney(r.total_qty).toNumber())} ${r.uom}`,
+        fmt(toMoney(r.total_revenue).toNumber()),
+        fmt(toMoney(r.total_profit).toNumber()),
         String(r.num_transactions),
       ]);
       dataQueryResult = {
@@ -158,9 +159,9 @@ async function runPhase3Report(ctx: DataQueryContext): Promise<DataQueryResult> 
         totSale = 0,
         totProfit = 0;
       const tableRows2 = rows.rows.map((r) => {
-        const cost = parseFloat(r.cost || "0");
-        const sale = parseFloat(r.sale_amount || "0");
-        const comm = parseFloat(r.commission || "0");
+        const cost = toMoney(r.cost).toNumber();
+        const sale = toMoney(r.sale_amount).toNumber();
+        const comm = toMoney(r.commission).toNumber();
         const profit3 = sale - cost - comm;
         const margin = sale > 0 ? ((profit3 / sale) * 100).toFixed(1) + "%" : "—";
         totCost += cost;
@@ -229,10 +230,10 @@ async function runPhase3Report(ctx: DataQueryContext): Promise<DataQueryResult> 
       let grandTotalValue = 0,
         grandTotalItems = 0;
       const tableRows2 = rows.rows.map((r) => {
-        const val = parseFloat(r.total_value || "0");
+        const val = toMoney(r.total_value).toNumber();
         grandTotalValue += val;
         grandTotalItems += parseInt(r.item_count || "0");
-        return [r.group_name, String(r.item_count), fmtDec(parseFloat(r.total_qty || "0")), fmt(val)];
+        return [r.group_name, String(r.item_count), fmtDec(toMoney(r.total_qty).toNumber()), fmt(val)];
       });
       tableRows2.push(["GRAND TOTAL", String(grandTotalItems), "—", fmt(grandTotalValue)]);
       const stats3 = [
@@ -270,7 +271,7 @@ async function runPhase3Report(ctx: DataQueryContext): Promise<DataQueryResult> 
       `);
       let grandSpend = 0;
       const tableRows2 = rows.rows.map((r) => {
-        const spend = parseFloat(r.net_spend || "0");
+        const spend = toMoney(r.net_spend).toNumber();
         grandSpend += spend;
         return [r.name, r.account_type, fmt(spend)];
       });
@@ -315,7 +316,7 @@ async function runPhase3Report(ctx: DataQueryContext): Promise<DataQueryResult> 
         r.customer,
         String(r.order_date).slice(0, 10),
         r.status,
-        fmt(parseFloat(r.grand_total || "0")),
+        fmt(toMoney(r.grand_total).toNumber()),
         String(r.total_qty_bales || 0),
         r.destination || "—",
       ]);
@@ -360,14 +361,14 @@ async function runPhase3Report(ctx: DataQueryContext): Promise<DataQueryResult> 
       `);
       let totValue = 0;
       const tableRows2 = rows.rows.map((r) => {
-        const val = parseFloat(r.total_value || "0");
+        const val = toMoney(r.total_value).toNumber();
         totValue += val;
         return [
           String(r.voucher_date).slice(0, 10),
           r.item_name,
           r.location,
-          `${fmtDec(parseFloat(r.qty))} ${r.uom}`,
-          fmtDec(parseFloat(r.rate)),
+          `${fmtDec(toMoney(r.qty).toNumber())} ${r.uom}`,
+          fmtDec(toMoney(r.rate).toNumber()),
           fmt(val),
           (r.description || "").slice(0, 35),
         ];
@@ -424,8 +425,8 @@ async function runPhase3Report(ctx: DataQueryContext): Promise<DataQueryResult> 
         String(r.voucher_date).slice(0, 10),
         r.voucher_type || "—",
         (r.description || "").slice(0, 40),
-        parseFloat(r.debit || "0") > 0 ? fmt(parseFloat(r.debit)) : "—",
-        parseFloat(r.credit || "0") > 0 ? fmt(parseFloat(r.credit)) : "—",
+        toMoney(r.debit).toNumber() > 0 ? fmt(toMoney(r.debit).toNumber()) : "—",
+        toMoney(r.credit).toNumber() > 0 ? fmt(toMoney(r.credit).toNumber()) : "—",
       ]);
       dataQueryResult = {
         queryType: "bank_transactions",
@@ -461,7 +462,7 @@ async function runPhase3Report(ctx: DataQueryContext): Promise<DataQueryResult> 
       `);
       let grandTotal = 0;
       const tableRows2 = rows.rows.map((r) => {
-        const amt = parseFloat(r.purchase_amount || "0");
+        const amt = toMoney(r.purchase_amount).toNumber();
         grandTotal += amt;
         return [
           r.code,
@@ -516,10 +517,10 @@ async function runPhase3Report(ctx: DataQueryContext): Promise<DataQueryResult> 
         totBales = 0,
         totWaste = 0;
       const tableRows2 = rows.rows.map((r) => {
-        const kgIn = parseFloat(r.kg_in || "0");
-        const kgPressed = parseFloat(r.kg_pressed || "0");
+        const kgIn = toMoney(r.kg_in).toNumber();
+        const kgPressed = toMoney(r.kg_pressed).toNumber();
         const bales = r.total_bales_produced ?? 0;
-        const waste = parseFloat(r.waste_kg || "0");
+        const waste = toMoney(r.waste_kg).toNumber();
         const efficiency = kgIn > 0 ? ((kgPressed / kgIn) * 100).toFixed(1) + "%" : "—";
         totKgIn += kgIn;
         totKgPressed += kgPressed;

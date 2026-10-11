@@ -175,7 +175,7 @@ export function SupplierTrackingDefaultsTab({ canManage = false }: { canManage?:
                     <div className="min-w-0">
                       <div className="flex items-center gap-2">
                         <span className="truncate text-sm font-medium">{row.supplierName}</span>
-                        <Badge variant="outline" className="shrink-0 font-mono text-[10px]">
+                        <Badge variant="outline" className="shrink-0 font-mono text-[11px]">
                           {row.supplierCode}
                         </Badge>
                       </div>

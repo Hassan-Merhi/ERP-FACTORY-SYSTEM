@@ -11,6 +11,7 @@ import { buildAliasMap, resolveBarcode } from "./helpers/proformaBarcodeHelpers"
 import { registerContainerLoadedItemsRoutes } from "./container-loaded-items";
 import { importSupplierProformaLines } from "./helpers/supplierProformaImport";
 import { supplierProformas, supplierProformaLines, suppliers } from "@shared/schema";
+import { parseMoneyInput, toMoney } from "../lib/money";
 
 /**
  * Parse a human-entered decimal value from Excel into a PostgreSQL-safe decimal string.
@@ -31,7 +32,7 @@ function sanitizeDecimal(v: unknown): string {
   const noCommas = stripped.replace(/,(?=\d{3}(?:[,.]|$))/g, "");
   // Must match: optional minus, digits, optional .digits — nothing else
   if (!/^-?\d+(\.\d+)?$/.test(noCommas)) return "0";
-  const n = parseFloat(noCommas);
+  const n = parseMoneyInput(noCommas)?.toNumber() ?? NaN;
   if (!isFinite(n)) return "0";
   return n.toFixed(6).replace(/\.?0+$/, "") || "0";
 }
@@ -504,8 +505,8 @@ export function registerSupplierProformaRoutes(app: Express, requireAuth: Reques
         for (let i = 0; i < lines.length; i++) {
           const line = lines[i];
           const qty = Number(line.qty) || 0;
-          const wt = parseFloat(line.weightPerBale || "0");
-          const price = parseFloat(line.pricePerBale || "0");
+          const wt = toMoney(line.weightPerBale).toNumber();
+          const price = toMoney(line.pricePerBale).toNumber();
           const lineWt = qty * wt;
           const lineVal = qty * price;
           totQty += qty;

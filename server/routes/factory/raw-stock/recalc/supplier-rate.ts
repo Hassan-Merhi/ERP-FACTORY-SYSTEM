@@ -17,7 +17,7 @@ import { eq, and } from "drizzle-orm";
 import { pool } from "../../../../db";
 
 import { ADMIN_ROLES } from "./_helpers";
-import { parseMoneyInput } from "../../../../lib/money";
+import { parseMoneyInput, toMoney } from "../../../../lib/money";
 
 export function registerRawStockSupplierRateRoutes(app: Express) {
   // ──────────────────────────────────────────────────────────────────────────
@@ -108,7 +108,7 @@ export function registerRawStockSupplierRateRoutes(app: Express) {
             .where(and(eq(factorySuppliers.id, sid), eq(factorySuppliers.companyId, companyId)));
           if (!existing) continue;
 
-          const oldRate = parseFloat((existing.currentRawMaterialCostPerKgUsd as string) || "0");
+          const oldRate = toMoney(existing.currentRawMaterialCostPerKgUsd as string).toNumber();
           const supplierName = existing.name || `Supplier #${sid}`;
           const { costPerKgUsd, totalReceivedKg, rows, unvaluedRowIds } = await db.transaction(async (tx) => {
             return getStableSupplierCost(tx, companyId, sid);
@@ -227,9 +227,9 @@ export function registerRawStockSupplierRateRoutes(app: Express) {
 
         const rows = result.rows.map((r) => {
           const changes = typeof r.changes === "string" ? JSON.parse(r.changes) : (r.changes ?? {});
-          const oldRate = parseFloat(changes?.old?.currentRawMaterialCostPerKgUsd ?? 0) || 0;
-          const recomputedRate = parseFloat(changes?.new?.currentRawMaterialCostPerKgUsd ?? 0) || 0;
-          const currentRate = parseFloat(r.current_rate ?? 0) || 0;
+          const oldRate = toMoney(changes?.old?.currentRawMaterialCostPerKgUsd).toNumber();
+          const recomputedRate = toMoney(changes?.new?.currentRawMaterialCostPerKgUsd).toNumber();
+          const currentRate = toMoney(r.current_rate).toNumber();
           // canRestore: true only when the current rate still matches what the recompute wrote
           // (i.e. nothing else has overwritten it since)
           const canRestore = oldRate > 0 && Math.abs(currentRate - recomputedRate) < 0.000001;
@@ -317,7 +317,7 @@ export function registerRawStockSupplierRateRoutes(app: Express) {
             continue;
           }
 
-          const oldRate = parseFloat((existing.currentRawMaterialCostPerKgUsd as string) || "0");
+          const oldRate = toMoney(existing.currentRawMaterialCostPerKgUsd as string).toNumber();
 
           // Phase 21 (B): the write and its audit commit together.
           await db.transaction(async (tx) => {

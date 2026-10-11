@@ -217,7 +217,7 @@ export default function OrphanedRecordsPage() {
           </div>
         ) : (
           <>
-            <div className="hidden md:block">
+            <div className="hidden md:block phone-land:hidden">
               <Table>
                 <TableHeader className="sticky top-0 z-30 bg-background">
                   <TableRow>
@@ -258,7 +258,7 @@ export default function OrphanedRecordsPage() {
                 </TableBody>
               </Table>
             </div>
-            <div className="md:hidden space-y-3">
+            <div className="md:hidden phone-land:block space-y-3">
               {unbalancedRecords.map((voucher) => (
                 <Card key={voucher.id} className="p-3" data-testid={`card-unbalanced-${voucher.id}`}>
                   <div className="flex items-center justify-between gap-2 mb-2">
@@ -353,7 +353,7 @@ export default function OrphanedRecordsPage() {
           </div>
         ) : (
           <>
-            <div className="hidden md:block">
+            <div className="hidden md:block phone-land:hidden">
               <Table>
                 <TableHeader className="sticky top-0 z-30 bg-background">
                   <TableRow>
@@ -401,7 +401,7 @@ export default function OrphanedRecordsPage() {
                 </TableBody>
               </Table>
             </div>
-            <div className="md:hidden space-y-3">
+            <div className="md:hidden phone-land:block space-y-3">
               <div className="flex items-center gap-2 mb-2">
                 <Checkbox
                   checked={selectedVouchers.length === orphanedRecords.length && orphanedRecords.length > 0}
@@ -461,7 +461,7 @@ export default function OrphanedRecordsPage() {
           </div>
         ) : (
           <>
-            <div className="hidden md:block">
+            <div className="hidden md:block phone-land:hidden">
               <Table>
                 <TableHeader className="sticky top-0 z-30 bg-background">
                   <TableRow>
@@ -522,7 +522,7 @@ export default function OrphanedRecordsPage() {
                 </TableBody>
               </Table>
             </div>
-            <div className="md:hidden space-y-3">
+            <div className="md:hidden phone-land:block space-y-3">
               {stockGroupArchives.map((archive) => (
                 <Card key={archive.id} className="p-3" data-testid={`card-archive-${archive.id}`}>
                   <div className="flex items-center justify-between gap-2 mb-2">

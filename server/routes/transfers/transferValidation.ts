@@ -2,6 +2,7 @@ import { insertInterCompanyTransferSchema } from "@shared/schema";
 import { z } from "zod";
 
 import { TransferRouteError } from "./transferErrors";
+import { parseMoneyInput } from "../../lib/money";
 
 const clientRequestIdSchema = z
   .string()
@@ -32,7 +33,7 @@ export function parseInterCompanyTransferInput(input: unknown) {
 
 export function parseSimpleTransferInput(input: unknown) {
   const parsed = simpleTransferSchema.parse(input);
-  const amount = Number.parseFloat(parsed.amount);
+  const amount = parseMoneyInput(parsed.amount)?.toNumber() ?? NaN;
   if (!Number.isFinite(amount) || amount <= 0) {
     throw new TransferRouteError(400, "Amount must be positive");
   }

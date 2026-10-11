@@ -1,4 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
+import { Package } from "lucide-react";
+import { PageHeader } from "@/components/PageHeader";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { FactoryArabicTranslationActions } from "@/components/FactoryArabicTranslationActions";
 import BalesHistory from "./BalesHistory";
@@ -52,7 +54,16 @@ export default function FactoryBalesHub() {
         onValueChange={(value) => setActiveTab(value as BalesTab)}
         className="flex h-full flex-col"
       >
-        <div className="flex shrink-0 items-end justify-between gap-4 overflow-x-auto border-b px-4 pt-3">
+        {/* Shared page-header grammar (accent bar, icon, subtitle) like the other hubs and the ERP pages. */}
+        <div className="shrink-0 px-4 pt-3 [&>header]:mb-0 [&>header]:border-b-0 [&>header]:pb-2">
+          <PageHeader
+            title="Bales"
+            subtitle="Bale history, barcode lookup, products and customer loading"
+            icon={<Package className="h-5 w-5" />}
+            showBackButton={false}
+          />
+        </div>
+        <div className="flex shrink-0 items-end justify-between gap-4 overflow-x-auto border-b px-4">
           <TabsList className="flex-nowrap">
             {show("history") && (
               <TabsTrigger value="history" data-testid="tab-bales-history">

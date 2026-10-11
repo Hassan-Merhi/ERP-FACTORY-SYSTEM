@@ -582,7 +582,7 @@ export default function ChatbotSettings() {
                             <Button
                               size="icon"
                               variant="ghost"
-                              className="h-8 w-8 mt-1.5 mr-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0 text-destructive"
+                              className="h-8 w-8 mt-1.5 mr-1 opacity-0 group-hover:opacity-100 touch:opacity-100 transition-opacity shrink-0 text-destructive"
                               onClick={() => deleteSessionMutation.mutate(sid)}
                               disabled={deleteSessionMutation.isPending}
                               title="Delete conversation"
@@ -713,7 +713,7 @@ export default function ChatbotSettings() {
                               <FileCode className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
                               <span className="truncate">{entry.filePath.replace(/^.*\//, "")}</span>
                             </div>
-                            <span className="text-[10px] text-muted-foreground block truncate">{entry.filePath}</span>
+                            <span className="text-[11px] text-muted-foreground block truncate">{entry.filePath}</span>
                           </TableCell>
                           <TableCell className="text-xs max-w-[200px]">
                             <span className="text-muted-foreground truncate block">{entry.description || "—"}</span>

@@ -454,7 +454,7 @@ export default function BalesHistory() {
           </div>
         ) : (
           <div>
-            <Table wrapperClassName="max-h-[calc(100vh-380px)] overflow-auto">
+            <Table>
               <TableHeader className="sticky top-0 z-30 bg-muted border-b-2 border-border/60">
                 <TableRow>
                   <TableHead className="w-10">
@@ -627,7 +627,7 @@ export default function BalesHistory() {
                                     data-testid={`text-product-name-${bale.id}`}
                                   >
                                     <span>{product?.name || bale.productName || "-"}</span>
-                                    <Pencil className="h-3 w-3 text-muted-foreground visible md:invisible md:group-hover:visible" />
+                                    <Pencil className="h-3 w-3 text-muted-foreground visible md:invisible md:group-hover:visible touch:visible" />
                                   </div>
                                 )}
                               </TableCell>

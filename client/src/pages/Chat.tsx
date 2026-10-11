@@ -341,9 +341,14 @@ export default function Chat() {
   const isSending = sendMutation.isPending || isUploading;
 
   return (
-    <div className="h-[calc(100vh-6rem)] flex gap-3" data-testid="chat-page">
+    // Below md the conversation list is a bounded pane above the thread, and the thread keeps its
+    // own scroll inside the viewport so long histories never push the composer off screen.
+    <div
+      className="h-[calc(100dvh-6rem)] flex gap-3 max-md:h-[calc(var(--app-viewport-height)-7rem)] max-md:max-h-[calc(var(--app-viewport-height)-7rem)] max-md:min-h-0 max-md:w-full max-md:min-w-0 max-md:flex-col max-md:overflow-hidden"
+      data-testid="chat-page"
+    >
       {/* Left panel: conversations */}
-      <Card className="w-64 shrink-0 flex flex-col">
+      <Card className="w-64 shrink-0 flex flex-col max-md:w-full max-md:max-h-[min(36dvh,20rem)] max-md:flex-none">
         <div className="p-3 border-b flex items-center justify-between gap-2">
           <h3 className="font-semibold text-sm">Messages</h3>
           <Button size="icon" variant="ghost" onClick={() => setNewChatOpen(true)} data-testid="button-new-chat">
@@ -399,7 +404,7 @@ export default function Chat() {
       </Card>
 
       {/* Main chat area */}
-      <Card className="flex-1 flex flex-col">
+      <Card className="flex-1 flex flex-col max-md:min-h-0 max-md:w-full max-md:min-w-0 max-md:overflow-hidden">
         {!selectedUserId ? (
           <CardContent className="flex-1 flex items-center justify-center">
             <div className="text-center text-muted-foreground">

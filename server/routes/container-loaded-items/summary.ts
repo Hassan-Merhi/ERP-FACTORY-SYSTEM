@@ -21,6 +21,7 @@ import {
 } from "@shared/schema";
 
 import { verifyContainerOwnership } from "./_helpers";
+import { toMoney } from "../../lib/money";
 
 export function registerContainerLoadedItemSummaryRoutes(app: Express, requireAuth: RequestHandler) {
   app.get(
@@ -69,8 +70,8 @@ export function registerContainerLoadedItemSummaryRoutes(app: Express, requireAu
             proformaByBarcode.set(bc, {
               ...line,
               qty: line.qty,
-              weightPerBale: parseFloat(line.weightPerBale || "0"),
-              pricePerBale: parseFloat(line.pricePerBale || "0"),
+              weightPerBale: toMoney(line.weightPerBale).toNumber(),
+              pricePerBale: toMoney(line.pricePerBale).toNumber(),
             });
           }
         }
@@ -83,8 +84,8 @@ export function registerContainerLoadedItemSummaryRoutes(app: Express, requireAu
             loadedByBarcode.set(bc, {
               ...item,
               qty: item.qty,
-              weightPerBale: parseFloat(item.weightPerBale || "0"),
-              pricePerBale: parseFloat(item.pricePerBale || "0"),
+              weightPerBale: toMoney(item.weightPerBale).toNumber(),
+              pricePerBale: toMoney(item.pricePerBale).toNumber(),
             });
           }
         }

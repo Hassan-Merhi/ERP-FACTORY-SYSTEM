@@ -51,7 +51,7 @@ export function ModuleIdentity({
           <Icon className="h-4 w-4" aria-hidden="true" />
         </div>
         <div className="min-w-0 flex-1">
-          <p className="truncate text-[10px] font-semibold uppercase tracking-[0.16em] opacity-70">{productName}</p>
+          <p className="truncate text-[11px] font-semibold uppercase tracking-[0.16em] opacity-70">{productName}</p>
           <p id={moduleId} className="truncate text-sm font-semibold text-foreground">
             {moduleName}
           </p>

@@ -86,7 +86,7 @@ export function VesselTrailMap({ points }: { points: VesselTrailPoint[] }) {
             className="text-primary"
           />
         </svg>
-        <div className="absolute left-2 top-2 rounded-sm bg-background/90 px-2 py-1 text-[10px] text-muted-foreground">
+        <div className="absolute left-2 top-2 rounded-sm bg-background/90 px-2 py-1 text-[11px] text-muted-foreground">
           AIS observations · not a predicted route
         </div>
       </div>

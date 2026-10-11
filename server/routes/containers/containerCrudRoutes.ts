@@ -1,6 +1,6 @@
 import { postFactoryVoucherTx } from "../../services/factory/factoryVoucherPosting";
 import { systemAccountDefinition } from "../../services/accounting/systemAccounts";
-import { moneyString, toMoney } from "../../lib/money";
+import { moneyString, parseMoneyInput, toMoney } from "../../lib/money";
 import { parseId } from "../../lib/parseId";
 import { getErrorMessage } from "../../lib/httpHandlers";
 import { getClientDate } from "../../lib/dateUtils";
@@ -101,8 +101,8 @@ export function registerContainerCrudRoutes(app: Express) {
 
       // Extract manual container cost data from request body (not in base schema)
       const itemName = req.body.itemName?.trim();
-      const ratePerKg = req.body.ratePerKg ? parseFloat(req.body.ratePerKg) : 0;
-      const totalKg = req.body.totalKg ? parseFloat(req.body.totalKg) : 0;
+      const ratePerKg = req.body.ratePerKg ? (parseMoneyInput(req.body.ratePerKg)?.toNumber() ?? NaN) : 0;
+      const totalKg = req.body.totalKg ? (parseMoneyInput(req.body.totalKg)?.toNumber() ?? NaN) : 0;
       const hasManualCostData = itemName && ratePerKg > 0 && totalKg > 0;
 
       // Validate supplier required for manual containers with cost data

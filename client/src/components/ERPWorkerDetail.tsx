@@ -267,7 +267,7 @@ export function ERPWorkerDetail({ worker, onBack, onEdit }: Props) {
                     >
                       {fmt(netBalance)}
                     </p>
-                    <p className="text-[10px] text-muted-foreground mt-0.5">Owed to worker</p>
+                    <p className="text-[11px] text-muted-foreground mt-0.5">Owed to worker</p>
                   </CardContent>
                 </Card>
                 <Card>
@@ -279,7 +279,7 @@ export function ERPWorkerDetail({ worker, onBack, onEdit }: Props) {
                     >
                       {fmt(totalDeposits)}
                     </p>
-                    <p className="text-[10px] text-muted-foreground mt-0.5">Accrued salary</p>
+                    <p className="text-[11px] text-muted-foreground mt-0.5">Accrued salary</p>
                   </CardContent>
                 </Card>
                 <Card>
@@ -288,7 +288,7 @@ export function ERPWorkerDetail({ worker, onBack, onEdit }: Props) {
                     <p className="text-xl font-bold text-blue-700 dark:text-blue-400" data-testid="stat-erp-total-paid">
                       {fmt(totalWithdrawals)}
                     </p>
-                    <p className="text-[10px] text-muted-foreground mt-0.5">Paid out</p>
+                    <p className="text-[11px] text-muted-foreground mt-0.5">Paid out</p>
                   </CardContent>
                 </Card>
                 <Card>
@@ -300,7 +300,7 @@ export function ERPWorkerDetail({ worker, onBack, onEdit }: Props) {
                     >
                       {fmt(advancesOutstanding)}
                     </p>
-                    <p className="text-[10px] text-muted-foreground mt-0.5">Outstanding</p>
+                    <p className="text-[11px] text-muted-foreground mt-0.5">Outstanding</p>
                   </CardContent>
                 </Card>
               </div>

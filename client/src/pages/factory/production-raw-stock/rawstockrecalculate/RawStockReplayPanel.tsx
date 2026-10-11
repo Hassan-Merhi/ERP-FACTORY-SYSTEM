@@ -150,7 +150,7 @@ export function RawStockReplayPanel({ rawStock }: RawStockReplayPanelProps) {
                 <div className="border rounded-md overflow-hidden bg-card shadow-xs">
                   <div className="bg-muted/50 px-3 py-1.5 text-xs font-medium text-muted-foreground flex items-center gap-2">
                     Supplier Timelines
-                    <Badge variant="outline" className="text-[10px]">
+                    <Badge variant="outline" className="text-[11px]">
                       {replayPreview.supplierRows.length} supplier(s)
                     </Badge>
                   </div>
@@ -272,7 +272,7 @@ export function RawStockReplayPanel({ rawStock }: RawStockReplayPanelProps) {
                               {s.safeToRepair ? (
                                 <Badge
                                   variant="outline"
-                                  className="text-emerald-600 border-emerald-500/30 bg-emerald-500/10 text-[10px]"
+                                  className="text-emerald-600 border-emerald-500/30 bg-emerald-500/10 text-[11px]"
                                 >
                                   Safe
                                 </Badge>
@@ -280,16 +280,16 @@ export function RawStockReplayPanel({ rawStock }: RawStockReplayPanelProps) {
                                 <div className="flex flex-col gap-0.5">
                                   <Badge
                                     variant="outline"
-                                    className="text-amber-600 border-amber-500/30 bg-amber-500/10 text-[10px]"
+                                    className="text-amber-600 border-amber-500/30 bg-amber-500/10 text-[11px]"
                                   >
                                     {s.reasons[0]}
                                   </Badge>
-                                  <span className="text-[10px] text-muted-foreground">gap: {kgGap.toFixed(3)} kg</span>
+                                  <span className="text-[11px] text-muted-foreground">gap: {kgGap.toFixed(3)} kg</span>
                                 </div>
                               ) : (
                                 <Badge
                                   variant="outline"
-                                  className="text-red-600 border-red-500/30 bg-red-500/10 text-[10px]"
+                                  className="text-red-600 border-red-500/30 bg-red-500/10 text-[11px]"
                                 >
                                   {s.reasons[0] || "Manual review"}
                                 </Badge>

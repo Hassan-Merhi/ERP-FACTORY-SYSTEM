@@ -14,26 +14,21 @@ const expectTokens = (file, tokens) => {
 expectTokens("client/src/app/ErpShell.tsx", [
   'import "@/erp-mobile-operations.css"',
   'data-erp-route={routePath}',
-  'className="w-full min-w-0 max-w-full"',
+  '"w-full min-w-0 max-w-full',
 ]);
 
+// #2173 rewrote this stylesheet without !important (every rule names the ERP route, so
+// specificity wins) and moved per-page phone behaviour onto the components: hover-revealed
+// buttons use the `touch` variant (checked repo-wide by the Phase 1 verifier) and landscape
+// phones keep the card lists through the `phone-land` variant (checked per page below).
 expectTokens("client/src/erp-mobile-operations.css", [
   "@media (max-width: 767px)",
-  "@media (hover: none) and (pointer: coarse) and (max-height: 500px)",
+  "(hover: none) and (pointer: coarse) and (max-height: 500px)",
   ".erp-mobile-scroll-tabs",
-  ".erp-mobile-touch-visible",
-  "min-height: 44px !important",
+  ".erp-mobile-touch-target",
+  "min-height: 44px",
   "min-width: 44px",
-  '[data-erp-route="/accounts"] button[class*="opacity-0"]',
-  '[data-erp-route="/parties"] button[class*="opacity-0"]',
-  '[data-erp-route="/containers"] button[class*="opacity-0"]',
-  '[data-erp-route="/inventory"] [class~="md:hidden"]',
-  '[data-erp-route="/stock"] [class~="md:hidden"]',
-  '[data-erp-route="/sales-tools"] [class~="md:hidden"]',
-  '[data-erp-route="/optional-vouchers"] [class~="md:hidden"]',
-  'max-height: calc(var(--app-viewport-height) - 10rem) !important',
 ]);
-
 for (const file of [
   "client/src/pages/InventoryHub.tsx",
   "client/src/pages/StockHub.tsx",
@@ -45,7 +40,7 @@ for (const file of [
 
 expectTokens("client/src/pages/containers/ActiveContainersTable.tsx", [
   "flex flex-col gap-3 hover-elevate sm:flex-row",
-  "erp-mobile-touch-visible erp-mobile-touch-target",
+  "erp-mobile-touch-target opacity-0 group-hover:opacity-100 touch:opacity-100",
   'className="w-full sm:w-auto"',
   "sm:w-36",
 ]);
@@ -81,6 +76,8 @@ const mobileDataPages = [
 for (const file of mobileDataPages) {
   const source = read(file);
   if (!source.includes("md:hidden")) failures.push(`${file}: missing existing mobile data view`);
+  // Landscape phones are wider than md but keep the phone card list (#2173 phone-land variant).
+  if (!source.includes("phone-land:block")) failures.push(`${file}: phone card list not kept on landscape phones`);
 }
 
 // Core ERP route coverage for the operational wave.

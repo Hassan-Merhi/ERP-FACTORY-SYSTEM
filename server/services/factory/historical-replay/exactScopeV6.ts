@@ -5,6 +5,7 @@ import { previewHistoricalCostReplayWithExecutor } from "./securePreview";
 import { buildSelectedSupplierCorrectionPlan } from "./closure";
 import { classifyReplayBalesForBatches } from "./baleClassification";
 import { normalizeReplayWriteScope } from "./selectedScope";
+import { toMoney } from "../../../lib/money";
 
 function sortNumbers(values: number[]): number[] {
   return [...new Set(values)].sort((left, right) => left - right);
@@ -235,7 +236,7 @@ export async function buildExactHistoricalReplayScopeInternalV6(params: {
     for (const row of rawStockResult.rows) {
       const expected = canonicalRateByContainer.get(row.container_id);
       if (expected == null) continue;
-      const stored = Number.parseFloat(row.cost_per_kg_usd ?? "0") || 0;
+      const stored = toMoney(row.cost_per_kg_usd).toNumber();
       if (Math.abs(expected - stored) > 0.000001) {
         rawStockIdToContainer.set(row.id, row.container_id);
       }

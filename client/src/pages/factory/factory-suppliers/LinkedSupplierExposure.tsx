@@ -120,7 +120,7 @@ export function LinkedSupplierExposure({
                                     <Button
                                       variant="ghost"
                                       size="sm"
-                                      className="h-5 px-1.5 text-[10px]"
+                                      className="h-5 px-1.5 text-[11px]"
                                       onClick={() => {
                                         const hasBalance = netPay > 0;
                                         openFxConversionDialog(
@@ -142,12 +142,12 @@ export function LinkedSupplierExposure({
                                       ? `${ccPrefix}${formatNum(String(Math.abs(netPay)))} CR`
                                       : `${ccPrefix}${formatNum(cg.netPayable)}`}
                                   </span>
-                                  <Badge variant="outline" className="text-[10px] py-0 px-1 font-bold">
+                                  <Badge variant="outline" className="text-[11px] py-0 px-1 font-bold">
                                     {cg.currencyCode}
                                   </Badge>
                                 </div>
                                 {hasComm && (
-                                  <div className="text-[10px] text-destructive font-medium">
+                                  <div className="text-[11px] text-destructive font-medium">
                                     incl. {ccPrefix}
                                     {formatNum(cg.totalCommission)} commission
                                   </div>

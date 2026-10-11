@@ -11,6 +11,7 @@ import { generateStockPdf } from "../../helpers/generateStockPdf";
 import { hydrateSessionNamedPermissions } from "../../services/security/namedPermissionService";
 import { inventory, stockItems, companies, stockGroups } from "@shared/schema";
 import { eq, and, inArray } from "drizzle-orm";
+import { toMoney } from "../../lib/money";
 
 const MAX_INVENTORY_RATE_STOCK_ITEM_IDS = 250;
 const POS_INVENTORY_COST_PERMISSION = "inventory.cost.view";
@@ -230,7 +231,7 @@ export function registerLocationInventoryRoutes(app: Express) {
       const inventory = await storage.getLocationInventory(req.session.currentCompanyId!, locationId);
 
       // Filter out zero-quantity items
-      const filteredInventory = inventory.filter((item) => parseFloat(item.quantity || "0") !== 0);
+      const filteredInventory = inventory.filter((item) => toMoney(item.quantity).toNumber() !== 0);
 
       // Build Excel workbook data. Cost columns are only included when the
       // current user is authorized to view cost.
@@ -241,11 +242,11 @@ export function registerLocationInventoryRoutes(app: Express) {
           "Group Code": item.stockGroupCode || "",
           "Group Name": item.stockGroupName || "Unassigned",
           UOM: item.stockItemUom || "",
-          Quantity: parseFloat(item.quantity || "0"),
+          Quantity: toMoney(item.quantity).toNumber(),
         };
         if (canViewCost) {
-          row["Cost/Unit"] = parseFloat(item.averageRate || "0");
-          row["Total Value"] = parseFloat(item.totalValue || "0");
+          row["Cost/Unit"] = toMoney(item.averageRate).toNumber();
+          row["Total Value"] = toMoney(item.totalValue).toNumber();
         }
         return row;
       });

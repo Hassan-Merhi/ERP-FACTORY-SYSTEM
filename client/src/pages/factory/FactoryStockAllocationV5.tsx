@@ -360,7 +360,7 @@ export default function FactoryStockAllocationV5() {
         <>
           <FactoryStockAllocationV5MobileList model={model} />
 
-          <div className="hidden max-h-[calc(100vh-160px)] overflow-auto md:block">
+          <div data-horizontal-scroll="true" className="hidden overflow-x-auto md:block phone-land:hidden">
             <table className="w-full text-sm border-collapse min-w-max">
               <thead>
                 <tr className="bg-muted sticky top-0 z-30">
@@ -410,7 +410,7 @@ export default function FactoryStockAllocationV5() {
                               >
                                 {row.productName}
                               </div>
-                              <div className="text-[10px] text-muted-foreground font-mono">{row.articleCode}</div>
+                              <div className="text-[11px] text-muted-foreground font-mono">{row.articleCode}</div>
                             </div>
                           </div>
                         </td>
@@ -456,7 +456,7 @@ export default function FactoryStockAllocationV5() {
                               {row.freeToPromise > 0 ? `+${row.freeToPromise}` : row.freeToPromise}
                             </span>
                             {isShortage && (
-                              <span className="text-[10px] text-destructive/70 font-normal">
+                              <span className="text-[11px] text-destructive/70 font-normal">
                                 need {Math.abs(row.freeToPromise)} more
                               </span>
                             )}
@@ -516,7 +516,7 @@ export default function FactoryStockAllocationV5() {
                                     </span>
                                     <span className="text-muted-foreground">—</span>
                                     <span className="text-muted-foreground">{proforma.customerName}</span>
-                                    <Badge variant="outline" className="text-[10px] h-4 px-1">
+                                    <Badge variant="outline" className="text-[11px] h-4 px-1">
                                       {proforma.containerCount} container{proforma.containerCount !== 1 ? "s" : ""}
                                     </Badge>
                                     <span className="text-muted-foreground">
@@ -528,7 +528,7 @@ export default function FactoryStockAllocationV5() {
                                     <Button
                                       size="sm"
                                       variant="outline"
-                                      className="h-5 px-2 text-[10px]"
+                                      className="h-5 px-2 text-[11px]"
                                       data-testid={`button-v5-add-containers-${proforma.proformaId}`}
                                       onClick={() =>
                                         openAddContainers(
@@ -544,7 +544,7 @@ export default function FactoryStockAllocationV5() {
                                     <Button
                                       size="sm"
                                       variant="outline"
-                                      className="h-5 px-2 text-[10px]"
+                                      className="h-5 px-2 text-[11px]"
                                       data-testid={`button-v5-link-container-${proforma.proformaId}`}
                                       onClick={() => {
                                         setLinkSelected(new Set());
@@ -561,7 +561,7 @@ export default function FactoryStockAllocationV5() {
                                     <Button
                                       size="sm"
                                       variant="outline"
-                                      className="h-5 px-2 text-[10px]"
+                                      className="h-5 px-2 text-[11px]"
                                       data-testid={`button-v5-edit-proforma-${proforma.proformaId}`}
                                       onClick={() => setEditDrawerProformaId(proforma.proformaId)}
                                     >
@@ -572,7 +572,7 @@ export default function FactoryStockAllocationV5() {
                                       <Button
                                         size="sm"
                                         variant="outline"
-                                        className="h-5 px-2 text-[10px]"
+                                        className="h-5 px-2 text-[11px]"
                                         data-testid={`button-v5-edit-draft-${proforma.proformaId}`}
                                         onClick={() => openEditDraft(proforma.proformaId, proforma.proformaName, rows)}
                                       >
@@ -592,7 +592,7 @@ export default function FactoryStockAllocationV5() {
                                         >
                                           <Container className="h-3 w-3 text-muted-foreground shrink-0" />
                                           <span className="font-medium">{c.containerName}</span>
-                                          <Badge variant="outline" className="text-[9px] h-4 px-1">
+                                          <Badge variant="outline" className="text-[11px] h-4 px-1">
                                             {STATUS_LABELS[c.status] ?? c.status}
                                           </Badge>
                                           <span className="text-muted-foreground tabular-nums">

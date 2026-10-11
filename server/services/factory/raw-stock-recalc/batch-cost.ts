@@ -4,6 +4,7 @@ import { db } from "../../../db";
 import { factoryContainers, factoryMixBatchSources, factoryMixBatches, factoryBales } from "@shared/schema";
 import { COST_SCALE, costEquals } from "./cost-math";
 import { COMPLETED_BATCH_STATUSES, OPEN_BATCH_STATUSES, RecalcRow, getRawStockRecalcPreview } from "./preview";
+import { toMoney } from "../../../lib/money";
 
 export interface BatchSourceChange {
   sourceId: number;
@@ -44,10 +45,10 @@ export function calculateBatchCostPreview(
   for (const { src, containerNumber } of allSources) {
     const dWeight = new Decimal(src.weightKg || "0");
     const correctedUsd = src.containerId != null ? correctedCostUsdByContainer.get(src.containerId) : undefined;
-    const oldCostPerKgUsd = parseFloat(src.costPerKg || "0");
+    const oldCostPerKgUsd = toMoney(src.costPerKg).toNumber();
     const dEffectiveCost = correctedUsd !== undefined ? correctedUsd : new Decimal(oldCostPerKgUsd);
     const dSourceTotalCost = dWeight.times(dEffectiveCost);
-    const oldTotalCost = parseFloat(src.totalCost || "0");
+    const oldTotalCost = toMoney(src.totalCost).toNumber();
 
     dTotalCost = dTotalCost.plus(dSourceTotalCost);
     dTotalWeight = dTotalWeight.plus(dWeight);
@@ -175,7 +176,7 @@ export async function getAffectedMixBatchesPreview(
     const sourcesForBatch = allSourcesForTouchedBatches.filter((r) => r.src.mixBatchId === batchId);
     const calc = calculateBatchCostPreview(sourcesForBatch, correctedCostUsdByContainer);
 
-    const oldCostPerKg = parseFloat(batch.costPerKg || "0");
+    const oldCostPerKg = toMoney(batch.costPerKg).toNumber();
     const newCostPerKg = calc.newCostPerKg.toNumber();
     const oldTotalCost = calc.totalWeightKg.times(new Decimal(oldCostPerKg)).toNumber();
     const newTotalCost = calc.newTotalCost.toNumber();

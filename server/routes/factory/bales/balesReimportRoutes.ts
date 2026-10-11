@@ -4,7 +4,7 @@
  * Registered by ./index.ts in the original order; Express resolves
  * first-match, so that order is behaviour.
  */
-import { lineAmount, MoneyDecimal } from "../../../lib/money";
+import { lineAmount, MoneyDecimal, plusMoney, toMoney } from "../../../lib/money";
 import type { Express, Request, Response } from "express";
 import { logAudit } from "../../helpers/auditHelpers";
 import { getErrorMessage } from "../../../lib/httpHandlers";
@@ -126,11 +126,17 @@ export function registerBalesReimportRoutes(app: Express) {
               productName: nameIdx >= 0 ? String(row.getCell(nameIdx + 1).value || "").trim() : "",
               category: catIdx >= 0 ? String(row.getCell(catIdx + 1).value || "").trim() : "",
               weightKg:
-                weightIdx >= 0 ? String(parseFloat(String(row.getCell(weightIdx + 1).value || "0")) || "0") : "0",
+                weightIdx >= 0
+                  ? String(toMoney(String(row.getCell(weightIdx + 1).value ?? "")).toNumber() || "0")
+                  : "0",
               costPerKg:
-                costPerKgIdx >= 0 ? String(parseFloat(String(row.getCell(costPerKgIdx + 1).value || "0")) || "0") : "0",
+                costPerKgIdx >= 0
+                  ? String(toMoney(String(row.getCell(costPerKgIdx + 1).value ?? "")).toNumber() || "0")
+                  : "0",
               totalCost:
-                totalCostIdx >= 0 ? String(parseFloat(String(row.getCell(totalCostIdx + 1).value || "0")) || "0") : "0",
+                totalCostIdx >= 0
+                  ? String(toMoney(String(row.getCell(totalCostIdx + 1).value ?? "")).toNumber() || "0")
+                  : "0",
               erpLocationId: locIdIdx >= 0 ? parseInt(String(row.getCell(locIdIdx + 1).value || "0")) || null : null,
               status: statusIdx >= 0 ? String(row.getCell(statusIdx + 1).value || "IN_STOCK").trim() : "IN_STOCK",
               mixBatchId: mixBatchIdx >= 0 ? parseInt(String(row.getCell(mixBatchIdx + 1).value || "0")) || null : null,
@@ -312,7 +318,7 @@ export function registerBalesReimportRoutes(app: Express) {
                 .returning();
 
               createdBales.push({ ...bale, _product: product });
-              totalWeight += parseFloat(row.weightKg);
+              totalWeight = plusMoney(totalWeight, row.weightKg);
             }
 
             const stockGroupCache = new Map<string, number>();
