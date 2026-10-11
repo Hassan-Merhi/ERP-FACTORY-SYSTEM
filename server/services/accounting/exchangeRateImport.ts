@@ -150,6 +150,23 @@ export function parseFactoryRateImportRows(body: unknown): FactoryRateImportRow[
   });
 }
 
+/**
+ * Takes the per-key advisory locks of a rates file in one statement, in the
+ * order given (callers pass sorted keys, so two imports never deadlock): the
+ * same locks a single save of that key takes.
+ */
+async function lockRateKeysTx(tx: DbTransaction, lockKeys: readonly string[]): Promise<void> {
+  if (lockKeys.length === 0) return;
+  await tx.execute(sql`
+    SELECT pg_advisory_xact_lock(hashtext(k.key))
+      FROM unnest(ARRAY[${sql.join(
+        lockKeys.map((key) => sql`${key}`),
+        sql`, `
+      )}]::text[]) WITH ORDINALITY AS k(key, n)
+     ORDER BY k.n
+  `);
+}
+
 /** Saves a factory rates file for one company: every row, and one audit row, in one transaction. */
 export async function importFactoryFxRates(
   actor: RateImportActor,
@@ -160,11 +177,10 @@ export async function importFactoryFxRates(
   refuseFutureAndDuplicates(rows, businessDate, (row) => `${row.currencyCode}:${row.effectiveDate}`);
   return db.transaction(async (tx) => {
     const currencies = Array.from(new Set(rows.map((row) => row.currencyCode))).sort();
-    for (const currency of currencies) {
-      await tx.execute(
-        sql`SELECT pg_advisory_xact_lock(hashtext(${`factory_fx_rates:${actor.companyId}:${currency}`}))`
-      );
-    }
+    await lockRateKeysTx(
+      tx,
+      currencies.map((currency) => `factory_fx_rates:${actor.companyId}:${currency}`)
+    );
     const existing = await tx
       .select({
         id: factoryFxRates.id,
@@ -267,9 +283,10 @@ export async function importCompanyExchangeRates(
       new Set(rows.map((row) => `${row.effectiveDate}:${row.fromCurrency}:${row.toCurrency}`))
     ).sort();
     // The same lock as a single save of that company, date and pair.
-    for (const key of keys) {
-      await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${`exchange_rates:${actor.companyId}:${key}`}))`);
-    }
+    await lockRateKeysTx(
+      tx,
+      keys.map((key) => `exchange_rates:${actor.companyId}:${key}`)
+    );
     const dates = Array.from(new Set(rows.map((row) => row.effectiveDate)));
     const existing = await tx
       .select()
