@@ -6,7 +6,6 @@ import { getExportPriceVisibility } from "../../../helpers/exportVisibility";
 import type { Express, Request, Response } from "express";
 import { db } from "../../../db";
 import { requireAuth } from "../../../auth";
-
 import {
   factoryBaleProducts,
   factoryBales,
