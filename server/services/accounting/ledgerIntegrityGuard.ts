@@ -469,6 +469,14 @@ export async function ensureLedgerIntegrityGuard(pool: Pool): Promise<boolean> {
     await client.query("BEGIN");
     await client.query("SELECT pg_advisory_xact_lock($1)", [INSTALL_LOCK_KEY]);
     await client.query("SET LOCAL lock_timeout = '10s'");
+    // Production forces company-scope RLS, and validating the parent foreign
+    // key reads every company's accounts: the install runs in the maintenance
+    // scope for this transaction only, like the startup migrations.
+    await client.query(
+      `SELECT set_config('app.company_scope_maintenance', 'on', true),
+              set_config('app.current_company_id', '', true),
+              set_config('app.authorized_company_ids', '', true)`
+    );
     for (const statement of LEDGER_INTEGRITY_GUARD_DDL) {
       await client.query(statement);
     }
