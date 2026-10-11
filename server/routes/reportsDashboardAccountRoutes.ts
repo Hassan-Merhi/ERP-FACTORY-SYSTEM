@@ -11,6 +11,8 @@ import { and, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import { db } from "../db";
 import { storage } from "../storage";
 import { requireAuth } from "../auth";
+import type Decimal from "decimal.js";
+import { debitMinusCredit, signedOpeningBalance, toMoney } from "../lib/money";
 import {
   bankAccounts,
   dashboardAccountSelections,
@@ -95,17 +97,16 @@ export function registerDashboardAccountRoutes(app: Express) {
       const ledgerMap = new Map(ledgerRows.map((l) => [l.id, l]));
       const bankMap = new Map(bankRows.map((b) => [b.id, b]));
       const ledgerBalMap = new Map(
-        ledgerSums.map((r) => [Number(r.accountId), { d: Number(r.totalDebit), c: Number(r.totalCredit) }])
+        ledgerSums.map((r) => [Number(r.accountId), { d: toMoney(r.totalDebit), c: toMoney(r.totalCredit) }])
       );
       const bankBalMap = new Map(
-        bankSums.map((r) => [Number(r.accountId), { d: Number(r.totalDebit), c: Number(r.totalCredit) }])
+        bankSums.map((r) => [Number(r.accountId), { d: toMoney(r.totalDebit), c: toMoney(r.totalCredit) }])
       );
 
-      const calcBal = (opening: string, side: string | null, sums?: { d: number; c: number }) => {
-        let bal = parseFloat(opening || "0");
-        if (side === "Cr") bal = -bal;
-        if (sums) bal += sums.d - sums.c;
-        return bal;
+      const calcBal = (opening: string, side: string | null, sums?: { d: Decimal; c: Decimal }) => {
+        let bal = signedOpeningBalance(opening, side === "Cr" ? "Cr" : "Dr");
+        if (sums) bal = bal.plus(sums.d).minus(sums.c);
+        return bal.toNumber();
       };
 
       const enrichedAccounts = accounts.map((account) => {
@@ -265,16 +266,19 @@ export function registerDashboardAccountRoutes(app: Express) {
 
       const ledgerMap = new Map(ledgerRows.map((l) => [l.id, l]));
       const ledgerBalMap = new Map(
-        ledgerSums.map((r) => [Number(r.accountId), { d: Number(r.totalDebit), c: Number(r.totalCredit) }])
+        ledgerSums.map((r) => [Number(r.accountId), { d: toMoney(r.totalDebit), c: toMoney(r.totalCredit) }])
       );
 
       const enrichedAccounts = accounts.map((account) => {
         const ledger = ledgerMap.get(account.accountId);
         if (!ledger) return null;
-        let balance = parseFloat(ledger.openingBalance || "0");
-        if (ledger.openingBalanceSide === "Cr") balance = -balance;
+        let exactBalance = signedOpeningBalance(
+          ledger.openingBalance,
+          ledger.openingBalanceSide === "Cr" ? "Cr" : "Dr"
+        );
         const sums = ledgerBalMap.get(ledger.id);
-        if (sums) balance += sums.d - sums.c;
+        if (sums) exactBalance = exactBalance.plus(sums.d).minus(sums.c);
+        const balance = exactBalance.toNumber();
         return {
           id: account.accountId,
           accountId: account.accountId,
@@ -423,17 +427,13 @@ export function registerDashboardAccountRoutes(app: Express) {
               )
               .execute();
 
-            let totalDebits = 0;
-            let totalCredits = 0;
-            for (const entry of entries) {
-              totalDebits += parseFloat(entry.debitAmount || "0");
-              totalCredits += parseFloat(entry.creditAmount || "0");
-            }
-
-            // Add opening balance
-            const openingBalance = parseFloat(account.openingBalance || "0");
-            const openingSign = account.openingBalanceSide === "Cr" ? -1 : 1;
-            const balance = openingBalance * openingSign + totalDebits - totalCredits;
+            // Opening balance (Dr positive) plus the account's lines, exactly.
+            const balance = signedOpeningBalance(
+              account.openingBalance,
+              account.openingBalanceSide === "Cr" ? "Cr" : "Dr"
+            )
+              .plus(debitMinusCredit(entries))
+              .toNumber();
 
             accounts.push({
               id: account.id,

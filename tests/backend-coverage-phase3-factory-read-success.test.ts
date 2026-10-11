@@ -125,7 +125,10 @@ describe("Phase 3 Factory read success paths", () => {
     expect(supplier?.totalContainers).toBe(1);
     expect(supplier?.pendingContainers).toBe(1);
     expect(Number(supplier?.totalKg)).toBeCloseTo(1000, 3);
-    expect(Number(supplier?.totalValue)).toBeCloseTo(2500, 2);
+    // Wave 13: the balance is the ledger's. A PENDING container has no journal,
+    // so the ledger holds 0 and its 2,500 shows as "not yet in the ledger".
+    expect(Number(supplier?.totalValue)).toBeCloseTo(0, 2);
+    expect(Number((supplier as { notInLedgerTotal?: string })?.notInLedgerTotal)).toBeCloseTo(2500, 2);
     expect(supplier?.fxUnresolved).toBe(false);
   });
 
@@ -133,8 +136,10 @@ describe("Phase 3 Factory read success paths", () => {
     const response = await agent.get(`/api/factory/suppliers/${supplierId}/balance`);
 
     expect(response.status).toBe(200);
-    expect(Number(response.body.balance)).toBeCloseTo(2500, 2);
-    expect(Number(response.body.outstandingUsd)).toBeCloseTo(2500, 2);
+    expect(Number(response.body.balance)).toBeCloseTo(0, 2);
+    expect(Number(response.body.outstandingUsd)).toBeCloseTo(0, 2);
+    expect(Number(response.body.notInLedgerTotal)).toBeCloseTo(2500, 2);
+    expect(Number(response.body.operationalMemo.outstandingUsd)).toBeCloseTo(2500, 2);
     expect(response.body.fxUnresolved).toBe(false);
   });
 

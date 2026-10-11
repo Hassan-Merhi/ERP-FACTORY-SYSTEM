@@ -155,7 +155,7 @@ export function StockItemDetailsDialogView({ dialog }: { dialog: StockItemDetail
                           data-testid="input-code"
                         />
                       ) : (
-                        <p className="text-sm font-mono p-2 bg-muted rounded" data-testid="text-code">
+                        <p className="text-sm font-mono p-2 bg-muted rounded-sm" data-testid="text-code">
                           {stockItem.code}
                         </p>
                       )}
@@ -171,7 +171,7 @@ export function StockItemDetailsDialogView({ dialog }: { dialog: StockItemDetail
                           data-testid="input-name"
                         />
                       ) : (
-                        <p className="text-sm p-2 bg-muted rounded" data-testid="text-name">
+                        <p className="text-sm p-2 bg-muted rounded-sm" data-testid="text-name">
                           {stockItem.name}
                         </p>
                       )}
@@ -187,7 +187,7 @@ export function StockItemDetailsDialogView({ dialog }: { dialog: StockItemDetail
                           data-testid="input-uom"
                         />
                       ) : (
-                        <p className="text-sm p-2 bg-muted rounded" data-testid="text-uom">
+                        <p className="text-sm p-2 bg-muted rounded-sm" data-testid="text-uom">
                           {stockItem.uom}
                         </p>
                       )}
@@ -212,7 +212,7 @@ export function StockItemDetailsDialogView({ dialog }: { dialog: StockItemDetail
                           </SelectContent>
                         </Select>
                       ) : (
-                        <p className="text-sm p-2 bg-muted rounded" data-testid="text-stock-group">
+                        <p className="text-sm p-2 bg-muted rounded-sm" data-testid="text-stock-group">
                           {stockGroups.find((g) => g.id === stockItem.stockGroupId)?.name || "Uncategorized"}
                         </p>
                       )}
@@ -240,7 +240,7 @@ export function StockItemDetailsDialogView({ dialog }: { dialog: StockItemDetail
                             </SelectContent>
                           </Select>
                         ) : (
-                          <p className="text-sm p-2 bg-muted rounded" data-testid="text-category">
+                          <p className="text-sm p-2 bg-muted rounded-sm" data-testid="text-category">
                             {stockCategories.find((c) => c.id === stockItem.categoryId)?.name || "—"}
                           </p>
                         )}
@@ -553,7 +553,7 @@ export function StockItemDetailsDialogView({ dialog }: { dialog: StockItemDetail
                           <div className="flex-1">
                             <div className="flex items-center gap-2 mb-1">
                               <p className="text-sm font-mono font-medium">{transaction.voucherNumber}</p>
-                              <span className="text-xs bg-muted px-2 py-1 rounded">{transaction.type}</span>
+                              <span className="text-xs bg-muted px-2 py-1 rounded-sm">{transaction.type}</span>
                             </div>
                             <p className="text-xs text-muted-foreground">{transaction.voucherDate}</p>
                             <p className="text-sm mt-1">

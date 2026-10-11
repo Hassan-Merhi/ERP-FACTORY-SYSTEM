@@ -266,7 +266,7 @@ export function ContainerPlannerCustomerAllocation({ planId, onPlanChanged }: Pr
               {selectedContainer.customers.map((customer) => (
                 <div
                   key={customer.customerId}
-                  className="flex items-center justify-between rounded border px-2 py-1 text-xs"
+                  className="flex items-center justify-between rounded-sm border px-2 py-1 text-xs"
                   data-testid={`row-container-customer-${customer.customerId}`}
                 >
                   <span className="truncate">

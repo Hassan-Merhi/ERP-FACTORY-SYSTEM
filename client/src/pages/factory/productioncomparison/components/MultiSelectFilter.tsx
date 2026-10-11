@@ -55,7 +55,7 @@ export function MultiSelectFilter({
           type="button"
           data-testid={testId}
           className={cn(
-            "inline-flex items-center justify-between gap-2 rounded-md border bg-background px-3 py-2 text-sm shadow-sm hover:bg-accent transition-colors min-w-[140px]",
+            "inline-flex items-center justify-between gap-2 rounded-md border bg-background px-3 py-2 text-sm shadow-xs hover:bg-accent transition-colors min-w-[140px]",
             selected.length > 0 && "border-primary/50",
             className
           )}
@@ -97,7 +97,7 @@ export function MultiSelectFilter({
                   >
                     <div
                       className={cn(
-                        "flex h-4 w-4 items-center justify-center rounded border shrink-0",
+                        "flex h-4 w-4 items-center justify-center rounded-sm border shrink-0",
                         checked ? "border-primary bg-primary text-primary-foreground" : "border-muted-foreground/40"
                       )}
                     >

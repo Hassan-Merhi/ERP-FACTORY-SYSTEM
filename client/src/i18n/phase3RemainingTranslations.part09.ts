@@ -317,6 +317,11 @@ export const phase3RemainingTranslationsPart09: readonly Phase3SharedUiEntry[] =
     fr: "Impossible de charger les données de la paie. Veuillez réessayer.",
   },
   {
+    en: "Failed to load Factory POS payment accounts",
+    ar: "تعذر تحميل حسابات الدفع في نقطة بيع المصنع",
+    fr: "Impossible de charger les comptes de paiement du PDV de l’usine",
+  },
+  {
     en: "Failed to load POS transactions",
     ar: "عدم تحميل معاملات البرمجيات المعينة",
     fr: "Impossible de charger les transactions de POS",

@@ -1,6 +1,7 @@
 import { logger } from "../../lib/logger";
 import { nameSchedulerCallback } from "../../lib/schedulerObservability";
 import { runWithDatabaseMaintenanceScope } from "../security/databaseScopeRuntimeContext";
+import { runAsSystemAuditActor } from "../audit/auditActorContext";
 
 /**
  * Wraps a scheduled job so a slow run cannot be overtaken by the next tick.
@@ -54,7 +55,15 @@ export function createSchedulerTick(
       // Scheduled jobs are process-owned rather than request-owned. They may
       // legitimately enumerate multiple companies, but that access must be an
       // explicit maintenance capability now that missing RLS scope fails closed.
-      await runWithDatabaseMaintenanceScope(`scheduler:${action}`, run);
+      // Maintenance scope bypasses the closed-period guard and the opening lock,
+      // so jobs that write vouchers (recurring journals, rental accruals and
+      // scheduled payments, factory stock journal) only list companies here and
+      // post each company in its tenant scope (accounting/scheduledPostingScope.ts,
+      // wave 18 A).
+      // Phase 21 (A): every write of the tick is audited as `system:<job>`.
+      await runAsSystemAuditActor(action, () => runWithDatabaseMaintenanceScope(`scheduler:${action}`, run), {
+        force: true,
+      });
       if (!options.quiet) {
         logger.info(`cron ${action} succeeded`, {
           module: "scheduler",

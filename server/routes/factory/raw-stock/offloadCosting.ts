@@ -3,8 +3,11 @@ import Decimal from "decimal.js";
 import { factoryContainerCommissions } from "@shared/schema";
 
 import { getErrorMessage } from "../../../lib/httpHandlers";
+import { lineAmount, parseMoneyInput, toMoney } from "../../../lib/money";
 import { computeContainerLandedCost } from "../../../services/factory/containerLandedCost";
-import { getOrFetchFxRateToUsd, getOrCreateLedgerAccount } from "../_helpers";
+import { getOrCreateLedgerAccount } from "../_helpers";
+import { db } from "../../../db";
+import { FactoryFxRateRequiredError, factoryDocumentRate } from "../../../services/factory/factoryDocumentFxRate";
 
 /**
  * Everything POST /api/factory/raw-stock/offload works out before it opens its
@@ -64,7 +67,7 @@ export interface OffloadCostingContext {
 }
 
 export type OffloadCosting =
-  | { ok: false; httpStatus: number; body: { message: string } }
+  | { ok: false; httpStatus: number; body: { message: string; code?: string } }
   | {
       ok: true;
       commTotalVal: number;
@@ -120,10 +123,10 @@ export async function computeOffloadCosting(ctx: OffloadCostingContext): Promise
   let commInsertValues: typeof factoryContainerCommissions.$inferInsert | null = null;
   if (commission && commission.personName && commission.commissionRate) {
     const commType = commission.commissionType || "PER_KG";
-    const commRate = parseFloat(commission.commissionRate) || 0;
+    const commRate = toMoney(commission.commissionRate).toNumber();
     // Commission PER_KG is computed on the full declared weight — agreed for the
     // whole container, not just the portion received so far.
-    commTotalVal = commType === "PER_KG" ? commRate * parseFloat(declaredKg) : commRate;
+    commTotalVal = commType === "PER_KG" ? lineAmount(commRate, declaredKg).toNumber() : commRate;
     const commCurrency = (commission.currencyCode || currencyCode).toUpperCase();
     commCurrencyForUsd = commCurrency;
 
@@ -134,9 +137,15 @@ export async function computeOffloadCosting(ctx: OffloadCostingContext): Promise
     } else if (commCurrency === currencyCode.toUpperCase()) {
       resolvedCommFxRate = fxRate;
     } else {
+      // Phase 19 C (M2): the recorded factory rate on or before the offload date
+      // (manual, else recorded auto), or 409 FACTORY_FX_RATE_REQUIRED. It used to
+      // fetch an external rate (never recorded) and mark it confirmed.
       try {
-        resolvedCommFxRate = parseFloat(await getOrFetchFxRateToUsd(companyId, commCurrency, offloadDate));
+        resolvedCommFxRate = toMoney(
+          (await factoryDocumentRate(db, companyId, commCurrency, offloadDate)).rate
+        ).toNumber();
       } catch (err: unknown) {
+        if (err instanceof FactoryFxRateRequiredError) return { ok: false, httpStatus: 409, body: err.body };
         return {
           ok: false,
           httpStatus: 400,
@@ -147,7 +156,8 @@ export async function computeOffloadCosting(ctx: OffloadCostingContext): Promise
       }
     }
     commFxRateForUsd = resolvedCommFxRate;
-    const commTotalUsd = commCurrency === "USD" ? commTotalVal : commTotalVal * resolvedCommFxRate;
+    const commTotalUsd =
+      commCurrency === "USD" ? commTotalVal : lineAmount(commTotalVal, resolvedCommFxRate).toNumber();
     commInsertValues = {
       companyId,
       containerId,
@@ -165,12 +175,20 @@ export async function computeOffloadCosting(ctx: OffloadCostingContext): Promise
 
   // Compute per-component USD values — kept for daybook/voucher posting.
   const freightCcy = reqFreightCurrencyCode || currencyCode;
-  const freightFxRateVal = parseFloat(reqFreightFxRate || String(fxRate));
-  const freightUsd = freightCcy === "USD" ? freightVal : freightVal * freightFxRateVal;
+  const freightFx = parseMoneyInput(reqFreightFxRate || fxRate);
+  if (freightCcy !== "USD" && freightVal > 0 && (!freightFx || freightFx.lte(0))) {
+    return { ok: false, httpStatus: 400, body: { message: "Freight FX rate must be a positive number" } };
+  }
+  const freightFxRateVal = freightFx ? freightFx.toNumber() : 0;
+  const freightUsd = freightCcy === "USD" ? freightVal : lineAmount(freightVal, freightFxRateVal).toNumber();
 
   const ocCcy = reqOtherChargesCurrencyCode || currencyCode;
-  const ocFxRateVal = parseFloat(reqOtherChargesFxRate || String(fxRate));
-  const ocUsd = ocCcy === "USD" ? otherChargesVal : otherChargesVal * ocFxRateVal;
+  const ocFx = parseMoneyInput(reqOtherChargesFxRate || fxRate);
+  if (ocCcy !== "USD" && otherChargesVal > 0 && (!ocFx || ocFx.lte(0))) {
+    return { ok: false, httpStatus: 400, body: { message: "Other charges FX rate must be a positive number" } };
+  }
+  const ocFxRateVal = ocFx ? ocFx.toNumber() : 0;
+  const ocUsd = ocCcy === "USD" ? otherChargesVal : lineAmount(otherChargesVal, ocFxRateVal).toNumber();
 
   // ── Build container snapshot for the shared landed-cost helper ────────────
   // All financial fields (inclusive cost/kg, finalPayableAmount, USD totals) are
@@ -232,7 +250,7 @@ export async function computeOffloadCosting(ctx: OffloadCostingContext): Promise
       amount: c.amount || "0",
       currencyCode: c.currencyCode || currencyCode,
       fxRateToUsd: c.fxRateToUsd || (c.currencyCode === "USD" ? "1" : String(fxRate)),
-      fxRateConfirmed: !!(c.fxRateToUsd && parseFloat(c.fxRateToUsd) > 0),
+      fxRateConfirmed: !!(c.fxRateToUsd && toMoney(c.fxRateToUsd).gt(0)),
     }));
 
   // Commission record: confirmed (rate was resolved above or is 1 for USD).
@@ -286,17 +304,23 @@ export async function computeOffloadCosting(ctx: OffloadCostingContext): Promise
     "FACTORY_CHARGES_PAYABLE",
     "Factory Charges Payable"
   );
+  // The expense (debit) account of the freight / other-charges voucher. On the
+  // supplier path the request's account is the expense account; on the
+  // own-account path the request's account is the one that paid (the credit
+  // leg), so the expense goes to the system expense account. Resolving it only
+  // for the supplier path left own-account vouchers with an expense line that
+  // posted to no account (2026-10 accounting audit: 13 such lines in production).
   const freightExpenseAcctId =
-    freightVal > 0 && effectiveFreightSupplierId
-      ? reqFreightAccountId
+    freightVal > 0
+      ? effectiveFreightSupplierId && reqFreightAccountId
         ? parseInt(reqFreightAccountId)
-        : await getOrCreateLedgerAccount(companyId, "FACTORY_FREIGHT_EXPENSE", "Freight Expense")
+        : await getOrCreateLedgerAccount(companyId, "FACTORY_FREIGHT_EXPENSE", "Freight Expense", "Direct Expense")
       : null;
   const ocExpenseAcctId =
-    otherChargesVal > 0 && reqOtherChargesSupplierId
-      ? reqOtherChargesAccountId
+    otherChargesVal > 0
+      ? reqOtherChargesSupplierId && reqOtherChargesAccountId
         ? parseInt(reqOtherChargesAccountId)
-        : await getOrCreateLedgerAccount(companyId, "FACTORY_OC_EXPENSE", "Other Charges Expense")
+        : await getOrCreateLedgerAccount(companyId, "FACTORY_OC_EXPENSE", "Other Charges Expense", "Direct Expense")
       : null;
 
   return {

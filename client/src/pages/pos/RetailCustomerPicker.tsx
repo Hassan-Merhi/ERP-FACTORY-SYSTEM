@@ -107,7 +107,7 @@ export function RetailCustomerPicker({
               <button
                 key={entry.id}
                 type="button"
-                className="flex w-full items-center justify-between rounded border px-2 py-1.5 text-left text-sm hover:bg-muted/50"
+                className="flex w-full items-center justify-between rounded-sm border px-2 py-1.5 text-left text-sm hover:bg-muted/50"
                 onClick={() => {
                   onSelect(entry);
                   setOpen(false);
@@ -130,7 +130,7 @@ export function RetailCustomerPicker({
             )}
           </div>
           {creating ? (
-            <div className="space-y-2 rounded border bg-muted/20 p-2">
+            <div className="space-y-2 rounded-sm border bg-muted/20 p-2">
               <div>
                 <Label htmlFor="retail-new-customer-name">Customer name</Label>
                 <Input

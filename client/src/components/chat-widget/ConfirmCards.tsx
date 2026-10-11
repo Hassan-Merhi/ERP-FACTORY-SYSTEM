@@ -64,7 +64,7 @@ export function StockAdjustmentConfirmCard({
           <span className="shrink-0">Location</span>
           {hasLocChoice ? (
             <select
-              className="text-xs font-medium text-foreground bg-background border rounded px-1.5 py-0.5 max-w-[180px]"
+              className="text-xs font-medium text-foreground bg-background border rounded-sm px-1.5 py-0.5 max-w-[180px]"
               value={selectedLocationId}
               onChange={(e) => {
                 const id = Number(e.target.value);
@@ -124,7 +124,7 @@ export function StockAdjustmentConfirmCard({
                       <div key={i} className={`grid ${cols} gap-1 items-center`}>
                         {hasChoice ? (
                           <select
-                            className="text-xs font-medium text-foreground bg-background border rounded px-1.5 py-0.5 w-full"
+                            className="text-xs font-medium text-foreground bg-background border rounded-sm px-1.5 py-0.5 w-full"
                             value={selectedItems[i].id}
                             onChange={(e) => {
                               const id = Number(e.target.value);
@@ -256,11 +256,11 @@ export function VoucherSearchResultsCard({
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-1.5 flex-wrap">
                   <span className="text-xs font-semibold text-foreground">{v.voucherNumber}</span>
-                  <span className="text-[11px] text-muted-foreground bg-muted rounded px-1 py-0.5">
+                  <span className="text-[11px] text-muted-foreground bg-muted rounded-sm px-1 py-0.5">
                     {v.voucherType}
                   </span>
                   {v.optional && (
-                    <span className="text-[11px] text-amber-600 dark:text-amber-400 bg-amber-500/10 rounded px-1 py-0.5">
+                    <span className="text-[11px] text-amber-600 dark:text-amber-400 bg-amber-500/10 rounded-sm px-1 py-0.5">
                       Optional
                     </span>
                   )}

@@ -105,7 +105,7 @@ export default function SmartStockTransferOrderPage() {
             type="button"
             variant="outline"
             size="sm"
-            className="fixed bottom-5 right-5 z-40 h-9 rounded-lg border-border/70 bg-background/90 px-3 text-xs font-medium text-muted-foreground shadow-sm backdrop-blur transition-colors hover:bg-accent hover:text-foreground"
+            className="fixed bottom-5 right-5 z-40 h-9 rounded-lg border-border/70 bg-background/90 px-3 text-xs font-medium text-muted-foreground shadow-xs backdrop-blur-sm transition-colors hover:bg-accent hover:text-foreground"
             onClick={() => setGeneratorOpen(true)}
             data-testid="button-open-smart-transfer-generator"
           >

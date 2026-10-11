@@ -89,7 +89,7 @@ async function attachBale(orderId: number, reference: string, withScanHistory = 
       `INSERT INTO factory_priority_scan_history
         (company_id, order_id, bale_id, reference_number, article_code,
          priority, color, business_date, scanned_by, allocation_source)
-       VALUES ($1, $2, $3, $4, $5, 1, '#dc2626', CURRENT_DATE, 'original-user', 'manual')`,
+       VALUES ($1, $2, $3, $4, $5, 1, '#B22222', CURRENT_DATE, 'original-user', 'manual')`,
       [ctx.companyId, orderId, baleId, reference, ARTICLE]
     );
   }
@@ -146,8 +146,8 @@ beforeAll(async () => {
 
   red = await loading();
   blue = await loading();
-  await configure(red, 1, "#dc2626");
-  await configure(blue, 2, "#2563eb");
+  await configure(red, 1, "#B22222");
+  await configure(blue, 2, "#6A5ACD");
   redBales = [await attachBale(red, `${PREFIX}-RED-1`, true), await attachBale(red, `${PREFIX}-RED-2`)];
   blueBale = await attachBale(blue, `${PREFIX}-BLUE-1`);
 }, 120000);
@@ -211,7 +211,7 @@ describe("Phase 7: auto-advance and front-of-queue recovery", () => {
       "SELECT color, priority, reversed_at FROM factory_priority_scan_history WHERE company_id = $1 AND bale_id = $2",
       [ctx.companyId, redBales[0]]
     );
-    expect(historic[0]).toMatchObject({ color: "#dc2626", priority: 1 });
+    expect(historic[0]).toMatchObject({ color: "#B22222", priority: 1 });
     expect(historic[0].reversed_at).toBeTruthy();
 
     const nextTarget = await db.transaction(async (tx) => {
@@ -227,7 +227,7 @@ describe("Phase 7: auto-advance and front-of-queue recovery", () => {
     const completed = await advanceSatisfiedPriorityScanConfigs(ctx.companyId);
     expect(completed.completedOrderIds).toContain(red);
     const green = await loading();
-    await configure(green, 2, "#dc2626"); // previously completed Red released the color
+    await configure(green, 2, "#B22222"); // previously completed Red released the color
 
     await reverse(replacement);
     const configs = await queue();
@@ -235,19 +235,19 @@ describe("Phase 7: auto-advance and front-of-queue recovery", () => {
     const greenConfig = configs.find((row) => row.orderId === green)!;
     expect(await activeOrderIds()).toEqual([red, blue, green]);
     expect(redConfig).toMatchObject({ enabled: true, priority: 1 });
-    expect(redConfig.color).not.toBe("#dc2626");
-    expect(greenConfig).toMatchObject({ color: "#dc2626", enabled: true, priority: 3 });
+    expect(redConfig.color).not.toBe("#B22222");
+    expect(greenConfig).toMatchObject({ color: "#B22222", enabled: true, priority: 3 });
 
     const { rows: historic } = await pool.query<{ color: string }>(
       "SELECT color FROM factory_priority_scan_history WHERE company_id = $1 AND bale_id = $2",
       [ctx.companyId, redBales[0]]
     );
-    expect(historic[0].color).toBe("#dc2626");
+    expect(historic[0].color).toBe("#B22222");
   }, 60000);
 
   it("never reactivates manually disabled or verified loadings", async () => {
     const manuallyDisabled = await loading();
-    await configure(manuallyDisabled, 4, "#7c3aed");
+    await configure(manuallyDisabled, 4, "#9400D3");
     // The loading was completed automatically, then an operator explicitly
     // switched it OFF. The later human action must win over auto recovery.
     await pool.query(
@@ -256,7 +256,7 @@ describe("Phase 7: auto-advance and front-of-queue recovery", () => {
        WHERE company_id = $1 AND order_id = $2`,
       [ctx.companyId, manuallyDisabled]
     );
-    await configure(manuallyDisabled, 4, "#7c3aed", false);
+    await configure(manuallyDisabled, 4, "#9400D3", false);
 
     const verified = await loading("VERIFIED");
     await pool.query(

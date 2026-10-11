@@ -486,7 +486,7 @@ export default function GITContainers({ embedded = false }: { embedded?: boolean
           </Popover>
 
           <ContainerBulkActions
-            className="max-sm:col-span-2 max-sm:[&>*]:flex-1"
+            className="max-sm:col-span-2 max-sm:*:flex-1"
             waSending={waSending}
             onImportClick={() => fileInputRef.current?.click()}
             onSendWhatsApp={sendToWhatsApp}

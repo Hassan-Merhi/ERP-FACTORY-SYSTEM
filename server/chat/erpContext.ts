@@ -9,7 +9,10 @@
 import { db } from "../db";
 import { logger } from "../lib/logger";
 import * as schema from "@shared/schema";
-import { and, desc, eq, gt, gte, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, gt, gte, inArray, isNull, sql } from "drizzle-orm";
+import { companyScopedSuppliers } from "@shared/schema/supplierCompanyScope";
+import { sumMoney, toMoney } from "../lib/money";
+import { getPartyBalances } from "../services/accounting/balances/ledgerBalanceEngine";
 
 // ── ERP context in-memory cache (TTL = 60 s per companyId) ───────────────────
 const ERP_CACHE_TTL_MS = 60_000;
@@ -18,10 +21,7 @@ interface ERPCacheEntry {
   expiresAt: number;
 }
 const erpContextCache = new Map<string, ERPCacheEntry>();
-const ERP_CACHE_MAX_ENTRIES = Math.max(
-  4,
-  Number.parseInt(process.env.ERP_CONTEXT_CACHE_MAX_ENTRIES || "32", 10) || 32
-);
+const ERP_CACHE_MAX_ENTRIES = Math.max(4, Number.parseInt(process.env.ERP_CONTEXT_CACHE_MAX_ENTRIES || "32", 10) || 32);
 
 function pruneERPContextCache(now = Date.now()): void {
   for (const [key, entry] of erpContextCache) {
@@ -300,15 +300,15 @@ export async function getERPContext(companyId: number) {
 
   const todaysSales = {
     date: todayStr,
-    revenue: parseFloat(todaysSalesRaw[0]?.revenue || "0"),
-    cost: parseFloat(todaysSalesRaw[0]?.cost || "0"),
-    profit: parseFloat(todaysSalesRaw[0]?.profit || "0"),
+    revenue: toMoney(todaysSalesRaw[0]?.revenue).toNumber(),
+    cost: toMoney(todaysSalesRaw[0]?.cost).toNumber(),
+    profit: toMoney(todaysSalesRaw[0]?.profit).toNumber(),
     transactionCount: todaysSalesRaw[0]?.transactionCount || 0,
-    unitsSold: parseFloat(todaysSalesRaw[0]?.unitsSold || "0"),
+    unitsSold: toMoney(todaysSalesRaw[0]?.unitsSold).toNumber(),
     margin:
-      parseFloat(todaysSalesRaw[0]?.revenue || "0") > 0
+      toMoney(todaysSalesRaw[0]?.revenue).toNumber() > 0
         ? (
-            (parseFloat(todaysSalesRaw[0]?.profit || "0") / parseFloat(todaysSalesRaw[0]?.revenue || "1")) *
+            (toMoney(todaysSalesRaw[0]?.profit).toNumber() / toMoney(todaysSalesRaw[0]?.revenue || "1").toNumber()) *
             100
           ).toFixed(1)
         : "0",
@@ -316,15 +316,16 @@ export async function getERPContext(companyId: number) {
 
   const thisMonthSales = {
     monthStart: monthStartStr,
-    revenue: parseFloat(thisMonthSalesRaw[0]?.revenue || "0"),
-    cost: parseFloat(thisMonthSalesRaw[0]?.cost || "0"),
-    profit: parseFloat(thisMonthSalesRaw[0]?.profit || "0"),
+    revenue: toMoney(thisMonthSalesRaw[0]?.revenue).toNumber(),
+    cost: toMoney(thisMonthSalesRaw[0]?.cost).toNumber(),
+    profit: toMoney(thisMonthSalesRaw[0]?.profit).toNumber(),
     transactionCount: thisMonthSalesRaw[0]?.transactionCount || 0,
-    unitsSold: parseFloat(thisMonthSalesRaw[0]?.unitsSold || "0"),
+    unitsSold: toMoney(thisMonthSalesRaw[0]?.unitsSold).toNumber(),
     margin:
-      parseFloat(thisMonthSalesRaw[0]?.revenue || "0") > 0
+      toMoney(thisMonthSalesRaw[0]?.revenue).toNumber() > 0
         ? (
-            (parseFloat(thisMonthSalesRaw[0]?.profit || "0") / parseFloat(thisMonthSalesRaw[0]?.revenue || "1")) *
+            (toMoney(thisMonthSalesRaw[0]?.profit).toNumber() /
+              toMoney(thisMonthSalesRaw[0]?.revenue || "1").toNumber()) *
             100
           ).toFixed(1)
         : "0",
@@ -334,12 +335,12 @@ export async function getERPContext(companyId: number) {
   const itemProfitabilityReport = itemProfitabilityRaw
     .map((row) => {
       const si = stockItems.find((s) => s.id === row.stockItemId);
-      const qty = parseFloat(row.totalQty || "0");
-      const revenue = parseFloat(row.totalRevenue || "0");
-      const cost = parseFloat(row.totalCost || "0");
-      const profit = parseFloat(row.totalProfit || "0");
-      const avgCfg = parseFloat(row.avgConfiguredPrice || "0");
-      const avgCost = parseFloat(row.avgCostPrice || "0");
+      const qty = toMoney(row.totalQty).toNumber();
+      const revenue = toMoney(row.totalRevenue).toNumber();
+      const cost = toMoney(row.totalCost).toNumber();
+      const profit = toMoney(row.totalProfit).toNumber();
+      const avgCfg = toMoney(row.avgConfiguredPrice).toNumber();
+      const avgCost = toMoney(row.avgCostPrice).toNumber();
       const margin = revenue > 0 ? ((profit / revenue) * 100).toFixed(1) : "0";
       const profitPerUnit = qty > 0 ? (profit / qty).toFixed(2) : "0";
       return {
@@ -359,7 +360,7 @@ export async function getERPContext(companyId: number) {
         lossAmount: profit < 0 ? Math.abs(profit).toFixed(2) : "0",
       };
     })
-    .sort((a, b) => parseFloat(a.totalProfit) - parseFloat(b.totalProfit)); // most losing first
+    .sort((a, b) => toMoney(a.totalProfit).minus(toMoney(b.totalProfit)).toNumber()); // most losing first
 
   // ── Sales by stock group ────────────────────────────────────────────
   const [salesByGroupRaw, salesByGroupTodayRaw, salesByGroupThisMonthRaw] = await Promise.all([
@@ -430,15 +431,15 @@ export async function getERPContext(companyId: number) {
     totalProfit: string;
   }) {
     const grp = stockGroups.find((g) => g.id === row.stockGroupId);
-    const rev = parseFloat(row.totalRevenue || "0");
-    const prof = parseFloat(row.totalProfit || "0");
+    const rev = toMoney(row.totalRevenue).toNumber();
+    const prof = toMoney(row.totalProfit).toNumber();
     return {
       groupId: row.stockGroupId,
       groupName: grp?.name || (row.stockGroupId ? "Unknown Group" : "Uncategorized"),
       groupCode: grp?.code || "",
-      totalQty: parseFloat(row.totalQty || "0").toFixed(2),
+      totalQty: toMoney(row.totalQty).toFixed(2),
       totalRevenue: rev.toFixed(2),
-      totalCost: parseFloat(row.totalCost || "0").toFixed(2),
+      totalCost: toMoney(row.totalCost).toFixed(2),
       totalProfit: prof.toFixed(2),
       profitMargin: rev > 0 ? ((prof / rev) * 100).toFixed(1) + "%" : "0%",
       isLosing: prof < 0,
@@ -447,22 +448,22 @@ export async function getERPContext(companyId: number) {
 
   const salesByGroup = salesByGroupRaw
     .map(enrichGroupRow)
-    .sort((a, b) => parseFloat(a.totalProfit) - parseFloat(b.totalProfit));
+    .sort((a, b) => toMoney(a.totalProfit).minus(toMoney(b.totalProfit)).toNumber());
   const salesByGroupToday = salesByGroupTodayRaw
     .map(enrichGroupRow)
-    .sort((a, b) => parseFloat(b.totalRevenue) - parseFloat(a.totalRevenue));
+    .sort((a, b) => toMoney(b.totalRevenue).minus(toMoney(a.totalRevenue)).toNumber());
   const salesByGroupThisMonth = salesByGroupThisMonthRaw
     .map(enrichGroupRow)
-    .sort((a, b) => parseFloat(b.totalRevenue) - parseFloat(a.totalRevenue));
+    .sort((a, b) => toMoney(b.totalRevenue).minus(toMoney(a.totalRevenue)).toNumber());
 
   // Pricing health: current stock items where selling price < average cost (selling below cost)
   const inventoryMap = new Map(inventory.map((i) => [i.stockItemId, i]));
   const pricingHealthReport = stockItems
     .map((item) => {
       const inv = inventoryMap.get(item.id);
-      const avgCost = parseFloat(inv?.averageRate || "0");
-      const sellPrice = parseFloat(item.sellingPrice || "0");
-      const qty = parseFloat(inv?.quantity || "0");
+      const avgCost = toMoney(inv?.averageRate).toNumber();
+      const sellPrice = toMoney(item.sellingPrice).toNumber();
+      const qty = toMoney(inv?.quantity).toNumber();
       const gap = sellPrice - avgCost;
       return {
         itemId: item.id,
@@ -476,8 +477,8 @@ export async function getERPContext(companyId: number) {
         potentialLoss: qty > 0 && gap < 0 ? (Math.abs(gap) * qty).toFixed(2) : "0",
       };
     })
-    .filter((item) => parseFloat(item.avgCostPrice) > 0) // only items with known cost
-    .sort((a, b) => parseFloat(a.priceGap) - parseFloat(b.priceGap)); // most losing first
+    .filter((item) => toMoney(item.avgCostPrice).toNumber() > 0) // only items with known cost
+    .sort((a, b) => toMoney(a.priceGap).minus(toMoney(b.priceGap)).toNumber()); // most losing first
 
   const lowStockAlerts: Array<{
     itemId: number;
@@ -488,8 +489,8 @@ export async function getERPContext(companyId: number) {
     status: "OUT_OF_STOCK" | "LOW_STOCK";
   }> = [];
   for (const item of stockItems) {
-    const qty = parseFloat(inventoryMap.get(item.id)?.quantity || "0");
-    const reorderLevel = parseFloat(item.reorderLevel || "0");
+    const qty = toMoney(inventoryMap.get(item.id)?.quantity).toNumber();
+    const reorderLevel = toMoney(item.reorderLevel).toNumber();
     if (reorderLevel > 0 && qty <= reorderLevel) {
       lowStockAlerts.push({
         itemId: item.id,
@@ -502,92 +503,75 @@ export async function getERPContext(companyId: number) {
     }
   }
 
-  // Fetch full supplier data including opening balances
-  const suppliersWithBalances = await db
-    .select({
-      id: schema.suppliers.id,
-      code: schema.suppliers.code,
-      legalName: schema.suppliers.legalName,
-      openingBalance: schema.suppliers.openingBalance,
-    })
-    .from(schema.suppliers)
-    .where(eq(schema.suppliers.active, true));
+  // Supplier and customer balances from the one balance engine (wave 13, A4/M3):
+  // only this company's suppliers and customers, plus any supplier of another
+  // company this company posted to (its payable counts here, owner decision 2);
+  // every line counted once in its voucher company. Amounts are exact until the
+  // context is built.
+  const [supplierEngine, customerEngine] = await Promise.all([
+    getPartyBalances(db, { companyId, kind: "supplier" }),
+    getPartyBalances(db, { companyId, kind: "customer", memo: true }),
+  ]);
+  const supplierIds = supplierEngine.parties.map((party) => party.id).filter((id): id is number => id !== null);
+  const supplierMasters =
+    supplierIds.length === 0
+      ? []
+      : await db
+          .select({
+            id: companyScopedSuppliers.id,
+            code: companyScopedSuppliers.code,
+            legalName: companyScopedSuppliers.legalName,
+            companyId: companyScopedSuppliers.companyId,
+            active: companyScopedSuppliers.active,
+          })
+          .from(companyScopedSuppliers)
+          .where(inArray(companyScopedSuppliers.id, supplierIds));
+  const supplierMasterById = new Map(supplierMasters.map((supplier) => [supplier.id, supplier]));
 
-  // Get voucher entries for each supplier (matching supplier page calculation)
-  const supplierBalances = await Promise.all(
-    suppliersWithBalances.map(async (supplier) => {
-      const entries = await db
-        .select({
-          debitAmount: schema.voucherEntries.debitAmount,
-          creditAmount: schema.voucherEntries.creditAmount,
-        })
-        .from(schema.voucherEntries)
-        .innerJoin(schema.vouchers, eq(schema.voucherEntries.voucherId, schema.vouchers.id))
-        .where(
-          and(
-            eq(schema.voucherEntries.supplierId, supplier.id),
-            eq(schema.vouchers.companyId, companyId),
-            eq(schema.vouchers.optional, false),
-            isNull(schema.vouchers.deletedAt)
-          )
-        );
-
-      // Calculate balance same as supplier page: Opening Balance + Credits - Debits
-      const openingBalance = parseFloat(supplier.openingBalance || "0");
-      const balance = entries.reduce((sum, entry) => {
-        const credit = parseFloat(entry.creditAmount || "0");
-        const debit = parseFloat(entry.debitAmount || "0");
-        return sum + (credit - debit);
-      }, openingBalance);
-
+  const filteredSupplierBalances = supplierEngine.parties
+    .filter((party) => party.id !== null && !party.deleted)
+    .filter((party) => supplierMasterById.get(party.id!)?.active !== false)
+    .map((party) => {
+      const master = supplierMasterById.get(party.id!);
+      const balance = toMoney(party.closing).negated(); // Cr positive: we owe the supplier
       return {
-        supplierId: supplier.id,
-        supplierCode: supplier.code,
-        supplierName: supplier.legalName || "Unknown",
-        openingBalance: openingBalance,
-        balance: balance,
-        status: balance > 0 ? "PAYABLE" : balance < 0 ? "OVERPAID" : "SETTLED",
+        supplierId: party.id!,
+        supplierCode: master?.code ?? party.code ?? "",
+        supplierName: master?.legalName || party.name || "Unknown",
+        openingBalance: toMoney(party.masterOpening).negated().toNumber(),
+        balance: balance.toNumber(),
+        exact: balance,
+        status: balance.greaterThan(0) ? "PAYABLE" : balance.isNegative() ? "OVERPAID" : "SETTLED",
       };
     })
-  );
+    .filter((supplier) => supplier.exact.abs().greaterThan(0.01));
 
-  // Filter to only show suppliers with non-zero balances
-  const filteredSupplierBalances = supplierBalances.filter((sb) => Math.abs(sb.balance) > 0.01);
-
-  let customerBalancesList: Array<{
-    customerId: number;
-    customerName: string;
-    balance: number;
-  }> = [];
-  try {
-    const customerBalancesRaw = await db
-      .select({
-        customerId: schema.customerBalances.customerId,
-        totalDebit: sql<string>`COALESCE(SUM(CAST(${schema.customerBalances.debitAmount} AS NUMERIC)), 0)`,
-        totalCredit: sql<string>`COALESCE(SUM(CAST(${schema.customerBalances.creditAmount} AS NUMERIC)), 0)`,
-      })
-      .from(schema.customerBalances)
-      .where(eq(schema.customerBalances.companyId, companyId))
-      .groupBy(schema.customerBalances.customerId);
-
-    customerBalancesList = customerBalancesRaw
-      .map((cb) => {
-        const customer = customers.find((c) => c.id === cb.customerId);
-        const balance = parseFloat(cb.totalDebit) - parseFloat(cb.totalCredit);
-        return {
-          customerId: cb.customerId,
-          customerName: customer?.legalName || "Unknown",
-          balance: balance,
-        };
-      })
-      .filter((cb) => Math.abs(cb.balance) > 0.01);
-  } catch (error) {
-    logger.error("Error fetching customer balances:", { error: error });
-  }
+  const customerRows = customerEngine.parties
+    .filter((party) => party.id !== null && !party.deleted)
+    .map((party) => ({
+      customerId: party.id!,
+      customerName: customers.find((customer) => customer.id === party.id)?.legalName || party.name || "Unknown",
+      exact: toMoney(party.closing),
+      memo: toMoney(party.memoTotal),
+    }));
+  const customerBalancesList = customerRows
+    .filter((customer) => customer.exact.abs().greaterThan(0.01))
+    .map((customer) => ({
+      customerId: customer.customerId,
+      customerName: customer.customerName,
+      balance: customer.exact.toNumber(),
+    }));
 
   const financialSummary = {
-    totalPayables: filteredSupplierBalances.filter((s) => s.balance > 0).reduce((sum, s) => sum + s.balance, 0),
-    totalReceivables: customerBalancesList.filter((c) => c.balance > 0).reduce((sum, c) => sum + c.balance, 0),
+    totalPayables: sumMoney(
+      filteredSupplierBalances.filter((supplier) => supplier.exact.greaterThan(0)).map((supplier) => supplier.exact)
+    ).toNumber(),
+    totalReceivables: sumMoney(
+      customerRows.filter((customer) => customer.exact.greaterThan(0)).map((customer) => customer.exact)
+    ).toNumber(),
+    // Receivables not yet in the ledger (factory invoices before the cut-over,
+    // factory POS credit sales, cache-only rows): shown apart, never in the total.
+    receivablesNotInLedger: sumMoney(customerRows.map((customer) => customer.memo)).toNumber(),
     openPurchaseOrders: purchaseOrders.filter((po) => po.status === "Open").length,
     pendingContainerSales: containerSales.filter((cs) => cs.paymentStatus !== "PAID").length,
   };
@@ -607,7 +591,7 @@ export async function getERPContext(companyId: number) {
     return {
       locationId: inv.locationId,
       locationName: location?.name || "Unknown",
-      totalValue: parseFloat(inv.totalValue),
+      totalValue: toMoney(inv.totalValue).toNumber(),
       itemCount: inv.itemCount,
     };
   });
@@ -629,16 +613,16 @@ export async function getERPContext(companyId: number) {
   const topSellingWithNames = topSellingItems.map((item) => {
     const stockItem = stockItems.find((s) => s.id === item.stockItemId);
     const profitMargin =
-      parseFloat(item.totalRevenue) > 0
-        ? ((parseFloat(item.totalProfit) / parseFloat(item.totalRevenue)) * 100).toFixed(1)
+      toMoney(item.totalRevenue).toNumber() > 0
+        ? ((toMoney(item.totalProfit).toNumber() / toMoney(item.totalRevenue).toNumber()) * 100).toFixed(1)
         : "0";
     return {
       itemId: item.stockItemId,
       itemName: stockItem?.name || "Unknown",
       itemCode: stockItem?.code || "N/A",
-      totalQuantity: parseFloat(item.totalQuantity).toFixed(2),
-      totalRevenue: parseFloat(item.totalRevenue).toFixed(2),
-      totalProfit: parseFloat(item.totalProfit).toFixed(2),
+      totalQuantity: toMoney(item.totalQuantity).toFixed(2),
+      totalRevenue: toMoney(item.totalRevenue).toFixed(2),
+      totalProfit: toMoney(item.totalProfit).toFixed(2),
       profitMargin: profitMargin + "%",
     };
   });
@@ -674,13 +658,13 @@ export async function getERPContext(companyId: number) {
 
   const slowMovingStock = stockItems
     .filter((item) => {
-      const qty = parseFloat(inventoryMap.get(item.id)?.quantity || "0");
+      const qty = toMoney(inventoryMap.get(item.id)?.quantity).toNumber();
       return qty > 0 && !recentlySoldItemIds.has(item.id);
     })
     .map((item) => {
-      const qty = parseFloat(inventoryMap.get(item.id)?.quantity || "0");
+      const qty = toMoney(inventoryMap.get(item.id)?.quantity).toNumber();
       const invRecord = inventory.find((i) => i.stockItemId === item.id);
-      const value = invRecord ? parseFloat(invRecord.totalValue || "0") : 0;
+      const value = invRecord ? toMoney(invRecord.totalValue).toNumber() : 0;
       return {
         itemId: item.id,
         itemCode: item.code,
@@ -715,7 +699,7 @@ export async function getERPContext(companyId: number) {
       return {
         poNumber: po.poNumber,
         supplierName: supplier?.legalName || "Unknown",
-        amount: parseFloat(po.itemsTotal || "0") + parseFloat(po.freight || "0"),
+        amount: toMoney(po.itemsTotal).plus(toMoney(po.freight)).toNumber(),
         daysInTransit,
         status: "OVERDUE",
       };
@@ -730,7 +714,7 @@ export async function getERPContext(companyId: number) {
       return {
         poNumber: po.poNumber,
         supplierName: supplier?.legalName || "Unknown",
-        amount: parseFloat(po.itemsTotal || "0") + parseFloat(po.freight || "0"),
+        amount: toMoney(po.itemsTotal).plus(toMoney(po.freight)).toNumber(),
         daysInTransit,
         isOverdue: daysInTransit > 90,
       };
@@ -754,8 +738,8 @@ export async function getERPContext(companyId: number) {
       employeeId: emp.id,
       employeeCode: emp.code,
       employeeName: `${emp.firstName} ${emp.lastName}`,
-      balance: parseFloat(emp.currentBalance || "0"),
-      openingBalance: parseFloat(emp.openingBalance || "0"),
+      balance: toMoney(emp.currentBalance).toNumber(),
+      openingBalance: toMoney(emp.openingBalance).toNumber(),
     }))
     .filter((e) => Math.abs(e.balance) > 0.01);
 
@@ -768,9 +752,9 @@ export async function getERPContext(companyId: number) {
       return {
         locationName: location?.name || "Unknown",
         locationCode: location?.code || "",
-        quantity: parseFloat(inv.quantity || "0"),
-        averageRate: parseFloat(inv.averageRate || "0"),
-        totalValue: parseFloat(inv.totalValue || "0"),
+        quantity: toMoney(inv.quantity).toNumber(),
+        averageRate: toMoney(inv.averageRate).toNumber(),
+        totalValue: toMoney(inv.totalValue).toNumber(),
       };
     });
     const totalQuantity = inventoryByLocation.reduce((sum, l) => sum + l.quantity, 0);
@@ -780,8 +764,8 @@ export async function getERPContext(companyId: number) {
       code: item.code,
       name: item.name,
       groupName: stockGroup?.name || "",
-      sellingPrice: parseFloat(item.sellingPrice || "0"),
-      reorderLevel: parseFloat(item.reorderLevel || "0"),
+      sellingPrice: toMoney(item.sellingPrice).toNumber(),
+      reorderLevel: toMoney(item.reorderLevel).toNumber(),
       totalQuantity,
       totalValue,
       locations: inventoryByLocation.filter((l) => l.quantity > 0),
@@ -814,10 +798,10 @@ export async function getERPContext(companyId: number) {
       itemCode: item?.code || "Unknown",
       itemName: item?.name || "Unknown",
       locationName: location?.name || "Unknown",
-      quantity: parseFloat(sale.quantity || "0"),
-      sellingPrice: parseFloat(sale.sellingPrice || "0"),
-      totalSales: parseFloat(sale.totalSales || "0"),
-      profit: parseFloat(sale.profit || "0"),
+      quantity: toMoney(sale.quantity).toNumber(),
+      sellingPrice: toMoney(sale.sellingPrice).toNumber(),
+      totalSales: toMoney(sale.totalSales).toNumber(),
+      profit: toMoney(sale.profit).toNumber(),
       date: sale.voucherDate,
       voucherNumber: sale.voucherNumber,
     };
@@ -838,7 +822,7 @@ export async function getERPContext(companyId: number) {
     todaysSales,
     thisMonthSales,
     lowStockAlerts,
-    supplierBalances: filteredSupplierBalances,
+    supplierBalances: filteredSupplierBalances.map(({ exact: _exact, ...supplier }) => supplier),
     customerBalances: customerBalancesList,
     purchaseOrders,
     containerSales,

@@ -114,7 +114,7 @@ export function AdjustmentSpreadsheet({ model }: { model: StockAdjustmentFormMod
                       }
                     }}
                     placeholder="p/c"
-                    className="w-full h-full px-3 bg-transparent outline-none focus:bg-accent/20 text-sm"
+                    className="w-full h-full px-3 bg-transparent outline-hidden focus:bg-accent/20 text-sm"
                     data-testid={`input-adjustment-type-${index}`}
                   />
                 </div>
@@ -206,7 +206,7 @@ export function AdjustmentSpreadsheet({ model }: { model: StockAdjustmentFormMod
                       }
                     }}
                     placeholder="Type to search..."
-                    className="w-full h-full px-3 bg-transparent outline-none focus:bg-accent/20"
+                    className="w-full h-full px-3 bg-transparent outline-hidden focus:bg-accent/20"
                     data-testid={`input-adjustment-item-${index}`}
                   />
                 </div>
@@ -244,7 +244,7 @@ export function AdjustmentSpreadsheet({ model }: { model: StockAdjustmentFormMod
                       }
                     }}
                     placeholder="0"
-                    className="w-full h-full px-3 bg-transparent outline-none focus:bg-accent/20 font-mono text-right"
+                    className="w-full h-full px-3 bg-transparent outline-hidden focus:bg-accent/20 font-mono text-right"
                     data-testid={`input-adjustment-qty-${index}`}
                   />
                 </div>
@@ -293,7 +293,7 @@ export function AdjustmentSpreadsheet({ model }: { model: StockAdjustmentFormMod
                       }
                     }}
                     placeholder="0"
-                    className="w-full h-full px-3 bg-transparent outline-none focus:bg-accent/20 font-mono text-right"
+                    className="w-full h-full px-3 bg-transparent outline-hidden focus:bg-accent/20 font-mono text-right"
                     data-testid={`input-adjustment-rate-${index}`}
                   />
                 </div>

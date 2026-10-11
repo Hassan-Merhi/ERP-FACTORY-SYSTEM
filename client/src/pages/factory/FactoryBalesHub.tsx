@@ -63,7 +63,7 @@ export default function FactoryBalesHub() {
             showBackButton={false}
           />
         </div>
-        <div className="flex flex-shrink-0 items-end justify-between gap-4 overflow-x-auto border-b px-4">
+        <div className="flex shrink-0 items-end justify-between gap-4 overflow-x-auto border-b px-4">
           <TabsList className="flex-nowrap">
             {show("history") && (
               <TabsTrigger value="history" data-testid="tab-bales-history">

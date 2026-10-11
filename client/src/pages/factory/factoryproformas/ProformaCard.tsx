@@ -126,7 +126,7 @@ export function ProformaCard(props: ProformaCardProps) {
   return (
     <div
       data-testid={`card-proforma-${proforma.id}`}
-      className={`rounded-lg border bg-card transition-shadow ${isExpanded ? "shadow-sm" : ""} ${!proforma.isActive ? "opacity-60" : ""}`}
+      className={`rounded-lg border bg-card transition-shadow ${isExpanded ? "shadow-xs" : ""} ${!proforma.isActive ? "opacity-60" : ""}`}
     >
       {/* Card header row */}
       <div className="flex items-center gap-2 px-4 py-3">

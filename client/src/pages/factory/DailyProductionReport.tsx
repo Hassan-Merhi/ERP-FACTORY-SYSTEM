@@ -50,14 +50,14 @@ export default function DailyProductionReport() {
     key: "tab",
     allowedValues: visibleTabs,
     knownValues: OVERVIEW_TABS,
-    defaultValue: visibleTabs.includes("production") ? "production" : visibleTabs[0] ?? "production",
+    defaultValue: visibleTabs.includes("production") ? "production" : (visibleTabs[0] ?? "production"),
   });
 
   const show = (tab: OverviewTab) => visibleTabs.includes(tab);
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
-      <div className="px-4 pt-4 pb-3 border-b flex-shrink-0">
+      <div className="px-4 pt-4 pb-3 border-b shrink-0">
         <PageHeader title="Overview" subtitle="Manufacturing overview — output metrics &amp; bale lifecycle" />
       </div>
 
@@ -69,7 +69,7 @@ export default function DailyProductionReport() {
           onValueChange={(value) => setActiveTab(value as OverviewTab)}
           className="flex flex-col flex-1 overflow-hidden"
         >
-          <TabsList className="mx-4 mt-3 mb-0 flex-shrink-0 w-fit" data-testid="tabs-production-analytics">
+          <TabsList className="mx-4 mt-3 mb-0 shrink-0 w-fit" data-testid="tabs-production-analytics">
             {show("otw-tracking") && (
               <TabsTrigger value="otw-tracking" data-testid="tab-otw-tracking">
                 <Truck className="h-4 w-4 mr-1.5" /> OTW Tracking
@@ -120,7 +120,6 @@ export default function DailyProductionReport() {
             </TabsContent>
           )}
 
-
           {show("product-comparison") && (
             <TabsContent
               value="product-comparison"
@@ -143,7 +142,10 @@ export default function DailyProductionReport() {
           )}
 
           {show("sheets") && (
-            <TabsContent value="sheets" className="flex-1 overflow-hidden flex flex-col mt-0 data-[state=inactive]:hidden">
+            <TabsContent
+              value="sheets"
+              className="flex-1 overflow-hidden flex flex-col mt-0 data-[state=inactive]:hidden"
+            >
               <FactoryStatusBuilder />
             </TabsContent>
           )}

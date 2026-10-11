@@ -52,7 +52,7 @@ export default function FactoryPartiesHub() {
             showBackButton={false}
           />
         </div>
-        <div className="border-b px-4 flex-shrink-0 overflow-x-auto">
+        <div className="border-b px-4 shrink-0 overflow-x-auto">
           <TabsList className="flex-nowrap">
             {showCustomers && (
               <TabsTrigger value="customers" data-testid="tab-parties-customers">

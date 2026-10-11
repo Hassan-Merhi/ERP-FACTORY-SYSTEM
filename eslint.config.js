@@ -15,7 +15,6 @@ export default tseslint.config(
       "vite.config.ts",
       "server/vite.ts",
       "postcss.config.js",
-      "tailwind.config.ts",
       "capacitor.config.ts",
       "scripts/**",
       "*.js",

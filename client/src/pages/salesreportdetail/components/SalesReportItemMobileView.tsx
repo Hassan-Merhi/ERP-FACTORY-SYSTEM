@@ -122,7 +122,7 @@ export function SalesReportItemMobileView(props: SalesReportItemMobileViewProps)
                                 (() => {
                                   const color = locationColorMap.get(loc.locationKey);
                                   return color ? (
-                                    <span className={`inline-block h-2 w-2 rounded-full flex-shrink-0 ${color.dot}`} />
+                                    <span className={`inline-block h-2 w-2 rounded-full shrink-0 ${color.dot}`} />
                                   ) : null;
                                 })()}
                               <span
@@ -132,7 +132,7 @@ export function SalesReportItemMobileView(props: SalesReportItemMobileViewProps)
                               </span>
                               {multipleLocations ? (
                                 <span
-                                  className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-normal ${locationColorMap.get(loc.locationKey)?.badge ?? ""}`}
+                                  className={`inline-flex items-center px-1.5 py-0.5 rounded-sm text-xs font-normal ${locationColorMap.get(loc.locationKey)?.badge ?? ""}`}
                                 >
                                   {loc.items.length} sale{loc.items.length !== 1 ? "s" : ""}
                                 </span>

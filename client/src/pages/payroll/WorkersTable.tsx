@@ -168,7 +168,7 @@ export function WorkersTable({
                 data-testid={`card-worker-${worker.id}`}
                 className={cn(
                   "grid grid-cols-[44px_minmax(220px,1.5fr)_110px_110px_110px_145px_150px] items-center gap-3 px-4 py-3 transition-colors hover:bg-muted/20",
-                  isSelected && "bg-primary/[0.04]"
+                  isSelected && "bg-primary/4"
                 )}
               >
                 <Checkbox
@@ -255,7 +255,7 @@ export function WorkersTable({
           return (
             <div
               key={worker.id}
-              className={cn("space-y-4 p-4", isSelected && "bg-primary/[0.04]")}
+              className={cn("space-y-4 p-4", isSelected && "bg-primary/4")}
               data-testid={`card-worker-mobile-${worker.id}`}
             >
               <div className="flex items-start gap-3">
@@ -272,7 +272,7 @@ export function WorkersTable({
                   <button
                     type="button"
                     onClick={() => setStatementEmployee(worker)}
-                    className="block max-w-full break-words text-left font-semibold hover:underline"
+                    className="block max-w-full wrap-break-word text-left font-semibold hover:underline"
                   >
                     {[worker.firstName, worker.lastName].filter(Boolean).join(" ")}
                   </button>

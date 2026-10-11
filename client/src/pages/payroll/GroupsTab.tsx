@@ -149,19 +149,19 @@ export function GroupsTab() {
                   </div>
                   <div className="ml-2 flex items-center gap-1.5">
                     {workerMembers.length > 0 && (
-                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-primary/10 text-primary">
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-sm text-xs font-medium bg-primary/10 text-primary">
                         <HardHat className="h-3 w-3 mr-1" />
                         {workerMembers.length} workers
                       </span>
                     )}
                     {employeeMembers.length > 0 && (
-                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-500/10 text-blue-600 dark:text-blue-400">
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-sm text-xs font-medium bg-blue-500/10 text-blue-600 dark:text-blue-400">
                         <Briefcase className="h-3 w-3 mr-1" />
                         {employeeMembers.length} employees
                       </span>
                     )}
                     {group.members.length === 0 && (
-                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-muted text-muted-foreground">
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-sm text-xs font-medium bg-muted text-muted-foreground">
                         0 members
                       </span>
                     )}

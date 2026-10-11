@@ -147,7 +147,7 @@ export function WorkersTab({
   return (
     <div className="space-y-5 pt-3">
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <Card className="border-border/70 bg-card/70 p-4 shadow-sm">
+        <Card className="border-border/70 bg-card/70 p-4 shadow-xs">
           <div className="flex items-center justify-between gap-3">
             <div>
               <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Total workers</p>
@@ -159,7 +159,7 @@ export function WorkersTab({
           </div>
         </Card>
 
-        <Card className="border-border/70 bg-card/70 p-4 shadow-sm">
+        <Card className="border-border/70 bg-card/70 p-4 shadow-xs">
           <div className="flex items-center justify-between gap-3">
             <div>
               <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Active workers</p>
@@ -171,7 +171,7 @@ export function WorkersTab({
           </div>
         </Card>
 
-        <Card className="border-border/70 bg-card/70 p-4 shadow-sm">
+        <Card className="border-border/70 bg-card/70 p-4 shadow-xs">
           <div className="flex items-center justify-between gap-3">
             <div>
               <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Worker groups</p>
@@ -183,7 +183,7 @@ export function WorkersTab({
           </div>
         </Card>
 
-        <Card className="border-border/70 bg-card/70 p-4 shadow-sm">
+        <Card className="border-border/70 bg-card/70 p-4 shadow-xs">
           <div className="flex items-center justify-between gap-3">
             <div>
               <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Selected to pay</p>
@@ -197,7 +197,7 @@ export function WorkersTab({
         </Card>
       </div>
 
-      <Card className="border-border/70 bg-card/60 p-3 shadow-sm">
+      <Card className="border-border/70 bg-card/60 p-3 shadow-xs">
         <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
           <div className="flex min-w-0 flex-1 flex-col gap-2 sm:flex-row sm:items-center">
             <div className="relative min-w-0 flex-1 sm:max-w-md">
@@ -325,7 +325,7 @@ export function WorkersTab({
             }, 0);
 
             return (
-              <section key={group.id} className="overflow-hidden rounded-2xl border border-border/70 bg-card shadow-sm">
+              <section key={group.id} className="overflow-hidden rounded-2xl border border-border/70 bg-card shadow-xs">
                 <div className="flex flex-col gap-3 border-b bg-muted/20 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
@@ -387,7 +387,7 @@ export function WorkersTab({
           })}
 
           {filteredUngroupedWorkers.length > 0 && (
-            <section className="overflow-hidden rounded-2xl border border-border/70 bg-card shadow-sm">
+            <section className="overflow-hidden rounded-2xl border border-border/70 bg-card shadow-xs">
               <div className="border-b bg-muted/20 px-4 py-4">
                 <div className="flex flex-wrap items-center gap-2">
                   <h3 className="font-semibold tracking-tight">Ungrouped Workers</h3>

@@ -106,7 +106,7 @@ export function RunRow({ run }: { run: BackupRun }) {
       </div>
 
       {isFailed && (run.emailError || run.whatsappError || run.skippedReason) && (
-        <div className="mt-1 p-2 rounded bg-destructive/10 text-destructive border border-destructive/20 flex items-start gap-2">
+        <div className="mt-1 p-2 rounded-sm bg-destructive/10 text-destructive border border-destructive/20 flex items-start gap-2">
           <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
           <div className="space-y-0.5">
             {run.emailError && <p>Email: {run.emailError}</p>}

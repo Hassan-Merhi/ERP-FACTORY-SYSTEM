@@ -183,7 +183,7 @@ export default function CustomerLogosSettings() {
                     <img
                       src={`/api/factory/customer-logos/${logo.id}/image`}
                       alt={logo.name}
-                      className="h-12 w-20 object-contain rounded shrink-0"
+                      className="h-12 w-20 object-contain rounded-sm shrink-0"
                     />
                     {renamingId === logo.id ? (
                       <div className="flex items-center gap-2 flex-1 flex-wrap">

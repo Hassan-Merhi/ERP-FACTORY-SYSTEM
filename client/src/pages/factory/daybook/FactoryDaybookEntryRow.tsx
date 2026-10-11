@@ -98,7 +98,7 @@ export function FactoryDaybookEntryRow({
       <div className="min-w-0 basis-full py-2 pl-8 pr-3 sm:basis-auto sm:pl-14 sm:pr-2">
         <div className="flex items-center gap-1.5 min-w-0">
           <span
-            className="min-w-0 break-words text-sm text-foreground sm:truncate"
+            className="min-w-0 wrap-break-word text-sm text-foreground sm:truncate"
             title={formatDaybookDescription(entry)}
           >
             {formatDaybookDescription(entry)}

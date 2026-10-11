@@ -140,7 +140,7 @@ export function SupplierProfitCheckSetup({ model }: { model: ProfitModel }) {
       <div className="rounded-xl border bg-card overflow-hidden">
         <div className="px-5 py-4 space-y-4">
           {/* Phones: one full-width control per row. */}
-          <div className="flex flex-wrap gap-4 items-end max-sm:flex-col max-sm:items-stretch max-sm:gap-3 max-sm:[&_[role=combobox]]:w-full max-sm:[&_button]:w-full">
+          <div className="flex flex-wrap gap-4 items-end max-sm:flex-col max-sm:items-stretch max-sm:gap-3 max-sm:**:[[role=combobox]]:w-full max-sm:[&_button]:w-full">
             <div className="space-y-1.5 min-w-[180px] flex-1">
               <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
                 Supplier

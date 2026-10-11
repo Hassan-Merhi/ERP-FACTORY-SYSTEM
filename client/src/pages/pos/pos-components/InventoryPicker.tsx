@@ -47,7 +47,7 @@ export function InventoryPicker({
         >
           <Search className={`text-muted-foreground shrink-0 ${mobile ? "h-5 w-5" : "h-4 w-4"}`} />
           <input
-            className={`flex-1 bg-transparent outline-none placeholder:text-muted-foreground ${mobile ? "text-base" : "text-sm"}`}
+            className={`flex-1 bg-transparent outline-hidden placeholder:text-muted-foreground ${mobile ? "text-base" : "text-sm"}`}
             placeholder="Scan barcode or search..."
             value={localSearch}
             onChange={(e) => setLocalSearch(e.target.value)}

@@ -399,7 +399,7 @@ export function EmployeeCrudDialogs({
             {(employeeStaff || []).map((worker) => {
               const isMember = groupMembers.some((m) => m.id === worker.id);
               return (
-                <div key={worker.id} className="flex items-center gap-2 p-2 rounded border">
+                <div key={worker.id} className="flex items-center gap-2 p-2 rounded-sm border">
                   <Checkbox
                     id={`worker-${worker.id}`}
                     checked={isMember}

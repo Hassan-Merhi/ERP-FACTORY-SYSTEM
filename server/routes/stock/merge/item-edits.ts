@@ -4,11 +4,13 @@
  * Registered by ./index.ts in the original order; Express resolves
  * first-match, so that order is behaviour.
  */
+import { db } from "../../../db";
 import type { Express } from "express";
-import { getErrorMessage } from "../../../lib/httpHandlers";
+import { getErrorMessage, HttpError } from "../../../lib/httpHandlers";
 import { storage } from "../../../storage";
 import { requireAuth } from "../../../auth";
 import { logAudit } from "../../_helpers";
+import { parseMoneyInput } from "../../../lib/money";
 
 export function registerStockItemEditRoutes(app: Express) {
   // Update stock transfer item
@@ -25,13 +27,13 @@ export function registerStockItemEditRoutes(app: Express) {
 
       // Validate numeric fields if provided
       if (req.body.quantity !== undefined) {
-        const qty = parseFloat(req.body.quantity);
+        const qty = parseMoneyInput(req.body.quantity)?.toNumber() ?? NaN;
         if (isNaN(qty)) {
           return res.status(400).json({ message: "Quantity must be a valid number" });
         }
       }
       if (req.body.rate !== undefined) {
-        const rate = parseFloat(req.body.rate);
+        const rate = parseMoneyInput(req.body.rate)?.toNumber() ?? NaN;
         if (isNaN(rate) || rate < 0) {
           return res.status(400).json({ message: "Rate must be a valid non-negative number" });
         }
@@ -43,28 +45,31 @@ export function registerStockItemEditRoutes(app: Express) {
         }
       }
 
-      const updated = await storage.updateStockTransferItem(itemId, req.body);
-      try {
+      // Phase 21 (B): the write and its audit commit together.
+      const updated = await db.transaction(async (tx) => {
+        const written = await storage.updateStockTransferItem(itemId, req.body, req.session.currentCompanyId, tx);
         const _sti: Record<string, { new: string }> = {};
         if (req.body.quantity !== undefined) _sti.quantity = { new: String(req.body.quantity) };
         if (req.body.rate !== undefined) _sti.rate = { new: String(req.body.rate) };
         if (req.body.stockItemId !== undefined) _sti.stockItemId = { new: String(req.body.stockItemId) };
-        await logAudit({
-          userId: req.session.userId!,
-          username: req.session.username || "unknown",
-          companyId: req.session.currentCompanyId!,
-          action: "update",
-          tableName: "stock_transfer_items",
-          recordId: itemId,
-          recordIdentifier: `Transfer item #${itemId}`,
-          changes: _sti,
-        });
-      } catch {
-        /* non-fatal */
-      }
+        await logAudit(
+          {
+            userId: req.session.userId!,
+            username: req.session.username || "unknown",
+            companyId: req.session.currentCompanyId!,
+            action: "update",
+            tableName: "stock_transfer_items",
+            recordId: itemId,
+            recordIdentifier: `Transfer item #${itemId}`,
+            changes: _sti,
+          },
+          tx
+        );
+        return written;
+      });
       res.json(updated);
     } catch (error: unknown) {
-      res.status(500).json({ message: getErrorMessage(error) });
+      res.status(error instanceof HttpError ? error.statusCode : 500).json({ message: getErrorMessage(error) });
     }
   });
 
@@ -82,13 +87,13 @@ export function registerStockItemEditRoutes(app: Express) {
 
       // Validate numeric fields if provided
       if (req.body.quantity !== undefined) {
-        const qty = parseFloat(req.body.quantity);
+        const qty = parseMoneyInput(req.body.quantity)?.toNumber() ?? NaN;
         if (isNaN(qty)) {
           return res.status(400).json({ message: "Quantity must be a valid number" });
         }
       }
       if (req.body.rate !== undefined) {
-        const rate = parseFloat(req.body.rate);
+        const rate = parseMoneyInput(req.body.rate)?.toNumber() ?? NaN;
         if (isNaN(rate) || rate < 0) {
           return res.status(400).json({ message: "Rate must be a valid non-negative number" });
         }
@@ -100,10 +105,10 @@ export function registerStockItemEditRoutes(app: Express) {
         }
       }
 
-      const updated = await storage.updateStockAdjustmentItem(itemId, req.body);
+      const updated = await storage.updateStockAdjustmentItem(itemId, req.body, req.session.currentCompanyId);
       res.json(updated);
     } catch (error: unknown) {
-      res.status(500).json({ message: getErrorMessage(error) });
+      res.status(error instanceof HttpError ? error.statusCode : 500).json({ message: getErrorMessage(error) });
     }
   });
 }

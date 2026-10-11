@@ -95,7 +95,7 @@ export function FactoryPendingInvoiceVerifyDialog7({ model }: { model: Model }) 
               />
               <p className="text-xs text-muted-foreground">
                 SQL to find available bales:
-                <code className="block mt-1 p-2 bg-muted rounded text-xs whitespace-pre-wrap">
+                <code className="block mt-1 p-2 bg-muted rounded-sm text-xs whitespace-pre-wrap">
                   {`SELECT reference_number, article_code, status\nFROM factory_bales\nWHERE status IN ('SOLD','RESERVED_FOR_ORDER','IN_STOCK')\nAND NOT EXISTS (\n  SELECT 1 FROM customer_order_bales cob\n  WHERE cob.bale_id = factory_bales.id\n)\nORDER BY updated_at DESC;`}
                 </code>
               </p>

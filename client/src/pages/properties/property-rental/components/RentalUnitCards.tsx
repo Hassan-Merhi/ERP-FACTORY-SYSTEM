@@ -90,7 +90,7 @@ function RentalUnitCard({
       title={
         <span className="flex min-w-0 flex-wrap items-baseline gap-x-2">
           <span className="font-mono">{unit.unitNumber}</span>
-          <span className="min-w-0 break-words font-medium">{contract ? contract.tenantName : null}</span>
+          <span className="min-w-0 wrap-break-word font-medium">{contract ? contract.tenantName : null}</span>
         </span>
       }
       subtitle={dimensions || undefined}

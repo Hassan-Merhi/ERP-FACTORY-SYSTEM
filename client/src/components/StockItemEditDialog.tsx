@@ -302,7 +302,7 @@ export function StockItemEditDialog({ open, onOpenChange, stockItemId }: StockIt
             <AlertDialogDescription>
               Are you sure you want to delete this stock item? This action cannot be undone.
               {stockItem && (
-                <div className="mt-2 p-2 bg-muted rounded text-sm">
+                <div className="mt-2 p-2 bg-muted rounded-sm text-sm">
                   <strong>{stockItem.code}</strong> - {stockItem.name}
                 </div>
               )}

@@ -85,7 +85,7 @@ export function exactMonthlyPay(salary: Decimal, startStr: string, endStr: strin
 export function exactMonthlyPayFromAttendance(
   salary: Decimal,
   periodStart: string,
-  attendance: readonly { status: string | null }[]
+  attendance: readonly { status?: string | null }[]
 ): Decimal {
   let attendedDays = 0;
   for (const row of attendance) {

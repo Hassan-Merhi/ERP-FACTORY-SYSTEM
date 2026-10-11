@@ -101,7 +101,7 @@ export function EmployeesTab({
   return (
     <div className="space-y-4 py-1">
       <div className="grid gap-3 md:grid-cols-3">
-        <div className="rounded-xl border bg-card p-4 shadow-sm">
+        <div className="rounded-xl border bg-card p-4 shadow-xs">
           <div className="flex items-center justify-between gap-3">
             <div>
               <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Employees</p>
@@ -112,7 +112,7 @@ export function EmployeesTab({
             </div>
           </div>
         </div>
-        <div className="rounded-xl border bg-card p-4 shadow-sm">
+        <div className="rounded-xl border bg-card p-4 shadow-xs">
           <div className="flex items-center justify-between gap-3">
             <div>
               <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Active</p>
@@ -123,7 +123,7 @@ export function EmployeesTab({
             </div>
           </div>
         </div>
-        <div className="rounded-xl border bg-card p-4 shadow-sm">
+        <div className="rounded-xl border bg-card p-4 shadow-xs">
           <div className="flex items-center justify-between gap-3">
             <div className="min-w-0">
               <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Monthly payroll</p>
@@ -136,7 +136,7 @@ export function EmployeesTab({
         </div>
       </div>
 
-      <div className="rounded-xl border bg-card shadow-sm">
+      <div className="rounded-xl border bg-card shadow-xs">
         <div className="flex flex-col gap-3 border-b p-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="relative min-w-0 flex-1 lg:max-w-xl">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -157,7 +157,7 @@ export function EmployeesTab({
                   size="sm"
                   variant="ghost"
                   className={`h-8 rounded-md px-3 ${
-                    empStatusFilter === status ? "bg-background shadow-sm hover:bg-background" : "text-muted-foreground"
+                    empStatusFilter === status ? "bg-background shadow-xs hover:bg-background" : "text-muted-foreground"
                   }`}
                   onClick={() => setEmpStatusFilter(status)}
                   data-testid={`button-emp-filter-${status.toLowerCase()}`}

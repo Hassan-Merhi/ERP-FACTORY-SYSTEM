@@ -99,7 +99,7 @@ export function FactoryLocationInventoryProductFooterDialogs({
   return (
     <>
       {proformaMode && selections.size > 0 && (
-        <div className="fixed bottom-0 left-0 right-0 z-50 border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 px-4 py-3 shadow-lg">
+        <div className="fixed bottom-0 left-0 right-0 z-50 border-t bg-background/95 backdrop-blur-sm supports-backdrop-filter:bg-background/80 px-4 py-3 shadow-lg">
           <div className="max-w-6xl mx-auto flex items-center justify-between gap-3 flex-wrap">
             <div className="flex items-center gap-3 flex-wrap">
               <Badge variant="secondary" className="text-sm">
@@ -209,7 +209,7 @@ export function FactoryLocationInventoryProductFooterDialogs({
                 data-testid={`button-inv-design-${option.value}`}
               >
                 <span
-                  className="inline-block h-2.5 w-2.5 rounded-full mr-2 flex-shrink-0 border border-border/50"
+                  className="inline-block h-2.5 w-2.5 rounded-full mr-2 shrink-0 border border-border/50"
                   style={{ background: option.color }}
                 />
                 {option.label}

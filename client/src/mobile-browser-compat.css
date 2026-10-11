@@ -6,313 +6,324 @@
  * hundreds of feature components. Keep desktop layout behavior unchanged. Selectors stay within
  * the documented Firefox 110+ baseline (no :has()).
  */
-:root {
-  --app-viewport-height: 100vh;
-  --safe-area-top: env(safe-area-inset-top, 0px);
-  --safe-area-right: env(safe-area-inset-right, 0px);
-  --safe-area-bottom: env(safe-area-inset-bottom, 0px);
-  --safe-area-left: env(safe-area-inset-left, 0px);
-  --mobile-control-min-height: 2.75rem;
-}
+/*
+ * Cascade layer: Tailwind v4 emits its utilities inside `@layer utilities`, and unlayered CSS beats
+ * any layered rule whatever its specificity. This file joins the same layer so, as before the
+ * upgrade, specificity and source order decide between these rules and utility classes. The
+ * layer order is restated first because a document orders layers by first mention, and this
+ * file may load before index.css.
+ */
+@layer theme, base, components, utilities;
 
-@supports (height: 100svh) {
+@layer utilities {
   :root {
-    --app-viewport-height: 100svh;
-  }
-}
-
-@supports (height: 100dvh) {
-  :root {
-    --app-viewport-height: 100dvh;
-  }
-}
-
-html {
-  width: 100%;
-  max-width: 100%;
-  overflow-x: clip;
-  -webkit-text-size-adjust: 100%;
-  text-size-adjust: 100%;
-}
-
-body,
-#root {
-  width: 100%;
-  max-width: 100%;
-  min-width: 0;
-  min-height: var(--app-viewport-height);
-}
-
-body {
-  overflow-x: hidden;
-  overscroll-behavior-x: none;
-}
-
-[data-slot="sidebar-wrapper"],
-[data-slot="sidebar-container"] {
-  height: var(--app-viewport-height);
-  max-height: var(--app-viewport-height);
-}
-
-[data-slot="sidebar-wrapper"],
-#main-content,
-#main-content > * {
-  min-width: 0;
-  max-width: 100%;
-}
-
-#main-content {
-  -webkit-overflow-scrolling: touch;
-  scroll-padding-block: 1rem;
-  scrollbar-gutter: stable;
-}
-
-#main-content :where(form, fieldset, [role="group"], [role="search"]) {
-  min-width: 0;
-  max-width: 100%;
-}
-
-#main-content :where(img, video) {
-  max-width: 100%;
-  height: auto;
-}
-
-#main-content :where(svg) {
-  max-width: 100%;
-}
-
-#main-content :where(.overflow-x-auto, .table-responsive, [data-horizontal-scroll]) {
-  max-width: 100%;
-  overscroll-behavior-inline: contain;
-  -webkit-overflow-scrolling: touch;
-}
-
-#main-content :where(input, select, textarea) {
-  max-width: 100%;
-}
-
-#main-content
-  :where(
-    [data-core-erp-page],
-    [data-core-erp-header],
-    [data-core-erp-actions],
-    [data-core-erp-filters],
-    [data-core-erp-summary],
-    [data-core-erp-content]
-  ) {
-  min-width: 0;
-  max-width: 100%;
-}
-
-[data-responsive-tabs="true"] {
-  -webkit-overflow-scrolling: touch;
-  scrollbar-width: thin;
-}
-
-.mobile-action-bar {
-  padding-bottom: max(0.75rem, var(--safe-area-bottom));
-}
-
-@media (max-width: 767px), (pointer: coarse) {
-  #main-content :where(button, [role="button"]) {
-    touch-action: manipulation;
+    --app-viewport-height: 100vh;
+    --safe-area-top: env(safe-area-inset-top, 0px);
+    --safe-area-right: env(safe-area-inset-right, 0px);
+    --safe-area-bottom: env(safe-area-inset-bottom, 0px);
+    --safe-area-left: env(safe-area-inset-left, 0px);
+    --mobile-control-min-height: 2.75rem;
   }
 
-  #main-content
-    :where(
-      input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="hidden"]),
-      select,
-      textarea
-    ) {
-    min-height: var(--mobile-control-min-height);
-    font-size: 16px;
+  @supports (height: 100svh) {
+    :root {
+      --app-viewport-height: 100svh;
+    }
   }
 
-  #main-content :where(button:not([data-compact-control="true"]), [role="button"]:not([data-compact-control="true"])) {
-    min-height: var(--mobile-control-min-height);
+  @supports (height: 100dvh) {
+    :root {
+      --app-viewport-height: 100dvh;
+    }
   }
 
-  #main-content {
-    scroll-padding-bottom: max(1rem, var(--safe-area-bottom));
+  html {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: clip;
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
   }
 
-  #main-content [data-core-erp-filters] > * {
+  body,
+  #root {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    min-height: var(--app-viewport-height);
+  }
+
+  body {
+    overflow-x: hidden;
+    overscroll-behavior-x: none;
+  }
+
+  [data-slot="sidebar-wrapper"],
+  [data-slot="sidebar-container"] {
+    height: var(--app-viewport-height);
+    max-height: var(--app-viewport-height);
+  }
+
+  [data-slot="sidebar-wrapper"],
+  #main-content,
+  #main-content > * {
     min-width: 0;
     max-width: 100%;
   }
 
-  #main-content [data-core-erp-actions] {
-    padding-bottom: max(0.25rem, var(--safe-area-bottom));
+  #main-content {
+    -webkit-overflow-scrolling: touch;
+    scroll-padding-block: 1rem;
+    scrollbar-gutter: stable;
   }
 
-  #main-content [data-responsive-tabs="true"] {
-    width: 100%;
+  #main-content :where(form, fieldset, [role="group"], [role="search"]) {
+    min-width: 0;
+    max-width: 100%;
   }
-}
 
-@media (max-width: 639px) {
-  /* Any `[role="dialog"]` surface fits the phone screen (popovers, command palettes, legacy
+  #main-content :where(img, video) {
+    max-width: 100%;
+    height: auto;
+  }
+
+  #main-content :where(svg) {
+    max-width: 100%;
+  }
+
+  #main-content :where(.overflow-x-auto, .table-responsive, [data-horizontal-scroll]) {
+    max-width: 100%;
+    overscroll-behavior-inline: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  #main-content :where(input, select, textarea) {
+    max-width: 100%;
+  }
+
+  #main-content
+    :where(
+      [data-core-erp-page],
+      [data-core-erp-header],
+      [data-core-erp-actions],
+      [data-core-erp-filters],
+      [data-core-erp-summary],
+      [data-core-erp-content]
+    ) {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  [data-responsive-tabs="true"] {
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+  }
+
+  .mobile-action-bar {
+    padding-bottom: max(0.75rem, var(--safe-area-bottom));
+  }
+
+  @media (max-width: 767px), (pointer: coarse) {
+    #main-content :where(button, [role="button"]) {
+      touch-action: manipulation;
+    }
+
+    #main-content
+      :where(
+        input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="hidden"]),
+        select,
+        textarea
+      ) {
+      min-height: var(--mobile-control-min-height);
+      font-size: 16px;
+    }
+
+    #main-content
+      :where(button:not([data-compact-control="true"]), [role="button"]:not([data-compact-control="true"])) {
+      min-height: var(--mobile-control-min-height);
+    }
+
+    #main-content {
+      scroll-padding-bottom: max(1rem, var(--safe-area-bottom));
+    }
+
+    #main-content [data-core-erp-filters] > * {
+      min-width: 0;
+      max-width: 100%;
+    }
+
+    #main-content [data-core-erp-actions] {
+      padding-bottom: max(0.25rem, var(--safe-area-bottom));
+    }
+
+    #main-content [data-responsive-tabs="true"] {
+      width: 100%;
+    }
+  }
+
+  @media (max-width: 639px) {
+    /* Any `[role="dialog"]` surface fits the phone screen (popovers, command palettes, legacy
      modals). Loaded after the Tailwind utilities, so equal-specificity caller classes lose by
      order and no !important is needed. Phone bottom sheets size themselves (phone-sheet.tsx). */
-  [role="dialog"]:not([data-phone-sheet="true"]) {
-    max-width: calc(100vw - 1rem);
-    max-height: calc(var(--app-viewport-height) - 1rem - var(--safe-area-top) - var(--safe-area-bottom));
-    overflow-y: auto;
-    overscroll-behavior: contain;
+    [role="dialog"]:not([data-phone-sheet="true"]) {
+      max-width: calc(100vw - 1rem);
+      max-height: calc(var(--app-viewport-height) - 1rem - var(--safe-area-top) - var(--safe-area-bottom));
+      overflow-y: auto;
+      overscroll-behavior: contain;
+    }
+
+    [data-radix-popper-content-wrapper] {
+      max-width: calc(100vw - 1rem);
+    }
+
+    .mobile-action-bar {
+      position: sticky;
+      bottom: 0;
+      z-index: 20;
+      margin-inline: -0.75rem;
+      border-top: 1px solid hsl(var(--border));
+      background: hsl(var(--background) / 0.96);
+      padding-inline: 0.75rem;
+      padding-top: 0.75rem;
+      backdrop-filter: blur(8px);
+    }
   }
 
-  [data-radix-popper-content-wrapper] {
-    max-width: calc(100vw - 1rem);
+  @media (min-width: 640px) {
+    .mobile-action-bar {
+      padding-bottom: 0;
+    }
   }
 
-  .mobile-action-bar {
-    position: sticky;
-    bottom: 0;
-    z-index: 20;
-    margin-inline: -0.75rem;
-    border-top: 1px solid hsl(var(--border));
-    background: hsl(var(--background) / 0.96);
-    padding-inline: 0.75rem;
-    padding-top: 0.75rem;
-    backdrop-filter: blur(8px);
-  }
-}
-
-@media (min-width: 640px) {
-  .mobile-action-bar {
-    padding-bottom: 0;
-  }
-}
-
-@media (max-height: 500px) and (orientation: landscape) {
-  [role="dialog"]:not([data-phone-sheet="true"]) {
-    max-height: calc(var(--app-viewport-height) - 0.5rem);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  html:focus-within {
-    scroll-behavior: auto;
+  @media (max-height: 500px) and (orientation: landscape) {
+    [role="dialog"]:not([data-phone-sheet="true"]) {
+      max-height: calc(var(--app-viewport-height) - 0.5rem);
+    }
   }
 
-  *,
-  *::before,
-  *::after {
-    scroll-behavior: auto !important;
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
-  }
-}
+  @media (prefers-reduced-motion: reduce) {
+    html:focus-within {
+      scroll-behavior: auto;
+    }
 
-/*
+    *,
+    *::before,
+    *::after {
+      scroll-behavior: auto !important;
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+
+  /*
  * Sidebar touch targets. Desktop sidebar rows are dense (py-1.5 links, py-1 section headers);
  * in the phone drawer and on any touch-only screen every link and button is at least 44px tall
  * so navigation works by thumb. Applies to the ERP, Factory and Properties sidebars alike.
  */
-[data-sidebar="sidebar"][data-mobile="true"] :is(a[href], button) {
-  min-height: 2.75rem;
-}
-
-[data-sidebar="sidebar"][data-mobile="true"] button {
-  min-width: 2.75rem;
-}
-
-@media (hover: none) and (pointer: coarse) {
-  [data-slot="sidebar"] :is(a[href], button) {
+  [data-sidebar="sidebar"][data-mobile="true"] :is(a[href], button) {
     min-height: 2.75rem;
   }
-}
 
-/*
+  [data-sidebar="sidebar"][data-mobile="true"] button {
+    min-width: 2.75rem;
+  }
+
+  @media (hover: none) and (pointer: coarse) {
+    [data-slot="sidebar"] :is(a[href], button) {
+      min-height: 2.75rem;
+    }
+  }
+
+  /*
  * Top bar touch targets. The 44px rules above are scoped to #main-content and to phones, so on
  * a tablet the user menu, company switcher, bell and theme toggle stayed at their 32px desktop
  * size. Any touch-first device gets 44px controls in the header too; the bar is min-h-14, so
  * nothing grows.
  */
-@media (pointer: coarse) {
-  [data-slot="app-top-bar"] :is(button, [role="button"], a[href]) {
-    min-height: 2.75rem;
-    min-width: 2.75rem;
+  @media (pointer: coarse) {
+    [data-slot="app-top-bar"] :is(button, [role="button"], a[href]) {
+      min-height: 2.75rem;
+      min-width: 2.75rem;
+    }
   }
-}
 
-/*
+  /*
  * Sideways tab strips (hub `.erp-mobile-scroll-tabs` rows and the shared TabsList) fade the edge
  * that still hides tabs, so a half-visible last tab reads as "more that way" instead of a hard
  * cut. useScrollOverflowProbe (mounted by each shell) keeps data-scroll-overflow current; a
  * strip that fits gets "none" and no mask.
  */
-:is(.erp-mobile-scroll-tabs, [data-responsive-tabs="true"])[data-scroll-overflow="end"] {
-  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 2.5rem), transparent);
-  mask-image: linear-gradient(to right, #000 calc(100% - 2.5rem), transparent);
-}
+  :is(.erp-mobile-scroll-tabs, [data-responsive-tabs="true"])[data-scroll-overflow="end"] {
+    -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 2.5rem), transparent);
+    mask-image: linear-gradient(to right, #000 calc(100% - 2.5rem), transparent);
+  }
 
-:is(.erp-mobile-scroll-tabs, [data-responsive-tabs="true"])[data-scroll-overflow="start"] {
-  -webkit-mask-image: linear-gradient(to left, #000 calc(100% - 2.5rem), transparent);
-  mask-image: linear-gradient(to left, #000 calc(100% - 2.5rem), transparent);
-}
+  :is(.erp-mobile-scroll-tabs, [data-responsive-tabs="true"])[data-scroll-overflow="start"] {
+    -webkit-mask-image: linear-gradient(to left, #000 calc(100% - 2.5rem), transparent);
+    mask-image: linear-gradient(to left, #000 calc(100% - 2.5rem), transparent);
+  }
 
-:is(.erp-mobile-scroll-tabs, [data-responsive-tabs="true"])[data-scroll-overflow="both"] {
-  -webkit-mask-image: linear-gradient(to right, transparent, #000 2.5rem, #000 calc(100% - 2.5rem), transparent);
-  mask-image: linear-gradient(to right, transparent, #000 2.5rem, #000 calc(100% - 2.5rem), transparent);
-}
+  :is(.erp-mobile-scroll-tabs, [data-responsive-tabs="true"])[data-scroll-overflow="both"] {
+    -webkit-mask-image: linear-gradient(to right, transparent, #000 2.5rem, #000 calc(100% - 2.5rem), transparent);
+    mask-image: linear-gradient(to right, transparent, #000 2.5rem, #000 calc(100% - 2.5rem), transparent);
+  }
 
-/*
+  /*
  * ERP, Factory and Properties phones: the floating notes launcher covered page content and
  * workflow bars; the workspace menu offers "My notes" there instead. The launcher mounts outside
  * the shells (App.tsx), so it keys off the document marker the shells set. POS keeps the button.
  */
-@media (max-width: 639px), (hover: none) and (pointer: coarse) and (max-height: 500px) {
-  html:is([data-app-shell="erp"], [data-app-shell="factory"], [data-app-shell="properties"])
-    [data-testid="button-open-user-notes"] {
-    display: none;
+  @media (max-width: 639px), (hover: none) and (pointer: coarse) and (max-height: 500px) {
+    html:is([data-app-shell="erp"], [data-app-shell="factory"], [data-app-shell="properties"])
+      [data-testid="button-open-user-notes"] {
+      display: none;
+    }
   }
-}
 
-/*
+  /*
  * Table regions that still hide columns sideways fade the edge that hides them (the same
  * data-scroll-overflow marker the tab strips use), so a clipped "ETA DAS" header reads as
  * "more to the right" rather than the end of the table.
  */
-:is([data-table-scroll-region], [data-horizontal-scroll="true"])[data-scroll-overflow="end"] {
-  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 2.5rem), transparent);
-  mask-image: linear-gradient(to right, #000 calc(100% - 2.5rem), transparent);
-}
+  :is([data-table-scroll-region], [data-horizontal-scroll="true"])[data-scroll-overflow="end"] {
+    -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 2.5rem), transparent);
+    mask-image: linear-gradient(to right, #000 calc(100% - 2.5rem), transparent);
+  }
 
-:is([data-table-scroll-region], [data-horizontal-scroll="true"])[data-scroll-overflow="start"] {
-  -webkit-mask-image: linear-gradient(to left, #000 calc(100% - 2.5rem), transparent);
-  mask-image: linear-gradient(to left, #000 calc(100% - 2.5rem), transparent);
-}
+  :is([data-table-scroll-region], [data-horizontal-scroll="true"])[data-scroll-overflow="start"] {
+    -webkit-mask-image: linear-gradient(to left, #000 calc(100% - 2.5rem), transparent);
+    mask-image: linear-gradient(to left, #000 calc(100% - 2.5rem), transparent);
+  }
 
-:is([data-table-scroll-region], [data-horizontal-scroll="true"])[data-scroll-overflow="both"] {
-  -webkit-mask-image: linear-gradient(to right, transparent, #000 2.5rem, #000 calc(100% - 2.5rem), transparent);
-  mask-image: linear-gradient(to right, transparent, #000 2.5rem, #000 calc(100% - 2.5rem), transparent);
-}
+  :is([data-table-scroll-region], [data-horizontal-scroll="true"])[data-scroll-overflow="both"] {
+    -webkit-mask-image: linear-gradient(to right, transparent, #000 2.5rem, #000 calc(100% - 2.5rem), transparent);
+    mask-image: linear-gradient(to right, transparent, #000 2.5rem, #000 calc(100% - 2.5rem), transparent);
+  }
 
-/*
+  /*
  * Keyboard-shortcut hints mean nothing on a touch device (a landscape phone is wider than `sm`,
  * so it otherwise shows the desktop search pill with its "Ctrl /" badge).
  */
-@media (hover: none) and (pointer: coarse) {
-  [data-slot="app-top-bar"] kbd {
-    display: none;
+  @media (hover: none) and (pointer: coarse) {
+    [data-slot="app-top-bar"] kbd {
+      display: none;
+    }
   }
-}
 
-/*
+  /*
  * A marked sideways scroller whose content currently fits is left unclipped, so a sticky table
  * header inside it sticks to the page instead of to a box that never scrolls. The overflow probe
  * keeps data-scroll-overflow current, so the scroller comes back the moment columns outgrow it.
  * Table regions that own their vertical scroll (capped / parent modes) are excluded.
  */
-[data-horizontal-scroll="true"][data-scroll-overflow="none"]:not([data-scroll-mode="capped"]):not(
-    [data-scroll-mode="parent"]
-  ) {
-  overflow: visible;
-}
+  [data-horizontal-scroll="true"][data-scroll-overflow="none"]:not([data-scroll-mode="capped"]):not(
+      [data-scroll-mode="parent"]
+    ) {
+    overflow: visible;
+  }
 
-/*
+  /*
  * Button and form action rows wrap instead of clipping off the right edge of a phone. Rows only:
  * a wrapped column sizes each child to its max-content width (a page column once grew to the
  * width of its widest tab strip), so columns (`flex-col`) and rows that ask for `flex-nowrap`
@@ -323,21 +334,22 @@ body {
  * by copying every rule naming those classes with the applying class swapped in, and a copy of
  * `:not(.flex-col)` as `:not(.empty-state)` matched nearly every column.
  */
-@media (max-width: 767px) {
-  .flex:is(.gap-2, .gap-3, .gap-4):not(.flex-col):not(.flex-nowrap),
-  .flex.flex-col:is(.sm\:flex-row, .md\:flex-row):is(.gap-2, .gap-3, .gap-4) {
-    flex-wrap: wrap;
+  @media (max-width: 767px) {
+    .flex:is(.gap-2, .gap-3, .gap-4):not(.flex-col):not(.flex-nowrap),
+    .flex.flex-col:is(.sm\:flex-row, .md\:flex-row):is(.gap-2, .gap-3, .gap-4) {
+      flex-wrap: wrap;
+    }
   }
-}
 
-/*
+  /*
  * Radix Select renders a visually hidden native <select> (for form autofill) with inline
  * absolute positioning. Without a positioned ancestor it is placed at its static position and
  * can extend the document below the shell, letting the whole page scroll on phones. Pinning
  * it to the viewport keeps it inert for layout (inline style, so the override needs !important).
  */
-select[aria-hidden="true"][tabindex="-1"] {
-  position: fixed !important;
-  top: 0;
-  left: 0;
+  select[aria-hidden="true"][tabindex="-1"] {
+    position: fixed !important;
+    top: 0;
+    left: 0;
+  }
 }

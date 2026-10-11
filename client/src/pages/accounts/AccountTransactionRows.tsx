@@ -97,7 +97,7 @@ export function AccountTransactionRows({
   return (
     <div
       ref={virtualRows.scrollRef}
-      className="rounded-xl border overflow-auto max-h-[70vh] table-responsive print:border-0 print:max-h-none print:overflow-visible hidden md:block print:!block"
+      className="rounded-xl border overflow-auto max-h-[70vh] table-responsive print:border-0 print:max-h-none print:overflow-visible hidden md:block print:block!"
       data-testid="account-statement-scroll-region"
     >
       <Table wrapperClassName="overflow-visible border-0 rounded-none max-h-none">

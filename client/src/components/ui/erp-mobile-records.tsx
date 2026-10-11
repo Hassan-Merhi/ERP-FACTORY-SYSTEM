@@ -64,7 +64,7 @@ function FieldGrid({ fields, className }: { fields: ErpMobileRecordField[]; clas
             {field.label}
           </dt>
           <dd
-            className={cn("mt-0.5 min-w-0 break-words text-sm text-foreground", field.numeric && "tabular-nums")}
+            className={cn("mt-0.5 min-w-0 wrap-break-word text-sm text-foreground", field.numeric && "tabular-nums")}
             dir={field.numeric ? "ltr" : undefined}
             style={field.numeric ? { unicodeBidi: "isolate", textAlign: "start" } : undefined}
           >
@@ -100,10 +100,10 @@ export function ErpMobileRecordCard({
   const heading = (
     <div className="flex min-w-0 items-start gap-3">
       <div className="min-w-0 flex-1">
-        <div className="break-words text-sm font-semibold leading-snug">{title}</div>
+        <div className="wrap-break-word text-sm font-semibold leading-snug">{title}</div>
         {(subtitle || badges) && (
           <div className="mt-0.5 flex min-w-0 flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
-            {subtitle && <span className="min-w-0 break-words">{subtitle}</span>}
+            {subtitle && <span className="min-w-0 wrap-break-word">{subtitle}</span>}
             {badges}
           </div>
         )}
@@ -126,7 +126,7 @@ export function ErpMobileRecordCard({
   return (
     <li
       className={cn(
-        "min-w-0 rounded-lg border bg-card text-card-foreground shadow-xs",
+        "min-w-0 rounded-lg border bg-card text-card-foreground shadow-2xs",
         selected && "border-primary ring-1 ring-primary",
         className
       )}
@@ -137,7 +137,7 @@ export function ErpMobileRecordCard({
           type="button"
           onClick={onOpen}
           aria-label={openLabel}
-          className="block w-full min-w-0 rounded-lg p-3 text-start touch-manipulation hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="block w-full min-w-0 rounded-lg p-3 text-start touch-manipulation hover:bg-muted/40 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
         >
           {heading}
           {fields.length > 0 && <FieldGrid fields={fields} className="mt-2" />}
@@ -167,7 +167,7 @@ export function ErpMobileRecordCard({
         </div>
       )}
       {actions && (
-        <div role="group" className="flex flex-wrap items-center justify-end gap-2 border-t px-3 py-2 [&>*]:min-h-10">
+        <div role="group" className="flex flex-wrap items-center justify-end gap-2 border-t px-3 py-2 *:min-h-10">
           {actions}
         </div>
       )}
@@ -214,7 +214,7 @@ export function ErpMobileRecordGroup({
   return (
     <section className={cn("min-w-0 space-y-2", className)} data-testid={testId}>
       <div className="flex min-w-0 items-baseline justify-between gap-2 px-1 pt-1">
-        <h3 className="min-w-0 break-words text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+        <h3 className="min-w-0 wrap-break-word text-xs font-semibold uppercase tracking-wide text-muted-foreground">
           {label}
         </h3>
         {meta && <div className="shrink-0 text-xs tabular-nums text-muted-foreground">{meta}</div>}

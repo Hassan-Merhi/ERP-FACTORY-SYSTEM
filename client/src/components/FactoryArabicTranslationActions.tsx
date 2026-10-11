@@ -93,7 +93,7 @@ function CodeList({ label, values }: { label: string; values: string[] }) {
       <p className="font-medium text-destructive">
         {label} ({values.length})
       </p>
-      <p className="mt-1 break-words font-mono text-xs">
+      <p className="mt-1 wrap-break-word font-mono text-xs">
         {displayed.join(", ")}
         {values.length > displayed.length ? ` … and ${values.length - displayed.length} more` : ""}
       </p>

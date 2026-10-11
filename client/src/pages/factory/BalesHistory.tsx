@@ -169,7 +169,7 @@ export default function BalesHistory() {
       {/* ── Header ── */}
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-3">
-          <div className="flex items-center justify-center h-9 w-9 rounded-xl bg-gradient-to-br from-emerald-500/30 to-emerald-600/10 border border-emerald-500/25 shrink-0">
+          <div className="flex items-center justify-center h-9 w-9 rounded-xl bg-linear-to-br from-emerald-500/30 to-emerald-600/10 border border-emerald-500/25 shrink-0">
             <Package className="h-4.5 w-4.5 text-emerald-500" />
           </div>
           <div>

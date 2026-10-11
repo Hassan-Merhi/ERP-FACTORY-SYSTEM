@@ -694,7 +694,7 @@ export default function ProductionComparison() {
                   </Button>
                 </div>
               )}
-              <div className={cn("overflow-hidden", !comparisonCards.cards && "rounded-xl border shadow-sm")}>
+              <div className={cn("overflow-hidden", !comparisonCards.cards && "rounded-xl border shadow-xs")}>
                 <div className="overflow-x-auto">
                   <table
                     className="w-full text-sm border-collapse"

@@ -583,7 +583,7 @@ function GroupsView({
           data-testid={`row-group-${g.stockGroupId ?? "null"}`}
         >
           {/* Icon */}
-          <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
+          <div className="shrink-0 w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
             <FolderOpen className="h-5 w-5 text-primary" />
           </div>
 
@@ -596,7 +596,7 @@ function GroupsView({
           </div>
 
           {/* Stats */}
-          <div className="hidden sm:flex items-center gap-6 flex-shrink-0">
+          <div className="hidden sm:flex items-center gap-6 shrink-0">
             <div className="text-right">
               <p className="text-xs text-muted-foreground">OTW</p>
               {g.otwQty > 0 ? (
@@ -622,12 +622,12 @@ function GroupsView({
           </div>
 
           {/* Mobile: show total qty only */}
-          <div className="sm:hidden text-right flex-shrink-0">
+          <div className="sm:hidden text-right shrink-0">
             <p className="text-xs text-muted-foreground">Total</p>
             <p className="text-sm font-mono font-semibold">{formatNumber(g.totalQty, 0)}</p>
           </div>
 
-          <ChevronRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+          <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
         </div>
       ))}
 
@@ -638,7 +638,7 @@ function GroupsView({
             Total ({groups.length} group{groups.length !== 1 ? "s" : ""})
           </span>
         </div>
-        <div className="hidden sm:flex items-center gap-6 flex-shrink-0">
+        <div className="hidden sm:flex items-center gap-6 shrink-0">
           <div className="text-right w-16">
             <p className="text-xs text-muted-foreground">OTW</p>
             <p className="text-sm font-mono font-semibold text-blue-600 dark:text-blue-400" data-testid="total-otw-qty">
@@ -673,7 +673,7 @@ function GroupsView({
             </p>
           </div>
         </div>
-        <div className="w-4 flex-shrink-0" />
+        <div className="w-4 shrink-0" />
       </div>
     </div>
   );
@@ -801,7 +801,7 @@ function ItemsTable({
                 <p className="font-medium text-sm">{row.stockItemName}</p>
                 {row.stockGroupName && <p className="text-xs text-muted-foreground mt-0.5">{row.stockGroupName}</p>}
               </div>
-              <p className="text-sm font-mono font-semibold flex-shrink-0">
+              <p className="text-sm font-mono font-semibold shrink-0">
                 {row.combinedValue > 0 ? formatAmount(row.combinedValue) : "—"}
               </p>
             </div>

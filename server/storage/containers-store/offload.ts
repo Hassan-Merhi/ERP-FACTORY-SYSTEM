@@ -1,7 +1,4 @@
-import {
-  infrastructurePostingIdentity,
-  insertInfrastructureVoucherTx,
-} from "../../services/accounting/infrastructureVoucherIdentity";
+import { postFactoryVoucherTx } from "../../services/factory/factoryVoucherPosting";
 import { createDatabaseStockMovementAdapter } from "../../services/inventory/databaseStockMovementAdapter";
 import { postStockMovementTx } from "../../services/inventory/stockMovementIntegrityService";
 import { eq, and, isNull } from "drizzle-orm";
@@ -260,38 +257,32 @@ export async function offloadContainer(
 
     if (dutiesAccountId && toInventoryDecimal(duties).isPositive()) {
       const dutiesExpenseAccountId = await findOrCreateExpenseAccount("DUTIES", "Duties", importChargesParentId);
-      const voucherNumber = `DUTY-${container.containerNumber}-${Date.now()}`;
+      const voucherNumber = `DUTY-${container.containerNumber}-${containerId}`;
       const amount = inventoryMoney(duties);
-      const { voucher: voucher } = await insertInfrastructureVoucherTx(
-        tx,
-        {
-          companyId: location.companyId,
-          voucherNumber,
-          voucherType: "Payment",
-          voucherDate,
-          description: `Duties for container ${container.containerNumber}`,
-          totalAmount: amount,
+      await postFactoryVoucherTx(tx, {
+        companyId: location.companyId,
+        voucherNumber: voucherNumber,
+        voucherType: "Payment",
+        voucherDate: voucherDate,
+        description: `Duties for container ${container.containerNumber}`,
+        sourceModule: "ERP",
+        source: {
+          sourceType: "container-offload",
+          sourceId: String(location.companyId) + ":" + String(containerId),
+          phase: "voucher",
         },
-        infrastructurePostingIdentity(
-          "container-offload",
-          String(location.companyId) + ":" + String(containerId),
-          "voucher"
-        ),
-        { duties, officeCharges, transferCharges, transportFees, additionalCharges }
-      );
-      await tx.insert(schema.voucherEntries).values({
-        voucherId: voucher.id,
-        ledgerAccountId: dutiesExpenseAccountId,
-        debitAmount: amount,
-        creditAmount: "0",
-        narration: `Duties for container ${container.containerNumber}`,
-      });
-      await tx.insert(schema.voucherEntries).values({
-        voucherId: voucher.id,
-        ledgerAccountId: dutiesAccountId,
-        debitAmount: "0",
-        creditAmount: amount,
-        narration: `Duties for container ${container.containerNumber}`,
+        lines: [
+          {
+            ledgerAccountId: dutiesExpenseAccountId,
+            debit: amount,
+            narration: `Duties for container ${container.containerNumber}`,
+          },
+          {
+            ledgerAccountId: dutiesAccountId,
+            credit: amount,
+            narration: `Duties for container ${container.containerNumber}`,
+          },
+        ],
       });
     }
 
@@ -318,36 +309,30 @@ export async function offloadContainer(
         );
       }
       const amount = inventoryMoney(officeCharges);
-      const { voucher: voucher } = await insertInfrastructureVoucherTx(
-        tx,
-        {
-          companyId: location.companyId,
-          voucherNumber: `OFFICE-${container.containerNumber}-${Date.now()}`,
-          voucherType: "Payment",
-          voucherDate,
-          description: `Office charges for container ${container.containerNumber}`,
-          totalAmount: amount,
+      await postFactoryVoucherTx(tx, {
+        companyId: location.companyId,
+        voucherNumber: `OFFICE-${container.containerNumber}-${containerId}`,
+        voucherType: "Payment",
+        voucherDate: voucherDate,
+        description: `Office charges for container ${container.containerNumber}`,
+        sourceModule: "ERP",
+        source: {
+          sourceType: "container-offload",
+          sourceId: String(location.companyId) + ":" + String(containerId),
+          phase: "office",
         },
-        infrastructurePostingIdentity(
-          "container-offload",
-          String(location.companyId) + ":" + String(containerId),
-          "office"
-        ),
-        { duties, officeCharges, transferCharges, transportFees, additionalCharges }
-      );
-      await tx.insert(schema.voucherEntries).values({
-        voucherId: voucher.id,
-        ledgerAccountId: officeChargesAccountId,
-        debitAmount: amount,
-        creditAmount: "0",
-        narration: `Office charges for container ${container.containerNumber}`,
-      });
-      await tx.insert(schema.voucherEntries).values({
-        voucherId: voucher.id,
-        ledgerAccountId: officeChargesCashAccountId,
-        debitAmount: "0",
-        creditAmount: amount,
-        narration: `Office charges for container ${container.containerNumber}`,
+        lines: [
+          {
+            ledgerAccountId: officeChargesAccountId,
+            debit: amount,
+            narration: `Office charges for container ${container.containerNumber}`,
+          },
+          {
+            ledgerAccountId: officeChargesCashAccountId,
+            credit: amount,
+            narration: `Office charges for container ${container.containerNumber}`,
+          },
+        ],
       });
     }
 
@@ -404,36 +389,30 @@ export async function offloadContainer(
       if (!creditAccountId) creditAccountId = await getTransportPayableAccount();
 
       const amount = inventoryMoney(transportFees);
-      const { voucher: voucher } = await insertInfrastructureVoucherTx(
-        tx,
-        {
-          companyId: location.companyId,
-          voucherNumber: `TRANS-${container.containerNumber}-${Date.now()}`,
-          voucherType: "Payment",
-          voucherDate,
-          description: `Transport fees for container ${container.containerNumber}`,
-          totalAmount: amount,
+      await postFactoryVoucherTx(tx, {
+        companyId: location.companyId,
+        voucherNumber: `TRANS-${container.containerNumber}-${containerId}`,
+        voucherType: "Payment",
+        voucherDate: voucherDate,
+        description: `Transport fees for container ${container.containerNumber}`,
+        sourceModule: "ERP",
+        source: {
+          sourceType: "container-offload",
+          sourceId: String(location.companyId) + ":" + String(containerId),
+          phase: "transport",
         },
-        infrastructurePostingIdentity(
-          "container-offload",
-          String(location.companyId) + ":" + String(containerId),
-          "transport"
-        ),
-        { duties, officeCharges, transferCharges, transportFees, additionalCharges }
-      );
-      await tx.insert(schema.voucherEntries).values({
-        voucherId: voucher.id,
-        ledgerAccountId: transportExpenseAccountId,
-        debitAmount: amount,
-        creditAmount: "0",
-        narration: `Transport fees for container ${container.containerNumber}`,
-      });
-      await tx.insert(schema.voucherEntries).values({
-        voucherId: voucher.id,
-        ledgerAccountId: creditAccountId,
-        debitAmount: "0",
-        creditAmount: amount,
-        narration: `Transport fees for container ${container.containerNumber}`,
+        lines: [
+          {
+            ledgerAccountId: transportExpenseAccountId,
+            debit: amount,
+            narration: `Transport fees for container ${container.containerNumber}`,
+          },
+          {
+            ledgerAccountId: creditAccountId,
+            credit: amount,
+            narration: `Transport fees for container ${container.containerNumber}`,
+          },
+        ],
       });
     }
 
@@ -470,36 +449,30 @@ export async function offloadContainer(
         transferPayableAccounts = [newAccount];
       }
       const amount = inventoryMoney(transferCharges);
-      const { voucher: voucher } = await insertInfrastructureVoucherTx(
-        tx,
-        {
-          companyId: location.companyId,
-          voucherNumber: `XFER-${container.containerNumber}-${Date.now()}`,
-          voucherType: "Payment",
-          voucherDate,
-          description: `Transfer charges for container ${container.containerNumber}`,
-          totalAmount: amount,
+      await postFactoryVoucherTx(tx, {
+        companyId: location.companyId,
+        voucherNumber: `XFER-${container.containerNumber}-${containerId}`,
+        voucherType: "Payment",
+        voucherDate: voucherDate,
+        description: `Transfer charges for container ${container.containerNumber}`,
+        sourceModule: "ERP",
+        source: {
+          sourceType: "container-offload",
+          sourceId: String(location.companyId) + ":" + String(containerId),
+          phase: "transfer",
         },
-        infrastructurePostingIdentity(
-          "container-offload",
-          String(location.companyId) + ":" + String(containerId),
-          "transfer"
-        ),
-        { duties, officeCharges, transferCharges, transportFees, additionalCharges }
-      );
-      await tx.insert(schema.voucherEntries).values({
-        voucherId: voucher.id,
-        ledgerAccountId: transferExpenseAccountId,
-        debitAmount: amount,
-        creditAmount: "0",
-        narration: `Transfer charges for container ${container.containerNumber}`,
-      });
-      await tx.insert(schema.voucherEntries).values({
-        voucherId: voucher.id,
-        ledgerAccountId: transferPayableAccounts[0].id,
-        debitAmount: "0",
-        creditAmount: amount,
-        narration: `Transfer charges for container ${container.containerNumber}`,
+        lines: [
+          {
+            ledgerAccountId: transferExpenseAccountId,
+            debit: amount,
+            narration: `Transfer charges for container ${container.containerNumber}`,
+          },
+          {
+            ledgerAccountId: transferPayableAccounts[0].id,
+            credit: amount,
+            narration: `Transfer charges for container ${container.containerNumber}`,
+          },
+        ],
       });
     }
 
@@ -526,36 +499,30 @@ export async function offloadContainer(
         importChargesParentId
       );
       const amount = inventoryMoney(charge.amount);
-      const { voucher: voucher } = await insertInfrastructureVoucherTx(
-        tx,
-        {
-          companyId: location.companyId,
-          voucherNumber: `CHG-${container.containerNumber}-${Date.now()}`,
-          voucherType: "Payment",
-          voucherDate,
-          description: `${charge.description} for container ${container.containerNumber}`,
-          totalAmount: amount,
+      await postFactoryVoucherTx(tx, {
+        companyId: location.companyId,
+        voucherNumber: `CHG-${container.containerNumber}-${containerId}-${chargeIndex}`,
+        voucherType: "Payment",
+        voucherDate: voucherDate,
+        description: `${charge.description} for container ${container.containerNumber}`,
+        sourceModule: "ERP",
+        source: {
+          sourceType: "container-offload",
+          sourceId: String(location.companyId) + ":" + String(containerId) + ":" + String(chargeIndex),
+          phase: "additional",
         },
-        infrastructurePostingIdentity(
-          "container-offload",
-          String(location.companyId) + ":" + String(containerId) + ":" + String(chargeIndex),
-          "additional"
-        ),
-        { duties, officeCharges, transferCharges, transportFees, additionalCharges }
-      );
-      await tx.insert(schema.voucherEntries).values({
-        voucherId: voucher.id,
-        ledgerAccountId: expenseAccountId,
-        debitAmount: amount,
-        creditAmount: "0",
-        narration: `${charge.description} for container ${container.containerNumber}`,
-      });
-      await tx.insert(schema.voucherEntries).values({
-        voucherId: voucher.id,
-        ledgerAccountId: charge.ledgerAccountId,
-        debitAmount: "0",
-        creditAmount: amount,
-        narration: `${charge.description} for container ${container.containerNumber}`,
+        lines: [
+          {
+            ledgerAccountId: expenseAccountId,
+            debit: amount,
+            narration: `${charge.description} for container ${container.containerNumber}`,
+          },
+          {
+            ledgerAccountId: charge.ledgerAccountId,
+            credit: amount,
+            narration: `${charge.description} for container ${container.containerNumber}`,
+          },
+        ],
       });
     }
 

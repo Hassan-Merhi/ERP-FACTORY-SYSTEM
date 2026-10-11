@@ -106,14 +106,14 @@ function CategorySelector({
       </PopoverTrigger>
       <PopoverContent className="max-h-64 w-56 overflow-y-auto p-2">
         <div className="mb-2 px-1 text-xs font-medium text-muted-foreground">Filter workers by team</div>
-        <label className="flex cursor-pointer items-center gap-2 rounded px-1 py-1 text-sm hover:bg-muted">
+        <label className="flex cursor-pointer items-center gap-2 rounded-sm px-1 py-1 text-sm hover:bg-muted">
           <Checkbox checked={value.length === 0} onCheckedChange={() => onChange([])} />
           <span>All workers</span>
         </label>
         {categories.map((category) => (
           <label
             key={category.id}
-            className="flex cursor-pointer items-center gap-2 rounded px-1 py-1 text-sm hover:bg-muted"
+            className="flex cursor-pointer items-center gap-2 rounded-sm px-1 py-1 text-sm hover:bg-muted"
           >
             <Checkbox
               checked={value.includes(category.id)}

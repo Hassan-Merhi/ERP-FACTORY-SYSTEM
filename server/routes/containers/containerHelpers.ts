@@ -4,7 +4,9 @@ import { db } from "../../db";
 import { storage } from "../../storage";
 import { vouchers, voucherEntries, intercompanyPosConfigs } from "@shared/schema";
 import { eq, and, or, sql, like } from "drizzle-orm";
-import type { DatabaseOrTransaction } from "../../db";
+import type { DatabaseOrTransaction, DbTransaction } from "../../db";
+import { postFactoryVoucherTx, usdLineAmounts } from "../../services/factory/factoryVoucherPosting";
+import { VoucherCorrectionError, editPostedFactoryVoucherTx } from "../../services/factory/factoryVoucherCorrection";
 import type Decimal from "decimal.js";
 import { toMoney, type MoneyInput } from "../../lib/money";
 
@@ -86,16 +88,40 @@ interface SyncIntercoResult {
   oldAmount?: string;
 }
 
+type IntercoFreightOpts = {
+  freightAmount: MoneyInput;
+  freightParentAccountId: number;
+  subsidiaryCompanyId?: number; // needed for fallback freight journal when no INTERCO-PARENT exists
+};
+
 export async function syncIntercoParentVoucher(
   dbOrTx: DatabaseOrTransaction,
   poNumbers: string | string[],
   grossTotal: MoneyInput,
   containerNumber?: string,
-  freightOpts?: {
-    freightAmount: MoneyInput;
-    freightParentAccountId: number;
-    subsidiaryCompanyId?: number; // needed for fallback freight journal when no INTERCO-PARENT exists
+  freightOpts?: IntercoFreightOpts
+): Promise<SyncIntercoResult> {
+  // A voucher's entry rewrites must commit together (balanced-voucher check runs at COMMIT).
+  if ("rollback" in dbOrTx) {
+    return syncIntercoParentVoucherOn(dbOrTx, poNumbers, grossTotal, containerNumber, freightOpts);
   }
+  try {
+    return await dbOrTx.transaction((tx) =>
+      syncIntercoParentVoucherOn(tx, poNumbers, grossTotal, containerNumber, freightOpts)
+    );
+  } catch (err) {
+    if (err instanceof VoucherCorrectionError) throw err;
+    logger.error("[syncIntercoParentVoucher] Error syncing parent INTERCO voucher:", { error: err });
+    return { found: false, updated: false, amount: toMoney(grossTotal).toFixed(2) };
+  }
+}
+
+async function syncIntercoParentVoucherOn(
+  dbOrTx: DatabaseOrTransaction,
+  poNumbers: string | string[],
+  grossTotal: MoneyInput,
+  containerNumber?: string,
+  freightOpts?: IntercoFreightOpts
 ): Promise<SyncIntercoResult> {
   // Amounts stay exact: numeric(20, 2) totals above about 10^15 have no cents left as numbers.
   const gross = toMoney(grossTotal);
@@ -103,6 +129,8 @@ export async function syncIntercoParentVoucher(
   const hasFreight = !!freightOpts && freight.greaterThan(0);
   const amountStr = gross.toFixed(2);
   const intercoTotal = hasFreight ? gross.minus(freight) : gross;
+  // Always a transaction here (syncIntercoParentVoucher opens one).
+  const tx = dbOrTx as DbTransaction;
   try {
     const parentCompanyId = await storage.getParentCompanyId();
     if (!parentCompanyId) return { found: false, updated: false, amount: amountStr };
@@ -202,76 +230,87 @@ export async function syncIntercoParentVoucher(
             .limit(1);
 
           if (existingFallback) {
-            // Update existing fallback voucher entries.
-            await dbOrTx
-              .update(vouchers)
-              .set({ totalAmount: freightAmtStr })
-              .where(eq(vouchers.id, existingFallback.id));
-            const fbEntries = await dbOrTx
-              .select()
-              .from(voucherEntries)
-              .where(eq(voucherEntries.voucherId, existingFallback.id));
-            for (const fe of fbEntries) {
-              if (toMoney(fe.debitAmount).greaterThan(0)) {
-                await dbOrTx
-                  .update(voucherEntries)
-                  .set({ debitAmount: freightAmtStr })
-                  .where(eq(voucherEntries.id, fe.id));
-              } else if (toMoney(fe.creditAmount).greaterThan(0)) {
-                await dbOrTx
-                  .update(voucherEntries)
-                  .set({
-                    creditAmount: freightAmtStr,
-                    ledgerAccountId: freightOpts.freightParentAccountId,
-                    narration: `Freight - ${nums.join(", ")}${containerNumber ? ` (${containerNumber})` : ""}`,
-                  })
-                  .where(eq(voucherEntries.id, fe.id));
+            // Update existing fallback voucher entries (phase 22 C: an audited
+            // open-period edit; refused with 409 in a closed period).
+            await editPostedFactoryVoucherTx(
+              tx,
+              {
+                companyId: parentCompanyId,
+                voucherIds: [existingFallback.id],
+                reason: "parent-freight-journal-resync",
+              },
+              async () => {
+                await tx
+                  .update(vouchers)
+                  .set({ totalAmount: freightAmtStr })
+                  .where(eq(vouchers.id, existingFallback.id));
+                const fbEntries = await tx
+                  .select()
+                  .from(voucherEntries)
+                  .where(eq(voucherEntries.voucherId, existingFallback.id));
+                for (const fe of fbEntries) {
+                  if (toMoney(fe.debitAmount).greaterThan(0)) {
+                    await tx
+                      .update(voucherEntries)
+                      .set(usdLineAmounts(freightAmtStr, 0))
+                      .where(eq(voucherEntries.id, fe.id));
+                  } else if (toMoney(fe.creditAmount).greaterThan(0)) {
+                    await tx
+                      .update(voucherEntries)
+                      .set({
+                        ...usdLineAmounts(0, freightAmtStr),
+                        ledgerAccountId: freightOpts.freightParentAccountId,
+                        narration: `Freight - ${nums.join(", ")}${containerNumber ? ` (${containerNumber})` : ""}`,
+                      })
+                      .where(eq(voucherEntries.id, fe.id));
+                  }
+                }
               }
-            }
+            );
             logger.info(
               `[syncIntercoParentVoucher] Updated fallback PARENT-FREIGHT journal #${existingFallback.id} for PO(s) ${nums.join(", ")}`
             );
             return { found: true, updated: true, voucherId: existingFallback.id, amount: freightAmtStr };
           } else {
-            // Create new fallback voucher.
+            // Create new fallback voucher — through the engine (phase 22 C); with
+            // no receivable account configured it would be one-sided and is refused.
             const today = new Date().toISOString().split("T")[0];
-            const [newFV] = await dbOrTx
-              .insert(vouchers)
-              .values({
-                companyId: parentCompanyId,
-                voucherNumber: fallbackVoucherNum,
-                voucherType: "Journal",
-                voucherDate: today,
-                description: `Parent freight - ${nums.join(", ")}${containerNumber ? ` (${containerNumber})` : ""}`,
-                totalAmount: freightAmtStr,
-                sourceModule: "ERP",
-              })
-              .returning();
-            const entriesToInsert = [
-              {
-                voucherId: newFV.id,
-                ledgerAccountId: freightOpts.freightParentAccountId,
-                debitAmount: "0",
-                creditAmount: freightAmtStr,
-                narration: `Freight - ${nums.join(", ")}${containerNumber ? ` (${containerNumber})` : ""}`,
+            const freightNarration = `Freight - ${nums.join(", ")}${containerNumber ? ` (${containerNumber})` : ""}`;
+            const { voucher: newFV } = await postFactoryVoucherTx(tx, {
+              companyId: parentCompanyId,
+              voucherNumber: fallbackVoucherNum,
+              voucherDate: today,
+              description: `Parent freight - ${nums.join(", ")}${containerNumber ? ` (${containerNumber})` : ""}`,
+              sourceModule: "ERP",
+              source: {
+                sourceType: "parent-freight-journal",
+                sourceId: `${freightOpts.subsidiaryCompanyId}:${primaryPoNum}`,
+                phase: "voucher",
               },
-            ];
-            if (drAccountId) {
-              entriesToInsert.push({
-                voucherId: newFV.id,
-                ledgerAccountId: drAccountId,
-                debitAmount: freightAmtStr,
-                creditAmount: "0",
-                narration: `Freight receivable - ${nums.join(", ")}`,
-              });
-            }
-            await dbOrTx.insert(voucherEntries).values(entriesToInsert);
+              lines: [
+                {
+                  ledgerAccountId: freightOpts.freightParentAccountId,
+                  credit: freightAmtStr,
+                  narration: freightNarration,
+                },
+                ...(drAccountId
+                  ? [
+                      {
+                        ledgerAccountId: drAccountId,
+                        debit: freightAmtStr,
+                        narration: `Freight receivable - ${nums.join(", ")}`,
+                      },
+                    ]
+                  : []),
+              ],
+            });
             logger.info(
               `[syncIntercoParentVoucher] Created fallback PARENT-FREIGHT journal #${newFV.id} for PO(s) ${nums.join(", ")}`
             );
             return { found: true, updated: true, voucherId: newFV.id, amount: freightAmtStr };
           }
         } catch (fbErr) {
+          if (fbErr instanceof VoucherCorrectionError) throw fbErr;
           logger.error("[syncIntercoParentVoucher] Failed to create fallback freight journal:", { error: fbErr });
         }
       }
@@ -308,60 +347,70 @@ export async function syncIntercoParentVoucher(
       `[syncIntercoParentVoucher] PO(s) ${nums.join(", ")}: voucher #${parentVoucher.id} ${oldAmountStr} → ${amountStr}`
     );
 
-    await dbOrTx.update(vouchers).set({ totalAmount: amountStr }).where(eq(vouchers.id, parentVoucher.id));
+    // Phase 22 (C), G4: an audited open-period edit of the posted parent
+    // voucher; refused (409: reverse and re-post) in a closed period.
+    const parentVoucherId = parentVoucher.id;
+    await editPostedFactoryVoucherTx(
+      tx,
+      { companyId: parentCompanyId, voucherIds: [parentVoucherId], reason: "interco-parent-voucher-resync" },
+      async () => {
+        await tx.update(vouchers).set({ totalAmount: amountStr }).where(eq(vouchers.id, parentVoucherId));
 
-    if (freightOpts && hasFreight) {
-      // Split the INTERCO-PARENT: DR subsidiary receivable (grossTotal),
-      //   CR supplier (intercoTotal — goods only), CR freightAccount (freight)
-      const intercoAmtStr = intercoTotal.toFixed(2);
-      const freightAmtStr = freight.toFixed(2);
-      let freightEntryFound = false;
+        if (freightOpts && hasFreight) {
+          // Split the INTERCO-PARENT: DR subsidiary receivable (grossTotal),
+          //   CR supplier (intercoTotal — goods only), CR freightAccount (freight)
+          const intercoAmtStr = intercoTotal.toFixed(2);
+          const freightAmtStr = freight.toFixed(2);
+          let freightEntryFound = false;
 
-      for (const entry of parentEntries) {
-        if (toMoney(entry.debitAmount).greaterThan(0)) {
-          await dbOrTx.update(voucherEntries).set({ debitAmount: amountStr }).where(eq(voucherEntries.id, entry.id));
-        } else if (toMoney(entry.creditAmount).greaterThan(0)) {
-          if (entry.ledgerAccountId === freightOpts.freightParentAccountId) {
-            freightEntryFound = true;
-            await dbOrTx
-              .update(voucherEntries)
-              .set({
-                creditAmount: freightAmtStr,
-                narration: `Freight - ${nums.join(", ")}${containerNumber ? ` (${containerNumber})` : ""}`,
-              })
-              .where(eq(voucherEntries.id, entry.id));
-          } else {
-            // Supplier CR → intercoTotal (goods share only)
-            await dbOrTx
-              .update(voucherEntries)
-              .set({ creditAmount: intercoAmtStr })
-              .where(eq(voucherEntries.id, entry.id));
+          for (const entry of parentEntries) {
+            if (toMoney(entry.debitAmount).greaterThan(0)) {
+              await tx.update(voucherEntries).set(usdLineAmounts(amountStr, 0)).where(eq(voucherEntries.id, entry.id));
+            } else if (toMoney(entry.creditAmount).greaterThan(0)) {
+              if (entry.ledgerAccountId === freightOpts.freightParentAccountId) {
+                freightEntryFound = true;
+                await tx
+                  .update(voucherEntries)
+                  .set({
+                    ...usdLineAmounts(0, freightAmtStr),
+                    narration: `Freight - ${nums.join(", ")}${containerNumber ? ` (${containerNumber})` : ""}`,
+                  })
+                  .where(eq(voucherEntries.id, entry.id));
+              } else {
+                // Supplier CR → intercoTotal (goods share only)
+                await tx
+                  .update(voucherEntries)
+                  .set(usdLineAmounts(0, intercoAmtStr))
+                  .where(eq(voucherEntries.id, entry.id));
+              }
+            }
+          }
+          if (!freightEntryFound) {
+            // voucher_entries has no company_id column — scope comes from the parent voucher.
+            await tx.insert(voucherEntries).values({
+              voucherId: parentVoucherId,
+              ledgerAccountId: freightOpts.freightParentAccountId,
+              ...usdLineAmounts(0, freightAmtStr),
+              narration: `Freight - ${nums.join(", ")}${containerNumber ? ` (${containerNumber})` : ""}`,
+            });
+          }
+        } else {
+          // No freight split — update all entries to grossTotal (original behaviour)
+          for (const entry of parentEntries) {
+            if (toMoney(entry.debitAmount).greaterThan(0)) {
+              await tx.update(voucherEntries).set(usdLineAmounts(amountStr, 0)).where(eq(voucherEntries.id, entry.id));
+            } else if (toMoney(entry.creditAmount).greaterThan(0)) {
+              await tx.update(voucherEntries).set(usdLineAmounts(0, amountStr)).where(eq(voucherEntries.id, entry.id));
+            }
           }
         }
       }
-      if (!freightEntryFound) {
-        // voucher_entries has no company_id column — scope comes from the parent voucher.
-        await dbOrTx.insert(voucherEntries).values({
-          voucherId: parentVoucher.id,
-          ledgerAccountId: freightOpts.freightParentAccountId,
-          debitAmount: "0",
-          creditAmount: freightAmtStr,
-          narration: `Freight - ${nums.join(", ")}${containerNumber ? ` (${containerNumber})` : ""}`,
-        });
-      }
-    } else {
-      // No freight split — update all entries to grossTotal (original behaviour)
-      for (const entry of parentEntries) {
-        if (toMoney(entry.debitAmount).greaterThan(0)) {
-          await dbOrTx.update(voucherEntries).set({ debitAmount: amountStr }).where(eq(voucherEntries.id, entry.id));
-        } else if (toMoney(entry.creditAmount).greaterThan(0)) {
-          await dbOrTx.update(voucherEntries).set({ creditAmount: amountStr }).where(eq(voucherEntries.id, entry.id));
-        }
-      }
-    }
+    );
 
     return { found: true, updated: true, voucherId: parentVoucher.id, amount: amountStr, oldAmount: oldAmountStr };
   } catch (err) {
+    // A refused edit (closed period) is the caller's answer, not a missing voucher.
+    if (err instanceof VoucherCorrectionError) throw err;
     logger.error("[syncIntercoParentVoucher] Error syncing parent INTERCO voucher:", { error: err });
     return { found: false, updated: false, amount: amountStr };
   }

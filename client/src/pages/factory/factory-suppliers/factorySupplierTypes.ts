@@ -23,10 +23,49 @@ export interface CurrencyGroup {
   autoSettledFreight?: string;
 }
 
+/** Ledger view of a factory supplier (balance engine, wave 13): Cr positive = we owe. */
+export interface FactorySupplierLedgerViewDto {
+  supplierId: number;
+  balanceBasis: "ledger";
+  ledgerBalanceUsd: string;
+  ledgerBalanceSide: "Cr" | "Dr";
+  openingBalanceUsd: string;
+  nativeBalances: Array<{
+    currencyCode: string;
+    debit: string;
+    credit: string;
+    balance: string;
+    usdBalance: string;
+    effectiveFxRateToUsd: string | null;
+    legacyUnconvertedLines: number;
+  }>;
+  ledgerFxUnresolved: boolean;
+  notInLedger: {
+    label: string;
+    total: string;
+    unresolved: boolean;
+    lines: Array<{
+      source: string;
+      sourceLabel: string;
+      reference: string | null;
+      sourceId: number;
+      date: string;
+      amount: string | null;
+      nativeAmount: string;
+      currency: string;
+      label: string;
+    }>;
+  };
+}
+
 export interface SupplierWithBalance extends FactorySupplier {
   totalContainers: number;
   totalKg: string;
+  /** Ledger balance (USD base, Cr positive) since wave 13; the operational figure is in operationalMemo. */
   totalValue: string;
+  balanceBasis?: "ledger";
+  notInLedgerTotal?: string;
+  operationalMemo?: { label: string; totalValue: string; currencyBalances?: CurrencyBalance[]; fxUnresolved?: boolean };
   brokerPoolUsd?: string;
   pendingContainers: number;
   receivedContainers: number;
@@ -153,5 +192,11 @@ export interface StatementResponse {
     totalPayments: string;
     netPayable: string;
     totalOwed: string;
+    ledgerBalance?: string;
+    notInLedgerTotal?: string;
+    operationalNetPayable?: string;
   };
+  balanceBasis?: "ledger";
+  ledgerView?: FactorySupplierLedgerViewDto & { lines?: unknown[] };
+  operationalMemoLabel?: string;
 }

@@ -19,6 +19,7 @@ import {
   locations,
 } from "@shared/schema";
 import { eq, and, sql, inArray, isNull } from "drizzle-orm";
+import { plusMoney, sumMoney } from "../../../lib/money";
 
 export function registerFactoryProductReadRoutes(app: Express) {
   // ───────────────────────────────────────────────
@@ -212,8 +213,8 @@ export function registerFactoryProductReadRoutes(app: Express) {
         const dateKey = ((bale.pressedAt || bale.createdAt) as Date).toISOString().split("T")[0];
         const existing = pressedMap.get(dateKey) || { date: dateKey, qty: 0, totalWeight: 0, totalCost: 0 };
         existing.qty += 1;
-        existing.totalWeight += parseFloat(bale.weightKg) || 0;
-        existing.totalCost += parseFloat(bale.totalCost) || 0;
+        existing.totalWeight = plusMoney(existing.totalWeight, bale.weightKg);
+        existing.totalCost = plusMoney(existing.totalCost, bale.totalCost);
         pressedMap.set(dateKey, existing);
       }
       const pressed = Array.from(pressedMap.values()).sort((a, b) => b.date.localeCompare(a.date));
@@ -251,8 +252,9 @@ export function registerFactoryProductReadRoutes(app: Express) {
           for (const order of allRelevantOrders) {
             const balesInOrder = orderBalesForProduct.filter((b) => b.orderId === order.id);
             const qty = balesInOrder.length;
-            const total = balesInOrder.reduce((s: number, b) => s + parseFloat(b.priceUsed || "0"), 0);
-            const pricePerBale = qty > 0 ? total / qty : 0;
+            const exactTotal = sumMoney(balesInOrder.map((b) => b.priceUsed));
+            const total = exactTotal.toNumber();
+            const pricePerBale = qty > 0 ? exactTotal.dividedBy(qty).toNumber() : 0;
 
             const [customer] = await db
               .select({ legalName: customers.legalName })
@@ -312,7 +314,7 @@ export function registerFactoryProductReadRoutes(app: Express) {
           totalWeight: 0,
         };
         existing.qty += 1;
-        existing.totalWeight += parseFloat(bale.weightKg) || 0;
+        existing.totalWeight = plusMoney(existing.totalWeight, bale.weightKg);
         locStockMap.set(locId, existing);
       }
       const locIds = [...locStockMap.keys()].filter((id) => id > 0);
@@ -328,7 +330,7 @@ export function registerFactoryProductReadRoutes(app: Express) {
       }
       const currentStock = {
         totalQty: inStockBales.length,
-        totalWeight: inStockBales.reduce((s, b) => s + (parseFloat(b.weightKg) || 0), 0),
+        totalWeight: sumMoney(inStockBales.map((b) => b.weightKg)).toNumber(),
         locations: Array.from(locStockMap.values()).sort((a, b) => b.qty - a.qty),
       };
 

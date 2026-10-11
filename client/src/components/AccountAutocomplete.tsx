@@ -248,7 +248,7 @@ export const AccountAutocomplete = forwardRef<AccountAutocompleteHandle, Account
               >
                 <Check
                   className={cn(
-                    "h-4 w-4 flex-shrink-0",
+                    "h-4 w-4 shrink-0",
                     value?.type === account.type && value?.id === account.id ? "opacity-100" : "opacity-0"
                   )}
                 />

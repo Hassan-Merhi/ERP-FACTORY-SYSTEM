@@ -111,7 +111,7 @@ export function ERPWorkerDetail({ worker, onBack, onEdit }: Props) {
       {/* Main layout: left card + right tabs */}
       <div className="flex flex-col lg:flex-row gap-4 items-start">
         {/* Left summary card */}
-        <div className="w-full lg:w-72 flex-shrink-0 space-y-3">
+        <div className="w-full lg:w-72 shrink-0 space-y-3">
           <Card>
             <CardContent className="p-5 flex flex-col items-center gap-3">
               <Avatar className="h-16 w-16">
@@ -561,7 +561,7 @@ export function ERPWorkerDetail({ worker, onBack, onEdit }: Props) {
                             )}
                           </div>
                         </div>
-                        <div className="flex items-center gap-1 flex-shrink-0">
+                        <div className="flex items-center gap-1 shrink-0">
                           <Button
                             size="icon"
                             variant="ghost"

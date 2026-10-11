@@ -9,8 +9,13 @@ import { getErrorMessage, errorStatus } from "../../../lib/httpHandlers";
 import { logger } from "../../../lib/logger";
 import { db } from "../../../db";
 import { requireAuth } from "../../../auth";
+import {
+  assertNoInventoryCutoverTx,
+  sendInventoryCutoverRefusal,
+} from "../../../services/accounting/perpetualInventory/cutoverRefusal";
 import { inventory, stockItems, vouchers, salesItems, locations } from "@shared/schema";
 import { eq, and, sql } from "drizzle-orm";
+import { toMoney } from "../../../lib/money";
 
 export function registerSalesInventoryFixRoutes(app: Express) {
   // Fix inventory for Sales vouchers that were edited with location changes
@@ -26,6 +31,8 @@ export function registerSalesInventoryFixRoutes(app: Express) {
       if (!companyId) {
         return res.status(400).json({ message: "No company selected" });
       }
+      // Wave 11: rewrites stock with no journal; refused after the cut-over.
+      await assertNoInventoryCutoverTx(db, companyId, "fix-sales-inventory");
 
       // Get all Sales vouchers for this company
       const salesVouchers = await db
@@ -42,8 +49,8 @@ export function registerSalesInventoryFixRoutes(app: Express) {
         const items = await db.select().from(salesItems).where(eq(salesItems.voucherId, voucher.id));
 
         for (const item of items) {
-          const quantity = parseFloat(item.quantity);
-          const _costPrice = parseFloat(item.costPrice);
+          const quantity = toMoney(item.quantity).toNumber();
+          const _costPrice = toMoney(item.costPrice).toNumber();
 
           // Check if inventory at this location has this deduction
           const [inv] = await db
@@ -57,7 +64,7 @@ export function registerSalesInventoryFixRoutes(app: Express) {
             locationId: voucher.locationId,
             stockItemId: item.stockItemId,
             saleQuantity: quantity,
-            currentInventory: inv ? parseFloat(inv.quantity) : null,
+            currentInventory: inv ? toMoney(inv.quantity).toNumber() : null,
           });
         }
       }
@@ -123,6 +130,7 @@ export function registerSalesInventoryFixRoutes(app: Express) {
         negativeInventoryFound: negativeInventory.length,
       });
     } catch (error: unknown) {
+      if (sendInventoryCutoverRefusal(res, error)) return;
       logger.error("[Fix Sales Inventory] Error:", { error: error });
       res.status(errorStatus(error)).json({ message: getErrorMessage(error) });
     }

@@ -107,10 +107,10 @@ const TabsTrigger = React.forwardRef<
       }}
       className={cn(
         "inline-flex min-h-11 shrink-0 touch-manipulation items-center justify-center gap-1.5 whitespace-nowrap text-sm font-medium transition-all sm:min-h-9",
-        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+        "focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
         "disabled:pointer-events-none disabled:opacity-40",
         "rounded-full px-3 py-1.5 text-muted-foreground hover:text-foreground sm:px-4",
-        active && "bg-background font-semibold text-foreground shadow-sm",
+        active && "bg-background font-semibold text-foreground shadow-xs",
         className
       )}
       {...props}
@@ -133,7 +133,7 @@ const TabsContent = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDi
         role="tabpanel"
         data-state={ctx.value === value ? "active" : "inactive"}
         className={cn(
-          "mt-4 min-w-0 ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+          "mt-4 min-w-0 ring-offset-background focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
           className
         )}
         {...props}

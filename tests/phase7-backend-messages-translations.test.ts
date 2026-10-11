@@ -13,15 +13,30 @@ describe("Phase 7 backend-message translations", () => {
     // added since, plus the 3 remote-support watch phrases reviewed in Phase 33E
     // (27bd1a8), plus the pool-timeout and CSRF rejection phrases the Phase 9
     // release ratchet required (702), plus the 25 Priority Scan configuration,
-    // queue and routing messages (#2032), for a total of 727.
-    expect(backendMessagesPhase7Translations).toHaveLength(727);
-    expect(new Set(backendMessagesPhase7Translations.map((entry) => entry.en)).size).toBe(727);
+    // queue and routing messages (#2032), plus the fixed-palette color and
+    // legacy move guards that replaced the free-text color length message
+    // (#2141), for a total of 728.
+    expect(backendMessagesPhase7Translations).toHaveLength(728);
+    expect(new Set(backendMessagesPhase7Translations.map((entry) => entry.en)).size).toBe(728);
 
     for (const entry of backendMessagesPhase7Translations) {
       expect(entry.en.trim()).not.toBe("");
       expect(entry.ar.trim()).not.toBe("");
       expect(entry.fr.trim()).not.toBe("");
     }
+  });
+
+  it("translates the Priority Scan fixed-palette guards", () => {
+    expect(translatePhase7BackendMessageText("Priority color must be one of the 11 approved HEX colors.", "fr")).toBe(
+      "La couleur de priorité doit être l’une des 11 couleurs HEX approuvées."
+    );
+    expect(
+      translatePhase7BackendMessageText(
+        "Only an existing active priority can be moved without choosing a new color.",
+        "ar"
+      )
+    ).toBe("لا يمكن نقل سوى أولوية نشطة موجودة دون اختيار لون جديد.");
+    expect(isPhase7BackendMessageText("Color is required and must be 64 characters or fewer.")).toBe(false);
   });
 
   it("translates the PO-import preview rejection", () => {

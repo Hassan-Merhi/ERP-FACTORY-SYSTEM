@@ -1,4 +1,4 @@
-import { db } from "../../db";
+import { db, type DatabaseOrTransaction } from "../../db";
 import { logger } from "../../lib/logger";
 import {
   auditLog,
@@ -10,6 +10,8 @@ import {
   factorySuppliers,
 } from "@shared/schema";
 import { inArray } from "drizzle-orm";
+import { currentAuditActor } from "../../services/audit/auditActorContext";
+import { parseMoneyInput, toMoney } from "../../lib/money";
 
 // ─── Audit log ────────────────────────────────────────────────────────────────
 export type AuditAction =
@@ -73,9 +75,12 @@ export async function logAudit(
   dbConn: { insert: typeof db.insert } = db
 ) {
   try {
+    // Phase 21 (A), AT4: an empty or "unknown" actor is the request's actor when known.
+    const actorMissing = !String(params.userId ?? "").trim() || params.userId === "unknown";
+    const actor = actorMissing ? currentAuditActor({ userId: "unknown", username: "unknown" }) : null;
     await dbConn.insert(auditLog).values({
-      userId: params.userId,
-      username: params.username,
+      userId: actor?.userId ?? params.userId,
+      username: actor?.username ?? params.username,
       companyId: params.companyId,
       action: normalizeAuditAction(params),
       tableName: params.tableName,
@@ -123,13 +128,15 @@ export async function snapshotVoucherEntries(
     debitAmount?: string | null;
     creditAmount?: string | null;
     narration?: string | null;
-  }>
+  }>,
+  // Wave 12: an audit written in a transaction resolves names on that transaction.
+  reader: DatabaseOrTransaction = db
 ): Promise<EntrySnap[]> {
   // Resolve ledger account names
   const ledgerIds = [...new Set(entries.map((e) => e.ledgerAccountId).filter((id): id is number => id != null))];
   const ledgerNames: Record<number, string> = {};
   if (ledgerIds.length > 0) {
-    const accts = await db
+    const accts = await reader
       .select({ id: ledgerAccounts.id, name: ledgerAccounts.name })
       .from(ledgerAccounts)
       .where(inArray(ledgerAccounts.id, ledgerIds));
@@ -142,7 +149,7 @@ export async function snapshotVoucherEntries(
   const bankIds = [...new Set(entries.map((e) => e.bankAccountId).filter((id): id is number => id != null))];
   const bankNames: Record<number, string> = {};
   if (bankIds.length > 0) {
-    const bnks = await db
+    const bnks = await reader
       .select({ id: bankAccounts.id, name: bankAccounts.name })
       .from(bankAccounts)
       .where(inArray(bankAccounts.id, bankIds));
@@ -155,7 +162,7 @@ export async function snapshotVoucherEntries(
   const supplierIds = [...new Set(entries.map((e) => e.supplierId).filter((id): id is number => id != null))];
   const supplierNames: Record<number, string> = {};
   if (supplierIds.length > 0) {
-    const supps = await db
+    const supps = await reader
       .select({ id: suppliers.id, name: suppliers.legalName })
       .from(suppliers)
       .where(inArray(suppliers.id, supplierIds));
@@ -168,7 +175,7 @@ export async function snapshotVoucherEntries(
   const employeeIds = [...new Set(entries.map((e) => e.employeeId).filter((id): id is number => id != null))];
   const employeeNames: Record<number, string> = {};
   if (employeeIds.length > 0) {
-    const emps = await db
+    const emps = await reader
       .select({ id: employees.id, firstName: employees.firstName, lastName: employees.lastName })
       .from(employees)
       .where(inArray(employees.id, employeeIds));
@@ -181,7 +188,7 @@ export async function snapshotVoucherEntries(
   const customerIds = [...new Set(entries.map((e) => e.customerId).filter((id): id is number => id != null))];
   const customerNames: Record<number, string> = {};
   if (customerIds.length > 0) {
-    const custs = await db
+    const custs = await reader
       .select({ id: customers.id, name: customers.legalName })
       .from(customers)
       .where(inArray(customers.id, customerIds));
@@ -196,7 +203,7 @@ export async function snapshotVoucherEntries(
   ];
   const factorySupplierNames: Record<number, string> = {};
   if (factorySupplierIds.length > 0) {
-    const fsupps = await db
+    const fsupps = await reader
       .select({ id: factorySuppliers.id, name: factorySuppliers.name })
       .from(factorySuppliers)
       .where(inArray(factorySuppliers.id, factorySupplierIds));
@@ -262,7 +269,7 @@ export function buildVoucherChangesForUpdate(
   const c: Record<string, { old?: AuditChangeValue; new?: AuditChangeValue }> = {};
   if (oldV.voucherType !== newV.voucherType) c.voucherType = { old: oldV.voucherType, new: newV.voucherType };
   if (oldV.voucherDate !== newV.voucherDate) c.date = { old: oldV.voucherDate, new: newV.voucherDate };
-  if (parseFloat(oldV.totalAmount || "0") !== parseFloat(newV.totalAmount || "0"))
+  if (toMoney(oldV.totalAmount).toNumber() !== toMoney(newV.totalAmount).toNumber())
     c.amount = { old: oldV.totalAmount, new: newV.totalAmount };
   if ((oldV.description ?? "") !== (newV.description ?? ""))
     c.description = { old: oldV.description ?? "", new: newV.description ?? "" };
@@ -349,13 +356,13 @@ export async function buildItemLevelChanges(
     if (!oldItem) continue;
     const name = await getName(id, newItem.itemName ?? oldItem.itemName);
     const fieldChanges: string[] = [];
-    const qn = parseFloat(String(newItem.quantity ?? 0));
-    const qo = parseFloat(String(oldItem.quantity ?? 0));
+    const qn = parseMoneyInput(String(newItem.quantity ?? 0))?.toNumber() ?? NaN;
+    const qo = parseMoneyInput(String(oldItem.quantity ?? 0))?.toNumber() ?? NaN;
     if (!isNaN(qn) && !isNaN(qo) && Math.abs(qn - qo) > 0.0001) {
       fieldChanges.push(`quantity from ${qo} to ${qn}`);
     }
-    const rn = parseFloat(String(newItem.rate ?? 0));
-    const ro = parseFloat(String(oldItem.rate ?? 0));
+    const rn = parseMoneyInput(String(newItem.rate ?? 0))?.toNumber() ?? NaN;
+    const ro = parseMoneyInput(String(oldItem.rate ?? 0))?.toNumber() ?? NaN;
     if (!isNaN(rn) && !isNaN(ro) && Math.abs(rn - ro) > 0.0001) {
       fieldChanges.push(`unit price from ${ro} to ${rn}`);
     }

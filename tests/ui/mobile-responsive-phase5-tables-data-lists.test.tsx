@@ -96,7 +96,7 @@ describe("Mobile responsiveness Phase 5 tables and data lists", () => {
     expect(values).toEqual(["555-0100", "—"]);
     // Row actions are grouped for assistive tech and keep 44px touch targets on phones.
     const actions = within(item).getByRole("group", { name: "Row actions" });
-    expect(actions.className).toContain("[&>*]:min-h-11");
+    expect(actions.className).toContain("*:min-h-11");
     expect(within(actions).getByRole("button", { name: "Edit" })).toBeInTheDocument();
     expect(screen.getByRole("status")).toHaveTextContent("No customers yet");
   });

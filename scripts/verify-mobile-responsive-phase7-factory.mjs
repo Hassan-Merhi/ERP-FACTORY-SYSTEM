@@ -38,7 +38,7 @@ for (const token of [
   "max-sm:[&_input]:min-h-11",
   "max-sm:[&_input]:text-base",
   "[&_form]:max-w-full",
-  "[&_[data-mobile-data-list]]:max-w-full",
+  "**:data-mobile-data-list:max-w-full",
 ]) {
   if (!factoryShell.includes(token)) failures.push(`Factory workspace contract missing: ${token}`);
 }

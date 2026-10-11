@@ -11,6 +11,7 @@ import { db } from "../../db";
 import { storage } from "../../storage";
 import { requireAuth, requireNonPOS } from "../../auth";
 import { voucherEntries, vouchers } from "@shared/schema";
+import { MoneyDecimal, sumMoney } from "../../lib/money";
 
 export function registerPayrollSummaryRoutes(app: Express) {
   // Get employees with calculated balances from transactions
@@ -50,7 +51,7 @@ export function registerPayrollSummaryRoutes(app: Express) {
           const employeeAccountCode = `EMP-${worker.code}`;
           const employeeAccount = allAccounts.find((a) => a.code === employeeAccountCode);
 
-          let totalPaid = 0;
+          let totalPaid = new MoneyDecimal(0);
 
           if (employeeAccount) {
             // Get all voucher entries that credit this employee account (withdrawals/payments)
@@ -70,7 +71,7 @@ export function registerPayrollSummaryRoutes(app: Express) {
               );
 
             // Sum all credits (payments to worker)
-            totalPaid = entries.reduce((sum: number, entry) => sum + parseFloat(entry.creditAmount || "0"), 0);
+            totalPaid = sumMoney(entries.map((entry) => entry.creditAmount));
           }
 
           return {
@@ -83,7 +84,7 @@ export function registerPayrollSummaryRoutes(app: Express) {
       );
 
       // Calculate grand total
-      const grandTotal = workerPayments.reduce((sum: number, wp) => sum + parseFloat(wp.totalPaid), 0);
+      const grandTotal = sumMoney(workerPayments.map((wp) => wp.totalPaid));
 
       res.json({
         workerPayments,

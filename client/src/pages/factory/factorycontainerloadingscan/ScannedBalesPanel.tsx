@@ -129,7 +129,7 @@ function ScanControls({ model }: { model: FactoryContainerLoadingScanModel }) {
           disabled={
             !model.orderId || !model.orderDetail || !model.selectedLocationId || model.addBaleMutation.isPending
           }
-          className={`h-14 min-w-0 rounded-xl border-border/80 bg-background pl-12 font-mono text-base shadow-sm transition-all focus-visible:ring-2 sm:text-lg ${model.scanInputClass}`}
+          className={`h-14 min-w-0 rounded-xl border-border/80 bg-background pl-12 font-mono text-base shadow-xs transition-all focus-visible:ring-2 sm:text-lg ${model.scanInputClass}`}
           autoFocus
           data-testid="input-scan-code"
         />
@@ -353,7 +353,7 @@ export function ScannedBalesPanel({ model }: { model: FactoryContainerLoadingSca
   return (
     <div className="flex min-h-0 min-w-0 flex-col xl:w-[60%]">
       <div
-        className={`flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border bg-background/90 shadow-sm transition-all duration-300 ${
+        className={`flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border bg-background/90 shadow-xs transition-all duration-300 ${
           scanFlash === "success" ? "ring-2 ring-green-500/80" : scanFlash === "error" ? "ring-2 ring-red-500/80" : ""
         }`}
       >

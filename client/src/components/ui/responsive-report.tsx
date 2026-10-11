@@ -20,7 +20,7 @@ const ResponsiveMetricGrid = React.forwardRef<HTMLDivElement, React.HTMLAttribut
       ref={ref}
       data-responsive-metric-grid="true"
       className={cn(
-        "grid min-w-0 grid-cols-1 gap-3 min-[420px]:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 [&>*]:min-w-0",
+        "grid min-w-0 grid-cols-1 gap-3 min-[420px]:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 *:min-w-0",
         className
       )}
       {...props}
@@ -34,7 +34,7 @@ const ResponsiveReportGrid = React.forwardRef<HTMLDivElement, React.HTMLAttribut
     <div
       ref={ref}
       data-responsive-report-grid="true"
-      className={cn("grid min-w-0 grid-cols-1 gap-4 xl:grid-cols-2 [&>*]:min-w-0 [&>*]:max-w-full", className)}
+      className={cn("grid min-w-0 grid-cols-1 gap-4 xl:grid-cols-2 *:min-w-0 *:max-w-full", className)}
       {...props}
     />
   )
@@ -46,7 +46,7 @@ const ResponsiveChartPanel = React.forwardRef<HTMLDivElement, React.HTMLAttribut
     <div
       ref={ref}
       data-responsive-chart-panel="true"
-      className={cn("min-w-0 max-w-full rounded-xl border bg-card p-3 shadow-sm sm:p-4", className)}
+      className={cn("min-w-0 max-w-full rounded-xl border bg-card p-3 shadow-xs sm:p-4", className)}
       {...props}
     />
   )
@@ -67,7 +67,7 @@ const ResponsiveChartViewport = React.forwardRef<HTMLDivElement, ResponsiveChart
       tabIndex={0}
       data-responsive-chart-viewport="true"
       className={cn(
-        "max-w-full touch-pan-x overflow-x-auto overscroll-x-contain rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+        "max-w-full touch-pan-x overflow-x-auto overscroll-x-contain rounded-lg focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
         className
       )}
       {...props}
@@ -93,14 +93,14 @@ ResponsiveChartHeader.displayName = "ResponsiveChartHeader";
 
 const ResponsiveChartTitle = React.forwardRef<HTMLHeadingElement, React.HTMLAttributes<HTMLHeadingElement>>(
   ({ className, ...props }, ref) => (
-    <h2 ref={ref} className={cn("min-w-0 break-words text-base font-semibold sm:text-lg", className)} {...props} />
+    <h2 ref={ref} className={cn("min-w-0 wrap-break-word text-base font-semibold sm:text-lg", className)} {...props} />
   )
 );
 ResponsiveChartTitle.displayName = "ResponsiveChartTitle";
 
 const ResponsiveChartDescription = React.forwardRef<HTMLParagraphElement, React.HTMLAttributes<HTMLParagraphElement>>(
   ({ className, ...props }, ref) => (
-    <p ref={ref} className={cn("mt-1 min-w-0 break-words text-sm text-muted-foreground", className)} {...props} />
+    <p ref={ref} className={cn("mt-1 min-w-0 wrap-break-word text-sm text-muted-foreground", className)} {...props} />
   )
 );
 ResponsiveChartDescription.displayName = "ResponsiveChartDescription";

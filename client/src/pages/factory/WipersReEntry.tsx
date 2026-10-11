@@ -885,7 +885,7 @@ export default function WipersReEntry() {
                 data-testid={`button-design-${opt.value}`}
               >
                 <span
-                  className="inline-block h-2.5 w-2.5 rounded-full mr-2 flex-shrink-0 border border-border/50"
+                  className="inline-block h-2.5 w-2.5 rounded-full mr-2 shrink-0 border border-border/50"
                   style={{ background: opt.color }}
                 />
                 {opt.label}

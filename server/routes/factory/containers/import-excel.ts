@@ -10,7 +10,10 @@ import { getClientDate } from "../../../lib/dateUtils";
 import { logger } from "../../../lib/logger";
 import { db } from "../../../db";
 import { requireAuth } from "../../../auth";
-import { writeDaybookEntry, getOrFetchFxRateToUsd } from "../_helpers";
+import { writeDaybookEntry } from "../_helpers";
+import { factoryDocumentRate } from "../../../services/factory/factoryDocumentFxRate";
+import { parseMoneyInput, toMoney } from "../../../lib/money";
+import { syncContainerCommissionJournalTx } from "../../../services/factory/containerCommissionJournal";
 import { factorySuppliers, factoryContainers } from "@shared/schema";
 import { eq } from "drizzle-orm";
 
@@ -63,14 +66,14 @@ export function registerFactoryContainerImportRoutes(app: Express) {
             continue;
           }
 
-          const ratePerKg = parseFloat(row.ratePerKg || "0") || 0;
-          const totalKg = parseFloat(row.totalKg || "0") || 0;
+          const ratePerKg = toMoney(row.ratePerKg).toNumber();
+          const totalKg = toMoney(row.totalKg).toNumber();
 
-          if (row.totalKg && isNaN(parseFloat(row.totalKg))) {
+          if (row.totalKg && parseMoneyInput(row.totalKg) === null) {
             errors.push(`Row ${rowNum} (${row.containerNumber}): Invalid Total Kg value`);
             continue;
           }
-          if (row.ratePerKg && isNaN(parseFloat(row.ratePerKg))) {
+          if (row.ratePerKg && parseMoneyInput(row.ratePerKg) === null) {
             errors.push(`Row ${rowNum} (${row.containerNumber}): Invalid Rate/Kg value`);
             continue;
           }
@@ -79,24 +82,37 @@ export function registerFactoryContainerImportRoutes(app: Express) {
           const today = getClientDate(req);
           const importDate = row.arrivalDate || today;
 
-          let fxRate: number;
+          let manualRate: number | null = null;
           if (fxSource === "manual" && row.fxRateToUsd) {
-            const parsedManualRate = parseFloat(row.fxRateToUsd);
+            const parsedManualRate = toMoney(row.fxRateToUsd).toNumber();
             if (currencyCode !== "USD" && !(parsedManualRate > 0)) {
               errors.push(`Row ${rowNum} (${row.containerNumber}): Invalid manual fxRateToUsd for ${currencyCode}`);
               continue;
             }
-            fxRate = parsedManualRate;
+            manualRate = parsedManualRate;
           } else if (fxSource === "manual") {
             errors.push(`Row ${rowNum} (${row.containerNumber}): fxSource is MANUAL but fxRateToUsd was not provided`);
             continue;
-          } else {
-            try {
-              fxRate = parseFloat(await getOrFetchFxRateToUsd(companyId, currencyCode, importDate));
-            } catch (fxErr: unknown) {
-              errors.push(`Row ${rowNum} (${row.containerNumber}): ${getErrorMessage(fxErr)}`);
-              continue;
-            }
+          }
+          // Phase 19 C (M2): the recorded factory rate on or before the row's date
+          // (a manual row rate is used only where one exists); the row is refused
+          // otherwise. It used to fetch an external rate and mark it confirmed.
+          let fxRate: number;
+          try {
+            fxRate = toMoney(
+              (
+                await factoryDocumentRate(
+                  db,
+                  companyId,
+                  currencyCode,
+                  importDate,
+                  manualRate !== null ? { rate: manualRate, confirmed: true } : undefined
+                )
+              ).rate
+            ).toNumber();
+          } catch (fxErr: unknown) {
+            errors.push(`Row ${rowNum} (${row.containerNumber}): ${getErrorMessage(fxErr)}`);
+            continue;
           }
 
           await db.transaction(async (tx) => {
@@ -121,7 +137,7 @@ export function registerFactoryContainerImportRoutes(app: Express) {
 
             const ratePerKgUsd = currencyCode === "USD" ? ratePerKg : ratePerKg * fxRate;
 
-            const commAmt = row.commissionAmount ? String(parseFloat(row.commissionAmount) || 0) : "0";
+            const commAmt = row.commissionAmount ? String(toMoney(row.commissionAmount).toNumber()) : "0";
             const commCcy = (row.commissionCurrencyCode || "USD").toUpperCase();
 
             const [container] = await tx
@@ -139,7 +155,7 @@ export function registerFactoryContainerImportRoutes(app: Express) {
                 fxRateSource: fxSource,
                 fxRateDateImport: importDate,
                 ratePerKgUsd: String(ratePerKgUsd),
-                // Explicitly resolved above (validated manual entry or a real auto-fetch).
+                // A recorded dated rate (or the row's own rate checked against one).
                 fxRateConfirmed: true,
                 arrivalDate: row.arrivalDate || null,
                 notes: row.notes || null,
@@ -166,6 +182,9 @@ export function registerFactoryContainerImportRoutes(app: Express) {
               amountCurrency: ratePerKg * totalKg,
               fxRateToUsd: fxRate,
             });
+
+            // Wave 8.4 continuation: the imported commission is journalled with the container.
+            await syncContainerCommissionJournalTx(tx, companyId, container.id);
 
             results.push(container);
           });

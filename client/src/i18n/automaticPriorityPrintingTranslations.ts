@@ -49,6 +49,21 @@ const translations: Record<string, Translation> = {
     ar: "تغيّرت الحمولة للمرجع ${label.referenceNumber}. حدّث الصفحة قبل الطباعة.",
     fr: "Le chargement a changé pour ${label.referenceNumber}. Actualisez avant d’imprimer.",
   },
+  "Priority color changed for ${label.referenceNumber}. Refresh before printing.": {
+    en: "Priority color changed for ${label.referenceNumber}. Refresh before printing.",
+    ar: "تغيّر لون الأولوية للمرجع ${label.referenceNumber}. حدّث الصفحة قبل الطباعة.",
+    fr: "La couleur de priorité a changé pour ${label.referenceNumber}. Actualisez avant d’imprimer.",
+  },
+  "Incomplete priority reprint audit for ${label.referenceNumber}.": {
+    en: "Incomplete priority reprint audit for ${label.referenceNumber}.",
+    ar: "سجل تدقيق إعادة طباعة الأولوية غير مكتمل للمرجع ${label.referenceNumber}.",
+    fr: "Audit de réimpression de priorité incomplet pour ${label.referenceNumber}.",
+  },
+  "Select one of the eleven approved Priority Scan colors.": {
+    en: "Select one of the eleven approved Priority Scan colors.",
+    ar: "اختر أحد ألوان المسح حسب الأولوية الأحد عشر المعتمدة.",
+    fr: "Sélectionnez l’une des onze couleurs approuvées pour le scan prioritaire.",
+  },
   "Could not record label reprint": {
     en: "Could not record label reprint",
     ar: "تعذر تسجيل إعادة طباعة الملصق",
@@ -79,10 +94,10 @@ const translations: Record<string, Translation> = {
     ar: "ملصقات الأولوية تحتاج إلى طابعة ملونة",
     fr: "Les étiquettes de priorité nécessitent une imprimante couleur",
   },
-  "Bales assigned to a priority loading print through the browser so the colored HMD logo is kept.": {
-    en: "Bales assigned to a priority loading print through the browser so the colored HMD logo is kept.",
-    ar: "تُطبع البالات المخصصة لحمولة ذات أولوية عبر المتصفح للحفاظ على شعار HMD الملوّن.",
-    fr: "Les balles affectées à un chargement prioritaire s’impriment via le navigateur afin de conserver le logo HMD en couleur.",
+  "Bales assigned to a priority loading print through the browser so the priority color box is kept.": {
+    en: "Bales assigned to a priority loading print through the browser so the priority color box is kept.",
+    ar: "تُطبع البالات المخصصة لحمولة ذات أولوية عبر المتصفح للحفاظ على مربع لون الأولوية.",
+    fr: "Les balles affectées à un chargement prioritaire s’impriment via le navigateur afin de conserver le bloc de couleur de priorité.",
   },
   "Could not prepare bale label print": {
     en: "Could not prepare bale label print",

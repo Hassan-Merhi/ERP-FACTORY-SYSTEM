@@ -159,7 +159,6 @@ export function getParentRoute(pathname: string): string | null {
   if (/^\/orphaned-records/.test(cleanPath)) return "/settings";
   if (/^\/deleted-items/.test(cleanPath)) return "/settings";
   if (/^\/account-migration/.test(cleanPath)) return "/settings";
-  if (/^\/test-data-import/.test(cleanPath)) return "/settings";
   if (/^\/notification-settings/.test(cleanPath)) return "/settings";
   if (/^\/chatbot-settings/.test(cleanPath)) return "/settings";
   if (/^\/intercompany-links/.test(cleanPath)) return "/settings";

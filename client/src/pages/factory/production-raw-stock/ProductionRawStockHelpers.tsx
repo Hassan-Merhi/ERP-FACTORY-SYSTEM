@@ -75,7 +75,7 @@ export function AccountCombobox({
         </Button>
       </PopoverTrigger>
       <PopoverContent
-        className="w-[var(--radix-popover-trigger-width)] min-w-[20rem] max-w-[calc(100vw-2rem)] p-0"
+        className="w-(--radix-popover-trigger-width) min-w-[20rem] max-w-[calc(100vw-2rem)] p-0"
         align="start"
       >
         <Command>

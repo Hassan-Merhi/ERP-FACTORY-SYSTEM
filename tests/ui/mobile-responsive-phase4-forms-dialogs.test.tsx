@@ -86,7 +86,7 @@ describe("Mobile responsiveness Phase 4 forms and dialogs", () => {
     expect(dialog().className).toContain("overflow-y-auto");
     expect(dialog().className).toContain("max-w-2xl");
     expect(screen.getByText("form").parentElement).toHaveAttribute("data-dialog-body", "true");
-    expect(screen.getByTestId("footer").className).toContain("[&>*]:min-h-11");
+    expect(screen.getByTestId("footer").className).toContain("*:min-h-11");
     expect(header().className).not.toContain("sticky");
   });
 
@@ -180,7 +180,7 @@ describe("Mobile responsiveness Phase 4 forms and dialogs", () => {
     expect(content.className).toContain("inset-x-0");
     expect(content.className).toContain("motion-reduce:animate-none");
     expect(screen.getByTestId("alert-footer").className).toContain("grid-cols-2");
-    expect(screen.getByTestId("alert-footer").className).toContain("[&>*]:min-h-11");
+    expect(screen.getByTestId("alert-footer").className).toContain("*:min-h-11");
   });
 
   it("gives sheets a full-height panel, a touch-sized close control, and a keyboard-aware bottom edge", () => {

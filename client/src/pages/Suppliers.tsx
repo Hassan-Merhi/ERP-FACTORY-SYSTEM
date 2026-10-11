@@ -258,8 +258,8 @@ export default function Suppliers() {
             <div key={i} className="rounded-xl border bg-card p-4 flex items-center gap-4">
               <Skeleton className="w-10 h-10 rounded-lg shrink-0" />
               <div className="flex-1 space-y-2">
-                <Skeleton className="h-3.5 w-40 rounded" />
-                <Skeleton className="h-3 w-24 rounded" />
+                <Skeleton className="h-3.5 w-40 rounded-sm" />
+                <Skeleton className="h-3 w-24 rounded-sm" />
               </div>
               <Skeleton className="h-6 w-28 rounded-md" />
             </div>

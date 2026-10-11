@@ -44,7 +44,7 @@ export function StockEntrySidebar({
 }: StockEntrySidebarProps) {
   return (
     <aside className="min-w-0 xl:sticky xl:top-6" aria-label="Stock entry options and totals">
-      <div className="min-w-0 space-y-5 rounded-2xl border bg-card p-3 shadow-sm sm:p-5">
+      <div className="min-w-0 space-y-5 rounded-2xl border bg-card p-3 shadow-xs sm:p-5">
         <div className="space-y-4">
           <div className="space-y-2">
             <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Location & Date</p>
@@ -120,7 +120,7 @@ export function StockEntrySidebar({
           <div className="min-w-0 rounded-lg bg-muted/40 p-3">
             <span className="block text-xs font-medium text-muted-foreground">Total Bales</span>
             <span
-              className="mt-1 block break-words text-xl font-black tabular-nums text-primary"
+              className="mt-1 block wrap-break-word text-xl font-black tabular-nums text-primary"
               data-testid="text-total-qty"
             >
               {totalQty}
@@ -129,7 +129,7 @@ export function StockEntrySidebar({
           <div className="min-w-0 rounded-lg bg-muted/40 p-3">
             <span className="block text-xs font-medium text-muted-foreground">Total Weight</span>
             <span
-              className="mt-1 block break-words text-xl font-black tabular-nums text-primary"
+              className="mt-1 block wrap-break-word text-xl font-black tabular-nums text-primary"
               data-testid="text-total-kg"
             >
               {totalKg.toFixed(1)}

@@ -13,7 +13,8 @@ import { getClientDate } from "../../lib/dateUtils";
 import { logger } from "../../lib/logger";
 import { inventory, stockTransferVouchers, stockTransferItems, vouchers, locations } from "@shared/schema";
 import { eq, and } from "drizzle-orm";
-import { MoneyDecimal, toMoney } from "../../lib/money";
+import { MoneyDecimal, parseMoneyInput, toMoney } from "../../lib/money";
+import { allocateVoucherNumberTx } from "../../services/accounting/voucherNumbering";
 import { allStockItemsOwned, ownLocationIds } from "../helpers/companyOwnership";
 import { sendTransferWhatsApp } from "../../helpers/sendTransferWhatsApp";
 import { getActiveCompanyPermissionContext } from "../../services/security/activeCompanyPermissionContext";
@@ -24,6 +25,7 @@ import {
   StockTransferPolicyError,
 } from "../../storage/stock-ops/transfers-create";
 import { lockInventoryRow } from "../../storage/inventoryRowLock";
+import { sendBaleMirrorMovementRefusal } from "../../services/accounting/perpetualInventory/cutoverRefusal";
 import {
   findExistingStockDocumentTx,
   recordStockDocumentTx,
@@ -100,8 +102,8 @@ export function registerStockTransferCreateRoutes(app: Express) {
           if (!item.stockItemId || isNaN(Number(item.stockItemId))) {
             return res.status(400).json({ message: `Invalid stockItemId: ${item.stockItemId}` });
           }
-          const qty = parseFloat(item.quantity);
-          if (isNaN(qty) || !isFinite(qty) || qty <= 0) {
+          const qty = parseMoneyInput(item.quantity);
+          if (!qty || !qty.gt(0)) {
             return res.status(400).json({ message: `Invalid quantity for item ${item.stockItemId}: ${item.quantity}` });
           }
         }
@@ -161,7 +163,6 @@ export function registerStockTransferCreateRoutes(app: Express) {
           }
         }
         // Create Stock Transfer voucher, items, and update inventory atomically
-        const voucherNumber = `ST-${Date.now()}`;
         const effectiveDate = voucherDate || getClientDate(req);
 
         // A transfer moves stock the moment it commits, so a double click or a
@@ -222,7 +223,13 @@ export function registerStockTransferCreateRoutes(app: Express) {
             .values({
               companyId,
               voucherType: "Stock Transfer",
-              voucherNumber,
+              // Phase 22 (B), PE8: the gapless number (a stock document header,
+              // no ledger lines, so not an engine posting).
+              voucherNumber: await allocateVoucherNumberTx(tx, {
+                companyId,
+                voucherType: "Stock Transfer",
+                voucherDate: effectiveDate,
+              }),
               voucherDate: effectiveDate,
               description: notes || null,
               totalAmount: "0",
@@ -342,7 +349,7 @@ export function registerStockTransferCreateRoutes(app: Express) {
                 destLocationName: destLocation.name,
                 items: txResult.transferItems.map((i) => ({
                   stockItemId: i.stockItemId,
-                  quantity: parseFloat(i.quantity),
+                  quantity: toMoney(i.quantity).toNumber(),
                 })),
                 voucherNumber: txResult.newVoucher.voucherNumber,
                 voucherDate: txResult.newVoucher.voucherDate,
@@ -388,10 +395,10 @@ export function registerStockTransferCreateRoutes(app: Express) {
         if (!item.stockItemId) {
           return res.status(400).json({ message: "Stock item ID is required for all items" });
         }
-        if (!item.quantity || parseFloat(item.quantity) <= 0) {
+        if (!item.quantity || !(parseMoneyInput(item.quantity)?.gt(0) ?? false)) {
           return res.status(400).json({ message: "Quantity must be positive for all items" });
         }
-        if (!item.rate || parseFloat(item.rate) < 0) {
+        if (!item.rate || (parseMoneyInput(item.rate)?.lt(0) ?? true)) {
           return res.status(400).json({ message: "Rate must be non-negative for all items" });
         }
 
@@ -420,7 +427,7 @@ export function registerStockTransferCreateRoutes(app: Express) {
       // Auto-fill rate from inventory for items with no rate (e.g. POS users who don't see cost)
       const itemsWithRate = await Promise.all(
         items.map(async (item) => {
-          if (!item.rate || parseFloat(item.rate) === 0) {
+          if (!item.rate || (parseMoneyInput(item.rate)?.isZero() ?? false)) {
             const [invRow] = await db
               .select({ averageRate: inventory.averageRate })
               .from(inventory)
@@ -479,7 +486,7 @@ export function registerStockTransferCreateRoutes(app: Express) {
               destLocationName: destLocation.name,
               items: transfer.items.map((i) => ({
                 stockItemId: i.stockItemId,
-                quantity: parseFloat(i.quantity),
+                quantity: toMoney(i.quantity).toNumber(),
               })),
               voucherNumber: voucher.voucherNumber,
               voucherDate: voucher.voucherDate,
@@ -489,6 +496,7 @@ export function registerStockTransferCreateRoutes(app: Express) {
           }
         });
     } catch (error: unknown) {
+      if (sendBaleMirrorMovementRefusal(res, error)) return;
       if (error instanceof StockTransferPolicyError) {
         logger.warn("stock transfer create rejected by inventory policy", {
           module: "stockTransfer",

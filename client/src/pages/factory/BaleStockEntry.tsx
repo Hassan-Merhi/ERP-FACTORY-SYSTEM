@@ -113,12 +113,12 @@ export default function BaleStockEntry() {
     <FactoryMobilePage>
       <FactoryMobileHeader>
         <div className="flex min-w-0 items-center gap-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-emerald-500/25 bg-gradient-to-br from-emerald-500/30 to-emerald-600/10">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-emerald-500/25 bg-linear-to-br from-emerald-500/30 to-emerald-600/10">
             <ScanLine className="h-5 w-5 text-emerald-500" />
           </div>
           <div className="min-w-0">
-            <h1 className="break-words text-lg font-bold leading-tight sm:text-xl">Bale Stock Entry</h1>
-            <p className="mt-0.5 break-words text-sm leading-snug text-muted-foreground">
+            <h1 className="wrap-break-word text-lg font-bold leading-tight sm:text-xl">Bale Stock Entry</h1>
+            <p className="mt-0.5 wrap-break-word text-sm leading-snug text-muted-foreground">
               Scan and record bale production
             </p>
           </div>

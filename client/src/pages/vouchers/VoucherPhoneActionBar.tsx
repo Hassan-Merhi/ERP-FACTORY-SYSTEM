@@ -53,7 +53,7 @@ export function VoucherPhoneActionBar({
       data-testid={testId}
       data-voucher-sticky-actions=""
     >
-      {extra && <div className="flex flex-wrap gap-2 [&>*]:flex-1">{extra}</div>}
+      {extra && <div className="flex flex-wrap gap-2 *:flex-1">{extra}</div>}
       <div className="flex min-w-0 items-center justify-between gap-2 text-xs">
         <div className="min-w-0 truncate font-mono tabular-nums text-muted-foreground" dir="ltr">
           {summary}

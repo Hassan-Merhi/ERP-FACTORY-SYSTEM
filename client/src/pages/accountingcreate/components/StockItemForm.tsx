@@ -205,7 +205,7 @@ function StockItemForm({
                   <FormControl>
                     <Checkbox checked={field.value} onCheckedChange={field.onChange} data-testid="checkbox-active" />
                   </FormControl>
-                  <FormLabel className="!mt-0">Active</FormLabel>
+                  <FormLabel className="mt-0!">Active</FormLabel>
                 </FormItem>
               )}
             />

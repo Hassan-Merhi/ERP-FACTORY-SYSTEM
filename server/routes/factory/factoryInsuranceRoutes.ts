@@ -5,7 +5,6 @@ import { and, desc, eq, ilike, inArray, isNull, or, sql } from "drizzle-orm";
 import { db, pool, type DbTransaction } from "../../db";
 import { requireAuth, requireRole } from "../../auth";
 import {
-  accountingPostingRequests,
   auditLog,
   insuranceMemberMonthlyAmounts,
   insuranceMembers,
@@ -32,6 +31,7 @@ import {
 } from "../../services/factory/insuranceWorkbookImport";
 import type Decimal from "decimal.js";
 import { sumMoney, toMoney } from "../../lib/money";
+import { retireVouchersTx, sessionRetirementActor } from "../../services/accounting/voucherRetirement";
 
 const CLEAR_CONFIRMATION = "CLEAR ALL INSURANCE";
 
@@ -305,10 +305,19 @@ export function registerFactoryInsuranceRoutes(app: Express) {
         .delete(insuranceMembers)
         .where(and(eq(insuranceMembers.id, id), eq(insuranceMembers.companyId, companyId)));
       if (existing.ledgerAccountId) {
-        await pool.query(`UPDATE ledger_accounts SET deleted_at = NOW() WHERE id = $1 AND company_id = $2`, [
-          existing.ledgerAccountId,
-          companyId,
-        ]);
+        // Only an account with no postings and no opening balance is removed:
+        // deleting one that carries history drops its balance from every
+        // report, and the ledger_accounts delete guard refuses it.
+        await pool.query(
+          `UPDATE ledger_accounts la SET deleted_at = NOW()
+            WHERE la.id = $1 AND la.company_id = $2
+              AND COALESCE(la.opening_balance, 0) = 0
+              AND NOT EXISTS (
+                SELECT 1 FROM voucher_entries ve JOIN vouchers v ON v.id = ve.voucher_id
+                 WHERE ve.ledger_account_id = la.id AND v.deleted_at IS NULL
+              )`,
+          [existing.ledgerAccountId, companyId]
+        );
       }
       res.json({ success: true });
     } catch (error: unknown) {
@@ -556,9 +565,14 @@ export function registerFactoryInsuranceRoutes(app: Express) {
           );
 
           if (voucherIds.length > 0) {
-            await tx.delete(accountingPostingRequests).where(inArray(accountingPostingRequests.voucherId, voucherIds));
-            await tx.delete(voucherEntries).where(inArray(voucherEntries.voucherId, voucherIds));
-            await tx.delete(vouchers).where(and(eq(vouchers.companyId, companyId), inArray(vouchers.id, voucherIds)));
+            // Wave 16 (A): retired (soft delete with lines, audited here, numbers
+            // and posting identities released), not hard-deleted.
+            await retireVouchersTx(tx, {
+              companyId,
+              voucherIds,
+              reason: "insurance-clear-all",
+              actor: sessionRetirementActor(req),
+            });
           }
           await tx.delete(insuranceMemberMonthlyAmounts).where(eq(insuranceMemberMonthlyAmounts.companyId, companyId));
           await tx.delete(insuranceMembers).where(eq(insuranceMembers.companyId, companyId));
@@ -585,7 +599,7 @@ export function registerFactoryInsuranceRoutes(app: Express) {
           return {
             membersDeleted: members.length,
             vouchersDeleted: voucherIds.length,
-            voucherEntriesDeleted: true,
+            voucherEntriesDeleted: false,
             monthlyAmountsDeleted: true,
             ledgerAccountsArchived: accountIds.length,
           };

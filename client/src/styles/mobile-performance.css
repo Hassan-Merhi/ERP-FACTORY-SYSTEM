@@ -1,23 +1,34 @@
 /* Mobile performance lifecycle — driven by useMobilePerformanceLifecycle. */
 
-html[data-app-visibility="hidden"] *,
-html[data-app-visibility="hidden"] *::before,
-html[data-app-visibility="hidden"] *::after {
-  animation-play-state: paused !important;
-  transition-duration: 0s !important;
-}
+/*
+ * Cascade layer: Tailwind v4 emits its utilities inside `@layer utilities`, and unlayered CSS beats
+ * any layered rule whatever its specificity. This file joins the same layer so, as before the
+ * upgrade, specificity and source order decide between these rules and utility classes. The
+ * layer order is restated first because a document orders layers by first mention, and this
+ * file may load before index.css.
+ */
+@layer theme, base, components, utilities;
 
-html[data-save-data="true"] {
-  scroll-behavior: auto;
-}
+@layer utilities {
+  html[data-app-visibility="hidden"] *,
+  html[data-app-visibility="hidden"] *::before,
+  html[data-app-visibility="hidden"] *::after {
+    animation-play-state: paused !important;
+    transition-duration: 0s !important;
+  }
 
-html[data-save-data="true"] [data-responsive-chart="true"],
-html[data-slow-connection="true"] [data-responsive-chart="true"] {
-  transition: none !important;
-}
+  html[data-save-data="true"] {
+    scroll-behavior: auto;
+  }
 
-@media (max-width: 767px) {
-  html[data-save-data="true"] [data-responsive-chart-panel="true"] {
-    box-shadow: none;
+  html[data-save-data="true"] [data-responsive-chart="true"],
+  html[data-slow-connection="true"] [data-responsive-chart="true"] {
+    transition: none !important;
+  }
+
+  @media (max-width: 767px) {
+    html[data-save-data="true"] [data-responsive-chart-panel="true"] {
+      box-shadow: none;
+    }
   }
 }

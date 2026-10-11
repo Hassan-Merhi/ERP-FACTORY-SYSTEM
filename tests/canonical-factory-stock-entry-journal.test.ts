@@ -84,7 +84,9 @@ describe("canonical journal for factory stock entry", () => {
     expect(Number(rows[0].location_id)).toBe(ctx.locationId);
     // Three bales of one product raise that item by three.
     expect(Number(rows[0].quantity_delta)).toBe(3);
-    expect(Number(rows[0].unit_cost)).toBeGreaterThan(0);
+    // Wave 11: the ERP mirror of factory bales is quantity only, so the receipt
+    // is at unit cost 0 (the factory values its bales in factory_bales.total_cost).
+    expect(Number(rows[0].unit_cost)).toBe(0);
 
     // The synthetic key is the smallest bale id the entry wrote.
     const { rows: baleRows } = await pool.query(

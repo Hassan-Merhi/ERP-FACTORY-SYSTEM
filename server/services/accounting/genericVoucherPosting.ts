@@ -1,11 +1,7 @@
 import { createHash } from "node:crypto";
 import Decimal from "decimal.js";
 import type { VoucherEntryInsertFields } from "./accountingTypes";
-import {
-  PostingValidationError,
-  type CentralPostingRequest,
-  type PostingActor,
-} from "./centralPostingEngine";
+import { PostingValidationError, type CentralPostingRequest, type PostingActor } from "./centralPostingEngine";
 import { normalizeVoucherEntryAmounts } from "./currencyAmounts";
 
 const TARGET_FIELDS = [
@@ -52,12 +48,9 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function decimalAmount(value: unknown, field: string, index: number): Decimal {
   let parsed: Decimal;
   try {
-    parsed = new Decimal(value == null || value === "" ? 0 : value as Decimal.Value);
+    parsed = new Decimal(value == null || value === "" ? 0 : (value as Decimal.Value));
   } catch {
-    throw new PostingValidationError(
-      "POSTING_AMOUNT_INVALID",
-      `Entry ${index + 1} has an invalid ${field}`
-    );
+    throw new PostingValidationError("POSTING_AMOUNT_INVALID", `Entry ${index + 1} has an invalid ${field}`);
   }
 
   if (!parsed.isFinite() || parsed.isNegative()) {
@@ -78,10 +71,7 @@ function resolveClientRequestId(value: unknown): string {
     );
   }
   if (requestId.length > MAX_REQUEST_ID_LENGTH || !REQUEST_ID_PATTERN.test(requestId)) {
-    throw new PostingValidationError(
-      "POSTING_REQUEST_ID_INVALID",
-      "clientRequestId contains unsupported characters"
-    );
+    throw new PostingValidationError("POSTING_REQUEST_ID_INVALID", "clientRequestId contains unsupported characters");
   }
   return requestId;
 }
@@ -90,10 +80,7 @@ function positiveTargetId(value: unknown, field: string): number | null {
   if (value == null || value === "") return null;
   const id = Number(value);
   if (!Number.isInteger(id) || id <= 0) {
-    throw new PostingValidationError(
-      "POSTING_TARGET_ID_INVALID",
-      `${field} must be a positive integer`
-    );
+    throw new PostingValidationError("POSTING_TARGET_ID_INVALID", `${field} must be a positive integer`);
   }
   return id;
 }
@@ -111,20 +98,36 @@ export function supportsCentralGenericVoucher(input: unknown): boolean {
   if (input.voucher.optional === true) return false;
   if (typeof input.clientRequestId !== "string" || !input.clientRequestId.trim()) return false;
 
-  const currency = String(input.voucher.currency ?? "USD").trim().toUpperCase();
+  const currency = String(input.voucher.currency ?? "USD")
+    .trim()
+    .toUpperCase();
   if (currency !== "USD") return false;
 
-  return input.entries.length >= 2 && input.entries.every((rawEntry) => {
-    if (!isRecord(rawEntry)) return false;
-    if (DUAL_CURRENCY_FIELDS.some((field) => rawEntry[field] != null)) return false;
-    try {
-      const debit = new Decimal(rawEntry.debitAmount == null || rawEntry.debitAmount === "" ? 0 : rawEntry.debitAmount as Decimal.Value);
-      const credit = new Decimal(rawEntry.creditAmount == null || rawEntry.creditAmount === "" ? 0 : rawEntry.creditAmount as Decimal.Value);
-      return debit.isFinite() && credit.isFinite() && debit.gte(0) && credit.gte(0) && debit.decimalPlaces() <= 2 && credit.decimalPlaces() <= 2;
-    } catch {
-      return true;
-    }
-  });
+  return (
+    input.entries.length >= 2 &&
+    input.entries.every((rawEntry) => {
+      if (!isRecord(rawEntry)) return false;
+      if (DUAL_CURRENCY_FIELDS.some((field) => rawEntry[field] != null)) return false;
+      try {
+        const debit = new Decimal(
+          rawEntry.debitAmount == null || rawEntry.debitAmount === "" ? 0 : (rawEntry.debitAmount as Decimal.Value)
+        );
+        const credit = new Decimal(
+          rawEntry.creditAmount == null || rawEntry.creditAmount === "" ? 0 : (rawEntry.creditAmount as Decimal.Value)
+        );
+        return (
+          debit.isFinite() &&
+          credit.isFinite() &&
+          debit.gte(0) &&
+          credit.gte(0) &&
+          debit.decimalPlaces() <= 2 &&
+          credit.decimalPlaces() <= 2
+        );
+      } catch {
+        return true;
+      }
+    })
+  );
 }
 
 function fingerprint(input: {
@@ -133,22 +136,24 @@ function fingerprint(input: {
   entries: VoucherEntryInsertFields[];
 }): string {
   return createHash("sha256")
-    .update(JSON.stringify({
-      companyId: input.companyId,
-      voucher: input.voucher,
-      entries: input.entries.map((entry) => ({
-        ledgerAccountId: entry.ledgerAccountId ?? null,
-        bankAccountId: entry.bankAccountId ?? null,
-        fixedAssetId: entry.fixedAssetId ?? null,
-        supplierId: entry.supplierId ?? null,
-        employeeId: entry.employeeId ?? null,
-        customerId: entry.customerId ?? null,
-        factorySupplierId: entry.factorySupplierId ?? null,
-        debitAmount: entry.debitAmount,
-        creditAmount: entry.creditAmount,
-        narration: entry.narration ?? null,
-      })),
-    }))
+    .update(
+      JSON.stringify({
+        companyId: input.companyId,
+        voucher: input.voucher,
+        entries: input.entries.map((entry) => ({
+          ledgerAccountId: entry.ledgerAccountId ?? null,
+          bankAccountId: entry.bankAccountId ?? null,
+          fixedAssetId: entry.fixedAssetId ?? null,
+          supplierId: entry.supplierId ?? null,
+          employeeId: entry.employeeId ?? null,
+          customerId: entry.customerId ?? null,
+          factorySupplierId: entry.factorySupplierId ?? null,
+          debitAmount: entry.debitAmount,
+          creditAmount: entry.creditAmount,
+          narration: entry.narration ?? null,
+        })),
+      })
+    )
     .digest("hex");
 }
 
@@ -164,7 +169,9 @@ export function buildGenericVoucherPostingRequest(input: GenericVoucherInput): B
   }
 
   const clientRequestId = resolveClientRequestId(input.clientRequestId);
-  const voucherCurrency = String(input.voucher.currency ?? "USD").trim().toUpperCase();
+  const voucherCurrency = String(input.voucher.currency ?? "USD")
+    .trim()
+    .toUpperCase();
   if (voucherCurrency !== "USD") {
     throw new PostingValidationError(
       "POSTING_CURRENCY_INVALID",
@@ -211,9 +218,7 @@ export function buildGenericVoucherPostingRequest(input: GenericVoucherInput): B
       baseCreditAmount: normalized.baseCreditAmount,
       historicalExchangeRate: normalized.historicalExchangeRate,
       rateConvention: normalized.rateConvention,
-      narration: typeof rawEntry.narration === "string" && rawEntry.narration.trim()
-        ? rawEntry.narration.trim()
-        : null,
+      narration: typeof rawEntry.narration === "string" && rawEntry.narration.trim() ? rawEntry.narration.trim() : null,
     };
 
     for (const field of TARGET_FIELDS) {
@@ -234,12 +239,18 @@ export function buildGenericVoucherPostingRequest(input: GenericVoucherInput): B
   const voucher: CentralPostingRequest["voucher"] = {
     companyId: input.companyId,
     locationId: positiveTargetId(input.voucher.locationId, "locationId"),
-    voucherNumber: voucherText(input.voucher.voucherNumber, "voucherNumber"),
+    // Phase 22 (B): an omitted number is allocated by the engine; a caller's
+    // deterministic family number (Golden Coast settlements) is kept.
+    voucherNumber:
+      input.voucher.voucherNumber == null || String(input.voucher.voucherNumber).trim() === ""
+        ? undefined
+        : voucherText(input.voucher.voucherNumber, "voucherNumber"),
     voucherType: voucherText(input.voucher.voucherType, "voucherType"),
     voucherDate: voucherText(input.voucher.voucherDate, "voucherDate"),
-    description: typeof input.voucher.description === "string" && input.voucher.description.trim()
-      ? input.voucher.description.trim()
-      : null,
+    description:
+      typeof input.voucher.description === "string" && input.voucher.description.trim()
+        ? input.voucher.description.trim()
+        : null,
     totalAmount: debitTotal.toDecimalPlaces(2).toFixed(2),
     optional: false,
     currency: "USD",

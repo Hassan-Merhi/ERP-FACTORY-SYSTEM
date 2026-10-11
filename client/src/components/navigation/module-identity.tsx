@@ -47,7 +47,7 @@ export function ModuleIdentity({
       {...props}
     >
       <div className="flex min-w-0 items-center gap-2.5">
-        <div className="shrink-0 rounded-md bg-background/70 p-2 shadow-sm">
+        <div className="shrink-0 rounded-md bg-background/70 p-2 shadow-xs">
           <Icon className="h-4 w-4" aria-hidden="true" />
         </div>
         <div className="min-w-0 flex-1">

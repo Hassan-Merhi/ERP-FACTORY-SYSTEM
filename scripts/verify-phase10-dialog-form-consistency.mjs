@@ -26,7 +26,7 @@ for (const token of [
   "DialogFooter",
   'tone === "destructive" ? "destructive"',
   "max-h-[calc(var(--app-viewport-height)-1rem)]",
-  "break-words",
+  "wrap-break-word",
   'aria-busy={isPending ? "true"',
   "motion-reduce:animate-none",
   "disableConfirm || isPending",
@@ -42,7 +42,7 @@ for (const token of [
   "confirmDisabled",
   "max-h-[calc(100dvh-1rem)]",
   "overflow-y-auto",
-  "break-words",
+  "wrap-break-word",
   'aria-busy={isLoading ? "true"',
   "motion-reduce:animate-none",
   "w-full sm:w-auto",
@@ -63,7 +63,7 @@ for (const token of [
   "data-dialog-body",
   "var(--app-viewport-height)",
   "focus-visible",
-  "[&>*]:min-h-11",
+  "*:min-h-11",
 ]) {
   if (!dialog.includes(token)) failures.push(`Base dialog contract missing: ${token}`);
 }
@@ -72,18 +72,18 @@ for (const token of [
   "w-[calc(100vw-1rem)]",
   "var(--app-viewport-height)",
   "overflow-y-auto overscroll-contain",
-  "[&>*]:min-h-11",
+  "*:min-h-11",
   "motion-reduce:animate-none",
 ]) {
   if (!alertDialog.includes(token)) failures.push(`Alert dialog contract missing: ${token}`);
 }
 
 for (const token of [
-  "h-[var(--app-viewport-height)]",
+  "h-(--app-viewport-height)",
   "w-[calc(100vw-0.75rem)]",
   'aria-label="Close panel"',
   "min-h-11 min-w-11",
-  "[&>*]:min-h-11",
+  "*:min-h-11",
   "motion-reduce:animate-none",
 ]) {
   if (!sheet.includes(token)) failures.push(`Sheet contract missing: ${token}`);

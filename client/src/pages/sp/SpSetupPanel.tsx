@@ -120,9 +120,9 @@ function IntercompanyReadinessRow({ account }: { account: GoldenCoastIntercompan
       <div className="min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
           {ok ? (
-            <CheckCircle2 className="h-3.5 w-3.5 text-green-600 flex-shrink-0" />
+            <CheckCircle2 className="h-3.5 w-3.5 text-green-600 shrink-0" />
           ) : (
-            <AlertCircle className="h-3.5 w-3.5 text-amber-600 flex-shrink-0" />
+            <AlertCircle className="h-3.5 w-3.5 text-amber-600 shrink-0" />
           )}
           <span className="font-medium">{account.name ?? account.expectedName}</span>
           <span className="font-mono text-xs text-muted-foreground">{account.subType}</span>
@@ -282,7 +282,7 @@ export default function SpSetupPanel() {
 
           {status?.bankAccounts?.length === 0 && (
             <div className="flex items-start gap-2 text-sm text-amber-600 bg-amber-50 dark:bg-amber-950/20 rounded-md p-3">
-              <AlertCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
+              <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
               <span>
                 No bank accounts found. Add at least one bank account for prepaid payments and sales receipts.
               </span>
@@ -291,7 +291,7 @@ export default function SpSetupPanel() {
 
           {supplierLinkGapCount > 0 ? (
             <div className="flex items-start gap-2 text-sm text-amber-600 bg-amber-50 dark:bg-amber-950/20 rounded-md p-3">
-              <AlertCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
+              <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
               <span>
                 {supplierLinkGapCount} Goods-OTW voucher{supplierLinkGapCount === 1 ? "" : "s"} need supplier-ledger
                 repair. Re-run Setup to fix them safely.
@@ -299,7 +299,7 @@ export default function SpSetupPanel() {
             </div>
           ) : (
             <div className="flex items-start gap-2 text-sm text-green-700 dark:text-green-400 bg-green-50 dark:bg-green-950/20 rounded-md p-3">
-              <CheckCircle2 className="h-4 w-4 mt-0.5 flex-shrink-0" />
+              <CheckCircle2 className="h-4 w-4 mt-0.5 shrink-0" />
               <span>Container suppliers and Goods-OTW voucher headers are synchronized.</span>
             </div>
           )}
@@ -357,9 +357,9 @@ export default function SpSetupPanel() {
                   <div className="min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       {role.status === "ok" ? (
-                        <CheckCircle2 className="h-3.5 w-3.5 text-green-600 flex-shrink-0" />
+                        <CheckCircle2 className="h-3.5 w-3.5 text-green-600 shrink-0" />
                       ) : (
-                        <AlertCircle className="h-3.5 w-3.5 text-amber-600 flex-shrink-0" />
+                        <AlertCircle className="h-3.5 w-3.5 text-amber-600 shrink-0" />
                       )}
                       <span className="font-medium">{role.name ?? role.expectedName}</span>
                       <span className="font-mono text-xs text-muted-foreground">{role.code ?? "not created"}</span>

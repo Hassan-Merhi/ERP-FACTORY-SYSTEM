@@ -76,7 +76,7 @@ const AlertDialogFooter = ({ className, children, ...props }: React.HTMLAttribut
     <div
       data-slot="alert-dialog-footer"
       className={cn(
-        "flex flex-col-reverse gap-2 border-t pt-4 sm:flex-row sm:justify-end sm:border-t-0 sm:pt-0 [&>*]:min-h-11 [&>*]:w-full sm:[&>*]:w-auto",
+        "flex flex-col-reverse gap-2 border-t pt-4 sm:flex-row sm:justify-end sm:border-t-0 sm:pt-0 *:min-h-11 *:w-full sm:*:w-auto",
         sheet && dialogFrameClasses.sheetFooter,
         sheet && countActions(children) === 2 && dialogFrameClasses.sheetFooterPair,
         className
@@ -95,7 +95,7 @@ const AlertDialogTitle = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <AlertDialogPrimitive.Title
     ref={ref}
-    className={cn("break-words text-lg font-semibold leading-snug", className)}
+    className={cn("wrap-break-word text-lg font-semibold leading-snug", className)}
     {...props}
   />
 ));
@@ -107,7 +107,7 @@ const AlertDialogDescription = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <AlertDialogPrimitive.Description
     ref={ref}
-    className={cn("break-words text-sm leading-relaxed text-muted-foreground", className)}
+    className={cn("wrap-break-word text-sm leading-relaxed text-muted-foreground", className)}
     {...props}
   />
 ));

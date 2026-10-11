@@ -1,22 +1,31 @@
 import type { ClientErrorLike } from "@/lib/clientError";
 // LEGACY — Stock Allocation V3. Superseded by FactoryStockAllocationV5. Kept as fallback only. Route: /factory/stock-allocation-v3 (not in sidebar).
-import {useState} from "react";
-import {useQuery, useMutation} from "@tanstack/react-query";
-import {queryClient} from "@/lib/queryClient";
-import {Badge} from "@/components/ui/badge";
-import {Button} from "@/components/ui/button";
-import {Card, CardContent} from "@/components/ui/card";
-import {useToast} from "@/hooks/use-toast";
-import {PageHeader} from "@/components/PageHeader";
-import {AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle} from "@/components/ui/alert-dialog";
-import {Table, TableBody, TableCell, TableHead, TableHeader, TableRow} from "@/components/ui/table";
-import {Package, ScanLine, Play, CheckCircle, XCircle, Plus, Container, ChevronRight} from "lucide-react";
+import { useState } from "react";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { queryClient } from "@/lib/queryClient";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { useToast } from "@/hooks/use-toast";
+import { PageHeader } from "@/components/PageHeader";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Package, ScanLine, Play, CheckCircle, XCircle, Plus, Container, ChevronRight } from "lucide-react";
 
-import type {Proforma, StockRow, Tab, V3Load} from "./factorystockallocationv3/types";
-import {TABS, TAB_LABELS, fmtDate, fmtDateTime, fmtKg} from "./factorystockallocationv3/utils";
-import {StatusBadge} from "./factorystockallocationv3/components/StatusBadge";
-import {ScanningPanel} from "./factorystockallocationv3/components/ScanningPanel";
-import {CreateLoadDialog} from "./factorystockallocationv3/components/CreateLoadDialog";
+import type { Proforma, StockRow, Tab, V3Load } from "./factorystockallocationv3/types";
+import { TABS, TAB_LABELS, fmtDate, fmtDateTime, fmtKg } from "./factorystockallocationv3/utils";
+import { StatusBadge } from "./factorystockallocationv3/components/StatusBadge";
+import { ScanningPanel } from "./factorystockallocationv3/components/ScanningPanel";
+import { CreateLoadDialog } from "./factorystockallocationv3/components/CreateLoadDialog";
 // ─────────────────────── Types ───────────────────────
 
 export default function FactoryStockAllocationV3() {
@@ -104,7 +113,7 @@ export default function FactoryStockAllocationV3() {
       <div className="px-6 pt-5 pb-3 border-b shrink-0">
         <div className="flex items-center gap-3 mb-4 flex-wrap">
           <PageHeader title="Stock Allocation" />
-          <Badge className="bg-blue-600 text-white text-xs px-2 py-0.5 rounded">v3.0 TEST</Badge>
+          <Badge className="bg-blue-600 text-white text-xs px-2 py-0.5 rounded-sm">v3.0 TEST</Badge>
           <span className="text-xs text-muted-foreground hidden sm:inline">
             Factory 2.0 isolated module — not production
           </span>
@@ -161,12 +170,12 @@ export default function FactoryStockAllocationV3() {
             >
               {TAB_LABELS[tab]}
               {tab === "expected" && expectedLoads.length > 0 && (
-                <span className="ml-1.5 text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded px-1">
+                <span className="ml-1.5 text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-sm px-1">
                   {expectedLoads.length}
                 </span>
               )}
               {tab === "loading" && loadingLoads.length > 0 && (
-                <span className="ml-1.5 text-xs bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300 rounded px-1">
+                <span className="ml-1.5 text-xs bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300 rounded-sm px-1">
                   {loadingLoads.length}
                 </span>
               )}

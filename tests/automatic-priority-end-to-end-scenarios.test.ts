@@ -23,9 +23,9 @@ const REMOVE = "/api/factory/stock-entry/remove";
 const BATCH = "/api/factory/customer-orders/loading-list/automatic-print-preflight-batch";
 const JOGGER = "E2E-JOGGER";
 const OTHER = "E2E-OTHER";
-const RED = "#dc2626";
-const BLUE = "#2563eb";
-const GREEN = "#16a34a";
+const RED = "#B22222";
+const BLUE = "#6A5ACD";
+const GREEN = "#7FFF00";
 
 type Bale = { id: number; referenceNumber: string };
 type Allocation = { baleId: number; orderId: number; color: string; priority: number };

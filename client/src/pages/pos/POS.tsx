@@ -605,7 +605,7 @@ export default function POS({ posUser, editVoucherId }: { posUser?: AuthMe; edit
               key={loc.id}
               role="button"
               tabIndex={0}
-              className="cursor-pointer p-5 hover-elevate focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:p-6"
+              className="cursor-pointer p-5 hover-elevate focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring sm:p-6"
               onClick={() => setSelectedLocation(loc)}
               onKeyDown={(event) => {
                 if (event.key === "Enter" || event.key === " ") {

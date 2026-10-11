@@ -9,9 +9,10 @@ import { eq, and, sql, isNull } from "drizzle-orm";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
-import { factoryDaybookEntries, ledgerAccounts } from "@shared/schema";
+import { ledgerAccounts } from "@shared/schema";
 import type { AttendanceStatusRow } from "../../../services/payroll/factoryPayrollGenerationPolicy";
-import { daybookAmountUsd } from "../../../lib/money";
+import { toMoney } from "../../../lib/money";
+import { exactMonthlyPay, exactMonthlyPayFromAttendance } from "../core/workerPayAmounts";
 
 /** Prefer the factory-pinned company ID so cross-tab ERP company switches don't corrupt factory writes. */
 export function getFactoryCompanyId(req: import("express").Request): number | undefined {
@@ -19,42 +20,8 @@ export function getFactoryCompanyId(req: import("express").Request): number | un
 }
 
 /** Write a single daybook entry (factory audit log). */
-export async function writeDaybookEntry(
-  dbOrTx: typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0],
-  opts: {
-    companyId: number;
-    txDate: string;
-    txType: string;
-    referenceId?: number;
-    referenceTable?: string;
-    description: string;
-    metaJson?: string;
-    currencyCode?: string;
-    amountCurrency?: number;
-    fxRateToUsd?: number;
-    amountUsd?: number;
-    createdBy?: string | null;
-  }
-) {
-  const currency = opts.currencyCode || "USD";
-  const fxRate = opts.fxRateToUsd || 1;
-  const amtCurrency = opts.amountCurrency || 0;
-  const amtUsd = daybookAmountUsd(currency, amtCurrency, fxRate, opts.amountUsd);
-  await dbOrTx.insert(factoryDaybookEntries).values({
-    companyId: opts.companyId,
-    txDate: opts.txDate,
-    txType: opts.txType,
-    referenceId: opts.referenceId || null,
-    referenceTable: opts.referenceTable || null,
-    description: opts.description,
-    metaJson: opts.metaJson || null,
-    currencyCode: currency,
-    amountCurrency: String(amtCurrency),
-    fxRateToUsd: String(fxRate),
-    amountUsd: amtUsd,
-    createdBy: opts.createdBy || null,
-  });
-}
+// Phase 19 C (M3): one shared daybook writer; a missing rate is stored unresolved (0), never 1.
+export { writeDaybookEntry } from "../../../services/factory/factoryDaybookWriter";
 
 /** Find or create a ledger account by name for a company. Returns the account row.
  *  Skips soft-deleted accounts and handles race-condition unique-constraint failures. */
@@ -119,22 +86,7 @@ export const workerUpload = multer({
 });
 
 export function computeMonthlyPay(salary: number, startStr: string, endStr: string): number {
-  const start = new Date(startStr + "T00:00:00");
-  const end = new Date(endStr + "T00:00:00");
-  let total = 0;
-  let cur = new Date(start.getFullYear(), start.getMonth(), 1);
-  while (cur <= end) {
-    const year = cur.getFullYear();
-    const month = cur.getMonth();
-    const monthLastDay = new Date(year, month + 1, 0);
-    const daysInThisMonth = monthLastDay.getDate();
-    const segStart = new Date(Math.max(cur.getTime(), start.getTime()));
-    const segEnd = new Date(Math.min(monthLastDay.getTime(), end.getTime()));
-    const daysInSeg = Math.floor((segEnd.getTime() - segStart.getTime()) / (1000 * 60 * 60 * 24)) + 1;
-    total += salary * (daysInSeg / daysInThisMonth);
-    cur = new Date(year, month + 1, 1);
-  }
-  return total;
+  return exactMonthlyPay(toMoney(salary), startStr, endStr).toNumber();
 }
 
 // Helper: Compute monthly pay from actual attendance records.
@@ -145,21 +97,6 @@ export function computeMonthlyPayFromAttendance(
   periodStart: string,
   attendanceRows: readonly AttendanceStatusRow[]
 ): number {
-  const daysInMonth = (dateStr: string) => {
-    const d = new Date(dateStr);
-    return new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
-  };
-
-  // Count actual days worked: Present/Late = 1 full day, Half Day = 0.5
-  let attendedDays = 0;
-  for (const row of attendanceRows) {
-    const s = row.status || "Absent";
-    if (s === "Present" || s === "Late") attendedDays += 1;
-    else if (s === "Half Day") attendedDays += 0.5;
-  }
-
-  // Daily rate: salary / days in the month of periodStart
-  const daysInStartMonth = daysInMonth(periodStart);
-  const dailyRate = baseSalary / daysInStartMonth;
-  return attendedDays * dailyRate;
+  // Present/Late = 1 day, Half Day = 0.5, at salary / days in the month of periodStart.
+  return exactMonthlyPayFromAttendance(toMoney(baseSalary), periodStart, attendanceRows).toNumber();
 }

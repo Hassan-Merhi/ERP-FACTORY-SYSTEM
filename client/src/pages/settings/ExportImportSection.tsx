@@ -135,7 +135,7 @@ export function ExportImportSection({ companies }: { companies: Company[] }) {
           )}
         </div>
         {importResult && (
-          <div className="mt-2 p-2 bg-muted rounded text-xs">
+          <div className="mt-2 p-2 bg-muted rounded-sm text-xs">
             Imported: {importResult.vouchers} vouchers, {importResult.accounts} accounts.
           </div>
         )}

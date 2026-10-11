@@ -8,10 +8,15 @@ import type { Express, Request, Response } from "express";
 import { getErrorMessage } from "../../../../lib/httpHandlers";
 import { db } from "../../../../db";
 import { requireAuth } from "../../../../auth";
-import { ledgerAccounts, voucherEntries, employees, vouchers } from "@shared/schema";
+import { ledgerAccounts, employees } from "@shared/schema";
 import { eq, and, inArray } from "drizzle-orm";
 import type Decimal from "decimal.js";
 import { parseMoneyInput, sumMoney, toMoney } from "../../../../lib/money";
+import {
+  factoryRequestSourceId,
+  factorySessionActor,
+  postFactoryVoucherTx,
+} from "../../../../services/factory/factoryVoucherPosting";
 
 export function registerFactoryEmployeeBulkWithdrawRoutes(app: Express) {
   // POST /api/factory/employees/bulk-withdraw — withdraw from multiple employees at once
@@ -60,64 +65,64 @@ export function registerFactoryEmployeeBulkWithdrawRoutes(app: Express) {
       if (!cashAccount) return res.status(404).json({ message: "Cash account not found" });
 
       const totalAmount = sumMoney(validWithdrawals.map((w) => w.exactAmount));
-      const voucherNumber = `EMP-WD-BULK-${Date.now()}`;
 
-      const [bulkVoucher] = await db
-        .insert(vouchers)
-        .values({
+      const { bulkVoucher, results } = await db.transaction(async (tx) => {
+        // Phase 22 (C): through the engine, engine-numbered (was
+        // EMP-WD-BULK-{Date.now()}), with the request's identity. CR Cash (total) /
+        // DR each employee.
+        const { voucher: bulkVoucher, replayed } = await postFactoryVoucherTx(tx, {
           companyId,
-          voucherNumber,
-          voucherType: "Journal",
           voucherDate: date,
           description: notes || `Bulk withdrawal - ${validWithdrawals.length} employees`,
-          totalAmount: totalAmount.toFixed(2),
-        })
-        .returning();
+          sourceModule: "ERP",
+          source: { sourceType: "factory-bulk-withdrawal", sourceId: factoryRequestSourceId(req), phase: "voucher" },
+          actor: factorySessionActor(req),
+          lines: [
+            {
+              ledgerAccountId: cashAccount.id,
+              credit: totalAmount,
+              narration: notes || `Bulk withdrawal - ${validWithdrawals.length} employees`,
+            },
+            ...validWithdrawals.map((wd) => {
+              const emp = employeeById.get(parseInt(wd.employeeId))!;
+              return {
+                employeeId: parseInt(wd.employeeId),
+                debit: wd.exactAmount,
+                narration: wd.notes || `Withdrawal for ${emp.firstName} ${emp.lastName}`,
+              };
+            }),
+          ],
+        });
+        if (replayed) return { bulkVoucher, results: [] };
 
-      // CR: Cash (total)
-      await db.insert(voucherEntries).values({
-        voucherId: bulkVoucher.id,
-        ledgerAccountId: cashAccount.id,
-        debitAmount: "0",
-        creditAmount: totalAmount.toFixed(2),
-        narration: notes || `Bulk withdrawal - ${validWithdrawals.length} employees - ${voucherNumber}`,
+        const results = [];
+        for (const wd of validWithdrawals) {
+          const empId = parseInt(wd.employeeId);
+          const amount = wd.exactAmount;
+          // Re-read inside the transaction: the balance is current, and a repeated
+          // employee starts from the balance the previous line left.
+          // The cash credit already counts this line, so it is always debited
+          // (validWithdrawals holds only this company's employees).
+          const [fresh] = await tx
+            .select()
+            .from(employees)
+            .where(and(eq(employees.id, empId), eq(employees.companyId, companyId)));
+          const emp = fresh ?? employeeById.get(empId)!;
+
+          const newBalance = toMoney(emp.currentBalance).minus(amount);
+          const newWithdrawals = toMoney(emp.totalWithdrawals).plus(amount);
+          await tx
+            .update(employees)
+            .set({
+              currentBalance: newBalance.toFixed(2),
+              totalWithdrawals: newWithdrawals.toFixed(2),
+            })
+            .where(eq(employees.id, empId));
+
+          results.push({ employeeId: empId, amount: amount.toNumber(), name: `${emp.firstName} ${emp.lastName}` });
+        }
+        return { bulkVoucher, results };
       });
-
-      const results = [];
-      for (const wd of validWithdrawals) {
-        const empId = parseInt(wd.employeeId);
-        const amount = wd.exactAmount;
-        const emp = employeeById.get(empId);
-        if (!emp) continue;
-
-        // DR: Employee
-        await db.insert(voucherEntries).values({
-          voucherId: bulkVoucher.id,
-          ledgerAccountId: null,
-          employeeId: empId,
-          debitAmount: amount.toFixed(2),
-          creditAmount: "0",
-          narration: wd.notes || `Withdrawal for ${emp.firstName} ${emp.lastName} - ${voucherNumber}`,
-        });
-
-        const newBalance = toMoney(emp.currentBalance).minus(amount);
-        const newWithdrawals = toMoney(emp.totalWithdrawals).plus(amount);
-        await db
-          .update(employees)
-          .set({
-            currentBalance: newBalance.toFixed(2),
-            totalWithdrawals: newWithdrawals.toFixed(2),
-          })
-          .where(eq(employees.id, empId));
-        // The same employee may appear twice; the next line starts from this balance.
-        employeeById.set(empId, {
-          ...emp,
-          currentBalance: newBalance.toFixed(2),
-          totalWithdrawals: newWithdrawals.toFixed(2),
-        });
-
-        results.push({ employeeId: empId, amount: amount.toNumber(), name: `${emp.firstName} ${emp.lastName}` });
-      }
 
       res.json({ voucher: bulkVoucher, results, totalAmount: totalAmount.toNumber() });
     } catch (error: unknown) {

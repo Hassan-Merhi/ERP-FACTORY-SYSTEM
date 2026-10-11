@@ -325,7 +325,7 @@ export function SupplierPaymentFxDialogs({
               </div>
             </div>
             <div className="flex items-center gap-2 p-3 rounded-md bg-muted/50">
-              <Globe className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+              <Globe className="h-4 w-4 text-muted-foreground shrink-0" />
               <span className="text-sm font-medium">{fxConversionForm.selectedCurrency} balance being settled</span>
             </div>
 

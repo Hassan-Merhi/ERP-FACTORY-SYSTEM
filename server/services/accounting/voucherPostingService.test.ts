@@ -144,4 +144,77 @@ describe("voucherPostingService", () => {
       )
     ).rejects.toThrow(/voucher/i);
   });
+
+  it.each([undefined, "", "   "])("refuses to insert a voucher with no number (%s)", async (voucherNumber) => {
+    const { tx, calls } = makeTransaction();
+
+    await expect(
+      insertVoucherWithEntriesTx(
+        tx,
+        {
+          companyId: 4,
+          voucherNumber: voucherNumber as unknown as string,
+          voucherType: "Journal",
+          voucherDate: "2026-07-21",
+          totalAmount: "0",
+        },
+        [],
+        SOURCE
+      )
+    ).rejects.toThrow(/voucherNumber is required/);
+    expect(calls).toHaveLength(0);
+  });
+
+  it("marks the voucher as engine-posted, trims the number and carries the reversal link", async () => {
+    const { tx, calls } = makeTransaction();
+
+    await insertVoucherWithEntriesTx(
+      tx,
+      {
+        companyId: 4,
+        voucherNumber: "  JV-4-2026-000001 ",
+        voucherType: "Journal",
+        voucherDate: "2026-07-22",
+        totalAmount: "0",
+        reversalOfVoucherId: 77,
+      },
+      [],
+      SOURCE
+    );
+    await insertVoucherWithEntriesTx(
+      makeTransaction().tx,
+      { companyId: 4, voucherNumber: "JV-2", voucherType: "Journal", voucherDate: "2026-07-22", totalAmount: "0" },
+      [],
+      SOURCE
+    );
+
+    expect(calls[0]).toMatchObject({
+      voucherNumber: "JV-4-2026-000001",
+      postedByEngine: true,
+      reversalOfVoucherId: 77,
+    });
+  });
+
+  it("defaults omitted entry amounts and targets, and refuses an absent identity field", async () => {
+    const { tx, calls } = makeTransaction();
+
+    await insertVoucherWithEntriesTx(
+      tx,
+      { companyId: 4, voucherNumber: "JV-5", voucherType: "Journal", voucherDate: "2026-07-23", totalAmount: "0" },
+      [{ bankAccountId: 3 }],
+      SOURCE
+    );
+    expect(calls[1]).toEqual([
+      expect.objectContaining({ ledgerAccountId: null, bankAccountId: 3, debitAmount: "0", creditAmount: "0" }),
+    ]);
+
+    await expect(
+      insertVoucherWithEntriesTx(
+        makeTransaction().tx,
+        { companyId: 4, voucherNumber: "JV-6", voucherType: "Journal", voucherDate: "2026-07-23", totalAmount: "0" },
+        [],
+        { sourceType: "test", sourceId: "x" } as unknown as typeof SOURCE
+      )
+    ).rejects.toThrow(/idempotencyKey is required/);
+  });
 });

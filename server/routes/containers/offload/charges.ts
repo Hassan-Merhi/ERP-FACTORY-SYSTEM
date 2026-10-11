@@ -12,6 +12,7 @@ import { db } from "../../../db";
 import { requireAuth, requireNonPOS } from "../../../auth";
 import { containers, containerOffloads, vouchers, voucherEntries, locations, ledgerAccounts } from "@shared/schema";
 import { eq, and, or, sql, like, ilike } from "drizzle-orm";
+import { toMoney } from "../../../lib/money";
 
 export function registerContainerOffloadChargeRoutes(app: Express) {
   // ── Offload charges summary (duties + transport + office) with account names ──
@@ -75,20 +76,20 @@ export function registerContainerOffloadChargeRoutes(app: Express) {
       const allCharges = [
         {
           label: "Duties",
-          amount: parseFloat(offloadRow.duties || "0"),
+          amount: toMoney(offloadRow.duties).toNumber(),
           accountName: dutiesAccount?.accountName ?? null,
         },
         {
           label: "Transport Fees",
-          amount: parseFloat(offloadRow.transportFees || "0"),
+          amount: toMoney(offloadRow.transportFees).toNumber(),
           accountName: transAccount?.accountName ?? null,
         },
         {
           label: "Office Charges",
-          amount: parseFloat(offloadRow.officeCharges || "0"),
+          amount: toMoney(offloadRow.officeCharges).toNumber(),
           accountName: officeAccount?.accountName ?? null,
         },
-        { label: "Transfer Charges", amount: parseFloat(offloadRow.transferCharges || "0"), accountName: null },
+        { label: "Transfer Charges", amount: toMoney(offloadRow.transferCharges).toNumber(), accountName: null },
       ].filter((c) => c.amount > 0);
 
       res.json({
@@ -96,7 +97,7 @@ export function registerContainerOffloadChargeRoutes(app: Express) {
         offloadedAt: offloadRow.offloadedAt,
         locationName: offloadRow.locationName,
         charges: allCharges,
-        totalCharges: parseFloat(offloadRow.totalCharges || "0"),
+        totalCharges: toMoney(offloadRow.totalCharges).toNumber(),
       });
     } catch (err: unknown) {
       logger.error("[offload-charges]", { error: getErrorMessage(err) });

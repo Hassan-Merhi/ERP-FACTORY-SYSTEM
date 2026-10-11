@@ -20,11 +20,12 @@ import {
   customerOrderLines,
   customerOrderBales,
   customerOrderCharges,
-  customerBalances,
-  factoryDaybookEntries,
   customerOrderBaleRemovals,
 } from "@shared/schema";
 import { eq, and, inArray, sql } from "drizzle-orm";
+import { FactoryInvoiceRateRefusalError } from "../../../../services/accounting/perpetualInventory/factoryInvoice";
+import { lockCustomerOrderTx, syncOrderTotalsTx } from "../orderChargeLedger";
+import { closedPeriodErrorResponse } from "../../../../lib/closedPeriodError";
 
 export function registerOrderBaleRemovalRoutes(app: Express) {
   // POST /api/factory/customer-orders/:id/bales/empty — return every scanned bale to stock
@@ -176,6 +177,8 @@ export function registerOrderBaleRemovalRoutes(app: Express) {
           });
         }
 
+        // Phase 22 (C), DI7: the order row is locked before it changes.
+        await lockCustomerOrderTx(tx, companyId, orderId);
         const [orderBale] = await tx
           .select()
           .from(customerOrderBales)
@@ -217,6 +220,10 @@ export function registerOrderBaleRemovalRoutes(app: Express) {
         }
 
         await recalculateOrderTotals(tx, orderId);
+        // A bale removed from a finalized invoice moves its receivable, daybook
+        // row and invoice journal with it (phase 22 C, F13; they were left on
+        // the old total).
+        await syncOrderTotalsTx(tx, companyId, orderId);
         if (orderBale) {
           await reversePriorityAllocationForDeletedBaleTx(tx, {
             companyId,
@@ -241,6 +248,9 @@ export function registerOrderBaleRemovalRoutes(app: Express) {
 
       res.json(updatedPayload);
     } catch (error: unknown) {
+      if (error instanceof FactoryInvoiceRateRefusalError) return res.status(409).json(error.body);
+      const closed = closedPeriodErrorResponse(error);
+      if (closed) return res.status(closed.status).json(closed.body);
       logger.error("Error removing bale from order:", { error: error });
       res.status(500).json({ message: getErrorMessage(error) });
     }
@@ -307,6 +317,8 @@ export function registerOrderBaleRemovalRoutes(app: Express) {
 
       await db.transaction(async (tx) => {
         await tx.execute(sql`SELECT pg_advisory_xact_lock(${PRIORITY_SCAN_LOCK_NAMESPACE}, ${companyId})`);
+        // Phase 22 (C), DI7: the order row is locked before it changes.
+        await lockCustomerOrderTx(tx, companyId, orderId);
         // 5. Remove from customer_order_bales
         await tx.delete(customerOrderBales).where(eq(customerOrderBales.id, orderBale.id));
 
@@ -339,74 +351,10 @@ export function registerOrderBaleRemovalRoutes(app: Express) {
           reason: "Bale returned to stock",
         });
 
-        // 9. For FINALIZED orders: sync customer_balances + daybook INVOICE entry
-        if (order.status === "FINALIZED") {
-          const [recalcOrder] = await tx
-            .select({ grandTotal: customerOrders.grandTotal })
-            .from(customerOrders)
-            .where(eq(customerOrders.id, orderId));
-          const newGrandTotal = parseFloat(recalcOrder?.grandTotal || "0");
-
-          const [ledgerEntry] = await tx
-            .select({ id: customerBalances.id })
-            .from(customerBalances)
-            .where(
-              and(
-                eq(customerBalances.companyId, companyId),
-                eq(customerBalances.referenceType, "INVOICE"),
-                eq(customerBalances.referenceId, orderId)
-              )
-            );
-          if (ledgerEntry) {
-            await tx
-              .update(customerBalances)
-              .set({ debitAmount: String(newGrandTotal), balance: String(newGrandTotal) })
-              .where(eq(customerBalances.id, ledgerEntry.id));
-          }
-
-          const [daybookEntry] = await tx
-            .select({ id: factoryDaybookEntries.id })
-            .from(factoryDaybookEntries)
-            .where(
-              and(
-                eq(factoryDaybookEntries.companyId, companyId),
-                eq(factoryDaybookEntries.txType, "INVOICE"),
-                eq(factoryDaybookEntries.referenceId, orderId)
-              )
-            );
-          if (daybookEntry) {
-            await tx
-              .update(factoryDaybookEntries)
-              .set({ amountCurrency: String(newGrandTotal), amountUsd: String(newGrandTotal) })
-              .where(eq(factoryDaybookEntries.id, daybookEntry.id));
-          }
-        }
-
-        // 10. For VERIFIED orders: sync ORDER_VERIFIED daybook entry
-        if (order.status === "VERIFIED") {
-          const [recalcOrder] = await tx
-            .select({ grandTotal: customerOrders.grandTotal })
-            .from(customerOrders)
-            .where(eq(customerOrders.id, orderId));
-          const newGrandTotal = parseFloat(recalcOrder?.grandTotal || "0");
-
-          const [verifiedEntry] = await tx
-            .select({ id: factoryDaybookEntries.id })
-            .from(factoryDaybookEntries)
-            .where(
-              and(
-                eq(factoryDaybookEntries.companyId, companyId),
-                eq(factoryDaybookEntries.txType, "ORDER_VERIFIED"),
-                eq(factoryDaybookEntries.referenceId, orderId)
-              )
-            );
-          if (verifiedEntry) {
-            await tx
-              .update(factoryDaybookEntries)
-              .set({ amountCurrency: String(newGrandTotal), amountUsd: String(newGrandTotal) })
-              .where(eq(factoryDaybookEntries.id, verifiedEntry.id));
-          }
-        }
+        // 9. The invoice's customer balance (FINALIZED, row locked), the INVOICE /
+        // ORDER_VERIFIED daybook row and the invoice journal follow the new total
+        // in this transaction (phase 22 C; was an unlocked float rewrite).
+        await syncOrderTotalsTx(tx, companyId, orderId);
       });
 
       // Return updated order info for the frontend to display
@@ -419,6 +367,9 @@ export function registerOrderBaleRemovalRoutes(app: Express) {
         newGrandTotal: finalOrder?.grandTotal,
       });
     } catch (error: unknown) {
+      if (error instanceof FactoryInvoiceRateRefusalError) return res.status(409).json(error.body);
+      const closed = closedPeriodErrorResponse(error);
+      if (closed) return res.status(closed.status).json(closed.body);
       logger.error("Error returning bale to stock:", { error: error });
       res.status(500).json({ message: getErrorMessage(error) });
     }

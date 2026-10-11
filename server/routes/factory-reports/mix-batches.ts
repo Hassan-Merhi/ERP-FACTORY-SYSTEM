@@ -9,6 +9,7 @@ import { getErrorMessage } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
 import { pool, type Database } from "../../db";
 import {} from "@shared/schema";
+import { toMoney } from "../../lib/money";
 
 export function registerFactoryMixBatchesByDateRoutes(app: Express, requireAuth: RequestHandler, _db: Database) {
   // ── Mix batches by date ───────────────────────────────────────────────────
@@ -74,9 +75,9 @@ export function registerFactoryMixBatchesByDateRoutes(app: Express, requireAuth:
 
         const enriched = batches.map((b) => {
           const batchSources = enrichedSources.filter((s) => s.mix_batch_id === b.id);
-          const totalWeight = parseFloat(b.total_weight_kg) || 0;
-          const totalCost = parseFloat(b.total_cost) || 0;
-          const costPerKg = parseFloat(b.cost_per_kg) || 0;
+          const totalWeight = toMoney(b.total_weight_kg).toNumber();
+          const totalCost = toMoney(b.total_cost).toNumber();
+          const costPerKg = toMoney(b.cost_per_kg).toNumber();
           return {
             id: b.id,
             batchCode: b.batch_code,
@@ -91,10 +92,10 @@ export function registerFactoryMixBatchesByDateRoutes(app: Express, requireAuth:
               id: s.id,
               sourceName: s.source_name,
               containerNumber: s.container_number,
-              weightKg: parseFloat(s.weight_kg) || 0,
-              costPerKg: parseFloat(s.cost_per_kg) || 0,
-              totalCost: parseFloat(s.total_cost) || 0,
-              percentOfBatch: totalWeight > 0 ? ((parseFloat(s.weight_kg) || 0) / totalWeight) * 100 : 0,
+              weightKg: toMoney(s.weight_kg).toNumber(),
+              costPerKg: toMoney(s.cost_per_kg).toNumber(),
+              totalCost: toMoney(s.total_cost).toNumber(),
+              percentOfBatch: totalWeight > 0 ? (toMoney(s.weight_kg).toNumber() / totalWeight) * 100 : 0,
             })),
           };
         });

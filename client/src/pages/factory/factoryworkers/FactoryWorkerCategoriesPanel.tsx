@@ -55,7 +55,7 @@ export function FactoryWorkerCategoriesPanel({ model }: FactoryWorkersModelProps
                             {activeMembers.length} active worker{activeMembers.length !== 1 ? "s" : ""}
                           </p>
                         </div>
-                        <div className="flex gap-1 flex-shrink-0">
+                        <div className="flex gap-1 shrink-0">
                           <Button
                             size="icon"
                             variant="ghost"

@@ -77,7 +77,7 @@ export function DetailDialog({
   return (
     <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
       <DialogContent className="max-w-2xl flex flex-col" style={{ maxHeight: "75vh" }}>
-        <DialogHeader className="flex-shrink-0">
+        <DialogHeader className="shrink-0">
           <DialogTitle className="flex items-center gap-2">
             {detailDirection === "in" ? (
               <span className="text-green-700 dark:text-green-400">Stock In</span>
@@ -166,7 +166,7 @@ export function DetailDialog({
           )}
         </div>
 
-        <DialogFooter className="flex-shrink-0 pt-2">
+        <DialogFooter className="shrink-0 pt-2">
           <Button variant="outline" onClick={() => setDetailOpen(false)}>
             Close
           </Button>

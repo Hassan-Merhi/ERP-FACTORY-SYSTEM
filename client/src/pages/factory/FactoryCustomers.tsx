@@ -17,8 +17,9 @@ import { Plus, Pencil, Search, User, Trash2, FileText, RotateCcw, History, Clock
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
 import { PageHeader } from "@/components/PageHeader";
+import { BalanceSplit, type LedgerSplitFields } from "./factorycustomerstatement/NotInLedgerParts";
 
-interface Customer {
+interface Customer extends LedgerSplitFields {
   id: number;
   code: string;
   legalName: string;
@@ -27,6 +28,7 @@ interface Customer {
   openingBalanceSide: string | null;
   active: boolean;
   paymentTermsDays: number | null;
+  /** Combined: ledger balance + amounts not yet in the ledger (see LedgerSplitFields). */
   balance?: number;
   balanceSide?: string;
 }
@@ -243,7 +245,7 @@ export default function FactoryCustomers() {
             onClick={openCreate}
             data-testid="button-add-customer"
             size="sm"
-            className="h-9 gap-2 rounded-lg px-4 shadow-sm"
+            className="h-9 gap-2 rounded-lg px-4 shadow-xs"
           >
             <Plus className="h-4 w-4" />
             Add Customer
@@ -307,6 +309,11 @@ export default function FactoryCustomers() {
                           <span className={`text-xs font-semibold ${drCrClass(customer.balanceSide)}`}>
                             {customer.balanceSide}
                           </span>
+                          <BalanceSplit
+                            split={customer}
+                            format={formatCashAmount}
+                            testId={`text-customer-balance-split-${customer.id}`}
+                          />
                         </span>
                       ) : (
                         "-"

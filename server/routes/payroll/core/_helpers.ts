@@ -9,10 +9,11 @@ import { eq, and, sql, isNull } from "drizzle-orm";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
-import { factoryDaybookEntries, factoryWorkerAdvances, ledgerAccounts } from "@shared/schema";
+import { factoryWorkerAdvances, ledgerAccounts } from "@shared/schema";
 import { normalizeVoucherEntryAmounts } from "../../../services/accounting/currencyAmounts";
 import type { AttendanceStatusRow } from "../../../services/payroll/factoryPayrollGenerationPolicy";
-import { daybookAmountUsd } from "../../../lib/money";
+import { MoneyDecimal, toMoney } from "../../../lib/money";
+import { exactMonthlyPay, exactMonthlyPayFromAttendance } from "./workerPayAmounts";
 
 /** Normalize a USD voucher entry (IDENTITY convention). Returns dual-currency fields spread-ready. */
 export function normUsd(debit: string | number, credit: string | number) {
@@ -42,42 +43,8 @@ export function getFactoryCompanyId(req: import("express").Request): number | un
 }
 
 /** Write a single daybook entry (factory audit log). */
-export async function writeDaybookEntry(
-  dbOrTx: typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0],
-  opts: {
-    companyId: number;
-    txDate: string;
-    txType: string;
-    referenceId?: number;
-    referenceTable?: string;
-    description: string;
-    metaJson?: string;
-    currencyCode?: string;
-    amountCurrency?: number;
-    fxRateToUsd?: number;
-    amountUsd?: number;
-    createdBy?: string | null;
-  }
-) {
-  const currency = opts.currencyCode || "USD";
-  const fxRate = opts.fxRateToUsd || 1;
-  const amtCurrency = opts.amountCurrency || 0;
-  const amtUsd = daybookAmountUsd(currency, amtCurrency, fxRate, opts.amountUsd);
-  await dbOrTx.insert(factoryDaybookEntries).values({
-    companyId: opts.companyId,
-    txDate: opts.txDate,
-    txType: opts.txType,
-    referenceId: opts.referenceId || null,
-    referenceTable: opts.referenceTable || null,
-    description: opts.description,
-    metaJson: opts.metaJson || null,
-    currencyCode: currency,
-    amountCurrency: String(amtCurrency),
-    fxRateToUsd: String(fxRate),
-    amountUsd: amtUsd,
-    createdBy: opts.createdBy || null,
-  });
-}
+// Phase 19 C (M3): one shared daybook writer; a missing rate is stored unresolved (0), never 1.
+export { writeDaybookEntry } from "../../../services/factory/factoryDaybookWriter";
 
 /** Find or create a ledger account by name for a company. Returns the account row.
  *  Skips soft-deleted accounts and handles race-condition unique-constraint failures.
@@ -125,21 +92,10 @@ export async function findOrCreateLedger(
       );
   }
   if (existing) {
-    // Payroll control accounts are system-owned accounting contracts. Repair any
-    // stale legacy type/visibility metadata when the account is reused so future
-    // postings and balance-sheet classification cannot silently lose them.
-    const normalizedName = accountName.trim().toLowerCase().replace(/\s+/g, " ");
-    const isPayrollControlAccount =
-      normalizedName === "payroll payable" || normalizedName === "factory worker advances";
-    if (
-      isPayrollControlAccount &&
-      (existing.accountType !== accountType || existing.active !== true || existing.isHidden === true)
-    ) {
-      await db
-        .update(ledgerAccounts)
-        .set({ accountType, active: true, isHidden: false })
-        .where(eq(ledgerAccounts.id, existing.id));
-    }
+    // Wave 18 B: an existing account is reused as it is. This helper never retypes,
+    // renames, reactivates, unhides or restores an account (it only skips
+    // soft-deleted rows when looking one up); a stale type is listed by the
+    // accounting integrity diagnostic and is corrected through the audited editor.
     return { id: existing.id };
   }
 
@@ -207,22 +163,7 @@ export const workerUpload = multer({
 });
 
 export function computeMonthlyPay(salary: number, startStr: string, endStr: string): number {
-  const start = new Date(startStr + "T00:00:00");
-  const end = new Date(endStr + "T00:00:00");
-  let total = 0;
-  let cur = new Date(start.getFullYear(), start.getMonth(), 1);
-  while (cur <= end) {
-    const year = cur.getFullYear();
-    const month = cur.getMonth();
-    const monthLastDay = new Date(year, month + 1, 0);
-    const daysInThisMonth = monthLastDay.getDate();
-    const segStart = new Date(Math.max(cur.getTime(), start.getTime()));
-    const segEnd = new Date(Math.min(monthLastDay.getTime(), end.getTime()));
-    const daysInSeg = Math.floor((segEnd.getTime() - segStart.getTime()) / (1000 * 60 * 60 * 24)) + 1;
-    total += salary * (daysInSeg / daysInThisMonth);
-    cur = new Date(year, month + 1, 1);
-  }
-  return total;
+  return exactMonthlyPay(toMoney(salary), startStr, endStr).toNumber();
 }
 
 // Helper: Compute monthly pay from actual attendance records.
@@ -233,23 +174,8 @@ export function computeMonthlyPayFromAttendance(
   periodStart: string,
   attendanceRows: readonly AttendanceStatusRow[]
 ): number {
-  const daysInMonth = (dateStr: string) => {
-    const d = new Date(dateStr);
-    return new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
-  };
-
-  // Count actual days worked: Present/Late = 1 full day, Half Day = 0.5
-  let attendedDays = 0;
-  for (const row of attendanceRows) {
-    const s = row.status || "Absent";
-    if (s === "Present" || s === "Late") attendedDays += 1;
-    else if (s === "Half Day") attendedDays += 0.5;
-  }
-
-  // Daily rate: salary / days in the month of periodStart
-  const daysInStartMonth = daysInMonth(periodStart);
-  const dailyRate = baseSalary / daysInStartMonth;
-  return attendedDays * dailyRate;
+  // Present/Late = 1 day, Half Day = 0.5, at salary / days in the month of periodStart.
+  return exactMonthlyPayFromAttendance(toMoney(baseSalary), periodStart, attendanceRows).toNumber();
 }
 
 /**
@@ -277,19 +203,19 @@ export async function settleAdvancesForPayroll(
       )
     )
     .orderBy(factoryWorkerAdvances.advanceDate);
-  let remaining = advanceAmount;
+  let remaining = toMoney(advanceAmount);
   for (const adv of outstanding) {
-    if (remaining <= 0) break;
-    const bal = parseFloat(adv.remainingBalance || "0");
-    const reduce = Math.min(bal, remaining);
-    const newBal = bal - reduce;
+    if (remaining.lte(0)) break;
+    const bal = toMoney(adv.remainingBalance);
+    const reduce = MoneyDecimal.min(bal, remaining);
+    const newBal = bal.minus(reduce);
     await tx
       .update(factoryWorkerAdvances)
       .set({
         remainingBalance: newBal.toFixed(2),
-        fullyPaid: newBal <= 0,
+        fullyPaid: newBal.lte(0),
       })
       .where(eq(factoryWorkerAdvances.id, adv.id));
-    remaining -= reduce;
+    remaining = remaining.minus(reduce);
   }
 }

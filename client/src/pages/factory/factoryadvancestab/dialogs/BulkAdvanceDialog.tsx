@@ -238,7 +238,7 @@ export function BulkAdvanceDialog({
                                 <PopoverTrigger asChild>
                                   <button
                                     className={[
-                                      "flex items-center gap-1 ml-auto rounded px-1.5 py-0.5 transition-colors",
+                                      "flex items-center gap-1 ml-auto rounded-sm px-1.5 py-0.5 transition-colors",
                                       "hover:bg-muted/60 cursor-pointer select-none",
                                       due.net > 0
                                         ? "text-emerald-600 dark:text-emerald-400"

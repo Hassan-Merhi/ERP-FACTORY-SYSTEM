@@ -60,7 +60,7 @@ export function StockTransferOrderMatrix({ model }: { model: Model }) {
             ref={matrixRef}
             tabIndex={0}
             onKeyDown={handleMatrixKeyDown}
-            className="max-h-[500px] max-w-full overflow-auto [scrollbar-gutter:stable] focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 rounded-md border"
+            className="max-h-[500px] max-w-full overflow-auto scrollbar-gutter-stable focus:outline-hidden focus:ring-2 focus:ring-primary focus:ring-offset-2 rounded-md border"
           >
             <table className="w-full caption-bottom text-sm border-collapse">
               <thead className="[&_tr]:border-b sticky top-0 z-30">

@@ -21,6 +21,12 @@ import {
 } from "@shared/schema";
 
 import { verifyContainerOwnership } from "./_helpers";
+import { lineAmount, toMoney } from "../../lib/money";
+
+/** qty × per-bale amount, exact. */
+const times = (qty: number, perBale: number): number => lineAmount(qty, perBale).toNumber();
+/** a − b, exact (per-bale price differences). */
+const diff = (a: number, b: number): number => toMoney(a).minus(toMoney(b)).toNumber();
 
 export function registerContainerLoadedItemReportRoutes(app: Express, requireAuth: RequestHandler) {
   app.get(
@@ -78,8 +84,8 @@ export function registerContainerLoadedItemReportRoutes(app: Express, requireAut
               barcode: bc,
               itemName: line.itemName,
               qty: line.qty,
-              weightPerBale: parseFloat(line.weightPerBale || "0"),
-              pricePerBale: parseFloat(line.pricePerBale || "0"),
+              weightPerBale: toMoney(line.weightPerBale).toNumber(),
+              pricePerBale: toMoney(line.pricePerBale).toNumber(),
             });
           }
         }
@@ -95,8 +101,8 @@ export function registerContainerLoadedItemReportRoutes(app: Express, requireAut
               barcode: bc,
               itemName: item.itemName || "",
               qty: item.qty,
-              weightPerBale: parseFloat(item.weightPerBale || "0"),
-              pricePerBale: parseFloat(item.pricePerBale || "0"),
+              weightPerBale: toMoney(item.weightPerBale).toNumber(),
+              pricePerBale: toMoney(item.pricePerBale).toNumber(),
             });
           }
         }
@@ -115,11 +121,11 @@ export function registerContainerLoadedItemReportRoutes(app: Express, requireAut
           const expectedPricePerBale = exp?.pricePerBale || 0;
           const loadedPricePerBale = loaded?.pricePerBale || 0;
 
-          const expectedWeightTotal = expectedQty * expectedWeightPerBale;
-          const loadedWeightTotal = loadedQty * (loadedWeightPerBale || expectedWeightPerBale);
+          const expectedWeightTotal = times(expectedQty, expectedWeightPerBale);
+          const loadedWeightTotal = times(loadedQty, loadedWeightPerBale || expectedWeightPerBale);
 
-          const expectedTotalValue = expectedQty * expectedPricePerBale;
-          const loadedTotalValue = loadedQty * (loadedPricePerBale || expectedPricePerBale);
+          const expectedTotalValue = times(expectedQty, expectedPricePerBale);
+          const loadedTotalValue = times(loadedQty, loadedPricePerBale || expectedPricePerBale);
 
           let statusQty: string;
           if (expectedQty === 0 && loadedQty > 0) statusQty = "LOADED_NOT_IN_PROFORMA";
@@ -129,12 +135,12 @@ export function registerContainerLoadedItemReportRoutes(app: Express, requireAut
           else statusQty = "MATCH";
 
           let priceStatus: string;
-          const priceDiffPerBale = loadedPricePerBale - expectedPricePerBale;
+          const priceDiffPerBale = diff(loadedPricePerBale, expectedPricePerBale);
           if (!expectedPricePerBale || !loadedPricePerBale) priceStatus = "PRICE_UNKNOWN";
           else if (Math.abs(priceDiffPerBale) < 0.01) priceStatus = "PRICE_MATCH";
           else priceStatus = "PRICE_DIFF";
 
-          const totalPriceDiff = priceDiffPerBale * loadedQty;
+          const totalPriceDiff = times(loadedQty, priceDiffPerBale);
 
           comparison.push({
             barcode,
@@ -217,8 +223,8 @@ export function registerContainerLoadedItemReportRoutes(app: Express, requireAut
             proformaByBarcode.set(bc, {
               ...line,
               qty: line.qty,
-              weightPerBale: parseFloat(line.weightPerBale || "0"),
-              pricePerBale: parseFloat(line.pricePerBale || "0"),
+              weightPerBale: toMoney(line.weightPerBale).toNumber(),
+              pricePerBale: toMoney(line.pricePerBale).toNumber(),
             });
           }
         }
@@ -231,8 +237,8 @@ export function registerContainerLoadedItemReportRoutes(app: Express, requireAut
             loadedByBarcode.set(bc, {
               ...item,
               qty: item.qty,
-              weightPerBale: parseFloat(item.weightPerBale || "0"),
-              pricePerBale: parseFloat(item.pricePerBale || "0"),
+              weightPerBale: toMoney(item.weightPerBale).toNumber(),
+              pricePerBale: toMoney(item.pricePerBale).toNumber(),
             });
           }
         }
@@ -254,10 +260,10 @@ export function registerContainerLoadedItemReportRoutes(app: Express, requireAut
           const expWeight = exp?.weightPerBale || 0;
           const loadWeight = loaded?.weightPerBale || expWeight;
           const itemName = exp?.itemName || loaded?.itemName || barcode;
-          const loadedWeightTotal = loadedQty * loadWeight;
-          const expectedWeightTotal = expectedQty * expWeight;
-          const loadedValueTotal = loadedQty * (loadPrice || expPrice);
-          const expectedValueTotal = expectedQty * expPrice;
+          const loadedWeightTotal = times(loadedQty, loadWeight);
+          const expectedWeightTotal = times(expectedQty, expWeight);
+          const loadedValueTotal = times(loadedQty, loadPrice || expPrice);
+          const expectedValueTotal = times(expectedQty, expPrice);
           const qtyDiff = loadedQty - expectedQty;
 
           let status = "OK";
@@ -274,7 +280,7 @@ export function registerContainerLoadedItemReportRoutes(app: Express, requireAut
             qtyDiff,
             expPrice,
             loadPrice,
-            priceDiff: loadPrice - expPrice,
+            priceDiff: diff(loadPrice, expPrice),
             expWeight,
             loadWeight,
             expectedWeightTotal,
@@ -313,15 +319,15 @@ export function registerContainerLoadedItemReportRoutes(app: Express, requireAut
               totalValue: loadedValueTotal,
             });
           }
-          if (expPrice && loadPrice && Math.abs(loadPrice - expPrice) >= 0.01) {
+          if (expPrice && loadPrice && Math.abs(diff(loadPrice, expPrice)) >= 0.01) {
             priceDiffs.push({
               barcode,
               itemName,
               proformaPrice: expPrice,
               loadedPrice: loadPrice,
-              diff: loadPrice - expPrice,
+              diff: diff(loadPrice, expPrice),
               qty: loadedQty,
-              totalDiff: (loadPrice - expPrice) * loadedQty,
+              totalDiff: times(loadedQty, diff(loadPrice, expPrice)),
             });
           }
         }

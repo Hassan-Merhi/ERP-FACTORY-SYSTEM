@@ -344,7 +344,7 @@ export function LocationDialogs({
                   <AlertTriangle className="h-5 w-5 text-amber-500 mx-auto" />
                   <div>
                     <p className="text-sm font-medium">{releaseDebtEnglish("WhatsApp groups could not be loaded")}</p>
-                    <p className="text-xs text-muted-foreground mt-1 break-words">{waConnectionError}</p>
+                    <p className="text-xs text-muted-foreground mt-1 wrap-break-word">{waConnectionError}</p>
                   </div>
                   <Button
                     type="button"

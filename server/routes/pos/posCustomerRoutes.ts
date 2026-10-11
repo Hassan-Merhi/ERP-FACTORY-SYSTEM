@@ -3,9 +3,10 @@ import { getErrorMessage } from "../../lib/httpHandlers";
 import { db } from "../../db";
 import { storage } from "../../storage";
 import { requireAuth } from "../../auth";
+import { getCustomersWithBalances } from "../customers/customerBalanceQuery";
+import { loadCustomerLedgerEntryRows } from "../../services/accounting/balances/customerLedgerStatement";
 import { userCompanyRoles, insertCustomerSchema, ledgerAccounts } from "@shared/schema";
 import { eq, and } from "drizzle-orm";
-import { toMoney } from "../../lib/money";
 
 export function registerPosCustomerRoutes(app: Express): void {
   // POS Customers - GET endpoint (for POS users with canAccessCustomers permission)
@@ -38,58 +39,9 @@ export function registerPosCustomerRoutes(app: Express): void {
         return res.status(403).json({ message: "Access denied: You do not have permission to access customers" });
       }
 
-      const customers = await storage.getAllCustomers(req.session.currentCompanyId);
-
-      const customersWithBalances = await Promise.all(
-        customers.map(async (customer) => {
-          if (customer.ledgerAccountId) {
-            const entries = await storage.getVoucherEntriesByLedger(
-              customer.ledgerAccountId,
-              undefined,
-              undefined,
-              req.session.currentCompanyId
-            );
-            const openingBalance = toMoney(customer.openingBalance);
-            const openingSide = customer.openingBalanceSide || "Dr";
-
-            // Exact: a float running total over every entry drifted.
-            const balance = entries.reduce(
-              (sum, entry) => {
-                const debit = toMoney(entry.debitAmount);
-                const credit = toMoney(entry.creditAmount);
-
-                if (debit.gt(0) && credit.eq(0)) {
-                  return sum.plus(debit);
-                } else if (credit.gt(0) && debit.eq(0)) {
-                  return sum.minus(credit);
-                }
-                return sum;
-              },
-              openingSide === "Dr" ? openingBalance : openingBalance.negated()
-            );
-
-            return {
-              ...customer,
-              balance: balance.abs().toNumber(),
-              balanceSide: balance.gte(0) ? "Dr" : "Cr",
-            };
-          }
-
-          const customerBalance = await storage.getCustomerBalance(customer.id, req.session.currentCompanyId!);
-          const openingBalance = toMoney(customer.openingBalance);
-          const openingSide = customer.openingBalanceSide || "Dr";
-
-          const totalBalance = (openingSide === "Dr" ? openingBalance : openingBalance.negated()).plus(
-            toMoney(customerBalance)
-          );
-
-          return {
-            ...customer,
-            balance: totalBalance.abs().toNumber(),
-            balanceSide: totalBalance.gte(0) ? "Dr" : "Cr",
-          };
-        })
-      );
+      // The one balance engine's customer closing, as /api/customers/stats and
+      // the voucher sidebar (customers/customerBalanceQuery.ts).
+      const customersWithBalances = await getCustomersWithBalances(req.session.currentCompanyId);
 
       res.json(customersWithBalances);
     } catch (error: unknown) {
@@ -163,8 +115,10 @@ export function registerPosCustomerRoutes(app: Express): void {
         name: `${customer.legalName} - Customer Account`,
         accountType: "Asset",
         subType: "Accounts Receivable",
-        openingBalance: parsed.openingBalance || "0",
-        openingBalanceSide: parsed.openingBalanceSide || "Dr",
+        // The customer record owns the opening (counted once by the balance
+        // engine); the linked ledger starts at zero.
+        openingBalance: "0",
+        openingBalanceSide: "Dr",
         active: true,
       });
 
@@ -191,22 +145,15 @@ export function registerPosCustomerRoutes(app: Express): void {
       if (!customer) return res.status(404).json({ message: "Customer not found" });
       if (customer.companyId !== companyId) return res.status(403).json({ message: "Access denied" });
 
+      // The customer's lines on the balance engine (wave 13, A3), this company
+      // only, so the statement foots to the balance the POS customer list shows.
       const { startDate, endDate } = req.query;
-      let transactions = [];
-      if (customer.ledgerAccountId) {
-        transactions = await storage.getVoucherEntriesByLedger(
-          customer.ledgerAccountId,
-          startDate as string | undefined,
-          endDate as string | undefined,
-          companyId
-        );
-      } else {
-        transactions = await storage.getVoucherEntriesByCustomer(
-          customerId,
-          startDate as string | undefined,
-          endDate as string | undefined
-        );
-      }
+      const transactions = await loadCustomerLedgerEntryRows(db, {
+        companyId,
+        customerId,
+        from: typeof startDate === "string" ? startDate : null,
+        to: typeof endDate === "string" ? endDate : null,
+      });
 
       res.json(transactions);
     } catch (error: unknown) {

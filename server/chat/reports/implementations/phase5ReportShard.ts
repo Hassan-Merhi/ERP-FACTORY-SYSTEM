@@ -1,4 +1,6 @@
 import { db, sql } from "./reportShardSupport";
+import { defaultOpeningSide } from "../../../services/accounting/accountClassification";
+import { toMoney } from "../../../lib/money";
 import type { DataQueryContext, DataQueryResult, ReportImplementationShard } from "../types";
 
 export const phase5QueryTypes = [
@@ -31,10 +33,17 @@ async function runPhase5Report(ctx: DataQueryContext): Promise<DataQueryResult> 
           COALESCE(SUM(CAST(ve.debit_amount AS numeric)), 0) AS total_dr,
           COALESCE(SUM(CAST(ve.credit_amount AS numeric)), 0) AS total_cr
         FROM ledger_accounts la
-        LEFT JOIN voucher_entries ve ON ve.ledger_account_id = la.id
-        LEFT JOIN vouchers v ON v.id = ve.voucher_id
-          AND v.deleted_at IS NULL AND v.optional = false
-          AND CAST(v.voucher_date AS text) BETWEEN ${dateFrom} AND ${dateTo}
+        -- Only lines of live, non-optional vouchers of this company dated in the
+        -- range are summed. The voucher filters used to sit on a second LEFT
+        -- JOIN, which kept every entry (deleted, optional and out-of-range
+        -- vouchers included) and only dropped the voucher row.
+        LEFT JOIN (
+          voucher_entries ve
+          JOIN vouchers v ON v.id = ve.voucher_id
+            AND v.company_id = ${companyId}
+            AND v.deleted_at IS NULL AND v.optional = false
+            AND CAST(COALESCE(v.effective_date, v.voucher_date) AS text) BETWEEN ${dateFrom} AND ${dateTo}
+        ) ON ve.ledger_account_id = la.id
         WHERE la.company_id = ${companyId}
           AND la.deleted_at IS NULL
           AND la.is_hidden = false
@@ -43,14 +52,16 @@ async function runPhase5Report(ctx: DataQueryContext): Promise<DataQueryResult> 
           OR COALESCE(SUM(CAST(ve.credit_amount AS numeric)), 0) > 0
         ORDER BY la.account_type, la.name
       `);
-      let grandDr = 0,
-        grandCr = 0;
+      let grandDrExact = toMoney(0),
+        grandCrExact = toMoney(0);
       const tableRows5 = rows.rows.map((r) => {
-        const dr = parseFloat(r.total_dr || "0");
-        const cr = parseFloat(r.total_cr || "0");
-        const net = dr - cr;
-        grandDr += dr;
-        grandCr += cr;
+        const drExact = toMoney(r.total_dr);
+        const crExact = toMoney(r.total_cr);
+        grandDrExact = grandDrExact.plus(drExact);
+        grandCrExact = grandCrExact.plus(crExact);
+        const dr = drExact.toNumber();
+        const cr = crExact.toNumber();
+        const net = drExact.minus(crExact).toNumber();
         return [
           r.code || "—",
           r.name,
@@ -61,6 +72,8 @@ async function runPhase5Report(ctx: DataQueryContext): Promise<DataQueryResult> 
           net < 0 ? fmt(Math.abs(net)) : "—",
         ];
       });
+      const grandDr = grandDrExact.toNumber();
+      const grandCr = grandCrExact.toNumber();
       tableRows5.push([
         "",
         "GRAND TOTAL",
@@ -163,31 +176,37 @@ async function runPhase5Report(ctx: DataQueryContext): Promise<DataQueryResult> 
       `);
       let _lineTotal = 0;
       const tableRows5 = lineRows.rows.map((r) => {
-        const lt = parseFloat(r.line_total || "0");
+        const lt = toMoney(r.line_total).toNumber();
         _lineTotal += lt;
-        return [r.item_name, r.code, `${fmtDec(parseFloat(r.qty))} ${r.uom}`, fmtDec(parseFloat(r.rate)), fmt(lt)];
+        return [
+          r.item_name,
+          r.code,
+          `${fmtDec(toMoney(r.qty).toNumber())} ${r.uom}`,
+          fmtDec(toMoney(r.rate).toNumber()),
+          fmt(lt),
+        ];
       });
       const charges = [
-        ["Freight", fmt(parseFloat(po5.freight || "0"))],
-        ["Surcharge", fmt(parseFloat(po5.surcharge || "0"))],
-        ["Fumigation", fmt(parseFloat(po5.fumigation || "0"))],
-        ["Document Charges", fmt(parseFloat(po5.doc_charges || "0"))],
-        ["Other Charges", fmt(parseFloat(po5.other_charges || "0"))],
-        ["Discount", `(${fmt(parseFloat(po5.discount || "0"))})`],
+        ["Freight", fmt(toMoney(po5.freight).toNumber())],
+        ["Surcharge", fmt(toMoney(po5.surcharge).toNumber())],
+        ["Fumigation", fmt(toMoney(po5.fumigation).toNumber())],
+        ["Document Charges", fmt(toMoney(po5.doc_charges).toNumber())],
+        ["Other Charges", fmt(toMoney(po5.other_charges).toNumber())],
+        ["Discount", `(${fmt(toMoney(po5.discount).toNumber())})`],
       ].filter(([, v]) => v !== fmt(0) && v !== `(${fmt(0)})`);
-      const grandPO =
-        parseFloat(po5.items_total || "0") +
-        parseFloat(po5.freight || "0") +
-        parseFloat(po5.surcharge || "0") +
-        parseFloat(po5.fumigation || "0") +
-        parseFloat(po5.doc_charges || "0") +
-        parseFloat(po5.other_charges || "0") -
-        parseFloat(po5.discount || "0");
+      const grandPO = toMoney(po5.items_total)
+        .plus(toMoney(po5.freight))
+        .plus(toMoney(po5.surcharge))
+        .plus(toMoney(po5.fumigation))
+        .plus(toMoney(po5.doc_charges))
+        .plus(toMoney(po5.other_charges))
+        .minus(toMoney(po5.discount))
+        .toNumber();
       const stats5 = [
         { label: "Supplier", value: po5.supplier },
         { label: "Container", value: po5.container_number },
         { label: "Currency", value: po5.currency },
-        { label: "Items Total", value: fmt(parseFloat(po5.items_total || "0")) },
+        { label: "Items Total", value: fmt(toMoney(po5.items_total).toNumber()) },
         { label: "Grand Total", value: fmt(grandPO), highlight: "positive" },
         { label: "Status", value: po5.status },
       ];
@@ -283,31 +302,31 @@ async function runPhase5Report(ctx: DataQueryContext): Promise<DataQueryResult> 
         { label: "Supplier", value: cc.supplier },
         { label: "Status", value: cc.status },
         { label: "Import Date", value: String(cc.import_date).slice(0, 10) },
-        { label: "Total Kg", value: fmtDec(parseFloat(cc.total_kg || "0")) },
-        { label: "Rate/Kg", value: fmtDec(parseFloat(cc.rate_per_kg || "0")) },
-        { label: "Grand Total", value: fmt(parseFloat(cc.grand_total || "0")), highlight: "positive" },
+        { label: "Total Kg", value: fmtDec(toMoney(cc.total_kg).toNumber()) },
+        { label: "Rate/Kg", value: fmtDec(toMoney(cc.rate_per_kg).toNumber()) },
+        { label: "Grand Total", value: fmt(toMoney(cc.grand_total).toNumber()), highlight: "positive" },
       ];
       const breakdownRows: string[][] = [
-        ["Items Total", cc.currency, fmt(parseFloat(cc.items_total || "0"))],
-        ["Charges Total", cc.currency, fmt(parseFloat(cc.charges_total || "0"))],
+        ["Items Total", cc.currency, fmt(toMoney(cc.items_total).toNumber())],
+        ["Charges Total", cc.currency, fmt(toMoney(cc.charges_total).toNumber())],
       ];
-      if (parseFloat(cc.transport_fee || "0") > 0)
-        breakdownRows.push(["Transport Fee", cc.currency, fmt(parseFloat(cc.transport_fee || "0"))]);
-      if (parseFloat(cc.duty_fee || "0") > 0)
-        breakdownRows.push(["Duty Fee", cc.currency, fmt(parseFloat(cc.duty_fee || "0"))]);
+      if (toMoney(cc.transport_fee).toNumber() > 0)
+        breakdownRows.push(["Transport Fee", cc.currency, fmt(toMoney(cc.transport_fee).toNumber())]);
+      if (toMoney(cc.duty_fee).toNumber() > 0)
+        breakdownRows.push(["Duty Fee", cc.currency, fmt(toMoney(cc.duty_fee).toNumber())]);
       for (const po of poRows5.rows) {
-        if (parseFloat(po.freight || "0") > 0)
-          breakdownRows.push([`Freight (${po.po_number})`, po.currency, fmt(parseFloat(po.freight))]);
-        if (parseFloat(po.fumigation || "0") > 0)
-          breakdownRows.push([`Fumigation (${po.po_number})`, po.currency, fmt(parseFloat(po.fumigation))]);
-        if (parseFloat(po.surcharge || "0") > 0)
-          breakdownRows.push([`Surcharge (${po.po_number})`, po.currency, fmt(parseFloat(po.surcharge))]);
-        if (parseFloat(po.doc_charges || "0") > 0)
-          breakdownRows.push([`Doc Charges (${po.po_number})`, po.currency, fmt(parseFloat(po.doc_charges))]);
-        if (parseFloat(po.discount || "0") > 0)
-          breakdownRows.push([`Discount (${po.po_number})`, po.currency, `(${fmt(parseFloat(po.discount))})`]);
+        if (toMoney(po.freight).toNumber() > 0)
+          breakdownRows.push([`Freight (${po.po_number})`, po.currency, fmt(toMoney(po.freight).toNumber())]);
+        if (toMoney(po.fumigation).toNumber() > 0)
+          breakdownRows.push([`Fumigation (${po.po_number})`, po.currency, fmt(toMoney(po.fumigation).toNumber())]);
+        if (toMoney(po.surcharge).toNumber() > 0)
+          breakdownRows.push([`Surcharge (${po.po_number})`, po.currency, fmt(toMoney(po.surcharge).toNumber())]);
+        if (toMoney(po.doc_charges).toNumber() > 0)
+          breakdownRows.push([`Doc Charges (${po.po_number})`, po.currency, fmt(toMoney(po.doc_charges).toNumber())]);
+        if (toMoney(po.discount).toNumber() > 0)
+          breakdownRows.push([`Discount (${po.po_number})`, po.currency, `(${fmt(toMoney(po.discount).toNumber())})`]);
       }
-      breakdownRows.push(["GRAND TOTAL", cc.currency, fmt(parseFloat(cc.grand_total || "0"))]);
+      breakdownRows.push(["GRAND TOTAL", cc.currency, fmt(toMoney(cc.grand_total).toNumber())]);
       dataQueryResult = {
         queryType: "container_cost_breakdown",
         title: `Cost Breakdown: ${cc.container_number}`,
@@ -412,20 +431,20 @@ async function runPhase5Report(ctx: DataQueryContext): Promise<DataQueryResult> 
         LEFT JOIN locations sl ON sl.id = sti.source_location_id
         JOIN locations dl ON dl.id = stv.destination_location_id
         WHERE si.company_id = ${companyId}
-          AND CAST(v.voucher_date AS text) BETWEEN ${dateFrom} AND ${dateTo}
+          AND CAST(COALESCE(v.effective_date, v.voucher_date) AS text) BETWEEN ${dateFrom} AND ${dateTo}
           ${locFilter5 ? sql`AND (sl.name ILIKE ${"%" + locFilter5 + "%"} OR dl.name ILIKE ${"%" + locFilter5 + "%"})` : sql``}
         ORDER BY v.voucher_date DESC
         LIMIT ${rowLimit}
       `);
       let totalTransferred = 0;
       const tableRows5 = rows.rows.map((r) => {
-        const amt = parseFloat(r.total_amount || "0");
+        const amt = toMoney(r.total_amount).toNumber();
         totalTransferred += amt;
         return [
           String(r.voucher_date).slice(0, 10),
           r.voucher_number,
           r.item_name,
-          `${fmtDec(parseFloat(r.qty))} ${r.uom}`,
+          `${fmtDec(toMoney(r.qty).toNumber())} ${r.uom}`,
           r.from_location || "—",
           r.to_location,
           fmt(amt),
@@ -456,9 +475,9 @@ async function runPhase5Report(ctx: DataQueryContext): Promise<DataQueryResult> 
         FROM voucher_entries ve
         JOIN vouchers v ON v.id = ve.voucher_id
           AND v.deleted_at IS NULL AND v.optional = false
-          AND CAST(v.voucher_date AS text) BETWEEN ${dateFrom} AND ${dateTo}
+          AND CAST(COALESCE(v.effective_date, v.voucher_date) AS text) BETWEEN ${dateFrom} AND ${dateTo}
         JOIN ledger_accounts la ON la.id = ve.ledger_account_id
-          AND la.account_type IN ('Bank', 'Cash')
+          AND LOWER(TRIM(la.account_type)) IN ('bank', 'cash')
         WHERE la.company_id = ${companyId}
         GROUP BY la.id, la.name, la.account_type
         ORDER BY total_in DESC
@@ -466,8 +485,8 @@ async function runPhase5Report(ctx: DataQueryContext): Promise<DataQueryResult> 
       let grandIn = 0,
         grandOut = 0;
       const tableRows5 = rows.rows.map((r) => {
-        const inflow = parseFloat(r.total_in || "0");
-        const outflow = parseFloat(r.total_out || "0");
+        const inflow = toMoney(r.total_in).toNumber();
+        const outflow = toMoney(r.total_out).toNumber();
         const net = inflow - outflow;
         grandIn += inflow;
         grandOut += outflow;
@@ -559,18 +578,23 @@ async function runPhase5Report(ctx: DataQueryContext): Promise<DataQueryResult> 
         FROM voucher_entries ve
         JOIN vouchers v ON v.id = ve.voucher_id
           AND v.deleted_at IS NULL AND v.optional = false
-          AND CAST(v.voucher_date AS text) BETWEEN ${dateFrom} AND ${dateTo}
+          AND CAST(COALESCE(v.effective_date, v.voucher_date) AS text) BETWEEN ${dateFrom} AND ${dateTo}
         WHERE ve.ledger_account_id = ${la5.id}
         ORDER BY v.voucher_date, v.id
         LIMIT ${rowLimit}
       `);
-      const ob = parseFloat(la5.opening_balance || "0") * (la5.opening_balance_side === "Cr" ? -1 : 1);
+      // A sideless opening is on its type's usual side, as in the balance engine (wave 13, C1).
+      const obSide5 =
+        la5.opening_balance_side === "Dr" || la5.opening_balance_side === "Cr"
+          ? la5.opening_balance_side
+          : (defaultOpeningSide(la5.account_type) ?? "Dr");
+      const ob = toMoney(la5.opening_balance).toNumber() * (obSide5 === "Cr" ? -1 : 1);
       let runningBal = ob;
       let totalDr = 0,
         totalCr = 0;
       const tableRows5 = txRows5.rows.map((r) => {
-        const dr = parseFloat(r.dr || "0");
-        const cr = parseFloat(r.cr || "0");
+        const dr = toMoney(r.dr).toNumber();
+        const cr = toMoney(r.cr).toNumber();
         runningBal += dr - cr;
         totalDr += dr;
         totalCr += cr;
@@ -627,14 +651,14 @@ async function runPhase5Report(ctx: DataQueryContext): Promise<DataQueryResult> 
         WHERE v.company_id = ${companyId}
           AND v.deleted_at IS NULL
           AND v.optional = false
-          AND CAST(v.voucher_date AS text) = ${reportDate}
+          AND CAST(COALESCE(v.effective_date, v.voucher_date) AS text) = ${reportDate}
         ORDER BY v.voucher_type, v.voucher_number
         LIMIT ${rowLimit}
       `);
       const typeMap5: Record<string, number> = {};
       let grandAmt = 0;
       const tableRows5 = rows.rows.map((r) => {
-        const amt = parseFloat(r.amount || "0");
+        const amt = toMoney(r.amount).toNumber();
         typeMap5[r.voucher_type] = (typeMap5[r.voucher_type] || 0) + amt;
         grandAmt += amt;
         return [
@@ -683,7 +707,7 @@ async function runPhase5Report(ctx: DataQueryContext): Promise<DataQueryResult> 
         JOIN vouchers v ON v.id = sal.voucher_id AND v.deleted_at IS NULL
         LEFT JOIN locations l ON l.id = v.location_id
         WHERE v.company_id = ${companyId}
-          AND CAST(v.voucher_date AS text) BETWEEN ${dateFrom} AND ${dateTo}
+          AND CAST(COALESCE(v.effective_date, v.voucher_date) AS text) BETWEEN ${dateFrom} AND ${dateTo}
         GROUP BY l.id, l.name, v.location_name
         ORDER BY total_profit DESC
         LIMIT ${rowLimit}
@@ -692,9 +716,9 @@ async function runPhase5Report(ctx: DataQueryContext): Promise<DataQueryResult> 
         grandCost = 0,
         grandProfit = 0;
       const tableRows5 = rows.rows.map((r) => {
-        const rev = parseFloat(r.total_revenue || "0");
-        const cost = parseFloat(r.total_cost || "0");
-        const profit5 = parseFloat(r.total_profit || "0");
+        const rev = toMoney(r.total_revenue).toNumber();
+        const cost = toMoney(r.total_cost).toNumber();
+        const profit5 = toMoney(r.total_profit).toNumber();
         const margin = rev > 0 ? ((profit5 / rev) * 100).toFixed(1) + "%" : "—";
         grandRev += rev;
         grandCost += cost;
@@ -737,13 +761,13 @@ async function runPhase5Report(ctx: DataQueryContext): Promise<DataQueryResult> 
         WHERE v.company_id = ${companyId}
           AND v.deleted_at IS NULL
           AND v.voucher_type = 'Debit Note'
-          AND CAST(v.voucher_date AS text) BETWEEN ${dateFrom} AND ${dateTo}
+          AND CAST(COALESCE(v.effective_date, v.voucher_date) AS text) BETWEEN ${dateFrom} AND ${dateTo}
         ORDER BY v.voucher_date DESC
         LIMIT ${rowLimit}
       `);
       let totalDN = 0;
       const tableRows5 = rows.rows.map((r) => {
-        const amt = parseFloat(r.amount || "0");
+        const amt = toMoney(r.amount).toNumber();
         totalDN += amt;
         return [
           String(r.voucher_date).slice(0, 10),

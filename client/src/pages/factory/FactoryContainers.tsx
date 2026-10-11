@@ -285,7 +285,7 @@ export default function FactoryContainers() {
           <Button
             onClick={() => navigate("/factory/containers/new")}
             data-testid="button-add-factory-container"
-            className="gap-2 shadow-sm"
+            className="gap-2 shadow-xs"
           >
             <Plus className="h-4 w-4" /> Add Container
           </Button>

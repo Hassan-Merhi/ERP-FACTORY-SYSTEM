@@ -10,18 +10,18 @@ export function WorkbookLegend() {
     <div className="flex items-center gap-3 flex-wrap text-xs text-muted-foreground px-1">
       <span className="font-medium">Row colour:</span>
       <span className="flex items-center gap-1">
-        <span className="inline-block w-3 h-3 rounded-sm bg-yellow-200 border border-yellow-400" /> Upcoming ETA, docs
+        <span className="inline-block w-3 h-3 rounded-xs bg-yellow-200 border border-yellow-400" /> Upcoming ETA, docs
         pending
       </span>
       <span className="flex items-center gap-1">
-        <span className="inline-block w-3 h-3 rounded-sm bg-rose-200 border border-rose-400" /> At port, docs missing
+        <span className="inline-block w-3 h-3 rounded-xs bg-rose-200 border border-rose-400" /> At port, docs missing
       </span>
       <span className="flex items-center gap-1">
-        <span className="inline-block w-3 h-3 rounded-sm bg-amber-100 border border-amber-300" /> Docs ready, not sent
+        <span className="inline-block w-3 h-3 rounded-xs bg-amber-100 border border-amber-300" /> Docs ready, not sent
         to truck
       </span>
       <span className="flex items-center gap-1">
-        <span className="inline-block w-3 h-3 rounded-sm bg-red-200 border border-red-400" /> Offload overdue
+        <span className="inline-block w-3 h-3 rounded-xs bg-red-200 border border-red-400" /> Offload overdue
       </span>
     </div>
   );

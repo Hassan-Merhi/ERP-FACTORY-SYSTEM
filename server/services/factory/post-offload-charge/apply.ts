@@ -1,8 +1,7 @@
 import type { DbTransaction } from "../../../db";
-import {
-  infrastructurePostingIdentity,
-  insertInfrastructureVoucherTx,
-} from "../../accounting/infrastructureVoucherIdentity";
+import { retireVouchersTx } from "../../accounting/voucherRetirement";
+import { postFactoryVoucherTx } from "../factoryVoucherPosting";
+import { editPostedFactoryVoucherTx } from "../factoryVoucherCorrection";
 import Decimal from "decimal.js";
 import { toMoney } from "../../../lib/money";
 import { and, eq, isNull } from "drizzle-orm";
@@ -18,6 +17,7 @@ import { cascadeContainerCostChange } from "../rawStockCostCascade";
 import { computeCorrectContainerCost } from "../raw-stock-recalc";
 import { getAuthoritativeSupplierRemainingKg } from "../rawStockLockedRate";
 import { writeDaybookEntry } from "../../../routes/factory/_helpers";
+import { normFactoryEntry } from "../factoryVoucherEntryAmounts";
 import {
   assertNoLaterSupplierCostEvents,
   getSupplierRateForUpdate,
@@ -27,6 +27,13 @@ import {
 import { computeRemainingFraction, loadActiveCharges, loadCostInputs } from "./loaders";
 import { PostOffloadMutationParams, PostOffloadMutationResult } from "./types";
 import type { CascadeResult } from "../rawStockCostCascade";
+
+/** Retire a charge's voucher in its own company (audited; number and identity released). */
+async function retireChargeVoucherTx(tx: DbTransaction, voucherId: number, reason: string): Promise<void> {
+  const [owner] = await tx.select({ companyId: vouchers.companyId }).from(vouchers).where(eq(vouchers.id, voucherId));
+  if (!owner) return;
+  await retireVouchersTx(tx, { companyId: owner.companyId, voucherIds: [voucherId], reason });
+}
 
 export async function applyPostOffloadChargeMutation(
   tx: DbTransaction,
@@ -250,53 +257,42 @@ export async function applyPostOffloadChargeMutation(
     let voucherId: number | null = null;
     if (accountingCtx && accountingCtx.chargesPayableAcctId > 0) {
       const { voucherCompanyId, chargesPayableAcctId } = accountingCtx;
-      const voucherNum = `FACTORY-POC-${containerId}-${inserted.id}-${Date.now()}`;
-      const { voucher: voucherRow } = await insertInfrastructureVoucherTx(
-        tx,
-        {
-          companyId: voucherCompanyId,
-          voucherType: "Journal",
-          voucherNumber: voucherNum,
-          voucherDate: txDate,
-          description: `${chargeData.description} (post-offload) — container ${container.containerNumber}`,
-          totalAmount: String(chargeData.amount),
-          currency: chargeData.currencyCode,
-          exchangeRate: String(chargeData.fxRateToUsd),
-          sourceModule: "FACTORY",
+      // Phase 22 (C): through the engine with the charge's posting identity; the
+      // FACTORY-POC-{container}-{charge}- family number is read by
+      // legacy-links.ts, so it keeps its prefix with a deterministic suffix.
+      const { voucher: voucherRow } = await postFactoryVoucherTx(tx, {
+        companyId: voucherCompanyId,
+        voucherNumber: (generation) => `FACTORY-POC-${containerId}-${inserted.id}-${generation}`,
+        voucherDate: txDate,
+        description: `${chargeData.description} (post-offload) — container ${container.containerNumber}`,
+        currency: chargeData.currencyCode,
+        fxRateToUsd: String(chargeData.fxRateToUsd),
+        source: {
+          sourceType: "factory-post-offload-charge",
+          sourceId: `${companyId}:${containerId}:${inserted.id}`,
+          phase: "voucher",
         },
-        infrastructurePostingIdentity(
-          "factory-post-offload-charge",
-          `${companyId}:${containerId}:${inserted.id}`,
-          "voucher"
-        ),
-        params
-      );
-      voucherId = voucherRow.id;
-
-      await tx.insert(voucherEntries).values({
-        voucherId: voucherRow.id,
-        ledgerAccountId: chargesPayableAcctId,
-        debitAmount: String(chargeData.amount),
-        creditAmount: "0",
-        narration: `${chargeData.description} payable — container ${container.containerNumber}`,
+        actor: { userId: params.userId ?? null },
+        lines: [
+          {
+            ledgerAccountId: chargesPayableAcctId,
+            debit: String(chargeData.amount),
+            narration: `${chargeData.description} payable — container ${container.containerNumber}`,
+          },
+          chargeData.ledgerAccountId
+            ? {
+                ledgerAccountId: chargeData.ledgerAccountId,
+                credit: String(chargeData.amount),
+                narration: `${chargeData.description} — container ${container.containerNumber}`,
+              }
+            : {
+                factorySupplierId: chargeData.supplierId,
+                credit: String(chargeData.amount),
+                narration: `${chargeData.description} — container ${container.containerNumber}`,
+              },
+        ],
       });
-      if (chargeData.ledgerAccountId) {
-        await tx.insert(voucherEntries).values({
-          voucherId: voucherRow.id,
-          ledgerAccountId: chargeData.ledgerAccountId,
-          debitAmount: "0",
-          creditAmount: String(chargeData.amount),
-          narration: `${chargeData.description} — container ${container.containerNumber}`,
-        });
-      } else if (chargeData.supplierId) {
-        await tx.insert(voucherEntries).values({
-          voucherId: voucherRow.id,
-          factorySupplierId: chargeData.supplierId,
-          debitAmount: "0",
-          creditAmount: String(chargeData.amount),
-          narration: `${chargeData.description} — container ${container.containerNumber}`,
-        });
-      }
+      voucherId = voucherRow.id;
     }
 
     // Save snapshots + accounting links on the charge row
@@ -515,101 +511,116 @@ export async function applyPostOffloadChargeMutation(
     const needsAccounting = !!(chargeData.ledgerAccountId || chargeData.supplierId);
     if (chargeRow.voucherId) {
       if (!needsAccounting) {
-        // Remove accounting: soft-delete the voucher
-        await tx.update(vouchers).set({ deletedAt: new Date() }).where(eq(vouchers.id, chargeRow.voucherId));
+        // Remove accounting: retire the voucher (phase 22 C: was an unaudited
+        // soft delete that kept its number and posting identity).
+        await retireChargeVoucherTx(tx, chargeRow.voucherId, "post-offload-charge-accounting-removed");
         newVoucherId = null;
       } else {
-        // Update existing voucher header + recreate entries
-        const { voucherCompanyId: _voucherCompanyId, chargesPayableAcctId } = accountingCtx || {
-          voucherCompanyId: companyId,
-          chargesPayableAcctId: 0,
-        };
-        await tx
-          .update(vouchers)
-          .set({
-            voucherDate: txDate,
-            description: `${chargeData.description} (post-offload) — container ${container.containerNumber}`,
-            totalAmount: String(chargeData.amount),
-            currency: chargeData.currencyCode,
-            exchangeRate: String(chargeData.fxRateToUsd),
-          })
-          .where(eq(vouchers.id, chargeRow.voucherId));
-        // Delete and recreate entries
-        await tx.delete(voucherEntries).where(eq(voucherEntries.voucherId, chargeRow.voucherId));
-        await tx.insert(voucherEntries).values({
-          voucherId: chargeRow.voucherId,
-          ledgerAccountId: chargesPayableAcctId,
-          debitAmount: String(chargeData.amount),
-          creditAmount: "0",
-          narration: `${chargeData.description} payable — container ${container.containerNumber}`,
-        });
-        if (chargeData.ledgerAccountId) {
-          await tx.insert(voucherEntries).values({
-            voucherId: chargeRow.voucherId,
-            ledgerAccountId: chargeData.ledgerAccountId,
-            debitAmount: "0",
-            creditAmount: String(chargeData.amount),
-            narration: `${chargeData.description} — container ${container.containerNumber}`,
-          });
-        } else if (chargeData.supplierId) {
-          await tx.insert(voucherEntries).values({
-            voucherId: chargeRow.voucherId,
-            factorySupplierId: chargeData.supplierId,
-            debitAmount: "0",
-            creditAmount: String(chargeData.amount),
-            narration: `${chargeData.description} — container ${container.containerNumber}`,
-          });
-        }
+        // Update existing voucher header + recreate entries — an audited
+        // open-period edit (phase 22 C, G4/PE9); refused (409, reverse and
+        // re-post) in a closed period.
+        const { chargesPayableAcctId } = accountingCtx || { chargesPayableAcctId: 0 };
+        const editedVoucherId = chargeRow.voucherId;
+        const [voucherOwner] = await tx
+          .select({ companyId: vouchers.companyId })
+          .from(vouchers)
+          .where(eq(vouchers.id, editedVoucherId));
+        await editPostedFactoryVoucherTx(
+          tx,
+          {
+            companyId: voucherOwner?.companyId ?? companyId,
+            voucherIds: [editedVoucherId],
+            reason: "post-offload-charge-edit",
+            actor: { userId: params.userId ?? null },
+            newVoucherDate: txDate,
+          },
+          async () => {
+            const lines = [
+              {
+                ledgerAccountId: chargesPayableAcctId,
+                ...normFactoryEntry(chargeData.currencyCode, String(chargeData.amount), "0", chargeData.fxRateToUsd),
+                narration: `${chargeData.description} payable — container ${container.containerNumber}`,
+              },
+              ...(chargeData.ledgerAccountId
+                ? [
+                    {
+                      ledgerAccountId: chargeData.ledgerAccountId,
+                      ...normFactoryEntry(
+                        chargeData.currencyCode,
+                        "0",
+                        String(chargeData.amount),
+                        chargeData.fxRateToUsd
+                      ),
+                      narration: `${chargeData.description} — container ${container.containerNumber}`,
+                    },
+                  ]
+                : chargeData.supplierId
+                  ? [
+                      {
+                        factorySupplierId: chargeData.supplierId,
+                        ...normFactoryEntry(
+                          chargeData.currencyCode,
+                          "0",
+                          String(chargeData.amount),
+                          chargeData.fxRateToUsd
+                        ),
+                        narration: `${chargeData.description} — container ${container.containerNumber}`,
+                      },
+                    ]
+                  : []),
+            ];
+            await tx
+              .update(vouchers)
+              .set({
+                voucherDate: txDate,
+                description: `${chargeData.description} (post-offload) — container ${container.containerNumber}`,
+                totalAmount: String(chargeData.amount),
+                currency: chargeData.currencyCode,
+                exchangeRate: String(chargeData.fxRateToUsd),
+              })
+              .where(eq(vouchers.id, editedVoucherId));
+            // Delete and recreate entries
+            await tx.delete(voucherEntries).where(eq(voucherEntries.voucherId, editedVoucherId));
+            await tx.insert(voucherEntries).values(lines.map((line) => ({ voucherId: editedVoucherId, ...line })));
+          }
+        );
       }
     } else if (needsAccounting && accountingCtx && accountingCtx.chargesPayableAcctId > 0) {
       // Create a new voucher for this charge that previously had none
       const { voucherCompanyId, chargesPayableAcctId } = accountingCtx;
-      const voucherNum = `FACTORY-POC-${containerId}-${chargeId}-${Date.now()}`;
-      const { voucher: voucherRow } = await insertInfrastructureVoucherTx(
-        tx,
-        {
-          companyId: voucherCompanyId,
-          voucherType: "Journal",
-          voucherNumber: voucherNum,
-          voucherDate: txDate,
-          description: `${chargeData.description} (post-offload) — container ${container.containerNumber}`,
-          totalAmount: String(chargeData.amount),
-          currency: chargeData.currencyCode,
-          exchangeRate: String(chargeData.fxRateToUsd),
-          sourceModule: "FACTORY",
+      const { voucher: voucherRow } = await postFactoryVoucherTx(tx, {
+        companyId: voucherCompanyId,
+        voucherNumber: (generation) => `FACTORY-POC-${containerId}-${chargeId}-${generation}`,
+        voucherDate: txDate,
+        description: `${chargeData.description} (post-offload) — container ${container.containerNumber}`,
+        currency: chargeData.currencyCode,
+        fxRateToUsd: String(chargeData.fxRateToUsd),
+        source: {
+          sourceType: "factory-post-offload-charge",
+          sourceId: `${companyId}:${containerId}:${chargeId}`,
+          phase: "voucher",
         },
-        infrastructurePostingIdentity(
-          "factory-post-offload-charge",
-          `${companyId}:${containerId}:${chargeId}`,
-          "voucher"
-        ),
-        params
-      );
-      newVoucherId = voucherRow.id;
-      await tx.insert(voucherEntries).values({
-        voucherId: voucherRow.id,
-        ledgerAccountId: chargesPayableAcctId,
-        debitAmount: String(chargeData.amount),
-        creditAmount: "0",
-        narration: `${chargeData.description} payable — container ${container.containerNumber}`,
+        actor: { userId: params.userId ?? null },
+        lines: [
+          {
+            ledgerAccountId: chargesPayableAcctId,
+            debit: String(chargeData.amount),
+            narration: `${chargeData.description} payable — container ${container.containerNumber}`,
+          },
+          chargeData.ledgerAccountId
+            ? {
+                ledgerAccountId: chargeData.ledgerAccountId,
+                credit: String(chargeData.amount),
+                narration: `${chargeData.description} — container ${container.containerNumber}`,
+              }
+            : {
+                factorySupplierId: chargeData.supplierId,
+                credit: String(chargeData.amount),
+                narration: `${chargeData.description} — container ${container.containerNumber}`,
+              },
+        ],
       });
-      if (chargeData.ledgerAccountId) {
-        await tx.insert(voucherEntries).values({
-          voucherId: voucherRow.id,
-          ledgerAccountId: chargeData.ledgerAccountId,
-          debitAmount: "0",
-          creditAmount: String(chargeData.amount),
-          narration: `${chargeData.description} — container ${container.containerNumber}`,
-        });
-      } else if (chargeData.supplierId) {
-        await tx.insert(voucherEntries).values({
-          voucherId: voucherRow.id,
-          factorySupplierId: chargeData.supplierId,
-          debitAmount: "0",
-          creditAmount: String(chargeData.amount),
-          narration: `${chargeData.description} — container ${container.containerNumber}`,
-        });
-      }
+      newVoucherId = voucherRow.id;
     }
 
     // Save snapshots on the charge row
@@ -790,7 +801,9 @@ export async function applyPostOffloadChargeMutation(
 
     // Soft-delete linked voucher
     if (chargeRow.voucherId) {
-      await tx.update(vouchers).set({ deletedAt: now }).where(eq(vouchers.id, chargeRow.voucherId));
+      // Phase 22 (C): retired (audited, number and posting identity released);
+      // was an unaudited soft delete.
+      await retireChargeVoucherTx(tx, chargeRow.voucherId, "post-offload-charge-reversed");
     }
 
     // Create reversing daybook entry (avoid duplicate if already reversed)

@@ -114,7 +114,10 @@ export function RemoteControlSessionWatchdog() {
           if (cancelled) return;
           const code = error instanceof RemoteControllerRequestError ? (error.code ?? "") : "";
           const status = error instanceof RemoteControllerRequestError ? error.status : 0;
-          if (status === 409 && ["TARGET_TAB_UNAVAILABLE", "TARGET_ALREADY_CONTROLLED", "SESSION_INACTIVE"].includes(code)) {
+          if (
+            status === 409 &&
+            ["TARGET_TAB_UNAVAILABLE", "TARGET_ALREADY_CONTROLLED", "SESSION_INACTIVE"].includes(code)
+          ) {
             conflictCountRef.current += 1;
             const retryDelay = Math.min(
               CONFLICT_RETRY_MAX_MS,
@@ -158,7 +161,7 @@ export function RemoteControlSessionWatchdog() {
   const failed = state === "error";
   return (
     <div
-      className="fixed left-3 top-14 z-[2147483645] flex max-w-[min(92vw,420px)] items-start gap-2 rounded-lg border bg-background/95 px-3 py-2 shadow-xl backdrop-blur"
+      className="fixed left-3 top-14 z-2147483645 flex max-w-[min(92vw,420px)] items-start gap-2 rounded-lg border bg-background/95 px-3 py-2 shadow-xl backdrop-blur-sm"
       data-screenfeed-ignore="true"
       data-testid="remote-control-session-watchdog"
       role={failed ? "alert" : "status"}

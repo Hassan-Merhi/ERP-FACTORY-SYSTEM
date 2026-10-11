@@ -8,9 +8,7 @@ import PDFDocument from "pdfkit";
 import ExcelJS from "exceljs";
 import path from "path";
 import fs from "fs";
-import { factoryDaybookEntries } from "@shared/schema";
-import type { DatabaseOrTransaction } from "../../db";
-import { daybookAmountUsd } from "../../lib/money";
+import { toMoney } from "../../lib/money";
 
 /**
  * Daybook writing plus the PDF and Excel generators for the supplier-usage
@@ -19,42 +17,8 @@ import { daybookAmountUsd } from "../../lib/money";
  * Declared at module scope so the report handlers can live in separate
  * modules; they previously closed over the register function's body.
  */
-export async function writeDaybookEntry(
-  dbOrTx: DatabaseOrTransaction,
-  opts: {
-    companyId: number;
-    txDate: string;
-    txType: string;
-    referenceId?: number;
-    referenceTable?: string;
-    description: string;
-    metaJson?: string;
-    currencyCode?: string;
-    amountCurrency?: number;
-    fxRateToUsd?: number;
-    amountUsd?: number;
-    createdBy?: string | null;
-  }
-) {
-  const currency = opts.currencyCode || "USD";
-  const fxRate = opts.fxRateToUsd || 1;
-  const amtCurrency = opts.amountCurrency || 0;
-  const amtUsd = daybookAmountUsd(currency, amtCurrency, fxRate, opts.amountUsd);
-  await dbOrTx.insert(factoryDaybookEntries).values({
-    companyId: opts.companyId,
-    txDate: opts.txDate,
-    txType: opts.txType,
-    referenceId: opts.referenceId || null,
-    referenceTable: opts.referenceTable || null,
-    description: opts.description,
-    metaJson: opts.metaJson || null,
-    currencyCode: currency,
-    amountCurrency: String(amtCurrency),
-    fxRateToUsd: String(fxRate),
-    amountUsd: amtUsd,
-    createdBy: opts.createdBy || null,
-  });
-}
+// Phase 19 C (M3): one shared daybook writer; a missing rate is stored unresolved (0), never 1.
+export { writeDaybookEntry } from "../../services/factory/factoryDaybookWriter";
 
 export const hmdLogo = path.join(process.cwd(), "server", "hmd-logo.png");
 export function addPdfBranding(doc: PDFKit.PDFDocument) {
@@ -494,7 +458,7 @@ export async function generateExcel(
         ms.containerId,
         container ? container.containerNumber : `C-${ms.containerId}`,
         supplier ? supplier.name : "Unknown",
-        parseFloat(ms.weightKg || "0"),
+        toMoney(ms.weightKg).toNumber(),
       ]);
       row.getCell(5).numFmt = numberFmt;
     } else {
@@ -503,9 +467,9 @@ export async function generateExcel(
         ms.containerId,
         container ? container.containerNumber : `C-${ms.containerId}`,
         supplier ? supplier.name : "Unknown",
-        parseFloat(ms.weightKg || "0"),
-        parseFloat(ms.costPerKg || "0"),
-        parseFloat(ms.totalCost || "0"),
+        toMoney(ms.weightKg).toNumber(),
+        toMoney(ms.costPerKg).toNumber(),
+        toMoney(ms.totalCost).toNumber(),
       ]);
       row.getCell(5).numFmt = numberFmt;
       row.getCell(6).numFmt = moneyFmt;

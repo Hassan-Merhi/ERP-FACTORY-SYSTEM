@@ -13,7 +13,17 @@ import type {
 import { insertVoucherWithEntriesTx } from "./voucherPostingService";
 import { assertTransactionCompanyScope } from "../security/transactionCompanyScope";
 import { resultRows } from "../../lib/queryResult";
+import { PostingValidationError } from "./postingValidationError";
+import { allocateVoucherNumberTx } from "./voucherNumbering";
+import {
+  assertRoundingRemainder,
+  buildRoundingEntry,
+  predictedLedgerTotals,
+  resolveRoundingAccountIdTx,
+} from "./engineRounding";
 import { GOLDEN_COAST_PHASE11_SOURCE_TYPE as GOLDEN_COAST_MONTHLY_CLOSE_SOURCE_TYPE } from "./goldenCoastPhase11CloseIdentity";
+
+export { PostingValidationError };
 
 const TARGET_FIELDS = [
   "ledgerAccountId",
@@ -98,16 +108,6 @@ export interface ValidatedPostingTotals {
 
 export interface CentralPostingResult<V = unknown, E = unknown> extends VoucherWithEntries<V, E> {
   replayed: boolean;
-}
-
-export class PostingValidationError extends Error {
-  readonly code: string;
-
-  constructor(code: string, message: string) {
-    super(message);
-    this.name = "PostingValidationError";
-    this.code = code;
-  }
 }
 
 function requiredText(value: unknown, field: string): string {
@@ -197,7 +197,10 @@ export function buildPostingRequestFingerprint(request: CentralPostingRequest): 
   const sourceType = request.source.sourceType.trim();
   const canonical = {
     companyId: request.voucher.companyId,
-    voucherNumber: SERVER_NUMBERED_RETRY_SOURCES.has(sourceType) ? null : request.voucher.voucherNumber.trim(),
+    voucherNumber:
+      SERVER_NUMBERED_RETRY_SOURCES.has(sourceType) || !request.voucher.voucherNumber?.trim()
+        ? null
+        : request.voucher.voucherNumber.trim(),
     voucherType: request.voucher.voucherType.trim(),
     voucherDate: request.voucher.voucherDate.trim(),
     totalAmount: normalizedDecimal(request.voucher.totalAmount),
@@ -249,13 +252,56 @@ export function hasSupportedPostingTargetShape(entry: VoucherEntryInsertFields):
   return populated.length === 2 && populated.includes("customerId") && populated.includes("ledgerAccountId");
 }
 
+const FX_CONVERSION_NOISE_PER_LINE = new Decimal("0.000001");
+
+function isForeignCurrencyRequest(request: CentralPostingRequest): boolean {
+  const voucherCurrency = String(request.voucher.currency ?? "USD")
+    .trim()
+    .toUpperCase();
+  if (voucherCurrency && voucherCurrency !== "USD") return true;
+  return request.entries.some(
+    (entry) =>
+      (entry.rateConvention != null && entry.rateConvention !== "IDENTITY") ||
+      (entry.transactionCurrency != null && String(entry.transactionCurrency).trim().toUpperCase() !== "USD")
+  );
+}
+
+/**
+ * When every line carries one non-USD transaction currency with its amounts,
+ * the transaction amounts must balance exactly (the base may then differ by
+ * conversion noise only).
+ */
+function foreignTransactionCurrencyUnbalanced(entries: VoucherEntryInsertFields[]): boolean {
+  const currencies = new Set(
+    entries.map((entry) =>
+      String(entry.transactionCurrency ?? "")
+        .trim()
+        .toUpperCase()
+    )
+  );
+  if (currencies.size !== 1 || currencies.has("") || currencies.has("USD")) return false;
+  if (entries.some((entry) => entry.transactionDebitAmount == null || entry.transactionCreditAmount == null)) {
+    return false;
+  }
+  let debit = new Decimal(0);
+  let credit = new Decimal(0);
+  for (const entry of entries) {
+    debit = debit.plus(new Decimal(String(entry.transactionDebitAmount)));
+    credit = credit.plus(new Decimal(String(entry.transactionCreditAmount)));
+  }
+  return !debit.equals(credit);
+}
+
 export function validateCentralPostingRequest(request: CentralPostingRequest): ValidatedPostingTotals {
   const { voucher, entries, source } = request;
 
   if (!Number.isInteger(voucher.companyId) || voucher.companyId <= 0) {
     throw new PostingValidationError("POSTING_COMPANY_INVALID", "A valid companyId is required");
   }
-  requiredText(voucher.voucherNumber, "voucherNumber");
+  // Phase 22 A: an omitted number is allocated by the engine (voucherNumbering.ts).
+  if (voucher.voucherNumber !== undefined && voucher.voucherNumber !== null) {
+    requiredText(voucher.voucherNumber, "voucherNumber");
+  }
   requiredText(voucher.voucherType, "voucherType");
   requiredText(voucher.voucherDate, "voucherDate");
   requiredText(source.sourceType, "sourceType");
@@ -290,7 +336,17 @@ export function validateCentralPostingRequest(request: CentralPostingRequest): V
     creditTotal = creditTotal.plus(credit);
   });
 
-  if (debitTotal.isZero() || !debitTotal.equals(creditTotal)) {
+  // Phase 22 A, D3: a foreign-currency voucher converted line by line may
+  // differ in its 6 dp base by conversion noise (at most 0.000001 per line);
+  // the engine's ROUNDING line absorbs it with the 2 dp rounding remainder.
+  const baseDrift = debitTotal.minus(creditTotal).abs();
+  const conversionNoiseAllowed = isForeignCurrencyRequest(request)
+    ? FX_CONVERSION_NOISE_PER_LINE.times(entries.length)
+    : new Decimal(0);
+  if (foreignTransactionCurrencyUnbalanced(entries)) {
+    throw new PostingValidationError("POSTING_UNBALANCED", "Voucher is not balanced in its transaction currency");
+  }
+  if (debitTotal.isZero() || baseDrift.gt(conversionNoiseAllowed)) {
     throw new PostingValidationError(
       "POSTING_UNBALANCED",
       `Voucher is not balanced: debit=${debitTotal.toFixed()} credit=${creditTotal.toFixed()}`
@@ -358,7 +414,34 @@ export async function postBalancedVoucherTx(
     entries: request.entries,
   });
 
-  const result = await insertVoucherWithEntriesTx(tx, request.voucher, request.entries, request.source);
+  // Phase 22 A, PE8/G9: a voucher without a number gets the next gapless
+  // number of its company / type / year, allocated in this transaction (a
+  // rollback releases it). A replay above returned before any allocation.
+  const voucherNumber =
+    request.voucher.voucherNumber?.trim() ||
+    (await allocateVoucherNumberTx(tx, {
+      companyId,
+      voucherType: request.voucher.voucherType,
+      voucherDate: request.voucher.voucherDate,
+    }));
+
+  // Phase 22 A, D3: the 2 dp base remainder of per-line conversion goes to the
+  // company's ROUNDING account, so the voucher balances exactly.
+  const ledger = predictedLedgerTotals(request.voucher, request.entries);
+  let entries = request.entries;
+  let voucher: VoucherInsertFields = { ...request.voucher, voucherNumber };
+  let finalTotals = totals;
+  if (!ledger.remainder.isZero()) {
+    assertRoundingRemainder(ledger.remainder, request.entries.length, voucherNumber);
+    const roundingAccountId = await resolveRoundingAccountIdTx(tx, companyId);
+    entries = [...request.entries, buildRoundingEntry(roundingAccountId, ledger.remainder)];
+    const balancedTotal = Decimal.max(ledger.debit, ledger.credit).toFixed(2);
+    // A debit-side ROUNDING line raises the debit total: the header follows it.
+    if (ledger.remainder.isNegative()) voucher = { ...voucher, totalAmount: balancedTotal };
+    finalTotals = { debitTotal: balancedTotal, creditTotal: balancedTotal };
+  }
+
+  const result = await insertVoucherWithEntriesTx(tx, voucher, entries, request.source);
 
   await dependencies.idempotency.record({
     tx,
@@ -374,8 +457,8 @@ export async function postBalancedVoucherTx(
     voucherId: result.voucher.id,
     source: request.source,
     actor: request.actor ?? {},
-    debitTotal: totals.debitTotal,
-    creditTotal: totals.creditTotal,
+    debitTotal: finalTotals.debitTotal,
+    creditTotal: finalTotals.creditTotal,
   });
 
   return { ...result, replayed: false };

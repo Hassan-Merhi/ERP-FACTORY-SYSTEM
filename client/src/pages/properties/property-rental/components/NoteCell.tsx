@@ -45,7 +45,7 @@ function NoteCell({ contractId, note, testId }: { contractId: number; note: stri
           value={value}
           onChange={(e) => setValue(e.target.value)}
           rows={3}
-          className="w-full rounded-md border border-input bg-background px-2 py-1 text-xs text-foreground resize-none focus:outline-none focus:ring-1 focus:ring-ring"
+          className="w-full rounded-md border border-input bg-background px-2 py-1 text-xs text-foreground resize-none focus:outline-hidden focus:ring-1 focus:ring-ring"
           placeholder="Add a note…"
           data-testid={`${testId}-note-input`}
         />

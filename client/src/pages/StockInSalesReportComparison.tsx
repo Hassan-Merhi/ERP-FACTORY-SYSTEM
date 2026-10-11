@@ -149,7 +149,7 @@ function GroupMultiSelect({
         <div className="max-h-72 space-y-1 overflow-y-auto">
           <button
             type="button"
-            className="flex w-full items-center gap-2 rounded px-2 py-2 text-left text-sm hover:bg-muted"
+            className="flex w-full items-center gap-2 rounded-sm px-2 py-2 text-left text-sm hover:bg-muted"
             onClick={() => onChange([])}
           >
             <Checkbox checked={selectedIds.length === 0} className="pointer-events-none" />
@@ -163,7 +163,7 @@ function GroupMultiSelect({
               <button
                 type="button"
                 key={group.id}
-                className="flex w-full items-center gap-2 rounded px-2 py-2 text-left text-sm hover:bg-muted"
+                className="flex w-full items-center gap-2 rounded-sm px-2 py-2 text-left text-sm hover:bg-muted"
                 onClick={() => onChange(checked ? selectedIds.filter((value) => value !== id) : [...selectedIds, id])}
               >
                 <Checkbox checked={checked} className="pointer-events-none" />
@@ -381,7 +381,7 @@ export default function StockInSalesReportComparison() {
         </Button>
       </PageHeader>
 
-      <div className="grid grid-cols-2 items-center gap-2 rounded-xl border bg-card p-2 sm:flex sm:flex-wrap sm:p-3 [&>*]:min-w-0">
+      <div className="grid grid-cols-2 items-center gap-2 rounded-xl border bg-card p-2 sm:flex sm:flex-wrap sm:p-3 *:min-w-0">
         <PeriodFilter value={period} onChange={setPeriod} data-testid="period-filter-stock-in-sales-comparison" />
         <Select value={grouping} onValueChange={(value) => setGrouping(value as GroupingType)}>
           <SelectTrigger className="w-full sm:w-32" data-testid="select-stock-in-sales-comparison-grouping">

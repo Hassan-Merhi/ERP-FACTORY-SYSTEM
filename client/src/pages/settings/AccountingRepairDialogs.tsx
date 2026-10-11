@@ -95,7 +95,7 @@ export function ZeroBalancesDialog({ open, onOpenChange, companyId }: ZeroBalanc
                 <Badge variant="outline">{selected.length} selected</Badge>
               </div>
 
-              <div className="max-h-96 overflow-y-auto border rounded">
+              <div className="max-h-96 overflow-y-auto border rounded-sm">
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -218,8 +218,8 @@ export function InitializeBalancesDialog({ open, onOpenChange }: InitializeBalan
             <div className="text-foreground">
               {!result ? (
                 <p className="text-muted-foreground">
-                  This will create Owner's Capital accounts for each company to balance the Import Cycle. This action
-                  cannot be easily undone.
+                  This checks each company's Import Cycle difference and shows what a balancing entry would need. No
+                  balances are changed: a difference is corrected with a reviewed, posted entry.
                 </p>
               ) : (
                 <div className="space-y-4 mt-4">
@@ -247,7 +247,7 @@ export function InitializeBalancesDialog({ open, onOpenChange }: InitializeBalan
                             )}
                           </Button>
                           {expandedId === r.companyId && (
-                            <div className="mt-2 grid grid-cols-1 md:grid-cols-2 gap-4 p-2 bg-muted/50 rounded">
+                            <div className="mt-2 grid grid-cols-1 md:grid-cols-2 gap-4 p-2 bg-muted/50 rounded-sm">
                               <div>
                                 <div className="font-medium text-green-600 dark:text-green-400 mb-1">
                                   Assets (Debit)
@@ -285,7 +285,7 @@ export function InitializeBalancesDialog({ open, onOpenChange }: InitializeBalan
           <AlertDialogCancel>Close</AlertDialogCancel>
           {!result && (
             <AlertDialogAction onClick={() => mutation.mutate()} disabled={mutation.isPending}>
-              {mutation.isPending ? "Processing..." : "Initialize All Companies"}
+              {mutation.isPending ? "Checking..." : "Check All Companies"}
             </AlertDialogAction>
           )}
         </AlertDialogFooter>

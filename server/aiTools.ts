@@ -1,6 +1,7 @@
 import { db } from "./db";
 import * as schema from "@shared/schema";
 import { eq, and, desc, sql, isNull, ilike, or, gte, inArray } from "drizzle-orm";
+import { toMoney } from "./lib/money";
 
 export async function searchStockItems(companyId: number, query: string, limit = 20) {
   const terms = query
@@ -50,18 +51,18 @@ export async function searchStockItems(companyId: number, query: string, limit =
 
   return rows.map((item) => {
     const inv = invMap.get(item.id);
-    const sellPrice = parseFloat(item.sellingPrice || "0");
-    const avgCost = parseFloat(inv?.avgRate || "0");
-    const totalQty = parseFloat(inv?.totalQty || "0");
+    const sellPrice = toMoney(item.sellingPrice).toNumber();
+    const avgCost = toMoney(inv?.avgRate).toNumber();
+    const totalQty = toMoney(inv?.totalQty).toNumber();
     return {
       id: item.id,
       code: item.code || "",
       name: item.name,
       sellingPrice: sellPrice.toFixed(2),
       avgCost: avgCost.toFixed(2),
-      reorderLevel: parseFloat(item.reorderLevel || "0").toFixed(2),
+      reorderLevel: toMoney(item.reorderLevel).toFixed(2),
       totalQty: totalQty.toFixed(3),
-      totalValue: parseFloat(inv?.totalValue || "0").toFixed(2),
+      totalValue: toMoney(inv?.totalValue).toFixed(2),
       pricingStatus:
         avgCost > 0
           ? sellPrice < avgCost
@@ -99,11 +100,11 @@ export async function getStockByLocation(companyId: number, stockItemId: number)
     .map((r) => ({
       locationId: r.locationId,
       location: locationMap.get(r.locationId!) || "Unknown",
-      quantity: parseFloat(r.quantity || "0").toFixed(3),
-      avgCost: parseFloat(r.averageRate || "0").toFixed(2),
-      totalValue: parseFloat(r.totalValue || "0").toFixed(2),
+      quantity: toMoney(r.quantity).toFixed(3),
+      avgCost: toMoney(r.averageRate).toFixed(2),
+      totalValue: toMoney(r.totalValue).toFixed(2),
     }))
-    .filter((r) => parseFloat(r.quantity) > 0);
+    .filter((r) => toMoney(r.quantity).toNumber() > 0);
 }
 
 export async function searchSuppliers(companyId: number, query: string, limit = 15) {
@@ -136,7 +137,7 @@ export async function searchSuppliers(companyId: number, query: string, limit = 
     name: s.legalName || "Unknown",
     phone: s.phone || "",
     email: s.email || "",
-    openingBalance: parseFloat(s.openingBalance || "0").toFixed(2),
+    openingBalance: toMoney(s.openingBalance).toFixed(2),
   }));
 }
 
@@ -213,7 +214,7 @@ export async function searchLedgerAccounts(companyId: number, query: string, lim
     code: a.code || "",
     name: a.name,
     accountType: a.accountType,
-    openingBalance: parseFloat(a.openingBalance || "0").toFixed(2),
+    openingBalance: toMoney(a.openingBalance).toFixed(2),
     openingBalanceSide: a.openingBalanceSide || "Dr",
   }));
 }
@@ -248,7 +249,7 @@ export async function searchVouchers(companyId: number, query: string, limit = 2
     number: v.voucherNumber,
     type: v.voucherType,
     date: v.voucherDate,
-    amount: parseFloat(v.totalAmount || "0").toFixed(2),
+    amount: toMoney(v.totalAmount).toFixed(2),
     description: v.description || "",
   }));
 }
@@ -282,12 +283,12 @@ export async function getLowStockItems(companyId: number, limit = 20) {
       .groupBy(schema.inventory.stockItemId),
   ]);
 
-  const invMap = new Map(invRows.map((i) => [i.stockItemId, parseFloat(i.totalQty || "0")]));
+  const invMap = new Map(invRows.map((i) => [i.stockItemId, toMoney(i.totalQty).toNumber()]));
 
   return items
     .map((item) => {
       const qty = invMap.get(item.id) ?? 0;
-      const reorder = parseFloat(item.reorderLevel || "0");
+      const reorder = toMoney(item.reorderLevel).toNumber();
       return { id: item.id, code: item.code || "", name: item.name, qty, reorderLevel: reorder };
     })
     .filter((item) => item.qty <= item.reorderLevel)
@@ -338,9 +339,9 @@ export async function getPricingHealth(companyId: number, limit = 20) {
   return items
     .map((item) => {
       const inv = invMap.get(item.id);
-      const avgCost = parseFloat(inv?.avgRate || "0");
-      const sellPrice = parseFloat(item.sellingPrice || "0");
-      const qty = parseFloat(inv?.totalQty || "0");
+      const avgCost = toMoney(inv?.avgRate).toNumber();
+      const sellPrice = toMoney(item.sellingPrice).toNumber();
+      const qty = toMoney(inv?.totalQty).toNumber();
       const gap = sellPrice - avgCost;
       return {
         id: item.id,
@@ -350,13 +351,13 @@ export async function getPricingHealth(companyId: number, limit = 20) {
         avgCost: avgCost.toFixed(2),
         priceGap: gap.toFixed(2),
         qty: qty.toFixed(3),
-        totalValue: parseFloat(inv?.totalValue || "0").toFixed(2),
+        totalValue: toMoney(inv?.totalValue).toFixed(2),
         status: gap < 0 ? "LOSING" : gap === 0 ? "BREAK_EVEN" : "PROFITABLE",
         potentialLoss: qty > 0 && gap < 0 ? (Math.abs(gap) * qty).toFixed(2) : "0",
       };
     })
-    .filter((item) => parseFloat(item.avgCost) > 0)
-    .sort((a, b) => parseFloat(a.priceGap) - parseFloat(b.priceGap))
+    .filter((item) => toMoney(item.avgCost).toNumber() > 0)
+    .sort((a, b) => toMoney(a.priceGap).minus(toMoney(b.priceGap)).toNumber())
     .slice(0, limit);
 }
 
@@ -387,11 +388,11 @@ export async function getSalesForItem(companyId: number, stockItemId: number, li
   return rows.map((r) => ({
     voucherNumber: r.voucherNumber,
     date: r.voucherDate,
-    qty: parseFloat(r.quantity || "0").toFixed(3),
-    sellingPrice: parseFloat(r.sellingPrice || "0").toFixed(2),
-    costPrice: parseFloat(r.costPrice || "0").toFixed(2),
-    totalSales: parseFloat(r.totalSales || "0").toFixed(2),
-    profit: parseFloat(r.profit || "0").toFixed(2),
+    qty: toMoney(r.quantity).toFixed(3),
+    sellingPrice: toMoney(r.sellingPrice).toFixed(2),
+    costPrice: toMoney(r.costPrice).toFixed(2),
+    totalSales: toMoney(r.totalSales).toFixed(2),
+    profit: toMoney(r.profit).toFixed(2),
   }));
 }
 
@@ -462,16 +463,16 @@ export async function getBusinessSummary(companyId: number) {
   ]);
 
   function summarise(row: (typeof todayRaw)[0], label: string) {
-    const rev = parseFloat(row.revenue || "0");
-    const prof = parseFloat(row.profit || "0");
+    const rev = toMoney(row.revenue).toNumber();
+    const prof = toMoney(row.profit).toNumber();
     return {
       label,
       revenue: rev.toFixed(2),
-      cost: parseFloat(row.cost || "0").toFixed(2),
+      cost: toMoney(row.cost).toFixed(2),
       profit: prof.toFixed(2),
       margin: rev > 0 ? ((prof / rev) * 100).toFixed(1) + "%" : "0%",
       transactions: row.transactionCount || 0,
-      unitsSold: parseFloat(row.unitsSold || "0").toFixed(2),
+      unitsSold: toMoney(row.unitsSold).toFixed(2),
     };
   }
 
@@ -483,9 +484,9 @@ export async function getBusinessSummary(companyId: number) {
     topItemsThisMonth: topItems.map((i) => ({
       name: i.itemName || "Unknown",
       code: i.itemCode || "",
-      revenue: parseFloat(i.totalRevenue || "0").toFixed(2),
-      profit: parseFloat(i.totalProfit || "0").toFixed(2),
-      qty: parseFloat(i.totalQty || "0").toFixed(2),
+      revenue: toMoney(i.totalRevenue).toFixed(2),
+      profit: toMoney(i.totalProfit).toFixed(2),
+      qty: toMoney(i.totalQty).toFixed(2),
     })),
   };
 }

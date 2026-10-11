@@ -142,7 +142,7 @@ export function CompactRunPayrollSelection({ model }: CompactRunPayrollSelection
                     <TableRow
                       key={id}
                       onClick={() => toggleWorker(id)}
-                      className={`cursor-pointer ${selected ? "bg-primary/[0.06] hover:bg-primary/[0.08]" : "hover:bg-muted/25"}`}
+                      className={`cursor-pointer ${selected ? "bg-primary/6 hover:bg-primary/8" : "hover:bg-muted/25"}`}
                       data-testid={`row-worker-${id}`}
                     >
                       <TableCell onClick={(event) => event.stopPropagation()}>
@@ -233,7 +233,7 @@ export function CompactRunPayrollSelection({ model }: CompactRunPayrollSelection
         </Button>
       </div>
 
-      <div className="overflow-hidden rounded-xl border bg-card shadow-sm">
+      <div className="overflow-hidden rounded-xl border bg-card shadow-xs">
         <div className="border-b p-3 sm:p-4">
           <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
             <div className="relative min-w-0 flex-1 xl:max-w-2xl">

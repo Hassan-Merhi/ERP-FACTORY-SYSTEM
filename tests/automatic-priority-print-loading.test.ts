@@ -68,8 +68,8 @@ describe("Automatic Priority Printing and Loading", () => {
       agent
         .put(`/api/factory/customer-orders/${orderId}/loading-list/priority-scan-config`)
         .send({ color, priority, enabled: true });
-    expect((await configure(firstOrderId, "#dc2626", 1)).status).toBe(200);
-    expect((await configure(secondOrderId, "#2563eb", 2)).status).toBe(200);
+    expect((await configure(firstOrderId, "#B22222", 1)).status).toBe(200);
+    expect((await configure(secondOrderId, "#6A5ACD", 2)).status).toBe(200);
 
     const ref = `${PREFIX.toUpperCase()}-001`;
     const bale = await pool.query<{ id: number }>(
@@ -88,7 +88,7 @@ describe("Automatic Priority Printing and Loading", () => {
     expect(print.body.priorityAllocation).toMatchObject({
       baleId,
       orderId: firstOrderId,
-      color: "#dc2626",
+      color: "#B22222",
       priority: 1,
       existing: false,
     });
@@ -98,7 +98,7 @@ describe("Automatic Priority Printing and Loading", () => {
     expect(secondPrint.body.priorityAllocation).toMatchObject({
       baleId,
       orderId: firstOrderId,
-      color: "#dc2626",
+      color: "#B22222",
       priority: 1,
       existing: true,
     });

@@ -101,17 +101,9 @@ describe("POS sales route behavior", () => {
       },
       { isSpCompany: false }
     );
-    expect(harness.logAudit).toHaveBeenCalledWith(
-      expect.objectContaining({
-        userId: "session-user",
-        username: "cashier",
-        companyId: 4,
-        action: "create",
-        tableName: "vouchers",
-        recordId: 501,
-        recordIdentifier: "POS-501",
-      })
-    );
+    // Phase 21 (B): createPosSale writes the create audit in the sale's
+    // transaction; the route no longer writes an after-commit duplicate.
+    expect(harness.logAudit).not.toHaveBeenCalled();
     expect(res.status).toHaveBeenCalledWith(200);
     expect(res.json).toHaveBeenCalledWith({
       voucher: { id: 501, voucherNumber: "POS-501" },
@@ -138,13 +130,12 @@ describe("POS sales route behavior", () => {
     expect(harness.logAudit).not.toHaveBeenCalled();
   });
 
-  it("treats audit failure as non-fatal after a successful sale", async () => {
+  it("writes no after-commit audit row of its own (the service audits in the sale transaction)", async () => {
     harness.companyRows.push({ companyType: "standard" });
     harness.createPosSale.mockResolvedValue({
       status: 200,
       body: { voucher: { id: 700, voucherNumber: "POS-700" } },
     });
-    harness.logAudit.mockRejectedValue(new Error("audit unavailable"));
     const res = makeRes();
 
     await harness.handlers.get("/api/pos/sales")!(
@@ -157,10 +148,7 @@ describe("POS sales route behavior", () => {
     );
 
     expect(res.status).toHaveBeenCalledWith(200);
-    expect(harness.loggerError).toHaveBeenCalledWith(
-      "[POS create audit] non-fatal:",
-      expect.objectContaining({ error: expect.any(Error) })
-    );
+    expect(harness.logAudit).not.toHaveBeenCalled();
   });
 
   it.each([

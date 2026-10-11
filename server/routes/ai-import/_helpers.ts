@@ -16,6 +16,7 @@ import {
 } from "@shared/schema";
 import { eq, and, isNull } from "drizzle-orm";
 import { sql } from "drizzle-orm";
+import { parseMoneyInput, toMoney } from "../../lib/money";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -208,12 +209,14 @@ export async function validateStockItemRows(
     mapped.code = code || null;
 
     // sellingPrice
-    const sellingPrice = parseFloat(String(raw.sellingPrice ?? raw["Selling Price"] ?? raw.price ?? 0));
+    const sellingPrice =
+      parseMoneyInput(String(raw.sellingPrice ?? raw["Selling Price"] ?? raw.price ?? 0))?.toNumber() ?? NaN;
     if (isNaN(sellingPrice) || sellingPrice < 0) errors.push("sellingPrice must be a non-negative number");
     mapped.sellingPrice = isNaN(sellingPrice) ? "0" : sellingPrice.toFixed(2);
 
     // reorderLevel
-    const reorderLevel = parseFloat(String(raw.reorderLevel ?? raw["Reorder Level"] ?? raw.reorder ?? 0));
+    const reorderLevel =
+      parseMoneyInput(String(raw.reorderLevel ?? raw["Reorder Level"] ?? raw.reorder ?? 0))?.toNumber() ?? NaN;
     mapped.reorderLevel = isNaN(reorderLevel) ? "0" : reorderLevel.toFixed(2);
 
     // stockGroup — check correction memory first, then fall back to name/code match
@@ -306,7 +309,7 @@ export async function validateSupplierRows(
     mapped.code = code || null;
     mapped.phone = String(raw.phone ?? raw.Phone ?? "").trim() || null;
     mapped.email = String(raw.email ?? raw.Email ?? "").trim() || null;
-    mapped.openingBalance = String(parseFloat(String(raw.openingBalance ?? raw["Opening Balance"] ?? "0")) || 0);
+    mapped.openingBalance = String(toMoney(String(raw.openingBalance ?? raw["Opening Balance"] ?? "")).toNumber());
 
     const status: "valid" | "warning" | "error" =
       errors.length > 0 ? "error" : warnings.length > 0 ? "warning" : "valid";
@@ -389,7 +392,7 @@ export async function validateVoucherRows(
     mapped.debitAccountId = debitAcct?.id ?? null;
     mapped.creditAccountId = creditAcct?.id ?? null;
 
-    const amount = parseFloat(String(raw.amount ?? raw.Amount ?? 0));
+    const amount = parseMoneyInput(String(raw.amount ?? raw.Amount ?? 0))?.toNumber() ?? NaN;
     if (isNaN(amount) || amount <= 0) errors.push("amount must be a positive number");
     mapped.amount = isNaN(amount) ? "0" : amount.toFixed(2);
 
@@ -431,6 +434,7 @@ export async function postRows(
   }
 }
 
+// Phase 21 (B): each row's create audit is written on the posting transaction.
 export async function postStockItemRows(
   companyId: number,
   userId: string,
@@ -458,16 +462,19 @@ export async function postStockItemRows(
       } as typeof stockItems.$inferInsert)
       .returning({ id: stockItems.id });
 
-    await logAudit({
-      userId,
-      username,
-      companyId,
-      action: "create",
-      tableName: "stock_items",
-      recordId: created.id,
-      recordIdentifier: d.code || d.name,
-      changes: null,
-    });
+    await logAudit(
+      {
+        userId,
+        username,
+        companyId,
+        action: "create",
+        tableName: "stock_items",
+        recordId: created.id,
+        recordIdentifier: d.code || d.name,
+        changes: null,
+      },
+      tx
+    );
 
     results.push({ rowId: row.id, recordType: "stock_item", recordId: created.id });
   }
@@ -499,16 +506,19 @@ export async function postCustomerRows(
       } as typeof customers.$inferInsert)
       .returning({ id: customers.id });
 
-    await logAudit({
-      userId,
-      username,
-      companyId,
-      action: "create",
-      tableName: "customers",
-      recordId: created.id,
-      recordIdentifier: d.code || d.name,
-      changes: null,
-    });
+    await logAudit(
+      {
+        userId,
+        username,
+        companyId,
+        action: "create",
+        tableName: "customers",
+        recordId: created.id,
+        recordIdentifier: d.code || d.name,
+        changes: null,
+      },
+      tx
+    );
 
     results.push({ rowId: row.id, recordType: "customer", recordId: created.id });
   }
@@ -540,16 +550,19 @@ export async function postSupplierRows(
       } as typeof suppliers.$inferInsert)
       .returning({ id: suppliers.id });
 
-    await logAudit({
-      userId,
-      username,
-      companyId,
-      action: "create",
-      tableName: "suppliers",
-      recordId: created.id,
-      recordIdentifier: d.code || d.legalName,
-      changes: null,
-    });
+    await logAudit(
+      {
+        userId,
+        username,
+        companyId,
+        action: "create",
+        tableName: "suppliers",
+        recordId: created.id,
+        recordIdentifier: d.code || d.legalName,
+        changes: null,
+      },
+      tx
+    );
 
     results.push({ rowId: row.id, recordType: "supplier", recordId: created.id });
   }

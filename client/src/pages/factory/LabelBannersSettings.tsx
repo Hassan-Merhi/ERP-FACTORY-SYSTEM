@@ -210,7 +210,7 @@ export default function LabelBannersSettings() {
                   <div className="flex items-center gap-2 flex-wrap justify-between">
                     <div className="flex items-center gap-2 min-w-0">
                       <span
-                        className="inline-block h-3 w-3 rounded-full flex-shrink-0 border border-border"
+                        className="inline-block h-3 w-3 rounded-full shrink-0 border border-border"
                         style={{ background: c.colorHex }}
                       />
                       {isEditing ? (
@@ -224,7 +224,7 @@ export default function LabelBannersSettings() {
                         <CardTitle className="text-sm truncate">{c.label}</CardTitle>
                       )}
                     </div>
-                    <div className="flex items-center gap-1 flex-shrink-0">
+                    <div className="flex items-center gap-1 shrink-0">
                       {c.hasCustom && !isEditing && (
                         <span className="text-xs px-1.5 py-0.5 rounded-full bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 font-medium flex items-center gap-1">
                           <CheckCircle className="h-3 w-3" />
@@ -293,7 +293,7 @@ export default function LabelBannersSettings() {
                         type="color"
                         value={editColorHex}
                         onChange={(e) => setEditColorHex(e.target.value)}
-                        className="h-7 w-12 rounded cursor-pointer border border-border bg-transparent p-0.5"
+                        className="h-7 w-12 rounded-sm cursor-pointer border border-border bg-transparent p-0.5"
                         data-testid={`input-edit-hex-${c.slug}`}
                       />
                       <span className="text-xs text-muted-foreground font-mono">{editColorHex}</span>
@@ -433,7 +433,7 @@ export default function LabelBannersSettings() {
                       type="color"
                       value={addColorHex}
                       onChange={(e) => setAddColorHex(e.target.value)}
-                      className="h-8 w-14 rounded cursor-pointer border border-border bg-transparent p-0.5"
+                      className="h-8 w-14 rounded-sm cursor-pointer border border-border bg-transparent p-0.5"
                       data-testid="input-add-color-hex"
                     />
                     <span className="text-xs text-muted-foreground font-mono">{addColorHex}</span>

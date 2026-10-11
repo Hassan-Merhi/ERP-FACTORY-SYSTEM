@@ -1,7 +1,11 @@
 import { and, asc, eq, inArray, isNull, sql } from "drizzle-orm";
-import { db } from "../db";
-import { adjustInventory } from "../inventoryHelper";
+import type Decimal from "decimal.js";
+import { db, type DbTransaction } from "../db";
 import { firstRow } from "../lib/queryResult";
+import { assertNoBaleMirrorMovementTx } from "./accounting/perpetualInventory/cutoverRefusal";
+import { applyTransferRevisionDeltaTx, postTransferResidualTx } from "./inventory/conservedStockTransfer";
+import { journalStockTransferLeg, nextStockTransferRevision } from "./inventory/stockTransferJournal";
+import { lineValueMoved, reversalDate } from "./inventory/valueExactReversal";
 import {
   inventory,
   locations,
@@ -174,7 +178,9 @@ async function assertCompanyScope(
 }
 
 export async function savePendingStockTransferRevision(
-  input: SavePendingRevisionInput
+  input: SavePendingRevisionInput,
+  // Phase 21 (B): the caller's audit, written on this transaction.
+  auditTx?: (tx: DbTransaction, result: PendingRevisionResult) => Promise<void>
 ): Promise<PendingRevisionResult> {
   const companyId = positiveInteger(input.companyId, "Company ID");
   const transferId = positiveInteger(input.transferId, "Transfer ID");
@@ -264,7 +270,7 @@ export async function savePendingStockTransferRevision(
       )
       .returning();
 
-    return {
+    const result: PendingRevisionResult = {
       revisionId,
       transferId,
       revisionNumber,
@@ -276,6 +282,8 @@ export async function savePendingStockTransferRevision(
       voucherDate: String(locked.voucher_date),
       items: savedItems,
     };
+    if (auditTx) await auditTx(tx, result);
+    return result;
   });
 }
 
@@ -329,12 +337,19 @@ export function mergePendingRevisionTargets(
 
 export async function approvePendingStockTransferRevision(
   companyIdInput: number,
-  revisionIdInput: number
+  revisionIdInput: number,
+  // Phase 21 (B): the caller's audit, written on this transaction (no-op
+  // approvals included, as the after-commit audit did).
+  auditTx?: (tx: DbTransaction, result: ApproveRevisionResult) => Promise<void>
 ): Promise<ApproveRevisionResult> {
   const companyId = positiveInteger(companyIdInput, "Company ID");
   const revisionId = positiveInteger(revisionIdInput, "Revision ID");
 
   return db.transaction(async (tx) => {
+    const finish = async (result: ApproveRevisionResult) => {
+      if (auditTx) await auditTx(tx, result);
+      return result;
+    };
     const requestedResult = await tx.execute(sql`
       SELECT
         str.id AS revision_id,
@@ -385,7 +400,7 @@ export async function approvePendingStockTransferRevision(
       const totalAmount = currentItems
         .reduce((sum, item) => sum.plus(lineAmount(item.quantity, item.rate)), new MoneyDecimal(0))
         .toFixed(2);
-      return {
+      return finish({
         revisionId,
         transferId,
         voucherId,
@@ -394,7 +409,7 @@ export async function approvePendingStockTransferRevision(
         changedItemCount: 0,
         inventoryApplied,
         totalAmount,
-      };
+      });
     }
 
     const pendingIds = pendingRows.map((row) => Number(row.id));
@@ -562,7 +577,55 @@ export async function approvePendingStockTransferRevision(
       }
     }
 
+    if (inventoryApplied) {
+      // Wave 11: a factory bale-mirror item is moved in the factory after the cut-over.
+      await assertNoBaleMirrorMovementTx(
+        tx,
+        companyId,
+        changes.filter((change) => Math.abs(change.delta) >= 0.0005).map((change) => change.stockItemId),
+        "stock-transfer-revision"
+      );
+    }
+
+    // Wave 15: an applied transfer's revision moves value conserved (more
+    // quantity: what the source relieves; less: the line's share of its
+    // value_moved, exactly) and the line keeps its value_moved, so a later
+    // edit or delete reverses exactly what moved.
+    const deltas: Decimal[] = [];
+    let canonicalRevision: number | undefined;
     for (const change of changes) {
+      let valueMoved: string | null | undefined = change.existing?.valueMoved;
+      if (inventoryApplied && Math.abs(change.delta) >= 0.0005) {
+        const applied = await applyTransferRevisionDeltaTx(tx, {
+          companyId,
+          sourceLocationId: change.sourceLocationId,
+          destinationLocationId,
+          stockItemId: change.stockItemId,
+          oldQuantity: change.existing?.quantity ?? 0,
+          newQuantity: change.newQuantity.toFixed(3),
+          lineValue: change.existing
+            ? lineValueMoved({ valueMoved: change.existing.valueMoved, total: change.existing.totalAmount })
+            : 0,
+          fallbackRate: change.rate,
+          sourceVoucherType: "Stock Transfer",
+          sourceVoucherId: voucherId,
+        });
+        deltas.push(...applied.deltas);
+        valueMoved = applied.valueMoved.toFixed(2);
+        // The canonical journal records the direction the stock travelled (as
+        // the immutable lifecycle does).
+        canonicalRevision ??= await nextStockTransferRevision(tx, companyId, transferId);
+        await journalStockTransferLeg(tx, {
+          companyId,
+          transferId,
+          revision: canonicalRevision,
+          phase: change.delta > 0 ? "issue" : "reverse",
+          fromLocationId: change.delta > 0 ? change.sourceLocationId : destinationLocationId,
+          toLocationId: change.delta > 0 ? destinationLocationId : change.sourceLocationId,
+          leg: { stockItemId: change.stockItemId, quantity: change.delta, rate: change.rate },
+        });
+      }
+
       if (change.existing) {
         if (change.newQuantity <= 0) {
           await tx.delete(stockTransferItems).where(eq(stockTransferItems.id, change.existing.id));
@@ -572,6 +635,7 @@ export async function approvePendingStockTransferRevision(
             .set({
               quantity: toMoney(change.newQuantity).toFixed(3),
               totalAmount: lineAmount(change.newQuantity, change.rate).toFixed(2),
+              valueMoved: valueMoved ?? null,
             })
             .where(eq(stockTransferItems.id, change.existing.id));
         }
@@ -583,14 +647,17 @@ export async function approvePendingStockTransferRevision(
           quantity: toMoney(change.newQuantity).toFixed(3),
           rate: toMoney(change.rate).toFixed(2),
           totalAmount: lineAmount(change.newQuantity, change.rate).toFixed(2),
+          valueMoved: valueMoved ?? null,
         });
       }
-
-      if (inventoryApplied && Math.abs(change.delta) >= 0.0005) {
-        await adjustInventory(tx, change.sourceLocationId, change.stockItemId, -change.delta, companyId, change.rate);
-        await adjustInventory(tx, destinationLocationId, change.stockItemId, change.delta, companyId, change.rate);
-      }
     }
+    await postTransferResidualTx(tx, {
+      companyId,
+      transferId,
+      date: reversalDate(),
+      reference: `Transfer ${transferId}`,
+      deltas,
+    });
 
     const finalItems = await tx.select().from(stockTransferItems).where(eq(stockTransferItems.transferId, transferId));
     const totalAmount = finalItems
@@ -614,7 +681,7 @@ export async function approvePendingStockTransferRevision(
       .set({ optional: false })
       .where(and(eq(stockTransferRevisions.transferId, transferId), eq(stockTransferRevisions.optional, true)));
 
-    return {
+    return finish({
       revisionId,
       transferId,
       voucherId,
@@ -623,6 +690,6 @@ export async function approvePendingStockTransferRevision(
       changedItemCount: changes.filter((change) => Math.abs(change.delta) >= 0.0005).length,
       inventoryApplied,
       totalAmount,
-    };
+    });
   });
 }

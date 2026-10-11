@@ -15,6 +15,7 @@ import {
   voucherEntries,
   vouchers,
 } from "@shared/schema";
+import { toMoney } from "../lib/money";
 
 export function registerReportsVoucherDetailRoutes(app: Express) {
   app.get("/api/voucher-detail/:voucherId", requireAuth, async (req, res) => {
@@ -115,18 +116,18 @@ export function registerReportsVoucherDetailRoutes(app: Express) {
         stockItemId: item.stockItemId,
         stockItemName: item.stockItemName || "Unknown Item",
         stockItemCode: item.stockItemCode || "",
-        quantity: parseFloat(item.quantity || "0"),
+        quantity: toMoney(item.quantity).toNumber(),
         unit: item.stockItemUom || "BL",
-        rate: parseFloat(item.rate || "0"),
-        amount: parseFloat(item.total || "0"),
+        rate: toMoney(item.rate).toNumber(),
+        amount: toMoney(item.total).toNumber(),
       }));
 
       const entries = entriesData.map((entry) => ({
         id: entry.id,
         ledgerAccountId: entry.ledgerAccountId || 0,
         ledgerAccountName: entry.ledgerAccountName || "Unknown Account",
-        debitAmount: parseFloat(entry.debitAmount || "0"),
-        creditAmount: parseFloat(entry.creditAmount || "0"),
+        debitAmount: toMoney(entry.debitAmount).toNumber(),
+        creditAmount: toMoney(entry.creditAmount).toNumber(),
         narration: entry.narration,
       }));
 

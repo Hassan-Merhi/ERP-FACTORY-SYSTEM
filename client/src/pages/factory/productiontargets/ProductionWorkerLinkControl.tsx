@@ -353,7 +353,7 @@ export function ProductionWorkerLinkControl({
               <span dir="auto">{partner.name}</span>
               <button
                 type="button"
-                className="rounded-sm p-0.5 hover:bg-muted"
+                className="rounded-xs p-0.5 hover:bg-muted"
                 disabled={disabled || busy}
                 onClick={() =>
                   setSelectedPartnerIds((current) => current.filter((workerId) => workerId !== partner.personId))

@@ -171,7 +171,7 @@ export function PageHeader({
         data-testid="text-page-title"
       >
         {icon && <span className="inline-flex shrink-0 text-muted-foreground">{icon}</span>}
-        <span className="min-w-0 break-words">{title}</span>
+        <span className="min-w-0 wrap-break-word">{title}</span>
       </h1>
       {subtitle && (
         <p className={cn("mt-1 text-sm text-muted-foreground", subtitleLayout)} data-testid="text-page-subtitle">
@@ -258,8 +258,8 @@ export function PageHeader({
             "col-span-2 flex min-w-0 flex-wrap items-center gap-2 sm:col-span-1 sm:col-start-2 sm:justify-end sm:self-end",
             titleRow,
             // Phone: fill each wrapped row evenly; each action keeps its full label.
-            "[&>*]:min-w-0 [&>*]:flex-auto sm:[&>*]:flex-none",
-            "[&>button]:justify-center [&>[data-slot]]:justify-center"
+            "*:min-w-0 *:flex-auto sm:*:flex-none",
+            "[&>button]:justify-center *:data-slot:justify-center"
           )}
           data-testid="page-header-actions"
         >

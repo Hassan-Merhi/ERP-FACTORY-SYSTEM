@@ -8,6 +8,7 @@ import type { Pool } from "pg";
 import { getErrorMessage } from "../lib/httpHandlers";
 import { logger } from "../lib/logger";
 import { scheduledWhatsAppDeliveryTracking } from "../startup-schema/030-scheduled-whatsapp-delivery-tracking";
+import { ensureRetailLedgerSchema } from "../services/retail/retailLedgerSchema";
 
 export async function ensureScheduledWhatsAppDeliveryTrackingSchema(pool: Pool): Promise<void> {
   for (const statement of scheduledWhatsAppDeliveryTracking) {
@@ -163,6 +164,8 @@ export async function ensureRetailFinancialSchema(pool: Pool): Promise<void> {
       ON retail_accounting_settings(company_id) WHERE location_id IS NULL;
   `);
   logger.info("[startup] ✓ Retail financial core schema ensured");
+  // Wave 17 (D): Retail cash movement journals and the Retail inventory opening.
+  await ensureRetailLedgerSchema(pool);
 }
 
 /**
@@ -396,6 +399,42 @@ export async function ensureRuntimeSchema(pool: Pool): Promise<void> {
     ALTER TABLE vouchers
       ADD COLUMN IF NOT EXISTS currency VARCHAR(3) NOT NULL DEFAULT 'USD';
 
+    -- Phase 21 (A), AT3: actor columns and the original number of a retired
+    -- voucher, kept by the audit trail trigger (services/audit/voucherAuditTrigger.ts,
+    -- which adds them as well, fatally). NULL = written before tracking.
+    ALTER TABLE vouchers
+      ADD COLUMN IF NOT EXISTS created_by TEXT,
+      ADD COLUMN IF NOT EXISTS updated_by TEXT,
+      ADD COLUMN IF NOT EXISTS deleted_by TEXT,
+      ADD COLUMN IF NOT EXISTS original_voucher_number VARCHAR(100);
+
+    -- Phase 22 (A), PE8/G9/PE9 (migrations/20261010_002): gapless voucher
+    -- number counters and the reversal link (services/accounting/voucherNumbering.ts,
+    -- voucherCorrection.ts).
+    CREATE TABLE IF NOT EXISTS voucher_number_sequences (
+      company_id INTEGER NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+      prefix VARCHAR(20) NOT NULL,
+      year INTEGER NOT NULL,
+      last_value BIGINT NOT NULL DEFAULT 0,
+      updated_at TIMESTAMP NOT NULL DEFAULT now(),
+      CONSTRAINT voucher_number_sequences_company_id_prefix_year_pk PRIMARY KEY (company_id, prefix, year)
+    );
+    ALTER TABLE vouchers
+      ADD COLUMN IF NOT EXISTS reversal_of_voucher_id INTEGER REFERENCES vouchers(id),
+      ADD COLUMN IF NOT EXISTS posted_by_engine BOOLEAN NOT NULL DEFAULT false;
+    CREATE UNIQUE INDEX IF NOT EXISTS vouchers_reversal_of_live_unique
+      ON vouchers (reversal_of_voucher_id)
+      WHERE reversal_of_voucher_id IS NOT NULL AND deleted_at IS NULL;
+
+    -- Phase 21 (A), AT5/AT6: request metadata and the hash chain on audit rows.
+    ALTER TABLE audit_log
+      ADD COLUMN IF NOT EXISTS request_id TEXT,
+      ADD COLUMN IF NOT EXISTS ip TEXT,
+      ADD COLUMN IF NOT EXISTS session_id TEXT,
+      ADD COLUMN IF NOT EXISTS reason TEXT,
+      ADD COLUMN IF NOT EXISTS prev_hash TEXT,
+      ADD COLUMN IF NOT EXISTS row_hash TEXT;
+
     ALTER TABLE user_preferences
       ADD COLUMN IF NOT EXISTS preferred_currency VARCHAR(10);
 
@@ -414,6 +453,10 @@ export async function ensureRuntimeSchema(pool: Pool): Promise<void> {
       ADD COLUMN IF NOT EXISTS opening_balance_base_amount      NUMERIC(20,6),
       ADD COLUMN IF NOT EXISTS opening_balance_native_amount    NUMERIC(20,6),
       ADD COLUMN IF NOT EXISTS category                         TEXT;
+
+    -- Phase 19 (B), PE7: fixed assets are soft-deleted.
+    ALTER TABLE fixed_assets
+      ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP;
 
     ALTER TABLE bank_accounts
       ADD COLUMN IF NOT EXISTS opening_balance_currency         VARCHAR(10),
@@ -576,11 +619,11 @@ export async function ensureRuntimeSchema(pool: Pool): Promise<void> {
   // always-on pre-listen schema guard.
   await ensureScheduledWhatsAppDeliveryTrackingSchema(pool);
 
-  // Phase 3 historical repairs are part of the blocking pre-listen path. Both
-  // passes are idempotent and evidence-gated; ambiguous accounting causes a
-  // throw so Render keeps the previous healthy instance live.
-  const { runPhase3HistoricalRepair } = await import("../services/accounting/phase3HistoricalRepair");
-  await runPhase3HistoricalRepair();
+  // Wave 16 (A): the Phase 3 historical accounting repair no longer runs here.
+  // It added and deleted lines of posted vouchers of every company before each
+  // listen, with no audit; it is now the Owner preview/apply at
+  // /api/accounting/phase3-historical/plan and /apply. The payroll daybook pass below
+  // rewrites the factory daybook mirror only (no voucher, line or account).
   const { runPhase3PayrollDaybookRepair } = await import("../services/accounting/phase3PayrollDaybookRepair");
   await runPhase3PayrollDaybookRepair();
 

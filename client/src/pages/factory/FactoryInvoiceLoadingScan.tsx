@@ -587,7 +587,7 @@ export default function FactoryInvoiceLoadingScan() {
               </span>
               <span>·</span>
               <span>
-                Press <kbd className="text-xs border rounded px-1">Enter</kbd> to submit
+                Press <kbd className="text-xs border rounded-sm px-1">Enter</kbd> to submit
               </span>
             </div>
 

@@ -193,7 +193,10 @@ describe("reprint audit agreement", () => {
 
   it("accepts an audit that returns the same loading as the prepared label", async () => {
     await expect(
-      assertReprintMatchesPrepared(response({ priorityAllocation: { orderId: 77 } }), bale("A", "#dc2626"))
+      assertReprintMatchesPrepared(
+        response({ priorityAllocation: { orderId: 77, color: "#dc2626" } }),
+        bale("A", "#dc2626")
+      )
     ).resolves.toBeUndefined();
     await expect(
       assertReprintMatchesPrepared(response({ priorityAllocation: null }), bale("B"))
@@ -206,6 +209,54 @@ describe("reprint audit agreement", () => {
     ).rejects.toThrow("Loading changed for B");
     await expect(assertReprintMatchesPrepared(response({}, false), bale("B"))).rejects.toThrow(
       "Could not record label reprint"
+    );
+  });
+});
+
+describe("saved reprint color consistency", () => {
+  const response = (priorityAllocation: unknown) =>
+    ({ ok: true, json: async () => ({ priorityAllocation }) }) as Response;
+
+  it.each(["#B22222", "#abc", "Navy"])(
+    "preserves historical color %s with equivalent normalized audit color",
+    async (color) => {
+      const normalized = color === "#abc" ? "#aabbcc" : color === "Navy" ? "#000080" : color.toLowerCase();
+      const input = bale("A", color);
+      await expect(
+        assertReprintMatchesPrepared(response({ orderId: 77, color: normalized }), input)
+      ).resolves.toBeUndefined();
+      expect(input.priorityColor).toBe(color);
+    }
+  );
+
+  it.each([undefined, null, "", "#FFD700", "url(x)"])(
+    "rejects missing, changed or unsafe audit color %s for the same order",
+    async (color) => {
+      await expect(
+        assertReprintMatchesPrepared(response({ orderId: 77, color }), bale("A", "#dc2626"))
+      ).rejects.toThrow("Priority color changed for A");
+    }
+  );
+
+  it("rejects incomplete reprint audit responses", async () => {
+    await expect(
+      assertReprintMatchesPrepared({ ok: true, json: async () => ({}) } as Response, bale("A"))
+    ).rejects.toThrow("Incomplete priority reprint audit");
+  });
+
+  it("rejects a changed preflight color even when the loading is unchanged", async () => {
+    const request = vi.fn(async () =>
+      ok([prepared(1, "A", { baleId: 1, orderId: 77, color: "#FFD700", priority: 1 })])
+    );
+    await expect(preparePriorityPrintLabels([bale("A", "#dc2626")], request, [1])).rejects.toThrow(
+      "Priority color changed for A"
+    );
+  });
+
+  it("rejects invalid preflight snapshot colors even when both invalid values normalize to null", async () => {
+    const request = vi.fn(async () => ok([prepared(1, "A", { baleId: 1, orderId: 77, color: "url(x)", priority: 1 })]));
+    await expect(preparePriorityPrintLabels([bale("A", "url(y)")], request, [1])).rejects.toThrow(
+      "Invalid priority assignment for A"
     );
   });
 });

@@ -304,11 +304,10 @@ export function resolveFactoryBackendAccessRequirement(req: Request): FactoryApi
     path === "/admin-verify" ||
     path === "/import-company-data" ||
     path === "/export-company-data" ||
-    path === "/migrate-voucher-descriptions" ||
-    path === "/payroll/migrate-city-split" ||
-    path === "/payroll/migrate-worker-names" ||
-    path === "/payroll/migrate-salary-groups" ||
-    path === "/bales/backfill-costs" ||
+    // The reviewed bale/mix re-cost (preview and Owner apply, wave 11) is a cost
+    // repair like /repair-perkg-prices; the retired /bales/backfill-costs (410)
+    // now falls to the Bales parent below.
+    hasPrefix(path, "/bale-cost") ||
     path === "/bilingual-snapshots/backfill" ||
     path === "/bilingual-snapshots/diagnose" ||
     (hasPrefix(path, "/settings") && isWrite(req)) ||
@@ -512,7 +511,9 @@ export function resolveFactoryBackendAccessRequirement(req: Request): FactoryApi
   }
 
   if (hasPrefix(path, "/location-inventory")) {
-    return requirement("factory/location-inventory");
+    if (isWrite(req)) return requirement("factory/location-inventory");
+    // Factory POS reads the selling location's stock to build its product picker.
+    return anyOf(requirement("factory/location-inventory"), requirement("factory/pos"));
   }
   if (hasPrefix(path, "/bale-stock-list")) {
     return requirement("factory/stock-bale-list");
@@ -648,7 +649,8 @@ export function resolveFactoryBackendAccessRequirement(req: Request): FactoryApi
     return anyOf(
       requirement("factory/parties", ["hide_tab_parties_customers"]),
       requirement("factory/invoicing"),
-      requirement("factory/stock-entry")
+      requirement("factory/stock-entry"),
+      requirement("factory/pos")
     );
   }
 
@@ -693,7 +695,8 @@ export function resolveFactoryBackendAccessRequirement(req: Request): FactoryApi
   }
 
   if (hasPrefix(path, "/pos")) {
-    return requirement("factory/production-report");
+    // Factory POS owns its API. Overview keeps the access it had while POS was its alias.
+    return anyOf(requirement("factory/pos"), requirement("factory/production-report"));
   }
 
   if (hasPrefix(path, "/monthly-salary-summary")) {

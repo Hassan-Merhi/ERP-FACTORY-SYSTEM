@@ -88,14 +88,14 @@ export function PosLocationManager({
             return (
               <div key={loc.id} className="space-y-1">
                 <label
-                  className={`flex items-center gap-2 cursor-pointer text-xs rounded px-2 py-1 transition-colors ${checked ? "bg-primary/10 text-primary font-medium" : "hover:bg-muted/50"}`}
+                  className={`flex items-center gap-2 cursor-pointer text-xs rounded-sm px-2 py-1 transition-colors ${checked ? "bg-primary/10 text-primary font-medium" : "hover:bg-muted/50"}`}
                   data-testid={`checkbox-location-${loc.id}`}
                 >
                   <input
                     type="checkbox"
                     checked={checked}
                     onChange={() => toggleLocation(loc.id)}
-                    className="rounded shrink-0"
+                    className="rounded-sm shrink-0"
                   />
                   <span className="truncate">{loc.name}</span>
                   <span className="text-muted-foreground shrink-0">({loc.code})</span>

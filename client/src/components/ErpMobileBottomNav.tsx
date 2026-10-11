@@ -136,7 +136,7 @@ export function ErpMobileBottomNav({ user, onMore, moreOpen = false }: ErpMobile
     <nav
       aria-label={t("mobileNav.ariaLabel")}
       data-testid="erp-mobile-bottom-nav"
-      className="no-print shrink-0 border-t bg-background/95 pb-[max(0.25rem,env(safe-area-inset-bottom))] backdrop-blur supports-[backdrop-filter]:bg-background/90 sm:hidden"
+      className="no-print shrink-0 border-t bg-background/95 pb-[max(0.25rem,env(safe-area-inset-bottom))] backdrop-blur-sm supports-backdrop-filter:bg-background/90 sm:hidden"
     >
       <div
         className="grid min-h-14 items-stretch px-1"

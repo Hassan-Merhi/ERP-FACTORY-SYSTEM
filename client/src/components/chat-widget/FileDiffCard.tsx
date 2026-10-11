@@ -43,7 +43,7 @@ export function CodeBlock({ code, lang }: { code: string; lang: string }) {
         <div className="flex items-center gap-1">
           {isPreviewable && (
             <button
-              className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors px-2 py-0.5 rounded hover:bg-muted"
+              className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors px-2 py-0.5 rounded-sm hover:bg-muted"
               onClick={() => setShowPreview((v) => !v)}
               type="button"
             >
@@ -52,7 +52,7 @@ export function CodeBlock({ code, lang }: { code: string; lang: string }) {
             </button>
           )}
           <button
-            className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors px-2 py-0.5 rounded hover:bg-muted"
+            className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors px-2 py-0.5 rounded-sm hover:bg-muted"
             onClick={handleCopy}
             type="button"
           >

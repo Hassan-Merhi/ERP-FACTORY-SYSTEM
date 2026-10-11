@@ -74,9 +74,9 @@ export function WorkflowDialog({
                 <Icon className="h-5 w-5" aria-hidden="true" />
               </div>
               <div className="min-w-0">
-                <DialogTitle className="break-words">{title}</DialogTitle>
+                <DialogTitle className="wrap-break-word">{title}</DialogTitle>
                 {description ? (
-                  <DialogDescription className="mt-1 break-words leading-5">{description}</DialogDescription>
+                  <DialogDescription className="mt-1 wrap-break-word leading-5">{description}</DialogDescription>
                 ) : null}
               </div>
             </div>

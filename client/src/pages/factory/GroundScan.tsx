@@ -93,7 +93,7 @@ export default function GroundScan() {
       const valid = stockLocations.some((l) => String(l.id) === selectedLocationId);
       if (!valid) setSelectedLocationId("all");
     }
-  }, [selectedLocationId, stockLocations]); 
+  }, [selectedLocationId, stockLocations]);
 
   const invalidate = () =>
     queryClient.invalidateQueries(
@@ -705,13 +705,13 @@ export default function GroundScan() {
           </div>
           {scanError && (
             <div className="flex items-center gap-2 text-destructive text-sm" data-testid="text-ground-scan-error">
-              <AlertCircle className="h-4 w-4 flex-shrink-0" />
+              <AlertCircle className="h-4 w-4 shrink-0" />
               {scanError}
             </div>
           )}
         </div>
 
-        <div className="flex items-center gap-2 flex-shrink-0">
+        <div className="flex items-center gap-2 shrink-0">
           <Button
             onClick={handleScan}
             disabled={scanning || !scanInput.trim()}

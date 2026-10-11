@@ -65,7 +65,7 @@ export function VoucherMobileTabs({ visibleSidebarGroups, activeTab, setActiveTa
         <SheetContent
           side="bottom"
           data-i18n-portal=""
-          className="mx-auto max-h-[calc(var(--erp-visual-viewport-height,var(--app-viewport-height))-2.5rem)] !flex-nowrap gap-0 rounded-t-2xl p-0"
+          className="mx-auto max-h-[calc(var(--erp-visual-viewport-height,var(--app-viewport-height))-2.5rem)] flex-nowrap! gap-0 rounded-t-2xl p-0"
           data-testid="sheet-voucher-types"
         >
           <div className="border-b px-4 pb-3 pt-4">

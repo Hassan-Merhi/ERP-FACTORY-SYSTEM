@@ -29,6 +29,7 @@ failure, so a correct document cannot quietly become undiscoverable.
 | Doc | What it covers |
 |---|---|
 | [accounting-flow.md](accounting-flow.md) | Voucher types, posting, the ledger |
+| [accounting-audit-2026-10.md](accounting-audit-2026-10.md) | Accounting audit findings, production evidence and remediation waves |
 | [inventory-flow.md](inventory-flow.md) | Stock data model and cost calculation |
 | [inventory-cost-memory-policy.md](inventory-cost-memory-policy.md) | Cost-memory rules for the current implementation |
 | [historical-sales-cogs-transfer-revision-findings.md](historical-sales-cogs-transfer-revision-findings.md) | Historical sales COGS repair: evidence findings and remaining blockers |
@@ -38,6 +39,7 @@ failure, so a correct document cannot quietly become undiscoverable.
 | [factory-flow.md](factory-flow.md) | Bales, production, payroll, raw materials |
 | [factory-container-planner.md](factory-container-planner.md) | Stock Allocation V5 container planning, saved drafts, and live reconciliation |
 | [automatic-priority-print-loading.md](automatic-priority-print-loading.md) | Automatic Priority Printing & Loading: company switch, automatic loading allocation, priority-colored labels, physical bale deletion and Priority #1 recovery |
+| [priority-scan-fixed-palette-color-block.md](priority-scan-fixed-palette-color-block.md) | Priority Scan fixed 11-color palette, solid color-box priority labels, legacy-color moves and saved-color print/reprint checks |
 | [pos-flow.md](pos-flow.md) | Point of sale, including offline |
 | [financial-close-and-migrations.md](financial-close-and-migrations.md) | Period locks and production migrations |
 | [golden-coast-phase16-audit.md](golden-coast-phase16-audit.md) | Golden Coast payable/equity separation invariants and the unmerged phase branches |

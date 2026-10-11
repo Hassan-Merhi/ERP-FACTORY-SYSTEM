@@ -3,14 +3,20 @@
  *
  * Pulls only the voucher entries that fall WITHIN fromDate..toDate
  * (not cumulative) so each monthly sheet can show "what happened this month"
- * rather than the cumulative balance-sheet snapshot.
+ * rather than the cumulative balance-sheet snapshot. A voucher counts from
+ * COALESCE(effective_date, voucher_date), the balance engine's date basis.
  */
 
 import { db } from "../db";
 import { storage } from "../storage";
 import { vouchers, voucherEntries } from "@shared/schema";
 import { eq, and, isNull, lte, gte } from "drizzle-orm";
+import type Decimal from "decimal.js";
 import { round2 } from "../netPositionHelper";
+import { MoneyDecimal, toMoney } from "../lib/money";
+import { classifyAccountType, expenseCategory } from "../services/accounting/accountClassification";
+import { voucherBookedOnSql } from "../services/accounting/balances/partyLineRules";
+import { notFiscalClosingVoucherSql } from "../services/accounting/balances/periodReportRules";
 
 export interface IncomeLineItem {
   label: string;
@@ -62,20 +68,24 @@ export async function calculateIncomeStatementForPeriod(
         eq(vouchers.companyId, companyId),
         eq(vouchers.optional, false),
         isNull(vouchers.deletedAt),
-        gte(vouchers.voucherDate, fromDate),
-        lte(vouchers.voucherDate, toDate)
+        // The fiscal closing journal is not period activity (wave 17 A).
+        notFiscalClosingVoucherSql,
+        // One date basis with the engine (wave 13, R2).
+        gte(voucherBookedOnSql, fromDate),
+        lte(voucherBookedOnSql, toDate)
       )
     )
     .execute();
 
-  // Sum debits and credits per account
-  const accountActivity = new Map<number, { debit: number; credit: number }>();
+  // Sum debits and credits per account, exact
+  const accountActivity = new Map<number, { debit: Decimal; credit: Decimal }>();
   for (const e of periodEntries) {
     if (!e.ledgerAccountId) continue;
-    const d = parseFloat(e.debitAmount || "0");
-    const c = parseFloat(e.creditAmount || "0");
-    const cur = accountActivity.get(e.ledgerAccountId) || { debit: 0, credit: 0 };
-    accountActivity.set(e.ledgerAccountId, { debit: cur.debit + d, credit: cur.credit + c });
+    const cur = accountActivity.get(e.ledgerAccountId) ?? { debit: new MoneyDecimal(0), credit: new MoneyDecimal(0) };
+    accountActivity.set(e.ledgerAccountId, {
+      debit: cur.debit.plus(toMoney(e.debitAmount)),
+      credit: cur.credit.plus(toMoney(e.creditAmount)),
+    });
   }
 
   // Build account lookup
@@ -89,30 +99,29 @@ export async function calculateIncomeStatementForPeriod(
   for (const [accId, activity] of accountActivity) {
     const acc = accountMap.get(accId);
     if (!acc) continue;
-    const type = acc.accountType || "";
-
-    if (type === "Income" || type === "Profit") {
+    // Shared classifier: Income, Revenue and Indirect Income (either storage
+    // form) are revenue; "Profit" is equity (capital / retained profit), not
+    // revenue. Expenses are bucketed by expenseCategory, which reads both the
+    // "Direct Expense" type and "Expense" + subType "Direct Expense".
+    if (classifyAccountType(acc.accountType, acc.subType) === "income") {
       // Income accounts: credits increase revenue
-      const net = round2(activity.credit - activity.debit);
+      const net = round2(activity.credit.minus(activity.debit).toNumber());
       if (net !== 0) {
-        revenueLines.push({ label: acc.name, value: net, category: type });
+        revenueLines.push({ label: acc.name, value: net, category: acc.accountType || "Income" });
       }
-    } else if (type === "Direct Expense") {
-      // Direct expenses: debits increase expense
-      const net = round2(activity.debit - activity.credit);
-      if (net !== 0) {
-        directExpLines.push({ label: acc.name, value: net, category: "Direct Expense" });
-      }
-    } else if (type === "Indirect Expense") {
-      const net = round2(activity.debit - activity.credit);
-      if (net !== 0) {
-        indirectExpLines.push({ label: acc.name, value: net, category: "Indirect Expense" });
-      }
-    } else if (type === "Expense") {
-      const net = round2(activity.debit - activity.credit);
-      if (net !== 0) {
-        generalExpLines.push({ label: acc.name, value: net, category: "Expense" });
-      }
+      continue;
+    }
+    const category = expenseCategory(acc.accountType, acc.subType);
+    if (!category) continue;
+    // Expenses: debits increase expense
+    const net = round2(activity.debit.minus(activity.credit).toNumber());
+    if (net === 0) continue;
+    if (category === "Direct Expense" || category === "COGS") {
+      directExpLines.push({ label: acc.name, value: net, category });
+    } else if (category === "Indirect Expense") {
+      indirectExpLines.push({ label: acc.name, value: net, category });
+    } else {
+      generalExpLines.push({ label: acc.name, value: net, category });
     }
   }
 

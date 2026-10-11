@@ -56,8 +56,10 @@ interface GroupNetPositionData {
     netPosition: number;
   };
   intercompany: {
-    mode: "already-excluded";
+    mode: "paired-elimination";
     additionalElimination: number;
+    /** Unmatched or mismatched intercompany amounts, part of the group totals (wave 13). */
+    differences?: GroupLineItem[];
     note: string;
   };
 }
@@ -126,7 +128,7 @@ function CompanySide({
                     key={`${line.label}-${index}`}
                     className="flex items-start justify-between gap-4 px-3 py-2 text-sm"
                   >
-                    <span className="min-w-0 break-words">{line.label}</span>
+                    <span className="min-w-0 wrap-break-word">{line.label}</span>
                     <span
                       className={`shrink-0 font-mono tabular-nums ${line.value < 0 ? "text-rose-600 dark:text-rose-400" : ""}`}
                     >
@@ -416,6 +418,27 @@ export function GroupNetPositionPage({ onBack }: { onBack: () => void }) {
                       </td>
                     </tr>
                   ))}
+                  {(data.intercompany.differences ?? []).map((line) => (
+                    <tr
+                      key={line.label}
+                      className="border-b border-border/50"
+                      data-testid="row-intercompany-difference"
+                    >
+                      <td className="py-3 pr-4">
+                        <div className="font-medium">Intercompany difference</div>
+                        <div className="text-xs text-muted-foreground">{line.label}</div>
+                      </td>
+                      <td className="py-3 px-3 text-right font-mono tabular-nums">
+                        {line.side === "forUs" ? formatAmount(line.value) : "—"}
+                      </td>
+                      <td className="py-3 px-3 text-right font-mono tabular-nums">
+                        {line.side === "onUs" ? formatAmount(line.value) : "—"}
+                      </td>
+                      <td className="py-3 pl-3 text-right font-mono tabular-nums">
+                        {formatAmount(line.side === "forUs" ? line.value : -line.value)}
+                      </td>
+                    </tr>
+                  ))}
                   <tr className="bg-muted/30 font-semibold">
                     <td className="py-3 pr-4">GROUP TOTAL</td>
                     <td className="py-3 px-3 text-right font-mono tabular-nums">
@@ -433,7 +456,7 @@ export function GroupNetPositionPage({ onBack }: { onBack: () => void }) {
             </CardContent>
           </Card>
 
-          <div className="rounded-xl border border-blue-500/20 bg-blue-500/[0.04] px-4 py-3 flex items-start gap-3 text-sm">
+          <div className="rounded-xl border border-blue-500/20 bg-blue-500/4 px-4 py-3 flex items-start gap-3 text-sm">
             <Info className="h-4 w-4 text-blue-600 dark:text-blue-400 mt-0.5 shrink-0" />
             <div>
               <p className="font-medium">Intercompany treatment</p>

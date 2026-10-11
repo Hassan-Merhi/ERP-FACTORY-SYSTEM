@@ -85,7 +85,6 @@ import {
   StockTransferOrder,
   SupplierProfitCheck,
   SupplierProformas,
-  TestDataImport,
   TrackingHub,
   TransactionJournal,
   VoucherDetail,
@@ -426,7 +425,6 @@ export function ErpRoutes({ user }: ErpRoutesProps) {
       {R("/chatbot-settings", isAdminOrDev, ChatbotSettings)}
       {R("/notification-settings", isAdminOrDev, NotificationSettings)}
       {R("/account-groups", isAdminOrDev, AccountGroups)}
-      {R("/test-data-import", isAdminOrDev, TestDataImport)}
       {R("/import-cycle-diagnostics", isAdminOrDev, ImportCycleDiagnostics)}
       {R("/inventory-repair", isAdminOrDev, InventoryRepair)}
       {R("/balance-repair", isAdminOrDev, BalanceRepair)}

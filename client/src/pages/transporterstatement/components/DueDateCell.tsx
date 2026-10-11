@@ -43,7 +43,7 @@ export function DueDateCell({
           value={value}
           autoFocus
           onChange={(e) => setValue(e.target.value)}
-          className="w-[130px] h-8 rounded-md border border-input bg-background px-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+          className="w-[130px] h-8 rounded-md border border-input bg-background px-2 text-sm focus:outline-hidden focus:ring-1 focus:ring-ring"
           data-testid={`input-due-date-${row.id}`}
         />
         <Button size="icon" variant="ghost" onClick={handleSave} data-testid={`btn-due-save-${row.id}`}>

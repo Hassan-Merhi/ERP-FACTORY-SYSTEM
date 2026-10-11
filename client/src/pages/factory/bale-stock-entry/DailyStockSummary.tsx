@@ -73,7 +73,7 @@ export function DailyStockSummary({ date }: { date: string }) {
       className="grid min-w-0 grid-cols-1 gap-2 min-[420px]:grid-cols-2 lg:grid-cols-4"
     >
       <div className="flex min-h-11 items-center rounded-lg border border-dashed px-3 py-2">
-        <span className="break-words text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+        <span className="wrap-break-word text-xs font-semibold uppercase tracking-widest text-muted-foreground">
           {isToday ? "Today" : "Production"}
         </span>
       </div>

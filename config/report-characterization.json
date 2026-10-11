@@ -4,23 +4,23 @@
   "pins": {
     "GET /api/stats/net-profit": {
       "status": 200,
-      "shape": "{currency,currencyRevaluation,equity,expenses,expensesTotal,forUs,forUsTotal,income,incomeTotal,netPosition,netPositionBreakdown,netPositionLabel,netProfit,netWorth,onUs,onUsTotal,ownersCapital,spPosProfit,totalExpenses,totalIncome}",
-      "hash": "ffe7bd19fdd5db92e1fcc5b12ca06ce6a13f01af38c0a8681e4ae07f06590789"
+      "shape": "{currency,currencyRevaluation,equity,expenses,expensesTotal,forUs,forUsTotal,income,incomeTotal,netPosition,netPositionBreakdown,netPositionLabel,netProfit,netWorth,notInLedger,onUs,onUsTotal,ownersCapital,spPosProfit,totalExpenses,totalIncome}",
+      "hash": "f8f6baf6da5f94f513ba6935c0a96de070ec9315d4fb69dc31b352f358ae23ec"
     },
     "GET /api/reports/net-profit-excel": {
       "status": 200,
       "shape": "workbook:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-      "hash": "8100eae894c541251fcce6ce21a360e4fede5ae9dd7ab71e0ca2eb628e38147a"
+      "hash": "cd5324ab11354eaaf9e4794d8d245ff5a798527e0421f3a8b4f062cce9ace413"
     },
     "GET /api/factory/net-position": {
       "status": 200,
-      "shape": "{asOf,balanceOnTableValue,forUs,forUsTotal,inventoryValue,ledgerAssets,ledgerLiabilities,loadingOrders,loadingTotal,netPosition,netPositionLabel,onUs,onUsTotal,payrollPayable,pendingOrders,pendingTotal,rawMaterialValue,supplierLiabilities,supplierOverpayments,valuationMode,verifiedOrders,verifiedTotal}",
-      "hash": "a8c8deff20645cb89524a5e55d8c11bdb2b5fe38295ccc9db77811e1433cb270"
+      "shape": "{asOf,balanceOnTableValue,bankAssets,bankOverdrafts,forUs,forUsTotal,inventoryValue,inventoryValueBasis,ledgerAssets,ledgerLiabilities,loadingOrders,loadingTotal,netPosition,netPositionLabel,notInLedger,onUs,onUsTotal,payrollPayable,pendingOrders,pendingTotal,rawMaterialValue,reservedBales,supplierLiabilities,supplierOverpayments,valuationMode,verifiedOrders,verifiedTotal}",
+      "hash": "a144e92efe9fad207b962be70c3b67285ac171d0534e15606e4abe7a73651d65"
     },
     "GET /api/factory/suppliers/:supplierId/statement": {
       "status": 200,
-      "shape": "{brokerContainers,currencyGroups,fxTransfers,ledger,linkedSupplierGroups,obCommissions,offloadCharges,payments,statement,summary,supplier,voucherPayments}",
-      "hash": "c744dde780be869ca88c8c74469c2405b547aff44dded594119247f721e72b7f"
+      "shape": "{balanceBasis,brokerContainers,currencyGroups,fxTransfers,ledger,ledgerView,linkedSupplierGroups,obCommissions,offloadCharges,operationalMemoLabel,payments,statement,summary,supplier,voucherPayments}",
+      "hash": "9d1f53b585be70655b670f0cb7026995c1e25e952937900833a9a345e8e39b28"
     },
     "PATCH /api/purchase-orders/:poId": {
       "status": 200,

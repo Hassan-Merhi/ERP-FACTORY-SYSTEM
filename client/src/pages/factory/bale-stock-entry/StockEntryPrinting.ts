@@ -191,7 +191,7 @@ export const printLabels = async (
         toast({
           title: "Priority labels need a color printer",
           description:
-            "Bales assigned to a priority loading print through the browser so the colored HMD logo is kept.",
+            "Bales assigned to a priority loading print through the browser so the priority color box is kept.",
         });
       }
       openBrowserPrint(labels, undefined, preOpenedWindowsRef);

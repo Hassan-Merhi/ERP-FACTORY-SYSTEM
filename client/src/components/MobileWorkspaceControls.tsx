@@ -138,7 +138,7 @@ export default function MobileWorkspaceControls({
       </SheetTrigger>
       <SheetContent
         side={direction === "rtl" ? "left" : "right"}
-        className="flex w-[calc(100vw_-_0.5rem)] max-w-sm flex-col gap-0 p-0"
+        className="flex w-[calc(100vw-0.5rem)] max-w-sm flex-col gap-0 p-0"
       >
         <SheetHeader className="border-b px-4 pb-3 pt-[max(1rem,var(--safe-area-top))] text-start">
           <SheetTitle>{t("workspace.controls")}</SheetTitle>
@@ -215,7 +215,7 @@ export default function MobileWorkspaceControls({
             </div>
           </div>
 
-          {extraActions && <div className="grid gap-2 [&>*]:w-full">{extraActions}</div>}
+          {extraActions && <div className="grid gap-2 *:w-full">{extraActions}</div>}
 
           <div className="rounded-lg border p-3">
             <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">

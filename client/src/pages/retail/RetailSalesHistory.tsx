@@ -118,7 +118,7 @@ export default function RetailSalesHistory() {
   return (
     <div className="mx-auto flex w-full max-w-[1400px] flex-col gap-4 p-3 pb-24 md:p-5 xl:pb-5">
       <RetailNav />
-      <div className="rounded-xl border bg-card p-4 shadow-sm">
+      <div className="rounded-xl border bg-card p-4 shadow-xs">
         <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight">
           <History className="h-6 w-6" /> Sales &amp; customer history
         </h1>
@@ -161,7 +161,7 @@ export default function RetailSalesHistory() {
                   <button
                     key={entry.id}
                     type="button"
-                    className="flex w-full items-center justify-between rounded border px-2 py-1.5 text-left text-sm hover:bg-muted/50"
+                    className="flex w-full items-center justify-between rounded-sm border px-2 py-1.5 text-left text-sm hover:bg-muted/50"
                     onClick={() => setCustomer(entry)}
                     data-no-translate
                   >
@@ -176,19 +176,19 @@ export default function RetailSalesHistory() {
           {customerHistoryQuery.data && (
             <div className="mt-2 space-y-2">
               <div className="grid grid-cols-2 gap-2 text-xs sm:grid-cols-4">
-                <div className="rounded border p-2">
+                <div className="rounded-sm border p-2">
                   <div className="text-muted-foreground">Purchases</div>
                   <strong>{customerHistoryQuery.data.summary.saleCount}</strong>
                 </div>
-                <div className="rounded border p-2">
+                <div className="rounded-sm border p-2">
                   <div className="text-muted-foreground">Total spent</div>
                   <strong>{money(customerHistoryQuery.data.summary.totalSpent)}</strong>
                 </div>
-                <div className="rounded border p-2">
+                <div className="rounded-sm border p-2">
                   <div className="text-muted-foreground">Refunded</div>
                   <strong>{money(customerHistoryQuery.data.summary.totalRefunded)}</strong>
                 </div>
-                <div className="rounded border p-2">
+                <div className="rounded-sm border p-2">
                   <div className="text-muted-foreground">Last purchase</div>
                   <strong>
                     {customerHistoryQuery.data.summary.lastPurchaseAt
@@ -198,7 +198,7 @@ export default function RetailSalesHistory() {
                 </div>
               </div>
               {customerHistoryQuery.data.returns.length > 0 && (
-                <div className="space-y-1 rounded border p-2 text-xs">
+                <div className="space-y-1 rounded-sm border p-2 text-xs">
                   <div className="font-medium">Returns</div>
                   {customerHistoryQuery.data.returns.map((entry) => (
                     <div key={entry.id} className="flex justify-between gap-2" data-no-translate>
@@ -211,7 +211,7 @@ export default function RetailSalesHistory() {
                 </div>
               )}
               {customerHistoryQuery.data.exchanges.length > 0 && (
-                <div className="space-y-1 rounded border p-2 text-xs">
+                <div className="space-y-1 rounded-sm border p-2 text-xs">
                   <div className="font-medium">Exchanges</div>
                   {customerHistoryQuery.data.exchanges.map((entry) => (
                     <div key={entry.id} className="flex justify-between gap-2" data-no-translate>

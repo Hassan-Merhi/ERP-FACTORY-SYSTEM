@@ -100,7 +100,7 @@ export function VoucherEntryRow({
               const txAmt = Math.max(txDebit, txCredit);
               const rateNum = parseFloat(rate);
               return (
-                <div className="mb-1 flex items-center gap-1.5 text-xs text-muted-foreground bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded px-2 py-0.5">
+                <div className="mb-1 flex items-center gap-1.5 text-xs text-muted-foreground bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-sm px-2 py-0.5">
                   <span className="font-medium text-amber-700 dark:text-amber-400">{txCcy}</span>
                   {txAmt > 0 && <span>{txCcy === "CFA" ? Math.round(txAmt).toLocaleString() : txAmt.toFixed(2)}</span>}
                   {rateNum > 0 && (

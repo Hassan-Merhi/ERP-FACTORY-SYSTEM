@@ -225,7 +225,7 @@ export function AgentDutyWhatsAppSection() {
                             <button
                               key={c.id}
                               type="button"
-                              className={`w-full text-left px-3 py-2 rounded text-xs hover-elevate ${chatId === c.id ? "bg-primary/10 text-primary font-medium" : ""}`}
+                              className={`w-full text-left px-3 py-2 rounded-sm text-xs hover-elevate ${chatId === c.id ? "bg-primary/10 text-primary font-medium" : ""}`}
                               onClick={() => assignGroup(name, c.id)}
                               data-testid={`option-wa-group-${name}-${c.id}`}
                             >

@@ -193,7 +193,7 @@ export default function FactoryContacts() {
         {isLoading ? (
           <div className="space-y-2">
             {[1, 2, 3, 4].map((i) => (
-              <div key={i} className="h-12 rounded border bg-muted/30 animate-pulse" />
+              <div key={i} className="h-12 rounded-sm border bg-muted/30 animate-pulse" />
             ))}
           </div>
         ) : filtered.length === 0 ? (

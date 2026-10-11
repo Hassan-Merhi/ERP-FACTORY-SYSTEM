@@ -108,12 +108,12 @@ describe("Mobile repair Phase 1 critical flows", () => {
   });
 
   it("makes hover-hidden row actions visible to coarse pointers through the touch variant", () => {
-    const tailwind = source("tailwind.config.ts");
+    const css = source("client/src/index.css");
     const rawStock = source("client/src/pages/factory/production-raw-stock/RawStockTable.tsx");
 
-    // A plugin variant, so `screens` stays simple and the `max-*` / `min-[…]` variants compile.
-    expect(tailwind).toContain('addVariant("touch", "@media (hover: none) and (pointer: coarse) { &:is(&) }")');
-    expect(tailwind).not.toContain("raw:");
+    // A custom variant with a doubled selector, so it out-ranks width variants on the same element.
+    expect(css).toContain("@custom-variant touch {");
+    expect(css).toContain("@media (hover: none) and (pointer: coarse) {\n    &:is(&) {");
     expect(rawStock).toContain("opacity-0 group-hover:opacity-100 touch:opacity-100");
     expect(rawStock).toContain("data-testid={`button-adjust-${row.supplierId}`}");
     expect(rawStock).toContain("data-testid={`button-deduct-${row.supplierId}`}");

@@ -80,7 +80,7 @@ describe("Mobile responsiveness Phase 9 dashboards and reports", () => {
     expect(card).toHaveAttribute("tabindex", "0");
     expect(card.className).toContain("min-w-0");
     const value = screen.getByText("$ 1,234,567.00");
-    expect(value.className).toContain("break-words");
+    expect(value.className).toContain("wrap-break-word");
     expect(value.className).toMatch(/min-\[360px\]:text-2xl/);
     fireEvent.keyDown(card, { key: "Enter" });
     fireEvent.keyDown(card, { key: " " });

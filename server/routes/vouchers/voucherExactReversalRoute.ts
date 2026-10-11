@@ -7,7 +7,8 @@ import { logger } from "../../lib/logger";
 import { PostingValidationError } from "../../services/accounting/centralPostingEngine";
 import { createDatabasePostingDependencies } from "../../services/accounting/databasePostingDependencies";
 import { createDatabaseVoucherReversalLoader } from "../../services/accounting/databaseVoucherReversalLoader";
-import { reverseVoucherExactlyTx } from "../../services/accounting/voucherReversal";
+import { sendInventoryCutoverRefusal } from "../../services/accounting/perpetualInventory/cutoverRefusal";
+import { assertExactReversalAllowedTx, reverseVoucherExactlyTx } from "../../services/accounting/voucherReversal";
 
 const postingDependencies = createDatabasePostingDependencies();
 const reversalLoader = createDatabaseVoucherReversalLoader();
@@ -58,8 +59,9 @@ export function registerVoucherExactReversalRoute(app: Express): void {
           : `REV-${originalVoucherId}`;
 
       try {
-        const result = await db.transaction(async (tx) =>
-          reverseVoucherExactlyTx(
+        const result = await db.transaction(async (tx) => {
+          await assertExactReversalAllowedTx(tx, companyId, originalVoucherId);
+          return reverseVoucherExactlyTx(
             tx,
             {
               companyId,
@@ -74,8 +76,8 @@ export function registerVoucherExactReversalRoute(app: Express): void {
             },
             reversalLoader,
             postingDependencies
-          )
-        );
+          );
+        });
 
         logger.info("Exact voucher reversal posted", {
           module: "accounting",
@@ -88,6 +90,7 @@ export function registerVoucherExactReversalRoute(app: Express): void {
 
         return res.status(result.replayed === true ? 200 : 201).json(result);
       } catch (error: unknown) {
+        if (sendInventoryCutoverRefusal(res, error)) return;
         if (error instanceof PostingValidationError) {
           logger.warn("Exact voucher reversal refused", {
             module: "accounting",

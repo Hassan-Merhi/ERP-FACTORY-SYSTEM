@@ -179,7 +179,7 @@ export function ExistingPositionCarryForwardPanel({ companyKey }: { companyKey: 
 
         {data.blockers.length > 0 && (
           <div className="flex items-start gap-2 rounded-md bg-amber-50 p-3 text-sm text-amber-700 dark:bg-amber-950/20 dark:text-amber-400">
-            <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0" />
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
             <div className="space-y-1">
               {data.blockers.map((blocker) => (
                 <p key={blocker}>{blocker}</p>

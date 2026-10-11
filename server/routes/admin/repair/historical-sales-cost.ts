@@ -3,6 +3,8 @@ import type { Express, Request, Response } from "express";
 import { requireAuth, requirePasswordConfirmation, requireRole } from "../../../auth";
 import { getErrorMessage } from "../../../lib/httpHandlers";
 import { logger } from "../../../lib/logger";
+import { sendInventoryCutoverRefusal } from "../../../services/accounting/perpetualInventory/cutoverRefusal";
+import { assertRunBeforeCutover } from "../../../services/inventory/historicalSalesCostCutoverGuard";
 import {
   privilegedConcurrencyLimit,
   privilegedMutationRateLimit,
@@ -134,6 +136,7 @@ export function registerHistoricalSalesCostRepairRoutes(app: Express): void {
           });
         }
 
+        await assertRunBeforeCutover(runId, "historical-sales-cost-apply");
         const result = await applyHistoricalSalesCostRepair({
           runId,
           auditHash,
@@ -141,6 +144,7 @@ export function registerHistoricalSalesCostRepairRoutes(app: Express): void {
         });
         return res.json(result);
       } catch (error: unknown) {
+        if (sendInventoryCutoverRefusal(res, error)) return;
         logger.error("Historical sales cost repair apply failed", {
           module: "historical-sales-cost-repair",
           action: "apply-route",
@@ -219,6 +223,7 @@ export function registerHistoricalSalesCostRepairRoutes(app: Express): void {
         if (req.body?.mode !== HISTORICAL_SALES_COST_PARTIAL_APPLY_MODE) {
           return res.status(400).json({ code: "HSCR_PARTIAL_MODE_REQUIRED" });
         }
+        await assertRunBeforeCutover(runId, "historical-sales-cost-partial-apply");
         const result = await applyHistoricalSalesCostPartial({
           runId,
           auditHash: String(req.body?.auditHash || "")
@@ -233,6 +238,7 @@ export function registerHistoricalSalesCostRepairRoutes(app: Express): void {
         });
         return res.json(result);
       } catch (error: unknown) {
+        if (sendInventoryCutoverRefusal(res, error)) return;
         logger.error("Historical sales cost partial apply failed", {
           module: "historical-sales-cost-repair",
           action: "partial-apply-route",
@@ -258,6 +264,7 @@ export function registerHistoricalSalesCostRepairRoutes(app: Express): void {
         if (!Number.isInteger(runId) || runId <= 0) {
           return res.status(400).json({ code: "HSCR_RUN_ID_INVALID" });
         }
+        await assertRunBeforeCutover(runId, "historical-sales-cost-rollback");
         const result = await rollbackHistoricalSalesCostPartial({
           runId,
           auditHash: String(req.body?.auditHash || "")
@@ -268,6 +275,7 @@ export function registerHistoricalSalesCostRepairRoutes(app: Express): void {
         });
         return res.json(result);
       } catch (error: unknown) {
+        if (sendInventoryCutoverRefusal(res, error)) return;
         logger.error("Historical sales cost partial-apply rollback failed", {
           module: "historical-sales-cost-repair",
           action: "partial-rollback-route",

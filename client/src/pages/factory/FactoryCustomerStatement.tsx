@@ -19,6 +19,12 @@ import { useToast } from "@/hooks/use-toast";
 import { PageHeader } from "@/components/PageHeader";
 import * as XLSX from "xlsx-js-style";
 import type { FactoryMyAccess } from "@shared/apiTypes";
+import {
+  BalanceSplit,
+  NotInLedgerBadge,
+  type LedgerSplitFields,
+  type NotInLedgerRowFields,
+} from "./factorycustomerstatement/NotInLedgerParts";
 
 interface CustomerInfo {
   id: number;
@@ -31,7 +37,7 @@ interface CustomerInfo {
   statementNote: string | null;
 }
 
-interface BalanceEntry {
+interface BalanceEntry extends NotInLedgerRowFields {
   id: number | string; // numeric for customerBalances rows, "ve-{n}" for voucher-entry rows
   transactionDate: string;
   transactionType: string;
@@ -51,7 +57,7 @@ interface BalanceEntry {
   rowNote: string | null;
 }
 
-interface StatementData {
+interface StatementData extends LedgerSplitFields {
   customer: CustomerInfo;
   invoices: unknown[];
   balanceHistory: BalanceEntry[];
@@ -391,6 +397,7 @@ export default function FactoryCustomerStatement() {
             <Badge variant="outline" className="mt-1 text-xs" data-testid="badge-balance-side">
               {currentBalanceSide}
             </Badge>
+            <BalanceSplit split={statement} format={fmtMoney} testId="text-balance-split" />
           </div>
           {hasOpeningBalance && (
             <div className="rounded-xl border p-4">
@@ -592,6 +599,12 @@ export default function FactoryCustomerStatement() {
                                   {entry.transactionType}
                                 </Badge>
                                 {isInvoice && <ExternalLink className="h-3 w-3 text-muted-foreground shrink-0" />}
+                                {entry.notInLedger && (
+                                  <NotInLedgerBadge
+                                    label={entry.notInLedgerLabel}
+                                    testId={`badge-not-in-ledger-${entry.id}`}
+                                  />
+                                )}
                               </div>
                             </TableCell>
                             <TableCell
@@ -659,7 +672,7 @@ export default function FactoryCustomerStatement() {
                                 onBlur={() => saveRowNote(entry.id, rowNotes[entry.id] ?? "")}
                                 placeholder={typeof entry.id === "string" ? "—" : "Add note…"}
                                 disabled={savingRowNote === entry.id || typeof entry.id === "string"}
-                                className="w-full text-xs bg-transparent border border-border rounded px-2 py-1 placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-50"
+                                className="w-full text-xs bg-transparent border border-border rounded-sm px-2 py-1 placeholder:text-muted-foreground/50 focus:outline-hidden focus:ring-1 focus:ring-ring disabled:opacity-50"
                                 data-testid={`input-row-note-${entry.id}`}
                               />
                             </TableCell>

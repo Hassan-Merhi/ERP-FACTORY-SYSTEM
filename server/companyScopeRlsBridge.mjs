@@ -231,11 +231,12 @@ if (!globalThis[INSTALL_KEY]) {
   await ensureCompanyScopeRlsReadiness();
 }
 
-// Historical worker-bonus account repair must run after the RLS helper functions
-// above exist so its dedicated transaction can enter explicit maintenance scope.
-await import("./workerBonusExpenseRepairBridge.mjs");
-
-// Reconcile VERIFIED/PENDING factory charges that were saved before customers
-// received ledger accounts. This is idempotent and runs under its own maintenance
-// transaction so old missing CHARGE-PRE vouchers are repaired on deployment.
-await import("./factoryChargeVoucherRepairBridge.mjs");
+// Phase 19 (A): the worker-bonus expense account repair (migration 0018) and the
+// CHARGE-PRE factory charge voucher repair no longer run at boot. They rewrote
+// posted lines, recreated vouchers and hard-deleted accounts in maintenance
+// scope with no audit; production showed nothing left for either to repair
+// (2026-10-10), and the charge routes write CHARGE-PRE vouchers themselves.
+//
+// Wave 6 inventory repair is separately env-gated and fail-closed. It runs
+// after company-scope RLS readiness so the tenant-scoped transaction is valid.
+await import("./inventoryValuationWave6RepairBridge.mjs");

@@ -32,7 +32,9 @@ function getKeyboardErrorForReason(reason: string | null, t: (v: string) => stri
   if (!reason) return null;
   const map: Record<string, string> = {
     "local-user-active": t("Employee is actively typing — remote typing paused. Try again in a moment."),
-    "no-safe-editable-focus": t("No safe field focused — click a safe search, filter or approved field in the watched screen first."),
+    "no-safe-editable-focus": t(
+      "No safe field focused — click a safe search, filter or approved field in the watched screen first."
+    ),
     "text-not-supported": t("This field doesn't accept typed text — select a text field."),
     "field-length-limit": t("Field is at its length limit — delete some text first."),
     "invalid-text": t("Text contains blocked control characters."),
@@ -61,8 +63,7 @@ interface KeyboardResultView {
 }
 
 type KeyboardPayload =
-  | { type: "insert-text"; text: string }
-  | { type: "key"; key: RemoteKeyboardKey; shiftKey: boolean };
+  { type: "insert-text"; text: string } | { type: "key"; key: RemoteKeyboardKey; shiftKey: boolean };
 
 const ALLOWED_SPECIAL_KEYS = new Map<string, RemoteKeyboardKey>([
   ["Backspace", "Backspace"],
@@ -108,7 +109,8 @@ export function RemoteKeyboardControllerOverlay() {
 
   const sessionId = session?.id ?? null;
   const mouseActive = !!session?.capabilities.mouse && authorizationIsFresh(session.mouseAuthorization?.expiresAt);
-  const keyboardActive = !!session?.capabilities.keyboard && authorizationIsFresh(session.keyboardAuthorization?.expiresAt);
+  const keyboardActive =
+    !!session?.capabilities.keyboard && authorizationIsFresh(session.keyboardAuthorization?.expiresAt);
 
   useEffect(() => {
     activeSessionIdRef.current = sessionId;
@@ -180,7 +182,8 @@ export function RemoteKeyboardControllerOverlay() {
       if (
         requestError instanceof RemoteControllerRequestError &&
         (requestError.status === 428 || requestError.code === "PASSWORD_CONFIRMATION_REQUIRED")
-      ) setPasswordOpen(true);
+      )
+        setPasswordOpen(true);
       else setError(requestError instanceof Error ? t(requestError.message) : t("Unable to enable keyboard control."));
     } finally {
       setBusy(false);
@@ -325,9 +328,12 @@ export function RemoteKeyboardControllerOverlay() {
     let cancelled = false;
     const bind = () => {
       if (cancelled) return;
-      void requestRemoteControlRealtime({ type: "remote-control:bind-keyboard-controller", sessionId }).catch((bindError) => {
-        if (!cancelled && bindError instanceof RemoteControlRealtimeError && bindError.status > 0) setError(t(bindError.message));
-      });
+      void requestRemoteControlRealtime({ type: "remote-control:bind-keyboard-controller", sessionId }).catch(
+        (bindError) => {
+          if (!cancelled && bindError instanceof RemoteControlRealtimeError && bindError.status > 0)
+            setError(t(bindError.message));
+        }
+      );
     };
     const unsubscribeReady = subscribeRemoteControlRealtimeReady((ready) => {
       if (ready) bind();
@@ -347,7 +353,9 @@ export function RemoteKeyboardControllerOverlay() {
       cancelled = true;
       unsubscribeReady();
       unsubscribeMessages();
-      void requestRemoteControlRealtime({ type: "remote-control:unbind-keyboard-controller", sessionId }).catch(() => undefined);
+      void requestRemoteControlRealtime({ type: "remote-control:unbind-keyboard-controller", sessionId }).catch(
+        () => undefined
+      );
     };
   }, [keyboardActive, sessionId, t]);
 
@@ -362,7 +370,7 @@ export function RemoteKeyboardControllerOverlay() {
 
   return createPortal(
     <section
-      className="w-full rounded-xl border bg-background/95 p-3 shadow-sm"
+      className="w-full rounded-xl border bg-background/95 p-3 shadow-xs"
       data-screenfeed-ignore="true"
       data-testid="remote-keyboard-controller-overlay"
       data-remote-control-panel-section="keyboard"
@@ -372,7 +380,9 @@ export function RemoteKeyboardControllerOverlay() {
           {keyboardActive ? <Keyboard className="h-4 w-4" /> : <MousePointer2 className="h-4 w-4" />}
         </div>
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-semibold">{t("Keyboard control")} · {session.targetUsername}</p>
+          <p className="truncate text-sm font-semibold">
+            {t("Keyboard control")} · {session.targetUsername}
+          </p>
           <p className="text-xs text-muted-foreground">
             {mouseActive
               ? t("Only safe search, filter and explicitly approved fields can be edited.")
@@ -413,7 +423,9 @@ export function RemoteKeyboardControllerOverlay() {
             void confirmPasswordAndEnable();
           }}
         >
-          <p className="text-xs font-medium">{t("Confirm your password to enable keyboard control for up to 5 minutes.")}</p>
+          <p className="text-xs font-medium">
+            {t("Confirm your password to enable keyboard control for up to 5 minutes.")}
+          </p>
           <div className="flex gap-2">
             <Input
               autoFocus
@@ -426,7 +438,11 @@ export function RemoteKeyboardControllerOverlay() {
               data-testid="input-remote-keyboard-password"
             />
             <Button type="submit" size="sm" className="h-9" disabled={!password || busy}>
-              {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : translateRemoteSupportPhase5Text("Confirm", language)}
+              {busy ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                translateRemoteSupportPhase5Text("Confirm", language)
+              )}
             </Button>
           </div>
         </form>
@@ -496,10 +512,16 @@ export function RemoteKeyboardControllerOverlay() {
       )}
 
       <div className="mt-2 flex items-center justify-between gap-2 text-[11px] text-muted-foreground">
-        <span>{keyboardActive ? t("Keyboard active") : mouseActive ? t("Enable keyboard") : t("Mouse control required")}</span>
+        <span>
+          {keyboardActive ? t("Keyboard active") : mouseActive ? t("Enable keyboard") : t("Mouse control required")}
+        </span>
         {statusLabel && <span className="shrink-0">{statusLabel}</span>}
       </div>
-      {error && <p className="mt-2 text-xs text-destructive" role="alert">{error}</p>}
+      {error && (
+        <p className="mt-2 text-xs text-destructive" role="alert">
+          {error}
+        </p>
+      )}
     </section>,
     portalHost
   );

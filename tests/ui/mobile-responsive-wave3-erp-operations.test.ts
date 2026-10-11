@@ -58,10 +58,9 @@ describe("Mobile Wave 3 ERP operational workflows", () => {
 
   it("keeps existing mobile data alternatives active on landscape phones", () => {
     // Each page declares it with the `phone-land` variant instead of a route-scoped override.
-    const tailwind = source("tailwind.config.ts");
-    expect(tailwind).toContain(
-      'addVariant("phone-land", "@media (hover: none) and (pointer: coarse) and (max-height: 500px) { &:is(&) }")'
-    );
+    const indexCss = source("client/src/index.css");
+    expect(indexCss).toContain("@custom-variant phone-land {");
+    expect(indexCss).toContain("@media (hover: none) and (pointer: coarse) and (max-height: 500px) {\n    &:is(&) {");
     for (const file of [
       "client/src/pages/stockitems/StockItemsView.tsx",
       "client/src/pages/StockQuery.tsx",

@@ -31,7 +31,7 @@ export default function FactoryContainerLoadingScan() {
     >
       <ScanOverlays model={model} />
 
-      <div className="mb-4 rounded-2xl border bg-background/90 px-4 py-3 shadow-sm sm:px-5 sm:py-4">
+      <div className="mb-4 rounded-2xl border bg-background/90 px-4 py-3 shadow-xs sm:px-5 sm:py-4">
         <div className="flex min-w-0 flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex min-w-0 items-center gap-3">
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border bg-primary/10">
@@ -101,7 +101,7 @@ export default function FactoryContainerLoadingScan() {
           <ProformaProgressPanel model={model} />
 
           {orderId && (
-            <div className="mobile-action-bar grid grid-cols-1 gap-2 rounded-2xl border bg-background/95 p-2 shadow-sm backdrop-blur sm:grid-cols-2 xl:static xl:m-0 xl:grid-cols-1 xl:bg-background/90">
+            <div className="mobile-action-bar grid grid-cols-1 gap-2 rounded-2xl border bg-background/95 p-2 shadow-xs backdrop-blur-sm sm:grid-cols-2 xl:static xl:m-0 xl:grid-cols-1 xl:bg-background/90">
               <Button
                 variant="outline"
                 className="h-11 w-full"

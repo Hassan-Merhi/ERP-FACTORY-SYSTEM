@@ -16,7 +16,10 @@ import {
   factoryAttendance,
   ledgerAccounts,
 } from "@shared/schema";
-import { computeMonthlyPay, getFactoryCompanyId } from "./_helpers";
+import type Decimal from "decimal.js";
+import { MoneyDecimal, toMoney, type MoneyInput } from "../../../lib/money";
+import { getFactoryCompanyId } from "./_helpers";
+import { exactMonthlyPay } from "./workerPayAmounts";
 import {
   attachProductionBonusesToPayroll,
   getProductionBonusTotalsForPayrollIds,
@@ -178,10 +181,15 @@ export function registerPayrollCoreReadRoutes(app: Express) {
             eq(factoryWorkerAdvances.repaymentType, "salary_deduction")
           )
         );
-      const advanceMap: Record<number, number> = {};
+      const advanceTotals = new Map<number, Decimal>();
       for (const advance of advanceRows) {
-        advanceMap[advance.workerId] = (advanceMap[advance.workerId] || 0) + parseFloat(advance.remaining || "0");
+        advanceTotals.set(
+          advance.workerId,
+          (advanceTotals.get(advance.workerId) ?? new MoneyDecimal(0)).plus(toMoney(advance.remaining))
+        );
       }
+      const advanceMap: Record<number, number> = {};
+      for (const [workerId, total] of advanceTotals) advanceMap[workerId] = total.toNumber();
 
       const attendanceRows = await db
         .select({
@@ -207,7 +215,7 @@ export function registerPayrollCoreReadRoutes(app: Express) {
         });
       }
 
-      const round2 = (n: number) => Math.round(n * 100) / 100;
+      const round2 = (n: MoneyInput) => toMoney(n).toDecimalPlaces(2).toNumber();
       const result: Record<
         number,
         {
@@ -224,8 +232,8 @@ export function registerPayrollCoreReadRoutes(app: Express) {
       > = {};
 
       for (const worker of workers) {
-        const baseSal = parseFloat(worker.baseSalary || "0");
-        const transport = parseFloat(worker.transportAllowance || "0");
+        const baseSal = toMoney(worker.baseSalary);
+        const transport = toMoney(worker.transportAllowance);
         const periodStart = periodStarts[worker.id];
         if (periodStart > todayStr) {
           result[worker.id] = {
@@ -242,31 +250,32 @@ export function registerPayrollCoreReadRoutes(app: Express) {
           continue;
         }
 
-        const grossBase = computeMonthlyPay(baseSal, periodStart, todayStr);
-        const grossTransport = computeMonthlyPay(transport, periodStart, todayStr);
+        const grossBase = exactMonthlyPay(baseSal, periodStart, todayStr);
+        const grossTransport = exactMonthlyPay(transport, periodStart, todayStr);
         let absenceDays = 0;
-        let absDeductBase = 0;
-        let absDeductTransport = 0;
+        let absDeductBase: Decimal = new MoneyDecimal(0);
+        let absDeductTransport: Decimal = new MoneyDecimal(0);
         for (const attendance of attendanceByWorker[worker.id] ?? []) {
           if (attendance.date < periodStart || attendance.date > todayStr) continue;
           const dim = getDIM(attendance.date);
           if (attendance.status === "Absent") {
             absenceDays += 1;
-            absDeductBase += baseSal / dim;
-            absDeductTransport += transport / dim;
+            absDeductBase = absDeductBase.plus(baseSal.div(dim));
+            absDeductTransport = absDeductTransport.plus(transport.div(dim));
           } else if (attendance.status === "Half Day") {
             absenceDays += 0.5;
-            absDeductBase += (baseSal / dim) * 0.5;
-            absDeductTransport += (transport / dim) * 0.5;
+            absDeductBase = absDeductBase.plus(baseSal.div(dim).times(0.5));
+            absDeductTransport = absDeductTransport.plus(transport.div(dim).times(0.5));
           }
         }
 
-        const base = Math.max(0, grossBase - absDeductBase);
-        const transportDue = Math.max(0, grossTransport - absDeductTransport);
-        const absenceDeducted = absDeductBase + absDeductTransport;
-        const advanceBalance = advanceMap[worker.id] || 0;
-        const advanceDeducted = Math.min(advanceBalance, base + transportDue);
-        const net = Math.max(0, base + transportDue - advanceDeducted);
+        const zero = new MoneyDecimal(0);
+        const base = MoneyDecimal.max(zero, grossBase.minus(absDeductBase));
+        const transportDue = MoneyDecimal.max(zero, grossTransport.minus(absDeductTransport));
+        const absenceDeducted = absDeductBase.plus(absDeductTransport);
+        const advanceBalance = toMoney(advanceMap[worker.id]);
+        const advanceDeducted = MoneyDecimal.min(advanceBalance, base.plus(transportDue));
+        const net = MoneyDecimal.max(zero, base.plus(transportDue).minus(advanceDeducted));
         result[worker.id] = {
           periodStart,
           periodEnd: todayStr,

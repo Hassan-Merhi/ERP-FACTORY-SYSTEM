@@ -230,13 +230,13 @@ export function SupplierDetailDialog({
               <div className="border rounded-lg overflow-hidden">
                 <div className="bg-muted/40 px-4 py-2.5 border-b flex gap-6">
                   {[80, 100, 80, 150, 80, 80, 80].map((w, i) => (
-                    <Skeleton key={i} className="h-3.5 rounded" style={{ width: w }} />
+                    <Skeleton key={i} className="h-3.5 rounded-sm" style={{ width: w }} />
                   ))}
                 </div>
                 {[1, 2, 3, 4, 5, 6].map((i) => (
                   <div key={i} className="px-4 py-3 border-b last:border-b-0 flex gap-6 items-center">
                     {[80, 100, 80, 150, 80, 80, 80].map((w, j) => (
-                      <Skeleton key={j} className="h-3 rounded" style={{ width: w }} />
+                      <Skeleton key={j} className="h-3 rounded-sm" style={{ width: w }} />
                     ))}
                   </div>
                 ))}
@@ -349,13 +349,13 @@ export function SupplierDetailDialog({
               <div className="border rounded-lg overflow-hidden">
                 <div className="bg-muted/40 px-4 py-2.5 border-b flex gap-6">
                   {[160, 120, 100, 100].map((w, i) => (
-                    <Skeleton key={i} className="h-3.5 rounded" style={{ width: w }} />
+                    <Skeleton key={i} className="h-3.5 rounded-sm" style={{ width: w }} />
                   ))}
                 </div>
                 {[1, 2, 3, 4].map((i) => (
                   <div key={i} className="px-4 py-3.5 border-b last:border-b-0 flex gap-6 items-center">
                     {[160, 120, 100, 100].map((w, j) => (
-                      <Skeleton key={j} className="h-3 rounded" style={{ width: w }} />
+                      <Skeleton key={j} className="h-3 rounded-sm" style={{ width: w }} />
                     ))}
                   </div>
                 ))}

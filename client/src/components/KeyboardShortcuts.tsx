@@ -69,7 +69,7 @@ const GLOBAL_SHORTCUTS: ShortcutGroup[] = [
 
 function KeyBadge({ children }: { children: string }) {
   return (
-    <span className="inline-flex items-center justify-center min-w-[1.75rem] h-6 px-1.5 rounded border border-border bg-muted text-[0.7rem] font-mono font-semibold text-muted-foreground shadow-sm">
+    <span className="inline-flex items-center justify-center min-w-7 h-6 px-1.5 rounded-sm border border-border bg-muted text-[0.7rem] font-mono font-semibold text-muted-foreground shadow-xs">
       {children}
     </span>
   );

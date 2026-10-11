@@ -64,6 +64,27 @@ describe("Wave 4 Factory backend access ownership", () => {
     ]);
   });
 
+  it("lets Factory POS own its API and read the stock and customers its picker needs", () => {
+    for (const path of ["/pos/sale", "/pos/sales/4", "/pos/account-options"]) {
+      for (const method of ["GET", "POST", "PUT", "DELETE"]) {
+        expect(resolveFactoryBackendAccessRequirement(req(path, method))?.alternatives).toEqual([
+          { pageKey: "factory/pos" },
+          { pageKey: "factory/production-report" },
+        ]);
+      }
+    }
+    expect(resolveFactoryBackendAccessRequirement(req("/location-inventory/3"))?.alternatives).toEqual([
+      { pageKey: "factory/location-inventory" },
+      { pageKey: "factory/pos" },
+    ]);
+    expect(resolveFactoryBackendAccessRequirement(req("/location-inventory/3", "POST"))).toEqual({
+      pageKey: "factory/location-inventory",
+    });
+    expect(resolveFactoryBackendAccessRequirement(req("/customers"))?.alternatives).toContainEqual({
+      pageKey: "factory/pos",
+    });
+  });
+
   it("maps all Stock Allocation versions and V5 actions to Stock Allocation", () => {
     for (const path of ["/stock-allocation", "/v2/stock-allocation", "/v3/loads", "/v5/proforma-with-loading"]) {
       expect(resolveFactoryBackendAccessRequirement(req(path))).toMatchObject({

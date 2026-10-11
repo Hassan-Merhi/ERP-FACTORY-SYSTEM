@@ -282,9 +282,9 @@ export default function BaleProducts() {
                               data-testid={`button-expand-category-${cat.id}`}
                             >
                               {isExpanded ? (
-                                <ChevronDown className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
+                                <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
                               ) : (
-                                <ChevronRight className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
+                                <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
                               )}
                               <span className="font-medium" data-testid={`text-category-${cat.id}`}>
                                 {cat.name}
@@ -292,7 +292,7 @@ export default function BaleProducts() {
                               {!cat.isActive && <Badge variant="outline">Inactive</Badge>}
                               <span className="text-xs text-muted-foreground ml-1">({catProducts.length})</span>
                             </button>
-                            <div className="flex items-center gap-1 flex-shrink-0">
+                            <div className="flex items-center gap-1 shrink-0">
                               <Button
                                 size="icon"
                                 variant="ghost"

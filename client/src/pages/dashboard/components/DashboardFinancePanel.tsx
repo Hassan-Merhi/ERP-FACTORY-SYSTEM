@@ -255,7 +255,7 @@ export function DashboardFinancePanel({ dashboard }: DashboardFinancePanelProps)
               {profitData?.netPositionLabel && (
                 <p
                   className={cn(
-                    "text-xs font-medium mt-3 text-center py-1 rounded-sm",
+                    "text-xs font-medium mt-3 text-center py-1 rounded-xs",
                     (profitData.netPosition ?? 0) >= 0
                       ? "bg-chart-2/20 text-chart-2"
                       : "bg-destructive/20 text-destructive"
@@ -414,7 +414,7 @@ export function DashboardFinancePanel({ dashboard }: DashboardFinancePanelProps)
                         }}
                         onDragOver={(e) => e.preventDefault()}
                         onDrop={() => handleCashDrop(dca.id)}
-                        className="flex items-center gap-2 py-2 px-2 rounded hover-elevate group cursor-grab active:cursor-grabbing"
+                        className="flex items-center gap-2 py-2 px-2 rounded-sm hover-elevate group cursor-grab active:cursor-grabbing"
                         data-testid={`cash-account-row-${dca.id}`}
                       >
                         <GripVertical className="h-4 w-4 text-muted-foreground/60 shrink-0" />
@@ -437,7 +437,7 @@ export function DashboardFinancePanel({ dashboard }: DashboardFinancePanelProps)
                       </div>
                     );
                   })}
-                  <div className="flex items-center justify-between py-2 px-2 bg-chart-2/10 rounded font-semibold mt-1">
+                  <div className="flex items-center justify-between py-2 px-2 bg-chart-2/10 rounded-sm font-semibold mt-1">
                     <span className="text-sm">Total Available</span>
                     <span className="text-sm font-mono text-chart-2">{formatCashAmount(totalAvailable)}</span>
                   </div>
@@ -546,7 +546,7 @@ export function DashboardFinancePanel({ dashboard }: DashboardFinancePanelProps)
                       }}
                       onDragOver={(e) => e.preventDefault()}
                       onDrop={() => handlePayableDrop(account.id)}
-                      className="flex items-center gap-2 py-2 px-2 rounded hover-elevate group cursor-grab active:cursor-grabbing"
+                      className="flex items-center gap-2 py-2 px-2 rounded-sm hover-elevate group cursor-grab active:cursor-grabbing"
                       data-testid={`payable-account-row-${account.id}`}
                     >
                       <GripVertical className="h-4 w-4 text-muted-foreground/60 shrink-0" />
@@ -568,7 +568,7 @@ export function DashboardFinancePanel({ dashboard }: DashboardFinancePanelProps)
                       </Button>
                     </div>
                   ))}
-                  <div className="flex items-center justify-between py-2 px-2 bg-destructive/10 rounded font-semibold mt-1">
+                  <div className="flex items-center justify-between py-2 px-2 bg-destructive/10 rounded-sm font-semibold mt-1">
                     <span className="text-sm">Total To Pay</span>
                     <span className="text-sm font-mono text-destructive">{formatCashAmount(totalPayable)}</span>
                   </div>

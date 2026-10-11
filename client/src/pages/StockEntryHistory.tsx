@@ -240,7 +240,7 @@ export default function StockEntryHistory({ onActiveDateChange }: StockEntryHist
     <div className="p-4 space-y-3">
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-3">
-          <div className="flex items-center justify-center h-8 w-8 rounded-xl bg-gradient-to-br from-sky-500/30 to-sky-600/10 border border-sky-500/25 shrink-0">
+          <div className="flex items-center justify-center h-8 w-8 rounded-xl bg-linear-to-br from-sky-500/30 to-sky-600/10 border border-sky-500/25 shrink-0">
             <History className="h-4 w-4 text-sky-500" />
           </div>
           <div>

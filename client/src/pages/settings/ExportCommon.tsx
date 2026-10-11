@@ -73,7 +73,7 @@ export function ChannelLine({
         <span className="font-medium">{label}:</span>
         <span>failed{attempts && attempts > 1 ? ` after ${attempts} attempt(s)` : ""}</span>
       </div>
-      {error && <p className="text-xs text-muted-foreground pl-5 break-words">{error}</p>}
+      {error && <p className="text-xs text-muted-foreground pl-5 wrap-break-word">{error}</p>}
     </div>
   );
 }

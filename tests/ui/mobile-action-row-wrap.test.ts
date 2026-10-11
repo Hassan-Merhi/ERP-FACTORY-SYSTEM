@@ -1,21 +1,19 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
-import autoprefixer from "autoprefixer";
+import tailwindcss from "@tailwindcss/postcss";
 import postcss, { type AtRule, type Rule } from "postcss";
-import tailwindcss from "tailwindcss";
 import { describe, expect, it } from "vitest";
 
 /**
  * Phone action-row wrapping, checked against the compiled stylesheets (what the browser actually
- * receives). Tailwind's `@apply` in index.css copies every rule naming an applied class with the
- * applying class swapped in, so a selector that is correct in source can compile into one that is
- * not. An earlier `:not(.flex-col)` in index.css shipped as `:not(.empty-state)` and wrapped
- * almost every column on phones, growing pages past the viewport.
+ * receives), so the rule is judged on what Tailwind emits rather than on its source text. (Under
+ * Tailwind v3, `@apply` in index.css once rewrote a `:not(.flex-col)` into `:not(.empty-state)`
+ * and wrapped almost every column on phones; the compiled check is what caught it.)
  */
 async function compile(file: string): Promise<postcss.Root> {
   const from = resolve(process.cwd(), file);
-  const result = await postcss([tailwindcss(), autoprefixer()]).process(readFileSync(from, "utf8"), { from });
+  const result = await postcss([tailwindcss()]).process(readFileSync(from, "utf8"), { from });
   return result.root;
 }
 

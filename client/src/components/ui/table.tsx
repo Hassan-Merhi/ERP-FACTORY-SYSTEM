@@ -140,7 +140,7 @@ const Table = React.forwardRef<HTMLTableElement, TableProps>(
         data-mobile-cards={cards ? "true" : undefined}
         data-scroll-mode={scrollMode}
         className={cn(
-          "relative max-w-full touch-pan-x overscroll-x-contain rounded-md border border-slate-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 dark:border-slate-600",
+          "relative max-w-full touch-pan-x overscroll-x-contain rounded-md border border-slate-300 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 dark:border-slate-600",
           // A sticky `thead` sticks to its nearest scrollport, which is this wrapper (declaring
           // overflow on one axis makes the other `auto` too). Without a height cap the scrollport
           // is exactly as tall as the table, so the header has no room to stick and scrolls away
@@ -209,7 +209,7 @@ const TableFooter = React.forwardRef<HTMLTableSectionElement, React.HTMLAttribut
     <tfoot
       ref={ref}
       className={cn(
-        "border-t border-slate-300 bg-muted/50 font-medium [&>tr]:last:border-b-0 dark:border-slate-600",
+        "border-t border-slate-300 bg-muted/50 font-medium last:[&>tr]:border-b-0 dark:border-slate-600",
         className
       )}
       {...props}
@@ -239,7 +239,7 @@ const TableHead = React.forwardRef<HTMLTableCellElement, React.ThHTMLAttributes<
       className={cn(
         // 11px at every width (10px uppercase labels were hard to read on 1080p) and a stronger
         // foreground tone so headers stay legible on the opaque muted background.
-        "h-10 whitespace-nowrap border-r border-slate-300 px-3 text-left align-middle text-[11px] font-semibold uppercase tracking-wider text-foreground/80 last:border-r-0 dark:border-slate-600 sm:h-8 sm:px-2 [&:has([role=checkbox])]:pr-0",
+        "h-10 whitespace-nowrap border-r border-slate-300 px-3 text-left align-middle text-[11px] font-semibold uppercase tracking-wider text-foreground/80 last:border-r-0 dark:border-slate-600 sm:h-8 sm:px-2 has-[[role=checkbox]]:pr-0",
         className
       )}
       {...props}
@@ -258,7 +258,7 @@ const TableCell = React.forwardRef<HTMLTableCellElement, React.TdHTMLAttributes<
     <td
       ref={ref}
       className={cn(
-        "min-w-0 break-words border-r border-slate-300 px-3 py-2 text-xs align-middle last:border-r-0 dark:border-slate-600 sm:px-2 sm:py-1 [&.font-mono]:whitespace-nowrap [&.text-right]:whitespace-nowrap [&:has([role=checkbox])]:pr-0",
+        "min-w-0 wrap-break-word border-r border-slate-300 px-3 py-2 text-xs align-middle last:border-r-0 dark:border-slate-600 sm:px-2 sm:py-1 [&.font-mono]:whitespace-nowrap [&.text-right]:whitespace-nowrap has-[[role=checkbox]]:pr-0",
         className
       )}
       {...props}

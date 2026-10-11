@@ -160,8 +160,11 @@ export function registerSpMigrationSalesRoutes(app: Express) {
             continue;
           }
 
-          const [vRow] = (
-            await db.execute(sql`
+          // Header, sale items and entries commit together; run tracking is recorded after commit.
+          const afterCommit: Array<() => Promise<void>> = [];
+          await db.transaction(async (tx) => {
+            const [vRow] = (
+              await tx.execute(sql`
             INSERT INTO vouchers
               (company_id, voucher_number, voucher_type, voucher_date, description, total_amount, currency, exchange_rate, source_module)
             VALUES
@@ -170,39 +173,41 @@ export function registerSpMigrationSalesRoutes(app: Express) {
                ${v.total_amount}, ${v.currency ?? "USD"}, ${v.exchange_rate ?? null}, 'SP_MIGRATION_READONLY')
             RETURNING id
           `)
-          ).rows;
-          const newVoucherId = pn(vRow.id);
-          await trackRow(runId, "vouchers", newVoucherId);
-          rowsCreated++;
-          vouchersCreated++;
+            ).rows;
+            const newVoucherId = pn(vRow.id);
+            afterCommit.push(() => trackRow(runId, "vouchers", newVoucherId));
+            rowsCreated++;
+            vouchersCreated++;
 
-          await db.execute(sql`
+            await tx.execute(sql`
             INSERT INTO sp_migration_source_links (run_id, source_table, source_id, target_table, target_id)
             VALUES (${runId}, 'vouchers', ${pn(v.id)}, 'vouchers', ${newVoucherId})
           `);
 
-          // Copy the original sale-item rows so migrated vouchers show real item details
-          // (not just the accounting entries) — display/history only, never touches stock.
-          const sourceSaleItems = (
-            await db.execute(sql`
+            // Copy the original sale-item rows so migrated vouchers show real item details
+            // (not just the accounting entries) — display/history only, never touches stock.
+            const sourceSaleItems = (
+              await tx.execute(sql`
             SELECT stock_item_id, quantity, selling_price, cost_price, total_sales, total_cost, profit, configured_price
             FROM sales_items WHERE voucher_id = ${v.id}
           `)
-          ).rows;
-          if (!sourceSaleItems.length) {
-            vouchersMissingItems++;
-            summary.push(`Voucher ${v.voucher_number} has no source sale item rows; accounting-only voucher migrated.`);
-          } else {
-            for (const si of sourceSaleItems) {
-              const targetStockItemId = stockItemMap.get(pn(si.stock_item_id));
-              if (!targetStockItemId) {
-                summary.push(
-                  `Voucher ${v.voucher_number}: sale item for source stock_item_id=${si.stock_item_id} has no target stock item mapping — skipped (run Stock Master first).`
-                );
-                continue;
-              }
-              const [siRow] = (
-                await db.execute(sql`
+            ).rows;
+            if (!sourceSaleItems.length) {
+              vouchersMissingItems++;
+              summary.push(
+                `Voucher ${v.voucher_number} has no source sale item rows; accounting-only voucher migrated.`
+              );
+            } else {
+              for (const si of sourceSaleItems) {
+                const targetStockItemId = stockItemMap.get(pn(si.stock_item_id));
+                if (!targetStockItemId) {
+                  summary.push(
+                    `Voucher ${v.voucher_number}: sale item for source stock_item_id=${si.stock_item_id} has no target stock item mapping — skipped (run Stock Master first).`
+                  );
+                  continue;
+                }
+                const [siRow] = (
+                  await tx.execute(sql`
                 INSERT INTO sales_items
                   (voucher_id, stock_item_id, quantity, selling_price, cost_price, total_sales, total_cost, profit, configured_price)
                 VALUES
@@ -210,32 +215,34 @@ export function registerSpMigrationSalesRoutes(app: Express) {
                    ${si.total_sales}, ${si.total_cost}, ${si.profit ?? "0"}, ${si.configured_price ?? null})
                 RETURNING id
               `)
-              ).rows;
-              await trackRow(runId, "sales_items", pn(siRow.id));
-              itemRowsCreated++;
-              rowsCreated++;
+                ).rows;
+                afterCommit.push(() => trackRow(runId, "sales_items", pn(siRow.id)));
+                itemRowsCreated++;
+                rowsCreated++;
+              }
             }
-          }
 
-          const entries = (
-            await db.execute(
-              sql`SELECT ledger_account_id, debit_amount, credit_amount, narration FROM voucher_entries WHERE voucher_id = ${v.id}`
-            )
-          ).rows;
-          for (const e of entries) {
-            const srcAcctId = e.ledger_account_id ? pn(e.ledger_account_id) : null;
-            const mappedAcctId = srcAcctId !== null ? (accountMap.get(srcAcctId) ?? suspenseAccountId) : null;
-            const [eRow] = (
-              await db.execute(sql`
+            const entries = (
+              await tx.execute(
+                sql`SELECT ledger_account_id, debit_amount, credit_amount, narration FROM voucher_entries WHERE voucher_id = ${v.id}`
+              )
+            ).rows;
+            for (const e of entries) {
+              const srcAcctId = e.ledger_account_id ? pn(e.ledger_account_id) : null;
+              const mappedAcctId = srcAcctId !== null ? (accountMap.get(srcAcctId) ?? suspenseAccountId) : null;
+              const [eRow] = (
+                await tx.execute(sql`
               INSERT INTO voucher_entries (voucher_id, ledger_account_id, debit_amount, credit_amount, narration)
               VALUES (${newVoucherId}, ${mappedAcctId}, ${e.debit_amount ?? "0"}, ${e.credit_amount ?? "0"}, ${e.narration ?? null})
               RETURNING id
             `)
-            ).rows;
-            await trackRow(runId, "voucher_entries", pn(eRow.id));
-            entriesCreated++;
-            rowsCreated++;
-          }
+              ).rows;
+              afterCommit.push(() => trackRow(runId, "voucher_entries", pn(eRow.id)));
+              entriesCreated++;
+              rowsCreated++;
+            }
+          });
+          for (const record of afterCommit) await record();
         }
 
         summary.push(
@@ -426,35 +433,39 @@ export function registerSpMigrationSalesRoutes(app: Express) {
               if (existingOtwV) {
                 otwVouchersSkipped++;
               } else {
-                const [otwVRow] = (
-                  await db.execute(sql`
+                const afterCommit: Array<() => Promise<void>> = [];
+                await db.transaction(async (tx) => {
+                  const [otwVRow] = (
+                    await tx.execute(sql`
                 INSERT INTO vouchers (company_id, voucher_number, voucher_type, voucher_date, description, total_amount, currency, source_module)
                 VALUES (${targetId}, ${otwVoucherNumber}, 'Journal', ${c.import_date ?? new Date().toISOString().split("T")[0]},
                         ${"GC Migration — Goods-OTW opening for container " + c.container_number},
                         ${otwAmount.toFixed(2)}, 'USD', 'SP_MIGRATION')
                 RETURNING id
               `)
-                ).rows;
-                const otwVoucherId = pn(otwVRow.id);
-                await trackRow(runId, "vouchers", otwVoucherId);
+                  ).rows;
+                  const otwVoucherId = pn(otwVRow.id);
+                  afterCommit.push(() => trackRow(runId, "vouchers", otwVoucherId));
 
-                const [otwDrEntry] = (
-                  await db.execute(sql`
+                  const [otwDrEntry] = (
+                    await tx.execute(sql`
                 INSERT INTO voucher_entries (voucher_id, ledger_account_id, debit_amount, credit_amount, narration)
                 VALUES (${otwVoucherId}, ${otwAssetAcctId}, ${otwAmount.toFixed(2)}, '0.00', ${"Goods OTW — container " + c.container_number})
                 RETURNING id
               `)
-                ).rows;
-                await trackRow(runId, "voucher_entries", pn(otwDrEntry.id));
+                  ).rows;
+                  afterCommit.push(() => trackRow(runId, "voucher_entries", pn(otwDrEntry.id)));
 
-                const [otwCrEntry] = (
-                  await db.execute(sql`
+                  const [otwCrEntry] = (
+                    await tx.execute(sql`
                 INSERT INTO voucher_entries (voucher_id, ledger_account_id, debit_amount, credit_amount, narration)
                 VALUES (${otwVoucherId}, ${otwClearingAcctId}, '0.00', ${otwAmount.toFixed(2)}, ${"Goods OTW clearing — container " + c.container_number})
                 RETURNING id
               `)
-                ).rows;
-                await trackRow(runId, "voucher_entries", pn(otwCrEntry.id));
+                  ).rows;
+                  afterCommit.push(() => trackRow(runId, "voucher_entries", pn(otwCrEntry.id)));
+                });
+                for (const record of afterCommit) await record();
 
                 rowsCreated += 3;
                 otwVouchersCreated++;
@@ -657,44 +668,49 @@ export function registerSpMigrationSalesRoutes(app: Express) {
           });
         }
 
-        const [vRow] = (
-          await db.execute(sql`
+        const afterCommit: Array<() => Promise<void>> = [];
+        const voucherId = await db.transaction(async (tx) => {
+          const [vRow] = (
+            await tx.execute(sql`
           INSERT INTO vouchers (company_id, voucher_number, voucher_type, voucher_date, description, total_amount, currency, source_module)
           VALUES (${targetId}, ${voucherNumber}, 'Journal', ${cutoffDate},
                   ${`GC accumulated profit-share opening balance as of ${cutoffDate} (${splitDescLabel})${profitNotes ? " — " + profitNotes : ""}`},
                   ${profit.toFixed(2)}, 'USD', 'SP_MIGRATION')
           RETURNING id
         `)
-        ).rows;
-        const voucherId = pn(vRow.id);
-        await trackRow(runId, "vouchers", voucherId);
+          ).rows;
+          const voucherId = pn(vRow.id);
+          afterCommit.push(() => trackRow(runId, "vouchers", voucherId));
 
-        const clrEntry = (
-          await db.execute(sql`
+          const clrEntry = (
+            await tx.execute(sql`
           INSERT INTO voucher_entries (voucher_id, ledger_account_id, debit_amount, credit_amount, narration)
           VALUES (${voucherId}, ${clrAcctId}, ${profit.toFixed(2)}, '0.00', 'Accumulated profit clearing')
           RETURNING id
         `)
-        ).rows[0];
-        await trackRow(runId, "voucher_entries", pn(clrEntry.id));
+          ).rows[0];
+          afterCommit.push(() => trackRow(runId, "voucher_entries", pn(clrEntry.id)));
 
-        const ourEntry = (
-          await db.execute(sql`
+          const ourEntry = (
+            await tx.execute(sql`
           INSERT INTO voucher_entries (voucher_id, ledger_account_id, debit_amount, credit_amount, narration)
           VALUES (${voucherId}, ${ourAcctId}, '0.00', ${ourShare.toFixed(2)}, 'Our profit share opening balance')
           RETURNING id
         `)
-        ).rows[0];
-        await trackRow(runId, "voucher_entries", pn(ourEntry.id));
+          ).rows[0];
+          afterCommit.push(() => trackRow(runId, "voucher_entries", pn(ourEntry.id)));
 
-        const supEntry = (
-          await db.execute(sql`
+          const supEntry = (
+            await tx.execute(sql`
           INSERT INTO voucher_entries (voucher_id, ledger_account_id, debit_amount, credit_amount, narration)
           VALUES (${voucherId}, ${supAcctId}, '0.00', ${supplierShare.toFixed(2)}, 'Supplier profit share opening balance')
           RETURNING id
         `)
-        ).rows[0];
-        await trackRow(runId, "voucher_entries", pn(supEntry.id));
+          ).rows[0];
+          afterCommit.push(() => trackRow(runId, "voucher_entries", pn(supEntry.id)));
+          return voucherId;
+        });
+        for (const record of afterCommit) await record();
 
         await db.execute(sql`
           UPDATE sp_migration_rehearsal_runs SET status = 'completed', rows_created = 4, completed_at = now() WHERE id = ${runId}

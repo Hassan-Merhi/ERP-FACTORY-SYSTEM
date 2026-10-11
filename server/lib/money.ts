@@ -38,13 +38,16 @@ function boundedDecimal(decimal: Decimal): Decimal | null {
 /**
  * A finite Decimal for any money input; empty, invalid, non-finite or
  * out-of-range input is zero, and a value too small for a float is zero too.
+ * A string with a leading number is read the way parseFloat reads it
+ * ("25 kg" is 25, "12.50 USD" is 12.5), so spreadsheet and form values that
+ * parseFloat accepted keep their amount instead of becoming zero.
  */
 export function toMoney(value: MoneyInput): Decimal {
   if (value === null || value === undefined || value === "") return new MoneyDecimal(0);
   try {
     return boundedDecimal(new MoneyDecimal(value)) ?? new MoneyDecimal(0);
   } catch {
-    return new MoneyDecimal(0);
+    return (typeof value === "string" ? parseMoneyInput(value) : null) ?? new MoneyDecimal(0);
   }
 }
 
@@ -90,6 +93,26 @@ export function sumMoney(values: Iterable<MoneyInput>): Decimal {
   let total = new MoneyDecimal(0);
   for (const value of values) total = total.plus(toMoney(value));
   return total;
+}
+
+/**
+ * Adds `value` to a running number total exactly and returns a number, for
+ * report totals that are kept as numbers in response objects. Each step goes
+ * through the total's shortest decimal form, so cents never drift
+ * (0.1 + 0.2 is 0.3, not 0.30000000000000004).
+ */
+export function plusMoney(total: number, value: MoneyInput): number {
+  return toMoney(total).plus(toMoney(value)).toNumber();
+}
+
+/** Subtracts `value` from a running number total exactly; the counterpart of plusMoney. */
+export function minusMoney(total: number, value: MoneyInput): number {
+  return toMoney(total).minus(toMoney(value)).toNumber();
+}
+
+/** Rounds a number to cents, half up, without the binary error of Math.round(n * 100) / 100. */
+export function roundCents(value: MoneyInput): number {
+  return toMoney(value).toDecimalPlaces(MONEY_DECIMAL_PLACES).toNumber();
 }
 
 /** Exact debit minus credit over ledger lines (positive = debit balance). */

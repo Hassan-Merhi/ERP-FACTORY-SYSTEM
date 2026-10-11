@@ -8,8 +8,7 @@ import type { RentalRoutesContext } from "./_helpers";
 import type { Express, Request, Response } from "express";
 import { getErrorMessage } from "../../../lib/httpHandlers";
 import { logger } from "../../../lib/logger";
-import { getCompanyId, ensureMonthlyForCompany, postRentAccrualForCompany } from "../shared";
-import { postDueScheduledRentalPayments } from "../../../services/rental/rentalPaymentPostingService";
+import { getCompanyId } from "../shared";
 import { getRentalBillingDay, getRentalPeriodDueDate } from "../../../services/rental/rentalPeriodService";
 import { getClientDate } from "../../../lib/dateUtils";
 import { db, pool } from "../../../db";
@@ -17,9 +16,10 @@ import { requireAuth } from "../../../auth";
 import { eq, and, sql, inArray } from "drizzle-orm";
 import { propertyUnits, propertyContracts, propertyMonthlyLedger, propertyPayments, companies } from "@shared/schema";
 import { computeNextBillingDate } from "./_helpers";
+import { sumMoney, toMoney } from "../../../lib/money";
 
 export function registerRentalUnitsReadRoutes(app: Express, ctx: RentalRoutesContext) {
-  const { module, urlPrefix, incomeAccountName, shopExpenseAccountName, tag } = ctx;
+  const { module, urlPrefix, tag } = ctx;
 
   app.get(`${urlPrefix}/units`, requireAuth, async (req: Request, res: Response) => {
     try {
@@ -27,24 +27,12 @@ export function registerRentalUnitsReadRoutes(app: Express, ctx: RentalRoutesCon
       if (!companyId) return res.status(400).json({ message: "No company selected" });
       const unitType = (req.query.unitType as string) || "WAREHOUSE";
 
+      // Read only (accounting audit wave 18 A): this page load no longer creates
+      // monthly rows or posts scheduled payments and accruals. They post from the
+      // daily scheduled job and the Admin/Owner "post due accruals now" action
+      // (POST {prefix}/accruals/post-due), dated by the company's business date.
+      // The client date only sets what the page shows as due.
       const asOf = getClientDate(req);
-      await ensureMonthlyForCompany(companyId, module, asOf);
-
-      // FIX #5: sequential awaited processing so scheduled posting runs before
-      //          accrual classification (avoids a race where an already-posted
-      //          payment is re-classified as due-unaccrued in the same request).
-      if ((module === "ERP" || module === "FACTORY") && unitType === "SHOP") {
-        try {
-          await postDueScheduledRentalPayments(companyId, module, asOf, shopExpenseAccountName);
-        } catch (e: unknown) {
-          logger.warn(`${tag} page-load scheduled-posting failed:`, { error: getErrorMessage(e).split("\n")[0] });
-        }
-        try {
-          await postRentAccrualForCompany(companyId, shopExpenseAccountName, module, incomeAccountName, asOf);
-        } catch (e: unknown) {
-          logger.warn(`${tag} page-load accrual failed:`, { error: getErrorMessage(e).split("\n")[0] });
-        }
-      }
 
       const regularUnits = await db
         .select()
@@ -149,12 +137,12 @@ export function registerRentalUnitsReadRoutes(app: Express, ctx: RentalRoutesCon
         for (const c of contracts) {
           const billingDay = getRentalBillingDay(c.startDate as string);
           const rows = ledgerByContract.get(c.id) ?? [];
-          let expected = 0;
-          for (const row of rows) {
-            const billingDate = getRentalPeriodDueDate(row.year, row.month, billingDay);
-            if (billingDate <= asOf) expected += parseFloat(row.expectedAmount as string) || 0;
-          }
-          expectedAsOfByContract.set(c.id, expected);
+          const expected = sumMoney(
+            rows
+              .filter((row) => getRentalPeriodDueDate(row.year, row.month, billingDay) <= asOf)
+              .map((row) => row.expectedAmount as string)
+          );
+          expectedAsOfByContract.set(c.id, expected.toNumber());
         }
 
         // POSTED rent payments as of asOf date (authoritative — not the paidAmount cache).
@@ -170,8 +158,8 @@ export function registerRentalUnitsReadRoutes(app: Express, ctx: RentalRoutesCon
         );
         postedRows.forEach((r) => {
           const n = parseInt(r.contract_id);
-          paidAsOfByContract.set(n, parseFloat(r.paid));
-          totalPaidByContract.set(n, parseFloat(r.paid));
+          paidAsOfByContract.set(n, toMoney(r.paid).toNumber());
+          totalPaidByContract.set(n, toMoney(r.paid).toNumber());
         });
 
         // SCHEDULED (future) payment totals
@@ -182,13 +170,15 @@ export function registerRentalUnitsReadRoutes(app: Express, ctx: RentalRoutesCon
            GROUP BY contract_id`,
           [contractIds]
         );
-        scheduledRows.forEach((r) => scheduledAmountByContract.set(parseInt(r.contract_id), parseFloat(r.scheduled)));
+        scheduledRows.forEach((r) =>
+          scheduledAmountByContract.set(parseInt(r.contract_id), toMoney(r.scheduled).toNumber())
+        );
 
         // outstanding = expected - POSTED paid (negative = prepaid credit)
         for (const c of contracts) {
           const expected = expectedAsOfByContract.get(c.id) ?? 0;
           const paid = paidAsOfByContract.get(c.id) ?? 0;
-          outstandingByContract.set(c.id, expected - paid);
+          outstandingByContract.set(c.id, toMoney(expected).minus(paid).toNumber());
           expectedAsOfByContractOuter.set(c.id, expected); // FIX #8
         }
 
@@ -212,7 +202,7 @@ export function registerRentalUnitsReadRoutes(app: Express, ctx: RentalRoutesCon
       const ownedResults = units.map((u) => {
         const c = contractByUnit.get(u.id);
         const appliedAsRent = c ? (guaranteeAppliedByContract.get(c.id) ?? 0) : 0;
-        const guaranteeRemaining = c ? Math.max(0, parseFloat(String(c.guaranteeAmount || "0")) - appliedAsRent) : null;
+        const guaranteeRemaining = c ? Math.max(0, toMoney(c.guaranteeAmount).minus(appliedAsRent).toNumber()) : null;
         // FIX #8: separate non-negative outstanding and credit fields
         const rawOutstanding = c ? (outstandingByContract.get(c.id) ?? 0) : null;
         const expectedAsOf = c ? (expectedAsOfByContractOuter.get(c.id) ?? 0) : null;
@@ -262,6 +252,7 @@ export function registerRentalUnitsReadRoutes(app: Express, ctx: RentalRoutesCon
 
             const sharedContractIds = sharedContracts.map((c) => c.id);
             const sharedOutstanding = new Map<number, number>();
+            const sharedExpected = new Map<number, number>();
             const sharedPaid = new Map<number, number>();
             const sharedScheduled = new Map<number, number>();
 
@@ -285,13 +276,14 @@ export function registerRentalUnitsReadRoutes(app: Express, ctx: RentalRoutesCon
             for (const c of sharedContracts) {
               const billingDay = getRentalBillingDay(c.startDate as string);
               const rows = sharedLedgerByContract.get(c.id) ?? [];
-              let expected = 0;
-              for (const row of rows) {
-                const billingDate = getRentalPeriodDueDate(row.year, row.month, billingDay);
-                if (billingDate <= asOf) expected += parseFloat(row.expectedAmount as string) || 0;
-              }
+              const expected = sumMoney(
+                rows
+                  .filter((row) => getRentalPeriodDueDate(row.year, row.month, billingDay) <= asOf)
+                  .map((row) => row.expectedAmount as string)
+              );
               // Will set outstanding after loading paid
-              sharedOutstanding.set(c.id, expected);
+              sharedExpected.set(c.id, expected.toNumber());
+              sharedOutstanding.set(c.id, expected.toNumber());
             }
 
             // POSTED rent payments for shared contracts — exclude guarantee deposits/releases.
@@ -303,7 +295,7 @@ export function registerRentalUnitsReadRoutes(app: Express, ctx: RentalRoutesCon
                GROUP BY contract_id`,
               [sharedContractIds, asOf]
             );
-            sharedPostedRows.forEach((r) => sharedPaid.set(parseInt(r.contract_id), parseFloat(r.paid)));
+            sharedPostedRows.forEach((r) => sharedPaid.set(parseInt(r.contract_id), toMoney(r.paid).toNumber()));
 
             // SCHEDULED for shared
             const { rows: sharedSchedRows } = await pool.query<{ contract_id: string; scheduled: string }>(
@@ -313,13 +305,15 @@ export function registerRentalUnitsReadRoutes(app: Express, ctx: RentalRoutesCon
                GROUP BY contract_id`,
               [sharedContractIds]
             );
-            sharedSchedRows.forEach((r) => sharedScheduled.set(parseInt(r.contract_id), parseFloat(r.scheduled)));
+            sharedSchedRows.forEach((r) =>
+              sharedScheduled.set(parseInt(r.contract_id), toMoney(r.scheduled).toNumber())
+            );
 
             // Finalize outstanding = expected - paid
             for (const c of sharedContracts) {
-              const expected = sharedOutstanding.get(c.id) ?? 0;
+              const expected = sharedExpected.get(c.id) ?? 0;
               const paid = sharedPaid.get(c.id) ?? 0;
-              sharedOutstanding.set(c.id, expected - paid);
+              sharedOutstanding.set(c.id, toMoney(expected).minus(paid).toNumber());
             }
 
             // Fetch owner company names
@@ -352,10 +346,10 @@ export function registerRentalUnitsReadRoutes(app: Express, ctx: RentalRoutesCon
                 const u = sharedUnitMap.get(c.unitId);
                 if (!u) return null;
                 const appliedAsRent = sharedGuaranteeApplied.get(c.id) ?? 0;
-                const guaranteeRemaining = Math.max(0, parseFloat(String(c.guaranteeAmount || "0")) - appliedAsRent);
+                const guaranteeRemaining = Math.max(0, toMoney(c.guaranteeAmount).minus(appliedAsRent).toNumber());
                 // FIX #8: separate non-negative outstanding and credit fields for shared contracts
                 const rawOutstanding = sharedOutstanding.get(c.id) ?? 0;
-                const expectedAsOf = rawOutstanding + (sharedPaid.get(c.id) ?? 0); // reverse: outstanding = expected - paid
+                const expectedAsOf = sharedExpected.get(c.id) ?? 0;
                 const paidAsOf = sharedPaid.get(c.id) ?? 0;
                 const scheduledAmount = sharedScheduled.get(c.id) ?? 0;
                 const outstanding = Math.max(0, rawOutstanding);

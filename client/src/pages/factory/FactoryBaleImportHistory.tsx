@@ -152,7 +152,7 @@ export default function FactoryBaleImportHistory() {
                       )}
                     </div>
                   </div>
-                  <div className="flex items-center gap-3 flex-shrink-0">
+                  <div className="flex items-center gap-3 shrink-0">
                     <div className="text-right hidden sm:block">
                       <p className="text-sm font-medium flex items-center gap-1 justify-end">
                         <Package className="h-3.5 w-3.5 text-muted-foreground" />
@@ -236,7 +236,7 @@ export default function FactoryBaleImportHistory() {
                       <TableCell className="text-right text-sm">{fmt(parseFloat(bale.weightKg))}</TableCell>
                       <TableCell>
                         <span
-                          className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${STATUS_COLORS[bale.status] || "bg-muted text-muted-foreground"}`}
+                          className={`inline-flex items-center px-2 py-0.5 rounded-sm text-xs font-medium ${STATUS_COLORS[bale.status] || "bg-muted text-muted-foreground"}`}
                         >
                           {bale.status.replace(/_/g, " ")}
                         </span>

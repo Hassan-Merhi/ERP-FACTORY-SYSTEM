@@ -114,7 +114,7 @@ export function FactoryProformasHeader(props: FactoryProformasHeaderProps) {
               {proformaSearch && (
                 <button
                   onClick={() => setProformaSearch("")}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover-elevate rounded"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover-elevate rounded-sm"
                   data-testid="button-clear-proforma-search"
                 >
                   <X className="h-3.5 w-3.5" />

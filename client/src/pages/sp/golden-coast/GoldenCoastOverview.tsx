@@ -92,7 +92,7 @@ export function GoldenCoastOverview({ onOpenTab }: { onOpenTab: (tab: GoldenCoas
                 {item.href ? (
                   <Link
                     href={item.href}
-                    className="inline-flex h-9 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground shadow hover:bg-primary/90"
+                    className="inline-flex h-9 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground shadow-sm hover:bg-primary/90"
                     data-testid="link-gc-pos"
                   >
                     {releaseDebtEnglish("Open POS")}

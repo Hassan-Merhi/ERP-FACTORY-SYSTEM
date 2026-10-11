@@ -43,7 +43,7 @@ export function PayrollRunDialogs({ payroll }: { payroll: FactoryPayrollState })
       {/* Run Payroll Dialog */}
       <Dialog open={runOpen} onOpenChange={setRunOpen}>
         <DialogContent className="max-w-2xl flex flex-col max-h-[90vh]" data-testid="dialog-run-payroll">
-          <DialogHeader className="flex-shrink-0">
+          <DialogHeader className="shrink-0">
             <DialogTitle>Run Payroll</DialogTitle>
             <DialogDescription>
               Configure the payroll period and settings, then preview before generating.
@@ -165,7 +165,7 @@ export function PayrollRunDialogs({ payroll }: { payroll: FactoryPayrollState })
               />
             </div>
           </div>
-          <DialogFooter className="flex-shrink-0">
+          <DialogFooter className="shrink-0">
             <Button variant="outline" onClick={() => setRunOpen(false)}>
               Cancel
             </Button>
@@ -184,7 +184,7 @@ export function PayrollRunDialogs({ payroll }: { payroll: FactoryPayrollState })
       {/* Preview Dialog */}
       <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
         <DialogContent className="max-w-4xl flex flex-col max-h-[90vh]" data-testid="dialog-preview-payroll">
-          <DialogHeader className="flex-shrink-0">
+          <DialogHeader className="shrink-0">
             <DialogTitle>Payroll Preview</DialogTitle>
             <DialogDescription>
               {previewRows.length} workers · {runForm.periodStart} to {runForm.periodEnd} · Net Total: $
@@ -451,7 +451,7 @@ export function PayrollRunDialogs({ payroll }: { payroll: FactoryPayrollState })
               );
             })}
           </div>
-          <DialogFooter className="flex-shrink-0">
+          <DialogFooter className="shrink-0">
             <Button variant="outline" onClick={() => setPreviewOpen(false)}>
               Back
             </Button>

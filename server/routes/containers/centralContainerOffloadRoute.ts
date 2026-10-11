@@ -55,6 +55,8 @@ async function runCentralOffload(req: Request, res: Response, mode: ContainerOff
       additionalCharges: data.additionalCharges ?? [],
       inventoryCostCorrections: data.inventoryCostCorrections ?? [],
       agentChargeLines: data.agentChargeLines ?? [],
+      // Wave 15 (M10): cost corrections need Admin/Owner.
+      actorRole: req.session.currentRole ?? null,
     });
 
     logger.info("Atomic container offload lifecycle completed", {

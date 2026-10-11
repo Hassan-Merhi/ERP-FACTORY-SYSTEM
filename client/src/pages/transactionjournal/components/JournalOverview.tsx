@@ -61,7 +61,7 @@ export function JournalSummaryCards({ model }: { model: TransactionJournalModel 
           data-testid={`card-company-summary-${id}`}
         >
           <CardHeader className="pb-1 pt-3 px-3">
-            <span className={`inline-block text-xs font-medium px-2 py-0.5 rounded ${companyColor(Number(id))}`}>
+            <span className={`inline-block text-xs font-medium px-2 py-0.5 rounded-sm ${companyColor(Number(id))}`}>
               {row.name}
             </span>
           </CardHeader>

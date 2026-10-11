@@ -2,11 +2,7 @@ import * as React from "react";
 import { ArrowDownRight, ArrowUpRight, Minus } from "lucide-react";
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  HorizontalScrollRegion,
-  ResponsiveActions,
-  ResponsiveToolbar,
-} from "@/components/ui/responsive-accessibility";
+import { HorizontalScrollRegion, ResponsiveActions, ResponsiveToolbar } from "@/components/ui/responsive-accessibility";
 import { cn } from "@/lib/utils";
 
 type FinancialScreenProps = React.HTMLAttributes<HTMLElement> & {
@@ -47,12 +43,13 @@ export function FinancialScreenHeader({
     <header aria-labelledby={titleId} className={cn("space-y-4", className)} {...props}>
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0 flex-1">
-          <h1 id={titleId} className="break-words text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
+          <h1
+            id={titleId}
+            className="wrap-break-word text-2xl font-semibold tracking-tight text-foreground sm:text-3xl"
+          >
             {title}
           </h1>
-          {description ? (
-            <p className="mt-1 max-w-3xl text-sm leading-6 text-muted-foreground">{description}</p>
-          ) : null}
+          {description ? <p className="mt-1 max-w-3xl text-sm leading-6 text-muted-foreground">{description}</p> : null}
         </div>
         {actions ? <ResponsiveActions label={actionsLabel}>{actions}</ResponsiveActions> : null}
       </div>
@@ -82,7 +79,7 @@ export function FinancialSectionHeader({
       {...props}
     >
       <div className="min-w-0 flex-1">
-        <h2 id={titleId} className="break-words text-lg font-semibold tracking-tight text-foreground sm:text-xl">
+        <h2 id={titleId} className="wrap-break-word text-lg font-semibold tracking-tight text-foreground sm:text-xl">
           {title}
         </h2>
         {description ? <p className="mt-1 text-sm leading-6 text-muted-foreground">{description}</p> : null}
@@ -124,7 +121,7 @@ export function FinancialSummaryCard({
     <Card className={cn("min-w-0", className)} {...props}>
       <CardHeader className="space-y-1 p-4 pb-2 sm:p-6 sm:pb-2">
         <CardDescription>{label}</CardDescription>
-        <CardTitle className={cn("break-words text-xl font-semibold tabular-nums sm:text-2xl", toneClasses[tone])}>
+        <CardTitle className={cn("wrap-break-word text-xl font-semibold tabular-nums sm:text-2xl", toneClasses[tone])}>
           {value}
         </CardTitle>
       </CardHeader>
@@ -136,7 +133,9 @@ export function FinancialSummaryCard({
               <span>{trendLabel}</span>
             </div>
           ) : null}
-          {description ? <p className="mt-1 break-words text-xs leading-5 text-muted-foreground">{description}</p> : null}
+          {description ? (
+            <p className="mt-1 wrap-break-word text-xs leading-5 text-muted-foreground">{description}</p>
+          ) : null}
         </CardContent>
       ) : null}
     </Card>
@@ -166,7 +165,7 @@ export function FinancialStatusStrip({
     <div
       className={cn(
         "flex min-w-0 flex-col gap-1 rounded-lg border bg-card px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4",
-        className,
+        className
       )}
       {...props}
     >
@@ -174,7 +173,9 @@ export function FinancialStatusStrip({
         <p className="text-sm font-medium text-foreground">{label}</p>
         {description ? <div className="mt-0.5 text-xs leading-5 text-muted-foreground">{description}</div> : null}
       </div>
-      <div className={cn("shrink-0 break-words text-lg font-semibold tabular-nums", toneClasses[tone])}>{value}</div>
+      <div className={cn("shrink-0 wrap-break-word text-lg font-semibold tabular-nums", toneClasses[tone])}>
+        {value}
+      </div>
     </div>
   );
 }

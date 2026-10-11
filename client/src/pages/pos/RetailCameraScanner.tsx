@@ -102,7 +102,7 @@ export function RetailCameraScanner({ onScan }: { onScan: (barcode: string) => v
           {error ? (
             <p className="text-sm text-destructive">{error}</p>
           ) : (
-            <video ref={videoRef} className="aspect-[4/3] w-full rounded-md bg-black object-cover" muted playsInline />
+            <video ref={videoRef} className="aspect-4/3 w-full rounded-md bg-black object-cover" muted playsInline />
           )}
           <p className="text-xs text-muted-foreground" data-i18n-ui>
             Hold the label steady inside the frame.

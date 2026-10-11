@@ -738,7 +738,7 @@ export function ContainerPlannerSavedPlans({ capacityBales, includeGarbageWipers
                               {qty > 0 && !container.isLocked ? (
                                 <button
                                   type="button"
-                                  className="rounded px-2 py-1 hover:bg-primary/10 hover:text-primary"
+                                  className="rounded-sm px-2 py-1 hover:bg-primary/10 hover:text-primary"
                                   onClick={() => {
                                     setMoveSource({
                                       containerId: container.id,

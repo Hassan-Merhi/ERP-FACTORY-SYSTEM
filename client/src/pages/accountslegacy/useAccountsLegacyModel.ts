@@ -27,6 +27,7 @@ import { getDefaultPeriodValue, PeriodFilterValue } from "@/components/ui/period
 import { LedgerAccount, BankAccount, insertBankAccountSchema, updateLedgerAccountSchema } from "@shared/schema";
 import type { InsertBankAccount, UpdateLedgerAccount } from "@shared/schema";
 import { Account, Transaction, WaRule, WaChat } from "../accounts/accountTypes";
+import { readNotInLedger } from "./NotInLedgerSection";
 
 /** Voucher type → Vouchers page tab, for statement row navigation. */
 const VOUCHER_TAB_MAP: Record<string, string> = {
@@ -75,13 +76,6 @@ interface GroupOption {
 interface VoucherNavigationRow {
   voucherId: number;
   voucherType?: string | null;
-}
-
-interface PayrollMigrationResponse {
-  vouchersUpdated?: number;
-  accountsDeleted?: number;
-  salaryAccountsReparented?: number;
-  bonusAccountsReparented?: number;
 }
 
 export function useAccountsLegacyModel() {
@@ -334,26 +328,6 @@ export function useAccountsLegacyModel() {
   const [filterCurrency, setFilterCurrency] = useState<"all" | "CFA">("all");
   const { data: currentUser } = useQuery<{ role?: string }>({ queryKey: ["/api/auth/me"] });
   const [exportLang, setExportLang] = useState<"en" | "fr" | "ar">("en");
-
-  const fixPayrollAccountsMutation = useMutation({
-    mutationFn: async (): Promise<PayrollMigrationResponse> => {
-      const response = await apiRequest("POST", "/api/factory/payroll/migrate-worker-names", {
-        companyId: selectedCompany?.id,
-        confirm: true,
-      });
-      return response.json();
-    },
-    onSuccess: (data: PayrollMigrationResponse) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/accounts"] });
-      toast({
-        title: "Payroll accounts fixed",
-        description: `${data.vouchersUpdated ?? 0} voucher(s) updated · ${data.accountsDeleted ?? 0} old account(s) removed · ${(data.salaryAccountsReparented ?? 0) + (data.bonusAccountsReparented ?? 0)} account(s) grouped`,
-      });
-    },
-    onError: (err: ClientErrorLike) => {
-      toast({ title: "Fix failed", description: err?.message ?? "Unknown error", variant: "destructive" });
-    },
-  });
 
   // ─── WhatsApp rule state ─────────────────────────────────────────────────
   const [waRuleDialogOpen, setWaRuleDialogOpen] = useState(false);
@@ -726,6 +700,7 @@ export function useAccountsLegacyModel() {
     periodFilter,
     setPeriodFilter,
     vouchersWithBalance,
+    notInLedger: readNotInLedger(rawTransactionData),
     broughtForwardBalance,
     closingBalance,
     transactionsLoading,
@@ -799,7 +774,6 @@ export function useAccountsLegacyModel() {
     createBankMutation,
     saveWaRuleMutation,
     sendWaStatementMutation,
-    fixPayrollAccountsMutation,
   };
 }
 

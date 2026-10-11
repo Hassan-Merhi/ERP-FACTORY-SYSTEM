@@ -7,9 +7,10 @@
 import type { Express, Request, Response } from "express";
 import { getErrorMessage } from "../../../lib/httpHandlers";
 import { logger } from "../../../lib/logger";
-import { getClientDate } from "../../../lib/dateUtils";
 import { db } from "../../../db";
 import { requireAuth } from "../../../auth";
+// The physical-deletion service also records the WASTE write-off value event
+// (wave 11) for the valued bales it removes, in the same transaction.
 import { deletePhysicalFactoryBalesTx } from "./physicalBaleDeletion";
 import { PRIORITY_SCAN_LOCK_NAMESPACE } from "../customer-orders/priorityScanQueue";
 import { verifySupervisorPassword } from "../_helpers";
@@ -65,7 +66,6 @@ export function registerFactoryStockRemovalRoutes(app: Express) {
           actorId: String(supervisor.id),
           actorName: supervisorUsername,
           reason: reason || "Factory bale stock removal",
-          businessDate: getClientDate(req),
         });
       });
 
@@ -143,7 +143,6 @@ export function registerFactoryStockRemovalRoutes(app: Express) {
           actorId: String(supervisor.id),
           actorName: supervisorUsername,
           reason: reason || "Factory bale stock removal",
-          businessDate: getClientDate(req),
         });
       });
 

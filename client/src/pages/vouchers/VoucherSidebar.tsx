@@ -54,7 +54,7 @@ export function VoucherSidebar({ activeTab, onTabChange, isFactoryMode }: Vouche
   const visibleSidebarGroups = isFactoryMode ? sidebarGroups.filter((g) => g.label !== "Adjustments") : sidebarGroups;
 
   return (
-    <nav className="w-full lg:w-64 flex-shrink-0 space-y-6">
+    <nav className="w-full lg:w-64 shrink-0 space-y-6">
       {visibleSidebarGroups.map((group) => (
         <div key={group.label} className="space-y-2">
           <h3 className="px-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider">{group.label}</h3>
@@ -66,7 +66,7 @@ export function VoucherSidebar({ activeTab, onTabChange, isFactoryMode }: Vouche
                 className={cn(
                   "w-full flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-md transition-all duration-200 hover-elevate active-elevate-2",
                   activeTab === item.key
-                    ? "bg-primary text-primary-foreground shadow-sm scale-[1.02]"
+                    ? "bg-primary text-primary-foreground shadow-xs scale-[1.02]"
                     : "text-muted-foreground hover:bg-muted hover:text-foreground"
                 )}
                 data-testid={`button-tab-${item.key}`}

@@ -324,7 +324,7 @@ export default function FactoryFinancialSnapshot() {
                             className="flex items-center justify-between gap-2 py-1.5 px-2 rounded-md group"
                           >
                             <button
-                              className="flex items-center gap-1.5 min-w-0 text-left hover-elevate rounded flex-1 py-0.5 px-1"
+                              className="flex items-center gap-1.5 min-w-0 text-left hover-elevate rounded-sm flex-1 py-0.5 px-1"
                               onClick={() =>
                                 navigate(
                                   `/factory/accounts?accountId=${acct.id}&accountType=ledger${netPosition?.asOf ? `&endDate=${netPosition.asOf}` : ""}`
@@ -433,7 +433,7 @@ export default function FactoryFinancialSnapshot() {
                             className="flex items-center justify-between gap-2 py-1.5 px-2 rounded-md group"
                           >
                             <button
-                              className="flex items-center gap-1.5 min-w-0 text-left hover-elevate rounded flex-1 py-0.5 px-1"
+                              className="flex items-center gap-1.5 min-w-0 text-left hover-elevate rounded-sm flex-1 py-0.5 px-1"
                               onClick={() =>
                                 navigate(
                                   `/factory/accounts?accountId=${acct.id}&accountType=ledger${netPosition?.asOf ? `&endDate=${netPosition.asOf}` : ""}`
@@ -536,7 +536,7 @@ export default function FactoryFinancialSnapshot() {
                             className="flex items-center justify-between gap-2 py-1.5 px-2 rounded-md group"
                           >
                             <button
-                              className="flex items-center gap-1.5 min-w-0 text-left hover-elevate rounded flex-1 py-0.5 px-1"
+                              className="flex items-center gap-1.5 min-w-0 text-left hover-elevate rounded-sm flex-1 py-0.5 px-1"
                               onClick={() =>
                                 navigate(
                                   `/factory/accounts?accountId=${acct.id}&accountType=ledger${netPosition?.asOf ? `&endDate=${netPosition.asOf}` : ""}`
@@ -639,7 +639,7 @@ export default function FactoryFinancialSnapshot() {
                             className="flex items-center justify-between gap-2 py-1.5 px-2 rounded-md group"
                           >
                             <button
-                              className="flex items-center gap-1.5 min-w-0 text-left hover-elevate rounded flex-1 py-0.5 px-1"
+                              className="flex items-center gap-1.5 min-w-0 text-left hover-elevate rounded-sm flex-1 py-0.5 px-1"
                               onClick={() =>
                                 navigate(
                                   `/factory/accounts?accountId=${acct.id}&accountType=ledger${netPosition?.asOf ? `&endDate=${netPosition.asOf}` : ""}`

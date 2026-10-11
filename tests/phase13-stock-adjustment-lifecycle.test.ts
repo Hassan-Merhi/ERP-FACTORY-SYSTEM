@@ -1,7 +1,7 @@
 import request from "supertest";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { db, pool } from "../server/db";
 import * as schema from "../shared/schema";
 import { cleanupTestData, closeTestServer, seedTestData, type TestContext } from "./setup";
@@ -260,10 +260,15 @@ describe("Phase 13 — stock adjustment quantity/value lifecycle", () => {
       .limit(1);
     expect(existingAccount).toBeDefined();
 
-    await db
-      .update(schema.ledgerAccounts)
-      .set({ active: false, deletedAt: new Date("2026-09-20T00:00:00Z") })
-      .where(eq(schema.ledgerAccounts.id, existingAccount!.id));
+    // Recreates the legacy state (a deleted account that still carries
+    // postings); the ledger integrity guard refuses it outside a reviewed repair.
+    await db.transaction(async (tx) => {
+      await tx.execute(sql`SELECT set_config('app.ledger_integrity_bypass', 'on', true)`);
+      await tx
+        .update(schema.ledgerAccounts)
+        .set({ active: false, deletedAt: new Date("2026-09-20T00:00:00Z") })
+        .where(eq(schema.ledgerAccounts.id, existingAccount!.id));
+    });
 
     const stockItemId = ctx.stockItemIds[0];
     await setInventory(ctx.locationId, stockItemId, 100, 10, 1000);

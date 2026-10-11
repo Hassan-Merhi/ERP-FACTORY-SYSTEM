@@ -18,7 +18,13 @@ import { requireAuth } from "../../auth";
 import { db } from "../../db";
 import { getErrorMessage } from "../../lib/httpHandlers";
 import { currentUserId, ensureCompanyLocation, requireRetailCompany } from "./retailPosContext";
-import { addMovement, lockInventoryRow, setInventoryQuantity } from "../../services/retail/retailStockLedger";
+import {
+  addMovement,
+  lockInventoryRow,
+  nextAverageCost,
+  setInventoryQuantity,
+} from "../../services/retail/retailStockLedger";
+import { trackRetailStockValueTx } from "../../services/retail/retailInventoryJournal";
 import {
   approvalCoversRequest,
   evaluateRetailDiscountPolicy,
@@ -633,7 +639,7 @@ export function registerRetailPosRoutes(app: Express): void {
             idempotencyKey: body.idempotencyKey,
             userId,
           });
-          await postRetailRefundAccountingTx(tx, {
+          const refundVoucherId = await postRetailRefundAccountingTx(tx, {
             companyId,
             locationId: body.locationId,
             saleId,
@@ -647,14 +653,25 @@ export function registerRetailPosRoutes(app: Express): void {
             userId,
             username: req.user?.username ?? null,
           });
+          // Wave 17 (D): what the refund journal did not put back on Retail inventory.
+          await returned.stockValue?.post({
+            kind: "return",
+            sourceId: returned.returnId,
+            description: `Retail return #${returned.returnId} for sale #${saleId}`,
+            actor: { userId, username: req.user?.username ?? null },
+            alreadyDebited: refundVoucherId ? returned.costValue : undefined,
+          });
         }
         return returned;
       });
 
       res.status(result.replayed ? 200 : 201).json({
         ...result,
-        refundAmount: roundRetailMoney(result.refundAmount, 2),
-        refundTaxAmount: roundRetailMoney(result.refundTaxAmount, 2),
+        // Exact amounts inside; a number only in the response.
+        refundAmount: result.refundAmount.toDecimalPlaces(2).toNumber(),
+        refundTaxAmount: result.refundTaxAmount.toDecimalPlaces(2).toNumber(),
+        refundValue: result.refundValue.toNumber(),
+        costValue: result.costValue.toNumber(),
         sale: await loadSaleResponse(companyId, saleId),
       });
     } catch (error) {
@@ -700,6 +717,10 @@ export function registerRetailPosRoutes(app: Express): void {
         for (const locationId of orderedLocationIds) await lockInventoryRow(tx, companyId, body.variantId, locationId);
         const source = await lockInventoryRow(tx, companyId, body.variantId, body.fromLocationId);
         const destination = await lockInventoryRow(tx, companyId, body.variantId, body.toLocationId);
+        const stockValue = await trackRetailStockValueTx(tx, companyId, [
+          { variantId: body.variantId, locationId: body.fromLocationId },
+          { variantId: body.variantId, locationId: body.toLocationId },
+        ]);
         let sourceAfter: number;
         let destinationAfter: number;
         try {
@@ -713,7 +734,15 @@ export function registerRetailPosRoutes(app: Express): void {
           throw new Error(`Insufficient stock for transfer. Available: ${source.quantity}`);
         }
         await setInventoryQuantity(tx, companyId, body.variantId, body.fromLocationId, sourceAfter);
-        await setInventoryQuantity(tx, companyId, body.variantId, body.toLocationId, destinationAfter);
+        // Wave 17 (D): the destination takes the units at the source's cost (value-exact), blended into its average.
+        await setInventoryQuantity(
+          tx,
+          companyId,
+          body.variantId,
+          body.toLocationId,
+          destinationAfter,
+          nextAverageCost(destination.quantity, destination.averageCost, body.quantity, source.averageCost)
+        );
         await addMovement(tx, {
           companyId,
           variantId: body.variantId,
@@ -741,6 +770,12 @@ export function registerRetailPosRoutes(app: Express): void {
           referenceId: operation.id,
           createdBy: userId,
           metadata: { fromLocationId: body.fromLocationId },
+        });
+        await stockValue.post({
+          kind: "transfer",
+          sourceId: operation.id,
+          description: `Retail stock transfer #${operation.id}`,
+          actor: { userId, username: req.user?.username ?? null },
         });
         return {
           replayed: false,
@@ -781,6 +816,9 @@ export function registerRetailPosRoutes(app: Express): void {
           .returning({ id: retailStockOperations.id });
         if (!operation) return { replayed: true };
         const stock = await lockInventoryRow(tx, companyId, body.variantId, body.locationId);
+        const stockValue = await trackRetailStockValueTx(tx, companyId, [
+          { variantId: body.variantId, locationId: body.locationId },
+        ]);
         const after = stock.quantity + body.quantityDelta;
         if (after < -0.000001 && !req.user?.canSellNegativeStock) {
           throw new Error(`Insufficient stock for adjustment. Available: ${stock.quantity}`);
@@ -799,6 +837,13 @@ export function registerRetailPosRoutes(app: Express): void {
           referenceId: operation.id,
           createdBy: userId,
           metadata: { reason: body.reason, reference: body.reference ?? null },
+        });
+        // Wave 17 (D): Dr/Cr Retail inventory against RETAIL-INVENTORY-ADJUSTMENT at the row's cost.
+        await stockValue.post({
+          kind: "adjustment",
+          sourceId: operation.id,
+          description: `Retail stock adjustment #${operation.id} · ${body.reason}`,
+          actor: { userId, username: req.user?.username ?? null },
         });
         return { replayed: false, operationId: operation.id, quantity: after };
       });

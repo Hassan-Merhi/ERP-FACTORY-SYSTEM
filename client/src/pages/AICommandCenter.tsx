@@ -141,7 +141,7 @@ function StepRow({ step }: { step: PlanStep }) {
           {step.error ? (
             <span className="text-red-500">{step.error}</span>
           ) : (
-            <pre className="whitespace-pre-wrap break-words">{JSON.stringify(step.result, null, 2)}</pre>
+            <pre className="whitespace-pre-wrap wrap-break-word">{JSON.stringify(step.result, null, 2)}</pre>
           )}
         </div>
       )}
@@ -193,7 +193,7 @@ function ApprovalCard({
 
             {showFull && (
               <div className="mt-2 rounded-md border bg-muted/30 p-3 text-xs font-mono overflow-auto max-h-64">
-                <pre className="whitespace-pre-wrap break-words">{JSON.stringify(preview, null, 2)}</pre>
+                <pre className="whitespace-pre-wrap wrap-break-word">{JSON.stringify(preview, null, 2)}</pre>
               </div>
             )}
           </div>

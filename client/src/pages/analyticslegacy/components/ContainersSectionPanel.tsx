@@ -276,7 +276,7 @@ export function ContainersSectionPanel({ analytics }: { analytics: AnalyticsLega
                       <button
                         type="button"
                         aria-pressed={reportSupplierIds.length === 0}
-                        className="flex items-center gap-2 w-full px-2 py-1.5 text-sm rounded hover:bg-accent"
+                        className="flex items-center gap-2 w-full px-2 py-1.5 text-sm rounded-sm hover:bg-accent"
                         onClick={() => setReportSupplierIds([])}
                       >
                         <Check className={`h-4 w-4 ${reportSupplierIds.length === 0 ? "opacity-100" : "opacity-0"}`} />
@@ -288,7 +288,7 @@ export function ContainersSectionPanel({ analytics }: { analytics: AnalyticsLega
                           key={supplier.id}
                           type="button"
                           aria-pressed={reportSupplierIds.includes(supplier.id)}
-                          className="flex items-center gap-2 w-full px-2 py-1.5 text-sm rounded hover:bg-accent"
+                          className="flex items-center gap-2 w-full px-2 py-1.5 text-sm rounded-sm hover:bg-accent"
                           onClick={() =>
                             setReportSupplierIds((prev) =>
                               prev.includes(supplier.id)

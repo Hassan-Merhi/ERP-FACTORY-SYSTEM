@@ -75,7 +75,7 @@ export function AgentCardTransit(props: AgentCardTransitProps) {
             <select
               value={transitTransporterFilter ?? ""}
               onChange={(e) => setTransitTransporterFilter(e.target.value || null)}
-              className="text-[11px] bg-transparent border border-slate-300 dark:border-slate-600 rounded px-1.5 py-0.5 text-slate-600 dark:text-slate-300 focus:outline-none cursor-pointer"
+              className="text-[11px] bg-transparent border border-slate-300 dark:border-slate-600 rounded-sm px-1.5 py-0.5 text-slate-600 dark:text-slate-300 focus:outline-hidden cursor-pointer"
               data-testid={`select-transit-transporter-${agentName}`}
             >
               <option value="">All transporters</option>

@@ -258,7 +258,7 @@ export default function ProformaAddLine() {
           <Button size="icon" variant="ghost" onClick={goBack} data-testid="button-back">
             <ArrowLeft className="h-4 w-4" />
           </Button>
-          <div className="min-w-[10rem] flex-1">
+          <div className="min-w-40 flex-1">
             <p className="text-xs text-muted-foreground">Adding line to</p>
             <PageHeader title={proformaName} />
           </div>
@@ -279,7 +279,7 @@ export default function ProformaAddLine() {
               className={`w-8 h-4 rounded-full relative transition-colors ${autoSave ? "bg-green-500" : "bg-muted-foreground/30"}`}
             >
               <span
-                className={`absolute top-0.5 w-3 h-3 rounded-full bg-white shadow transition-transform ${autoSave ? "translate-x-4" : "translate-x-0.5"}`}
+                className={`absolute top-0.5 w-3 h-3 rounded-full bg-white shadow-sm transition-transform ${autoSave ? "translate-x-4" : "translate-x-0.5"}`}
               />
             </span>
           </button>

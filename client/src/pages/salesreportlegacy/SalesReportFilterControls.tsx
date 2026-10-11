@@ -100,7 +100,7 @@ export function SalesReportFilterControls({
           <PopoverContent className="w-52 p-2" align="start">
             <div className="space-y-1">
               <div
-                className="flex items-center gap-2 px-2 py-1.5 rounded hover-elevate cursor-pointer"
+                className="flex items-center gap-2 px-2 py-1.5 rounded-sm hover-elevate cursor-pointer"
                 onClick={() => setSelectedCompanies([])}
                 data-testid="option-all-companies"
               >
@@ -111,7 +111,7 @@ export function SalesReportFilterControls({
               {companyFilterOptions.map(([code, name]) => (
                 <div
                   key={code}
-                  className="flex items-center gap-2 px-2 py-1.5 rounded hover-elevate cursor-pointer"
+                  className="flex items-center gap-2 px-2 py-1.5 rounded-sm hover-elevate cursor-pointer"
                   onClick={() =>
                     setSelectedCompanies((prev) =>
                       prev.includes(code) ? prev.filter((c) => c !== code) : [...prev, code]
@@ -185,7 +185,7 @@ export function SalesReportFilterControls({
         <PopoverContent className="w-52 p-2" align="start">
           <div className="space-y-1">
             <div
-              className="flex items-center gap-2 px-2 py-1.5 rounded hover-elevate cursor-pointer"
+              className="flex items-center gap-2 px-2 py-1.5 rounded-sm hover-elevate cursor-pointer"
               onClick={() => setSelectedLocations([])}
             >
               <Checkbox checked={selectedLocations.length === 0} className="h-4 w-4" />
@@ -195,7 +195,7 @@ export function SalesReportFilterControls({
             {locations.map((loc) => (
               <div
                 key={loc.id}
-                className="flex items-center gap-2 px-2 py-1.5 rounded hover-elevate cursor-pointer"
+                className="flex items-center gap-2 px-2 py-1.5 rounded-sm hover-elevate cursor-pointer"
                 onClick={() =>
                   setSelectedLocations((prev) =>
                     prev.includes(String(loc.id)) ? prev.filter((l) => l !== String(loc.id)) : [...prev, String(loc.id)]
@@ -224,7 +224,7 @@ export function SalesReportFilterControls({
         <PopoverContent className="w-52 p-2" align="start">
           <div className="space-y-1">
             <div
-              className="flex items-center gap-2 px-2 py-1.5 rounded hover-elevate cursor-pointer"
+              className="flex items-center gap-2 px-2 py-1.5 rounded-sm hover-elevate cursor-pointer"
               onClick={() => setSelectedStockGroups([])}
             >
               <Checkbox checked={selectedStockGroups.length === 0} className="h-4 w-4" />
@@ -234,7 +234,7 @@ export function SalesReportFilterControls({
             {stockGroups.map((g) => (
               <div
                 key={g.id}
-                className="flex items-center gap-2 px-2 py-1.5 rounded hover-elevate cursor-pointer"
+                className="flex items-center gap-2 px-2 py-1.5 rounded-sm hover-elevate cursor-pointer"
                 onClick={() =>
                   setSelectedStockGroups((prev) =>
                     prev.includes(String(g.id)) ? prev.filter((x) => x !== String(g.id)) : [...prev, String(g.id)]

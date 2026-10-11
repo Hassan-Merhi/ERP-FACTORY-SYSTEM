@@ -431,7 +431,7 @@ export default function FactoryShippingContainers() {
                     {colVis.status && (
                       <TableCell>
                         <button
-                          className="focus:outline-none"
+                          className="focus:outline-hidden"
                           title="Open order"
                           onClick={() => {
                             if (!r.customerOrderId) return;

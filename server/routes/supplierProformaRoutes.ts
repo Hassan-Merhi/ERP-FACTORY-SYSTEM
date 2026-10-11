@@ -4,13 +4,14 @@ import { logger } from "../lib/logger";
 import { logAudit } from "./_helpers";
 import { Express } from "express";
 import type { Request, Response, RequestHandler } from "express";
-import { db } from "../db";
+import { db, type DbTransaction } from "../db";
 import { eq, and, ne, sql } from "drizzle-orm";
 import ExcelJS from "exceljs";
 import { buildAliasMap, resolveBarcode } from "./helpers/proformaBarcodeHelpers";
 import { registerContainerLoadedItemsRoutes } from "./container-loaded-items";
 import { importSupplierProformaLines } from "./helpers/supplierProformaImport";
 import { supplierProformas, supplierProformaLines, suppliers } from "@shared/schema";
+import { parseMoneyInput, toMoney } from "../lib/money";
 
 /**
  * Parse a human-entered decimal value from Excel into a PostgreSQL-safe decimal string.
@@ -21,12 +22,17 @@ import { supplierProformas, supplierProformaLines, suppliers } from "@shared/sch
 function sanitizeDecimal(v: unknown): string {
   const raw = String(v ?? "").trim();
   // Strip leading/trailing currency symbols and whitespace
-  const stripped = raw.replace(/^[^0-9\-(]+/, "").replace(/[^0-9.]+$/, "");
+  const leading = raw.replace(/^[^0-9\-(]+/, "");
+  // Trailing currency text is trimmed with a scan, not an end-anchored regex,
+  // so a long non-numeric tail cannot make the match quadratic.
+  let end = leading.length;
+  while (end > 0 && !/[0-9.]/.test(leading[end - 1])) end -= 1;
+  const stripped = leading.slice(0, end);
   // Remove thousands commas: only valid when pattern is NNN,NNN,...
   const noCommas = stripped.replace(/,(?=\d{3}(?:[,.]|$))/g, "");
   // Must match: optional minus, digits, optional .digits — nothing else
   if (!/^-?\d+(\.\d+)?$/.test(noCommas)) return "0";
-  const n = parseFloat(noCommas);
+  const n = parseMoneyInput(noCommas)?.toNumber() ?? NaN;
   if (!isFinite(n)) return "0";
   return n.toFixed(6).replace(/\.?0+$/, "") || "0";
 }
@@ -43,16 +49,15 @@ async function batchInsertProformaLines(
     qty: number;
     weightPerBale: string;
     pricePerBale: string;
-  }[]
+  }[],
+  tx: DbTransaction
 ) {
   // Each row has 6 columns → 6 params; PostgreSQL limit is 65535.
   // 200 rows × 6 = 1200 params — well within limits.
   const CHUNK = 200;
-  await db.transaction(async (tx) => {
-    for (let i = 0; i < rows.length; i += CHUNK) {
-      await tx.insert(supplierProformaLines).values(rows.slice(i, i + CHUNK));
-    }
-  });
+  for (let i = 0; i < rows.length; i += CHUNK) {
+    await tx.insert(supplierProformaLines).values(rows.slice(i, i + CHUNK));
+  }
 }
 
 export function registerSupplierProformaRoutes(app: Express, requireAuth: RequestHandler) {
@@ -119,44 +124,51 @@ export function registerSupplierProformaRoutes(app: Express, requireAuth: Reques
       `);
       if (supplierCheck.rows.length === 0) return res.status(404).json({ message: "Supplier not found" });
 
-      const [proforma] = await db
-        .insert(supplierProformas)
-        .values({
-          companyId,
-          supplierId,
-          reference: reference || "Untitled",
-          notes: notes || null,
-        })
-        .returning();
-      if (lines && Array.isArray(lines) && lines.length > 0) {
-        // Resolve alias codes to primary stock-item codes so that proforma lines
-        // are always stored with the canonical code regardless of what code the
-        // supplier's packing-list used.
-        const { map: aliasMap } = await buildAliasMap(companyId);
-        const lineValues = lines.map((l) => ({
-          proformaId: proforma.id,
-          barcode: resolveBarcode(String(l.barcode || "").trim(), aliasMap),
-          itemName: String(l.itemName || "").trim(),
-          qty: parseInt(l.qty) || 0,
-          weightPerBale: sanitizeDecimal(l.weightPerBale),
-          pricePerBale: sanitizeDecimal(l.pricePerBale),
-        }));
-        await batchInsertProformaLines(lineValues);
-      }
+      // Resolve alias codes to primary stock-item codes so that proforma lines
+      // are always stored with the canonical code regardless of what code the
+      // supplier's packing-list used.
+      const aliasMap = lines && Array.isArray(lines) && lines.length > 0 ? (await buildAliasMap(companyId)).map : null;
+      // Phase 21 (B): the proforma, its lines and the create audit commit together.
+      const proforma = await db.transaction(async (tx) => {
+        const [created] = await tx
+          .insert(supplierProformas)
+          .values({
+            companyId,
+            supplierId,
+            reference: reference || "Untitled",
+            notes: notes || null,
+          })
+          .returning();
+        if (aliasMap && Array.isArray(lines)) {
+          const lineValues = lines.map((l) => ({
+            proformaId: created.id,
+            barcode: resolveBarcode(String(l.barcode || "").trim(), aliasMap),
+            itemName: String(l.itemName || "").trim(),
+            qty: parseInt(l.qty) || 0,
+            weightPerBale: sanitizeDecimal(l.weightPerBale),
+            pricePerBale: sanitizeDecimal(l.pricePerBale),
+          }));
+          await batchInsertProformaLines(lineValues, tx);
+        }
+        await logAudit(
+          {
+            userId: req.session.userId!,
+            username: req.session.username || "unknown",
+            companyId,
+            action: "create",
+            tableName: "supplier_proformas",
+            recordId: created.id,
+            recordIdentifier: created.reference || `Proforma#${created.id}`,
+            changes: { supplierId: { old: null, new: supplierId }, reference: { old: null, new: created.reference } },
+          },
+          tx
+        );
+        return created;
+      });
       const allLines = await db
         .select()
         .from(supplierProformaLines)
         .where(eq(supplierProformaLines.proformaId, proforma.id));
-      await logAudit({
-        userId: req.session.userId!,
-        username: req.session.username || "unknown",
-        companyId,
-        action: "create",
-        tableName: "supplier_proformas",
-        recordId: proforma.id,
-        recordIdentifier: proforma.reference || `Proforma#${proforma.id}`,
-        changes: { supplierId: { old: null, new: supplierId }, reference: { old: null, new: proforma.reference } },
-      });
       res.json({ ...proforma, lines: allLines });
     } catch (error: unknown) {
       res.status(500).json({ message: getErrorMessage(error) });
@@ -198,19 +210,25 @@ export function registerSupplierProformaRoutes(app: Express, requireAuth: Reques
         .from(supplierProformas)
         .where(and(eq(supplierProformas.id, proformaId), eq(supplierProformas.companyId, companyId)));
       if (!owned) return res.status(404).json({ message: "Proforma not found" });
-      await db.delete(supplierProformaLines).where(eq(supplierProformaLines.proformaId, proformaId));
-      await db
-        .delete(supplierProformas)
-        .where(and(eq(supplierProformas.id, proformaId), eq(supplierProformas.companyId, companyId)));
-      await logAudit({
-        userId: req.session.userId!,
-        username: req.session.username || "unknown",
-        companyId,
-        action: "delete",
-        tableName: "supplier_proformas",
-        recordId: proformaId,
-        recordIdentifier: `Proforma#${proformaId}`,
-        changes: { deleted: { old: false, new: true } },
+      // Phase 21 (B): the delete and its audit commit together.
+      await db.transaction(async (tx) => {
+        await tx.delete(supplierProformaLines).where(eq(supplierProformaLines.proformaId, proformaId));
+        await tx
+          .delete(supplierProformas)
+          .where(and(eq(supplierProformas.id, proformaId), eq(supplierProformas.companyId, companyId)));
+        await logAudit(
+          {
+            userId: req.session.userId!,
+            username: req.session.username || "unknown",
+            companyId,
+            action: "delete",
+            tableName: "supplier_proformas",
+            recordId: proformaId,
+            recordIdentifier: `Proforma#${proformaId}`,
+            changes: { deleted: { old: false, new: true } },
+          },
+          tx
+        );
       });
       res.json({ success: true });
     } catch (error: unknown) {
@@ -487,8 +505,8 @@ export function registerSupplierProformaRoutes(app: Express, requireAuth: Reques
         for (let i = 0; i < lines.length; i++) {
           const line = lines[i];
           const qty = Number(line.qty) || 0;
-          const wt = parseFloat(line.weightPerBale || "0");
-          const price = parseFloat(line.pricePerBale || "0");
+          const wt = toMoney(line.weightPerBale).toNumber();
+          const price = toMoney(line.pricePerBale).toNumber();
           const lineWt = qty * wt;
           const lineVal = qty * price;
           totQty += qty;

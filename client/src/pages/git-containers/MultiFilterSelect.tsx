@@ -31,9 +31,8 @@ export function MultiFilterSelect({
     onChange(selected.includes(val) ? selected.filter((v) => v !== val) : [...selected, val]);
   };
 
-  const visibleOptions = searchable && query.trim()
-    ? options.filter((o) => o.label.toLowerCase().includes(query.toLowerCase()))
-    : options;
+  const visibleOptions =
+    searchable && query.trim() ? options.filter((o) => o.label.toLowerCase().includes(query.toLowerCase())) : options;
 
   const triggerLabel =
     selected.length === 0
@@ -43,7 +42,11 @@ export function MultiFilterSelect({
         : `${selected.length} selected`;
 
   return (
-    <Popover onOpenChange={(open) => { if (!open) setQuery(""); }}>
+    <Popover
+      onOpenChange={(open) => {
+        if (!open) setQuery("");
+      }}
+    >
       <PopoverTrigger asChild>
         <Button
           variant="outline"
@@ -64,7 +67,7 @@ export function MultiFilterSelect({
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search..."
-              className="flex-1 text-xs bg-transparent outline-none placeholder:text-muted-foreground py-1"
+              className="flex-1 text-xs bg-transparent outline-hidden placeholder:text-muted-foreground py-1"
             />
             {query && (
               <button onClick={() => setQuery("")} className="text-muted-foreground hover:text-foreground">
@@ -81,7 +84,7 @@ export function MultiFilterSelect({
               <div key={opt.value}>
                 {opt.dividerBefore && <div className="border-t my-1" />}
                 <div
-                  className="flex items-center gap-2 px-2 py-1.5 rounded-sm cursor-pointer hover-elevate text-xs"
+                  className="flex items-center gap-2 px-2 py-1.5 rounded-xs cursor-pointer hover-elevate text-xs"
                   onClick={() => toggle(opt.value)}
                 >
                   <Checkbox

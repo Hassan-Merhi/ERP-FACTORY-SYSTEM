@@ -265,7 +265,7 @@ export default function FactoryWorkerAttendanceReport() {
                 setMode(m);
               }}
               data-testid={`mode-${m}`}
-              className={cn("h-7 px-3 text-xs rounded-sm", mode === m ? "bg-muted font-semibold" : "")}
+              className={cn("h-7 px-3 text-xs rounded-xs", mode === m ? "bg-muted font-semibold" : "")}
             >
               {m === "today" ? "Today" : m === "yesterday" ? "Yesterday" : m === "thisMonth" ? "This Month" : "Custom"}
             </Button>
@@ -307,7 +307,7 @@ export default function FactoryWorkerAttendanceReport() {
               value={customStart}
               onChange={(e) => setCustomStart(e.target.value)}
               data-testid="input-custom-start"
-              className="h-7 rounded-md border bg-background px-2 text-xs focus:outline-none focus:ring-1 focus:ring-ring"
+              className="h-7 rounded-md border bg-background px-2 text-xs focus:outline-hidden focus:ring-1 focus:ring-ring"
             />
             <span className="text-xs text-muted-foreground">–</span>
             <input
@@ -315,7 +315,7 @@ export default function FactoryWorkerAttendanceReport() {
               value={customEnd}
               onChange={(e) => setCustomEnd(e.target.value)}
               data-testid="input-custom-end"
-              className="h-7 rounded-md border bg-background px-2 text-xs focus:outline-none focus:ring-1 focus:ring-ring"
+              className="h-7 rounded-md border bg-background px-2 text-xs focus:outline-hidden focus:ring-1 focus:ring-ring"
             />
           </div>
         )}
@@ -330,7 +330,7 @@ export default function FactoryWorkerAttendanceReport() {
             size="sm"
             onClick={() => setFilter("all")}
             data-testid="filter-all"
-            className={cn("h-7 px-3 text-xs rounded-sm", filter === "all" ? "bg-muted font-semibold" : "")}
+            className={cn("h-7 px-3 text-xs rounded-xs", filter === "all" ? "bg-muted font-semibold" : "")}
           >
             All
             {data && (
@@ -344,7 +344,7 @@ export default function FactoryWorkerAttendanceReport() {
             size="sm"
             onClick={() => setFilter("present")}
             data-testid="filter-present"
-            className={cn("h-7 px-3 text-xs rounded-sm", filter === "present" ? "status-success font-semibold" : "")}
+            className={cn("h-7 px-3 text-xs rounded-xs", filter === "present" ? "status-success font-semibold" : "")}
           >
             No Absences
             {data && (
@@ -358,7 +358,7 @@ export default function FactoryWorkerAttendanceReport() {
             size="sm"
             onClick={() => setFilter("absent")}
             data-testid="filter-absent"
-            className={cn("h-7 px-3 text-xs rounded-sm", filter === "absent" ? "status-danger font-semibold" : "")}
+            className={cn("h-7 px-3 text-xs rounded-xs", filter === "absent" ? "status-danger font-semibold" : "")}
           >
             Has Absences
             {data && (
@@ -519,11 +519,11 @@ export default function FactoryWorkerAttendanceReport() {
             <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted/50 rounded-md px-3 py-2 print:hidden">
               <Pencil className="h-3.5 w-3.5 shrink-0" />
               Click a cell to cycle: P → A → L → H → Clear. Or press{" "}
-              <kbd className="mx-1 px-1 rounded border text-[11px]">P</kbd>{" "}
-              <kbd className="mx-1 px-1 rounded border text-[11px]">A</kbd>{" "}
-              <kbd className="mx-1 px-1 rounded border text-[11px]">L</kbd>{" "}
-              <kbd className="mx-1 px-1 rounded border text-[11px]">H</kbd> when focused.{" "}
-              <kbd className="mx-1 px-1 rounded border text-[11px]">Del</kbd> clears.
+              <kbd className="mx-1 px-1 rounded-sm border text-[11px]">P</kbd>{" "}
+              <kbd className="mx-1 px-1 rounded-sm border text-[11px]">A</kbd>{" "}
+              <kbd className="mx-1 px-1 rounded-sm border text-[11px]">L</kbd>{" "}
+              <kbd className="mx-1 px-1 rounded-sm border text-[11px]">H</kbd> when focused.{" "}
+              <kbd className="mx-1 px-1 rounded-sm border text-[11px]">Del</kbd> clears.
             </div>
           )}
 
@@ -717,13 +717,13 @@ export default function FactoryWorkerAttendanceReport() {
           {/* ── Legend ──────────────────────────────────────────────────────── */}
           <div className="flex items-center gap-4 text-xs text-muted-foreground print:hidden">
             <span className="flex items-center gap-1.5">
-              <span className="inline-flex items-center justify-center w-4 h-4 rounded-sm bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300 text-[11px] font-bold">
+              <span className="inline-flex items-center justify-center w-4 h-4 rounded-xs bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300 text-[11px] font-bold">
                 P
               </span>
               Present
             </span>
             <span className="flex items-center gap-1.5">
-              <span className="inline-flex items-center justify-center w-4 h-4 rounded-sm bg-red-100 dark:bg-red-900/40 text-red-600 dark:text-red-400 text-[11px] font-bold">
+              <span className="inline-flex items-center justify-center w-4 h-4 rounded-xs bg-red-100 dark:bg-red-900/40 text-red-600 dark:text-red-400 text-[11px] font-bold">
                 A
               </span>
               Absent

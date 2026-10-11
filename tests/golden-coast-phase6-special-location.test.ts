@@ -6,7 +6,7 @@
  * proves that the third posting shares the same durable transaction.
  */
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import { db, pool } from "../server/db";
 import * as schema from "../shared/schema";
 import { closeTestServer } from "./setup";
@@ -205,10 +205,15 @@ describe("Golden Coast Phase 6 special-location allocation", () => {
       expect(readiness.body.canPost).toBe(false);
       expect(readiness.body.blockers.join(" ")).toMatch(/hassan_savings|Hassan Savings/i);
 
-      await db
-        .update(schema.ledgerAccounts)
-        .set({ active: true, deletedAt: new Date() })
-        .where(eq(schema.ledgerAccounts.id, hassanSavingsAccountId));
+      // Recreates the legacy state (a deleted account that still carries a
+      // balance); the ledger integrity guard refuses it outside a reviewed repair.
+      await db.transaction(async (tx) => {
+        await tx.execute(sql`SELECT set_config('app.ledger_integrity_bypass', 'on', true)`);
+        await tx
+          .update(schema.ledgerAccounts)
+          .set({ active: true, deletedAt: new Date() })
+          .where(eq(schema.ledgerAccounts.id, hassanSavingsAccountId));
+      });
       readiness = await fixture.agent.get(readinessUrl);
       expect(readiness.body.canPost).toBe(false);
 

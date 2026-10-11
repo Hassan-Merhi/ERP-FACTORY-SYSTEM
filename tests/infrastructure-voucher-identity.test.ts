@@ -1,8 +1,10 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { and, eq } from "drizzle-orm";
+import { and, eq, like, or } from "drizzle-orm";
 
-import { db } from "../server/db";
-import { accountingPostingRequests, auditLog, voucherEntries, vouchers } from "../shared/schema";
+import { db, pool } from "../server/db";
+import { deleteAuditLogRowsForTests } from "./helpers/auditLogCleanup";
+import { retireVouchersTx } from "../server/services/accounting/voucherRetirement";
+import { accountingPostingRequests, voucherEntries, vouchers } from "../shared/schema";
 import {
   infrastructurePostingIdentity,
   insertInfrastructureVoucherTx,
@@ -56,12 +58,17 @@ async function clearPosting() {
   const key = ctx ? identity().idempotencyKey : "";
   if (!ctx) return;
 
-  await db
-    .delete(accountingPostingRequests)
-    .where(
-      and(eq(accountingPostingRequests.companyId, ctx.companyId), eq(accountingPostingRequests.idempotencyKey, key))
-    );
-  await db.delete(auditLog).where(and(eq(auditLog.companyId, ctx.companyId), eq(auditLog.recordIdentifier, key)));
+  await db.delete(accountingPostingRequests).where(
+    and(
+      eq(accountingPostingRequests.companyId, ctx.companyId),
+      // A retirement keeps the marker as `{key}#retired:{voucherId}` (wave 16 A).
+      or(
+        eq(accountingPostingRequests.idempotencyKey, key),
+        like(accountingPostingRequests.idempotencyKey, `${key}#retired:%`)
+      )
+    )
+  );
+  await deleteAuditLogRowsForTests(pool, "company_id = $1 AND record_identifier = $2", [ctx.companyId, key]);
 
   const rows = await db
     .select({ id: vouchers.id })
@@ -146,7 +153,10 @@ describe("infrastructure voucher identity", () => {
     });
   });
 
-  it("creates a fresh active voucher after the previous posting was reversed and soft-deleted", async () => {
+  // Wave 16 (A): a replay of a deleted voucher's request is refused (it used to
+  // drop the marker and post again); a deliberate re-post retires the old
+  // voucher first, which releases the marker, and is a new identity generation.
+  it("refuses a replay of a soft-deleted posting, and posts a fresh voucher after a retirement", async () => {
     const [beforeMarker] = await db
       .select()
       .from(accountingPostingRequests)
@@ -160,11 +170,12 @@ describe("infrastructure voucher identity", () => {
     expect(beforeMarker).toBeTruthy();
     const oldVoucherId = Number(beforeMarker.voucherId);
 
-    await db.transaction(async (tx) => {
-      await tx.delete(voucherEntries).where(eq(voucherEntries.voucherId, oldVoucherId));
-      await tx.update(vouchers).set({ deletedAt: new Date() }).where(eq(vouchers.id, oldVoucherId));
-    });
+    await db.update(vouchers).set({ deletedAt: new Date() }).where(eq(vouchers.id, oldVoucherId));
+    await expect(postInfrastructureVoucher()).rejects.toMatchObject({ code: "POSTING_SOURCE_VOUCHER_DELETED" });
 
+    await db.transaction((tx) =>
+      retireVouchersTx(tx, { companyId: ctx.companyId, voucherIds: [oldVoucherId], reason: "test-rebuild" })
+    );
     const reposted = await postInfrastructureVoucher();
     expect(reposted.replayed).toBe(false);
     expect(reposted.voucher.id).not.toBe(oldVoucherId);

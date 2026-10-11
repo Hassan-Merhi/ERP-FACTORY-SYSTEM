@@ -105,7 +105,7 @@ export function StockEntryScanner({
           value={scanInput}
           onChange={(e) => onScanInputChange(e.target.value)}
           onKeyDown={handleKeyDown}
-          className="h-12 rounded-xl border-2 pl-11 text-base shadow-sm transition-all focus-visible:ring-primary/20 sm:h-11"
+          className="h-12 rounded-xl border-2 pl-11 text-base shadow-xs transition-all focus-visible:ring-primary/20 sm:h-11"
           data-testid="input-scan-product"
         />
 
@@ -115,7 +115,7 @@ export function StockEntryScanner({
             className="mt-2 flex items-start gap-2 border-destructive/40 bg-destructive/5 text-destructive"
           >
             <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-            <span className="min-w-0 break-words">{scanError}</span>
+            <span className="min-w-0 wrap-break-word">{scanError}</span>
           </FactoryMobileStatus>
         )}
 
@@ -151,9 +151,9 @@ export function StockEntryScanner({
                     {p.articleCode || p.code || "STK"}
                   </span>
                   <span className="min-w-0">
-                    <span className="block break-words text-sm font-bold">{p.name}</span>
+                    <span className="block wrap-break-word text-sm font-bold">{p.name}</span>
                     {p.nameAr && (
-                      <span dir="rtl" className="block break-words text-xs text-muted-foreground">
+                      <span dir="rtl" className="block wrap-break-word text-xs text-muted-foreground">
                         {p.nameAr}
                       </span>
                     )}

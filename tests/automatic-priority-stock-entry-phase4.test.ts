@@ -100,8 +100,8 @@ beforeAll(async () => {
   );
   unmatchedProductId = other.rows[0].id;
 
-  redOrderId = await addLoading(1, "#dc2626", "10.00");
-  blueOrderId = await addLoading(2, "#2563eb", "12.00");
+  redOrderId = await addLoading(1, "#B22222", "10.00");
+  blueOrderId = await addLoading(2, "#6A5ACD", "12.00");
 }, 120000);
 
 afterAll(async () => {
@@ -169,7 +169,7 @@ describe("Phase 4: atomic new-stock priority routing", () => {
     }>;
     expect(assignments).toHaveLength(3);
     expect(assignments.map((a) => a.orderId)).toEqual([redOrderId, redOrderId, blueOrderId]);
-    expect(assignments.map((a) => a.color)).toEqual(["#dc2626", "#dc2626", "#2563eb"]);
+    expect(assignments.map((a) => a.color)).toEqual(["#B22222", "#B22222", "#6A5ACD"]);
     expect(assignments.map((a) => a.source)).toEqual(["stock-entry", "stock-entry", "stock-entry"]);
     expect(assignments.every((a) => !a.existing)).toBe(true);
 
@@ -203,7 +203,7 @@ describe("Phase 4: atomic new-stock priority routing", () => {
     expect(original.body.items[0]).toMatchObject({
       orderId: redOrderId,
       originalPriority: 1,
-      originalColor: "#dc2626",
+      originalColor: "#B22222",
       allocationSource: "stock-entry",
       active: true,
     });
@@ -260,7 +260,7 @@ describe("Phase 4: atomic new-stock priority routing", () => {
   }, 60000);
 
   it("serializes concurrent Stock Entry batches against the same remaining proforma capacity", async () => {
-    const thirdOrderId = await addLoading(1, "#16a34a", "9.00");
+    const thirdOrderId = await addLoading(1, "#7FFF00", "9.00");
     const [left, right] = await Promise.all([createStock(matchingProductId, 2), createStock(matchingProductId, 2)]);
     expect(left.status).toBe(200);
     expect(right.status).toBe(200);
@@ -302,7 +302,7 @@ describe("Phase 4: atomic new-stock priority routing", () => {
     expect(await countRows("factory_priority_auto_allocations")).toBe(oldAssignments);
     const archived = await agent.get(HISTORY).query({ orderId: redOrderId });
     expect(archived.status).toBe(200);
-    expect(archived.body.items.every((item: { originalColor: string }) => item.originalColor === "#dc2626")).toBe(true);
+    expect(archived.body.items.every((item: { originalColor: string }) => item.originalColor === "#B22222")).toBe(true);
   }, 60000);
 
   it("rolls back the complete Stock Entry if an item is invalid", async () => {

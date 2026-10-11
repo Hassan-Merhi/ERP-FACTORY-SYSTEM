@@ -347,7 +347,7 @@ export function VoucherEntriesTable({
                           </FormControl>
                           {!isEmpty && typeBadge && (
                             <span
-                              className={`lg:hidden inline-block text-[11px] font-medium px-1.5 py-0 rounded mt-0.5 ${typeBadge.cls}`}
+                              className={`lg:hidden inline-block text-[11px] font-medium px-1.5 py-0 rounded-sm mt-0.5 ${typeBadge.cls}`}
                             >
                               {typeBadge.label}
                             </span>
@@ -360,7 +360,7 @@ export function VoucherEntriesTable({
                   </td>
                   <td className="px-2 py-1.5 align-top pt-3 hidden lg:table-cell">
                     {!isEmpty && typeBadge && (
-                      <span className={`inline-block text-[11px] font-medium px-1.5 py-0 rounded ${typeBadge.cls}`}>
+                      <span className={`inline-block text-[11px] font-medium px-1.5 py-0 rounded-sm ${typeBadge.cls}`}>
                         {typeBadge.label}
                       </span>
                     )}
@@ -450,9 +450,9 @@ export function VoucherEntriesTable({
                     Add Row
                   </Button>
                   <p className="text-[11px] text-muted-foreground hidden xl:block">
-                    <kbd className="px-1 py-0.5 bg-muted rounded text-[11px]">Tab</kbd> next field
-                    <kbd className="px-1 py-0.5 bg-muted rounded text-[11px] ml-2">↵</kbd> new row
-                    <kbd className="px-1 py-0.5 bg-muted rounded text-[11px] ml-2">↑↓</kbd> move
+                    <kbd className="px-1 py-0.5 bg-muted rounded-sm text-[11px]">Tab</kbd> next field
+                    <kbd className="px-1 py-0.5 bg-muted rounded-sm text-[11px] ml-2">↵</kbd> new row
+                    <kbd className="px-1 py-0.5 bg-muted rounded-sm text-[11px] ml-2">↑↓</kbd> move
                   </p>
                   {hasAnyAmount && (
                     <div className="text-right xl:hidden">
@@ -490,7 +490,9 @@ export function VoucherEntriesTable({
                   )}
                 </div>
                 {hasAccount && typeBadge && (
-                  <span className={`inline-block text-[11px] font-medium px-1.5 py-0 rounded mt-0.5 ${typeBadge.cls}`}>
+                  <span
+                    className={`inline-block text-[11px] font-medium px-1.5 py-0 rounded-sm mt-0.5 ${typeBadge.cls}`}
+                  >
                     {typeBadge.label}
                   </span>
                 )}

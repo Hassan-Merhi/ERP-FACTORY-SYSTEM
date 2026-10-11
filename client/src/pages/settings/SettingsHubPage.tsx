@@ -270,7 +270,7 @@ export function SettingsHubPage({ onNavigate, currentUser, appMode }: SettingsHu
   return (
     <div className="flex-1 overflow-y-auto">
       {/* ── Hero ── */}
-      <div className="relative bg-gradient-to-br from-primary/10 via-primary/5 to-background border-b">
+      <div className="relative bg-linear-to-br from-primary/10 via-primary/5 to-background border-b">
         <div className="max-w-5xl mx-auto px-4 md:px-8 py-8 md:py-12">
           <div className="flex flex-col md:flex-row md:items-start gap-6">
             {/* Left: heading + search */}
@@ -299,14 +299,14 @@ export function SettingsHubPage({ onNavigate, currentUser, appMode }: SettingsHu
                   placeholder="Search settings — users, permissions, exports, POS, audit…"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  className="pl-10 h-11 rounded-xl bg-background/80 backdrop-blur-sm shadow-sm"
+                  className="pl-10 h-11 rounded-xl bg-background/80 backdrop-blur-xs shadow-xs"
                   data-testid="input-settings-search"
                 />
               </div>
             </div>
 
             {/* Right: stats card */}
-            <Card className="shrink-0 p-4 md:min-w-[200px] space-y-3 bg-background/70 backdrop-blur-sm shadow-sm">
+            <Card className="shrink-0 p-4 md:min-w-[200px] space-y-3 bg-background/70 backdrop-blur-xs shadow-xs">
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Overview</p>
               <div className="space-y-2">
                 <StatRow label="Visible areas" value={visibleCategories.length} />

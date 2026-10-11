@@ -42,7 +42,7 @@ export function BaleLogoPickerPopover({
             <img
               src={`/api/factory/customer-logos/${overrideLogoId}/image`}
               alt="Logo"
-              className="h-5 w-8 object-contain rounded"
+              className="h-5 w-8 object-contain rounded-sm"
             />
           ) : (
             <ImagePlus className="h-4 w-4 text-muted-foreground" />

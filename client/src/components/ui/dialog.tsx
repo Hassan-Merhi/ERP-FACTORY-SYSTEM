@@ -103,7 +103,7 @@ const DialogContent = React.forwardRef<
             data-slot="dialog-close"
             aria-label="Close dialog"
             className={cn(
-              "absolute right-2 top-2 flex min-h-10 min-w-10 items-center justify-center rounded-md opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none motion-reduce:transition-none sm:right-4 sm:top-4",
+              "absolute right-2 top-2 flex min-h-10 min-w-10 items-center justify-center rounded-md opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none motion-reduce:transition-none sm:right-4 sm:top-4",
               sheet && dialogFrameClasses.sheetClose
             )}
           >
@@ -149,7 +149,7 @@ const DialogFooter = ({ className, children, ...props }: React.HTMLAttributes<HT
     <div
       data-slot="dialog-footer"
       className={cn(
-        "flex flex-col-reverse gap-2 border-t pt-4 sm:flex-row sm:justify-end sm:border-t-0 sm:pt-0 [&>*]:min-h-11 [&>*]:w-full sm:[&>*]:w-auto",
+        "flex flex-col-reverse gap-2 border-t pt-4 sm:flex-row sm:justify-end sm:border-t-0 sm:pt-0 *:min-h-11 *:w-full sm:*:w-auto",
         sheet && dialogFrameClasses.sheetFooter,
         sheet && countActions(children) === 2 && dialogFrameClasses.sheetFooterPair,
         className
@@ -169,7 +169,7 @@ const DialogTitle = React.forwardRef<
   <DialogPrimitive.Title
     ref={ref}
     data-slot="dialog-title"
-    className={cn("break-words text-lg font-semibold leading-snug tracking-tight", className)}
+    className={cn("wrap-break-word text-lg font-semibold leading-snug tracking-tight", className)}
     {...props}
   />
 ));
@@ -182,7 +182,7 @@ const DialogDescription = React.forwardRef<
   <DialogPrimitive.Description
     ref={ref}
     data-slot="dialog-description"
-    className={cn("break-words text-sm leading-relaxed text-muted-foreground", className)}
+    className={cn("wrap-break-word text-sm leading-relaxed text-muted-foreground", className)}
     {...props}
   />
 ));

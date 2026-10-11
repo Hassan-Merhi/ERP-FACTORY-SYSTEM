@@ -136,7 +136,7 @@ export function StockTransferSidebars({ model }: { model: StockTransferFormModel
                         </div>
                         <div className="flex items-center">
                           <div
-                            className={`text-xs font-medium px-2 py-0.5 rounded ${stock === 0 ? "bg-destructive/10 text-destructive" : stock < 10 ? "bg-chart-3/10 text-chart-3" : "bg-chart-2/10 text-chart-2"}`}
+                            className={`text-xs font-medium px-2 py-0.5 rounded-sm ${stock === 0 ? "bg-destructive/10 text-destructive" : stock < 10 ? "bg-chart-3/10 text-chart-3" : "bg-chart-2/10 text-chart-2"}`}
                           >
                             {stock === 0 ? "Out" : `${stock.toFixed(0)}`}
                           </div>

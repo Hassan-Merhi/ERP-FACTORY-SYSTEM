@@ -7,42 +7,53 @@
  */
 
 /*
+ * Cascade layer: Tailwind v4 emits its utilities inside `@layer utilities`, and unlayered CSS beats
+ * any layered rule whatever its specificity. This file joins the same layer so, as before the
+ * upgrade, specificity and source order decide between these rules and utility classes. The
+ * layer order is restated first because a document orders layers by first mention, and this
+ * file may load before index.css.
+ */
+@layer theme, base, components, utilities;
+
+@layer utilities {
+  /*
  * A single-column phone grid (`grid-cols-1 sm:grid-cols-2`) whose full-width rows use a bare
  * `col-span-2` gains an implicit auto-sized second column, squeezing every field beside it.
  * Below `sm` those rows span the one explicit column instead.
  */
-@media (max-width: 639px) {
-  [data-factory-workspace] .grid-cols-1 > .col-span-2,
-  html[data-app-shell="factory"] [data-slot="dialog-content"] .grid-cols-1 > .col-span-2 {
-    grid-column: 1 / -1;
+  @media (max-width: 639px) {
+    [data-factory-workspace] .grid-cols-1 > .col-span-2,
+    html[data-app-shell="factory"] [data-slot="dialog-content"] .grid-cols-1 > .col-span-2 {
+      grid-column: 1 / -1;
+    }
   }
-}
 
-/*
+  /*
  * Popovers and dropdown menus never exceed the usable phone width, whatever fixed width
  * (`w-[320px]`, `w-96`) the page gave them for desktop.
  */
-@media (max-width: 639px) {
-  html[data-app-shell="factory"] [data-radix-popper-content-wrapper] > * {
-    max-width: calc(100vw - 1rem);
-  }
-}
-
-/* Workspace tab strips scroll sideways instead of wrapping into tiny two-line tabs. */
-@media (max-width: 639px), (hover: none) and (pointer: coarse) and (max-height: 500px) {
-  [data-factory-workspace] [role="tablist"][data-factory-scroll-tabs="true"] {
-    justify-content: flex-start;
-    overflow-x: auto;
-    overscroll-behavior-x: contain;
-    scroll-snap-type: x proximity;
-    scrollbar-width: thin;
-    -webkit-overflow-scrolling: touch;
+  @media (max-width: 639px) {
+    html[data-app-shell="factory"] [data-radix-popper-content-wrapper] > * {
+      max-width: calc(100vw - 1rem);
+    }
   }
 
-  [data-factory-workspace] [role="tablist"][data-factory-scroll-tabs="true"] > [role="tab"] {
-    flex: 0 0 auto;
-    min-height: 2.75rem;
-    white-space: nowrap;
-    scroll-snap-align: start;
+  /* Workspace tab strips scroll sideways instead of wrapping into tiny two-line tabs. */
+  @media (max-width: 639px), (hover: none) and (pointer: coarse) and (max-height: 500px) {
+    [data-factory-workspace] [role="tablist"][data-factory-scroll-tabs="true"] {
+      justify-content: flex-start;
+      overflow-x: auto;
+      overscroll-behavior-x: contain;
+      scroll-snap-type: x proximity;
+      scrollbar-width: thin;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    [data-factory-workspace] [role="tablist"][data-factory-scroll-tabs="true"] > [role="tab"] {
+      flex: 0 0 auto;
+      min-height: 2.75rem;
+      white-space: nowrap;
+      scroll-snap-align: start;
+    }
   }
 }

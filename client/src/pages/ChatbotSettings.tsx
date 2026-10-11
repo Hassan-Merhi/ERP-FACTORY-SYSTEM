@@ -359,7 +359,7 @@ export default function ChatbotSettings() {
                   <label className="text-xs font-medium text-muted-foreground">Repository URL</label>
                   <input
                     type="text"
-                    className="w-full h-9 rounded-md border border-border bg-background px-3 text-sm font-mono focus:outline-none focus:ring-1 focus:ring-ring"
+                    className="w-full h-9 rounded-md border border-border bg-background px-3 text-sm font-mono focus:outline-hidden focus:ring-1 focus:ring-ring"
                     placeholder={
                       githubSettings?.configured ? "Enter new URL to replace…" : "https://github.com/user/repo.git"
                     }
@@ -379,7 +379,7 @@ export default function ChatbotSettings() {
                   <div className="relative">
                     <input
                       type={showToken ? "text" : "password"}
-                      className="w-full h-9 rounded-md border border-border bg-background px-3 pr-9 text-sm font-mono focus:outline-none focus:ring-1 focus:ring-ring"
+                      className="w-full h-9 rounded-md border border-border bg-background px-3 pr-9 text-sm font-mono focus:outline-hidden focus:ring-1 focus:ring-ring"
                       placeholder={githubSettings?.hasToken ? "Enter new token to replace…" : "ghp_xxxxxxxxxxxx"}
                       value={githubToken}
                       onChange={(e) => setGithubToken(e.target.value)}
@@ -643,7 +643,7 @@ export default function ChatbotSettings() {
                           data-testid={`message-${msg.id}`}
                         >
                           {msg.role === "assistant" && (
-                            <div className="flex-shrink-0 h-7 w-7 rounded-full bg-primary flex items-center justify-center">
+                            <div className="shrink-0 h-7 w-7 rounded-full bg-primary flex items-center justify-center">
                               <Bot className="h-4 w-4 text-primary-foreground" />
                             </div>
                           )}
@@ -652,11 +652,11 @@ export default function ChatbotSettings() {
                               msg.role === "user" ? "bg-primary text-primary-foreground" : "bg-muted"
                             }`}
                           >
-                            <p className="whitespace-pre-wrap break-words">{msg.message}</p>
+                            <p className="whitespace-pre-wrap wrap-break-word">{msg.message}</p>
                             <p className="text-xs opacity-60 mt-1">{format(new Date(msg.createdAt), "h:mm a")}</p>
                           </div>
                           {msg.role === "user" && (
-                            <div className="flex-shrink-0 h-7 w-7 rounded-full bg-muted flex items-center justify-center">
+                            <div className="shrink-0 h-7 w-7 rounded-full bg-muted flex items-center justify-center">
                               <span className="text-xs font-medium">Me</span>
                             </div>
                           )}

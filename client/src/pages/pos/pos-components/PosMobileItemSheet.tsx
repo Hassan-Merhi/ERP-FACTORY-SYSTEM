@@ -24,7 +24,7 @@ interface PosMobileItemSheetProps {
 }
 
 const inputClassName =
-  "h-12 w-full min-w-0 rounded-lg border border-input bg-background px-3 text-base font-semibold tabular-nums outline-none focus:ring-2 focus:ring-ring";
+  "h-12 w-full min-w-0 rounded-lg border border-input bg-background px-3 text-base font-semibold tabular-nums outline-hidden focus:ring-2 focus:ring-ring";
 
 /**
  * Phone POS item sheet: tapping a search result opens this bottom sheet to set quantity and
@@ -43,7 +43,7 @@ export function PosMobileItemSheet({
     <Sheet open={item !== null} onOpenChange={onOpenChange}>
       <SheetContent
         side="bottom"
-        className="mx-auto flex max-h-[min(90dvh,40rem)] !flex-nowrap flex-col gap-0 rounded-t-2xl p-0 sm:max-w-lg"
+        className="mx-auto flex max-h-[min(90dvh,40rem)] flex-nowrap! flex-col gap-0 rounded-t-2xl p-0 sm:max-w-lg"
         data-testid="sheet-pos-mobile-item"
         // Portalled: the interface translator only localises marked portals.
         data-i18n-portal=""
@@ -106,7 +106,7 @@ function PosItemForm({
     <form onSubmit={submit} className="flex min-h-0 flex-1 flex-col" noValidate>
       <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain px-4 pb-4 pt-5">
         <div className="pe-10">
-          <SheetTitle className="break-words text-lg leading-snug">{item.name}</SheetTitle>
+          <SheetTitle className="wrap-break-word text-lg leading-snug">{item.name}</SheetTitle>
           <SheetDescription className="font-mono text-xs">{item.code}</SheetDescription>
         </div>
 

@@ -113,7 +113,7 @@ export default function BaleProductImages() {
     <div className="flex h-full min-h-0 min-w-0 flex-col md:flex-row" data-testid="bale-product-images-page">
       {/* ── Left: Product List ─────────────────────────────────── */}
       <div
-        className={`min-w-0 flex-shrink-0 flex-col md:w-72 md:border-r ${showList ? "flex border-b md:border-b-0" : "hidden md:flex"}`}
+        className={`min-w-0 shrink-0 flex-col md:w-72 md:border-r ${showList ? "flex border-b md:border-b-0" : "hidden md:flex"}`}
       >
         <div className="border-b p-3 sm:p-4">
           <h2 className="mb-3 text-lg font-semibold" data-testid="text-product-list-title">
@@ -181,7 +181,7 @@ export default function BaleProductImages() {
             <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between sm:gap-4">
               <div className="min-w-0">
                 <PageHeader title={selectedProduct.name} />
-                <p className="mt-1 break-words text-sm text-muted-foreground">
+                <p className="mt-1 wrap-break-word text-sm text-muted-foreground">
                   Article code: <span className="font-mono font-medium">{selectedProduct.articleCode}</span>
                 </p>
               </div>

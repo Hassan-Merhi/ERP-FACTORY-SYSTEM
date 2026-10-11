@@ -22,7 +22,7 @@ export function StockEntryHistoryEditableDateCell({
         autoFocus
         type="date"
         defaultValue={dateStr}
-        className="border rounded px-1 py-0.5 text-xs w-32"
+        className="border rounded-sm px-1 py-0.5 text-xs w-32"
         onBlur={(event) => {
           const value = event.target.value;
           if (value && value !== dateStr) onSave(value);

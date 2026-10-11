@@ -108,13 +108,13 @@ function RevisionItemsTable({ items, label }: { items: AuditItem[]; label?: stri
               } gap-2 border-t px-3 py-2.5 text-xs items-start`}
             >
               <div className="min-w-0">
-                <div className="font-medium break-words">{itemName}</div>
+                <div className="font-medium wrap-break-word">{itemName}</div>
                 {item.stockItemId !== undefined && (
                   <div className="text-[11px] text-muted-foreground">ID {String(item.stockItemId)}</div>
                 )}
               </div>
               <div className="min-w-0">
-                <div className="break-words">{sourceName}</div>
+                <div className="wrap-break-word">{sourceName}</div>
                 {item.sourceLocationId !== undefined && (
                   <div className="text-[11px] text-muted-foreground">ID {String(item.sourceLocationId)}</div>
                 )}
@@ -242,12 +242,14 @@ function StructuredValue({ field, value, depth = 0 }: { field: string; value: Au
   if (Array.isArray(value)) {
     if (value.length === 0) return <span className="text-muted-foreground">None</span>;
     if (value.every((item) => item === null || ["string", "number", "boolean"].includes(typeof item))) {
-      return <span className="break-words whitespace-pre-wrap">{value.map((item) => String(item)).join(", ")}</span>;
+      return (
+        <span className="wrap-break-word whitespace-pre-wrap">{value.map((item) => String(item)).join(", ")}</span>
+      );
     }
     return (
       <div className="space-y-2 min-w-0">
         {value.map((item, index) => (
-          <div key={index} className="rounded border bg-background/60 p-2 min-w-0">
+          <div key={index} className="rounded-sm border bg-background/60 p-2 min-w-0">
             <div className="text-[11px] font-medium text-muted-foreground mb-1">Item {index + 1}</div>
             <StructuredValue field={`${field}_${index}`} value={item} depth={depth + 1} />
           </div>
@@ -260,16 +262,16 @@ function StructuredValue({ field, value, depth = 0 }: { field: string; value: Au
     const entries = Object.entries(value);
     if (entries.length === 0) return <span className="text-muted-foreground">—</span>;
     return (
-      <div className="rounded border bg-background/60 divide-y min-w-0">
+      <div className="rounded-sm border bg-background/60 divide-y min-w-0">
         {entries.map(([nestedField, nestedValue]) => (
           <div
             key={nestedField}
             className="grid grid-cols-[minmax(100px,150px)_minmax(0,1fr)] gap-3 px-2.5 py-2 text-xs min-w-0 max-sm:grid-cols-1 max-sm:gap-1"
           >
-            <span className="text-muted-foreground break-words">
+            <span className="text-muted-foreground wrap-break-word">
               {BUSINESS_FIELD_LABELS[nestedField] || fieldLabel(nestedField)}
             </span>
-            <div className="min-w-0 break-words whitespace-pre-wrap">
+            <div className="min-w-0 wrap-break-word whitespace-pre-wrap">
               <StructuredValue field={nestedField} value={nestedValue} depth={depth + 1} />
             </div>
           </div>
@@ -278,7 +280,7 @@ function StructuredValue({ field, value, depth = 0 }: { field: string; value: Au
     );
   }
 
-  return <span className="break-words whitespace-pre-wrap">{fmtBusinessValue(field, value)}</span>;
+  return <span className="wrap-break-word whitespace-pre-wrap">{fmtBusinessValue(field, value)}</span>;
 }
 
 function EntryTable({ entries, label }: { entries: AuditEntry[]; label?: string }) {
@@ -299,7 +301,7 @@ function EntryTable({ entries, label }: { entries: AuditEntry[]; label?: string 
             // Phones stack each entry: account, then Debit/Credit side by side, then narration.
             className="grid grid-cols-[minmax(130px,1fr)_90px_90px_minmax(120px,1fr)] gap-2 px-3 py-2 border-t text-xs items-start max-sm:grid-cols-2 max-sm:gap-1"
           >
-            <span className="font-medium break-words max-sm:col-span-2">
+            <span className="font-medium wrap-break-word max-sm:col-span-2">
               {String(entry.account ?? "Unknown account")}
             </span>
             <span className="text-right tabular-nums max-sm:text-start">
@@ -310,7 +312,7 @@ function EntryTable({ entries, label }: { entries: AuditEntry[]; label?: string 
               <span className="text-muted-foreground sm:hidden">Credit </span>
               {fmtEntryAmount(entry.credit)}
             </span>
-            <span className="text-muted-foreground break-words whitespace-pre-wrap max-sm:col-span-2">
+            <span className="text-muted-foreground wrap-break-word whitespace-pre-wrap max-sm:col-span-2">
               {String(entry.narration ?? "—")}
             </span>
           </div>
@@ -395,7 +397,7 @@ export function AuditLogDialog({ log, onClose }: { log: Record<string, unknown>;
             {isAdded ? "+" : isRemoved ? "−" : "~"}
           </span>
           <span
-            className={`break-words whitespace-pre-wrap min-w-0 ${
+            className={`wrap-break-word whitespace-pre-wrap min-w-0 ${
               isAdded ? "text-green-700 dark:text-green-300" : isRemoved ? "text-destructive/90" : ""
             }`}
           >
@@ -416,7 +418,7 @@ export function AuditLogDialog({ log, onClose }: { log: Record<string, unknown>;
         key={field}
         className="grid grid-cols-[minmax(120px,180px)_minmax(0,1fr)] gap-3 text-sm py-2.5 items-start min-w-0 max-sm:grid-cols-1 max-sm:gap-1"
       >
-        <span className="text-muted-foreground break-words">{label}</span>
+        <span className="text-muted-foreground wrap-break-word">{label}</span>
         <div className="min-w-0">
           {hasActualChange ? (
             <div className="space-y-2 min-w-0">
@@ -448,7 +450,9 @@ export function AuditLogDialog({ log, onClose }: { log: Record<string, unknown>;
     itemSnapshotsChanged ||
     readableFields.some(([, pair]) => {
       const normalized = isChangePair(pair) ? pair : { new: pair };
-      return normalized.old !== undefined && normalized.new !== undefined && !valuesEqual(normalized.old, normalized.new);
+      return (
+        normalized.old !== undefined && normalized.new !== undefined && !valuesEqual(normalized.old, normalized.new)
+      );
     });
 
   return (
@@ -460,18 +464,18 @@ export function AuditLogDialog({ log, onClose }: { log: Record<string, unknown>;
     >
       <DialogContent className="max-w-3xl max-h-[88vh] overflow-y-auto overflow-x-hidden">
         <DialogHeader>
-          <DialogTitle className="text-base font-medium leading-snug pr-6 break-words">
+          <DialogTitle className="text-base font-medium leading-snug pr-6 wrap-break-word">
             {getHeaderSentence(log)}
           </DialogTitle>
         </DialogHeader>
 
         <div className="grid grid-cols-[minmax(110px,160px)_minmax(0,1fr)] gap-x-6 gap-y-2 text-sm rounded-md border p-3 bg-muted/30 min-w-0 max-sm:grid-cols-[minmax(0,6.5rem)_minmax(0,1fr)] max-sm:gap-x-3">
           <span className="text-muted-foreground">User</span>
-          <span className="font-medium break-words">{String(log.username ?? "Unknown")}</span>
+          <span className="font-medium wrap-break-word">{String(log.username ?? "Unknown")}</span>
           <span className="text-muted-foreground">Date & Time</span>
           <span>{fmtDate(String(log.createdAt ?? ""))}</span>
           <span className="text-muted-foreground">Company</span>
-          <span className="font-medium break-words">
+          <span className="font-medium wrap-break-word">
             {String(log.companyName ?? "") || (log.companyId ? `Company #${String(log.companyId)}` : "Unknown company")}
             {log.companyCode ? ` (${String(log.companyCode)})` : ""}
           </span>
@@ -479,15 +483,15 @@ export function AuditLogDialog({ log, onClose }: { log: Record<string, unknown>;
           <div className="min-w-0">
             <Badge
               variant={actionBadgeVariant(String(log.action ?? ""))}
-              className="text-xs max-w-full whitespace-normal break-words leading-snug"
+              className="text-xs max-w-full whitespace-normal wrap-break-word leading-snug"
             >
               {actionLabel(String(log.action ?? ""))}
             </Badge>
           </div>
           <span className="text-muted-foreground">Module</span>
-          <span className="break-words">{tableShortName(String(log.tableName ?? ""))}</span>
+          <span className="wrap-break-word">{tableShortName(String(log.tableName ?? ""))}</span>
           <span className="text-muted-foreground">Record</span>
-          <span className="break-words whitespace-pre-wrap">{getRecordLabel(log)}</span>
+          <span className="wrap-break-word whitespace-pre-wrap">{getRecordLabel(log)}</span>
           {voucherType && (
             <>
               <span className="text-muted-foreground">Type</span>
@@ -508,9 +512,7 @@ export function AuditLogDialog({ log, onClose }: { log: Record<string, unknown>;
                     ? "What changed"
                     : "Activity details"}
           </p>
-          {renderedRows.length > 0 && (
-            <div className="rounded-md border px-3 divide-y min-w-0">{renderedRows}</div>
-          )}
+          {renderedRows.length > 0 && <div className="rounded-md border px-3 divide-y min-w-0">{renderedRows}</div>}
           {hasItems && (
             <div className="space-y-2 pt-1">
               {itemSnapshotsChanged ? (
@@ -540,15 +542,15 @@ export function AuditLogDialog({ log, onClose }: { log: Record<string, unknown>;
                     <p className="text-xs font-medium text-muted-foreground">Accounts changed</p>
                     {entryDiff.changed.map(({ account, old, new: next }) => (
                       <div key={account} className="rounded-md border p-3 space-y-2 text-xs min-w-0">
-                        <p className="font-semibold break-words">{account}</p>
+                        <p className="font-semibold wrap-break-word">{account}</p>
                         <div className="grid grid-cols-[60px_1fr] gap-2 min-w-0">
                           <span className="text-muted-foreground">Before</span>
-                          <span className="break-words">
+                          <span className="wrap-break-word">
                             Debit {fmtEntryAmount(old.debit)}, Credit {fmtEntryAmount(old.credit)}
                             {old.narration ? ` — ${old.narration}` : ""}
                           </span>
                           <span className="text-muted-foreground">After</span>
-                          <span className="font-medium break-words">
+                          <span className="font-medium wrap-break-word">
                             Debit {fmtEntryAmount(next.debit)}, Credit {fmtEntryAmount(next.credit)}
                             {next.narration ? ` — ${next.narration}` : ""}
                           </span>

@@ -24,6 +24,7 @@ import {
 } from "lucide-react";
 import { StatementResponse, SupplierWithBalance, type StatementDisplayRow } from "./factorySupplierTypes";
 import { LinkedSupplierExposure } from "./LinkedSupplierExposure";
+import { LedgerBalancePanel } from "./LedgerBalancePanel";
 import type { useFactorySuppliersModel } from "./useFactorySuppliersModel";
 
 type SuppliersModel = ReturnType<typeof useFactorySuppliersModel>;
@@ -291,6 +292,14 @@ export function SupplierStatement({
         )}
       </div>
 
+      {statementData.ledgerView && (
+        <LedgerBalancePanel
+          view={statementData.ledgerView}
+          operationalTotal={statementData.summary.operationalNetPayable}
+          formatNum={formatNum}
+        />
+      )}
+
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
         {!isBrokerStatement && (
           <>
@@ -334,31 +343,31 @@ export function SupplierStatement({
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-sm">
                 {statementData.supplier.contactPerson && (
                   <div className="flex items-center gap-2">
-                    <Users className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                    <Users className="h-4 w-4 text-muted-foreground shrink-0" />
                     <span>{statementData.supplier.contactPerson}</span>
                   </div>
                 )}
                 {statementData.supplier.phone && (
                   <div className="flex items-center gap-2">
-                    <Phone className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                    <Phone className="h-4 w-4 text-muted-foreground shrink-0" />
                     <span>{statementData.supplier.phone}</span>
                   </div>
                 )}
                 {statementData.supplier.email && (
                   <div className="flex items-center gap-2">
-                    <Mail className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                    <Mail className="h-4 w-4 text-muted-foreground shrink-0" />
                     <span>{statementData.supplier.email}</span>
                   </div>
                 )}
                 {statementData.supplier.address && (
                   <div className="flex items-center gap-2">
-                    <MapPin className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                    <MapPin className="h-4 w-4 text-muted-foreground shrink-0" />
                     <span>{statementData.supplier.address}</span>
                   </div>
                 )}
                 {statementData.supplier.notes && (
                   <div className="flex items-start gap-2 sm:col-span-2">
-                    <FileText className="h-4 w-4 text-muted-foreground flex-shrink-0 mt-0.5" />
+                    <FileText className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
                     <span className="text-muted-foreground">{statementData.supplier.notes}</span>
                   </div>
                 )}

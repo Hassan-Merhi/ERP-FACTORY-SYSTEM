@@ -76,7 +76,7 @@ function SectionHeading({
 function SystemToolCard({ card }: { card: ToolCard }) {
   return (
     <div
-      className="group flex min-h-[218px] flex-col overflow-hidden rounded-2xl border border-border/70 bg-card/80 p-5 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-md sm:p-6"
+      className="group flex min-h-[218px] flex-col overflow-hidden rounded-2xl border border-border/70 bg-card/80 p-5 shadow-xs transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-md sm:p-6"
       data-testid={card.testId}
     >
       <div className="flex items-start justify-between gap-4">
@@ -93,7 +93,7 @@ function SystemToolCard({ card }: { card: ToolCard }) {
 
       <Button
         variant="outline"
-        className="mt-5 h-10 w-full justify-between border-border/70 bg-background/50 transition-colors group-hover:border-primary/30 group-hover:bg-primary/[0.03]"
+        className="mt-5 h-10 w-full justify-between border-border/70 bg-background/50 transition-colors group-hover:border-primary/30 group-hover:bg-primary/3"
         onClick={card.onAction}
         data-testid={`button-action-${card.testId}`}
       >
@@ -197,12 +197,12 @@ export function SystemToolsTab({ appMode, currentUser, selectedCompany, companie
 
   return (
     <div className="space-y-8">
-      <header className="relative overflow-hidden rounded-2xl border border-primary/15 bg-gradient-to-br from-card via-card to-primary/10 p-5 shadow-sm sm:p-6">
+      <header className="relative overflow-hidden rounded-2xl border border-primary/15 bg-linear-to-br from-card via-card to-primary/10 p-5 shadow-xs sm:p-6">
         <div className="pointer-events-none absolute -right-16 -top-20 h-48 w-48 rounded-full bg-primary/10 blur-3xl" />
         <div className="relative flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
           <div className="space-y-4">
             <div className="flex flex-wrap items-center gap-2">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-sm">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-xs">
                 <Wrench className="h-5 w-5" />
               </div>
               <Badge variant="secondary" className="rounded-full px-3 py-1 text-xs">
@@ -239,7 +239,7 @@ export function SystemToolsTab({ appMode, currentUser, selectedCompany, companie
         </div>
       </header>
 
-      <div className="flex items-start gap-3 rounded-xl border border-amber-500/20 bg-amber-500/[0.04] px-4 py-3 text-sm text-muted-foreground">
+      <div className="flex items-start gap-3 rounded-xl border border-amber-500/20 bg-amber-500/4 px-4 py-3 text-sm text-muted-foreground">
         <Info className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
         <span>
           These tools can affect company records or financial views. Review the impact before confirming changes.
@@ -268,7 +268,7 @@ export function SystemToolsTab({ appMode, currentUser, selectedCompany, companie
             title="Global settings"
             description="Keep cross-company reporting preferences in one place."
           />
-          <Card className="overflow-hidden border-border/70 bg-card/80 shadow-sm">
+          <Card className="overflow-hidden border-border/70 bg-card/80 shadow-xs">
             <CardContent className="flex flex-col gap-5 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
               <div className="flex items-start gap-3">
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
@@ -314,7 +314,7 @@ export function SystemToolsTab({ appMode, currentUser, selectedCompany, companie
             description="High-impact maintenance actions are kept separate from everyday diagnostics."
           />
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            <Card className="group overflow-hidden border-destructive/20 bg-card/80 shadow-sm transition-all hover:-translate-y-0.5 hover:border-destructive/40 hover:shadow-md">
+            <Card className="group overflow-hidden border-destructive/20 bg-card/80 shadow-xs transition-all hover:-translate-y-0.5 hover:border-destructive/40 hover:shadow-md">
               <CardContent className="flex h-full flex-col p-5 sm:p-6">
                 <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-destructive/10 text-destructive">
                   <Trash2 className="h-5 w-5" />
@@ -336,7 +336,7 @@ export function SystemToolsTab({ appMode, currentUser, selectedCompany, companie
               </CardContent>
             </Card>
 
-            <Card className="group overflow-hidden border-border/70 bg-card/80 shadow-sm transition-all hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-md">
+            <Card className="group overflow-hidden border-border/70 bg-card/80 shadow-xs transition-all hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-md">
               <CardContent className="flex h-full flex-col p-5 sm:p-6">
                 <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
                   <Eraser className="h-5 w-5" />

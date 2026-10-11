@@ -25,7 +25,7 @@ export function CustomerStatementExports({
   };
 
   return (
-    <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:flex-shrink-0 sm:items-center">
+    <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:shrink-0 sm:items-center">
       <Button
         variant="outline"
         size="sm"

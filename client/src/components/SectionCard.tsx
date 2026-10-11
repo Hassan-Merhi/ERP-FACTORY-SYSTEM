@@ -34,7 +34,7 @@ export function SectionCard({
   "data-testid": testId,
 }: SectionCardProps) {
   return (
-    <Card className={cn("flex flex-col shadow-sm", className)} data-testid={testId}>
+    <Card className={cn("flex flex-col shadow-xs", className)} data-testid={testId}>
       {(title || description || actions) && (
         <CardHeader className="flex flex-row items-start justify-between gap-3 space-y-0 pb-3">
           <div className="flex items-start gap-2 min-w-0 flex-1">

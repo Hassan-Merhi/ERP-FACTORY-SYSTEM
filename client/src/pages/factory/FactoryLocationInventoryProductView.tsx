@@ -267,7 +267,7 @@ export function FactoryLocationInventoryProductView({ inventory }: { inventory: 
                   className={`w-7 h-3.5 rounded-full relative transition-colors ${proformaAutoSave ? "bg-green-500" : "bg-muted-foreground/30"}`}
                 >
                   <span
-                    className={`absolute top-0.5 w-2.5 h-2.5 rounded-full bg-white shadow transition-transform ${proformaAutoSave ? "translate-x-3.5" : "translate-x-0.5"}`}
+                    className={`absolute top-0.5 w-2.5 h-2.5 rounded-full bg-white shadow-sm transition-transform ${proformaAutoSave ? "translate-x-3.5" : "translate-x-0.5"}`}
                   />
                 </span>
               </button>
@@ -351,7 +351,7 @@ export function FactoryLocationInventoryProductView({ inventory }: { inventory: 
               <PopoverContent className="w-60 p-1" align="start">
                 <div className="max-h-64 overflow-y-auto">
                   <div
-                    className="flex items-center gap-2 px-2 py-1.5 rounded-sm cursor-pointer hover-elevate text-xs"
+                    className="flex items-center gap-2 px-2 py-1.5 rounded-xs cursor-pointer hover-elevate text-xs"
                     onClick={() => setCategoryFilter([])}
                     data-testid="badge-category-all"
                   >
@@ -366,7 +366,7 @@ export function FactoryLocationInventoryProductView({ inventory }: { inventory: 
                   {allCategoryNames.map((name) => (
                     <div
                       key={name}
-                      className="flex items-center gap-2 px-2 py-1.5 rounded-sm cursor-pointer hover-elevate text-xs"
+                      className="flex items-center gap-2 px-2 py-1.5 rounded-xs cursor-pointer hover-elevate text-xs"
                       onClick={() =>
                         setCategoryFilter((prev) =>
                           prev.includes(name) ? prev.filter((c) => c !== name) : [...prev, name]

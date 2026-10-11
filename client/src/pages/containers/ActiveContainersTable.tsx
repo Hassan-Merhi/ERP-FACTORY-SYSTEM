@@ -89,7 +89,7 @@ export function ActiveContainersTable({
             data-testid={`row-container-${container.id}`}
           >
             <div className="flex w-full min-w-0 items-start gap-3 sm:flex-1 sm:items-center">
-              <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
+              <div className="shrink-0 w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
                 <Package className="h-5 w-5 text-primary" />
               </div>
               <div className="flex-1 min-w-0">
@@ -151,12 +151,12 @@ export function ActiveContainersTable({
                     {container.status}
                   </Badge>
                 </div>
-                <p className="text-xs text-muted-foreground mt-0.5 break-words">
+                <p className="text-xs text-muted-foreground mt-0.5 wrap-break-word">
                   {getSupplierName(container.supplierId)}
                 </p>
               </div>
             </div>
-            <div className="flex w-full flex-wrap items-center justify-between gap-2 sm:w-auto sm:flex-shrink-0 sm:justify-end sm:gap-4">
+            <div className="flex w-full flex-wrap items-center justify-between gap-2 sm:w-auto sm:shrink-0 sm:justify-end sm:gap-4">
               <div className="text-left sm:text-right">
                 <p className="text-xs text-muted-foreground">Import date</p>
                 <p className="text-sm font-mono">{formatDisplayDate(container.importDate)}</p>

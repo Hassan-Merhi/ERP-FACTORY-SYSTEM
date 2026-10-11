@@ -54,8 +54,8 @@ export function EventTimelineSheet({
                   <div key={i} className="flex gap-3 items-start">
                     <div className="h-4 w-4 rounded-full bg-muted animate-pulse shrink-0 mt-0.5" />
                     <div className="flex-1 space-y-1.5">
-                      <div className="h-3 bg-muted rounded w-3/4 animate-pulse" />
-                      <div className="h-3 bg-muted rounded w-1/2 animate-pulse" />
+                      <div className="h-3 bg-muted rounded-sm w-3/4 animate-pulse" />
+                      <div className="h-3 bg-muted rounded-sm w-1/2 animate-pulse" />
                     </div>
                   </div>
                 ))}

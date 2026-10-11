@@ -15,7 +15,6 @@ import { requireAuth } from "../../../../auth";
 import { writeDaybookEntry, getOrCreateLedgerAccount } from "../../_helpers";
 import {
   factorySuppliers,
-  voucherEntries,
   vouchers,
   factorySupplierPayments,
   insertFactorySupplierPaymentSchema,
@@ -32,6 +31,9 @@ import {
   financialOperationFingerprint,
   withDurableFinancialOperation,
 } from "../../../../services/accounting/durableFinancialOperation";
+import { postFactoryVoucherTx } from "../../../../services/factory/factoryVoucherPosting";
+import { FactoryFxRateRequiredError, factoryDocumentRate } from "../../../../services/factory/factoryDocumentFxRate";
+import { retireVouchersTx, sessionRetirementActor } from "../../../../services/accounting/voucherRetirement";
 
 export function registerFactorySupplierPaymentRoutes(app: Express) {
   app.get("/api/factory/supplier-payments", requireAuth, async (req: Request, res: Response) => {
@@ -102,6 +104,13 @@ export function registerFactorySupplierPaymentRoutes(app: Express) {
         if (!ownAccount) return res.status(404).json({ message: "Payment account not found" });
       }
 
+      // Wave 17 (D): a non-USD payment needs a confirmed factory rate on or
+      // before its date (409 otherwise); it is posted normalized at its own
+      // entered rate. It used to post the legacy shape when the rate was 1.
+      const postingRate = await factoryDocumentRate(db, companyId, payCurrency, String(parsed.date).slice(0, 10), {
+        rate: parsed.fxRateToUsd,
+      });
+
       const operationKey = resolveFinancialOperationKey(req);
       const operation = await withDurableFinancialOperation(
         {
@@ -121,44 +130,38 @@ export function registerFactorySupplierPaymentRoutes(app: Express) {
           // Double-entry Payment voucher: DR Supplier Payable / CR Bank or Cash
           // amount is stored at four places; the voucher takes it at cents, half up.
           const payAmtStr = toMoney(payment.amount).toFixed(2);
-          const payVoucherNum = `FACTORY-PAY-${payment.id}-${Date.now()}`;
-
-          const [payVoucher] = await tx
-            .insert(vouchers)
-            .values({
-              companyId,
-              voucherType: "Payment",
-              voucherNumber: payVoucherNum,
-              voucherDate: payment.date,
-              description: `Supplier payment – see factory payment #${payment.id}`,
-              totalAmount: payAmtStr,
-              currency: payment.currencyCode || "USD",
-              exchangeRate: toMoney((payment.fxRateToUsd as string) || "1").toString(),
-              sourceModule: "FACTORY",
-              effectiveDate: (req.body.effectiveDate as string) || null,
-            })
-            .returning();
-
-          // DR: Factory Supplier (debit reduces the liability we owe them)
-          await tx.insert(voucherEntries).values({
-            voucherId: payVoucher.id,
-            factorySupplierId: payment.supplierId,
-            debitAmount: payAmtStr,
-            creditAmount: "0",
-            narration: `Payment to supplier – factory payment #${payment.id}`,
-          });
-
           // CR: Bank/Cash ledger account (or auto-created "Factory Cash Payments" if not specified)
           const crAccountId = payment.paidFromAccountId
             ? payment.paidFromAccountId
             : await getOrCreateLedgerAccount(companyId, "FACTORY_CASH_PAYMENTS", "Factory Cash Payments", "ASSET");
-
-          await tx.insert(voucherEntries).values({
-            voucherId: payVoucher.id,
-            ledgerAccountId: crAccountId,
-            debitAmount: "0",
-            creditAmount: payAmtStr,
-            narration: `Bank/cash outflow – factory payment #${payment.id}`,
+          // Phase 22 (C): through the engine with the payment's posting identity;
+          // the FACTORY-PAY-{payment}- number is read as identity (supplier
+          // statements and balances, the delete below), so it keeps the prefix with
+          // the posting generation (was Date.now()). Both legs normalized at the
+          // payment's rate (wave 6, wave 17 D).
+          await postFactoryVoucherTx(tx, {
+            companyId,
+            voucherType: "Payment",
+            voucherNumber: (generation) => `FACTORY-PAY-${payment.id}-${generation}`,
+            voucherDate: payment.date,
+            effectiveDate: (req.body.effectiveDate as string) || null,
+            description: `Supplier payment – see factory payment #${payment.id}`,
+            currency: payment.currencyCode || "USD",
+            fxRateToUsd: toMoney(postingRate.rate).toString(),
+            source: { sourceType: "factory-supplier-payment", sourceId: payment.id, phase: "voucher" },
+            lines: [
+              // DR: Factory Supplier (debit reduces the liability we owe them)
+              {
+                factorySupplierId: payment.supplierId,
+                debit: payAmtStr,
+                narration: `Payment to supplier – factory payment #${payment.id}`,
+              },
+              {
+                ledgerAccountId: crAccountId,
+                credit: payAmtStr,
+                narration: `Bank/cash outflow – factory payment #${payment.id}`,
+              },
+            ],
           });
 
           const [spSupplier] = await tx
@@ -182,6 +185,7 @@ export function registerFactorySupplierPaymentRoutes(app: Express) {
       );
       res.json(operation.value);
     } catch (error: unknown) {
+      if (error instanceof FactoryFxRateRequiredError) return res.status(409).json(error.body);
       logger.error("Error creating supplier payment:", { error: error });
       res.status(financialOperationErrorStatus(error) === 500 ? 400 : financialOperationErrorStatus(error)).json({
         message: getErrorMessage(error),
@@ -215,8 +219,13 @@ export function registerFactorySupplierPaymentRoutes(app: Express) {
           .where(and(eq(vouchers.companyId, companyId), sql`${vouchers.voucherNumber} LIKE ${payVoucherPattern}`));
         if (payVouchers.length > 0) {
           const vIds = payVouchers.map((v) => v.id);
-          await tx.delete(voucherEntries).where(inArray(voucherEntries.voucherId, vIds));
-          await tx.delete(vouchers).where(inArray(vouchers.id, vIds));
+          // Wave 16 (A): retired (soft delete with lines, audited here), not hard-deleted.
+          await retireVouchersTx(tx, {
+            companyId,
+            voucherIds: vIds,
+            reason: "factory-supplier-payment-delete",
+            actor: sessionRetirementActor(req),
+          });
         }
         // Remove the original SUPPLIER_PAYMENT daybook entry (including legacy rows
         // written before referenceTable was populated).

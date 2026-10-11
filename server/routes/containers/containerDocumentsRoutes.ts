@@ -6,17 +6,8 @@ import type { Express } from "express";
 import { db } from "../../db";
 import { storage } from "../../storage";
 import { requireAuth, requireNonPOS } from "../../auth";
-import {
-  inventory,
-  stockItems,
-  containerOffloads,
-  containerOffloadItems,
-  poLineItems,
-  vouchers,
-  voucherEntries,
-  salesItems,
-} from "@shared/schema";
-import { eq, and, inArray } from "drizzle-orm";
+import { stockItems, containerOffloads, containerOffloadItems, poLineItems } from "@shared/schema";
+import { eq, inArray } from "drizzle-orm";
 import { createWorkbook, aoaToSheet, writeWorkbook } from "../../excelHelper";
 
 export function registerContainerDocumentsRoutes(app: Express) {
@@ -29,14 +20,17 @@ export function registerContainerDocumentsRoutes(app: Express) {
       const containerId = parseId(req.params.id);
 
       if (containerId === null) return res.status(400).json({ message: "Invalid id" });
-       const container = await storage.getContainerByIdForCompany(containerId, req.session.currentCompanyId);
+      const container = await storage.getContainerByIdForCompany(containerId, req.session.currentCompanyId);
 
       if (!container) {
         return res.status(404).json({ message: "Container not found" });
       }
 
       const supplier = await storage.getSupplierById(container.supplierId);
-       const purchaseOrders = await storage.getPurchaseOrdersByContainerForCompany(containerId, req.session.currentCompanyId);
+      const purchaseOrders = await storage.getPurchaseOrdersByContainerForCompany(
+        containerId,
+        req.session.currentCompanyId
+      );
 
       // Batch-fetch all PO line items and offload items in parallel
       const poIds = purchaseOrders.map((po) => po.id);
@@ -175,10 +169,10 @@ export function registerContainerDocumentsRoutes(app: Express) {
 
       for (const container of allContainers) {
         const supplier = await storage.getSupplierById(container.supplierId);
-         const purchaseOrders = await storage.getPurchaseOrdersByContainerForCompany(
-           container.id,
-           req.session.currentCompanyId
-         );
+        const purchaseOrders = await storage.getPurchaseOrdersByContainerForCompany(
+          container.id,
+          req.session.currentCompanyId
+        );
 
         const sheetData: unknown[][] = [];
 
@@ -275,194 +269,10 @@ export function registerContainerDocumentsRoutes(app: Express) {
     }
   });
 
-  // Create a manual container (ERP only — SP companies must use /api/sp/containers)
-
-  app.post("/api/sales-import/backfill", requireAuth, async (req, res) => {
-    try {
-      if (!req.session.currentCompanyId) {
-        return res.status(400).json({ message: "No company selected" });
-      }
-
-      const { locationCashAccountMap } = req.body;
-
-      if (!locationCashAccountMap || typeof locationCashAccountMap !== "object") {
-        return res.status(400).json({
-          message:
-            "Location-to-cash-account mapping is required. Please specify which cash account to use for each location's sales.",
-        });
-      }
-
-      // Validate all cash accounts belong to this company
-      const cashAccountIds = Object.values(locationCashAccountMap) as number[];
-      for (const cashAccountId of cashAccountIds) {
-        const cashAccount = await storage.getLedgerAccountById(cashAccountId);
-        if (!cashAccount || cashAccount.companyId !== req.session.currentCompanyId) {
-          return res.status(400).json({ message: `Invalid cash account ID: ${cashAccountId}` });
-        }
-      }
-
-      // Get or create "Sales Revenue" ledger account
-      let salesRevenueAccount = await storage.getLedgerAccountByCode("SALES_REV", req.session.currentCompanyId!);
-      if (!salesRevenueAccount) {
-        salesRevenueAccount = await storage.createLedgerAccount({
-          companyId: req.session.currentCompanyId!,
-          code: "SALES_REV",
-          name: "Sales Revenue",
-          accountType: "Income",
-          subType: "Direct Income",
-          openingBalance: "0",
-          openingBalanceSide: "Cr",
-          active: true,
-        });
-      }
-
-      // Get all Sales vouchers for this company
-      const allVouchers = await db
-        .select()
-        .from(vouchers)
-        .where(and(eq(vouchers.companyId, req.session.currentCompanyId!), eq(vouchers.voucherType, "Sales")))
-        .execute();
-
-      if (allVouchers.length === 0) {
-        return res.json({
-          message: "No sales vouchers found",
-          count: 0,
-        });
-      }
-
-      // Get all existing voucher entries for these vouchers
-      const voucherIds = allVouchers.map((v) => v.id);
-      const existingEntries = await db
-        .select()
-        .from(voucherEntries)
-        .where(inArray(voucherEntries.voucherId, voucherIds))
-        .execute();
-
-      // Create a map of voucher ID -> set of ledger account IDs
-      const voucherLedgerMap = new Map<number, Set<number>>();
-      for (const entry of existingEntries) {
-        if (!voucherLedgerMap.has(entry.voucherId)) {
-          voucherLedgerMap.set(entry.voucherId, new Set());
-        }
-        if (entry.ledgerAccountId) {
-          voucherLedgerMap.get(entry.voucherId)!.add(entry.ledgerAccountId);
-        }
-      }
-
-      // Filter to vouchers that need backfill (missing entries or have wrong structure)
-      const vouchersNeedingBackfill = allVouchers.filter((v) => {
-        const ledgerIds = voucherLedgerMap.get(v.id) || new Set();
-        const entryCount = ledgerIds.size;
-
-        // Need backfill if:
-        // 1. No entries at all
-        // 2. Missing sales revenue
-        // 3. Has wrong number of entries (old format had COGS/Inventory)
-        const hasSalesRev = ledgerIds.has(salesRevenueAccount!.id);
-        return entryCount === 0 || !hasSalesRev || entryCount !== 2;
-      });
-
-      if (vouchersNeedingBackfill.length === 0) {
-        return res.json({
-          message: "All sales vouchers already have complete accounting entries",
-          count: 0,
-        });
-      }
-
-      let backfilledCount = 0;
-      let skippedCount = 0;
-
-      for (const voucher of vouchersNeedingBackfill) {
-        // Use a transaction to ensure atomic updates
-        await db.transaction(async (tx) => {
-          // Get all sales items for this voucher
-          const items = await tx.select().from(salesItems).where(eq(salesItems.voucherId, voucher.id)).execute();
-
-          if (items.length === 0) {
-            logger.warn(`No sales items found for voucher ${voucher.id}, skipping`);
-            skippedCount++;
-            return;
-          }
-
-          // Calculate total sales
-          const totalSales = items.reduce((sum, item) => sum + parseFloat(item.totalSales || "0"), 0);
-
-          if (totalSales === 0) {
-            logger.warn(`Voucher ${voucher.id} has zero sales, skipping`);
-            skippedCount++;
-            return;
-          }
-
-          // Determine location for this voucher by checking first sales item
-          const firstItem = items[0];
-          const stockItem = await tx.select().from(stockItems).where(eq(stockItems.id, firstItem.stockItemId)).limit(1);
-
-          if (stockItem.length === 0) {
-            logger.warn(`Could not find stock item ${firstItem.stockItemId} for voucher ${voucher.id}, skipping`);
-            skippedCount++;
-            return;
-          }
-
-          // Find inventory record to determine location
-          const inventoryRecords = await tx
-            .select()
-            .from(inventory)
-            .where(eq(inventory.stockItemId, stockItem[0].id))
-            .limit(1);
-
-          if (inventoryRecords.length === 0) {
-            logger.warn(`Could not determine location for voucher ${voucher.id}, skipping`);
-            skippedCount++;
-            return;
-          }
-
-          const locationId = inventoryRecords[0].locationId;
-          const cashAccountId = locationCashAccountMap[locationId];
-
-          if (!cashAccountId) {
-            logger.warn(`No cash account mapped for location ${locationId}, skipping voucher ${voucher.id}`);
-            skippedCount++;
-            return;
-          }
-
-          // Delete all existing voucher entries (in case of old format)
-          await tx.delete(voucherEntries).where(eq(voucherEntries.voucherId, voucher.id));
-
-          // Create new balanced entries (periodic inventory system)
-
-          // Entry 1: Debit Cash Account (location-specific)
-          await tx.insert(voucherEntries).values({
-            voucherId: voucher.id,
-            ledgerAccountId: cashAccountId,
-            debitAmount: totalSales.toFixed(2),
-            creditAmount: "0",
-            narration: `Cash from POS Sales - ${items.length} items (Backfilled)`,
-          });
-
-          // Entry 2: Credit Sales Revenue
-          await tx.insert(voucherEntries).values({
-            voucherId: voucher.id,
-            ledgerAccountId: salesRevenueAccount!.id,
-            debitAmount: "0",
-            creditAmount: totalSales.toFixed(2),
-            narration: `Sales Revenue - ${items.length} items (Backfilled)`,
-          });
-
-          backfilledCount++;
-        });
-      }
-
-      res.json({
-        message: `Sales backfill completed. ${backfilledCount} vouchers updated, ${skippedCount} skipped.`,
-        backfilledCount,
-        skippedCount,
-        totalSalesVouchers: allVouchers.length,
-      });
-    } catch (error: unknown) {
-      logger.error("Sales backfill error:", { error: error });
-      res.status(500).json({ message: getErrorMessage(error) });
-    }
-  });
+  // Phase 19 (A): POST /api/sales-import/backfill is removed. It wiped the lines
+  // of every Sales voucher of the company not shaped as Dr cash / Cr SALES_REV
+  // and reposted them from float sums with no audit (production 2026-10-10:
+  // no line carries its "(Backfilled)" narration, so it never ran there).
 
   // Price import from Excel: preview matching by stock item code
 }

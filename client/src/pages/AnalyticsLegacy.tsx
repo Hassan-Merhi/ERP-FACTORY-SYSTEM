@@ -59,7 +59,7 @@ export default function Analytics() {
                   <button
                     key={item.key}
                     onClick={() => setActiveSection(item.key)}
-                    className={`flex items-center gap-2 w-full rounded-md px-2 py-1.5 text-sm transition-colors ${isActive ? "bg-background font-medium shadow-sm" : "text-muted-foreground hover-elevate"}`}
+                    className={`flex items-center gap-2 w-full rounded-md px-2 py-1.5 text-sm transition-colors ${isActive ? "bg-background font-medium shadow-xs" : "text-muted-foreground hover-elevate"}`}
                     data-testid={`tab-${item.key}`}
                   >
                     <Icon className="h-4 w-4 shrink-0" />

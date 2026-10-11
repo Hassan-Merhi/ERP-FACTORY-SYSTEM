@@ -229,7 +229,7 @@ function LoadedBalesSummary({ model }: { model: FactoryContainerLoadingScanModel
 
 function OrderSummaryCard({ model }: { model: FactoryContainerLoadingScanModel }) {
   return (
-    <div className="overflow-hidden rounded-2xl border bg-background/90 shadow-sm">
+    <div className="overflow-hidden rounded-2xl border bg-background/90 shadow-xs">
       <div className="border-b px-4 py-3 sm:px-5">
         <h3 className="text-sm font-semibold sm:text-base">{model.tr("orderSummary")}</h3>
         <p className="mt-0.5 text-xs text-muted-foreground">{model.tr("notLinkedProforma")}</p>
@@ -275,7 +275,7 @@ export function ProformaProgressPanel({ model }: { model: FactoryContainerLoadin
   const progressPercent = requestedQty > 0 ? Math.min(100, Math.round((loadedTowardTarget / requestedQty) * 100)) : 0;
 
   return (
-    <div className="overflow-hidden rounded-2xl border bg-background/90 shadow-sm" data-testid="card-proforma-progress">
+    <div className="overflow-hidden rounded-2xl border bg-background/90 shadow-xs" data-testid="card-proforma-progress">
       <div className="px-4 py-3 sm:px-5 sm:py-4">
         <div className="flex flex-wrap items-start justify-between gap-2">
           <div className="min-w-0">

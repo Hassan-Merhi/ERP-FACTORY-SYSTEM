@@ -25,6 +25,9 @@ const harness = vi.hoisted(() => {
     getCompanyById: vi.fn(),
     isParentCompanyContext: vi.fn(),
     generateAccountStatementPdf: vi.fn(),
+    getCustomerByLedgerId: vi.fn(),
+    getPartyBalance: vi.fn(),
+    loadCustomerNotInLedger: vi.fn(),
   };
 });
 
@@ -34,8 +37,19 @@ vi.mock("../server/auth", () => ({ requireAuth: (_req: any, _res: any, next: any
 vi.mock("../server/routes/helpers/supplierBalanceHelpers", () => ({
   isParentCompanyContext: harness.isParentCompanyContext,
 }));
+vi.mock("../server/routes/helpers/partyOpeningSide", () => ({ loadPartyOpeningSides: async () => new Map() }));
 vi.mock("../server/lib/accountStatementPdfGenerator", () => ({
   generateAccountStatementPdf: harness.generateAccountStatementPdf,
+}));
+// Wave 10: a ledger account a customer owns opens at the balance engine's
+// customer opening, with what is not yet in the ledger reported separately.
+vi.mock("../server/lib/factoryCustomerLedger", () => ({ getCustomerByLedgerId: harness.getCustomerByLedgerId }));
+vi.mock("../server/services/accounting/balances/ledgerBalanceEngine", () => ({
+  getPartyBalance: harness.getPartyBalance,
+}));
+vi.mock("../server/services/accounting/balances/customerLedgerStatement", () => ({
+  loadCustomerNotInLedger: harness.loadCustomerNotInLedger,
+  loadCustomerLedgerEntryRows: vi.fn(async () => []),
 }));
 vi.mock("../server/lib/httpHandlers", () => ({ getErrorMessage: (error: any) => error?.message || String(error) }));
 vi.mock("../server/lib/logger", () => ({ logger: { error: vi.fn() } }));
@@ -47,6 +61,8 @@ vi.mock("drizzle-orm", () => ({
   desc: (column: unknown) => ({ type: "desc", column }),
   isNull: (column: unknown) => ({ type: "isNull", column }),
   isNotNull: (column: unknown) => ({ type: "isNotNull", column }),
+  or: (...conditions: unknown[]) => ({ type: "or", conditions }),
+  inArray: (column: unknown, values: unknown) => ({ type: "inArray", column, values }),
   sql: (strings: TemplateStringsArray, ...values: unknown[]) => ({ strings, values }),
 }));
 vi.mock("@shared/schema", () => ({
@@ -164,6 +180,7 @@ describe("account statement route behavior", () => {
     harness.isParentCompanyContext.mockResolvedValue(true);
     harness.getCompanyById.mockResolvedValue({ id: 4, companyType: "erp" });
     harness.generateAccountStatementPdf.mockResolvedValue(Buffer.from("%PDF-1.4\npdf-statement"));
+    harness.getCustomerByLedgerId.mockResolvedValue(null);
   });
 
   it("returns recoverable deleted vouchers for a supported account type", async () => {
@@ -186,63 +203,87 @@ describe("account statement route behavior", () => {
     expect(harness.db.selectDistinct).not.toHaveBeenCalled();
   });
 
-  it("computes supplier opening balance only for the parent books and scopes history to the selected company", async () => {
-    harness.selectResults.push([{ ob: "100" }], [{ totalDebit: "20", totalCredit: "45" }]);
+  // Wave 13: the supplier pre-period balance is the balance engine's period
+  // opening (the supplier's own opening, counted in its own company only, with
+  // its side, plus earlier lines of this company). It used to add the opening
+  // when the global parent-company setting named this company, without its side.
+  it("opens a supplier at the balance engine's period opening, Cr positive", async () => {
+    harness.getPartyBalance.mockResolvedValue({ opening: "-125.00" });
     const parent = responseHarness();
     await routes.get("GET /api/accounts/:type/:id/pre-period-balance")!(
       request({ params: { type: "supplier", id: "8" }, query: { endDate: "2026-08-01" } }),
       parent
     );
     expect(parent.body).toEqual({ balance: 125 });
-    expect(harness.isParentCompanyContext).toHaveBeenCalledWith(4);
-
-    harness.isParentCompanyContext.mockResolvedValue(false);
-    harness.selectResults.push([{ totalDebit: "20", totalCredit: "45" }]);
-    const child = responseHarness();
-    await routes.get("GET /api/accounts/:type/:id/pre-period-balance")!(
-      request({ params: { type: "supplier", id: "8" }, query: { endDate: "2026-08-01" } }),
-      child
-    );
-    expect(child.body).toEqual({ balance: 25 });
+    expect(harness.getPartyBalance).toHaveBeenCalledWith(harness.db, {
+      companyId: 4,
+      kind: "supplier",
+      id: 8,
+      from: "2026-08-01",
+    });
+    expect(harness.isParentCompanyContext).not.toHaveBeenCalled();
   });
 
-  it("applies Dr/Cr sign conventions to bank opening balances and prior vouchers", async () => {
-    harness.selectResults.push([{ ob: "50", side: "Cr" }], [{ totalDebit: "30", totalCredit: "10" }]);
+  // Wave 17 A: every family opens at the balance engine's period opening (the
+  // master's opening with its side, a sideless ledger opening by its type, and
+  // the lines the engine attributes to it before endDate — a line naming a
+  // ledger and a bank is the ledger's). It used to sum every line naming the
+  // bank on top of the opening, with a sideless opening read as Dr.
+  it("opens a bank at the balance engine's period opening", async () => {
+    harness.selectResults.push([{ id: 3 }]);
+    harness.getPartyBalance.mockResolvedValue({ opening: "-30.00" });
     const res = responseHarness();
     await routes.get("GET /api/accounts/:type/:id/pre-period-balance")!(
       request({ params: { type: "bank", id: "3" }, query: { endDate: "2026-08-01" } }),
       res
     );
     expect(res.body).toEqual({ balance: -30 });
+    expect(harness.getPartyBalance).toHaveBeenCalledWith(harness.db, {
+      companyId: 4,
+      kind: "bank",
+      id: 3,
+      from: "2026-08-01",
+    });
   });
 
-  it("sums the pre-period balance exactly", async () => {
-    // 0.1 opening + 0.2 prior debit is 0.3; the float path returned 0.30000000000000004.
-    harness.selectResults.push([{ ob: "0.1", side: "Dr" }], [{ totalDebit: "0.2", totalCredit: "0" }]);
+  it("returns the engine's exact opening and 404 for an account outside the company", async () => {
+    harness.selectResults.push([{ id: 3 }]);
+    harness.getPartyBalance.mockResolvedValue({ opening: "0.30" });
     const res = responseHarness();
     await routes.get("GET /api/accounts/:type/:id/pre-period-balance")!(
       request({ params: { type: "bank", id: "3" }, query: { endDate: "2026-08-01" } }),
       res
     );
     expect(res.body).toEqual({ balance: 0.3 });
+    harness.selectResults.push([]);
+    const missing = responseHarness();
+    await routes.get("GET /api/accounts/:type/:id/pre-period-balance")!(
+      request({ params: { type: "bank", id: "99" }, query: { endDate: "2026-08-01" } }),
+      missing
+    );
+    expect(missing.statusCode).toBe(404);
   });
 
-  it("uses the factory customer-ledger combined formula before the requested period", async () => {
+  it("opens a customer-owned ledger at the balance engine's customer opening before the period", async () => {
+    // The factory composite (orders + cache + vouchers without CHARGE-/INV-) is
+    // retired: the ledger figure is the engine's, the operational part is reported apart.
     harness.getCompanyById.mockResolvedValue({ id: 4, companyType: "factory" });
-    harness.selectResults.push(
-      [{ ob: "0", side: "Dr" }],
-      [{ id: 44, ob: "10", side: "Dr" }],
-      [{ total: "120" }],
-      [{ net: "-15" }],
-      [{ net: "30" }],
-      [{ net: "5" }]
-    );
+    harness.selectResults.push([{ id: 12 }]);
+    harness.getCustomerByLedgerId.mockResolvedValue({ id: 44, companyId: 4 });
+    harness.getPartyBalance.mockResolvedValue({ opening: "150.00" });
+    harness.loadCustomerNotInLedger.mockResolvedValue({ prePeriodTotal: "120.00", rows: [] });
     const res = responseHarness();
     await routes.get("GET /api/accounts/:type/:id/pre-period-balance")!(
       request({ params: { type: "ledger", id: "12" }, query: { endDate: "2026-08-01" } }),
       res
     );
-    expect(res.body).toEqual({ balance: 150 });
+    expect(res.body).toEqual({ balance: 150, notInLedgerBefore: "120.00" });
+    expect(harness.getPartyBalance).toHaveBeenCalledWith(harness.db, {
+      companyId: 4,
+      kind: "customer",
+      id: 44,
+      from: "2026-08-01",
+    });
   });
 
   it("rejects unknown account types and invalid identifiers", async () => {

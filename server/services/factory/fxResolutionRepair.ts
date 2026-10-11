@@ -27,6 +27,7 @@ import { and, eq, sql } from "drizzle-orm";
 import { db } from "../../db";
 import { factoryContainers, factoryOffloadAdditionalCharges, factoryContainerCommissions } from "@shared/schema";
 import type { DatabaseOrTransaction } from "../../db";
+import { syncContainerCommissionJournalTx } from "./containerCommissionJournal";
 
 export type FxResolutionSource = "container" | "offload_additional_charge" | "commission";
 
@@ -247,6 +248,9 @@ export async function applyFxResolutionRepair(
     const values = { fxRateToUsd: String(newFxRateToUsd), fxRateConfirmed: true };
     if (source === "container") {
       await tx.update(factoryContainers).set(values).where(eq(factoryContainers.id, id));
+      // Wave 14: a commission in the container's currency posts at this rate
+      // now (FACTORY-COMM-{container}, same transaction).
+      await syncContainerCommissionJournalTx(tx, companyId, id);
     } else if (source === "offload_additional_charge") {
       await tx.update(factoryOffloadAdditionalCharges).set(values).where(eq(factoryOffloadAdditionalCharges.id, id));
     } else {

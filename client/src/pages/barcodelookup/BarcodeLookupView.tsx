@@ -15,7 +15,7 @@ export function BarcodeLookupView({ model }: { model: BarcodeLookupModel }) {
     <div className="space-y-4 p-4">
       <div className="rounded-xl border overflow-hidden">
         <div className="flex items-center gap-3 px-4 py-3 border-b bg-muted/20">
-          <div className="flex items-center justify-center h-9 w-9 rounded-xl bg-gradient-to-br from-blue-500/30 to-blue-600/10 border border-blue-500/25 shrink-0">
+          <div className="flex items-center justify-center h-9 w-9 rounded-xl bg-linear-to-br from-blue-500/30 to-blue-600/10 border border-blue-500/25 shrink-0">
             <ScanLine className="h-4.5 w-4.5 text-blue-500" />
           </div>
           <div>
@@ -27,7 +27,7 @@ export function BarcodeLookupView({ model }: { model: BarcodeLookupModel }) {
           <div className="grid gap-2 sm:grid-cols-[7.5rem_minmax(0,1fr)_auto]">
             <button
               type="button"
-              className="flex h-10 items-center justify-between gap-2 rounded-md border bg-background px-3 text-left text-xs font-medium text-foreground shadow-sm transition-colors hover:border-primary/50 hover:bg-muted/40"
+              className="flex h-10 items-center justify-between gap-2 rounded-md border bg-background px-3 text-left text-xs font-medium text-foreground shadow-xs transition-colors hover:border-primary/50 hover:bg-muted/40"
               onClick={() => model.setSearchMode(model.searchMode === "reference" ? "article" : "reference")}
               data-testid="button-toggle-search-mode"
               title="Click to switch between Ref # and Article Code mode"
@@ -48,7 +48,7 @@ export function BarcodeLookupView({ model }: { model: BarcodeLookupModel }) {
               size="sm"
               onClick={model.handleSearch}
               disabled={model.isLoading || !model.searchValue.trim()}
-              className="h-10 gap-1.5 px-4 sm:min-w-[6.5rem]"
+              className="h-10 gap-1.5 px-4 sm:min-w-26"
               data-testid="button-lookup-search"
             >
               <Search className="h-4 w-4" />

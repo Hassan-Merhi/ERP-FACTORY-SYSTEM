@@ -400,7 +400,7 @@ export function ProductionPositionsTab() {
                       className={`flex items-center gap-2 rounded-lg border p-2 text-left transition-colors ${selected ? "border-primary bg-primary/10" : "hover:bg-muted"}`}
                     >
                       <span
-                        className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-sm border ${selected ? "border-primary bg-primary" : "border-input"}`}
+                        className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-xs border ${selected ? "border-primary bg-primary" : "border-input"}`}
                       >
                         {selected && <CheckCircle2 className="h-3 w-3 text-primary-foreground" />}
                       </span>

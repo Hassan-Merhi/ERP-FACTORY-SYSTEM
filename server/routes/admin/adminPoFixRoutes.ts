@@ -4,7 +4,7 @@ import { logger } from "../../lib/logger";
 import type { Express } from "express";
 import { db } from "../../db";
 import { storage } from "../../storage";
-import { requireAuth, requireRole, requireNonPOS } from "../../auth";
+import { requireAuth, requireRole } from "../../auth";
 
 import {
   containers,
@@ -19,87 +19,13 @@ import { eq, and, or, isNull, like } from "drizzle-orm";
 
 import { registerPoSupplierReconciliationRoutes } from "./poSupplierReconciliationRoutes";
 import { calcPoAmountsExact } from "../containers/containerHelpers";
-import { MoneyDecimal, moneyString, parseMoneyInput } from "../../lib/money";
+import { MoneyDecimal, moneyString } from "../../lib/money";
 
 export function registerAdminPoFixRoutes(app: Express) {
   registerPoSupplierReconciliationRoutes(app);
 
-  app.post("/api/test-data/vouchers", requireAuth, requireNonPOS, async (req, res) => {
-    try {
-      const companyId = req.session.currentCompanyId;
-      if (!companyId) {
-        return res.status(400).json({ message: "No company selected" });
-      }
-
-      const { date, debitAccountId, creditAccountId, amount, description } = req.body;
-
-      // Validate required fields
-      if (!date || !debitAccountId || !creditAccountId || !amount) {
-        return res
-          .status(400)
-          .json({ message: "Missing required fields: date, debitAccountId, creditAccountId, amount" });
-      }
-
-      const parsedAmount = parseMoneyInput(amount);
-      if (!parsedAmount || parsedAmount.lessThanOrEqualTo(0)) {
-        return res.status(400).json({ message: "Amount must be a positive number" });
-      }
-
-      // Verify debit account exists and belongs to current company
-      const debitAccount = await storage.getLedgerAccountById(debitAccountId);
-      if (!debitAccount || debitAccount.companyId !== companyId) {
-        return res.status(404).json({ message: "Debit account not found or doesn't belong to current company" });
-      }
-
-      // Verify credit account exists and belongs to current company
-      const creditAccount = await storage.getLedgerAccountById(creditAccountId);
-      if (!creditAccount || creditAccount.companyId !== companyId) {
-        return res.status(404).json({ message: "Credit account not found or doesn't belong to current company" });
-      }
-
-      // Generate a unique voucher number with TEST- prefix
-      const voucherNumber = `TEST-${Date.now()}`;
-
-      // Create the voucher as optional (excluded from calculations by default)
-      const [voucher] = await db
-        .insert(vouchers)
-        .values({
-          companyId,
-          voucherNumber,
-          voucherType: "Journal",
-          voucherDate: date,
-          description: description || `Test data entry`,
-          totalAmount: moneyString(parsedAmount),
-          optional: true, // Start as draft/optional
-        })
-        .returning();
-
-      // Create debit entry
-      await db.insert(voucherEntries).values({
-        voucherId: voucher.id,
-        ledgerAccountId: debitAccountId,
-        debitAmount: moneyString(parsedAmount),
-        creditAmount: "0",
-        narration: `Test data - ${description || debitAccount.name}`,
-      });
-
-      // Create credit entry
-      await db.insert(voucherEntries).values({
-        voucherId: voucher.id,
-        ledgerAccountId: creditAccountId,
-        debitAmount: "0",
-        creditAmount: moneyString(parsedAmount),
-        narration: `Test data - ${description || creditAccount.name}`,
-      });
-
-      res.status(201).json({
-        voucher,
-        message: "Test entry created as optional (draft). Toggle to apply to calculations.",
-      });
-    } catch (error: unknown) {
-      res.status(500).json({ message: getErrorMessage(error) });
-    }
-  });
+  // Phase 19 (A): POST /api/test-data/vouchers is removed. Any non-POS user could
+  // post a TEST- journal into the real books with no audit.
 
   // ==========================================
   // Fix Old PO Inter-Company Credits
@@ -267,36 +193,38 @@ export function registerAdminPoFixRoutes(app: Express) {
           // SUBSIDIARY VOUCHER - Transfer liability from Supplier to Parent Credit
           // ============================================================
           const voucherNumber = `INTERCO-${po.poNumber}-${Date.now()}`;
-          const [voucher] = await db
-            .insert(vouchers)
-            .values({
-              companyId: company.id,
-              voucherNumber,
-              voucherType: "Journal",
-              voucherDate,
-              description: `Transfer supplier liability to ${parentCompany.name} Credit - PO ${po.poNumber} - Container ${container.containerNumber}`,
-              totalAmount: moneyString(poTotal),
-            })
-            .returning();
+          await db.transaction(async (tx) => {
+            const [voucher] = await tx
+              .insert(vouchers)
+              .values({
+                companyId: company.id,
+                voucherNumber,
+                voucherType: "Journal",
+                voucherDate,
+                description: `Transfer supplier liability to ${parentCompany.name} Credit - PO ${po.poNumber} - Container ${container.containerNumber}`,
+                totalAmount: moneyString(poTotal),
+              })
+              .returning();
 
-          // Debit: Supplier account (reduce payable - they got paid by parent company)
-          if (po.supplierId) {
-            await db.insert(voucherEntries).values({
+            // Debit: Supplier account (reduce payable - they got paid by parent company)
+            if (po.supplierId) {
+              await tx.insert(voucherEntries).values({
+                voucherId: voucher.id,
+                supplierId: po.supplierId,
+                debitAmount: moneyString(poTotal),
+                creditAmount: "0",
+                narration: `Transfer to ${parentCompany.name} Credit - PO ${po.poNumber}`,
+              });
+            }
+
+            // Credit: Parent Credit account (we owe parent company, who paid the supplier)
+            await tx.insert(voucherEntries).values({
               voucherId: voucher.id,
-              supplierId: po.supplierId,
-              debitAmount: moneyString(poTotal),
-              creditAmount: "0",
-              narration: `Transfer to ${parentCompany.name} Credit - PO ${po.poNumber}`,
+              ledgerAccountId: creditAccount[0].id,
+              debitAmount: "0",
+              creditAmount: moneyString(poTotal),
+              narration: `PO ${po.poNumber} - Container ${container.containerNumber} (${parentCompany.name} paid)`,
             });
-          }
-
-          // Credit: Parent Credit account (we owe parent company, who paid the supplier)
-          await db.insert(voucherEntries).values({
-            voucherId: voucher.id,
-            ledgerAccountId: creditAccount[0].id,
-            debitAmount: "0",
-            creditAmount: moneyString(poTotal),
-            narration: `PO ${po.poNumber} - Container ${container.containerNumber} (${parentCompany.name} paid)`,
           });
 
           // ============================================================
@@ -336,37 +264,39 @@ export function registerAdminPoFixRoutes(app: Express) {
 
           // Create Journal voucher in parent company
           const parentVoucherNumber = `INTERCO-PARENT-${po.poNumber}-${Date.now()}`;
-          const [parentVoucher] = await db
-            .insert(vouchers)
-            .values({
-              companyId: parentCompany.id,
-              voucherNumber: parentVoucherNumber,
-              voucherType: "Journal",
-              voucherDate,
-              description: `${container.containerNumber} ${poSupplier?.legalName || "Unknown Supplier"}`,
-              totalAmount: moneyString(poTotal),
-            })
-            .returning();
+          await db.transaction(async (tx) => {
+            const [parentVoucher] = await tx
+              .insert(vouchers)
+              .values({
+                companyId: parentCompany.id,
+                voucherNumber: parentVoucherNumber,
+                voucherType: "Journal",
+                voucherDate,
+                description: `${container.containerNumber} ${poSupplier?.legalName || "Unknown Supplier"}`,
+                totalAmount: moneyString(poTotal),
+              })
+              .returning();
 
-          // DR [Subsidiary] Credit (they owe us)
-          await db.insert(voucherEntries).values({
-            voucherId: parentVoucher.id,
-            ledgerAccountId: subsidiaryReceivableAccount[0].id,
-            debitAmount: moneyString(poTotal),
-            creditAmount: "0",
-            narration: `PO ${po.poNumber} - ${company.name} owes us`,
-          });
-
-          // CR Supplier (we owe supplier)
-          if (po.supplierId) {
-            await db.insert(voucherEntries).values({
+            // DR [Subsidiary] Credit (they owe us)
+            await tx.insert(voucherEntries).values({
               voucherId: parentVoucher.id,
-              supplierId: po.supplierId,
-              debitAmount: "0",
-              creditAmount: moneyString(poTotal),
-              narration: `PO ${po.poNumber} - Supplier payment`,
+              ledgerAccountId: subsidiaryReceivableAccount[0].id,
+              debitAmount: moneyString(poTotal),
+              creditAmount: "0",
+              narration: `PO ${po.poNumber} - ${company.name} owes us`,
             });
-          }
+
+            // CR Supplier (we owe supplier)
+            if (po.supplierId) {
+              await tx.insert(voucherEntries).values({
+                voucherId: parentVoucher.id,
+                supplierId: po.supplierId,
+                debitAmount: "0",
+                creditAmount: moneyString(poTotal),
+                narration: `PO ${po.poNumber} - Supplier payment`,
+              });
+            }
+          });
 
           totalFixed++;
           totalAmount = totalAmount.plus(poTotal);
@@ -474,30 +404,33 @@ export function registerAdminPoFixRoutes(app: Express) {
         }
 
         let fixedThisPO = false;
+        const { voucherId, supplierId } = po;
 
-        // Add DR Purchases entry if missing
-        if (existingPurchaseEntry.length === 0) {
-          await db.insert(voucherEntries).values({
-            voucherId: po.voucherId,
-            ledgerAccountId: purchasesAccount.id,
-            debitAmount: moneyString(poTotal),
-            creditAmount: "0",
-            narration: `PO ${po.poNumber} - Fix missing entry`,
-          });
-          fixedThisPO = true;
-        }
+        await db.transaction(async (tx) => {
+          // Add DR Purchases entry if missing
+          if (existingPurchaseEntry.length === 0) {
+            await tx.insert(voucherEntries).values({
+              voucherId,
+              ledgerAccountId: purchasesAccount.id,
+              debitAmount: moneyString(poTotal),
+              creditAmount: "0",
+              narration: `PO ${po.poNumber} - Fix missing entry`,
+            });
+            fixedThisPO = true;
+          }
 
-        // Add CR Supplier entry if missing
-        if (existingSupplierEntry.length === 0) {
-          await db.insert(voucherEntries).values({
-            voucherId: po.voucherId,
-            supplierId: po.supplierId,
-            debitAmount: "0",
-            creditAmount: moneyString(poTotal),
-            narration: `PO ${po.poNumber} - Fix missing supplier entry`,
-          });
-          fixedThisPO = true;
-        }
+          // Add CR Supplier entry if missing
+          if (existingSupplierEntry.length === 0) {
+            await tx.insert(voucherEntries).values({
+              voucherId,
+              supplierId,
+              debitAmount: "0",
+              creditAmount: moneyString(poTotal),
+              narration: `PO ${po.poNumber} - Fix missing supplier entry`,
+            });
+            fixedThisPO = true;
+          }
+        });
 
         if (fixedThisPO) {
           fixed++;
@@ -526,104 +459,10 @@ export function registerAdminPoFixRoutes(app: Express) {
     }
   });
 
-  // ==========================================
-  // Reverse Fix Old PO Inter-Company Credits
-  // ==========================================
-
-  app.post("/api/reverse-po-credits", requireAuth, requireRole("Admin"), async (req, res) => {
-    try {
-      const { companyId, parentCompanyId } = req.body;
-
-      if (!companyId) {
-        return res.status(400).json({
-          message: "Please select a subsidiary company to reverse.",
-        });
-      }
-
-      if (!parentCompanyId) {
-        return res.status(400).json({
-          message: "Please select a parent company.",
-        });
-      }
-
-      const allCompanies = await storage.getAllCompanies();
-      const company = allCompanies.find((c) => c.id === companyId);
-      const parentCompany = allCompanies.find((c) => c.id === parentCompanyId);
-
-      if (!company) {
-        return res.status(400).json({ message: "Subsidiary company not found." });
-      }
-
-      if (!parentCompany) {
-        return res.status(400).json({
-          message: "Parent company not found.",
-        });
-      }
-
-      if (company.id === parentCompany.id) {
-        return res.status(400).json({
-          message: "Subsidiary and parent company cannot be the same.",
-        });
-      }
-
-      // Process only the selected subsidiary
-      const targetCompany = company;
-
-      let totalReversed = 0;
-      const details: Array<{ company: string; voucherNumber: string; amount: string }> = [];
-
-      // Delete INTERCO vouchers in this subsidiary company
-      const companyIntercoVouchers = await db
-        .select()
-        .from(vouchers)
-        .where(and(eq(vouchers.companyId, targetCompany.id), like(vouchers.voucherNumber, "INTERCO-%")));
-
-      for (const v of companyIntercoVouchers) {
-        // Delete voucher entries first
-        await db.delete(voucherEntries).where(eq(voucherEntries.voucherId, v.id));
-        // Delete voucher
-        await db.delete(vouchers).where(eq(vouchers.id, v.id));
-        totalReversed++;
-        details.push({ company: targetCompany.name, voucherNumber: v.voucherNumber, amount: v.totalAmount || "0" });
-      }
-
-      // Also delete corresponding INTERCO-PARENT vouchers in parent company for this subsidiary
-      const parentIntercoVouchers = await db
-        .select()
-        .from(vouchers)
-        .where(
-          and(
-            eq(vouchers.companyId, parentCompany.id),
-            or(
-              like(vouchers.voucherNumber, "INTERCO-PARENT-%"),
-              like(vouchers.voucherNumber, "INTERCO-LUB-%") // Also match old format
-            ),
-            like(vouchers.description, `%${targetCompany.name}%`)
-          )
-        );
-
-      for (const v of parentIntercoVouchers) {
-        await db.delete(voucherEntries).where(eq(voucherEntries.voucherId, v.id));
-        await db.delete(vouchers).where(eq(vouchers.id, v.id));
-        totalReversed++;
-        details.push({
-          company: `${parentCompany.name} (for ${targetCompany.name})`,
-          voucherNumber: v.voucherNumber,
-          amount: v.totalAmount || "0",
-        });
-      }
-
-      res.json({
-        message: `Reversed ${totalReversed} inter-company vouchers for ${company.name} (parent: ${parentCompany.name})`,
-        reversed: totalReversed,
-        details,
-        processedCompanies: 1,
-      });
-    } catch (error: unknown) {
-      logger.error("Reverse PO credits error:", { error: error });
-      res.status(500).json({ message: getErrorMessage(error) });
-    }
-  });
+  // POST /api/reverse-po-credits was retired in wave 16 (A): it hard-deleted
+  // every INTERCO-% voucher of a company named in the body, and parent
+  // vouchers matched by description, statement by statement with no
+  // transaction and no audit. Correct intercompany history by reversal.
 
   // ==========================================
   // Reset Company Data (Admin only)

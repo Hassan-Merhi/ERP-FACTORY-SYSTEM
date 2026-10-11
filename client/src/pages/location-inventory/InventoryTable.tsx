@@ -122,7 +122,7 @@ export function InventoryTable({
                         <span className="flex items-center gap-2 min-w-0">
                           <span className="truncate">{item.stockItemName}</span>
                           {/* The code is a column on desktop search; phone cards show it under the name. */}
-                          <span className="hidden font-mono text-xs font-normal text-muted-foreground [[data-mobile-cards=true]_&]:inline">
+                          <span className="hidden font-mono text-xs font-normal text-muted-foreground in-data-[mobile-cards=true]:inline">
                             {item.stockItemCode}
                           </span>
                           {item.stockItemActive === false && (

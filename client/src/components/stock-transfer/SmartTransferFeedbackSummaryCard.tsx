@@ -45,7 +45,7 @@ export default function SmartTransferFeedbackSummaryCard() {
 
   if (isLoading) {
     return (
-      <div className="fixed bottom-20 right-6 z-30 w-72 rounded-lg border bg-background/95 p-3 text-xs shadow-lg backdrop-blur">
+      <div className="fixed bottom-20 right-6 z-30 w-72 rounded-lg border bg-background/95 p-3 text-xs shadow-lg backdrop-blur-sm">
         Loading smart-transfer accuracy…
       </div>
     );
@@ -54,7 +54,7 @@ export default function SmartTransferFeedbackSummaryCard() {
   if (!data) return null;
 
   return (
-    <div className="fixed bottom-20 right-6 z-30 w-80 rounded-lg border bg-background/95 p-3 shadow-lg backdrop-blur">
+    <div className="fixed bottom-20 right-6 z-30 w-80 rounded-lg border bg-background/95 p-3 shadow-lg backdrop-blur-sm">
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <BarChart3 className="h-4 w-4" />

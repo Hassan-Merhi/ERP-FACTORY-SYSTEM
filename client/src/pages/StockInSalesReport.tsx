@@ -140,7 +140,7 @@ function MultiSelectFilter<T extends { id: number; name: string }>({
       <PopoverContent className="w-56 p-2" align="start">
         <div className="max-h-72 space-y-1 overflow-y-auto">
           <div
-            className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 hover-elevate"
+            className="flex cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 hover-elevate"
             onClick={() => onChange([])}
             data-testid={`${testId}-all`}
           >
@@ -154,7 +154,7 @@ function MultiSelectFilter<T extends { id: number; name: string }>({
             return (
               <div
                 key={item.id}
-                className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 hover-elevate"
+                className="flex cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 hover-elevate"
                 onClick={() => onChange(selected ? selectedIds.filter((value) => value !== id) : [...selectedIds, id])}
                 data-testid={`${testId}-option-${item.id}`}
               >

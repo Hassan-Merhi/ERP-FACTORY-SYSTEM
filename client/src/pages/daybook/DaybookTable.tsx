@@ -654,7 +654,7 @@ export function DaybookTable({
       mobileItems.push(
         <div
           key={`m-date-${rowDate}`}
-          className="sticky top-0 z-10 bg-muted/60 backdrop-blur-sm px-3 py-1.5 flex items-center justify-between border-b"
+          className="sticky top-0 z-10 bg-muted/60 backdrop-blur-xs px-3 py-1.5 flex items-center justify-between border-b"
         >
           <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
             {formatDisplayDate(parseISO(rowDate))}

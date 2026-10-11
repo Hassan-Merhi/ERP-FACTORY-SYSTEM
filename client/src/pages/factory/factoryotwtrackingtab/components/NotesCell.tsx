@@ -3,8 +3,8 @@
  *
  * Extracted from FactoryOtwTrackingTab.tsx during the Phase 4 god-file split.
  */
-import {useState} from "react";
-import {Input} from "@/components/ui/input";
+import { useState } from "react";
+import { Input } from "@/components/ui/input";
 
 export // ── Inline notes cell ────────────────────────────────────────────────────────
 function NotesCell({
@@ -49,7 +49,7 @@ function NotesCell({
   }
   return (
     <span
-      className={`text-xs cursor-pointer rounded px-1 py-0.5 hover-elevate max-w-[140px] truncate block ${current ? "text-foreground" : "text-muted-foreground italic"}`}
+      className={`text-xs cursor-pointer rounded-sm px-1 py-0.5 hover-elevate max-w-[140px] truncate block ${current ? "text-foreground" : "text-muted-foreground italic"}`}
       onClick={startEdit}
       data-testid={`text-notes-${containerId}`}
       title={current || "Click to add note"}

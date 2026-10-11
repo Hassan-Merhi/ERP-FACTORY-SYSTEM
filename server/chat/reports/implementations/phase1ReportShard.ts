@@ -1,5 +1,20 @@
-import { db, schema, eq, and, desc, sql, isNull, asc, ilike } from "./reportShardSupport";
+import {
+  db,
+  schema,
+  eq,
+  and,
+  desc,
+  sql,
+  isNull,
+  asc,
+  ilike,
+  nonPartyAccountTypesSql,
+  profitAndLossAccountTypesSql,
+} from "./reportShardSupport";
+import { MoneyDecimal, plusMoney, toMoney } from "../../../lib/money";
+import { classifyAccountType, expenseCategory } from "../../../services/accounting/accountClassification";
 import type { DataQueryContext, DataQueryResult, ReportImplementationShard } from "../types";
+import { notFiscalClosingVoucher } from "../../../services/accounting/balances/periodReportRules";
 
 export const phase1QueryTypes = [
   "pl_summary",
@@ -21,29 +36,44 @@ async function runPhase1Report(ctx: DataQueryContext): Promise<DataQueryResult> 
 
   switch (params.queryType) {
     case "pl_summary": {
-      const rows = await db.execute<{ account_type: string; total_debit: string; total_credit: string }>(sql`
-        SELECT la.account_type,
+      const rows = await db.execute<{
+        account_type: string;
+        sub_type: string | null;
+        total_debit: string;
+        total_credit: string;
+      }>(sql`
+        SELECT la.account_type, la.sub_type,
           COALESCE(SUM(CAST(ve.debit_amount AS numeric)), 0) AS total_debit,
           COALESCE(SUM(CAST(ve.credit_amount AS numeric)), 0) AS total_credit
         FROM voucher_entries ve
         JOIN vouchers v ON v.id = ve.voucher_id AND v.optional = false AND v.deleted_at IS NULL
+          AND v.company_id = ${companyId}
         JOIN ledger_accounts la ON la.id = ve.ledger_account_id AND la.company_id = ${companyId}
-        WHERE v.voucher_date BETWEEN ${dateFrom} AND ${dateTo}
-          AND la.account_type IN ('Income','Expense','Direct Expense','Indirect Expense','Profit')
-        GROUP BY la.account_type
+        WHERE COALESCE(v.effective_date, v.voucher_date) BETWEEN ${dateFrom} AND ${dateTo}
+          AND ${notFiscalClosingVoucher("v")}
+          AND LOWER(TRIM(la.account_type)) IN (${profitAndLossAccountTypesSql()})
+        GROUP BY la.account_type, la.sub_type
       `);
-      let revenue = 0,
-        cogs = 0,
-        opex = 0;
+      // Shared classifier: every income type is revenue (Indirect Income and
+      // Revenue included); Direct Expense is cost of goods sold; every other
+      // expense (Government Taxes included) is operating. Profit is equity and
+      // no longer read as an expense.
+      let revenueExact = new MoneyDecimal(0),
+        cogsExact = new MoneyDecimal(0),
+        opexExact = new MoneyDecimal(0);
       for (const row of rows.rows) {
-        const dr = parseFloat(row.total_debit || "0");
-        const cr = parseFloat(row.total_credit || "0");
-        if (row.account_type === "Income") revenue += cr - dr;
-        else if (row.account_type === "Direct Expense") cogs += dr - cr;
-        else opex += dr - cr;
+        const debitMinusCredit = toMoney(row.total_debit).minus(toMoney(row.total_credit));
+        if (classifyAccountType(row.account_type, row.sub_type) === "income")
+          revenueExact = revenueExact.minus(debitMinusCredit);
+        else if (expenseCategory(row.account_type, row.sub_type) === "Direct Expense")
+          cogsExact = cogsExact.plus(debitMinusCredit);
+        else opexExact = opexExact.plus(debitMinusCredit);
       }
-      const gross = revenue - cogs;
-      const net = gross - opex;
+      const revenue = revenueExact.toNumber();
+      const cogs = cogsExact.toNumber();
+      const opex = opexExact.toNumber();
+      const gross = revenueExact.minus(cogsExact).toNumber();
+      const net = revenueExact.minus(cogsExact).minus(opexExact).toNumber();
       dataQueryResult = {
         queryType: "pl_summary",
         title: "Profit & Loss Summary",
@@ -74,15 +104,15 @@ async function runPhase1Report(ctx: DataQueryContext): Promise<DataQueryResult> 
         FROM ledger_accounts la
         LEFT JOIN voucher_entries ve ON ve.ledger_account_id = la.id
         LEFT JOIN vouchers v ON v.id = ve.voucher_id
-        WHERE la.company_id = ${companyId} AND la.account_type IN ('Cash','Bank') AND la.active = true AND la.deleted_at IS NULL
+        WHERE la.company_id = ${companyId} AND LOWER(TRIM(la.account_type)) IN ('cash', 'bank') AND la.active = true AND la.deleted_at IS NULL
         GROUP BY la.id, la.name, la.account_type, la.opening_balance, la.opening_balance_side
         ORDER BY la.account_type, la.name
       `);
       let grandTotal = 0;
       const stats = rows.rows.map((row) => {
-        const ob = parseFloat(row.opening_balance || "0");
+        const ob = toMoney(row.opening_balance).toNumber();
         const obAdj = row.opening_balance_side === "Cr" ? -ob : ob;
-        const bal = obAdj + parseFloat(row.total_debit || "0") - parseFloat(row.total_credit || "0");
+        const bal = plusMoney(obAdj, toMoney(row.total_debit).minus(toMoney(row.total_credit)));
         grandTotal += bal;
         return {
           label: `${row.name} (${row.account_type})`,
@@ -121,7 +151,7 @@ async function runPhase1Report(ctx: DataQueryContext): Promise<DataQueryResult> 
         LEFT JOIN voucher_entries ve ON ve.ledger_account_id = la.id
         LEFT JOIN vouchers v ON v.id = ve.voucher_id
         WHERE la.company_id = ${companyId} AND la.active = true AND la.deleted_at IS NULL
-          AND la.account_type NOT IN ('Cash','Bank','Income','Expense','Direct Expense','Indirect Expense','Equity','Profit','Government Taxes')
+          AND LOWER(TRIM(la.account_type)) NOT IN (${nonPartyAccountTypesSql()})
         GROUP BY la.id, la.name, la.opening_balance, la.opening_balance_side
         HAVING (
           CASE WHEN la.opening_balance_side = 'Cr' THEN -CAST(la.opening_balance AS numeric) ELSE CAST(la.opening_balance AS numeric) END
@@ -136,9 +166,9 @@ async function runPhase1Report(ctx: DataQueryContext): Promise<DataQueryResult> 
         LIMIT ${rowLimit}
       `);
       const tableRows = rows.rows.map((row) => {
-        const ob = parseFloat(row.opening_balance || "0");
+        const ob = toMoney(row.opening_balance).toNumber();
         const obAdj = row.opening_balance_side === "Cr" ? -ob : ob;
-        const bal = obAdj + parseFloat(row.total_debit || "0") - parseFloat(row.total_credit || "0");
+        const bal = plusMoney(obAdj, toMoney(row.total_debit).minus(toMoney(row.total_credit)));
         const lastTx = row.last_tx ? String(row.last_tx).slice(0, 10) : "—";
         return [row.name, fmt(bal), lastTx];
       });
@@ -206,8 +236,8 @@ async function runPhase1Report(ctx: DataQueryContext): Promise<DataQueryResult> 
         r.voucherDate || "—",
         r.voucherType || "—",
         (r.description || "").slice(0, 40),
-        parseFloat(r.debitAmount || "0") > 0 ? fmtDec(parseFloat(r.debitAmount!)) : "—",
-        parseFloat(r.creditAmount || "0") > 0 ? fmtDec(parseFloat(r.creditAmount!)) : "—",
+        toMoney(r.debitAmount).toNumber() > 0 ? fmtDec(toMoney(r.debitAmount!).toNumber()) : "—",
+        toMoney(r.creditAmount).toNumber() > 0 ? fmtDec(toMoney(r.creditAmount!).toNumber()) : "—",
       ]);
       dataQueryResult = {
         queryType: "customer_statement",
@@ -273,8 +303,8 @@ async function runPhase1Report(ctx: DataQueryContext): Promise<DataQueryResult> 
         r.voucherDate || "—",
         r.voucherType || "—",
         (r.description || "").slice(0, 40),
-        parseFloat(r.debitAmount || "0") > 0 ? fmtDec(parseFloat(r.debitAmount!)) : "—",
-        parseFloat(r.creditAmount || "0") > 0 ? fmtDec(parseFloat(r.creditAmount!)) : "—",
+        toMoney(r.debitAmount).toNumber() > 0 ? fmtDec(toMoney(r.debitAmount!).toNumber()) : "—",
+        toMoney(r.creditAmount).toNumber() > 0 ? fmtDec(toMoney(r.creditAmount!).toNumber()) : "—",
       ]);
       dataQueryResult = {
         queryType: "supplier_statement",
@@ -295,8 +325,8 @@ async function runPhase1Report(ctx: DataQueryContext): Promise<DataQueryResult> 
         JOIN voucher_entries ve ON ve.ledger_account_id = la.id
         JOIN vouchers v ON v.id = ve.voucher_id AND v.optional = false AND v.deleted_at IS NULL AND v.voucher_type = 'Receipt'
         WHERE la.company_id = ${companyId} AND la.active = true
-          AND v.voucher_date BETWEEN ${dateFrom} AND ${dateTo}
-          AND la.account_type NOT IN ('Cash','Bank','Income','Expense','Direct Expense','Indirect Expense','Equity','Government Taxes')
+          AND COALESCE(v.effective_date, v.voucher_date) BETWEEN ${dateFrom} AND ${dateTo}
+          AND LOWER(TRIM(la.account_type)) NOT IN (${nonPartyAccountTypesSql()})
           AND CAST(ve.credit_amount AS numeric) > 0
         GROUP BY la.id, la.name
         ORDER BY total_received DESC
@@ -306,7 +336,7 @@ async function runPhase1Report(ctx: DataQueryContext): Promise<DataQueryResult> 
         String(i + 1),
         r.name,
         String(r.tx_count),
-        fmt(parseFloat(r.total_received || "0")),
+        fmt(toMoney(r.total_received).toNumber()),
       ]);
       dataQueryResult = {
         queryType: "top_customers",
@@ -333,7 +363,7 @@ async function runPhase1Report(ctx: DataQueryContext): Promise<DataQueryResult> 
         LEFT JOIN voucher_entries ve ON ve.ledger_account_id = la.id
         LEFT JOIN vouchers v ON v.id = ve.voucher_id
         WHERE la.company_id = ${companyId} AND la.active = true AND la.deleted_at IS NULL
-          AND la.account_type NOT IN ('Cash','Bank','Income','Expense','Direct Expense','Indirect Expense','Equity','Profit','Government Taxes')
+          AND LOWER(TRIM(la.account_type)) NOT IN (${nonPartyAccountTypesSql()})
         GROUP BY la.id, la.name, la.opening_balance, la.opening_balance_side
         HAVING (
           CASE WHEN la.opening_balance_side = 'Cr' THEN -CAST(la.opening_balance AS numeric) ELSE CAST(la.opening_balance AS numeric) END
@@ -348,9 +378,9 @@ async function runPhase1Report(ctx: DataQueryContext): Promise<DataQueryResult> 
         LIMIT ${rowLimit}
       `);
       const tableRows = rows.rows.map((row) => {
-        const ob = parseFloat(row.opening_balance || "0");
+        const ob = toMoney(row.opening_balance).toNumber();
         const obAdj = row.opening_balance_side === "Cr" ? -ob : ob;
-        const bal = obAdj + parseFloat(row.total_debit || "0") - parseFloat(row.total_credit || "0");
+        const bal = plusMoney(obAdj, toMoney(row.total_debit).minus(toMoney(row.total_credit)));
         return [row.name, fmt(Math.abs(bal))];
       });
       dataQueryResult = {
@@ -398,11 +428,11 @@ async function runPhase1Report(ctx: DataQueryContext): Promise<DataQueryResult> 
         GROUP BY fb.status ORDER BY count DESC
       `);
       const totalBales = rows.rows.reduce((s: number, r) => s + parseInt(r.count || "0"), 0);
-      const totalWeight = rows.rows.reduce((s: number, r) => s + parseFloat(r.total_weight || "0"), 0);
+      const totalWeight = rows.rows.reduce((s: number, r) => plusMoney(s, r.total_weight), 0);
       const tableRows = rows.rows.map((r) => [
         String(r.status).replace(/_/g, " "),
         String(r.count),
-        fmtDec(parseFloat(r.total_weight || "0")) + " kg",
+        fmtDec(toMoney(r.total_weight).toNumber()) + " kg",
       ]);
       dataQueryResult = {
         queryType: "bale_production",

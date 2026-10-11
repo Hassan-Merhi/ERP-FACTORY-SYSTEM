@@ -83,7 +83,7 @@ describe("Mobile responsiveness Phase 7 Factory workflows", () => {
       "max-sm:[&_input]:min-h-11",
       "max-sm:[&_input]:text-base",
       "[&_form]:max-w-full",
-      "[&_[data-mobile-data-list]]:max-w-full",
+      "**:data-mobile-data-list:max-w-full",
     ]) {
       expect(shell).toContain(token);
     }

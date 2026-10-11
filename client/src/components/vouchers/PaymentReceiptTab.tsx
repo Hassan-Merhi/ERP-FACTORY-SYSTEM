@@ -328,7 +328,7 @@ export function PaymentReceiptTab({
                       <FormControl>
                         <Input
                           type="date"
-                          className="w-[9.5rem] h-8 text-xs"
+                          className="w-38 h-8 text-xs"
                           value={
                             field.value instanceof Date
                               ? format(field.value, "yyyy-MM-dd")
@@ -354,7 +354,7 @@ export function PaymentReceiptTab({
                       <span className="text-xs text-muted-foreground whitespace-nowrap">Eff.</span>
                       <Input
                         type="date"
-                        className="w-[9.5rem] h-8 text-xs"
+                        className="w-38 h-8 text-xs"
                         value={effectiveDate || ""}
                         onChange={(e) => onEffectiveDateChange(e.target.value)}
                         data-testid="input-effective-date"
@@ -752,8 +752,8 @@ export function PaymentReceiptTab({
                         </span>
                       ) : (
                         <span className="text-[11px] text-muted-foreground hidden sm:block">
-                          <kbd className="px-1 py-0.5 bg-muted rounded text-[11px]">⌘</kbd>
-                          <kbd className="px-1 py-0.5 bg-muted rounded text-[11px] ml-1">↵</kbd> to save
+                          <kbd className="px-1 py-0.5 bg-muted rounded-sm text-[11px]">⌘</kbd>
+                          <kbd className="px-1 py-0.5 bg-muted rounded-sm text-[11px] ml-1">↵</kbd> to save
                         </span>
                       )}
                     </div>

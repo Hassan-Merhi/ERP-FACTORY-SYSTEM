@@ -106,7 +106,7 @@ export function AgentStatementPanel({
         <div className={phone ? "min-w-0 flex-1" : undefined}>
           <div className="flex items-center gap-2.5 flex-wrap">
             <h2
-              className={`${phone ? "break-words text-lg" : "text-xl"} font-bold tracking-tight`}
+              className={`${phone ? "wrap-break-word text-lg" : "text-xl"} font-bold tracking-tight`}
               data-testid="text-agent-account-name"
             >
               {selectedAccount.name}
@@ -254,7 +254,7 @@ export function AgentStatementPanel({
           </div>
         </div>
 
-        <div className="rounded-xl border overflow-hidden shadow-sm">
+        <div className="rounded-xl border overflow-hidden shadow-xs">
           <Table mobileLayout="cards">
             <TableHeader>
               <TableRow className="bg-muted/50 hover:bg-muted/50 border-b-2">
@@ -363,7 +363,7 @@ export function AgentStatementPanel({
                           <TableCell className="py-3">
                             {note && (
                               <p
-                                className={`text-xs text-muted-foreground ${phone ? "break-words" : "truncate max-w-xs"}`}
+                                className={`text-xs text-muted-foreground ${phone ? "wrap-break-word" : "truncate max-w-xs"}`}
                               >
                                 {note}
                               </p>

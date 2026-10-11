@@ -266,7 +266,7 @@ export function ContainerPlannerPhase1() {
                 <tbody>
                   {preview.products.map((product, rowIndex) => (
                     <tr key={product.articleCode} className={rowIndex % 2 === 0 ? "bg-background" : "bg-muted/20"}>
-                      <td className="sticky left-0 z-[5] border-b border-r bg-inherit px-3 py-2">
+                      <td className="sticky left-0 z-5 border-b border-r bg-inherit px-3 py-2">
                         <div className="font-medium">{product.productName}</div>
                         <div className="font-mono text-[11px] text-muted-foreground">{product.articleCode}</div>
                       </td>

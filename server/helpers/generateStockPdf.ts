@@ -9,6 +9,7 @@
  */
 
 import { pool } from "../db";
+import { toMoney } from "../lib/money";
 
 // ── Geometry ──────────────────────────────────────────────────────────────────
 const X_LEFT = 40;
@@ -125,9 +126,9 @@ export async function generateStockPdf(
       itemName: r.item_name,
       groupName: r.group_name || "Unassigned",
       uom: r.uom || "BL",
-      qty: parseFloat(r.quantity || "0"),
-      rate: parseFloat(r.average_rate || "0"),
-      totalValue: parseFloat(r.total_value || "0"),
+      qty: toMoney(r.quantity).toNumber(),
+      rate: toMoney(r.average_rate).toNumber(),
+      totalValue: toMoney(r.total_value).toNumber(),
     }))
     .filter((r) => {
       if (!includeNegativeStock && r.qty < 0) return false;

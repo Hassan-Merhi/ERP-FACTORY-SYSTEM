@@ -463,11 +463,11 @@ export default function FactoryOtwTrackingTab({ onEdit }: OtwTrackingTabProps = 
         </p>
         <div className="flex items-center gap-3 flex-wrap text-xs text-muted-foreground">
           <span className="flex items-center gap-1">
-            <span className="inline-block w-3 h-3 rounded-sm bg-red-200 dark:bg-red-900/40" />
+            <span className="inline-block w-3 h-3 rounded-xs bg-red-200 dark:bg-red-900/40" />
             Overdue
           </span>
           <span className="flex items-center gap-1">
-            <span className="inline-block w-3 h-3 rounded-sm bg-amber-200 dark:bg-amber-900/40" />
+            <span className="inline-block w-3 h-3 rounded-xs bg-amber-200 dark:bg-amber-900/40" />
             Tracking Error
           </span>
           <span className="text-muted-foreground">{docsReceived} docs received</span>
@@ -482,7 +482,7 @@ export default function FactoryOtwTrackingTab({ onEdit }: OtwTrackingTabProps = 
       ) : (
         <Table mobileLayout="cards" className="text-xs whitespace-nowrap" wrapperClassName="overflow-x-auto">
           <TableHeader className="sticky top-0 z-10">
-            <TableRow className="!bg-amber-100 dark:!bg-amber-900/40">
+            <TableRow className="bg-amber-100! dark:bg-amber-900/40!">
               <TableHead className="w-8">#</TableHead>
               <TableHead>Container #</TableHead>
               <TableHead>Supplier</TableHead>

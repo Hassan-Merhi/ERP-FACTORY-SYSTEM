@@ -59,7 +59,7 @@ describe("Desktop table structure is preserved", () => {
 describe("Mobile-compatible layout patterns", () => {
   it("Login.tsx — fills the viewport at browser zoom levels without clipping overflow", () => {
     const s = src("client/src/pages/Login.tsx");
-    expect(s).toContain("min-h-screen min-h-[100dvh]");
+    expect(s).toContain("min-h-screen min-h-dvh");
     expect(s).not.toContain("xl:h-full xl:overflow-hidden");
   });
   it("FactoryWorkers.tsx — filter panel can be toggled (filtersOpen state)", () => {

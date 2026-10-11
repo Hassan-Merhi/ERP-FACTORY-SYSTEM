@@ -332,7 +332,7 @@ function EditableTransferDetail({
                         }
                       }}
                       className={cn(
-                        "w-full text-center text-sm border rounded-md bg-background px-1 py-1.5 font-mono outline-none focus:ring-2 focus:ring-primary/40 transition-shadow",
+                        "w-full text-center text-sm border rounded-md bg-background px-1 py-1.5 font-mono outline-hidden focus:ring-2 focus:ring-primary/40 transition-shadow",
                         changed && "border-primary/40 bg-primary/5"
                       )}
                       data-testid={`input-delta-${item.id}`}
@@ -377,7 +377,7 @@ function EditableTransferDetail({
                     <button
                       type="button"
                       onClick={() => removeExtra(idx)}
-                      className="sm:hidden shrink-0 h-5 w-5 flex items-center justify-center rounded text-muted-foreground hover:text-destructive transition-colors"
+                      className="sm:hidden shrink-0 h-5 w-5 flex items-center justify-center rounded-sm text-muted-foreground hover:text-destructive transition-colors"
                       data-testid={`button-remove-extra-mobile-${item.stockItemId}`}
                     >
                       <X className="h-3 w-3" />
@@ -405,7 +405,7 @@ function EditableTransferDetail({
                           focusRelative(`extra-${item.stockItemId}`, -1);
                         }
                       }}
-                      className="w-full text-center text-sm border border-primary/40 rounded-md bg-primary/5 px-1 py-1.5 font-mono outline-none focus:ring-2 focus:ring-primary/40 transition-shadow"
+                      className="w-full text-center text-sm border border-primary/40 rounded-md bg-primary/5 px-1 py-1.5 font-mono outline-hidden focus:ring-2 focus:ring-primary/40 transition-shadow"
                       data-testid={`input-extra-qty-${item.stockItemId}`}
                     />
                   </div>
@@ -422,7 +422,7 @@ function EditableTransferDetail({
                   <button
                     type="button"
                     onClick={() => removeExtra(idx)}
-                    className="hidden sm:flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:text-destructive transition-colors"
+                    className="hidden sm:flex h-6 w-6 items-center justify-center rounded-sm text-muted-foreground hover:text-destructive transition-colors"
                     data-testid={`button-remove-extra-${item.stockItemId}`}
                   >
                     <X className="h-3.5 w-3.5" />
@@ -465,7 +465,7 @@ function EditableTransferDetail({
                     setPanelSearch("");
                   }
                 }}
-                className="flex-1 text-sm bg-transparent outline-none text-foreground placeholder:text-muted-foreground"
+                className="flex-1 text-sm bg-transparent outline-hidden text-foreground placeholder:text-muted-foreground"
                 data-testid="input-search-bar"
                 autoComplete="off"
               />

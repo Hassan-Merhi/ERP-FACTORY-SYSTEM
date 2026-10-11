@@ -233,7 +233,7 @@ export const coreTablesAndColumns: string[] = [
         WHEN page_key IN ('factory/intelligence/profitability','factory/intelligence/cashflow','factory/net-position-details','factory/net-position','factory/net-profit-analytics') THEN 'factory/intelligence/financial-hub'
         WHEN page_key IN ('factory/financial-snapshot') THEN 'factory/analytics'
         WHEN page_key IN ('factory/users','factory/customer-logos','factory/label-banners') THEN 'factory/settings'
-        WHEN page_key IN ('factory/bale-ledger','factory/pos') THEN 'factory/production-report'
+        WHEN page_key IN ('factory/bale-ledger') THEN 'factory/production-report'
         ELSE page_key
       END
     FROM factory_user_page_access
@@ -253,7 +253,7 @@ export const coreTablesAndColumns: string[] = [
       'factory/intelligence/profitability','factory/intelligence/cashflow','factory/net-position-details','factory/net-position','factory/net-profit-analytics',
       'factory/financial-snapshot',
       'factory/users','factory/customer-logos','factory/label-banners',
-      'factory/bale-ledger','factory/pos'
+      'factory/bale-ledger'
     )
     ON CONFLICT (company_id, user_id, page_key) DO NOTHING`,
   `DELETE FROM factory_user_page_access
@@ -274,7 +274,7 @@ export const coreTablesAndColumns: string[] = [
       'factory/intelligence/profitability','factory/intelligence/cashflow','factory/net-position-details','factory/net-position','factory/net-profit-analytics',
       'factory/financial-snapshot',
       'factory/users','factory/customer-logos','factory/label-banners',
-      'factory/bale-ledger','factory/pos',
+      'factory/bale-ledger',
       'factory/mix-batches','factory/bale-transfers'
     )`,
   `UPDATE factory_user_profiles

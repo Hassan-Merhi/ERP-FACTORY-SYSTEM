@@ -228,7 +228,7 @@ export function ContainersWhatsAppSection() {
                       <button
                         key={c.id}
                         type="button"
-                        className={`w-full text-left px-3 py-2 rounded text-xs hover-elevate ${groupChatId === c.id ? "bg-primary/10 text-primary font-medium" : ""}`}
+                        className={`w-full text-left px-3 py-2 rounded-sm text-xs hover-elevate ${groupChatId === c.id ? "bg-primary/10 text-primary font-medium" : ""}`}
                         onClick={() => {
                           setGroupChatId(c.id);
                           setShowGroupPicker(false);

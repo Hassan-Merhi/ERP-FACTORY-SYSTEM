@@ -66,7 +66,7 @@ function ToolCard({
   };
 
   return (
-    <Card className="group flex h-full flex-col overflow-hidden border-border/70 bg-card/80 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-md">
+    <Card className="group flex h-full flex-col overflow-hidden border-border/70 bg-card/80 shadow-xs transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-md">
       <CardHeader className="space-y-3 pb-3">
         <div
           className={`flex h-10 w-10 items-center justify-center rounded-xl border border-border/60 ${iconStyles[accent]}`}
@@ -138,12 +138,12 @@ export function DataToolsView({ model }: Props) {
 
   return (
     <div className="space-y-8">
-      <header className="relative overflow-hidden rounded-2xl border border-primary/15 bg-gradient-to-br from-card via-card to-primary/10 p-5 shadow-sm sm:p-6">
+      <header className="relative overflow-hidden rounded-2xl border border-primary/15 bg-linear-to-br from-card via-card to-primary/10 p-5 shadow-xs sm:p-6">
         <div className="pointer-events-none absolute -right-16 -top-20 h-48 w-48 rounded-full bg-primary/10 blur-3xl" />
         <div className="relative flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
           <div className="space-y-4">
             <div className="flex flex-wrap items-center gap-2">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-sm">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-xs">
                 <Database className="h-5 w-5" />
               </div>
               <Badge variant="secondary" className="rounded-full px-3 py-1 text-xs">
@@ -181,7 +181,7 @@ export function DataToolsView({ model }: Props) {
       </header>
 
       {appMode === "factory" && (
-        <Card className="overflow-hidden border-primary/20 bg-primary/[0.03] shadow-sm">
+        <Card className="overflow-hidden border-primary/20 bg-primary/3 shadow-xs">
           <CardContent className="flex flex-col gap-5 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
             <div className="flex items-start gap-3">
               <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">

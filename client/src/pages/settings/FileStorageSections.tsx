@@ -115,7 +115,7 @@ export function PreviewModal({
             <iframe
               src={blobUrl}
               title="PDF Preview"
-              className="w-full h-[65vh] rounded border-0"
+              className="w-full h-[65vh] rounded-sm border-0"
               data-testid="preview-pdf"
             />
           )}
@@ -124,7 +124,7 @@ export function PreviewModal({
               <img
                 src={blobUrl}
                 alt={visibleName(file)}
-                className="max-w-full max-h-[65vh] rounded object-contain"
+                className="max-w-full max-h-[65vh] rounded-sm object-contain"
                 data-testid="preview-image"
               />
             </div>
@@ -157,7 +157,7 @@ export function PreviewModal({
           )}
           {!loading && !error && type === "text" && text !== undefined && (
             <pre
-              className="text-xs whitespace-pre-wrap font-mono bg-muted/30 p-4 rounded max-h-[65vh] overflow-auto"
+              className="text-xs whitespace-pre-wrap font-mono bg-muted/30 p-4 rounded-sm max-h-[65vh] overflow-auto"
               data-testid="preview-text"
             >
               {text}

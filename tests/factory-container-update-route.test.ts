@@ -275,6 +275,12 @@ describe("PATCH /api/factory/containers/:id — exchange rates", () => {
 
   it("manual mode trusts a rate supplied in the request and marks it confirmed", async () => {
     const id = await seedContainer({ currencyCode: "USD", fxRateConfirmed: false, ratePerKg: "4.000000" });
+    // Phase 19 C (M2): a manual rate is accepted where a recorded dated AUD rate exists.
+    await pool.query(
+      `INSERT INTO factory_fx_rates (company_id, currency_code, rate_to_usd, effective_date, source)
+       VALUES ($1, 'AUD', '0.66000000', '2020-01-01', 'manual')`,
+      [ctx.companyId]
+    );
 
     const response = await patchContainer(id, {
       currencyCode: "AUD",

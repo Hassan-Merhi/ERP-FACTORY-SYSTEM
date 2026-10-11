@@ -12,7 +12,7 @@ export function LoadingSetupCard({ model }: { model: FactoryContainerLoadingScan
   const { orderId, customerId, activeProformas } = model;
 
   return (
-    <div className="overflow-hidden rounded-2xl border bg-background/90 shadow-sm">
+    <div className="overflow-hidden rounded-2xl border bg-background/90 shadow-xs">
       <div className="border-b px-4 py-3 sm:px-5">
         <h3 className="text-sm font-semibold sm:text-base">{model.tr("loadingDetails")}</h3>
         <p className="mt-0.5 text-xs text-muted-foreground">
@@ -93,7 +93,9 @@ export function LoadingSetupCard({ model }: { model: FactoryContainerLoadingScan
         )}
 
         <div>
-          <label className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-muted-foreground">{model.tr("note")}</label>
+          <label className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            {model.tr("note")}
+          </label>
           {orderId ? (
             <div className="flex items-start gap-2">
               <Textarea

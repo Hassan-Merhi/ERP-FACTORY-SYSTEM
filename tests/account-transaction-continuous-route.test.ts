@@ -23,6 +23,15 @@ vi.mock("../server/routes/helpers/supplierBalanceHelpers", () => ({
   authorizeCompanyIdParam: async (_req: unknown, id: number) => id,
 }));
 vi.mock("../server/lib/factoryCustomerLedger", () => ({ getCustomerByLedgerId: async () => null }));
+// The customer statement runner (balance engine) is not exercised here.
+vi.mock("../server/services/accounting/balances/customerLedgerStatement", () => ({
+  customerLedgerNetBefore: async () => 0,
+  loadCustomerNotInLedger: async () => ({ label: "", total: "0.00", prePeriodTotal: "0.00", rows: [] }),
+}));
+vi.mock("../server/services/accounting/balances/partyLineRules", () => ({
+  customerOwnedLinePredicate: () => "TRUE",
+  liveVoucherPredicate: () => "TRUE",
+}));
 vi.mock("../server/services/accounting/accountStatementCurrency", () => ({
   summarizeAccountStatementCurrency: () => [],
 }));

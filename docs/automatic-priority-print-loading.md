@@ -30,8 +30,8 @@ A saved snapshot is reused only while the bale is still linked to that loading. 
 
 ## Labels
 
-- A4, A5 and sticker labels keep the exact ordinary layout, sizes, banners and barcodes. For an allocated bale, only the small HMD logo inside the barcode information box changes: the "HMD" letters and swoosh are drawn in the bale's **saved** priority color, "INTERNATIONAL GROUP" stays black. The logo is a full-resolution palette PNG of the same artwork whose letter palette entries are recolored (`client/src/lib/priorityHmdLogo.ts`), so it prints as sharply as the ordinary logo. The large HMD banners are unchanged. There is no colored stripe.
-- Legacy Pressing and Production finalization labels color only their small "HMD" text.
+- A4, A5 and sticker labels keep the exact ordinary layout, sizes, banners and barcodes. For an allocated bale, only the small HMD logo inside the barcode information box changes: it is replaced by an empty solid rounded rectangle filled with the bale's **saved** priority color (A4 25×14 mm, A5 22×12 mm, sticker 20×10 mm — the same size on screen and in print), with no lettering inside it. The large HMD banners are unchanged. There is no colored stripe. See [priority-scan-fixed-palette-color-block.md](priority-scan-fixed-palette-color-block.md).
+- Legacy Pressing and Production finalization labels replace their small "HMD / INTERNATIONAL GROUP" text with the same 25×14 mm saved-color rectangle; ordinary bales keep the text.
 - Bales without an allocation print exactly as before.
 - Colors come only from the server snapshot (`#RRGGBB`, `#RGB` or a known legacy name); an unrecognized color cancels printing instead of printing a misleading label.
 - Print routing (A4/A5 vs sticker, design-color picker) is the same as for ordinary labels. Zebra ZPL is monochrome, so a batch containing a priority label always uses browser printing.

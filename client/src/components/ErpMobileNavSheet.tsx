@@ -189,14 +189,14 @@ export function ErpMobileNavSheet({ user, open, onOpenChange }: ErpMobileNavShee
         onOpenAutoFocus={(event) => event.preventDefault()}
         // flex-nowrap: the global phone rule that wraps `.flex.gap-*` would split this height-capped
         // column into side-by-side columns (the old phone sidebar's two-column mess).
-        className="mx-auto max-h-[calc(var(--erp-visual-viewport-height,var(--app-viewport-height))-2.5rem)] !flex-nowrap gap-0 rounded-t-2xl p-0 sm:p-0"
+        className="mx-auto max-h-[calc(var(--erp-visual-viewport-height,var(--app-viewport-height))-2.5rem)] flex-nowrap! gap-0 rounded-t-2xl p-0 sm:p-0"
       >
-        <div className="flex shrink-0 flex-col !flex-nowrap gap-3 border-b px-4 pb-3 pt-4 text-start">
+        <div className="flex shrink-0 flex-col flex-nowrap! gap-3 border-b px-4 pb-3 pt-4 text-start">
           <SheetTitle className="pe-10">{t("mobileNav.allPages")}</SheetTitle>
           <SheetDescription className="sr-only">{t("mobileNav.allPagesDescription")}</SheetDescription>
           <div className="relative">
             <Search
-              className="pointer-events-none absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+              className="pointer-events-none absolute inset-s-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
               aria-hidden="true"
             />
             <Input

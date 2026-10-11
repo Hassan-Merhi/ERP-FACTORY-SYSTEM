@@ -73,4 +73,31 @@ describe("stock transfer create totals", () => {
     ]);
     expect(voucher.rows[0].total_amount).toBe("0.46");
   });
+
+  it("rejects malformed quantities and rates instead of reading them as zero", async () => {
+    const stockItemId = ctx.stockItemIds[0];
+    const badQuantity = await agent.post("/api/stock-transfers").send({
+      sourceLocationId: ctx.locationId,
+      destinationLocationId: ctx.location2Id,
+      voucherDate: "2026-09-14",
+      clientRequestId: `${TEST_PREFIX}-bad-qty`,
+      items: [{ stockItemId, sourceLocationId: ctx.locationId, quantity: "-1foo" }],
+    });
+    expect(badQuantity.status).toBe(400);
+
+    const [voucher] = await db
+      .select({ id: schema.vouchers.id })
+      .from(schema.vouchers)
+      .where(eq(schema.vouchers.companyId, ctx.companyId))
+      .limit(1);
+    expect(voucher).toBeDefined();
+    // "-1foo" used to become 0 and fall through to the inventory-rate fallback.
+    const badRate = await agent.post("/api/stock-transfers").send({
+      voucherId: voucher.id,
+      destinationLocationId: ctx.location2Id,
+      items: [{ stockItemId, sourceLocationId: ctx.locationId, quantity: "1", rate: "-1foo" }],
+    });
+    expect(badRate.status).toBe(400);
+    expect(badRate.body.message).toBe("Rate must be non-negative for all items");
+  });
 });

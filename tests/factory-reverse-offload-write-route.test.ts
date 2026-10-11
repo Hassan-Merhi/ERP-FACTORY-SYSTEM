@@ -142,9 +142,16 @@ describe("POST /api/factory/containers/:id/reverse-offload", () => {
     expect(Number(supplier.rows[0].current_raw_material_cost_per_kg_usd)).toBeCloseTo(0, 8);
 
     // Offload-time financials are part of the same unwind.
-    expect((await pool.query(`SELECT id FROM vouchers WHERE id = $1`, [offloadVoucherId])).rowCount).toBe(0);
     expect(
-      (await pool.query(`SELECT id FROM voucher_entries WHERE voucher_id = $1`, [offloadVoucherId])).rowCount
+      (await pool.query(`SELECT id FROM vouchers WHERE id = $1 AND deleted_at IS NULL`, [offloadVoucherId])).rowCount
+    ).toBe(0);
+    expect(
+      (
+        await pool.query(
+          `SELECT ve.id FROM voucher_entries ve JOIN vouchers v ON v.id = ve.voucher_id AND v.deleted_at IS NULL WHERE ve.voucher_id = $1`,
+          [offloadVoucherId]
+        )
+      ).rowCount
     ).toBe(0);
 
     // The restored status closes the destructive path immediately. Keeping this

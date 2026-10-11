@@ -55,9 +55,9 @@ export function BatchRow({
         data-testid={`group-${group.key}`}
       >
         {isExpanded ? (
-          <ChevronDown className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
+          <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
         ) : (
-          <ChevronRight className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
+          <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
         )}
         <div className="min-w-0 flex-1">
           <p className={`font-medium ${condensed ? "text-xs" : "text-sm"}`}>
@@ -67,7 +67,7 @@ export function BatchRow({
             {group.records.length} worker{group.records.length !== 1 ? "s" : ""}
           </p>
         </div>
-        <div className="flex flex-shrink-0 items-center gap-3">
+        <div className="flex shrink-0 items-center gap-3">
           <div className="text-right">
             <p className={`font-mono font-semibold ${condensed ? "text-xs" : "text-sm"}`}>${total.toFixed(2)}</p>
             <p className="text-xs text-muted-foreground">

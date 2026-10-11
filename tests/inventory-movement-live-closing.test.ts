@@ -170,4 +170,39 @@ describe("inventory movement All Locations closing balance", () => {
     });
     expect(harness.state.selectRows).toEqual([{ quantity: "2476", totalValue: "37140" }]);
   });
+
+  it("keeps running drill values exact for cent amounts", async () => {
+    harness.state.selectRows = [{ quantity: "2", totalValue: "0.3" }];
+    const movement = (date: string, inwardValue: number) => ({
+      date,
+      particulars: "Receipt",
+      vchType: "Purchase",
+      voucherId: 1,
+      poId: null,
+      inwardQty: 1,
+      inwardRate: inwardValue,
+      inwardValue,
+      outwardQty: 0,
+      outwardRate: 0,
+      outwardValue: 0,
+      isPOS: false,
+      posSellingRate: 0,
+      posSellingValue: 0,
+    });
+    // The opening is rebuilt from today's live total (0.3) minus the month's receipts: zero.
+    harness.fetchStockMovements.mockImplementation(async (_c: number, _s: number, _l: unknown, start: string) =>
+      start === "2026-09-01" ? [movement("2026-09-02", 0.1), movement("2026-09-03", 0.2)] : []
+    );
+    const res = responseHarness();
+    await routes.get("GET /api/inventory/movement/drill")!(
+      { session: { currentCompanyId: 4 }, query: { stockItemId: "9", year: "2026", month: "9" } },
+      res
+    );
+
+    expect(res.statusCode).toBe(200);
+    const last = res.body.transactions.at(-1);
+    expect(res.body.transactions[0].closingValue).toBe(0.1);
+    expect(last.closingValue).toBe(0.3);
+    expect(res.body.totals.inwardValue).toBe(0.3);
+  });
 });

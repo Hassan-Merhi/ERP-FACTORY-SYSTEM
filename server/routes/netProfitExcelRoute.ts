@@ -5,23 +5,14 @@ import { db } from "../db";
 import { storage } from "../storage";
 import { requireAuth } from "../auth";
 import { logAudit } from "./_helpers";
-import { loadSalaryAdvanceNetPositionAdjustments } from "../helpers/salaryAdvanceNetPosition";
-import {
-  inventory,
-  containers,
-  vouchers,
-  voucherEntries,
-  salesItems,
-  locations,
-  employees,
-  exchangeRates,
-} from "@shared/schema";
-import { eq, and, desc, inArray, sql, isNull, gte, lte } from "drizzle-orm";
-import { companyScopedSuppliers } from "@shared/schema/supplierCompanyScope";
+import { calculateNetPositionAsOf } from "../helpers/calculateNetPositionAsOf";
+import { vouchers, voucherEntries, salesItems } from "@shared/schema";
+import { eq, and, inArray, sql, isNull, gte, lte } from "drizzle-orm";
 import {
   computeBalancesFromEntries,
   computeStats,
   fmtMonthLabel,
+  netProfitSection,
   writeSheet,
   writeSummarySheet,
   type NetProfitBalanceEntry,
@@ -29,6 +20,10 @@ import {
 } from "./netProfitExcelSheets";
 import type Decimal from "decimal.js";
 import { MoneyDecimal, sumMoney, toMoney } from "../lib/money";
+import { ledgerCarriesStock } from "../services/accounting/perpetualInventory/reportBasis";
+import { companyStockValue } from "../services/inventory/stockValuation";
+import { voucherBookedOnSql } from "../services/accounting/balances/partyLineRules";
+import { notFiscalClosingVoucherSql } from "../services/accounting/balances/periodReportRules";
 
 export function registerNetProfitExcelRoute(app: Express) {
   app.get("/api/reports/net-profit-excel", requireAuth, async (req, res) => {
@@ -46,20 +41,28 @@ export function registerNetProfitExcelRoute(app: Express) {
       const startDate = req.query.startDate ? new Date(req.query.startDate as string) : null;
       const endDate = req.query.endDate ? new Date(req.query.endDate as string) : null;
       const periodLabel = (req.query.periodLabel as string) || "All Time";
+      // Perpetual inventory (wave 8.5): when the ledger carries the stock as of the
+      // period end, cost of sales is in the ledger (COGS) and the periodic opening
+      // and closing stock terms, and the computed stock in net position, drop out.
+      const ledgerStock = await ledgerCarriesStock(companyId, endDate ? endDate.toISOString().split("T")[0] : null);
 
       const companyAccounts = await storage.getAllLedgerAccounts(companyId, true);
 
-      // Fetch period vouchers WITH their dates for monthly grouping
+      // Fetch period vouchers WITH their dates for monthly grouping. The fiscal
+      // closing journal is not period profit (wave 17 A).
       const voucherConditions = [
         eq(vouchers.companyId, companyId),
         isNull(vouchers.deletedAt),
         eq(vouchers.optional, false),
+        notFiscalClosingVoucherSql,
       ];
-      if (startDate) voucherConditions.push(gte(vouchers.voucherDate, startDate.toISOString().split("T")[0]));
-      if (endDate) voucherConditions.push(lte(vouchers.voucherDate, endDate.toISOString().split("T")[0]));
+      // One date basis with the engine (wave 13, R2): a voucher counts from
+      // COALESCE(effective_date, voucher_date), for the period and its months.
+      if (startDate) voucherConditions.push(gte(voucherBookedOnSql, startDate.toISOString().split("T")[0]));
+      if (endDate) voucherConditions.push(lte(voucherBookedOnSql, endDate.toISOString().split("T")[0]));
 
       const allPeriodVouchers = await db
-        .select({ id: vouchers.id, voucherDate: vouchers.voucherDate })
+        .select({ id: vouchers.id, voucherDate: sql`${voucherBookedOnSql}::text`.mapWith(String) })
         .from(vouchers)
         .where(and(...voucherConditions))
         .execute();
@@ -67,8 +70,7 @@ export function registerNetProfitExcelRoute(app: Express) {
       // Group voucher IDs by YYYY-MM
       const vouchersByMonth = new Map<string, number[]>();
       for (const v of allPeriodVouchers) {
-        const d = new Date(v.voucherDate);
-        const mk = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+        const mk = String(v.voucherDate).slice(0, 7);
         if (!vouchersByMonth.has(mk)) vouchersByMonth.set(mk, []);
         vouchersByMonth.get(mk)!.push(v.id);
       }
@@ -104,10 +106,10 @@ export function registerNetProfitExcelRoute(app: Express) {
         isNull(vouchers.deletedAt),
         eq(vouchers.optional, false),
       ];
-      if (startDate) salesConditions.push(gte(vouchers.voucherDate, startDate.toISOString().split("T")[0]));
-      if (endDate) salesConditions.push(lte(vouchers.voucherDate, endDate.toISOString().split("T")[0]));
+      if (startDate) salesConditions.push(gte(voucherBookedOnSql, startDate.toISOString().split("T")[0]));
+      if (endDate) salesConditions.push(lte(voucherBookedOnSql, endDate.toISOString().split("T")[0]));
       const allSalesRows = await db
-        .select({ voucherDate: vouchers.voucherDate, total: salesItems.totalSales })
+        .select({ voucherDate: sql`${voucherBookedOnSql}::text`.mapWith(String), total: salesItems.totalSales })
         .from(salesItems)
         .innerJoin(vouchers, eq(salesItems.voucherId, vouchers.id))
         .where(and(...salesConditions))
@@ -118,26 +120,27 @@ export function registerNetProfitExcelRoute(app: Express) {
       const salesByMonth = new Map<string, Decimal>();
       let totalSalesAll = ZERO;
       for (const s of allSalesRows) {
-        const d = new Date(s.voucherDate);
-        const mk = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+        const mk = String(s.voucherDate).slice(0, 7);
         const v = toMoney(s.total);
         salesByMonth.set(mk, (salesByMonth.get(mk) ?? ZERO).plus(v));
         totalSalesAll = totalSalesAll.plus(v);
       }
 
-      // ERP voucher-based income: income accounts excluded from directIncomes/indirectIncomes
-      // (SALES-named accounts and uncategorized income) that appear in non-POS vouchers.
-      const xlsxMissedIncomeAccounts = companyAccounts.filter((acc) => {
-        if (acc.accountType !== "Income") return false;
-        if (acc.subType === "Indirect Income") return false;
-        if (
-          acc.subType === "Direct Income" &&
-          !acc.code?.includes("SALES") &&
-          !acc.name?.toLowerCase().includes("sales")
-        )
-          return false;
-        return true;
-      });
+      // ERP voucher-based income: the income accounts read through the sales
+      // total (SALES-named and uncategorised income, netProfitSection
+      // "salesAccount") that appear in non-POS vouchers. Direct and indirect
+      // income have their own sections.
+      const importChargesParent = companyAccounts.find((acc) => acc.code === "IMPORT_CHARGES");
+      const importChargesIds = new Set<number>();
+      if (importChargesParent) {
+        importChargesIds.add(importChargesParent.id);
+        companyAccounts.forEach((acc) => {
+          if (acc.parentId === importChargesParent.id) importChargesIds.add(acc.id);
+        });
+      }
+      const xlsxMissedIncomeAccounts = companyAccounts.filter(
+        (acc) => netProfitSection(acc, importChargesIds) === "salesAccount"
+      );
       // Re-fetch pos voucher IDs for the period to exclude from ERP income calculation
       const posPeriodVouchersXlsx =
         allPeriodVoucherIds.length > 0 && xlsxMissedIncomeAccounts.length > 0
@@ -177,281 +180,48 @@ export function registerNetProfitExcelRoute(app: Express) {
           if (net.abs().lessThan(0.001)) continue;
           const vDate = voucherDateMap.get(e.voucherId);
           if (!vDate) continue;
-          const d = new Date(vDate);
-          const mk = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+          const mk = vDate.slice(0, 7);
           salesByMonth.set(mk, (salesByMonth.get(mk) ?? ZERO).plus(net));
           totalSalesAll = totalSalesAll.plus(net);
         }
       }
 
-      // allTimeAccountBalances for Net Position (no startDate filter)
-      const allTimeConds = [
-        eq(vouchers.companyId, companyId),
-        isNull(vouchers.deletedAt),
-        eq(vouchers.optional, false),
-      ];
-      if (endDate) allTimeConds.push(lte(vouchers.voucherDate, endDate.toISOString().split("T")[0]));
-      const allTimeVsXlsx = await db
-        .select({ id: vouchers.id })
-        .from(vouchers)
-        .where(and(...allTimeConds))
-        .execute();
-      const allTimeIdsXlsx = allTimeVsXlsx.map((v) => v.id);
-      const allTimeEntriesXlsx =
-        allTimeIdsXlsx.length > 0
-          ? await db
-              .select({
-                voucherId: voucherEntries.voucherId,
-                ledgerAccountId: voucherEntries.ledgerAccountId,
-                supplierId: voucherEntries.supplierId,
-                employeeId: voucherEntries.employeeId,
-                debitAmount: sql<string>`COALESCE("voucher_entries"."base_debit_amount", "voucher_entries"."debit_amount")`,
-                creditAmount: sql<string>`COALESCE("voucher_entries"."base_credit_amount", "voucher_entries"."credit_amount")`,
-              })
-              .from(voucherEntries)
-              .where(inArray(voucherEntries.voucherId, allTimeIdsXlsx))
-              .execute()
-          : [];
-      type DebitCredit = { debit: Decimal; credit: Decimal };
-      const NO_BALANCE: DebitCredit = { debit: ZERO, credit: ZERO };
-      const allTimeBalsXlsx = new Map<number, DebitCredit>();
-      for (const e of allTimeEntriesXlsx) {
-        if (e.ledgerAccountId) {
-          const cur = allTimeBalsXlsx.get(e.ledgerAccountId) ?? NO_BALANCE;
-          allTimeBalsXlsx.set(e.ledgerAccountId, {
-            debit: cur.debit.plus(toMoney(e.debitAmount)),
-            credit: cur.credit.plus(toMoney(e.creditAmount)),
-          });
+      // Opening and closing stock (wave 11): the one stock valuation
+      // (stockValuation.ts, SUM(total_value), negative stock not subtracting).
+      // With a period start the opening stock is the valuation as of the day
+      // before it (replayed from the stored values), not the stock items'
+      // opening master data, which is the opening of all time and says nothing
+      // about a later period. Without one (all time) the master data is the
+      // only opening there is. The closing stock is the valuation as of the
+      // period end (live when the period runs to today or later).
+      const isoDate = (date: Date) => date.toISOString().split("T")[0];
+      const today = isoDate(new Date());
+      let openingStockValue = 0;
+      if (!ledgerStock) {
+        if (startDate) {
+          const eve = new Date(startDate.getTime());
+          eve.setUTCDate(eve.getUTCDate() - 1);
+          openingStockValue = Number(await companyStockValue(db, companyId, isoDate(eve)));
+        } else {
+          const allStockItems = await storage.getAllStockItems(companyId);
+          openingStockValue = sumMoney(allStockItems.map((item) => item.openingValue)).toNumber();
         }
       }
-
-      // Opening Stock
-      const allStockItems = await storage.getAllStockItems(companyId);
-      const openingStockValue = sumMoney(allStockItems.map((item) => item.openingValue)).toNumber();
-
-      // Closing Stock (current inventory)
-      const activeLocData = await db
-        .select({ id: locations.id })
-        .from(locations)
-        .where(and(eq(locations.companyId, companyId), eq(locations.active, true), isNull(locations.deletedAt)))
-        .execute();
-      const activeLocIds = activeLocData.map((l) => l.id);
-      let closingStockExact = ZERO;
-      if (activeLocIds.length > 0) {
-        const invData = await db
-          .select({ quantity: inventory.quantity, averageRate: inventory.averageRate })
-          .from(inventory)
-          .where(inArray(inventory.locationId, activeLocIds))
-          .execute();
-        for (const inv of invData)
-          closingStockExact = closingStockExact.plus(toMoney(inv.quantity).times(toMoney(inv.averageRate)));
-      }
+      const closingAsOf = endDate && isoDate(endDate) < today ? isoDate(endDate) : null;
+      const closingStockExact = ledgerStock ? ZERO : toMoney(await companyStockValue(db, companyId, closingAsOf));
       const closingStockValue = closingStockExact.toNumber();
 
-      // Net Position - same calculation as dashboard (/api/stats/net-profit)
-      const npRound2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
-
-      // Build supplier balance map from all-time entries
-      const xlsxSupplierBals = new Map<number, DebitCredit>();
-      const xlsxEmployeeBals = new Map<number, DebitCredit>();
-      for (const e of allTimeEntriesXlsx) {
-        const d = toMoney(e.debitAmount);
-        const c = toMoney(e.creditAmount);
-        if (e.supplierId) {
-          const cur = xlsxSupplierBals.get(e.supplierId) ?? NO_BALANCE;
-          xlsxSupplierBals.set(e.supplierId, {
-            debit: d.greaterThan(0) && c.isZero() ? cur.debit.plus(d) : cur.debit,
-            credit: c.greaterThan(0) && d.isZero() ? cur.credit.plus(c) : cur.credit,
-          });
-        }
-        if (e.employeeId) {
-          const cur = xlsxEmployeeBals.get(e.employeeId) ?? NO_BALANCE;
-          xlsxEmployeeBals.set(e.employeeId, { debit: cur.debit.plus(d), credit: cur.credit.plus(c) });
-        }
-      }
-
-      // Account exclusion rules matching dashboard
-      const npExcludedTypes = ["Income", "Profit", "Equity", "EQUITY", "Fixed Asset"];
-      const npExpenseTypes = ["Expense", "Direct Expense", "Indirect Expense"];
-      const _npLiabilityTypes = ["Liability", "Duty Agent", "Transporter Agent", "Loan"];
-      const npAssetTypes = ["Asset", "Current Asset", "Fixed Asset", "Bank", "Cash"];
-      const npStockPatterns = [
-        "closing stock",
-        "opening stock",
-        "stock in hand",
-        "stock on hand",
-        "inventory",
-        "stock account",
-        "goods in stock",
-        "merchandise",
-      ];
-      const npStockCodes = ["CLOSING_STOCK", "OPENING_STOCK", "STOCK", "INVENTORY", "STOCK_IN_HAND"];
-      const npFixedAssetNames = [
-        "rover",
-        "toyota",
-        "mercedes",
-        "vehicle",
-        "car",
-        "truck",
-        "land",
-        "property",
-        "building",
-        "house",
-        "rolex",
-        "watch",
-        "luxury",
-        "jewelry",
-        "guarantee",
-        "deposit",
-        "caution",
-      ];
-      const isExcludedFromNp = (acc: {
-        code: string;
-        id: number;
-        name: string;
-        active: boolean;
-        createdAt: Date;
-        companyId: number;
-        deletedAt: Date | null;
-        accountType: string;
-        subType: string | null;
-        parentId: number | null;
-        openingBalance: string | null;
-        openingBalanceSide: string | null;
-        openingBalanceNativeAmount: string | null;
-        openingBalanceCurrency: string | null;
-        openingBalanceHistoricalRate: string | null;
-        openingBalanceBaseAmount: string | null;
-        isHidden: boolean;
-      }) => {
-        if (npExcludedTypes.includes(acc.accountType || "")) return true;
-        if (acc.code === "PRODUCTION_ADJUSTMENT" || acc.code === "CONSUMPTION_EXPENSE") return true;
-        const nameLower = (acc.name || "").toLowerCase();
-        const codeLower = (acc.code || "").toLowerCase();
-        if (npAssetTypes.includes(acc.accountType || "")) {
-          if (npStockPatterns.some((p: string) => nameLower.includes(p))) return true;
-          if (
-            npStockCodes.some(
-              (c: string) => codeLower === c.toLowerCase() || codeLower.startsWith(c.toLowerCase() + "_")
-            )
-          )
-            return true;
-          if (npFixedAssetNames.some((p: string) => nameLower.includes(p))) return true;
-        }
-        return false;
-      };
-
-      // CFA revaluation: Cash accounts hold physical CFA units — their USD worth changes with the rate.
-      const xlsxCfaRateRows = await db
-        .select()
-        .from(exchangeRates)
-        .where(
-          and(
-            eq(exchangeRates.companyId, companyId),
-            eq(exchangeRates.fromCurrency, "USD"),
-            eq(exchangeRates.toCurrency, "CFA")
-          )
-        )
-        .orderBy(desc(exchangeRates.effectiveDate))
-        .limit(1);
-      const xlsxCurrentCfaRate = xlsxCfaRateRows.length > 0 ? toMoney(xlsxCfaRateRows[0].rate) : ZERO;
-
-      let npForUs = ZERO,
-        npOnUs = ZERO;
-      for (const acc of companyAccounts) {
-        if (npExpenseTypes.includes(acc.accountType || "")) continue;
-        if (acc.accountType === "Income") continue;
-        if (isExcludedFromNp(acc)) continue;
-        const opening = toMoney(acc.openingBalance);
-        const openingSigned = acc.openingBalanceSide === "Dr" ? opening : opening.negated();
-        const bal = allTimeBalsXlsx.get(acc.id) ?? NO_BALANCE;
-        let net = openingSigned.plus(bal.debit).minus(bal.credit);
-        // Revalue Cash accounts: amounts are in CFA, divide by current rate to get USD
-        if (xlsxCurrentCfaRate.greaterThan(0) && acc.accountType === "Cash") {
-          net = net.dividedBy(xlsxCurrentCfaRate);
-        }
-        if (net.greaterThan(0)) npForUs = npForUs.plus(net);
-        else if (net.lessThan(0)) npOnUs = npOnUs.plus(net.abs());
-      }
-
-      // For All Time (no endDate): include inventory, workers, OTW — current values match the dashboard.
-      // For specific periods (endDate set): skip these non-date-bounded components.
-      const xlsxIsAllTime = !endDate;
-      if (xlsxIsAllTime) {
-        // Add stock on floor (inventory) as asset
-        npForUs = npForUs.plus(closingStockExact);
-
-        // Add worker/employee liabilities
-        const xlsxEmployees = await db
-          .select({
-            id: employees.id,
-            employeeType: employees.employeeType,
-            currentBalance: employees.currentBalance,
-            openingBalance: employees.openingBalance,
-            openingBalanceSide: sql<string>`COALESCE(opening_balance_side, 'Cr')`,
-          })
-          .from(employees)
-          .where(and(eq(employees.companyId, companyId), isNull(employees.deletedAt)))
-          .execute();
-        const xlsxManagedAdvances = await loadSalaryAdvanceNetPositionAdjustments(companyId, null);
-        const xlsxPayrollSigned = npRound2(
-          sumMoney(
-            xlsxEmployees
-              .filter((employee) => employee.employeeType !== "Worker")
-              .map((employee) => employee.currentBalance)
-          ).toNumber()
-        );
-        const xlsxWorkerIds = new Set(
-          xlsxEmployees.filter((employee) => employee.employeeType === "Worker").map((employee) => employee.id)
-        );
-        const xlsxWorkerAdvances = npRound2(
-          xlsxManagedAdvances
-            .filter((advance) => xlsxWorkerIds.has(advance.employeeId))
-            .reduce((sum, advance) => sum + advance.remainingBalance, 0)
-        );
-        npForUs = npForUs.plus(Math.max(0, -xlsxPayrollSigned)).plus(xlsxWorkerAdvances);
-        npOnUs = npOnUs.plus(Math.max(0, xlsxPayrollSigned));
-
-        // Add OTW containers as assets
-        const xlsxOtwContainers = await db
-          .select()
-          .from(containers)
-          .where(and(eq(containers.companyId, companyId), eq(containers.status, "OTW")))
-          .execute();
-        for (const c of xlsxOtwContainers) {
-          npForUs = npForUs.plus(toMoney(c.grandTotal || c.itemsTotal));
-        }
-      }
-
-      // Add suppliers (always included — xlsxSupplierBals is already bounded by endDate)
-      // Match the dashboard: only an explicit parent_company_id on this company
-      // delegates supplier balances. Standalone companies keep their own suppliers.
-      const xlsxShouldIncludeSuppliers = company?.parentCompanyId == null;
-      if (xlsxShouldIncludeSuppliers) {
-        const xlsxAllSuppliers = await db
-          .select()
-          .from(companyScopedSuppliers)
-          .where(and(eq(companyScopedSuppliers.companyId, companyId), isNull(companyScopedSuppliers.deletedAt)))
-          .execute();
-        for (const sup of xlsxAllSuppliers) {
-          const balance = xlsxSupplierBals.get(sup.id) ?? NO_BALANCE;
-          const netBalance = toMoney(sup.openingBalance).plus(balance.credit).minus(balance.debit);
-          if (netBalance.greaterThan(0)) npOnUs = npOnUs.plus(netBalance);
-          else if (netBalance.lessThan(0)) npForUs = npForUs.plus(netBalance.abs());
-        }
-      }
-
-      const netPositionValue = npRound2(npForUs.minus(npOnUs).toNumber());
-
-      // Import charges IDs
-      const importChargesParent = companyAccounts.find((acc) => acc.code === "IMPORT_CHARGES");
-      const importChargesIds = new Set<number>();
-      if (importChargesParent) {
-        importChargesIds.add(importChargesParent.id);
-        companyAccounts.forEach((acc) => {
-          if (acc.parentId === importChargesParent.id) importChargesIds.add(acc.id);
-        });
-      }
+      // Net position (wave 13, R5/X4): the one dated net position,
+      // calculateNetPositionAsOf as of the period end (today for all time),
+      // which takes ledger accounts, banks, customers, suppliers and employees
+      // from the balance engine and lists unposted amounts apart. The workbook
+      // used to compute its own: it divided USD-base Cash balances by the CFA
+      // rate, took the payroll from employees.current_balance and read no bank
+      // accounts or customers. The sheets do not print it (their layout is
+      // unchanged); it is recorded in the workbook's description.
+      const netPositionAsOf = endDate && isoDate(endDate) < today ? isoDate(endDate) : today;
+      const netPosition = await calculateNetPositionAsOf(companyId, netPositionAsOf);
+      const netPositionValue = netPosition.netPosition;
 
       // Bundled once and passed to every stats/sheet call; these three were
       // captured from this scope before the sheet code moved out.
@@ -465,6 +235,7 @@ export function registerNetProfitExcelRoute(app: Express) {
       const workbook = new ExcelJS.default.Workbook();
       workbook.creator = "ERP System";
       workbook.created = new Date();
+      workbook.description = `Net position as of ${netPositionAsOf}: ${netPositionValue.toFixed(2)}`;
 
       if (sortedMonths.length > 1) {
         // Summary sheet first (one column per month + grand total)

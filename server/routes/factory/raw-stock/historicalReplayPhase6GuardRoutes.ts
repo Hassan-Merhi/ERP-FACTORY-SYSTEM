@@ -10,6 +10,7 @@ import {
   type ReplayQueryExecutor,
 } from "../../../services/factory/historicalCostReplay";
 import { verifyRepairToken } from "../../../services/factory/repairToken";
+import { toMoney } from "../../../lib/money";
 
 const APPLY_PATH = "/api/factory/raw-stock/recalc/historical-replay/apply";
 const PREVIEW_PATH = "/api/factory/raw-stock/recalc/historical-replay";
@@ -103,9 +104,9 @@ async function loadBalanceProjectionBase(
     ),
   ]);
 
-  const totalMixWeightKg = Number.parseFloat(mixResult.rows[0]?.total_mix_kg ?? "0") || 0;
-  const currentTotalMixCost = Number.parseFloat(mixResult.rows[0]?.total_mix_cost ?? "0") || 0;
-  const totalBaleWeightKg = Number.parseFloat(baleResult.rows[0]?.total_bale_kg ?? "0") || 0;
+  const totalMixWeightKg = toMoney(mixResult.rows[0]?.total_mix_kg).toNumber();
+  const currentTotalMixCost = toMoney(mixResult.rows[0]?.total_mix_cost).toNumber();
+  const totalBaleWeightKg = toMoney(baleResult.rows[0]?.total_bale_kg).toNumber();
   const balanceOnTableWeightKg = Math.max(totalMixWeightKg - totalBaleWeightKg, 0);
   const currentRate = totalMixWeightKg > 0 ? currentTotalMixCost / totalMixWeightKg : 0;
   const currentBalanceOnTableAsset = round2(balanceOnTableWeightKg * currentRate);
@@ -271,7 +272,7 @@ export function registerHistoricalReplayPhase6GuardRoutes(app: Express): void {
             "Valued transfers and opening balances require an explicit stored USD cost. This adjustment is not denominated in USD.",
         });
       }
-      if (valuationBasis !== "QUANTITY_ONLY" && !(Number.parseFloat(row.cost_per_kg || "0") > 0)) {
+      if (valuationBasis !== "QUANTITY_ONLY" && !(toMoney(row.cost_per_kg).toNumber() > 0)) {
         await client.query("ROLLBACK");
         return res.status(409).json({
           message: "A valued transfer or opening balance must have a positive USD cost per kg.",

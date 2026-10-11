@@ -3,9 +3,9 @@
  *
  * Extracted from FactorySheetsAndSacks.tsx during the Phase 4 god-file split.
  */
-import {Check} from "lucide-react";
+import { Check } from "lucide-react";
 
-import {COLOR_PRESETS, isLight} from "../utils";
+import { COLOR_PRESETS, isLight } from "../utils";
 
 export // ─── Color Picker ─────────────────────────────────────────────────────────────
 function ColorPicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
@@ -18,7 +18,7 @@ function ColorPicker({ value, onChange }: { value: string; onChange: (v: string)
             type="button"
             title={c.label}
             onClick={() => onChange(c.value)}
-            className="relative rounded-full border-2 transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="relative rounded-full border-2 transition-all focus:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
             style={{
               width: 28,
               height: 28,

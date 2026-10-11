@@ -1,308 +1,323 @@
-html[data-application-direction="rtl"],
-html[dir="rtl"] body {
-  direction: rtl;
-}
-
-html,
-body,
-#root {
-  max-inline-size: 100%;
-}
-
-html[dir="rtl"] body,
-html[dir="rtl"] [data-slot="app-top-bar"],
-html[dir="rtl"] [data-radix-popper-content-wrapper],
-html[dir="rtl"] [role="dialog"],
-html[dir="rtl"] [role="menu"],
-html[dir="rtl"] [role="listbox"],
-html[dir="rtl"] [role="tree"],
-html[dir="rtl"] [role="navigation"] {
-  direction: rtl;
-  text-align: start;
-}
-
-html[dir="rtl"] [data-slot="app-top-bar-actions"],
-html[dir="rtl"] [data-slot="pos-top-bar-actions"] {
-  margin-left: 0;
-  margin-inline-start: auto;
-}
-
-html[dir="rtl"] input:not([dir="ltr"]),
-html[dir="rtl"] textarea:not([dir="ltr"]),
-html[dir="rtl"] select:not([dir="ltr"]),
-html[dir="rtl"] [contenteditable="true"]:not([dir="ltr"]) {
-  text-align: right;
-}
-
-html[dir="rtl"] [data-business-value],
-html[dir="rtl"] [data-stock-name],
-html[dir="rtl"] [data-stock-item-name],
-html[dir="rtl"] [data-stock-group],
-html[dir="rtl"] [data-stock-group-name],
-html[dir="rtl"] [data-account-name],
-html[dir="rtl"] [data-company-name],
-html[dir="rtl"] [data-customer-name],
-html[dir="rtl"] [data-supplier-name],
-html[dir="rtl"] [data-property-name],
-html[dir="rtl"] [data-unit-name],
-html[dir="rtl"] [data-tenant-name],
-html[dir="rtl"] [data-worker-name],
-html[dir="rtl"] [dir="auto"] {
-  unicode-bidi: isolate;
-}
-
-html[dir="rtl"] [data-article-code],
-html[dir="rtl"] [data-account-code],
-html[dir="rtl"] [data-container-number],
-html[dir="rtl"] [data-voucher-number],
-html[dir="rtl"] [data-contract-reference],
-html[dir="rtl"] [data-document-reference],
-html[dir="rtl"] [data-identifier],
-html[dir="rtl"] [data-reference],
-html[dir="rtl"] [data-currency-value],
-html[dir="rtl"] [data-money-value],
-html[dir="rtl"] [data-quantity-value],
-html[dir="rtl"] [data-date-value],
-html[dir="rtl"] [data-phone-value],
-html[dir="rtl"] [data-email-value],
-html[dir="rtl"] [data-path-value],
-html[dir="rtl"] [data-status-code],
-html[dir="rtl"] .tabular-nums,
-html[dir="rtl"] code,
-html[dir="rtl"] kbd,
-html[dir="rtl"] input[type="number"],
-html[dir="rtl"] input[type="date"],
-html[dir="rtl"] input[type="time"],
-html[dir="rtl"] input[type="datetime-local"],
-html[dir="rtl"] input[type="email"],
-html[dir="rtl"] input[type="tel"],
-html[dir="rtl"] input[inputmode="numeric"],
-html[dir="rtl"] input[inputmode="decimal"],
-html[dir="rtl"] [dir="ltr"] {
-  direction: ltr;
-  unicode-bidi: isolate;
-  text-align: left;
-}
-
-html[dir="rtl"] table,
-html[dir="rtl"] [role="table"],
-html[dir="rtl"] [role="grid"] {
-  direction: rtl;
-}
-
-html[dir="rtl"] th,
-html[dir="rtl"] td,
-html[dir="rtl"] [role="columnheader"],
-html[dir="rtl"] [role="cell"],
-html[dir="rtl"] [role="gridcell"] {
-  text-align: start;
-}
-
-html[dir="rtl"] [data-slot="dialog-close"],
-html[dir="rtl"] [data-slot="sheet-close"] {
-  right: auto;
-  left: 0.5rem;
-}
-
-html[dir="rtl"] [data-slot="dialog-header"],
-html[dir="rtl"] [data-slot="sheet-header"] {
-  padding-right: 0;
-  padding-left: 2rem;
-  text-align: right;
-}
-
-html[dir="rtl"] [data-slot="dialog-footer"],
-html[dir="rtl"] [data-slot="sheet-footer"] {
-  justify-content: flex-start;
-}
-
-html[dir="rtl"] [data-slot="sheet-content"][data-sheet-side="left"] {
-  right: 0;
-  left: auto;
-  border-right-width: 0;
-  border-left-width: 1px;
-}
-
-html[dir="rtl"] [data-slot="sheet-content"][data-sheet-side="right"] {
-  right: auto;
-  left: 0;
-  border-right-width: 1px;
-  border-left-width: 0;
-}
-
-html[dir="rtl"] [data-slot="sheet-content"][data-sheet-side="left"][data-state="open"] {
-  --tw-enter-translate-x: 100%;
-}
-
-html[dir="rtl"] [data-slot="sheet-content"][data-sheet-side="left"][data-state="closed"] {
-  --tw-exit-translate-x: 100%;
-}
-
-html[dir="rtl"] [data-slot="sheet-content"][data-sheet-side="right"][data-state="open"] {
-  --tw-enter-translate-x: -100%;
-}
-
-html[dir="rtl"] [data-slot="sheet-content"][data-sheet-side="right"][data-state="closed"] {
-  --tw-exit-translate-x: -100%;
-}
-
-html[dir="rtl"] [data-slot="sidebar"][data-side="left"] [data-slot="sidebar-container"] {
-  right: 0;
-  left: auto;
-  border-right-width: 0;
-  border-left-width: 1px;
-}
-
-html[dir="rtl"] [data-slot="sidebar"][data-side="left"][data-collapsible="offcanvas"] [data-slot="sidebar-container"] {
-  right: calc(var(--sidebar-width) * -1);
-}
-
-html[dir="rtl"] [data-slot="sidebar"][data-side="left"][data-state="expanded"] [data-slot="sidebar-container"] {
-  right: 0;
-}
-
-html[dir="rtl"] [data-slot="sidebar"][data-side="right"] [data-slot="sidebar-container"] {
-  right: auto;
-  left: 0;
-  border-right-width: 1px;
-  border-left-width: 0;
-}
-
-html[dir="rtl"] [data-slot="sidebar"][data-side="right"][data-collapsible="offcanvas"] [data-slot="sidebar-container"] {
-  left: calc(var(--sidebar-width) * -1);
-}
-
-html[dir="rtl"] [data-slot="sidebar"][data-side="right"][data-state="expanded"] [data-slot="sidebar-container"] {
-  left: 0;
-}
-
-html[dir="rtl"] [data-slot="sidebar"][data-mobile="true"][data-sheet-side="left"] {
-  right: 0;
-  left: auto;
-  border-right-width: 0;
-  border-left-width: 1px;
-}
-
-html[dir="rtl"] [data-slot="sidebar"][data-mobile="true"][data-sheet-side="right"] {
-  right: auto;
-  left: 0;
-  border-right-width: 1px;
-  border-left-width: 0;
-}
-
-html[dir="rtl"] [data-slot="sidebar-group-action"] {
-  right: auto;
-  left: 0.75rem;
-}
-
-html[dir="rtl"] [data-slot="sidebar-trigger"] svg,
-html[dir="rtl"] [data-directional-icon="true"] {
-  transform: scaleX(-1);
-}
-
-html[dir="rtl"] [data-slot="dropdown-menu-sub-trigger"] > svg:last-child,
-html[dir="rtl"] [data-slot="context-menu-sub-trigger"] > svg:last-child {
-  transform: rotate(180deg);
-}
-
-html[dir="rtl"] [data-slot="skip-link"]:focus,
-html[dir="rtl"] a[href="#main-content"]:focus {
-  right: 1rem;
-  left: auto;
-}
-
-[data-radix-popper-content-wrapper],
-[role="dialog"],
-[role="menu"],
-[role="listbox"] {
-  max-inline-size: min(calc(100vw - 1rem), var(--radix-popper-available-width, 100vw));
-}
-
-[role="dialog"] {
-  overflow-wrap: anywhere;
-}
-
-[data-horizontal-scroll-region],
-.overflow-x-auto,
-.overflow-x-scroll {
-  overscroll-behavior-inline: contain;
-  scrollbar-gutter: stable both-edges;
-}
-
-:where(
-  button,
-  a,
-  input,
-  textarea,
-  select,
-  [role="button"],
-  [role="menuitem"],
-  [role="option"],
-  [data-horizontal-scroll-region]
-):focus-visible {
-  outline: 2px solid hsl(var(--ring));
-  outline-offset: 2px;
-}
-
 /*
+ * Cascade layer: Tailwind v4 emits its utilities inside `@layer utilities`, and unlayered CSS beats
+ * any layered rule whatever its specificity. This file joins the same layer so, as before the
+ * upgrade, specificity and source order decide between these rules and utility classes. The
+ * layer order is restated first because a document orders layers by first mention, and this
+ * file may load before index.css.
+ */
+@layer theme, base, components, utilities;
+
+@layer utilities {
+  html[data-application-direction="rtl"],
+  html[dir="rtl"] body {
+    direction: rtl;
+  }
+
+  html,
+  body,
+  #root {
+    max-inline-size: 100%;
+  }
+
+  html[dir="rtl"] body,
+  html[dir="rtl"] [data-slot="app-top-bar"],
+  html[dir="rtl"] [data-radix-popper-content-wrapper],
+  html[dir="rtl"] [role="dialog"],
+  html[dir="rtl"] [role="menu"],
+  html[dir="rtl"] [role="listbox"],
+  html[dir="rtl"] [role="tree"],
+  html[dir="rtl"] [role="navigation"] {
+    direction: rtl;
+    text-align: start;
+  }
+
+  html[dir="rtl"] [data-slot="app-top-bar-actions"],
+  html[dir="rtl"] [data-slot="pos-top-bar-actions"] {
+    margin-left: 0;
+    margin-inline-start: auto;
+  }
+
+  html[dir="rtl"] input:not([dir="ltr"]),
+  html[dir="rtl"] textarea:not([dir="ltr"]),
+  html[dir="rtl"] select:not([dir="ltr"]),
+  html[dir="rtl"] [contenteditable="true"]:not([dir="ltr"]) {
+    text-align: right;
+  }
+
+  html[dir="rtl"] [data-business-value],
+  html[dir="rtl"] [data-stock-name],
+  html[dir="rtl"] [data-stock-item-name],
+  html[dir="rtl"] [data-stock-group],
+  html[dir="rtl"] [data-stock-group-name],
+  html[dir="rtl"] [data-account-name],
+  html[dir="rtl"] [data-company-name],
+  html[dir="rtl"] [data-customer-name],
+  html[dir="rtl"] [data-supplier-name],
+  html[dir="rtl"] [data-property-name],
+  html[dir="rtl"] [data-unit-name],
+  html[dir="rtl"] [data-tenant-name],
+  html[dir="rtl"] [data-worker-name],
+  html[dir="rtl"] [dir="auto"] {
+    unicode-bidi: isolate;
+  }
+
+  html[dir="rtl"] [data-article-code],
+  html[dir="rtl"] [data-account-code],
+  html[dir="rtl"] [data-container-number],
+  html[dir="rtl"] [data-voucher-number],
+  html[dir="rtl"] [data-contract-reference],
+  html[dir="rtl"] [data-document-reference],
+  html[dir="rtl"] [data-identifier],
+  html[dir="rtl"] [data-reference],
+  html[dir="rtl"] [data-currency-value],
+  html[dir="rtl"] [data-money-value],
+  html[dir="rtl"] [data-quantity-value],
+  html[dir="rtl"] [data-date-value],
+  html[dir="rtl"] [data-phone-value],
+  html[dir="rtl"] [data-email-value],
+  html[dir="rtl"] [data-path-value],
+  html[dir="rtl"] [data-status-code],
+  html[dir="rtl"] .tabular-nums,
+  html[dir="rtl"] code,
+  html[dir="rtl"] kbd,
+  html[dir="rtl"] input[type="number"],
+  html[dir="rtl"] input[type="date"],
+  html[dir="rtl"] input[type="time"],
+  html[dir="rtl"] input[type="datetime-local"],
+  html[dir="rtl"] input[type="email"],
+  html[dir="rtl"] input[type="tel"],
+  html[dir="rtl"] input[inputmode="numeric"],
+  html[dir="rtl"] input[inputmode="decimal"],
+  html[dir="rtl"] [dir="ltr"] {
+    direction: ltr;
+    unicode-bidi: isolate;
+    text-align: left;
+  }
+
+  html[dir="rtl"] table,
+  html[dir="rtl"] [role="table"],
+  html[dir="rtl"] [role="grid"] {
+    direction: rtl;
+  }
+
+  html[dir="rtl"] th,
+  html[dir="rtl"] td,
+  html[dir="rtl"] [role="columnheader"],
+  html[dir="rtl"] [role="cell"],
+  html[dir="rtl"] [role="gridcell"] {
+    text-align: start;
+  }
+
+  html[dir="rtl"] [data-slot="dialog-close"],
+  html[dir="rtl"] [data-slot="sheet-close"] {
+    right: auto;
+    left: 0.5rem;
+  }
+
+  html[dir="rtl"] [data-slot="dialog-header"],
+  html[dir="rtl"] [data-slot="sheet-header"] {
+    padding-right: 0;
+    padding-left: 2rem;
+    text-align: right;
+  }
+
+  html[dir="rtl"] [data-slot="dialog-footer"],
+  html[dir="rtl"] [data-slot="sheet-footer"] {
+    justify-content: flex-start;
+  }
+
+  html[dir="rtl"] [data-slot="sheet-content"][data-sheet-side="left"] {
+    right: 0;
+    left: auto;
+    border-right-width: 0;
+    border-left-width: 1px;
+  }
+
+  html[dir="rtl"] [data-slot="sheet-content"][data-sheet-side="right"] {
+    right: auto;
+    left: 0;
+    border-right-width: 1px;
+    border-left-width: 0;
+  }
+
+  html[dir="rtl"] [data-slot="sheet-content"][data-sheet-side="left"][data-state="open"] {
+    --tw-enter-translate-x: 100%;
+  }
+
+  html[dir="rtl"] [data-slot="sheet-content"][data-sheet-side="left"][data-state="closed"] {
+    --tw-exit-translate-x: 100%;
+  }
+
+  html[dir="rtl"] [data-slot="sheet-content"][data-sheet-side="right"][data-state="open"] {
+    --tw-enter-translate-x: -100%;
+  }
+
+  html[dir="rtl"] [data-slot="sheet-content"][data-sheet-side="right"][data-state="closed"] {
+    --tw-exit-translate-x: -100%;
+  }
+
+  html[dir="rtl"] [data-slot="sidebar"][data-side="left"] [data-slot="sidebar-container"] {
+    right: 0;
+    left: auto;
+    border-right-width: 0;
+    border-left-width: 1px;
+  }
+
+  html[dir="rtl"]
+    [data-slot="sidebar"][data-side="left"][data-collapsible="offcanvas"]
+    [data-slot="sidebar-container"] {
+    right: calc(var(--sidebar-width) * -1);
+  }
+
+  html[dir="rtl"] [data-slot="sidebar"][data-side="left"][data-state="expanded"] [data-slot="sidebar-container"] {
+    right: 0;
+  }
+
+  html[dir="rtl"] [data-slot="sidebar"][data-side="right"] [data-slot="sidebar-container"] {
+    right: auto;
+    left: 0;
+    border-right-width: 1px;
+    border-left-width: 0;
+  }
+
+  html[dir="rtl"]
+    [data-slot="sidebar"][data-side="right"][data-collapsible="offcanvas"]
+    [data-slot="sidebar-container"] {
+    left: calc(var(--sidebar-width) * -1);
+  }
+
+  html[dir="rtl"] [data-slot="sidebar"][data-side="right"][data-state="expanded"] [data-slot="sidebar-container"] {
+    left: 0;
+  }
+
+  html[dir="rtl"] [data-slot="sidebar"][data-mobile="true"][data-sheet-side="left"] {
+    right: 0;
+    left: auto;
+    border-right-width: 0;
+    border-left-width: 1px;
+  }
+
+  html[dir="rtl"] [data-slot="sidebar"][data-mobile="true"][data-sheet-side="right"] {
+    right: auto;
+    left: 0;
+    border-right-width: 1px;
+    border-left-width: 0;
+  }
+
+  html[dir="rtl"] [data-slot="sidebar-group-action"] {
+    right: auto;
+    left: 0.75rem;
+  }
+
+  html[dir="rtl"] [data-slot="sidebar-trigger"] svg,
+  html[dir="rtl"] [data-directional-icon="true"] {
+    transform: scaleX(-1);
+  }
+
+  html[dir="rtl"] [data-slot="dropdown-menu-sub-trigger"] > svg:last-child,
+  html[dir="rtl"] [data-slot="context-menu-sub-trigger"] > svg:last-child {
+    transform: rotate(180deg);
+  }
+
+  html[dir="rtl"] [data-slot="skip-link"]:focus,
+  html[dir="rtl"] a[href="#main-content"]:focus {
+    right: 1rem;
+    left: auto;
+  }
+
+  [data-radix-popper-content-wrapper],
+  [role="dialog"],
+  [role="menu"],
+  [role="listbox"] {
+    max-inline-size: min(calc(100vw - 1rem), var(--radix-popper-available-width, 100vw));
+  }
+
+  [role="dialog"] {
+    overflow-wrap: anywhere;
+  }
+
+  [data-horizontal-scroll-region],
+  .overflow-x-auto,
+  .overflow-x-scroll {
+    overscroll-behavior-inline: contain;
+    scrollbar-gutter: stable both-edges;
+  }
+
+  :where(
+    button,
+    a,
+    input,
+    textarea,
+    select,
+    [role="button"],
+    [role="menuitem"],
+    [role="option"],
+    [data-horizontal-scroll-region]
+  ):focus-visible {
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: 2px;
+  }
+
+  /*
  * POS transfer item picker: the POS navigation rail moves to the physical
  * right in Arabic. Keep the item picker on the opposite side so it never
  * covers the navigation header or menu. The existing RTL flex direction
  * already places the reserved spacer on this same side.
  */
-@media (min-width: 640px) {
-  html[dir="rtl"] [data-pos-workspace="true"] .fixed:has(> [data-i18n-portal]) {
-    right: auto !important;
-    left: 0 !important;
-    border-left-width: 0;
-    border-right-width: 1px;
-  }
-}
-
-@media (max-width: 640px) {
-  [data-slot="app-top-bar"] {
-    min-inline-size: 0;
-    padding-inline: 0.5rem;
+  @media (min-width: 640px) {
+    html[dir="rtl"] [data-pos-workspace="true"] .fixed:has(> [data-i18n-portal]) {
+      right: auto !important;
+      left: 0 !important;
+      border-left-width: 0;
+      border-right-width: 1px;
+    }
   }
 
-  [data-slot="app-top-bar-actions"] {
-    min-inline-size: 0;
-    max-inline-size: 100%;
-    overflow-x: auto;
-    overscroll-behavior-inline: contain;
-    scrollbar-width: none;
+  @media (max-width: 640px) {
+    [data-slot="app-top-bar"] {
+      min-inline-size: 0;
+      padding-inline: 0.5rem;
+    }
+
+    [data-slot="app-top-bar-actions"] {
+      min-inline-size: 0;
+      max-inline-size: 100%;
+      overflow-x: auto;
+      overscroll-behavior-inline: contain;
+      scrollbar-width: none;
+    }
+
+    [data-slot="app-top-bar-actions"]::-webkit-scrollbar {
+      display: none;
+    }
+
+    [role="dialog"] {
+      max-block-size: calc(100dvh - 1rem);
+      max-inline-size: calc(100vw - 1rem);
+    }
   }
 
-  [data-slot="app-top-bar-actions"]::-webkit-scrollbar {
-    display: none;
+  @media (pointer: coarse) {
+    :where(button, [role="button"], [role="menuitem"], [role="option"]):not([data-compact-control="true"]) {
+      min-block-size: 2.5rem;
+      min-inline-size: 2.5rem;
+    }
   }
 
-  [role="dialog"] {
-    max-block-size: calc(100dvh - 1rem);
-    max-inline-size: calc(100vw - 1rem);
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      scroll-behavior: auto !important;
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
   }
-}
 
-@media (pointer: coarse) {
-  :where(button, [role="button"], [role="menuitem"], [role="option"]):not([data-compact-control="true"]) {
-    min-block-size: 2.5rem;
-    min-inline-size: 2.5rem;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    scroll-behavior: auto !important;
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
-  }
-}
-
-@media (forced-colors: active) {
-  :where(button, a, input, textarea, select, [role="button"], [data-horizontal-scroll-region]):focus-visible {
-    outline: 2px solid CanvasText;
+  @media (forced-colors: active) {
+    :where(button, a, input, textarea, select, [role="button"], [data-horizontal-scroll-region]):focus-visible {
+      outline: 2px solid CanvasText;
+    }
   }
 }
