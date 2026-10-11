@@ -1,3 +1,5 @@
+import { MoneyDecimal, toMoney } from "../../lib/money";
+
 /**
  * One attendance record, reduced to the only field the pay calculators read.
  *
@@ -79,7 +81,7 @@ function countWeekdays(start: string, end: string): number {
 function computeMonthlyPay(salary: number, start: string, end: string): number {
   const startDate = new Date(`${start}T00:00:00Z`);
   const endDate = new Date(`${end}T00:00:00Z`);
-  let total = 0;
+  let total = new MoneyDecimal(0);
   let cursor = new Date(Date.UTC(startDate.getUTCFullYear(), startDate.getUTCMonth(), 1));
 
   while (cursor <= endDate) {
@@ -90,11 +92,11 @@ function computeMonthlyPay(salary: number, start: string, end: string): number {
     const segmentStart = new Date(Math.max(cursor.getTime(), startDate.getTime()));
     const segmentEnd = new Date(Math.min(monthLastDay.getTime(), endDate.getTime()));
     const segmentDays = Math.floor((segmentEnd.getTime() - segmentStart.getTime()) / 86_400_000) + 1;
-    total += salary * (segmentDays / daysInMonth);
+    total = total.plus(toMoney(salary).times(segmentDays).div(daysInMonth));
     cursor = new Date(Date.UTC(year, month + 1, 1));
   }
 
-  return total;
+  return total.toNumber();
 }
 
 function computeMonthlyPayFromAttendance(
@@ -109,7 +111,7 @@ function computeMonthlyPayFromAttendance(
     if (status === "Present" || status === "Late" || status === "Leave") attendedDays += 1;
     else if (status === "Half Day") attendedDays += 0.5;
   }
-  return attendedDays * (baseSalary / daysInMonth);
+  return toMoney(baseSalary).times(attendedDays).div(daysInMonth).toNumber();
 }
 
 export function buildFactoryPayrollGenerationLockKey(companyId: number, startDate: string, endDate: string): string {

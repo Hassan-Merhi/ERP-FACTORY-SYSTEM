@@ -12,6 +12,7 @@ import { requireAuth } from "../../../auth";
 import { sql, inArray } from "drizzle-orm";
 import { ledgerAccounts, vouchers, voucherEntries } from "@shared/schema";
 import { findOrCreateLedger, getFactoryCompanyId, normUsd } from "./_helpers";
+import { toMoney } from "../../../lib/money";
 
 /** A PAYROLL-GEN voucher row this migration rewrites, joined to its DR entry. */
 type PayrollGenVoucherRow = {
@@ -150,9 +151,8 @@ export function registerPayrollCoreMigrationRoutes(app: Express) {
         const bonByCity = new Map<string, number>();
         for (const pr of payrollData.rows) {
           const city = (pr.city as string | null)?.trim() || "";
-          const sal =
-            parseFloat(pr.base_salary || "0") + parseFloat(pr.transport || "0") - parseFloat(pr.deductions || "0");
-          const bon = parseFloat(pr.bonuses || "0");
+          const sal = toMoney(pr.base_salary).plus(toMoney(pr.transport)).minus(toMoney(pr.deductions)).toNumber();
+          const bon = toMoney(pr.bonuses).toNumber();
           salByCity.set(city, (salByCity.get(city) || 0) + sal);
           bonByCity.set(city, (bonByCity.get(city) || 0) + bon);
         }
@@ -231,7 +231,7 @@ export function registerPayrollCoreMigrationRoutes(app: Express) {
       `);
 
       for (const wb of paidBonuses.rows) {
-        const amt = parseFloat(wb.amount || "0");
+        const amt = toMoney(wb.amount).toNumber();
         if (amt <= 0) continue;
         const workerName = (wb.full_name as string | null)?.trim() || `Worker #${wb.worker_id}`;
         const expAcc = await findOrCreateLedger(companyId, `Bonus Expense - ${workerName}`, "Expense", {
@@ -370,9 +370,8 @@ export function registerPayrollCoreMigrationRoutes(app: Express) {
         for (const p of payrollData.rows) {
           const workerName = (p.full_name as string) || `Worker #${p.worker_id}`;
           const accs = workerAccMap.get(p.worker_id)!;
-          const salAmt =
-            parseFloat(p.base_salary || "0") + parseFloat(p.transport || "0") - parseFloat(p.deductions || "0");
-          const bonAmt = parseFloat(p.bonuses || "0");
+          const salAmt = toMoney(p.base_salary).plus(toMoney(p.transport)).minus(toMoney(p.deductions)).toNumber();
+          const bonAmt = toMoney(p.bonuses).toNumber();
           if (salAmt > 0) {
             newEntries.push({
               voucherId: row.id,

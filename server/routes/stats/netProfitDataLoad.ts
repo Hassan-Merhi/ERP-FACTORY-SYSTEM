@@ -4,6 +4,7 @@ import { vouchers, type Company } from "@shared/schema";
 import { pool } from "../../db";
 import { storage } from "../../storage";
 import { resultRows } from "../../lib/queryResult";
+import { toMoney } from "../../lib/money";
 
 /** One ledger account row as mapped to camelCase below: the original columns
  *  guaranteed to exist in every deployment (including pre-migration prod).
@@ -301,8 +302,8 @@ export async function loadNetProfitData(companyId: number, toDate: string | null
   for (const row of groupedLedgerRows.rows) {
     if (row.ledger_account_id) {
       accountBalances.set(Number(row.ledger_account_id), {
-        debit: parseFloat(row.total_debit || "0"),
-        credit: parseFloat(row.total_credit || "0"),
+        debit: toMoney(row.total_debit).toNumber(),
+        credit: toMoney(row.total_credit).toNumber(),
       });
     }
   }
@@ -315,8 +316,8 @@ export async function loadNetProfitData(companyId: number, toDate: string | null
   for (const row of groupedSupplierRows.rows) {
     if (row.supplier_id) {
       supplierBalances.set(Number(row.supplier_id), {
-        debit: parseFloat(row.total_debit || "0"),
-        credit: parseFloat(row.total_credit || "0"),
+        debit: toMoney(row.total_debit).toNumber(),
+        credit: toMoney(row.total_credit).toNumber(),
       });
     }
   }
@@ -326,8 +327,8 @@ export async function loadNetProfitData(companyId: number, toDate: string | null
   for (const row of groupedEmployeeRows.rows) {
     if (row.employee_id) {
       employeeBalances.set(Number(row.employee_id), {
-        debit: parseFloat(row.total_debit || "0"),
-        credit: parseFloat(row.total_credit || "0"),
+        debit: toMoney(row.total_debit).toNumber(),
+        credit: toMoney(row.total_credit).toNumber(),
       });
     }
   }

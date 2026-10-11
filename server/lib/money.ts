@@ -102,6 +102,16 @@ export function plusMoney(total: number, value: MoneyInput): number {
   return toMoney(total).plus(toMoney(value)).toNumber();
 }
 
+/** Subtracts `value` from a running number total exactly; the counterpart of plusMoney. */
+export function minusMoney(total: number, value: MoneyInput): number {
+  return toMoney(total).minus(toMoney(value)).toNumber();
+}
+
+/** Rounds a number to cents, half up, without the binary error of Math.round(n * 100) / 100. */
+export function roundCents(value: MoneyInput): number {
+  return toMoney(value).toDecimalPlaces(MONEY_DECIMAL_PLACES).toNumber();
+}
+
 /** Exact debit minus credit over ledger lines (positive = debit balance). */
 export function debitMinusCredit(lines: Iterable<{ debitAmount?: MoneyInput; creditAmount?: MoneyInput }>): Decimal {
   let total = new MoneyDecimal(0);

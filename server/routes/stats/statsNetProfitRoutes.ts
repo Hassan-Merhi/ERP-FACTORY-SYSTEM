@@ -23,7 +23,7 @@ import { storage } from "../../storage";
 import { getSupplierPartnerPosProfit } from "./realizedProfit";
 import { loadSalaryAdvanceNetPositionAdjustments } from "../../helpers/salaryAdvanceNetPosition";
 import { isInventoryValuationOnlyAccount } from "../../lib/inventoryPnlAccounts";
-import { sumMoney, toMoney } from "../../lib/money";
+import { minusMoney, plusMoney, roundCents, sumMoney, toMoney } from "../../lib/money";
 
 export function registerStatsNetProfitRoutes(app: Express) {
   app.get("/api/stats/net-profit", requireAuth, requireNonPOS, async (req, res) => {
@@ -39,7 +39,7 @@ export function registerStatsNetProfitRoutes(app: Express) {
       const toDate = req.query.toDate ? String(req.query.toDate) : null;
 
       // Rounding helper — defined early so it is available throughout the handler
-      const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
+      const round2 = roundCents;
 
       // Fetch company to know its base currency (CFA vs USD)
       // Check the 30-second TTL cache before touching the DB
@@ -126,8 +126,8 @@ export function registerStatsNetProfitRoutes(app: Express) {
         for (const customer of supplierPartnerCustomerPosition.items) {
           const value = round2(Math.abs(customer.signedBalance));
           if (customer.signedBalance > 0) {
-            forUsTotal = round2(forUsTotal + value);
-            categoryTotals["asset_Asset"] = round2((categoryTotals["asset_Asset"] || 0) + value);
+            forUsTotal = round2(plusMoney(forUsTotal, value));
+            categoryTotals["asset_Asset"] = round2(plusMoney(categoryTotals["asset_Asset"] || 0, value));
             forUsAccounts.push({
               id: customer.ledgerAccountId ?? undefined,
               name: customer.name,
@@ -136,8 +136,10 @@ export function registerStatsNetProfitRoutes(app: Express) {
               category: "Asset",
             });
           } else {
-            onUsTotal = round2(onUsTotal + value);
-            categoryTotals["liability_Liability"] = round2((categoryTotals["liability_Liability"] || 0) + value);
+            onUsTotal = round2(plusMoney(onUsTotal, value));
+            categoryTotals["liability_Liability"] = round2(
+              plusMoney(categoryTotals["liability_Liability"] || 0, value)
+            );
             onUsAccounts.push({
               id: customer.ledgerAccountId ?? undefined,
               name: customer.name,
@@ -159,7 +161,7 @@ export function registerStatsNetProfitRoutes(app: Express) {
         const nameLower = (a.name || "").toLowerCase();
         const code = (a.code || "").toUpperCase();
         if (nameLower.includes("accrued rent") || code === "ACCR-RENT-PAY" || code === "ACCRUED_RENT_PAYABLE") {
-          onUsTotal = round2(onUsTotal - a.value);
+          onUsTotal = round2(minusMoney(onUsTotal, a.value));
           onUsAccounts.splice(i, 1);
         }
       }
@@ -171,11 +173,11 @@ export function registerStatsNetProfitRoutes(app: Express) {
         const a = forUsAccounts[i];
         const nameLower = (a.name || "").toLowerCase();
         if (nameLower.includes("prepaid rent")) {
-          forUsTotal = round2(forUsTotal - a.value);
+          forUsTotal = round2(minusMoney(forUsTotal, a.value));
           // Subtract from whichever category bucket it landed in (typically "asset_Asset")
           const catKey = `asset_${a.category}`;
           if (categoryTotals[catKey] !== undefined) {
-            categoryTotals[catKey] = round2(categoryTotals[catKey] - a.value);
+            categoryTotals[catKey] = round2(minusMoney(categoryTotals[catKey], a.value));
             if (Math.abs(categoryTotals[catKey]) < 0.01) delete categoryTotals[catKey];
           }
           forUsAccounts.splice(i, 1);
@@ -201,7 +203,7 @@ export function registerStatsNetProfitRoutes(app: Express) {
               .orderBy(desc(exchangeRates.effectiveDate))
               .limit(1)
           : [];
-      const currentCfaRate = cfaRateRows.length > 0 ? parseFloat(cfaRateRows[0].rate) : 0;
+      const currentCfaRate = cfaRateRows.length > 0 ? toMoney(cfaRateRows[0].rate).toNumber() : 0;
 
       // Legacy non-base balances are intentionally not revalued here. Only the
       // dedicated cash/bank middleware may apply the current rate, and it
@@ -230,9 +232,11 @@ export function registerStatsNetProfitRoutes(app: Express) {
 
         if (isIncomeAccount) {
           if (netBalance < 0) {
-            incomeTotal += Math.abs(netBalance);
-            categoryTotals["income_Sales/Revenue"] =
-              (categoryTotals["income_Sales/Revenue"] || 0) + Math.abs(netBalance);
+            incomeTotal = plusMoney(incomeTotal, Math.abs(netBalance));
+            categoryTotals["income_Sales/Revenue"] = plusMoney(
+              categoryTotals["income_Sales/Revenue"] || 0,
+              Math.abs(netBalance)
+            );
             incomeAccounts.push({
               id: acc.id,
               name: acc.name,
@@ -241,8 +245,11 @@ export function registerStatsNetProfitRoutes(app: Express) {
               category: "Income",
             });
           } else if (netBalance > 0) {
-            incomeTotal -= netBalance;
-            categoryTotals["income_Sales/Revenue"] = (categoryTotals["income_Sales/Revenue"] || 0) - netBalance;
+            incomeTotal = minusMoney(incomeTotal, netBalance);
+            categoryTotals["income_Sales/Revenue"] = minusMoney(
+              categoryTotals["income_Sales/Revenue"] || 0,
+              netBalance
+            );
             incomeAccounts.push({
               id: acc.id,
               name: acc.name,
@@ -254,13 +261,13 @@ export function registerStatsNetProfitRoutes(app: Express) {
         } else if (isAnyExpenseType && !excludedFromExpenses.has(acc.id)) {
           const category = normalizedExpenseType || "Expense";
           if (netBalance > 0) {
-            expensesTotal += netBalance;
-            categoryTotals[`exp_${category}`] = (categoryTotals[`exp_${category}`] || 0) + netBalance;
+            expensesTotal = plusMoney(expensesTotal, netBalance);
+            categoryTotals[`exp_${category}`] = plusMoney(categoryTotals[`exp_${category}`] || 0, netBalance);
             expensesAccounts.push({ id: acc.id, name: acc.name, code: acc.code || "", value: netBalance, category });
           } else if (netBalance < 0) {
             const credit = Math.abs(netBalance);
-            expensesTotal -= credit;
-            categoryTotals[`exp_${category}`] = (categoryTotals[`exp_${category}`] || 0) - credit;
+            expensesTotal = minusMoney(expensesTotal, credit);
+            categoryTotals[`exp_${category}`] = minusMoney(categoryTotals[`exp_${category}`] || 0, credit);
             expensesAccounts.push({
               id: acc.id,
               name: acc.name,
@@ -291,7 +298,7 @@ export function registerStatsNetProfitRoutes(app: Express) {
           const code = (acc.code || "").toUpperCase();
           const nameLower = (acc.name || "").toLowerCase();
           if (factoryLedgerCodesToStrip.has(code) || factoryLedgerNamesToStrip.some((p) => nameLower.includes(p))) {
-            forUsTotal -= acc.value;
+            forUsTotal = minusMoney(forUsTotal, acc.value);
             const catKey = `asset_${acc.category || acc.name}`;
             if (categoryTotals[catKey] !== undefined) delete categoryTotals[catKey];
             forUsAccounts.splice(i, 1);
@@ -304,7 +311,7 @@ export function registerStatsNetProfitRoutes(app: Express) {
       // computed in ./netProfitStockSection.
       const stockOnFloor = await computeStockInHand(companyId, toDate);
       if (stockOnFloor > 0) {
-        forUsTotal += stockOnFloor;
+        forUsTotal = plusMoney(forUsTotal, stockOnFloor);
         categoryTotals["asset_Stock In Hand"] = stockOnFloor;
         forUsAccounts.push({
           name: "Stock In Hand (Inventory)",
@@ -333,11 +340,11 @@ export function registerStatsNetProfitRoutes(app: Express) {
           const acc = accounts[i];
           if ((acc.id && payrollLedgerIds.has(acc.id)) || isPayrollPayableAccount(acc)) {
             const value = Number(acc.value || 0);
-            if (side === "asset") forUsTotal = round2(forUsTotal - value);
-            else onUsTotal = round2(onUsTotal - value);
+            if (side === "asset") forUsTotal = round2(minusMoney(forUsTotal, value));
+            else onUsTotal = round2(minusMoney(onUsTotal, value));
             const catKey = `${side}_${acc.category || acc.name}`;
             if (categoryTotals[catKey] !== undefined) {
-              categoryTotals[catKey] = round2(categoryTotals[catKey] - value);
+              categoryTotals[catKey] = round2(minusMoney(categoryTotals[catKey], value));
               if (Math.abs(categoryTotals[catKey]) < 0.01) delete categoryTotals[catKey];
             }
             accounts.splice(i, 1);
@@ -382,7 +389,7 @@ export function registerStatsNetProfitRoutes(app: Express) {
       const workerAdvancesDisplay = round2(
         managedSalaryAdvances
           .filter((advance) => payrollWorkerIds.has(advance.employeeId))
-          .reduce((sum, advance) => sum + advance.remainingBalance, 0)
+          .reduce((sum, advance) => plusMoney(sum, advance.remainingBalance), 0)
       );
 
       // Strip any "advance"-related ledger accounts that classifyNetPositionAccounts may have
@@ -396,7 +403,7 @@ export function registerStatsNetProfitRoutes(app: Express) {
         while (i >= 0) {
           const acc = forUsAccounts[i];
           if (advanceLedgerPattern.test(acc.name || "")) {
-            forUsTotal = round2(forUsTotal - acc.value);
+            forUsTotal = round2(minusMoney(forUsTotal, acc.value));
             const catKey = `asset_${acc.category || acc.name}`;
             if (categoryTotals[catKey] !== undefined) delete categoryTotals[catKey];
             forUsAccounts.splice(i, 1);
@@ -409,9 +416,9 @@ export function registerStatsNetProfitRoutes(app: Express) {
       const payrollOverpaymentDisplay = Math.max(0, -payrollSignedBalance);
 
       if (payrollPayableDisplay > 0) {
-        onUsTotal = round2(onUsTotal + payrollPayableDisplay);
+        onUsTotal = round2(plusMoney(onUsTotal, payrollPayableDisplay));
         categoryTotals["liability_Payroll"] = round2(
-          (categoryTotals["liability_Payroll"] || 0) + payrollPayableDisplay
+          plusMoney(categoryTotals["liability_Payroll"] || 0, payrollPayableDisplay)
         );
         onUsAccounts.push({
           name: "Payroll Payable",
@@ -421,8 +428,10 @@ export function registerStatsNetProfitRoutes(app: Express) {
         });
       }
       if (payrollOverpaymentDisplay > 0) {
-        forUsTotal = round2(forUsTotal + payrollOverpaymentDisplay);
-        categoryTotals["asset_Payroll"] = round2((categoryTotals["asset_Payroll"] || 0) + payrollOverpaymentDisplay);
+        forUsTotal = round2(plusMoney(forUsTotal, payrollOverpaymentDisplay));
+        categoryTotals["asset_Payroll"] = round2(
+          plusMoney(categoryTotals["asset_Payroll"] || 0, payrollOverpaymentDisplay)
+        );
         forUsAccounts.push({
           name: "Payroll Overpayment",
           code: "PAYROLL_PAYABLE",
@@ -431,9 +440,9 @@ export function registerStatsNetProfitRoutes(app: Express) {
         });
       }
       if (workerAdvancesDisplay > 0) {
-        forUsTotal = round2(forUsTotal + workerAdvancesDisplay);
+        forUsTotal = round2(plusMoney(forUsTotal, workerAdvancesDisplay));
         categoryTotals["asset_Worker Advances"] = round2(
-          (categoryTotals["asset_Worker Advances"] || 0) + workerAdvancesDisplay
+          plusMoney(categoryTotals["asset_Worker Advances"] || 0, workerAdvancesDisplay)
         );
         forUsAccounts.push({
           name: "Worker Advances (Prepaid)",
@@ -462,12 +471,12 @@ export function registerStatsNetProfitRoutes(app: Express) {
 
       for (const sup of allSuppliers) {
         const balance = supplierBalances.get(sup.id) || { debit: 0, credit: 0 };
-        const opening = parseFloat(sup.openingBalance || "0");
+        const opening = toMoney(sup.openingBalance);
         // Suppliers: Credit = we owe them, Debit = we paid them.
         // Net positive = we owe them (liability), Net negative = they owe us (asset).
-        const netBalance = opening + balance.credit - balance.debit;
+        const netBalance = opening.plus(balance.credit).minus(balance.debit).toNumber();
         if (netBalance > 0) {
-          supplierLiabilities += netBalance;
+          supplierLiabilities = plusMoney(supplierLiabilities, netBalance);
           onUsAccounts.push({
             name: sup.legalName,
             code: sup.code || "",
@@ -475,7 +484,7 @@ export function registerStatsNetProfitRoutes(app: Express) {
             category: "Supplier",
           });
         } else if (netBalance < 0) {
-          supplierAssets += Math.abs(netBalance);
+          supplierAssets = plusMoney(supplierAssets, Math.abs(netBalance));
           forUsAccounts.push({
             name: sup.legalName,
             code: sup.code || "",
@@ -489,11 +498,11 @@ export function registerStatsNetProfitRoutes(app: Express) {
       const supplierLiabilitiesDisplay = supplierLiabilities;
       const supplierAssetsDisplay = supplierAssets;
       if (supplierLiabilitiesDisplay > 0) {
-        onUsTotal += supplierLiabilitiesDisplay;
+        onUsTotal = plusMoney(onUsTotal, supplierLiabilitiesDisplay);
         categoryTotals["liability_Suppliers"] = supplierLiabilitiesDisplay;
       }
       if (supplierAssetsDisplay > 0) {
-        forUsTotal += supplierAssetsDisplay;
+        forUsTotal = plusMoney(forUsTotal, supplierAssetsDisplay);
         categoryTotals["asset_Supplier Overpayment"] = supplierAssetsDisplay;
       }
 
@@ -539,7 +548,7 @@ export function registerStatsNetProfitRoutes(app: Express) {
         ).toNumber();
 
         if (stockOtwValue > 0) {
-          forUsTotal += stockOtwValue;
+          forUsTotal = plusMoney(forUsTotal, stockOtwValue);
           categoryTotals["asset_Stock OTW"] = stockOtwValue;
           forUsAccounts.push({
             name: "Stock On The Way",
@@ -556,14 +565,14 @@ export function registerStatsNetProfitRoutes(app: Express) {
       const rental = await computeRentalOutstanding(companyId, toDate, currentCfaRate);
       if (rental.prepaidRent > 0.005) {
         const val = rental.prepaidRent;
-        forUsTotal = round2(forUsTotal + val);
-        categoryTotals["asset_Prepaid Rent"] = (categoryTotals["asset_Prepaid Rent"] || 0) + val;
+        forUsTotal = round2(plusMoney(forUsTotal, val));
+        categoryTotals["asset_Prepaid Rent"] = plusMoney(categoryTotals["asset_Prepaid Rent"] || 0, val);
         forUsAccounts.push({ name: "Prepaid Rent", code: "PREPAID_RENT", value: val, category: "Prepaid Rent" });
       }
       if (rental.rentPayable > 0.005) {
         const val = rental.rentPayable;
-        onUsTotal = round2(onUsTotal + val);
-        categoryTotals["liability_Rent Payable"] = (categoryTotals["liability_Rent Payable"] || 0) + val;
+        onUsTotal = round2(plusMoney(onUsTotal, val));
+        categoryTotals["liability_Rent Payable"] = plusMoney(categoryTotals["liability_Rent Payable"] || 0, val);
         onUsAccounts.push({ name: "Rent Payable", code: "RENT_PAYABLE", value: val, category: "Rent Payable" });
       }
 
@@ -621,7 +630,7 @@ export function registerStatsNetProfitRoutes(app: Express) {
         };
         const stockEntries = forUsAccounts.filter(isStockEntry);
         if (stockEntries.length > 1) {
-          const combined = round2(stockEntries.reduce((s: number, a) => s + (a.value || 0), 0));
+          const combined = round2(stockEntries.reduce((s: number, a) => plusMoney(s, a.value), 0));
           for (let i = forUsAccounts.length - 1; i >= 0; i--) {
             if (isStockEntry(forUsAccounts[i])) forUsAccounts.splice(i, 1);
           }
@@ -642,7 +651,7 @@ export function registerStatsNetProfitRoutes(app: Express) {
       // Supplier-partner companies also include signed partner equity directly:
       // debit equity increases the position, while credit equity reduces it.
       const equityNetPositionContribution = equityIncludedInNetPosition ? equity.total : 0;
-      const netPosition = round2(forUsTotal - onUsTotal + equityNetPositionContribution);
+      const netPosition = round2(toMoney(forUsTotal).minus(onUsTotal).plus(equityNetPositionContribution));
 
       const netPositionLabel = netPosition >= 0 ? "We have more than we owe" : "We owe more than we have";
 
@@ -663,14 +672,14 @@ export function registerStatsNetProfitRoutes(app: Express) {
       const profitAccounts = companyAccounts.filter((acc) => acc.accountType === "Profit");
       let ownersCapital = 0;
       for (const acc of profitAccounts) {
-        const opening = parseFloat(acc.openingBalance || "0");
+        const opening = toMoney(acc.openingBalance);
         const balance = accountBalances.get(acc.id) || { debit: 0, credit: 0 };
-        ownersCapital += opening + balance.credit - balance.debit;
+        ownersCapital = plusMoney(ownersCapital, opening.plus(balance.credit).minus(balance.debit));
       }
 
       // Net Worth and Profit for backward compatibility
       const netWorth = netPosition;
-      const netProfit = round2(incomeTotal - expensesTotal);
+      const netProfit = round2(minusMoney(incomeTotal, expensesTotal));
 
       // Breakdown for display
       const netPositionBreakdown = {

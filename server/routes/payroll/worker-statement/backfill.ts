@@ -7,6 +7,7 @@
 import type { Express, Request, Response } from "express";
 import { getErrorMessage } from "../../../lib/httpHandlers";
 import { logger } from "../../../lib/logger";
+import { toMoney } from "../../../lib/money";
 import { getClientDate } from "../../../lib/dateUtils";
 import { db } from "../../../db";
 import { requireAuth } from "../../../auth";
@@ -69,13 +70,13 @@ export function registerPayrollVoucherBackfillRoutes(app: Express) {
       );
 
       const toBackfill = paidPayrolls.filter((p) => {
-        const net = parseFloat(p.netSalary || "0");
+        const net = toMoney(p.netSalary).toNumber();
         return net > 0 && !existingPayrollIds.has(p.id);
       });
 
       const skipped = paidPayrolls
         .filter((p) => {
-          const net = parseFloat(p.netSalary || "0");
+          const net = toMoney(p.netSalary).toNumber();
           return net <= 0 || existingPayrollIds.has(p.id);
         })
         .map((p) => p.id);
@@ -126,7 +127,7 @@ export function registerPayrollVoucherBackfillRoutes(app: Express) {
         }
 
         for (const pr of toBackfill) {
-          const netAmt = parseFloat(pr.netSalary || "0");
+          const netAmt = toMoney(pr.netSalary);
           const cashAcctId = pr.cashAccountId!;
           const payrollAcctId = payrollAccountCache.get(pr.companyId)!;
           const workerName = ((workerMap.get(pr.workerId) as string) || "").trim() || `Worker #${pr.workerId}`;
