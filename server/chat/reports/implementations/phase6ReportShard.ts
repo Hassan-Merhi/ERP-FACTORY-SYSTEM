@@ -1,5 +1,6 @@
 import { db, sql } from "./reportShardSupport";
 import type { DataQueryContext, DataQueryResult, ReportImplementationShard } from "../types";
+import { plusMoney, toMoney } from "../../../lib/money";
 
 /** One debit/credit leg aggregated into a journal_entries row by json_agg. */
 type JournalEntryLine = { account: string; dr: number; cr: number };
@@ -51,7 +52,7 @@ async function runPhase6Report(ctx: DataQueryContext): Promise<DataQueryResult> 
       `);
       let totalBalance = 0;
       const tableRows6 = rows.rows.map((r) => {
-        const bal = parseFloat(r.net_balance || "0");
+        const bal = toMoney(r.net_balance).toNumber();
         totalBalance += Math.max(bal, 0);
         const balLabel = bal >= 0 ? fmt(bal) + " Dr" : fmt(Math.abs(bal)) + " Cr";
         return [
@@ -108,7 +109,7 @@ async function runPhase6Report(ctx: DataQueryContext): Promise<DataQueryResult> 
         r.phone || "—",
         r.payment_terms || "—",
         String(r.po_count),
-        fmt(parseFloat(r.total_ordered || "0")),
+        fmt(toMoney(r.total_ordered).toNumber()),
         r.active ? "Active" : "Inactive",
       ]);
       const stats6 = [
@@ -186,18 +187,18 @@ async function runPhase6Report(ctx: DataQueryContext): Promise<DataQueryResult> 
       let totalQty = 0,
         totalVal = 0;
       const tableRows6 = invRows.rows.map((r) => {
-        const qty = parseFloat(r.qty || "0");
-        const val = parseFloat(r.total_value || "0");
+        const qty = toMoney(r.qty).toNumber();
+        const val = toMoney(r.total_value).toNumber();
         totalQty += qty;
         totalVal += val;
-        return [r.location, fmtDec(qty), fmtDec(parseFloat(r.avg_rate || "0")), fmt(val)];
+        return [r.location, fmtDec(qty), fmtDec(toMoney(r.avg_rate).toNumber()), fmt(val)];
       });
       const stats6 = [
         { label: "Code", value: si6.code },
         { label: "Group", value: si6.group_name || "—" },
         { label: "UOM", value: si6.uom },
-        { label: "Selling Price", value: fmtDec(parseFloat(si6.selling_price || "0")) },
-        { label: "Reorder Level", value: `${fmtDec(parseFloat(si6.reorder_level || "0"))} ${si6.uom}` },
+        { label: "Selling Price", value: fmtDec(toMoney(si6.selling_price).toNumber()) },
+        { label: "Reorder Level", value: `${fmtDec(toMoney(si6.reorder_level).toNumber())} ${si6.uom}` },
         {
           label: "Total Stock",
           value: `${fmtDec(totalQty)} ${si6.uom}`,
@@ -247,13 +248,13 @@ async function runPhase6Report(ctx: DataQueryContext): Promise<DataQueryResult> 
         totUsed = 0,
         totCost = 0;
       const tableRows6 = rows.rows.map((r) => {
-        const totalKg = parseFloat(r.total_kg || "0");
-        const usedKg = parseFloat(r.used_kg || "0");
+        const totalKg = toMoney(r.total_kg).toNumber();
+        const usedKg = toMoney(r.used_kg).toNumber();
         const remainKg = totalKg - usedKg;
         const pct = totalKg > 0 ? ((usedKg / totalKg) * 100).toFixed(1) + "%" : "—";
         totWeight += totalKg;
         totUsed += usedKg;
-        totCost += parseFloat(r.total_cost || "0");
+        totCost = plusMoney(totCost, r.total_cost);
         return [
           r.batch_code,
           r.name || "—",
@@ -263,7 +264,7 @@ async function runPhase6Report(ctx: DataQueryContext): Promise<DataQueryResult> 
           fmtDec(usedKg),
           fmtDec(remainKg),
           pct,
-          fmtDec(parseFloat(r.cost_per_kg || "0")),
+          fmtDec(toMoney(r.cost_per_kg).toNumber()),
           r.operator_user || "—",
         ];
       });
@@ -331,7 +332,7 @@ async function runPhase6Report(ctx: DataQueryContext): Promise<DataQueryResult> 
         r.customer,
         String(r.line_count),
         String(r.total_qty),
-        fmt(parseFloat(r.total_value || "0")),
+        fmt(toMoney(r.total_value).toNumber()),
         r.is_active ? "Active" : "Inactive",
         String(r.created_at).slice(0, 10),
       ]);
@@ -378,7 +379,7 @@ async function runPhase6Report(ctx: DataQueryContext): Promise<DataQueryResult> 
         r.supplier,
         String(r.line_count),
         String(r.total_qty),
-        fmt(parseFloat(r.total_value || "0")),
+        fmt(toMoney(r.total_value).toNumber()),
         String(r.created_at).slice(0, 10),
         (r.notes || "").slice(0, 40),
       ]);
@@ -420,9 +421,9 @@ async function runPhase6Report(ctx: DataQueryContext): Promise<DataQueryResult> 
         totCost = 0,
         totProfit = 0;
       const tableRows6 = rows.rows.map((r) => {
-        const rev = parseFloat(r.revenue || "0");
-        const cost = parseFloat(r.cost || "0");
-        const profit6 = parseFloat(r.profit || "0");
+        const rev = toMoney(r.revenue).toNumber();
+        const cost = toMoney(r.cost).toNumber();
+        const profit6 = toMoney(r.profit).toNumber();
         const margin = rev > 0 ? ((profit6 / rev) * 100).toFixed(1) + "%" : "—";
         totRev += rev;
         totCost += cost;
@@ -488,13 +489,13 @@ async function runPhase6Report(ctx: DataQueryContext): Promise<DataQueryResult> 
       `);
       let grandItems = 0;
       const tableRows6 = rows.rows.map((r) => {
-        const lt = parseFloat(r.line_total || "0");
+        const lt = toMoney(r.line_total).toNumber();
         grandItems += lt;
         return [
           r.item_name,
           r.code,
-          `${fmtDec(parseFloat(r.qty))} ${r.uom}`,
-          fmtDec(parseFloat(r.rate)),
+          `${fmtDec(toMoney(r.qty).toNumber())} ${r.uom}`,
+          fmtDec(toMoney(r.rate).toNumber()),
           fmt(lt),
           r.po_number,
           r.currency,
@@ -540,8 +541,8 @@ async function runPhase6Report(ctx: DataQueryContext): Promise<DataQueryResult> 
       let totalSalary = 0,
         totalBalance = 0;
       const tableRows6 = rows.rows.map((r) => {
-        const sal = parseFloat(r.monthly_salary || "0");
-        const bal = parseFloat(r.current_balance || "0");
+        const sal = toMoney(r.monthly_salary).toNumber();
+        const bal = toMoney(r.current_balance).toNumber();
         totalSalary += sal;
         totalBalance += bal;
         return [

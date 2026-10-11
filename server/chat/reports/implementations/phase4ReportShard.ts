@@ -1,5 +1,6 @@
 import { db, sql } from "./reportShardSupport";
 import type { DataQueryContext, DataQueryResult, ReportImplementationShard } from "../types";
+import { toMoney } from "../../../lib/money";
 
 export const phase4QueryTypes = [
   "pos_sales_summary",
@@ -53,7 +54,7 @@ async function runPhase4Report(ctx: DataQueryContext): Promise<DataQueryResult> 
       const t4 = totalsRow.rows[0];
       let _grandRev = 0;
       const tableRows4 = rows.rows.map((r) => {
-        const rev = parseFloat(r.total_revenue || "0");
+        const rev = toMoney(r.total_revenue).toNumber();
         _grandRev += rev;
         return [
           r.product_name,
@@ -68,7 +69,7 @@ async function runPhase4Report(ctx: DataQueryContext): Promise<DataQueryResult> 
         { label: "Total Transactions", value: String(t4?.num_transactions || 0) },
         {
           label: "Grand Total Revenue",
-          value: fmt(parseFloat(t4?.grand_total || "0")),
+          value: fmt(toMoney(t4?.grand_total).toNumber()),
           highlight: "positive",
         },
       ];
@@ -110,7 +111,7 @@ async function runPhase4Report(ctx: DataQueryContext): Promise<DataQueryResult> 
       // No in/out totals are computed here: the shard renders rows and a count,
       // and the accumulators that used to sit here were written but never read.
       const tableRows4 = rows.rows.map((r) => {
-        const amt = parseFloat(r.amount || "0");
+        const amt = toMoney(r.amount).toNumber();
         return [
           String(r.transfer_date).slice(0, 10),
           r.transfer_type,
@@ -169,14 +170,14 @@ async function runPhase4Report(ctx: DataQueryContext): Promise<DataQueryResult> 
       `);
       let totalVal = 0;
       const tableRows4 = rows.rows.map((r) => {
-        const val = parseFloat(r.total_value || "0");
+        const val = toMoney(r.total_value).toNumber();
         totalVal += val;
         return [
           r.item_name,
           r.code,
           r.location,
-          `${fmtDec(parseFloat(r.qty))} ${r.uom}`,
-          fmtDec(parseFloat(r.rate)),
+          `${fmtDec(toMoney(r.qty).toNumber())} ${r.uom}`,
+          fmtDec(toMoney(r.rate).toNumber()),
           fmt(val),
         ];
       });
@@ -215,8 +216,8 @@ async function runPhase4Report(ctx: DataQueryContext): Promise<DataQueryResult> 
         String(i + 1),
         r.full_name,
         String(r.total_bales),
-        fmtDec(parseFloat(r.total_kg || "0")),
-        fmtDec(parseFloat(r.avg_kg_per_bale || "0")),
+        fmtDec(toMoney(r.total_kg).toNumber()),
+        fmtDec(toMoney(r.avg_kg_per_bale).toNumber()),
       ]);
       dataQueryResult = {
         queryType: "worker_productivity",
@@ -255,8 +256,8 @@ async function runPhase4Report(ctx: DataQueryContext): Promise<DataQueryResult> 
       `);
       let _grandItems = 0;
       const tableRows4 = rows.rows.map((r) => {
-        const items = parseFloat(r.total_items || "0");
-        const charges = parseFloat(r.total_charges || "0");
+        const items = toMoney(r.total_items).toNumber();
+        const charges = toMoney(r.total_charges).toNumber();
         _grandItems += items;
         return [r.supplier, String(r.po_count), fmt(items), fmt(charges), fmt(items + charges), r.currency];
       });
@@ -344,7 +345,7 @@ async function runPhase4Report(ctx: DataQueryContext): Promise<DataQueryResult> 
       let totalWaste = 0;
       const typeMap: Record<string, number> = {};
       const tableRows4 = rows.rows.map((r) => {
-        const kg = parseFloat(r.kg_waste || "0");
+        const kg = toMoney(r.kg_waste).toNumber();
         totalWaste += kg;
         const wt = r.waste_type || "Unknown";
         typeMap[wt] = (typeMap[wt] || 0) + kg;
@@ -394,7 +395,7 @@ async function runPhase4Report(ctx: DataQueryContext): Promise<DataQueryResult> 
       let totalReceipts = 0,
         totalPayments = 0;
       const tableRows4 = rows.rows.map((r) => {
-        const amt = parseFloat(r.amount || "0");
+        const amt = toMoney(r.amount).toNumber();
         if (r.voucher_type === "Receipt") totalReceipts += amt;
         else totalPayments += amt;
         return [
@@ -449,7 +450,7 @@ async function runPhase4Report(ctx: DataQueryContext): Promise<DataQueryResult> 
         grandTotal = 0;
       const tableRows4 = rows.rows.map((r) => {
         const cnt = parseInt(r.count || "0");
-        const amt = parseFloat(r.total_amount || "0");
+        const amt = toMoney(r.total_amount).toNumber();
         grandCount += cnt;
         grandTotal += amt;
         return [
@@ -496,10 +497,10 @@ async function runPhase4Report(ctx: DataQueryContext): Promise<DataQueryResult> 
         grandValue = 0;
       const tableRows4 = rows.rows.map((r) => {
         const items = parseInt(r.item_count || "0");
-        const val = parseFloat(r.total_value || "0");
+        const val = toMoney(r.total_value).toNumber();
         grandItems += items;
         grandValue += val;
-        return [r.location, String(items), fmtDec(parseFloat(r.total_qty || "0")), fmt(val)];
+        return [r.location, String(items), fmtDec(toMoney(r.total_qty).toNumber()), fmt(val)];
       });
       tableRows4.push(["GRAND TOTAL", String(grandItems), "—", fmt(grandValue)]);
       const stats4 = [

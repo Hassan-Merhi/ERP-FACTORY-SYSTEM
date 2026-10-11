@@ -1,6 +1,7 @@
 import { db, sql, nonPartyAccountTypesSql, accountTypesOfClassSql } from "./reportShardSupport";
 import type { DataQueryContext, DataQueryResult, ReportImplementationShard } from "../types";
 import { notFiscalClosingVoucher } from "../../../services/accounting/balances/periodReportRules";
+import { plusMoney, toMoney } from "../../../lib/money";
 
 export const phase2QueryTypes = [
   "inventory_check",
@@ -64,9 +65,9 @@ async function runPhase2Report(ctx: DataQueryContext): Promise<DataQueryResult> 
         r.item_name,
         r.code,
         r.location_name,
-        `${fmtDec(parseFloat(r.qty))} ${r.uom}`,
-        fmtDec(parseFloat(r.avg_rate)),
-        fmt(parseFloat(r.total_value)),
+        `${fmtDec(toMoney(r.qty).toNumber())} ${r.uom}`,
+        fmtDec(toMoney(r.avg_rate).toNumber()),
+        fmt(toMoney(r.total_value).toNumber()),
       ]);
       dataQueryResult = {
         queryType: "inventory_check",
@@ -102,9 +103,9 @@ async function runPhase2Report(ctx: DataQueryContext): Promise<DataQueryResult> 
       const tableRows2 = rows.rows.map((r) => [
         r.name,
         r.code,
-        `${fmtDec(parseFloat(r.total_qty))} ${r.uom}`,
-        `${fmtDec(parseFloat(r.reorder_level))} ${r.uom}`,
-        `${Math.round((parseFloat(r.total_qty) / parseFloat(r.reorder_level)) * 100)}%`,
+        `${fmtDec(toMoney(r.total_qty).toNumber())} ${r.uom}`,
+        `${fmtDec(toMoney(r.reorder_level).toNumber())} ${r.uom}`,
+        `${Math.round((toMoney(r.total_qty).toNumber() / toMoney(r.reorder_level).toNumber()) * 100)}%`,
       ]);
       dataQueryResult = {
         queryType: "low_stock_items",
@@ -154,8 +155,8 @@ async function runPhase2Report(ctx: DataQueryContext): Promise<DataQueryResult> 
         String(r.voucher_date).slice(0, 10),
         r.adjustment_type,
         r.location,
-        `${fmtDec(Math.abs(parseFloat(r.qty)))} ${r.uom}`,
-        parseFloat(r.qty) >= 0 ? "IN" : "OUT",
+        `${fmtDec(Math.abs(toMoney(r.qty).toNumber()))} ${r.uom}`,
+        toMoney(r.qty).toNumber() >= 0 ? "IN" : "OUT",
       ]);
       dataQueryResult = {
         queryType: "stock_movement",
@@ -196,7 +197,7 @@ async function runPhase2Report(ctx: DataQueryContext): Promise<DataQueryResult> 
         r.supplier,
         r.container_number,
         r.currency,
-        fmtDec(parseFloat(r.items_total || "0")),
+        fmtDec(toMoney(r.items_total).toNumber()),
         r.status,
       ]);
       dataQueryResult = {
@@ -259,11 +260,11 @@ async function runPhase2Report(ctx: DataQueryContext): Promise<DataQueryResult> 
         grandTotalOver90 = 0,
         grandTotalAll = 0;
       const tableRows2 = rows.rows.map((r) => {
-        const balance = parseFloat(r.ob) + parseFloat(r.total_debit) - parseFloat(r.total_credit);
-        const b0 = parseFloat(r.bucket_0_30);
-        const b1 = parseFloat(r.bucket_31_60);
-        const b2 = parseFloat(r.bucket_61_90);
-        const b3 = parseFloat(r.bucket_over_90);
+        const balance = toMoney(r.ob).plus(toMoney(r.total_debit)).minus(toMoney(r.total_credit)).toNumber();
+        const b0 = toMoney(r.bucket_0_30).toNumber();
+        const b1 = toMoney(r.bucket_31_60).toNumber();
+        const b2 = toMoney(r.bucket_61_90).toNumber();
+        const b3 = toMoney(r.bucket_over_90).toNumber();
         grandTotal0_30 += b0;
         grandTotal31_60 += b1;
         grandTotal61_90 += b2;
@@ -346,11 +347,11 @@ async function runPhase2Report(ctx: DataQueryContext): Promise<DataQueryResult> 
         sgTotalOver90 = 0,
         sgTotalAll = 0;
       const tableRows2 = rows.rows.map((r) => {
-        const balance = parseFloat(r.ob) + parseFloat(r.total_credit) - parseFloat(r.total_debit);
-        const b0 = parseFloat(r.bucket_0_30);
-        const b1 = parseFloat(r.bucket_31_60);
-        const b2 = parseFloat(r.bucket_61_90);
-        const b3 = parseFloat(r.bucket_over_90);
+        const balance = toMoney(r.ob).plus(toMoney(r.total_credit)).minus(toMoney(r.total_debit)).toNumber();
+        const b0 = toMoney(r.bucket_0_30).toNumber();
+        const b1 = toMoney(r.bucket_31_60).toNumber();
+        const b2 = toMoney(r.bucket_61_90).toNumber();
+        const b3 = toMoney(r.bucket_over_90).toNumber();
         sgTotal0_30 += b0;
         sgTotal31_60 += b1;
         sgTotal61_90 += b2;
@@ -417,7 +418,7 @@ async function runPhase2Report(ctx: DataQueryContext): Promise<DataQueryResult> 
         r.eta ? String(r.eta).slice(0, 10) : "—",
         r.supplier,
         r.transporter || "—",
-        fmtDec(parseFloat(r.grand_total || "0")),
+        fmtDec(toMoney(r.grand_total).toNumber()),
       ]);
       dataQueryResult = {
         queryType: "container_list",
@@ -447,8 +448,8 @@ async function runPhase2Report(ctx: DataQueryContext): Promise<DataQueryResult> 
             AND CAST(COALESCE(v.effective_date, v.voucher_date) AS text) BETWEEN ${from} AND ${to}
         `);
         const row = r.rows[0];
-        const rev = parseFloat(row?.revenue || "0");
-        const exp = parseFloat(row?.expenses || "0");
+        const rev = toMoney(row?.revenue).toNumber();
+        const exp = toMoney(row?.expenses).toNumber();
         return { revenue: rev, expenses: exp, net: rev - exp };
       };
       const [thisM, lastM] = await Promise.all([runPL(thisMonthStart, todayStr), runPL(lastMonthStart, lastMonthEnd)]);
@@ -502,8 +503,8 @@ async function runPhase2Report(ctx: DataQueryContext): Promise<DataQueryResult> 
         occupied = 0,
         vacant = 0;
       const tableRows2 = rows.rows.map((r) => {
-        const exp = parseFloat(r.expected || "0");
-        const paid = parseFloat(r.paid || "0");
+        const exp = toMoney(r.expected).toNumber();
+        const paid = toMoney(r.paid).toNumber();
         totalExpected += exp;
         totalPaid += paid;
         if (r.tenant_name) occupied++;
@@ -578,18 +579,18 @@ async function runPhase2Report(ctx: DataQueryContext): Promise<DataQueryResult> 
         totalBale = 0,
         totalDed = 0;
       const tableRows2 = rows.rows.map((r) => {
-        const net = parseFloat(r.net_salary || "0");
+        const net = toMoney(r.net_salary).toNumber();
         totalNet += net;
-        totalBase += parseFloat(r.base_salary || "0");
-        totalBale += parseFloat(r.bale_earnings || "0");
-        totalDed += parseFloat(r.deductions || "0");
+        totalBase = plusMoney(totalBase, r.base_salary);
+        totalBale = plusMoney(totalBale, r.bale_earnings);
+        totalDed = plusMoney(totalDed, r.deductions);
         return [
           r.worker_name,
           String(r.period_start).slice(0, 10),
           String(r.period_end).slice(0, 10),
-          fmt(parseFloat(r.base_salary || "0")),
-          fmt(parseFloat(r.bale_earnings || "0")),
-          fmt(parseFloat(r.deductions || "0")),
+          fmt(toMoney(r.base_salary).toNumber()),
+          fmt(toMoney(r.bale_earnings).toNumber()),
+          fmt(toMoney(r.deductions).toNumber()),
           fmt(net),
           r.status,
         ];
