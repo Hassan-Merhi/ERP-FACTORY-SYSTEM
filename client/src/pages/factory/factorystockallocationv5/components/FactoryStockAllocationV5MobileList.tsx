@@ -33,27 +33,27 @@ export function FactoryStockAllocationV5MobileList({ model }: { model: Model }) 
   } = model;
 
   return (
-    <div className="space-y-3 overflow-y-auto p-3 md:hidden" data-testid="v5-mobile-list">
+    <div className="space-y-3 overflow-y-auto p-3 md:hidden phone-land:block" data-testid="v5-mobile-list">
       {totals && (
         <div className="grid grid-cols-2 gap-2 rounded-xl border bg-muted/30 p-3" data-testid="v5-mobile-totals">
           <div>
-            <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Stock</div>
+            <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Stock</div>
             <div className="font-mono text-sm font-bold text-green-700 dark:text-green-400">
               {totals.stockAvailable}
             </div>
           </div>
           <div>
-            <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Expected</div>
+            <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Expected</div>
             <div className="font-mono text-sm font-bold text-amber-600 dark:text-amber-400">
               {totals.expectedToLoad}
             </div>
           </div>
           <div>
-            <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Loaded</div>
+            <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Loaded</div>
             <div className="font-mono text-sm font-bold text-blue-600 dark:text-blue-400">{totals.totalLoaded}</div>
           </div>
           <div>
-            <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Balance</div>
+            <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Balance</div>
             <div className={cn("font-mono text-sm font-bold", totals.freeToPromise < 0 && "text-destructive")}>
               {totals.freeToPromise > 0 ? `+${totals.freeToPromise}` : totals.freeToPromise}
             </div>
@@ -100,25 +100,25 @@ export function FactoryStockAllocationV5MobileList({ model }: { model: Model }) 
 
               <div className="grid grid-cols-2 gap-2 text-xs">
                 <div className="rounded-lg bg-muted/40 p-2">
-                  <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Stock Available</div>
+                  <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Stock Available</div>
                   <div className="mt-0.5 font-mono font-semibold text-green-700 dark:text-green-400">
                     {row.stockAvailable}
                   </div>
                 </div>
                 <div className="rounded-lg bg-muted/40 p-2">
-                  <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Expected to Load</div>
+                  <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Expected to Load</div>
                   <div className="mt-0.5 font-mono font-semibold text-amber-600 dark:text-amber-400">
                     {row.expectedToLoad}
                   </div>
                 </div>
                 <div className="rounded-lg bg-muted/40 p-2">
-                  <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Total Loaded</div>
+                  <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Total Loaded</div>
                   <div className="mt-0.5 font-mono font-semibold text-blue-600 dark:text-blue-400">
                     {row.totalLoaded}
                   </div>
                 </div>
                 <div className="rounded-lg bg-muted/40 p-2">
-                  <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Available Balance</div>
+                  <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Available Balance</div>
                   <div className={cn("mt-0.5 font-mono font-semibold", isShortage && "text-destructive")}>
                     {row.freeToPromise}
                   </div>
@@ -230,8 +230,8 @@ export function FactoryStockAllocationV5MobileList({ model }: { model: Model }) 
                                 <Container className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                                 <div className="min-w-0 flex-1">
                                   <div className="truncate font-medium">{container.containerName}</div>
-                                  <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[10px] text-muted-foreground">
-                                    <Badge variant="outline" className="h-4 px-1 text-[9px]">
+                                  <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
+                                    <Badge variant="outline" className="h-4 px-1 text-[11px]">
                                       {STATUS_LABELS[container.status] ?? container.status}
                                     </Badge>
                                     <span className="tabular-nums">

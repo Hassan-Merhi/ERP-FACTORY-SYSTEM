@@ -533,13 +533,13 @@ export default function StockInSalesReportDetail() {
               <p className="text-[12px] font-medium leading-none text-muted-foreground">Opening Stock</p>
               <div className="mt-auto grid grid-cols-2 gap-3 pt-3">
                 <div>
-                  <p className="text-[9px] font-medium uppercase tracking-[0.08em] text-muted-foreground/80">Qty</p>
+                  <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground/80">Qty</p>
                   <p className="mt-1 whitespace-nowrap font-mono text-[17px] font-semibold leading-none tracking-tight tabular-nums">
                     {formatNumber(summary.openingStockQty, 0)}
                   </p>
                 </div>
                 <div className="min-w-0 text-right">
-                  <p className="text-[9px] font-medium uppercase tracking-[0.08em] text-muted-foreground/80">Value</p>
+                  <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground/80">Value</p>
                   <p className="mt-1 whitespace-nowrap font-mono text-[15px] font-semibold leading-none tracking-tight tabular-nums 2xl:text-[16px]">
                     {roundedMoney(summary.openingStockValue)}
                   </p>
@@ -562,13 +562,13 @@ export default function StockInSalesReportDetail() {
               <p className="text-[12px] font-medium leading-none text-muted-foreground">Closing / In Hand</p>
               <div className="mt-auto grid grid-cols-2 gap-3 pt-3">
                 <div>
-                  <p className="text-[9px] font-medium uppercase tracking-[0.08em] text-muted-foreground/80">Qty</p>
+                  <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground/80">Qty</p>
                   <p className="mt-1 whitespace-nowrap font-mono text-[17px] font-semibold leading-none tracking-tight tabular-nums">
                     {formatNumber(summary.closingStockQty, 0)}
                   </p>
                 </div>
                 <div className="min-w-0 text-right">
-                  <p className="text-[9px] font-medium uppercase tracking-[0.08em] text-muted-foreground/80">Value</p>
+                  <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground/80">Value</p>
                   <p className="mt-1 whitespace-nowrap font-mono text-[15px] font-semibold leading-none tracking-tight tabular-nums 2xl:text-[16px]">
                     {roundedMoney(summary.closingStockValue)}
                   </p>

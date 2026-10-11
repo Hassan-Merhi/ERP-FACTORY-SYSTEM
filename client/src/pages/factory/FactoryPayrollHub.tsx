@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { PageHeader } from "@/components/PageHeader";
 import { HardHat, Shield, Users } from "lucide-react";
 import FactoryWorkersHub from "@/pages/factory/FactoryWorkersHub";
 import FactoryEmployeesHub from "@/pages/factory/FactoryEmployeesHub";
@@ -46,14 +47,14 @@ export default function FactoryPayrollHub() {
   return (
     <div className="flex flex-col h-full overflow-hidden">
       <div className="border-b bg-background shrink-0">
-        <div className="flex items-center gap-3 px-5 pt-4 pb-3">
-          <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-            <Users className="h-4 w-4 text-primary" />
-          </div>
-          <div>
-            <h1 className="text-base font-semibold leading-tight">Payroll & Benefits</h1>
-            <p className="text-xs text-muted-foreground">{tr("hubDescription")}</p>
-          </div>
+        {/* Shared page-header grammar (accent bar, icon, subtitle) like the ERP and Properties pages. */}
+        <div className="px-4 pt-3 [&>header]:mb-0 [&>header]:border-b-0 [&>header]:pb-2">
+          <PageHeader
+            title="Payroll & Benefits"
+            subtitle={tr("hubDescription")}
+            icon={<Users className="h-5 w-5" />}
+            showBackButton={false}
+          />
         </div>
 
         <div className="flex gap-0 px-4 overflow-x-auto" role="tablist">
@@ -83,7 +84,9 @@ export default function FactoryPayrollHub() {
 
       <div className="flex-1 overflow-auto min-h-0">
         {sections.length === 0 && (
-          <div className="p-6 text-sm text-muted-foreground">No Payroll & Benefits tabs are available for this user.</div>
+          <div className="p-6 text-sm text-muted-foreground">
+            No Payroll & Benefits tabs are available for this user.
+          </div>
         )}
         {activeSection === "workers" && sections.includes("workers") && (
           <div className="p-4">

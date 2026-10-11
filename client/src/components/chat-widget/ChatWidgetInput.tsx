@@ -74,7 +74,7 @@ export function ChatWidgetInput({
           Failed to send message. Please try again.
         </p>
       )}
-      <p className="text-center mt-2 text-[10px] text-muted-foreground/50 font-medium tracking-wide uppercase">
+      <p className="text-center mt-2 text-[11px] text-muted-foreground/50 font-medium tracking-wide uppercase">
         AI responses may be inaccurate
       </p>
     </div>

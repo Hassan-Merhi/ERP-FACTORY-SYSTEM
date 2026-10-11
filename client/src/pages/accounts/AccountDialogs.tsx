@@ -462,7 +462,7 @@ export function AccountDialogs({
                   <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-xs">
                     <div className="space-y-0.5">
                       <FormLabel>Active Status</FormLabel>
-                      <div className="text-[10px] text-muted-foreground">Account is available for new entries</div>
+                      <div className="text-[11px] text-muted-foreground">Account is available for new entries</div>
                     </div>
                     <FormControl>
                       <Switch checked={field.value} onCheckedChange={field.onChange} data-testid="switch-edit-active" />

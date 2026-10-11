@@ -469,7 +469,7 @@ export function FactoryWorkerDetailView({ model }: FactoryWorkerDetailModelProps
                         >
                           ${netBalance.toFixed(2)}
                         </p>
-                        <p className="text-[10px] text-muted-foreground mt-0.5">Paid + Bonus − Outstanding Advances</p>
+                        <p className="text-[11px] text-muted-foreground mt-0.5">Paid + Bonus − Outstanding Advances</p>
                       </CardContent>
                     </Card>
                     <Card>
@@ -481,7 +481,7 @@ export function FactoryWorkerDetailView({ model }: FactoryWorkerDetailModelProps
                         >
                           ${fmtNum(totalPaid)}
                         </p>
-                        <p className="text-[10px] text-muted-foreground mt-0.5">Salary only</p>
+                        <p className="text-[11px] text-muted-foreground mt-0.5">Salary only</p>
                       </CardContent>
                     </Card>
                     <Card>
@@ -493,7 +493,7 @@ export function FactoryWorkerDetailView({ model }: FactoryWorkerDetailModelProps
                         >
                           ${fmtNum(totalPending)}
                         </p>
-                        <p className="text-[10px] text-muted-foreground mt-0.5">Unpaid payrolls</p>
+                        <p className="text-[11px] text-muted-foreground mt-0.5">Unpaid payrolls</p>
                       </CardContent>
                     </Card>
                     <Card>
@@ -505,7 +505,7 @@ export function FactoryWorkerDetailView({ model }: FactoryWorkerDetailModelProps
                         >
                           ${advancesLeft.toFixed(2)}
                         </p>
-                        <p className="text-[10px] text-muted-foreground mt-0.5">Outstanding balance</p>
+                        <p className="text-[11px] text-muted-foreground mt-0.5">Outstanding balance</p>
                       </CardContent>
                     </Card>
                   </div>

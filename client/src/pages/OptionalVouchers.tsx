@@ -338,9 +338,12 @@ export default function OptionalVouchers() {
       ) : (
         <>
           {/* Desktop table */}
-          <div className="hidden md:block border rounded-xl overflow-auto max-h-[calc(100vh-280px)]">
+          <div
+            data-horizontal-scroll="true"
+            className="hidden md:block phone-land:hidden border rounded-xl overflow-x-auto"
+          >
             <table className="w-full text-sm">
-              <thead className="sticky top-0 z-30 bg-muted/40">
+              <thead className="sticky top-0 z-30 bg-muted">
                 <tr className="h-11 bg-muted/40 border-b">
                   <th className="text-left px-4 font-medium">Date</th>
                   <th className="text-left px-4 font-medium">Type</th>
@@ -436,7 +439,7 @@ export default function OptionalVouchers() {
           </div>
 
           {/* Mobile cards */}
-          <div className="md:hidden space-y-2">
+          <div className="md:hidden phone-land:block space-y-2">
             {orderedVouchers.map((v) => (
               <div key={v.id} className="border rounded-xl p-4 space-y-2" data-testid={`card-voucher-${v.id}`}>
                 <div className="flex items-start justify-between gap-2">

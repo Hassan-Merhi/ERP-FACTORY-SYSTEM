@@ -5,6 +5,29 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/*
+ * Touch and landscape-phone variants. Each doubles its own selector (`&:is(&)`) so it out-ranks a
+ * width variant on the same element: `phone-land:block` must win over `md:hidden` on a landscape
+ * phone, and `touch:opacity-100` over any width-based opacity.
+ */
+/* Touch-first devices: hover-revealed controls stay visible, shortcut hints hide. */
+@custom-variant touch {
+  @media (hover: none) and (pointer: coarse) {
+    &:is(&) {
+      @slot;
+    }
+  }
+}
+/* Landscape phones are wider than `sm`/`md` but still short touch screens: keep the phone
+   card/list presentation there (same query as ERP_PHONE_LAYOUT_QUERY's second clause). */
+@custom-variant phone-land {
+  @media (hover: none) and (pointer: coarse) and (max-height: 500px) {
+    &:is(&) {
+      @slot;
+    }
+  }
+}
+
 @theme {
   --radius-lg: 0.5rem;
   --radius-md: 0.375rem;
@@ -703,7 +726,7 @@
 
   /* Tabular numerals everywhere — keeps numeric columns aligned in tables/KPIs */
   .font-mono,
-  [class*="tabular-nums"],
+  .tabular-nums,
   td,
   th {
     font-variant-numeric: tabular-nums;
@@ -778,12 +801,17 @@
 
 /* Print styles for account statements */
 @media print {
-  /* Universal print hygiene — applies to every printed view */
+  /* Universal print hygiene — applies to every printed view. The print rules follow the
+     Tailwind utilities in this file, so equal-specificity selectors win by order and nothing
+     here is marked important; `[class]` lifts the universal reset to utility specificity. */
   *,
   *::before,
-  *::after {
-    box-shadow: none !important;
-    text-shadow: none !important;
+  *::after,
+  [class],
+  [class]::before,
+  [class]::after {
+    box-shadow: none;
+    text-shadow: none;
   }
 
   /* Status pills: render as monochrome outlined chips on paper */
@@ -792,22 +820,22 @@
   .status-info,
   .status-danger,
   .status-muted {
-    background: white !important;
-    color: #111 !important;
-    border: 1px solid #999 !important;
+    background: white;
+    color: #111;
+    border: 1px solid #999;
   }
 
   /* Hide non-essential interactive chrome from prints */
   [data-print-hide],
   .no-print {
-    display: none !important;
+    display: none;
   }
 
   body {
-    background: white !important;
-    color: #111 !important;
-    font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif !important;
-    font-size: 11px !important;
+    background: white;
+    color: #111;
+    font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    font-size: 11px;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
     margin: 0;
@@ -815,7 +843,7 @@
   }
 
   .print-container {
-    background: white !important;
+    background: white;
     padding: 10mm 12mm;
   }
 
@@ -833,14 +861,14 @@
 
   .print-container th,
   .print-container td {
-    border: 1px solid #ccc !important;
+    border: 1px solid #ccc;
     padding: 5px 8px;
     text-align: left;
     vertical-align: middle;
   }
 
   .print-container th {
-    background-color: #eaeaea !important;
+    background-color: #eaeaea;
     font-weight: 700;
     font-size: 10px;
     text-transform: uppercase;
@@ -849,23 +877,23 @@
   }
 
   .print-container tbody tr:nth-child(even) {
-    background-color: #f7f7f7 !important;
+    background-color: #f7f7f7;
   }
 
   .print-container [data-testid="row-opening-balance"] {
-    background-color: #e8ecf0 !important;
+    background-color: #e8ecf0;
     font-weight: 600;
     page-break-inside: avoid;
   }
 
   .print-container .bg-accent\/50 {
-    background-color: #dde3ea !important;
+    background-color: #dde3ea;
     font-weight: 700;
     page-break-inside: avoid;
   }
 
   .print-container .bg-muted\/30 {
-    background-color: #f0f2f4 !important;
+    background-color: #f0f2f4;
   }
 
   .print-container .text-right {
@@ -894,52 +922,52 @@
   }
 
   .print-container .col-date {
-    width: 90px !important;
+    width: 90px;
     min-width: 90px;
   }
 
   .print-container .col-type {
-    width: 80px !important;
+    width: 80px;
     min-width: 80px;
   }
 
   .print-container .col-particulars {
-    width: auto !important;
+    width: auto;
   }
 
   .print-container .col-amount {
-    width: 100px !important;
+    width: 100px;
     min-width: 100px;
   }
 
   .print-container .col-balance {
-    width: 100px !important;
+    width: 100px;
     min-width: 100px;
   }
 
   .print-container .row-totals {
-    background-color: #f0f2f4 !important;
+    background-color: #f0f2f4;
     font-weight: 600;
-    border-top: 1px solid #bbb !important;
+    border-top: 1px solid #bbb;
     page-break-inside: avoid;
   }
 
   .print-container .border-t-2 {
-    border-top: 2px solid #999 !important;
+    border-top: 2px solid #999;
   }
 
   /* ── App chrome: hide sidebar, app header, and no-print elements ── */
   [data-slot="sidebar-wrapper"],
   .no-print,
   [data-no-print] {
-    display: none !important;
+    display: none;
   }
 
   /* Expand content to fill the page width */
-  main {
-    overflow: visible !important;
-    height: auto !important;
-    width: 100% !important;
+  main#main-content {
+    overflow: visible;
+    height: auto;
+    width: 100%;
   }
 
   /* Hide common action buttons when printing */
@@ -949,7 +977,7 @@
   [data-testid="button-export-pdf-with-cost"],
   [data-testid="button-export-pdf-no-cost"],
   [data-testid="button-print"] {
-    display: none !important;
+    display: none;
   }
 }
 
@@ -963,12 +991,12 @@
 
 /* ─────────────────────────────────────────────────────────────────────────
    MOBILE RESPONSIVENESS — Phase 1
-   All rules are scoped to max-width: 768px.
+   All rules are scoped to max-width: 767px (below Tailwind `md`, so they never overlap it).
    Desktop layout (≥769px) is completely unaffected.
    No table display type is globally overridden.
    No business logic, API, or auth logic is touched.
    ───────────────────────────────────────────────────────────────────────── */
-@media (max-width: 768px) {
+@media (max-width: 767px) {
   /* ── 1. Page-level overflow protection ──────────────────────────────────
      Prevents any child element from causing the whole page to scroll
      horizontally. Scoped to html/body only — does NOT use overflow:hidden
@@ -997,30 +1025,16 @@
     flex-direction: column;
   }
 
-  /* ── 3. Dialogs / modals fit within viewport ────────────────────────────
-     Shadcn DialogContent renders with [role="dialog"]. These rules make
-     every dialog fit within the visible viewport on narrow screens without
-     touching any component's JSX. max-height uses dvh (dynamic viewport
-     height) so the keyboard collapsing doesn't break dialog height. */
-  /* Sidebar SheetContent also carries [role="dialog"] (verified: data-sidebar="sidebar"
-     is set on the SheetContent element in sidebar.tsx line 187). Exclude it so the
-     full-height drawer is not clipped by the max-height rule. */
-  [role="dialog"]:not([data-sidebar="sidebar"]) {
-    max-width: calc(100vw - 1rem) !important;
-    max-height: calc(100dvh - 1rem) !important;
-    overflow-y: auto !important;
-    /* keep dialog centred — Radix already provides this via transform */
-  }
+  /* ── 3. Dialogs / modals ────────────────────────────────────────────────
+     The dialog and sheet primitives size themselves to the viewport
+     (`var(--app-viewport-height)`, `calc(100vw-1rem)`) and phone sheets to
+     the visible viewport (phone-sheet.tsx); the remaining catch-all for other
+     `[role="dialog"]` surfaces lives in mobile-browser-compat.css. */
 
   /* ── 4. Buttons and form action rows ────────────────────────────────────
-     Rows of buttons (e.g. Save / Cancel / Export) should wrap rather than
-     clip off the right edge of the screen. Scoped to common flex-row
-     containers that hold interactive controls. */
-  .flex.gap-2,
-  .flex.gap-3,
-  .flex.gap-4 {
-    flex-wrap: wrap;
-  }
+     Rows of buttons (e.g. Save / Cancel / Export) wrap rather than clip off the
+     right edge of the screen. The rule lives in mobile-browser-compat.css with
+     the other shared phone rules. */
 
   /* Form inputs, selects, and textareas must not exceed the viewport */
   input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),

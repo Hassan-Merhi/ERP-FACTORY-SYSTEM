@@ -87,7 +87,7 @@ export function InventoryPicker({
                 </p>
               </div>
               <span
-                className={`shrink-0 font-bold rounded ${mobile ? "text-xs px-2 py-1" : "text-[10px] px-1.5 py-0.5"} ${
+                className={`shrink-0 font-bold rounded ${mobile ? "text-xs px-2 py-1" : "text-[11px] px-1.5 py-0.5"} ${
                   isOut
                     ? "bg-red-500/15 text-red-500"
                     : isLow

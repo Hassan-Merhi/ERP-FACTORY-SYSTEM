@@ -440,7 +440,7 @@ export default function FactoryInvoiceDetail() {
       )}
 
       <Card className="mb-6">
-        <Table mobileLayout="cards" wrapperClassName="max-h-[calc(100vh-260px)] overflow-auto">
+        <Table mobileLayout="cards">
           <TableHeader className="sticky top-0 z-30 bg-background">
             <TableRow>
               <TableHead className="w-[50px]">#</TableHead>
@@ -554,7 +554,7 @@ export default function FactoryInvoiceDetail() {
                                     maximumFractionDigits: 4,
                                   })}
                                 </span>
-                                <Pencil className="h-3 w-3 text-muted-foreground invisible group-hover:visible" />
+                                <Pencil className="h-3 w-3 text-muted-foreground invisible group-hover:visible touch:visible" />
                               </button>
                             )
                           ) : (

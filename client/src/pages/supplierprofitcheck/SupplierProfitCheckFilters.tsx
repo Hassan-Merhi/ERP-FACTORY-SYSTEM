@@ -34,7 +34,7 @@ export function SupplierProfitCheckFilters({ model }: { model: ProfitModel }) {
             <Filter className="w-3.5 h-3.5" />
             {model.statusFilterLabel}
             {model.activeStatuses.length > 0 && (
-              <Badge className="bg-amber-500 text-white ml-1 px-1.5 py-0 h-4 text-[10px]">
+              <Badge className="bg-amber-500 text-white ml-1 px-1.5 py-0 h-4 text-[11px]">
                 {model.activeStatuses.length}
               </Badge>
             )}
@@ -75,7 +75,7 @@ export function SupplierProfitCheckFilters({ model }: { model: ProfitModel }) {
             ))}
           </div>
           <div className="mt-2 pt-1.5 border-t">
-            <p className="text-[10px] text-muted-foreground px-1.5">Select multiple to combine filters</p>
+            <p className="text-[11px] text-muted-foreground px-1.5">Select multiple to combine filters</p>
           </div>
         </PopoverContent>
       </Popover>

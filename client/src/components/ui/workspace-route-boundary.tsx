@@ -5,7 +5,9 @@ import { LoadingState } from "@/components/ui/page-state";
 import { cn } from "@/lib/utils";
 
 const workspaceConsistencyClasses = [
-  "w-full min-w-0 max-w-full",
+  // Reading width is capped on very wide screens (1800px and up, where the content column would
+  // pass 1600px); wider tables keep their own sideways scroll inside it.
+  "mx-auto w-full min-w-0 max-w-full min-[1800px]:max-w-[1600px]",
   "[&_button]:touch-manipulation",
   "max-sm:[&_button]:min-h-11",
   "max-sm:[&_input]:min-h-11",
@@ -71,11 +73,15 @@ export function WorkspaceRouteBoundary({
     <ErrorBoundary resetKey={resetKey}>
       <Suspense
         fallback={
-          <LoadingState
-            className={fill ? "h-full border-0 bg-transparent" : undefined}
-            title={loadingTitle}
-            description={loadingDescription}
-          />
+          // The workspace padding lives on the route content (not on the scroll container, so
+          // sticky headers stick at its true top); the loading card needs the same inset.
+          <div className={fill ? "h-full" : "p-3 sm:p-6"}>
+            <LoadingState
+              className={fill ? "h-full border-0 bg-transparent" : undefined}
+              title={loadingTitle}
+              description={loadingDescription}
+            />
+          </div>
         }
       >
         <WorkspaceConsistencyBoundary className={className} fill={fill} routeKey={resetKey}>

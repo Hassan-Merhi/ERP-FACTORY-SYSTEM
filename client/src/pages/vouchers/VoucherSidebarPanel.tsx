@@ -120,7 +120,7 @@ export function VoucherSidebarPanel({
       </nav>
 
       {isFinancialTab && (
-        <Card className="flex flex-col max-h-[60vh] lg:max-h-[calc(100vh-25rem)]">
+        <Card className="flex flex-col max-h-[60vh] lg:max-h-[calc(100dvh-25rem)]">
           <div className="p-4 border-b">
             <div className="flex items-center justify-between gap-2 mb-2">
               <h3 className="text-sm font-semibold">Accounts</h3>

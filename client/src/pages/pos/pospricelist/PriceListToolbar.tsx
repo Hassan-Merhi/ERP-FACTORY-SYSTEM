@@ -253,7 +253,7 @@ export function PriceListUnpricedGroups({ model }: { model: PosPriceListModel })
               <span>{name}</span>
               <span
                 className={cn(
-                  "inline-flex items-center justify-center min-w-[1.1rem] h-4 px-1 rounded-sm text-[10px] font-bold",
+                  "inline-flex items-center justify-center min-w-[1.1rem] h-4 px-1 rounded-sm text-[11px] font-bold",
                   isHidden
                     ? "bg-muted-foreground/15 text-muted-foreground"
                     : "bg-amber-500/20 text-amber-700 dark:text-amber-400"

@@ -266,7 +266,9 @@ export function PaymentReceiptTab({
   };
 
   return (
-    <div className="flex flex-col lg:flex-row gap-4">
+    // Three columns (type nav, form, account picker) only from xl: at lg with the sidebar pinned the
+    // form had ~450px and its labels wrapped letter by letter.
+    <div className="flex flex-col xl:flex-row gap-4">
       {/* ── Left column: form ── */}
       <div className="flex-1 min-w-0">
         <Card>
@@ -302,7 +304,8 @@ export function PaymentReceiptTab({
                 </div>
 
                 {/* Title + badges */}
-                <div className="flex items-center gap-2 flex-1 min-w-0">
+                {/* min-w keeps the title readable: the row wraps the date input instead of covering it. */}
+                <div className="flex items-center gap-2 flex-1 min-w-[9rem]">
                   <span className="text-sm font-medium">{title}</span>
                   {isEditMode && (
                     <Badge variant="secondary" className="text-xs" data-testid="badge-editing">
@@ -542,7 +545,7 @@ export function PaymentReceiptTab({
 
                   {/* Running total — stated up front, not discovered at the bottom */}
                   <div className="rounded-lg border bg-muted/20 px-4 py-3 flex flex-col justify-center">
-                    <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                       {title.replace(" Voucher", "")} Total
                     </span>
                     <span
@@ -664,19 +667,19 @@ export function PaymentReceiptTab({
 
               {/* ── Action bar — the total stays with Save, pinned to the bottom of the card ── */}
               <div
-                className="sticky bottom-0 z-20 rounded-b-lg border-t bg-card/95 px-4 sm:px-5 py-3 backdrop-blur-sm supports-backdrop-filter:bg-card/80 max-sm:bg-card max-sm:shadow-[0_-4px_12px_-8px_hsl(var(--foreground)/0.25)] max-sm:supports-backdrop-filter:bg-card max-sm:py-2"
+                className="sticky bottom-0 z-20 rounded-b-lg border-t bg-card px-4 sm:px-5 py-3 shadow-[0_-4px_12px_-8px_hsl(var(--foreground)/0.25)] max-sm:py-2"
                 data-voucher-sticky-actions=""
               >
                 <div className="flex items-center justify-between gap-4 flex-wrap">
                   <div className="flex items-center gap-5">
                     <div className="flex flex-col max-sm:hidden">
-                      <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                      <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                         Lines
                       </span>
                       <span className="text-sm font-semibold font-mono tabular-nums">{validEntryCount}</span>
                     </div>
                     <div className="flex flex-col">
-                      <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                      <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                         Total
                       </span>
                       <span
@@ -749,8 +752,8 @@ export function PaymentReceiptTab({
                         </span>
                       ) : (
                         <span className="text-[11px] text-muted-foreground hidden sm:block">
-                          <kbd className="px-1 py-0.5 bg-muted rounded-sm text-[10px]">⌘</kbd>
-                          <kbd className="px-1 py-0.5 bg-muted rounded-sm text-[10px] ml-1">↵</kbd> to save
+                          <kbd className="px-1 py-0.5 bg-muted rounded-sm text-[11px]">⌘</kbd>
+                          <kbd className="px-1 py-0.5 bg-muted rounded-sm text-[11px] ml-1">↵</kbd> to save
                         </span>
                       )}
                     </div>
@@ -764,8 +767,8 @@ export function PaymentReceiptTab({
 
       {/* ── Right column: Account Sidebar — hidden on mobile, visible on sm+ ── */}
       <div
-        className="hidden sm:block w-full lg:w-[40%] lg:sticky lg:top-4 h-fit"
-        style={{ maxHeight: "calc(100vh - 2rem)" }}
+        className="hidden sm:block w-full xl:w-[40%] xl:sticky xl:top-4 h-fit"
+        style={{ maxHeight: "calc(100dvh - 2rem)" }}
       >
         <AccountSidebar {...sidebarProps} />
       </div>

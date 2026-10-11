@@ -127,9 +127,12 @@ export default function StockQuery() {
       ) : (
         <>
           {/* Desktop table */}
-          <div className="hidden md:block border rounded-xl overflow-auto max-h-[calc(100vh-280px)]">
+          <div
+            data-horizontal-scroll="true"
+            className="hidden md:block phone-land:hidden border rounded-xl overflow-x-auto"
+          >
             <table className="w-full text-sm">
-              <thead className="sticky top-0 z-30 bg-muted/40">
+              <thead className="sticky top-0 z-30 bg-muted">
                 <tr className="h-11 bg-muted/40 border-b">
                   <th className="text-left px-4 font-medium w-32">Code</th>
                   <th className="text-left px-4 font-medium">Name</th>
@@ -165,7 +168,7 @@ export default function StockQuery() {
           </div>
 
           {/* Mobile list */}
-          <div className="md:hidden space-y-1.5">
+          <div className="md:hidden phone-land:block space-y-1.5">
             {items.map((item) => (
               <div
                 key={item.id}

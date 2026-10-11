@@ -137,11 +137,11 @@ export function AssignContainersDialog({
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-mono font-semibold text-sm">{c.containerNumber}</span>
                       <span
-                        className={`text-[10px] font-medium px-1.5 py-0.5 rounded-sm ${STATUS_COLORS[c.status] || "bg-muted text-muted-foreground"}`}
+                        className={`text-[11px] font-medium px-1.5 py-0.5 rounded-sm ${STATUS_COLORS[c.status] || "bg-muted text-muted-foreground"}`}
                       >
                         {c.status}
                       </span>
-                      <span className="text-[10px] text-muted-foreground">{c.currencyCode}</span>
+                      <span className="text-[11px] text-muted-foreground">{c.currencyCode}</span>
                     </div>
                     <div className="flex items-center gap-3 mt-0.5 text-xs text-muted-foreground">
                       {c.origin && <span>{c.origin}</span>}

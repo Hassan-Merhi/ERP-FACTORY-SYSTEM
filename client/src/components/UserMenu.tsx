@@ -56,19 +56,21 @@ export function UserMenu({ accentColor, user, onLogout }: UserMenuProps) {
           className="h-8 max-w-60 gap-2 rounded-full border border-border/40 bg-muted/30 px-1.5 md:px-2.5"
         >
           <span
-            className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[9px] font-bold text-white"
+            className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[11px] font-bold text-white"
             style={{ backgroundColor: accentColor }}
             aria-hidden="true"
           >
             {getInitials(user.username)}
           </span>
-          <span className="hidden min-w-0 items-center gap-2 md:flex">
+          {/* Name from lg, role from xl: at md (iPad portrait with the sidebar pinned) the header
+              row has ~500px for six controls and the name pushed the theme toggle off-screen. */}
+          <span className="hidden min-w-0 items-center gap-2 lg:flex">
             <span className="max-w-32 truncate text-sm font-medium leading-none" data-business-value="true">
               {user.username}
             </span>
             {roleLabel ? (
               <span
-                className="hidden border-l border-border/50 pl-2 text-xs leading-none text-muted-foreground lg:inline"
+                className="hidden border-l border-border/50 pl-2 text-xs leading-none text-muted-foreground xl:inline"
                 data-business-value="true"
               >
                 {roleLabel}

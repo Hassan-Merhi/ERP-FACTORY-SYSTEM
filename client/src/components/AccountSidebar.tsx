@@ -245,8 +245,8 @@ export default function AccountSidebar({
               : `${_accounts.length} accounts`}
           </p>
           <p className="text-[11px] text-muted-foreground hidden sm:block">
-            <kbd className="px-1 py-0.5 bg-muted rounded-sm text-[10px]">↑↓</kbd> move{" "}
-            <kbd className="px-1 py-0.5 bg-muted rounded-sm text-[10px] ml-1">↵</kbd> select
+            <kbd className="px-1 py-0.5 bg-muted rounded-sm text-[11px]">↑↓</kbd> move{" "}
+            <kbd className="px-1 py-0.5 bg-muted rounded-sm text-[11px] ml-1">↵</kbd> select
           </p>
         </div>
       </div>
@@ -303,7 +303,7 @@ export default function AccountSidebar({
               return (
                 <div key={`${account.type}-${account.id}`}>
                   {heading && (
-                    <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground px-2 pt-2 pb-1">
+                    <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground px-2 pt-2 pb-1">
                       {heading}
                     </p>
                   )}
@@ -324,7 +324,7 @@ export default function AccountSidebar({
                         </div>
                         {TYPE_BADGE[account.type] && (
                           <span
-                            className={`inline-block text-[9px] font-medium px-1.5 py-0 rounded-sm mt-0.5 ${TYPE_BADGE[account.type].cls}`}
+                            className={`inline-block text-[11px] font-medium px-1.5 py-0 rounded-sm mt-0.5 ${TYPE_BADGE[account.type].cls}`}
                           >
                             {TYPE_BADGE[account.type].label}
                           </span>

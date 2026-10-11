@@ -7,6 +7,7 @@ import "./lib/operationalPhase4BandwidthFetch";
 import "./lib/phase4BandwidthFetch";
 import { createRoot } from "react-dom/client";
 import App from "./App";
+import "./fonts.css";
 import "./index.css";
 import "./mobile-browser-compat.css";
 import "./voucher-narration-cleanup.css";

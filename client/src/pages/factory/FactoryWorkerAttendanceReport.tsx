@@ -334,7 +334,7 @@ export default function FactoryWorkerAttendanceReport() {
           >
             All
             {data && (
-              <Badge variant="secondary" className="ml-1.5 text-[10px] px-1.5 py-0 h-4">
+              <Badge variant="secondary" className="ml-1.5 text-[11px] px-1.5 py-0 h-4">
                 {sortedWorkers.length}
               </Badge>
             )}
@@ -348,7 +348,7 @@ export default function FactoryWorkerAttendanceReport() {
           >
             No Absences
             {data && (
-              <Badge variant="outline" className="ml-1.5 text-[10px] px-1.5 py-0 h-4 status-success">
+              <Badge variant="outline" className="ml-1.5 text-[11px] px-1.5 py-0 h-4 status-success">
                 {presentCount}
               </Badge>
             )}
@@ -362,7 +362,7 @@ export default function FactoryWorkerAttendanceReport() {
           >
             Has Absences
             {data && (
-              <Badge variant="outline" className="ml-1.5 text-[10px] px-1.5 py-0 h-4 status-danger">
+              <Badge variant="outline" className="ml-1.5 text-[11px] px-1.5 py-0 h-4 status-danger">
                 {absentCount}
               </Badge>
             )}
@@ -382,7 +382,7 @@ export default function FactoryWorkerAttendanceReport() {
             {hideFullAbsent ? "Show" : "Hide"} fully absent
             <Badge
               variant="secondary"
-              className="text-[10px] px-1.5 py-0 h-4 bg-red-100 dark:bg-red-900/40 text-red-600 dark:text-red-400"
+              className="text-[11px] px-1.5 py-0 h-4 bg-red-100 dark:bg-red-900/40 text-red-600 dark:text-red-400"
             >
               {fullyAbsentCount}
             </Badge>
@@ -508,7 +508,7 @@ export default function FactoryWorkerAttendanceReport() {
                     : "—"}
                 </p>
                 {salaryKpi && salaryKpi.totalRemaining < 0 && (
-                  <p className="text-[10px] text-blue-500 dark:text-blue-400 mt-0.5">Overpaid</p>
+                  <p className="text-[11px] text-blue-500 dark:text-blue-400 mt-0.5">Overpaid</p>
                 )}
               </CardContent>
             </Card>
@@ -519,11 +519,11 @@ export default function FactoryWorkerAttendanceReport() {
             <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted/50 rounded-md px-3 py-2 print:hidden">
               <Pencil className="h-3.5 w-3.5 shrink-0" />
               Click a cell to cycle: P → A → L → H → Clear. Or press{" "}
-              <kbd className="mx-1 px-1 rounded-sm border text-[10px]">P</kbd>{" "}
-              <kbd className="mx-1 px-1 rounded-sm border text-[10px]">A</kbd>{" "}
-              <kbd className="mx-1 px-1 rounded-sm border text-[10px]">L</kbd>{" "}
-              <kbd className="mx-1 px-1 rounded-sm border text-[10px]">H</kbd> when focused.{" "}
-              <kbd className="mx-1 px-1 rounded-sm border text-[10px]">Del</kbd> clears.
+              <kbd className="mx-1 px-1 rounded-sm border text-[11px]">P</kbd>{" "}
+              <kbd className="mx-1 px-1 rounded-sm border text-[11px]">A</kbd>{" "}
+              <kbd className="mx-1 px-1 rounded-sm border text-[11px]">L</kbd>{" "}
+              <kbd className="mx-1 px-1 rounded-sm border text-[11px]">H</kbd> when focused.{" "}
+              <kbd className="mx-1 px-1 rounded-sm border text-[11px]">Del</kbd> clears.
             </div>
           )}
 
@@ -542,8 +542,8 @@ export default function FactoryWorkerAttendanceReport() {
             </Card>
           ) : (
             /* ── Attendance grid ────────────────────────────────────────────── */
-            <div className="overflow-auto rounded-md border print:overflow-visible print:border-0 max-h-[calc(100vh-360px)] print:max-h-none">
-              <table className="w-full text-xs border-collapse min-w-max print:text-[9px]">
+            <div className="overflow-auto rounded-md border print:overflow-visible print:border-0 print:max-h-none">
+              <table className="w-full text-xs border-collapse min-w-max print:text-[11px]">
                 <thead>
                   <tr className="bg-muted print:bg-gray-100">
                     <th className="text-left px-2 py-2 font-medium border-b border-r whitespace-nowrap sticky top-0 left-0 bg-muted z-30 min-w-[70px] print:bg-gray-100">
@@ -563,7 +563,7 @@ export default function FactoryWorkerAttendanceReport() {
                         )}
                       >
                         <div className="flex flex-col items-center gap-0 leading-tight">
-                          <span className="text-[9px] text-muted-foreground font-normal">{abbr}</span>
+                          <span className="text-[11px] text-muted-foreground font-normal">{abbr}</span>
                           <span className="text-[11px] font-semibold">{label}</span>
                         </div>
                       </th>
@@ -679,8 +679,8 @@ export default function FactoryWorkerAttendanceReport() {
 
                   {/* ── Daily summary row ────────────────────────────────────── */}
                   <tr className="border-t-2 bg-muted/60 font-semibold sticky bottom-0 print:bg-gray-100">
-                    <td className="px-2 py-2 border-r sticky left-0 bg-muted/60 z-10 text-muted-foreground text-[10px] print:bg-gray-100" />
-                    <td className="px-3 py-2 border-r sticky left-[70px] bg-muted/60 z-10 text-muted-foreground text-[10px] whitespace-nowrap print:bg-gray-100">
+                    <td className="px-2 py-2 border-r sticky left-0 bg-muted/60 z-10 text-muted-foreground text-[11px] print:bg-gray-100" />
+                    <td className="px-3 py-2 border-r sticky left-[70px] bg-muted/60 z-10 text-muted-foreground text-[11px] whitespace-nowrap print:bg-gray-100">
                       Daily Total
                     </td>
                     {data.dates.map(({ date }) => {
@@ -688,17 +688,17 @@ export default function FactoryWorkerAttendanceReport() {
                       return (
                         <td key={date} className="text-center px-0 py-2 border-r w-8 align-top">
                           {ds.present > 0 && (
-                            <div className="text-[9px] font-semibold text-emerald-700 dark:text-emerald-400 leading-tight">
+                            <div className="text-[11px] font-semibold text-emerald-700 dark:text-emerald-400 leading-tight">
                               {ds.present}
                             </div>
                           )}
                           {ds.absent > 0 && (
-                            <div className="text-[9px] font-semibold text-red-500 dark:text-red-400 leading-tight">
+                            <div className="text-[11px] font-semibold text-red-500 dark:text-red-400 leading-tight">
                               {ds.absent}
                             </div>
                           )}
                           {ds.present === 0 && ds.absent === 0 && (
-                            <span className="text-muted-foreground/30 text-[9px]">—</span>
+                            <span className="text-muted-foreground/30 text-[11px]">—</span>
                           )}
                         </td>
                       );
@@ -717,13 +717,13 @@ export default function FactoryWorkerAttendanceReport() {
           {/* ── Legend ──────────────────────────────────────────────────────── */}
           <div className="flex items-center gap-4 text-xs text-muted-foreground print:hidden">
             <span className="flex items-center gap-1.5">
-              <span className="inline-flex items-center justify-center w-4 h-4 rounded-xs bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300 text-[9px] font-bold">
+              <span className="inline-flex items-center justify-center w-4 h-4 rounded-xs bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300 text-[11px] font-bold">
                 P
               </span>
               Present
             </span>
             <span className="flex items-center gap-1.5">
-              <span className="inline-flex items-center justify-center w-4 h-4 rounded-xs bg-red-100 dark:bg-red-900/40 text-red-600 dark:text-red-400 text-[9px] font-bold">
+              <span className="inline-flex items-center justify-center w-4 h-4 rounded-xs bg-red-100 dark:bg-red-900/40 text-red-600 dark:text-red-400 text-[11px] font-bold">
                 A
               </span>
               Absent
@@ -735,7 +735,7 @@ export default function FactoryWorkerAttendanceReport() {
             <span className="flex items-center gap-1.5">
               <Badge
                 variant="outline"
-                className="text-[9px] text-amber-600 dark:text-amber-400 border-amber-300 px-1 py-0 h-auto"
+                className="text-[11px] text-amber-600 dark:text-amber-400 border-amber-300 px-1 py-0 h-auto"
               >
                 Sa/Su
               </Badge>

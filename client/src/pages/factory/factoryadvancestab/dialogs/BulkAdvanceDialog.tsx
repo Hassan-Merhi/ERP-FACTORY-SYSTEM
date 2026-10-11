@@ -296,7 +296,7 @@ export function BulkAdvanceDialog({
                                       </span>
                                     </div>
                                   </div>
-                                  <p className="text-[10px] text-muted-foreground/50 mt-2 leading-relaxed">
+                                  <p className="text-[11px] text-muted-foreground/50 mt-2 leading-relaxed">
                                     Calendar-day proration · Absences &amp; advances deducted
                                   </p>
                                 </PopoverContent>

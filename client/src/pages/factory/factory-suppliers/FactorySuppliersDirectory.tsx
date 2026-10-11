@@ -143,7 +143,7 @@ export function FactorySuppliersDirectory({ model }: { model: SuppliersModel }) 
                     {supplier.totalContainers} containers
                   </span>
                   {otwCount > 0 && (
-                    <Badge variant="outline" className="text-amber-600 border-amber-400 text-[10px]">
+                    <Badge variant="outline" className="text-amber-600 border-amber-400 text-[11px]">
                       {otwCount} OTW
                     </Badge>
                   )}

@@ -56,7 +56,7 @@ export function FindVoucherTab({ model }: { model: AccountsLegacyModel }) {
               <FileText className="w-4 h-4 shrink-0 text-muted-foreground" />
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <Badge variant="outline" className="text-[10px]">
+                  <Badge variant="outline" className="text-[11px]">
                     {v.voucherType}
                   </Badge>
                   {v.locationName && <span className="text-xs text-muted-foreground">{v.locationName}</span>}

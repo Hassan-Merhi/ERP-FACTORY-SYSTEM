@@ -210,7 +210,7 @@ export function TabDetail() {
                       <TableCell className={cn(r.isOverdue ? "text-red-600 font-bold" : "")}>
                         {fmtD(r.maxOffloadDate)}
                         {r.daysDelayed ? (
-                          <span className="ml-1 text-red-600 text-[10px]">+{r.daysDelayed}d</span>
+                          <span className="ml-1 text-red-600 text-[11px]">+{r.daysDelayed}d</span>
                         ) : null}
                       </TableCell>
                       <TableCell className="text-center">

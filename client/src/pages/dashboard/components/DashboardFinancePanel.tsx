@@ -428,7 +428,7 @@ export function DashboardFinancePanel({ dashboard }: DashboardFinancePanelProps)
                         <Button
                           size="icon"
                           variant="ghost"
-                          className="ml-1 opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+                          className="ml-1 opacity-100 md:opacity-0 group-hover:opacity-100 touch:opacity-100 transition-opacity shrink-0"
                           onClick={() => removeAccountMutation.mutate(dca.id)}
                           data-testid={`button-remove-cash-account-${dca.id}`}
                         >
@@ -560,7 +560,7 @@ export function DashboardFinancePanel({ dashboard }: DashboardFinancePanelProps)
                       <Button
                         size="icon"
                         variant="ghost"
-                        className="ml-1 opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+                        className="ml-1 opacity-100 md:opacity-0 group-hover:opacity-100 touch:opacity-100 transition-opacity shrink-0"
                         onClick={() => removePayableAccountMutation.mutate(account.id)}
                         data-testid={`button-remove-payable-account-${account.id}`}
                       >

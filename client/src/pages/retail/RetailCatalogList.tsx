@@ -194,7 +194,7 @@ export function RetailCatalogList({
                                 />
                               ))}
                               {images.length > 3 && (
-                                <span className="flex h-10 w-10 items-center justify-center rounded-sm border-2 border-background bg-muted text-[10px] font-bold">
+                                <span className="flex h-10 w-10 items-center justify-center rounded-sm border-2 border-background bg-muted text-[11px] font-bold">
                                   +{images.length - 3}
                                 </span>
                               )}

@@ -86,7 +86,7 @@ export function RemoveFromStockTable({
                 <TableCell className="font-mono text-xs font-bold">{bale.referenceNumber}</TableCell>
                 <TableCell>
                   <div className="font-medium text-sm">{bale.productName}</div>
-                  <div className="text-[10px] text-muted-foreground font-mono">{bale.articleCode}</div>
+                  <div className="text-[11px] text-muted-foreground font-mono">{bale.articleCode}</div>
                 </TableCell>
                 <TableCell className="text-xs">{bale.locationName}</TableCell>
                 <TableCell className="text-xs text-muted-foreground">
@@ -95,7 +95,7 @@ export function RemoveFromStockTable({
                 <TableCell className="text-xs">{bale.finalizedByName || "-"}</TableCell>
                 <TableCell className="text-right font-bold text-sm">
                   {parseFloat(bale.weightKg || "0").toFixed(1)}{" "}
-                  <span className="text-[10px] text-muted-foreground">KG</span>
+                  <span className="text-[11px] text-muted-foreground">KG</span>
                 </TableCell>
                 <TableCell className="text-right">
                   <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => onPrintBale(bale)}>
@@ -122,7 +122,7 @@ export function RemoveFromStockTable({
                 <TableCell className="font-medium text-sm">{row.productName}</TableCell>
                 <TableCell className="text-center font-bold">{row.qty}</TableCell>
                 <TableCell className="text-right font-bold text-sm">
-                  {row.totalWeight.toFixed(1)} <span className="text-[10px] text-muted-foreground">KG</span>
+                  {row.totalWeight.toFixed(1)} <span className="text-[11px] text-muted-foreground">KG</span>
                 </TableCell>
               </TableRow>
             ))

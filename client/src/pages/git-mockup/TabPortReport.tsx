@@ -161,7 +161,7 @@ export function TabPortReport() {
                           <td className="py-0.5 px-2">{fmtD(r.borderDate)}</td>
                           <td className={cn("py-0.5 px-2", r.daysDelayed ? "text-red-600 font-bold" : "")}>
                             {fmtD(r.maxOffloadDate)}
-                            {r.daysDelayed ? <span className="ml-1 text-[10px]">+{r.daysDelayed}d</span> : null}
+                            {r.daysDelayed ? <span className="ml-1 text-[11px]">+{r.daysDelayed}d</span> : null}
                           </td>
                           <td className="py-0.5 px-2 text-center">
                             {r.docReceived ? (
@@ -174,7 +174,7 @@ export function TabPortReport() {
                             {r.docsSentDate ? (
                               <CheckCircle2 className="h-3.5 w-3.5 text-green-600 mx-auto" />
                             ) : r.docReceived ? (
-                              <span className="text-amber-700 text-[10px] font-medium">READY</span>
+                              <span className="text-amber-700 text-[11px] font-medium">READY</span>
                             ) : (
                               "—"
                             )}

@@ -146,16 +146,22 @@ describe("Table mobileLayout", () => {
     expect(screen.getByText("Shirts")).toHaveAttribute("data-mobile-cell", "title");
   });
 
-  it("keeps the table on tablet/desktop, outside ERP/Factory mode, and when not opted in", () => {
+  it("keeps the table on tablet/desktop, in POS mode, and when not opted in", () => {
     phone.value = false;
     renderTable("cards");
     expect(screen.getByTestId("table")).not.toHaveAttribute("data-mobile-cards");
     cleanup();
 
     phone.value = true;
-    phone.mode = "properties";
+    phone.mode = "pos";
     renderTable("cards");
     expect(screen.getByTestId("table")).not.toHaveAttribute("data-mobile-cards");
+    cleanup();
+
+    // Properties phones restack opted-in tables as cards like ERP and Factory.
+    phone.mode = "properties";
+    renderTable("cards");
+    expect(screen.getByTestId("table")).toHaveAttribute("data-mobile-cards", "true");
     cleanup();
 
     phone.mode = "erp";

@@ -428,7 +428,7 @@ function ScreenFeedDialog({ userId, username, onClose }: { userId: string; usern
                     <div className="flex items-center gap-2">
                       <p className="truncate font-medium leading-tight">{getPageLabel(event.route)}</p>
                       {event.count > 1 ? (
-                        <span className="shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-[10px]">×{event.count}</span>
+                        <span className="shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-[11px]">×{event.count}</span>
                       ) : null}
                     </div>
                     <div className="flex items-center justify-between gap-2">

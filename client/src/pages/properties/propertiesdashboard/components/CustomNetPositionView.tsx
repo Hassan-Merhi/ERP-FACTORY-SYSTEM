@@ -3,14 +3,14 @@
  *
  * Extracted from PropertiesDashboard.tsx during the Phase 4 god-file split.
  */
-import {Card, CardContent, CardHeader, CardTitle} from "@/components/ui/card";
-import {Button} from "@/components/ui/button";
-import {Badge} from "@/components/ui/badge";
-import {useCurrencyContext} from "@/contexts/CurrencyContext";
-import {Eye, EyeOff, RotateCcw, Equal} from "lucide-react";
-import {useState, useCallback, useMemo} from "react";
-import type {ProfitData, PropsCustomAccount} from "../types";
-import {loadPropsCustomViewHidden, savePropsCustomViewHidden} from "../utils";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { useCurrencyContext } from "@/contexts/CurrencyContext";
+import { Eye, EyeOff, RotateCcw, Equal } from "lucide-react";
+import { useState, useCallback, useMemo } from "react";
+import type { ProfitData, PropsCustomAccount } from "../types";
+import { loadPropsCustomViewHidden, savePropsCustomViewHidden } from "../utils";
 
 export function CustomNetPositionView({ data }: { data: ProfitData }) {
   const { formatAmount } = useCurrencyContext();
@@ -168,7 +168,7 @@ export function CustomNetPositionView({ data }: { data: ProfitData }) {
                 >
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <Badge variant="outline" className={`text-[9px] px-1 h-4 shrink-0 ${sideBadgeClass(acc.side)}`}>
+                      <Badge variant="outline" className={`text-[11px] px-1 h-4 shrink-0 ${sideBadgeClass(acc.side)}`}>
                         {sideLabel(acc.side)}
                       </Badge>
                       <p className="text-sm font-medium truncate">{acc.name}</p>

@@ -107,7 +107,7 @@ export function StockAdjustmentConfirmCard({
             return (
               <>
                 <div
-                  className={`grid ${cols} gap-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wide`}
+                  className={`grid ${cols} gap-1 text-[11px] font-semibold text-muted-foreground uppercase tracking-wide`}
                 >
                   <span>Item</span>
                   <span className="text-center">Type</span>
@@ -147,7 +147,7 @@ export function StockAdjustmentConfirmCard({
                           <span className="truncate text-foreground">{selectedItems[i].name}</span>
                         )}
                         <span
-                          className={`text-center text-[10px] font-semibold ${item.type === "PRODUCE" ? "text-green-600 dark:text-green-400" : "text-destructive"}`}
+                          className={`text-center text-[11px] font-semibold ${item.type === "PRODUCE" ? "text-green-600 dark:text-green-400" : "text-destructive"}`}
                         >
                           {item.type === "PRODUCE" ? "Produce" : "Consume"}
                         </span>
@@ -156,12 +156,12 @@ export function StockAdjustmentConfirmCard({
                           {item.rate > 0 ? (
                             item.rate.toLocaleString(undefined, { maximumFractionDigits: 2 })
                           ) : (
-                            <span className="italic text-[10px]">—</span>
+                            <span className="italic text-[11px]">—</span>
                           )}
                         </span>
                         {hasStockPreview && (
                           <span
-                            className={`text-right text-[10px] ${isNegative ? "text-destructive font-semibold" : "text-muted-foreground"}`}
+                            className={`text-right text-[11px] ${isNegative ? "text-destructive font-semibold" : "text-muted-foreground"}`}
                           >
                             {item.currentStock !== undefined ? `${item.currentStock}→` : ""}
                             {item.projectedStock !== undefined ? (
@@ -180,7 +180,7 @@ export function StockAdjustmentConfirmCard({
           })()}
         </div>
         {draft.items.some((i) => i.projectedStock !== undefined && i.projectedStock < 0) && (
-          <p className="text-[10px] text-destructive border-t pt-1">
+          <p className="text-[11px] text-destructive border-t pt-1">
             Warning: stock would go negative for one or more items.
           </p>
         )}
@@ -256,19 +256,19 @@ export function VoucherSearchResultsCard({
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-1.5 flex-wrap">
                   <span className="text-xs font-semibold text-foreground">{v.voucherNumber}</span>
-                  <span className="text-[10px] text-muted-foreground bg-muted rounded-sm px-1 py-0.5">
+                  <span className="text-[11px] text-muted-foreground bg-muted rounded-sm px-1 py-0.5">
                     {v.voucherType}
                   </span>
                   {v.optional && (
-                    <span className="text-[10px] text-amber-600 dark:text-amber-400 bg-amber-500/10 rounded-sm px-1 py-0.5">
+                    <span className="text-[11px] text-amber-600 dark:text-amber-400 bg-amber-500/10 rounded-sm px-1 py-0.5">
                       Optional
                     </span>
                   )}
                 </div>
                 <p className="text-[11px] text-muted-foreground mt-0.5 truncate">{v.description || "—"}</p>
                 <div className="flex items-center gap-2 mt-0.5">
-                  <span className="text-[10px] text-muted-foreground">{v.voucherDate}</span>
-                  <span className="text-[10px] font-medium text-foreground">${amount}</span>
+                  <span className="text-[11px] text-muted-foreground">{v.voucherDate}</span>
+                  <span className="text-[11px] font-medium text-foreground">${amount}</span>
                 </div>
               </div>
               <Button

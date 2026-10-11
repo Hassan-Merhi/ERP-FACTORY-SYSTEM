@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
+import { useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
@@ -26,7 +27,9 @@ function getSavedPos(): { x: number; y: number } {
   } catch {
     // Storage is unavailable in private mode and can throw on quota; the value is a convenience, not state we need.
   }
-  return { x: 20, y: window.innerHeight - 120 };
+  // High enough to clear the sticky action bars (POS checkout, voucher totals) that sit at the
+  // bottom of the workspace; the x is pushed inside the content column once the shell mounts.
+  return { x: 20, y: window.innerHeight - 170 };
 }
 
 /** Opens the notes panel from other surfaces (the ERP phone workspace menu). */
@@ -49,6 +52,52 @@ export function UserNotesPanel() {
   const [draft, setDraft] = useState<string | null>(null);
   const [savedRecently, setSavedRecently] = useState(false);
   const [pos, setPos] = useState<{ x: number; y: number }>(getSavedPos);
+  // Hidden until the workspace exists, so it never floats over the app loading screen.
+  const [anchored, setAnchored] = useState(false);
+  const [currentLocation] = useLocation();
+
+  // Keep the launcher inside the content column. The default (and any saved) position sat at
+  // x=20, which is over the pinned sidebar's footer and nav links on desktops and tablets. When
+  // the workspace's left edge is to the right of the button, move it just inside that edge; the
+  // ResizeObserver covers sidebar expand/collapse, which changes the edge without a window resize.
+  useEffect(() => {
+    let main: HTMLElement | null = null;
+    let retry: ReturnType<typeof setTimeout> | null = null;
+    let observer: ResizeObserver | null = null;
+    const relocate = () => {
+      if (!main) return;
+      const left = Math.round(main.getBoundingClientRect().left);
+      setPos((current) => {
+        const next = {
+          x: left > 0 && current.x < left + 8 ? left + 16 : current.x,
+          y: Math.min(current.y, window.innerHeight - 56),
+        };
+        return next.x === current.x && next.y === current.y ? current : next;
+      });
+    };
+    // This panel mounts on idle, which on heavier routes can be before the lazy shell has
+    // rendered its workspace; keep looking for it instead of giving up.
+    const attach = () => {
+      main = document.getElementById("main-content");
+      if (!main) {
+        retry = setTimeout(attach, 250);
+        return;
+      }
+      relocate();
+      setAnchored(true);
+      if (typeof ResizeObserver !== "undefined") {
+        observer = new ResizeObserver(relocate);
+        observer.observe(main);
+      }
+    };
+    attach();
+    window.addEventListener("resize", relocate);
+    return () => {
+      if (retry) clearTimeout(retry);
+      window.removeEventListener("resize", relocate);
+      observer?.disconnect();
+    };
+  }, [currentLocation]);
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const savedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -170,10 +219,10 @@ export function UserNotesPanel() {
             data-testid="button-open-user-notes"
             aria-label="My notes"
             style={{ left: pos.x, top: pos.y }}
-            className="group fixed z-50 flex items-center gap-2 rounded-full bg-primary text-primary-foreground shadow-md px-3 py-2 opacity-30 hover:opacity-100 transition-all duration-300 ease-in-out overflow-hidden max-w-9 hover:max-w-[120px] focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring select-none cursor-grab active:cursor-grabbing"
+            className={`${anchored ? "" : "invisible "}group fixed z-50 flex items-center gap-2 rounded-full bg-primary text-primary-foreground shadow-md px-3 py-2 opacity-30 hover:opacity-100 transition-all duration-300 ease-in-out overflow-hidden max-w-9 hover:max-w-[120px] focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring select-none cursor-grab active:cursor-grabbing`}
           >
             <NotebookPen className="h-4 w-4 shrink-0" />
-            <span className="text-sm font-medium whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-200 delay-100">
+            <span className="text-sm font-medium whitespace-nowrap opacity-0 group-hover:opacity-100 touch:opacity-100 transition-opacity duration-200 delay-100">
               My Notes
             </span>
           </button>

@@ -136,7 +136,7 @@ export default function OffloadItemSearch() {
       {results.length > 0 && (
         <>
           {/* Desktop table */}
-          <div className="hidden md:block border rounded-xl overflow-hidden">
+          <div className="hidden md:block phone-land:hidden border rounded-xl overflow-hidden">
             <table className="w-full text-sm">
               <thead>
                 <tr className="h-11 bg-muted/40 border-b">
@@ -178,7 +178,7 @@ export default function OffloadItemSearch() {
           </div>
 
           {/* Mobile cards */}
-          <div className="md:hidden space-y-2">
+          <div className="md:hidden phone-land:block space-y-2">
             {results.map((row, i) => (
               <div key={i} className="border rounded-xl p-4 space-y-2" data-testid={`card-result-${i}`}>
                 <div className="flex items-start justify-between gap-2">

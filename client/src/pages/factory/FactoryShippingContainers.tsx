@@ -367,12 +367,7 @@ export default function FactoryShippingContainers() {
 
         {/* ── Main Table ── */}
         <div className="rounded-md border">
-          <Table
-            mobileLayout="cards"
-            className="text-xs"
-            style={{ minWidth: "1100px" }}
-            wrapperClassName="max-h-[calc(100vh-300px)] overflow-auto"
-          >
+          <Table mobileLayout="cards" className="text-xs" style={{ minWidth: "1100px" }}>
             <TableHeader>
               <TableRow>
                 {colVis.orderDate && <TableHead className="text-xs w-20 min-w-[80px]">Order Date</TableHead>}

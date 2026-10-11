@@ -75,7 +75,7 @@ export function FixPOCreditsDialog({ open, onOpenChange, companies }: FixPOCredi
                   <p className="text-sm text-muted-foreground">
                     Manage credit management between subsidiaries and parent.
                   </p>
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <Label>Subsidiary (Source)</Label>
                       <Select value={selectedSub} onValueChange={setSelectedSub}>

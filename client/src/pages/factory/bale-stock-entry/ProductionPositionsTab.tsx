@@ -240,14 +240,14 @@ export function ProductionPositionsTab() {
                   <TableCell>
                     <div className="font-bold">{position.name}</div>
                     {position.ruleEffectiveFrom && (
-                      <div className="text-[10px] text-muted-foreground">Rule from {position.ruleEffectiveFrom}</div>
+                      <div className="text-[11px] text-muted-foreground">Rule from {position.ruleEffectiveFrom}</div>
                     )}
                   </TableCell>
                   <TableCell>
                     <div className="flex max-w-md flex-wrap gap-1">
                       {position.members?.length ? (
                         position.members.map((member) => (
-                          <Badge key={member.workerId} variant="secondary" className="text-[10px]">
+                          <Badge key={member.workerId} variant="secondary" className="text-[11px]">
                             {member.fullName}
                           </Badge>
                         ))
@@ -407,7 +407,7 @@ export function ProductionPositionsTab() {
                       <span className="min-w-0">
                         <span className="block truncate text-xs font-medium">{worker.fullName || worker.name}</span>
                         {worker.employeeCode && (
-                          <span className="block text-[10px] text-muted-foreground">{worker.employeeCode}</span>
+                          <span className="block text-[11px] text-muted-foreground">{worker.employeeCode}</span>
                         )}
                       </span>
                     </button>

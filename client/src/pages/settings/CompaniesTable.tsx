@@ -16,9 +16,7 @@ interface CompaniesTableProps {
 export function CompaniesTable({ companies, onEdit, onDelete }: CompaniesTableProps) {
   const [search, setSearch] = useState("");
 
-  const filtered = companies.filter(
-    (c) => searchAny(search, c.name, c.code)
-  );
+  const filtered = companies.filter((c) => searchAny(search, c.name, c.code));
 
   return (
     <div className="space-y-4">
@@ -49,7 +47,7 @@ export function CompaniesTable({ companies, onEdit, onDelete }: CompaniesTablePr
                 <TableCell className="font-medium">{company.name}</TableCell>
                 <TableCell className="font-mono text-xs uppercase">{company.code}</TableCell>
                 <TableCell>
-                  <Badge variant="outline" className="uppercase text-[10px]">
+                  <Badge variant="outline" className="uppercase text-[11px]">
                     {company.companyType}
                   </Badge>
                 </TableCell>

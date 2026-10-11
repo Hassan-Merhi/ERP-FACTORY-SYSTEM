@@ -132,7 +132,7 @@ function StepRow({ step }: { step: PlanStep }) {
           <p className="text-xs text-red-500 max-w-[180px] truncate">{step.error}</p>
         )}
         {hasResult && (
-          <Eye className="h-3.5 w-3.5 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity shrink-0 mt-0.5" />
+          <Eye className="h-3.5 w-3.5 text-muted-foreground opacity-0 group-hover:opacity-100 touch:opacity-100 transition-opacity shrink-0 mt-0.5" />
         )}
       </div>
 
@@ -453,7 +453,7 @@ export default function AICommandCenter() {
                 <TabsTrigger value="task" data-testid="tab-task">
                   Active Task
                   {activeTask && (
-                    <Badge variant="secondary" className="ml-2 text-[10px] px-1.5">
+                    <Badge variant="secondary" className="ml-2 text-[11px] px-1.5">
                       {activeTask.status.replace(/_/g, " ")}
                     </Badge>
                   )}
@@ -461,7 +461,7 @@ export default function AICommandCenter() {
                 <TabsTrigger value="approvals" data-testid="tab-approvals">
                   Approvals
                   {approvals.length > 0 && (
-                    <Badge variant="default" className="ml-2 text-[10px] px-1.5 bg-amber-500 hover:bg-amber-500">
+                    <Badge variant="default" className="ml-2 text-[11px] px-1.5 bg-amber-500 hover:bg-amber-500">
                       {approvals.length}
                     </Badge>
                   )}
@@ -655,13 +655,13 @@ export default function AICommandCenter() {
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 flex-wrap">
                               <span className="text-xs font-medium">{formatTaskType(task.taskType)}</span>
-                              <Badge variant={cfg.variant} className="text-[10px] px-1.5 gap-1">
+                              <Badge variant={cfg.variant} className="text-[11px] px-1.5 gap-1">
                                 {cfg.label}
                               </Badge>
                             </div>
                             <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">{task.userInstruction}</p>
                           </div>
-                          <span className="text-[10px] text-muted-foreground shrink-0">{timeAgo(task.createdAt)}</span>
+                          <span className="text-[11px] text-muted-foreground shrink-0">{timeAgo(task.createdAt)}</span>
                         </button>
                       );
                     })}

@@ -251,9 +251,8 @@ export default function AccountGroups() {
   const childCount = (groupId: number) => allAccounts.filter((a) => a.parentId === groupId).length;
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* The .border-b wrapper is the Phase 1 master/detail phone layout anchor. */}
-      <div className={isErp ? "border-b border-transparent px-6 pt-4" : "border-b px-6 py-4"}>
+    <div className="min-h-screen bg-background max-md:min-h-full">
+      <div className={isErp ? "border-b border-transparent px-6 pt-4 max-md:px-3" : "border-b px-6 py-4 max-md:px-3"}>
         {isErp ? (
           <PageHeader
             title="Account Groups"
@@ -271,9 +270,10 @@ export default function AccountGroups() {
         )}
       </div>
 
-      <div className="flex h-[calc(100vh-73px)]">
+      {/* Below md the group list is a bounded pane above the detail pane. */}
+      <div className="flex h-[calc(100dvh-73px)] max-md:h-auto max-md:min-h-0 max-md:flex-col">
         {/* Left panel */}
-        <div className="w-72 border-r flex flex-col shrink-0">
+        <div className="w-72 border-r flex flex-col shrink-0 max-md:w-full max-md:max-h-[min(44dvh,24rem)] max-md:flex-none max-md:border-r-0 max-md:border-b">
           <div className="p-4 border-b space-y-3">
             <Button className="w-full" onClick={() => setCreateOpen(true)} data-testid="button-create-group">
               <Plus className="h-4 w-4 mr-2" />
@@ -332,7 +332,7 @@ export default function AccountGroups() {
         </div>
 
         {/* Right panel */}
-        <div className="flex-1 overflow-y-auto p-6">
+        <div className="flex-1 overflow-y-auto p-6 max-md:w-full max-md:min-w-0 max-md:overflow-visible max-md:p-3">
           {!selectedGroup ? (
             <div className="flex flex-col items-center justify-center h-full gap-4 text-muted-foreground">
               <Folder className="h-12 w-12 opacity-30" />
@@ -417,7 +417,7 @@ export default function AccountGroups() {
                             <Button
                               variant="ghost"
                               size="icon"
-                              className="opacity-0 group-hover:opacity-100 shrink-0"
+                              className="opacity-0 group-hover:opacity-100 touch:opacity-100 shrink-0"
                               onClick={() => removeMutation.mutate(child.id)}
                               disabled={removeMutation.isPending}
                               data-testid={`button-remove-child-${child.id}`}

@@ -130,7 +130,7 @@ export function CleanEmptyAccountsDialog({ open, onOpenChange, companyId }: Clea
                       </TableCell>
                       <TableCell className="font-medium text-sm">{account.name}</TableCell>
                       <TableCell>
-                        <Badge variant="outline" className="text-[10px]">
+                        <Badge variant="outline" className="text-[11px]">
                           {account.accountType}
                         </Badge>
                       </TableCell>

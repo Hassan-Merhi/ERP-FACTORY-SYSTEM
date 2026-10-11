@@ -170,7 +170,7 @@ function CompanyCard({
             <div className="min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
                 <h3 className="font-semibold truncate">{company.companyName}</h3>
-                <Badge variant="outline" className="text-[10px]">
+                <Badge variant="outline" className="text-[11px]">
                   {company.companyCode}
                 </Badge>
               </div>
@@ -179,20 +179,20 @@ function CompanyCard({
           </div>
           <div className="grid grid-cols-3 gap-3 sm:gap-6 text-right lg:min-w-[500px]">
             <div>
-              <div className="text-[10px] uppercase tracking-wide text-muted-foreground">What We Have</div>
+              <div className="text-[11px] uppercase tracking-wide text-muted-foreground">What We Have</div>
               <div className="font-mono tabular-nums text-sm font-semibold text-emerald-600 dark:text-emerald-400">
                 {formatAmount(company.forUsTotal)}
               </div>
             </div>
             <div>
-              <div className="text-[10px] uppercase tracking-wide text-muted-foreground">What We Owe</div>
+              <div className="text-[11px] uppercase tracking-wide text-muted-foreground">What We Owe</div>
               <div className="font-mono tabular-nums text-sm font-semibold text-rose-600 dark:text-rose-400">
                 {formatAmount(company.onUsTotal)}
               </div>
             </div>
             <div className="flex items-start justify-end gap-2">
               <div>
-                <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Net Position</div>
+                <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Net Position</div>
                 <div
                   className={`font-mono tabular-nums text-sm font-bold ${positive ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"}`}
                 >

@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { PageHeader } from "@/components/PageHeader";
 import FactoryProformas from "@/pages/factory/FactoryProformas";
 import FactoryInvoices from "@/pages/factory/FactoryInvoices";
 import FactoryContainerLoadingScan from "@/pages/factory/FactoryContainerLoadingScan";
@@ -64,14 +65,14 @@ export default function FactoryInvoicing() {
   return (
     <div className="flex flex-col h-full overflow-hidden">
       <div className="border-b bg-background shrink-0">
-        <div className="flex items-center gap-3 px-5 pt-4 pb-3">
-          <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-            <FileText className="h-4 w-4 text-primary" />
-          </div>
-          <div>
-            <h1 className="text-base font-semibold leading-tight">Invoicing</h1>
-            <p className="text-xs text-muted-foreground">Proformas, invoices and container loadings</p>
-          </div>
+        {/* Shared page-header grammar (accent bar, icon, subtitle) like the ERP and Properties pages. */}
+        <div className="px-4 pt-3 [&>header]:mb-0 [&>header]:border-b-0 [&>header]:pb-2">
+          <PageHeader
+            title="Invoicing"
+            subtitle="Proformas, invoices and container loadings"
+            icon={<FileText className="h-5 w-5" />}
+            showBackButton={false}
+          />
         </div>
 
         <div className="flex gap-0 px-4 overflow-x-auto" role="tablist">

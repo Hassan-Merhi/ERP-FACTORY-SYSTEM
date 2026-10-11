@@ -109,7 +109,7 @@ export function RawStockHistoryPanel({ rawStock }: RawStockHistoryPanelProps) {
 
                 <div className="border rounded-md overflow-hidden bg-card shadow-xs">
                   <Table mobileLayout="cards">
-                    <TableHeader className="bg-muted/50">
+                    <TableHeader className="bg-muted">
                       <TableRow>
                         <TableHead className="w-8">
                           <input
@@ -170,14 +170,14 @@ export function RawStockHistoryPanel({ rawStock }: RawStockHistoryPanelProps) {
                             {row.canRestore ? (
                               <Badge
                                 variant="outline"
-                                className="text-amber-600 border-amber-500/30 bg-amber-500/10 text-[10px]"
+                                className="text-amber-600 border-amber-500/30 bg-amber-500/10 text-[11px]"
                               >
                                 Restorable
                               </Badge>
                             ) : (
                               <Badge
                                 variant="outline"
-                                className="text-muted-foreground text-[10px]"
+                                className="text-muted-foreground text-[11px]"
                                 title="Current rate no longer matches what recompute wrote — something else changed it since."
                               >
                                 Already changed
@@ -216,7 +216,7 @@ export function RawStockHistoryPanel({ rawStock }: RawStockHistoryPanelProps) {
             ) : (
               <div className="border rounded-md overflow-hidden bg-card shadow-xs">
                 <Table mobileLayout="cards">
-                  <TableHeader className="bg-muted/50">
+                  <TableHeader className="bg-muted">
                     <TableRow>
                       <TableHead>Applied at</TableHead>
                       <TableHead>By</TableHead>
@@ -237,7 +237,7 @@ export function RawStockHistoryPanel({ rawStock }: RawStockHistoryPanelProps) {
                         <TableCell className="text-xs">
                           <div className="font-medium text-foreground">{row.description}</div>
                           {row.containerNumbers && row.containerNumbers.length > 0 && (
-                            <div className="font-mono text-[10px] text-muted-foreground mt-0.5">
+                            <div className="font-mono text-[11px] text-muted-foreground mt-0.5">
                               {row.containerNumbers.slice(0, 6).join(", ")}
                               {row.containerNumbers.length > 6 && ` +${row.containerNumbers.length - 6} more`}
                             </div>
@@ -245,14 +245,14 @@ export function RawStockHistoryPanel({ rawStock }: RawStockHistoryPanelProps) {
                         </TableCell>
                         <TableCell>
                           {row.undoneAt ? (
-                            <Badge variant="outline" className="text-muted-foreground text-[10px]">
+                            <Badge variant="outline" className="text-muted-foreground text-[11px]">
                               Undone {new Date(row.undoneAt).toLocaleDateString()}
                               {row.undoneByUsername ? ` by ${row.undoneByUsername}` : ""}
                             </Badge>
                           ) : (
                             <Badge
                               variant="outline"
-                              className="text-emerald-500 border-emerald-500/30 bg-emerald-500/10 text-[10px]"
+                              className="text-emerald-500 border-emerald-500/30 bg-emerald-500/10 text-[11px]"
                             >
                               Applied
                             </Badge>

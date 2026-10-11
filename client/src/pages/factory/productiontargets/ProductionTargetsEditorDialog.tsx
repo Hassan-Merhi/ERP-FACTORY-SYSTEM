@@ -224,9 +224,7 @@ export function ProductionTargetsEditorDialog({
                 <SlidersHorizontal className="h-4 w-4 text-primary" />
                 {tr("editTargets")}
               </DialogTitle>
-              <DialogDescription className="mt-1">
-                {tr("productionEditorDescription")}
-              </DialogDescription>
+              <DialogDescription className="mt-1">{tr("productionEditorDescription")}</DialogDescription>
             </div>
             <div className="flex items-center gap-2">
               <Badge variant="outline">
@@ -293,73 +291,71 @@ export function ProductionTargetsEditorDialog({
                 </TableRow>
               ) : (
                 visibleRows.map((row) => {
-                  const linkedPartners = (row.linkedWorkers ?? []).filter(
-                    (member) => member.workerId !== row.personId
-                  );
+                  const linkedPartners = (row.linkedWorkers ?? []).filter((member) => member.workerId !== row.personId);
                   return (
-                  <TableRow key={row.personId} className={!row.active ? "opacity-60" : undefined}>
-                    <TableCell>
-                      <div className="font-medium" dir="auto">
-                        {row.name}
-                      </div>
-                      {!row.active && (
-                        <Badge variant="outline" className="mt-1 h-5 px-1.5 text-[10px]">
-                          {tr("inactive")}
-                        </Badge>
-                      )}
-
-                      {row.linkGroupId != null && linkedPartners.length > 0 && (
-                        <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-                          <Badge variant="secondary" className="gap-1 text-[11px] font-normal">
-                            <span dir="auto">
-                              {tr("linkedWith")}: {linkedPartners.map((member) => member.workerName).join(", ")}
-                            </span>
+                    <TableRow key={row.personId} className={!row.active ? "opacity-60" : undefined}>
+                      <TableCell>
+                        <div className="font-medium" dir="auto">
+                          {row.name}
+                        </div>
+                        {!row.active && (
+                          <Badge variant="outline" className="mt-1 h-5 px-1.5 text-[11px]">
+                            {tr("inactive")}
                           </Badge>
-                        </div>
-                      )}
-                      {periodType === "daily" && (
-                        <div className="mt-1.5">
-                          <ProductionWorkerLinkControl
-                            row={row}
-                            rows={draftRows}
-                            effectiveFrom={periodStart}
-                            targetBales={row.targetBales}
-                            disabled={!canManageLinks || busy}
-                          />
-                        </div>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <Input
-                        value={row.category}
-                        disabled={finalized || busy}
-                        onChange={(event) => updateRow(row.personId, { category: event.target.value })}
-                        placeholder={tr("categoryStation")}
-                        list="production-editor-category-options"
-                        data-testid={`input-production-category-${row.personId}`}
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <Input
-                        type="number"
-                        min="0"
-                        step="1"
-                        value={row.targetBales ?? ""}
-                        disabled={finalized || busy}
-                        onChange={(event) =>
-                          updateRow(row.personId, { targetBales: targetValue(event.target.value) })
-                        }
-                        className="text-right tabular-nums"
-                        data-testid={`input-production-target-${row.personId}`}
-                      />
-                    </TableCell>
-                    <TableCell className="text-right font-semibold tabular-nums">
-                      {row.producedBales ?? 0}
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="outline">{tr(row.status === "Absent" ? "absent" : row.status === "New" ? "new" : "present")}</Badge>
-                    </TableCell>
-                  </TableRow>
+                        )}
+
+                        {row.linkGroupId != null && linkedPartners.length > 0 && (
+                          <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                            <Badge variant="secondary" className="gap-1 text-[11px] font-normal">
+                              <span dir="auto">
+                                {tr("linkedWith")}: {linkedPartners.map((member) => member.workerName).join(", ")}
+                              </span>
+                            </Badge>
+                          </div>
+                        )}
+                        {periodType === "daily" && (
+                          <div className="mt-1.5">
+                            <ProductionWorkerLinkControl
+                              row={row}
+                              rows={draftRows}
+                              effectiveFrom={periodStart}
+                              targetBales={row.targetBales}
+                              disabled={!canManageLinks || busy}
+                            />
+                          </div>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <Input
+                          value={row.category}
+                          disabled={finalized || busy}
+                          onChange={(event) => updateRow(row.personId, { category: event.target.value })}
+                          placeholder={tr("categoryStation")}
+                          list="production-editor-category-options"
+                          data-testid={`input-production-category-${row.personId}`}
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <Input
+                          type="number"
+                          min="0"
+                          step="1"
+                          value={row.targetBales ?? ""}
+                          disabled={finalized || busy}
+                          onChange={(event) =>
+                            updateRow(row.personId, { targetBales: targetValue(event.target.value) })
+                          }
+                          className="text-right tabular-nums"
+                          data-testid={`input-production-target-${row.personId}`}
+                        />
+                      </TableCell>
+                      <TableCell className="text-right font-semibold tabular-nums">{row.producedBales ?? 0}</TableCell>
+                      <TableCell>
+                        <Badge variant="outline">
+                          {tr(row.status === "Absent" ? "absent" : row.status === "New" ? "new" : "present")}
+                        </Badge>
+                      </TableCell>
+                    </TableRow>
                   );
                 })
               )}

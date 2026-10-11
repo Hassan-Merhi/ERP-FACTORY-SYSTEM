@@ -69,7 +69,7 @@ export default function FactoryContainerLoadingScan() {
                   <Package className="h-4 w-4 text-muted-foreground" />
                 </div>
                 <div>
-                  <div className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                  <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
                     {model.tr("bales")}
                   </div>
                   <div className="font-mono text-sm font-semibold">{model.bales.length}</div>
@@ -80,7 +80,7 @@ export default function FactoryContainerLoadingScan() {
                   <Scale className="h-4 w-4 text-muted-foreground" />
                 </div>
                 <div>
-                  <div className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                  <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
                     {model.tr("weight")}
                   </div>
                   <div className="font-mono text-sm font-semibold">

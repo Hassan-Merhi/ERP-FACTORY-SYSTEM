@@ -58,7 +58,7 @@ export function SoldContainersTable({
       ) : (
         <Card>
           <CardContent className="p-0 hidden md:block">
-            <Table>
+            <Table stickyFirstColumn>
               <TableHeader className="sticky top-0 z-30 bg-background">
                 <TableRow>
                   <TableHead>Container Number</TableHead>

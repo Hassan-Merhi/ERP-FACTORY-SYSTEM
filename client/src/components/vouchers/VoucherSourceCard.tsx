@@ -76,7 +76,7 @@ export function VoucherSourceCard({
       </div>
 
       <div className="flex-1 min-w-0">
-        <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{label}</div>
+        <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{label}</div>
         <div className="text-sm font-semibold truncate mt-0.5">{accountName}</div>
 
         {/* How much of the account this voucher consumes */}

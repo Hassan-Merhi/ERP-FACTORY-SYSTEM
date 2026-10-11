@@ -329,7 +329,7 @@ export function POSDialogs({
               <div className="p-8 text-center text-muted-foreground">Loading inventory...</div>
             ) : (
               <table className="w-full text-sm border-collapse">
-                <thead className="sticky top-0 bg-muted/50">
+                <thead className="sticky top-0 bg-muted">
                   <tr className="border-b">
                     <th className="text-left p-2 font-medium">Item</th>
                     <th className="text-right p-2 font-medium">Stock</th>

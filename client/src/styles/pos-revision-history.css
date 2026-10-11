@@ -1,17 +1,28 @@
 /* Keep revision-history headers and values on the same fixed numeric tracks. */
-[data-testid^="card-revision-"] [class*="grid-cols-[1fr_auto_auto_auto]"] {
-  grid-template-columns: minmax(0, 1fr) 4rem 4rem 4.5rem;
-}
+/*
+ * Cascade layer: Tailwind v4 emits its utilities inside `@layer utilities`, and unlayered CSS beats
+ * any layered rule whatever its specificity. This file joins the same layer so, as before the
+ * upgrade, specificity and source order decide between these rules and utility classes. The
+ * layer order is restated first because a document orders layers by first mention, and this
+ * file may load before index.css.
+ */
+@layer theme, base, components, utilities;
 
-[data-testid^="card-revision-"] [class*="grid-cols-[1fr_auto_auto_auto]"] > :nth-child(n + 2) {
-  width: 100%;
-  text-align: right;
-  font-variant-numeric: tabular-nums;
-}
-
-@media (max-width: 639px) {
+@layer utilities {
   [data-testid^="card-revision-"] [class*="grid-cols-[1fr_auto_auto_auto]"] {
-    grid-template-columns: minmax(8rem, 1fr) 3rem 3rem 3.5rem;
-    column-gap: 0.5rem;
+    grid-template-columns: minmax(0, 1fr) 4rem 4rem 4.5rem;
+  }
+
+  [data-testid^="card-revision-"] [class*="grid-cols-[1fr_auto_auto_auto]"] > :nth-child(n + 2) {
+    width: 100%;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+
+  @media (max-width: 639px) {
+    [data-testid^="card-revision-"] [class*="grid-cols-[1fr_auto_auto_auto]"] {
+      grid-template-columns: minmax(8rem, 1fr) 3rem 3rem 3.5rem;
+      column-gap: 0.5rem;
+    }
   }
 }

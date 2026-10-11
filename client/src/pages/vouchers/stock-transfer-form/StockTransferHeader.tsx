@@ -179,7 +179,7 @@ export function StockTransferFormView({ model }: { model: StockTransferFormModel
           })}
         >
           <StockTransferHeader model={model} />
-          <div className="flex flex-col lg:flex-row gap-4">
+          <div className="flex flex-col xl:flex-row gap-4">
             <Card className="flex-1 overflow-hidden min-w-0">
               <StockTransferMobileEntries model={model} />
               <StockTransferDesktopEntries model={model} />

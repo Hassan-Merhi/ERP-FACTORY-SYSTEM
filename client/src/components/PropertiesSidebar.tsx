@@ -58,13 +58,7 @@ const PROPERTIES_PINNED_DEFAULTS: NavItem[] = [
   { title: "Agent Ledger", url: "/properties/agents", icon: UserRound },
 ];
 
-export function PropertiesSidebar({
-  user,
-  onLogout,
-}: {
-  user?: ShellUser;
-  onLogout: () => void | Promise<void>;
-}) {
+export function PropertiesSidebar({ user, onLogout }: { user?: ShellUser; onLogout: () => void | Promise<void> }) {
   const isAdmin = user?.role === "Admin" || user?.role === "Developer";
   const isOwner = user?.role === "Owner";
   const visibleSections = useMemo(
@@ -121,7 +115,7 @@ export function PropertiesSidebar({
 
         {recentItems.length > 0 && (
           <div className="mt-3">
-            <p className="mb-1 px-2.5 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/50">
+            <p className="mb-1 px-2.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground/50">
               Recent
             </p>
             <div className="space-y-0.5">

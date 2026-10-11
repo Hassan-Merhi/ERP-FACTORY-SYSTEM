@@ -41,7 +41,7 @@ function WorkbookDataRow({ r }: { r: EnrichedContainerApi }) {
       <td className="py-0.5 px-2">{fmtD(r.borderDate)}</td>
       <td className={cn("py-0.5 px-2", r.isOverdue ? "text-red-600 font-bold" : "")}>
         {fmtD(r.maxOffloadDate)}
-        {r.daysDelayed ? <span className="ml-1 text-[10px]">+{r.daysDelayed}d</span> : null}
+        {r.daysDelayed ? <span className="ml-1 text-[11px]">+{r.daysDelayed}d</span> : null}
       </td>
       <td className="py-0.5 px-2 text-center">
         {r.docReceived ? (
@@ -88,7 +88,7 @@ function SupplierGroupedRows({ rows }: { rows: EnrichedContainerApi[] }) {
           <tr className="bg-muted/40 border-t border-border">
             <td
               colSpan={WORKBOOK_COLS}
-              className="py-0.5 px-2 text-center text-[10px] font-bold uppercase tracking-widest text-muted-foreground"
+              className="py-0.5 px-2 text-center text-[11px] font-bold uppercase tracking-widest text-muted-foreground"
             >
               {name} — {sRows.length}
             </td>

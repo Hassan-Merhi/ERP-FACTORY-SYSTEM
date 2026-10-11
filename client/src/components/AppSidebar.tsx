@@ -324,7 +324,7 @@ export function AppSidebar({ user, onLogout }: { user?: SidebarUser; onLogout: (
 
         {recentItems.length > 0 && (
           <div className="mt-3">
-            <p className="mb-1 px-2.5 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/50">
+            <p className="mb-1 px-2.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground/50">
               Recent
             </p>
             <div className="space-y-0.5">
@@ -343,7 +343,7 @@ export function AppSidebar({ user, onLogout }: { user?: SidebarUser; onLogout: (
 
         {utilityItems.filter(isItemVisible).length > 0 && (
           <div className="mt-4">
-            <p className="mb-1 px-2.5 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/50">
+            <p className="mb-1 px-2.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground/50">
               Tools
             </p>
             <div className="space-y-0.5">

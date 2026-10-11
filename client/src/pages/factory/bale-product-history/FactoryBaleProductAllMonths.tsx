@@ -174,7 +174,7 @@ export function FactoryBaleProductAllMonths() {
                       <span className="inline-flex items-center gap-1.5 group">
                         {formatNumber(Number(bale.weightKg))}
                         <button
-                          className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 rounded-sm hover:bg-muted"
+                          className="opacity-0 group-hover:opacity-100 touch:opacity-100 transition-opacity p-0.5 rounded-sm hover:bg-muted"
                           onClick={() =>
                             setWeightEditBale({
                               id: bale.id,
@@ -208,7 +208,7 @@ export function FactoryBaleProductAllMonths() {
                       {bale.status === "IN_STOCK" && bale.isInLoadingOrder ? (
                         <Badge
                           variant="outline"
-                          className="text-[10px] px-1.5 py-0.5 border-amber-400 text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 no-default-active-elevate"
+                          className="text-[11px] px-1.5 py-0.5 border-amber-400 text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 no-default-active-elevate"
                         >
                           Loading
                         </Badge>

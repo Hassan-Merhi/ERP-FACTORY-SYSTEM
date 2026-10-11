@@ -246,7 +246,7 @@ export function ContainerDrawerTracking({
             <p className="text-xs font-medium text-muted-foreground">Auto-update scheduler</p>
             <div
               className={cn(
-                "text-[10px] font-bold px-1.5 py-0.5 rounded-xs uppercase",
+                "text-[11px] font-bold px-1.5 py-0.5 rounded-xs uppercase",
                 priority.tier === "high"
                   ? "bg-red-100 text-red-700"
                   : priority.tier === "medium"
@@ -288,7 +288,7 @@ export function ContainerDrawerTracking({
           <div className="flex items-center justify-between">
             <div className="space-y-0.5">
               <Label className="text-xs">Enabled</Label>
-              <p className="text-[10px] text-muted-foreground">Allow system to track this container</p>
+              <p className="text-[11px] text-muted-foreground">Allow system to track this container</p>
             </div>
             <Switch
               checked={trackEnabled}
@@ -301,7 +301,7 @@ export function ContainerDrawerTracking({
           <div className="flex items-center justify-between">
             <div className="space-y-0.5">
               <Label className="text-xs">Auto-update</Label>
-              <p className="text-[10px] text-muted-foreground">Automatically poll for status changes</p>
+              <p className="text-[11px] text-muted-foreground">Automatically poll for status changes</p>
             </div>
             <Switch
               checked={trackAutoUpdate}
@@ -345,7 +345,7 @@ export function ContainerDrawerTracking({
               On-demand Tracking
             </p>
             {container.trackingLastCheckedAt && (
-              <span className="text-[10px] text-muted-foreground">
+              <span className="text-[11px] text-muted-foreground">
                 Checked {new Date(container.trackingLastCheckedAt).toLocaleString()}
               </span>
             )}
@@ -361,7 +361,7 @@ export function ContainerDrawerTracking({
                   <Loader2 className="h-4 w-4 animate-spin text-sky-600" />
                   <span className="text-sm font-medium">Tracking in progress...</span>
                 </div>
-                <span className="text-[10px] text-sky-600 font-mono">STEP {trackProgress.length}</span>
+                <span className="text-[11px] text-sky-600 font-mono">STEP {trackProgress.length}</span>
               </div>
 
               <Progress value={Math.min(100, (trackProgress.length / 5) * 100)} className="h-1.5" />
@@ -378,7 +378,7 @@ export function ContainerDrawerTracking({
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center justify-between gap-2">
                           <p className="text-[11px] font-medium leading-none">{step.label}</p>
-                          <span className="text-[9px] text-muted-foreground font-mono">
+                          <span className="text-[11px] text-muted-foreground font-mono">
                             {new Date(step.ts).toLocaleTimeString([], {
                               hour12: false,
                               minute: "2-digit",
@@ -387,7 +387,7 @@ export function ContainerDrawerTracking({
                           </span>
                         </div>
                         {step.detail && (
-                          <p className="text-[10px] text-muted-foreground mt-0.5 line-clamp-1">{step.detail}</p>
+                          <p className="text-[11px] text-muted-foreground mt-0.5 line-clamp-1">{step.detail}</p>
                         )}
                       </div>
                     </div>
@@ -413,7 +413,7 @@ export function ContainerDrawerTracking({
             <div className="rounded-md border p-2.5 space-y-2" data-testid="panel-last-tracking">
               <div className="flex items-center justify-between">
                 <span className="text-[11px] font-medium text-muted-foreground">Last Status</span>
-                <span className="text-[10px] text-muted-foreground uppercase font-mono">
+                <span className="text-[11px] text-muted-foreground uppercase font-mono">
                   {container.trackingProvider}
                 </span>
               </div>
@@ -429,7 +429,7 @@ export function ContainerDrawerTracking({
                 </p>
               )}
               {container.trackingError && (
-                <div className="mt-1 flex items-start gap-1.5 text-[10px] text-red-600 bg-red-50 dark:bg-red-900/20 p-1.5 rounded-sm border border-red-100 dark:border-red-900/40">
+                <div className="mt-1 flex items-start gap-1.5 text-[11px] text-red-600 bg-red-50 dark:bg-red-900/20 p-1.5 rounded-sm border border-red-100 dark:border-red-900/40">
                   <AlertTriangle className="h-3 w-3 shrink-0 mt-0.5" />
                   <span>{container.trackingError}</span>
                 </div>
@@ -494,7 +494,7 @@ export function ContainerDrawerTracking({
                           >
                             {ev.status}
                           </p>
-                          <p className="text-[10px] text-muted-foreground whitespace-nowrap">
+                          <p className="text-[11px] text-muted-foreground whitespace-nowrap">
                             {new Date(ev.eventDate).toLocaleDateString()}
                           </p>
                         </div>
@@ -516,7 +516,7 @@ export function ContainerDrawerTracking({
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="w-full text-[10px] h-auto py-0 text-sky-600 underline"
+                  className="w-full text-[11px] h-auto py-0 text-sky-600 underline"
                   asChild
                 >
                   <a href={container.trackingLink} target="_blank" rel="noopener noreferrer">

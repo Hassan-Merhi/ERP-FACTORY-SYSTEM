@@ -1,6 +1,5 @@
 import { Suspense } from "react";
 import { lazyRetry as lazy } from "@/lib/lazyRetry";
-import { useDialogScrollFix } from "@/hooks/use-dialog-scroll-fix";
 import { useMobilePerformanceLifecycle } from "@/hooks/use-mobile-performance-lifecycle";
 import { useLocation, Redirect } from "wouter";
 import { useCompany } from "@/contexts/CompanyContext";
@@ -28,7 +27,6 @@ export function AuthenticatedApp({ user, handleLogout }: AuthenticatedAppProps) 
   const { selectedCompany, isLoading: companyLoading } = useCompany();
   useMobilePerformanceLifecycle();
   useWsInvalidation();
-  useDialogScrollFix();
 
   const [currentLocation] = useLocation();
   useErpScrollRestoration(currentLocation);

@@ -545,7 +545,7 @@ export function FactoryLocationInventoryProductView({ inventory }: { inventory: 
         {/* Desktop table */}
         {!inventoryLoading && !(proformaMode && availableLoading) && (
           <div className="hidden md:block space-y-0 w-full">
-            <div className="rounded-md border w-full overflow-auto max-h-[calc(100vh-300px)]">
+            <div data-horizontal-scroll="true" className="rounded-md border w-full overflow-x-auto">
               <table className="table-fixed text-sm" style={{ minWidth: "820px", width: "100%" }}>
                 <colgroup>
                   {proformaMode && <col style={{ width: "36px" }} />}

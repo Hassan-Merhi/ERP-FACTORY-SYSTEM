@@ -42,7 +42,7 @@ export function AccountSearchResults({ model }: { model: AccountsLegacyModel }) 
               <div className="flex-1 min-w-0 flex items-center gap-2.5">
                 <span className="text-sm font-medium truncate">{acc.name}</span>
                 {acc.accountId && (
-                  <span className="text-[10px] text-muted-foreground font-mono shrink-0">#{acc.accountId}</span>
+                  <span className="text-[11px] text-muted-foreground font-mono shrink-0">#{acc.accountId}</span>
                 )}
               </div>
               {!hideBalances && (
@@ -55,14 +55,14 @@ export function AccountSearchResults({ model }: { model: AccountsLegacyModel }) 
                   )}
                 >
                   {model.formatAmountForAccount(Math.abs(acc.balance), acc.type)}
-                  <span className="ml-1 text-[10px] opacity-60">{balanceSide}</span>
+                  <span className="ml-1 text-[11px] opacity-60">{balanceSide}</span>
                 </span>
               )}
             </button>
             {acc.type === "ledger" && (
               <button
                 type="button"
-                className="opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity p-1 rounded-sm hover:bg-muted text-muted-foreground hover:text-foreground shrink-0"
+                className="opacity-0 group-hover:opacity-100 touch:opacity-100 focus-visible:opacity-100 transition-opacity p-1 rounded-sm hover:bg-muted text-muted-foreground hover:text-foreground shrink-0"
                 onClick={() => model.openEditAccountDialog(acc)}
                 title="Edit account"
                 aria-label={`Edit ${acc.name}`}
@@ -71,7 +71,7 @@ export function AccountSearchResults({ model }: { model: AccountsLegacyModel }) 
                 <Pencil className="h-3.5 w-3.5" />
               </button>
             )}
-            <ArrowRight className="h-3.5 w-3.5 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
+            <ArrowRight className="h-3.5 w-3.5 text-muted-foreground opacity-0 group-hover:opacity-100 touch:opacity-100 transition-opacity shrink-0" />
           </div>
         );
       })}

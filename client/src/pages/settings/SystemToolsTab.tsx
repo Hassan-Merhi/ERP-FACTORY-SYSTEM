@@ -81,7 +81,7 @@ function SystemToolCard({ card }: { card: ToolCard }) {
     >
       <div className="flex items-start justify-between gap-4">
         <div className={`flex h-11 w-11 items-center justify-center rounded-xl ${card.iconBg}`}>{card.icon}</div>
-        <Badge className={`rounded-full border-0 px-2.5 py-1 text-[10px] font-semibold ${card.categoryColor}`}>
+        <Badge className={`rounded-full border-0 px-2.5 py-1 text-[11px] font-semibold ${card.categoryColor}`}>
           {card.category}
         </Badge>
       </div>

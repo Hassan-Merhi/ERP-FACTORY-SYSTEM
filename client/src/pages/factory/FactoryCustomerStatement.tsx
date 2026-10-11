@@ -438,7 +438,7 @@ export default function FactoryCustomerStatement() {
                 {(priceListQuery.data?.length ?? 0) > 0 && (
                   <Badge
                     variant="secondary"
-                    className="ml-2 text-[10px] no-default-hover-elevate no-default-active-elevate"
+                    className="ml-2 text-[11px] no-default-hover-elevate no-default-active-elevate"
                   >
                     {priceListQuery.data!.length}
                   </Badge>

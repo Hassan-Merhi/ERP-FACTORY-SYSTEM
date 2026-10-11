@@ -112,7 +112,7 @@ function LiveBadge({ original, live }: { original: number; live: number }) {
       <TooltipTrigger asChild>
         <Badge
           variant="outline"
-          className="text-amber-600 border-amber-500 bg-amber-500/10 gap-1 ml-2 text-[10px] px-1 py-0"
+          className="text-amber-600 border-amber-500 bg-amber-500/10 gap-1 ml-2 text-[11px] px-1 py-0"
         >
           <Zap className="w-2.5 h-2.5" />
           updated
@@ -315,7 +315,7 @@ export default function OffloadDetail() {
               <p className="text-sm font-medium mb-2 text-muted-foreground uppercase tracking-wide">Stock Items</p>
               <div className="border rounded-md overflow-x-auto">
                 <table className="w-full text-sm">
-                  <thead className="sticky top-0 z-30 bg-muted/50">
+                  <thead className="sticky top-0 z-30 bg-muted">
                     <tr className="border-b bg-muted/40">
                       <th className="text-left p-3 font-medium">Item</th>
                       <th className="text-right p-3 font-medium">Qty</th>
@@ -429,7 +429,7 @@ export default function OffloadDetail() {
                       <td className="p-3 pl-5 flex items-center gap-1">
                         Additional Charges
                         {live?.hasVouchers && (
-                          <Badge variant="outline" className="text-[10px] px-1 py-0 gap-0.5">
+                          <Badge variant="outline" className="text-[11px] px-1 py-0 gap-0.5">
                             <Zap className="w-2.5 h-2.5" />
                             live
                           </Badge>

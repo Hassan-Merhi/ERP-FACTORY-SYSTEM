@@ -230,7 +230,7 @@ export default function FactoryStockAllocationV2() {
                       <span className="text-xs font-semibold leading-tight">{p.customerName}</span>
                       <span
                         className={cn(
-                          "text-[10px] leading-tight",
+                          "text-[11px] leading-tight",
                           isOn ? "text-primary-foreground/70" : "text-muted-foreground"
                         )}
                       >
@@ -239,7 +239,7 @@ export default function FactoryStockAllocationV2() {
                       {!p.isActive && (
                         <span
                           className={cn(
-                            "text-[10px] leading-tight",
+                            "text-[11px] leading-tight",
                             isOn ? "text-primary-foreground/60" : "text-muted-foreground/60"
                           )}
                         >
@@ -266,7 +266,7 @@ export default function FactoryStockAllocationV2() {
               </CardContent>
             </Card>
           ) : (
-            <div className="overflow-auto rounded-md border max-h-[calc(100vh-260px)]">
+            <div data-horizontal-scroll="true" className="overflow-x-auto rounded-md border">
               <table className="w-full text-sm border-collapse min-w-max">
                 <thead>
                   <tr className="bg-muted sticky top-0 z-30">
@@ -348,7 +348,7 @@ export default function FactoryStockAllocationV2() {
                             {p.name}
                           </span>
                           {!p.isActive && (
-                            <Badge variant="outline" className="text-[10px] px-1">
+                            <Badge variant="outline" className="text-[11px] px-1">
                               Inactive
                             </Badge>
                           )}
@@ -374,7 +374,7 @@ export default function FactoryStockAllocationV2() {
                             {row.displayName}
                           </span>
                           {!row.isActive && (
-                            <Badge variant="outline" className="text-[10px] px-1 py-0 shrink-0">
+                            <Badge variant="outline" className="text-[11px] px-1 py-0 shrink-0">
                               Inactive
                             </Badge>
                           )}
@@ -445,12 +445,12 @@ export default function FactoryStockAllocationV2() {
                               {line.quantity}
                             </span>
                             {line.alreadyLoaded > 0 && (
-                              <div className="text-[10px] text-muted-foreground/60">
+                              <div className="text-[11px] text-muted-foreground/60">
                                 {line.alreadyLoaded} loaded · {line.remainingToLoad} left
                               </div>
                             )}
                             {line.alreadyLoaded === 0 && (
-                              <div className="text-[10px] text-muted-foreground/60">bales</div>
+                              <div className="text-[11px] text-muted-foreground/60">bales</div>
                             )}
                           </td>
                         );

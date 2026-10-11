@@ -184,7 +184,7 @@ export function FactoryWorkersRosterPanel({ model }: FactoryWorkersModelProps) {
             <SlidersHorizontal className="h-4 w-4 mr-1.5" />
             Filter
             {activeFilterCount > 0 && (
-              <span className="ml-1.5 bg-background text-foreground text-[10px] font-bold rounded-full w-4 h-4 flex items-center justify-center">
+              <span className="ml-1.5 bg-background text-foreground text-[11px] font-bold rounded-full w-4 h-4 flex items-center justify-center">
                 {activeFilterCount}
               </span>
             )}
@@ -453,8 +453,10 @@ export function FactoryWorkersRosterPanel({ model }: FactoryWorkersModelProps) {
         )}
 
         {/* Table */}
-        <div className="border rounded-xl overflow-auto max-h-[calc(100vh-220px)]">
-          <Table mobileLayout="cards" wrapperClassName="overflow-visible" className="w-full table-fixed">
+        <div data-horizontal-scroll="true" className="border rounded-xl overflow-x-auto">
+          {/* min-w keeps the eight columns readable on tablets: the outer div scrolls sideways
+              instead of table-fixed squeezing every header into one another. Phone cards reset it. */}
+          <Table mobileLayout="cards" wrapperClassName="overflow-visible" className="w-full min-w-[64rem] table-fixed">
             <TableHeader className="sticky top-0 z-30">
               <TableRow className="bg-muted border-b-2 border-border/60 hover:bg-muted">
                 <TableHead className="w-10 text-center text-xs font-semibold uppercase tracking-wide text-muted-foreground py-2 pl-3 pr-1">
@@ -697,7 +699,7 @@ export function FactoryWorkersRosterPanel({ model }: FactoryWorkersModelProps) {
                                   </span>
                                 </div>
                               </div>
-                              <p className="text-[10px] text-muted-foreground/50 mt-2 leading-relaxed">
+                              <p className="text-[11px] text-muted-foreground/50 mt-2 leading-relaxed">
                                 Calendar-day proration · Absences &amp; advances deducted
                               </p>
                             </PopoverContent>
@@ -721,7 +723,7 @@ export function FactoryWorkersRosterPanel({ model }: FactoryWorkersModelProps) {
                     </TableCell>
                     <TableCell className="py-3">
                       <div
-                        className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                        className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 touch:opacity-100 transition-opacity"
                         onClick={(e) => e.stopPropagation()}
                       >
                         <Button

@@ -155,7 +155,7 @@ export function FactorySupplierStatementBranch({ model }: { model: SuppliersMode
     .sort((left, right) => new Date(right.date).getTime() - new Date(left.date).getTime());
 
   const typeBadge = (type: string) => (
-    <Badge variant="outline" className="text-[10px] uppercase font-bold">
+    <Badge variant="outline" className="text-[11px] uppercase font-bold">
       {type}
     </Badge>
   );

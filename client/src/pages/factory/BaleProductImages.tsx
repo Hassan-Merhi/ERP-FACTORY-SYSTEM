@@ -259,7 +259,7 @@ export default function BaleProductImages() {
                           <Button
                             size="icon"
                             variant="destructive"
-                            className="opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100"
+                            className="opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100 touch:opacity-100"
                             onClick={() => deleteMutation.mutate(img.id)}
                             disabled={deleteMutation.isPending}
                             aria-label={`Delete ${img.fileName ?? "product image"}`}

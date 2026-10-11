@@ -103,7 +103,7 @@ export default function CreateProformaV5Drawer({ open, onClose, articleRows, onS
         <DialogHeader className="px-5 py-4 border-b shrink-0">
           <DialogTitle className="text-base flex items-center gap-2">
             Create Proforma
-            <Badge variant="secondary" className="text-[10px] font-semibold tracking-wide">
+            <Badge variant="secondary" className="text-[11px] font-semibold tracking-wide">
               v5
             </Badge>
           </DialogTitle>
@@ -335,7 +335,7 @@ export default function CreateProformaV5Drawer({ open, onClose, articleRows, onS
                   <BookmarkCheck className="h-3.5 w-3.5 mr-1.5" />
                   Agreed Prices
                   {customerPriceListQuery.data && customerPriceListQuery.data.length > 0 && (
-                    <span className="ml-1 text-[10px] opacity-70">({customerPriceListQuery.data.length})</span>
+                    <span className="ml-1 text-[11px] opacity-70">({customerPriceListQuery.data.length})</span>
                   )}
                 </Button>
               )}
@@ -465,7 +465,7 @@ export default function CreateProformaV5Drawer({ open, onClose, articleRows, onS
                       <div className="font-medium truncate max-w-[220px] text-xs leading-tight" title={row.productName}>
                         {row.productName}
                       </div>
-                      <div className="text-[10px] text-muted-foreground font-mono">{row.articleCode}</div>
+                      <div className="text-[11px] text-muted-foreground font-mono">{row.articleCode}</div>
                     </td>
 
                     <td
@@ -504,10 +504,10 @@ export default function CreateProformaV5Drawer({ open, onClose, articleRows, onS
                           data-testid={`input-v5-qty-${row.articleCode}`}
                         />
                         {hasError && (
-                          <span className="text-[10px] text-destructive">{errors[`qty_${row.articleCode}`]}</span>
+                          <span className="text-[11px] text-destructive">{errors[`qty_${row.articleCode}`]}</span>
                         )}
                         {shortage && !hasError && (
-                          <span className="text-[10px] text-amber-600 dark:text-amber-400 flex items-center gap-0.5 whitespace-nowrap">
+                          <span className="text-[11px] text-amber-600 dark:text-amber-400 flex items-center gap-0.5 whitespace-nowrap">
                             <AlertTriangle className="h-2.5 w-2.5" />
                             short {shortBy}
                           </span>
@@ -560,7 +560,7 @@ export default function CreateProformaV5Drawer({ open, onClose, articleRows, onS
                         const mode = pricingModes[row.articleCode] ?? "per_bale";
                         return (
                           <div className="flex items-center gap-1">
-                            <div className="flex rounded-sm border shrink-0 overflow-hidden text-[9px] font-semibold">
+                            <div className="flex rounded-sm border shrink-0 overflow-hidden text-[11px] font-semibold">
                               <button
                                 className={cn(
                                   "px-1.5 py-0.5 transition-colors",
@@ -701,7 +701,7 @@ export default function CreateProformaV5Drawer({ open, onClose, articleRows, onS
                 {warningCount} product{warningCount !== 1 ? "s" : ""} with shortage
               </span>
             )}
-            <span className="text-[10px] text-muted-foreground/60">Ctrl/⌘+S to save</span>
+            <span className="text-[11px] text-muted-foreground/60">Ctrl/⌘+S to save</span>
           </div>
           <div className="flex items-center gap-2">
             <Button variant="outline" size="default" onClick={onClose} data-testid="button-v5-cancel-proforma">

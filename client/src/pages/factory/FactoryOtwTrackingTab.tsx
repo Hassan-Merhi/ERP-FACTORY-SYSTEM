@@ -480,11 +480,7 @@ export default function FactoryOtwTrackingTab({ onEdit }: OtwTrackingTabProps = 
           <p className="text-sm">No containers match your filters.</p>
         </div>
       ) : (
-        <Table
-          mobileLayout="cards"
-          className="text-xs whitespace-nowrap"
-          wrapperClassName="max-h-[calc(100vh-340px)] overflow-x-auto"
-        >
+        <Table mobileLayout="cards" className="text-xs whitespace-nowrap" wrapperClassName="overflow-x-auto">
           <TableHeader className="sticky top-0 z-10">
             <TableRow className="bg-amber-100! dark:bg-amber-900/40!">
               <TableHead className="w-8">#</TableHead>

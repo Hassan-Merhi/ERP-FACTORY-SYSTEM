@@ -258,7 +258,7 @@ export default function FactoryContacts() {
                       )}
                     </TableCell>
                     <TableCell className="align-top py-3 text-right">
-                      <div className="flex items-center justify-end gap-1 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100">
+                      <div className="flex items-center justify-end gap-1 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 touch:opacity-100 sm:group-focus-within:opacity-100 touch:opacity-100">
                         <Button
                           size="icon"
                           variant="ghost"

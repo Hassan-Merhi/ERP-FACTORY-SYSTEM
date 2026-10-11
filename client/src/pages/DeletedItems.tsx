@@ -443,7 +443,7 @@ export default function DeletedItems() {
             </div>
           ) : (
             <>
-              <div className="hidden md:block">
+              <div className="hidden md:block phone-land:hidden">
                 <Table>
                   <TableHeader className="sticky top-0 z-30 bg-background">
                     <TableRow>
@@ -559,7 +559,7 @@ export default function DeletedItems() {
                   </TableBody>
                 </Table>
               </div>
-              <div className="md:hidden space-y-3">
+              <div className="md:hidden phone-land:block space-y-3">
                 {items.map((item) => {
                   const IconComponent = typeIcons[item.type] || Package;
                   return (
@@ -719,7 +719,7 @@ export default function DeletedItems() {
             <SheetDescription>Viewing deleted item information</SheetDescription>
           </SheetHeader>
           {detailItem && (
-            <div className="mt-6 space-y-4 overflow-y-auto max-h-[calc(100vh-10rem)] pr-1">
+            <div className="mt-6 space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <p className="text-sm text-muted-foreground">Type</p>
@@ -785,7 +785,7 @@ export default function DeletedItems() {
                     ) : (
                       <div className="rounded-md border overflow-hidden">
                         <table className="w-full text-sm">
-                          <thead className="sticky top-0 z-30 bg-muted/50">
+                          <thead className="sticky top-0 z-30 bg-muted">
                             <tr className="border-b bg-muted/40">
                               <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground">Account</th>
                               <th className="text-right px-3 py-2 text-xs font-medium text-muted-foreground">Debit</th>
