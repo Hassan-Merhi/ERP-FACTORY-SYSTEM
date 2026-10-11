@@ -6,6 +6,8 @@ const files = {
   financial: "client/src/components/financial/financial-screen.tsx",
   operations: "client/src/components/operations/operations-screen.tsx",
   dialog: "client/src/components/ui/dialog.tsx",
+  // The dialog frame classes (viewport bound, phone sheet) live here since #2173.
+  dialogFrame: "client/src/components/ui/phone-sheet.tsx",
   sheet: "client/src/components/ui/sheet.tsx",
   direction: "client/src/i18n/applicationDirection.ts",
   languageContext: "client/src/contexts/ApplicationLanguageContext.tsx",
@@ -15,6 +17,8 @@ const files = {
   propertiesShell: "client/src/app/PropertiesShell.tsx",
   posShell: "client/src/app/PosShell.tsx",
   mobileHook: "client/src/hooks/use-mobile.tsx",
+  // The shared breakpoint constant use-mobile imports since #2173.
+  breakpoints: "client/src/lib/breakpoints.ts",
   mobileViewport: "client/src/mobile-browser-compat.css",
   main: "client/src/main.tsx",
 };
@@ -89,7 +93,7 @@ for (const token of [
 // The dialog is bounded by --app-viewport-height rather than a literal 100dvh. That variable is
 // declared 100vh with an @supports (height: 100dvh) upgrade (asserted against the viewport CSS
 // below), so it stays dvh-correct on mobile while still degrading on browsers without dvh.
-if (!sources.dialog.includes("var(--app-viewport-height)")) {
+if (!`${sources.dialog}\n${sources.dialogFrame}`.includes("var(--app-viewport-height)")) {
   failures.push("Accessible dialog contract missing: dynamic viewport height bound");
 }
 
@@ -183,7 +187,9 @@ for (const token of [
   "mql.addListener(onChange)",
   "mql.removeListener(onChange)",
 ]) {
-  if (!sources.mobileHook.includes(token)) failures.push(`Mobile breakpoint compatibility contract missing: ${token}`);
+  if (!`${sources.mobileHook}\n${sources.breakpoints}`.includes(token)) {
+    failures.push(`Mobile breakpoint compatibility contract missing: ${token}`);
+  }
 }
 
 for (const token of [

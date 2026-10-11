@@ -239,7 +239,7 @@ export default function StockTransfers({ hideVoucherNotes = false }: StockTransf
       ) : (
         <>
           {/* Desktop table */}
-          <div className="hidden md:block border rounded-xl overflow-hidden">
+          <div className="hidden md:block phone-land:hidden border rounded-xl overflow-hidden">
             <div className="table-responsive">
               <Table>
                 <TableHeader>
@@ -348,7 +348,7 @@ export default function StockTransfers({ hideVoucherNotes = false }: StockTransf
           </div>
 
           {/* Mobile cards */}
-          <div className="md:hidden space-y-2">
+          <div className="md:hidden phone-land:block space-y-2">
             {filtered.map((t) => (
               <div
                 key={t.transferId}

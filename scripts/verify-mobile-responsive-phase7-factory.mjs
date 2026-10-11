@@ -80,8 +80,9 @@ for (const token of [
   "ResponsiveDataList",
   "ResponsiveDataListField",
   "ResponsiveDataListActions",
-  'className="md:hidden"',
-  'className="hidden overflow-hidden rounded-xl border bg-card/50 md:block"',
+  // Since #2173 landscape phones keep the card list too (phone-land variant).
+  'className="md:hidden phone-land:block"',
+  'className="hidden overflow-hidden rounded-xl border bg-card/50 md:block phone-land:hidden"',
   'scrollLabel="Bales ready for stock entry"',
   'minimumWidth="56rem"',
   'inputMode="numeric"',

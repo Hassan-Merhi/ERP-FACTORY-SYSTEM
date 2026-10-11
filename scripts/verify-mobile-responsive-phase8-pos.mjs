@@ -28,7 +28,9 @@ for (const token of [
   'className="hidden px-4 pt-4 lg:block"',
   'data-pos-mobile-page="true"',
   'data-pos-mobile-checkout="true"',
-  "fixed inset-x-0 bottom-0",
+  // #2173: the checkout bar sticks inside the POS scroller instead of being viewport-fixed, so
+  // it never paints over a pinned tablet sidebar.
+  "sticky bottom-0 z-40 mt-auto",
   "env(safe-area-inset-bottom)",
 ]) {
   const source = token.includes("desktop") || token.includes("hidden px") ? header : mobile;
