@@ -10,6 +10,7 @@ import { db } from "../../db";
 import { requireAuth } from "../../auth";
 import { sql } from "drizzle-orm";
 import { resultRows } from "../../lib/queryResult";
+import { parseMoneyInput, toMoney } from "../../lib/money";
 
 /** Shape of a git_agent_adjustments row as selected by the queries below. */
 type GitAgentAdjustmentRow = {
@@ -90,7 +91,7 @@ export function registerGitAgentRoutes(app: Express) {
         byAgent[agentName].push({
           id: r.id,
           description: r.description,
-          amount: parseFloat(r.amount),
+          amount: toMoney(r.amount).toNumber(),
           type: r.type,
           createdAt: r.created_at,
         });
@@ -117,7 +118,7 @@ export function registerGitAgentRoutes(app: Express) {
         rows.map((r) => ({
           id: r.id,
           description: r.description,
-          amount: parseFloat(r.amount),
+          amount: toMoney(r.amount).toNumber(),
           type: r.type,
           createdAt: r.created_at,
         }))
@@ -132,7 +133,7 @@ export function registerGitAgentRoutes(app: Express) {
       const companyId = parseInt(req.params.companyId, 10);
       const agentName = req.params.agentName;
       const description: string = (req.body.description ?? "").trim();
-      const amount = parseFloat(req.body.amount);
+      const amount = parseMoneyInput(req.body.amount)?.toNumber() ?? NaN;
       const type: string = req.body.type;
       if (!description) return res.status(400).json({ message: "Description is required." });
       if (isNaN(amount) || amount <= 0) return res.status(400).json({ message: "Amount must be a positive number." });
@@ -149,7 +150,7 @@ export function registerGitAgentRoutes(app: Express) {
       res.json({
         id: r.id,
         description: r.description,
-        amount: parseFloat(r.amount),
+        amount: toMoney(r.amount).toNumber(),
         type: r.type,
         createdAt: r.created_at,
       });
@@ -258,12 +259,16 @@ export function registerGitAgentRoutes(app: Express) {
       }
 
       // Warn on mismatched duty amounts
-      const amountsDiffer = Math.abs(parseFloat(oldC.duty_fee ?? "") - parseFloat(newC.duty_fee ?? "")) > 0.01;
+      const amountsDiffer =
+        Math.abs(
+          (parseMoneyInput(oldC.duty_fee ?? "")?.toNumber() ?? NaN) -
+            (parseMoneyInput(newC.duty_fee ?? "")?.toNumber() ?? NaN)
+        ) > 0.01;
       if (amountsDiffer && !confirmDifferentAmount) {
         return res.status(409).json({
           message: "Duty amounts differ between the two containers.",
-          oldAmount: parseFloat(oldC.duty_fee ?? ""),
-          newAmount: parseFloat(newC.duty_fee ?? ""),
+          oldAmount: parseMoneyInput(oldC.duty_fee ?? "")?.toNumber() ?? NaN,
+          newAmount: parseMoneyInput(newC.duty_fee ?? "")?.toNumber() ?? NaN,
           requiresConfirmation: true,
         });
       }
@@ -288,7 +293,7 @@ export function registerGitAgentRoutes(app: Express) {
               (${companyId}, ${agentName}, 'replace',
                ${Number(oldContainerId)}, ${Number(newContainerId)},
                ${oldC.container_number}, ${newC.container_number},
-               ${parseFloat(newC.duty_fee ?? "")}, ${userId})`
+               ${parseMoneyInput(newC.duty_fee ?? "")?.toNumber() ?? NaN}, ${userId})`
       );
 
       res.json({

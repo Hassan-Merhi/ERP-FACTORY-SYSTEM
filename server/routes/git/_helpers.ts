@@ -18,6 +18,7 @@ import {
   bankAccounts,
 } from "../../../shared/schema";
 import { and, eq, inArray, isNotNull, isNull, or, sql } from "drizzle-orm";
+import { plusMoney, toMoney } from "../../lib/money";
 
 // ── In-memory undo store for bulk Excel imports ────────────────────────────
 // Keyed by importId (UUID). Stores the "before" snapshot so the last import
@@ -72,11 +73,7 @@ export const gitUpload = multer({
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export type WarningCode =
-  | "no_open_balance"
-  | "ledger_exceeds_containers"
-  | "allocation_gap"
-  | "fuzzy_match"
-  | "no_account_linked";
+  "no_open_balance" | "ledger_exceeds_containers" | "allocation_gap" | "fuzzy_match" | "no_account_linked";
 
 export type AllocStatus = "Cleared" | "Partially Cleared" | "Open";
 
@@ -323,7 +320,7 @@ export async function buildAgentsForCompany(cid: number) {
     const acct = allLedgerAccts.find((a) => a.id === accountId);
     if (!acct) return 0;
 
-    const rawOB = parseFloat(acct.openingBalance || "0");
+    const rawOB = toMoney(acct.openingBalance).toNumber();
     let balance = acct.openingBalanceSide === "Cr" ? -rawOB : rawOB;
 
     // Ledger voucher entries — no company filter, matches Accounts page behaviour
@@ -336,7 +333,7 @@ export async function buildAgentsForCompany(cid: number) {
       );
 
     for (const e of entries) {
-      balance += parseFloat(e.debitAmount || "0") - parseFloat(e.creditAmount || "0");
+      balance = plusMoney(balance, toMoney(e.debitAmount).minus(toMoney(e.creditAmount)));
     }
 
     // Linked bank accounts — entries stored under bankAccountId, not ledgerAccountId.
@@ -351,7 +348,7 @@ export async function buildAgentsForCompany(cid: number) {
       .where(eq(bankAccounts.linkedLedgerId, accountId));
 
     for (const bank of linkedBanks) {
-      const bOB = parseFloat(bank.openingBalance || "0");
+      const bOB = toMoney(bank.openingBalance).toNumber();
       balance += bank.openingBalanceSide === "Cr" ? -bOB : bOB;
 
       const bankEntries = await db
@@ -363,7 +360,7 @@ export async function buildAgentsForCompany(cid: number) {
         );
 
       for (const e of bankEntries) {
-        balance += parseFloat(e.debitAmount || "0") - parseFloat(e.creditAmount || "0");
+        balance = plusMoney(balance, toMoney(e.debitAmount).minus(toMoney(e.creditAmount)));
       }
     }
 
@@ -387,7 +384,7 @@ export async function buildAgentsForCompany(cid: number) {
           createdAt: r.createdAt,
           transporter: r.transporter ?? null,
           location: r.location ?? null,
-          dutyFee: parseFloat(r.dutyFee || "0"),
+          dutyFee: toMoney(r.dutyFee).toNumber(),
           status: r.status,
           supplierName: r.supplierName ?? null,
           supplierCode: r.supplierCode ?? null,

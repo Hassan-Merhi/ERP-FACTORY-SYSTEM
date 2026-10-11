@@ -15,6 +15,7 @@ import { eq, and } from "drizzle-orm";
 import { adjustInventory } from "../../../inventoryHelper";
 import { createDatabaseStockMovementAdapter } from "../../../services/inventory/databaseStockMovementAdapter";
 import { postStockMovementTx } from "../../../services/inventory/stockMovementIntegrityService";
+import { toMoney } from "../../../lib/money";
 
 const canonicalStockMovementAdapter = createDatabaseStockMovementAdapter();
 
@@ -56,8 +57,8 @@ export function registerAdminRepairMiscRoutes(app: Express) {
             const occurredAt = new Date().toISOString();
             for (const item of items) {
               const srcId = item.sourceLocationId || transferRecord.sourceLocationId;
-              const qty = parseFloat(item.quantity);
-              const rate = parseFloat(item.rate || "0");
+              const qty = toMoney(item.quantity).toNumber();
+              const rate = toMoney(item.rate).toNumber();
               if (srcId && qty > 0) {
                 await adjustInventory(tx, srcId, item.stockItemId, -qty, companyId);
                 await adjustInventory(tx, transferRecord.destinationLocationId, item.stockItemId, qty, companyId, rate);

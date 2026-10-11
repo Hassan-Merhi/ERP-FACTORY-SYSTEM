@@ -13,6 +13,7 @@ import { requireAuth, requireRole } from "../../../auth";
 import { computeRawBalance } from "../userManagementRoutes";
 import { systemSettings } from "@shared/schema";
 import { eq } from "drizzle-orm";
+import { toMoney } from "../../../lib/money";
 
 export function registerAdminEquityRepairRoutes(app: Express) {
   app.post("/api/admin/recalculate-equity-adjustment", requireAuth, requireRole("Admin"), async (req, res) => {
@@ -29,7 +30,7 @@ export function registerAdminEquityRepairRoutes(app: Express) {
       // Get current equity adjustment for the "previous" value in the response
       const settingKey = `equity_adjustment_${companyId}`;
       const existingAdjustment = await db.select().from(systemSettings).where(eq(systemSettings.key, settingKey));
-      const currentAdjustment = existingAdjustment.length > 0 ? parseFloat(existingAdjustment[0].value || "0") : 0;
+      const currentAdjustment = existingAdjustment.length > 0 ? toMoney(existingAdjustment[0].value).toNumber() : 0;
 
       const newAdjustment = -rawBalance;
 

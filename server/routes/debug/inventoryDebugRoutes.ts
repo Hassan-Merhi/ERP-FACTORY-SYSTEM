@@ -4,6 +4,7 @@ import { db } from "../../db";
 import { getErrorMessage } from "../../lib/httpHandlers";
 import { inventory, locations, stockItems } from "@shared/schema";
 import { and, eq } from "drizzle-orm";
+import { toMoney } from "../../lib/money";
 
 export function registerInventoryDebugRoutes(app: Express) {
   app.get(
@@ -51,8 +52,8 @@ export function registerInventoryDebugRoutes(app: Express) {
         let activeQty = 0;
         let activeValue = 0;
         for (const rec of inventoryRecords) {
-          const qty = parseFloat(rec.quantity);
-          const rate = parseFloat(rec.averageRate);
+          const qty = toMoney(rec.quantity).toNumber();
+          const rate = toMoney(rec.averageRate).toNumber();
           const val = qty * rate;
           totalQty += qty;
           totalValue += val;
@@ -86,8 +87,8 @@ export function registerInventoryDebugRoutes(app: Express) {
               displayName = `[INACTIVE] ${record.locationName}`;
             }
 
-            const qty = parseFloat(record.quantity);
-            const rate = parseFloat(record.averageRate);
+            const qty = toMoney(record.quantity).toNumber();
+            const rate = toMoney(record.averageRate).toNumber();
             return {
               id: record.id,
               locationId: record.locationId,
