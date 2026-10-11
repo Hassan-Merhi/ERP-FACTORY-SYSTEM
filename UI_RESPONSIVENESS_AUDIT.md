@@ -1,8 +1,8 @@
 # UI, Scrolling and Responsiveness Audit — Desktop / Tablet / Mobile
 
-**Date:** 2026-10-10 · **Branch audited:** `main` at `86a5aa3` · **Scope:** rendered web app (not the Capacitor builds)
+**Date:** 2026-10-10 (initial audit of `main` at `86a5aa3`) · 2026-10-11 (final re-audit of `claude/fervent-hopper-wzfayi` at `3608fa6`) · **Scope:** rendered web app (not the Capacitor builds)
 
-## Score: **90 / 100** after Phases 1–8 complete (was **88** with Phase 8 partly done, **73 / 100** on `main` at `86a5aa3`)
+## Score: **90 / 100** — full re-audit of `claude/fervent-hopper-wzfayi` at `3608fa6` on 2026-10-11 (was **73 / 100** on `main` at `86a5aa3`; **88** after the first Phase 8 increment)
 
 | Area | Weight | Before | After | What changed / what is left |
 | --- | --- | --- | --- | --- |
@@ -13,7 +13,13 @@
 | Consistency and design system | 10 | 7 | **9** | One breakpoints module, `touch` and `phone-land` Tailwind variants so components declare their own touch/landscape behaviour, route-scoped overrides removed (`!important` 147 → 38, all but 8 of them print or reduced-motion rules; class-string selectors 53 → 0), one scoped action-row wrap rule, phone bottom-sheet dialogs and card tables are the primitives' own behaviour, page stacking lives on the pages, the `touch`/`phone-land` variants no longer disable Tailwind's `max-*`/`min-[…]` variants, every mobile phase test renders. Left: the voucher print block still uses `!important`. |
 | Accessibility and touch ergonomics | 5 | 4 | **4** | Collapsed sidebar is inert, 44px header controls on coarse pointers, shortcut badges hidden on touch, launcher hidden until anchored. Left: 10px text, web fonts from the network. |
 
-### Re-audit evidence (branch `claude/fervent-hopper-wzfayi` at `2238e0e`, same harness and seeded data as §1; re-run unchanged after the final Phase 8 increment on 17 routes × 3 touch sizes, plus a 49-capture pixel diff)
+### Final re-audit evidence (branch at `3608fa6`, 2026-10-11, same harness, routes, sizes and seeded data as §1)
+
+The whole matrix was re-run from a fresh login on the finished branch: 16 ERP routes × 6 sizes, 10 Factory routes × 5, 7 Properties routes × 3, the POS sale screen at 4 sizes, plus the bottom-sheet dialog probe (ERP New Customer, Properties Add Shop, Factory Print Settings at 390×844 and 844×390, the same dialog as a centred modal at 1440×900) and the phone drawer probe on all three shells. Results are identical to the Phase 8 verification runs: no document or workspace overflow on any of the 188 captures, no control outside the viewport (the POS probe's 20 are the collapsed sidebar's inert links, parked off-canvas by design), the only sub-40px touch controls are the visually hidden skip link and the 18px reference-number links inside the Containers table, every wheel and swipe moved the page (ERP 15/15 wheel on desktop and wide, 42/42 swipes on touch sizes; Factory 24/24; Properties 6/6), and the only console errors are the Vite dev server's HMR WebSocket (0 application errors). Tables that still scroll sideways: Containers OTW below 1920, and the Factory stock-entry cart, raw-stock and payroll tables at 768, all with the edge fade and none trapping the page scroll. Text under 12px remains on 2–6 nodes per route (chips, badges, Dr/Cr suffixes).
+
+Per-area verdict after the re-audit: desktop keeps two points off for the 10px chip text, the 1440px table clipping and the absent content max-width at 1920; tablet three off because wide tables and the Daybook keep their own sideways/region scroll; phone two off for the landscape drawer chrome and the three Factory hubs without a title strip; scrolling one off because a wide table cannot have both a page-sticky header and a sideways scroller; consistency one off for the voucher print block's `!important`; accessibility one off for the 10px text and network web fonts. Nothing found in this pass is new.
+
+### Re-audit evidence after the first Phase 8 increment (branch at `2238e0e`)
 
 | Pass | Routes × sizes | Doc or workspace overflow | Controls off-screen | Sub-40px touch controls | Nested vertical scrollers | Wheel / swipe moved the page |
 | --- | --- | --- | --- | --- | --- | --- |
