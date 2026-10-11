@@ -176,31 +176,37 @@ async function runPhase5Report(ctx: DataQueryContext): Promise<DataQueryResult> 
       `);
       let _lineTotal = 0;
       const tableRows5 = lineRows.rows.map((r) => {
-        const lt = parseFloat(r.line_total || "0");
+        const lt = toMoney(r.line_total).toNumber();
         _lineTotal += lt;
-        return [r.item_name, r.code, `${fmtDec(parseFloat(r.qty))} ${r.uom}`, fmtDec(parseFloat(r.rate)), fmt(lt)];
+        return [
+          r.item_name,
+          r.code,
+          `${fmtDec(toMoney(r.qty).toNumber())} ${r.uom}`,
+          fmtDec(toMoney(r.rate).toNumber()),
+          fmt(lt),
+        ];
       });
       const charges = [
-        ["Freight", fmt(parseFloat(po5.freight || "0"))],
-        ["Surcharge", fmt(parseFloat(po5.surcharge || "0"))],
-        ["Fumigation", fmt(parseFloat(po5.fumigation || "0"))],
-        ["Document Charges", fmt(parseFloat(po5.doc_charges || "0"))],
-        ["Other Charges", fmt(parseFloat(po5.other_charges || "0"))],
-        ["Discount", `(${fmt(parseFloat(po5.discount || "0"))})`],
+        ["Freight", fmt(toMoney(po5.freight).toNumber())],
+        ["Surcharge", fmt(toMoney(po5.surcharge).toNumber())],
+        ["Fumigation", fmt(toMoney(po5.fumigation).toNumber())],
+        ["Document Charges", fmt(toMoney(po5.doc_charges).toNumber())],
+        ["Other Charges", fmt(toMoney(po5.other_charges).toNumber())],
+        ["Discount", `(${fmt(toMoney(po5.discount).toNumber())})`],
       ].filter(([, v]) => v !== fmt(0) && v !== `(${fmt(0)})`);
-      const grandPO =
-        parseFloat(po5.items_total || "0") +
-        parseFloat(po5.freight || "0") +
-        parseFloat(po5.surcharge || "0") +
-        parseFloat(po5.fumigation || "0") +
-        parseFloat(po5.doc_charges || "0") +
-        parseFloat(po5.other_charges || "0") -
-        parseFloat(po5.discount || "0");
+      const grandPO = toMoney(po5.items_total)
+        .plus(toMoney(po5.freight))
+        .plus(toMoney(po5.surcharge))
+        .plus(toMoney(po5.fumigation))
+        .plus(toMoney(po5.doc_charges))
+        .plus(toMoney(po5.other_charges))
+        .minus(toMoney(po5.discount))
+        .toNumber();
       const stats5 = [
         { label: "Supplier", value: po5.supplier },
         { label: "Container", value: po5.container_number },
         { label: "Currency", value: po5.currency },
-        { label: "Items Total", value: fmt(parseFloat(po5.items_total || "0")) },
+        { label: "Items Total", value: fmt(toMoney(po5.items_total).toNumber()) },
         { label: "Grand Total", value: fmt(grandPO), highlight: "positive" },
         { label: "Status", value: po5.status },
       ];
@@ -296,31 +302,31 @@ async function runPhase5Report(ctx: DataQueryContext): Promise<DataQueryResult> 
         { label: "Supplier", value: cc.supplier },
         { label: "Status", value: cc.status },
         { label: "Import Date", value: String(cc.import_date).slice(0, 10) },
-        { label: "Total Kg", value: fmtDec(parseFloat(cc.total_kg || "0")) },
-        { label: "Rate/Kg", value: fmtDec(parseFloat(cc.rate_per_kg || "0")) },
-        { label: "Grand Total", value: fmt(parseFloat(cc.grand_total || "0")), highlight: "positive" },
+        { label: "Total Kg", value: fmtDec(toMoney(cc.total_kg).toNumber()) },
+        { label: "Rate/Kg", value: fmtDec(toMoney(cc.rate_per_kg).toNumber()) },
+        { label: "Grand Total", value: fmt(toMoney(cc.grand_total).toNumber()), highlight: "positive" },
       ];
       const breakdownRows: string[][] = [
-        ["Items Total", cc.currency, fmt(parseFloat(cc.items_total || "0"))],
-        ["Charges Total", cc.currency, fmt(parseFloat(cc.charges_total || "0"))],
+        ["Items Total", cc.currency, fmt(toMoney(cc.items_total).toNumber())],
+        ["Charges Total", cc.currency, fmt(toMoney(cc.charges_total).toNumber())],
       ];
-      if (parseFloat(cc.transport_fee || "0") > 0)
-        breakdownRows.push(["Transport Fee", cc.currency, fmt(parseFloat(cc.transport_fee || "0"))]);
-      if (parseFloat(cc.duty_fee || "0") > 0)
-        breakdownRows.push(["Duty Fee", cc.currency, fmt(parseFloat(cc.duty_fee || "0"))]);
+      if (toMoney(cc.transport_fee).toNumber() > 0)
+        breakdownRows.push(["Transport Fee", cc.currency, fmt(toMoney(cc.transport_fee).toNumber())]);
+      if (toMoney(cc.duty_fee).toNumber() > 0)
+        breakdownRows.push(["Duty Fee", cc.currency, fmt(toMoney(cc.duty_fee).toNumber())]);
       for (const po of poRows5.rows) {
-        if (parseFloat(po.freight || "0") > 0)
-          breakdownRows.push([`Freight (${po.po_number})`, po.currency, fmt(parseFloat(po.freight))]);
-        if (parseFloat(po.fumigation || "0") > 0)
-          breakdownRows.push([`Fumigation (${po.po_number})`, po.currency, fmt(parseFloat(po.fumigation))]);
-        if (parseFloat(po.surcharge || "0") > 0)
-          breakdownRows.push([`Surcharge (${po.po_number})`, po.currency, fmt(parseFloat(po.surcharge))]);
-        if (parseFloat(po.doc_charges || "0") > 0)
-          breakdownRows.push([`Doc Charges (${po.po_number})`, po.currency, fmt(parseFloat(po.doc_charges))]);
-        if (parseFloat(po.discount || "0") > 0)
-          breakdownRows.push([`Discount (${po.po_number})`, po.currency, `(${fmt(parseFloat(po.discount))})`]);
+        if (toMoney(po.freight).toNumber() > 0)
+          breakdownRows.push([`Freight (${po.po_number})`, po.currency, fmt(toMoney(po.freight).toNumber())]);
+        if (toMoney(po.fumigation).toNumber() > 0)
+          breakdownRows.push([`Fumigation (${po.po_number})`, po.currency, fmt(toMoney(po.fumigation).toNumber())]);
+        if (toMoney(po.surcharge).toNumber() > 0)
+          breakdownRows.push([`Surcharge (${po.po_number})`, po.currency, fmt(toMoney(po.surcharge).toNumber())]);
+        if (toMoney(po.doc_charges).toNumber() > 0)
+          breakdownRows.push([`Doc Charges (${po.po_number})`, po.currency, fmt(toMoney(po.doc_charges).toNumber())]);
+        if (toMoney(po.discount).toNumber() > 0)
+          breakdownRows.push([`Discount (${po.po_number})`, po.currency, `(${fmt(toMoney(po.discount).toNumber())})`]);
       }
-      breakdownRows.push(["GRAND TOTAL", cc.currency, fmt(parseFloat(cc.grand_total || "0"))]);
+      breakdownRows.push(["GRAND TOTAL", cc.currency, fmt(toMoney(cc.grand_total).toNumber())]);
       dataQueryResult = {
         queryType: "container_cost_breakdown",
         title: `Cost Breakdown: ${cc.container_number}`,
@@ -432,13 +438,13 @@ async function runPhase5Report(ctx: DataQueryContext): Promise<DataQueryResult> 
       `);
       let totalTransferred = 0;
       const tableRows5 = rows.rows.map((r) => {
-        const amt = parseFloat(r.total_amount || "0");
+        const amt = toMoney(r.total_amount).toNumber();
         totalTransferred += amt;
         return [
           String(r.voucher_date).slice(0, 10),
           r.voucher_number,
           r.item_name,
-          `${fmtDec(parseFloat(r.qty))} ${r.uom}`,
+          `${fmtDec(toMoney(r.qty).toNumber())} ${r.uom}`,
           r.from_location || "—",
           r.to_location,
           fmt(amt),
@@ -479,8 +485,8 @@ async function runPhase5Report(ctx: DataQueryContext): Promise<DataQueryResult> 
       let grandIn = 0,
         grandOut = 0;
       const tableRows5 = rows.rows.map((r) => {
-        const inflow = parseFloat(r.total_in || "0");
-        const outflow = parseFloat(r.total_out || "0");
+        const inflow = toMoney(r.total_in).toNumber();
+        const outflow = toMoney(r.total_out).toNumber();
         const net = inflow - outflow;
         grandIn += inflow;
         grandOut += outflow;
@@ -582,13 +588,13 @@ async function runPhase5Report(ctx: DataQueryContext): Promise<DataQueryResult> 
         la5.opening_balance_side === "Dr" || la5.opening_balance_side === "Cr"
           ? la5.opening_balance_side
           : (defaultOpeningSide(la5.account_type) ?? "Dr");
-      const ob = parseFloat(la5.opening_balance || "0") * (obSide5 === "Cr" ? -1 : 1);
+      const ob = toMoney(la5.opening_balance).toNumber() * (obSide5 === "Cr" ? -1 : 1);
       let runningBal = ob;
       let totalDr = 0,
         totalCr = 0;
       const tableRows5 = txRows5.rows.map((r) => {
-        const dr = parseFloat(r.dr || "0");
-        const cr = parseFloat(r.cr || "0");
+        const dr = toMoney(r.dr).toNumber();
+        const cr = toMoney(r.cr).toNumber();
         runningBal += dr - cr;
         totalDr += dr;
         totalCr += cr;
@@ -652,7 +658,7 @@ async function runPhase5Report(ctx: DataQueryContext): Promise<DataQueryResult> 
       const typeMap5: Record<string, number> = {};
       let grandAmt = 0;
       const tableRows5 = rows.rows.map((r) => {
-        const amt = parseFloat(r.amount || "0");
+        const amt = toMoney(r.amount).toNumber();
         typeMap5[r.voucher_type] = (typeMap5[r.voucher_type] || 0) + amt;
         grandAmt += amt;
         return [
@@ -710,9 +716,9 @@ async function runPhase5Report(ctx: DataQueryContext): Promise<DataQueryResult> 
         grandCost = 0,
         grandProfit = 0;
       const tableRows5 = rows.rows.map((r) => {
-        const rev = parseFloat(r.total_revenue || "0");
-        const cost = parseFloat(r.total_cost || "0");
-        const profit5 = parseFloat(r.total_profit || "0");
+        const rev = toMoney(r.total_revenue).toNumber();
+        const cost = toMoney(r.total_cost).toNumber();
+        const profit5 = toMoney(r.total_profit).toNumber();
         const margin = rev > 0 ? ((profit5 / rev) * 100).toFixed(1) + "%" : "—";
         grandRev += rev;
         grandCost += cost;
@@ -761,7 +767,7 @@ async function runPhase5Report(ctx: DataQueryContext): Promise<DataQueryResult> 
       `);
       let totalDN = 0;
       const tableRows5 = rows.rows.map((r) => {
-        const amt = parseFloat(r.amount || "0");
+        const amt = toMoney(r.amount).toNumber();
         totalDN += amt;
         return [
           String(r.voucher_date).slice(0, 10),

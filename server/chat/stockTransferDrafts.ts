@@ -16,6 +16,7 @@ import {
   buildStockTransferSuggestionContext,
   matchLocationByName,
 } from "../services/stockTransferAnalysis";
+import { toMoney } from "../lib/money";
 /** One item inside a stock-transfer chat draft. */
 type StockTransferDraftItem = {
   stockItemId: number;
@@ -454,7 +455,7 @@ If intent is unclear or this is not a stock transfer request, respond with exact
                     AND location_id = ${parsedTf.sourceLocationId}
                     AND company_id = ${companyId}
                 `);
-                item.currentStock = parseFloat((invResult.rows[0] as { qty: string })?.qty || "0");
+                item.currentStock = toMoney((invResult.rows[0] as { qty: string })?.qty).toNumber();
               }
             }
             stockTransferDraft = parsedTf;

@@ -30,13 +30,15 @@ import {
   RE_VOUCHER_SEARCH,
   RE_ACCOUNT_QUERY,
 } from "./intent";
+import { toMoney } from "../lib/money";
 
 function buildSystemPrompt(context: ERPContext, userPreferences?: UserPreferences): string {
   const _currency = userPreferences?.currency || "USD";
   const profitMargin =
-    parseFloat(context.profitAnalysis.totalSales) > 0
+    toMoney(context.profitAnalysis.totalSales).toNumber() > 0
       ? (
-          (parseFloat(context.profitAnalysis.totalProfit) / parseFloat(context.profitAnalysis.totalSales)) *
+          (toMoney(context.profitAnalysis.totalProfit).toNumber() /
+            toMoney(context.profitAnalysis.totalSales).toNumber()) *
           100
         ).toFixed(1)
       : "0";
@@ -90,9 +92,9 @@ All data below is LIVE from the database - not cached. These numbers reflect the
 - Transactions: ${context.thisMonthSales.transactionCount} | Units Sold: ${context.thisMonthSales.unitsSold}
 
 ### 💰 ALL-TIME FINANCIAL OVERVIEW:
-- Total Sales Revenue: $${parseFloat(context.profitAnalysis.totalSales).toLocaleString()}
-- Total Cost of Goods: $${parseFloat(context.profitAnalysis.totalCost).toLocaleString()}
-- Gross Profit: $${parseFloat(context.profitAnalysis.totalProfit).toLocaleString()}
+- Total Sales Revenue: $${toMoney(context.profitAnalysis.totalSales).toNumber().toLocaleString()}
+- Total Cost of Goods: $${toMoney(context.profitAnalysis.totalCost).toNumber().toLocaleString()}
+- Gross Profit: $${toMoney(context.profitAnalysis.totalProfit).toNumber().toLocaleString()}
 - Profit Margin: ${profitMargin}%
 - Items Sold: ${context.profitAnalysis.itemsSold}
 
@@ -190,7 +192,7 @@ ${
         .slice(0, 5)
         .map(
           (item, i) =>
-            `${i + 1}. ${item.itemName} - Revenue: $${parseFloat(item.totalRevenue).toLocaleString()}, Profit: $${parseFloat(item.totalProfit).toLocaleString()} (${item.profitMargin} margin)`
+            `${i + 1}. ${item.itemName} - Revenue: $${toMoney(item.totalRevenue).toNumber().toLocaleString()}, Profit: $${toMoney(item.totalProfit).toNumber().toLocaleString()} (${item.profitMargin} margin)`
         )
         .join("\n")
     : "No sales data available yet."
@@ -274,7 +276,7 @@ ${
         .slice(0, 5)
         .map(
           (i) =>
-            `  * ${i.itemName}: selling $${i.sellingPrice} vs cost $${i.avgCostPrice} (losing $${Math.abs(parseFloat(i.priceGap)).toFixed(2)}/unit, $${i.potentialLoss} total at current stock)`
+            `  * ${i.itemName}: selling $${i.sellingPrice} vs cost $${i.avgCostPrice} (losing $${Math.abs(toMoney(i.priceGap).toNumber()).toFixed(2)}/unit, $${i.potentialLoss} total at current stock)`
         )
         .join("\n")}`
     : ""
