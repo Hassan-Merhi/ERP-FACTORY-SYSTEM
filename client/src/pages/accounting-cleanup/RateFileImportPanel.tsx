@@ -163,37 +163,35 @@ export function RateFileImportPanel({ kind, recorded, importUrl, today, onSaved 
             </ul>
           )}
           {rows.length > 0 && (
-            <div className="max-h-80 overflow-auto rounded-md border" data-table-scroll-region>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Currency</TableHead>
-                    <TableHead>Date</TableHead>
-                    <TableHead className="text-end">Rate</TableHead>
-                    <TableHead className="text-end">Recorded</TableHead>
-                    <TableHead>Status</TableHead>
+            <Table maxHeight="20rem" scrollLabel="Rates file preview">
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Currency</TableHead>
+                  <TableHead>Date</TableHead>
+                  <TableHead className="text-end">Rate</TableHead>
+                  <TableHead className="text-end">Recorded</TableHead>
+                  <TableHead>Status</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {rows.map((row) => (
+                  <TableRow
+                    key={`${row.fromCurrency}-${row.toCurrency}-${row.effectiveDate}`}
+                    data-testid={`row-rate-import-${row.fromCurrency}-${row.effectiveDate}`}
+                  >
+                    <TableCell className="font-mono">
+                      {kind === "factory" ? row.fromCurrency : `${row.fromCurrency} → ${row.toCurrency}`}
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap">{row.effectiveDate}</TableCell>
+                    <TableCell className="text-end font-mono tabular-nums">{row.rate}</TableCell>
+                    <TableCell className="text-end font-mono tabular-nums">{row.recorded ?? "—"}</TableCell>
+                    <TableCell data-i18n-ui>
+                      <Badge variant={STATUS_VARIANT[row.status]}>{STATUS_TEXT[row.status]}</Badge>
+                    </TableCell>
                   </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {rows.map((row) => (
-                    <TableRow
-                      key={`${row.fromCurrency}-${row.toCurrency}-${row.effectiveDate}`}
-                      data-testid={`row-rate-import-${row.fromCurrency}-${row.effectiveDate}`}
-                    >
-                      <TableCell className="font-mono">
-                        {kind === "factory" ? row.fromCurrency : `${row.fromCurrency} → ${row.toCurrency}`}
-                      </TableCell>
-                      <TableCell className="whitespace-nowrap">{row.effectiveDate}</TableCell>
-                      <TableCell className="text-end font-mono tabular-nums">{row.rate}</TableCell>
-                      <TableCell className="text-end font-mono tabular-nums">{row.recorded ?? "—"}</TableCell>
-                      <TableCell data-i18n-ui>
-                        <Badge variant={STATUS_VARIANT[row.status]}>{STATUS_TEXT[row.status]}</Badge>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
+                ))}
+              </TableBody>
+            </Table>
           )}
           {counts.conflict > 0 && (
             <div className="flex items-start gap-2">

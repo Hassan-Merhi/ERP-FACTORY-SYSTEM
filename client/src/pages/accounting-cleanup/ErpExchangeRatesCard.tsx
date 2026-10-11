@@ -100,26 +100,24 @@ export function ErpExchangeRatesCard({ canEdit }: { canEdit: boolean }) {
       ) : sorted.length === 0 ? (
         <p className="text-sm text-muted-foreground">No company rate is recorded yet.</p>
       ) : (
-        <div className="max-h-72 overflow-auto rounded-md border" data-table-scroll-region>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Pair</TableHead>
-                <TableHead>Effective from</TableHead>
-                <TableHead className="text-end">Rate</TableHead>
+        <Table maxHeight="18rem" scrollLabel="Company exchange rates">
+          <TableHeader>
+            <TableRow>
+              <TableHead>Pair</TableHead>
+              <TableHead>Effective from</TableHead>
+              <TableHead className="text-end">Rate</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {sorted.slice(0, 100).map((row) => (
+              <TableRow key={row.id} data-testid={`row-erp-rate-${row.id}`}>
+                <TableCell className="font-mono">{`${row.fromCurrency} → ${row.toCurrency}`}</TableCell>
+                <TableCell className="whitespace-nowrap">{String(row.effectiveDate).slice(0, 10)}</TableCell>
+                <TableCell className="text-end font-mono tabular-nums">{String(row.rate)}</TableCell>
               </TableRow>
-            </TableHeader>
-            <TableBody>
-              {sorted.slice(0, 100).map((row) => (
-                <TableRow key={row.id} data-testid={`row-erp-rate-${row.id}`}>
-                  <TableCell className="font-mono">{`${row.fromCurrency} → ${row.toCurrency}`}</TableCell>
-                  <TableCell className="whitespace-nowrap">{String(row.effectiveDate).slice(0, 10)}</TableCell>
-                  <TableCell className="text-end font-mono tabular-nums">{String(row.rate)}</TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
+            ))}
+          </TableBody>
+        </Table>
       )}
       {canEdit && (
         <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center">

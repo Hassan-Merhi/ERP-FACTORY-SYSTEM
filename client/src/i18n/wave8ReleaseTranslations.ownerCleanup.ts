@@ -458,4 +458,19 @@ export const wave8ReleaseTranslationsOwnerCleanup: readonly Phase3SharedUiEntry[
     ar: "أخفِ مسار الإقفال وإعادة الفتح",
     fr: "Masquer le flux de clôture et de réouverture",
   },
+  {
+    en: "Company exchange rates",
+    ar: "أسعار صرف الشركة",
+    fr: "Taux de change de la société",
+  },
+  {
+    en: "Rates file preview",
+    ar: "معاينة ملف الأسعار",
+    fr: "Aperçu du fichier de taux",
+  },
+  {
+    en: "Supplier ledger lines",
+    ar: "قيود دفتر المورد",
+    fr: "Lignes du grand livre fournisseur",
+  },
 ];

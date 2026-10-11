@@ -122,7 +122,7 @@ export default function AccountingCleanup() {
   const steps = cleanupStepsFor(mode);
 
   return (
-    <div className="mx-auto w-full max-w-5xl min-w-0 space-y-4 py-3 sm:p-6" data-testid="page-accounting-cleanup">
+    <div className="mx-auto w-full max-w-5xl min-w-0 space-y-4" data-testid="page-accounting-cleanup">
       <PageHeader
         title="Accounting clean-up"
         subtitle="The Owner's production steps, in the order they must be done."

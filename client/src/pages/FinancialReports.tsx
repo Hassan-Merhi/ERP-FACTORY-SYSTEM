@@ -61,7 +61,7 @@ export default function FinancialReports() {
   });
 
   return (
-    <ResponsiveReportPage className="p-3 sm:p-4" data-testid="page-financial-reports">
+    <ResponsiveReportPage data-testid="page-financial-reports">
       <PageHeader title="Financial Statements" subtitle="Statements of the current company from the ledger" />
       <Tabs
         value={activeTab}

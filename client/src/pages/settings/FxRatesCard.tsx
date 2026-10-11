@@ -180,19 +180,19 @@ export function FxRatesCard() {
           </Table>
         )}
         {canEdit && (
-          <div className="flex items-center gap-2 flex-wrap">
+          <div className="grid grid-cols-1 gap-2 min-[420px]:grid-cols-2 sm:flex sm:flex-wrap sm:items-center">
             <Input
               placeholder="Currency (e.g. EUR)"
               value={newCurrency}
               onChange={(e) => setNewCurrency(e.target.value.toUpperCase())}
-              className="w-36"
+              className="w-full sm:w-36"
               data-testid="input-fxrate-currency"
             />
             <Input
               placeholder="Rate to USD (e.g. 1.18)"
               value={newRate}
               onChange={(e) => setNewRate(e.target.value)}
-              className="w-48"
+              className="w-full sm:w-48"
               type="number"
               step="0.0001"
               min="0"
@@ -203,7 +203,7 @@ export function FxRatesCard() {
               value={newDate}
               max={today}
               onChange={(e) => setNewDate(e.target.value)}
-              className="w-44"
+              className="w-full sm:w-44"
               aria-label="Effective from"
               data-testid="input-fxrate-date"
             />

@@ -157,7 +157,7 @@ function Figures({ entries, testId }: { entries: Array<[string, unknown]>; testI
   );
 }
 
-function RowsTable({ rows, testId }: { rows: unknown[]; testId: string }) {
+function RowsTable({ rows, label, testId }: { rows: unknown[]; label: string; testId: string }) {
   const objects = rows.filter((row): row is PlanRecord => !!row && typeof row === "object" && !Array.isArray(row));
   if (objects.length === 0) {
     return (
@@ -168,8 +168,8 @@ function RowsTable({ rows, testId }: { rows: unknown[]; testId: string }) {
   }
   const columns = Array.from(new Set(objects.slice(0, MAX_ROWS).flatMap((row) => Object.keys(row)))).slice(0, 10);
   return (
-    <div className="max-h-80 overflow-auto rounded-md border" data-table-scroll-region data-testid={testId}>
-      <Table>
+    <div className="min-w-0 space-y-1" data-testid={testId}>
+      <Table maxHeight="20rem" scrollLabel={label}>
         <TableHeader>
           <TableRow>
             {columns.map((column) => (
@@ -230,7 +230,7 @@ export function PlanFigures({ plan, testId, omit = [] }: { plan: PlanRecord; tes
             {fieldLabel(key)}
             <Badge variant="outline">{value.length}</Badge>
           </p>
-          {value.length > 0 && <RowsTable rows={value} testId={`${testId}-${key}`} />}
+          {value.length > 0 && <RowsTable rows={value} label={fieldLabel(key)} testId={`${testId}-${key}`} />}
         </div>
       ))}
     </div>

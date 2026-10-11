@@ -27,17 +27,17 @@ export function FactorySupplierLedgerLines({
   formatNum,
 }: FactorySupplierLedgerLinesProps) {
   return (
-    <div className="overflow-x-auto" data-testid="table-supplier-ledger-lines">
-      <Table>
+    <div className="min-w-0" data-testid="table-supplier-ledger-lines">
+      <Table scrollLabel="Supplier ledger lines">
         <TableHeader>
           <TableRow>
             <TableHead>Date</TableHead>
             <TableHead>Voucher</TableHead>
             <TableHead>Description</TableHead>
-            <TableHead className="text-right">Debit (USD)</TableHead>
-            <TableHead className="text-right">Credit (USD)</TableHead>
-            <TableHead className="text-right">Native</TableHead>
-            <TableHead className="text-right">Balance (USD)</TableHead>
+            <TableHead className="text-end">Debit (USD)</TableHead>
+            <TableHead className="text-end">Credit (USD)</TableHead>
+            <TableHead className="text-end">Native</TableHead>
+            <TableHead className="text-end">Balance (USD)</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -45,27 +45,25 @@ export function FactorySupplierLedgerLines({
             <TableCell colSpan={6} className="text-sm text-muted-foreground">
               Opening Balance
             </TableCell>
-            <TableCell className="text-right font-mono text-sm">{crText(openingBalanceUsd, formatNum)}</TableCell>
+            <TableCell className="text-end font-mono text-sm">{crText(openingBalanceUsd, formatNum)}</TableCell>
           </TableRow>
           {lines.map((line) => (
             <TableRow key={line.entryId} data-testid={`row-supplier-ledger-line-${line.entryId}`}>
               <TableCell className="font-mono text-sm whitespace-nowrap">{formatDate(line.date)}</TableCell>
               <TableCell className="font-mono text-xs">{line.voucherNumber}</TableCell>
               <TableCell className="text-sm text-muted-foreground">{line.description}</TableCell>
-              <TableCell className="text-right font-mono text-sm">
+              <TableCell className="text-end font-mono text-sm">
                 {line.debitUsd === "0.00" ? "—" : formatNum(line.debitUsd)}
               </TableCell>
-              <TableCell className="text-right font-mono text-sm">
+              <TableCell className="text-end font-mono text-sm">
                 {line.creditUsd === "0.00" ? "—" : formatNum(line.creditUsd)}
               </TableCell>
-              <TableCell className="text-right font-mono text-xs text-muted-foreground">
+              <TableCell className="text-end font-mono text-xs text-muted-foreground">
                 {line.currency === "USD"
                   ? ""
                   : `${line.currency} ${formatNum(line.nativeCredit !== "0.00" ? line.nativeCredit : line.nativeDebit)}`}
               </TableCell>
-              <TableCell className="text-right font-mono text-sm">
-                {crText(line.runningBalanceUsd, formatNum)}
-              </TableCell>
+              <TableCell className="text-end font-mono text-sm">{crText(line.runningBalanceUsd, formatNum)}</TableCell>
             </TableRow>
           ))}
         </TableBody>
