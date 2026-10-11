@@ -15,6 +15,7 @@ import { companyStockValue } from "../services/inventory/stockValuation";
 import { loadNetPositionParties, type NotInLedgerSection } from "../services/accounting/balances/netPositionParties";
 import { toFiniteNumber, toPositiveInteger } from "@shared/typeGuards";
 import { ledgerCarriesStock } from "../services/accounting/perpetualInventory/reportBasis";
+import { plusMoney } from "../lib/money";
 
 /**
  * The two grouped balance projections read below.
@@ -242,7 +243,7 @@ export async function calculateNetPositionAsOf(
 
     let otwTotal = 0;
     for (const c of otwContainers) {
-      otwTotal += parseFloat(c.grandTotal || c.itemsTotal || "0");
+      otwTotal = plusMoney(otwTotal, c.grandTotal || c.itemsTotal);
     }
     otwTotal = round2(otwTotal);
     if (otwTotal !== 0) {

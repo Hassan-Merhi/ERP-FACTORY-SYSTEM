@@ -11,6 +11,7 @@
 import PDFDocument from "pdfkit";
 import path from "path";
 import fs from "fs";
+import { plusMoney, toMoney } from "./money";
 
 const FONTS_DIR = path.join(process.cwd(), "server", "fonts");
 const AMIRI = path.join(FONTS_DIR, "Amiri-Regular.ttf");
@@ -80,7 +81,7 @@ export async function generateWorkerBalesPdf(groups: GroupRow[], date: string, c
         return {
           worker: w,
           count: bales.length,
-          totalKg: bales.reduce((s, b) => s + parseFloat(String(b.weightKg || 0)), 0),
+          totalKg: bales.reduce((s, b) => plusMoney(s, b.weightKg), 0),
         };
       })
       .sort((a, b) => b.count - a.count);
@@ -205,7 +206,7 @@ export async function generateWorkerBalesPdf(groups: GroupRow[], date: string, c
     for (const worker of sortedWorkers) {
       const bales = byWorker.get(worker)!.sort((a, b) => (a.productName || "").localeCompare(b.productName || ""));
       const workerBaleCount = bales.length;
-      const workerTotalKg = bales.reduce((s, b) => s + parseFloat(String(b.weightKg || 0)), 0);
+      const workerTotalKg = bales.reduce((s, b) => plusMoney(s, b.weightKg), 0);
 
       bales.forEach((b, idx) => {
         ensureSpace(ROW_H + 2);
@@ -249,7 +250,7 @@ export async function generateWorkerBalesPdf(groups: GroupRow[], date: string, c
         x += COL_PROD;
 
         // Weight — number only, right-aligned in COL_WT
-        const wt = parseFloat(String(b.weightKg || 0)).toFixed(0);
+        const wt = toMoney(b.weightKg).toFixed(0);
         doc.font("Helvetica").fontSize(8.5);
         fill(doc, SLATE);
         doc.text(wt, x + 2, y + 4, { width: COL_WT - 4, align: "right", lineBreak: false });

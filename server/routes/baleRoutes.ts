@@ -33,6 +33,7 @@ import { registerBaleTransferRoutes } from "./baleTransferRoutes";
 import { registerProductionBaleRoutes } from "./productionBaleRoutes";
 import { registerProductionRawStockRoutes } from "./productionRawStockRoutes";
 import { registerBaleLookupRoutes } from "./baleLookupRoutes";
+import { parseMoneyInput, toMoney } from "../lib/money";
 
 class LabelPrintRequestError extends Error {}
 
@@ -218,13 +219,13 @@ export function registerBaleRoutes(app: Express) {
       const preview = await Promise.all(
         rows.map(async (row) => {
           const barcode = String(row.barcode || "").trim();
-          const newPrice = parseFloat(String(row.price || ""));
+          const newPrice = parseMoneyInput(String(row.price || ""))?.toNumber() ?? NaN;
           if (!barcode) return { barcode, status: "invalid", currentPrice: null, newPrice: null };
           if (isNaN(newPrice) || newPrice < 0)
             return { barcode, status: "invalid_price", currentPrice: null, newPrice: null };
           const bale = await storage.getBaleByBarcode(barcode, companyId);
           if (!bale) return { barcode, status: "not_found", currentPrice: null, newPrice };
-          const currentPrice = bale.price ? parseFloat(bale.price) : null;
+          const currentPrice = bale.price ? toMoney(bale.price).toNumber() : null;
           const noChange = currentPrice !== null && Math.abs(currentPrice - newPrice) < 0.001;
           return {
             id: bale.id,
@@ -258,7 +259,7 @@ export function registerBaleRoutes(app: Express) {
       let updated = 0;
       for (const row of rows) {
         const id = parseInt(String(row.id));
-        const price = parseFloat(String(row.price));
+        const price = parseMoneyInput(String(row.price))?.toNumber() ?? NaN;
         if (isNaN(id) || isNaN(price) || price < 0) continue;
         const bale = await storage.getBaleById(id);
         if (!bale || bale.companyId !== companyId) continue;

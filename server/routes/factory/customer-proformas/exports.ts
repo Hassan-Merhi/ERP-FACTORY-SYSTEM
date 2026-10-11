@@ -24,6 +24,7 @@ import {
 import { eq, and, inArray } from "drizzle-orm";
 import path from "path";
 import fs from "fs";
+import { toMoney } from "../../../lib/money";
 
 export function registerFactoryCustomerProformaExportRoutes(app: Express) {
   app.get("/api/factory/customer-proformas/:id/export/excel", requireAuth, async (req: Request, res: Response) => {
@@ -70,7 +71,7 @@ export function registerFactoryCustomerProformaExportRoutes(app: Express) {
           );
         prods.forEach((p) => {
           if (p.articleCode) {
-            wMap.set(p.articleCode, parseFloat(p.weightPerBaleKg || "0"));
+            wMap.set(p.articleCode, toMoney(p.weightPerBaleKg).toNumber());
             nameMap.set(p.articleCode, p.name || "");
           }
         });
@@ -171,7 +172,7 @@ export function registerFactoryCustomerProformaExportRoutes(app: Express) {
       rawLines.forEach((line, idx: number) => {
         const qty = parseInt(String(line.quantity));
         const kgPerBale = wMap.get(line.articleCode) || 0;
-        const price = parseFloat(String(line.pricePerBale));
+        const price = toMoney(line.pricePerBale).toNumber();
         const totalKg = qty * kgPerBale;
         const totalPrice = qty * price;
         totalQty += qty;
@@ -272,7 +273,7 @@ export function registerFactoryCustomerProformaExportRoutes(app: Express) {
           );
         prods.forEach((p) => {
           if (p.articleCode) {
-            wMap.set(p.articleCode, parseFloat(p.weightPerBaleKg || "0"));
+            wMap.set(p.articleCode, toMoney(p.weightPerBaleKg).toNumber());
             nameMap.set(p.articleCode, p.name || "");
           }
         });
@@ -399,7 +400,7 @@ export function registerFactoryCustomerProformaExportRoutes(app: Express) {
       rawLines.forEach((line, idx: number) => {
         const qty = parseInt(String(line.quantity));
         const kgPerBale = wMap.get(line.articleCode) || 0;
-        const price = parseFloat(String(line.pricePerBale));
+        const price = toMoney(line.pricePerBale).toNumber();
         const totalKg = qty * kgPerBale;
         const totalPrice = qty * price;
         totalQty += qty;

@@ -28,6 +28,7 @@ import {
 } from "@shared/schema";
 import { eq, and, sql, inArray, isNull } from "drizzle-orm";
 import { resultRows } from "../../../lib/queryResult";
+import { toMoney } from "../../../lib/money";
 
 export function registerFactoryProductionValueReportRoutes(app: Express) {
   // ───────────────────────────────────────────────
@@ -246,9 +247,9 @@ export function registerFactoryProductionValueReportRoutes(app: Express) {
         const code = bale.articleCode || "UNKNOWN";
         const name = bale.productName || code;
         const catName = bale.categoryName || "Uncategorized";
-        const wt = parseFloat(bale.weightKg || "0");
-        const costPrice = parseFloat(bale.productionPrice || "0");
-        const sellingPrice = parseFloat(bale.sellingPrice || "0");
+        const wt = toMoney(bale.weightKg).toNumber();
+        const costPrice = toMoney(bale.productionPrice).toNumber();
+        const sellingPrice = toMoney(bale.sellingPrice).toNumber();
         const price = valuationMode === "selling" ? sellingPrice : costPrice;
         const value = price; // catalog price is per bale (not per kg)
         // Prefer the live worker record; fall back to the name snapshotted on the bale.
@@ -402,7 +403,7 @@ export function registerFactoryProductionValueReportRoutes(app: Express) {
       // when closed, so their contribution is already 0 by definition.
       const periodOnTableKg = mixBatchRows.reduce((s: number, r) => {
         if ((r.status || "ACTIVE") !== "ACTIVE") return s;
-        const remaining = Math.max(0, parseFloat(r.totalWeightKg || "0") - parseFloat(r.usedKg || "0"));
+        const remaining = Math.max(0, toMoney(r.totalWeightKg).minus(toMoney(r.usedKg)).toNumber());
         return s + remaining;
       }, 0);
 
@@ -568,13 +569,13 @@ export function registerFactoryProductionValueReportRoutes(app: Express) {
             continue; // truly unresolvable — skip
           }
 
-          const w = parseFloat(src.weightKg || "0");
+          const w = toMoney(src.weightKg).toNumber();
           // Use effective cost: locked rate for direct-supplier sources, stored costPerKg otherwise
           let cpk: number;
           if (src.supplierId != null) {
-            cpk = reportSupplierRateMap.get(src.supplierId) ?? parseFloat(src.costPerKg || "0");
+            cpk = reportSupplierRateMap.get(src.supplierId) ?? toMoney(src.costPerKg).toNumber();
           } else {
-            cpk = parseFloat(src.costPerKg || "0");
+            cpk = toMoney(src.costPerKg).toNumber();
           }
 
           const key = `${batchDate}::${supplierName}`;
@@ -643,7 +644,7 @@ export function registerFactoryProductionValueReportRoutes(app: Express) {
           byCategory: safeCategoryRows,
           linkedBatches: linkedBatchRows.map((row) => ({
             id: row.id,
-            totalWeightKg: parseFloat(row.totalWeightKg || "0"),
+            totalWeightKg: toMoney(row.totalWeightKg).toNumber(),
           })),
         },
         wipersGarbage: {

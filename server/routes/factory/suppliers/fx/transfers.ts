@@ -148,7 +148,7 @@ export function registerSupplierFxTransferRoutes(app: Express) {
           txType: "SUPPLIER_FX_TRANSFER",
           referenceId: created.id,
           referenceTable: "factory_supplier_fx_transfers",
-          description: `${transferKind}: ${fromSupplier.name} ${created.fromCurrencyCode} ${parseFloat(created.fromAmount).toFixed(2)} → ${toSupplier.name} USD ${parseFloat(created.toAmountUsd).toFixed(2)}`,
+          description: `${transferKind}: ${fromSupplier.name} ${created.fromCurrencyCode} ${toMoney(created.fromAmount).toFixed(2)} → ${toSupplier.name} USD ${toMoney(created.toAmountUsd).toFixed(2)}`,
           amountCurrency: toMoney(created.fromAmount).toNumber(),
           amountUsd: toMoney(created.toAmountUsd).toNumber(),
           currencyCode: created.fromCurrencyCode,
@@ -202,7 +202,7 @@ export function registerSupplierFxTransferRoutes(app: Express) {
           companyId,
           txDate: getClientDate(req),
           txType: "SUPPLIER_FX_TRANSFER_DELETE",
-          description: `FX Transfer deleted: ${transfer.fromCurrencyCode} ${parseFloat(transfer.fromAmount).toFixed(2)} → USD ${parseFloat(transfer.toAmountUsd).toFixed(2)} (dated ${transfer.date})`,
+          description: `FX Transfer deleted: ${transfer.fromCurrencyCode} ${toMoney(transfer.fromAmount).toFixed(2)} → USD ${toMoney(transfer.toAmountUsd).toFixed(2)} (dated ${transfer.date})`,
         });
       });
 

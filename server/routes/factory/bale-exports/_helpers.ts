@@ -14,6 +14,7 @@ import {
   factorySupplierCategories,
 } from "@shared/schema";
 import { eq, and, sql, isNull, not } from "drizzle-orm";
+import { plusMoney, toMoney } from "../../../lib/money";
 
 // ── Weekly report: shared Excel builder (used by download + WhatsApp send) ───
 
@@ -90,12 +91,14 @@ export async function buildWeeklyReportExcelBuffer(companyId: number, period: st
   const stockInByDate = new Map<string, Map<WrCatKey, number>>();
   for (const r of rawStockRows) {
     const ck = getCK(r.categoryId as number | null);
-    const rem = (parseFloat(r.receivedKg as string) || 0) - (parseFloat(r.usedKg as string) || 0);
+    const rem = toMoney(r.receivedKg as string)
+      .minus(toMoney(r.usedKg as string))
+      .toNumber();
     if (catBalMap.has(ck)) catBalMap.get(ck)!.currentBalance += rem;
     else catBalMap.set(ck, { name: getCN(r.categoryId as number | null), currentBalance: rem });
     const ds = (r.offloadedAt as Date).toISOString().slice(0, 10);
     if (!stockInByDate.has(ds)) stockInByDate.set(ds, new Map());
-    stockInByDate.get(ds)!.set(ck, (stockInByDate.get(ds)!.get(ck) || 0) + (parseFloat(r.receivedKg as string) || 0));
+    stockInByDate.get(ds)!.set(ck, plusMoney(stockInByDate.get(ds)!.get(ck) || 0, r.receivedKg as string));
   }
 
   const adjRows = await db
@@ -111,7 +114,7 @@ export async function buildWeeklyReportExcelBuffer(companyId: number, period: st
   const manualRemoveByDate = new Map<string, Map<WrCatKey, number>>();
   for (const adj of adjRows) {
     const ck = getCK(adj.catId as number | null);
-    const kg = parseFloat(adj.kg as string) || 0;
+    const kg = toMoney(adj.kg as string).toNumber();
     if (kg <= 0) continue;
     const isAdd = adj.type === "ADD";
     if (catBalMap.has(ck)) catBalMap.get(ck)!.currentBalance += isAdd ? kg : -kg;
@@ -149,12 +152,12 @@ export async function buildWeeklyReportExcelBuffer(companyId: number, period: st
   for (const r of srcRows)
     srcSumByCont.set(
       r.containerId as number,
-      (srcSumByCont.get(r.containerId as number) || 0) + (parseFloat(r.weightKg as string) || 0)
+      plusMoney(srcSumByCont.get(r.containerId as number) || 0, r.weightKg as string)
     );
 
   const consByDate = new Map<string, Map<WrCatKey, number>>();
   for (const r of srcRows) {
-    const w = parseFloat(r.weightKg as string) || 0;
+    const w = toMoney(r.weightKg as string).toNumber();
     if (w <= 0) continue;
     const ds = r.batchDate
       ? typeof r.batchDate === "string"
@@ -167,7 +170,7 @@ export async function buildWeeklyReportExcelBuffer(companyId: number, period: st
     if (!catBalMap.has(ck)) catBalMap.set(ck, { name: getCN(r.catId as number | null), currentBalance: 0 });
   }
   for (const r of rawStockRows) {
-    const actualUsed = parseFloat(r.usedKg as string) || 0;
+    const actualUsed = toMoney(r.usedKg as string).toNumber();
     if (actualUsed <= 0) continue;
     const gap = actualUsed - (srcSumByCont.get(r.containerId as number) || 0);
     if (gap <= 0.001) continue;

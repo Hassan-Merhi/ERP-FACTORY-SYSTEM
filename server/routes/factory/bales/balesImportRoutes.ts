@@ -30,7 +30,7 @@ import {
   factoryBaleImportBatches,
 } from "@shared/schema";
 import { eq, and, asc, desc, sql, inArray, ilike } from "drizzle-orm";
-import { lineAmount, MoneyDecimal, parseMoneyInput } from "../../../lib/money";
+import { lineAmount, MoneyDecimal, parseMoneyInput, toMoney } from "../../../lib/money";
 
 export function registerBalesImportRoutes(app: Express) {
   // ───────────────────────────────────────────────
@@ -318,7 +318,7 @@ export function registerBalesImportRoutes(app: Express) {
             const status = bale.status || "IN_STOCK";
             // An imported bale's cost per kg is read as USD (the bale cost basis).
             const costPerKg = bale.costPerKg || "0";
-            const weight = parseFloat(bale.weightKg);
+            const weight = toMoney(bale.weightKg).toNumber();
             const totalCost = lineAmount(bale.weightKg, costPerKg).toDecimalPlaces(7).toFixed(7);
             try {
               await tx.transaction(async (row) => {
@@ -490,7 +490,7 @@ export function registerBalesImportRoutes(app: Express) {
     const consumedBySupplier = new Map<number, number>();
     for (const row of consumed) {
       if (row.supplierId != null) {
-        consumedBySupplier.set(row.supplierId, parseFloat(row.totalKg) || 0);
+        consumedBySupplier.set(row.supplierId, toMoney(row.totalKg).toNumber());
       }
     }
 
@@ -511,7 +511,7 @@ export function registerBalesImportRoutes(app: Express) {
 
       for (const rec of records) {
         if (remaining <= 0.001) break;
-        const cap = parseFloat(rec.receivedKg as string) || 0;
+        const cap = toMoney(rec.receivedKg as string).toNumber();
         const deduct = Math.min(remaining, cap);
         await executor
           .update(factoryRawStock)

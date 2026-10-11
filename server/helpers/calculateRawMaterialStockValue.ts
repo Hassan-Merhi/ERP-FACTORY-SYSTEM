@@ -6,16 +6,17 @@
  *
  * Root cause of previous bug: doing `String(value || fallback)` before
  * parseFloat — a stored "0.0000" string is truthy so the fallback was never
- * reached.  The route correctly does `parseFloat(value) || fallback` (parse
- * first, then OR on the numeric result).
+ * reached.  The route correctly parses first and then ORs the numeric result
+ * with the fallback (`toMoney(value).toNumber() || fallback`).
  */
 
 import { db } from "../db";
 import { factoryRawStock, factoryContainers, factorySuppliers, factoryRawMaterialAdjustments } from "@shared/schema";
 import { and, eq, sql } from "drizzle-orm";
+import { toMoney } from "../lib/money";
 
 function parse(v: unknown): number {
-  return parseFloat(String(v ?? "0")) || 0;
+  return toMoney(String(v ?? "")).toNumber();
 }
 
 export async function calculateRawMaterialStockValue(companyId: number): Promise<number> {
@@ -52,8 +53,8 @@ export async function calculateRawMaterialStockValue(companyId: number): Promise
     const received = parse(r.receivedKg);
     const used = parse(r.usedKg);
     const cpk = parse(r.costPerKg);
-    // Parse first, THEN fall back (same as route):  parseFloat(val) || fallback
-    const cpkUsd = parseFloat(String(r.costPerKgUsd ?? "0")) || cpk;
+    // Parse first, THEN fall back (same as route).
+    const cpkUsd = toMoney(r.costPerKgUsd).toNumber() || cpk;
 
     const existing = supplierMap.get(key);
     if (existing) {

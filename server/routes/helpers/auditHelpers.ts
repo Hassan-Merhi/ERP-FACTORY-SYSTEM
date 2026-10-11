@@ -11,6 +11,7 @@ import {
 } from "@shared/schema";
 import { inArray } from "drizzle-orm";
 import { currentAuditActor } from "../../services/audit/auditActorContext";
+import { parseMoneyInput, toMoney } from "../../lib/money";
 
 // ─── Audit log ────────────────────────────────────────────────────────────────
 export type AuditAction =
@@ -268,7 +269,7 @@ export function buildVoucherChangesForUpdate(
   const c: Record<string, { old?: AuditChangeValue; new?: AuditChangeValue }> = {};
   if (oldV.voucherType !== newV.voucherType) c.voucherType = { old: oldV.voucherType, new: newV.voucherType };
   if (oldV.voucherDate !== newV.voucherDate) c.date = { old: oldV.voucherDate, new: newV.voucherDate };
-  if (parseFloat(oldV.totalAmount || "0") !== parseFloat(newV.totalAmount || "0"))
+  if (toMoney(oldV.totalAmount).toNumber() !== toMoney(newV.totalAmount).toNumber())
     c.amount = { old: oldV.totalAmount, new: newV.totalAmount };
   if ((oldV.description ?? "") !== (newV.description ?? ""))
     c.description = { old: oldV.description ?? "", new: newV.description ?? "" };
@@ -355,13 +356,13 @@ export async function buildItemLevelChanges(
     if (!oldItem) continue;
     const name = await getName(id, newItem.itemName ?? oldItem.itemName);
     const fieldChanges: string[] = [];
-    const qn = parseFloat(String(newItem.quantity ?? 0));
-    const qo = parseFloat(String(oldItem.quantity ?? 0));
+    const qn = parseMoneyInput(String(newItem.quantity ?? 0))?.toNumber() ?? NaN;
+    const qo = parseMoneyInput(String(oldItem.quantity ?? 0))?.toNumber() ?? NaN;
     if (!isNaN(qn) && !isNaN(qo) && Math.abs(qn - qo) > 0.0001) {
       fieldChanges.push(`quantity from ${qo} to ${qn}`);
     }
-    const rn = parseFloat(String(newItem.rate ?? 0));
-    const ro = parseFloat(String(oldItem.rate ?? 0));
+    const rn = parseMoneyInput(String(newItem.rate ?? 0))?.toNumber() ?? NaN;
+    const ro = parseMoneyInput(String(oldItem.rate ?? 0))?.toNumber() ?? NaN;
     if (!isNaN(rn) && !isNaN(ro) && Math.abs(rn - ro) > 0.0001) {
       fieldChanges.push(`unit price from ${ro} to ${rn}`);
     }
