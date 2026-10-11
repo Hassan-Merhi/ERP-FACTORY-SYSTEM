@@ -1,5 +1,5 @@
 import { eq, and, isNull, inArray } from "drizzle-orm";
-import { db } from "../../db";
+import { db, type DatabaseOrTransaction } from "../../db";
 import * as schema from "@shared/schema";
 
 export async function bulkGetStockItemsByIds(ids: number[], companyId: number): Promise<schema.StockItem[]> {
@@ -16,9 +16,9 @@ export async function bulkGetStockItemsByIds(ids: number[], companyId: number): 
     );
 }
 
-export async function bulkDeleteStockItems(ids: number[]): Promise<void> {
+export async function bulkDeleteStockItems(ids: number[], executor: DatabaseOrTransaction = db): Promise<void> {
   if (ids.length === 0) return;
-  await db.update(schema.stockItems).set({ deletedAt: new Date() }).where(inArray(schema.stockItems.id, ids));
+  await executor.update(schema.stockItems).set({ deletedAt: new Date() }).where(inArray(schema.stockItems.id, ids));
 }
 
 // ---------------------------------------------------------------------------

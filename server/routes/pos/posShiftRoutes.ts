@@ -188,7 +188,10 @@ export function registerPosShiftRoutes(app: Express): void {
       }
       if (!parseMoneyInput(closingCash)) return res.status(400).json({ message: "Invalid amount" });
 
-      const closedShift = await storage.closeShift(shiftId, closingCash.toString(), notes);
+      const closedShift = await storage.closeShift(shiftId, closingCash.toString(), notes, {
+        userId,
+        username: req.user?.username ?? null,
+      });
       res.json(closedShift);
     } catch (error: unknown) {
       res.status(500).json({ message: getErrorMessage(error) });

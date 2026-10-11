@@ -18,7 +18,23 @@ vi.mock("../server/services/factory/rawStockStableCost", () => ({
     ],
   }),
 }));
-vi.mock("../server/services/factory/rawStockLockedRate", () => ({ getLockedSupplierRate: async () => 0.35 }));
+// Wave 11: the route prices sources through baleCostBasis (the supplier's
+// persisted locked rate, else the container's landed USD cost) instead of
+// getLockedSupplierRate; the rate is stubbed there now. These tests pin weights.
+vi.mock("../server/services/factory/baleCostBasis", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../server/services/factory/baleCostBasis")>();
+  const { default: Decimal } = await import("decimal.js");
+  return {
+    ...actual,
+    supplierLockedUsdRate: async () => new Decimal(0.35),
+    containerUsdRate: async () => null,
+    rawSourceUsdRate: async () => ({ rate: new Decimal(0.35), basis: "supplier-locked" }),
+  };
+});
+vi.mock("../server/services/accounting/perpetualInventory/cutover", () => ({
+  isPerpetualInventoryActive: async () => false,
+  getInventoryCutover: async () => null,
+}));
 vi.mock("../server/db", async () => {
   const { getTableName, SQL } = await import("drizzle-orm");
   const { PgDialect } = await import("drizzle-orm/pg-core");

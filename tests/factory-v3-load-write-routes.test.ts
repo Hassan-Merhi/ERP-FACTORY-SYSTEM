@@ -23,6 +23,13 @@
  * scanned by mistake and then removed would be written out of stock anyway,
  * silently, with the load looking perfectly normal.
  *
+ * Wave 17 B (owner decision 1): finalize also invoices the load (a FINALIZED
+ * customer order with the bales at their proforma price, the customer's SALE
+ * row) in the same transaction, so the bales here sit on a location and their
+ * articles are on the proforma; re-finalizing is idempotent (it used to be
+ * refused with 400). The invoice itself is covered by
+ * wave17b-inventory-factory.test.ts.
+ *
  * The scan endpoint's two 409 warnings are covered from both sides, because
  * `bypass` is what turns a refusal into a write: a bale reserved for another
  * order, or already sitting in another active load, is refused once and
@@ -32,6 +39,7 @@ import request from "supertest";
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 
 import { pool } from "../server/db";
+import { deleteAuditLogRowsForTests } from "./helpers/auditLogCleanup";
 import { seedTestData, cleanupTestData, closeTestServer, type TestContext } from "./setup";
 
 const TEST_PREFIX = "v3load";
@@ -45,11 +53,19 @@ let seq = 0;
 async function createBale(status = "IN_STOCK"): Promise<{ id: number; reference: string }> {
   seq += 1;
   const reference = `${TEST_PREFIX}-REF-${seq}`;
+  const article = `${TEST_PREFIX}-ART-${seq}`;
   const result = await pool.query<{ id: number }>(
     `INSERT INTO factory_bales
-       (company_id, bale_code, reference_number, article_code, product_name, weight_kg, cost_per_kg, total_cost, status)
-     VALUES ($1, $2, $2, $3, $4, '25.000', '2.00', '50.00', $5) RETURNING id`,
-    [ctx.companyId, reference, `${TEST_PREFIX}-ART-${seq}`, `${TEST_PREFIX} product`, status]
+       (company_id, bale_code, reference_number, article_code, product_name, weight_kg, cost_per_kg, total_cost, status,
+        erp_location_id)
+     VALUES ($1, $2, $2, $3, $4, '25.000', '2.00', '50.00', $5, $6) RETURNING id`,
+    [ctx.companyId, reference, article, `${TEST_PREFIX} product`, status, ctx.locationId]
+  );
+  // The invoice prices each bale from the proforma (wave 17 B).
+  await pool.query(
+    `INSERT INTO customer_proforma_lines (proforma_id, article_code, product_name, quantity, price_per_bale)
+     VALUES ($1, $2, $3, 10, '80.00')`,
+    [proformaId, article, `${TEST_PREFIX} product`]
   );
   return { id: result.rows[0].id, reference };
 }
@@ -113,6 +129,15 @@ afterAll(async () => {
     `DELETE FROM factory_v3_load_bales WHERE load_id IN (SELECT id FROM factory_v3_loads WHERE company_id = $1)`,
     [ctx.companyId]
   );
+  await pool.query(`DELETE FROM customer_balances WHERE company_id = $1`, [ctx.companyId]);
+  for (const table of ["customer_order_bales", "customer_order_lines"]) {
+    await pool.query(`DELETE FROM ${table} WHERE order_id IN (SELECT id FROM customer_orders WHERE company_id = $1)`, [
+      ctx.companyId,
+    ]);
+  }
+  await pool.query(`DELETE FROM customer_orders WHERE company_id = $1`, [ctx.companyId]);
+  await pool.query(`DELETE FROM customer_invoice_sequences WHERE company_id = $1`, [ctx.companyId]);
+  await deleteAuditLogRowsForTests(pool, "company_id = $1", [ctx.companyId]);
   await pool.query(`DELETE FROM factory_v3_loads WHERE company_id = $1`, [ctx.companyId]);
   await pool.query(`DELETE FROM customer_proformas WHERE company_id = $1`, [ctx.companyId]);
   await pool.query(`DELETE FROM customers WHERE company_id = $1`, [ctx.companyId]);
@@ -334,14 +359,21 @@ describe("POST /api/factory/v3/loads/:id/finalize", () => {
     expect(await loadStatus(loadId)).toBe("expected_to_load");
   });
 
-  it("refuses to finalize twice", async () => {
+  it("re-finalizing is idempotent: the same invoice, no second one", async () => {
     const loadId = await createLoadingLoad();
     const bale = await createBale();
     await agent.post(`/api/factory/v3/loads/${loadId}/bales`).send({ scanCode: bale.reference });
-    expect((await agent.post(`/api/factory/v3/loads/${loadId}/finalize`)).status).toBe(200);
+    const first = await agent.post(`/api/factory/v3/loads/${loadId}/finalize`);
+    expect(first.status).toBe(200);
 
     const second = await agent.post(`/api/factory/v3/loads/${loadId}/finalize`);
-    expect(second.status).toBe(400);
+    expect(second.status).toBe(200);
+    expect(second.body.alreadyFinalized).toBe(true);
+    expect(second.body.invoice.orderId).toBe(first.body.invoice.orderId);
+    const orders = await pool.query(`SELECT COUNT(*)::int AS n FROM customer_order_bales WHERE bale_id = $1`, [
+      bale.id,
+    ]);
+    expect(orders.rows[0].n).toBe(1);
   });
 
   it("refuses to remove a bale from a finalized load", async () => {

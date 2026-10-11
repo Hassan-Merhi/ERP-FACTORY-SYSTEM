@@ -29,10 +29,29 @@ import {
   factoryWorkerAdvances,
   factoryAdvanceRepayments,
   factorySuppliers,
+  accountingPostingRequests,
 } from "@shared/schema";
-import { eq, and, desc, sql } from "drizzle-orm";
+import { eq, and, desc, sql, inArray } from "drizzle-orm";
 import type Decimal from "decimal.js";
 import { MoneyDecimal, parseMoneyInput, toMoney, type MoneyInput } from "../../../lib/money";
+import { syncContainerCommissionJournalTx } from "../../../services/factory/containerCommissionJournal";
+import { retireVouchersTx, sessionRetirementActor } from "../../../services/accounting/voucherRetirement";
+import {
+  editPostedFactoryVoucherTx,
+  sendVoucherCorrectionRefusal,
+} from "../../../services/factory/factoryVoucherCorrection";
+
+/**
+ * Posting source types of the factory employee cash vouchers whose void moves
+ * the employee balances back (the engine-numbered successors of EMP-DEP- /
+ * EMP-WD- / EMP-PAY-; see employee-crud/cash.ts, bulk-withdraw.ts, bulk-payroll.ts).
+ */
+const EMPLOYEE_CASH_POSTING_SOURCE_TYPES = [
+  "factory-employee-deposit",
+  "factory-employee-withdrawal",
+  "factory-bulk-withdrawal",
+  "factory-bulk-payroll",
+];
 
 /** A voucher's exchange rate; a missing, zero or unreadable one counts as 1. */
 const voucherFxRate = (rate: MoneyInput) => {
@@ -167,36 +186,58 @@ export function registerFactoryDaybookEditRoutes(app: Express) {
       if (fxRateToUsd !== undefined) updates.fxRateToUsd = String(fxRateToUsd);
       if (txDate !== undefined) updates.txDate = txDate;
 
-      const [updated] = await db
-        .update(factoryDaybookEntries)
-        .set(updates)
-        .where(eq(factoryDaybookEntries.id, realEntryId))
-        .returning();
-      const afterJson = JSON.stringify(updated);
+      // Phase 22 (C): the daybook edit, its edit record and the source voucher's
+      // sync commit together; a voucher date change is an edit of the posted
+      // voucher (refused with 409 in a closed period — reverse instead —
+      // audited before/after otherwise). A description-only sync stays a plain
+      // header change (the correction policy allows it).
+      const updated = await db.transaction(async (tx) => {
+        const [row] = await tx
+          .update(factoryDaybookEntries)
+          .set(updates)
+          .where(eq(factoryDaybookEntries.id, realEntryId))
+          .returning();
+        await tx.insert(factoryDaybookEntryEdits).values({
+          daybookEntryId: realEntryId,
+          editedBy: userId,
+          beforeJson,
+          afterJson: JSON.stringify(row),
+          reason: reason.trim(),
+        });
 
-      await db.insert(factoryDaybookEntryEdits).values({
-        daybookEntryId: realEntryId,
-        editedBy: userId,
-        beforeJson,
-        afterJson,
-        reason: reason.trim(),
-      });
-
-      // ── Sync description and date back to the source voucher so Accounts statements stay in sync ──
-      if (updated.referenceTable === "vouchers" && updated.referenceId) {
-        const voucherUpdates: PgUpdateSetSource<typeof vouchers> = {};
-        if (description !== undefined) voucherUpdates.description = description;
-        if (txDate !== undefined) voucherUpdates.voucherDate = txDate;
-        if (Object.keys(voucherUpdates).length > 0) {
-          await db
-            .update(vouchers)
-            .set(voucherUpdates)
-            .where(and(eq(vouchers.id, updated.referenceId), eq(vouchers.companyId, companyId)));
+        // ── Sync description and date back to the source voucher so Accounts statements stay in sync ──
+        if (row.referenceTable === "vouchers" && row.referenceId) {
+          const sourceVoucherId = row.referenceId;
+          const voucherUpdates: PgUpdateSetSource<typeof vouchers> = {};
+          if (description !== undefined) voucherUpdates.description = description;
+          if (txDate !== undefined) voucherUpdates.voucherDate = txDate;
+          const applyVoucherUpdates = () =>
+            tx
+              .update(vouchers)
+              .set(voucherUpdates)
+              .where(and(eq(vouchers.id, sourceVoucherId), eq(vouchers.companyId, companyId)));
+          if (txDate !== undefined) {
+            await editPostedFactoryVoucherTx(
+              tx,
+              {
+                companyId,
+                voucherIds: [sourceVoucherId],
+                reason: `factory-daybook-edit: ${reason.trim()}`,
+                actor: { userId, username: req.session.username },
+                newVoucherDate: txDate,
+              },
+              applyVoucherUpdates
+            );
+          } else if (Object.keys(voucherUpdates).length > 0) {
+            await applyVoucherUpdates();
+          }
         }
-      }
+        return row;
+      });
 
       res.json(updated);
     } catch (error: unknown) {
+      if (sendVoucherCorrectionRefusal(res, error)) return;
       logger.error("Error editing daybook entry:", { error: error });
       res.status(500).json({ message: getErrorMessage(error) });
     }
@@ -357,13 +398,17 @@ export function registerFactoryDaybookEditRoutes(app: Express) {
             await tx
               .update(factoryContainerCommissions)
               .set({ commissionTotal: amountText })
-              .where(eq(factoryContainerCommissions.id, commId));
+              .where(
+                and(eq(factoryContainerCommissions.id, commId), eq(factoryContainerCommissions.companyId, companyId))
+              );
           }
           // Also sync the commissionAmount summary on the container
           await tx
             .update(factoryContainers)
             .set({ commissionAmount: amountText, updatedAt: new Date() })
             .where(eq(factoryContainers.id, containerId!));
+          // Wave 8.4 continuation: and its commission journal FACTORY-COMM-{container}.
+          await syncContainerCommissionJournalTx(tx, companyId, containerId!);
         } else if (sourceType === "DUTY" || entry.txType === "DUTY") {
           if (container.dutyStatus !== "CONFIRMED") {
             throw new Error(
@@ -591,12 +636,32 @@ export function registerFactoryDaybookEditRoutes(app: Express) {
           .select()
           .from(voucherEntries)
           .where(and(eq(voucherEntries.voucherId, voucherId), sql`${voucherEntries.employeeId} IS NOT NULL`));
+        // Phase 22 (C) engine-numbers the employee deposit / withdrawal / bulk
+        // payroll vouchers (they were EMP-DEP- / EMP-WD- / EMP-PAY-{Date.now()}),
+        // so they are recognised by their posting identity as well as by the
+        // legacy number (read before the retirement renames the identity key).
+        const [employeeCashPosting] = await tx
+          .select({ sourceType: accountingPostingRequests.sourceType })
+          .from(accountingPostingRequests)
+          .where(
+            and(
+              eq(accountingPostingRequests.companyId, companyId),
+              eq(accountingPostingRequests.voucherId, voucherId),
+              inArray(accountingPostingRequests.sourceType, EMPLOYEE_CASH_POSTING_SOURCE_TYPES)
+            )
+          )
+          .limit(1);
 
-        // 1. Delete voucher entries (double-entry lines)
-        await tx.delete(voucherEntries).where(eq(voucherEntries.voucherId, voucherId));
-
-        // 2. Soft-delete the voucher
-        await tx.update(vouchers).set({ deletedAt: new Date() }).where(eq(vouchers.id, voucherId));
+        // 1-2. Retire the voucher (phase 19 A, G3): soft-deleted with its lines
+        // kept, number given up, posting identity released, one audit row with
+        // the header and every line, in this transaction. It hard-deleted the
+        // lines before soft-deleting the voucher, so the history was lost.
+        await retireVouchersTx(tx, {
+          companyId,
+          voucherIds: [voucherId],
+          reason: "factory-daybook-void",
+          actor: sessionRetirementActor(req),
+        });
 
         // 3. Delete the real daybook entry if it exists
         if (daybookEntryId) {
@@ -692,7 +757,10 @@ export function registerFactoryDaybookEditRoutes(app: Express) {
         // 4b. Reverse employee balance/deposit/withdrawal for EMP-DEP, EMP-WD, EMP-PAY vouchers
         if (
           empEntries.length > 0 &&
-          (vNum.startsWith("EMP-DEP-") || vNum.startsWith("EMP-WD-") || vNum.startsWith("EMP-PAY-"))
+          (Boolean(employeeCashPosting) ||
+            vNum.startsWith("EMP-DEP-") ||
+            vNum.startsWith("EMP-WD-") ||
+            vNum.startsWith("EMP-PAY-"))
         ) {
           // Group deltas by employeeId
           const empDeltas = new Map<number, { creditTotal: Decimal; debitTotal: Decimal }>();

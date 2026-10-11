@@ -27,10 +27,20 @@ import {
   factoryDaybookEntries,
   vouchers,
 } from "@shared/schema";
-import { eq, and, sql, inArray } from "drizzle-orm";
+import { eq, and, sql, inArray, isNull } from "drizzle-orm";
 import { firstRow } from "../../../../lib/queryResult";
 import { freezeCanonicalInvoiceDocument } from "../../../../services/factoryInvoiceDocumentService";
+import {
+  FactoryInvoiceRateRefusalError,
+  syncFactoryInvoiceTx,
+} from "../../../../services/accounting/perpetualInventory/factoryInvoice";
 import { toMoney } from "../../../../lib/money";
+import {
+  sendVoucherCorrectionRefusal,
+  editPostedFactoryVoucherTx,
+} from "../../../../services/factory/factoryVoucherCorrection";
+import { closedPeriodErrorResponse } from "../../../../lib/closedPeriodError";
+import { finalizedChargeVoucherNumber, postOrderChargeVoucherTx, preChargeVoucherNumber } from "../orderChargeLedger";
 
 export function registerOrderFinalizeRoutes(app: Express) {
   app.post("/api/factory/customer-orders/:id/finalize", requireAuth, async (req: Request, res: Response) => {
@@ -174,30 +184,50 @@ export function registerOrderFinalizeRoutes(app: Express) {
             for (const charge of chargesForJournal) {
               const chargeAmountDecimal = toMoney(charge.amount);
               if (chargeAmountDecimal.lte(0)) continue;
-              const chargeAmount = chargeAmountDecimal.toFixed();
 
-              const invoiceVoucherNumber = `CHARGE-${invoiceNumber}-${charge.id}-${Date.now()}`;
+              // Phase 22 (C): deterministic per charge (was Date.now()).
+              const invoiceVoucherNumber = finalizedChargeVoucherNumber(invoiceNumber, charge.id);
               const chargeDesc = order.containerNumber
                 ? `${charge.name} for offloaded container - ${order.containerNumber}`
                 : `${charge.name} - ${invoiceNumber}`;
 
               // Check for a PRE-voucher created when the charge was saved in pending/verified state
-              const preVoucherNumber = `CHARGE-PRE-${orderId}-${charge.id}`;
+              const preVoucherNumber = preChargeVoucherNumber(orderId, charge.id);
               const [preVoucher] = await tx
                 .select({ id: vouchers.id })
                 .from(vouchers)
-                .where(and(eq(vouchers.companyId, companyId), eq(vouchers.voucherNumber, preVoucherNumber)));
+                .where(
+                  and(
+                    eq(vouchers.companyId, companyId),
+                    eq(vouchers.voucherNumber, preVoucherNumber),
+                    isNull(vouchers.deletedAt)
+                  )
+                );
 
               if (preVoucher) {
-                // Rename the PRE-voucher — same entries already exist, just update the reference
-                await tx
-                  .update(vouchers)
-                  .set({ voucherNumber: invoiceVoucherNumber, voucherDate: today, description: chargeDesc })
-                  .where(eq(vouchers.id, preVoucher.id));
-                await tx
-                  .update(voucherEntries)
-                  .set({ narration: chargeDesc })
-                  .where(eq(voucherEntries.voucherId, preVoucher.id));
+                // Rename the PRE-voucher — same entries already exist, just update the
+                // reference and date. Phase 22 (C), G4: an audited edit of a posted
+                // voucher, refused (409) when it lies in a closed period.
+                await editPostedFactoryVoucherTx(
+                  tx,
+                  {
+                    companyId,
+                    voucherIds: [preVoucher.id],
+                    reason: "factory-order-finalize-charge-rename",
+                    newVoucherDate: today,
+                    actor: { userId: req.session.userId, username: req.session.username },
+                  },
+                  async () => {
+                    await tx
+                      .update(vouchers)
+                      .set({ voucherNumber: invoiceVoucherNumber, voucherDate: today, description: chargeDesc })
+                      .where(eq(vouchers.id, preVoucher.id));
+                    await tx
+                      .update(voucherEntries)
+                      .set({ narration: chargeDesc })
+                      .where(eq(voucherEntries.voucherId, preVoucher.id));
+                  }
+                );
                 // Phase 6: ensure the charge.voucherId FK points at the renamed voucher
                 // (it should already, from the PRE-create stamp, but stay defensive for legacy data)
                 await tx
@@ -205,45 +235,27 @@ export function registerOrderFinalizeRoutes(app: Express) {
                   .set({ voucherId: preVoucher.id })
                   .where(eq(customerOrderCharges.id, charge.id));
               } else {
-                // No PRE-voucher — charge was added before this feature or on a DRAFT order
-                const [chargeVoucher] = await tx
-                  .insert(vouchers)
-                  .values({
-                    companyId,
-                    voucherType: "Journal",
-                    voucherNumber: invoiceVoucherNumber,
-                    voucherDate: today,
-                    description: chargeDesc,
-                    totalAmount: chargeAmount,
-                    sourceModule: "FACTORY",
-                  })
-                  .returning();
-                // Dr Customer Account (charge billed to customer)
-                await tx.insert(voucherEntries).values({
-                  voucherId: chargeVoucher.id,
-                  ledgerAccountId: customer.ledgerAccountId,
+                // No PRE-voucher — charge was added before this feature or on a DRAFT order.
+                // Dr Customer Account (charge billed to customer) / Cr Charge Account,
+                // through the engine with the charge's posting identity.
+                await postOrderChargeVoucherTx(tx, {
+                  companyId,
+                  chargeId: charge.id,
+                  voucherNumber: invoiceVoucherNumber,
+                  voucherDate: today,
+                  description: chargeDesc,
                   customerId: order.customerId,
-                  debitAmount: chargeAmount,
-                  creditAmount: "0",
-                  narration: chargeDesc,
+                  customerLedgerAccountId: customer.ledgerAccountId,
+                  chargeLedgerAccountId: charge.ledgerAccountId!,
+                  amount: chargeAmountDecimal,
                 });
-                // Cr Charge Account (freight/other charges income account)
-                await tx.insert(voucherEntries).values({
-                  voucherId: chargeVoucher.id,
-                  ledgerAccountId: charge.ledgerAccountId!,
-                  debitAmount: "0",
-                  creditAmount: chargeAmount,
-                  narration: chargeDesc,
-                });
-                // Phase 6: stamp FK
-                await tx
-                  .update(customerOrderCharges)
-                  .set({ voucherId: chargeVoucher.id })
-                  .where(eq(customerOrderCharges.id, charge.id));
               }
             }
           }
         }
+
+        // Perpetual inventory (wave 8.4): the invoice journal follows the order.
+        await syncFactoryInvoiceTx(tx, companyId, orderId);
 
         const [finalOrder] = await tx
           .select({
@@ -329,6 +341,11 @@ export function registerOrderFinalizeRoutes(app: Express) {
 
       res.json(result);
     } catch (error: unknown) {
+      // Wave 17 B: a non-USD invoice with no confirmed rate is refused (nothing committed).
+      if (error instanceof FactoryInvoiceRateRefusalError) return res.status(409).json(error.body);
+      if (sendVoucherCorrectionRefusal(res, error)) return;
+      const closed = closedPeriodErrorResponse(error);
+      if (closed) return res.status(closed.status).json(closed.body);
       logger.error("Error finalizing order:", { error: error });
       res.status(400).json({ message: getErrorMessage(error) });
     }

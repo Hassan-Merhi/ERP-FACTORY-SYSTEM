@@ -1,5 +1,5 @@
 import { eq, and, or, isNull, asc } from "drizzle-orm";
-import { db } from "../../db";
+import { db, type DatabaseOrTransaction } from "../../db";
 import * as schema from "@shared/schema";
 import { punctuationInsensitiveSearch } from "../../lib/searchNormalization";
 
@@ -76,18 +76,30 @@ export async function getStockItemByBarcode(barcode: string, companyId: number):
   return getStockItemByCodeOrAlias(barcode, companyId);
 }
 
-export async function createStockItem(item: schema.InsertStockItem): Promise<schema.StockItem> {
-  const [created] = await db.insert(schema.stockItems).values(item).returning();
+// Phase 21 (B): writers take an optional executor so a route can audit in the same transaction.
+export async function createStockItem(
+  item: schema.InsertStockItem,
+  executor: DatabaseOrTransaction = db
+): Promise<schema.StockItem> {
+  const [created] = await executor.insert(schema.stockItems).values(item).returning();
   return created;
 }
 
-export async function updateStockItem(id: number, updates: Partial<schema.InsertStockItem>): Promise<schema.StockItem> {
-  const [updated] = await db.update(schema.stockItems).set(updates).where(eq(schema.stockItems.id, id)).returning();
+export async function updateStockItem(
+  id: number,
+  updates: Partial<schema.InsertStockItem>,
+  executor: DatabaseOrTransaction = db
+): Promise<schema.StockItem> {
+  const [updated] = await executor
+    .update(schema.stockItems)
+    .set(updates)
+    .where(eq(schema.stockItems.id, id))
+    .returning();
   return updated;
 }
 
-export async function deleteStockItem(id: number): Promise<void> {
-  await db.update(schema.stockItems).set({ deletedAt: new Date() }).where(eq(schema.stockItems.id, id));
+export async function deleteStockItem(id: number, executor: DatabaseOrTransaction = db): Promise<void> {
+  await executor.update(schema.stockItems).set({ deletedAt: new Date() }).where(eq(schema.stockItems.id, id));
 }
 
 export async function searchStockItems(

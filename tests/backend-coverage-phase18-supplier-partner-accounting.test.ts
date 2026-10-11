@@ -8,6 +8,7 @@ import {
   teardownGoldenCoastPhase5Fixture,
   type GoldenCoastPhase5Fixture,
 } from "./helpers/goldenCoastPhase5Fixture";
+import { withFixtureTransaction } from "./helpers/voucherFixtureTransaction";
 
 const PREFIX = "p18sp";
 const TX_DATE = "2026-09-14";
@@ -80,27 +81,31 @@ async function insertBalancedSupplierVoucher(input: {
   amount: number;
   voucherNumber: string;
 }): Promise<number> {
-  const voucher = await pool.query<{ id: number }>(
-    `INSERT INTO vouchers
-       (company_id, voucher_type, voucher_number, voucher_date, description, total_amount, currency, exchange_rate, source_module)
-     VALUES ($1, 'Journal', $2, $3, 'Phase 18 supplier payable control', $4, 'USD', '1', 'SP')
-     RETURNING id`,
-    [input.companyId, input.voucherNumber, TX_DATE, String(input.amount)]
-  );
-  const voucherId = voucher.rows[0].id;
-  await pool.query(
-    `INSERT INTO voucher_entries
-       (voucher_id, ledger_account_id, debit_amount, credit_amount, narration)
-     VALUES ($1, $2, $3, '0', 'Phase 18 supplier purchase debit')`,
-    [voucherId, input.debitAccountId, String(input.amount)]
-  );
-  await pool.query(
-    `INSERT INTO voucher_entries
-       (voucher_id, ledger_account_id, supplier_id, debit_amount, credit_amount, narration)
-     VALUES ($1, $2, $3, '0', $4, 'Phase 18 supplier payable credit')`,
-    [voucherId, input.payableAccountId, input.supplierId, String(input.amount)]
-  );
-  return voucherId;
+  // The voucher and both legs go in one transaction: the voucher balance guard
+  // checks the voucher at COMMIT.
+  return withFixtureTransaction(async (client) => {
+    const voucher = await client.query<{ id: number }>(
+      `INSERT INTO vouchers
+         (company_id, voucher_type, voucher_number, voucher_date, description, total_amount, currency, exchange_rate, source_module)
+       VALUES ($1, 'Journal', $2, $3, 'Phase 18 supplier payable control', $4, 'USD', '1', 'SP')
+       RETURNING id`,
+      [input.companyId, input.voucherNumber, TX_DATE, String(input.amount)]
+    );
+    const voucherId = voucher.rows[0].id;
+    await client.query(
+      `INSERT INTO voucher_entries
+         (voucher_id, ledger_account_id, debit_amount, credit_amount, narration)
+       VALUES ($1, $2, $3, '0', 'Phase 18 supplier purchase debit')`,
+      [voucherId, input.debitAccountId, String(input.amount)]
+    );
+    await client.query(
+      `INSERT INTO voucher_entries
+         (voucher_id, ledger_account_id, supplier_id, debit_amount, credit_amount, narration)
+       VALUES ($1, $2, $3, '0', $4, 'Phase 18 supplier payable credit')`,
+      [voucherId, input.payableAccountId, input.supplierId, String(input.amount)]
+    );
+    return voucherId;
+  });
 }
 
 function surface(report: ReconciliationReport, key: string): ReconciliationSurface {
@@ -292,9 +297,18 @@ describe("Phase 18 Supplier Partner accounting controls", () => {
       .query({ companyId: fixture.plainCompanyId });
     expect(statement.status, statement.text).toBe(200);
     const rows = statement.body as Array<{ type: string; companyId: number | null; balance: number }>;
-    expect(rows.some((row) => row.type === "opening")).toBe(false);
-    expect(rows).toHaveLength(1);
-    expect(rows[0]).toMatchObject({ type: "voucher", companyId: fixture.plainCompanyId, balance: 75 });
+    // Wave 14 (one supplier rule): the supplier's 125 Cr opening belongs to its
+    // own company, which is the company read, so it opens the statement; it no
+    // longer depends on the global parent setting (it used to be hidden here).
+    // The SP payable evidence line is still listed and counted.
+    expect(rows).toHaveLength(2);
+    expect(rows[0]).toMatchObject({ type: "opening", balance: 125 });
+    expect(rows[1]).toMatchObject({
+      type: "voucher",
+      companyId: fixture.plainCompanyId,
+      balance: 200,
+      spPayableEvidence: true,
+    });
 
     const reconciliation = await fixture.agent.get("/api/sp/reconciliation/full");
     expect(reconciliation.status, reconciliation.text).toBe(200);

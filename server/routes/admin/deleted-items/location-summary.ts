@@ -10,17 +10,11 @@ import { getErrorMessage } from "../../../lib/httpHandlers";
 import { logger } from "../../../lib/logger";
 import { db } from "../../../db";
 import { requireAuth, requireRole } from "../../../auth";
-import {
-  inventory,
-  stockItems,
-  stockGroups,
-  containers,
-  purchaseOrders,
-  vouchers,
-  voucherEntries,
-} from "@shared/schema";
+import { toMoney } from "../../../lib/money";
+import { inventory, stockItems, stockGroups, containers, purchaseOrders, vouchers } from "@shared/schema";
 import { eq, and, inArray, sql, isNull } from "drizzle-orm";
 import { handleLocationSummaryBandwidthProfile } from "./location-summary-bandwidth";
+import { retireVouchersTx, sessionRetirementActor } from "../../../services/accounting/voucherRetirement";
 
 export function registerLocationSummaryRoutes(app: Express) {
   // Stock Item Monthly Summary - Get aggregated monthly data for a stock item
@@ -63,11 +57,13 @@ export function registerLocationSummaryRoutes(app: Express) {
           stockItemId: inventory.stockItemId,
           quantity: inventory.quantity,
           averageRate: inventory.averageRate,
+          totalValue: inventory.totalValue,
         })
         .from(inventory)
         .where(and(eq(inventory.companyId, companyId), inArray(inventory.locationId, locationIds)));
 
-      // Create lookup maps for inventory data - calculate value dynamically as qty * rate
+      // Lookup maps for inventory data; the value is the stored total_value
+      // (wave 11), never quantity × the rounded average rate.
       const inventoryMap = new Map<string, { quantity: number; rate: number; value: number }>();
       for (const inv of inventoryData) {
         const key = `${inv.locationId}-${inv.stockItemId}`;
@@ -76,7 +72,7 @@ export function registerLocationSummaryRoutes(app: Express) {
         inventoryMap.set(key, {
           quantity: qty,
           rate: rate,
-          value: qty * rate,
+          value: toMoney(inv.totalValue).toNumber(),
         });
       }
 
@@ -283,11 +279,20 @@ export function registerLocationSummaryRoutes(app: Express) {
   // Cleanup endpoint to remove orphaned charge vouchers - admin only (destructive)
   app.post("/api/cleanup/orphaned-charges", requireAuth, requireRole("Admin"), async (req, res) => {
     try {
-      // Find all CHARGE vouchers
+      // Wave 16 (A): the current company's live CHARGE vouchers only (it read
+      // every company's), retired rather than hard-deleted.
+      const companyId = req.session.currentCompanyId;
+      if (!companyId) return res.status(400).json({ message: "No company selected" });
       const chargeVouchers = await db
         .select()
         .from(vouchers)
-        .where(sql`${vouchers.voucherNumber} LIKE 'CHARGE-%'`);
+        .where(
+          and(
+            eq(vouchers.companyId, companyId),
+            isNull(vouchers.deletedAt),
+            sql`${vouchers.voucherNumber} LIKE 'CHARGE-%'`
+          )
+        );
 
       let deletedCount = 0;
 
@@ -301,14 +306,20 @@ export function registerLocationSummaryRoutes(app: Express) {
           .select()
           .from(purchaseOrders)
           .leftJoin(containers, eq(purchaseOrders.containerId, containers.id))
-          .where(eq(containers.containerNumber, containerNumber))
+          .where(and(eq(containers.containerNumber, containerNumber), eq(containers.companyId, companyId)))
           .limit(1);
 
         // If no POs for this container, delete the charge voucher
         if (remainingPOs.length === 0) {
-          await db.delete(voucherEntries).where(eq(voucherEntries.voucherId, chargeVoucher.id));
-          await db.delete(vouchers).where(eq(vouchers.id, chargeVoucher.id));
-          deletedCount++;
+          const retired = await db.transaction((tx) =>
+            retireVouchersTx(tx, {
+              companyId,
+              voucherIds: [chargeVoucher.id],
+              reason: "orphaned-charge-voucher-cleanup",
+              actor: sessionRetirementActor(req),
+            })
+          );
+          deletedCount += retired.length;
         }
       }
 

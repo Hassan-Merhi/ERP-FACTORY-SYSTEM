@@ -1,10 +1,13 @@
 /**
  * POST /api/admin/initialize-accounting-balances computes the import-cycle
- * balance per company and writes the Profit account's opening balance to
- * close it. Its sums now use exact decimals (server/lib/money.ts): ten supplier
- * credits of 0.10 are a supplier balance of exactly 1, where the float sum
- * was 0.9999999999999999, and the written opening balance is the exact
- * difference between the reported totals.
+ * balance per company exactly (server/lib/money.ts): ten supplier credits of
+ * 0.10 are a supplier balance of exactly 1, where the float sum was
+ * 0.9999999999999999.
+ *
+ * It used to write the difference into the Profit account's opening balance
+ * so the books appeared balanced. That hid the difference (2026-10 accounting
+ * audit). It now only reports the opening balance a balancing entry would need
+ * and leaves the account unchanged.
  */
 import request from "supertest";
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
@@ -23,8 +26,9 @@ let profitAccountId: number;
 interface CompanyResult {
   companyId: number;
   imbalance: number;
-  openingBalance?: string;
-  openingBalanceSide?: string;
+  accountUpdated?: boolean;
+  proposedOpeningBalance?: string;
+  proposedOpeningBalanceSide?: string;
   components?: {
     assets: { name: string; value: number }[];
     liabilities: { name: string; value: number }[];
@@ -86,7 +90,7 @@ afterAll(async () => {
 }, 60000);
 
 describe("initialize accounting balances", () => {
-  it("sums ledger lines exactly and writes the exact closing difference to Profit", async () => {
+  it("sums ledger lines exactly and reports, without writing, the closing difference", async () => {
     const response = await agent.post("/api/admin/initialize-accounting-balances").send({});
     expect(response.status).toBe(200);
     const result = (response.body.results as CompanyResult[]).find((row) => row.companyId === ctx.companyId);
@@ -97,14 +101,15 @@ describe("initialize accounting balances", () => {
 
     const { totalAssets, totalLiabilities } = result!.components!;
     const expectedCents = Math.round(totalAssets * 100) - Math.round(totalLiabilities * 100);
+    const [profit] = await db.select().from(schema.ledgerAccounts).where(eq(schema.ledgerAccounts.id, profitAccountId));
+    expect(profit.openingBalance).toBe("0.00");
+    expect(profit.openingBalanceSide).toBe("Cr");
     if (Math.abs(expectedCents) < 100) {
-      expect(result!.openingBalance).toBeUndefined();
+      expect(result!.proposedOpeningBalance).toBeUndefined();
       return;
     }
-    expect(result!.openingBalance).toBe((Math.abs(expectedCents) / 100).toFixed(2));
-    expect(result!.openingBalanceSide).toBe(expectedCents >= 0 ? "Cr" : "Dr");
-
-    const [profit] = await db.select().from(schema.ledgerAccounts).where(eq(schema.ledgerAccounts.id, profitAccountId));
-    expect(profit.openingBalance).toBe(result!.openingBalance);
+    expect(result!.accountUpdated).toBe(false);
+    expect(result!.proposedOpeningBalance).toBe((Math.abs(expectedCents) / 100).toFixed(2));
+    expect(result!.proposedOpeningBalanceSide).toBe(expectedCents >= 0 ? "Cr" : "Dr");
   });
 });

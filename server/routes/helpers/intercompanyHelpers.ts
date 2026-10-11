@@ -3,6 +3,8 @@ import { db, type DbTransaction } from "../../db";
 import { getErrorMessage } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
 import {
+  accountingPostingRequests,
+  intercompanyAccountLinks,
   intercompanyPosConfigs,
   companies,
   ledgerAccounts,
@@ -10,44 +12,53 @@ import {
   voucherEntries,
   type IntercompanyPosConfig,
 } from "@shared/schema";
-import { eq, and, sql, ilike, isNull, inArray } from "drizzle-orm";
+import { eq, and, sql, isNull, inArray } from "drizzle-orm";
 import {
   createTenantDatabaseScope,
   getDatabaseScopeRuntimeContext,
   runWithDatabaseScopeRuntimeContext,
 } from "../../services/security/databaseScopeRuntimeContext";
+import { retireVouchersByNumberTx, retireVouchersTx } from "../../services/accounting/voucherRetirement";
+import { pairLines, postErpVoucherTx } from "../../services/accounting/erpVoucherPosting";
+import {
+  getCompanyRequestRuntimeContext,
+  runWithCompanyRequestRuntimeContext,
+} from "../../services/security/companyRequestRuntimeContext";
 
 // ─── Intercompany POS ─────────────────────────────────────────────────────────
 //
-// A cash POS sale in a source company is mirrored as two daily running-total
-// journals: INTERCO-SRC (Dr source interco / Cr cash, in the source company)
-// and INTERCO-DST (Dr cash / Cr destination interco, in the destination).
+// Phase 22 (B), D7: a cash POS sale in a source company is mirrored as ONE
+// journal per sale in each company, posted through the central engine:
+//   source:      Dr source interco / Cr cash             (unless skipSourceVoucher)
+//   destination: Dr destination cash / Cr destination interco
+// Each journal's posting identity is the sale (and its cash account), so a
+// replay posts nothing twice; numbers are allocated by the engine. The daily
+// running-total journals (INTERCO-SRC-<company>-<date>, INTERCO-DST-…) that
+// used to be re-written on every sale are no longer posted; a rebuild of a date
+// retires them (and the per-sale journals) and posts one journal per sale.
+//
+// The destination cash account is the CONFIGURED one: the active
+// intercompany_account_links row from the source cash account to the
+// destination company (decided by default, owner can override; it used to be
+// found by name). Without a link the destination side is not posted and the
+// mirror reports it.
 //
 // Every write happens in ONE transaction that holds a per-source-company
-// advisory lock, so:
-//   * concurrent sales serialize instead of overwriting each other's running
-//     totals (the old read-modify-write lost updates), and
-//   * a failure leaves neither company's journal half-written.
-//
-// The transaction runs with both companies authorized in the database scope.
-// That authority comes from the stored intercompany_pos_configs row, which the
-// tenant boundary only lets a user save with membership in both companies
-// (destCompanyId is a checked secondary company). Without it, row-level
-// security hid the destination company's accounts and the DST side was
-// silently skipped.
-//
-// DST vouchers are numbered per source company. Several sources may feed one
-// destination, and the old shared INTERCO-DST-<dest>-<date> voucher meant a
-// recalculation for one source deleted every other source's amounts.
+// advisory lock, with both companies authorized in the database scope. That
+// authority comes from the stored intercompany_pos_configs row, which the
+// tenant boundary only lets a user save with membership in both companies.
 
 const INTERCO_LOCK_NAMESPACE = 74_123;
 const ZERO = new Decimal(0);
+export const INTERCO_POS_SOURCE_TYPE = "intercompany-pos-src";
+export const INTERCO_POS_DEST_TYPE = "intercompany-pos-dst";
 
 function money(value: Decimal.Value | null | undefined): Decimal {
   if (value === null || value === undefined || value === "") return ZERO;
   return new Decimal(value);
 }
 
+/** The pre-phase-22 daily running-total numbers, still present on historical dates. */
 function srcVoucherNumber(sourceCompanyId: number, date: string): string {
   return `INTERCO-SRC-${sourceCompanyId}-${date}`;
 }
@@ -87,12 +98,19 @@ async function runIntercompanyTransaction<T>(
     throw new Error("intercompany_pos_scope_mismatch");
   }
   const scope = createTenantDatabaseScope(sourceCompanyId, [config.destCompanyId], "authorized-companies");
-  return runWithDatabaseScopeRuntimeContext(scope, () =>
-    db.transaction(async (tx) => {
-      await tx.execute(sql`SELECT pg_advisory_xact_lock(${INTERCO_LOCK_NAMESPACE}, ${sourceCompanyId})`);
-      return work(tx);
-    })
-  );
+  const run = () =>
+    runWithDatabaseScopeRuntimeContext(scope, () =>
+      db.transaction(async (tx) => {
+        await tx.execute(sql`SELECT pg_advisory_xact_lock(${INTERCO_LOCK_NAMESPACE}, ${sourceCompanyId})`);
+        return work(tx);
+      })
+    );
+  // The engine asserts each company's transaction scope against the request:
+  // the destination is authorized by the stored configuration (above).
+  const request = getCompanyRequestRuntimeContext();
+  if (!request) return run();
+  const authorizedCompanyIds = [...new Set([...(request.authorizedCompanyIds ?? []), config.destCompanyId])];
+  return runWithCompanyRequestRuntimeContext({ ...request, authorizedCompanyIds }, run);
 }
 
 async function isGoldenCoastCompany(tx: DbTransaction, companyId: number): Promise<boolean> {
@@ -113,13 +131,45 @@ async function isGoldenCoastCompany(tx: DbTransaction, companyId: number): Promi
   return roles.has("gc_partner_capital") && roles.has("gc_owner_capital");
 }
 
-async function postTransferTx(
+/** The configured destination cash account for a source cash account (no name lookup). */
+async function linkedDestinationCashAccountTx(
   tx: DbTransaction,
   config: IntercompanyPosConfig,
-  cashAccountId: number,
-  amount: Decimal,
-  date: string
-): Promise<void> {
+  cashAccountId: number
+): Promise<number | null> {
+  const [link] = await tx
+    .select({ destLedgerAccountId: intercompanyAccountLinks.destLedgerAccountId })
+    .from(intercompanyAccountLinks)
+    .innerJoin(
+      ledgerAccounts,
+      and(
+        eq(ledgerAccounts.id, intercompanyAccountLinks.destLedgerAccountId),
+        eq(ledgerAccounts.companyId, config.destCompanyId),
+        isNull(ledgerAccounts.deletedAt)
+      )
+    )
+    .where(
+      and(
+        eq(intercompanyAccountLinks.sourceCompanyId, config.sourceCompanyId),
+        eq(intercompanyAccountLinks.sourceLedgerAccountId, cashAccountId),
+        eq(intercompanyAccountLinks.destCompanyId, config.destCompanyId),
+        eq(intercompanyAccountLinks.active, true)
+      )
+    )
+    .orderBy(intercompanyAccountLinks.id)
+    .limit(1);
+  return link?.destLedgerAccountId ?? null;
+}
+
+export interface IntercompanyPosSale {
+  saleVoucherId: number;
+  cashAccountId: number;
+  amount: Decimal;
+  date: string;
+}
+
+/** Posts the mirror journals of one sale (both companies) in `tx`. */
+async function postSaleMirrorTx(tx: DbTransaction, config: IntercompanyPosConfig, sale: IntercompanyPosSale) {
   const sourceCompanyId = config.sourceCompanyId;
   const [srcCompanyRow] = await tx
     .select({ name: companies.name })
@@ -133,168 +183,105 @@ async function postTransferTx(
   const dstCompanyName = dstCompanyRow?.name ?? `Company ${config.destCompanyId}`;
 
   const [cashAccount] = await tx
-    .select({ name: ledgerAccounts.name })
-    .from(ledgerAccounts)
-    .where(and(eq(ledgerAccounts.id, cashAccountId), eq(ledgerAccounts.companyId, sourceCompanyId)));
-  if (!cashAccount) return;
-  const cashName = cashAccount.name;
-
-  let destCashAccounts = await tx
     .select({ id: ledgerAccounts.id })
     .from(ledgerAccounts)
-    .where(and(eq(ledgerAccounts.companyId, config.destCompanyId), eq(ledgerAccounts.name, cashName)));
-  if (destCashAccounts.length === 0) {
-    destCashAccounts = await tx
-      .select({ id: ledgerAccounts.id })
-      .from(ledgerAccounts)
-      .where(and(eq(ledgerAccounts.companyId, config.destCompanyId), ilike(ledgerAccounts.name, cashName)));
-  }
-  const destCashAccount = destCashAccounts[0] ?? null;
+    .where(and(eq(ledgerAccounts.id, sale.cashAccountId), eq(ledgerAccounts.companyId, sourceCompanyId)));
+  if (!cashAccount) return;
+  const saleKey = `${sale.saleVoucherId}:${sale.cashAccountId}`;
 
   // Source voucher: Dr source interco / Cr cash. Skipped for SP companies so
   // Cash in Net Position is not reduced; only the destination side is needed.
   if (!config.skipSourceVoucher) {
-    await addToRunningTotalVoucherTx(tx, {
+    const narration = `Cash transferred to ${dstCompanyName} – ${sale.date}`;
+    await postErpVoucherTx(tx, {
       companyId: sourceCompanyId,
-      voucherNumber: srcVoucherNumber(sourceCompanyId, date),
-      date,
-      narration: `Cash transferred to ${dstCompanyName} – ${date}`,
-      totalAccountId: config.sourceIntercoAccountId,
-      totalSide: "debit",
-      lineAccountId: cashAccountId,
-      amount,
+      voucherType: "Journal",
+      voucherDate: sale.date,
+      description: narration,
+      lines: pairLines(
+        { ledgerAccountId: config.sourceIntercoAccountId },
+        { ledgerAccountId: sale.cashAccountId },
+        sale.amount,
+        narration
+      ),
+      source: { type: INTERCO_POS_SOURCE_TYPE, id: saleKey },
     });
   }
 
-  if (destCashAccount) {
-    await addToRunningTotalVoucherTx(tx, {
-      companyId: config.destCompanyId,
-      voucherNumber: dstVoucherNumber(sourceCompanyId, config.destCompanyId, date),
-      date,
-      narration: `Cash received from ${srcCompanyName} – ${date}`,
-      totalAccountId: config.destIntercoAccountId,
-      totalSide: "credit",
-      lineAccountId: destCashAccount.id,
-      amount,
-    });
-  } else {
+  const destCashAccountId = await linkedDestinationCashAccountTx(tx, config, sale.cashAccountId);
+  if (!destCashAccountId) {
     logger.warn(
-      `[IntercompanyPOS] Could not find cash account "${cashName}" in company ${config.destCompanyId}. Dest voucher skipped.`
+      `[IntercompanyPOS] No intercompany account link from cash account ${sale.cashAccountId} to company ${config.destCompanyId}. Dest voucher skipped.`
     );
-  }
-}
-
-/**
- * Adds `amount` to a daily running-total journal: one line per cash account on
- * `lineAccountId`'s side and a single balancing line on `totalAccountId` that
- * always equals the sum of the other lines. Must run under the interco lock.
- */
-async function addToRunningTotalVoucherTx(
-  tx: DbTransaction,
-  opts: {
-    companyId: number;
-    voucherNumber: string;
-    date: string;
-    narration: string;
-    totalAccountId: number;
-    totalSide: "debit" | "credit";
-    lineAccountId: number;
-    amount: Decimal;
-  }
-): Promise<void> {
-  const { companyId, voucherNumber, date, narration, totalAccountId, totalSide, lineAccountId, amount } = opts;
-  const lineSide = totalSide === "debit" ? "credit" : "debit";
-  const amountText = amount.toFixed(2);
-  const sideValues = (side: "debit" | "credit", value: string) =>
-    side === "debit" ? { debitAmount: value, creditAmount: "0" } : { debitAmount: "0", creditAmount: value };
-  const sideAmount = (entry: typeof voucherEntries.$inferSelect, side: "debit" | "credit") =>
-    money(side === "debit" ? entry.debitAmount : entry.creditAmount);
-
-  const [existing] = await tx
-    .select()
-    .from(vouchers)
-    .where(and(eq(vouchers.companyId, companyId), eq(vouchers.voucherNumber, voucherNumber)));
-
-  if (!existing) {
-    const [created] = await tx
-      .insert(vouchers)
-      .values({
-        companyId,
-        voucherNumber,
-        voucherType: "Journal",
-        description: narration,
-        voucherDate: date,
-        totalAmount: amountText,
-        sourceModule: "ERP",
-      })
-      .returning();
-    await tx.insert(voucherEntries).values([
-      { voucherId: created.id, ledgerAccountId: totalAccountId, ...sideValues(totalSide, amountText), narration },
-      { voucherId: created.id, ledgerAccountId: lineAccountId, ...sideValues(lineSide, amountText), narration },
-    ]);
     return;
   }
-
-  const entries = await tx.select().from(voucherEntries).where(eq(voucherEntries.voucherId, existing.id));
-  const lineEntry = entries.find(
-    (entry) => entry.ledgerAccountId === lineAccountId && sideAmount(entry, lineSide).gt(ZERO)
-  );
-  if (lineEntry) {
-    await tx
-      .update(voucherEntries)
-      .set(sideValues(lineSide, sideAmount(lineEntry, lineSide).plus(amount).toFixed(2)))
-      .where(eq(voucherEntries.id, lineEntry.id));
-  } else {
-    await tx.insert(voucherEntries).values({
-      voucherId: existing.id,
-      ledgerAccountId: lineAccountId,
-      ...sideValues(lineSide, amountText),
-      narration,
-    });
-  }
-
-  const refreshed = await tx.select().from(voucherEntries).where(eq(voucherEntries.voucherId, existing.id));
-  const total = refreshed
-    .filter((entry) => entry.ledgerAccountId !== totalAccountId)
-    .reduce((sum, entry) => sum.plus(sideAmount(entry, lineSide)), ZERO);
-  const totalText = total.toFixed(2);
-  const totalEntry = refreshed.find(
-    (entry) => entry.ledgerAccountId === totalAccountId && sideAmount(entry, totalSide).gt(ZERO)
-  );
-  if (totalEntry) {
-    await tx.update(voucherEntries).set(sideValues(totalSide, totalText)).where(eq(voucherEntries.id, totalEntry.id));
-  } else {
-    await tx.insert(voucherEntries).values({
-      voucherId: existing.id,
-      ledgerAccountId: totalAccountId,
-      ...sideValues(totalSide, totalText),
-      narration,
-    });
-  }
-  await tx.update(vouchers).set({ description: narration, totalAmount: totalText }).where(eq(vouchers.id, existing.id));
+  const narration = `Cash received from ${srcCompanyName} – ${sale.date}`;
+  await postErpVoucherTx(tx, {
+    companyId: config.destCompanyId,
+    voucherType: "Journal",
+    voucherDate: sale.date,
+    description: narration,
+    lines: pairLines(
+      { ledgerAccountId: destCashAccountId },
+      { ledgerAccountId: config.destIntercoAccountId },
+      sale.amount,
+      narration
+    ),
+    source: { type: INTERCO_POS_DEST_TYPE, id: `${sourceCompanyId}:${saleKey}` },
+  });
 }
 
-async function deleteVoucherByNumberTx(tx: DbTransaction, companyId: number, voucherNumber: string): Promise<void> {
-  const [existing] = await tx
-    .select({ id: vouchers.id })
-    .from(vouchers)
-    .where(and(eq(vouchers.companyId, companyId), eq(vouchers.voucherNumber, voucherNumber)));
-  if (!existing) return;
-  await tx.delete(voucherEntries).where(eq(voucherEntries.voucherId, existing.id));
-  await tx.delete(vouchers).where(eq(vouchers.id, existing.id));
+/** Live per-sale mirror journals of the source's sales dated `date`, in both companies. */
+async function saleMirrorVoucherIdsTx(
+  tx: DbTransaction,
+  config: IntercompanyPosConfig,
+  date: string
+): Promise<{ companyId: number; voucherId: number }[]> {
+  const rows = await tx
+    .select({ companyId: vouchers.companyId, voucherId: vouchers.id })
+    .from(accountingPostingRequests)
+    .innerJoin(vouchers, eq(vouchers.id, accountingPostingRequests.voucherId))
+    .where(
+      and(
+        isNull(vouchers.deletedAt),
+        eq(vouchers.voucherDate, date),
+        sql`(
+          (${accountingPostingRequests.companyId} = ${config.sourceCompanyId}
+             AND ${accountingPostingRequests.sourceType} = ${INTERCO_POS_SOURCE_TYPE})
+          OR (${accountingPostingRequests.companyId} = ${config.destCompanyId}
+             AND ${accountingPostingRequests.sourceType} = ${INTERCO_POS_DEST_TYPE}
+             AND ${accountingPostingRequests.sourceId} LIKE ${`${config.sourceCompanyId}:%`})
+        )`
+      )
+    );
+  return rows.map((row) => ({ companyId: Number(row.companyId), voucherId: Number(row.voucherId) }));
 }
 
 /**
- * Mirrors one cash POS sale into the intercompany journals. Called after the
- * sale commits; never throws (a sale must not fail on its mirror), but the
- * mirror is all-or-nothing and `recalculateIntercompanyForDate` rebuilds it.
- * Resolves true when the mirror is posted or not applicable.
+ * Retires a pre-phase-22 running-total journal (and, on a rebuild, the
+ * per-sale journals): soft delete, audited, number and posting identity
+ * released (wave 16 A).
+ */
+async function deleteVoucherByNumberTx(tx: DbTransaction, companyId: number, voucherNumber: string): Promise<void> {
+  await retireVouchersByNumberTx(tx, {
+    companyId,
+    voucherNumbers: [voucherNumber],
+    reason: "intercompany-pos-mirror-rebuild",
+  });
+}
+
+/**
+ * Mirrors one cash POS sale into the intercompany journals (one per company).
+ * Called after the sale commits; never throws (a sale must not fail on its
+ * mirror), but the mirror is all-or-nothing and `recalculateIntercompanyForDate`
+ * rebuilds it. Resolves true when the mirror is posted or not applicable.
  */
 export async function runIntercompanyPosTransfer(
   sourceCompanyId: number,
   cashAccountId: number,
-  saleAmount: number,
-  saleDateStr: string
+  saleAmount: Decimal.Value,
+  saleDateStr: string,
+  saleVoucherId: number
 ): Promise<boolean> {
   try {
     const amount = money(saleAmount).toDecimalPlaces(2);
@@ -304,7 +291,7 @@ export async function runIntercompanyPosTransfer(
 
     await runIntercompanyTransaction(sourceCompanyId, config, async (tx) => {
       if (await isGoldenCoastCompany(tx, sourceCompanyId)) return;
-      await postTransferTx(tx, config, cashAccountId, amount, saleDateStr);
+      await postSaleMirrorTx(tx, config, { saleVoucherId, cashAccountId, amount, date: saleDateStr });
     });
     return true;
   } catch (err: unknown) {
@@ -332,6 +319,13 @@ export async function recalculateIntercompanyForDate(companyId: number, date: st
 
       await deleteVoucherByNumberTx(tx, companyId, srcVoucherNumber(companyId, date));
       await deleteVoucherByNumberTx(tx, config.destCompanyId, dstVoucherNumber(companyId, config.destCompanyId, date));
+      for (const mirror of await saleMirrorVoucherIdsTx(tx, config, date)) {
+        await retireVouchersTx(tx, {
+          companyId: mirror.companyId,
+          voucherIds: [mirror.voucherId],
+          reason: "intercompany-pos-mirror-rebuild",
+        });
+      }
 
       // The pre-fix shared DST voucher can only be rebuilt from this source
       // when no other source feeds the same destination; otherwise it holds
@@ -370,6 +364,7 @@ export async function recalculateIntercompanyForDate(companyId: number, date: st
 
       const cashDebits = await tx
         .select({
+          voucherId: voucherEntries.voucherId,
           ledgerAccountId: voucherEntries.ledgerAccountId,
           debitAmount: voucherEntries.debitAmount,
         })
@@ -387,9 +382,22 @@ export async function recalculateIntercompanyForDate(companyId: number, date: st
         )
         .orderBy(voucherEntries.id);
 
+      // One mirror per sale and cash account (a sale's cash lines summed).
+      const bySale = new Map<string, IntercompanyPosSale>();
       for (const entry of cashDebits) {
         if (!entry.ledgerAccountId) continue;
-        await postTransferTx(tx, config, entry.ledgerAccountId, money(entry.debitAmount), date);
+        const key = `${entry.voucherId}:${entry.ledgerAccountId}`;
+        const sale = bySale.get(key) ?? {
+          saleVoucherId: entry.voucherId,
+          cashAccountId: entry.ledgerAccountId,
+          amount: ZERO,
+          date,
+        };
+        sale.amount = sale.amount.plus(money(entry.debitAmount));
+        bySale.set(key, sale);
+      }
+      for (const sale of bySale.values()) {
+        if (sale.amount.gt(ZERO)) await postSaleMirrorTx(tx, config, sale);
       }
     });
     return true;

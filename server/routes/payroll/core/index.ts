@@ -11,7 +11,6 @@ import { registerPayrollPreviewRoutes } from "./preview";
 import { registerPayrollGenerateRoutes } from "./generate";
 import { registerPayrollMarkPaidRoutes } from "./mark-paid";
 import { registerPayrollPaymentSummaryPdfRoutes } from "./payment-summary-pdf";
-import { registerPayrollCoreMigrationRoutes } from "./migrations";
 
 export function registerPayrollCoreRoutes(app: Express) {
   registerPayrollCoreReadRoutes(app);
@@ -19,5 +18,6 @@ export function registerPayrollCoreRoutes(app: Express) {
   registerPayrollGenerateRoutes(app);
   registerPayrollMarkPaidRoutes(app);
   registerPayrollPaymentSummaryPdfRoutes(app);
-  registerPayrollCoreMigrationRoutes(app);
+  // Phase 19 (A): POST /api/factory/payroll/migrate-worker-names is retired (floats,
+  // hard-deleted accounts, rewrote posted lines, no audit), like migrate-city-split.
 }

@@ -24,6 +24,16 @@ import {
 } from "@shared/schema";
 import { eq, and, sql, inArray, isNull } from "drizzle-orm";
 import { buildBrokerStatement, isPayableContainer, isSupplierPaidFreight, resolveDisplayFx } from "./_helpers";
+import {
+  emptyFactorySupplierLedgerView,
+  FACTORY_SUPPLIER_OPERATIONAL_MEMO_LABEL,
+  loadFactorySupplierLedgerViews,
+} from "./factorySupplierLedger";
+import {
+  entryNativeAmounts,
+  entryStoredUsdAmounts,
+  voucherEntryCurrencyColumns,
+} from "../../../../services/factory/voucherEntryCurrency";
 
 // Balances are summed as exact decimals (server/lib/money.ts) and only turned
 // into numbers or fixed-point strings when the response is built.
@@ -84,8 +94,7 @@ export function registerSupplierWithBalancesRoutes(app: Express) {
         const voucherPaymentRows = await db
           .select({
             factorySupplierId: voucherEntries.factorySupplierId,
-            debitAmount: voucherEntries.debitAmount,
-            currency: vouchers.currency,
+            ...voucherEntryCurrencyColumns,
             exchangeRate: vouchers.exchangeRate,
             optional: vouchers.optional,
           })
@@ -94,6 +103,11 @@ export function registerSupplierWithBalancesRoutes(app: Express) {
           .where(
             and(
               inArray(voucherEntries.factorySupplierId, allSupplierIds),
+              // A voucher line belongs to its voucher's company; deleted and optional
+              // vouchers never reach a balance (soft delete keeps the lines).
+              eq(vouchers.companyId, companyId),
+              eq(vouchers.optional, false),
+              isNull(vouchers.deletedAt),
               sql`${voucherEntries.debitAmount}::numeric > 0`,
               sql`${vouchers.voucherNumber} NOT LIKE 'FACTORY-PAY-%'`
             )
@@ -102,11 +116,16 @@ export function registerSupplierWithBalancesRoutes(app: Express) {
           const suppId = row.factorySupplierId;
           if (!suppId) continue;
           if (row.optional) continue; // optional vouchers don't affect the balance
-          const amt = toMoney(row.debitAmount);
-          const curr = row.currency || "USD";
+          // Native amount in its own currency; a normalized entry also holds
+          // its USD base, and only a legacy foreign-currency entry is
+          // converted from the voucher's rate.
+          const native = entryNativeAmounts(row);
+          const amt = native.debit;
+          const curr = native.currency;
+          const stored = entryStoredUsdAmounts(row);
           let usdAmt: Decimal;
-          if (curr === "USD") {
-            usdAmt = amt;
+          if (stored) {
+            usdAmt = stored.debit;
           } else {
             // vouchers.exchangeRate has no fxRateConfirmed column yet — legacy heuristic stopgap.
             const { fxRate: fx, looksSet } = resolveStoredFxRate(curr, row.exchangeRate);
@@ -153,6 +172,52 @@ export function registerSupplierWithBalancesRoutes(app: Express) {
                 )
               )
           : [];
+
+      // Primary balances (wave 13, owner decision 3): the ledger from the balance
+      // engine, the native balance per currency of the same lines, and the
+      // container amounts not yet in the ledger. The operational figures
+      // computed below are returned only as a labelled memo.
+      const ledgerViews = await loadFactorySupplierLedgerViews(db, companyId, { ids: allSupplierIds });
+      const ledgerFields = (supplierId: number) => {
+        const view = ledgerViews.get(supplierId) ?? emptyFactorySupplierLedgerView(supplierId);
+        return {
+          totalValue: view.ledgerBalanceUsd,
+          balanceBasis: view.balanceBasis,
+          ledgerBalance: view.ledgerBalanceUsd,
+          ledgerBalanceSide: view.ledgerBalanceSide,
+          currencyBalances: view.nativeBalances
+            .filter((bucket) => toMoney(bucket.balance).abs().gt(0.001))
+            .map((bucket) => ({
+              currencyCode: bucket.currencyCode,
+              balance: toMoney(bucket.balance).toNumber(),
+              fxRateToUsd: toMoney(bucket.effectiveFxRateToUsd ?? 0).toNumber(),
+            })),
+          nativeBalances: view.nativeBalances,
+          notInLedgerTotal: view.notInLedger.total,
+          notInLedger: view.notInLedger,
+          fxUnresolved: view.ledgerFxUnresolved,
+        };
+      };
+
+      const ledgerExposure = (supplierIds: number[]) => {
+        const native: MoneyBucket = {};
+        const usd: MoneyBucket = {};
+        for (const id of supplierIds) {
+          for (const bucket of ledgerViews.get(id)?.nativeBalances ?? []) {
+            if (!toMoney(bucket.balance).gt(0)) continue;
+            addTo(native, bucket.currencyCode, toMoney(bucket.balance));
+            addTo(usd, bucket.currencyCode, toMoney(bucket.usdBalance));
+          }
+        }
+        return Object.entries(native)
+          .filter(([, balance]) => balance.gt(0.001))
+          .map(([currencyCode, balance]) => ({
+            currencyCode,
+            balance: balance.toNumber(),
+            fxRateToUsd: currencyCode === "USD" ? 1 : (usd[currencyCode] ?? ZERO).dividedBy(balance).toNumber(),
+          }))
+          .sort((a, _b) => (a.currencyCode === "USD" ? 1 : -1));
+      };
 
       // Helper to compute stats for a single supplier record
       const computeStats = (s: typeof factorySuppliers.$inferSelect, includeOtw: boolean = false) => {
@@ -232,11 +297,15 @@ export function registerSupplierWithBalancesRoutes(app: Express) {
           // Freight in its own currency bucket with its effective USD value
           if (freightAmt.gt(0)) {
             // Same-cc freight converts at container fx; cross-cc USD freight stays as USD
+            // A third-currency freight converts at its own confirmed freight rate,
+            // never at the container's rate (wave 13); unresolved when it has none.
             const freightFx =
               freightCc === "USD"
                 ? 1
                 : (configuredFxRates[freightCc] ??
-                  (freightCc === cc ? fx : resolveDisplayFx(freightCc, undefined, c.fxRateToUsd, c.fxRateConfirmed)));
+                  (freightCc === cc
+                    ? fx
+                    : resolveDisplayFx(freightCc, undefined, c.freightFxRateToUsd, c.freightFxRateConfirmed)));
             markIfUnresolved(freightCc, freightFx);
             addTo(byCurrencyNative, freightCc, freightAmt);
             addTo(byCurrencyUsd, freightCc, freightAmt.times(freightCc === "USD" ? 1 : freightFx));
@@ -251,7 +320,9 @@ export function registerSupplierWithBalancesRoutes(app: Express) {
                 commCc === "USD"
                   ? 1
                   : (configuredFxRates[commCc] ??
-                    (commCc === cc ? fx : resolveDisplayFx(commCc, undefined, c.fxRateToUsd, c.fxRateConfirmed)));
+                    (commCc === cc
+                      ? fx
+                      : resolveDisplayFx(commCc, undefined, c.commissionFxRateToUsd, c.commissionFxRateConfirmed)));
               markIfUnresolved(commCc, commFx);
               addTo(byCurrencyNative, commCc, commAmt);
               addTo(byCurrencyUsd, commCc, commAmt.times(commCc === "USD" ? 1 : commFx));
@@ -294,7 +365,14 @@ export function registerSupplierWithBalancesRoutes(app: Express) {
           if (oc.lte(0)) continue;
           const cc = c.otherChargesCurrencyCode || "USD";
           if (s.parentId && cc === "USD") continue;
-          const fx = resolveDisplayFx(cc, configuredFxRates[cc], c.fxRateToUsd, c.fxRateConfirmed);
+          // The container's rate converts only the container's own currency (wave 13).
+          const sameAsContainer = cc === (c.currencyCode || "USD");
+          const fx = resolveDisplayFx(
+            cc,
+            configuredFxRates[cc],
+            sameAsContainer ? c.fxRateToUsd : undefined,
+            sameAsContainer ? c.fxRateConfirmed : undefined
+          );
           markIfUnresolved(cc, fx);
           addTo(byCurrencyNative, cc, oc);
           addTo(byCurrencyUsd, cc, oc.times(fx));
@@ -450,7 +528,6 @@ export function registerSupplierWithBalancesRoutes(app: Express) {
             ...s,
             totalContainers: own.totalContainers,
             totalKg: own.totalKg.toFixed(3),
-            totalValue: own.balance.toFixed(2),
             totalPaid: own.totalPaid.toFixed(2),
             totalCommissionUsd: own.commissionValue.toFixed(2),
             approxFxRate: own.approxFxRate.gt(0) ? own.approxFxRate.toFixed(4) : null,
@@ -458,11 +535,16 @@ export function registerSupplierWithBalancesRoutes(app: Express) {
             otwByCurrency: own.otwByCurrency,
             receivedContainers: own.receivedContainers,
             lastContainerDate: own.lastContainerDate,
-            currencyBalances: own.currencyBalances,
             dueContainers: own.dueContainers,
             dueContainersCount: own.dueContainers.length,
             autoSettledFreightUsd: own.autoSettledFreightUsd.toFixed(2),
-            fxUnresolved: own.fxUnresolved,
+            ...ledgerFields(s.id),
+            operationalMemo: {
+              label: FACTORY_SUPPLIER_OPERATIONAL_MEMO_LABEL,
+              totalValue: own.balance.toFixed(2),
+              currencyBalances: own.currencyBalances,
+              fxUnresolved: own.fxUnresolved,
+            },
           };
         }
 
@@ -490,12 +572,18 @@ export function registerSupplierWithBalancesRoutes(app: Express) {
         const aggDueContainers = [...own.dueContainers, ...childStats.flatMap((cs) => cs.dueContainers)];
 
         // Linked supplier exposure: per-child per-currency balances (informational, NOT counted in broker totals)
-        const linkedSupplierExposure = children.map((c, i: number) => ({
-          supplierId: c.id,
-          supplierName: c.name,
-          currencyBalances: childStats[i].currencyBalances,
-          autoSettledFreightUsd: childStats[i].autoSettledFreightUsd.toFixed(2),
-        }));
+        const linkedSupplierExposure = children.map((c, i: number) => {
+          const childLedger = ledgerFields(c.id);
+          return {
+            supplierId: c.id,
+            supplierName: c.name,
+            ledgerBalance: childLedger.ledgerBalance,
+            currencyBalances: childLedger.currencyBalances,
+            notInLedgerTotal: childLedger.notInLedgerTotal,
+            operationalCurrencyBalances: childStats[i].currencyBalances,
+            autoSettledFreightUsd: childStats[i].autoSettledFreightUsd.toFixed(2),
+          };
+        });
 
         // Aggregate exposure totals for summary display (informational only).
         // Auto-settled cross-currency freight (e.g. USD freight on AUD containers) flows into
@@ -565,13 +653,15 @@ export function registerSupplierWithBalancesRoutes(app: Express) {
           brokerPoolUsd
         );
 
+        const brokerLedger = ledgerFields(s.id);
         return {
           ...s,
           totalContainers: aggContainers,
           totalKg: aggKg.toFixed(3),
-          // Grand total: USD_pool + EUR × rate + AUD × rate (matches detail page)
-          totalValue: grandTotal.toFixed(2),
-          brokerPoolUsd: brokerPoolUsd.toFixed(2),
+          // The broker's own ledger balance (true broker model: linked suppliers
+          // are not merged in; they are listed in linkedSupplierExposure).
+          ...brokerLedger,
+          brokerPoolUsd: brokerLedger.ledgerBalance,
           totalPaid: own.totalPaid.toFixed(2),
           totalCommissionUsd: own.commissionValue.toFixed(2),
           approxFxRate: own.approxFxRate.gt(0) ? own.approxFxRate.toFixed(4) : null,
@@ -579,16 +669,25 @@ export function registerSupplierWithBalancesRoutes(app: Express) {
           otwByCurrency: aggOtwByCurrency,
           receivedContainers: aggReceived,
           lastContainerDate: aggLastDate,
-          currencyBalances: own.currencyBalances,
           dueContainers: aggDueContainers,
           dueContainersCount: aggDueContainers.length,
           linkedSupplierExposure,
-          exposureCurrencyBalances: finalExposureCurrencyBalances.map((e) => ({
-            currencyCode: e.currencyCode,
-            balance: e.balance.toNumber(),
-            fxRateToUsd: e.fxRateToUsd.toNumber(),
-          })),
-          fxUnresolved: own.fxUnresolved || childStats.some((cs) => cs.fxUnresolved),
+          // Linked suppliers' ledger balances per currency (what they are owed), informational.
+          exposureCurrencyBalances: ledgerExposure(children.map((c) => c.id)),
+          fxUnresolved: brokerLedger.fxUnresolved || children.some((c) => ledgerFields(c.id).fxUnresolved),
+          operationalMemo: {
+            label: FACTORY_SUPPLIER_OPERATIONAL_MEMO_LABEL,
+            // Grand total: USD_pool + EUR × rate + AUD × rate (the broker statement's KPI).
+            totalValue: grandTotal.toFixed(2),
+            brokerPoolUsd: brokerPoolUsd.toFixed(2),
+            currencyBalances: own.currencyBalances,
+            exposureCurrencyBalances: finalExposureCurrencyBalances.map((e) => ({
+              currencyCode: e.currencyCode,
+              balance: e.balance.toNumber(),
+              fxRateToUsd: e.fxRateToUsd.toNumber(),
+            })),
+            fxUnresolved: own.fxUnresolved || childStats.some((cs) => cs.fxUnresolved),
+          },
         };
       });
 

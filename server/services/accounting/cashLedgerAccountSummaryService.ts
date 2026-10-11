@@ -1,9 +1,10 @@
 import Decimal from "decimal.js";
-import { and, desc, eq, isNull, or } from "drizzle-orm";
+import { and, eq, isNull, or } from "drizzle-orm";
 import { db, pool } from "../../db";
-import { exchangeRates, ledgerAccounts } from "@shared/schema";
+import { ledgerAccounts } from "@shared/schema";
 import type { CashBankCurrencySummary, NativeBalancesByCurrency } from "./cashBankRevaluationService";
 import { normalizeCurrencyCode } from "./currencyAmounts";
+import { getLatestCfaPerUsd } from "./latestCfaPerUsd";
 
 const DP_AMOUNT = 6;
 const DP_RATE = 10;
@@ -53,27 +54,6 @@ function normalizeStoredCurrency(value: string | null | undefined): string | nul
   } catch {
     return value.trim().toUpperCase();
   }
-}
-
-async function getLatestCfaPerUsd(companyId: number): Promise<Decimal | null> {
-  const rows = await db
-    .select({ rate: exchangeRates.rate })
-    .from(exchangeRates)
-    .where(
-      and(
-        eq(exchangeRates.companyId, companyId),
-        or(
-          and(eq(exchangeRates.fromCurrency, "USD"), eq(exchangeRates.toCurrency, "CFA")),
-          and(eq(exchangeRates.fromCurrency, "USD"), eq(exchangeRates.toCurrency, "XOF"))
-        )
-      )
-    )
-    .orderBy(desc(exchangeRates.effectiveDate))
-    .limit(1);
-
-  if (!rows[0]?.rate) return null;
-  const rate = amount(rows[0].rate);
-  return rate.gt(0) ? rate : null;
 }
 
 async function loadLedgerAccount(companyId: number, accountId: number): Promise<LedgerAccountRow | null> {
@@ -285,16 +265,18 @@ function summarizeLedgerAccount(
   };
 }
 
+/** `asOf`: the date of the current CFA rate (default: the company's business date). */
 export async function getCashLedgerAccountSummary(
   companyId: number,
-  accountId: number
+  accountId: number,
+  asOf?: string
 ): Promise<CashBankCurrencySummary | null> {
   const account = await loadLedgerAccount(companyId, accountId);
   if (!account) return null;
 
   const [rows, currentCfaPerUsd] = await Promise.all([
     loadLedgerAggregate(companyId, accountId),
-    getLatestCfaPerUsd(companyId),
+    getLatestCfaPerUsd(companyId, asOf),
   ]);
   return summarizeLedgerAccount(account, rows, currentCfaPerUsd);
 }

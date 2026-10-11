@@ -192,28 +192,10 @@ END $mig$`;
       /* skip if table not ready */
     }
 
-    // One-time fix: correct reversed rental auto-transfer entries on the TO company side.
-    // Previously, TR-IN vouchers incorrectly DEBITED the clearing account and CREDITED the
-    // destination account. The correct pattern is DR destination, CR clearing.
-    // This query finds only the wrong ones (where clearing is debited) and swaps them.
-    try {
-      await migrationClient.query(`
-          UPDATE voucher_entries ve
-          SET
-            debit_amount  = ve.credit_amount,
-            credit_amount = ve.debit_amount
-          WHERE ve.voucher_id IN (
-            SELECT DISTINCT ve2.voucher_id
-            FROM voucher_entries ve2
-            JOIN inter_company_transfers ict ON ict.to_voucher_id = ve2.voucher_id
-            JOIN ledger_accounts la ON la.id = ve2.ledger_account_id
-            WHERE la.code = 'TRANSFER-CLEARING'
-              AND ve2.debit_amount::numeric > 0
-          )
-        `);
-    } catch {
-      /* skip if tables not ready */
-    }
+    // Retired (2026-10 accounting audit): a step here swapped debit and credit on
+    // every TR-IN voucher whose TRANSFER-CLEARING line was a debit, on every boot.
+    // It was not one-shot, so it would also invert any later legitimate entry of
+    // that shape. Posted entries are corrected with a reversing entry instead.
 
     // Fix: cascade overpaid rental months to the correct next available month.
     // Handles two cases:
@@ -516,167 +498,15 @@ END $mig$`;
       logger.error("[AllocationFix] Error:", { error: getErrorMessage(e) });
     }
 
-    // ── Merge split Production/Consumption ledger accounts ───────────────────
-    // Old setup created two accounts per company: PRODUCTION_ADJUSTMENT (Liability)
-    // and CONSUMPTION_EXPENSE (Indirect Expense). Now a single STOCK_ADJUSTMENT
-    // account is used for both sides. This runs once per company and is idempotent.
-    try {
-      const companies = await migrationClient.query(`SELECT id FROM companies`);
-      let mergedCount = 0;
-      for (const { id: cid } of companies.rows) {
-        const oldAccts = await migrationClient.query(
-          `SELECT id, code FROM ledger_accounts
-             WHERE company_id = $1
-               AND code IN ('PRODUCTION_ADJUSTMENT', 'CONSUMPTION_EXPENSE')
-               AND deleted_at IS NULL`,
-          [cid]
-        );
-        if (oldAccts.rows.length === 0) continue;
-
-        // Find or create the unified account
-        let unifiedId: number;
-        const existing = await migrationClient.query(
-          `SELECT id FROM ledger_accounts
-             WHERE company_id = $1 AND code = 'STOCK_ADJUSTMENT' AND deleted_at IS NULL
-             LIMIT 1`,
-          [cid]
-        );
-        if (existing.rows.length > 0) {
-          unifiedId = existing.rows[0].id;
-        } else {
-          const created = await migrationClient.query(
-            `INSERT INTO ledger_accounts
-                 (company_id, code, name, account_type, sub_type,
-                  opening_balance, opening_balance_side, created_at)
-               VALUES
-                 ($1, 'STOCK_ADJUSTMENT', 'Stock Adjustment (Production/Consumption)',
-                  'Indirect Expense', 'Indirect Expense', '0', 'Dr', NOW())
-               RETURNING id`,
-            [cid]
-          );
-          unifiedId = created.rows[0].id;
-        }
-
-        // Re-point all voucher_entries from the old accounts to the unified one
-        const oldIds: number[] = oldAccts.rows.map((r) => Number(r.id));
-        if (oldIds.length > 0) {
-          const idList = oldIds.join(",");
-          await migrationClient.query(
-            `UPDATE voucher_entries
-               SET ledger_account_id = ${unifiedId}
-               WHERE ledger_account_id IN (${idList})`
-          );
-          // Soft-delete the now-empty old accounts
-          await migrationClient.query(
-            `UPDATE ledger_accounts
-               SET deleted_at = NOW()
-               WHERE id IN (${idList})`
-          );
-        }
-
-        mergedCount++;
-      }
-      if (mergedCount > 0) {
-        logger.info(
-          `[StockAdjFix] Merged Production/Consumption accounts → unified STOCK_ADJUSTMENT for ${mergedCount} company(ies)`
-        );
-      } else {
-        logger.info(`[StockAdjFix] All companies already use unified STOCK_ADJUSTMENT — nothing to merge`);
-      }
-    } catch (e: unknown) {
-      logger.error("[StockAdjFix] Error:", { error: getErrorMessage(e) });
-    }
-
-    // ── Fix bonus expense accounts: update accountType → "Indirect Expense" ──
-    try {
-      const bonusFix = await migrationClient.query(`
-          UPDATE ledger_accounts
-          SET account_type = 'Indirect Expense'
-          WHERE (code = 'BONUS_EXPENSE' OR code LIKE 'BONUS_EXP_%')
-            AND account_type != 'Indirect Expense'
-          RETURNING id
-        `);
-      if (bonusFix.rowCount && bonusFix.rowCount > 0) {
-        logger.info(`[BonusExpFix] Updated ${bonusFix.rowCount} bonus expense account(s) → Indirect Expense`);
-      }
-    } catch (e: unknown) {
-      logger.error("[BonusExpFix] Error:", { error: getErrorMessage(e) });
-    }
-
-    // ── Auto-fix credit note variance entries posted to wrong account ────────
-    // Voucher entries narrated "Variance between refund and inventory cost"
-    // used to fall back to a random Indirect Expense account when no
-    // "Sales Returns" account existed. Re-route them to the correct account.
-    try {
-      const badVariance = await migrationClient.query(`
-          SELECT ve.id, v.company_id
-          FROM voucher_entries ve
-          JOIN vouchers v ON v.id = ve.voucher_id
-          JOIN ledger_accounts la ON la.id = ve.ledger_account_id
-          WHERE ve.narration IN (
-                  'Variance between refund and inventory cost',
-                  'Variance between debit note amount and inventory cost'
-                )
-            AND LOWER(la.name) NOT LIKE '%sales return%'
-            AND LOWER(la.name) NOT LIKE '%return%allowance%'
-            AND la.code != 'SALES-RETURNS'
-        `);
-
-      if (badVariance.rows.length > 0) {
-        const companyIds: number[] = [...new Set<number>(badVariance.rows.map((r) => Number(r.company_id)))];
-        let totalFixed = 0;
-
-        for (const cid of companyIds) {
-          // Find existing "Sales Returns" account or create one
-          const { rows: existing } = await migrationClient.query(
-            `
-              SELECT id FROM ledger_accounts
-              WHERE company_id = $1
-                AND (LOWER(name) LIKE '%sales return%' OR code = 'SALES-RETURNS')
-              LIMIT 1
-            `,
-            [cid]
-          );
-
-          let accountId: number;
-          if (existing.length > 0) {
-            accountId = existing[0].id;
-          } else {
-            const { rows: created } = await migrationClient.query(
-              `
-                INSERT INTO ledger_accounts (company_id, code, name, account_type, active, is_hidden)
-                VALUES ($1, 'SALES-RETURNS', 'Sales Returns & Allowances', 'Income', true, false)
-                ON CONFLICT DO NOTHING
-                RETURNING id
-              `,
-              [cid]
-            );
-            if (created.length === 0) {
-              const { rows: refetch } = await migrationClient.query(
-                `SELECT id FROM ledger_accounts WHERE company_id = $1 AND code = 'SALES-RETURNS' LIMIT 1`,
-                [cid]
-              );
-              accountId = refetch[0]?.id;
-            } else {
-              accountId = created[0].id;
-            }
-          }
-          if (!accountId!) continue;
-
-          const entryIds = badVariance.rows.filter((r) => Number(r.company_id) === cid).map((r) => r.id);
-
-          await migrationClient.query(`UPDATE voucher_entries SET ledger_account_id = $1 WHERE id = ANY($2)`, [
-            accountId,
-            entryIds,
-          ]);
-          totalFixed += entryIds.length;
-        }
-
-        logger.info(`[CreditNoteVarianceFix] Moved ${totalFixed} variance entry/entries → Sales Returns & Allowances`);
-      }
-    } catch (e: unknown) {
-      logger.error("[CreditNoteVarianceFix] Error:", { error: getErrorMessage(e) });
-    }
+    // Retired (2026-10 accounting audit): three boot-time repairs used to run here
+    // on every boot, outside a transaction, and rewrite posted history:
+    //   - merge PRODUCTION_ADJUSTMENT / CONSUMPTION_EXPENSE into STOCK_ADJUSTMENT by
+    //     re-pointing voucher_entries and soft-deleting the old accounts;
+    //   - rewrite BONUS_EXPENSE account types;
+    //   - re-route credit-note variance lines to a "Sales Returns" account.
+    // Re-pointing or reclassifying posted entries at deploy time changes historical
+    // statements without a journal or an audit trail. Any such correction is now a
+    // reviewed, posted entry; the accounting integrity diagnostic reports the cases.
 
     // ── Auto-fix orphaned RESERVED_FOR_ORDER bales ───────────────────────────
     // Bales stuck in RESERVED_FOR_ORDER with no active customer order referencing
@@ -740,28 +570,11 @@ END $mig$`;
       logger.error("[InsuranceMemberBackfill] Error:", { error: getErrorMessage(e) });
     }
 
-    // ── Soft-delete orphaned Insurance ledger accounts ───────────────────────
-    // Insurance member deletion previously left the linked "Insurance - Name"
-    // ledger account alive. Clean up any that no longer have a member row.
-    // (Runs after the back-fill above so legitimate accounts are not removed.)
-    try {
-      const insuranceFix = await migrationClient.query(`
-          UPDATE ledger_accounts la
-          SET deleted_at = NOW()
-          WHERE la.deleted_at IS NULL
-            AND la.name LIKE 'Insurance - %'
-            AND NOT EXISTS (
-              SELECT 1 FROM insurance_members im
-              WHERE im.ledger_account_id = la.id
-            )
-          RETURNING id
-        `);
-      if (insuranceFix.rowCount && insuranceFix.rowCount > 0) {
-        logger.info(`[InsuranceFix] Soft-deleted ${insuranceFix.rowCount} orphaned Insurance ledger account(s)`);
-      }
-    } catch (e: unknown) {
-      logger.error("[InsuranceFix] Error:", { error: getErrorMessage(e) });
-    }
+    // Wave 16 (A): the InsuranceFix step that soft-deleted "Insurance - %"
+    // ledger accounts with no member row was retired. It ignored opening
+    // balances (an account with an opening and no postings lost it from every
+    // report) and changed accounts at boot with no audit. Such accounts stay;
+    // delete one deliberately from the chart of accounts if it is unwanted.
 
     // Auto-fix sequence desyncs (can happen after data restores / bulk imports with explicit IDs)
     const seqFixes: Array<[string, string]> = [

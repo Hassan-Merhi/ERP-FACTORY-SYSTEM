@@ -31,10 +31,11 @@ describe("SP offload charge atomic rollback contract", () => {
   it("keeps every state-changing offload write after the transaction boundary", () => {
     const transactionStart = source.indexOf("db.transaction");
     const mutationSites = [
-      "tx.insert(vouchers)",
-      "tx.insert(spOffloads)",
-      "tx.insert(spOffloadCharges)",
-      "tx.insert(spStockMovements)",
+      // Phase 22 C: vouchers post through the engine inside the transaction.
+      "postFactoryVoucherTx(tx",
+      ".insert(spOffloads)",
+      ".insert(spOffloadCharges)",
+      ".insert(spStockMovements)",
       "adjustSpInventoryAtomic(tx",
     ];
 
@@ -49,7 +50,10 @@ describe("SP offload charge atomic rollback contract", () => {
   it("does not introduce an inner catch that can swallow charge validation failures", () => {
     const transactionStart = source.indexOf("db.transaction");
     const prepaidUpdate = source.indexOf("amount_used_usd", transactionStart);
-    const bankFailure = source.indexOf("Bank account #${charge.creditBankAccountId} not found for this company", prepaidUpdate);
+    const bankFailure = source.indexOf(
+      "Bank account #${charge.creditBankAccountId} not found for this company",
+      prepaidUpdate
+    );
     const between = source.slice(prepaidUpdate, bankFailure);
 
     expect(prepaidUpdate).toBeGreaterThan(transactionStart);

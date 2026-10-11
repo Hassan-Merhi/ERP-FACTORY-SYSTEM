@@ -11,16 +11,11 @@ import { parseId } from "../../../../lib/parseId";
 import { db } from "../../../../db";
 import { requireAuth } from "../../../../auth";
 import { recalculateOrderTotals } from "../../_helpers";
-import {
-  factoryBales,
-  customerOrders,
-  customerOrderBales,
-  customerBalances,
-  customers,
-  factoryDaybookEntries,
-  customerOrderBaleRemovals,
-} from "@shared/schema";
-import { eq, and, sql, ilike } from "drizzle-orm";
+import { factoryBales, customerOrders, customerOrderBales, customers, customerOrderBaleRemovals } from "@shared/schema";
+import { eq, and, sql, ilike, inArray } from "drizzle-orm";
+import { FactoryInvoiceRateRefusalError } from "../../../../services/accounting/perpetualInventory/factoryInvoice";
+import { lockCustomerOrderTx, syncOrderTotalsTx } from "../orderChargeLedger";
+import { closedPeriodErrorResponse } from "../../../../lib/closedPeriodError";
 
 export function registerOrderBaleSwapRoutes(app: Express) {
   // GET /api/factory/bales/:id/order-info — get the order a bale is allocated to (for the confirmation dialog)
@@ -133,6 +128,25 @@ export function registerOrderBaleSwapRoutes(app: Express) {
       if (!order) return res.status(404).json({ message: "Associated order not found" });
 
       await db.transaction(async (tx) => {
+        // Phase 22 (C), DI7: the order row is locked before the order changes,
+        // and both bales are re-read locked so a concurrent swap or scan of the
+        // same bale cannot slip in between the checks above and the writes.
+        await lockCustomerOrderTx(tx, companyId, order.id);
+        const lockedBales = await tx
+          .select({ id: factoryBales.id, status: factoryBales.status })
+          .from(factoryBales)
+          .where(
+            and(eq(factoryBales.companyId, companyId), inArray(factoryBales.id, [currentBale.id, replacementBale.id]))
+          )
+          .for("update");
+        const lockedStatus = new Map(lockedBales.map((row) => [row.id, row.status]));
+        if (
+          lockedStatus.get(currentBale.id) !== currentBale.status ||
+          lockedStatus.get(replacementBale.id) !== "IN_STOCK"
+        ) {
+          throw new Error("The bales changed while the swap was being prepared; reload and try again");
+        }
+
         // 5. Update customerOrderBales to point to the replacement bale (keep priceUsed unchanged)
         await tx
           .update(customerOrderBales)
@@ -174,74 +188,11 @@ export function registerOrderBaleSwapRoutes(app: Express) {
         // 9. Recalculate order totals
         await recalculateOrderTotals(tx, order.id);
 
-        // 10. For FINALIZED orders: sync customer_balances + daybook INVOICE entry
-        if (order.status === "FINALIZED") {
-          const [recalcOrder] = await tx
-            .select({ grandTotal: customerOrders.grandTotal })
-            .from(customerOrders)
-            .where(eq(customerOrders.id, order.id));
-          const newGrandTotal = parseFloat(recalcOrder?.grandTotal || "0");
-
-          const [ledgerEntry] = await tx
-            .select({ id: customerBalances.id })
-            .from(customerBalances)
-            .where(
-              and(
-                eq(customerBalances.companyId, companyId),
-                eq(customerBalances.referenceType, "INVOICE"),
-                eq(customerBalances.referenceId, order.id)
-              )
-            );
-          if (ledgerEntry) {
-            await tx
-              .update(customerBalances)
-              .set({ debitAmount: String(newGrandTotal), balance: String(newGrandTotal) })
-              .where(eq(customerBalances.id, ledgerEntry.id));
-          }
-
-          const [daybookEntry] = await tx
-            .select({ id: factoryDaybookEntries.id })
-            .from(factoryDaybookEntries)
-            .where(
-              and(
-                eq(factoryDaybookEntries.companyId, companyId),
-                eq(factoryDaybookEntries.txType, "INVOICE"),
-                eq(factoryDaybookEntries.referenceId, order.id)
-              )
-            );
-          if (daybookEntry) {
-            await tx
-              .update(factoryDaybookEntries)
-              .set({ amountCurrency: String(newGrandTotal), amountUsd: String(newGrandTotal) })
-              .where(eq(factoryDaybookEntries.id, daybookEntry.id));
-          }
-        }
-
-        // 11. For VERIFIED orders: sync ORDER_VERIFIED daybook entry
-        if (order.status === "VERIFIED") {
-          const [recalcOrder] = await tx
-            .select({ grandTotal: customerOrders.grandTotal })
-            .from(customerOrders)
-            .where(eq(customerOrders.id, order.id));
-          const newGrandTotal = parseFloat(recalcOrder?.grandTotal || "0");
-
-          const [verifiedEntry] = await tx
-            .select({ id: factoryDaybookEntries.id })
-            .from(factoryDaybookEntries)
-            .where(
-              and(
-                eq(factoryDaybookEntries.companyId, companyId),
-                eq(factoryDaybookEntries.txType, "ORDER_VERIFIED"),
-                eq(factoryDaybookEntries.referenceId, order.id)
-              )
-            );
-          if (verifiedEntry) {
-            await tx
-              .update(factoryDaybookEntries)
-              .set({ amountCurrency: String(newGrandTotal), amountUsd: String(newGrandTotal) })
-              .where(eq(factoryDaybookEntries.id, verifiedEntry.id));
-          }
-        }
+        // 10. The invoice's customer balance (FINALIZED, row locked), the INVOICE /
+        // ORDER_VERIFIED daybook row and the invoice journal follow the new total
+        // in this transaction (phase 22 C; the balance was read and rewritten
+        // with no lock, as a float).
+        await syncOrderTotalsTx(tx, companyId, order.id);
       });
 
       const [finalOrder] = await db.select().from(customerOrders).where(eq(customerOrders.id, order.id));
@@ -255,6 +206,9 @@ export function registerOrderBaleSwapRoutes(app: Express) {
         replacementRef: replacementBale.referenceNumber,
       });
     } catch (error: unknown) {
+      if (error instanceof FactoryInvoiceRateRefusalError) return res.status(409).json(error.body);
+      const closed = closedPeriodErrorResponse(error);
+      if (closed) return res.status(closed.status).json(closed.body);
       logger.error("Error swapping bale:", { error: error });
       res.status(500).json({ message: getErrorMessage(error) });
     }

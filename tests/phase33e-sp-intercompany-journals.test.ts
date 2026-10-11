@@ -1,30 +1,48 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+// Phase 22 (C): the SP offload journals post through the factory door
+// (postFactoryPartyLineVoucherTx for the OTW reversal, whose clearing lines
+// carry a supplier party; postFactoryVoucherTx -> the engine for the rest).
+// This unit suite pins what is posted (accounts, sides, exact amounts, the
+// reconciliation and the fail-closed checks) at that door; the door itself is
+// covered by tests/phase22c-factory-writers-engine.test.ts against a database.
 const harness = vi.hoisted(() => {
   const state = {
     selectQueue: [] as Array<Array<Record<string, unknown>>>,
-    inserts: [] as Array<{ table: unknown; values: unknown }>,
-    nextVoucherId: 100,
   };
-
-  const insertInfrastructureVoucherTx = vi.fn(async () => ({
-    voucher: { id: state.nextVoucherId++ },
-  }));
-  const infrastructurePostingIdentity = vi.fn((sourceType: string, sourceId: string, slot: string) => ({
-    sourceType,
-    sourceId,
-    slot,
-  }));
-
-  return { state, insertInfrastructureVoucherTx, infrastructurePostingIdentity };
+  const postFactoryPartyLineVoucherTx = vi.fn(async () => ({ voucherId: 100, replayed: false }));
+  const postFactoryVoucherTx = vi.fn(async () => ({ voucher: { id: 101 }, entries: [], replayed: false }));
+  return { state, postFactoryPartyLineVoucherTx, postFactoryVoucherTx };
 });
 
-vi.mock("../server/services/accounting/infrastructureVoucherIdentity", () => ({
-  insertInfrastructureVoucherTx: harness.insertInfrastructureVoucherTx,
-  infrastructurePostingIdentity: harness.infrastructurePostingIdentity,
+vi.mock("../server/services/factory/factoryVoucherPosting", () => ({
+  postFactoryPartyLineVoucherTx: harness.postFactoryPartyLineVoucherTx,
+  postFactoryVoucherTx: harness.postFactoryVoucherTx,
 }));
 
 import { postSupplierPartnerJournals } from "../server/services/containers/offload-lifecycle/sp-journals";
+
+type PostedLine = {
+  ledgerAccountId: number;
+  supplierId?: number | null;
+  debit?: { toFixed(dp?: number): string };
+  credit?: { toFixed(dp?: number): string };
+  narration?: string;
+};
+type PostedInput = {
+  companyId: number;
+  voucherNumber: (generation: number) => string;
+  source: { sourceType: string; sourceId: string; phase: string };
+  lines: PostedLine[];
+};
+
+function posted(mock: { mock: { calls: unknown[][] } }, index: number): PostedInput {
+  return mock.mock.calls[index]?.[1] as PostedInput;
+}
+
+function money(line: PostedLine) {
+  return { debit: line.debit?.toFixed(2) ?? "0.00", credit: line.credit?.toFixed(2) ?? "0.00" };
+}
 
 function account(id: number, companyId: number, subType: string) {
   return { id, companyId, subType };
@@ -39,12 +57,6 @@ function makeTx() {
     builder.limit = vi.fn(async () => harness.state.selectQueue.shift() ?? []);
     return builder;
   });
-  tx.insert = vi.fn((table: unknown) => ({
-    values: vi.fn(async (values: unknown) => {
-      harness.state.inserts.push({ table, values });
-      return [];
-    }),
-  }));
   return tx;
 }
 
@@ -101,18 +113,15 @@ describe("Phase 33E Supplier Partner intercompany offload journals", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     harness.state.selectQueue = [];
-    harness.state.inserts = [];
-    harness.state.nextVoucherId = 100;
   });
 
   it("does nothing for a non-Supplier Partner company", async () => {
     harness.state.selectQueue.push([{ companyType: "erp", parentCompanyId: null }]);
-    const tx = makeTx();
 
-    await expect(postSupplierPartnerJournals(tx, container(), [po()], input())).resolves.toBeUndefined();
+    await expect(postSupplierPartnerJournals(makeTx(), container(), [po()], input())).resolves.toBeUndefined();
 
-    expect(harness.insertInfrastructureVoucherTx).not.toHaveBeenCalled();
-    expect(harness.state.inserts).toHaveLength(0);
+    expect(harness.postFactoryPartyLineVoucherTx).not.toHaveBeenCalled();
+    expect(harness.postFactoryVoucherTx).not.toHaveBeenCalled();
   });
 
   it("fails closed when the base SP accounting accounts are incomplete", async () => {
@@ -128,7 +137,8 @@ describe("Phase 33E Supplier Partner intercompany offload journals", () => {
       status: 400,
       code: "CONTAINER_OFFLOAD_SP_ACCOUNTS_MISSING",
     });
-    expect(harness.insertInfrastructureVoucherTx).not.toHaveBeenCalled();
+    expect(harness.postFactoryPartyLineVoucherTx).not.toHaveBeenCalled();
+    expect(harness.postFactoryVoucherTx).not.toHaveBeenCalled();
   });
 
   it("fails closed when parent-agent intercompany accounts are incomplete", async () => {
@@ -150,7 +160,8 @@ describe("Phase 33E Supplier Partner intercompany offload journals", () => {
       status: 400,
       code: "CONTAINER_OFFLOAD_SP_AGENT_ACCOUNTS_MISSING",
     });
-    expect(harness.insertInfrastructureVoucherTx).not.toHaveBeenCalled();
+    expect(harness.postFactoryPartyLineVoucherTx).not.toHaveBeenCalled();
+    expect(harness.postFactoryVoucherTx).not.toHaveBeenCalled();
   });
 
   it("creates no voucher when both OTW and valid agent amounts are zero", async () => {
@@ -168,8 +179,8 @@ describe("Phase 33E Supplier Partner intercompany offload journals", () => {
       })
     );
 
-    expect(harness.insertInfrastructureVoucherTx).not.toHaveBeenCalled();
-    expect(harness.state.inserts).toHaveLength(0);
+    expect(harness.postFactoryPartyLineVoucherTx).not.toHaveBeenCalled();
+    expect(harness.postFactoryVoucherTx).not.toHaveBeenCalled();
   });
 
   it("uses a single unsupplied clearing line when OTW has no positive PO allocation", async () => {
@@ -177,25 +188,35 @@ describe("Phase 33E Supplier Partner intercompany offload journals", () => {
 
     await postSupplierPartnerJournals(makeTx(), container(), [], input());
 
-    expect(harness.insertInfrastructureVoucherTx).toHaveBeenCalledTimes(2);
-    expect(harness.state.inserts).toHaveLength(3);
-    expect(harness.state.inserts[0]?.values).toEqual({
-      voucherId: 100,
-      ledgerAccountId: 12,
-      supplierId: null,
-      debitAmount: "100",
-      creditAmount: "0",
-      narration: "OTW Clearing reversal — ERP container #7001",
+    expect(harness.postFactoryPartyLineVoucherTx).toHaveBeenCalledTimes(1);
+    expect(harness.postFactoryVoucherTx).toHaveBeenCalledTimes(1);
+
+    const reversal = posted(harness.postFactoryPartyLineVoucherTx, 0);
+    expect(reversal.companyId).toBe(7);
+    expect(reversal.voucherNumber(1)).toBe("SP-OTW-REV-ERP-7001-1");
+    expect(reversal.source).toEqual({
+      sourceType: "sp-container-offload",
+      sourceId: "7:7001",
+      phase: "otw-reversal",
     });
-    expect(harness.state.inserts[1]?.values).toMatchObject({
-      voucherId: 100,
-      ledgerAccountId: 11,
-      debitAmount: "0",
-      creditAmount: "100.00",
-    });
-    expect(harness.state.inserts[2]?.values).toEqual([
-      expect.objectContaining({ voucherId: 101, ledgerAccountId: 13, debitAmount: "100.00", creditAmount: "0" }),
-      expect.objectContaining({ voucherId: 101, ledgerAccountId: 14, debitAmount: "0", creditAmount: "100.00" }),
+    expect(
+      reversal.lines.map((line) => ({
+        account: line.ledgerAccountId,
+        supplierId: line.supplierId ?? null,
+        ...money(line),
+      }))
+    ).toEqual([
+      { account: 12, supplierId: null, debit: "100.00", credit: "0.00" },
+      { account: 11, supplierId: null, debit: "0.00", credit: "100.00" },
+    ]);
+    expect(reversal.lines[0]?.narration).toBe("OTW Clearing reversal — ERP container #7001");
+
+    const stock = posted(harness.postFactoryVoucherTx, 0);
+    expect(stock.voucherNumber(1)).toBe("SP-STOCK-ERP-7001-1");
+    expect(stock.source.phase).toBe("stock-recognition");
+    expect(stock.lines.map((line) => ({ account: line.ledgerAccountId, ...money(line) }))).toEqual([
+      { account: 13, debit: "100.00", credit: "0.00" },
+      { account: 14, debit: "0.00", credit: "100.00" },
     ]);
   });
 
@@ -209,11 +230,12 @@ describe("Phase 33E Supplier Partner intercompany offload journals", () => {
       input()
     );
 
-    const supplierClearing = harness.state.inserts.slice(0, 2).map((entry) => entry.values as Record<string, unknown>);
-    expect(supplierClearing).toEqual([
-      expect.objectContaining({ supplierId: 1, debitAmount: "60.00", creditAmount: "0" }),
-      expect.objectContaining({ supplierId: 2, debitAmount: "40.00", creditAmount: "0" }),
+    const reversal = posted(harness.postFactoryPartyLineVoucherTx, 0);
+    expect(reversal.lines.slice(0, 2).map((line) => ({ supplierId: line.supplierId, ...money(line) }))).toEqual([
+      { supplierId: 1, debit: "60.00", credit: "0.00" },
+      { supplierId: 2, debit: "40.00", credit: "0.00" },
     ]);
+    expect(money(reversal.lines[2] as PostedLine)).toEqual({ debit: "0.00", credit: "100.00" });
   });
 
   it("rejects a PO allocation whose final reconciliation would become non-positive", async () => {
@@ -231,9 +253,9 @@ describe("Phase 33E Supplier Partner intercompany offload journals", () => {
       code: "CONTAINER_OFFLOAD_SP_OTW_MISMATCH",
     });
 
-    expect(harness.insertInfrastructureVoucherTx).toHaveBeenCalledTimes(1);
-    expect(harness.state.inserts).toHaveLength(1);
-    expect(harness.state.inserts[0]?.values).toMatchObject({ supplierId: 1, debitAmount: "150.00" });
+    // The lines are built before anything is posted, so nothing reaches the ledger.
+    expect(harness.postFactoryPartyLineVoucherTx).not.toHaveBeenCalled();
+    expect(harness.postFactoryVoucherTx).not.toHaveBeenCalled();
   });
 
   it("filters invalid agent lines and posts equal child/parent intercompany totals", async () => {
@@ -258,37 +280,25 @@ describe("Phase 33E Supplier Partner intercompany offload journals", () => {
       })
     );
 
-    expect(harness.insertInfrastructureVoucherTx).toHaveBeenCalledTimes(2);
-    expect(harness.insertInfrastructureVoucherTx.mock.calls[0]?.[1]).toMatchObject({
-      companyId: 7,
-      totalAmount: "35.00",
-    });
-    expect(harness.insertInfrastructureVoucherTx.mock.calls[1]?.[1]).toMatchObject({
-      companyId: 1,
-      totalAmount: "35.00",
-    });
+    expect(harness.postFactoryPartyLineVoucherTx).not.toHaveBeenCalled();
+    expect(harness.postFactoryVoucherTx).toHaveBeenCalledTimes(2);
 
-    expect(harness.state.inserts[0]?.values).toEqual([
-      expect.objectContaining({ voucherId: 100, ledgerAccountId: 32, debitAmount: "35.00", creditAmount: "0" }),
-      expect.objectContaining({ voucherId: 100, ledgerAccountId: 33, debitAmount: "0", creditAmount: "35.00" }),
+    const child = posted(harness.postFactoryVoucherTx, 0);
+    expect(child.companyId).toBe(7);
+    expect(child.voucherNumber(1)).toBe("SP-AGENT-SETTLE-7001-1");
+    expect(child.lines.map((line) => ({ account: line.ledgerAccountId, ...money(line) }))).toEqual([
+      { account: 32, debit: "35.00", credit: "0.00" },
+      { account: 33, debit: "0.00", credit: "35.00" },
     ]);
-    expect(harness.state.inserts[1]?.values).toMatchObject({
-      voucherId: 101,
-      ledgerAccountId: 31,
-      debitAmount: "35.00",
-      creditAmount: "0",
-    });
-    expect(harness.state.inserts[2]?.values).toMatchObject({
-      voucherId: 101,
-      ledgerAccountId: 82,
-      debitAmount: "0",
-      creditAmount: "25.00",
-    });
-    expect(harness.state.inserts[3]?.values).toMatchObject({
-      voucherId: 101,
-      ledgerAccountId: 83,
-      debitAmount: "0",
-      creditAmount: "10.00",
-    });
+
+    const parent = posted(harness.postFactoryVoucherTx, 1);
+    expect(parent.companyId).toBe(1);
+    expect(parent.voucherNumber(1)).toBe("SP-AGENT-ERP-7001-1");
+    expect(parent.lines.map((line) => ({ account: line.ledgerAccountId, ...money(line) }))).toEqual([
+      { account: 31, debit: "35.00", credit: "0.00" },
+      { account: 82, debit: "0.00", credit: "25.00" },
+      { account: 83, debit: "0.00", credit: "10.00" },
+    ]);
+    expect(parent.lines[1]?.narration).toBe("Agent credit for ERP container #7001 — Freight agent");
   });
 });

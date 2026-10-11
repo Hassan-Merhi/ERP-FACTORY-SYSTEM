@@ -2,10 +2,14 @@ import { getErrorMessage } from "../../../lib/httpHandlers";
 import { logger } from "../../../lib/logger";
 import { db } from "../../../db";
 import { getUtcTodayString, isRentalPeriodDue } from "../../../services/rental/rentalPeriodService";
-import { propertyUnits, propertyContracts, propertyMonthlyLedger, vouchers, voucherEntries } from "@shared/schema";
+import { propertyUnits, propertyContracts, propertyMonthlyLedger } from "@shared/schema";
 import { eq, and, sql, inArray, isNull, isNotNull, ne } from "drizzle-orm";
 import { RentalModule, findOrCreateLedgerAccount } from "./ledger";
 import { ensureMonthlyLedgerRows } from "./monthly-rows";
+import { MoneyDecimal, toMoney } from "../../../lib/money";
+import { postAccrualPassTx, type RentAccrualPostingOptions } from "./accrual-posting";
+
+export type { RentAccrualPostingOptions } from "./accrual-posting";
 
 export async function ensureMonthlyForCompany(companyId: number, module: RentalModule, asOfDate?: string) {
   const active = await db
@@ -71,7 +75,8 @@ export async function postRentAccrualForCompany(
   shopExpenseAccountName: string,
   moduleParam: string = "ERP",
   incomeAccountName: string = "Rental Income",
-  asOfDate?: string
+  asOfDate?: string,
+  options: RentAccrualPostingOptions = {}
 ): Promise<{ accrued: number; skipped: number }> {
   // FIX #4: use explicit asOfDate instead of hidden new Date() so accruals
   //          are reproducible and safe to call from any date context.
@@ -193,7 +198,7 @@ export async function postRentAccrualForCompany(
         .groupBy(propertyMonthlyLedger.contractId);
 
       for (const r of outstandingRows) {
-        if (Number(r.expected) - Number(r.paid) > 0.005) {
+        if (toMoney(r.expected).minus(toMoney(r.paid)).gt("0.005")) {
           contractsWithPositiveOutstanding.add(r.contractId);
         }
       }
@@ -273,17 +278,17 @@ export async function postRentAccrualForCompany(
                GROUP BY ledger_row_id`
             )
           );
-          const actualPaidByRowId = new Map<number, number>(
-            ((paidQueryResult.rows)).map((r) => [Number(r.ledger_row_id), Number(r.total_paid)])
+          const actualPaidByRowId = new Map(
+            paidQueryResult.rows.map((r) => [Number(r.ledger_row_id), toMoney(r.total_paid as string)])
           );
 
-          type Entry = { id: number; amount: number; unitId: number; month: number; year: number };
+          type Entry = { id: number; amount: ReturnType<typeof toMoney>; unitId: number; month: number; year: number };
           const entries: Entry[] = [];
           for (const locked of lockedRows) {
-            const expected = Number(locked.expected_amount);
-            const paid = actualPaidByRowId.get(Number(locked.id)) ?? 0;
-            const amount = expected - paid;
-            if (amount <= 0) continue;
+            const expected = toMoney(locked.expected_amount).toDecimalPlaces(2);
+            const paid = actualPaidByRowId.get(Number(locked.id)) ?? new MoneyDecimal(0);
+            const amount = expected.minus(paid).toDecimalPlaces(2);
+            if (!amount.gt(0)) continue;
             entries.push({
               id: Number(locked.id),
               amount,
@@ -294,7 +299,7 @@ export async function postRentAccrualForCompany(
           }
           if (entries.length === 0) return;
 
-          const totalAmount = entries.reduce((s, e) => s + e.amount, 0);
+          const totalAmount = entries.reduce((s, e) => s.plus(e.amount), new MoneyDecimal(0));
 
           const expenseAccountId = await findOrCreateLedgerAccount(
             tx,
@@ -316,52 +321,26 @@ export async function postRentAccrualForCompany(
           const periodLabel = months.length === 1 ? months[0] : `${months[0]}–${months[months.length - 1]}`;
           const voucherDesc = `Rent accrual - ${companyId} - ${periodLabel}`;
 
-          // ONE voucher for all rows
-          const [v] = await tx
-            .insert(vouchers)
-            .values({
-              companyId,
-              voucherNumber: `ACCR-RENT-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-              voucherType: "Journal",
-              voucherDate: effectiveAsOf,
-              description: voucherDesc,
-              totalAmount: String(totalAmount),
-              currency: batchCurrency,
-              sourceModule: moduleParam,
-            })
-            .returning();
-
-          // One debit entry per row so the journal is traceable by unit + month
-          const debitEntries = entries.map((e) => ({
-            voucherId: v.id,
-            ledgerAccountId: expenseAccountId,
-            debitAmount: String(e.amount),
-            creditAmount: "0",
-            narration: `Rent accrual - ${unitNameById.get(e.unitId) ?? `unit${e.unitId}`} - ${String(e.month).padStart(2, "0")}/${e.year}`,
-          }));
-
-          // One combined credit to Accrued Rent Payable
-          await tx.insert(voucherEntries).values([
-            ...debitEntries,
-            {
-              voucherId: v.id,
-              ledgerAccountId: liabilityAccountId,
-              debitAmount: "0",
-              creditAmount: String(totalAmount),
-              narration: voucherDesc,
-            },
-          ]);
-
-          // Stamp every locked row with the single voucher ID
-          await tx
-            .update(propertyMonthlyLedger)
-            .set({ accrualVoucherId: v.id })
-            .where(
-              inArray(
-                propertyMonthlyLedger.id,
-                entries.map((e) => e.id)
-              )
-            );
+          // ONE voucher for all rows; one debit line per row so the journal is
+          // traceable by unit + month, one combined credit to Accrued Rent Payable.
+          await postAccrualPassTx(tx, {
+            companyId,
+            module: moduleParam,
+            pass: "accrual",
+            voucherDate: effectiveAsOf,
+            description: voucherDesc,
+            currency: batchCurrency,
+            lines: [
+              ...entries.map((e) => ({
+                ledgerAccountId: expenseAccountId,
+                debit: e.amount,
+                narration: `Rent accrual - ${unitNameById.get(e.unitId) ?? `unit${e.unitId}`} - ${String(e.month).padStart(2, "0")}/${e.year}`,
+              })),
+              { ledgerAccountId: liabilityAccountId, credit: totalAmount, narration: voucherDesc },
+            ],
+            ledgerRowIds: entries.map((e) => e.id),
+            options,
+          });
 
           accrued += entries.length;
         });
@@ -447,71 +426,36 @@ export async function postRentAccrualForCompany(
           const period15 = months15.length === 1 ? months15[0] : `${months15[0]}–${months15[months15.length - 1]}`;
           const desc15 = `Advance rent recognition - ${companyId} - ${period15}`;
 
-          let totalExpense15 = 0;
-          let totalAdvCredit15 = 0;
-          let totalApCredit15 = 0;
+          let totalAdvCredit15 = new MoneyDecimal(0);
+          let totalApCredit15 = new MoneyDecimal(0);
           const debitEntries15 = [];
 
           for (const r of locked15) {
-            const expected = Number(r.expected_amount);
-            const paid = Number(r.paid_amount || "0");
-            const advCredit = Math.min(paid, expected);
-            const apCredit = Math.max(0, expected - paid);
+            const expected = toMoney(r.expected_amount).toDecimalPlaces(2);
+            const paid = toMoney(r.paid_amount).toDecimalPlaces(2);
+            const advCredit = MoneyDecimal.min(paid, expected);
+            const apCredit = MoneyDecimal.max(0, expected.minus(paid));
             const narr15 = `Advance rent recognition - unit${r.unit_id} - ${String(Number(r.month)).padStart(2, "0")}/${r.year}`;
-            debitEntries15.push({
-              ledgerAccountId: expenseAcctId,
-              debitAmount: String(expected),
-              creditAmount: "0",
-              narration: narr15,
-            });
-            totalExpense15 += expected;
-            totalAdvCredit15 += advCredit;
-            totalApCredit15 += apCredit;
+            debitEntries15.push({ ledgerAccountId: expenseAcctId, debit: expected, narration: narr15 });
+            totalAdvCredit15 = totalAdvCredit15.plus(advCredit);
+            totalApCredit15 = totalApCredit15.plus(apCredit);
           }
 
-          const [v15] = await tx
-            .insert(vouchers)
-            .values({
-              companyId,
-              voucherNumber: `ADV-REC-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-              voucherType: "Journal",
-              voucherDate: effectiveAsOf,
-              description: desc15,
-              totalAmount: String(totalExpense15),
-              currency: batchCurrency,
-              sourceModule: moduleParam,
-            })
-            .returning();
-
-          const allEntries15 = debitEntries15.map((e) => ({ ...e, voucherId: v15.id }));
-          if (totalAdvCredit15 > 0.005) {
-            allEntries15.push({
-              voucherId: v15.id,
-              ledgerAccountId: advanceAcctId,
-              debitAmount: "0",
-              creditAmount: String(totalAdvCredit15),
-              narration: desc15,
-            });
-          }
-          if (totalApCredit15 > 0.005) {
-            allEntries15.push({
-              voucherId: v15.id,
-              ledgerAccountId: liabilityAcctId,
-              debitAmount: "0",
-              creditAmount: String(totalApCredit15),
-              narration: desc15,
-            });
-          }
-          await tx.insert(voucherEntries).values(allEntries15);
-          await tx
-            .update(propertyMonthlyLedger)
-            .set({ accrualVoucherId: v15.id })
-            .where(
-              inArray(
-                propertyMonthlyLedger.id,
-                locked15.map((r) => Number(r.id))
-              )
-            );
+          await postAccrualPassTx(tx, {
+            companyId,
+            module: moduleParam,
+            pass: "advance-recognition",
+            voucherDate: effectiveAsOf,
+            description: desc15,
+            currency: batchCurrency,
+            lines: [
+              ...debitEntries15,
+              { ledgerAccountId: advanceAcctId, credit: totalAdvCredit15, narration: desc15 },
+              { ledgerAccountId: liabilityAcctId, credit: totalApCredit15, narration: desc15 },
+            ],
+            ledgerRowIds: locked15.map((r) => Number(r.id)),
+            options,
+          });
           accrued += locked15.length;
         });
       }
@@ -562,72 +506,36 @@ export async function postRentAccrualForCompany(
           const months = [...new Set(duePrepaid.map((r) => `${String(r.month).padStart(2, "0")}/${r.year}`))].sort();
           const periodLabel = months.length === 1 ? months[0] : `${months[0]}–${months[months.length - 1]}`;
 
-          // Total expense to recognize = full expected rent (prepaid portion + any outstanding)
-          const totalExpected = duePrepaid.reduce((s, r) => s + Number(r.expectedAmount), 0);
+          // Expense = full expected rent; Cr Prepaid Rent for the part paid in
+          // advance, Cr Accrued Rent Payable for the remainder (partial prepay).
+          const expectedOf = (r: (typeof duePrepaid)[number]) => toMoney(r.expectedAmount).toDecimalPlaces(2);
+          const totalExpected = duePrepaid.reduce((s, r) => s.plus(expectedOf(r)), new MoneyDecimal(0));
           const totalPaid = duePrepaid.reduce(
-            (s, r) => s + Math.min(Number(r.paidAmount), Number(r.expectedAmount)),
-            0
+            (s, r) => s.plus(MoneyDecimal.min(toMoney(r.paidAmount).toDecimalPlaces(2), expectedOf(r))),
+            new MoneyDecimal(0)
           );
-          const totalUnpaid = Math.max(0, totalExpected - totalPaid);
+          const totalUnpaid = MoneyDecimal.max(0, totalExpected.minus(totalPaid));
 
           const vDesc = `Prepaid rent recognized - ${companyId} - ${periodLabel}`;
-          const [v] = await tx
-            .insert(vouchers)
-            .values({
-              companyId,
-              voucherNumber: `PREP-RENT-REC-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-              voucherType: "Journal",
-              voucherDate: effectiveAsOf,
-              description: vDesc,
-              totalAmount: String(totalExpected),
-              currency: batchCurrency,
-              sourceModule: moduleParam,
-            })
-            .returning();
-
-          // One debit line per row (Rent Expense = full expected)
-          const entries = duePrepaid.map((r) => {
-            const rowLabel = `${unitNameById.get(r.unitId) ?? `unit${r.unitId}`} - ${String(r.month).padStart(2, "0")}/${r.year}`;
-            return {
-              voucherId: v.id,
-              ledgerAccountId: expenseId,
-              debitAmount: String(Number(r.expectedAmount)),
-              creditAmount: "0",
-              narration: `Prepaid rent recognized - ${rowLabel}`,
-            };
+          await postAccrualPassTx(tx, {
+            companyId,
+            module: moduleParam,
+            pass: "prepaid-recognition",
+            voucherDate: effectiveAsOf,
+            description: vDesc,
+            currency: batchCurrency,
+            lines: [
+              ...duePrepaid.map((r) => ({
+                ledgerAccountId: expenseId,
+                debit: expectedOf(r),
+                narration: `Prepaid rent recognized - ${unitNameById.get(r.unitId) ?? `unit${r.unitId}`} - ${String(r.month).padStart(2, "0")}/${r.year}`,
+              })),
+              { ledgerAccountId: prepaidId, credit: totalPaid, narration: vDesc },
+              { ledgerAccountId: liabilityId, credit: totalUnpaid, narration: vDesc },
+            ],
+            ledgerRowIds: duePrepaid.map((r) => r.id),
+            options,
           });
-
-          // Credit Prepaid Rent for the portion already paid in advance
-          if (totalPaid > 0.005) {
-            entries.push({
-              voucherId: v.id,
-              ledgerAccountId: prepaidId,
-              debitAmount: "0",
-              creditAmount: totalPaid.toFixed(2),
-              narration: vDesc,
-            });
-          }
-          // Credit Accrued Rent Payable for the remainder (partial-prepay case)
-          if (totalUnpaid > 0.005) {
-            entries.push({
-              voucherId: v.id,
-              ledgerAccountId: liabilityId,
-              debitAmount: "0",
-              creditAmount: totalUnpaid.toFixed(2),
-              narration: vDesc,
-            });
-          }
-
-          await tx.insert(voucherEntries).values(entries);
-          await tx
-            .update(propertyMonthlyLedger)
-            .set({ accrualVoucherId: v.id })
-            .where(
-              inArray(
-                propertyMonthlyLedger.id,
-                duePrepaid.map((r) => r.id)
-              )
-            );
           accrued += duePrepaid.length;
         });
       }
@@ -695,11 +603,10 @@ export async function postRentAccrualForCompany(
         await db.transaction(async (tx) => {
           // Recognize only the collected (deferred) portion — paidAmount, not expectedAmount.
           // Uncollected rent has no deferred account entry, so no recognition needed for it.
-          const totalDeferred = dueDeferred.reduce(
-            (s, r) => s + Math.min(Number(r.paidAmount), Number(r.expectedAmount)),
-            0
-          );
-          if (totalDeferred < 0.005) return; // nothing to recognize
+          const collected = (r: (typeof dueDeferred)[number]) =>
+            MoneyDecimal.min(toMoney(r.paidAmount).toDecimalPlaces(2), toMoney(r.expectedAmount).toDecimalPlaces(2));
+          const totalDeferred = dueDeferred.reduce((s, r) => s.plus(collected(r)), new MoneyDecimal(0));
+          if (!totalDeferred.gt(0)) return; // nothing to recognize
           const incomeId = await findOrCreateLedgerAccount(
             tx,
             companyId,
@@ -718,52 +625,25 @@ export async function postRentAccrualForCompany(
           const months = [...new Set(dueDeferred.map((r) => `${String(r.month).padStart(2, "0")}/${r.year}`))].sort();
           const periodLabel = months.length === 1 ? months[0] : `${months[0]}–${months[months.length - 1]}`;
           const vDesc = `Deferred rent recognized - ${companyId} - ${periodLabel}`;
-          const [v] = await tx
-            .insert(vouchers)
-            .values({
-              companyId,
-              voucherNumber: `DEF-RENT-REC-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-              voucherType: "Journal",
-              voucherDate: effectiveAsOf,
-              description: vDesc,
-              totalAmount: String(totalDeferred),
-              currency: lBatchCurrency,
-              sourceModule: moduleParam,
-            })
-            .returning();
-          // One debit line per row for only the deferred (collected) portion
-          const debitEntries = dueDeferred
-            .map((r) => ({
-              amount: Math.min(Number(r.paidAmount), Number(r.expectedAmount)),
-              label: `${landlordUnitNames.get(r.unitId) ?? `unit${r.unitId}`} - ${String(r.month).padStart(2, "0")}/${r.year}`,
-            }))
-            .filter((e) => e.amount > 0.005)
-            .map((e) => ({
-              voucherId: v.id,
-              ledgerAccountId: deferredId,
-              debitAmount: e.amount.toFixed(2),
-              creditAmount: "0",
-              narration: `Deferred rent recognized - ${e.label}`,
-            }));
-          await tx.insert(voucherEntries).values([
-            ...debitEntries,
-            {
-              voucherId: v.id,
-              ledgerAccountId: incomeId,
-              debitAmount: "0",
-              creditAmount: totalDeferred.toFixed(2),
-              narration: vDesc,
-            },
-          ]);
-          await tx
-            .update(propertyMonthlyLedger)
-            .set({ accrualVoucherId: v.id })
-            .where(
-              inArray(
-                propertyMonthlyLedger.id,
-                dueDeferred.map((r) => r.id)
-              )
-            );
+          // One debit line per row for only the deferred (collected) portion.
+          await postAccrualPassTx(tx, {
+            companyId,
+            module: moduleParam,
+            pass: "deferred-recognition",
+            voucherDate: effectiveAsOf,
+            description: vDesc,
+            currency: lBatchCurrency,
+            lines: [
+              ...dueDeferred.map((r) => ({
+                ledgerAccountId: deferredId,
+                debit: collected(r),
+                narration: `Deferred rent recognized - ${landlordUnitNames.get(r.unitId) ?? `unit${r.unitId}`} - ${String(r.month).padStart(2, "0")}/${r.year}`,
+              })),
+              { ledgerAccountId: incomeId, credit: totalDeferred, narration: vDesc },
+            ],
+            ledgerRowIds: dueDeferred.map((r) => r.id),
+            options,
+          });
         });
       }
     }

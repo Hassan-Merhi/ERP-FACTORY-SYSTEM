@@ -303,6 +303,23 @@ async function handlePhase1Post(req: Request, res: Response): Promise<void> {
       for (const item of built.postings) {
         const posted = (await postBalancedVoucherTx(tx, item.request, postingDependencies)) as PersistedPostingResult;
         postings.push({ role: item.role, posted });
+        // Wave 16 (B): audited in the posting transaction.
+        if (!posted.replayed) {
+          const entrySnapshot = await snapshotVoucherEntries(posted.entries, tx);
+          await logAudit(
+            {
+              userId: userId ?? "system",
+              username: req.session.username || "unknown",
+              companyId: selectedCompany,
+              action: "create",
+              tableName: "vouchers",
+              recordId: posted.voucher.id,
+              recordIdentifier: posted.voucher.voucherNumber,
+              changes: buildVoucherChangesForCreate(posted.voucher, entrySnapshot),
+            },
+            tx
+          );
+        }
       }
 
       return {
@@ -311,30 +328,6 @@ async function handlePhase1Post(req: Request, res: Response): Promise<void> {
         eventType: built.eventType,
       };
     });
-
-    for (const item of result.postings) {
-      if (item.posted.replayed) continue;
-      try {
-        const entrySnapshot = await snapshotVoucherEntries(item.posted.entries);
-        await logAudit({
-          userId: userId ?? "system",
-          username: req.session.username || "unknown",
-          companyId: selectedCompany,
-          action: "create",
-          tableName: "vouchers",
-          recordId: item.posted.voucher.id,
-          recordIdentifier: item.posted.voucher.voucherNumber,
-          changes: buildVoucherChangesForCreate(item.posted.voucher, entrySnapshot),
-        });
-      } catch (auditError: unknown) {
-        logger.error("Golden Coast Phase 1 compatibility audit failed (non-fatal)", {
-          companyId: selectedCompany,
-          voucherId: item.posted.voucher.id,
-          role: item.role,
-          error: auditError,
-        });
-      }
-    }
 
     const primary = result.postings[0]?.posted;
     if (!primary) {

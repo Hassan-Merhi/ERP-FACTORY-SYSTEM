@@ -48,6 +48,7 @@ function makeContext(overrides: Record<string, unknown> = {}): ERPContext {
     financialSummary: {
       totalPayables: 0,
       totalReceivables: 0,
+      receivablesNotInLedger: 0,
       openPurchaseOrders: 0,
       pendingContainerSales: 0,
     },

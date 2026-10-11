@@ -9,7 +9,6 @@ import { ArrowRight, CheckCircle, Images, Loader2, MessageCircle, Save, ToggleRi
 import type { FactorySettingsData } from "./types";
 import { FactorySettingsAdminTools } from "./FactorySettingsAdminTools";
 import { AutomaticPriorityPrintingCard } from "./AutomaticPriorityPrintingCard";
-import { MigrateVoucherDescriptionsCard } from "./components/MigrateVoucherDescriptionsCard";
 import { RecalculateBaleCostsCard } from "./components/RecalculateBaleCostsCard";
 import type { useFactorySettingsModel } from "./useFactorySettingsModel";
 
@@ -657,7 +656,6 @@ export function FactorySettingsView({ model }: Props) {
       </Card>
 
       <RecalculateBaleCostsCard />
-      <MigrateVoucherDescriptionsCard />
     </div>
   );
 }

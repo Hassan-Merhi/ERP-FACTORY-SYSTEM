@@ -631,6 +631,10 @@ export function registerFactoryProductionValueReportRoutes(app: Express) {
         to: to || null,
         costsHidden: hideReportCosts,
         valuationMode,
+        // Wave 11: the report's bale values are catalogue prices per bale — the
+        // production (selling) value of what was produced — never the bales'
+        // cost, which is factory_bales.total_cost (USD material cost).
+        valueBasis: "selling-value-catalogue-price-per-bale",
         production: {
           totalBales,
           totalWeightKg: totalBaleWeightKg,

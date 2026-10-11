@@ -48,7 +48,7 @@ export function useStockAdjustmentFormModel({ voucherIdToEdit }: StockAdjustment
   const appMode = useAppMode();
   const modeApiRequest = getApiRequest(appMode);
   const modePrefix = useModePrefix();
-  const { formatAmount, selectedCurrency, exchangeRate } = useCurrencyContext();
+  const { formatAmount } = useCurrencyContext();
   const [, setLocation] = useLocation();
   const hydratedVoucherIdRef = useRef<number | null>(null);
 
@@ -247,26 +247,22 @@ export function useStockAdjustmentFormModel({ voucherIdToEdit }: StockAdjustment
         return await voucherRes.json();
       }
 
-      const voucherRes = await modeApiRequest("POST", "/api/vouchers", {
-        companyId: selectedCompany?.id,
-        voucherType: adjustmentType,
-        voucherNumber: `${adjustmentType.toUpperCase()}-${Date.now()}`,
-        voucherDate: format(data.voucherDate, "yyyy-MM-dd"),
-        description: `Stock ${adjustmentType.toLowerCase()} at ${locations.find((l) => l.id === data.locationId)?.name}`,
-        totalAmount: totalAmount.toString(),
-        optional: data.optional,
-        currency: selectedCurrency,
-        exchangeRate: exchangeRate ? exchangeRate.toString() : undefined,
-      });
-      const voucher = await voucherRes.json();
-      await modeApiRequest("POST", "/api/stock-adjustments", {
-        voucherId: voucher.id,
+      // The server creates the voucher and its adjustment in one transaction
+      // (the generic voucher route refuses stock voucher types).
+      const adjustmentRes = await modeApiRequest("POST", "/api/stock-adjustments", {
+        voucher: {
+          voucherNumber: `${adjustmentType.toUpperCase()}-${Date.now()}`,
+          voucherDate: format(data.voucherDate, "yyyy-MM-dd"),
+          description: `Stock ${adjustmentType.toLowerCase()} at ${locations.find((l) => l.id === data.locationId)?.name}`,
+          optional: data.optional,
+        },
         locationId: data.locationId,
         adjustmentType,
         notes: data.notes || "",
         items,
       });
-      return voucher;
+      const created = await adjustmentRes.json();
+      return created.voucher;
     },
     onSuccess: () => {
       const isEditMode = !!voucherIdToEdit;

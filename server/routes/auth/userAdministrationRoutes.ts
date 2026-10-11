@@ -172,16 +172,23 @@ export function registerUserAdministrationRoutes(app: Express) {
           .status(409)
           .json({ message: "This user already has a role in this company. Edit the existing role instead." });
       }
-      const role = await storage.createUserCompanyRole(parsed);
-      await logAudit({
-        userId: req.user!.id,
-        username: req.user!.username || req.session.username || "unknown",
-        companyId: req.session.currentCompanyId,
-        action: "create",
-        tableName: "user_company_roles",
-        recordId: role.id,
-        recordIdentifier: `userId:${parsed.userId} role:${parsed.role} company:${parsed.companyId}`,
-        changes: null,
+      // Phase 21 (B): the role and its audit row commit together.
+      const role = await db.transaction(async (tx) => {
+        const created = await storage.createUserCompanyRole(parsed, tx);
+        await logAudit(
+          {
+            userId: req.user!.id,
+            username: req.user!.username || req.session.username || "unknown",
+            companyId: req.session.currentCompanyId,
+            action: "create",
+            tableName: "user_company_roles",
+            recordId: created.id,
+            recordIdentifier: `userId:${parsed.userId} role:${parsed.role} company:${parsed.companyId}`,
+            changes: null,
+          },
+          tx
+        );
+        return created;
       });
       res.status(201).json(role);
     } catch (error: unknown) {
@@ -197,26 +204,34 @@ export function registerUserAdministrationRoutes(app: Express) {
         return res.status(400).json({ message: "POS role requires an assigned location" });
       }
       const [oldRecord] = await db.select().from(userCompanyRoles).where(eq(userCompanyRoles.id, id)).limit(1);
-      const role = await storage.updateUserCompanyRole(id, parsed);
-      if (oldRecord) {
-        const changes: Record<string, { old?: unknown; new?: unknown }> = {};
-        for (const key of Object.keys(parsed) as Array<keyof typeof parsed>) {
-          const oldVal = oldRecord[key];
-          const newVal = parsed[key];
-          if (newVal !== undefined && String(oldVal) !== String(newVal)) changes[key] = { old: oldVal, new: newVal };
+      // Phase 21 (B): the role change and its audit row commit together; the
+      // sessions are invalidated after commit, as before.
+      const role = await db.transaction(async (tx) => {
+        const updatedRole = await storage.updateUserCompanyRole(id, parsed, tx);
+        if (oldRecord) {
+          const changes: Record<string, { old?: unknown; new?: unknown }> = {};
+          for (const key of Object.keys(parsed) as Array<keyof typeof parsed>) {
+            const oldVal = oldRecord[key];
+            const newVal = parsed[key];
+            if (newVal !== undefined && String(oldVal) !== String(newVal)) changes[key] = { old: oldVal, new: newVal };
+          }
+          await logAudit(
+            {
+              userId: req.user!.id,
+              username: req.user!.username || req.session.username || "unknown",
+              companyId: req.session.currentCompanyId,
+              action: "update",
+              tableName: "user_company_roles",
+              recordId: id,
+              recordIdentifier: `userId:${oldRecord.userId} role:${oldRecord.role} company:${oldRecord.companyId}`,
+              changes: Object.keys(changes).length > 0 ? changes : null,
+            },
+            tx
+          );
         }
-        await logAudit({
-          userId: req.user!.id,
-          username: req.user!.username || req.session.username || "unknown",
-          companyId: req.session.currentCompanyId,
-          action: "update",
-          tableName: "user_company_roles",
-          recordId: id,
-          recordIdentifier: `userId:${oldRecord.userId} role:${oldRecord.role} company:${oldRecord.companyId}`,
-          changes: Object.keys(changes).length > 0 ? changes : null,
-        });
-        await invalidateUserSessions(oldRecord.userId);
-      }
+        return updatedRole;
+      });
+      if (oldRecord) await invalidateUserSessions(oldRecord.userId);
       res.json(role);
     } catch (error: unknown) {
       res.status(400).json({ message: getErrorMessage(error) });
@@ -227,20 +242,27 @@ export function registerUserAdministrationRoutes(app: Express) {
     try {
       const id = parseInt(req.params.id);
       const [oldRecord] = await db.select().from(userCompanyRoles).where(eq(userCompanyRoles.id, id)).limit(1);
-      await storage.deleteUserCompanyRole(id);
-      if (oldRecord) {
-        await logAudit({
-          userId: req.user!.id,
-          username: req.user!.username || req.session.username || "unknown",
-          companyId: req.session.currentCompanyId,
-          action: "delete",
-          tableName: "user_company_roles",
-          recordId: id,
-          recordIdentifier: `userId:${oldRecord.userId} role:${oldRecord.role} company:${oldRecord.companyId}`,
-          changes: null,
-        });
-        await invalidateUserSessions(oldRecord.userId);
-      }
+      // Phase 21 (B): the delete and its audit row commit together; the
+      // sessions are invalidated after commit, as before.
+      await db.transaction(async (tx) => {
+        await storage.deleteUserCompanyRole(id, tx);
+        if (oldRecord) {
+          await logAudit(
+            {
+              userId: req.user!.id,
+              username: req.user!.username || req.session.username || "unknown",
+              companyId: req.session.currentCompanyId,
+              action: "delete",
+              tableName: "user_company_roles",
+              recordId: id,
+              recordIdentifier: `userId:${oldRecord.userId} role:${oldRecord.role} company:${oldRecord.companyId}`,
+              changes: null,
+            },
+            tx
+          );
+        }
+      });
+      if (oldRecord) await invalidateUserSessions(oldRecord.userId);
       res.status(204).send();
     } catch (error: unknown) {
       res.status(400).json({ message: getErrorMessage(error) });

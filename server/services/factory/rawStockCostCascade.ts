@@ -5,6 +5,19 @@
  * This service is cost-only. It never changes quantities, vouchers, supplier
  * balances, payments, or source ownership. Callers must invoke it inside the
  * transaction that owns the business event.
+ *
+ * Wave 11 (inventory fidelity):
+ *   - once the company's cut-over applies (today), a cascade re-costs only the
+ *     bales that are factory stock (pending pressing, in stock, reserved). Sold,
+ *     dispatched, loaded and written-off bales, and bales on finalized,
+ *     dispatched or sold orders, keep the cost their invoice or sale took
+ *     (history kept). Before the cut-over the ledger carries no bale cost, so
+ *     the cascade keeps correcting every bale of the batch, sold ones
+ *     included, as it always did (order profit and history read the
+ *     corrected landed cost);
+ *   - the change the cascade makes to the factory valuation is recorded as a
+ *     REVALUATION event, which the daily factory stock journal posts to
+ *     Factory Stock Revaluation instead of Production Variance.
  */
 import type { DbTransaction } from "../../db";
 import { eq, and, sql } from "drizzle-orm";
@@ -19,6 +32,7 @@ import {
 } from "@shared/schema";
 import { getLockedSupplierRate, getAuthoritativeSupplierRemainingKg } from "./rawStockLockedRate";
 import { resolveMixSourcePricingBasis } from "./mixSourcePricingBasis";
+import { factoryStockEventsActive, withFactoryValuationEventTx } from "./factoryStockValueEvents";
 import {
   calculateCostLine,
   calculateRateAfterInventoryValueDelta,
@@ -69,11 +83,50 @@ export interface CascadeResult {
 const OPEN_BATCH_STATUSES = ["ACTIVE", "OPEN", "CARRY_FORWARD"];
 const COMPLETED_BATCH_STATUSES = ["COMPLETED", "CLOSED"];
 
+type BatchCascadeResult = {
+  batchCode: string;
+  status: string;
+  oldCostPerKg: number;
+  newCostPerKg: number;
+  totalBatchWeightKg: number;
+  wasCompleted: boolean;
+  bales: { baleId: number; baleCode?: string }[];
+};
+
 /**
  * Recompute one batch from all persisted source values, then cascade that cost
- * to every non-deleted bale still associated with the batch.
+ * to the bales still associated with the batch (after the cut-over, only those
+ * that are factory stock).
  */
 export async function recomputeBatchAndCascadeBales(
+  tx: DbTransaction,
+  companyId: number,
+  batchId: number
+): Promise<BatchCascadeResult> {
+  return withFactoryValuationEventTx(
+    tx,
+    companyId,
+    "REVALUATION",
+    { sourceType: "factory-mix-batch-cost-cascade", sourceId: batchId },
+    () => recomputeBatchAndCascadeBalesInner(tx, companyId, batchId)
+  );
+}
+
+/** Bales a cascade may re-cost: after the cut-over, factory stock only. */
+async function cascadeBaleFilter(tx: DbTransaction, companyId: number) {
+  if (!(await factoryStockEventsActive(tx, companyId))) {
+    return sql`${factoryBales.status} NOT IN ('DELETED','REMOVED')`;
+  }
+  return sql`${factoryBales.status} IN ('PENDING_PRESSING','IN_STOCK','RESERVED_FOR_ORDER','RESERVED_FOR_DISPATCH')
+    AND NOT EXISTS (
+      SELECT 1 FROM customer_order_bales cob
+        JOIN customer_orders co ON co.id = cob.order_id
+       WHERE cob.bale_id = ${factoryBales.id} AND co.company_id = ${companyId}
+         AND co.status IN ('FINALIZED', 'DISPATCHED', 'SOLD')
+    )`;
+}
+
+async function recomputeBatchAndCascadeBalesInner(
   tx: DbTransaction,
   companyId: number,
   batchId: number
@@ -122,7 +175,7 @@ export async function recomputeBatchAndCascadeBales(
       and(
         eq(factoryBales.mixBatchId, batchId),
         eq(factoryBales.companyId, companyId),
-        sql`${factoryBales.status} NOT IN ('DELETED','REMOVED')`
+        await cascadeBaleFilter(tx, companyId)
       )
     );
 
@@ -157,17 +210,35 @@ export async function recomputeBatchAndCascadeBales(
  */
 export async function cascadeContainerCostChange(
   tx: DbTransaction,
-  params: {
-    companyId: number;
-    containerId: number;
-    newCostPerKg: number;
-    newCostPerKgUsd: number;
-    supplierInventoryValueDeltaUsdOverride?: Decimal;
-    skipSupplierRateUpdate?: boolean;
-  },
+  params: CascadeContainerParams,
   opts: {
     includeCompletedBatches?: boolean;
   } = {}
+): Promise<CascadeResult> {
+  return withFactoryValuationEventTx(
+    tx,
+    params.companyId,
+    "REVALUATION",
+    { sourceType: "factory-container-cost-cascade", sourceId: params.containerId },
+    () => cascadeContainerCostChangeInner(tx, params, opts)
+  );
+}
+
+interface CascadeContainerParams {
+  companyId: number;
+  containerId: number;
+  newCostPerKg: number;
+  newCostPerKgUsd: number;
+  supplierInventoryValueDeltaUsdOverride?: Decimal;
+  skipSupplierRateUpdate?: boolean;
+}
+
+async function cascadeContainerCostChangeInner(
+  tx: DbTransaction,
+  params: CascadeContainerParams,
+  opts: {
+    includeCompletedBatches?: boolean;
+  }
 ): Promise<CascadeResult> {
   const { companyId, containerId } = params;
   const { includeCompletedBatches = false } = opts;
@@ -294,7 +365,7 @@ export async function cascadeContainerCostChange(
         bales,
         totalBatchWeightKg: _totalWeight,
         ...batchResult
-      } = await recomputeBatchAndCascadeBales(tx, companyId, batchId);
+      } = await recomputeBatchAndCascadeBalesInner(tx, companyId, batchId);
       affectedBatches.push({
         batchId,
         ...batchResult,

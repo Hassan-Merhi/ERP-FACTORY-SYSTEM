@@ -16,6 +16,12 @@ import { ledgerAccounts, bankAccounts, vouchers, voucherEntries } from "@shared/
 
 import { getFactoryCompanyId } from "./_helpers";
 import { parseMoneyInput } from "../../../lib/money";
+import {
+  erpRequestSourceId,
+  pairLines,
+  postErpVoucherTx,
+  sessionPostingActor,
+} from "../../../services/accounting/erpVoucherPosting";
 
 export function registerAdvanceCashRoutes(app: Express) {
   // GET /api/factory/cash-account-balance/:id — current DR-CR balance for a ledger account
@@ -123,6 +129,7 @@ export function registerAdvanceCashRoutes(app: Express) {
         .where(and(eq(ledgerAccounts.id, cashAccountId), eq(ledgerAccounts.companyId, companyId)));
       if (!cashAcct) return res.status(400).json({ message: "Cash account not found" });
 
+      const requestSourceId = erpRequestSourceId(req);
       await db.transaction(async (tx) => {
         // Resolve or auto-create the contra "Factory Advance Adjustments" account
         let [adjAccount] = await tx
@@ -148,41 +155,22 @@ export function registerAdvanceCashRoutes(app: Express) {
             .returning();
         }
 
-        const voucherNumber = `ADJ-CASH-${cashAccountId}-${Date.now()}`;
         const desc = narration || "Cash balance adjustment";
-
-        const [voucher] = await tx
-          .insert(vouchers)
-          .values({
-            companyId,
-            voucherNumber,
-            voucherType: "Journal",
-            voucherDate: date,
-            description: desc,
-            totalAmount: amount.toFixed(2),
-            currency: "USD",
-            sourceModule: "FACTORY",
-          })
-          .returning();
 
         // isCredit = true  → CR Cash / DR Adjustments  (reduces cash balance)
         // isCredit = false → DR Cash / CR Adjustments  (increases cash balance)
-        await tx.insert(voucherEntries).values([
-          {
-            voucherId: voucher.id,
-            ledgerAccountId: adjAccount.id,
-            debitAmount: isCredit ? amount.toFixed(2) : "0",
-            creditAmount: isCredit ? "0" : amount.toFixed(2),
-            narration: desc,
-          },
-          {
-            voucherId: voucher.id,
-            ledgerAccountId: cashAccountId,
-            debitAmount: isCredit ? "0" : amount.toFixed(2),
-            creditAmount: isCredit ? amount.toFixed(2) : "0",
-            narration: desc,
-          },
-        ]);
+        await postErpVoucherTx(tx, {
+          companyId,
+          voucherType: "Journal",
+          voucherDate: date,
+          description: desc,
+          sourceModule: "FACTORY",
+          lines: isCredit
+            ? pairLines({ ledgerAccountId: adjAccount.id }, { ledgerAccountId: cashAccountId }, amount, desc)
+            : pairLines({ ledgerAccountId: cashAccountId }, { ledgerAccountId: adjAccount.id }, amount, desc),
+          source: { type: "factory-cash-adjustment", id: `${cashAccountId}:${requestSourceId}` },
+          actor: sessionPostingActor(req, "Cash balance adjustment"),
+        });
       });
 
       res.json({

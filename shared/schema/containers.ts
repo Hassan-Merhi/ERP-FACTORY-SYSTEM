@@ -382,6 +382,12 @@ export const containerOffloadItems = pgTable("container_offload_items", {
   quantity: decimal("quantity", { precision: 15, scale: 3 }).notNull(),
   rate: decimal("rate", { precision: 20, scale: 2 }).notNull(),
   totalValue: decimal("total_value", { precision: 20, scale: 2 }).notNull(),
+  // Wave 11: the part of totalValue the stock sub-ledger received (null on
+  // legacy lines: all of it), and the part charged to COGS instead (the
+  // settlement variance of a shortage the receipt covered, and the sold share
+  // of a later charge re-pricing). totalValue = valueMoved + cogsVariance.
+  valueMoved: decimal("value_moved", { precision: 20, scale: 2 }),
+  cogsVariance: decimal("cogs_variance", { precision: 20, scale: 2 }),
 });
 
 export type ContainerOffloadItem = typeof containerOffloadItems.$inferSelect;

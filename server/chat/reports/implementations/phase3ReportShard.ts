@@ -1,5 +1,6 @@
-import { db, sql } from "./reportShardSupport";
+import { db, sql, accountTypesOfClassSql } from "./reportShardSupport";
 import type { DataQueryContext, DataQueryResult, ReportImplementationShard } from "../types";
+import { notFiscalClosingVoucher } from "../../../services/accounting/balances/periodReportRules";
 import { toMoney } from "../../../lib/money";
 
 export const phase3QueryTypes = [
@@ -42,7 +43,7 @@ async function runPhase3Report(ctx: DataQueryContext): Promise<DataQueryResult> 
         JOIN stock_items si ON si.id = sal.stock_item_id
         JOIN vouchers v ON v.id = sal.voucher_id AND v.deleted_at IS NULL
         WHERE si.company_id = ${companyId}
-          AND CAST(v.voucher_date AS text) BETWEEN ${dateFrom} AND ${dateTo}
+          AND CAST(COALESCE(v.effective_date, v.voucher_date) AS text) BETWEEN ${dateFrom} AND ${dateTo}
           ${itemNameFilter ? sql`AND si.name ILIKE ${"%" + itemNameFilter + "%"}` : sql``}
         GROUP BY si.id, si.name, si.code, si.uom
         ORDER BY total_revenue DESC
@@ -97,7 +98,7 @@ async function runPhase3Report(ctx: DataQueryContext): Promise<DataQueryResult> 
         JOIN stock_items si ON si.id = sal.stock_item_id
         JOIN vouchers v ON v.id = sal.voucher_id AND v.deleted_at IS NULL
         WHERE si.company_id = ${companyId}
-          AND CAST(v.voucher_date AS text) BETWEEN ${dateFrom} AND ${dateTo}
+          AND CAST(COALESCE(v.effective_date, v.voucher_date) AS text) BETWEEN ${dateFrom} AND ${dateTo}
         GROUP BY si.id, si.name, si.code, si.uom
         ORDER BY total_revenue DESC
         LIMIT ${rowLimit}
@@ -259,8 +260,10 @@ async function runPhase3Report(ctx: DataQueryContext): Promise<DataQueryResult> 
         JOIN vouchers v ON v.id = ve.voucher_id AND v.deleted_at IS NULL AND v.optional = false
         JOIN ledger_accounts la ON la.id = ve.ledger_account_id
         WHERE la.company_id = ${companyId}
-          AND la.account_type IN ('Expense', 'Direct Expense', 'Indirect Expense', 'Government Taxes')
-          AND CAST(v.voucher_date AS text) BETWEEN ${dateFrom} AND ${dateTo}
+          AND v.company_id = ${companyId}
+          AND ${notFiscalClosingVoucher("v")}
+          AND LOWER(TRIM(la.account_type)) IN (${accountTypesOfClassSql("expense")})
+          AND CAST(COALESCE(v.effective_date, v.voucher_date) AS text) BETWEEN ${dateFrom} AND ${dateTo}
         GROUP BY la.id, la.name, la.account_type
         HAVING SUM(CAST(ve.debit_amount AS numeric) - CAST(ve.credit_amount AS numeric)) > 0
         ORDER BY net_spend DESC
@@ -352,7 +355,7 @@ async function runPhase3Report(ctx: DataQueryContext): Promise<DataQueryResult> 
         JOIN stock_items si ON si.id = cni.stock_item_id
         JOIN locations l ON l.id = cni.location_id
         WHERE si.company_id = ${companyId}
-          AND CAST(v.voucher_date AS text) BETWEEN ${dateFrom} AND ${dateTo}
+          AND CAST(COALESCE(v.effective_date, v.voucher_date) AS text) BETWEEN ${dateFrom} AND ${dateTo}
         ORDER BY v.voucher_date DESC
         LIMIT ${rowLimit}
       `);
@@ -387,7 +390,7 @@ async function runPhase3Report(ctx: DataQueryContext): Promise<DataQueryResult> 
       const accountName = params.entityName || params.locationName;
       const acctRows = await db.execute<{ id: number; name: string; account_type: string }>(sql`
         SELECT id, name, account_type FROM ledger_accounts
-        WHERE company_id = ${companyId} AND account_type IN ('Bank','Cash') AND deleted_at IS NULL
+        WHERE company_id = ${companyId} AND LOWER(TRIM(account_type)) IN ('bank', 'cash') AND deleted_at IS NULL
           ${accountName ? sql`AND name ILIKE ${"%" + accountName + "%"}` : sql``}
         ORDER BY account_type, name
         LIMIT 1
@@ -414,7 +417,7 @@ async function runPhase3Report(ctx: DataQueryContext): Promise<DataQueryResult> 
         FROM voucher_entries ve
         JOIN vouchers v ON v.id = ve.voucher_id AND v.deleted_at IS NULL AND v.optional = false
         WHERE ve.ledger_account_id = ${acct3.id}
-          AND CAST(v.voucher_date AS text) BETWEEN ${dateFrom} AND ${dateTo}
+          AND CAST(COALESCE(v.effective_date, v.voucher_date) AS text) BETWEEN ${dateFrom} AND ${dateTo}
         ORDER BY v.voucher_date DESC, v.id DESC
         LIMIT ${rowLimit}
       `);

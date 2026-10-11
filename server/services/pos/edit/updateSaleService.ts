@@ -11,9 +11,10 @@
 import { db, type DbTransaction } from "../../../db";
 import { logger } from "../../../lib/logger";
 import { storage } from "../../../storage";
-import { logAudit, recalculateIntercompanyForDate } from "../../../routes/_helpers";
+import { recalculateIntercompanyForDate } from "../../../routes/_helpers";
+import { writePosSaleUpdateAuditTx } from "./posSaleUpdateAudit";
 import { salesItems, voucherEntries, stockItems, vouchers } from "@shared/schema";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import type {
   HandlerErrorResult,
   PosEditSaleItemInput,
@@ -32,6 +33,7 @@ import {
   validateNewLocationBelongsToCompany,
 } from "./validateEditSaleRequest";
 import { reverseOriginalSaleInventory, clearOldSaleRecords } from "./reverseOriginalSaleInventory";
+import { postReversalResidualTx, saleCogsInventoryCreditTx } from "../../inventory/valueExactReversal";
 import { rebuildSaleItems } from "./rebuildSaleItems";
 import { nextCanonicalSourceRevision } from "../../inventory/canonicalSourceRevision";
 import { updateVoucherRecord } from "./updateSaleVoucher";
@@ -41,7 +43,17 @@ import {
   postGoldenCoastPosAccountingTx,
   retireGoldenCoastPosAccountingTx,
 } from "../goldenCoastPosAccounting";
+import { postSaleCogsTx } from "../../accounting/perpetualInventory/saleCogs";
+import { baleMirrorMovementRefusal } from "../../accounting/perpetualInventory/cutoverRefusal";
 import { spDeductionAmount, spPayableAfterDeduction } from "../spDeduction";
+import { toMoney } from "../../../lib/money";
+import {
+  assertVoucherEditableTx,
+  VoucherCorrectionError,
+  type VoucherEditContext,
+} from "../../accounting/voucherCorrection";
+import type { VoucherAuditState } from "../../../routes/helpers/voucherAuditTrail";
+import { rebalanceVoucherRoundingTx } from "../../accounting/engineRounding";
 
 function err(result: HandlerErrorResult): { status: number; body: PosSaleUpdateResponseBody } {
   // HandlerErrorResult bodies are plain JSON message objects; the response
@@ -56,6 +68,8 @@ export interface PosSaleUpdateTransactionResult {
   grandTotal?: number;
   totalQtySoldEdit?: number;
   isGoldenCoastEdit?: boolean;
+  /** Phase 22 (B): the voucher before the edit, for the correction-policy audit row. */
+  editBefore?: VoucherAuditState;
   auditOldItems?: Array<{
     stockItemId: number;
     quantity: string;
@@ -93,6 +107,15 @@ export async function applyPosSaleUpdateTx(
   }
   validateItemsPositive(items);
 
+  // Wave 11: a factory bale-mirror item is sold in the factory after the cut-over.
+  const mirrorRefusal = await baleMirrorMovementRefusal(
+    tx,
+    currentCompanyId,
+    items.map((item) => (item as { stockItemId?: unknown } | null)?.stockItemId),
+    "pos-sale-edit"
+  );
+  if (mirrorRefusal) return { error: { status: mirrorRefusal.status, body: { ...mirrorRefusal.body } } };
+
   const [lockedVoucher] = await tx
     .select()
     .from(vouchers)
@@ -117,6 +140,22 @@ export async function applyPosSaleUpdateTx(
 
   const restrictionResult = applyPosRoleRestrictions(userRole, newLocationId, lockedVoucher.locationId);
   if ("error" in restrictionResult) return restrictionResult;
+
+  // Phase 22 (B), PE9/G4: the correction policy — an open-period edit is audited
+  // below in this transaction; a sale dated (or re-dated) in a closed period is
+  // refused with 409 VOUCHER_CLOSED_PERIOD_REVERSE_INSTEAD (reverse it instead).
+  let editContext: VoucherEditContext;
+  try {
+    editContext = await assertVoucherEditableTx(tx, voucherId, {
+      companyId: currentCompanyId,
+      newVoucherDate: typeof voucherDate === "string" ? voucherDate : null,
+    });
+  } catch (error: unknown) {
+    if (error instanceof VoucherCorrectionError) {
+      return { error: { status: error.statusCode, body: error.body() } };
+    }
+    throw error;
+  }
 
   if (!lockedVoucher.locationId) {
     return { error: { status: 400, body: { message: "Existing sale is missing a location" } } };
@@ -163,7 +202,9 @@ export async function applyPosSaleUpdateTx(
   }
 
   const oldItemsMap = new Map(oldSalesItems.map((item) => [item.id, item]));
-  await reverseOriginalSaleInventory(tx, lockedVoucher, oldSalesItems, canonicalRevision);
+  // Wave 11: the old lines come back exactly; the ledger's COGS is compared below.
+  const cogsBefore = await saleCogsInventoryCreditTx(tx, lockedVoucher.companyId, voucherId);
+  const restoredDelta = await reverseOriginalSaleInventory(tx, lockedVoucher, oldSalesItems, canonicalRevision);
   await clearOldSaleRecords(tx, voucherId);
 
   const rebuildResult = await rebuildSaleItems(tx, {
@@ -204,8 +245,11 @@ export async function applyPosSaleUpdateTx(
     exchangeRate: lockedVoucher.exchangeRate ? String(lockedVoucher.exchangeRate) : null,
   });
 
+  // Phase 22 A (D3): the rounding remainder of an engine voucher's new lines.
+  await rebalanceVoucherRoundingTx(tx, { companyId: lockedVoucher.companyId, voucherId });
+
   if (isGoldenCoastEdit && clientSaleId && !isCreditSale) {
-    const oldPaymentEntry = oldEntries.find((entry) => Number(entry.debitAmount ?? 0) > 0);
+    const oldPaymentEntry = oldEntries.find((entry) => toMoney(entry.debitAmount).gt(0));
     const normalizedPaymentType =
       rawPaymentAccountType === "bank" || rawPaymentAccountType === "cash"
         ? rawPaymentAccountType
@@ -241,12 +285,39 @@ export async function applyPosSaleUpdateTx(
     });
   }
 
+  // Perpetual inventory (wave 8.1): the edited sale's COGS replaces the old one.
+  if (!isSpCompanyEdit) {
+    await postSaleCogsTx(tx, {
+      companyId: lockedVoucher.companyId,
+      saleVoucherId: voucherId,
+      saleVoucherNumber: lockedVoucher.voucherNumber,
+      voucherDate: String(voucherDate || lockedVoucher.voucherDate),
+      locationId: targetLocationId,
+      relieved: rebuildResult.relieved,
+      optional: lockedVoucher.optional === true,
+    });
+    // What the restore of the old lines moved beyond the COGS journal it
+    // replaced (stock sold since, a legacy line) keeps the ledger with the
+    // sub-ledger.
+    await postReversalResidualTx(tx, {
+      companyId: lockedVoucher.companyId,
+      sourceType: "pos-edit",
+      sourceId: `${voucherId}:${Date.now().toString(36)}`,
+      reference: lockedVoucher.voucherNumber,
+      subLedgerDelta: restoredDelta.minus(rebuildResult.relieved),
+      ledgerDelta: cogsBefore.minus(await saleCogsInventoryCreditTx(tx, lockedVoucher.companyId, voucherId)),
+      actor: { userId, username },
+      locationId: targetLocationId,
+    });
+  }
+
   return {
     existingVoucher: lockedVoucher,
     targetLocationId,
     grandTotal: rebuildResult.grandTotal,
     totalQtySoldEdit: rebuildResult.totalQtySoldEdit,
     isGoldenCoastEdit,
+    editBefore: editContext.before,
     auditOldItems: oldSalesItems.map((item) => ({
       stockItemId: item.stockItemId,
       quantity: item.quantity,
@@ -284,7 +355,14 @@ export async function updatePosSale(
   const preRestrictionResult = applyPosRoleRestrictions(userRole, newLocationId, preExistingVoucher.locationId);
   if ("error" in preRestrictionResult) return err(preRestrictionResult.error);
 
-  const transactionResult = await db.transaction((tx) => applyPosSaleUpdateTx(tx, params, spContextResult.context));
+  // Phase 21 (B): the edit audit is written on the edit's transaction.
+  const transactionResult = await db.transaction(async (tx) => {
+    const result = await applyPosSaleUpdateTx(tx, params, spContextResult.context);
+    if (!result.error) {
+      await writePosSaleUpdateAuditTx(tx, { voucherId, companyId: currentCompanyId, userId, username }, result);
+    }
+    return result;
+  });
   if (transactionResult.error) return err(transactionResult.error);
 
   const existingVoucher = transactionResult.existingVoucher!;
@@ -315,7 +393,7 @@ export async function updatePosSale(
   let customerAccount = null;
   if (isCreditSale) {
     const updatedEntries = await db.select().from(voucherEntries).where(eq(voucherEntries.voucherId, voucherId));
-    const debitEntry = updatedEntries.find((entry) => parseFloat(entry.debitAmount || "0") > 0);
+    const debitEntry = updatedEntries.find((entry) => toMoney(entry.debitAmount).gt(0));
     if (debitEntry?.ledgerAccountId) {
       customerAccount = await storage.getLedgerAccountById(debitEntry.ledgerAccountId);
     }
@@ -333,58 +411,6 @@ export async function updatePosSale(
         logger.error("[IntercompanyPOS Recalc] Unhandled:", { error })
       );
     }
-  }
-
-  try {
-    const oldAuditRows = transactionResult.auditOldItems ?? [];
-    const oldItemIds = Array.from(new Set(oldAuditRows.map((item) => item.stockItemId)));
-    const oldItemNames =
-      oldItemIds.length > 0
-        ? await db
-            .select({ id: stockItems.id, name: stockItems.name, code: stockItems.code })
-            .from(stockItems)
-            .where(inArray(stockItems.id, oldItemIds))
-        : [];
-    const oldItemNameMap = new Map(oldItemNames.map((item) => [item.id, item] as const));
-
-    const changes: Record<string, { old?: unknown; new?: unknown }> = {};
-    if (existingVoucher.totalAmount !== updatedVoucher.totalAmount)
-      changes.totalAmount = { old: existingVoucher.totalAmount, new: updatedVoucher.totalAmount };
-    if (existingVoucher.voucherDate !== updatedVoucher.voucherDate)
-      changes.date = { old: existingVoucher.voucherDate, new: updatedVoucher.voucherDate };
-    if (existingVoucher.locationId !== updatedVoucher.locationId)
-      changes.locationId = { old: existingVoucher.locationId, new: updatedVoucher.locationId };
-    changes.itemCount = { new: updatedSalesItems.length };
-    changes.items = {
-      old: oldAuditRows.map((item) => ({
-        stockItemId: item.stockItemId,
-        stockItemName: oldItemNameMap.get(item.stockItemId)?.name ?? `Item #${item.stockItemId}`,
-        code: oldItemNameMap.get(item.stockItemId)?.code ?? null,
-        quantity: item.quantity,
-        rate: item.rate,
-        totalAmount: item.totalAmount,
-      })),
-      new: updatedSalesItems.map((item) => ({
-        stockItemId: item.stockItemId,
-        stockItemName: item.stockItemName,
-        code: item.stockItemCode,
-        quantity: item.quantity,
-        rate: item.sellingPrice,
-        totalAmount: item.totalSales,
-      })),
-    };
-    await logAudit({
-      userId,
-      username,
-      companyId: currentCompanyId,
-      action: "update",
-      tableName: "vouchers",
-      recordId: voucherId,
-      recordIdentifier: updatedVoucher.voucherNumber,
-      changes,
-    });
-  } catch {
-    /* non-fatal */
   }
 
   return {

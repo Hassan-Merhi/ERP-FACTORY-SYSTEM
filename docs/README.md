@@ -29,6 +29,7 @@ failure, so a correct document cannot quietly become undiscoverable.
 | Doc | What it covers |
 |---|---|
 | [accounting-flow.md](accounting-flow.md) | Voucher types, posting, the ledger |
+| [accounting-audit-2026-10.md](accounting-audit-2026-10.md) | Accounting audit findings, production evidence and remediation waves |
 | [inventory-flow.md](inventory-flow.md) | Stock data model and cost calculation |
 | [inventory-cost-memory-policy.md](inventory-cost-memory-policy.md) | Cost-memory rules for the current implementation |
 | [historical-sales-cogs-transfer-revision-findings.md](historical-sales-cogs-transfer-revision-findings.md) | Historical sales COGS repair: evidence findings and remaining blockers |

@@ -19,6 +19,18 @@ vi.mock("../server/db", () => {
   return { db: { select: () => chain() } };
 });
 
+// Wave 13 (owner decision 3): the ledger balance comes from the balance engine
+// (raw SQL this harness cannot run); this test pins the operational figures.
+vi.mock("../server/routes/factory/suppliers/balance/factorySupplierLedger", async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import("../server/routes/factory/suppliers/balance/factorySupplierLedger")>();
+  return {
+    ...actual,
+    loadFactorySupplierLedgerViews: async () => new Map(),
+    loadFactorySupplierLedgerLines: async () => [],
+  };
+});
+
 import { registerSupplierBrokerVisualStatementRoutes } from "../server/routes/factory/suppliers/broker/visual-statement";
 
 describe("broker visual statement", () => {

@@ -29,8 +29,38 @@ const harness = vi.hoisted(() => {
     classifyNetPositionAccounts: vi.fn(),
     computeNetPositionInventory: vi.fn(),
     computeNetPositionSupplierBalances: vi.fn(),
+    loadNetPositionParties: vi.fn(),
     loggerError: vi.fn(),
   };
+});
+
+// Wave 10: factory suppliers, customers and employees come from the balance
+// engine; the factory-specific "not yet in the ledger" helpers stay real.
+vi.mock("../server/services/accounting/balances/netPositionParties", async () => {
+  const notInLedgerSection = (lines: Array<{ value: number; count: number }>) => ({
+    label: "Not yet in the ledger",
+    total: Math.round(lines.reduce((sum, line) => sum + line.value, 0) * 100) / 100,
+    lines,
+  });
+  return { loadNetPositionParties: harness.loadNetPositionParties, notInLedgerSection };
+});
+
+const payrollLine = (value: number) => ({
+  name: "Payroll Payable",
+  code: "EMPLOYEE_PAYROLL_PAYABLE",
+  value,
+  category: "Liability",
+  partyKind: "employee",
+  partyId: null,
+});
+const emptyParties = () => ({
+  forUs: [],
+  onUs: [payrollLine(0)],
+  forUsTotal: 0,
+  onUsTotal: 0,
+  customerLedgerIds: new Set<number>(),
+  payrollSigned: 0,
+  notInLedger: { label: "Not yet in the ledger", total: 0, lines: [] },
 });
 
 vi.mock("../server/db", () => ({
@@ -41,7 +71,14 @@ vi.mock("../server/auth", () => ({ requireAuth: (_req: any, _res: any, next: any
 vi.mock("../server/lib/dateUtils", () => ({ getClientDate: harness.getClientDate }));
 vi.mock("../server/lib/httpHandlers", () => ({ getErrorMessage: (error: any) => error?.message || String(error) }));
 vi.mock("../server/lib/logger", () => ({ logger: { error: harness.loggerError } }));
-vi.mock("../server/netPositionHelper", () => ({ classifyNetPositionAccounts: harness.classifyNetPositionAccounts }));
+vi.mock("../server/netPositionHelper", () => ({
+  classifyNetPositionAccounts: harness.classifyNetPositionAccounts,
+  PERPETUAL_STOCK_ACCOUNT_CODES: new Set<string>(),
+}));
+// Before any perpetual-inventory cut-over: the computed factory values apply.
+vi.mock("../server/services/accounting/perpetualInventory/reportBasis", () => ({
+  ledgerCarriesStock: async () => false,
+}));
 vi.mock("../server/services/rental/rentalPeriodService", () => ({
   getRentalBillingDay: () => 1,
   getRentalPeriodDueDate: (year: number, month: number) => `${year}-${String(month).padStart(2, "0")}-01`,
@@ -113,6 +150,7 @@ describe("Phase 33D employee/factory net position", () => {
       stockOtwValue: 0,
       balanceOnTableValue: 0,
     });
+    harness.loadNetPositionParties.mockResolvedValue(emptyParties());
   });
 
   it("returns 400 when neither the session nor an active factory company can resolve a company", async () => {
@@ -169,7 +207,7 @@ describe("Phase 33D employee/factory net position", () => {
     expect(res.body.onUs.accounts).toEqual([expect.objectContaining({ code: "EMPLOYEE_PAYROLL_PAYABLE", value: 0 })]);
   });
 
-  it("uses authoritative factory sources, strips duplicate ledger categories, and separates employee payables from receivables", async () => {
+  it("takes parties from the balance engine, keeps ledger balances, and lists unfinalized orders apart", async () => {
     harness.classifyNetPositionAccounts.mockReturnValue({
       forUsAccounts: [
         { id: 1, name: "Operating Cash", code: "CASH", category: "Asset", value: 100 },
@@ -177,6 +215,7 @@ describe("Phase 33D employee/factory net position", () => {
         { id: 3, name: "Factory Worker Advances", code: "ADV", category: "Asset", value: 88 },
         { id: 4, name: "Prepaid Rent - Legacy", code: "RENT", category: "Asset", value: 50 },
         { id: 5, name: "Insurance - Member", code: "INS", category: "Asset", value: 20 },
+        { id: 6, name: "Customer Ledger", code: "CUST-6", category: "Asset", value: 77 },
       ],
       onUsAccounts: [
         { name: "Payroll Payable", code: "PAYROLL_PAYABLE", category: "Liability", value: 500 },
@@ -186,15 +225,63 @@ describe("Phase 33D employee/factory net position", () => {
         { name: "Other Payable", code: "OTHER", category: "Liability", value: 30 },
       ],
     });
-    harness.computeNetPositionSupplierBalances.mockResolvedValue({
-      supplierLockedRateMapNp: new Map(),
-      allContainersF: [],
-      supplierItems: [
-        { name: "Supplier Due", balanceUsd: 40, breakdown: [] },
-        { name: "Supplier Overpaid", balanceUsd: -10, breakdown: [] },
+    harness.loadNetPositionParties.mockResolvedValue({
+      forUs: [
+        {
+          name: "Supplier Overpaid",
+          code: "SUPPLIER_OVERPAID",
+          value: 10,
+          category: "Supplier Overpayments",
+          partyKind: "factorySupplier",
+          partyId: 2,
+        },
+        {
+          name: "Bob Owes",
+          code: "EMPLOYEE_RECEIVABLE",
+          value: 12,
+          category: "Employee Receivable",
+          partyKind: "employee",
+          partyId: 9,
+        },
+        {
+          id: 6,
+          name: "Customer Dr",
+          code: "CUSTOMER_DR",
+          value: 70,
+          category: "Customer",
+          partyKind: "customer",
+          partyId: 5,
+        },
       ],
-      totalSupplierLiabilities: 40,
-      totalSupplierOverpayments: 10,
+      onUs: [
+        {
+          name: "Supplier Due",
+          code: "SUPPLIER",
+          value: 40,
+          category: "Supplier",
+          partyKind: "factorySupplier",
+          partyId: 1,
+        },
+        payrollLine(20),
+      ],
+      forUsTotal: 92,
+      onUsTotal: 60,
+      // The customer's linked ledger is rolled into the customer line.
+      customerLedgerIds: new Set<number>([6]),
+      payrollSigned: 20,
+      notInLedger: {
+        label: "Not yet in the ledger",
+        total: 300,
+        lines: [
+          {
+            label: "Factory invoices not yet in the ledger",
+            code: "NOT_IN_LEDGER_FACTORY_INVOICE",
+            value: 300,
+            category: "Not yet in the ledger",
+            count: 2,
+          },
+        ],
+      },
     });
     harness.computeNetPositionInventory.mockResolvedValue({
       inventorySellValue: 200,
@@ -208,7 +295,6 @@ describe("Phase 33D employee/factory net position", () => {
       { rows: [{ total: "15" }] }
     );
     harness.selectResults.push(
-      [],
       [],
       [],
       [
@@ -240,23 +326,21 @@ describe("Phase 33D employee/factory net position", () => {
           customerName: "Loading Customer",
         },
       ],
-      [],
-      [
-        { firstName: "Alice", lastName: "Pay", currentBalance: "20" },
-        { firstName: "Bob", lastName: "Owes", currentBalance: "-12" },
-        { firstName: "Zero", lastName: "Balance", currentBalance: "0" },
-      ]
+      []
     );
 
     const res = resHarness();
     await routes.get("GET /api/factory/net-position")!(req({ query: { asOf: "2026-09-15" } }), res);
 
     expect(res.statusCode).toBe(200);
+    // What We Have: ledger 100 + 88 (worker-advance ledger kept) + inventory 200
+    // + raw 100 + table 25 + OTW 50 + customer 70 + supplier overpaid 10 + employee 12 = 655.
+    // What We Owe: ledger 50 + 30 + supplier 40 + payroll 20 = 140.
     expect(res.body).toMatchObject({
       asOf: "2026-09-15",
-      forUsTotal: 722,
-      onUsTotal: 90,
-      netPosition: 632,
+      forUsTotal: 655,
+      onUsTotal: 140,
+      netPosition: 515,
       supplierLiabilities: 40,
       supplierOverpayments: 10,
       inventoryValue: 200,
@@ -265,10 +349,19 @@ describe("Phase 33D employee/factory net position", () => {
       pendingTotal: 60,
       verifiedTotal: 70,
       loadingTotal: 80,
-      ledgerAssets: 100,
-      ledgerLiabilities: 30,
+      ledgerAssets: 188,
+      ledgerLiabilities: 80,
       payrollPayable: 20,
     });
+    // Unfinalized orders and the worker-advance table's excess over the ledger
+    // (15 − (88 − 50) = −23) are listed apart, never in the totals.
+    expect(res.body.notInLedger.lines.map((line: any) => [line.code, line.value])).toEqual([
+      ["NOT_IN_LEDGER_FACTORY_INVOICE", 300],
+      ["PENDING_ORDERS", 60],
+      ["VERIFIED_ORDERS", 70],
+      ["LOADING_ORDERS", 80],
+      ["WORKER_ADVANCES", -23],
+    ]);
 
     const forUsCodes = res.body.forUs.accounts.map((account: any) => account.code);
     expect(forUsCodes).toEqual(
@@ -278,28 +371,33 @@ describe("Phase 33D employee/factory net position", () => {
         "BALANCE_ON_TABLE",
         "STOCK_OTW",
         "CASH",
+        "ADV",
+        "CUSTOMER_DR",
         "SUPPLIER_OVERPAID",
-        "PENDING_ORDERS",
-        "VERIFIED_ORDERS",
-        "LOADING_ORDERS",
         "EMPLOYEE_RECEIVABLE",
-        "WORKER_ADVANCES",
       ])
     );
-    expect(forUsCodes).not.toEqual(expect.arrayContaining(["LEGACY_INV", "ADV", "RENT", "INS"]));
+    expect(forUsCodes).not.toEqual(
+      expect.arrayContaining(["LEGACY_INV", "RENT", "INS", "CUST-6", "PENDING_ORDERS", "WORKER_ADVANCES"])
+    );
 
     const onUsCodes = res.body.onUs.accounts.map((account: any) => account.code);
-    expect(onUsCodes).toEqual(expect.arrayContaining(["SUPPLIER", "OTHER", "EMPLOYEE_PAYROLL_PAYABLE"]));
-    expect(onUsCodes).not.toEqual(expect.arrayContaining(["PAYROLL_PAYABLE", "ACCR-RENT-PAY", "ADV", "INS"]));
+    expect(onUsCodes).toEqual(expect.arrayContaining(["SUPPLIER", "OTHER", "ADV", "EMPLOYEE_PAYROLL_PAYABLE"]));
+    expect(onUsCodes).not.toEqual(expect.arrayContaining(["PAYROLL_PAYABLE", "ACCR-RENT-PAY", "INS"]));
 
     const supplierArgs = harness.computeNetPositionSupplierBalances.mock.calls[0][0];
     expect(supplierArgs.companyId).toBe(7);
     expect(supplierArgs.asOf).toBe("2026-09-15");
+    expect(supplierArgs.contextOnly).toBe(true);
     expect(supplierArgs.getConfigFx("CDF")).toBe(0.00035);
     expect(supplierArgs.getConfigFx("USD")).toBe(1);
+    expect(harness.loadNetPositionParties).toHaveBeenCalledWith(
+      7,
+      expect.objectContaining({ asOf: "2026-09-15", customers: true, factorySuppliers: true, employees: "factory" })
+    );
   });
 
-  it("sums ledger movements and customer balances exactly", async () => {
+  it("sums ledger movements exactly", async () => {
     harness.executeResults.push({ rows: [] }, { rows: [] });
     harness.selectResults.push(
       [{ id: 1, name: "Cash", code: "CASH", accountType: "Cash" }],
@@ -308,11 +406,6 @@ describe("Phase 33D employee/factory net position", () => {
         { ledgerAccountId: 1, debitAmount: "0.1", creditAmount: "0" },
         { ledgerAccountId: 1, debitAmount: "0.2", creditAmount: "0" },
       ],
-      [{ id: 4, legalName: "Tiny Customer", openingBalance: "0.1", openingBalanceSide: "Dr", ledgerAccountId: null }],
-      [{ customerId: 4, net: "-0.09" }],
-      [],
-      [],
-      [],
       [],
       []
     );
@@ -323,9 +416,6 @@ describe("Phase 33D employee/factory net position", () => {
     expect(res.statusCode).toBe(200);
     // 0.1 + 0.2 reaches the classifier as 0.3, not 0.30000000000000004.
     expect(harness.classifyNetPositionAccounts.mock.calls[0][1].get(1)).toEqual({ debit: 0.3, credit: 0 });
-    // 0.1 - 0.09 is exactly the 0.01 threshold, so the customer is not listed;
-    // the float path saw 0.010000000000000009 and listed it.
-    expect(JSON.stringify(res.body)).not.toContain("Tiny Customer");
   });
 
   it("falls back to the client date when asOf is malformed", async () => {

@@ -21,7 +21,16 @@ import { createDatabasePostingDependencies } from "../../services/accounting/dat
 import { erpRateToDaybookFxRateToUsd } from "../../services/accounting/currencyAmounts";
 import { applyEmployeeBalanceDeltasTx } from "../../services/accounting/employeeBalancePosting";
 import { buildManualJournalPostingRequest } from "../../services/accounting/manualJournalPosting";
-import { transformGoldenCoastOwnerWithdrawalJournal } from "../../services/accounting/goldenCoastOwnerWithdrawalJournal";
+import {
+  applyGoldenCoastOwnerWithdrawalTemplate,
+  goldenCoastOwnerWithdrawalTemplatePreview,
+  matchGoldenCoastOwnerWithdrawalJournal,
+  type GoldenCoastOwnerWithdrawalTransform,
+} from "../../services/accounting/goldenCoastOwnerWithdrawalJournal";
+
+export const GC_OWNER_WITHDRAWAL_TEMPLATE_CONFIRM = "GC_OWNER_WITHDRAWAL_TEMPLATE_CONFIRM";
+export const GC_OWNER_WITHDRAWAL_TEMPLATE_MESSAGE =
+  "This journal is a Golden Coast owner withdrawal. Press OK to post the owner-withdrawal template (Dr owner equity, Dr GC Sales Cash, Cr GC Owner Withdrawal Clearing at twice the amount), or Cancel to post it exactly as entered.";
 import { recalculateOrderTotals } from "../factory/_helpers";
 import { checkAccountWhatsAppRule } from "../factoryWhatsappRoutes";
 import { buildVoucherChangesForCreate, logAudit, snapshotVoucherEntries } from "../_helpers";
@@ -212,11 +221,34 @@ async function createActiveJournal(req: Request, res: Response, next: NextFuncti
       return;
     }
 
-    const ownerWithdrawal = await transformGoldenCoastOwnerWithdrawalJournal({ companyId, entries });
+    // Phase 22 (B), D6: the Golden Coast owner-withdrawal template is applied
+    // only when the user confirmed it; a matching journal without that answer
+    // is refused with the template's lines, and `false` posts it as entered.
+    const templateAnswer = req.body?.goldenCoastOwnerWithdrawalTemplate;
+    const withdrawalMatch = await matchGoldenCoastOwnerWithdrawalJournal({ companyId, entries });
+    if (withdrawalMatch && typeof templateAnswer !== "boolean") {
+      res.status(409).json({
+        code: GC_OWNER_WITHDRAWAL_TEMPLATE_CONFIRM,
+        message: GC_OWNER_WITHDRAWAL_TEMPLATE_MESSAGE,
+        template: goldenCoastOwnerWithdrawalTemplatePreview(withdrawalMatch),
+      });
+      return;
+    }
+    if (templateAnswer === true && !withdrawalMatch) {
+      res.status(400).json({
+        code: "GC_OWNER_WITHDRAWAL_TEMPLATE_NOT_APPLICABLE",
+        message: "This journal is not a Golden Coast owner withdrawal; post it without the template.",
+      });
+      return;
+    }
+    const ownerWithdrawal: GoldenCoastOwnerWithdrawalTransform =
+      withdrawalMatch && templateAnswer === true
+        ? await applyGoldenCoastOwnerWithdrawalTemplate(companyId, withdrawalMatch)
+        : { entries, transformed: false };
     const postingEntries = ownerWithdrawal.entries;
 
     if (ownerWithdrawal.transformed) {
-      logger.info("Golden Coast owner withdrawal journal transformed", {
+      logger.info("Golden Coast owner withdrawal template posted (confirmed by the user)", {
         module: "vouchers",
         action: "createJournalCentral",
         companyId,
@@ -230,7 +262,6 @@ async function createActiveJournal(req: Request, res: Response, next: NextFuncti
 
     const built = buildManualJournalPostingRequest({
       companyId,
-      voucherNumber: `JOURNAL-${Date.now()}`,
       voucherDate,
       entries: postingEntries,
       notes,
@@ -264,6 +295,22 @@ async function createActiveJournal(req: Request, res: Response, next: NextFuncti
           companyId,
           entries: posted.entries,
         });
+        // Wave 16 (B): the rich voucher audit is written in the posting
+        // transaction; an audit failure rolls the journal back.
+        const auditEntries = await snapshotVoucherEntries(posted.entries, tx);
+        await logAudit(
+          {
+            userId: userId!,
+            username: req.session.username || "unknown",
+            companyId,
+            action: "create",
+            tableName: "vouchers",
+            recordId: posted.voucher.id,
+            recordIdentifier: posted.voucher.voucherNumber,
+            changes: buildVoucherChangesForCreate(posted.voucher, auditEntries),
+          },
+          tx
+        );
       }
 
       return posted;
@@ -321,23 +368,6 @@ async function createActiveJournal(req: Request, res: Response, next: NextFuncti
           voucherId: result.voucher.id,
           error,
         });
-      }
-
-      try {
-        const auditEntries = await snapshotVoucherEntries(result.entries);
-        await logAudit({
-          userId: userId!,
-          username: req.session.username || "unknown",
-          companyId,
-          action: "create",
-          tableName: "vouchers",
-          recordId: result.voucher.id,
-          recordIdentifier: result.voucher.voucherNumber,
-          changes: buildVoucherChangesForCreate(result.voucher, auditEntries),
-        });
-      } catch {
-        // The transaction-owned central posting audit already exists. Preserve
-        // the old rich audit as best-effort compatibility only.
       }
     }
 

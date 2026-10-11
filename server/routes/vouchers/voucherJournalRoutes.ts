@@ -3,16 +3,27 @@ import { getErrorMessage, errorStatus } from "../../lib/httpHandlers";
 import { db } from "../../db";
 import { voucherMutationBlockReason } from "../../lib/migratedVoucherGuard";
 import { requireAuth, requireNonPOS } from "../../auth";
+import { syncEmployeeBalancesFromEntries } from "../_helpers";
+import { writeVoucherAuditTx } from "../helpers/voucherAuditTrail";
 import {
-  logAudit,
-  syncEmployeeBalancesFromEntries,
-  snapshotVoucherEntries,
-  buildVoucherChangesForCreate,
-  buildVoucherChangesForUpdate,
-} from "../_helpers";
+  erpRequestSourceId,
+  postManualVoucherTx,
+  sessionPostingActor,
+} from "../../services/accounting/erpVoucherPosting";
+import {
+  assertNotIntercompanyTransferLeg,
+  sendIntercompanyTransferLegRefusal,
+} from "../../services/accounting/intercompanyTransferLegGuard";
 import { logger } from "../../lib/logger";
-import { vouchers, voucherEntries, customerBalances, interCompanyTransfers } from "@shared/schema";
-import { eq, and, or, isNull } from "drizzle-orm";
+import { vouchers, voucherEntries, customerBalances } from "@shared/schema";
+import { eq, and, isNull, sql } from "drizzle-orm";
+import type { DbTransaction } from "../../db";
+import {
+  assertVoucherEditableTx,
+  recordVoucherEditAuditTx,
+  sendVoucherCorrectionRefusal,
+} from "../../services/accounting/voucherCorrection";
+import { rebalanceVoucherRoundingTx } from "../../services/accounting/engineRounding";
 import { checkAccountWhatsAppRule } from "../factoryWhatsappRoutes";
 
 import { recalculateOrderTotals } from "../factory/_helpers";
@@ -62,6 +73,7 @@ function journalBaseTotal(currency: string, totals: { debits: Decimal; credits: 
  */
 
 async function syncJournalToOrderCharge(
+  tx: DbTransaction,
   companyId: number,
   savedEntries: Array<{
     customerId: number | null;
@@ -87,7 +99,7 @@ async function syncJournalToOrderCharge(
 
     // Priority 1: find by direct voucher link (exact match, no ambiguity)
     if (voucherId) {
-      matchingCharges = await db
+      matchingCharges = await tx
         .select({
           id: customerOrderCharges.id,
           orderId: customerOrderCharges.orderId,
@@ -109,7 +121,7 @@ async function syncJournalToOrderCharge(
 
     // Priority 2: fall back to ledger account match (only if exactly one unlinked result)
     if (matchingCharges.length === 0) {
-      const byLedger = await db
+      const byLedger = await tx
         .select({
           id: customerOrderCharges.id,
           orderId: customerOrderCharges.orderId,
@@ -140,12 +152,12 @@ async function syncJournalToOrderCharge(
     if (matchingCharges.length === 0) continue;
 
     const charge = matchingCharges[0];
-    const amountChanged = toMoney(charge.amount).minus(newAmount).abs().greaterThanOrEqualTo(0.01);
+    const amountChanged = !toMoney(charge.amount).equals(newAmount.toDecimalPlaces(2));
 
-    // Atomically: update charge amount, recalc order totals, sync customerBalances.
-    // Without a transaction a crash between the three writes leaves the order's grand
-    // total inconsistent with the underlying charge rows.
-    await db.transaction(async (tx) => {
+    // Phase 22 (B), PE10: in the journal's own transaction (it ran after the
+    // commit, its failure swallowed): charge amount, order totals and the
+    // invoice balance commit with the journal or not at all.
+    {
       // Update charge amount and stamp voucherId for direct future lookups
       await tx
         .update(customerOrderCharges)
@@ -155,8 +167,10 @@ async function syncJournalToOrderCharge(
         })
         .where(eq(customerOrderCharges.id, charge.id));
 
-      if (!amountChanged) return; // voucherId stamp done, but no recalc needed
+      if (!amountChanged) continue; // voucherId stamp done, but no recalc needed
 
+      // DI7: the order is locked before its totals are recalculated.
+      await tx.execute(sql`SELECT id FROM customer_orders WHERE id = ${charge.orderId} FOR UPDATE`);
       // Recalculate and save order totals
       await recalculateOrderTotals(tx, charge.orderId);
 
@@ -167,6 +181,12 @@ async function syncJournalToOrderCharge(
         .where(eq(customerOrders.id, charge.orderId));
 
       if (updatedOrder) {
+        // DI7: the invoice balance row is locked before it is rewritten.
+        await tx.execute(sql`
+          SELECT id FROM customer_balances
+           WHERE company_id = ${companyId} AND reference_id = ${charge.orderId} AND reference_type = 'INVOICE'
+           FOR UPDATE
+        `);
         await tx
           .update(customerBalances)
           .set({ debitAmount: updatedOrder.grandTotal, balance: updatedOrder.grandTotal })
@@ -178,7 +198,7 @@ async function syncJournalToOrderCharge(
             )
           );
       }
-    });
+    }
   }
 }
 
@@ -233,29 +253,8 @@ export function registerVoucherJournalRoutes(app: Express) {
       // For CFA: baseTotalMax = max(totalDebits, totalCredits) / cfaPerUsd
       const baseTotalMax = journalBaseTotal(vCurrency, totals, cfaPerUsd);
 
-      // Generate voucher number
-      const voucherNumber = `JOURNAL-${Date.now()}`;
-
       // Use database transaction for atomic operation
       const result = await db.transaction(async (tx) => {
-        // Create journal voucher
-        const [createdVoucher] = await tx
-          .insert(vouchers)
-          .values({
-            companyId: req.session.currentCompanyId!,
-            voucherNumber,
-            voucherType: "Journal",
-            voucherDate,
-            description: notes || null,
-            // Store historical base-currency (USD) total.
-            totalAmount: baseTotalMax.toFixed(6),
-            optional: optional ?? false,
-            currency: vCurrency,
-            exchangeRate: vRateRaw ? String(vRateRaw) : null,
-            effectiveDate: effectiveDate || null,
-          })
-          .returning();
-
         const voucherEntriesToCreate = [];
 
         // Create entries.
@@ -280,7 +279,6 @@ export function registerVoucherJournalRoutes(app: Express) {
           });
 
           voucherEntriesToCreate.push({
-            voucherId: createdVoucher.id,
             ...accountField,
             debitAmount: norm.debitAmount,
             creditAmount: norm.creditAmount,
@@ -295,27 +293,47 @@ export function registerVoucherJournalRoutes(app: Express) {
           });
         }
 
-        // Batch insert all voucher entries
-        const createdEntries = await tx.insert(voucherEntries).values(voucherEntriesToCreate).returning();
+        // Phase 22 (B): an active journal posts through the central engine (number
+        // allocated there); an optional one keeps a direct insert with an
+        // allocated number (it is off the ledger and may be unbalanced).
+        const posted = await postManualVoucherTx(tx, {
+          companyId: req.session.currentCompanyId!,
+          voucherType: "Journal",
+          voucherDate,
+          description: notes || null,
+          currency: vCurrency,
+          exchangeRate: vRateRaw ? String(vRateRaw) : null,
+          effectiveDate: effectiveDate || null,
+          optional: optional === true,
+          optionalTotalAmount: baseTotalMax.toFixed(6),
+          entries: voucherEntriesToCreate,
+          source: { type: "manual-journal-legacy", id: `${req.session.currentCompanyId}:${erpRequestSourceId(req)}` },
+          actor: sessionPostingActor(req, "Journal creation"),
+        });
+        if (posted.replayed) return { voucher: posted.voucher, entries: posted.entries };
+        const createdVoucher = posted.voucher;
+        const createdEntries = posted.entries;
+        // Sync order charges automatically, in this transaction.
+        await syncJournalToOrderCharge(tx, req.session.currentCompanyId!, createdEntries, createdVoucher.id);
+
+        // Wave 12: employee balances and the audit row are written in this transaction.
+        if (!createdVoucher.optional) {
+          await syncEmployeeBalancesFromEntries(createdEntries, req.session.currentCompanyId!, false, tx);
+        }
+        await writeVoucherAuditTx(tx, {
+          actor: {
+            userId: req.session.userId,
+            username: req.session.username,
+            companyId: req.session.currentCompanyId,
+          },
+          action: "create",
+          voucherId: createdVoucher.id,
+          before: null,
+          after: { voucher: createdVoucher, entries: createdEntries },
+        });
 
         return { voucher: createdVoucher, entries: createdEntries };
       });
-
-      // Sync employee balances from voucher entries (only for non-optional vouchers)
-      if (!result.voucher.optional) {
-        await syncEmployeeBalancesFromEntries(
-          result.entries.map((e) => ({
-            ledgerAccountId: e.ledgerAccountId,
-            employeeId: e.employeeId,
-            debitAmount: e.debitAmount,
-            creditAmount: e.creditAmount,
-          })),
-          req.session.currentCompanyId!
-        );
-      }
-
-      // Sync order charges automatically (non-fatal)
-      await syncJournalToOrderCharge(req.session.currentCompanyId!, result.entries, result.voucher.id).catch(() => {});
 
       // Write to factory daybook if this company has factory settings
       try {
@@ -383,21 +401,6 @@ export function registerVoucherJournalRoutes(app: Express) {
         logger.error("WhatsApp rule check error (non-fatal):", { error: waErr });
       }
 
-      try {
-        const auditEntries = await snapshotVoucherEntries(result.entries);
-        await logAudit({
-          userId: req.session.userId!,
-          username: req.session.username || "unknown",
-          companyId: req.session.currentCompanyId!,
-          action: "create",
-          tableName: "vouchers",
-          recordId: result.voucher.id,
-          recordIdentifier: result.voucher.voucherNumber,
-          changes: buildVoucherChangesForCreate(result.voucher, auditEntries),
-        });
-      } catch {
-        /* non-fatal */
-      }
       logger.info("journal voucher create succeeded", {
         module: "vouchers",
         action: "createJournal",
@@ -459,6 +462,17 @@ export function registerVoucherJournalRoutes(app: Express) {
         return res.status(400).json({ message: "Missing required fields" });
       }
 
+      // Phase 19 C (MC-2): an intercompany transfer leg (a Payment, Receipt or
+      // draft journal reaching this legacy editor) is not edited here (409): the
+      // transfer is deleted (both legs) and recorded again. This editor used to
+      // rescale the other company's voucher after commit, outside a transaction.
+      try {
+        await assertNotIntercompanyTransferLeg(voucherId);
+      } catch (legError: unknown) {
+        if (sendIntercompanyTransferLegRefusal(res, legError)) return;
+        throw legError;
+      }
+
       // Determine voucher currency and rate for the PATCH handler.
       // currency/exchangeRate may not be sent on a PATCH (preserve existing values).
       const vCurrencyPatch = (currency as string | undefined) || "USD";
@@ -493,6 +507,12 @@ export function registerVoucherJournalRoutes(app: Express) {
         if (blockedVoucherReason) {
           throw new Error(blockedVoucherReason);
         }
+        // Phase 22 (B), PE9/G4: open-period edit, audited below; closed period → 409.
+        const editContext = await assertVoucherEditableTx(tx, voucherId, {
+          companyId: existingVoucher.companyId,
+          newVoucherDate: voucherDate,
+          newEffectiveDate: effectiveDate || null,
+        });
 
         // Get existing entries before deleting (for balance sync)
         const oldEntries = await tx.select().from(voucherEntries).where(eq(voucherEntries.voucherId, voucherId));
@@ -551,7 +571,33 @@ export function registerVoucherJournalRoutes(app: Express) {
         }
 
         // Batch insert all new voucher entries
-        const createdEntries = await tx.insert(voucherEntries).values(voucherEntriesToCreate).returning();
+        const insertedEntries = await tx.insert(voucherEntries).values(voucherEntriesToCreate).returning();
+        // Phase 22 A (D3): the rounding remainder of an engine voucher's new lines.
+        await rebalanceVoucherRoundingTx(tx, { companyId: existingVoucher.companyId, voucherId });
+
+        // Wave 12: employee balances move in this transaction (reverse the old
+        // lines, apply the new), and the edit is audited with the full
+        // before/after snapshot before it commits.
+        if (!existingVoucher.optional) {
+          await syncEmployeeBalancesFromEntries(oldEntries, req.session.currentCompanyId!, true, tx);
+        }
+        if (!updatedVoucher.optional) {
+          await syncEmployeeBalancesFromEntries(insertedEntries, req.session.currentCompanyId!, false, tx);
+        }
+        // Sync order charges: a customer line + a CR ledger line matching a charge
+        // on one of their orders updates that charge, in this transaction.
+        await syncJournalToOrderCharge(tx, req.session.currentCompanyId!, insertedEntries, voucherId);
+        const audited = await recordVoucherEditAuditTx(tx, {
+          voucherId,
+          before: editContext.before,
+          actor: {
+            userId: req.session.userId,
+            username: req.session.username,
+            companyId: req.session.currentCompanyId,
+          },
+          reason: "Journal voucher update",
+        });
+        const createdEntries = audited.entries;
 
         return {
           voucher: updatedVoucher,
@@ -561,84 +607,6 @@ export function registerVoucherJournalRoutes(app: Express) {
           wasOptional: existingVoucher.optional,
         };
       });
-
-      // Sync employee balances: reverse old entries if voucher was non-optional
-      if (!result.wasOptional) {
-        await syncEmployeeBalancesFromEntries(
-          result.oldEntries.map((e) => ({
-            ledgerAccountId: e.ledgerAccountId,
-            employeeId: e.employeeId,
-            debitAmount: e.debitAmount,
-            creditAmount: e.creditAmount,
-          })),
-          req.session.currentCompanyId!,
-          true // reverse
-        );
-      }
-
-      // Apply new entries if voucher is non-optional
-      if (!result.voucher.optional) {
-        await syncEmployeeBalancesFromEntries(
-          result.entries.map((e) => ({
-            ledgerAccountId: e.ledgerAccountId,
-            employeeId: e.employeeId,
-            debitAmount: e.debitAmount,
-            creditAmount: e.creditAmount,
-          })),
-          req.session.currentCompanyId!
-        );
-      }
-
-      // Sync order charges: if the journal has a customer entry + a CR ledger entry
-      // that matches a charge on one of their orders, update that charge automatically
-      await syncJournalToOrderCharge(req.session.currentCompanyId!, result.entries, result.voucher.id).catch(() => {});
-
-      // ── Intercompany counterpart sync ─────────────────────────────────────
-      // If this voucher is one side of an intercompany transfer pair, scale the
-      // counterpart voucher's totalAmount and entries to match the new amount.
-      try {
-        const [ict] = await db
-          .select()
-          .from(interCompanyTransfers)
-          .where(
-            or(eq(interCompanyTransfers.fromVoucherId, voucherId), eq(interCompanyTransfers.toVoucherId, voucherId))
-          )
-          .limit(1);
-        if (ict) {
-          const otherVoucherId = ict.fromVoucherId === voucherId ? ict.toVoucherId : ict.fromVoucherId;
-          if (otherVoucherId) {
-            const newTotal = toMoney(result.voucher.totalAmount);
-            const [otherVoucher] = await db.select().from(vouchers).where(eq(vouchers.id, otherVoucherId));
-            if (otherVoucher) {
-              const oldTotal = toMoney(otherVoucher.totalAmount);
-              const ratio = oldTotal.greaterThan(0) ? newTotal.dividedBy(oldTotal) : new MoneyDecimal(1);
-              const otherEntries = await db
-                .select()
-                .from(voucherEntries)
-                .where(eq(voucherEntries.voucherId, otherVoucherId));
-              for (const e of otherEntries) {
-                await db
-                  .update(voucherEntries)
-                  .set({
-                    debitAmount: toMoney(e.debitAmount).times(ratio).toFixed(2),
-                    creditAmount: toMoney(e.creditAmount).times(ratio).toFixed(2),
-                  })
-                  .where(eq(voucherEntries.id, e.id));
-              }
-              await db
-                .update(vouchers)
-                .set({ totalAmount: newTotal.toFixed(2) })
-                .where(eq(vouchers.id, otherVoucherId));
-              await db
-                .update(fde)
-                .set({ amountCurrency: newTotal.toFixed(2), amountUsd: newTotal.toFixed(2) })
-                .where(and(eq(fde.referenceTable, "vouchers"), eq(fde.referenceId, otherVoucherId)));
-            }
-          }
-        }
-      } catch (ictErr: unknown) {
-        logger.error("[ICT sync] Counterpart update failed (non-fatal):", { error: getErrorMessage(ictErr) });
-      }
 
       // WhatsApp rule check — prompt the frontend instead of auto-sending
       let waJournalPatch: { prompt: boolean; accountId?: number; voucherDate?: string; month?: string } = {
@@ -669,39 +637,6 @@ export function registerVoucherJournalRoutes(app: Express) {
         logger.error("WhatsApp rule check error (non-fatal):", { error: waErr });
       }
 
-      try {
-        const _oldSnapJ = await snapshotVoucherEntries(result.oldEntries);
-        const _newSnapJ = await snapshotVoucherEntries(result.entries);
-        await logAudit({
-          userId: req.session.userId!,
-          username: req.session.username || "unknown",
-          companyId: req.session.currentCompanyId!,
-          action: "update",
-          tableName: "vouchers",
-          recordId: result.voucher.id,
-          recordIdentifier: result.voucher.voucherNumber,
-          changes: buildVoucherChangesForUpdate(
-            {
-              voucherType: result.existingVoucher.voucherType,
-              voucherDate: result.existingVoucher.voucherDate,
-              totalAmount: result.existingVoucher.totalAmount,
-              description: result.existingVoucher.description,
-              optional: result.existingVoucher.optional,
-            },
-            {
-              voucherType: result.voucher.voucherType,
-              voucherDate: result.voucher.voucherDate,
-              totalAmount: result.voucher.totalAmount,
-              description: result.voucher.description,
-              optional: result.voucher.optional,
-            },
-            _oldSnapJ,
-            _newSnapJ
-          ),
-        });
-      } catch {
-        /* non-fatal */
-      }
       logger.info("journal voucher update succeeded", {
         module: "vouchers",
         action: "updateJournal",
@@ -721,6 +656,7 @@ export function registerVoucherJournalRoutes(app: Express) {
         error,
       });
       logger.error("Error updating journal voucher:", { error: error });
+      if (sendVoucherCorrectionRefusal(res, error)) return;
       res.status(errorStatus(error)).json({ message: getErrorMessage(error) });
     }
   });

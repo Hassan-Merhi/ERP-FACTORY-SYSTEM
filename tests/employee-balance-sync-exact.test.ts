@@ -6,10 +6,12 @@
  *     1.00499… and stored 1.00) and reversing it returns exactly to 0.00.
  *   - Employees are looked up inside the voucher's company only: an entry that
  *     names another company's employee id leaves that employee untouched.
+ *   - Wave 12: the executor is now a required argument (the caller's
+ *     transaction in the routes); these calls pass the pool-level db.
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 
-import { pool } from "../server/db";
+import { db, pool } from "../server/db";
 import { syncEmployeeBalancesFromEntries } from "../server/routes/helpers/employeeHelpers";
 import { seedTestData, cleanupTestData, closeTestServer, type TestContext } from "./setup";
 
@@ -61,7 +63,9 @@ describe("syncEmployeeBalancesFromEntries", () => {
   it("applies the summed change at cents and reverses it exactly", async () => {
     await syncEmployeeBalancesFromEntries(
       [{ ledgerAccountId: null, employeeId, debitAmount: "0.000000", creditAmount: "1.005000" }],
-      ctx.companyId
+      ctx.companyId,
+      false,
+      db
     );
     expect(await balances(employeeId)).toEqual({
       current_balance: "1.01",
@@ -72,7 +76,8 @@ describe("syncEmployeeBalancesFromEntries", () => {
     await syncEmployeeBalancesFromEntries(
       [{ ledgerAccountId: null, employeeId, debitAmount: "0.000000", creditAmount: "1.005000" }],
       ctx.companyId,
-      true
+      true,
+      db
     );
     expect(await balances(employeeId)).toEqual({
       current_balance: "0.00",
@@ -84,7 +89,9 @@ describe("syncEmployeeBalancesFromEntries", () => {
   it("does not touch another company's employee", async () => {
     await syncEmployeeBalancesFromEntries(
       [{ ledgerAccountId: null, employeeId: foreignEmployeeId, debitAmount: "0.000000", creditAmount: "50.000000" }],
-      ctx.companyId
+      ctx.companyId,
+      false,
+      db
     );
     expect(await balances(foreignEmployeeId)).toEqual({
       current_balance: "0.00",

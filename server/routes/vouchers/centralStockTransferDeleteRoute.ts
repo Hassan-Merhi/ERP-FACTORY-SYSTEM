@@ -47,29 +47,27 @@ async function deleteStockTransfer(req: Request, res: Response, next: NextFuncti
   }
 
   try {
-    const result = await deleteStockTransferVoucher({ companyId, voucherId });
-
-    if (!result.replayed) {
-      try {
-        const entrySnapshot = await snapshotVoucherEntries(result.entries);
-        await logAudit({
-          userId: req.session.userId!,
-          username: req.session.username || "unknown",
-          companyId,
-          action: "delete",
-          tableName: "vouchers",
-          recordId: voucherId,
-          recordIdentifier: result.voucher.voucherNumber,
-          changes: buildVoucherChangesForDelete(result.voucher, entrySnapshot),
-        });
-      } catch (error: unknown) {
-        logger.error("Central stock transfer delete audit failed (non-fatal)", {
-          companyId,
-          voucherId,
-          error,
-        });
-      }
-    }
+    // Wave 16 (B): the audit row is written in the deleting transaction.
+    const result = await deleteStockTransferVoucher({
+      companyId,
+      voucherId,
+      audit: async (tx, deleted) => {
+        const entrySnapshot = await snapshotVoucherEntries(deleted.entries, tx);
+        await logAudit(
+          {
+            userId: req.session.userId!,
+            username: req.session.username || "unknown",
+            companyId,
+            action: "delete",
+            tableName: "vouchers",
+            recordId: voucherId,
+            recordIdentifier: deleted.voucher.voucherNumber,
+            changes: buildVoucherChangesForDelete(deleted.voucher, entrySnapshot),
+          },
+          tx
+        );
+      },
+    });
 
     logger.info("central stock transfer delete succeeded", {
       module: "stock-transfer",

@@ -17,12 +17,14 @@ import {
   factoryContainers,
   factoryRawStock,
   factoryContainerCommissions,
-  voucherEntries,
   factoryDaybookEntries,
   vouchers,
 } from "@shared/schema";
 import { eq, and, or, inArray, ilike, isNull } from "drizzle-orm";
-import { normFactoryEntry } from "./_helpers";
+import { postFactoryVoucherTx } from "../../../services/factory/factoryVoucherPosting";
+import { toMoney } from "../../../lib/money";
+import { removeContainerCommissionJournalTx } from "../../../services/factory/containerCommissionJournal";
+import { retireVouchersTx, sessionRetirementActor } from "../../../services/accounting/voucherRetirement";
 
 export function registerFactoryContainerDeleteRoutes(app: Express) {
   // ── Bulk cascade-delete containers ───────────────────────────────────────────
@@ -153,7 +155,10 @@ export function registerFactoryContainerDeleteRoutes(app: Express) {
             )
           );
 
-        // 3. Delete accounting vouchers and their entries
+        // 3. Delete accounting vouchers and their entries. The commission
+        // journal FACTORY-COMM-{container} carries a posting identity, so it is
+        // removed with it (wave 8.4 continuation).
+        await removeContainerCommissionJournalTx(tx, companyId, id);
         const containerVouchers = await tx
           .select({ id: vouchers.id })
           .from(vouchers)
@@ -171,8 +176,13 @@ export function registerFactoryContainerDeleteRoutes(app: Express) {
           );
         if (containerVouchers.length > 0) {
           const vIds = containerVouchers.map((v) => v.id);
-          await tx.delete(voucherEntries).where(inArray(voucherEntries.voucherId, vIds));
-          await tx.delete(vouchers).where(inArray(vouchers.id, vIds));
+          // Wave 16 (A): retired (soft delete with lines, audited here), not hard-deleted.
+          await retireVouchersTx(tx, {
+            companyId,
+            voucherIds: vIds,
+            reason: "factory-container-delete",
+            actor: sessionRetirementActor(req),
+          });
         }
       });
 
@@ -204,8 +214,9 @@ export function registerFactoryContainerDeleteRoutes(app: Express) {
           skipped++;
           continue;
         }
-        const goodsValue = parseFloat(container.ratePerKg || "0") * parseFloat(container.totalKg || "0");
-        if (goodsValue <= 0) {
+        // Exact (was a float product).
+        const goodsValue = toMoney(container.ratePerKg).times(toMoney(container.totalKg));
+        if (goodsValue.lessThanOrEqualTo(0)) {
           skipped++;
           continue;
         }
@@ -244,33 +255,31 @@ export function registerFactoryContainerDeleteRoutes(app: Express) {
 
         const today = getClientDate(req);
         const importCostAccId = await getOrCreateLedgerAccount(companyId, "FACTORY_IMPORT_COST", "Factory Import Cost");
-        const importVoucherNum = `FACTORY-IMPORT-${container.id}-${Date.now()}`;
-        const [importVoucher] = await db
-          .insert(vouchers)
-          .values({
+        // Phase 22 (C): through the engine with the container's goods identity
+        // (the create route's) and its FACTORY-IMPORT-{container}- family number.
+        await db.transaction((tx) =>
+          postFactoryVoucherTx(tx, {
             companyId,
-            voucherType: "Journal",
-            voucherNumber: importVoucherNum,
+            voucherNumber: (generation) => `FACTORY-IMPORT-${container.id}-${generation}`,
             voucherDate: container.arrivalDate || today,
             description: `Goods import - container ${container.containerNumber}`,
-            totalAmount: String(goodsValue),
             currency: container.currencyCode || "USD",
-            exchangeRate: String(backfillFxRate),
-            sourceModule: "FACTORY",
+            fxRateToUsd: String(backfillFxRate),
+            source: { sourceType: "factory-container-import", sourceId: container.id, phase: "goods" },
+            lines: [
+              {
+                ledgerAccountId: importCostAccId,
+                debit: goodsValue,
+                narration: `Goods import cost - container ${container.containerNumber}`,
+              },
+              {
+                factorySupplierId: container.supplierId,
+                credit: goodsValue,
+                narration: `Goods payable to supplier - container ${container.containerNumber}`,
+              },
+            ],
           })
-          .returning();
-        await db.insert(voucherEntries).values({
-          voucherId: importVoucher.id,
-          ledgerAccountId: importCostAccId,
-          ...normFactoryEntry(container.currencyCode || "USD", String(goodsValue), "0", backfillFxRate),
-          narration: `Goods import cost - container ${container.containerNumber}`,
-        });
-        await db.insert(voucherEntries).values({
-          voucherId: importVoucher.id,
-          factorySupplierId: container.supplierId,
-          ...normFactoryEntry(container.currencyCode || "USD", "0", String(goodsValue), backfillFxRate),
-          narration: `Goods payable to supplier - container ${container.containerNumber}`,
-        });
+        );
         created++;
       }
 

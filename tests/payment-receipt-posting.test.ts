@@ -1,3 +1,4 @@
+import Decimal from "decimal.js";
 import { describe, expect, it } from "vitest";
 import type { VoucherEntryInsertFields } from "../server/services/accounting/accountingTypes";
 import { buildPaymentReceiptPostingRequest } from "../server/services/accounting/paymentReceiptPosting";
@@ -147,7 +148,9 @@ describe("buildPaymentReceiptPostingRequest", () => {
     expect(built.request.voucher.totalAmount).toBe("0.335000");
   });
 
-  it("applies the bounded aggregate rounding adjustment to the final positive legs", async () => {
+  // Phase 22 A (D3): no per-line adjustment (the currency trigger refuses a base
+  // that does not match its rate); the engine posts the remainder to ROUNDING.
+  it("keeps every leg's exact base (legs pair per line, so the voucher balances without adjustment)", async () => {
     const built = await buildPaymentReceiptPostingRequest(
       baseInput({
         currency: "EUR",
@@ -159,12 +162,14 @@ describe("buildPaymentReceiptPostingRequest", () => {
       })
     );
 
-    const debits = built.request.entries.reduce((sum, entry) => sum + Number(entry.debitAmount), 0);
-    const credits = built.request.entries.reduce((sum, entry) => sum + Number(entry.creditAmount), 0);
-    expect(debits).toBe(0.666667);
-    expect(credits).toBe(0.666667);
-    expect(built.request.entries[2].debitAmount).toBe("0.333334");
-    expect(built.request.entries[3].creditAmount).toBe("0.333334");
+    const debits = built.request.entries.reduce((sum, entry) => sum.plus(entry.debitAmount ?? "0"), new Decimal(0));
+    const credits = built.request.entries.reduce((sum, entry) => sum.plus(entry.creditAmount ?? "0"), new Decimal(0));
+    expect(debits.toFixed(6)).toBe("0.666666");
+    expect(credits.toFixed(6)).toBe("0.666666");
+    expect(built.request.voucher.totalAmount).toBe("0.666666");
+    for (const entry of built.request.entries) {
+      expect(new Decimal(entry.debitAmount ?? "0").plus(entry.creditAmount ?? "0").toFixed(6)).toBe("0.333333");
+    }
   });
 
   it("uses a stable idempotency key for the same protected request", async () => {

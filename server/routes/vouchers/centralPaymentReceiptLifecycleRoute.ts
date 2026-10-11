@@ -6,6 +6,10 @@ import { db } from "../../db";
 import { getErrorMessage, errorStatus } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
 import { voucherMutationBlockReason } from "../../lib/migratedVoucherGuard";
+import {
+  assertNotIntercompanyTransferLeg,
+  sendIntercompanyTransferLegRefusal,
+} from "../../services/accounting/intercompanyTransferLegGuard";
 import { storage } from "../../storage";
 import type { VoucherEntryInsertFields } from "../../services/accounting/accountingTypes";
 import { PostingValidationError } from "../../services/accounting/centralPostingEngine";
@@ -20,7 +24,12 @@ type CentralPaymentReceiptBody = Omit<
   "companyId" | "voucherNumber" | "actor" | "resolveTarget"
 > & { optional?: unknown };
 import { checkAccountWhatsAppRule } from "../factoryWhatsappRoutes";
-import { buildVoucherChangesForUpdate, logAudit, snapshotVoucherEntries } from "../_helpers";
+import {
+  assertVoucherEditableTx,
+  recordVoucherEditAuditTx,
+  sendVoucherCorrectionRefusal,
+} from "../../services/accounting/voucherCorrection";
+import { rebalanceVoucherRoundingTx } from "../../services/accounting/engineRounding";
 
 const postingDependencies = createDatabasePostingDependencies();
 
@@ -97,6 +106,17 @@ async function updateActivePaymentReceipt(req: Request, res: Response, next: Nex
       return;
     }
 
+    // Phase 19 C (MC-2): an intercompany transfer leg is not edited here or on
+    // the legacy route this one falls through to (409): the transfer is deleted
+    // (both legs) and recorded again. This editor changed one leg and left the
+    // other company's voucher and the link as they were.
+    try {
+      await assertNotIntercompanyTransferLeg(voucherId);
+    } catch (legError: unknown) {
+      if (sendIntercompanyTransferLegRefusal(res, legError)) return;
+      throw legError;
+    }
+
     const body = req.body as CentralPaymentReceiptBody;
     // Keep optional transitions and all non-Payment/Receipt edits on the legacy route.
     if (
@@ -133,6 +153,13 @@ async function updateActivePaymentReceipt(req: Request, res: Response, next: Nex
       if (!isActivePaymentReceiptType(lockedVoucher.voucherType) || lockedVoucher.optional) {
         throw new Error("Payment/Receipt compatibility state changed during update");
       }
+      // Phase 22 A (correction policy): open period only (409
+      // VOUCHER_CLOSED_PERIOD_REVERSE_INSTEAD otherwise); a reversed voucher is not edited.
+      const editContext = await assertVoucherEditableTx(tx, voucherId, {
+        companyId,
+        newVoucherDate: String(body.voucherDate),
+        newEffectiveDate: body.effectiveDate ? String(body.effectiveDate) : null,
+      });
 
       const built = await buildPaymentReceiptPostingRequest({
         companyId,
@@ -190,7 +217,7 @@ async function updateActivePaymentReceipt(req: Request, res: Response, next: Nex
         .returning();
 
       await tx.delete(voucherEntries).where(eq(voucherEntries.voucherId, voucherId));
-      const createdEntries = await tx
+      const insertedEntries = await tx
         .insert(voucherEntries)
         .values(built.request.entries.map((entry) => ({ voucherId, ...entry })))
         .returning();
@@ -198,10 +225,12 @@ async function updateActivePaymentReceipt(req: Request, res: Response, next: Nex
       await applyEmployeeBalanceDeltasTx({
         tx,
         companyId,
-        entries: createdEntries,
+        entries: insertedEntries,
         direction: "apply",
         missingEmployeeBehavior: "throw",
       });
+      // Phase 22 A (D3): an engine voucher balances exactly (ROUNDING line).
+      await rebalanceVoucherRoundingTx(tx, { companyId, voucherId });
 
       // An edited duty/transport/office charge voucher re-prices the offloaded bales.
       await syncContainerChargeVoucherEditTx(tx, {
@@ -211,11 +240,21 @@ async function updateActivePaymentReceipt(req: Request, res: Response, next: Nex
         newTotal: updatedVoucher.totalAmount,
       });
 
+      // Wave 16 (B) / phase 22 A: the edit replaces the voucher's lines (delete
+      // and re-insert, the legacy edit contract). The full header and every line
+      // before and after are audited in this transaction, so a failed audit
+      // rolls the edit back.
+      const audited = await recordVoucherEditAuditTx(tx, {
+        voucherId,
+        before: editContext.before,
+        actor: { userId: userId ?? null, username: req.session.username || "unknown", companyId },
+        reason: `${body.voucherType} voucher update`,
+      });
+      const createdEntries = audited.entries;
+
       return {
         voucher: updatedVoucher,
         entries: createdEntries,
-        oldEntries,
-        existingVoucher: lockedVoucher,
       };
     });
 
@@ -241,40 +280,6 @@ async function updateActivePaymentReceipt(req: Request, res: Response, next: Nex
       });
     }
 
-    try {
-      const oldSnapshot = await snapshotVoucherEntries(result.oldEntries);
-      const newSnapshot = await snapshotVoucherEntries(result.entries);
-      await logAudit({
-        userId: userId!,
-        username: req.session.username || "unknown",
-        companyId,
-        action: "update",
-        tableName: "vouchers",
-        recordId: voucherId,
-        recordIdentifier: result.voucher.voucherNumber,
-        changes: buildVoucherChangesForUpdate(
-          {
-            voucherType: result.existingVoucher.voucherType,
-            voucherDate: result.existingVoucher.voucherDate,
-            totalAmount: result.existingVoucher.totalAmount,
-            description: result.existingVoucher.description,
-            optional: result.existingVoucher.optional,
-          },
-          {
-            voucherType: result.voucher.voucherType,
-            voucherDate: result.voucher.voucherDate,
-            totalAmount: result.voucher.totalAmount,
-            description: result.voucher.description,
-            optional: result.voucher.optional,
-          },
-          oldSnapshot,
-          newSnapshot
-        ),
-      });
-    } catch {
-      // Voucher rows and employee effects are already transactionally consistent.
-    }
-
     logger.info("central Payment/Receipt update succeeded", {
       module: "vouchers",
       action: "updatePaymentReceiptCentral",
@@ -295,6 +300,7 @@ async function updateActivePaymentReceipt(req: Request, res: Response, next: Nex
       durationMs: Date.now() - startedAt,
       error,
     });
+    if (sendVoucherCorrectionRefusal(res, error)) return;
     if (error instanceof PostingValidationError) {
       res.status(400).json({ message: error.message, code: error.code });
       return;

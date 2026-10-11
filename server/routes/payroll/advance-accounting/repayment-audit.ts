@@ -17,11 +17,11 @@ import {
   factoryAdvanceRepayments,
   ledgerAccounts,
   vouchers,
-  voucherEntries,
 } from "@shared/schema";
 
 import { getFactoryCompanyId } from "./_helpers";
 import { toMoney } from "../../../lib/money";
+import { postErpVoucherTx } from "../../../services/accounting/erpVoucherPosting";
 
 export function registerAdvanceRepaymentAuditRoutes(app: Express) {
   // GET /api/factory/advances/repayment-audit — find salary deduction advances missing cash vouchers
@@ -285,39 +285,24 @@ export function registerAdvanceRepaymentAuditRoutes(app: Express) {
               .returning();
 
             const narration = `Salary deduction repayment — ${workerName}: $${amount.toFixed(2)} (advance #${adv.id})`;
-            const voucherNumber = `REPAY-SAL-${repayment.id}-${Date.now()}`;
-            const [voucher] = await tx
-              .insert(vouchers)
-              .values({
-                companyId,
-                voucherNumber,
-                voucherType: "Journal",
-                voucherDate: repaymentDate,
-                description: narration,
-                totalAmount: amount.toFixed(2),
-                currency: "USD",
-                sourceModule: "FACTORY",
-              })
-              .returning();
-
+            const voucherNumber = `REPAY-SAL-${repayment.id}-1`;
             // DR Factory Workers Salary Payable / CR Factory Worker Advances
             // Salary deductions reduce the company's wage obligation — no cash movement
-            await tx.insert(voucherEntries).values([
-              {
-                voucherId: voucher.id,
-                ledgerAccountId: payableAcct.id,
-                debitAmount: amount.toFixed(2),
-                creditAmount: "0",
-                narration,
-              },
-              {
-                voucherId: voucher.id,
-                ledgerAccountId: advancesAccount.id,
-                debitAmount: "0",
-                creditAmount: amount.toFixed(2),
-                narration,
-              },
-            ]);
+
+            await await postErpVoucherTx(tx, {
+              companyId,
+              voucherNumber,
+              voucherType: "Journal",
+              voucherDate: repaymentDate,
+              description: narration,
+              currency: "USD",
+              sourceModule: "FACTORY",
+              lines: [
+                { ledgerAccountId: payableAcct.id, debit: amount.toFixed(2), narration: narration },
+                { ledgerAccountId: advancesAccount.id, credit: amount.toFixed(2), narration: narration },
+              ],
+              source: { type: "advance-repayment-salary", id: repayment.id },
+            });
             posted++;
           } else {
             // Case A: repayment records exist, re-create missing vouchers
@@ -327,37 +312,21 @@ export function registerAdvanceRepaymentAuditRoutes(app: Express) {
               if (amount.lte(0)) continue;
               const rDate = repay.repaymentDate || repaymentDate;
               const narration = `Salary deduction repayment — ${workerName}: $${amount.toFixed(2)} (advance #${adv.id})`;
-              const voucherNumber = `REPAY-SAL-${repay.id}-${Date.now()}`;
-              const [voucher] = await tx
-                .insert(vouchers)
-                .values({
-                  companyId,
-                  voucherNumber,
-                  voucherType: "Journal",
-                  voucherDate: rDate,
-                  description: narration,
-                  totalAmount: amount.toFixed(2),
-                  currency: "USD",
-                  sourceModule: "FACTORY",
-                })
-                .returning();
-
-              await tx.insert(voucherEntries).values([
-                {
-                  voucherId: voucher.id,
-                  ledgerAccountId: payableAcct.id,
-                  debitAmount: amount.toFixed(2),
-                  creditAmount: "0",
-                  narration,
-                },
-                {
-                  voucherId: voucher.id,
-                  ledgerAccountId: advancesAccount.id,
-                  debitAmount: "0",
-                  creditAmount: amount.toFixed(2),
-                  narration,
-                },
-              ]);
+              const voucherNumber = `REPAY-SAL-${repay.id}-1`;
+              await await postErpVoucherTx(tx, {
+                companyId,
+                voucherNumber,
+                voucherType: "Journal",
+                voucherDate: rDate,
+                description: narration,
+                currency: "USD",
+                sourceModule: "FACTORY",
+                lines: [
+                  { ledgerAccountId: payableAcct.id, debit: amount.toFixed(2), narration: narration },
+                  { ledgerAccountId: advancesAccount.id, credit: amount.toFixed(2), narration: narration },
+                ],
+                source: { type: "advance-repayment-salary", id: repay.id },
+              });
               posted++;
             }
           }

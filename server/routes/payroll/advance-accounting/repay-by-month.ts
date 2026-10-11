@@ -11,18 +11,12 @@ import { getClientDate } from "../../../lib/dateUtils";
 import { db } from "../../../db";
 import { requireAuth } from "../../../auth";
 import { eq, and, sql, inArray } from "drizzle-orm";
-import {
-  factoryWorkers,
-  factoryWorkerAdvances,
-  factoryAdvanceRepayments,
-  ledgerAccounts,
-  vouchers,
-  voucherEntries,
-} from "@shared/schema";
+import { factoryWorkers, factoryWorkerAdvances, factoryAdvanceRepayments, ledgerAccounts } from "@shared/schema";
 
 import { getFactoryCompanyId, writeDaybookEntry } from "./_helpers";
 import type Decimal from "decimal.js";
 import { MoneyDecimal, toMoney } from "../../../lib/money";
+import { postErpVoucherTx } from "../../../services/accounting/erpVoucherPosting";
 
 export function registerAdvanceRepayByMonthRoutes(app: Express) {
   app.post("/api/factory/advances/repay-by-month", requireAuth, async (req: Request, res: Response) => {
@@ -126,37 +120,21 @@ export function registerAdvanceRepayByMonthRoutes(app: Express) {
             .where(eq(factoryWorkerAdvances.id, advance.id));
 
           // Voucher: DR Cash, CR Factory Worker Advances
-          const voucherNumber = `RECEIPT-REPAY-${repayment.id}-${Date.now()}`;
-          const [createdVoucher] = await tx
-            .insert(vouchers)
-            .values({
-              companyId,
-              voucherNumber,
-              voucherType: "Receipt",
-              voucherDate: repayDate,
-              description: narration,
-              totalAmount: bal.toFixed(2),
-              currency: "USD",
-              sourceModule: "FACTORY",
-            })
-            .returning();
-
-          await tx.insert(voucherEntries).values([
-            {
-              voucherId: createdVoucher.id,
-              ledgerAccountId: cashAccountId,
-              debitAmount: bal.toFixed(2),
-              creditAmount: "0",
-              narration,
-            },
-            {
-              voucherId: createdVoucher.id,
-              ledgerAccountId: advancesAccount.id,
-              debitAmount: "0",
-              creditAmount: bal.toFixed(2),
-              narration,
-            },
-          ]);
+          const voucherNumber = `RECEIPT-REPAY-${repayment.id}-1`;
+          await postErpVoucherTx(tx, {
+            companyId,
+            voucherNumber,
+            voucherType: "Receipt",
+            voucherDate: repayDate,
+            description: narration,
+            currency: "USD",
+            sourceModule: "FACTORY",
+            lines: [
+              { ledgerAccountId: cashAccountId, debit: bal.toFixed(2), narration: narration },
+              { ledgerAccountId: advancesAccount.id, credit: bal.toFixed(2), narration: narration },
+            ],
+            source: { type: "advance-repayment", id: repayment.id },
+          });
 
           await writeDaybookEntry(tx, {
             companyId,

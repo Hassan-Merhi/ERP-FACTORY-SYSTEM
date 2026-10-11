@@ -4,7 +4,6 @@ import { logger } from "../../lib/logger";
 import { requireAuth, canModifyDate } from "../../auth";
 import { updatePosSale } from "../../services/pos/edit/updateSaleService";
 import { classifyGoldenCoastPosConfigurationError } from "../../services/pos/goldenCoastPosConfigurationError";
-import { logAudit } from "../helpers/auditHelpers";
 
 export function registerPosEditSaleRoutes(app: Express): void {
   // Update existing sales voucher
@@ -56,20 +55,8 @@ export async function handlePosSaleEdit(
         voucherId: result.body?.voucher?.id,
         durationMs: Date.now() - _t,
       });
-      try {
-        await logAudit({
-          userId: req.session.userId!,
-          username: req.session.username || "unknown",
-          companyId: req.session.currentCompanyId!,
-          action: "update",
-          tableName: "vouchers",
-          recordId: voucherId,
-          recordIdentifier: result.body?.voucher?.voucherNumber ?? null,
-          changes: null,
-        });
-      } catch (auditErr) {
-        logger.error("[POS edit audit] non-fatal:", { error: auditErr });
-      }
+      // Phase 21 (B): updatePosSale writes the edit audit inside the edit's
+      // transaction; the duplicate after-commit summary row here is gone.
     }
     const responseBody =
       options.includeLegacyTopLevelVoucher && result.body?.voucher

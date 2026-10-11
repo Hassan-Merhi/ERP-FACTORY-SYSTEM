@@ -7,7 +7,7 @@
 import type { Express, Request, Response } from "express";
 import { getErrorMessage } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
-import { eq, and, desc, inArray } from "drizzle-orm";
+import { eq, and, desc, inArray, isNotNull, like, or } from "drizzle-orm";
 import { db } from "../../db";
 import { storage } from "../../storage";
 import { getAccessibleCompanyIds } from "../../security/companyAccessBoundary";
@@ -19,12 +19,16 @@ import {
   factoryWorkerDeductions,
   salaryAdvanceDeductions,
   salaryAdvances,
-  voucherEntries,
   vouchers,
 } from "@shared/schema";
 import type Decimal from "decimal.js";
 import { MoneyDecimal, moneyString, parseMoneyInput, sumMoney, toMoney } from "../../lib/money";
 import { allLedgerAccountsOwned } from "../helpers/companyOwnership";
+import {
+  postErpVoucherTx,
+  sessionPostingActor,
+  type ErpVoucherLine,
+} from "../../services/accounting/erpVoucherPosting";
 
 type PayrollItemInput = {
   employeeId: number;
@@ -227,20 +231,9 @@ export function registerPayrollRunRoutes(app: Express) {
         }
 
         const payDate = run.date;
-        const voucherNumber = `SAL-${runId}-${Date.now()}`;
-        const [voucher] = await db
-          .insert(vouchers)
-          .values({
-            companyId,
-            voucherNumber,
-            voucherType: "Payment",
-            voucherDate: payDate,
-            description: run.notes || `Payroll run #${runId} — ${runItems.length} workers`,
-            totalAmount: moneyString(totalAmount),
-          })
-          .returning();
 
-        // Create one debit entry per worker group
+        // Resolve one expense account per worker group before posting
+        const runGroupDebits: ErpVoucherLine[] = [];
         for (const [grp, grpTotal] of itemsByGroup) {
           const isDefault = grp === "__default__";
           const expCode = isDefault
@@ -262,28 +255,65 @@ export function registerPayrollRunRoutes(app: Express) {
               active: true,
             });
           }
-          await db.insert(voucherEntries).values({
-            voucherId: voucher.id,
+          runGroupDebits.push({
             ledgerAccountId: expAccount.id,
-            debitAmount: moneyString(grpTotal),
-            creditAmount: "0",
+            debit: grpTotal,
             narration: isDefault ? `Salary expense — payroll run #${runId}` : `Salary expense - ${grp} — run #${runId}`,
           });
         }
 
-        // Single credit entry for the total payment out
-        await db.insert(voucherEntries).values({
-          voucherId: voucher.id,
-          ledgerAccountId: parseInt(paymentAccountId),
-          debitAmount: "0",
-          creditAmount: moneyString(totalAmount),
-          narration: `Cash paid — payroll run #${runId}`,
+        // Voucher header and every entry commit together (balanced-voucher trigger).
+        // Phase 22 (B): through the central engine (one payment per run; a
+        // repeated pay request returns it), the run marked PAID in the same
+        // transaction.
+        const { voucher, updated } = await db.transaction(async (tx) => {
+          // The run's payment keeps its SAL-{run}- family number: the run undo
+          // (runs-lifecycle.ts), the voucher bulk delete and the central
+          // payment deletion policy find it by that prefix to reverse the run.
+          // The suffix is the payment's generation (1 + the run's earlier
+          // payment vouchers, deleted by an undo or a voucher delete, which
+          // keep their numbers), and a later generation is its own posting
+          // identity, so a re-pay after an undo posts a new voucher instead of
+          // replaying the deleted one; a repeated request of one generation
+          // still replays.
+          const earlierPayments = await tx
+            .select({ id: vouchers.id })
+            .from(vouchers)
+            .where(
+              and(
+                eq(vouchers.companyId, companyId),
+                isNotNull(vouchers.deletedAt),
+                or(
+                  like(vouchers.voucherNumber, `SAL-${runId}-%`),
+                  like(vouchers.originalVoucherNumber, `SAL-${runId}-%`)
+                )
+              )
+            );
+          const generation = earlierPayments.length + 1;
+          const { voucher } = await postErpVoucherTx(tx, {
+            companyId,
+            voucherType: "Payment",
+            voucherNumber: `SAL-${runId}-${generation}`,
+            voucherDate: payDate,
+            description: run.notes || `Payroll run #${runId} — ${runItems.length} workers`,
+            lines: [
+              ...runGroupDebits,
+              {
+                ledgerAccountId: parseInt(paymentAccountId),
+                credit: totalAmount,
+                narration: `Cash paid — payroll run #${runId}`,
+              },
+            ],
+            source: { type: "erp-payroll-run", id: runId, revision: generation > 1 ? `g${generation}` : null },
+            actor: sessionPostingActor(req, "Payroll run payment"),
+          });
+          const [updated] = await tx
+            .update(erpPayrollRuns)
+            .set({ status: "PAID", paymentAccountId: parseInt(paymentAccountId), paidAt: new Date().toISOString() })
+            .where(eq(erpPayrollRuns.id, runId))
+            .returning();
+          return { voucher, updated };
         });
-        const [updated] = await db
-          .update(erpPayrollRuns)
-          .set({ status: "PAID", paymentAccountId: parseInt(paymentAccountId), paidAt: new Date().toISOString() })
-          .where(eq(erpPayrollRuns.id, runId))
-          .returning();
 
         // Deduct advance balances FIFO for each employee who has a deduction in this payroll
         const payMonth = payDate.substring(0, 7);

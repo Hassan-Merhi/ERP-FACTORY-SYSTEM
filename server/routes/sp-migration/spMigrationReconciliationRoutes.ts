@@ -64,14 +64,15 @@ export function registerSpMigrationReconciliationRoutes(app: Express) {
         `)
         ).rows;
         const stockMismatches = perItemStock.filter((r) => Math.abs(pn(r.src_qty) - pn(r.tgt_qty)) > 0.01);
+        // Value by the stored total_value (wave 11): quantity × average_rate drifts.
         const srcStock = (
           await db.execute(
-            sql`SELECT COALESCE(SUM(quantity),0) AS q, COALESCE(SUM(quantity*average_rate),0) AS v FROM inventory WHERE company_id = ${sourceId}`
+            sql`SELECT COALESCE(SUM(quantity),0) AS q, COALESCE(SUM(total_value),0) AS v FROM inventory WHERE company_id = ${sourceId}`
           )
         ).rows[0];
         const tgtStock = (
           await db.execute(
-            sql`SELECT COALESCE(SUM(quantity),0) AS q, COALESCE(SUM(quantity*average_rate),0) AS v FROM inventory WHERE company_id = ${targetId}`
+            sql`SELECT COALESCE(SUM(quantity),0) AS q, COALESCE(SUM(total_value),0) AS v FROM inventory WHERE company_id = ${targetId}`
           )
         ).rows[0];
         areas.push({

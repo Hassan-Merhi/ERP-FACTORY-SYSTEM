@@ -239,19 +239,15 @@ export function useChatActions(state: ChatActionsState) {
       const hasP = resolved.items.some((i) => i.type === "PRODUCE");
       const hasC = resolved.items.some((i) => i.type === "CONSUME");
       const adjType = hasP && hasC ? "Mixed" : hasP ? "Production" : "Consumption";
-      const totalAmount = resolved.items.reduce((sum, i) => sum + i.quantity * i.rate, 0);
       const voucherNumber = `AI-${Date.now()}`;
-      const voucherRes = await apiRequest("POST", "/api/vouchers", {
-        voucherNumber,
-        voucherType: adjType,
-        voucherDate: resolved.date,
-        description: resolved.notes || `${adjType} voucher`,
-        totalAmount: String(totalAmount),
-        optional: resolved.optional ?? false,
-      });
-      const voucherData = await voucherRes.json();
+      // One request: the server creates the voucher with its adjustment.
       await apiRequest("POST", "/api/stock-adjustments", {
-        voucherId: voucherData.id,
+        voucher: {
+          voucherNumber,
+          voucherDate: resolved.date,
+          description: resolved.notes || `${adjType} voucher`,
+          optional: resolved.optional ?? false,
+        },
         locationId: resolved.locationId,
         adjustmentType: adjType,
         notes: resolved.notes || "",

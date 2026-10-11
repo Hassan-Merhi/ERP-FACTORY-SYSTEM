@@ -19,6 +19,17 @@ import {
 import { getClientDate } from "../../lib/dateUtils";
 import { resultRows } from "../../lib/queryResult";
 import { requireSpCompany, getSpAccount, parseNum } from "./spHelpers";
+import { parseMoneyInput, toMoney } from "../../lib/money";
+import {
+  postFactoryPartyLineVoucherTx,
+  postFactoryVoucherTx,
+  usdLineAmounts,
+} from "../../services/factory/factoryVoucherPosting";
+import {
+  editPostedFactoryVoucherTx,
+  sendVoucherCorrectionRefusal,
+} from "../../services/factory/factoryVoucherCorrection";
+import { PostingValidationError } from "../../services/accounting/centralPostingEngine";
 
 // ── Containers + Prepaid Charges ─────────────────────────────────────────────
 
@@ -44,6 +55,9 @@ export function registerSpContainerRoutes(app: Express) {
 
       res.json(result);
     } catch (error: unknown) {
+      if (sendVoucherCorrectionRefusal(res, error)) return;
+      if (error instanceof PostingValidationError)
+        return res.status(400).json({ code: error.code, message: error.message });
       res.status(500).json({ message: getErrorMessage(error) });
     }
   });
@@ -108,7 +122,7 @@ export function registerSpContainerRoutes(app: Express) {
         otwClrAcct = customOtwClr;
       }
 
-      const totalUsd = parseNum(invoiceTotalUsd);
+      const totalUsd = (parseMoneyInput(invoiceTotalUsd) ?? toMoney(0)).toDecimalPlaces(2);
       const supplierIdNum = supplierId ? parseInt(String(supplierId)) : null;
 
       const result = await db.transaction(async (tx) => {
@@ -121,7 +135,7 @@ export function registerSpContainerRoutes(app: Express) {
             containerNumber: containerNumber || null,
             invoiceNumber,
             invoiceDate,
-            invoiceTotalUsd: String(totalUsd),
+            invoiceTotalUsd: totalUsd.toFixed(2),
             discountPct: String(parseNum(discountPct)),
             freightEstimateUsd: String(parseNum(freightEstimateUsd)),
             notes: notes || null,
@@ -145,40 +159,32 @@ export function registerSpContainerRoutes(app: Express) {
         }
 
         // Voucher: Dr Goods OTW / Cr Goods OTW Clearing
-        if (totalUsd > 0) {
-          const voucherNum = `SP-OTW-${container.id}-${Date.now()}`;
-          const [voucher] = await tx
-            .insert(vouchers)
-            .values({
-              companyId,
-              voucherType: "Journal",
-              voucherNumber: voucherNum,
-              voucherDate: invoiceDate,
-              description: `Goods OTW: ${supplierName} — Invoice ${invoiceNumber}`,
-              totalAmount: String(totalUsd),
-              currency: "USD",
-              exchangeRate: "1",
-              sourceModule: "SP",
-            })
-            .returning();
-
-          await tx.insert(voucherEntries).values({
-            voucherId: voucher.id,
-            ledgerAccountId: otwAcct.id,
-            debitAmount: String(totalUsd),
-            creditAmount: "0",
-            narration: `Goods OTW — ${supplierName} inv ${invoiceNumber}`,
+        if (totalUsd.greaterThan(0)) {
+          // Phase 22 (C): identity, Decimal, deterministic SP-OTW- number (read as
+          // identity by the SP lists). The clearing line carries the supplier as
+          // party, so it is posted by the party-line writer (see factoryVoucherPosting).
+          const { voucherId } = await postFactoryPartyLineVoucherTx(tx, {
+            companyId,
+            voucherNumber: (generation) => `SP-OTW-${container.id}-${generation}`,
+            voucherDate: invoiceDate,
+            description: `Goods OTW: ${supplierName} — Invoice ${invoiceNumber}`,
+            sourceModule: "SP",
+            source: { sourceType: "sp-container-otw", sourceId: `${companyId}:${container.id}`, phase: "voucher" },
+            lines: [
+              {
+                ledgerAccountId: otwAcct.id,
+                debit: totalUsd,
+                narration: `Goods OTW — ${supplierName} inv ${invoiceNumber}`,
+              },
+              {
+                ledgerAccountId: otwClrAcct.id,
+                supplierId: supplierIdNum,
+                credit: totalUsd,
+                narration: `OTW Clearing — ${supplierName} inv ${invoiceNumber}`,
+              },
+            ],
           });
-
-          await tx.insert(voucherEntries).values({
-            voucherId: voucher.id,
-            ledgerAccountId: otwClrAcct.id,
-            debitAmount: "0",
-            creditAmount: String(totalUsd),
-            supplierId: supplierIdNum,
-            narration: `OTW Clearing — ${supplierName} inv ${invoiceNumber}`,
-          });
-
+          const voucher = { id: voucherId };
           await tx.update(spContainers).set({ goodsOtwVoucherId: voucher.id }).where(eq(spContainers.id, container.id));
         }
 
@@ -187,6 +193,9 @@ export function registerSpContainerRoutes(app: Express) {
 
       res.json(result);
     } catch (error: unknown) {
+      if (sendVoucherCorrectionRefusal(res, error)) return;
+      if (error instanceof PostingValidationError)
+        return res.status(400).json({ code: error.code, message: error.message });
       res.status(500).json({ message: getErrorMessage(error) });
     }
   });
@@ -244,10 +253,10 @@ export function registerSpContainerRoutes(app: Express) {
           return null;
         }
 
-        const totalUsd = parseNum(invoiceTotalUsd ?? lockedExisting.invoiceTotalUsd);
-        const supplierIdNum = supplierId
-          ? parseInt(String(supplierId))
-          : (lockedExisting.supplierId ?? null);
+        const totalUsd = (
+          parseMoneyInput(invoiceTotalUsd ?? lockedExisting.invoiceTotalUsd) ?? toMoney(0)
+        ).toDecimalPlaces(2);
+        const supplierIdNum = supplierId ? parseInt(String(supplierId)) : (lockedExisting.supplierId ?? null);
         const newSupplierName = supplierName ?? lockedExisting.supplierName;
         const newInvoiceNumber = invoiceNumber ?? lockedExisting.invoiceNumber;
         const newInvoiceDate = invoiceDate ?? lockedExisting.invoiceDate;
@@ -261,7 +270,7 @@ export function registerSpContainerRoutes(app: Express) {
             containerNumber: containerNumber !== undefined ? containerNumber || null : lockedExisting.containerNumber,
             invoiceNumber: newInvoiceNumber,
             invoiceDate: newInvoiceDate,
-            invoiceTotalUsd: String(totalUsd),
+            invoiceTotalUsd: totalUsd.toFixed(2),
             discountPct: String(parseNum(discountPct ?? lockedExisting.discountPct)),
             freightEstimateUsd: String(parseNum(freightEstimateUsd ?? lockedExisting.freightEstimateUsd)),
             notes: notes !== undefined ? notes || null : lockedExisting.notes,
@@ -270,72 +279,78 @@ export function registerSpContainerRoutes(app: Express) {
           .returning();
 
         // Regenerate OTW voucher if amount or supplier changed
-        if (lockedExisting.goodsOtwVoucherId && totalUsd > 0) {
-          // Update voucher header
-          await tx
-            .update(vouchers)
-            .set({
-              voucherDate: newInvoiceDate,
-              description: `Goods OTW: ${newSupplierName} — Invoice ${newInvoiceNumber}`,
-              totalAmount: String(totalUsd),
-            })
-            .where(eq(vouchers.id, lockedExisting.goodsOtwVoucherId));
-
-          // Delete old entries and recreate with updated amounts
-          await tx.delete(voucherEntries).where(eq(voucherEntries.voucherId, lockedExisting.goodsOtwVoucherId));
-
-          await tx.insert(voucherEntries).values({
-            voucherId: lockedExisting.goodsOtwVoucherId,
-            ledgerAccountId: otwAcct.id,
-            debitAmount: String(totalUsd),
-            creditAmount: "0",
-            narration: `Goods OTW — ${newSupplierName} inv ${newInvoiceNumber}`,
-          });
-
-          await tx.insert(voucherEntries).values({
-            voucherId: lockedExisting.goodsOtwVoucherId,
-            ledgerAccountId: otwClrAcct.id,
-            debitAmount: "0",
-            creditAmount: String(totalUsd),
-            supplierId: supplierIdNum,
-            narration: `OTW Clearing — ${newSupplierName} inv ${newInvoiceNumber}`,
-          });
-        } else if (!lockedExisting.goodsOtwVoucherId && totalUsd > 0) {
-          // Create new voucher if none existed
-          const voucherNum = `SP-OTW-${containerId}-${Date.now()}`;
-          const [voucher] = await tx
-            .insert(vouchers)
-            .values({
+        if (lockedExisting.goodsOtwVoucherId && totalUsd.greaterThan(0)) {
+          const otwVoucherId = lockedExisting.goodsOtwVoucherId;
+          // Phase 22 (C), G4/PE9: an audited open-period edit of the posted OTW
+          // voucher (refused with 409 in a closed period: reverse and re-post).
+          await editPostedFactoryVoucherTx(
+            tx,
+            {
               companyId,
-              voucherType: "Journal",
-              voucherNumber: voucherNum,
-              voucherDate: newInvoiceDate,
-              description: `Goods OTW: ${newSupplierName} — Invoice ${newInvoiceNumber}`,
-              totalAmount: String(totalUsd),
-              currency: "USD",
-              exchangeRate: "1",
-              sourceModule: "SP",
-            })
-            .returning();
-
-          await tx.insert(voucherEntries).values({
-            voucherId: voucher.id,
-            ledgerAccountId: otwAcct.id,
-            debitAmount: String(totalUsd),
-            creditAmount: "0",
-            narration: `Goods OTW — ${newSupplierName} inv ${newInvoiceNumber}`,
+              voucherIds: [otwVoucherId],
+              reason: "sp-container-otw-edit",
+              actor: { userId: req.session.userId, username: req.session.username },
+              newVoucherDate: newInvoiceDate,
+            },
+            async () => {
+              await tx
+                .update(vouchers)
+                .set({
+                  voucherDate: newInvoiceDate,
+                  description: `Goods OTW: ${newSupplierName} — Invoice ${newInvoiceNumber}`,
+                  totalAmount: totalUsd.toFixed(2),
+                })
+                .where(eq(vouchers.id, otwVoucherId));
+              // Wave 16 (A): the edit carries the container's supplier on the header
+              // itself; the container trigger no longer rewrites posted vouchers.
+              await tx.execute(
+                sql`UPDATE vouchers SET supplier_id = ${supplierIdNum}
+                     WHERE id = ${otwVoucherId} AND company_id = ${companyId}
+                       AND supplier_id IS DISTINCT FROM ${supplierIdNum}`
+              );
+              // Delete old entries and recreate with updated amounts
+              await tx.delete(voucherEntries).where(eq(voucherEntries.voucherId, otwVoucherId));
+              await tx.insert(voucherEntries).values([
+                {
+                  voucherId: otwVoucherId,
+                  ledgerAccountId: otwAcct.id,
+                  ...usdLineAmounts(totalUsd, 0),
+                  narration: `Goods OTW — ${newSupplierName} inv ${newInvoiceNumber}`,
+                },
+                {
+                  voucherId: otwVoucherId,
+                  ledgerAccountId: otwClrAcct.id,
+                  supplierId: supplierIdNum,
+                  ...usdLineAmounts(0, totalUsd),
+                  narration: `OTW Clearing — ${newSupplierName} inv ${newInvoiceNumber}`,
+                },
+              ]);
+            }
+          );
+        } else if (!lockedExisting.goodsOtwVoucherId && totalUsd.greaterThan(0)) {
+          // Create new voucher if none existed
+          const { voucherId } = await postFactoryPartyLineVoucherTx(tx, {
+            companyId,
+            voucherNumber: (generation) => `SP-OTW-${containerId}-${generation}`,
+            voucherDate: newInvoiceDate,
+            description: `Goods OTW: ${newSupplierName} — Invoice ${newInvoiceNumber}`,
+            sourceModule: "SP",
+            source: { sourceType: "sp-container-otw", sourceId: `${companyId}:${containerId}`, phase: "voucher" },
+            lines: [
+              {
+                ledgerAccountId: otwAcct.id,
+                debit: totalUsd,
+                narration: `Goods OTW — ${newSupplierName} inv ${newInvoiceNumber}`,
+              },
+              {
+                ledgerAccountId: otwClrAcct.id,
+                supplierId: supplierIdNum,
+                credit: totalUsd,
+                narration: `OTW Clearing — ${newSupplierName} inv ${newInvoiceNumber}`,
+              },
+            ],
           });
-
-          await tx.insert(voucherEntries).values({
-            voucherId: voucher.id,
-            ledgerAccountId: otwClrAcct.id,
-            debitAmount: "0",
-            creditAmount: String(totalUsd),
-            supplierId: supplierIdNum,
-            narration: `OTW Clearing — ${newSupplierName} inv ${newInvoiceNumber}`,
-          });
-
-          await tx.update(spContainers).set({ goodsOtwVoucherId: voucher.id }).where(eq(spContainers.id, containerId));
+          await tx.update(spContainers).set({ goodsOtwVoucherId: voucherId }).where(eq(spContainers.id, containerId));
         }
 
         return updatedContainer;
@@ -350,6 +365,9 @@ export function registerSpContainerRoutes(app: Express) {
 
       res.json(updated);
     } catch (error: unknown) {
+      if (sendVoucherCorrectionRefusal(res, error)) return;
+      if (error instanceof PostingValidationError)
+        return res.status(400).json({ code: error.code, message: error.message });
       res.status(500).json({ message: getErrorMessage(error) });
     }
   });
@@ -398,6 +416,9 @@ export function registerSpContainerRoutes(app: Express) {
 
       res.json({ ...container, lines, prepaid, offload: offload || null, offloadCharges, movements });
     } catch (error: unknown) {
+      if (sendVoucherCorrectionRefusal(res, error)) return;
+      if (error instanceof PostingValidationError)
+        return res.status(400).json({ code: error.code, message: error.message });
       res.status(500).json({ message: getErrorMessage(error) });
     }
   });
@@ -477,6 +498,9 @@ export function registerSpContainerRoutes(app: Express) {
         unmappedCount: enriched.filter((l) => !l.aliasResolved).length,
       });
     } catch (error: unknown) {
+      if (sendVoucherCorrectionRefusal(res, error)) return;
+      if (error instanceof PostingValidationError)
+        return res.status(400).json({ code: error.code, message: error.message });
       res.status(500).json({ message: getErrorMessage(error) });
     }
   });
@@ -501,6 +525,9 @@ export function registerSpContainerRoutes(app: Express) {
 
       res.json(rows);
     } catch (error: unknown) {
+      if (sendVoucherCorrectionRefusal(res, error)) return;
+      if (error instanceof PostingValidationError)
+        return res.status(400).json({ code: error.code, message: error.message });
       res.status(500).json({ message: getErrorMessage(error) });
     }
   });
@@ -545,7 +572,7 @@ export function registerSpContainerRoutes(app: Express) {
         if (!bank) return res.status(400).json({ message: "Bank account not found for this company" });
       }
 
-      const amount = parseNum(amountPaidUsd);
+      const amount = (parseMoneyInput(amountPaidUsd) ?? toMoney(0)).toDecimalPlaces(2);
       const date = prepaidDate || getClientDate(req);
 
       const result = await db.transaction(async (tx) => {
@@ -557,49 +584,36 @@ export function registerSpContainerRoutes(app: Express) {
             prepaidDate: date,
             chargeType,
             agentName: agentName || null,
-            amountPaidUsd: String(amount),
+            amountPaidUsd: amount.toFixed(2),
             amountUsedUsd: "0",
             notes: notes || null,
           })
           .returning();
 
-        const voucherNum = `SP-PRE-${charge.id}-${Date.now()}`;
         const desc = `Prepaid ${chargeType}${agentName ? ` — ${agentName}` : ""} for container #${containerId}`;
-
-        const [voucher] = await tx
-          .insert(vouchers)
-          .values({
-            companyId,
-            voucherType: "Journal",
-            voucherNumber: voucherNum,
-            voucherDate: date,
-            description: desc,
-            totalAmount: String(amount),
-            currency: "USD",
-            exchangeRate: "1",
-            sourceModule: "SP",
-          })
-          .returning();
-
-        // Dr Prepaid Charges
-        await tx.insert(voucherEntries).values({
-          voucherId: voucher.id,
-          ledgerAccountId: prepaidAcct.id,
-          debitAmount: String(amount),
-          creditAmount: "0",
-          narration: `Prepaid ${chargeType} — ${agentName || ""}`,
+        // Phase 22 (C): through the engine with the prepaid charge's identity
+        // (SP-PRE- family number kept, deterministic suffix).
+        const { voucher } = await postFactoryVoucherTx(tx, {
+          companyId,
+          voucherNumber: (generation) => `SP-PRE-${charge.id}-${generation}`,
+          voucherDate: date,
+          description: desc,
+          sourceModule: "SP",
+          source: { sourceType: "sp-prepaid-charge", sourceId: charge.id, phase: "voucher" },
+          lines: [
+            // Dr Prepaid Charges / Cr Bank
+            { ledgerAccountId: prepaidAcct.id, debit: amount, narration: `Prepaid ${chargeType} — ${agentName || ""}` },
+            ...(bankAccountId
+              ? [
+                  {
+                    bankAccountId: parseInt(bankAccountId),
+                    credit: amount,
+                    narration: `Payment for prepaid ${chargeType}`,
+                  },
+                ]
+              : []),
+          ],
         });
-
-        // Cr Bank
-        if (bankAccountId) {
-          await tx.insert(voucherEntries).values({
-            voucherId: voucher.id,
-            bankAccountId: parseInt(bankAccountId),
-            debitAmount: "0",
-            creditAmount: String(amount),
-            narration: `Payment for prepaid ${chargeType}`,
-          });
-        }
 
         await tx.update(spPrepaidCharges).set({ voucherId: voucher.id }).where(eq(spPrepaidCharges.id, charge.id));
 
@@ -608,6 +622,9 @@ export function registerSpContainerRoutes(app: Express) {
 
       res.json(result);
     } catch (error: unknown) {
+      if (sendVoucherCorrectionRefusal(res, error)) return;
+      if (error instanceof PostingValidationError)
+        return res.status(400).json({ code: error.code, message: error.message });
       res.status(500).json({ message: getErrorMessage(error) });
     }
   });
