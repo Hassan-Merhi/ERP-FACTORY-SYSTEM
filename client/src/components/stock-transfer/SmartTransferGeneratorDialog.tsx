@@ -39,113 +39,15 @@ import {
   validateSmartPreviewLines,
   type SmartPreviewOrderItem,
 } from "./smartTransferPreviewUi";
-
-interface Location {
-  id: number;
-  name: string;
-  code: string;
-}
-
-interface StockMeta {
-  id: number;
-  name: string;
-  active?: boolean;
-}
-
-interface StockItemLight {
-  id: number;
-  name: string;
-  code: string;
-  uom: string;
-}
-
-interface LocationData {
-  quantity: number;
-  rate: number;
-  value: number;
-}
-
-interface LocationSummaryItem {
-  id: number;
-  code: string;
-  name: string;
-  uom: string;
-  locationData: Record<number, LocationData>;
-}
-
-interface LocationSummaryGroup {
-  id: number;
-  name: string;
-  items: LocationSummaryItem[];
-}
-
-interface LocationSummaryResponse {
-  stockGroups: LocationSummaryGroup[];
-}
-
-type PerformanceClassification =
-  "strong_seller" | "good_seller" | "normal_seller" | "slow_seller" | "overstocked" | "no_recent_sales";
-
-interface SmartPreviewLine {
-  clientId: string;
-  manual?: boolean;
-  stockItemId: number;
-  stockItemName: string;
-  stockItemCode: string;
-  uom: string;
-  stockGroupId: number | null;
-  categoryId: number | null;
-  sourceLocationId: number;
-  sourceLocationName: string;
-  availableAtSource: number;
-  sourceCurrentStock: number;
-  sourceReserveQty: number;
-  sourceAverageRate: number;
-  destinationStock: number;
-  otwQty: number;
-  effectiveDestinationStock: number;
-  olderTransferQty: number;
-  newerTransferQty: number;
-  salesAfterOlderTransfer: number;
-  salesAfterNewerTransfer: number;
-  totalSalesSinceOlderTransfer: number;
-  olderSellThroughPercentage: number;
-  newerSellThroughPercentage: number;
-  overallSellThroughPercentage: number;
-  averageSalesPerDay: number;
-  latestSalesPerDay: number;
-  estimatedDaysOfStockRemaining: number | null;
-  classification: PerformanceClassification;
-  classificationLabel: string;
-  suggestedQuantity: number;
-  itemSuggestedTotal: number;
-  calculatedNeed: number;
-  confidence: number;
-  reason: string;
-}
-
-interface SmartPreviewResponse {
-  readOnly: true;
-  destinationLocationId: number;
-  destinationLocationName: string;
-  sourceLocationIds: number[];
-  sourceLocationNames: string[];
-  targetQuantity: number;
-  achievedQuantity: number;
-  shortfallQuantity: number;
-  shortfall: boolean;
-  lines: Omit<SmartPreviewLine, "clientId" | "manual">[];
-  warnings: string[];
-  excludedItems: Array<{
-    stockItemId: number;
-    stockItemName: string;
-    reason: string;
-  }>;
-  history: {
-    newerTransfer: { voucherNumber: string; voucherDate: string } | null;
-    olderTransfer: { voucherNumber: string; voucherDate: string } | null;
-  };
-}
+import {
+  type Location,
+  type StockMeta,
+  type StockItemLight,
+  type LocationSummaryResponse,
+  type PerformanceClassification,
+  type SmartPreviewLine,
+  type SmartPreviewResponse,
+} from "./smartTransferGeneratorTypes";
 
 interface SmartTransferGeneratorDialogProps {
   open: boolean;
