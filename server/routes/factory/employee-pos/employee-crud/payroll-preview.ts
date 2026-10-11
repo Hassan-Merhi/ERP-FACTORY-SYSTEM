@@ -11,6 +11,7 @@ import { requireAuth } from "../../../../auth";
 import { employees } from "@shared/schema";
 import { eq, and, sql } from "drizzle-orm";
 import { sqlArray } from "../../../../lib/sqlArray";
+import { MoneyDecimal, toMoney } from "../../../../lib/money";
 import { toFiniteNumber, toPositiveInteger } from "@shared/typeGuards";
 
 /**
@@ -93,18 +94,20 @@ export function registerFactoryEmployeePayrollPreviewRoutes(app: Express) {
         const half = (a["half day"] || 0) + (a.halfday || 0);
         const absent = a.absent || 0;
         const totalMarkedDays = present + half + absent;
-        const monthlySalary = parseFloat(emp.monthlySalary || "0");
-        const dailyRate = daysInMonth > 0 ? monthlySalary / daysInMonth : 0;
+        const monthlySalary = toMoney(emp.monthlySalary);
 
         // Absence-deduction model: unmarked days within the period are treated as present.
         // Only explicitly marked absences and half-days reduce pay.
         const deductedDays = absent + half * 0.5;
         const effectivePresentDays = Math.max(0, daysInMonth - deductedDays);
-        const calculatedPay = Math.max(0, monthlySalary - dailyRate * deductedDays);
+        // salary x deducted days / days in month, in exact decimals.
+        const zero = new MoneyDecimal(0);
+        const absenceDeduction = daysInMonth > 0 ? monthlySalary.times(deductedDays).div(daysInMonth) : zero;
+        const calculatedPay = MoneyDecimal.max(zero, monthlySalary.minus(absenceDeduction));
 
-        const outstandingAdvance = advMap[eid] || 0;
-        const deduction = Math.min(outstandingAdvance, calculatedPay);
-        const netPay = Math.max(0, calculatedPay - deduction);
+        const outstandingAdvance = toMoney(advMap[eid]);
+        const deduction = MoneyDecimal.min(outstandingAdvance, calculatedPay);
+        const netPay = MoneyDecimal.max(zero, calculatedPay.minus(deduction));
         return {
           employeeId: eid,
           employeeName: `${emp.firstName} ${emp.lastName}`.trim(),
