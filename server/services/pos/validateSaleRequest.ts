@@ -30,6 +30,7 @@ import type {
   PosSaleResponseBody,
   ResolvedPaymentAccount,
 } from "./posSaleTypes";
+import { isAccountType } from "../accounting/accountClassification";
 
 /** Returns the existing sale response body if `clientSaleId` was already saved, else null. */
 export async function checkIdempotentSale(
@@ -154,7 +155,7 @@ export async function resolvePaymentAccount(params: {
       };
     }
 
-    if (fetchedCustomerAccount.accountType !== "Asset") {
+    if (!isAccountType(fetchedCustomerAccount.accountType, "Asset")) {
       return {
         error: {
           status: 400,
@@ -186,7 +187,7 @@ export async function resolvePaymentAccount(params: {
       };
     }
 
-    if (cashLedger.accountType !== "Cash") {
+    if (!isAccountType(cashLedger.accountType, "Cash")) {
       return {
         error: {
           status: 400,
@@ -209,9 +210,9 @@ export async function resolvePaymentAccount(params: {
 
     if (ledgerAccount) {
       // It's a ledger account - validate it's appropriate for POS sales
-      if (ledgerAccount.accountType === "Cash") {
+      if (isAccountType(ledgerAccount.accountType, "Cash")) {
         return { accountType: "cash", accountId: paymentAccountId, customerAccount: null };
-      } else if (ledgerAccount.accountType === "Asset") {
+      } else if (isAccountType(ledgerAccount.accountType, "Asset")) {
         // Asset accounts are customer receivables - should only be used for credit sales
         return {
           error: {

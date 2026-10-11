@@ -8,9 +8,13 @@ export async function getAllInterCompanyTransfers(companyId?: number): Promise<s
       .select()
       .from(schema.interCompanyTransfers)
       .where(
-        or(
-          eq(schema.interCompanyTransfers.fromCompanyId, companyId),
-          eq(schema.interCompanyTransfers.toCompanyId, companyId)
+        and(
+          or(
+            eq(schema.interCompanyTransfers.fromCompanyId, companyId),
+            eq(schema.interCompanyTransfers.toCompanyId, companyId)
+          ),
+          // Phase 26 (MC-11): a soft-deleted link is history, not a transfer.
+          isNull(schema.interCompanyTransfers.deletedAt)
         )
       )
       .orderBy(sql`${schema.interCompanyTransfers.transferDate} DESC`);
@@ -18,6 +22,7 @@ export async function getAllInterCompanyTransfers(companyId?: number): Promise<s
   return await db
     .select()
     .from(schema.interCompanyTransfers)
+    .where(isNull(schema.interCompanyTransfers.deletedAt))
     .orderBy(sql`${schema.interCompanyTransfers.transferDate} DESC`);
 }
 

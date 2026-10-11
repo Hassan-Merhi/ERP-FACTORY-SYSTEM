@@ -16,7 +16,6 @@ import { MoneyDecimal, moneyString, toMoney } from "../../lib/money";
 import { syncEmployeeBalancesFromEntries } from "../_helpers";
 import { readVoucherAuditState, writeVoucherAuditTx } from "../helpers/voucherAuditTrail";
 import {
-  vouchers,
   voucherEntries,
   interCompanyTransfers,
   salaryAdvances,
@@ -26,11 +25,13 @@ import {
   erpPayrollRunItems,
   intercompanyPaymentRequests,
 } from "@shared/schema";
-import { eq, and, or, inArray, sql } from "drizzle-orm";
+import { eq, and, or, inArray, sql, isNull } from "drizzle-orm";
 import { z } from "zod";
 import { reverseVoucherStockTx } from "../../services/inventory/voucherStockReversal";
+import { retireVouchersTx, sessionRetirementActor } from "../../services/accounting/voucherRetirement";
 import { syncPurchaseOrderGitForVoucherTx } from "../../services/accounting/perpetualInventory/stockReceipts";
 import { syncFactoryInvoiceForChargeVoucherTx } from "../../services/accounting/perpetualInventory/factoryInvoice";
+import { softDeleteTransferLinkTx } from "../../services/accounting/intercompany/intercompanyTransferPosting";
 
 export function registerVoucherBulkDeleteRoutes(app: Express) {
   // Bulk delete vouchers (Admin only) - uses same deletion logic as single delete
@@ -142,9 +143,18 @@ export function registerVoucherBulkDeleteRoutes(app: Express) {
             const linkedTransfers = await tx
               .select()
               .from(interCompanyTransfers)
-              .where(or(eq(interCompanyTransfers.fromVoucherId, id), eq(interCompanyTransfers.toVoucherId, id)));
+              .where(
+                and(
+                  or(eq(interCompanyTransfers.fromVoucherId, id), eq(interCompanyTransfers.toVoucherId, id)),
+                  isNull(interCompanyTransfers.deletedAt)
+                )
+              );
             for (const transfer of linkedTransfers) {
-              await tx.delete(interCompanyTransfers).where(eq(interCompanyTransfers.id, transfer.id));
+              // Phase 26 (MC-11): the link is soft-deleted and audited, not removed.
+              await softDeleteTransferLinkTx(tx, transfer.id, {
+                reason: `Voucher ${voucher.voucherNumber} deleted (bulk)`,
+                actor: { userId: req.session.userId, username: req.session.username },
+              });
               // Wave 9: the other side is soft-deleted (lines kept) and audited
               // under its own company in this transaction, never hard-deleted.
               await softDeleteInterCompanyCounterpartTx(tx, {
@@ -165,8 +175,16 @@ export function registerVoucherBulkDeleteRoutes(app: Express) {
                 )
               );
 
-            // Soft delete: Set deletedAt instead of hard delete
-            await tx.update(vouchers).set({ deletedAt: new Date() }).where(eq(vouchers.id, id));
+            // Phase 23 (phase 22 leftover): retired like every system removal —
+            // soft-deleted with its lines, its number given up (~DEL{id}) and its
+            // posting identity released, so a SAL- payroll run can be paid again
+            // as a new generation; audited in this transaction.
+            await retireVouchersTx(tx, {
+              companyId: currentCompanyId,
+              voucherIds: [id],
+              reason: "voucher-bulk-delete",
+              actor: sessionRetirementActor(req),
+            });
             // Perpetual inventory (wave 8.2): a deleted PO voucher is no longer in transit.
             await syncPurchaseOrderGitForVoucherTx(tx, currentCompanyId, id);
             // Perpetual inventory (wave 8.4): an order whose charge this voucher carries re-syncs its invoice journal.

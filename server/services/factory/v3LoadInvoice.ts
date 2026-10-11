@@ -141,21 +141,30 @@ export async function finalizeV3LoadTx(
     user: { id: string | null; name: string | null };
     /** The statement date of the customer's SALE row (the client's date). */
     statementDate: string;
+    /**
+     * Phase 28 (F10): invoices a load finalized before wave 17 B (status
+     * finalized, no invoice, its bales already SOLD) on this date, through the
+     * reviewed legacy back-fill plan. The load keeps its status and finalize
+     * stamp; the invoice is dated here (its original date, or the cut-over
+     * date when that is closed).
+     */
+    legacyInvoiceDate?: string;
   }
 ): Promise<V3LoadFinalizeResult> {
   const { companyId, loadId } = params;
+  const legacy = params.legacyInvoiceDate !== undefined;
   const [load] = await tx
     .select()
     .from(factoryV3Loads)
     .where(and(eq(factoryV3Loads.id, loadId), eq(factoryV3Loads.companyId, companyId)))
     .for("update");
   if (!load) throw new V3LoadFinalizeRefusalError(404, "Load not found", "V3_LOAD_NOT_FOUND");
-  if (load.status === "finalized") {
+  if (load.status === "finalized" && !(legacy && !load.customerOrderId)) {
     if (load.customerOrderId) await syncFactoryInvoiceTx(tx, companyId, load.customerOrderId);
     const invoice = load.customerOrderId ? await invoiceSummaryTx(tx, companyId, load.customerOrderId) : null;
     return { load, invoice, alreadyFinalized: true };
   }
-  if (load.status !== "loading") {
+  if (load.status !== (legacy ? "finalized" : "loading")) {
     throw new V3LoadFinalizeRefusalError(400, V3_LOAD_NOT_LOADING_MESSAGE, "V3_LOAD_NOT_LOADING");
   }
 
@@ -206,7 +215,11 @@ export async function finalizeV3LoadTx(
     `)
   );
   if (bales.length === 0) throw new V3LoadFinalizeRefusalError(400, V3_LOAD_EMPTY_MESSAGE, "V3_LOAD_EMPTY");
-  const unavailable = bales.filter((bale) => bale.deleted_at !== null || !STOCK_STATUSES.has(String(bale.status)));
+  const unavailable = bales.filter(
+    (bale) =>
+      bale.deleted_at !== null ||
+      !(STOCK_STATUSES.has(String(bale.status)) || (legacy && String(bale.status) === "SOLD"))
+  );
   if (unavailable.length > 0) {
     throw new V3LoadFinalizeRefusalError(
       409,
@@ -235,7 +248,7 @@ export async function finalizeV3LoadTx(
   }
 
   const invoiceNumber = await nextInvoiceNumberTx(tx, companyId);
-  const finalizedAt = new Date();
+  const finalizedAt = legacy ? new Date(`${params.legacyInvoiceDate}T12:00:00.000Z`) : new Date();
   const orderDate = String(load.expectedLoadDate);
   const [order] = await tx
     .insert(customerOrders)
@@ -289,7 +302,7 @@ export async function finalizeV3LoadTx(
   await tx.insert(customerBalances).values({
     companyId,
     customerId: proforma.customer_id,
-    transactionDate: params.statementDate,
+    transactionDate: legacy ? params.legacyInvoiceDate! : params.statementDate,
     transactionType: "SALE",
     debitAmount: grandTotal,
     creditAmount: "0",
@@ -304,13 +317,17 @@ export async function finalizeV3LoadTx(
 
   const [updated] = await tx
     .update(factoryV3Loads)
-    .set({
-      status: "finalized",
-      finalizedAt,
-      finalizedBy: params.user.id,
-      finalizedByName: params.user.name,
-      customerOrderId: order.id,
-    })
+    .set(
+      legacy
+        ? { customerOrderId: order.id }
+        : {
+            status: "finalized",
+            finalizedAt,
+            finalizedBy: params.user.id,
+            finalizedByName: params.user.name,
+            customerOrderId: order.id,
+          }
+    )
     .where(and(eq(factoryV3Loads.id, loadId), eq(factoryV3Loads.companyId, companyId)))
     .returning();
 

@@ -259,47 +259,26 @@ export function registerCompanySettingsRoutes(app: Express) {
         return res.status(403).json({ message: "Only Admin users can access the parent company setting" });
       }
       const parentCompanyId = await storage.getParentCompanyId();
-      res.json({ parentCompanyId });
+      res.json({ parentCompanyId, derivedFrom: "companies.parent_company_id", retiredSetting: true });
     } catch (error: unknown) {
       logger.error("Get parent company error:", { error: error });
       res.status(500).json({ message: getErrorMessage(error) });
     }
   });
 
+  // Phase 26 (MC-7, decided by default): the global parent-company setting is
+  // retired; companies.parent_company_id (Settings > Companies) is the one
+  // parent model. The GET above reports the parent derived from it.
   app.post("/api/system/parent-company", requireAuth, async (req, res) => {
-    try {
-      // Only Admin can change parent company setting
-      const userRole = req.session.currentRole;
-      if (userRole !== "Admin" && userRole !== "Developer") {
-        return res.status(403).json({ message: "Only Admin users can change the parent company setting" });
-      }
-
-      const { parentCompanyId } = req.body;
-
-      // Validate parentCompanyId is null or a valid number
-      if (parentCompanyId !== null && parentCompanyId !== undefined) {
-        const numericId = typeof parentCompanyId === "string" ? parseInt(parentCompanyId, 10) : parentCompanyId;
-        if (typeof numericId !== "number" || isNaN(numericId)) {
-          return res.status(400).json({ message: "Invalid parent company ID: must be a number or null" });
-        }
-
-        // Validate the company exists
-        const company = await storage.getCompanyById(numericId);
-        if (!company) {
-          return res.status(400).json({ message: "Company not found" });
-        }
-
-        await storage.setParentCompanyId(numericId);
-        res.json({ success: true, parentCompanyId: numericId });
-      } else {
-        // Setting to null (clear the parent company)
-        await storage.setParentCompanyId(null);
-        res.json({ success: true, parentCompanyId: null });
-      }
-    } catch (error: unknown) {
-      logger.error("Set parent company error:", { error: error });
-      res.status(500).json({ message: getErrorMessage(error) });
+    const userRole = req.session.currentRole;
+    if (userRole !== "Admin" && userRole !== "Developer") {
+      return res.status(403).json({ message: "Only Admin users can change the parent company setting" });
     }
+    return res.status(410).json({
+      code: "PARENT_COMPANY_SETTING_RETIRED",
+      message:
+        "The global parent company setting is retired. Set each subsidiary's parent company under Settings > Companies.",
+    });
   });
 
   // Company Data Reset - Delete vouchers (keep OTW container vouchers only) and clear opening balances

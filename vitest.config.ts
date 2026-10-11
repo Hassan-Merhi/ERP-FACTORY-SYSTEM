@@ -35,6 +35,8 @@ export default defineConfig({
       "./server/schemaPreload.mjs",
       "./tests/voucherRequestIdentityTestBridge.mjs",
       "./tests/vitestSequentialCompatibility.mjs",
+      // No-op unless TEST_FIXTURE_MAINTENANCE_SCOPE=1 (suite run as a non-superuser role).
+      "./tests/rlsFixtureScope.mjs",
     ],
     // Co-located tests under server/ and shared/ are included too. They existed
     // from the initial import but no config matched them, so 78 tests never ran

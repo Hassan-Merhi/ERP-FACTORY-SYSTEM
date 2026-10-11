@@ -161,9 +161,9 @@ export async function loadNetProfitData(companyId: number, toDate: string | null
         }))
       ),
     // 1. Ledger-account balances — account-company scoped (migrated-account rule)
-    // COALESCE(base_debit_amount, debit_amount): uses historical USD base when available
-    // (i.e. after backfill), falls back to debit_amount for legacy rows.
-    // Falls back to plain debit_amount/credit_amount when base columns are absent.
+    // Phase 29 (M10/AR-3): the ledger amount debit_amount/credit_amount (2dp, the
+    // column the balance guard sums and the trigger derives from the base), not
+    // the 6dp base_* conversion evidence, so this agrees with the balance engine.
     pool
       .query<{
         ledger_account_id: string;
@@ -173,11 +173,11 @@ export async function loadNetProfitData(companyId: number, toDate: string | null
         close_credit: string;
       }>(
         `SELECT ve.ledger_account_id,
-            SUM(COALESCE(ve.base_debit_amount,  ve.debit_amount)::numeric)  AS total_debit,
-            SUM(COALESCE(ve.base_credit_amount, ve.credit_amount)::numeric) AS total_credit,
-            COALESCE(SUM(COALESCE(ve.base_debit_amount,  ve.debit_amount)::numeric)
+            SUM(ve.debit_amount::numeric)  AS total_debit,
+            SUM(ve.credit_amount::numeric) AS total_credit,
+            COALESCE(SUM(ve.debit_amount::numeric)
               FILTER (WHERE NOT (${notFiscalClosingVoucherText("v")})), 0) AS close_debit,
-            COALESCE(SUM(COALESCE(ve.base_credit_amount, ve.credit_amount)::numeric)
+            COALESCE(SUM(ve.credit_amount::numeric)
               FILTER (WHERE NOT (${notFiscalClosingVoucherText("v")})), 0) AS close_credit
      FROM voucher_entries ve
      JOIN vouchers        v  ON ve.voucher_id        = v.id

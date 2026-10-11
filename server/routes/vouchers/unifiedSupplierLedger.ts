@@ -17,14 +17,15 @@
  *   - Supplier-partner companies (documented design): their supplier credits
  *     are posted on the SP payable ledger with the supplier tagged, and this
  *     page is their supplier-tagged payable evidence (the SP reconciliation
- *     reads the same lines). In those companies every supplier-tagged line is
- *     listed and counted; a line the engine gives to the account carries
- *     `spPayableEvidence: true`.
+ *     reads the same lines). Phase 25 (AR-10, one definition of an SP
+ *     supplier balance, decided by default): the balance is the engine's —
+ *     the lines it attributes to the supplier — in every company. The
+ *     supplier-tagged lines the engine gives to the SP payable account are
+ *     still listed, labelled `spPayableEvidence: true`, and never move the
+ *     running balance (they did, so the page disagreed with the engine).
  */
-import { pool } from "../../db";
 import { storage } from "../../storage";
 import { MoneyDecimal, toMoney } from "../../lib/money";
-import { higherPriorityTargetsAbsent } from "../../services/accounting/balances/partyLineRules";
 import { getSupplierBalanceForContext } from "../helpers/supplierBalanceHelpers";
 
 /**
@@ -58,23 +59,6 @@ export interface SupplierStatementRow extends SupplierStatementTransaction {
   containerId?: number | null;
 }
 
-const SUPPLIER_OWNED_LINE = higherPriorityTargetsAbsent("ve", "supplier_id");
-
-/** Cr-positive net of supplier-tagged lines the engine gives to another target, before `startDate`. */
-async function evidenceBroughtForward(supplierId: number, companyId: number, startDate: string) {
-  const result = await pool.query<{ net: string }>(
-    `SELECT COALESCE(SUM(ve.credit_amount::numeric - ve.debit_amount::numeric), 0)::text AS net
-       FROM voucher_entries ve
-       JOIN vouchers v ON v.id = ve.voucher_id
-      WHERE ve.supplier_id = $1 AND v.company_id = $2
-        AND v.optional = false AND v.deleted_at IS NULL
-        AND NOT (${SUPPLIER_OWNED_LINE})
-        AND COALESCE(v.effective_date::date, v.voucher_date::date) < $3::date`,
-    [supplierId, companyId, startDate]
-  );
-  return toMoney(result.rows[0]?.net ?? 0);
-}
-
 export async function buildUnifiedSupplierLedger(input: {
   supplierId: number;
   companyIds: readonly number[];
@@ -94,24 +78,21 @@ export async function buildUnifiedSupplierLedger(input: {
   const perCompany = await Promise.all(
     companyIds.map(async (companyId) => {
       const supplierPartner = companyMap.get(companyId)?.companyType === "supplier_partner";
-      const [owned, all, engine, carried] = await Promise.all([
+      const [owned, all, engine] = await Promise.all([
         storage.getVoucherEntriesBySupplier(supplierId, companyId, startDate, endDate, { ownedOnly: true }),
         supplierPartner
           ? storage.getVoucherEntriesBySupplier(supplierId, companyId, startDate, endDate)
           : Promise.resolve(null),
         supplier ? getSupplierBalanceForContext(supplier, companyId, { startDate, endDate }) : Promise.resolve(null),
-        supplierPartner && startDate
-          ? evidenceBroughtForward(supplierId, companyId, startDate)
-          : Promise.resolve(new MoneyDecimal(0)),
       ]);
-      return { companyId, owned, all, engine, carried };
+      return { companyId, owned, all, engine };
     })
   );
 
-  for (const { companyId, owned, all, engine, carried } of perCompany) {
+  for (const { companyId, owned, all, engine } of perCompany) {
     // The engine's period opening (Cr positive): the opening with its side in
     // the supplier's own company only, plus owned lines before startDate.
-    opening = opening.plus(engine?.periodOpeningBalance ?? 0).plus(carried);
+    opening = opening.plus(engine?.periodOpeningBalance ?? 0);
     const ownedIds = new Set(owned.map((entry) => entry.entryId));
     const company = companyMap.get(companyId);
     for (const entry of all ?? owned) {
@@ -156,7 +137,8 @@ export async function buildUnifiedSupplierLedger(input: {
   }
   let balance = opening;
   for (const t of transactions) {
-    balance = balance.plus(t.credit).minus(t.debit);
+    // Evidence lines are the SP payable account's: listed, not counted (AR-10).
+    if (!t.spPayableEvidence) balance = balance.plus(t.credit).minus(t.debit);
     result.push({ ...t, balance: balance.toNumber() });
   }
   return result;

@@ -76,12 +76,19 @@ export const RETAIL_INVENTORY_OPENING_REFUSAL_MESSAGES = {
   RETAIL_INVENTORY_OPENING_LATER_DOCUMENTS:
     "Retail stock documents are dated after the chosen opening date. Choose a later opening date.",
   RETAIL_INVENTORY_OPENING_FUTURE_DATE: "The Retail inventory opening date cannot be in the future.",
+  RETAIL_INVENTORY_OPENING_SIGN_OFF_REQUIRED:
+    "Sign off the opening difference: give a reason of at least 10 characters after reviewing what makes it up.",
 } as const;
 export type RetailInventoryOpeningRefusalCode = keyof typeof RETAIL_INVENTORY_OPENING_REFUSAL_MESSAGES;
 
 export class RetailInventoryOpeningRefusal extends HttpError {
   constructor(readonly code: RetailInventoryOpeningRefusalCode) {
-    super(code === "RETAIL_INVENTORY_OPENING_FUTURE_DATE" ? 400 : 409, RETAIL_INVENTORY_OPENING_REFUSAL_MESSAGES[code]);
+    super(
+      code === "RETAIL_INVENTORY_OPENING_FUTURE_DATE" || code === "RETAIL_INVENTORY_OPENING_SIGN_OFF_REQUIRED"
+        ? 400
+        : 409,
+      RETAIL_INVENTORY_OPENING_REFUSAL_MESSAGES[code]
+    );
     this.name = "RetailInventoryOpeningRefusal";
   }
   get body() {
@@ -172,6 +179,16 @@ export interface RetailInventoryOpeningPlan {
   /** Sub-ledger value less ledger balance: posted Dr inventory / Cr equity when positive. */
   amount: string;
   laterDocuments: number;
+  /**
+   * Phase 29 (I7): what makes up the difference posted to Opening Balance
+   * Equity, for the Owner's sign-off: the sub-ledger by location (and its
+   * negative rows), the ledger balance by source (account openings and the
+   * voucher families that posted to the Retail inventory accounts).
+   */
+  composition: {
+    subLedgerByLocation: Array<{ locationId: number; rows: number; value: string; negativeValue: string }>;
+    ledgerBySource: Array<{ source: string; vouchers: number; amount: string }>;
+  };
   alreadyApplied: { openingDate: string; voucherId: number | null } | null;
   blockers: RetailInventoryOpeningRefusalCode[];
   planHash: string;
@@ -195,6 +212,7 @@ export async function planRetailInventoryOpeningTx(
   const ledgerBalance = cents(ledger);
   const amount = subLedgerValue.minus(ledgerBalance);
   const laterDocuments = await movementsAfter(tx, companyId, openingDate);
+  const composition = await openingCompositionTx(tx, companyId, inventoryAccountIds);
   const existing = await retailInventoryOpeningTx(tx, companyId);
   const today = await companyBusinessDate(companyId, tx);
   const blockers: RetailInventoryOpeningRefusalCode[] = [];
@@ -232,9 +250,58 @@ export async function planRetailInventoryOpeningTx(
     ledgerBalance: ledgerBalance.toFixed(2),
     amount: amount.toFixed(2),
     laterDocuments,
+    composition,
     alreadyApplied: existing ? { openingDate: String(existing.openingDate), voucherId: existing.voucherId } : null,
     blockers,
     planHash,
+  };
+}
+
+/** Phase 29 (I7): the composition of the opening difference (see RetailInventoryOpeningPlan). */
+async function openingCompositionTx(
+  tx: DbTransaction,
+  companyId: number,
+  inventoryAccountIds: number[]
+): Promise<RetailInventoryOpeningPlan["composition"]> {
+  const byLocation = await rows<{ location_id: number; rows: number; value: string; negative: string }>(
+    tx,
+    sql`SELECT location_id, COUNT(*)::int AS rows, COALESCE(SUM(quantity * average_cost), 0)::text AS value,
+               COALESCE(SUM(quantity * average_cost) FILTER (WHERE quantity < 0), 0)::text AS negative
+          FROM retail_variant_inventory WHERE company_id = ${companyId}
+         GROUP BY location_id ORDER BY location_id`
+  );
+  const ids = sql.join(
+    (inventoryAccountIds.length ? inventoryAccountIds : [0]).map((id) => sql`${id}`),
+    sql`, `
+  );
+  const bySource = await rows<{ source: string; vouchers: number; amount: string }>(
+    tx,
+    sql`SELECT COALESCE(NULLIF(substring(v.voucher_number FROM '^([A-Za-z-]+[A-Za-z])'), ''), 'OTHER') AS source,
+               COUNT(DISTINCT v.id)::int AS vouchers,
+               COALESCE(SUM(ve.debit_amount - ve.credit_amount), 0)::text AS amount
+          FROM voucher_entries ve JOIN vouchers v ON v.id = ve.voucher_id
+         WHERE v.company_id = ${companyId} AND v.deleted_at IS NULL AND COALESCE(v.optional, false) = false
+           AND ve.ledger_account_id IN (${ids})
+         GROUP BY 1 ORDER BY 1`
+  );
+  const [opening] = await rows<{ net: string }>(
+    tx,
+    sql`SELECT COALESCE(SUM(CASE WHEN opening_balance_side = 'Cr' THEN -opening_balance ELSE opening_balance END), 0)::text AS net
+          FROM ledger_accounts WHERE company_id = ${companyId} AND id IN (${ids})`
+  );
+  return {
+    subLedgerByLocation: byLocation.map((row) => ({
+      locationId: Number(row.location_id),
+      rows: row.rows,
+      value: cents(row.value).toFixed(2),
+      negativeValue: cents(row.negative).toFixed(2),
+    })),
+    ledgerBySource: [
+      ...(toMoney(opening?.net ?? 0).isZero()
+        ? []
+        : [{ source: "ACCOUNT_OPENING_BALANCE", vouchers: 0, amount: cents(opening!.net).toFixed(2) }]),
+      ...bySource.map((row) => ({ source: row.source, vouchers: row.vouchers, amount: cents(row.amount).toFixed(2) })),
+    ],
   };
 }
 
@@ -250,8 +317,11 @@ export async function previewRetailInventoryOpening(companyId: number, openingDa
  */
 export async function applyRetailInventoryOpening(
   companyId: number,
-  input: { openingDate: string; planHash: string; actor: RetailJournalActor }
+  input: { openingDate: string; planHash: string; actor: RetailJournalActor; signOff?: string | null }
 ) {
+  // Phase 29 (I7): the difference to Opening Balance Equity is signed off.
+  const signOff = String(input.signOff ?? "").trim();
+  if (signOff.length < 10) throw new RetailInventoryOpeningRefusal("RETAIL_INVENTORY_OPENING_SIGN_OFF_REQUIRED");
   return db.transaction(async (tx) => {
     await tx.execute(sql`LOCK TABLE retail_variant_inventory IN SHARE MODE`);
     await tx.execute(sql`SELECT pg_advisory_xact_lock(${2026_10_174}, ${companyId})`);
@@ -303,7 +373,9 @@ export async function applyRetailInventoryOpening(
           amount: { new: plan.amount },
           voucherId: { new: voucherId },
           planHash: { new: plan.planHash },
+          signOff: { new: { reason: signOff, composition: plan.composition } },
         },
+        reason: signOff,
       },
       tx
     );

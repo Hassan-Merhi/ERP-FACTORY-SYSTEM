@@ -16,6 +16,27 @@ const REQUIRED_DIRECT_TABLES = [
   "stock_items",
   "inventory",
 ];
+// Accounting audit phase 26 (MC-8): migrations/20261011_026_company_scope_rls_extension.sql.
+export const PHASE26_RLS_TABLES = [
+  "employees",
+  "factory_suppliers",
+  "customer_balances",
+  "factory_containers",
+  "factory_supplier_payments",
+  "factory_supplier_fx_transfers",
+  "factory_pos_sales",
+  "factory_daybook_entries",
+  "factory_container_commissions",
+  "factory_container_other_charges",
+  "factory_offload_additional_charges",
+  "factory_transporter_transactions",
+  "factory_stock_value_events",
+  "factory_payrolls",
+  "factory_worker_advances",
+  "fiscal_period_closures",
+  "suppliers",
+  "inter_company_transfers",
+];
 
 function resolveConnectionString() {
   if (process.env.DATABASE_URL) return process.env.DATABASE_URL;
@@ -50,6 +71,10 @@ export async function ensureCompanyScopeRlsReadiness() {
     new URL("../migrations/0016_company_scope_rls_readiness.sql", import.meta.url),
     "utf8"
   );
+  const extensionSql = await readFile(
+    new URL("../migrations/20261011_026_company_scope_rls_extension.sql", import.meta.url),
+    "utf8"
+  );
   const client = new Client({
     connectionString,
     ssl: resolveDatabaseSsl(connectionString),
@@ -63,6 +88,7 @@ export async function ensureCompanyScopeRlsReadiness() {
     await client.query("SET LOCAL statement_timeout = '90s'");
     await client.query("SELECT pg_advisory_xact_lock($1)", [STARTUP_LOCK_KEY]);
     await client.query(migrationSql);
+    await client.query(extensionSql);
 
     const functionCheck = await client.query(`
       SELECT
@@ -192,6 +218,30 @@ export async function ensureCompanyScopeRlsReadiness() {
       throw new Error("Voucher-entry direct company-scope RLS fast path was not installed completely.");
     }
 
+    const extensionCheck = await client.query(
+      `
+        SELECT c.relname AS table_name, c.relrowsecurity AS rls_enabled, c.relforcerowsecurity AS rls_forced,
+               EXISTS (
+                 SELECT 1 FROM pg_policies p
+                  WHERE p.schemaname = 'public' AND p.tablename = c.relname
+                    AND p.policyname = c.relname || '_company_scope_policy'
+               ) AS policy_present
+          FROM pg_class c
+          JOIN pg_namespace n ON n.oid = c.relnamespace
+         WHERE n.nspname = 'public' AND c.relkind = 'r' AND c.relname = ANY($1::text[])
+           AND EXISTS (SELECT 1 FROM information_schema.columns col
+                        WHERE col.table_schema = 'public' AND col.table_name = c.relname
+                          AND col.column_name IN ('company_id', 'from_company_id'))
+      `,
+      [PHASE26_RLS_TABLES]
+    );
+    const extensionGaps = extensionCheck.rows
+      .filter((row) => row.rls_enabled !== true || row.rls_forced !== true || row.policy_present !== true)
+      .map((row) => row.table_name);
+    if (extensionGaps.length > 0) {
+      throw new Error(`Phase 26 company-scope RLS was not installed completely on: ${extensionGaps.join(", ")}`);
+    }
+
     await client.query("SELECT set_config('app.company_scope_maintenance', 'on', true)");
     const voucherEntryMismatch = await client.query(`
       SELECT COUNT(*)::int AS mismatch_count
@@ -207,6 +257,7 @@ export async function ensureCompanyScopeRlsReadiness() {
     await client.query("COMMIT");
     log("INFO", "Company-scope RLS fail-closed readiness verified", {
       tablesPresent: existingTables.length,
+      phase26TablesPresent: extensionCheck.rows.length,
       policiesPresent: policyCheck.rows.length,
       forcedTables: existingTables.length,
       voucherEntryFastPath: true,

@@ -9,7 +9,6 @@ import {
  * first-match, so that order is behaviour.
  */
 import type { Express } from "express";
-import { getClientDate } from "../../lib/dateUtils";
 import { getErrorMessage } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
 import { db } from "../../db";
@@ -31,6 +30,16 @@ import { resolvePoImportCreditTarget } from "../../services/accounting/poImportA
 import { supplierService } from "../suppliers/supplierService";
 import { collectPreviewItemErrors, findPreviewContainer, type PoImportPreviewItem } from "./po-import-preview";
 import { allocatePoCharges } from "./poChargeAllocation";
+import { MoneyDecimal } from "../../lib/money";
+import { insertLinkedPurchaseOrderTx } from "../../storage/containers-store/purchase-orders";
+import {
+  isForeignPo,
+  normalizePoEntries,
+  poUsd,
+  poVoucherTotal,
+} from "../../services/accounting/fx/purchaseOrderCurrency";
+import { resolvePoImportCurrency, resolvePoImportLines } from "./poImportCurrency";
+import { ensureParentCreditAccount, resolveSubsidiaryReceivableAccount } from "./poImportParentAccounts";
 
 export function registerPoImportRoutes(app: Express) {
   app.post("/api/po-import/validate", requireAuth, async (req, res) => {
@@ -164,6 +173,12 @@ export function registerPoImportRoutes(app: Express) {
       if (!supplier) {
         validationErrors.push("Selected supplier not found");
       }
+      // Phases 23–29 integration (G17): a supplier is posted only in the books of
+      // the company that owns it. The parent's supplier reaches a subsidiary
+      // through the due-to / due-from intercompany accounts; the subsidiary's own
+      // supplier stays on the subsidiary's books.
+      const supplierOwnedHere = supplier?.companyId === currentCompanyId;
+      const supplierOwnedByParent = parentCompanyId !== null && supplier?.companyId === parentCompanyId;
 
       // Get all stock items for validation
       const allStockItems = await storage.getAllStockItems(req.session.currentCompanyId!);
@@ -208,6 +223,20 @@ export function registerPoImportRoutes(app: Express) {
       if (existingImport) {
         return res.status(400).json({ message: "This file has already been imported" });
       }
+
+      // Phase 24 (M5): a non-USD PO posts at the rate recorded on or before the
+      // import date (a client rate within 0.5% of it); its USD amounts are
+      // stored on the PO with the native ones alongside. Checked before any write.
+      const resolvedCurrency = await resolvePoImportCurrency({
+        companyId: currentCompanyId,
+        items: containerPreview.items,
+        importDate: String(importDate),
+        clientRate: req.body.exchangeRate,
+      });
+      if ("refusal" in resolvedCurrency) {
+        return res.status(resolvedCurrency.refusal.status).json(resolvedCurrency.refusal.body);
+      }
+      const poCurrency = resolvedCurrency.currency;
 
       // A container number that already exists is only a hard block if it already has
       // real financial data attached (PO, charges, or a sale) or belongs to another
@@ -384,30 +413,12 @@ export function registerPoImportRoutes(app: Express) {
           const linkedParentCompanyId = parentCompanyId;
           const subsidiaryName = currentCompanyLink?.name || `Company ${currentCompanyId}`;
 
-          // Find or create "[Subsidiary Name] Credit" account in parent
-          // (Asset - receivable). The companyId argument is mandatory on every
-          // lookup so a same-named account in another tenant cannot be used.
-          const subsidiaryAccountName = `${subsidiaryName} Credit`;
-          let subsidiaryReceivableAccount = await storage.getLedgerAccountByName(
-            subsidiaryAccountName,
-            linkedParentCompanyId
-          );
-          if (!subsidiaryReceivableAccount) {
-            const parentAccountPrefix = subsidiaryName.substring(0, 3).toUpperCase() + "CRD";
-            let code = parentAccountPrefix;
-            let suffix = 1;
-            while (await storage.getLedgerAccountByCode(code, linkedParentCompanyId)) {
-              code = parentAccountPrefix + suffix;
-              suffix++;
-            }
-            subsidiaryReceivableAccount = await storage.createLedgerAccount({
-              companyId: linkedParentCompanyId,
-              name: subsidiaryAccountName,
-              code,
-              accountType: "Asset",
-              subType: "Current Asset",
-            });
-          }
+          // The parent's receivable from this subsidiary (phase 26, MC-9; poImportParentAccounts.ts).
+          const subsidiaryReceivableAccount = await resolveSubsidiaryReceivableAccount({
+            currentCompanyId,
+            linkedParentCompanyId,
+            subsidiaryName,
+          });
 
           const hasParentFreight =
             resolvedFreightPaidBy === "parent" && resolvedFreightParentAccountId && poFreight.gt(0);
@@ -420,9 +431,16 @@ export function registerPoImportRoutes(app: Express) {
 
           // Parent voucher:
           //   DR Subsidiary Receivable (gross amount)
-          //   CR Supplier (goods/non-freight amount)
+          //   CR Supplier (goods/non-freight amount) — only the parent's own supplier (G17)
           //   CR Parent Freight Account (freight, when parent-paid)
-          const intercoParentTotal = hasParentFreight ? poGrandTotal : poIntercoTotal;
+          // A supplier the subsidiary owns stays on its books: the parent's voucher
+          // then carries only the freight it pays (nothing at all without it).
+          if (!supplierOwnedByParent && !hasParentFreight) return;
+          const intercoParentTotal = !supplierOwnedByParent
+            ? poFreight
+            : hasParentFreight
+              ? poGrandTotal
+              : poIntercoTotal;
           const parentEntries = [
             {
               ledgerAccountId: subsidiaryReceivableAccount.id,
@@ -430,12 +448,16 @@ export function registerPoImportRoutes(app: Express) {
               creditAmount: "0",
               narration: `${subsidiaryName} PO ${poNumber} - Container ${containerNumber}`,
             },
-            {
-              supplierId,
-              debitAmount: "0",
-              creditAmount: poIntercoTotal.toFixed(2),
-              narration: `${subsidiaryName} PO ${poNumber} - Container ${containerNumber}`,
-            },
+            ...(supplierOwnedByParent
+              ? [
+                  {
+                    supplierId,
+                    debitAmount: "0",
+                    creditAmount: poIntercoTotal.toFixed(2),
+                    narration: `${subsidiaryName} PO ${poNumber} - Container ${containerNumber}`,
+                  },
+                ]
+              : []),
             ...(hasParentFreight
               ? [
                   {
@@ -467,10 +489,15 @@ export function registerPoImportRoutes(app: Express) {
                 voucherType: "Journal",
                 voucherDate: importDate,
                 description: `${containerNumber} ${supplier?.legalName || "Unknown"}`,
-                totalAmount: intercoParentTotal.toFixed(2),
+                totalAmount: poVoucherTotal(
+                  normalizePoEntries(parentEntries, poCurrency),
+                  intercoParentTotal,
+                  poCurrency
+                ),
                 optional: false,
                 sourceModule: "ERP",
-                currency: "USD",
+                currency: poCurrency.currency,
+                ...(isForeignPo(poCurrency) ? { exchangeRate: poCurrency.unitsPerUsd } : {}),
               },
               postingSource,
               {
@@ -485,7 +512,7 @@ export function registerPoImportRoutes(app: Express) {
             );
 
             await tx.insert(voucherEntries).values(
-              parentEntries.map((entry) => ({
+              normalizePoEntries(parentEntries, poCurrency).map((entry) => ({
                 voucherId: parentVoucher.id,
                 ...entry,
               }))
@@ -535,7 +562,8 @@ export function registerPoImportRoutes(app: Express) {
           // CR OTW Clearing (Liability — we owe for goods in transit)
           localEntries.push({
             ledgerAccountId: otwClrAcct.id,
-            supplierId: supplierId,
+            // G17: the supplier tag only when this company owns the supplier.
+            ...(supplierOwnedHere ? { supplierId } : {}),
             debitAmount: "0",
             creditAmount: poGrandTotal.toFixed(2),
             narration: `PO ${poNumber} - Container ${containerNumber}`,
@@ -548,55 +576,9 @@ export function registerPoImportRoutes(app: Express) {
           const currentCompany = await storage.getCompanyById(currentCompanyId);
           const subsidiaryName = currentCompany?.name || `Company ${currentCompanyId}`;
 
-          // Auto-create Parent Credit Account if it doesn't exist
+          // Auto-create the Parent Credit Account if it doesn't exist (poImportParentAccounts.ts).
           if (!parentCreditAccountId) {
-            // Get parent company name for the account
-            const parentCompany = await storage.getCompanyById(parentCompanyId);
-            const parentName = parentCompany?.name || "Parent Company";
-            const creditAccountName = `${parentName} Credit`;
-
-            // Try to find or create the account (with retry for concurrent requests)
-            for (let attempt = 0; attempt < 3 && !parentCreditAccountId; attempt++) {
-              try {
-                // Always fetch first - handles concurrent creation
-                let existingAccount = await storage.getLedgerAccountByName(creditAccountName, currentCompanyId);
-
-                if (!existingAccount && attempt < 2) {
-                  // Auto-generate unique code
-                  let code = parentName.substring(0, 3).toUpperCase() + "CRD";
-                  let suffix = 1;
-                  while (await storage.getLedgerAccountByCode(code, currentCompanyId)) {
-                    code = parentName.substring(0, 3).toUpperCase() + "CRD" + suffix;
-                    suffix++;
-                  }
-                  existingAccount = await storage.createLedgerAccount({
-                    companyId: currentCompanyId,
-                    name: creditAccountName,
-                    code,
-                    accountType: "Liability",
-                    subType: "Current Liability",
-                  });
-                }
-
-                if (existingAccount?.id) {
-                  parentCreditAccountId = existingAccount.id;
-
-                  // Save to company settings for future use
-                  await storage.upsertCompanySettings({
-                    companyId: currentCompanyId,
-                    parentCreditAccountId: parentCreditAccountId,
-                  });
-                  logger.info(
-                    `Auto-created Parent Credit Account: ${creditAccountName} (ID: ${parentCreditAccountId})`
-                  );
-                }
-              } catch (err: unknown) {
-                logger.info(`Parent Credit Account creation attempt ${attempt + 1} failed, will retry fetch:`, {
-                  error: getErrorMessage(err),
-                });
-                // On any error, loop will retry with fetch-first approach
-              }
-            }
+            parentCreditAccountId = await ensureParentCreditAccount({ currentCompanyId, parentCompanyId });
           }
 
           if (parentCreditAccountId) {
@@ -624,12 +606,27 @@ export function registerPoImportRoutes(app: Express) {
               narration: `PO ${poNumber} - Container ${containerNumber}`,
             });
 
-            localEntries.push({
-              ledgerAccountId: parentCreditAccountId,
-              debitAmount: "0",
-              creditAmount: subsidiaryVoucherAmount.toFixed(2),
-              narration: `PO ${poNumber} - Credit from ${subsidiaryName}`,
-            });
+            // G17: the subsidiary's own supplier is credited here (its books); only
+            // the freight the parent pays is owed to the parent.
+            const parentDue = supplierOwnedHere
+              ? subsidiaryVoucherAmount.minus(poIntercoTotal)
+              : subsidiaryVoucherAmount;
+            if (supplierOwnedHere) {
+              localEntries.push({
+                supplierId,
+                debitAmount: "0",
+                creditAmount: poIntercoTotal.toFixed(2),
+                narration: `PO ${poNumber} - Container ${containerNumber}`,
+              });
+            }
+            if (parentDue.gt(0)) {
+              localEntries.push({
+                ledgerAccountId: parentCreditAccountId,
+                debitAmount: "0",
+                creditAmount: parentDue.toFixed(2),
+                narration: `PO ${poNumber} - Credit from ${subsidiaryName}`,
+              });
+            }
           }
         } else {
           // === PARENT/STANDALONE COMPANY: Create local payable entry ===
@@ -712,15 +709,32 @@ export function registerPoImportRoutes(app: Express) {
           }
         }
 
-        const voucher = await db.transaction(async (tx) => {
+        // Resolve the PO's stock items before anything of this PO is written (USD, native alongside).
+        const resolved = await resolvePoImportLines({
+          companyId: req.session.currentCompanyId!,
+          items: poItems,
+          freshStockItems,
+          currency: poCurrency,
+        });
+        if ("refusal" in resolved) return res.status(resolved.refusal.status).json(resolved.refusal.body);
+        const resolvedLines = resolved.lines;
+
+        // The Purchase voucher, its lines, the PO and its lines commit together
+        // (phase 24, M5; they were separate transactions). A non-USD PO's
+        // voucher is in its currency with normalized lines.
+        const nativeVoucherTotal = resolvedFreightPaidBy === "parent" ? poGrandTotal : poIntercoTotal;
+        const normalizedLocalEntries = normalizePoEntries(localEntries, poCurrency);
+        const usd = (value: Parameters<typeof poUsd>[0]) => poUsd(value, poCurrency).toFixed(2);
+        await db.transaction(async (tx) => {
           const voucherFields = {
             companyId: currentCompanyId,
-            currency: "USD",
+            currency: poCurrency.currency,
+            ...(isForeignPo(poCurrency) ? { exchangeRate: poCurrency.unitsPerUsd } : {}),
             voucherNumber: `PO-${poNumber}-${Date.now()}`,
             voucherType: "Purchase",
             voucherDate: importDate,
             description: `${containerNumber} ${supplier?.legalName || "Unknown"}`,
-            totalAmount: (resolvedFreightPaidBy === "parent" ? poGrandTotal : poIntercoTotal).toFixed(2),
+            totalAmount: poVoucherTotal(normalizedLocalEntries, nativeVoucherTotal, poCurrency),
             optional: false,
             sourceModule: "ERP",
           };
@@ -731,11 +745,38 @@ export function registerPoImportRoutes(app: Express) {
             voucherFields,
             { replaceEntriesOnReplay: false }
           );
-          if (localEntries.length > 0) {
+          if (normalizedLocalEntries.length > 0) {
             await tx
               .insert(voucherEntries)
-              .values(localEntries.map((entry) => ({ voucherId: localVoucher.id, ...entry })));
+              .values(normalizedLocalEntries.map((entry) => ({ voucherId: localVoucher.id, ...entry })));
           }
+          await insertLinkedPurchaseOrderTx(
+            tx,
+            {
+              companyId: currentCompanyId,
+              poNumber,
+              containerId: container.id,
+              supplierId,
+              voucherId: localVoucher.id,
+              // The money columns are USD; the imported currency is native_currency.
+              currency: "USD",
+              nativeCurrency: poCurrency.currency,
+              exchangeRate: poCurrency.unitsPerUsd,
+              nativeItemsTotal: poItemsTotal.toFixed(2),
+              nativeGrandTotal: poGrandTotal.toFixed(2),
+              itemsTotal: resolvedLines.reduce((sum, line) => sum.plus(line.lineTotal), new MoneyDecimal(0)).toFixed(2),
+              freight: usd(poFreight),
+              surcharge: usd(poSurcharge),
+              fumigation: usd(poFumigation),
+              documentCharges: usd(poDocumentCharges),
+              discount: usd(poDiscount),
+              otherCharges: usd(poOtherCharges),
+              chargesEdited: hasAnyCharges,
+              freightPaidBy: resolvedFreightPaidBy,
+              freightParentAccountId: resolvedFreightPaidBy === "parent" ? resolvedFreightParentAccountId : null,
+            },
+            resolvedLines
+          );
           return localVoucher;
         });
 
@@ -744,61 +785,6 @@ export function registerPoImportRoutes(app: Express) {
           // to, so it runs under the scope that re-verifies the parent link and the caller's
           // membership before the database scope moves.
           await runWithVerifiedParentCompanyScope(parentCompanyId, createParentIntercompanyPosting);
-        }
-
-        const po = await storage.createPurchaseOrder(
-          {
-            companyId: currentCompanyId,
-            poNumber,
-            containerId: container.id,
-            supplierId,
-            voucherId: voucher.id,
-            currency: poItems[0]?.currency,
-            itemsTotal: poItemsTotal.toFixed(),
-            freight: poFreight.toFixed(2),
-            surcharge: poSurcharge.toFixed(2),
-            fumigation: poFumigation.toFixed(2),
-            documentCharges: poDocumentCharges.toFixed(2),
-            discount: poDiscount.toFixed(2),
-            otherCharges: poOtherCharges.toFixed(2),
-            chargesEdited: hasAnyCharges,
-            freightPaidBy: resolvedFreightPaidBy,
-            freightParentAccountId: resolvedFreightPaidBy === "parent" ? resolvedFreightParentAccountId : null,
-          },
-          getClientDate(req)
-        );
-
-        for (const item of poItems) {
-          // Re-lookup stock item by code/alias or name to get fresh ID (not stale preview data)
-          let stockItemId = item.stockItemId;
-          let stockItem = null;
-
-          // Try code/alias first, then fall back to name
-          if (item.barcode) {
-            stockItem = await storage.getStockItemByCodeOrAlias(item.barcode, req.session.currentCompanyId!);
-          }
-          if (!stockItem && item.itemName) {
-            stockItem = freshStockItems.find((si) => si.name === item.itemName);
-          }
-
-          if (stockItem) {
-            stockItemId = stockItem.id;
-          }
-
-          if (!stockItemId) {
-            return res.status(400).json({
-              message: `Stock item not found: ${item.barcode || item.itemName}. Please ensure all items exist before importing.`,
-            });
-          }
-
-          await storage.createPOLineItem({
-            poId: po.id,
-            stockItemId: stockItemId,
-            itemName: item.itemName,
-            quantity: item.quantity.toString(),
-            rate: item.rate.toString(),
-            lineTotal: item.lineTotal.toString(),
-          });
         }
       }
 

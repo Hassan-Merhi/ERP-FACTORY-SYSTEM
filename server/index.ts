@@ -36,6 +36,7 @@ import { buildSessionMiddleware } from "./startup/sessionMiddleware";
 import { ensureRuntimeSchema } from "./startup/ensureRuntimeSchema";
 import { ensureClosedPeriodGuard } from "./services/accounting/closedPeriodGuard";
 import { ensureLedgerIntegrityGuard } from "./services/accounting/ledgerIntegrityGuard";
+import { ensureLedgerModelSchema } from "./services/accounting/ledgerModelSchema";
 import { ensureInventoryCutoverSchema } from "./services/accounting/perpetualInventory/cutover";
 import { ensureInventoryFidelitySchema } from "./services/inventory/inventoryFidelitySchema";
 import { ensureFactoryCostBasisSchema } from "./services/factory/factoryCostBasisSchema";
@@ -55,6 +56,9 @@ import { ensureFactoryContainerPlannerSchemaOnBoot } from "./startup/factoryCont
 import { ensurePriorityScanSchema } from "./startup/priorityScanSchema";
 import { ensureFactorySheetsSacksSchema } from "./startup/factorySheetsSacksSchema";
 import { ensureRecurringJournalSchema } from "./services/accounting/ensureRecurringJournalSchema";
+import { ensureOpenItemSchema } from "./services/accounting/allocations/ensureOpenItemSchema";
+import { ensureMultiCompanySchema } from "./services/accounting/intercompany/ensureMultiCompanySchema";
+import { ensurePurchaseOrderCurrencySchema } from "./services/accounting/fx/purchaseOrderCurrencySchema";
 import { bootstrapRecurringJournalFromEnvironment } from "./services/accounting/recurringJournalBootstrap";
 import { ensureFactoryInvoiceDocumentSnapshotStore } from "./services/factoryInvoiceDocumentService";
 import {
@@ -269,6 +273,9 @@ let migrationsDone = false;
       // Opening balances locked once a fiscal period is closed (wave 12); fatal on failure.
       await ensureOpeningBalanceLock(pool);
       await ensureLedgerIntegrityGuard(pool);
+      // Phase 23: closure history, opening journal and legacy repair tables, per-company
+      // bank/fixed-asset codes, the sub-ledger period lock; fatal on failure.
+      await ensureLedgerModelSchema(pool);
       // Voucher-entry currency normalization (migrations/20260720_005, as production has it;
       // wave 14). Fatal on failure; skipped with a warning only if a column is missing.
       await ensureCurrencyNormalizationGuard(pool);
@@ -290,6 +297,9 @@ let migrationsDone = false;
       });
       await ensureFinancialOperationRequests(pool);
       await ensureRecurringJournalSchema(pool);
+      await ensureOpenItemSchema(pool);
+      await ensureMultiCompanySchema(pool);
+      await ensurePurchaseOrderCurrencySchema(pool);
       await ensurePriorityScanSchema(pool);
       logger.info("[startup] ✓ Priority Scan schema ensured");
       await ensureFactoryInvoiceDocumentSnapshotStore(pool);

@@ -1,5 +1,6 @@
 /**
- * Rental auto-transfers write the receiving side in another company. Under
+ * Rental auto-transfers write the receiving side in another company (phase
+ * 26: inside the payment's transaction, through the intercompany service). Under
  * row-level security a request is pinned to its own company, so the receiving
  * company's clearing account was invisible, the fallback insert hit the existing
  * row, and every transfer after the policies tightened failed silently. This
@@ -27,7 +28,7 @@ describeDatabase("rental auto-transfer under company-scope RLS", () => {
   let receivingAccountB: number;
 
   type Modules = {
-    maybeRunAutoTransfer: typeof import("../server/routes/rental/shared/auto-transfer").maybeRunAutoTransfer;
+    runRentalAutoTransferTx: typeof import("../server/routes/rental/shared/auto-transfer").runRentalAutoTransferTx;
     reverseAutoTransfersTx: typeof import("../server/routes/rental/shared/auto-transfer").reverseAutoTransfersTx;
     runWithAutoTransferCounterparties: typeof import("../server/services/rental/autoTransferScope").runWithAutoTransferCounterparties;
     counterpartiesForPayments: typeof import("../server/services/rental/autoTransferScope").autoTransferCounterpartiesForPayments;
@@ -50,6 +51,10 @@ describeDatabase("rental auto-transfer under company-scope RLS", () => {
       "utf8"
     );
     await admin.query(migration);
+    // Phase 26 (MC-8): the transfer links are company-scoped too.
+    await admin.query(
+      await readFile(path.join(process.cwd(), "migrations/20261011_026_company_scope_rls_extension.sql"), "utf8")
+    );
 
     await admin.query(`DROP OWNED BY ${roleName}`).catch(() => {});
     await admin.query(`DROP ROLE IF EXISTS ${roleName}`);
@@ -115,7 +120,7 @@ describeDatabase("rental auto-transfer under company-scope RLS", () => {
     const requestContext = await import("../server/services/security/companyRequestRuntimeContext");
     const databaseScope = await import("../server/services/security/databaseScopeRuntimeContext");
     mods = {
-      maybeRunAutoTransfer: transfer.maybeRunAutoTransfer,
+      runRentalAutoTransferTx: transfer.runRentalAutoTransferTx,
       reverseAutoTransfersTx: transfer.reverseAutoTransfersTx,
       runWithAutoTransferCounterparties: scope.runWithAutoTransferCounterparties,
       counterpartiesForPayments: scope.autoTransferCounterpartiesForPayments,
@@ -163,7 +168,7 @@ describeDatabase("rental auto-transfer under company-scope RLS", () => {
          FROM inter_company_transfers t
          JOIN vouchers tv ON tv.id = t.to_voucher_id
          JOIN vouchers fv ON fv.id = t.from_voucher_id
-        WHERE t.source_payment_id = $1`,
+        WHERE t.source_payment_id = $1 AND t.deleted_at IS NULL`,
       [paymentId]
     );
     return result.rows;
@@ -172,11 +177,31 @@ describeDatabase("rental auto-transfer under company-scope RLS", () => {
   it("posts the receiving side in the destination company, once per payment", async () => {
     const paymentId = 900_000_001;
     await mods.inRequest(companyA, () =>
-      mods.maybeRunAutoTransfer(companyA, "PROPERTIES", cashAccountA, "1250.00", "2026-10-02", "Unit 7", paymentId)
+      mods.db.transaction((tx) =>
+        mods.runRentalAutoTransferTx(tx, {
+          companyId: companyA,
+          module: "PROPERTIES",
+          fromLedgerAccountId: cashAccountA,
+          amount: "1250.00",
+          transferDate: "2026-10-02",
+          unitLabel: "Unit 7",
+          sourcePaymentId: paymentId,
+        })
+      )
     );
     // A repeated call for the same payment posts nothing more.
     await mods.inRequest(companyA, () =>
-      mods.maybeRunAutoTransfer(companyA, "PROPERTIES", cashAccountA, "1250.00", "2026-10-02", "Unit 7", paymentId)
+      mods.db.transaction((tx) =>
+        mods.runRentalAutoTransferTx(tx, {
+          companyId: companyA,
+          module: "PROPERTIES",
+          fromLedgerAccountId: cashAccountA,
+          amount: "1250.00",
+          transferDate: "2026-10-02",
+          unitLabel: "Unit 7",
+          sourcePaymentId: paymentId,
+        })
+      )
     );
 
     const rows = await transferRows(paymentId);
@@ -188,7 +213,17 @@ describeDatabase("rental auto-transfer under company-scope RLS", () => {
   it("reverses both sides, including the receiving company's voucher", async () => {
     const paymentId = 900_000_002;
     await mods.inRequest(companyA, () =>
-      mods.maybeRunAutoTransfer(companyA, "PROPERTIES", cashAccountA, "300.00", "2026-10-03", "Unit 8", paymentId)
+      mods.db.transaction((tx) =>
+        mods.runRentalAutoTransferTx(tx, {
+          companyId: companyA,
+          module: "PROPERTIES",
+          fromLedgerAccountId: cashAccountA,
+          amount: "300.00",
+          transferDate: "2026-10-03",
+          unitLabel: "Unit 8",
+          sourcePaymentId: paymentId,
+        })
+      )
     );
     const [posted] = await transferRows(paymentId);
     expect(posted).toBeDefined();
@@ -217,7 +252,17 @@ describeDatabase("rental auto-transfer under company-scope RLS", () => {
     );
     const paymentId = 900_000_003;
     await mods.inRequest(companyA, () =>
-      mods.maybeRunAutoTransfer(companyA, "PROPERTIES", cashAccountA, "50.00", "2026-10-04", "Unit 9", paymentId)
+      mods.db.transaction((tx) =>
+        mods.runRentalAutoTransferTx(tx, {
+          companyId: companyA,
+          module: "PROPERTIES",
+          fromLedgerAccountId: cashAccountA,
+          amount: "50.00",
+          transferDate: "2026-10-04",
+          unitLabel: "Unit 9",
+          sourcePaymentId: paymentId,
+        })
+      )
     );
 
     expect(await mods.inRequest(companyA, () => mods.counterpartiesForPayments(companyA, [paymentId]))).toEqual([

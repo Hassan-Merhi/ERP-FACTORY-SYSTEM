@@ -31,6 +31,10 @@ interface OpeningPlan {
   amount: string;
   stockRows: number;
   laterDocuments: number;
+  composition?: {
+    subLedgerByLocation: Array<{ locationId: number; rows: number; value: string; negativeValue: string }>;
+    ledgerBySource: Array<{ source: string; vouchers: number; amount: string }>;
+  };
   alreadyApplied: { openingDate: string; voucherId: number | null } | null;
   blockers: string[];
   planHash: string;
@@ -69,6 +73,7 @@ export function RetailLedgerPanel({
   const [draft, setDraft] = useState<Record<string, string>>({});
   const [openingDate, setOpeningDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [plan, setPlan] = useState<OpeningPlan | null>(null);
+  const [signOff, setSignOff] = useState("");
 
   const reasonsQuery = useQuery<{ reasons: CashReason[] }>({
     queryKey: ["retail-cash-reasons", companyKey],
@@ -124,6 +129,7 @@ export function RetailLedgerPanel({
           openingDate: plan.openingDate,
           planHash: plan.planHash,
           confirm: true,
+          signOff,
         })
       ).json();
     },
@@ -206,7 +212,10 @@ export function RetailLedgerPanel({
                 <Button variant="outline" disabled={preview.isPending} onClick={() => preview.mutate()}>
                   Preview opening
                 </Button>
-                <Button disabled={!plan || plan.blockers.length > 0 || apply.isPending} onClick={() => apply.mutate()}>
+                <Button
+                  disabled={!plan || plan.blockers.length > 0 || signOff.trim().length < 10 || apply.isPending}
+                  onClick={() => apply.mutate()}
+                >
                   Apply opening
                 </Button>
               </div>
@@ -215,6 +224,28 @@ export function RetailLedgerPanel({
                   Stock {plan.subLedgerValue} ({plan.stockRows} rows) · ledger {plan.ledgerBalance} · opening journal{" "}
                   {plan.amount}
                   {plan.blockers.length ? <div className="text-destructive">{plan.blockers.join(", ")}</div> : null}
+                  {plan.composition ? (
+                    <ul className="mt-1 list-disc pl-4">
+                      {plan.composition.subLedgerByLocation.map((row) => (
+                        <li key={`loc-${row.locationId}`}>
+                          #{row.locationId}: {row.value} ({row.rows})
+                        </li>
+                      ))}
+                      {plan.composition.ledgerBySource.map((row) => (
+                        <li key={`src-${row.source}`}>
+                          {row.source}: {row.amount} ({row.vouchers})
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
+                  <Label className="mt-2 block" htmlFor="retail-opening-sign-off">
+                    Sign-off
+                  </Label>
+                  <Input
+                    id="retail-opening-sign-off"
+                    value={signOff}
+                    onChange={(event) => setSignOff(event.target.value)}
+                  />
                 </div>
               ) : null}
             </>

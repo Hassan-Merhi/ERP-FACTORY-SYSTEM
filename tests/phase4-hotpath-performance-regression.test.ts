@@ -13,7 +13,8 @@ describe("Phase 4 hot-path performance regressions", () => {
 
     expect(source).toContain("ve.ledger_account_id = $2");
     expect(source).toContain("loadLedgerAccount(companyId, accountId)");
-    expect(source).toContain("loadLedgerAggregate(companyId, accountId)");
+    // Phase 24 (M13): the aggregate also takes the as-of date.
+    expect(source).toContain("loadLedgerAggregate(companyId, accountId, asOf ?? null)");
     expect(source).not.toContain("getCashBankRevaluation");
     expect(route).toContain("getCashLedgerAccountSummary(companyId, id)");
   });

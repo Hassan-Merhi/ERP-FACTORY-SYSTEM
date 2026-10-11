@@ -6,6 +6,7 @@ import type { RetailPaymentMethod } from "@shared/schema/retailPos";
 import type { DbTransaction } from "../../db";
 import { allocateCents, MoneyDecimal, toMoney, type MoneyInput } from "../../lib/money";
 import { postBalancedVoucherTx } from "../accounting/centralPostingEngine";
+import { retailEntriesInCurrency, retailVoucherCurrencyTx } from "../accounting/fx/retailCurrency";
 import { createDatabasePostingDependencies } from "../accounting/databasePostingDependencies";
 import { companyBusinessDate } from "../accounting/companyBusinessDate";
 
@@ -338,7 +339,16 @@ export async function settleRetailSaleTx(
         ]),
   ];
   const debitTotal = saleAccountingAmount.plus(costAccountingAmount);
-  const currency = await companyCurrency(tx, input.companyId);
+  // The company's business date (its timezone), not the UTC date.
+  const voucherDate = await companyBusinessDate(input.companyId, tx);
+  // Phase 24 (M11): a non-USD company posts native amounts at the dated rate.
+  const voucherCurrency = await retailVoucherCurrencyTx(
+    tx,
+    input.companyId,
+    await companyCurrency(tx, input.companyId),
+    voucherDate
+  );
+  const inCurrency = retailEntriesInCurrency(entries, voucherCurrency, debitTotal.toFixed(2));
   const sourceKey = `retail-pos-sale:${input.saleId}`;
   const posted = await postBalancedVoucherTx(
     tx,
@@ -347,15 +357,15 @@ export async function settleRetailSaleTx(
         companyId: input.companyId,
         voucherNumber: `RETAIL-SALE-${input.saleId}`,
         voucherType: "Journal",
-        // The company's business date (its timezone), not the UTC date.
-        voucherDate: await companyBusinessDate(input.companyId, tx),
-        totalAmount: debitTotal.toFixed(2),
+        voucherDate,
+        totalAmount: inCurrency.totalAmount,
         description: `Retail POS sale #${input.saleId}`,
         locationId: input.locationId,
-        currency,
+        currency: voucherCurrency.currency,
+        exchangeRate: voucherCurrency.rate,
         sourceModule: "Retail",
       },
-      entries,
+      entries: inCurrency.entries,
       source: {
         sourceType: "retail-pos-sale",
         sourceId: String(input.saleId),
@@ -600,7 +610,15 @@ export async function postRetailRefundAccountingTx(
         ]),
   ];
   const total = refundAccountingAmount.plus(restoredCostAccountingAmount);
-  const currency = await companyCurrency(tx, input.companyId);
+  const voucherDate = await companyBusinessDate(input.companyId, tx);
+  // Phase 24 (M11): a non-USD company posts native amounts at the dated rate.
+  const voucherCurrency = await retailVoucherCurrencyTx(
+    tx,
+    input.companyId,
+    await companyCurrency(tx, input.companyId),
+    voucherDate
+  );
+  const inCurrency = retailEntriesInCurrency(entries, voucherCurrency, total.toFixed(2));
   const posted = await postBalancedVoucherTx(
     tx,
     {
@@ -608,17 +626,18 @@ export async function postRetailRefundAccountingTx(
         companyId: input.companyId,
         voucherNumber: `RETAIL-${input.sourceType === "retail-pos-cancel" ? "CANCEL" : "RETURN"}-${input.sourceId}`,
         voucherType: "Journal",
-        voucherDate: await companyBusinessDate(input.companyId, tx),
-        totalAmount: total.toFixed(2),
+        voucherDate,
+        totalAmount: inCurrency.totalAmount,
         description:
           input.sourceType === "retail-pos-cancel"
             ? `Retail cancellation for sale #${input.saleId}`
             : `Retail return for sale #${input.saleId}`,
         locationId: input.locationId,
-        currency,
+        currency: voucherCurrency.currency,
+        exchangeRate: voucherCurrency.rate,
         sourceModule: "Retail",
       },
-      entries,
+      entries: inCurrency.entries,
       source: {
         sourceType: input.sourceType,
         sourceId: input.sourceId,

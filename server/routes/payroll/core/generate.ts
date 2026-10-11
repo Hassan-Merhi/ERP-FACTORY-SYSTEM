@@ -12,7 +12,7 @@ import {
   allocatePayrollAccountingAmounts,
   moneyFromCents,
 } from "../../../services/accounting/payrollAccountingAmounts";
-import { eq, and, sql, gte, lte, inArray } from "drizzle-orm";
+import { eq, and, gte, lte, inArray } from "drizzle-orm";
 import type Decimal from "decimal.js";
 import { MoneyDecimal, parseMoneyInput, toMoney } from "../../../lib/money";
 import {
@@ -21,23 +21,26 @@ import {
   factoryWorkerAdvances,
   factoryWorkerDeductions,
   factoryAttendance,
-  vouchers,
 } from "@shared/schema";
 import { findOrCreateLedger, getFactoryCompanyId, settleAdvancesForPayroll, writeDaybookEntry } from "./_helpers";
 import { computeWorkerPayAmounts } from "./workerPayAmounts";
-import { retireVouchersTx, sessionRetirementActor } from "../../../services/accounting/voucherRetirement";
-import {
-  postErpVoucherTx,
-  sessionPostingActor,
-  type ErpVoucherLine,
-} from "../../../services/accounting/erpVoucherPosting";
+import { rebuildPayrollGenVoucher } from "../_payrollAccountingHelper";
+import { PAYROLL_COMPANY_MISMATCH_MESSAGE } from "./mark-paid";
 
 export function registerPayrollGenerateRoutes(app: Express) {
   // POST /api/factory/payrolls/generate-bulk - Generate draft payrolls for multiple workers
   app.post("/api/factory/payrolls/generate-bulk", requireAuth, async (req: Request, res: Response) => {
     try {
-      const companyId = req.body.companyId || getFactoryCompanyId(req);
+      // Phase 28 (F12): the session's company; a body naming another company is refused.
+      const companyId = getFactoryCompanyId(req);
       if (!companyId) return res.status(400).json({ message: "No company selected" });
+      if (
+        req.body.companyId !== undefined &&
+        req.body.companyId !== null &&
+        Number(req.body.companyId) !== Number(companyId)
+      ) {
+        return res.status(403).json({ code: "PAYROLL_COMPANY_MISMATCH", message: PAYROLL_COMPANY_MISMATCH_MESSAGE });
+      }
       const {
         workerIds,
         periodStart,
@@ -138,8 +141,8 @@ export function registerPayrollGenerateRoutes(app: Express) {
 
       // Pre-resolve per-worker ledger accounts OUTSIDE the transaction
       // Sequential calls to avoid simultaneous MAX(code) reads returning the same nextCode
-      const payableAccGen = await findOrCreateLedger(companyId, "Payroll Payable", "Liability");
-      const advancesAccGen = await findOrCreateLedger(companyId, "Factory Worker Advances", "Asset");
+      await findOrCreateLedger(companyId, "Payroll Payable", "Liability");
+      await findOrCreateLedger(companyId, "Factory Worker Advances", "Asset");
       // Ensure group header accounts exist — worker accounts nest under them in the chart of accounts
       const salaryGroupAcc = await findOrCreateLedger(companyId, "Salary Expense - Workers", "Expense", {
         subType: "Group",
@@ -234,80 +237,14 @@ export function registerPayrollGenerateRoutes(app: Express) {
           totalAdvanceDeductionsCents += accounting.advanceCents;
           count++;
         }
-        // Accounting: Dr per-worker Salary/Bonus Expense / Cr Payroll Payable (net) / Cr Factory Worker Advances
-        const totalGrossCents = totalNetCents + totalAdvanceDeductionsCents;
-        if (totalGrossCents > 0) {
-          // ── Dedup guard: remove any existing PAYROLL-GEN vouchers for this period ──
-          // Prevents duplicate expense vouchers when payroll is regenerated (e.g. after a data pull).
-          const staleGenVouchers = await tx
-            .select({ id: vouchers.id })
-            .from(vouchers)
-            .where(
-              and(
-                eq(vouchers.companyId, companyId),
-                sql`${vouchers.voucherNumber} LIKE 'PAYROLL-GEN-%'`,
-                eq(vouchers.voucherDate, periodStart),
-                sql`${vouchers.description} LIKE ${"%" + periodEnd + "%"}`
-              )
-            );
-          if (staleGenVouchers.length > 0) {
-            const vIds = staleGenVouchers.map((v) => v.id);
-            // Rebuilt PAYROLL-GEN vouchers can have a durable accounting posting
-            // identity that references the voucher with ON DELETE RESTRICT. Remove
-            // that marker first so regeneration can safely replace old vouchers.
-            // Wave 16 (A): retired (soft delete with lines, audited here), not hard-deleted.
-            await retireVouchersTx(tx, {
-              companyId,
-              voucherIds: vIds,
-              reason: "payroll-generation-rebuild",
-              actor: sessionRetirementActor(req),
-            });
-          }
-
-          const desc = `Payroll expense: ${count} worker${count !== 1 ? "s" : ""} (${periodStart} – ${periodEnd})`;
-          // Phase 22 (B): through the central engine. The PAYROLL-GEN- prefix is
-          // kept (the dedup guard above, the integrity diagnostic and the
-          // worker-statement repair find the journal by it), with the company
-          // and period as a deterministic suffix instead of Date.now() (voucher
-          // numbers are unique across companies). A rebuild retires the
-          // old journal first, which releases its number and posting identity.
-          const journalLines: ErpVoucherLine[] = [];
-          // DR entries per worker (one salary line + one bonus line each)
-          for (const { workerName, workerId, salAmt, bonAmt } of workerExpenses) {
-            const accs = workerAccCache.get(workerId)!;
-            journalLines.push({
-              ledgerAccountId: accs.salaryId,
-              debit: salAmt,
-              narration: `Salary - ${workerName} (${periodStart} – ${periodEnd})`,
-            });
-            journalLines.push({
-              ledgerAccountId: accs.bonusId,
-              debit: bonAmt,
-              narration: `Bonus - ${workerName} (${periodStart} – ${periodEnd})`,
-            });
-          }
-          journalLines.push({
-            ledgerAccountId: payableAccGen.id,
-            credit: moneyFromCents(totalNetCents),
-            narration: desc,
-          });
-          // Credit Factory Worker Advances to reduce the asset as deductions are settled
-          journalLines.push({
-            ledgerAccountId: advancesAccGen.id,
-            credit: moneyFromCents(totalAdvanceDeductionsCents),
-            narration: `Advance deductions settled - ${count} worker${count !== 1 ? "s" : ""} (${periodStart} – ${periodEnd})`,
-          });
-          await postErpVoucherTx(tx, {
-            companyId,
-            voucherNumber: `PAYROLL-GEN-${companyId}-${periodStart}-${periodEnd}`,
-            voucherType: "Journal",
-            voucherDate: periodStart,
-            description: desc,
-            sourceModule: "FACTORY",
-            lines: journalLines,
-            source: { type: "payroll-generation", id: `${companyId}:${periodStart}:${periodEnd}` },
-            actor: sessionPostingActor(req, "Payroll generation"),
-          });
+        // Phase 28 (F12): the period's accrual is rebuilt from EVERY payroll of
+        // the period (rebuildPayrollGenVoucher, the reviewed rebuild the payroll
+        // edit, delete and bonus paths use): the old journal is retired and one
+        // PAYROLL-GEN journal posted for all of them. Before, this route retired
+        // the period's journal and re-posted it from this batch only, so a second
+        // batch for the same period dropped the first batch's expense and payable.
+        if (totalNetCents + totalAdvanceDeductionsCents > 0) {
+          await rebuildPayrollGenVoucher(tx, companyId, periodStart, periodEnd);
         }
         const totalNet = toMoney(moneyFromCents(totalNetCents)).toNumber();
         await writeDaybookEntry(tx, {

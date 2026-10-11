@@ -1,20 +1,6 @@
-import {
-  db,
-  schema,
-  eq,
-  and,
-  desc,
-  sql,
-  isNull,
-  asc,
-  ilike,
-  nonPartyAccountTypesSql,
-  profitAndLossAccountTypesSql,
-} from "./reportShardSupport";
-import { MoneyDecimal, toMoney } from "../../../lib/money";
-import { classifyAccountType, expenseCategory } from "../../../services/accounting/accountClassification";
+import { db, schema, eq, and, desc, sql, isNull, asc, ilike, nonPartyAccountTypesSql } from "./reportShardSupport";
 import type { DataQueryContext, DataQueryResult, ReportImplementationShard } from "../types";
-import { notFiscalClosingVoucher } from "../../../services/accounting/balances/periodReportRules";
+import { cashPositionReport, profitLossSummaryReport } from "./financialStatementReports";
 
 export const phase1QueryTypes = [
   "pl_summary",
@@ -31,106 +17,19 @@ export const phase1QueryTypes = [
 ] as const;
 
 async function runPhase1Report(ctx: DataQueryContext): Promise<DataQueryResult> {
-  const { companyId, params, dateFrom, dateTo, todayStr, rowLimit, userMessage, fmt, fmtDec } = ctx;
+  const { companyId, params, dateFrom, dateTo, rowLimit, userMessage, fmt, fmtDec } = ctx;
   let dataQueryResult: DataQueryResult;
 
   switch (params.queryType) {
     case "pl_summary": {
-      const rows = await db.execute<{
-        account_type: string;
-        sub_type: string | null;
-        total_debit: string;
-        total_credit: string;
-      }>(sql`
-        SELECT la.account_type, la.sub_type,
-          COALESCE(SUM(CAST(ve.debit_amount AS numeric)), 0) AS total_debit,
-          COALESCE(SUM(CAST(ve.credit_amount AS numeric)), 0) AS total_credit
-        FROM voucher_entries ve
-        JOIN vouchers v ON v.id = ve.voucher_id AND v.optional = false AND v.deleted_at IS NULL
-          AND v.company_id = ${companyId}
-        JOIN ledger_accounts la ON la.id = ve.ledger_account_id AND la.company_id = ${companyId}
-        WHERE COALESCE(v.effective_date, v.voucher_date) BETWEEN ${dateFrom} AND ${dateTo}
-          AND ${notFiscalClosingVoucher("v")}
-          AND LOWER(TRIM(la.account_type)) IN (${profitAndLossAccountTypesSql()})
-        GROUP BY la.account_type, la.sub_type
-      `);
-      // Shared classifier: every income type is revenue (Indirect Income and
-      // Revenue included); Direct Expense is cost of goods sold; every other
-      // expense (Government Taxes included) is operating. Profit is equity and
-      // no longer read as an expense.
-      let revenueExact = new MoneyDecimal(0),
-        cogsExact = new MoneyDecimal(0),
-        opexExact = new MoneyDecimal(0);
-      for (const row of rows.rows) {
-        const debitMinusCredit = toMoney(row.total_debit).minus(toMoney(row.total_credit));
-        if (classifyAccountType(row.account_type, row.sub_type) === "income")
-          revenueExact = revenueExact.minus(debitMinusCredit);
-        else if (expenseCategory(row.account_type, row.sub_type) === "Direct Expense")
-          cogsExact = cogsExact.plus(debitMinusCredit);
-        else opexExact = opexExact.plus(debitMinusCredit);
-      }
-      const revenue = revenueExact.toNumber();
-      const cogs = cogsExact.toNumber();
-      const opex = opexExact.toNumber();
-      const gross = revenueExact.minus(cogsExact).toNumber();
-      const net = revenueExact.minus(cogsExact).minus(opexExact).toNumber();
-      dataQueryResult = {
-        queryType: "pl_summary",
-        title: "Profit & Loss Summary",
-        subtitle: `${dateFrom} to ${dateTo}`,
-        stats: [
-          { label: "Revenue", value: fmt(revenue), highlight: revenue >= 0 ? "positive" : "negative" },
-          { label: "Cost of Goods Sold", value: fmt(cogs), highlight: "muted" },
-          { label: "Gross Profit", value: fmt(gross), highlight: gross >= 0 ? "positive" : "negative" },
-          { label: "Operating Expenses", value: fmt(opex), highlight: "muted" },
-          { label: "Net Profit / (Loss)", value: fmt(net), highlight: net >= 0 ? "positive" : "negative" },
-        ],
-      };
+      // Phase 27 (RP-13): on the report services (financialStatementReports.ts).
+      dataQueryResult = await profitLossSummaryReport(ctx);
       break;
     }
 
     case "cash_position": {
-      const rows = await db.execute<{
-        name: string;
-        account_type: string;
-        opening_balance: string | null;
-        opening_balance_side: string | null;
-        total_debit: string;
-        total_credit: string;
-      }>(sql`
-        SELECT la.name, la.account_type, la.opening_balance, la.opening_balance_side,
-          COALESCE(SUM(CASE WHEN v.deleted_at IS NULL AND v.optional = false THEN CAST(ve.debit_amount AS numeric) ELSE 0 END), 0) AS total_debit,
-          COALESCE(SUM(CASE WHEN v.deleted_at IS NULL AND v.optional = false THEN CAST(ve.credit_amount AS numeric) ELSE 0 END), 0) AS total_credit
-        FROM ledger_accounts la
-        LEFT JOIN voucher_entries ve ON ve.ledger_account_id = la.id
-        LEFT JOIN vouchers v ON v.id = ve.voucher_id
-        WHERE la.company_id = ${companyId} AND LOWER(TRIM(la.account_type)) IN ('cash', 'bank') AND la.active = true AND la.deleted_at IS NULL
-        GROUP BY la.id, la.name, la.account_type, la.opening_balance, la.opening_balance_side
-        ORDER BY la.account_type, la.name
-      `);
-      let grandTotal = 0;
-      const stats = rows.rows.map((row) => {
-        const ob = parseFloat(row.opening_balance || "0");
-        const obAdj = row.opening_balance_side === "Cr" ? -ob : ob;
-        const bal = obAdj + parseFloat(row.total_debit || "0") - parseFloat(row.total_credit || "0");
-        grandTotal += bal;
-        return {
-          label: `${row.name} (${row.account_type})`,
-          value: fmt(bal),
-          highlight: bal >= 0 ? "positive" : "negative",
-        };
-      });
-      stats.push({
-        label: "TOTAL CASH & BANK",
-        value: fmt(grandTotal),
-        highlight: grandTotal >= 0 ? "positive" : "negative",
-      });
-      dataQueryResult = {
-        queryType: "cash_position",
-        title: "Cash & Bank Positions",
-        subtitle: `As of ${todayStr}`,
-        stats,
-      };
+      // Phase 27 (RP-13): on the report services (financialStatementReports.ts).
+      dataQueryResult = await cashPositionReport(ctx);
       break;
     }
 

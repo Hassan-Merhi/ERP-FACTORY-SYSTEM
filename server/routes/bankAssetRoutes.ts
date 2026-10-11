@@ -152,8 +152,8 @@ export function registerBankAssetRoutes(app: Express) {
                 COALESCE(ve.transaction_currency, 'USD') AS entry_currency,
                 COALESCE(SUM(ve.transaction_debit_amount::numeric),  0) AS native_debit,
                 COALESCE(SUM(ve.transaction_credit_amount::numeric), 0) AS native_credit,
-                COALESCE(SUM(COALESCE(ve.base_debit_amount,  ve.debit_amount)::numeric),  0) AS hist_base_debit,
-                COALESCE(SUM(COALESCE(ve.base_credit_amount, ve.credit_amount)::numeric), 0) AS hist_base_credit
+                COALESCE(SUM(ve.debit_amount::numeric),  0) AS hist_base_debit,
+                COALESCE(SUM(ve.credit_amount::numeric), 0) AS hist_base_credit
          FROM voucher_entries ve
          JOIN vouchers v ON ve.voucher_id = v.id
          WHERE v.company_id = $1
@@ -321,8 +321,8 @@ export function registerBankAssetRoutes(app: Express) {
           hist_credit: string;
         }>(
           `SELECT ve.fixed_asset_id,
-                  COALESCE(SUM(COALESCE(ve.base_debit_amount,  ve.debit_amount)::numeric),  0) AS hist_debit,
-                  COALESCE(SUM(COALESCE(ve.base_credit_amount, ve.credit_amount)::numeric), 0) AS hist_credit
+                  COALESCE(SUM(ve.debit_amount::numeric),  0) AS hist_debit,
+                  COALESCE(SUM(ve.credit_amount::numeric), 0) AS hist_credit
            FROM voucher_entries ve
            JOIN vouchers v ON ve.voucher_id = v.id
            WHERE ve.fixed_asset_id = ANY($1::int[])
@@ -365,7 +365,7 @@ export function registerBankAssetRoutes(app: Express) {
       const parsed = insertFixedAssetSchema.parse({ ...req.body, companyId });
 
       // Check for duplicate code
-      const existing = await storage.getFixedAssetByCode(parsed.code);
+      const existing = await storage.getFixedAssetByCode(parsed.code, companyId);
       if (existing) {
         return res.status(400).json({ message: "Fixed asset code already exists" });
       }

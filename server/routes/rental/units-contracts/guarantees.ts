@@ -15,7 +15,7 @@ import { getErrorMessage } from "../../../lib/httpHandlers";
 import {
   getCompanyId,
   findOrCreateLedgerAccount,
-  maybeRunAutoTransfer,
+  runRentalAutoTransferTx,
   reverseAutoTransfersTx,
   ensureMonthlyLedgerRows,
   buildAllocations,
@@ -142,14 +142,22 @@ export function registerRentalGuaranteeRoutes(app: Express, ctx: RentalRoutesCon
               source: { type: "rental-guarantee-statement", id: String(id) },
               actor: postingActor(req),
             });
+            // Auto-transfer if configured (only for landlord receiving cash), in
+            // this transaction (phase 26, MC-3).
+            await runRentalAutoTransferTx(tx, {
+              companyId,
+              module,
+              fromLedgerAccountId: cashAccountId,
+              amount,
+              transferDate: dateStr,
+              unitLabel,
+              sourceKey: `guarantee-statement-${id}`,
+              notes: notes ?? null,
+              actor: postingActor(req),
+            });
           }
         }
       });
-
-      // Fire auto-transfer if configured (only for landlord receiving cash)
-      if (cashAccountId && !(module === "ERP" || module === "FACTORY")) {
-        await maybeRunAutoTransfer(companyId, module, cashAccountId, amount, dateStr, unitLabel, undefined, notes);
-      }
 
       res.json({ ok: true });
     } catch (e: unknown) {
@@ -254,33 +262,44 @@ export function registerRentalGuaranteeRoutes(app: Express, ctx: RentalRoutesCon
           .update(propertyContracts)
           .set({ guaranteePostedToStatement: true, guaranteePostedAmount: amount })
           .where(eq(propertyContracts.id, id));
-      });
 
-      // A resent request (same clientRequestId) posted nothing new.
-      if (replayed) return res.json({ ok: true });
+        // A resent request (same clientRequestId) posted nothing new.
+        if (replayed) return;
 
-      // Record in payments log so it's visible in cash flow / payments history
-      const pd = new Date(dateStr);
-      const [savedPayment] = await db
-        .insert(propertyPayments)
-        .values({
+        // Record in payments log so it's visible in cash flow / payments history,
+        // then the auto-transfer with that payment id (so deletion can reverse
+        // both sides), all in this transaction (phase 26, MC-3).
+        const pd = new Date(dateStr);
+        const [savedPayment] = await tx
+          .insert(propertyPayments)
+          .values({
+            companyId,
+            module,
+            contractId: contract.id,
+            unitId: contract.unitId,
+            ledgerRowId: null,
+            cashAccountId,
+            voucherId,
+            amount,
+            paymentDate: dateStr,
+            forYear: pd.getUTCFullYear(),
+            forMonth: pd.getUTCMonth() + 1,
+            notes: notes ? `[Guarantee release] ${notes}` : `[Guarantee release] ${unitLabel}`,
+          })
+          .returning();
+
+        await runRentalAutoTransferTx(tx, {
           companyId,
           module,
-          contractId: contract.id,
-          unitId: contract.unitId,
-          ledgerRowId: null,
-          cashAccountId,
-          voucherId,
+          fromLedgerAccountId: cashAccountId,
           amount,
-          paymentDate: dateStr,
-          forYear: pd.getUTCFullYear(),
-          forMonth: pd.getUTCMonth() + 1,
-          notes: notes ? `[Guarantee release] ${notes}` : `[Guarantee release] ${unitLabel}`,
-        })
-        .returning();
-
-      // Fire auto-transfer if configured — pass the payment ID so deletion can reverse both sides
-      await maybeRunAutoTransfer(companyId, module, cashAccountId, amount, dateStr, unitLabel, savedPayment?.id, notes);
+          transferDate: dateStr,
+          unitLabel,
+          sourcePaymentId: savedPayment?.id ?? null,
+          notes: notes ?? null,
+          actor: postingActor(req),
+        });
+      });
 
       res.json({ ok: true });
     } catch (e: unknown) {

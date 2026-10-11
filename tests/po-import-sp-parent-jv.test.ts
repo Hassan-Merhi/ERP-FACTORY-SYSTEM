@@ -194,10 +194,12 @@ describe("PO import linked Supplier Partner parent accounting", () => {
     expect(localEntries.rows).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ subType: "sp_goods_otw", debitAmount: "100.00" }),
+        // Phases 23–29 integration (G17): the supplier is the parent's, so the
+        // child's clearing line no longer names it (the parent carries it below).
         expect.objectContaining({
           subType: "sp_otw_clearing",
           creditAmount: "100.00",
-          supplierId,
+          supplierId: null,
         }),
       ])
     );

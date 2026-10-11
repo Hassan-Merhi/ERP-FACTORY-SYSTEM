@@ -60,6 +60,13 @@ export const factorySuppliers = pgTable(
     address: text("address"),
     notes: text("notes"),
     openingBalance: decimal("opening_balance", { precision: 20, scale: 4 }).notNull().default("0"),
+    // Phase 25 (AR-9): the opening's side (NULL = Cr, what we owe), its
+    // currency and native amount; opening_balance stays the USD book amount.
+    openingBalanceSide: varchar("opening_balance_side", { length: 2 }),
+    openingBalanceCurrency: varchar("opening_balance_currency", { length: 3 }),
+    openingBalanceNativeAmount: decimal("opening_balance_native_amount", { precision: 20, scale: 4 }),
+    // Phase 25 (AR-4): days from an invoice's booked date to its due date; NULL = 30.
+    paymentTermsDays: integer("payment_terms_days"),
     linkedSupplierId: integer("linked_supplier_id"),
     parentId: integer("parent_id"),
     supplierCategoryId: integer("supplier_category_id"),
@@ -94,6 +101,10 @@ export const insertFactorySupplierSchema = createInsertSchema(factorySuppliers)
     address: z.string().optional().nullable(),
     notes: z.string().optional().nullable(),
     openingBalance: z.string().optional(),
+    openingBalanceSide: z.enum(["Dr", "Cr"]).optional().nullable(),
+    openingBalanceCurrency: z.string().length(3).optional().nullable(),
+    openingBalanceNativeAmount: z.string().optional().nullable(),
+    paymentTermsDays: z.number().int().positive().optional().nullable(),
     linkedSupplierId: z.number().optional().nullable(),
     parentId: z.number().optional().nullable(),
     supplierCategoryId: z.number().optional().nullable(),

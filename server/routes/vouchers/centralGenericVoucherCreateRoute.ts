@@ -15,7 +15,9 @@ import {
 } from "../../services/accounting/genericVoucherPosting";
 import { stockVoucherTypeRefusal } from "../../services/accounting/stockVoucherTypes";
 import { triggerIntercompanyNotifications } from "../intercompanyNotificationRoutes";
-import { buildVoucherChangesForCreate, getCurrentExchangeRate, logAudit, snapshotVoucherEntries } from "../_helpers";
+import { buildVoucherChangesForCreate, logAudit, snapshotVoucherEntries } from "../_helpers";
+import { companyBusinessDate } from "../../services/accounting/companyBusinessDate";
+import { sendDocumentRateError, voucherHeaderRate } from "../../services/accounting/fx/clientRateCheck";
 
 const postingDependencies = createDatabasePostingDependencies();
 type CustomerLinkedLedgerRow = { id: number; ledgerAccountId: number | null };
@@ -91,10 +93,19 @@ async function createCentralGenericVoucher(req: Request, res: Response, next: Ne
       return;
     }
 
-    const currentRate = await getCurrentExchangeRate(companyId);
-    const suppliedRate = req.body.voucher?.exchangeRate;
-    const voucherExchangeRate =
-      suppliedRate != null ? String(suppliedRate) : currentRate != null ? String(currentRate) : null;
+    // Phase 24 (M4): the rate recorded on or before the voucher date; a rate
+    // the client sends is accepted only within 0.5% of it (else 409).
+    const rawVoucherDate = req.body.voucher?.voucherDate;
+    const headerRate = await voucherHeaderRate({
+      companyId,
+      voucherCurrency: req.body.voucher?.currency,
+      voucherDate:
+        typeof rawVoucherDate === "string" && rawVoucherDate.trim()
+          ? rawVoucherDate
+          : await companyBusinessDate(companyId),
+      clientRate: req.body.voucher?.exchangeRate,
+    });
+    const voucherExchangeRate = headerRate.rate;
 
     const result = await db.transaction(async (tx) => {
       const resolvedEntries = await resolveCustomerLinkedLedgersTx({
@@ -195,6 +206,7 @@ async function createCentralGenericVoucher(req: Request, res: Response, next: Ne
       res.status(postingStatus(error)).json({ message: error.message, code: error.code });
       return;
     }
+    if (sendDocumentRateError(res, error)) return;
 
     res.status(errorStatus(error)).json({ message: getErrorMessage(error) });
   }

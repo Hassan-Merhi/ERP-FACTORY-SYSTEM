@@ -413,6 +413,7 @@ async function throwIfResNotOk(res: Response) {
         ledgerBalance?: unknown;
         notInProforma?: unknown;
         overloaded?: unknown;
+        voucherId?: unknown;
       } = new Error(errorData.message || res.statusText);
     error.status = res.status;
     error.code = errorData.code;
@@ -421,6 +422,8 @@ async function throwIfResNotOk(res: Response) {
     error.ledgerBalance = errorData.ledgerBalance;
     error.notInProforma = errorData.notInProforma;
     error.overloaded = errorData.overloaded;
+    // Phase 29: the closed-period refusal names the voucher to reverse.
+    error.voucherId = errorData.voucherId;
     throw error;
   }
 }
@@ -669,6 +672,18 @@ const globalQueryCache = new QueryCache({
 // error._handledGlobally.
 const globalMutationCache = new MutationCache({
   onError: (error: ClientErrorLike) => {
+    // Phase 29: a voucher edit refused because its period is closed offers the
+    // Reverse action (POST /api/vouchers/:id/reverse) instead of an error toast.
+    if (error?.code === "VOUCHER_CLOSED_PERIOD_REVERSE_INSTEAD") {
+      const voucherId = Number((error as { voucherId?: unknown }).voucherId);
+      if (Number.isInteger(voucherId) && voucherId > 0) {
+        error._handledGlobally = true;
+        void import("@/components/voucherReverseInstead").then((module) =>
+          module.offerReverseInstead(error, voucherId)
+        );
+        return;
+      }
+    }
     if (error?.name === "OfflineQueued") {
       error._handledGlobally = true;
       const label = error.description ? `${error.description} saved` : "Action saved";

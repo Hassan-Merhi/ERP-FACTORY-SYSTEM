@@ -10,6 +10,7 @@ import {
   vouchers,
 } from "@shared/schema";
 import { removeFactoryDaybookMirrorTx } from "../accounting/factoryDaybookMirrorRemoval";
+import { softDeleteTransferLinkTx } from "../accounting/intercompany/intercompanyTransferPosting";
 
 export type RentalModule = "PROPERTIES" | "ERP" | "FACTORY";
 
@@ -114,12 +115,18 @@ export async function deleteRentalPaymentGroup(input: DeleteRentalPaymentInput):
         const linkedTransfers = await tx
           .select()
           .from(interCompanyTransfers)
-          .where(inArray(interCompanyTransfers.sourcePaymentId, paymentIds));
+          .where(
+            and(inArray(interCompanyTransfers.sourcePaymentId, paymentIds), isNull(interCompanyTransfers.deletedAt))
+          );
 
         for (const transfer of linkedTransfers) {
           const fromVoucherId = transfer.fromVoucherId;
           const toVoucherId = transfer.toVoucherId;
-          await tx.delete(interCompanyTransfers).where(eq(interCompanyTransfers.id, transfer.id));
+          // Phase 26 (MC-11): the link is soft-deleted and audited, not removed.
+          await softDeleteTransferLinkTx(tx, transfer.id, {
+            reason: "rental-payment-delete-transfer-leg",
+            actor: input.actor,
+          });
           // Phase 21 (B): each leg is retired (soft delete with its lines, number
           // released, one audit row with the actor, in this transaction) instead
           // of a plain unaudited soft delete.

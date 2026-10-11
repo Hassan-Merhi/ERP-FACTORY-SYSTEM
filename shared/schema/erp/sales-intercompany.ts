@@ -124,13 +124,31 @@ export const interCompanyTransfers = pgTable("inter_company_transfers", {
   toVoucherId: integer("to_voucher_id").references(() => vouchers.id, { onDelete: "restrict" }),
   description: text("description"),
   sourcePaymentId: integer("source_payment_id"),
+  // Phase 26 (MC-1): the intercompany accounts each leg posted against (the
+  // from-company's due-from account, the to-company's due-to account). NULL on
+  // links written before phase 26; readers derive them from the vouchers.
+  fromIcAccountId: integer("from_ic_account_id"),
+  toIcAccountId: integer("to_ic_account_id"),
+  // Phase 26: what wrote the link (inter-company-transfer, simple-company-transfer,
+  // rental-auto-transfer, intercompany-pos, cross-company-reclass); NULL before.
+  sourceType: text("source_type"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
+  // Phase 26 (MC-11): a link is soft-deleted with its vouchers and updated with
+  // an edit of its legs, never hard-deleted.
+  updatedAt: timestamp("updated_at"),
+  deletedAt: timestamp("deleted_at"),
+  deletedBy: text("deleted_by"),
+  deleteReason: text("delete_reason"),
 });
 
 export const insertInterCompanyTransferSchema = createInsertSchema(interCompanyTransfers)
   .omit({
     id: true,
     createdAt: true,
+    updatedAt: true,
+    deletedAt: true,
+    deletedBy: true,
+    deleteReason: true,
   })
   .extend({
     transferType: z.enum(["Cash", "Loan"]),

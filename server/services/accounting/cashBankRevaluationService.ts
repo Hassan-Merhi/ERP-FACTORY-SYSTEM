@@ -102,7 +102,11 @@ export type CashBankAttribution = "legacy" | "engine";
 
 export interface CashBankRevaluationOptions {
   attribution?: CashBankAttribution;
-  /** The date of the current CFA rate (default: the company's business date); a later rate is never used. */
+  /**
+   * The date of the current CFA rate (default: the company's business date); a
+   * later rate is never used. When given it also cuts the lines
+   * (COALESCE(effective_date, voucher_date) <= asOf; phase 24, M13).
+   */
   asOf?: string;
 }
 
@@ -187,7 +191,8 @@ async function loadAggregates(
   companyId: number,
   accountKind: "ledger" | "bank",
   accountIds: number[],
-  attribution: CashBankAttribution
+  attribution: CashBankAttribution,
+  asOf: string | null = null
 ): Promise<AggregateRow[]> {
   if (accountIds.length === 0) return [];
   const accountColumn = accountKind === "ledger" ? "ve.ledger_account_id" : "ve.bank_account_id";
@@ -261,6 +266,7 @@ async function loadAggregates(
          AND v.deleted_at IS NULL
          AND ${accountColumn} = ANY($2::int[])
          ${bankOnly}
+         AND ($3::date IS NULL OR COALESCE(v.effective_date, v.voucher_date) <= $3::date)
      )
      SELECT
        account_id::text,
@@ -273,7 +279,7 @@ async function loadAggregates(
        COALESCE(SUM(unresolved_raw_net), 0)::text AS unresolved_raw_net
      FROM classified
      GROUP BY account_id, entry_currency`,
-    [companyId, accountIds]
+    [companyId, accountIds, asOf]
   );
   return result.rows;
 }
@@ -295,8 +301,8 @@ export async function getCashBankRevaluation(
   const ledgerIds = accounts.filter((row) => row.accountKind === "ledger").map((row) => row.id);
   const bankIds = accounts.filter((row) => row.accountKind === "bank").map((row) => row.id);
   const [ledgerRows, bankRows] = await Promise.all([
-    loadAggregates(companyId, "ledger", ledgerIds, attribution),
-    loadAggregates(companyId, "bank", bankIds, attribution),
+    loadAggregates(companyId, "ledger", ledgerIds, attribution, options.asOf ?? null),
+    loadAggregates(companyId, "bank", bankIds, attribution, options.asOf ?? null),
   ]);
 
   const rowMap = new Map<string, AggregateRow[]>();
@@ -418,8 +424,9 @@ export async function getCashBankRevaluation(
 export async function getCashBankAccountSummary(
   companyId: number,
   accountKind: "ledger" | "bank",
-  accountId: number
+  accountId: number,
+  asOf?: string
 ): Promise<CashBankCurrencySummary | null> {
-  const result = await getCashBankRevaluation(companyId);
+  const result = await getCashBankRevaluation(companyId, asOf ? { asOf } : {});
   return result.accounts.find((row) => row.accountKind === accountKind && row.id === accountId) || null;
 }

@@ -648,4 +648,128 @@ export const wave8ReleaseTranslationsPart4: readonly Phase3SharedUiEntry[] = [
     ar: "تصحيح مدين دائنين يتيم ({{0}} صفوف) — مدين مصروف الإيجار / دائن الدائنين",
     fr: "Correction de débit fournisseurs orphelin ({{0}} ligne(s)) — débit charge de loyer / crédit fournisseurs",
   },
+  // Accounting audit phase 24 (multi-currency complete).
+  // Dated rates and client rate tolerance (services/accounting/fx/clientRateCheck.ts).
+  {
+    en: "The exchange rate sent differs from the rate recorded for this date by more than 0.5%. Use the recorded rate, or record the correct rate for the date first.",
+    ar: "يختلف سعر الصرف المرسل عن السعر المسجل لهذا التاريخ بأكثر من 0.5%. استخدم السعر المسجل، أو سجّل السعر الصحيح لهذا التاريخ أولاً.",
+    fr: "Le taux de change envoyé diffère de plus de 0,5 % du taux enregistré pour cette date. Utilisez le taux enregistré, ou enregistrez d’abord le bon taux pour cette date.",
+  },
+  {
+    en: "No exchange rate is recorded for this currency on or before the document date. Record the dated exchange rate first.",
+    ar: "لا يوجد سعر صرف مسجل لهذه العملة في تاريخ المستند أو قبله. سجّل سعر الصرف المؤرخ أولاً.",
+    fr: "Aucun taux de change n’est enregistré pour cette devise à la date du document ou avant. Enregistrez d’abord le taux de change daté.",
+  },
+  // Non-USD purchase orders (routes/import/poImportCurrency.ts).
+  {
+    en: "All items of a purchase order import must be in the same currency.",
+    ar: "يجب أن تكون جميع بنود استيراد أمر الشراء بالعملة نفسها.",
+    fr: "Tous les articles d’une importation de bon de commande doivent être dans la même devise.",
+  },
+  // Month-end revaluation (services/accounting/fx/monthEndRevaluation.ts).
+  {
+    en: "The revaluation date must be the last day of a month (YYYY-MM-DD).",
+    ar: "يجب أن يكون تاريخ إعادة التقييم آخر يوم في الشهر (YYYY-MM-DD).",
+    fr: "La date de réévaluation doit être le dernier jour d’un mois (AAAA-MM-JJ).",
+  },
+  {
+    en: "A month can be revalued only once its last day has been reached.",
+    ar: "لا يمكن إعادة تقييم الشهر إلا بعد بلوغ آخر يوم فيه.",
+    fr: "Un mois ne peut être réévalué qu’une fois son dernier jour atteint.",
+  },
+  {
+    en: "The revaluation plan has changed since it was reviewed. Preview it again and apply the new plan.",
+    ar: "تغيّرت خطة إعادة التقييم منذ مراجعتها. اعرضها مجدداً وطبّق الخطة الجديدة.",
+    fr: "Le plan de réévaluation a changé depuis sa revue. Prévisualisez-le à nouveau et appliquez le nouveau plan.",
+  },
+  {
+    en: "This month has already been revalued.",
+    ar: "تمت إعادة تقييم هذا الشهر بالفعل.",
+    fr: "Ce mois a déjà été réévalué.",
+  },
+  {
+    en: "There is nothing to revalue for this month.",
+    ar: "لا يوجد ما يُعاد تقييمه لهذا الشهر.",
+    fr: "Il n’y a rien à réévaluer pour ce mois.",
+  },
+  {
+    en: "The reviewed plan hash is required.",
+    ar: "بصمة الخطة المراجَعة مطلوبة.",
+    fr: "L’empreinte du plan revu est requise.",
+  },
+  {
+    en: "The UNREALIZED_FX account is deleted. Restore it before revaluing.",
+    ar: "حساب UNREALIZED_FX محذوف. استعده قبل إعادة التقييم.",
+    fr: "Le compte UNREALIZED_FX est supprimé. Restaurez-le avant de réévaluer.",
+  },
+  {
+    en: "The ${code} account is deleted. Restore it or choose another account before exchange differences can be posted.",
+    ar: "الحساب {{0}} محذوف. استعده أو اختر حساباً آخر قبل ترحيل فروق الصرف.",
+    fr: "Le compte {{0}} est supprimé. Restaurez-le ou choisissez un autre compte avant de comptabiliser les écarts de change.",
+  },
+  // Accounting audit phase 25 (receivables and payables as open items).
+  // Factory supplier statement on the ledger lines (AR-8).
+  { en: "Debit (USD)", ar: "مدين (دولار)", fr: "Débit (USD)" },
+  { en: "Credit (USD)", ar: "دائن (دولار)", fr: "Crédit (USD)" },
+  { en: "Native", ar: "بالعملة الأصلية", fr: "Devise d’origine" },
+  { en: "Balance (USD)", ar: "الرصيد (دولار)", fr: "Solde (USD)" },
+  {
+    en: "Operational activity (memo, not the ledger)",
+    ar: "النشاط التشغيلي (مذكرة، ليس دفتر الأستاذ)",
+    fr: "Activité opérationnelle (mémo, pas le grand livre)",
+  },
+  // Open items and allocations (routes/stats/agingReportRoutes.ts, allocations/).
+  { en: "partyId is required", ar: "يلزم معرّف الطرف (partyId)", fr: "partyId est requis" },
+  {
+    en: "kind must be customer, supplier, factorySupplier or employee",
+    ar: "يجب أن يكون النوع customer أو supplier أو factorySupplier أو employee",
+    fr: "kind doit être customer, supplier, factorySupplier ou employee",
+  },
+  {
+    en: "A reason is required for a manual re-allocation",
+    ar: "يلزم ذكر سبب لإعادة التخصيص اليدوية",
+    fr: "Un motif est requis pour une réaffectation manuelle",
+  },
+  {
+    en: "Each allocation amount must be positive with at most 2 decimals",
+    ar: "يجب أن يكون كل مبلغ تخصيص موجباً وبحد أقصى منزلتين عشريتين",
+    fr: "Chaque montant d’affectation doit être positif avec au plus 2 décimales",
+  },
+  {
+    en: "Allocation ${id} is not a live allocation of this party",
+    ar: "التخصيص {{0}} ليس تخصيصاً سارياً لهذا الطرف",
+    fr: "L’affectation {{0}} n’est pas une affectation active de ce tiers",
+  },
+  {
+    en: "Item ${invoiceKey} is not an open invoice of this party",
+    ar: "البند {{0}} ليس فاتورة مفتوحة لهذا الطرف",
+    fr: "L’élément {{0}} n’est pas une facture ouverte de ce tiers",
+  },
+  {
+    en: "Item ${paymentKey} is not a credit of this party",
+    ar: "البند {{0}} ليس رصيداً دائناً لهذا الطرف",
+    fr: "L’élément {{0}} n’est pas un avoir de ce tiers",
+  },
+  // Credit / debit notes against an invoice (AR-7).
+  {
+    en: "This note references an invoice: reverse it and issue a new note instead of editing it",
+    ar: "هذا الإشعار يشير إلى فاتورة: اعكسه وأصدر إشعاراً جديداً بدلاً من تعديله",
+    fr: "Cette note fait référence à une facture : contre-passez-la et émettez une nouvelle note au lieu de la modifier",
+  },
+  {
+    en: "invoiceVoucherId is required: a note references the invoice it adjusts",
+    ar: "يلزم invoiceVoucherId: يشير الإشعار إلى الفاتورة التي يعدّلها",
+    fr: "invoiceVoucherId est requis : une note fait référence à la facture qu’elle ajuste",
+  },
+  {
+    en: "A note names either a customer or a supplier",
+    ar: "يحدد الإشعار إما عميلاً أو مورداً",
+    fr: "Une note désigne soit un client, soit un fournisseur",
+  },
+  { en: "A credit note is for a customer", ar: "إشعار الدائن يكون لعميل", fr: "Un avoir concerne un client" },
+  {
+    en: "A debit note is for a supplier",
+    ar: "إشعار المدين يكون لمورد",
+    fr: "Une note de débit concerne un fournisseur",
+  },
 ];

@@ -10,7 +10,7 @@ import { getErrorMessage } from "../../../lib/httpHandlers";
 import { logger } from "../../../lib/logger";
 import { db } from "../../../db";
 import { requireAuth } from "../../../auth";
-import { verifySupervisorPassword } from "../_helpers";
+import { verifySupervisorPasswordForUser } from "../_helpers";
 import { factoryBaleProducts, users, userCompanyRoles } from "@shared/schema";
 import { eq, and, sql } from "drizzle-orm";
 
@@ -31,7 +31,7 @@ export function registerFactoryProductWriteRoutes(app: Express) {
         if (!adminUser || !adminUser.active) {
           return res.status(403).json({ message: "Invalid admin credentials" });
         }
-        const passwordValid = await verifySupervisorPassword(adminAuth.password, adminUser.password);
+        const passwordValid = await verifySupervisorPasswordForUser(adminAuth.password, adminUser);
         if (!passwordValid) {
           return res.status(403).json({ message: "Invalid admin credentials" });
         }

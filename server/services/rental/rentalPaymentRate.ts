@@ -1,10 +1,9 @@
 /**
  * The rate a rental payment posts at (accounting audit phase 19 B, PE2).
  */
-import Decimal from "decimal.js";
-
+import { db } from "../../db";
 import { parseMoneyInput } from "../../lib/money";
-import { getExchangeRateForDate } from "../../storage/accounting/exchange-rates";
+import { resolveCompanyRecordedRate } from "../accounting/fx/rateResolver";
 
 /** A rate refusal that carries the HTTP status and the missing pair. */
 export type RentalRateRequiredError = Error & { status: number; code: string; currency: string; date: string };
@@ -28,12 +27,9 @@ export async function recordedRentalPaymentRate(companyId: number, currency: str
   const code = (currency || "USD").trim().toUpperCase();
   if (code === "USD") return "1";
   const day = String(date).slice(0, 10);
-  const direct = await getExchangeRateForDate(companyId, "USD", code, day);
-  const directRate = direct ? parseMoneyInput(direct.rate) : null;
-  if (directRate && directRate.greaterThan(0)) return directRate.toString();
-  const inverse = await getExchangeRateForDate(companyId, code, "USD", day);
-  const inverseRate = inverse ? parseMoneyInput(inverse.rate) : null;
-  if (inverseRate && inverseRate.greaterThan(0)) return new Decimal(1).div(inverseRate).toDecimalPlaces(10).toString();
+  // Phase 24 (M1): the one resolver (USD→currency or the inverse pair, the later date first).
+  const recorded = await resolveCompanyRecordedRate(db, companyId, code, day);
+  if (recorded && parseMoneyInput(recorded.unitsPerUsd)?.greaterThan(0)) return recorded.unitsPerUsd;
   const err = new Error(RENTAL_RATE_REQUIRED_MESSAGE) as RentalRateRequiredError;
   err.status = 409;
   err.code = RENTAL_RATE_REQUIRED_CODE;

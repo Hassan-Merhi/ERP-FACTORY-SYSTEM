@@ -19,10 +19,13 @@ import {
   locations,
   companies,
 } from "@shared/schema";
-import { eq, and, inArray, sql, isNull } from "drizzle-orm";
+import { eq, and, inArray, sql, isNull, gte, lte } from "drizzle-orm";
+import { voucherBookedOnSql } from "../../services/accounting/balances/partyLineRules";
 import { _getCached, _setCached } from "../../services/shared/ttlCache";
 import { countedStockRowValue } from "../../services/inventory/stockValuation";
 import { getFinancialRatios } from "../../services/reports/financialReportsService";
+import { requireFinancialReportAccess } from "./financialReportAccess";
+import { companyBusinessDate } from "../../services/accounting/companyBusinessDate";
 
 const numberValue = (value: unknown) =>
   toInventoryDecimal(value as unknown as Parameters<typeof toInventoryDecimal>[0]).toNumber();
@@ -42,9 +45,12 @@ export function registerStatsReportsRoutes(app: Express) {
       const companyId = req.session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });
       const { startDate, endDate, locationId, stockGroupId } = req.query;
-      const conditions = [eq(vouchers.companyId, companyId)];
-      if (startDate) conditions.push(sql`${vouchers.voucherDate} >= ${startDate}`);
-      if (endDate) conditions.push(sql`${vouchers.voucherDate} <= ${endDate}`);
+      // Phase 27 (RP-11): live, non-optional vouchers only, booked on
+      // COALESCE(effective_date, voucher_date) as every other report (it read
+      // deleted and optional vouchers by voucher_date).
+      const conditions = [eq(vouchers.companyId, companyId), isNull(vouchers.deletedAt), eq(vouchers.optional, false)];
+      if (startDate) conditions.push(gte(voucherBookedOnSql, String(startDate)));
+      if (endDate) conditions.push(lte(voucherBookedOnSql, String(endDate)));
       if (locationId) conditions.push(eq(vouchers.locationId, parseInt(locationId as string)));
 
       let salesData = await db
@@ -246,13 +252,18 @@ export function registerStatsReportsRoutes(app: Express) {
     }
   });
 
-  app.get("/api/reports/ratios", requireAuth, async (req, res) => {
+  // Phase 27 (RP-15): the trial balance/balance sheet roles (was any signed-in user, POS included).
+  app.get("/api/reports/ratios", requireAuth, requireFinancialReportAccess, async (req, res) => {
     try {
       const companyId = req.session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });
       const startDate =
         typeof req.query.startDate === "string" && req.query.startDate ? req.query.startDate : undefined;
-      const endDate = typeof req.query.endDate === "string" && req.query.endDate ? req.query.endDate : undefined;
+      // Phase 27 (RP-8): without an endDate the ratios stop at the company's business date.
+      const endDate =
+        typeof req.query.endDate === "string" && req.query.endDate
+          ? req.query.endDate
+          : await companyBusinessDate(companyId);
       const cacheKey = `ratios:${companyId}:${startDate ?? ""}:${endDate ?? ""}`;
       const cached = _getCached(cacheKey);
       if (cached) return res.json(cached);

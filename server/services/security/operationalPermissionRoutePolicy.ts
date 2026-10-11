@@ -317,6 +317,8 @@ export const OPERATIONAL_ROUTE_PERMISSIONS: Readonly<Record<OperationalPermissio
     "GET /api/stats/group-net-position-excel",
     "GET /api/reports/net-profit-excel",
     "GET /api/reports/net-position-monthly-excel",
+    // Phase 27: the financial-statement exports (Excel, and PDF from the same route).
+    "GET /api/reports/export/:report",
     "GET /api/sp/sales-form/export",
     "GET /api/sp/sales-form/export-v2",
     // Missed by the old URL rules (.xlsx / .csv suffix).

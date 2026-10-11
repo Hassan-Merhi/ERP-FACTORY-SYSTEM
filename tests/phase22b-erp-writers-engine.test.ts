@@ -532,10 +532,12 @@ describe("D7: intercompany POS mirror, one journal per sale", () => {
     });
   }
 
-  it("skips the destination side without a configured cash account link (no name lookup)", async () => {
+  // Phase 26 (MC-4): without a configured destination cash account neither side
+  // is posted (the source side used to be posted alone).
+  it("posts neither side without a configured cash account link (no name lookup)", async () => {
     const sale = await cashSale("2026-03-09", "5.00");
     expect(await runIntercompanyPosTransfer(ctx.companyId, ctx.cashAccountId, "5.00", "2026-03-09", sale)).toBe(true);
-    expect(await postedFor(ctx.companyId, "intercompany-pos-src", `${sale}:%`)).toHaveLength(1);
+    expect(await postedFor(ctx.companyId, "intercompany-pos-src", `${sale}:%`)).toHaveLength(0);
     expect(await postedFor(other.companyId, "intercompany-pos-dst", `${ctx.companyId}:${sale}:%`)).toHaveLength(0);
   });
 

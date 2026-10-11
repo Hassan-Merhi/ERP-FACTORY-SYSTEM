@@ -35,6 +35,7 @@ export {
   resolveGoldenCoastAutomaticHadiPair,
   selectGoldenCoastAutomaticHadiCashAccount,
 } from "./goldenCoastPhase6AutoHadiCore";
+import { isAccountType } from "../../services/accounting/accountClassification";
 export type { GoldenCoastAutomaticHadiAccount, GoldenCoastAutomaticHadiPair } from "./goldenCoastPhase6AutoHadiCore";
 
 const postingDependencies = createDatabasePostingDependencies();
@@ -84,7 +85,7 @@ async function activeIntercompanyAccount(
     .orderBy(asc(ledgerAccounts.id))
     .limit(2);
 
-  if (rows.length !== 1 || rows[0].accountType !== "Intercompany") {
+  if (rows.length !== 1 || !isAccountType(rows[0].accountType, "Intercompany")) {
     throw new core.GoldenCoastPhase6AutoHadiError(
       rows.length === 0
         ? `${label} is not configured for company ${companyId}; run Golden Coast setup first.`
@@ -332,7 +333,7 @@ async function resolveFreshStartEquityAccount(
     .orderBy(asc(ledgerAccounts.id))
     .limit(2);
 
-  if (rows.length !== 1 || rows[0].accountType !== "Equity") {
+  if (rows.length !== 1 || !isAccountType(rows[0].accountType, "Equity")) {
     throw new core.GoldenCoastPhase6AutoHadiError(
       rows.length === 0
         ? "Fresh Start FZ Equity is not configured for Golden Coast; run Golden Coast setup first."

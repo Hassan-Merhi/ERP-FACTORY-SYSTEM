@@ -141,9 +141,12 @@ describe("POST /api/vouchers/bulk-delete per-voucher outcomes", () => {
           AND action NOT LIKE 'row\\_%'` /* phase 21 A: application rows, not the database row audit */,
       [ctx.companyId, voucher.id]
     );
-    expect(audit.rows).toHaveLength(1);
-    expect(audit.rows[0].action).toBe("delete");
-    expect(audit.rows[0].record_identifier).toBe(voucher.voucherNumber);
+    // Phase 23 (phase 22 leftover): the voucher is retired (number given up,
+    // posting identity released), which writes its own audit row beside the
+    // voucher snapshot row; both name the voucher's original number.
+    expect(audit.rows).toHaveLength(2);
+    expect(audit.rows.every((row) => row.action === "delete")).toBe(true);
+    expect(audit.rows.every((row) => row.record_identifier === voucher.voucherNumber)).toBe(true);
   });
 
   it("accepts numeric ids given as strings", async () => {

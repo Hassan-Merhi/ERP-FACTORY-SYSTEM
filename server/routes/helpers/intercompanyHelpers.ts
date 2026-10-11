@@ -7,19 +7,25 @@ import {
   intercompanyAccountLinks,
   intercompanyPosConfigs,
   companies,
+  interCompanyTransfers,
   ledgerAccounts,
   vouchers,
   voucherEntries,
   type IntercompanyPosConfig,
 } from "@shared/schema";
-import { eq, and, sql, isNull, inArray } from "drizzle-orm";
+import { eq, and, sql, isNull, inArray, or } from "drizzle-orm";
 import {
   createTenantDatabaseScope,
   getDatabaseScopeRuntimeContext,
   runWithDatabaseScopeRuntimeContext,
 } from "../../services/security/databaseScopeRuntimeContext";
 import { retireVouchersByNumberTx, retireVouchersTx } from "../../services/accounting/voucherRetirement";
-import { pairLines, postErpVoucherTx } from "../../services/accounting/erpVoucherPosting";
+import type { PostingActor } from "../../services/accounting/centralPostingEngine";
+import { withIntercompanyCompaniesTx } from "../../services/accounting/intercompany/intercompanyScope";
+import {
+  postIntercompanyTransferTx,
+  softDeleteTransferLinkTx,
+} from "../../services/accounting/intercompany/intercompanyTransferPosting";
 import {
   getCompanyRequestRuntimeContext,
   runWithCompanyRequestRuntimeContext,
@@ -29,7 +35,7 @@ import {
 //
 // Phase 22 (B), D7: a cash POS sale in a source company is mirrored as ONE
 // journal per sale in each company, posted through the central engine:
-//   source:      Dr source interco / Cr cash             (unless skipSourceVoucher)
+//   source:      Dr source interco / Cr cash             (always, phase 26)
 //   destination: Dr destination cash / Cr destination interco
 // Each journal's posting identity is the sale (and its cash account), so a
 // replay posts nothing twice; numbers are allocated by the engine. The daily
@@ -47,6 +53,9 @@ import {
 // advisory lock, with both companies authorized in the database scope. That
 // authority comes from the stored intercompany_pos_configs row, which the
 // tenant boundary only lets a user save with membership in both companies.
+// Phase 26 (MC-4): a POS sale posts its mirror inside the sale's own
+// transaction (postIntercompanyPosMirrorTx), through the intercompany service
+// (both legs, the transfer link with the interco account ids, audited).
 
 const INTERCO_LOCK_NAMESPACE = 74_123;
 const ZERO = new Decimal(0);
@@ -168,8 +177,24 @@ export interface IntercompanyPosSale {
   date: string;
 }
 
-/** Posts the mirror journals of one sale (both companies) in `tx`. */
-async function postSaleMirrorTx(tx: DbTransaction, config: IntercompanyPosConfig, sale: IntercompanyPosSale) {
+/**
+ * Posts the mirror journals of one sale (both companies) and their transfer
+ * link in `tx`, through the intercompany service (phase 26, MC-4): the
+ * configured interco accounts of the POS config, the configured destination
+ * cash account (the intercompany_account_links row), audited. Decided by
+ * default (owner can override): the mirror is always two-sided. The
+ * supplier-partner "skip the source voucher" setting no longer posts the
+ * destination alone (that left the money in both companies' cash); and with no
+ * configured destination cash account NOTHING is posted (it used to post the
+ * source side alone) — the date is listed by the multi-company diagnostic and
+ * rebuilt once the link is saved. Returns whether the mirror was posted.
+ */
+async function postSaleMirrorTx(
+  tx: DbTransaction,
+  config: IntercompanyPosConfig,
+  sale: IntercompanyPosSale,
+  actor?: PostingActor
+): Promise<boolean> {
   const sourceCompanyId = config.sourceCompanyId;
   const [srcCompanyRow] = await tx
     .select({ name: companies.name })
@@ -186,49 +211,49 @@ async function postSaleMirrorTx(tx: DbTransaction, config: IntercompanyPosConfig
     .select({ id: ledgerAccounts.id })
     .from(ledgerAccounts)
     .where(and(eq(ledgerAccounts.id, sale.cashAccountId), eq(ledgerAccounts.companyId, sourceCompanyId)));
-  if (!cashAccount) return;
+  if (!cashAccount) return false;
   const saleKey = `${sale.saleVoucherId}:${sale.cashAccountId}`;
-
-  // Source voucher: Dr source interco / Cr cash. Skipped for SP companies so
-  // Cash in Net Position is not reduced; only the destination side is needed.
-  if (!config.skipSourceVoucher) {
-    const narration = `Cash transferred to ${dstCompanyName} – ${sale.date}`;
-    await postErpVoucherTx(tx, {
-      companyId: sourceCompanyId,
-      voucherType: "Journal",
-      voucherDate: sale.date,
-      description: narration,
-      lines: pairLines(
-        { ledgerAccountId: config.sourceIntercoAccountId },
-        { ledgerAccountId: sale.cashAccountId },
-        sale.amount,
-        narration
-      ),
-      source: { type: INTERCO_POS_SOURCE_TYPE, id: saleKey },
-    });
-  }
 
   const destCashAccountId = await linkedDestinationCashAccountTx(tx, config, sale.cashAccountId);
   if (!destCashAccountId) {
     logger.warn(
-      `[IntercompanyPOS] No intercompany account link from cash account ${sale.cashAccountId} to company ${config.destCompanyId}. Dest voucher skipped.`
+      `[IntercompanyPOS] No intercompany account link from cash account ${sale.cashAccountId} to company ${config.destCompanyId}. Mirror not posted (neither side).`
     );
-    return;
+    return false;
   }
-  const narration = `Cash received from ${srcCompanyName} – ${sale.date}`;
-  await postErpVoucherTx(tx, {
-    companyId: config.destCompanyId,
-    voucherType: "Journal",
-    voucherDate: sale.date,
-    description: narration,
-    lines: pairLines(
-      { ledgerAccountId: destCashAccountId },
-      { ledgerAccountId: config.destIntercoAccountId },
-      sale.amount,
-      narration
-    ),
-    source: { type: INTERCO_POS_DEST_TYPE, id: `${sourceCompanyId}:${saleKey}` },
+
+  const srcNarration = `Cash transferred to ${dstCompanyName} – ${sale.date}`;
+  const dstNarration = `Cash received from ${srcCompanyName} – ${sale.date}`;
+  await postIntercompanyTransferTx(tx, {
+    fromCompanyId: sourceCompanyId,
+    toCompanyId: config.destCompanyId,
+    amount: sale.amount.toFixed(2),
+    transferDate: sale.date,
+    transferType: "Cash",
+    description: `POS cash mirror of sale ${sale.saleVoucherId}`,
+    sourceType: "intercompany-pos",
+    intercompanyAccounts: {
+      fromIcAccountId: config.sourceIntercoAccountId,
+      toIcAccountId: config.destIntercoAccountId,
+    },
+    authorization: "stored-configuration",
+    actor: actor ?? { reason: "Intercompany POS cash mirror" },
+    from: {
+      accountId: sale.cashAccountId,
+      voucherType: "Journal",
+      description: srcNarration,
+      narration: srcNarration,
+      source: { type: INTERCO_POS_SOURCE_TYPE, id: saleKey },
+    },
+    to: {
+      accountId: destCashAccountId,
+      voucherType: "Journal",
+      description: dstNarration,
+      narration: dstNarration,
+      source: { type: INTERCO_POS_DEST_TYPE, id: `${sourceCompanyId}:${saleKey}` },
+    },
   });
+  return true;
 }
 
 /** Live per-sale mirror journals of the source's sales dated `date`, in both companies. */
@@ -271,10 +296,45 @@ async function deleteVoucherByNumberTx(tx: DbTransaction, companyId: number, vou
 }
 
 /**
- * Mirrors one cash POS sale into the intercompany journals (one per company).
- * Called after the sale commits; never throws (a sale must not fail on its
- * mirror), but the mirror is all-or-nothing and `recalculateIntercompanyForDate`
- * rebuilds it. Resolves true when the mirror is posted or not applicable.
+ * Mirrors one cash POS sale inside the SALE'S OWN transaction (phase 26, MC-4):
+ * the sale and both mirror journals commit together; a failure of the mirror
+ * rolls the sale back (it used to run after the sale committed and only log a
+ * failure). Serialized per source company like the rebuild. Resolves whether
+ * the mirror was posted (false: no enabled config, a Golden Coast company, or
+ * no configured destination cash account — nothing posted on either side).
+ */
+export async function postIntercompanyPosMirrorTx(
+  tx: DbTransaction,
+  input: {
+    sourceCompanyId: number;
+    cashAccountId: number;
+    saleAmount: Decimal.Value;
+    saleDate: string;
+    saleVoucherId: number;
+    actor?: PostingActor;
+  }
+): Promise<boolean> {
+  const amount = money(input.saleAmount).toDecimalPlaces(2);
+  if (!amount.gt(ZERO)) return false;
+  const [config] = await tx
+    .select()
+    .from(intercompanyPosConfigs)
+    .where(eq(intercompanyPosConfigs.sourceCompanyId, input.sourceCompanyId));
+  if (!config || !config.enabled) return false;
+  await tx.execute(sql`SELECT pg_advisory_xact_lock(${INTERCO_LOCK_NAMESPACE}, ${input.sourceCompanyId})`);
+  if (await isGoldenCoastCompany(tx, input.sourceCompanyId)) return false;
+  return postSaleMirrorTx(
+    tx,
+    config,
+    { saleVoucherId: input.saleVoucherId, cashAccountId: input.cashAccountId, amount, date: input.saleDate },
+    input.actor
+  );
+}
+
+/**
+ * Mirrors one cash POS sale in a transaction of its own (a rebuild of one
+ * sale; the POS sale itself posts its mirror with postIntercompanyPosMirrorTx).
+ * Never throws; resolves true when the mirror is posted or not applicable.
  */
 export async function runIntercompanyPosTransfer(
   sourceCompanyId: number,
@@ -304,101 +364,154 @@ export async function runIntercompanyPosTransfer(
   }
 }
 
+/** Soft-deletes the transfer links of mirror journals being retired by a rebuild. */
+async function softDeleteMirrorLinksTx(tx: DbTransaction, voucherIds: readonly number[]): Promise<void> {
+  if (voucherIds.length === 0) return;
+  const links = await tx
+    .select({ id: interCompanyTransfers.id })
+    .from(interCompanyTransfers)
+    .where(
+      and(
+        isNull(interCompanyTransfers.deletedAt),
+        or(
+          inArray(interCompanyTransfers.fromVoucherId, [...voucherIds]),
+          inArray(interCompanyTransfers.toVoucherId, [...voucherIds])
+        )
+      )
+    );
+  for (const link of links) {
+    await softDeleteTransferLinkTx(tx, link.id, { reason: "intercompany-pos-mirror-rebuild" });
+  }
+}
+
 // ─── Recalculate Intercompany POS for a specific date ─────────────────────────
 // Rebuilds this source company's INTERCO-SRC/DST vouchers for the date from all
 // non-deleted cash Sales vouchers, atomically and under the same lock as live
 // sales. Never throws; resolves false when the rebuild failed and was rolled
 // back (the previous journals are then left untouched).
+/** The rebuild of one date of a source company's mirror, in `tx` (both companies in scope). */
+async function rebuildIntercompanyDateTx(
+  tx: DbTransaction,
+  config: IntercompanyPosConfig,
+  companyId: number,
+  date: string
+): Promise<void> {
+  if (await isGoldenCoastCompany(tx, companyId)) return;
+
+  await deleteVoucherByNumberTx(tx, companyId, srcVoucherNumber(companyId, date));
+  await deleteVoucherByNumberTx(tx, config.destCompanyId, dstVoucherNumber(companyId, config.destCompanyId, date));
+  const mirrors = await saleMirrorVoucherIdsTx(tx, config, date);
+  await softDeleteMirrorLinksTx(
+    tx,
+    mirrors.map((mirror) => mirror.voucherId)
+  );
+  for (const mirror of mirrors) {
+    await retireVouchersTx(tx, {
+      companyId: mirror.companyId,
+      voucherIds: [mirror.voucherId],
+      reason: "intercompany-pos-mirror-rebuild",
+    });
+  }
+
+  // The pre-fix shared DST voucher can only be rebuilt from this source
+  // when no other source feeds the same destination; otherwise it holds
+  // their amounts too and is left as it is.
+  const otherSources = await tx
+    .select({ id: intercompanyPosConfigs.id })
+    .from(intercompanyPosConfigs)
+    .where(
+      and(
+        eq(intercompanyPosConfigs.destCompanyId, config.destCompanyId),
+        sql`${intercompanyPosConfigs.sourceCompanyId} <> ${companyId}`
+      )
+    );
+  if (otherSources.length === 0) {
+    await deleteVoucherByNumberTx(tx, config.destCompanyId, legacyDstVoucherNumber(config.destCompanyId, date));
+  } else {
+    logger.warn("[IntercompanyPOS Recalc] Shared legacy DST voucher left unchanged", {
+      sourceCompanyId: companyId,
+      destCompanyId: config.destCompanyId,
+      date,
+    });
+  }
+
+  const daySales = await tx
+    .select({ id: vouchers.id })
+    .from(vouchers)
+    .where(
+      and(
+        eq(vouchers.companyId, companyId),
+        eq(vouchers.voucherType, "Sales"),
+        eq(vouchers.voucherDate, date),
+        isNull(vouchers.deletedAt)
+      )
+    );
+  if (daySales.length === 0) return;
+
+  const cashDebits = await tx
+    .select({
+      voucherId: voucherEntries.voucherId,
+      ledgerAccountId: voucherEntries.ledgerAccountId,
+      debitAmount: voucherEntries.debitAmount,
+    })
+    .from(voucherEntries)
+    .innerJoin(ledgerAccounts, eq(voucherEntries.ledgerAccountId, ledgerAccounts.id))
+    .where(
+      and(
+        inArray(
+          voucherEntries.voucherId,
+          daySales.map((sale) => sale.id)
+        ),
+        eq(ledgerAccounts.accountType, "Cash"),
+        sql`${voucherEntries.debitAmount}::numeric > 0`
+      )
+    )
+    .orderBy(voucherEntries.id);
+
+  // One mirror per sale and cash account (a sale's cash lines summed).
+  const bySale = new Map<string, IntercompanyPosSale>();
+  for (const entry of cashDebits) {
+    if (!entry.ledgerAccountId) continue;
+    const key = `${entry.voucherId}:${entry.ledgerAccountId}`;
+    const sale = bySale.get(key) ?? {
+      saleVoucherId: entry.voucherId,
+      cashAccountId: entry.ledgerAccountId,
+      amount: ZERO,
+      date,
+    };
+    sale.amount = sale.amount.plus(money(entry.debitAmount));
+    bySale.set(key, sale);
+  }
+  for (const sale of bySale.values()) {
+    if (sale.amount.gt(ZERO)) await postSaleMirrorTx(tx, config, sale);
+  }
+}
+
+/**
+ * Rebuilds one date of the source company's mirror inside the CALLER'S
+ * transaction (phase 26, MC-4: a POS sale edit rebuilds with the edit, not
+ * after it), serialized per source company, with the configured destination
+ * in scope.
+ */
+export async function rebuildIntercompanyPosDateTx(tx: DbTransaction, companyId: number, date: string): Promise<void> {
+  const [config] = await tx
+    .select()
+    .from(intercompanyPosConfigs)
+    .where(eq(intercompanyPosConfigs.sourceCompanyId, companyId));
+  if (!config || !config.enabled) return;
+  await tx.execute(sql`SELECT pg_advisory_xact_lock(${INTERCO_LOCK_NAMESPACE}, ${companyId})`);
+  await withIntercompanyCompaniesTx(tx, [companyId, config.destCompanyId], "stored-configuration", () =>
+    rebuildIntercompanyDateTx(tx, config, companyId, date)
+  );
+}
+
 export async function recalculateIntercompanyForDate(companyId: number, date: string): Promise<boolean> {
   try {
     const config = await loadEnabledConfig(companyId);
     if (!config) return true;
 
     await runIntercompanyTransaction(companyId, config, async (tx) => {
-      if (await isGoldenCoastCompany(tx, companyId)) return;
-
-      await deleteVoucherByNumberTx(tx, companyId, srcVoucherNumber(companyId, date));
-      await deleteVoucherByNumberTx(tx, config.destCompanyId, dstVoucherNumber(companyId, config.destCompanyId, date));
-      for (const mirror of await saleMirrorVoucherIdsTx(tx, config, date)) {
-        await retireVouchersTx(tx, {
-          companyId: mirror.companyId,
-          voucherIds: [mirror.voucherId],
-          reason: "intercompany-pos-mirror-rebuild",
-        });
-      }
-
-      // The pre-fix shared DST voucher can only be rebuilt from this source
-      // when no other source feeds the same destination; otherwise it holds
-      // their amounts too and is left as it is.
-      const otherSources = await tx
-        .select({ id: intercompanyPosConfigs.id })
-        .from(intercompanyPosConfigs)
-        .where(
-          and(
-            eq(intercompanyPosConfigs.destCompanyId, config.destCompanyId),
-            sql`${intercompanyPosConfigs.sourceCompanyId} <> ${companyId}`
-          )
-        );
-      if (otherSources.length === 0) {
-        await deleteVoucherByNumberTx(tx, config.destCompanyId, legacyDstVoucherNumber(config.destCompanyId, date));
-      } else {
-        logger.warn("[IntercompanyPOS Recalc] Shared legacy DST voucher left unchanged", {
-          sourceCompanyId: companyId,
-          destCompanyId: config.destCompanyId,
-          date,
-        });
-      }
-
-      const daySales = await tx
-        .select({ id: vouchers.id })
-        .from(vouchers)
-        .where(
-          and(
-            eq(vouchers.companyId, companyId),
-            eq(vouchers.voucherType, "Sales"),
-            eq(vouchers.voucherDate, date),
-            isNull(vouchers.deletedAt)
-          )
-        );
-      if (daySales.length === 0) return;
-
-      const cashDebits = await tx
-        .select({
-          voucherId: voucherEntries.voucherId,
-          ledgerAccountId: voucherEntries.ledgerAccountId,
-          debitAmount: voucherEntries.debitAmount,
-        })
-        .from(voucherEntries)
-        .innerJoin(ledgerAccounts, eq(voucherEntries.ledgerAccountId, ledgerAccounts.id))
-        .where(
-          and(
-            inArray(
-              voucherEntries.voucherId,
-              daySales.map((sale) => sale.id)
-            ),
-            eq(ledgerAccounts.accountType, "Cash"),
-            sql`${voucherEntries.debitAmount}::numeric > 0`
-          )
-        )
-        .orderBy(voucherEntries.id);
-
-      // One mirror per sale and cash account (a sale's cash lines summed).
-      const bySale = new Map<string, IntercompanyPosSale>();
-      for (const entry of cashDebits) {
-        if (!entry.ledgerAccountId) continue;
-        const key = `${entry.voucherId}:${entry.ledgerAccountId}`;
-        const sale = bySale.get(key) ?? {
-          saleVoucherId: entry.voucherId,
-          cashAccountId: entry.ledgerAccountId,
-          amount: ZERO,
-          date,
-        };
-        sale.amount = sale.amount.plus(money(entry.debitAmount));
-        bySale.set(key, sale);
-      }
-      for (const sale of bySale.values()) {
-        if (sale.amount.gt(ZERO)) await postSaleMirrorTx(tx, config, sale);
-      }
+      await rebuildIntercompanyDateTx(tx, config, companyId, date);
     });
     return true;
   } catch (err: unknown) {

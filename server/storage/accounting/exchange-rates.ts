@@ -2,6 +2,7 @@ import { eq, and, sql } from "drizzle-orm";
 import { db, pool } from "../../db";
 import * as schema from "@shared/schema";
 import { companyBusinessDate } from "../../services/accounting/companyBusinessDate";
+import { resolveCompanyPairRate } from "../../services/accounting/fx/rateResolver";
 
 export async function getExchangeRates(companyId: number): Promise<schema.ExchangeRate[]> {
   return await db
@@ -27,26 +28,21 @@ export async function getLatestExchangeRate(
   return getExchangeRateForDate(companyId, fromCurrency, toCurrency, cutoff);
 }
 
+/**
+ * The company's rate of a pair dated on or before `date`. Phase 24 (M1): the
+ * one resolver's company-store lookup (`resolveCompanyPairRate`: latest date,
+ * then latest row; CFA and XOF are one currency).
+ */
 export async function getExchangeRateForDate(
   companyId: number,
   fromCurrency: string,
   toCurrency: string,
   date: string
 ): Promise<schema.ExchangeRate | undefined> {
-  const results = await db
-    .select()
-    .from(schema.exchangeRates)
-    .where(
-      and(
-        eq(schema.exchangeRates.companyId, companyId),
-        eq(schema.exchangeRates.fromCurrency, fromCurrency),
-        eq(schema.exchangeRates.toCurrency, toCurrency),
-        sql`${schema.exchangeRates.effectiveDate} <= ${date}`
-      )
-    )
-    .orderBy(sql`${schema.exchangeRates.effectiveDate} DESC`)
-    .limit(1);
-  return results[0];
+  const found = await resolveCompanyPairRate(db, companyId, fromCurrency, toCurrency, date);
+  if (!found || found.id == null) return undefined;
+  const [row] = await db.select().from(schema.exchangeRates).where(eq(schema.exchangeRates.id, found.id)).limit(1);
+  return row;
 }
 
 export async function createExchangeRate(rate: schema.InsertExchangeRate): Promise<schema.ExchangeRate> {

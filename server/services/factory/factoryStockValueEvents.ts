@@ -20,7 +20,8 @@
  *
  * `amount` is the signed change of the factory stock value in USD (a
  * write-off is negative). Events are recorded only while the company's
- * cut-over applies to today, since the journal exists only then; each journal
+ * cut-over applies to today (the company business date), since the journal
+ * exists only then; each journal
  * claims the events not yet claimed by an earlier day's journal.
  */
 import type Decimal from "decimal.js";
@@ -28,6 +29,7 @@ import { sql } from "drizzle-orm";
 
 import type { DbTransaction } from "../../db";
 import { MoneyDecimal, toMoney } from "../../lib/money";
+import { companyBusinessDate } from "../accounting/companyBusinessDate";
 import { isPerpetualInventoryActive } from "../accounting/perpetualInventory/cutover";
 import { factoryStockValuation } from "../accounting/perpetualInventory/factoryValuation";
 
@@ -41,8 +43,12 @@ export const FACTORY_STOCK_EVENT_ACCOUNT: Record<FactoryStockEventKind, string> 
   MATERIAL_PRICE: "FACTORY_MATERIAL_PRICE_VARIANCE",
 };
 
-/** The journal's dates are UTC days (factoryStockJournal.todayUtc). */
-const todayUtc = () => new Date().toISOString().slice(0, 10);
+/**
+ * Phase 28 (F9): events are dated on the company's business date (its
+ * timezone), the date the daily factory journal is posted on; they were UTC
+ * days, so an evening event in a timezone ahead of UTC landed on the wrong day.
+ */
+const eventDate = (tx: DbTransaction, companyId: number) => companyBusinessDate(companyId, tx);
 
 export interface FactoryStockEventSource {
   sourceType: string;
@@ -51,7 +57,7 @@ export interface FactoryStockEventSource {
 
 /** Whether value events are recorded for the company today. */
 export async function factoryStockEventsActive(tx: DbTransaction, companyId: number): Promise<boolean> {
-  return isPerpetualInventoryActive(tx, companyId, todayUtc());
+  return isPerpetualInventoryActive(tx, companyId, await eventDate(tx, companyId));
 }
 
 /** Records one value change; a no-op before the cut-over and for a zero amount. */
@@ -64,7 +70,7 @@ export async function recordFactoryStockValueEventTx(
   if (!(await factoryStockEventsActive(tx, params.companyId))) return;
   await tx.execute(sql`
     INSERT INTO factory_stock_value_events (company_id, event_date, kind, amount, source_type, source_id)
-    VALUES (${params.companyId}, ${todayUtc()}::date, ${params.kind}, ${amount.toFixed(7)}, ${params.sourceType},
+    VALUES (${params.companyId}, ${await eventDate(tx, params.companyId)}::date, ${params.kind}, ${amount.toFixed(7)}, ${params.sourceType},
             ${params.sourceId == null ? null : String(params.sourceId)})
   `);
 }

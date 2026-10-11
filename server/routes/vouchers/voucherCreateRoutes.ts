@@ -7,7 +7,6 @@ import { logger } from "../../lib/logger";
 import { requireAuth, requireNonPOS } from "../../auth";
 import {
   logAudit,
-  getCurrentExchangeRate,
   syncEmployeeBalancesFromEntries,
   snapshotVoucherEntries,
   buildVoucherChangesForCreate,
@@ -28,6 +27,11 @@ import {
   sessionPostingActor,
 } from "../../services/accounting/erpVoucherPosting";
 import { stockVoucherTypeRefusal } from "../../services/accounting/stockVoucherTypes";
+import {
+  checkClientEntryRates,
+  sendDocumentRateError,
+  voucherHeaderRate,
+} from "../../services/accounting/fx/clientRateCheck";
 import {
   validateManualVoucherEntryAmounts,
   type ValidatedManualVoucherTotals,
@@ -103,7 +107,16 @@ export function registerVoucherCreateRoutes(app: Express) {
         return res.status(400).json({ message: "Invalid request data", field: "optional" });
       }
       const textField = (value: unknown) => (typeof value === "string" && value.trim() ? value : undefined);
-      const exchangeRate = await getCurrentExchangeRate(companyId);
+      // Phase 24 (M4): the rate recorded on or before the voucher date (a
+      // client rate within 0.5% of it), not today's.
+      const headerRate = await voucherHeaderRate({
+        companyId,
+        voucherCurrency:
+          typeof req.body.currency === "string" && /^[A-Z]{3}$/.test(req.body.currency) ? req.body.currency : "USD",
+        voucherDate: String(req.body.voucherDate),
+        clientRate: req.body.exchangeRate,
+      });
+      const exchangeRate = headerRate.rate;
       const voucher = await storage.createVoucher({
         companyId,
         voucherNumber: String(req.body.voucherNumber),
@@ -129,6 +142,7 @@ export function registerVoucherCreateRoutes(app: Express) {
       });
       res.json(voucher);
     } catch (error: unknown) {
+      if (sendDocumentRateError(res, error)) return;
       res.status(errorStatus(error)).json({ message: getErrorMessage(error) });
     }
   });
@@ -172,18 +186,23 @@ export function registerVoucherCreateRoutes(app: Express) {
       }
 
       const idempotencyHeader = String(req.get("X-Idempotency-Key") ?? "").trim();
-      // Get current exchange rate before starting the transaction
-      const exchangeRate = await getCurrentExchangeRate(req.session.currentCompanyId!);
-
-      // Use the caller-supplied currency/rate if present (multi-currency create path).
-      // Fall back to the current company rate (legacy USD-only path).
+      // Phase 24 (M4): the voucher's rate is the one recorded on or before its
+      // date; a caller-supplied rate (header or line) is accepted only within
+      // 0.5% of it (409 otherwise). A USD voucher's header rate is the display
+      // rate. Before: the caller's rate as given, else today's company rate.
       const voucherCurrency: string = (voucher.currency as string | undefined) || "USD";
-      const voucherHistoricalRate: string | null =
-        voucher.exchangeRate != null
-          ? String(voucher.exchangeRate)
-          : exchangeRate != null
-            ? String(exchangeRate)
-            : null;
+      const headerRate = await voucherHeaderRate({
+        companyId: req.session.currentCompanyId!,
+        voucherCurrency,
+        voucherDate: String(voucher.voucherDate ?? ""),
+        clientRate: voucher.exchangeRate,
+      });
+      const voucherHistoricalRate: string | null = headerRate.rate;
+      await checkClientEntryRates(db, {
+        companyId: req.session.currentCompanyId!,
+        documentDate: String(voucher.voucherDate ?? ""),
+        entries,
+      });
 
       // Create voucher + all entries atomically inside a single transaction.
       // Any thrown error automatically rolls back both the voucher row and
@@ -380,6 +399,7 @@ export function registerVoucherCreateRoutes(app: Express) {
       if (error instanceof PostingValidationError) {
         return res.status(400).json({ message: error.message, code: error.code });
       }
+      if (sendDocumentRateError(res, error)) return;
       res.status(errorStatus(error)).json({ message: getErrorMessage(error) });
     }
   });

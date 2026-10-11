@@ -111,52 +111,55 @@ type Line = {
   nativeCredit?: string;
 };
 
-async function voucher(companyId: number, lines: Line[], voucherDate: string, number?: string) {
+async function voucher(companyId: number, lines: Line[], voucherDate: string, number?: string, legacy = false) {
   sequence += 1;
-  return withFixtureTransaction(async (client) => {
-    const created = await client.query<{ id: number }>(
-      `INSERT INTO vouchers (company_id, voucher_number, voucher_type, voucher_date, total_amount, currency)
+  return withFixtureTransaction(
+    async (client) => {
+      const created = await client.query<{ id: number }>(
+        `INSERT INTO vouchers (company_id, voucher_number, voucher_type, voucher_date, total_amount, currency)
        VALUES ($1, $2, 'Journal', $3, 0, 'USD') RETURNING id`,
-      [companyId, number ?? `${PREFIX}-${sequence}`, voucherDate]
-    );
-    for (const line of lines) {
-      const normalized = line.currency !== undefined;
-      const isDebit = Number(line.debit) > 0;
-      // Fully normalized (rate and convention too): the currency trigger keeps it as given.
-      const dual = normalized
-        ? normalizedLineFields(
-            isDebit ? line.debit : line.credit,
-            (isDebit ? line.nativeDebit : line.nativeCredit) ?? "0",
-            isDebit ? "debit" : "credit"
-          )
-        : null;
-      await client.query(
-        `INSERT INTO voucher_entries (voucher_id, ledger_account_id, bank_account_id, customer_id, supplier_id,
+        [companyId, number ?? `${PREFIX}-${sequence}`, voucherDate]
+      );
+      for (const line of lines) {
+        const normalized = line.currency !== undefined;
+        const isDebit = Number(line.debit) > 0;
+        // Fully normalized (rate and convention too): the currency trigger keeps it as given.
+        const dual = normalized
+          ? normalizedLineFields(
+              isDebit ? line.debit : line.credit,
+              (isDebit ? line.nativeDebit : line.nativeCredit) ?? "0",
+              isDebit ? "debit" : "credit"
+            )
+          : null;
+        await client.query(
+          `INSERT INTO voucher_entries (voucher_id, ledger_account_id, bank_account_id, customer_id, supplier_id,
                                       factory_supplier_id, debit_amount, credit_amount, transaction_currency,
                                       transaction_debit_amount, transaction_credit_amount, base_debit_amount,
                                       base_credit_amount, historical_exchange_rate, rate_convention)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)`,
-        [
-          created.rows[0].id,
-          line.ledger ?? null,
-          line.bank ?? null,
-          line.customer ?? null,
-          line.supplier ?? null,
-          line.factorySupplier ?? null,
-          line.debit,
-          line.credit,
-          normalized ? line.currency : null,
-          dual?.transactionDebit ?? null,
-          dual?.transactionCredit ?? null,
-          dual?.baseDebit ?? null,
-          dual?.baseCredit ?? null,
-          dual?.rate ?? null,
-          dual?.convention ?? null,
-        ]
-      );
-    }
-    return created.rows[0].id;
-  });
+          [
+            created.rows[0].id,
+            line.ledger ?? null,
+            line.bank ?? null,
+            line.customer ?? null,
+            line.supplier ?? null,
+            line.factorySupplier ?? null,
+            line.debit,
+            line.credit,
+            normalized ? line.currency : null,
+            dual?.transactionDebit ?? null,
+            dual?.transactionCredit ?? null,
+            dual?.baseDebit ?? null,
+            dual?.baseCredit ?? null,
+            dual?.rate ?? null,
+            dual?.convention ?? null,
+          ]
+        );
+      }
+      return created.rows[0].id;
+    },
+    { legacyUnbalanced: legacy }
+  );
 }
 
 async function insertId(query: string, params: unknown[]): Promise<number> {
@@ -243,7 +246,10 @@ beforeAll(async () => {
   );
 
   // ── Subsidiary: posts a 50 payable to the parent's shared supplier, and has
-  // its own supplier with an opening the parent must never see.
+  // its own supplier with an opening the parent must never see. Phase 23
+  // (G17): a new line can no longer name the parent's supplier (it goes
+  // through the due-to / due-from accounts), so this models existing history,
+  // written under the legacy bypass; the readers below still count it once.
   const childExpense = await ledger(child, "EXP", "Expense");
   await voucher(
     child,
@@ -251,7 +257,9 @@ beforeAll(async () => {
       { ledger: childExpense, debit: "50.00", credit: "0" },
       { supplier, debit: "0", credit: "50.00" },
     ],
-    "2026-09-04"
+    "2026-09-04",
+    undefined,
+    true
   );
   childOwnSupplier = await insertId(
     `INSERT INTO suppliers (company_id, code, legal_name, email, opening_balance, opening_balance_side)
@@ -347,11 +355,15 @@ beforeAll(async () => {
     ],
     "2026-09-07"
   );
+  // Phase 26 (MC-1): the link names the cash accounts the legs moved and records
+  // the intercompany accounts separately (from_ic_account_id / to_ic_account_id);
+  // group elimination reads the latter (the cash accounts are never eliminated).
   await pool.query(
     `INSERT INTO inter_company_transfers (transfer_type, from_company_id, to_company_id, transfer_date, amount,
-                                          from_ledger_account_id, to_ledger_account_id)
-     VALUES ('Cash', $1, $2, '2026-09-07', 100, $3, $4)`,
-    [parent, child, icParent, icChild]
+                                          from_ledger_account_id, to_ledger_account_id,
+                                          from_ic_account_id, to_ic_account_id)
+     VALUES ('Cash', $1, $2, '2026-09-07', 100, $3, $4, $5, $6)`,
+    [parent, child, pCash, cCash, icParent, icChild]
   );
 
   registerAccountPayableRoutes(fakeApp);

@@ -386,6 +386,20 @@ export function startScheduler() {
     }
   );
 
+  // Phase 25 (AR-4): automatic FIFO allocation of receipts, credit notes and
+  // advances to invoices by due date, every hour at :17 (writes only the
+  // allocation table and its audit rows; no journal).
+  cron.schedule(
+    "17 * * * *",
+    createSchedulerTick("openItemAllocation", async () => {
+      const { runOpenItemAllocationForAllCompanies } = await import("../accounting/allocations/allocationRun");
+      await runOpenItemAllocationForAllCompanies();
+    }),
+    {
+      timezone: "America/New_York",
+    }
+  );
+
   // Overdue customer payment reminder — runs every day at 9:00 AM EST
   cron.schedule(
     "0 9 * * *",

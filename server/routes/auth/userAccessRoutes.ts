@@ -13,6 +13,7 @@ import {
   userPreferences,
 } from "@shared/schema";
 import { and, eq } from "drizzle-orm";
+import { isAccountType } from "../../services/accounting/accountClassification";
 
 export function registerUserAccessRoutes(app: Express) {
   app.get("/api/user-locations/:userId/:companyId", requireAuth, async (req, res) => {
@@ -107,7 +108,7 @@ export function registerUserAccessRoutes(app: Express) {
           if (!cashAccount) {
             return res.status(400).json({ message: `Cash account ${mapping.cashAccountId} not found in this company` });
           }
-          if (cashAccount.accountType !== "Cash") {
+          if (!isAccountType(cashAccount.accountType, "Cash")) {
             return res.status(400).json({ message: `Account ${mapping.cashAccountId} is not a Cash account` });
           }
         }

@@ -18,6 +18,7 @@
 import type { Pool } from "pg";
 
 import { logger } from "../../lib/logger";
+import { PHASE28_ACCOUNTING_DDL } from "./phase28Schema";
 
 export const FACTORY_COST_BASIS_DDL: readonly string[] = [
   `CREATE TABLE IF NOT EXISTS factory_pos_sale_bales (
@@ -66,6 +67,9 @@ export const FACTORY_COST_BASIS_DDL: readonly string[] = [
        ALTER TABLE factory_v3_loads ADD COLUMN customer_order_id integer;
      END IF;
    END $v3_load_order$`,
+  // Phases 28/29: factory receivable cut-over, bale cost resolutions, dated
+  // factory valuation, invoice mirror reductions, Retail supplier invoices.
+  ...PHASE28_ACCOUNTING_DDL,
 ];
 
 /** Creates the tables. Throws on failure (see the module comment). */

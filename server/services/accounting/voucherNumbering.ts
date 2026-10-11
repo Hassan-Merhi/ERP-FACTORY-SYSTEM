@@ -151,16 +151,17 @@ async function seedCounter(tx: ExecutingTransaction, companyId: number, prefix: 
   `);
 }
 
+/**
+ * Whether the candidate is held by any voucher (the unique constraint is
+ * global) or was this company's before a retirement. Read through
+ * erp_voucher_number_taken (ledgerModelSchema.ts): under row-level security
+ * the posting's tenant scope cannot see another company's vouchers.
+ */
 async function numberTaken(tx: ExecutingTransaction, companyId: number, candidate: string): Promise<boolean> {
-  const rows = resultRows(
-    await tx.execute(sql`
-      SELECT 1 AS taken FROM vouchers
-       WHERE voucher_number = ${candidate}
-          OR (company_id = ${companyId} AND original_voucher_number = ${candidate})
-       LIMIT 1
-    `)
+  const rows = resultRows<{ taken: boolean }>(
+    await tx.execute(sql`SELECT erp_voucher_number_taken(${candidate}, ${companyId}) AS taken`)
   );
-  return rows.length > 0;
+  return rows[0]?.taken === true;
 }
 
 /**

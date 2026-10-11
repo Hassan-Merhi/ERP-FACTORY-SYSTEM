@@ -6,6 +6,7 @@ import { logger } from "../lib/logger";
 import { resolveActiveCompanyId } from "../routes/helpers/resolveActiveCompanyId";
 import { canAccessTargetUser } from "../services/security/companyUserAdminScopePolicy";
 import { classifyUserLocationConfigurationRoute } from "../services/security/userLocationConfigurationPolicy";
+import { isAccountType } from "../services/accounting/accountClassification";
 
 function positiveIds(values: unknown[]): number[] | null {
   const ids = values.map(Number);
@@ -120,7 +121,7 @@ export async function enforceUserLocationConfigurationScope(req: Request, res: R
   if (
     locationRows.length !== locationIds.length ||
     cashRows.length !== cashAccountIds.length ||
-    cashRows.some((row) => row.accountType !== "Cash")
+    cashRows.some((row) => !isAccountType(row.accountType, "Cash"))
   ) {
     return deny(req, res, "USER_CASH_MAPPING_OWNERSHIP_INVALID", 400, "Invalid cash mapping");
   }

@@ -307,7 +307,13 @@ export function registerRawStockAdjRoutes(app: Express) {
       }
 
       let inserted: typeof factoryRawMaterialAdjustments.$inferSelect | undefined;
-      await db.transaction(async (tx) => {
+      // Phase 28 (F8): the factory valuation counts ADD / REMOVE adjustments. One
+      // without a purchase voucher changes the factory stock value with no
+      // posting: under perpetual inventory it is tagged (ADD: REVALUATION,
+      // REMOVE: WASTE) so the daily factory journal posts it to its account.
+      const voucherPosts = Boolean(createVoucher && resolvedSupplierId && rawMaterialAcctId && totalAmount.gt(0));
+      const tagged = !voucherPosts && (type === "ADD" || type === "REMOVE");
+      const writeAdjustment = async (tx: Parameters<Parameters<typeof db.transaction>[0]>[0]) => {
         [inserted] = await tx
           .insert(factoryRawMaterialAdjustments)
           .values({
@@ -373,6 +379,16 @@ export function registerRawStockAdjRoutes(app: Express) {
             fxRateToUsd: toMoney(fxRate).toNumber(),
           });
         }
+      };
+      await db.transaction(async (outer) => {
+        if (!tagged) return writeAdjustment(outer);
+        return withFactoryValuationEventTx(
+          outer,
+          companyId,
+          type === "REMOVE" ? "WASTE" : "REVALUATION",
+          { sourceType: "factory-raw-material-adjustment", sourceId: reference || null },
+          () => writeAdjustment(outer)
+        );
       });
 
       res.json(inserted);

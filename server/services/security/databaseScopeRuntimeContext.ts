@@ -68,3 +68,23 @@ export function runWithDatabaseMaintenanceScope<T>(reason: string, callback: () 
 export function getDatabaseScopeRuntimeContext(): DatabaseScopeRuntimeContext | undefined {
   return databaseScopeRuntime.getStore();
 }
+
+/**
+ * Runs `callback` with no database scope at all (whatever scope the caller is
+ * in). The backend test app uses it as its first middleware so a request starts
+ * unscoped exactly as in production, even when the test that sends it runs in
+ * the fixture maintenance scope (tests/rlsFixtureScope.mjs).
+ */
+export function runOutsideDatabaseScope<T>(callback: () => T): T {
+  return databaseScopeRuntime.exit(callback);
+}
+
+/**
+ * Tests only (tests/rlsFixtureScope.mjs, opt-in): enters `context` for the rest
+ * of the current asynchronous execution, so fixture SQL of a suite run as a
+ * non-superuser role (RLS enforced) is written in the maintenance scope.
+ */
+export function enterDatabaseScopeRuntimeContextForTests(context: DatabaseScopeRuntimeContext): void {
+  if (process.env.NODE_ENV !== "test") throw new Error("database_scope_enter_is_test_only");
+  databaseScopeRuntime.enterWith(context);
+}

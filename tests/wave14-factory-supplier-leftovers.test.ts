@@ -470,34 +470,41 @@ describe("ERP suppliers on the posting-company rule", () => {
       date: string,
       amount: string,
       debitAccount: number,
-      credit: { ledger?: number; supplier: number }
+      credit: { ledger?: number; supplier: number },
+      // Phase 23 (G17): a line naming another company's supplier is refused for new
+      // lines; the cross-company postings below are written as history (the ledger
+      // integrity bypass of the fixture helper), as wave13-payables-group does.
+      history = false
     ) =>
-      withFixtureTransaction(async (client) => {
-        const header = await client.query(
-          `INSERT INTO vouchers (company_id, voucher_type, voucher_number, voucher_date, total_amount, currency,
+      withFixtureTransaction(
+        async (client) => {
+          const header = await client.query(
+            `INSERT INTO vouchers (company_id, voucher_type, voucher_number, voucher_date, total_amount, currency,
                                  exchange_rate)
            VALUES ($1, 'Journal', $2, $3, $4, 'USD', 1) RETURNING id`,
-          [companyId, `${PREFIX}-${number}`, date, amount]
-        );
-        await client.query(
-          `INSERT INTO voucher_entries (voucher_id, ledger_account_id, debit_amount, credit_amount)
+            [companyId, `${PREFIX}-${number}`, date, amount]
+          );
+          await client.query(
+            `INSERT INTO voucher_entries (voucher_id, ledger_account_id, debit_amount, credit_amount)
            VALUES ($1, $2, $3, 0)`,
-          [header.rows[0].id, debitAccount, amount]
-        );
-        await client.query(
-          `INSERT INTO voucher_entries (voucher_id, ledger_account_id, supplier_id, debit_amount, credit_amount)
+            [header.rows[0].id, debitAccount, amount]
+          );
+          await client.query(
+            `INSERT INTO voucher_entries (voucher_id, ledger_account_id, supplier_id, debit_amount, credit_amount)
            VALUES ($1, $2, $3, 0, $4)`,
-          [header.rows[0].id, credit.ledger ?? null, credit.supplier, amount]
-        );
-      });
+            [header.rows[0].id, credit.ledger ?? null, credit.supplier, amount]
+          );
+        },
+        { legacyUnbalanced: history }
+      );
     // The supplier's own line in its company.
     await post(childId, "V1", "2026-09-10", "40", childExpense, { supplier: ownSupplier });
     // A supplier-tagged line on a payable ledger: the ledger account's line.
     await post(childId, "V2", "2026-09-11", "30", childExpense, { ledger: childPayable, supplier: ownSupplier });
     // The parent posting to the child's supplier: the parent's payable.
-    await post(parentId, "V3", "2026-09-12", "20", parentExpense, { supplier: ownSupplier });
+    await post(parentId, "V3", "2026-09-12", "20", parentExpense, { supplier: ownSupplier }, true);
     // The child posting to the parent's supplier: the child's payable.
-    await post(childId, "V4", "2026-09-13", "50", childExpense, { supplier: parentSupplier });
+    await post(childId, "V4", "2026-09-13", "50", childExpense, { supplier: parentSupplier }, true);
   }, 60000);
 
   const withGlobalParent = async <T>(value: number, work: () => Promise<T>) => {

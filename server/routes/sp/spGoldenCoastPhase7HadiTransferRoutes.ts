@@ -51,6 +51,7 @@ import { getCurrentExchangeRate } from "../helpers/exchangeRateHelpers";
 import { isGoldenCoastCompany } from "./spGoldenCoastPhase4CutoverFifoRoutes";
 import { loadGoldenCoastAccounts } from "./spGoldenCoastSetupRoutes";
 import { requireSpCompany } from "./spHelpers";
+import { isAccountType } from "../../services/accounting/accountClassification";
 
 const postingDependencies = createDatabasePostingDependencies();
 const phase7RequestBudget = privilegedRequestBudget({ maxBodyBytes: 16 * 1024, maxCollectionItems: 10 });
@@ -229,7 +230,7 @@ async function activeIntercompanyAccount(
       409
     );
   }
-  if (rows[0].accountType !== "Intercompany") {
+  if (!isAccountType(rows[0].accountType, "Intercompany")) {
     throw new GoldenCoastPhase7RouteError(
       `${label} must have account type Intercompany, not ${rows[0].accountType}`,
       "GC_PHASE7_INTERCOMPANY_INVALID",

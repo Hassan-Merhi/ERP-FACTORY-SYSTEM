@@ -32,7 +32,7 @@
  * the amount edit of PATCH /api/voucher-entries/:id. Refused with 409
  * INTERCOMPANY_TRANSFER_LEG_EDIT_REFUSED; nothing is written.
  */
-import { eq, or } from "drizzle-orm";
+import { and, eq, isNull, or } from "drizzle-orm";
 import { interCompanyTransfers } from "@shared/schema";
 
 import { db, type DatabaseOrTransaction } from "../../db";
@@ -65,7 +65,12 @@ export async function intercompanyTransferOfVoucher(
   const [transfer] = await executor
     .select({ id: interCompanyTransfers.id })
     .from(interCompanyTransfers)
-    .where(or(eq(interCompanyTransfers.fromVoucherId, voucherId), eq(interCompanyTransfers.toVoucherId, voucherId)))
+    .where(
+      and(
+        or(eq(interCompanyTransfers.fromVoucherId, voucherId), eq(interCompanyTransfers.toVoucherId, voucherId)),
+        isNull(interCompanyTransfers.deletedAt)
+      )
+    )
     .limit(1);
   return transfer ?? null;
 }

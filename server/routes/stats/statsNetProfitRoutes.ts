@@ -31,6 +31,8 @@ import {
   isIndirectIncome,
 } from "../../services/accounting/accountClassification";
 import { sumMoney, toMoney } from "../../lib/money";
+import { reconcileNetPositionToBalanceSheet } from "../../services/accounting/reporting/netPositionReconciliation";
+import { companyBusinessDate } from "../../services/accounting/companyBusinessDate";
 
 export function registerStatsNetProfitRoutes(app: Express) {
   app.get("/api/stats/net-profit", requireAuth, requireNonPOS, async (req, res) => {
@@ -570,6 +572,19 @@ export function registerStatsNetProfitRoutes(app: Express) {
         netPosition,
       };
 
+      // Phase 27 (RP-12): the net position against the balance sheet's net
+      // assets as of the same date, with the valuation lines as labelled memo
+      // lines and the remainder listed, in exact decimals. Historical figures:
+      // the live view's current-rate cash/bank translation is applied later.
+      const balanceSheetReconciliation = await reconcileNetPositionToBalanceSheet(
+        companyId,
+        toDate ?? (await companyBusinessDate(companyId)),
+        netPosition,
+        forUsAccounts,
+        onUsAccounts,
+        equityNetPositionContribution
+      );
+
       const _result = {
         totalIncome: incomeTotal,
         totalExpenses: expensesTotal,
@@ -610,6 +625,7 @@ export function registerStatsNetProfitRoutes(app: Express) {
         incomeTotal,
         expensesTotal,
         notInLedger: parties.notInLedger,
+        balanceSheetReconciliation,
         currency: {
           ...netPositionCurrency,
           currentCashBankTranslationApplied: false,

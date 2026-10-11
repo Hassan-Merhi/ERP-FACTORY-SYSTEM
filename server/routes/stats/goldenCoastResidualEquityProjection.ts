@@ -2,6 +2,7 @@ import type { Express } from "express";
 import { getAccountNetBalance, round2, type AccountBalance, type AccountLike } from "../../netPositionHelper";
 import { logger } from "../../lib/logger";
 import { loadNetProfitData } from "./netProfitDataLoad";
+import { isAccountType } from "../../services/accounting/accountClassification";
 
 type LedgerRow = AccountLike & {
   subType?: string | null;
@@ -88,7 +89,7 @@ function displayCategory(account: LedgerRow, side: "asset" | "liability"): strin
 
 function isCustomerNetPositionAccount(account: LedgerRow): boolean {
   return (
-    account.accountType === "Customer" ||
+    isAccountType(account.accountType, "Customer") ||
     account.subType === "Accounts Receivable" ||
     (account.code || "").toUpperCase().startsWith("CUST-") ||
     (account.name || "").toLowerCase().includes("customer account")

@@ -8,7 +8,8 @@ import { describe, expect, it, vi } from "vitest";
 vi.mock("../server/auth", () => ({ requireAuth: () => undefined }));
 vi.mock("../server/routes/factory/suppliers/broker/_helpers", () => ({
   buildBrokerStatement: async () => ({
-    supplier: { name: "Broker" },
+    supplier: { id: 4, name: "Broker" },
+    linkedSuppliers: [],
     currencyLedgers: [
       {
         currencyCode: "USD",
@@ -24,6 +25,18 @@ vi.mock("../server/routes/factory/suppliers/broker/_helpers", () => ({
       },
     ],
   }),
+}));
+
+// Phase 25 (AR-8): the export's first sheet is the ledger; no ledger lines here.
+vi.mock("../server/routes/factory/suppliers/balance/factorySupplierLedger", () => ({
+  FACTORY_SUPPLIER_OPERATIONAL_MEMO_LABEL: "memo",
+  emptyFactorySupplierLedgerView: (id: number) => ({
+    supplierId: id,
+    openingBalanceUsd: "0.00",
+    ledgerBalanceUsd: "0.00",
+  }),
+  loadFactorySupplierLedgerViews: async () => new Map(),
+  loadFactorySupplierLedgerLines: async () => [],
 }));
 
 import { registerSupplierBrokerStatementRoutes } from "../server/routes/factory/suppliers/broker/statement";
@@ -58,7 +71,8 @@ describe("broker statement export", () => {
     const workbook = new ExcelJS.Workbook();
     await workbook.xlsx.load(buffer!);
     const values: unknown[] = [];
-    workbook.getWorksheet("USD")!.eachRow((row) => {
+    // Phase 25 (AR-8): the operational currency sheets are labelled memo.
+    workbook.getWorksheet("USD (memo)")!.eachRow((row) => {
       if (row.getCell(3).value === "C1") values.push(row.getCell(4).value, row.getCell(7).value);
     });
     expect(values).toEqual([1.01, 1.01]);

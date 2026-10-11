@@ -107,7 +107,8 @@ export const bankAccounts = pgTable(
   {
     id: serial("id").primaryKey(),
     companyId: integer("company_id").notNull(),
-    code: varchar("code", { length: 50 }).notNull().unique(),
+    // Phase 23 (C10): unique per company (bank_accounts_company_code_unique), not across companies.
+    code: varchar("code", { length: 50 }).notNull(),
     name: text("name").notNull(),
     bankName: text("bank_name").notNull(),
     accountNumber: text("account_number").notNull(),
@@ -126,6 +127,7 @@ export const bankAccounts = pgTable(
   },
   (t) => ({
     companyIdx: index("bank_accounts_company_idx").on(t.companyId),
+    companyCodeUnique: uniqueIndex("bank_accounts_company_code_unique").on(t.companyId, t.code),
   })
 );
 
@@ -155,7 +157,8 @@ export const fixedAssets = pgTable(
   {
     id: serial("id").primaryKey(),
     companyId: integer("company_id").notNull(),
-    code: varchar("code", { length: 50 }).notNull().unique(),
+    // Phase 23 (C10): unique per company (fixed_assets_company_code_unique), not across companies.
+    code: varchar("code", { length: 50 }).notNull(),
     name: text("name").notNull(),
     category: text("category").notNull(),
     purchaseDate: date("purchase_date").notNull(),
@@ -175,6 +178,7 @@ export const fixedAssets = pgTable(
   },
   (t) => ({
     companyIdx: index("fixed_assets_company_idx").on(t.companyId),
+    companyCodeUnique: uniqueIndex("fixed_assets_company_code_unique").on(t.companyId, t.code),
   })
 );
 

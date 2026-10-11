@@ -197,6 +197,23 @@ export interface StatementResponse {
     operationalNetPayable?: string;
   };
   balanceBasis?: "ledger";
-  ledgerView?: FactorySupplierLedgerViewDto & { lines?: unknown[] };
+  ledgerView?: FactorySupplierLedgerViewDto & { lines?: FactorySupplierLedgerLineDto[] };
   operationalMemoLabel?: string;
+}
+
+/** One ledger line of the factory supplier statement (server factorySupplierLedger.ts). */
+export interface FactorySupplierLedgerLineDto {
+  entryId: number;
+  voucherId: number;
+  voucherNumber: string;
+  voucherType: string | null;
+  date: string;
+  description: string;
+  debitUsd: string;
+  creditUsd: string;
+  currency: string;
+  nativeDebit: string;
+  nativeCredit: string;
+  /** Cr positive, USD, after this line (opening included). */
+  runningBalanceUsd: string;
 }

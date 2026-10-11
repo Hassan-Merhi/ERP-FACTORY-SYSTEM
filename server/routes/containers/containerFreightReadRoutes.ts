@@ -64,7 +64,8 @@ export function registerContainerFreightReadRoutes(app: Express) {
   // Ledger accounts from the parent company — used for "Parent pays freight" picker
   app.get("/api/purchase-orders/parent-freight-accounts", requireAuth, requireNonPOS, async (req, res) => {
     try {
-      const parentCompanyId = await storage.getParentCompanyId();
+      // Phase 26 (MC-7): the parent of the current company (companies.parent_company_id).
+      const parentCompanyId = await storage.getParentCompanyId(req.session.currentCompanyId);
       if (!parentCompanyId) return res.status(404).json({ message: "No parent company configured" });
       const accounts = await db
         .select({
@@ -95,7 +96,7 @@ export function registerContainerFreightReadRoutes(app: Express) {
       if (!po) return res.status(404).json({ message: "Purchase order not found" });
       if (po.companyId !== companyId) return res.status(403).json({ message: "Access denied" });
 
-      const parentCompanyId = await storage.getParentCompanyId();
+      const parentCompanyId = await storage.getParentCompanyId(po.companyId);
       const isSameCompanySync = !parentCompanyId || po.companyId === parentCompanyId;
 
       const { grossTotal: poGrossTotal, intercoTotal: poSupplierTotal } = calcPoAmountsExact({

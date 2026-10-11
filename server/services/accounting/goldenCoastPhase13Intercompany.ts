@@ -1,4 +1,5 @@
 export type GoldenCoastPhase13IntercompanyRole = "golden_coast_hadi" | "hadi_golden_coast";
+import { isAccountType } from "./accountClassification";
 
 export interface GoldenCoastPhase13IntercompanyDefinition {
   role: GoldenCoastPhase13IntercompanyRole;
@@ -166,7 +167,7 @@ export function planGoldenCoastPhase13IntercompanyAccount(input: {
   }
 
   const repairs: GoldenCoastPhase13IntercompanyRepair[] = [];
-  if (selected.accountType !== "Intercompany") {
+  if (!isAccountType(selected.accountType, "Intercompany")) {
     repairs.push({ field: "accountType", from: selected.accountType, to: "Intercompany" });
   }
   if (selected.subType !== input.definition.subType) {

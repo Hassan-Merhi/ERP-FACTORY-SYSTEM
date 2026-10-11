@@ -57,6 +57,5 @@ export async function findOrCreateLedgerAccount(
 }
 
 // ── Auto-transfer helper ──────────────────────────────────────────────────────
-// Called after a payment is committed. Looks up the auto-transfer config for
-// this company/module and, if enabled, posts two vouchers (one per company)
-// using the same TRANSFER-CLEARING pattern as /api/simple-company-transfer.
+// runRentalAutoTransferTx (auto-transfer.ts) runs inside the payment's
+// transaction and posts through the intercompany service (phase 26, MC-3).

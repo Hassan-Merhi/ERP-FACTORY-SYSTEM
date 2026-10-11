@@ -1,12 +1,7 @@
 import Decimal from "decimal.js";
 
 export type RawStockCostEventKind =
-  | "offload"
-  | "post_offload_charge"
-  | "commission"
-  | "freight"
-  | "manual_adjustment"
-  | "recalculation";
+  "offload" | "post_offload_charge" | "commission" | "freight" | "manual_adjustment" | "recalculation";
 
 export interface RawStockCostSourceIdentity {
   sourceType: string;
@@ -58,16 +53,8 @@ export interface RawStockCostingAdapter {
     supplierId: number;
     source: RawStockCostSourceIdentity;
   }): Promise<RawStockCostResult | null>;
-  validateOwnership(input: {
-    tx: unknown;
-    companyId: number;
-    supplierId: number;
-  }): Promise<void>;
-  lockCurrentState(input: {
-    tx: unknown;
-    companyId: number;
-    supplierId: number;
-  }): Promise<RawStockCostState>;
+  validateOwnership(input: { tx: unknown; companyId: number; supplierId: number }): Promise<void>;
+  lockCurrentState(input: { tx: unknown; companyId: number; supplierId: number }): Promise<RawStockCostState>;
   appendCostEvent(input: {
     tx: unknown;
     request: RawStockCostEventRequest;
@@ -123,7 +110,11 @@ function requiredText(value: unknown, field: string): string {
   return normalized;
 }
 
-function decimal(value: unknown, field: string, options: { allowNegative?: boolean; allowZero?: boolean } = {}): Decimal {
+function decimal(
+  value: unknown,
+  field: string,
+  options: { allowNegative?: boolean; allowZero?: boolean } = {}
+): Decimal {
   let parsed: Decimal;
   try {
     parsed = new Decimal(String(value));
@@ -152,7 +143,10 @@ function normalizeCurrency(value: unknown): string {
 
 function validateState(state: RawStockCostState, supplierId: number, currency: string): void {
   if (state.supplierId !== supplierId) {
-    throw new RawStockCostingValidationError("RAW_STOCK_SUPPLIER_MISMATCH", "Locked raw-stock state belongs to another supplier");
+    throw new RawStockCostingValidationError(
+      "RAW_STOCK_SUPPLIER_MISMATCH",
+      "Locked raw-stock state belongs to another supplier"
+    );
   }
   if (normalizeCurrency(state.currency) !== currency) {
     throw new RawStockCostingValidationError(
@@ -205,7 +199,10 @@ export function validateRawStockCostEvent(request: RawStockCostEventRequest): Va
   });
 
   if (quantityDeltaKg.isZero() && costDelta.isZero()) {
-    throw new RawStockCostingValidationError("RAW_STOCK_EVENT_EMPTY", "A raw-stock cost event must change quantity or cost");
+    throw new RawStockCostingValidationError(
+      "RAW_STOCK_EVENT_EMPTY",
+      "A raw-stock cost event must change quantity or cost"
+    );
   }
 
   if (request.kind === "offload" && quantityDeltaKg.lte(0)) {
@@ -272,9 +269,7 @@ export async function applyRawStockCostEventTx(
   const beforeQuantity = new Decimal(before.quantityKg);
   const beforeUnitCost = new Decimal(before.unitCostPerKg);
   const quantityDelta = validated.quantityDeltaKg;
-  const derivedCostDelta = request.preserveUnitCost
-    ? quantityDelta.mul(beforeUnitCost)
-    : validated.costDelta;
+  const derivedCostDelta = request.preserveUnitCost ? quantityDelta.mul(beforeUnitCost) : validated.costDelta;
   const nextQuantity = beforeQuantity.plus(quantityDelta);
   const nextTotalCost = new Decimal(before.totalCost).plus(derivedCostDelta);
 

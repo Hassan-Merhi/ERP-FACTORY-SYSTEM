@@ -94,6 +94,7 @@ export const ERP_NAV_SECTIONS: NavSection[] = [
       { title: "Accounts", url: "/accounts", icon: Wallet },
       { title: "Parties", url: "/parties", icon: Handshake },
       { title: "Payroll", url: "/payroll", icon: UserCheck },
+      { title: "Financial Statements", url: "/financial-reports", icon: BarChart3 },
     ],
   },
   {
@@ -201,6 +202,8 @@ export function useErpVisibleSections(user?: SidebarUser): {
     )
       return false;
     if (item.url === "/net-profit-report") return isDeveloper;
+    // Phase 27 (RP-15): Admin, Owner and Manager, as the report API.
+    if (item.url === "/financial-reports") return isAdmin || isOwner || effectiveRole === "Manager";
     if (item.url === "/company-transfer") return isDeveloper;
     if (item.url === "/spreadsheet") return isDeveloper;
     if (item.url === "/live-sheets") return isDeveloper;

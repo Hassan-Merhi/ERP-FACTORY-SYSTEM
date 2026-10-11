@@ -48,6 +48,7 @@ import { postErpVoucherTx } from "../accounting/erpVoucherPosting";
 import { companyClosedThrough, isDateInClosedPeriod } from "../accounting/scheduledPostingScope";
 import { assertTransactionCompanyScope } from "../security/transactionCompanyScope";
 import { getRentalBillingDay, getRentalPeriodDueDate } from "./rentalPeriodService";
+import { isAccountType } from "../accounting/accountClassification";
 
 const PREPAID_ACCOUNT_NAME = "Prepaid Rent";
 const TOLERANCE = new MoneyDecimal("0.005");
@@ -245,7 +246,7 @@ async function derivePlan(
           summaries
             .filter(
               (e) =>
-                (e.account_type === "Indirect Expense" || e.account_type === "Expense") &&
+                (isAccountType(e.account_type, "Indirect Expense") || isAccountType(e.account_type, "Expense")) &&
                 e.name.toLowerCase().includes("rent")
             )
             .map((e) => e.debit)

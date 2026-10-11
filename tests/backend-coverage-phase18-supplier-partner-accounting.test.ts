@@ -262,9 +262,12 @@ describe("Phase 18 Supplier Partner accounting controls", () => {
       .get(`/api/suppliers/${gcSupplierId}/unified-ledger`)
       .query({ companyId: fixture.ctx.companyId });
     expect(statement.status, statement.text).toBe(200);
-    const rows = statement.body as Array<{ type: string; credit: number; balance: number }>;
-    expect(rows.some((row) => row.type === "voucher" && row.credit === 250)).toBe(true);
-    expect(rows.at(-1)?.balance).toBe(250);
+    const rows = statement.body as Array<{ type: string; credit: number; balance: number; spPayableEvidence?: true }>;
+    // Phase 25 (AR-10, one SP supplier definition): the supplier-tagged line on
+    // the SP payable ledger is listed as evidence, labelled, and does not move
+    // the supplier's balance (the engine's; it was counted: 250).
+    expect(rows.some((row) => row.type === "voucher" && row.credit === 250 && row.spPayableEvidence)).toBe(true);
+    expect(rows.at(-1)?.balance).toBe(0);
   }, 120000);
 
   it("keeps non-parent Supplier Partner supplier visibility and reconciliation company-scoped", async () => {
@@ -300,13 +303,14 @@ describe("Phase 18 Supplier Partner accounting controls", () => {
     // Wave 14 (one supplier rule): the supplier's 125 Cr opening belongs to its
     // own company, which is the company read, so it opens the statement; it no
     // longer depends on the global parent setting (it used to be hidden here).
-    // The SP payable evidence line is still listed and counted.
+    // Phase 25 (AR-10): the SP payable evidence line is listed, labelled, and
+    // not counted in the balance (it was: 200).
     expect(rows).toHaveLength(2);
     expect(rows[0]).toMatchObject({ type: "opening", balance: 125 });
     expect(rows[1]).toMatchObject({
       type: "voucher",
       companyId: fixture.plainCompanyId,
-      balance: 200,
+      balance: 125,
       spPayableEvidence: true,
     });
 

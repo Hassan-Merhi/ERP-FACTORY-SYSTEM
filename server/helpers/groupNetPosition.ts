@@ -6,6 +6,10 @@ import {
   type HistoricalCurrencyReadiness,
 } from "../services/accounting/historicalCurrencyReadiness";
 import { registerStatsMultiCurrencyRoutes } from "../routes/stats/statsMultiCurrencyRoutes";
+import {
+  GROUP_PRESENTATION_CURRENCY,
+  companiesNeedingTranslation,
+} from "../services/accounting/fx/groupPresentationCurrency";
 import { registerStatsNetProfitRoutes } from "../routes/stats/statsNetProfitRoutes";
 import {
   getCompanyRequestRuntimeContext,
@@ -70,6 +74,9 @@ export interface GroupNetPositionCompany {
 
 export interface GroupNetPositionSnapshot {
   asOfDate: string;
+  /** Phase 24 (MC-5): the group is presented in USD; companies kept in another currency are listed. */
+  presentationCurrency?: typeof GROUP_PRESENTATION_CURRENCY;
+  companiesNeedingTranslation?: ReturnType<typeof companiesNeedingTranslation>;
   companyCount: number;
   excludedCompanyTypes: string[];
   companies: GroupNetPositionCompany[];
@@ -457,6 +464,8 @@ export async function calculateGroupNetPosition(
 
   return {
     asOfDate,
+    presentationCurrency: GROUP_PRESENTATION_CURRENCY,
+    companiesNeedingTranslation: companiesNeedingTranslation(companies),
     companyCount: positions.length,
     excludedCompanyTypes: [...EXCLUDED_COMPANY_TYPE_LIST],
     companies: positions,

@@ -531,20 +531,25 @@ export function registerIntercompanyNotificationRoutes(app: Express) {
       }
 
       // ── Validate that the chosen debit account belongs to the destination company ──
-      const [chosenAccount] = await db
-        .select({ id: ledgerAccounts.id, name: ledgerAccounts.name, companyId: ledgerAccounts.companyId })
-        .from(ledgerAccounts)
-        .where(eq(ledgerAccounts.id, destLedgerAccountId));
+      // Read in the destination company's scope (membership checked above): under
+      // row-level security the request's own company cannot see its accounts
+      // (phases 23–29 integration; the posting below uses the same scope).
+      const { chosenAccount, crAccount } = await withAuthorizedPostingCompany(link.destCompanyId, async () => {
+        const [chosen] = await db
+          .select({ id: ledgerAccounts.id, name: ledgerAccounts.name, companyId: ledgerAccounts.companyId })
+          .from(ledgerAccounts)
+          .where(eq(ledgerAccounts.id, destLedgerAccountId));
+        // Resolve the CR (IC) account name for the auto-description
+        const [credit] = await db
+          .select({ name: ledgerAccounts.name })
+          .from(ledgerAccounts)
+          .where(eq(ledgerAccounts.id, link.destLedgerAccountId));
+        return { chosenAccount: chosen, crAccount: credit };
+      });
       if (!chosenAccount) return res.status(400).json({ message: "Selected account not found" });
       if (chosenAccount.companyId !== link.destCompanyId) {
         return res.status(400).json({ message: "Selected account does not belong to the destination company" });
       }
-
-      // Resolve the CR (IC) account name for the auto-description
-      const [crAccount] = await db
-        .select({ name: ledgerAccounts.name })
-        .from(ledgerAccounts)
-        .where(eq(ledgerAccounts.id, link.destLedgerAccountId));
 
       // Use provided description or fall back to "Received from [CR] into [DR]"
       const resolvedDescription =

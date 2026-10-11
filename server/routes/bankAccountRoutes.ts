@@ -32,6 +32,7 @@ import {
   requestRole,
 } from "../services/accounting/accountHistoryPolicy";
 import { logAudit } from "./_helpers";
+import { isAccountType } from "../services/accounting/accountClassification";
 
 class BankAccountRouteError extends Error {
   constructor(
@@ -96,7 +97,7 @@ export function registerBankAccountRoutes(app: Express) {
       const parsed = insertBankAccountSchema.parse({ ...req.body, companyId: req.session.currentCompanyId });
 
       // Check for duplicate code
-      const existing = await storage.getBankAccountByCode(parsed.code);
+      const existing = await storage.getBankAccountByCode(parsed.code, req.session.currentCompanyId);
       if (existing) {
         return res.status(400).json({ message: "Bank account code already exists" });
       }
@@ -122,7 +123,7 @@ export function registerBankAccountRoutes(app: Express) {
           return res.status(400).json({ message: "Linked ledger account not found" });
         }
 
-        if (linkedLedger.accountType !== "Bank" && linkedLedger.accountType !== "Cash") {
+        if (!isAccountType(linkedLedger.accountType, "Bank") && !isAccountType(linkedLedger.accountType, "Cash")) {
           return res.status(400).json({
             message: `Linked ledger must be Bank or Cash type. Found: ${linkedLedger.accountType}`,
           });
@@ -229,7 +230,7 @@ export function registerBankAccountRoutes(app: Express) {
                 )
               );
             if (!linkedLedger) throw new BankAccountRouteError(400, "Linked ledger account not found");
-            if (linkedLedger.accountType !== "Bank" && linkedLedger.accountType !== "Cash") {
+            if (!isAccountType(linkedLedger.accountType, "Bank") && !isAccountType(linkedLedger.accountType, "Cash")) {
               throw new BankAccountRouteError(
                 400,
                 `Linked ledger must be Bank or Cash type. Found: ${linkedLedger.accountType}`

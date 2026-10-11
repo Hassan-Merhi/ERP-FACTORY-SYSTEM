@@ -232,21 +232,27 @@ describe("system settings and the parent company", () => {
     await pool.query(`DELETE FROM system_settings WHERE key = $1`, [key]);
   }, 60_000);
 
-  it("serves the parent company id from cache and invalidates it on write", async () => {
-    const original = await authStorage.getParentCompanyId();
+  it("derives the parent company from companies.parent_company_id, never from the retired setting", async () => {
+    // Phase 26 (MC-7, decided by default): the parent model is the column. The
+    // global parentCompanyId system setting (and its cache) is no longer read.
+    const original = await pool.query(`SELECT value FROM system_settings WHERE key = 'parentCompanyId'`);
+    const child = await pool.query<{ id: number }>(
+      `INSERT INTO companies (code, name, parent_company_id) VALUES ($1, $2, $3) RETURNING id`,
+      [`${TEST_PREFIX}CH${Date.now() % 100000}`.toUpperCase(), `${TEST_PREFIX} child`, ctx.companyId]
+    );
+    const childId = child.rows[0].id;
     try {
-      await authStorage.setParentCompanyId(ctx.companyId);
-      expect(await authStorage.getParentCompanyId()).toBe(ctx.companyId);
+      expect(await authStorage.getParentCompanyId(childId)).toBe(ctx.companyId);
+      // A company with subsidiaries is its own group parent.
+      expect(await authStorage.getParentCompanyId(ctx.companyId)).toBe(ctx.companyId);
 
-      // A second read comes from the in-memory cache and must agree.
-      expect(await authStorage.getParentCompanyId()).toBe(ctx.companyId);
-
-      // Writing through the setter clears the cache rather than leaving the
-      // previous value to be served for another five minutes.
-      await authStorage.setParentCompanyId(null);
-      expect(await authStorage.getParentCompanyId()).toBeNull();
+      // Writing the legacy setting changes nothing.
+      await authStorage.setParentCompanyId(childId);
+      expect(await authStorage.getParentCompanyId(childId)).toBe(ctx.companyId);
+      expect(await authStorage.getParentCompanyId(ctx.companyId)).toBe(ctx.companyId);
     } finally {
-      await authStorage.setParentCompanyId(original);
+      await pool.query(`DELETE FROM companies WHERE id = $1`, [childId]);
+      await authStorage.setParentCompanyId(original.rows[0]?.value ? Number(original.rows[0].value) : null);
     }
   }, 60_000);
 });

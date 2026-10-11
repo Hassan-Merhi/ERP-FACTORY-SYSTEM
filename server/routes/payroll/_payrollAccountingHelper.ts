@@ -11,6 +11,25 @@ import { eq, and, sql, ne, isNull } from "drizzle-orm";
 import { ledgerAccounts, vouchers, factoryPayrolls, factoryWorkers } from "@shared/schema";
 import { allocatePayrollAccountingAmounts, moneyFromCents } from "../../services/accounting/payrollAccountingAmounts";
 import { retireVouchersTx } from "../../services/accounting/voucherRetirement";
+import { systemAccountIdsTx } from "../../services/accounting/perpetualInventory/linkedJournal";
+
+/** A worker's legacy per-worker expense account (live, active, a leaf), by its exact name; never created. */
+async function findLegacyWorkerAccountTx(tx: DbTransaction, companyId: number, name: string): Promise<number | null> {
+  const [row] = await tx
+    .select({ id: ledgerAccounts.id })
+    .from(ledgerAccounts)
+    .where(
+      and(
+        eq(ledgerAccounts.companyId, companyId),
+        eq(ledgerAccounts.name, name),
+        eq(ledgerAccounts.active, true),
+        isNull(ledgerAccounts.deletedAt),
+        sql`NOT EXISTS (SELECT 1 FROM ledger_accounts c WHERE c.parent_id = ${ledgerAccounts.id} AND c.deleted_at IS NULL)`
+      )
+    )
+    .limit(1);
+  return row ? row.id : null;
+}
 
 /**
  * Find or create a ledger account by name for a company.
@@ -178,29 +197,22 @@ async function rebuildPayrollGenVoucherTx(
 
   const payableAcc = await findOrCreateLedger(companyId, "Payroll Payable", "Liability");
   const advancesAcc = await findOrCreateLedger(companyId, "Factory Worker Advances", "Asset");
-  const salaryGroup = await findOrCreateLedger(companyId, "Salary Expense - Workers", "Expense", { subType: "Group" });
-  const bonusGroup = await findOrCreateLedger(companyId, "Bonus Expense - Workers", "Expense", { subType: "Group" });
-
-  await globalDb.execute(
-    sql`UPDATE ledger_accounts SET sub_type='Group' WHERE id IN (${salaryGroup.id}, ${bonusGroup.id}) AND (sub_type IS NULL OR sub_type <> 'Group')`
-  );
-
+  // Phase 23 (C9, decided by default): no ledger account per worker any more.
+  // A worker who already has a legacy "Salary Expense - <name>" account keeps
+  // posting to it (history and its statement stay where they are); any other
+  // worker posts to the pooled FACTORY_SALARY_EXPENSE / FACTORY_BONUS_EXPENSE
+  // accounts, with the worker named on the line (the payroll record is the
+  // worker's sub-ledger).
+  const pooled = await systemAccountIdsTx(tx, companyId, ["FACTORY_SALARY_EXPENSE", "FACTORY_BONUS_EXPENSE"]);
   const workerAccCache = new Map<number, { salaryId: number; bonusId: number }>();
   for (const { workerId, workerName } of workerRows) {
     if (workerAccCache.has(workerId)) continue;
-    const sa = await findOrCreateLedger(companyId, `Salary Expense - ${workerName}`, "Expense", {
-      parentId: salaryGroup.id,
+    const sa = await findLegacyWorkerAccountTx(tx, companyId, `Salary Expense - ${workerName}`);
+    const ba = await findLegacyWorkerAccountTx(tx, companyId, `Bonus Expense - ${workerName}`);
+    workerAccCache.set(workerId, {
+      salaryId: sa ?? pooled.get("FACTORY_SALARY_EXPENSE")!,
+      bonusId: ba ?? pooled.get("FACTORY_BONUS_EXPENSE")!,
     });
-    const ba = await findOrCreateLedger(companyId, `Bonus Expense - ${workerName}`, "Expense", {
-      parentId: bonusGroup.id,
-    });
-    await globalDb.execute(
-      sql`UPDATE ledger_accounts SET parent_id = ${salaryGroup.id} WHERE id = ${sa.id} AND (parent_id IS NULL OR parent_id <> ${salaryGroup.id})`
-    );
-    await globalDb.execute(
-      sql`UPDATE ledger_accounts SET parent_id = ${bonusGroup.id} WHERE id = ${ba.id} AND (parent_id IS NULL OR parent_id <> ${bonusGroup.id})`
-    );
-    workerAccCache.set(workerId, { salaryId: sa.id, bonusId: ba.id });
   }
 
   const count = remaining.length;

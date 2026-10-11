@@ -44,8 +44,10 @@ export const OPENING_BALANCE_LOCK_TABLES = [
  * erp_closed_period_guard_bypassed), and deleting a master after a close is
  * locked too (DI4): a hard DELETE, or a soft delete / restore (deleted_at set
  * or cleared), of a row whose opening is not zero.
+ * v4 (phase 23, G6): the same refusal once the company's opening journal is
+ * applied (opening_journal_applications), whatever the periods.
  */
-export const OPENING_BALANCE_LOCK_VERSION = "2026-10-opening-balance-lock-v3";
+export const OPENING_BALANCE_LOCK_VERSION = "2026-10-opening-balance-lock-v4";
 
 export const openingBalanceLockTriggerName = (table: string) => `${table}_opening_balance_lock`;
 
@@ -54,8 +56,28 @@ export const OPENING_BALANCE_LOCK_DDL: readonly string[] = [
    LANGUAGE plpgsql AS $fn$
    DECLARE
      locked_through date;
+     journal_cut_over date;
    BEGIN
      IF p_company_id IS NULL OR erp_closed_period_guard_bypassed() THEN RETURN; END IF;
+     -- Phase 23 (v4), G6: once the company's opening journal is applied, the
+     -- openings live in that journal and the master fields are read-only. The
+     -- apply itself (which empties them in its own transaction) sets
+     -- app.opening_journal_apply. Read dynamically: the table is created by
+     -- the ledger model schema, installed after this lock.
+     IF to_regclass('opening_journal_applications') IS NOT NULL
+        AND lower(btrim(coalesce(current_setting('app.opening_journal_apply', true), ''))) <> 'on' THEN
+       EXECUTE 'SELECT max(cut_over_date) FROM opening_journal_applications WHERE company_id = $1'
+          INTO journal_cut_over USING p_company_id;
+       IF journal_cut_over IS NOT NULL THEN
+         RAISE EXCEPTION USING
+           ERRCODE = '${CLOSED_PERIOD_ERROR_CODE}',
+           MESSAGE = format(
+             'OPENING_JOURNAL_APPLIED: the opening balances were moved into the opening journal of %s, so an opening balance cannot be created, changed or deleted',
+             journal_cut_over
+           ),
+           HINT = 'Post a journal entry instead.';
+       END IF;
+     END IF;
      PERFORM pg_advisory_xact_lock_shared(${CLOSED_PERIOD_LOCK_NAMESPACE}, p_company_id);
      SELECT max(period_end_date) INTO locked_through
        FROM fiscal_period_closures WHERE company_id = p_company_id AND status = 'CLOSED';

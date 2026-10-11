@@ -40,6 +40,7 @@ import { MoneyDecimal } from "../../lib/money";
 import { writeAuditEvent } from "../../services/audit";
 import { resolveRequestCompanyId } from "../../services/security/requestCompanyScope";
 import { assertTransactionCompanyScope } from "../../services/security/transactionCompanyScope";
+import { isAccountType } from "../../services/accounting/accountClassification";
 
 const PLAN_HASH = /^[0-9a-f]{64}$/;
 const PLAN_ROUTE = "/api/insurance/admin/journal-direction/plan";
@@ -128,9 +129,11 @@ async function loadEntries(executor: DatabaseOrTransaction, companyId: number, l
   return result.rows as unknown as EntryRow[];
 }
 
-const isExpense = (row: EntryRow) => row.ledger_name === "Insurance Expense" && row.account_type === "Expense";
+const isExpense = (row: EntryRow) =>
+  row.ledger_name === "Insurance Expense" && isAccountType(row.account_type, "Expense");
 const isLiability = (row: EntryRow) =>
-  row.account_type === "Liability" && ((row.ledger_name ?? "").startsWith("Insurance - ") || row.member_linked);
+  isAccountType(row.account_type, "Liability") &&
+  ((row.ledger_name ?? "").startsWith("Insurance - ") || row.member_linked);
 
 /** The plan for one company: which INS- vouchers carry the old direction, provably, and what the swap writes. */
 async function derivePlan(

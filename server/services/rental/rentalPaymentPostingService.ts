@@ -18,7 +18,7 @@ import Decimal from "decimal.js";
 import { parseMoneyInput, sumMoney, toMoney } from "../../lib/money";
 import type { RentalModule } from "../../routes/rental/shared";
 import { postErpVoucherTx, type ErpVoucherLine } from "../accounting/erpVoucherPosting";
-import { findOrCreateLedgerAccount, maybeRunAutoTransfer } from "../../routes/rental/shared";
+import { findOrCreateLedgerAccount, runRentalAutoTransferTx } from "../../routes/rental/shared";
 import { isRentalPeriodDue, getRentalBillingDay, getRentalPeriodDueDate } from "./rentalPeriodService";
 import { buildAllocationsForPayment, findEarliestOutstandingMonth } from "./rentalPaymentAllocationService";
 import { isRentalRateRequiredError, recordedRentalPaymentRate } from "./rentalPaymentRate";
@@ -779,30 +779,27 @@ async function postScheduledGroup(
         tx
       );
     }
+
+    // Phase 26 (MC-3): the auto-transfer posts in this transaction; a failure
+    // leaves the group SCHEDULED (retried on the next run) instead of posting
+    // the payment with the transfer silently missing.
+    const firstRow = groupRows[0];
+    if (firstRow.cashAccountId && unit) {
+      await runRentalAutoTransferTx(tx, {
+        companyId,
+        module,
+        fromLedgerAccountId: firstRow.cashAccountId,
+        amount: totalAmountStr,
+        transferDate: paymentDate,
+        unitLabel: `${unit.locationGroup}/${unit.unitNumber}`,
+        sourcePaymentId: firstRow.id,
+        notes: notes ?? null,
+        actor: audit ? { ...audit.actor, reason: "Rental auto-transfer" } : undefined,
+      });
+    }
   });
 
   if (groupRows.length === 0) return false;
-
-  try {
-    const firstRow = groupRows[0];
-    if (firstRow.cashAccountId && unit) {
-      const unitLabel = `${unit.locationGroup}/${unit.unitNumber}`;
-      await maybeRunAutoTransfer(
-        companyId,
-        module,
-        firstRow.cashAccountId,
-        sumMoney(groupRows.map((r) => r.amount as string)).toFixed(2),
-        paymentDate,
-        unitLabel,
-        firstRow.id,
-        notes ?? undefined
-      );
-    }
-  } catch (e: unknown) {
-    logger.warn("[rentalPostingService] auto-transfer failed:", {
-      error: getErrorMessage(e).split("\n")[0],
-    });
-  }
 
   return true;
 }

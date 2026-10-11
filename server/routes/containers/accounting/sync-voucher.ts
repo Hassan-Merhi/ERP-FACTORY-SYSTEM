@@ -40,7 +40,8 @@ export function registerContainerSyncVoucherRoutes(app: Express) {
 
       const pos = await db.select().from(purchaseOrders).where(eq(purchaseOrders.containerId, id));
 
-      const parentCompanyId = await storage.getParentCompanyId();
+      // Phase 26 (MC-7): the parent of the container's company (companies.parent_company_id).
+      const parentCompanyId = await storage.getParentCompanyId(companyId);
       let updatedLocalVouchers = 0;
       let updatedParentVouchers = 0;
       const skipped: string[] = [];

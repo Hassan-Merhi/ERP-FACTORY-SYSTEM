@@ -1,6 +1,6 @@
 import type { Request, Response } from "express";
-import { eq, inArray } from "drizzle-orm";
-import { intercompanyAccountLinks, ledgerAccounts, userCompanyRoles } from "@shared/schema";
+import { eq, sql } from "drizzle-orm";
+import { intercompanyAccountLinks, userCompanyRoles } from "@shared/schema";
 import { db } from "../db";
 import { logger } from "../lib/logger";
 import {
@@ -49,11 +49,20 @@ async function ledgersBelongToPair(input: {
   sourceCompanyId: number;
   destCompanyId: number;
 }): Promise<boolean> {
-  const rows = await db
-    .select({ id: ledgerAccounts.id, companyId: ledgerAccounts.companyId })
-    .from(ledgerAccounts)
-    .where(inArray(ledgerAccounts.id, [input.sourceLedgerAccountId, input.destLedgerAccountId]));
-  const companyByLedger = new Map(rows.map((row) => [row.id, row.companyId]));
+  // The two accounts belong to two companies, and the request's tenant scope
+  // (one company) cannot see the other's under row-level security: ownership is
+  // read through the narrow erp_ledger_account_owners probe (ids and owners
+  // only; phases 23–29 integration, ledgerModelSchema.ts).
+  const result = await db.execute(
+    sql`SELECT account_id, company_id
+          FROM erp_ledger_account_owners(ARRAY[${input.sourceLedgerAccountId}, ${input.destLedgerAccountId}]::integer[])`
+  );
+  const companyByLedger = new Map(
+    (result.rows as Array<{ account_id: number; company_id: number }>).map((row) => [
+      Number(row.account_id),
+      Number(row.company_id),
+    ])
+  );
   return ledgersMatchIntercompanyPair(
     companyByLedger.get(input.sourceLedgerAccountId),
     companyByLedger.get(input.destLedgerAccountId),

@@ -28,8 +28,12 @@
  *     the mix's sources at their USD rates now (the supplier's locked moving
  *     average, else the container's landed USD cost; an upstream batch at its
  *     own recomputed rate);
- *   - a bale with no mix at its product's production price per bale (garbage
- *     HMD16 bales at nothing); a bale with no product keeps its cost;
+ *   - a garbage HMD16 bale with no mix at nothing; any other bale with no mix
+ *     is left to the no-mix resolution (phase 28 F4, noMixBaleResolution.ts:
+ *     assign to a costed mix, write off, or accept) and counted in
+ *     `noMixBales`; it used to be re-costed at the catalogue production price;
+ *   - spreadsheet-imported bales are re-costed like the others (phase 28 F6):
+ *     from their mix, or through the no-mix resolution;
  *   - mixes: every mix whose rate a re-costed bale uses, and every open mix
  *     (not closed, with weight left). Their sources take the USD rates and
  *     their header the recomputed cost. Only an open mix's remaining weight is
@@ -45,6 +49,7 @@ import { sql } from "drizzle-orm";
 import { db, type DbTransaction } from "../../db";
 import { MoneyDecimal, toMoney } from "../../lib/money";
 import { logAudit } from "../../routes/helpers/auditHelpers";
+import { companyBusinessDate } from "../accounting/companyBusinessDate";
 import { isPerpetualInventoryActive } from "../accounting/perpetualInventory/cutover";
 import {
   isSupplierPartnerCompany,
@@ -55,6 +60,7 @@ import {
   baleCostFromMix,
   containerUsdRate,
   FACTORY_COST_SCALE,
+  isZeroCostArticle,
   rawSourceUsdRate,
   stockEntryBaleCost,
 } from "./baleCostBasis";
@@ -113,6 +119,8 @@ export interface BaleRecostPlan {
   mixes: RecostMixLine[];
   bales: RecostBaleLine[];
   unvalued: RecostUnvalued[];
+  /** Phase 28 (F4): stock bales with no mix left to the no-mix resolution (not re-costed here). */
+  noMixBales: number;
   totals: { wipChange: string; finishedChange: string; total: string };
   planHash: string;
 }
@@ -127,7 +135,6 @@ export class BaleRecostRefusal extends Error {
   }
 }
 
-const todayUtc = () => new Date().toISOString().slice(0, 10);
 const fixed = (value: Decimal) => value.toDecimalPlaces(FACTORY_COST_SCALE).toFixed(FACTORY_COST_SCALE);
 
 async function rows<T>(tx: DbTransaction, query: ReturnType<typeof sql>): Promise<T[]> {
@@ -156,7 +163,8 @@ interface MixRow {
 
 /** The plan, computed inside `tx` (read-only). */
 export async function planBaleRecostTx(tx: DbTransaction, companyId: number): Promise<BaleRecostPlan> {
-  const date = todayUtc();
+  // Phase 28 (F9): the company business date, not the UTC day.
+  const date = await companyBusinessDate(companyId, tx);
   const unvalued: RecostUnvalued[] = [];
 
   const bales = await rows<{
@@ -318,6 +326,7 @@ export async function planBaleRecostTx(tx: DbTransaction, companyId: number): Pr
   }
 
   const baleLines: RecostBaleLine[] = [];
+  let noMixBales = 0;
   let finishedChange: Decimal = new MoneyDecimal(0);
   for (const bale of bales) {
     let next: { costPerKg: Decimal; totalCost: Decimal };
@@ -331,13 +340,14 @@ export async function planBaleRecostTx(tx: DbTransaction, companyId: number): Pr
       next = baleCostFromMix(bale.weight_kg, rate);
     } else {
       basis = "production-price";
-      if (!bale.has_product) continue; // no catalogue product: the bale keeps its recorded cost
-      if (bale.production_price === null && !bale.article_code?.startsWith("HMD16")) {
-        if (!toMoney(bale.total_cost).gt(0)) {
-          unvalued.push({ source: "factory_bales", id: bale.id, reason: "its product has no production price" });
-        }
+      // Phase 28 (F4): a bale with no mix is no longer re-costed at the
+      // catalogue price; the no-mix resolution assigns it to a costed mix,
+      // writes it off or accepts its cost. Garbage HMD16 bales cost nothing.
+      if (!isZeroCostArticle(bale.article_code)) {
+        noMixBales += 1;
         continue;
       }
+      if (!bale.has_product) continue; // no catalogue product: the bale keeps its recorded cost
       next = stockEntryBaleCost(bale.production_price, bale.weight_kg, bale.article_code);
     }
     const oldTotal = toMoney(bale.total_cost);
@@ -368,7 +378,7 @@ export async function planBaleRecostTx(tx: DbTransaction, companyId: number): Pr
   };
   const planHash = crypto
     .createHash("sha256")
-    .update(JSON.stringify({ companyId, mixes, bales: baleLines, unvalued, totals }))
+    .update(JSON.stringify({ companyId, mixes, bales: baleLines, unvalued, noMixBales, totals }))
     .digest("hex");
   return {
     companyId,
@@ -377,6 +387,7 @@ export async function planBaleRecostTx(tx: DbTransaction, companyId: number): Pr
     mixes,
     bales: baleLines,
     unvalued,
+    noMixBales,
     totals,
     planHash,
   };
@@ -403,7 +414,7 @@ export async function applyBaleRecost(
 ): Promise<BaleRecostResult> {
   return db.transaction(async (tx) => {
     await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext('factory_bale_recost'), ${companyId})`);
-    const date = todayUtc();
+    const date = await companyBusinessDate(companyId, tx);
     // The revaluation is dated today: refused in a closed period, journal or not.
     await tx.execute(sql`SELECT erp_assert_accounting_date_open(${companyId}, ${date}::date)`);
     const plan = await planBaleRecostTx(tx, companyId);

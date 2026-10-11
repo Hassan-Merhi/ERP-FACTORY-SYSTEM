@@ -25,6 +25,7 @@ import {
 import { StatementResponse, SupplierWithBalance, type StatementDisplayRow } from "./factorySupplierTypes";
 import { LinkedSupplierExposure } from "./LinkedSupplierExposure";
 import { LedgerBalancePanel } from "./LedgerBalancePanel";
+import { FactorySupplierLedgerLines } from "./FactorySupplierLedgerLines";
 import type { useFactorySuppliersModel } from "./useFactorySuppliersModel";
 
 type SuppliersModel = ReturnType<typeof useFactorySuppliersModel>;
@@ -478,6 +479,33 @@ export function SupplierStatement({
         </div>
       )}
 
+      {statementData.ledgerView?.lines && (
+        <div className="rounded-xl border overflow-hidden">
+          <div
+            className="flex items-center justify-between gap-2 px-4 py-3 border-b bg-muted/20 cursor-pointer hover-elevate"
+            onClick={() => toggleStmtSection("ledgerLines")}
+          >
+            <span className="flex items-center gap-2 flex-1">
+              <BookOpen className="h-4 w-4" />
+              <span className="text-sm font-semibold">Account Ledger</span>
+              <ChevronDown
+                className={`h-4 w-4 text-muted-foreground transition-transform ${collapsedStmtSections.has("ledgerLines") ? "" : "rotate-180"}`}
+              />
+            </span>
+          </div>
+          {!collapsedStmtSections.has("ledgerLines") && (
+            <div className="p-4">
+              <FactorySupplierLedgerLines
+                lines={statementData.ledgerView.lines}
+                openingBalanceUsd={statementData.ledgerView.openingBalanceUsd}
+                formatDate={formatDate}
+                formatNum={formatNum}
+              />
+            </div>
+          )}
+        </div>
+      )}
+
       <div className="rounded-xl border overflow-hidden">
         <div
           className="flex items-center justify-between gap-2 px-4 py-3 border-b bg-muted/20 cursor-pointer hover-elevate"
@@ -485,7 +513,7 @@ export function SupplierStatement({
         >
           <span className="flex items-center gap-2 flex-1">
             <BookOpen className="h-4 w-4" />
-            <span className="text-sm font-semibold">Account Ledger</span>
+            <span className="text-sm font-semibold">Operational activity (memo, not the ledger)</span>
             <ChevronDown
               className={`h-4 w-4 text-muted-foreground transition-transform ${collapsedStmtSections.has("allActivity") ? "" : "rotate-180"}`}
             />

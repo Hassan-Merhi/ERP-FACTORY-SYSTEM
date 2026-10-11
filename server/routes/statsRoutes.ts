@@ -7,6 +7,7 @@ import { registerStatsDataRoutes } from "./stats/statsDataRoutes";
 import { registerStatsSalesRoutes } from "./stats/statsSalesRoutes";
 import { registerStatsReportsRoutes } from "./stats/statsReportsRoutes";
 import { registerAgingReportRoutes } from "./stats/agingReportRoutes";
+import { registerFinancialStatementRoutes } from "./stats/financialStatementRoutes";
 import { registerStatsCountryActivityRoutes } from "./stats/statsCountryActivityRoutes";
 import { registerStatsMultiCurrencyRoutes } from "./stats/statsMultiCurrencyRoutes";
 import { registerStockInSalesReportRoutes } from "./stats/stockInSalesReportRoutes";
@@ -36,5 +37,6 @@ export function registerStatsRoutes(app: Express) {
   registerItemMarketAnalysisRoutes(app);
   registerStatsReportsRoutes(app);
   registerAgingReportRoutes(app);
+  registerFinancialStatementRoutes(app);
   registerStatsCountryActivityRoutes(app);
 }

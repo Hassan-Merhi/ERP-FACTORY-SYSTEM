@@ -10,7 +10,7 @@ import { getErrorMessage, errorStatus } from "../lib/httpHandlers";
 import { eq, and, inArray, isNull, sql } from "drizzle-orm";
 import { db } from "../db";
 import { storage } from "../storage";
-import { FiscalPeriodCloseError } from "../storage/accounting/fiscal-periods";
+import { FiscalPeriodCloseError, retainedEarningsAccountIdTx } from "../storage/accounting/fiscal-periods";
 import { logAudit } from "./_helpers";
 import { requireAuth, requireNonPOS, checkPOSLocation } from "../auth";
 import { ledgerAccounts, locations, salesItems, stockItems, voucherEntries, vouchers } from "@shared/schema";
@@ -31,20 +31,12 @@ export function registerFinancialSalesRoutes(app: Express) {
         return res.status(400).json({ message: "No company selected" });
       }
 
-      const { periodStartDate, periodEndDate, retainedEarningsAccountId, notes } = req.body;
+      const { periodStartDate, periodEndDate, notes } = req.body;
 
       // Validate required fields
-      if (!periodStartDate || !periodEndDate || !retainedEarningsAccountId) {
+      if (!periodStartDate || !periodEndDate) {
         return res.status(400).json({
-          message: "Period start date, end date, and retained earnings account are required",
-        });
-      }
-
-      // Parse and validate retained earnings account ID
-      const accountId = parseInt(retainedEarningsAccountId);
-      if (isNaN(accountId)) {
-        return res.status(400).json({
-          message: "Invalid retained earnings account ID",
+          message: "Period start date and end date are required",
         });
       }
 
@@ -64,21 +56,23 @@ export function registerFinancialSalesRoutes(app: Express) {
         });
       }
 
-      // Validate retained earnings account exists and is an Equity account
-      const retainedEarningsAccount = await storage.getLedgerAccountById(accountId);
-      if (!retainedEarningsAccount) {
-        return res.status(400).json({
-          message: "Retained earnings account not found",
+      // Phase 23 (G12): retained earnings is the company's RETAINED_EARNINGS
+      // system account. A retainedEarningsAccountId in the body must name it;
+      // without one, it is used.
+      const registryAccountId = await retainedEarningsAccountIdTx(db, req.session.currentCompanyId);
+      if (registryAccountId === null) {
+        return res.status(409).json({
+          message: "The company has no RETAINED_EARNINGS system account",
+          code: "RETAINED_EARNINGS_MISSING",
         });
       }
-      if (retainedEarningsAccount.accountType !== "Equity") {
+      const requested = req.body.retainedEarningsAccountId;
+      const accountId =
+        requested === undefined || requested === null || requested === "" ? registryAccountId : Number(requested);
+      if (!Number.isInteger(accountId) || accountId !== registryAccountId) {
         return res.status(400).json({
-          message: "Retained earnings account must be an Equity account",
-        });
-      }
-      if (retainedEarningsAccount.companyId !== req.session.currentCompanyId) {
-        return res.status(403).json({
-          message: "Retained earnings account belongs to a different company",
+          message: "The retained earnings account must be the company's RETAINED_EARNINGS system account",
+          code: "RETAINED_EARNINGS_NOT_SYSTEM_ACCOUNT",
         });
       }
 
@@ -100,14 +94,16 @@ export function registerFinancialSalesRoutes(app: Express) {
     }
   });
 
-  // Reopen the latest closed fiscal period (Admin). Soft-deletes the closing
-  // journal, restores the opening balances the close zeroed and lifts the lock
-  // back to the previous close. A reason is required and audited.
+  // Reopen the latest closed fiscal period (Admin or Owner). Soft-deletes the
+  // closing journal, restores the opening balances the close zeroed, keeps the
+  // closure in its history and lifts the lock back to the previous close. A
+  // reason is required and audited in the reopen's transaction.
   app.post("/api/fiscal-period/:id/reopen", requireAuth, async (req, res) => {
     try {
+      // Phase 23 (G12): the Owner may reopen too (it was Admin only).
       const userRole = req.session.currentRole;
-      if (userRole !== "Admin" && userRole !== "Developer") {
-        return res.status(403).json({ message: "Only Admins can reopen fiscal periods" });
+      if (userRole !== "Admin" && userRole !== "Owner" && userRole !== "Developer") {
+        return res.status(403).json({ message: "Only Admins and Owners can reopen fiscal periods" });
       }
       const companyId = req.session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });
@@ -119,25 +115,30 @@ export function registerFinancialSalesRoutes(app: Express) {
       if (!reason) return res.status(400).json({ message: "A reason is required to reopen a fiscal period" });
 
       // Phase 21 (B): the reopen audit is written on the reopen's transaction.
-      const closure = await storage.reopenFiscalPeriod(companyId, closureId, async (tx, reopened) => {
-        await logAudit(
-          {
-            userId: req.session.userId!,
-            username: req.session.username || "unknown",
-            companyId,
-            action: "reverse",
-            tableName: "fiscal_period_closures",
-            recordId: reopened.id,
-            recordIdentifier: `${reopened.periodStartDate}..${reopened.periodEndDate}`,
-            changes: {
-              status: { old: "CLOSED", new: "REOPENED" },
-              closingVoucherId: { old: reopened.closingVoucherId, new: null },
-              reason: { old: undefined, new: reason },
+      const closure = await storage.reopenFiscalPeriod(
+        companyId,
+        closureId,
+        async (tx, reopened) => {
+          await logAudit(
+            {
+              userId: req.session.userId!,
+              username: req.session.username || "unknown",
+              companyId,
+              action: "reverse",
+              tableName: "fiscal_period_closures",
+              recordId: reopened.id,
+              recordIdentifier: `${reopened.periodStartDate}..${reopened.periodEndDate}`,
+              changes: {
+                status: { old: "CLOSED", new: "REOPENED" },
+                closingVoucherId: { old: reopened.closingVoucherId, new: null },
+                reason: { old: undefined, new: reason },
+              },
             },
-          },
-          tx
-        );
-      });
+            tx
+          );
+        },
+        { userId: req.session.userId ?? null, reason }
+      );
       res.json({ reopened: true, periodStartDate: closure.periodStartDate, periodEndDate: closure.periodEndDate });
     } catch (error: unknown) {
       const status = error instanceof FiscalPeriodCloseError ? error.status : errorStatus(error);

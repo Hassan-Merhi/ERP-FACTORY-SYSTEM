@@ -172,7 +172,8 @@ export function registerBalanceRepairScanRoutes(app: Express) {
           LEFT JOIN companies tc ON tc.id = ict.to_company_id
           LEFT JOIN vouchers fv ON fv.id = ict.from_voucher_id
           LEFT JOIN vouchers tv ON tv.id = ict.to_voucher_id
-          WHERE ict.from_company_id = ${companyId} OR ict.to_company_id = ${companyId}
+          WHERE (ict.from_company_id = ${companyId} OR ict.to_company_id = ${companyId})
+            AND ict.deleted_at IS NULL
         `);
 
       const orphanedTransfers: OrphanedTransfer[] = [];

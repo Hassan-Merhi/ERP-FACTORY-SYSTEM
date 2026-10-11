@@ -84,7 +84,11 @@ async function loadLedgerAccount(companyId: number, accountId: number): Promise<
   return row ?? null;
 }
 
-async function loadLedgerAggregate(companyId: number, accountId: number): Promise<AggregateRow[]> {
+async function loadLedgerAggregate(
+  companyId: number,
+  accountId: number,
+  asOf: string | null = null
+): Promise<AggregateRow[]> {
   const result = await pool.query<AggregateRow>(
     `WITH classified AS (
        SELECT
@@ -150,6 +154,7 @@ async function loadLedgerAggregate(companyId: number, accountId: number): Promis
          AND v.optional = false
          AND v.deleted_at IS NULL
          AND ve.ledger_account_id = $2
+         AND ($3::date IS NULL OR COALESCE(v.effective_date, v.voucher_date) <= $3::date)
      )
      SELECT
        entry_currency,
@@ -161,7 +166,7 @@ async function loadLedgerAggregate(companyId: number, accountId: number): Promis
        COALESCE(SUM(unresolved_raw_net), 0)::text AS unresolved_raw_net
      FROM classified
      GROUP BY entry_currency`,
-    [companyId, accountId]
+    [companyId, accountId, asOf]
   );
   return result.rows;
 }
@@ -265,7 +270,11 @@ function summarizeLedgerAccount(
   };
 }
 
-/** `asOf`: the date of the current CFA rate (default: the company's business date). */
+/**
+ * `asOf`: the date of the current CFA rate (default: the company's business
+ * date) and, when given, the cut of the lines (COALESCE(effective_date,
+ * voucher_date) <= asOf; phase 24, M13). Without it every posted line counts.
+ */
 export async function getCashLedgerAccountSummary(
   companyId: number,
   accountId: number,
@@ -275,7 +284,7 @@ export async function getCashLedgerAccountSummary(
   if (!account) return null;
 
   const [rows, currentCfaPerUsd] = await Promise.all([
-    loadLedgerAggregate(companyId, accountId),
+    loadLedgerAggregate(companyId, accountId, asOf ?? null),
     getLatestCfaPerUsd(companyId, asOf),
   ]);
   return summarizeLedgerAccount(account, rows, currentCfaPerUsd);

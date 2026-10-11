@@ -21,7 +21,7 @@ import { db, pool } from "../server/db";
 import { ensureAuditLogAppendOnlyGuard } from "../server/services/audit/auditLogAppendOnlyGuard";
 import { pruneRemoteSupportAuditRows } from "../server/services/remoteSupportAuditRetention";
 import { syncEmployeeBalancesFromEntries } from "../server/routes/helpers/employeeHelpers";
-import { maybeRunAutoTransfer } from "../server/routes/rental/shared/auto-transfer";
+import { runRentalAutoTransferTx } from "../server/routes/rental/shared/auto-transfer";
 import { KNOWN_SECURITY_PERMISSIONS } from "../server/services/security/namedPermissionService";
 import { deleteAuditLogRowsForTests } from "./helpers/auditLogCleanup";
 import { cleanupTestData, closeTestServer, seedTestData, type TestContext } from "./setup";
@@ -439,24 +439,36 @@ describe("atomic writers", () => {
       `SELECT COUNT(*) AS n FROM vouchers WHERE company_id = $1 AND voucher_number LIKE 'TR-OUT-%'`,
       [ctx.companyId]
     );
-    await maybeRunAutoTransfer(ctx.companyId, "PROPERTIES", ctx.cashAccountId, "40.00", "2026-10-01", "W12B/1");
+    // Phase 26 (MC-3): the transfer runs in the payment's transaction, so the
+    // refusal reaches the caller (it used to be logged and swallowed).
+    const autoTransfer = () =>
+      db.transaction((tx) =>
+        runRentalAutoTransferTx(tx, {
+          companyId: ctx.companyId,
+          module: "PROPERTIES",
+          fromLedgerAccountId: ctx.cashAccountId,
+          amount: "40.00",
+          transferDate: "2026-10-01",
+          unitLabel: "W12B/1",
+        })
+      );
+    await expect(autoTransfer()).rejects.toThrow();
     expect(
       await count(`SELECT COUNT(*) AS n FROM vouchers WHERE company_id = $1 AND voucher_number LIKE 'TR-OUT-%'`, [
         ctx.companyId,
       ])
     ).toBe(outBefore);
     expect(
-      await count(
-        `SELECT COUNT(*) AS n FROM ledger_accounts WHERE company_id = ANY($1) AND code = 'TRANSFER-CLEARING'`,
-        [[ctx.companyId, destCompanyId]]
-      )
+      await count(`SELECT COUNT(*) AS n FROM ledger_accounts WHERE company_id = ANY($1) AND code LIKE 'IC-%'`, [
+        [ctx.companyId, destCompanyId],
+      ])
     ).toBe(0);
 
     await pool.query(`UPDATE rental_auto_transfer_configs SET dest_ledger_account_id = $2 WHERE company_id = $1`, [
       ctx.companyId,
       destCash!.id,
     ]);
-    await maybeRunAutoTransfer(ctx.companyId, "PROPERTIES", ctx.cashAccountId, "40.00", "2026-10-01", "W12B/1");
+    await autoTransfer();
     expect(
       await count(
         `SELECT COUNT(*) AS n FROM inter_company_transfers WHERE from_company_id = $1 AND to_company_id = $2`,

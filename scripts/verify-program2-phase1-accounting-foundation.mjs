@@ -17,7 +17,12 @@ const requiredFiles = [
   "server/services/accounting/employeeBalancePosting.ts",
   "server/services/accounting/voucherLifecycleService.ts",
   "server/services/accounting/partyReconciliationService.ts",
-  "server/services/accounting/periodLockService.ts",
+  // Accounting audit phase 23 (G12/G13, 2026-10-11): the period-lock contract
+  // is the database closed-period guard over the one close model
+  // (fiscal_period_closures). The unused second model, periodLockService.ts /
+  // financialCloseService.ts, was deleted; these two files carry the contract.
+  "server/services/accounting/closedPeriodGuard.ts",
+  "server/storage/accounting/fiscal-periods.ts",
   "server/services/accounting/reconciliationRepairService.ts",
   "server/routes/voucherRoutes.ts",
   "server/services/pos/createSaleService.ts",
@@ -73,7 +78,9 @@ const requiredBoundaryExports = [
   "replaceVoucherTx",
   "reverseVoucherTx",
   "reconcileTargetTx",
-  "assertPeriodOpenTx",
+  // Was assertPeriodOpenTx (periodLockService, never called by a writer and
+  // removed by phase 23 G13); period locks are enforced by the guard below.
+  "ensureClosedPeriodGuard",
   "generateReconciliationReportTx",
   "executeApprovedRepairsTx",
 ];

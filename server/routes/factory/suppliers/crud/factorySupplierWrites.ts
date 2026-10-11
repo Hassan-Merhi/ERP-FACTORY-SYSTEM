@@ -44,6 +44,10 @@ const AUDIT_FIELDS = [
   "address",
   "notes",
   "openingBalance",
+  "openingBalanceSide",
+  "openingBalanceCurrency",
+  "openingBalanceNativeAmount",
+  "paymentTermsDays",
   "linkedSupplierId",
   "parentId",
   "supplierCategoryId",
@@ -121,8 +125,9 @@ export async function updateFactorySupplierTx(
     role: actor.role,
     lines: await countAccountLines(tx, [["factory_supplier_id", id]]),
     opening: {
-      before: { amount: before.openingBalance },
-      after: { amount: after.openingBalance },
+      // Phase 25 (AR-9): the side is part of the opening.
+      before: { amount: before.openingBalance, side: before.openingBalanceSide },
+      after: { amount: after.openingBalance, side: after.openingBalanceSide },
       defaultSide: "Cr",
     },
     company: { before: before.companyId, after: values.companyId },

@@ -149,6 +149,61 @@ async function loadNativeBalances(
 }
 
 /**
+ * Phase 25 (AR-9): a factory supplier opening recorded in a foreign currency
+ * (opening_balance_currency + opening_balance_native_amount) counts in that
+ * currency's native balance, with its side (NULL = Cr); its USD book amount
+ * (opening_balance) is the bucket's USD. An opening without a currency is USD.
+ */
+async function addNativeOpenings(
+  executor: DatabaseOrTransaction,
+  ids: readonly number[],
+  native: Map<number, FactorySupplierNativeBalance[]>
+): Promise<void> {
+  if (ids.length === 0) return;
+  const result = await executor.execute<Record<string, unknown>>(sql`
+    SELECT id, opening_balance::text AS usd, opening_balance_side AS side,
+           UPPER(COALESCE(NULLIF(opening_balance_currency, ''), 'USD')) AS currency,
+           opening_balance_native_amount::text AS native
+      FROM factory_suppliers
+     WHERE id IN (${sql.join(
+       ids.map((id) => sql`${id}`),
+       sql`, `
+     )})
+  `);
+  for (const row of result.rows) {
+    const usd = toMoney(row.usd as string);
+    const currency = String(row.currency);
+    const amount = currency === "USD" ? usd : toMoney(row.native as string | null);
+    if (amount.isZero() && usd.isZero()) continue;
+    const sign = row.side === "Dr" ? -1 : 1;
+    const partyId = Number(row.id);
+    const list = native.get(partyId) ?? [];
+    let bucket = list.find((entry) => entry.currencyCode === currency);
+    if (!bucket) {
+      bucket = {
+        currencyCode: currency,
+        debit: "0.00",
+        credit: "0.00",
+        balance: "0.00",
+        usdBalance: "0.00",
+        effectiveFxRateToUsd: currency === "USD" ? "1" : null,
+        legacyUnconvertedLines: 0,
+      };
+      list.push(bucket);
+    }
+    const balance = toMoney(bucket.balance).plus(amount.times(sign));
+    const usdBalance = toMoney(bucket.usdBalance).plus(usd.times(sign));
+    bucket.balance = balance.toFixed(2);
+    bucket.usdBalance = usdBalance.toFixed(2);
+    if (currency !== "USD") {
+      bucket.effectiveFxRateToUsd =
+        !balance.isZero() && !usdBalance.isZero() ? usdBalance.dividedBy(balance).toFixed(6) : null;
+    }
+    native.set(partyId, list);
+  }
+}
+
+/**
  * Ledger views of the company's factory suppliers (or of `ids`), as of `asOf`
  * (everything posted when omitted). Every master of the company is returned,
  * zero or not.
@@ -169,6 +224,7 @@ export async function loadFactorySupplierLedgerViews(
   });
   const ids = parties.map((party) => party.id).filter((id): id is number => id !== null);
   const native = await loadNativeBalances(executor, companyId, ids, options.asOf);
+  await addNativeOpenings(executor, ids, native);
   for (const party of parties) {
     if (party.id === null) continue;
     const owed = toMoney(party.closing).negated();

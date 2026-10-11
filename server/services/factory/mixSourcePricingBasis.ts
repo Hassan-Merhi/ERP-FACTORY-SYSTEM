@@ -14,10 +14,10 @@
  */
 
 export type MixSourcePricingBasis =
-  | "BATCH"               // sourceBatchId present — upstream batch drives the rate
+  | "BATCH" // sourceBatchId present — upstream batch drives the rate
   | "SUPPLIER_LOCKED_RATE" // supplierId present (± containerId) — supplier historical rate
-  | "CONTAINER_DIRECT"    // containerId only, no supplierId — individual container rate
-  | "MANUAL_REVIEW";      // none of the above — cannot determine programmatically
+  | "CONTAINER_DIRECT" // containerId only, no supplierId — individual container rate
+  | "MANUAL_REVIEW"; // none of the above — cannot determine programmatically
 
 export interface MixSourceLike {
   sourceBatchId?: number | null;

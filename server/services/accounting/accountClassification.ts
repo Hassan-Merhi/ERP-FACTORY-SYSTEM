@@ -55,8 +55,10 @@ export type AccountClass = "asset" | "liability" | "equity" | "income" | "expens
  *   - "Indirect Income" as an account type (bulk-payroll recoveries) as well as
  *     the UI's "Income" + subType "Indirect Income";
  *   - "Profit": the capital / retained-profit accounts, so equity, never revenue;
- *   - "Government Taxes": duties and taxes charged on imports and offloads,
- *     an expense;
+ *   - "Government Taxes": a tax account (phase 23, C3, decided by default):
+ *     a liability (tax payable), or an asset when its sub-type says the tax
+ *     is receivable (see TAX_ASSET_SUBTYPE); it is no longer an expense, so
+ *     the fiscal close no longer sweeps it into retained earnings;
  *   - "Intercompany": a party account; it is a receivable in debit and a
  *     payable in credit, decided by its balance;
  *   - "Customer" / "Supplier": party accounts, likewise by balance.
@@ -64,10 +66,19 @@ export type AccountClass = "asset" | "liability" | "equity" | "income" | "expens
  */
 const ACCOUNT_TYPES_BY_CLASS: Readonly<Record<Exclude<AccountClass, "unknown">, readonly string[]>> = {
   asset: ["asset", "current asset", "fixed asset", "bank", "cash"],
-  liability: ["liability", "current liability", "loan", "loans", "duty agent", "transporter agent", "accounts payable"],
+  liability: [
+    "liability",
+    "current liability",
+    "loan",
+    "loans",
+    "duty agent",
+    "transporter agent",
+    "accounts payable",
+    "government taxes",
+  ],
   equity: ["equity", "profit"],
   income: ["income", "revenue", "indirect income", "direct income"],
-  expense: ["expense", "direct expense", "indirect expense", "government taxes", "cogs"],
+  expense: ["expense", "direct expense", "indirect expense", "cogs"],
   party: ["customer", "supplier", "intercompany"],
 };
 
@@ -87,7 +98,72 @@ function normalizeType(type: string | null | undefined): string {
  * Income", "Current Asset") decides; otherwise the class is "unknown".
  */
 export function classifyAccountType(accountType: string | null | undefined, subType?: string | null): AccountClass {
-  return CLASS_BY_TYPE.get(normalizeType(accountType)) ?? CLASS_BY_TYPE.get(normalizeType(subType)) ?? "unknown";
+  const byType = CLASS_BY_TYPE.get(normalizeType(accountType));
+  if (byType === "liability" && isTaxAssetAccount(accountType, subType)) return "asset";
+  return byType ?? CLASS_BY_TYPE.get(normalizeType(subType)) ?? "unknown";
+}
+
+/**
+ * Phase 23, C3: a tax account whose sub-type names a receivable (input VAT,
+ * recoverable or prepaid tax, a tax refund due) is an asset; every other tax
+ * account is a liability.
+ */
+const TAX_ASSET_SUBTYPE = /receivable|recoverable|input|prepaid|refund/i;
+const INTERCOMPANY_ASSET_SUBTYPE = /receivable|due[ _-]?from|hadi_sp_intercompany/i;
+const INTERCOMPANY_LIABILITY_SUBTYPE = /payable|due[ _-]?to|_credit|sp_hadi_intercompany/i;
+
+function isTaxAssetAccount(accountType: string | null | undefined, subType: string | null | undefined): boolean {
+  return normalizeType(accountType) === "government taxes" && TAX_ASSET_SUBTYPE.test(subType ?? "");
+}
+
+/**
+ * The stored nature of an account (phase 23, C3: ledger_accounts.account_class,
+ * constrained by a CHECK): one of the five classes of the accounting equation.
+ * The type stays the sub-type ("Bank", "Duty Agent", "Loans", ...). Party types
+ * get a nature from their usual side: a customer ASSET, a supplier LIABILITY;
+ * an intercompany account by its sub-type (due from / receivable: ASSET; due to
+ * / payable / a parent credit account: LIABILITY), null when the sub-type says
+ * neither. Null for a type the classifier does not know (listed, never guessed).
+ */
+export type AccountNature = "ASSET" | "LIABILITY" | "EQUITY" | "INCOME" | "EXPENSE";
+export const ACCOUNT_NATURES: readonly AccountNature[] = ["ASSET", "LIABILITY", "EQUITY", "INCOME", "EXPENSE"];
+
+export function accountNatureOf(accountType: string | null | undefined, subType?: string | null): AccountNature | null {
+  const accountClass = classifyAccountType(accountType, subType);
+  switch (accountClass) {
+    case "asset":
+      return "ASSET";
+    case "liability":
+      return "LIABILITY";
+    case "equity":
+      return "EQUITY";
+    case "income":
+      return "INCOME";
+    case "expense":
+      return "EXPENSE";
+    case "party": {
+      const type = normalizeType(accountType) || normalizeType(subType);
+      if (type === "customer") return "ASSET";
+      if (type === "supplier") return "LIABILITY";
+      const sub = subType ?? "";
+      if (INTERCOMPANY_ASSET_SUBTYPE.test(sub)) return "ASSET";
+      if (INTERCOMPANY_LIABILITY_SUBTYPE.test(sub)) return "LIABILITY";
+      return null;
+    }
+    default:
+      return null;
+  }
+}
+
+/**
+ * Phase 23, C4: a case- and space-insensitive comparison of an account type with
+ * one or more type names, for the call sites that check a specific sub-type
+ * ("Cash", "Bank", "Intercompany", "Equity") rather than a class. Replaces raw
+ * `accountType === "Cash"` comparisons, which missed 'CASH' and ' Cash'.
+ */
+export function isAccountType(accountType: string | null | undefined, ...names: string[]): boolean {
+  const type = normalizeType(accountType);
+  return type !== "" && names.some((name) => normalizeType(name) === type);
 }
 
 /** Lower-case type names of the given classes, for `LOWER(TRIM(account_type)) IN (...)` filters. */
@@ -133,6 +209,9 @@ export function defaultOpeningSide(
   accountType: string | null | undefined,
   subType?: string | null
 ): "Dr" | "Cr" | null {
+  // Phase 23: a sideless tax-account opening keeps the Dr it was read with while
+  // the type was an expense, so reclassifying the type moves no balance.
+  if (LEGACY_DEBIT_OPENING_TYPES.has(normalizeType(accountType))) return "Dr";
   switch (classifyAccountType(accountType, subType)) {
     case "asset":
     case "expense":
@@ -148,11 +227,14 @@ export function defaultOpeningSide(
   }
 }
 
+/** Types whose sideless opening stays Dr whatever their class (phase 23: tax accounts, formerly expenses). */
+export const LEGACY_DEBIT_OPENING_TYPES: ReadonlySet<string> = new Set(["government taxes"]);
+
 /**
  * Income-statement types in their stored spelling: a fiscal close moves their
  * balances to retained earnings. Derived from the classifier (income and
- * expense classes), so it now includes legacy "Revenue" and "Government
- * Taxes" (an expense; see ACCOUNT_TYPES_BY_CLASS). Matching should be
+ * expense classes), so it includes legacy "Revenue"; "Government Taxes" is a
+ * tax (balance-sheet) account since phase 23. Matching should be
  * case-insensitive (see accountTypeNamesOf); this list is for display and for
  * callers that compare canonical spellings.
  */
@@ -164,7 +246,6 @@ export const PROFIT_AND_LOSS_ACCOUNT_TYPES: readonly string[] = [
   "Expense",
   "Direct Expense",
   "Indirect Expense",
-  "Government Taxes",
   "COGS",
 ];
 

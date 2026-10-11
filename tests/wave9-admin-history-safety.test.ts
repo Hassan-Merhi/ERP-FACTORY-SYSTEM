@@ -329,6 +329,19 @@ describe("deleted items: vouchers", () => {
 });
 
 describe("inter-company voucher delete", () => {
+  // Phase 26: the counterpart company is brought into the delete's scope only
+  // for a member of it (it was soft-deleted without the check, and silently
+  // skipped under row-level security).
+  beforeAll(async () => {
+    await pool.query(
+      `INSERT INTO user_company_roles (user_id, company_id, role) VALUES ($1, $2, 'Admin') ON CONFLICT DO NOTHING`,
+      [a.userId, b.companyId]
+    );
+  });
+  afterAll(async () => {
+    await pool.query(`DELETE FROM user_company_roles WHERE user_id = $1 AND company_id = $2`, [a.userId, b.companyId]);
+  });
+
   it.each([
     ["Contra", "Contra"],
     ["Payment", "Receipt"],

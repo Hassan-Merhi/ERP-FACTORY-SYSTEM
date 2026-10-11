@@ -3,6 +3,7 @@ import { registerUserManagementRoutes } from "./admin/userManagementRoutes";
 import { registerCompanySettingsRoutes } from "./admin/companySettingsRoutes";
 import { registerAccountMigrationRoundTripRoutes } from "./admin/accountMigrationRoundTripRoutes";
 import { registerAccountMigrationSafeRoutes } from "./admin/accountMigrationSafeRoutes";
+import { registerAccountMigrationRetirementRoutes } from "./accounting-integrity/ledgerModelRoutes";
 import { registerImportExportRoutes } from "./admin/import-export";
 import { registerAdminPoFixRoutes } from "./admin/adminPoFixRoutes";
 import { registerAdminRepairRoutes } from "./admin/repair";
@@ -53,6 +54,8 @@ export function registerAdminRoutes(app: Express) {
 
   registerUserManagementRoutes(app);
   registerCompanySettingsRoutes(app);
+  // Phase 23 (G5): execute and undo are retired (410) before the old handlers.
+  registerAccountMigrationRetirementRoutes(app);
   registerAccountMigrationRoundTripRoutes(app);
   registerAccountMigrationSafeRoutes(app);
   registerImportExportRoutes(app);

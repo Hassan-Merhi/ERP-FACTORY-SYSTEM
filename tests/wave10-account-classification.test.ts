@@ -7,6 +7,9 @@
  * mis-cased types ('EXPENSE'). These tests prove that the shared classifier
  * reads them all the same way in net position, the P&L, net profit, the
  * monthly income statement, the chat trial balance and the fiscal close.
+ * Phase 23 (C3, decided by default): "Government Taxes" is a tax account, a
+ * liability (an asset when its sub-type is a receivable), no longer an
+ * expense: it leaves the P&L and the fiscal close and joins net position.
  */
 import request from "supertest";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -38,7 +41,8 @@ describe("classifyAccountType", () => {
     expect(classifyAccountType("Indirect Income")).toBe("income");
     expect(classifyAccountType("Revenue")).toBe("income");
     expect(classifyAccountType("INCOME")).toBe("income");
-    expect(classifyAccountType("Government Taxes")).toBe("expense");
+    expect(classifyAccountType("Government Taxes")).toBe("liability");
+    expect(classifyAccountType("Government Taxes", "VAT receivable")).toBe("asset");
     expect(classifyAccountType("EXPENSE")).toBe("expense");
     expect(classifyAccountType(" direct expense ")).toBe("expense");
     expect(classifyAccountType("Profit")).toBe("equity");
@@ -71,7 +75,7 @@ describe("classifyAccountType", () => {
     expect(expenseCategory("Expense", "Direct Expense")).toBe("Direct Expense");
     expect(expenseCategory("Indirect Expense")).toBe("Indirect Expense");
     expect(expenseCategory("EXPENSE")).toBe("Expense");
-    expect(expenseCategory("Government Taxes")).toBe("Government Taxes");
+    expect(expenseCategory("Government Taxes")).toBeNull();
     expect(expenseCategory("Income")).toBeNull();
   });
 
@@ -111,7 +115,6 @@ describe("net position helper", () => {
       acc(2, "Indirect Income"),
       acc(3, "Revenue"),
       acc(4, "INCOME"),
-      acc(5, "Government Taxes"),
       acc(6, "EXPENSE"),
       acc(7, "Profit"),
     ];
@@ -120,7 +123,6 @@ describe("net position helper", () => {
       [2, { debit: 0, credit: 40 }],
       [3, { debit: 0, credit: 300 }],
       [4, { debit: 0, credit: 9 }],
-      [5, { debit: 25, credit: 0 }],
       [6, { debit: 10, credit: 0 }],
       [7, { debit: 0, credit: 500 }],
     ]);
@@ -226,7 +228,20 @@ describe("ledger reports", () => {
     await account("DUTY", "Government Taxes");
     await account("UPPER", "EXPENSE");
     await account("CAPITAL", "Profit");
-    await account("RE", "Equity");
+    // Phase 23 (G12): the close posts to the RETAINED_EARNINGS system account.
+    ids.RE = (
+      await db
+        .insert(schema.ledgerAccounts)
+        .values({
+          companyId: ctx.companyId,
+          code: "RETAINED_EARNINGS",
+          name: "Retained Earnings",
+          accountType: "Equity",
+          openingBalance: "0",
+          openingBalanceSide: "Cr",
+        })
+        .returning()
+    )[0].id;
     await account("TBA", "Asset");
     await account("TBL", "Liability");
 
@@ -250,7 +265,7 @@ describe("ledger reports", () => {
     closeTestServer();
   }, 60000);
 
-  it("P&L reads both Indirect Income forms and Revenue as income, Government Taxes as expense, Profit as neither", async () => {
+  it("P&L reads both Indirect Income forms and Revenue as income, Government Taxes and Profit as neither", async () => {
     const pl = await getProfitLoss(ctx.companyId, "2026-03-01", "2026-03-31");
     const income = new Map(pl.incomeItems.map((item) => [item.id, item.balance]));
     const expense = new Map(pl.expenseItems.map((item) => [item.id, item.balance]));
@@ -260,7 +275,7 @@ describe("ledger reports", () => {
     expect(income.has(ids.CAPITAL)).toBe(false);
     // Expense balances are debit-minus-credit since wave 13 (they were
     // credit-minus-debit, which made netProfit add the expenses).
-    expect(expense.get(ids.DUTY)).toBe(25);
+    expect(expense.has(ids.DUTY)).toBe(false);
     expect(expense.get(ids.UPPER)).toBe(10);
   });
 
@@ -272,14 +287,12 @@ describe("ledger reports", () => {
     expect(revenue.get(`${TEST_PREFIX} REVENUE`)).toBe(300);
     expect(revenue.has(`${TEST_PREFIX} CAPITAL`)).toBe(false);
     expect(statement.generalExpLines).toEqual(
-      expect.arrayContaining([
-        { label: `${TEST_PREFIX} DUTY`, value: 25, category: "Government Taxes" },
-        { label: `${TEST_PREFIX} UPPER`, value: 10, category: "Expense" },
-      ])
+      expect.arrayContaining([{ label: `${TEST_PREFIX} UPPER`, value: 10, category: "Expense" }])
     );
+    expect(statement.generalExpLines.some((line) => line.label === `${TEST_PREFIX} DUTY`)).toBe(false);
   });
 
-  it("net profit counts Indirect Income as income and keeps it and Government Taxes out of net position", async () => {
+  it("net profit counts Indirect Income as income and keeps it out of net position; Government Taxes is in net position", async () => {
     const response = await agent.get("/api/stats/net-profit");
     expect(response.status).toBe(200);
     const accountIds = (list: Array<{ id?: number }>) => new Set(list.map((item) => item.id));
@@ -291,10 +304,11 @@ describe("ledger reports", () => {
       expect(income.has(ids[key])).toBe(true);
       expect(onUs.has(ids[key])).toBe(false);
     }
-    for (const key of ["DUTY", "UPPER"]) {
-      expect(expenses.has(ids[key])).toBe(true);
-      expect(forUs.has(ids[key])).toBe(false);
-    }
+    expect(expenses.has(ids.UPPER)).toBe(true);
+    expect(forUs.has(ids.UPPER)).toBe(false);
+    // A tax account with a debit balance (duties paid) is in net position, not an expense.
+    expect(expenses.has(ids.DUTY)).toBe(false);
+    expect(forUs.has(ids.DUTY) || onUs.has(ids.DUTY)).toBe(true);
     const recovery = response.body.income.accounts.find((item: { id: number }) => item.id === ids.RECOVERY);
     expect(recovery).toMatchObject({ value: 40, category: "Indirect Income" });
   });
@@ -318,7 +332,7 @@ describe("ledger reports", () => {
     expect(liability?.slice(3, 5)).toEqual(["0.00", "7.00"]);
   });
 
-  it("the fiscal close closes Revenue, both Indirect Income forms, Government Taxes and mis-cased types, not Profit", async () => {
+  it("the fiscal close closes Revenue, both Indirect Income forms and mis-cased types, not Government Taxes or Profit", async () => {
     const closure = await closeFiscalPeriod(ctx.companyId, "2026-01-01", "2026-04-30", ids.RE, ctx.userId);
     const [closing] = await db
       .select()
@@ -340,13 +354,13 @@ describe("ledger reports", () => {
     expect(byAccount.get(ids.RENT)).toBe("100.00/0.00");
     expect(byAccount.get(ids.RECOVERY)).toBe("40.00/0.00");
     expect(byAccount.get(ids.REVENUE)).toBe("300.00/0.00");
-    expect(byAccount.get(ids.DUTY)).toBe("0.00/25.00");
+    expect(byAccount.has(ids.DUTY)).toBe(false);
     expect(byAccount.get(ids.UPPER)).toBe("0.00/10.00");
     expect(byAccount.has(ids.CAPITAL)).toBe(false);
     expect(byAccount.has(ids.TBA)).toBe(false);
     // The seeded sales account has no entries in the period, so these are our totals.
     expect(Number(closure.totalIncome)).toBe(440);
-    expect(Number(closure.totalExpense)).toBe(35);
-    expect(Number(closure.netIncome)).toBe(405);
+    expect(Number(closure.totalExpense)).toBe(10);
+    expect(Number(closure.netIncome)).toBe(430);
   });
 });

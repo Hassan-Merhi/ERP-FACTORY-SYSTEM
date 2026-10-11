@@ -243,7 +243,14 @@ describe("bulk payroll generation", () => {
 
     const vouchers = await genVouchers();
     expect(vouchers).toHaveLength(1);
-    expect(vouchers[0].description).toContain("1 worker");
+    // Phase 28 (F12): the period's accrual is rebuilt from every payroll of the
+    // period (it used to be re-posted from this batch only: "1 worker").
+    const period = await pool.query(
+      `SELECT COUNT(*)::int AS n FROM factory_payrolls WHERE company_id = $1 AND period_start = $2 AND period_end = $3`,
+      [ctx.companyId, PERIOD_START, PERIOD_END]
+    );
+    const count = period.rows[0].n as number;
+    expect(vouchers[0].description).toContain(`${count} worker${count === 1 ? "" : "s"}`);
   });
 
   it("caps an approved advance override at the worker's gross pay and balance", async () => {

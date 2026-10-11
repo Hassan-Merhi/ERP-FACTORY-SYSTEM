@@ -77,7 +77,22 @@ if (!globalThis[INSTALL_KEY]) {
     });
 
     try {
-      await pool.query(migrationSql);
+      // Phases 23–29 integration: suppliers are under row-level security since
+      // phase 26 (MC-8, migrations/20261011_026_company_scope_rls_extension.sql)
+      // and stock_groups since 0016. As the production role (owner, no
+      // BYPASSRLS, FORCE RLS) this cross-company ownership migration read no
+      // supplier outside a scope and failed closed once suppliers existed, so it
+      // runs in the maintenance scope, like the other startup bridges. The
+      // setting is session-level (the file has its own BEGIN/COMMIT) on this
+      // single-connection pool, which is closed right after.
+      const client = await pool.connect();
+      try {
+        await client.query("SELECT set_config('app.company_scope_maintenance', 'on', false)");
+        await client.query(migrationSql);
+        await client.query("SELECT set_config('app.company_scope_maintenance', 'off', false)");
+      } finally {
+        client.release();
+      }
       console.log(
         JSON.stringify({
           timestamp: new Date().toISOString(),

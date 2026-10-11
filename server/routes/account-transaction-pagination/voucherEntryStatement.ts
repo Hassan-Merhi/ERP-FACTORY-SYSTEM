@@ -1,5 +1,5 @@
 import { pool } from "../../db";
-import { higherPriorityTargetsAbsent } from "../../services/accounting/balances/partyLineRules";
+import { higherPriorityTargetsAbsent, type PartyTargetColumn } from "../../services/accounting/balances/partyLineRules";
 import {
   ContinuousCursorError,
   continuousCursorScope,
@@ -47,8 +47,10 @@ export function genericFilteredCte(
     return `$${values.length}`;
   };
   const conditions = [`ve.${column} = $1`, "v.optional = false", "v.deleted_at IS NULL"];
-  // A supplier lists the lines the balance engine attributes to it (wave 13).
-  if (kind === "supplier") conditions.push(higherPriorityTargetsAbsent("ve", "supplier_id"));
+  // Every kind lists the lines the balance engine attributes to it (wave 13
+  // suppliers; phase 25 AR-2 banks, fixed assets and employees). A ledger
+  // account has no target of higher priority.
+  if (kind !== "ledger") conditions.push(higherPriorityTargetsAbsent("ve", column as PartyTargetColumn));
   if (companyId) conditions.push(`v.company_id = ${bind(companyId)}`);
   if (dates.rawStart) {
     conditions.push(`COALESCE(v.effective_date::date, v.voucher_date::date) >= ${bind(dates.rawStart)}::date`);
@@ -154,7 +156,7 @@ export async function loadVoucherPrePeriodNet(options: {
      FROM voucher_entries ve
      JOIN vouchers v ON v.id = ve.voucher_id
      WHERE ve.${column} = $1
-       AND ${column === "supplier_id" ? higherPriorityTargetsAbsent("ve", "supplier_id") : "TRUE"}
+       AND ${column === "ledger_account_id" ? "TRUE" : higherPriorityTargetsAbsent("ve", column as PartyTargetColumn)}
        AND v.optional = false
        AND v.deleted_at IS NULL
        ${companyCondition}

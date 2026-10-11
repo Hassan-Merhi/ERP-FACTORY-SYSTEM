@@ -36,7 +36,9 @@ import { planReadinessResolutionTx } from "../../inventory/inventoryReadinessRes
 import { assertTransactionCompanyScope } from "../../security/transactionCompanyScope";
 import { importedAtSpreadsheetCostTx, type ImportedAtSpreadsheetCost } from "../../factory/stockImportPolicy";
 import { DEFAULT_PERPETUAL_INVENTORY_FROM, PERPETUAL_INVENTORY_POSTING_READY, getInventoryCutover } from "./cutover";
-import { noMixCataloguePricedBales } from "./factoryCutoverBlockers";
+import { importedBalesNotRecosted, noMixCataloguePricedBales } from "./factoryCutoverBlockers";
+import { getFactoryArCutover, type FactoryArCutover } from "../../factory/factoryOpeningReceivable";
+import { planLegacyFactoryPostings } from "../../factory/factoryLegacyPostings";
 import { listUnpostedFactoryInvoices } from "./factoryInvoice";
 import { factoryStockValuation } from "./factoryValuation";
 import { isSupplierPartnerCompany } from "./linkedJournal";
@@ -58,6 +60,7 @@ export type ReadinessBlockerCode =
   | "UNVALUED_FACTORY_ROWS"
   | "OPEN_MIXES_WITHOUT_USD_RATE"
   | "NO_MIX_BALES_AT_CATALOGUE_PRICE"
+  | "IMPORTED_BALES_NOT_RECOSTED"
   | "UNPOSTED_FACTORY_INVOICES"
   | "LEGACY_FX_LINES_UNREPAIRED"
   | "LEGACY_FX_LINES_WITHOUT_DATED_RATE"
@@ -87,6 +90,12 @@ export interface PerpetualReadinessReport {
   openMixesWithoutUsdRate: number;
   /** Stock bales with no mix, costed at the catalogue production price (decision 2): unvalued. */
   noMixCataloguePricedBales: { count: number; cost: string; baleIds: number[] };
+  /** Phase 28 (F6): imported stock bales from a mix not yet re-costed from it (a blocker). */
+  importedBalesNotRecosted: { count: number; cost: string; baleIds: number[] };
+  /** Phase 28 (F1): the factory receivable cut-over, once its opening receivable is applied. */
+  factoryReceivableCutover: FactoryArCutover | null;
+  /** Phase 28 (F10/F11): legacy factory postings the reviewed back-fill would post (information). */
+  legacyFactoryPostings: { items: number; blocked: number };
   /** Stock still held that a spreadsheet import brought in, at the spreadsheet's cost (wave 18 C, not a blocker). */
   importedAtSpreadsheetCost: ImportedAtSpreadsheetCost;
   unpostedFactoryInvoices: number;
@@ -119,6 +128,9 @@ export async function perpetualReadinessReport(
       const openMixesWithoutUsdRate = unvaluedBySource("factory_mix_batches");
       const noMixBales = await noMixCataloguePricedBales(tx, companyId);
       const imported = await importedAtSpreadsheetCostTx(tx, companyId);
+      const importedNotRecosted = await importedBalesNotRecosted(tx, companyId);
+      const receivableCutover = await getFactoryArCutover(tx, companyId);
+      const legacy = await planLegacyFactoryPostings(companyId, tx);
       const unposted = await listUnpostedFactoryInvoices(tx, companyId);
       const documents = cutover ? null : await documentsOnOrAfterCutover(tx, companyId, effectiveFrom);
       const opening = cutover ? null : await planOpeningInventoryJournal(companyId, effectiveFrom, tx);
@@ -135,6 +147,9 @@ export async function perpetualReadinessReport(
         openMixesWithoutUsdRate,
         noMixBales,
         imported,
+        importedNotRecosted,
+        receivableCutover,
+        legacy,
         unposted,
         documents,
         opening,
@@ -189,6 +204,12 @@ export async function perpetualReadinessReport(
     report.noMixBales.count,
     report.noMixBales.cost,
     `${report.noMixBales.count} stock bales have no mix and are costed at the catalogue production price (unvalued)`
+  );
+  add(
+    "IMPORTED_BALES_NOT_RECOSTED",
+    report.importedNotRecosted.count,
+    report.importedNotRecosted.cost,
+    `${report.importedNotRecosted.count} imported stock bales are not costed from their mix yet (bale re-cost)`
   );
   add(
     "UNPOSTED_FACTORY_INVOICES",
@@ -262,6 +283,9 @@ export async function perpetualReadinessReport(
     openMixesWithoutUsdRate: report.openMixesWithoutUsdRate,
     noMixCataloguePricedBales: report.noMixBales,
     importedAtSpreadsheetCost: report.imported,
+    importedBalesNotRecosted: report.importedNotRecosted,
+    factoryReceivableCutover: report.receivableCutover,
+    legacyFactoryPostings: { items: report.legacy.items.length, blocked: report.legacy.blocked.length },
     unpostedFactoryInvoices: report.unposted.length,
     legacyFxLines: { unrepaired: fx.legacyLines, repairable: fx.repairableLines, withoutDatedRate },
     documentsOnOrAfterCutover: report.documents,

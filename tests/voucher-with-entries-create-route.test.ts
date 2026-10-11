@@ -60,6 +60,15 @@ async function entriesFor(voucherId: number) {
   return db.select().from(schema.voucherEntries).where(eq(schema.voucherEntries.voucherId, voucherId));
 }
 
+async function recordCompanyRate(currency: string, unitsPerUsd: string, date: string) {
+  await pool.query(
+    `INSERT INTO exchange_rates (company_id, from_currency, to_currency, rate, effective_date)
+     VALUES ($1, 'USD', $2, $3, $4)
+     ON CONFLICT (company_id, effective_date, from_currency, to_currency) DO UPDATE SET rate = EXCLUDED.rate`,
+    [ctx.companyId, currency, unitsPerUsd, date]
+  );
+}
+
 async function voucherCountFor(number: string): Promise<number> {
   const result = await pool.query<{ count: string }>(
     `SELECT COUNT(*)::text AS count FROM vouchers WHERE company_id = $1 AND voucher_number = $2`,
@@ -281,8 +290,10 @@ describe("POST /api/vouchers/with-entries", () => {
         { ledgerAccountId: ctx.salesAccountId, debitAmount: "0", creditAmount: "90.00" },
       ],
     });
-    expect(response.status).toBe(400);
-    expect(response.body.code).toBe("POSTING_EXCHANGE_RATE_REQUIRED");
+    // Phase 24 (M4): the rate is the one recorded on or before the voucher date;
+    // a non-USD voucher with none recorded is refused before anything is written.
+    expect(response.status).toBe(409);
+    expect(response.body.code).toBe("EXCHANGE_RATE_REQUIRED");
     expect(await voucherCountFor(number)).toBe(0);
   });
 
@@ -411,6 +422,8 @@ describe("POST /api/vouchers/with-entries", () => {
 
   it("normalises a foreign-currency journal into base amounts at the supplied rate", async () => {
     const number = voucherNumber();
+    // Phase 24 (M4): a client rate is accepted within 0.5% of the recorded rate.
+    await recordCompanyRate("EUR", "1.25", "2026-03-01");
 
     const response = await postWithEntries({
       voucher: {
@@ -448,14 +461,18 @@ describe("POST /api/vouchers/with-entries", () => {
 
   it("passes caller-supplied dual-currency fields through unchanged", async () => {
     const number = voucherNumber();
+    await recordCompanyRate("GBP", "0.769231", "2026-03-01");
 
     const response = await postWithEntries({
+      // Phase 24 (M4): the header rate is GBP per USD (the company convention)
+      // and checked against the recorded rate; the lines' USD-per-GBP rate is
+      // checked inverted (1 / 1.3).
       voucher: {
         voucherNumber: number,
         voucherType: "Journal",
         voucherDate: "2026-03-12",
         currency: "GBP",
-        exchangeRate: "1.3",
+        exchangeRate: "0.769231",
       },
       // Both lines carry their GBP amount in transaction_* and the USD base the
       // caller computed: the normalized shape the currency trigger accepts for

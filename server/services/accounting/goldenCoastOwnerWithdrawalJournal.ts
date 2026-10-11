@@ -2,6 +2,7 @@ import Decimal from "decimal.js";
 import { and, eq, inArray, isNull } from "drizzle-orm";
 import { ledgerAccounts } from "@shared/schema";
 import { db } from "../../db";
+import { isAccountType } from "./accountClassification";
 
 export const GC_OWNER_WITHDRAWAL_CLEARING_CODE = "GC-OWCLR";
 export const GC_OWNER_WITHDRAWAL_CLEARING_SUBTYPE = "gc_owner_withdrawal_clearing";
@@ -75,7 +76,7 @@ async function ensureClearingAccount(companyId: number): Promise<{ id: number; n
     if (
       row.name !== GC_OWNER_WITHDRAWAL_CLEARING_NAME ||
       row.subType !== GC_OWNER_WITHDRAWAL_CLEARING_SUBTYPE ||
-      row.accountType !== "Equity" ||
+      !isAccountType(row.accountType, "Equity") ||
       row.isHidden !== true ||
       row.active !== true
     ) {

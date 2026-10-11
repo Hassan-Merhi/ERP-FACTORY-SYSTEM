@@ -1,6 +1,7 @@
-import { db, sql, nonPartyAccountTypesSql, accountTypesOfClassSql } from "./reportShardSupport";
+import { db, sql, accountTypesOfClassSql } from "./reportShardSupport";
 import type { DataQueryContext, DataQueryResult, ReportImplementationShard } from "../types";
 import { notFiscalClosingVoucher } from "../../../services/accounting/balances/periodReportRules";
+import { agingChatResult } from "./agingChatTable";
 
 export const phase2QueryTypes = [
   "inventory_check",
@@ -213,176 +214,12 @@ async function runPhase2Report(ctx: DataQueryContext): Promise<DataQueryResult> 
     }
 
     case "customer_aging": {
-      const rows = await db.execute<{
-        name: string;
-        ob: string;
-        total_debit: string;
-        total_credit: string;
-        bucket_0_30: string;
-        bucket_31_60: string;
-        bucket_61_90: string;
-        bucket_over_90: string;
-      }>(sql`
-        SELECT la.name,
-          COALESCE(CASE WHEN la.opening_balance_side = 'Cr' THEN -CAST(la.opening_balance AS numeric) ELSE CAST(la.opening_balance AS numeric) END, 0) AS ob,
-          COALESCE(SUM(CASE WHEN v.deleted_at IS NULL AND v.optional = false THEN CAST(ve.debit_amount AS numeric) ELSE 0 END), 0) AS total_debit,
-          COALESCE(SUM(CASE WHEN v.deleted_at IS NULL AND v.optional = false THEN CAST(ve.credit_amount AS numeric) ELSE 0 END), 0) AS total_credit,
-          COALESCE(SUM(CASE WHEN v.deleted_at IS NULL AND v.optional = false AND CURRENT_DATE - CAST(v.voucher_date AS date) BETWEEN 0 AND 30
-            THEN CAST(ve.debit_amount AS numeric) - CAST(ve.credit_amount AS numeric) ELSE 0 END), 0) AS bucket_0_30,
-          COALESCE(SUM(CASE WHEN v.deleted_at IS NULL AND v.optional = false AND CURRENT_DATE - CAST(v.voucher_date AS date) BETWEEN 31 AND 60
-            THEN CAST(ve.debit_amount AS numeric) - CAST(ve.credit_amount AS numeric) ELSE 0 END), 0) AS bucket_31_60,
-          COALESCE(SUM(CASE WHEN v.deleted_at IS NULL AND v.optional = false AND CURRENT_DATE - CAST(v.voucher_date AS date) BETWEEN 61 AND 90
-            THEN CAST(ve.debit_amount AS numeric) - CAST(ve.credit_amount AS numeric) ELSE 0 END), 0) AS bucket_61_90,
-          COALESCE(SUM(CASE WHEN v.deleted_at IS NULL AND v.optional = false AND CURRENT_DATE - CAST(v.voucher_date AS date) > 90
-            THEN CAST(ve.debit_amount AS numeric) - CAST(ve.credit_amount AS numeric) ELSE 0 END), 0) AS bucket_over_90
-        FROM ledger_accounts la
-        LEFT JOIN voucher_entries ve ON ve.ledger_account_id = la.id
-        LEFT JOIN vouchers v ON v.id = ve.voucher_id
-        WHERE la.company_id = ${companyId} AND la.active = true AND la.deleted_at IS NULL
-          AND LOWER(TRIM(la.account_type)) NOT IN (${nonPartyAccountTypesSql(["Accounts Payable", "Loans"])})
-        GROUP BY la.id, la.name, la.opening_balance, la.opening_balance_side
-        HAVING (
-          COALESCE(CASE WHEN la.opening_balance_side = 'Cr' THEN -CAST(la.opening_balance AS numeric) ELSE CAST(la.opening_balance AS numeric) END, 0)
-          + COALESCE(SUM(CASE WHEN v.deleted_at IS NULL AND v.optional = false THEN CAST(ve.debit_amount AS numeric) ELSE 0 END), 0)
-          - COALESCE(SUM(CASE WHEN v.deleted_at IS NULL AND v.optional = false THEN CAST(ve.credit_amount AS numeric) ELSE 0 END), 0)
-        ) > 100
-        ORDER BY (
-          COALESCE(CASE WHEN la.opening_balance_side = 'Cr' THEN -CAST(la.opening_balance AS numeric) ELSE CAST(la.opening_balance AS numeric) END, 0)
-          + COALESCE(SUM(CASE WHEN v.deleted_at IS NULL AND v.optional = false THEN CAST(ve.debit_amount AS numeric) ELSE 0 END), 0)
-          - COALESCE(SUM(CASE WHEN v.deleted_at IS NULL AND v.optional = false THEN CAST(ve.credit_amount AS numeric) ELSE 0 END), 0)
-        ) DESC
-        LIMIT ${rowLimit}
-      `);
-      let grandTotal0_30 = 0,
-        grandTotal31_60 = 0,
-        grandTotal61_90 = 0,
-        grandTotalOver90 = 0,
-        grandTotalAll = 0;
-      const tableRows2 = rows.rows.map((r) => {
-        const balance = parseFloat(r.ob) + parseFloat(r.total_debit) - parseFloat(r.total_credit);
-        const b0 = parseFloat(r.bucket_0_30);
-        const b1 = parseFloat(r.bucket_31_60);
-        const b2 = parseFloat(r.bucket_61_90);
-        const b3 = parseFloat(r.bucket_over_90);
-        grandTotal0_30 += b0;
-        grandTotal31_60 += b1;
-        grandTotal61_90 += b2;
-        grandTotalOver90 += b3;
-        grandTotalAll += balance;
-        return [
-          r.name,
-          fmt(balance),
-          fmt(b0 > 0 ? b0 : 0),
-          fmt(b1 > 0 ? b1 : 0),
-          fmt(b2 > 0 ? b2 : 0),
-          fmt(b3 > 0 ? b3 : 0),
-        ];
-      });
-      tableRows2.push([
-        "TOTAL",
-        fmt(grandTotalAll),
-        fmt(grandTotal0_30),
-        fmt(grandTotal31_60),
-        fmt(grandTotal61_90),
-        fmt(grandTotalOver90),
-      ]);
-      dataQueryResult = {
-        queryType: "customer_aging",
-        title: "Customer Receivables Aging",
-        subtitle: `As of ${todayStr}`,
-        table: {
-          headers: ["Account", "Total", "0-30 days", "31-60 days", "61-90 days", "90+ days"],
-          rows: tableRows2,
-        },
-        noData: tableRows2.length <= 1,
-      };
+      dataQueryResult = await agingChatResult({ companyId, kind: "customer", rowLimit, fmt });
       break;
     }
 
     case "supplier_aging": {
-      const rows = await db.execute<{
-        name: string;
-        ob: string;
-        total_debit: string;
-        total_credit: string;
-        bucket_0_30: string;
-        bucket_31_60: string;
-        bucket_61_90: string;
-        bucket_over_90: string;
-      }>(sql`
-        SELECT la.name,
-          COALESCE(CASE WHEN la.opening_balance_side = 'Dr' THEN -CAST(la.opening_balance AS numeric) ELSE CAST(la.opening_balance AS numeric) END, 0) AS ob,
-          COALESCE(SUM(CASE WHEN v.deleted_at IS NULL AND v.optional = false THEN CAST(ve.credit_amount AS numeric) ELSE 0 END), 0) AS total_credit,
-          COALESCE(SUM(CASE WHEN v.deleted_at IS NULL AND v.optional = false THEN CAST(ve.debit_amount AS numeric) ELSE 0 END), 0) AS total_debit,
-          COALESCE(SUM(CASE WHEN v.deleted_at IS NULL AND v.optional = false AND CURRENT_DATE - CAST(v.voucher_date AS date) BETWEEN 0 AND 30
-            THEN CAST(ve.credit_amount AS numeric) - CAST(ve.debit_amount AS numeric) ELSE 0 END), 0) AS bucket_0_30,
-          COALESCE(SUM(CASE WHEN v.deleted_at IS NULL AND v.optional = false AND CURRENT_DATE - CAST(v.voucher_date AS date) BETWEEN 31 AND 60
-            THEN CAST(ve.credit_amount AS numeric) - CAST(ve.debit_amount AS numeric) ELSE 0 END), 0) AS bucket_31_60,
-          COALESCE(SUM(CASE WHEN v.deleted_at IS NULL AND v.optional = false AND CURRENT_DATE - CAST(v.voucher_date AS date) BETWEEN 61 AND 90
-            THEN CAST(ve.credit_amount AS numeric) - CAST(ve.debit_amount AS numeric) ELSE 0 END), 0) AS bucket_61_90,
-          COALESCE(SUM(CASE WHEN v.deleted_at IS NULL AND v.optional = false AND CURRENT_DATE - CAST(v.voucher_date AS date) > 90
-            THEN CAST(ve.credit_amount AS numeric) - CAST(ve.debit_amount AS numeric) ELSE 0 END), 0) AS bucket_over_90
-        FROM ledger_accounts la
-        LEFT JOIN voucher_entries ve ON ve.ledger_account_id = la.id
-        LEFT JOIN vouchers v ON v.id = ve.voucher_id
-        WHERE la.company_id = ${companyId} AND la.active = true AND la.deleted_at IS NULL
-          AND LOWER(TRIM(la.account_type)) IN (${accountTypesOfClassSql("liability")})
-        GROUP BY la.id, la.name, la.opening_balance, la.opening_balance_side
-        HAVING (
-          COALESCE(CASE WHEN la.opening_balance_side = 'Dr' THEN -CAST(la.opening_balance AS numeric) ELSE CAST(la.opening_balance AS numeric) END, 0)
-          + COALESCE(SUM(CASE WHEN v.deleted_at IS NULL AND v.optional = false THEN CAST(ve.credit_amount AS numeric) ELSE 0 END), 0)
-          - COALESCE(SUM(CASE WHEN v.deleted_at IS NULL AND v.optional = false THEN CAST(ve.debit_amount AS numeric) ELSE 0 END), 0)
-        ) > 100
-        ORDER BY (
-          COALESCE(CASE WHEN la.opening_balance_side = 'Dr' THEN -CAST(la.opening_balance AS numeric) ELSE CAST(la.opening_balance AS numeric) END, 0)
-          + COALESCE(SUM(CASE WHEN v.deleted_at IS NULL AND v.optional = false THEN CAST(ve.credit_amount AS numeric) ELSE 0 END), 0)
-          - COALESCE(SUM(CASE WHEN v.deleted_at IS NULL AND v.optional = false THEN CAST(ve.debit_amount AS numeric) ELSE 0 END), 0)
-        ) DESC
-        LIMIT ${rowLimit}
-      `);
-      let sgTotal0_30 = 0,
-        sgTotal31_60 = 0,
-        sgTotal61_90 = 0,
-        sgTotalOver90 = 0,
-        sgTotalAll = 0;
-      const tableRows2 = rows.rows.map((r) => {
-        const balance = parseFloat(r.ob) + parseFloat(r.total_credit) - parseFloat(r.total_debit);
-        const b0 = parseFloat(r.bucket_0_30);
-        const b1 = parseFloat(r.bucket_31_60);
-        const b2 = parseFloat(r.bucket_61_90);
-        const b3 = parseFloat(r.bucket_over_90);
-        sgTotal0_30 += b0;
-        sgTotal31_60 += b1;
-        sgTotal61_90 += b2;
-        sgTotalOver90 += b3;
-        sgTotalAll += balance;
-        return [
-          r.name,
-          fmt(balance),
-          fmt(b0 > 0 ? b0 : 0),
-          fmt(b1 > 0 ? b1 : 0),
-          fmt(b2 > 0 ? b2 : 0),
-          fmt(b3 > 0 ? b3 : 0),
-        ];
-      });
-      tableRows2.push([
-        "TOTAL",
-        fmt(sgTotalAll),
-        fmt(sgTotal0_30),
-        fmt(sgTotal31_60),
-        fmt(sgTotal61_90),
-        fmt(sgTotalOver90),
-      ]);
-      dataQueryResult = {
-        queryType: "supplier_aging",
-        title: "Supplier Payables Aging",
-        subtitle: `As of ${todayStr}`,
-        table: {
-          headers: ["Supplier", "Total Owed", "0-30 days", "31-60 days", "61-90 days", "90+ days"],
-          rows: tableRows2,
-        },
-        noData: tableRows2.length <= 1,
-      };
+      dataQueryResult = await agingChatResult({ companyId, kind: "supplier", rowLimit, fmt });
       break;
     }
 

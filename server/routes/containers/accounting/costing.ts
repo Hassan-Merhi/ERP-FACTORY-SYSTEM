@@ -46,7 +46,8 @@ export function registerContainerCostingRoutes(app: Express) {
         const companyId = req.session.currentCompanyId;
         if (!companyId) return res.status(400).json({ message: "No company selected" });
 
-        const parentCompanyId = await storage.getParentCompanyId();
+        // Phase 26 (MC-7): the parent of the current company (companies.parent_company_id).
+        const parentCompanyId = await storage.getParentCompanyId(companyId);
 
         // Collect company IDs to process: always include the current company.
         // When the current company IS the parent, also include all subsidiaries so

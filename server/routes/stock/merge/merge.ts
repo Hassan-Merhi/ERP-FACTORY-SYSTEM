@@ -15,6 +15,7 @@ import {
   inventoryQuantity,
   inventoryUnitCost,
 } from "../../../lib/inventoryMath";
+import { recordStockMergeEvidenceTx } from "../../../services/inventory/stockMergeEvidence";
 import { db } from "../../../db";
 import { requireAuth, requireNonPOS } from "../../../auth";
 import {
@@ -232,6 +233,14 @@ export function registerStockItemMergeRoutes(app: Express) {
       await db.transaction(async (tx) => {
         const keptMap = new Map(keptInvBefore.map((r) => [r.locationId, r]));
 
+        // Phase 29 (I5): dated evidence of the merge for the as-of stock replay.
+        await recordStockMergeEvidenceTx(tx, {
+          companyId,
+          keptId,
+          duplicateId,
+          rows: dupInvBefore,
+          actor: { userId: String(userId), username: req.session.username || String(userId) },
+        });
         for (const dupRow of dupInvBefore) {
           const locId = dupRow.locationId;
           const keptRow = keptMap.get(locId);

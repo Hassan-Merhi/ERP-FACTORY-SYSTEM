@@ -22,9 +22,9 @@ let parentCompanyResolution: Promise<number> | null = null;
 export class ParentCompanyNotConfiguredError extends Error {
   constructor() {
     super(
-      "Parent company is not configured (system setting 'parentCompanyId' is unset) and there is more than one " +
-        "ERP company, so legacy supplier opening balances cannot be safely isolated. An Admin must set the parent " +
-        "company under Company Settings before viewing supplier balances."
+      "Parent company is not configured (no company is set as the parent of another) and there is more than one " +
+        "ERP company, so legacy supplier opening balances cannot be safely isolated. An Admin must set each " +
+        "subsidiary's parent company under Settings > Companies before viewing supplier balances."
     );
     this.name = "ParentCompanyNotConfiguredError";
   }
@@ -78,11 +78,10 @@ export async function isParentCompanyContext(companyId?: number | null): Promise
   const linkedChild = (await storage.getAllCompanies()).some((company) => company.parentCompanyId === companyId);
   if (linkedChild) return true;
 
-  // For a standalone company, the old global setting may still identify the
-  // owner of historical supplier opening balances, but it does not create an
-  // intercompany relationship for current transactions.
-  const legacyParentCompanyId = await storage.getParentCompanyId();
-  return legacyParentCompanyId === companyId;
+  // Phase 26 (MC-7): the global setting is retired; a standalone company is
+  // the parent context only when it is the one company (no group).
+  const allCompanies = await storage.getAllCompanies();
+  return allCompanies.length === 1 && allCompanies[0].id === companyId;
 }
 
 /**

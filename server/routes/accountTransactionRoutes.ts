@@ -175,11 +175,13 @@ export function registerAccountTransactionRoutes(app: Express) {
         return res.status(403).json({ message: "No access to this account's company" });
       }
 
+      // Phase 25 (AR-2): the bank's own lines, as the balance engine attributes them.
       const transactions = await storage.getVoucherEntriesByBankAccount(
         bankAccountId,
         rawStart,
         effectiveEndDate,
-        companyId
+        companyId,
+        { ownedOnly: true }
       );
 
       let preNetBalance = 0;
@@ -189,6 +191,7 @@ export function registerAccountTransactionRoutes(app: Express) {
            FROM voucher_entries ve
            JOIN vouchers v ON ve.voucher_id = v.id
            WHERE ve.bank_account_id = $1
+             AND ${higherPriorityTargetsAbsent("ve", "bank_account_id")}
              AND v.optional = false
              AND v.deleted_at IS NULL
              AND v.company_id = $2
@@ -241,11 +244,13 @@ export function registerAccountTransactionRoutes(app: Express) {
         return res.status(403).json({ message: "No access to this account's company" });
       }
 
+      // Phase 25 (AR-2): the asset's own lines, as the balance engine attributes them.
       const transactions = await storage.getVoucherEntriesByFixedAsset(
         fixedAssetId,
         rawStart,
         effectiveEndDate,
-        companyId
+        companyId,
+        { ownedOnly: true }
       );
 
       let preNetBalance = 0;
@@ -255,6 +260,7 @@ export function registerAccountTransactionRoutes(app: Express) {
            FROM voucher_entries ve
            JOIN vouchers v ON ve.voucher_id = v.id
            WHERE ve.fixed_asset_id = $1
+             AND ${higherPriorityTargetsAbsent("ve", "fixed_asset_id")}
              AND v.optional = false
              AND v.deleted_at IS NULL
              AND v.company_id = $2
@@ -382,7 +388,16 @@ export function registerAccountTransactionRoutes(app: Express) {
         return res.status(403).json({ message: "No access to this account's company" });
       }
 
-      const transactions = await storage.getVoucherEntriesByEmployee(employeeId, companyId, rawStart, effectiveEndDate);
+      // Phase 25 (AR-2): the employee's own lines, as the balance engine attributes them.
+      const transactions = await storage.getVoucherEntriesByEmployee(
+        employeeId,
+        companyId,
+        rawStart,
+        effectiveEndDate,
+        {
+          ownedOnly: true,
+        }
+      );
 
       let preNetBalance = 0;
       if (rawStart) {
@@ -391,6 +406,7 @@ export function registerAccountTransactionRoutes(app: Express) {
            FROM voucher_entries ve
            JOIN vouchers v ON ve.voucher_id = v.id
            WHERE ve.employee_id = $1
+             AND ${higherPriorityTargetsAbsent("ve", "employee_id")}
              AND v.optional = false
              AND v.deleted_at IS NULL
              AND v.company_id = $2

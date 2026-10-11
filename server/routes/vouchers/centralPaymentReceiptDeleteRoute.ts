@@ -1,5 +1,5 @@
 import type { Express, NextFunction, Request, Response } from "express";
-import { and, eq, or, sql } from "drizzle-orm";
+import { and, eq, or, sql, isNull } from "drizzle-orm";
 import {
   interCompanyTransfers,
   intercompanyPaymentRequests,
@@ -23,6 +23,7 @@ import {
 import { softDeleteInterCompanyCounterpartTx } from "../voucher-entries/delete";
 import { buildVoucherChangesForDelete, logAudit, snapshotVoucherEntries } from "../_helpers";
 import type { DatabaseOrTransaction } from "../../db";
+import { softDeleteTransferLinkTx } from "../../services/accounting/intercompany/intercompanyTransferPosting";
 
 class LegacyPaymentReceiptDeleteRequired extends Error {}
 
@@ -149,11 +150,18 @@ async function deleteActivePaymentReceipt(req: Request, res: Response, next: Nex
         .select()
         .from(interCompanyTransfers)
         .where(
-          or(eq(interCompanyTransfers.fromVoucherId, voucherId), eq(interCompanyTransfers.toVoucherId, voucherId))
+          and(
+            or(eq(interCompanyTransfers.fromVoucherId, voucherId), eq(interCompanyTransfers.toVoucherId, voucherId)),
+            isNull(interCompanyTransfers.deletedAt)
+          )
         );
       for (const transfer of linkedTransfers) {
         const otherVoucherId = transfer.fromVoucherId === voucherId ? transfer.toVoucherId : transfer.fromVoucherId;
-        await tx.delete(interCompanyTransfers).where(eq(interCompanyTransfers.id, transfer.id));
+        // Phase 26 (MC-11): the link is soft-deleted and audited, not removed.
+        await softDeleteTransferLinkTx(tx, transfer.id, {
+          reason: `Voucher ${voucher.voucherNumber} deleted`,
+          actor: { userId, username: req.session.username },
+        });
         await softDeleteInterCompanyCounterpartTx(tx, {
           transfer,
           voucherId,

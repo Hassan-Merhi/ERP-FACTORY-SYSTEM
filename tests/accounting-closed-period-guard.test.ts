@@ -94,7 +94,8 @@ beforeAll(async () => {
     .insert(schema.ledgerAccounts)
     .values({
       companyId: ctx.companyId,
-      code: `${TEST_PREFIX}_RE`,
+      // Phase 23 (G12): the close requires the RETAINED_EARNINGS system account.
+      code: "RETAINED_EARNINGS",
       name: "Retained Earnings",
       accountType: "Equity",
       openingBalance: "0",
@@ -271,7 +272,11 @@ describe("closed fiscal period lock — database triggers", () => {
     const writer = await pool.connect();
     try {
       await writer.query("BEGIN");
-      await writer.query("SELECT set_config('app.company_scope_maintenance', 'off', true)");
+      // The company's own tenant scope (also under RLS when run as a non-superuser role).
+      await writer.query(
+        "SELECT set_config('app.company_scope_maintenance', 'off', true), set_config('app.current_company_id', $1, true)",
+        [String(ctx.companyId)]
+      );
       // Any guarded write takes the shared side of the company's close lock.
       await writer.query(
         `INSERT INTO vouchers (company_id, voucher_number, voucher_type, voucher_date, total_amount)

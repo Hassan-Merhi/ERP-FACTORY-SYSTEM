@@ -171,7 +171,7 @@ export function registerFactoryCustomerStatementRoutes(app: Express) {
         await db
           .update(customerBalances)
           .set({ rowNote: rowNote || null })
-          .where(eq(customerBalances.id, entryId));
+          .where(and(eq(customerBalances.id, entryId), eq(customerBalances.companyId, companyId)));
         res.json({ ok: true });
       } catch (error: unknown) {
         res.status(500).json({ message: getErrorMessage(error) });

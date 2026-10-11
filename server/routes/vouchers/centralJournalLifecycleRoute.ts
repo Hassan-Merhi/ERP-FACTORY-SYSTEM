@@ -1,5 +1,5 @@
 import type { Express, NextFunction, Request, Response } from "express";
-import { and, eq, or, sql } from "drizzle-orm";
+import { and, eq, or, sql, isNull } from "drizzle-orm";
 import {
   customerBalances,
   customerOrderCharges,
@@ -38,6 +38,7 @@ import {
 import { rebalanceVoucherRoundingTx } from "../../services/accounting/engineRounding";
 import { toMoney } from "../../lib/money";
 import { getAccessibleCompanyIds } from "../../security/companyAccessBoundary";
+import { softDeleteTransferLinkTx } from "../../services/accounting/intercompany/intercompanyTransferPosting";
 
 const postingDependencies = createDatabasePostingDependencies();
 
@@ -542,11 +543,18 @@ async function deleteActiveJournal(req: Request, res: Response, next: NextFuncti
         .select()
         .from(interCompanyTransfers)
         .where(
-          or(eq(interCompanyTransfers.fromVoucherId, voucherId), eq(interCompanyTransfers.toVoucherId, voucherId))
+          and(
+            or(eq(interCompanyTransfers.fromVoucherId, voucherId), eq(interCompanyTransfers.toVoucherId, voucherId)),
+            isNull(interCompanyTransfers.deletedAt)
+          )
         );
       for (const transfer of linkedTransfers) {
         // Wave 9: the other company's voucher is soft-deleted and audited, never hard-deleted.
-        await tx.delete(interCompanyTransfers).where(eq(interCompanyTransfers.id, transfer.id));
+        // Phase 26 (MC-11): the link is soft-deleted and audited as well.
+        await softDeleteTransferLinkTx(tx, transfer.id, {
+          reason: `Voucher ${voucher.voucherNumber} deleted`,
+          actor: { userId: req.session.userId, username: req.session.username },
+        });
         await softDeleteInterCompanyCounterpartTx(tx, {
           transfer,
           voucherId,

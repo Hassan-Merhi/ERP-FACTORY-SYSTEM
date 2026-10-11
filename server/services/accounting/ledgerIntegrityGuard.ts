@@ -2,7 +2,7 @@ import type { Pool } from "pg";
 
 import { logger } from "../../lib/logger";
 import { getErrorMessage } from "../../lib/httpHandlers";
-import { accountTypeNamesOf } from "./accountClassification";
+import { LEGACY_DEBIT_OPENING_TYPES, accountTypeNamesOf } from "./accountClassification";
 
 function typeList(...classes: Parameters<typeof accountTypeNamesOf>): string {
   return accountTypeNamesOf(...classes)
@@ -12,6 +12,18 @@ function typeList(...classes: Parameters<typeof accountTypeNamesOf>): string {
     })
     .join(", ");
 }
+
+const legacyDebitTypes = [...LEGACY_DEBIT_OPENING_TYPES]
+  .map((name) => {
+    if (!/^[a-z ]+$/.test(name)) throw new Error("ledger_integrity_unsafe_type_name");
+    return `'${name}'`;
+  })
+  .join(", ");
+
+/** Phase 23, C3: the sub-types that make a tax account an asset (accountClassification TAX_ASSET_SUBTYPE). */
+const TAX_ASSET_SUBTYPE_SQL = "'(receivable|recoverable|input|prepaid|refund)'";
+const INTERCOMPANY_ASSET_SUBTYPE_SQL = "'(receivable|due[ _-]?from|hadi_sp_intercompany)'";
+const INTERCOMPANY_LIABILITY_SUBTYPE_SQL = "'(payable|due[ _-]?to|_credit|sp_hadi_intercompany)'";
 
 /**
  * The engine's side for a sideless ledger opening (ledgerBalanceEngine
@@ -24,6 +36,7 @@ function typeList(...classes: Parameters<typeof accountTypeNamesOf>): string {
 const DEFAULT_OPENING_SIDE_FUNCTION = `CREATE OR REPLACE FUNCTION erp_default_ledger_opening_side(p_type text)
    RETURNS text LANGUAGE sql IMMUTABLE AS $fn$
      SELECT CASE
+              WHEN t IN (${legacyDebitTypes}) THEN 'Dr'
               WHEN t IN (${typeList("asset", "expense")}) THEN 'Dr'
               WHEN t IN (${typeList("liability", "equity", "income")}) THEN 'Cr'
               WHEN t = 'customer' THEN 'Dr'
@@ -46,11 +59,41 @@ const classCases = (column: string) =>
 const ACCOUNT_CLASS_FUNCTION = `CREATE OR REPLACE FUNCTION erp_ledger_account_class(p_type text, p_sub_type text)
    RETURNS text LANGUAGE sql IMMUTABLE AS $fn$
      SELECT CASE
+              WHEN lower(btrim(COALESCE(p_type, ''))) = 'government taxes'
+                   AND COALESCE(p_sub_type, '') ~* ${TAX_ASSET_SUBTYPE_SQL} THEN 'asset'
               ${classCases("p_type")}
               ${classCases("p_sub_type")}
               ELSE 'unknown'
             END
    $fn$`;
+
+/**
+ * Phase 23, C3: the nature stored in ledger_accounts.account_class
+ * (accountClassification.accountNatureOf): the class in capitals, a customer
+ * ASSET, a supplier LIABILITY, an intercompany account by its sub-type, NULL
+ * for an unknown type or an intercompany account whose sub-type says neither.
+ */
+export const ACCOUNT_NATURE_FUNCTION = `CREATE OR REPLACE FUNCTION erp_ledger_account_nature(p_type text, p_sub_type text)
+   RETURNS text LANGUAGE sql IMMUTABLE AS $fn$
+     SELECT CASE erp_ledger_account_class(p_type, p_sub_type)
+              WHEN 'asset' THEN 'ASSET'
+              WHEN 'liability' THEN 'LIABILITY'
+              WHEN 'equity' THEN 'EQUITY'
+              WHEN 'income' THEN 'INCOME'
+              WHEN 'expense' THEN 'EXPENSE'
+              WHEN 'party' THEN CASE
+                WHEN lower(btrim(COALESCE(NULLIF(btrim(COALESCE(p_type, '')), ''), p_sub_type, ''))) = 'customer' THEN 'ASSET'
+                WHEN lower(btrim(COALESCE(NULLIF(btrim(COALESCE(p_type, '')), ''), p_sub_type, ''))) = 'supplier' THEN 'LIABILITY'
+                WHEN COALESCE(p_sub_type, '') ~* ${INTERCOMPANY_ASSET_SUBTYPE_SQL} THEN 'ASSET'
+                WHEN COALESCE(p_sub_type, '') ~* ${INTERCOMPANY_LIABILITY_SUBTYPE_SQL} THEN 'LIABILITY'
+                ELSE NULL END
+              ELSE NULL
+            END
+   $fn$`;
+
+/** Phase 23, C3: the stored account class column and its CHECK. */
+export const LEDGER_ACCOUNT_CLASS_COLUMN = "account_class";
+export const LEDGER_ACCOUNT_CLASS_CHECK = "ledger_accounts_account_class_check";
 
 /**
  * Ledger integrity guards (2026-10 accounting audit, wave 4).
@@ -79,7 +122,13 @@ const ACCOUNT_CLASS_FUNCTION = `CREATE OR REPLACE FUNCTION erp_ledger_account_cl
  *     be soft-deleted;
  *   - the account tree (phase 19 B, v4): a parent foreign key and a BEFORE
  *     trigger refusing a parent of another company, a deleted parent, a parent
- *     of another class (classifyAccountType) and cycles.
+ *     of another class (classifyAccountType) and cycles;
+ *   - phase 23 (v5): a new line posts only to an active, non-deleted leaf
+ *     ledger account (no live sub-accounts, sub-type not "Group"), an active
+ *     bank, and live (not deleted) customers, employees and suppliers; a
+ *     supplier of another company is refused (G17: parent and subsidiary meet
+ *     through due-to / due-from accounts); ledger_accounts.account_class holds
+ *     the class (ASSET, LIABILITY, EQUITY, INCOME, EXPENSE) with a CHECK.
  *
  * Existing rows are left as they are: constraints are NOT VALID and the line
  * trigger only checks accounts when they are set or changed. The accounting
@@ -127,9 +176,10 @@ export const LEDGER_INTEGRITY_GUARD_DDL: readonly string[] = [
    DECLARE
      target_company integer;
      target_deleted timestamp;
-     parent_company integer;
      account_targets integer;
      party_targets integer;
+     target_active boolean;
+     target_sub_type text;
    BEGIN
      IF erp_ledger_integrity_bypassed() THEN
        RETURN NEW;
@@ -168,7 +218,7 @@ export const LEDGER_INTEGRITY_GUARD_DDL: readonly string[] = [
      END IF;
 
      IF NEW.ledger_account_id IS NOT NULL THEN
-       SELECT company_id, deleted_at INTO target_company, target_deleted
+       SELECT company_id, deleted_at, active, sub_type INTO target_company, target_deleted, target_active, target_sub_type
          FROM ledger_accounts WHERE id = NEW.ledger_account_id;
        IF NOT FOUND OR target_company IS DISTINCT FROM NEW.company_id THEN
          RAISE EXCEPTION USING ERRCODE = '23514',
@@ -180,15 +230,36 @@ export const LEDGER_INTEGRITY_GUARD_DDL: readonly string[] = [
            MESSAGE = format('LEDGER_ACCOUNT_DELETED: ledger account %s is deleted and cannot be posted to',
                             NEW.ledger_account_id);
        END IF;
+       -- Phase 23 (v5), C7: only an active leaf account takes new lines. A
+       -- header (sub-type Group) or an account with live sub-accounts is a
+       -- total of its children, and an inactive account is retired.
+       IF target_active IS NOT TRUE THEN
+         RAISE EXCEPTION USING ERRCODE = '23514',
+           MESSAGE = format('LEDGER_ACCOUNT_INACTIVE: ledger account %s is inactive and cannot be posted to',
+                            NEW.ledger_account_id),
+           HINT = 'Activate the account or post to another one.';
+       END IF;
+       IF lower(btrim(COALESCE(target_sub_type, ''))) = 'group'
+          OR EXISTS (SELECT 1 FROM ledger_accounts c
+                      WHERE c.parent_id = NEW.ledger_account_id AND c.deleted_at IS NULL) THEN
+         RAISE EXCEPTION USING ERRCODE = '23514',
+           MESSAGE = format('LEDGER_ACCOUNT_NOT_LEAF: ledger account %s is a group account (it has sub-accounts) and cannot be posted to',
+                            NEW.ledger_account_id),
+           HINT = 'Post to one of its sub-accounts.';
+       END IF;
      END IF;
 
      IF NEW.bank_account_id IS NOT NULL THEN
-       SELECT company_id, deleted_at INTO target_company, target_deleted
+       SELECT company_id, deleted_at, active INTO target_company, target_deleted, target_active
          FROM bank_accounts WHERE id = NEW.bank_account_id;
        IF NOT FOUND OR target_company IS DISTINCT FROM NEW.company_id OR target_deleted IS NOT NULL THEN
          RAISE EXCEPTION USING ERRCODE = '23514',
            MESSAGE = format('BANK_ACCOUNT_NOT_POSTABLE: bank account %s is deleted or belongs to another company',
                             NEW.bank_account_id);
+       END IF;
+       IF target_active IS NOT TRUE THEN
+         RAISE EXCEPTION USING ERRCODE = '23514',
+           MESSAGE = format('BANK_ACCOUNT_INACTIVE: bank account %s is inactive and cannot be posted to', NEW.bank_account_id);
        END IF;
      END IF;
 
@@ -209,20 +280,29 @@ export const LEDGER_INTEGRITY_GUARD_DDL: readonly string[] = [
      END IF;
 
      IF NEW.customer_id IS NOT NULL THEN
-       SELECT company_id INTO target_company FROM customers WHERE id = NEW.customer_id;
+       SELECT company_id, deleted_at INTO target_company, target_deleted FROM customers WHERE id = NEW.customer_id;
        IF NOT FOUND OR target_company IS DISTINCT FROM NEW.company_id THEN
          RAISE EXCEPTION USING ERRCODE = '23514',
            MESSAGE = format('CUSTOMER_COMPANY_MISMATCH: customer %s does not belong to company %s',
                             NEW.customer_id, NEW.company_id);
        END IF;
+       -- Phase 23 (v5), C7: a deleted party takes no new line.
+       IF target_deleted IS NOT NULL THEN
+         RAISE EXCEPTION USING ERRCODE = '23514',
+           MESSAGE = format('PARTY_DELETED: customer %s is deleted and cannot be posted to', NEW.customer_id);
+       END IF;
      END IF;
 
      IF NEW.employee_id IS NOT NULL THEN
-       SELECT company_id INTO target_company FROM employees WHERE id = NEW.employee_id;
+       SELECT company_id, deleted_at INTO target_company, target_deleted FROM employees WHERE id = NEW.employee_id;
        IF target_company IS DISTINCT FROM NEW.company_id THEN
          RAISE EXCEPTION USING ERRCODE = '23514',
            MESSAGE = format('EMPLOYEE_COMPANY_MISMATCH: employee %s does not belong to company %s',
                             NEW.employee_id, NEW.company_id);
+       END IF;
+       IF target_deleted IS NOT NULL THEN
+         RAISE EXCEPTION USING ERRCODE = '23514',
+           MESSAGE = format('PARTY_DELETED: employee %s is deleted and cannot be posted to', NEW.employee_id);
        END IF;
      END IF;
 
@@ -236,20 +316,22 @@ export const LEDGER_INTEGRITY_GUARD_DDL: readonly string[] = [
      END IF;
 
      IF NEW.supplier_id IS NOT NULL THEN
-       SELECT company_id INTO target_company FROM suppliers WHERE id = NEW.supplier_id;
+       -- Phase 23 (v5), G17 (decided by default): a supplier belongs to one
+       -- company's books. A parent's supplier is no longer posted directly in a
+       -- subsidiary (or the reverse): the subsidiary posts its due-to-parent
+       -- intercompany account and the parent the supplier. Read through
+       -- to_jsonb: suppliers.deleted_at may be missing on an old schema.
+       SELECT s.company_id, (to_jsonb(s)->>'deleted_at') INTO target_company, target_deleted
+         FROM suppliers s WHERE s.id = NEW.supplier_id;
        IF target_company IS DISTINCT FROM NEW.company_id THEN
-         -- Group suppliers are shared between a parent and its subsidiaries in
-         -- both directions (subsidiary POs, and the parent's side of an
-         -- intercompany PO); anything outside that parent/child pair is refused.
-         SELECT parent_company_id INTO parent_company FROM companies WHERE id = NEW.company_id;
-         IF NOT (
-              (parent_company IS NOT NULL AND target_company = parent_company)
-              OR EXISTS (SELECT 1 FROM companies c WHERE c.id = target_company AND c.parent_company_id = NEW.company_id)
-            ) THEN
-           RAISE EXCEPTION USING ERRCODE = '23514',
-             MESSAGE = format('SUPPLIER_COMPANY_MISMATCH: supplier %s belongs to neither company %s nor its parent or subsidiaries',
-                              NEW.supplier_id, NEW.company_id);
-         END IF;
+         RAISE EXCEPTION USING ERRCODE = '23514',
+           MESSAGE = format('SUPPLIER_COMPANY_MISMATCH: supplier %s does not belong to company %s',
+                            NEW.supplier_id, NEW.company_id),
+           HINT = 'Post a parent or subsidiary supplier through the due-to / due-from intercompany accounts.';
+       END IF;
+       IF target_deleted IS NOT NULL THEN
+         RAISE EXCEPTION USING ERRCODE = '23514',
+           MESSAGE = format('PARTY_DELETED: supplier %s is deleted and cannot be posted to', NEW.supplier_id);
        END IF;
      END IF;
 
@@ -411,6 +493,19 @@ export const LEDGER_INTEGRITY_GUARD_DDL: readonly string[] = [
   `CREATE TRIGGER ${LEDGER_ACCOUNT_TREE_TRIGGER}
      BEFORE INSERT OR UPDATE OF parent_id, company_id, account_type, sub_type, deleted_at ON ledger_accounts
      FOR EACH ROW EXECUTE FUNCTION erp_ledger_account_tree_guard()`,
+  // Phase 23 (v5), C7: the leaf check reads children by parent.
+  `CREATE INDEX IF NOT EXISTS ledger_accounts_parent_id_idx ON ledger_accounts (parent_id) WHERE parent_id IS NOT NULL`,
+  // Phase 23 (v5), C3: the account class, derived from the type (kept as the
+  // sub-type) by a generated column, so every writer gets it and no existing
+  // row is rewritten by hand; the CHECK names the five classes. The column is
+  // recreated with each guard version so it always follows the function.
+  ACCOUNT_NATURE_FUNCTION,
+  `ALTER TABLE ledger_accounts DROP COLUMN IF EXISTS ${LEDGER_ACCOUNT_CLASS_COLUMN}`,
+  `ALTER TABLE ledger_accounts ADD COLUMN ${LEDGER_ACCOUNT_CLASS_COLUMN} text
+     GENERATED ALWAYS AS (erp_ledger_account_nature(account_type, sub_type)) STORED`,
+  `ALTER TABLE ledger_accounts ADD CONSTRAINT ${LEDGER_ACCOUNT_CLASS_CHECK}
+     CHECK (${LEDGER_ACCOUNT_CLASS_COLUMN} IS NULL
+            OR ${LEDGER_ACCOUNT_CLASS_COLUMN} IN ('ASSET', 'LIABILITY', 'EQUITY', 'INCOME', 'EXPENSE'))`,
 ];
 
 const INSTALL_LOCK_KEY = 741_220_263;
@@ -421,7 +516,7 @@ const INSTALL_LOCK_KEY = 741_220_263;
  * take no locks on the ledger tables (ADD CONSTRAINT and CREATE TRIGGER take
  * strong table locks even when they end up changing nothing).
  */
-export const LEDGER_INTEGRITY_GUARD_VERSION = "2026-10-ledger-integrity-v4";
+export const LEDGER_INTEGRITY_GUARD_VERSION = "2026-10-ledger-integrity-v5";
 
 // A schema push drops constraints it does not know about while the version
 // comment survives, so the constraints are checked as well as the version.
@@ -443,6 +538,10 @@ async function installedVersion(client: { query: Pool["query"] }): Promise<strin
         AND EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'bank_accounts_delete_guard' AND NOT tgisinternal)
         AND EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = '${LEDGER_ACCOUNT_TREE_TRIGGER}' AND NOT tgisinternal)
         AND EXISTS (SELECT 1 FROM pg_constraint WHERE conname = '${LEDGER_ACCOUNT_PARENT_FK}')
+        AND EXISTS (SELECT 1 FROM pg_constraint WHERE conname = '${LEDGER_ACCOUNT_CLASS_CHECK}')
+        AND EXISTS (SELECT 1 FROM information_schema.columns
+                     WHERE table_schema = current_schema() AND table_name = 'ledger_accounts'
+                       AND column_name = '${LEDGER_ACCOUNT_CLASS_COLUMN}')
         AND (SELECT COUNT(*) FROM pg_constraint
               WHERE conrelid = 'voucher_entries'::regclass
                 AND conname = ANY($1::text[])) = cardinality($1::text[])`,

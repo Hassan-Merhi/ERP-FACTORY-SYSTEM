@@ -2,7 +2,7 @@ import request from "supertest";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 
-import { db, pool } from "../server/db";
+import { db } from "../server/db";
 import * as schema from "../shared/schema";
 import { cleanupTestData, closeTestServer, seedTestData, type TestContext } from "./setup";
 
@@ -115,216 +115,32 @@ afterAll(async () => {
   await closeTestServer();
 }, 120_000);
 
-describe("Phase 33B account migration accounting routes", () => {
-  it("rejects malformed and same-company migrations before any accounting write", async () => {
-    const invalid = await agent.post("/api/admin/account-migration/execute").send({
-      accountIds: [],
-      srcCompanyId: ctx.companyId,
-      destCompanyId: destinationCompanyId,
-    });
-    expect(invalid.status).toBe(400);
-
-    const sameCompany = await agent.post("/api/admin/account-migration/execute").send({
-      accountIds: [ctx.salesAccountId],
-      srcCompanyId: ctx.companyId,
-      destCompanyId: ctx.companyId,
-    });
-    expect(sameCompany.status).toBe(400);
-  });
-
-  it("moves an exclusive voucher intact and restores it on exact undo", async () => {
-    const migratedAccountId = await makeAccount(ctx.companyId, "EXCLUSIVE");
-    const sourceVoucherId = await makeVoucher(
+// Phase 23 (G5, decided by default): the account migration no longer moves
+// vouchers between companies or rewrites their lines; execute and undo answer
+// 410 and change nothing. A balance moves by an account reclassification
+// journal (tests/phase23-ledger-tools.test.ts). The tests below pinned the
+// retired line-rewriting behaviour and now pin the retirement.
+describe("Phase 33B account migration accounting routes (retired in phase 23)", () => {
+  it("refuses execute and undo with 410 before any accounting write", async () => {
+    const source = await makeAccount(ctx.companyId, "SRC");
+    const voucherId = await makeVoucher(
       ctx.companyId,
       [
-        { accountId: migratedAccountId, debit: "100.00", credit: "0" },
-        { accountId: migratedAccountId, debit: "0", credit: "100.00" },
-      ],
-      "exclusive-history"
-    );
-
-    const execute = await agent.post("/api/admin/account-migration/execute").send({
-      accountIds: [migratedAccountId],
-      srcCompanyId: ctx.companyId,
-      destCompanyId: destinationCompanyId,
-    });
-
-    expect(execute.status).toBe(200);
-    expect(execute.body).toMatchObject({
-      success: true,
-      movedVoucherCount: 1,
-      sharedVoucherCount: 0,
-      splitVoucherCount: 0,
-    });
-    expect(execute.body.movedVoucherIds).toContain(sourceVoucherId);
-    expect(await accountCompany(migratedAccountId)).toBe(destinationCompanyId);
-    expect(await voucherCompany(sourceVoucherId)).toBe(destinationCompanyId);
-
-    const undo = await agent.post("/api/admin/account-migration/undo").send({
-      accounts: execute.body.accounts,
-      movedVoucherIds: execute.body.movedVoucherIds,
-      srcCompanyId: ctx.companyId,
-      destCompanyId: destinationCompanyId,
-    });
-
-    expect(undo.status).toBe(200);
-    expect(undo.body).toMatchObject({ success: true, restoredAccountCount: 1 });
-    expect(undo.body.roundTrip).not.toBe(true);
-    expect(await accountCompany(migratedAccountId)).toBe(ctx.companyId);
-    expect(await voucherCompany(sourceVoucherId)).toBe(ctx.companyId);
-  }, 60_000);
-
-  it("splits shared history on execute and restores it exactly on ordinary undo", async () => {
-    const migratedAccountId = await makeAccount(ctx.companyId, "SPLIT");
-    const sourceVoucherId = await makeVoucher(
-      ctx.companyId,
-      [
-        { accountId: migratedAccountId, debit: "100.00", credit: "0" },
+        { accountId: source, debit: "100.00", credit: "0" },
         { accountId: ctx.cashAccountId, debit: "0", credit: "100.00" },
       ],
-      "shared-history"
+      "RETIRED"
     );
-
     const execute = await agent.post("/api/admin/account-migration/execute").send({
-      accountIds: [migratedAccountId],
+      accountIds: [source],
       srcCompanyId: ctx.companyId,
       destCompanyId: destinationCompanyId,
     });
-
-    expect(execute.status).toBe(200);
-    expect(execute.body).toMatchObject({
-      success: true,
-      srcCompanyId: ctx.companyId,
-      destCompanyId: destinationCompanyId,
-      sharedVoucherCount: 1,
-      splitVoucherCount: 1,
-    });
-    expect(await accountCompany(migratedAccountId)).toBe(destinationCompanyId);
-    expect(await voucherCompany(sourceVoucherId)).toBe(ctx.companyId);
-
-    const movedEntry = await pool.query<{ ledger_account_id: number | null }>(
-      `SELECT ledger_account_id
-         FROM voucher_entries
-        WHERE voucher_id = $1
-          AND narration = $2
-        ORDER BY id
-        LIMIT 1`,
-      [sourceVoucherId, `${TEST_PREFIX} shared-history`]
-    );
-    expect(movedEntry.rows[0]?.ledger_account_id).not.toBe(migratedAccountId);
-
-    const undo = await agent.post("/api/admin/account-migration/undo").send({
-      accounts: execute.body.accounts,
-      movedVoucherIds: execute.body.movedVoucherIds,
-      srcCompanyId: ctx.companyId,
-      destCompanyId: destinationCompanyId,
-    });
-
-    expect(undo.status).toBe(200);
-    expect(undo.body).toMatchObject({ success: true, restoredAccountCount: 1 });
-    expect(undo.body.roundTrip).not.toBe(true);
-    expect(await accountCompany(migratedAccountId)).toBe(ctx.companyId);
-    expect(await voucherCompany(sourceVoucherId)).toBe(ctx.companyId);
-
-    const restored = await pool.query<{ ledger_account_id: number | null }>(
-      `SELECT ledger_account_id
-         FROM voucher_entries
-        WHERE voucher_id = $1
-          AND narration = $2
-        ORDER BY id
-        LIMIT 1`,
-      [sourceVoucherId, `${TEST_PREFIX} shared-history`]
-    );
-    expect(restored.rows[0]?.ledger_account_id).toBe(migratedAccountId);
-  }, 60_000);
-
-  it("round-trips new exclusive destination-company accounting activity instead of orphaning it", async () => {
-    const migratedAccountId = await makeAccount(ctx.companyId, "ROUND");
-
-    const execute = await agent.post("/api/admin/account-migration/execute").send({
-      accountIds: [migratedAccountId],
-      srcCompanyId: ctx.companyId,
-      destCompanyId: destinationCompanyId,
-    });
-    expect(execute.status).toBe(200);
-    expect(await accountCompany(migratedAccountId)).toBe(destinationCompanyId);
-
-    const postMigrationVoucherId = await makeVoucher(
-      destinationCompanyId,
-      [
-        { accountId: migratedAccountId, debit: "100.00", credit: "0" },
-        { accountId: migratedAccountId, debit: "0", credit: "100.00" },
-      ],
-      "post-migration"
-    );
-
-    const undo = await agent.post("/api/admin/account-migration/undo").send({
-      accounts: execute.body.accounts,
-      movedVoucherIds: execute.body.movedVoucherIds,
-      srcCompanyId: ctx.companyId,
-      destCompanyId: destinationCompanyId,
-    });
-
-    expect(undo.status).toBe(200);
-    expect(undo.body).toMatchObject({
-      success: true,
-      roundTrip: true,
-      postMigrationVoucherCount: 1,
-      restoredAccountCount: 1,
-      movedBackVoucherCount: 1,
-      splitBackVoucherCount: 0,
-    });
-    expect(await accountCompany(migratedAccountId)).toBe(ctx.companyId);
-    expect(await voucherCompany(postMigrationVoucherId)).toBe(ctx.companyId);
-  }, 60_000);
-
-  it("splits shared post-migration activity when moving the account back", async () => {
-    const migratedAccountId = await makeAccount(ctx.companyId, "ROUND-SHARED");
-    const destinationPeerAccountId = await makeAccount(destinationCompanyId, "DEST-PEER");
-
-    const execute = await agent.post("/api/admin/account-migration/execute").send({
-      accountIds: [migratedAccountId],
-      srcCompanyId: ctx.companyId,
-      destCompanyId: destinationCompanyId,
-    });
-    expect(execute.status).toBe(200);
-
-    const postMigrationVoucherId = await makeVoucher(
-      destinationCompanyId,
-      [
-        { accountId: migratedAccountId, debit: "100.00", credit: "0" },
-        { accountId: destinationPeerAccountId, debit: "0", credit: "100.00" },
-      ],
-      "post-migration-shared"
-    );
-
-    const undo = await agent.post("/api/admin/account-migration/undo").send({
-      accounts: execute.body.accounts,
-      movedVoucherIds: execute.body.movedVoucherIds,
-      srcCompanyId: ctx.companyId,
-      destCompanyId: destinationCompanyId,
-    });
-
-    expect(undo.status).toBe(200);
-    expect(undo.body).toMatchObject({
-      success: true,
-      roundTrip: true,
-      postMigrationVoucherCount: 1,
-      restoredAccountCount: 1,
-      movedBackVoucherCount: 0,
-      splitBackVoucherCount: 1,
-    });
-    expect(await accountCompany(migratedAccountId)).toBe(ctx.companyId);
-    expect(await voucherCompany(postMigrationVoucherId)).toBe(destinationCompanyId);
-
-    const sourceRows = await pool.query<{ voucher_id: number; company_id: number }>(
-      `SELECT ve.voucher_id, v.company_id
-         FROM voucher_entries ve
-         JOIN vouchers v ON v.id = ve.voucher_id
-        WHERE ve.ledger_account_id = $1`,
-      [migratedAccountId]
-    );
-    expect(sourceRows.rows.some((row) => row.company_id === ctx.companyId)).toBe(true);
-    expect(sourceRows.rows.some((row) => row.voucher_id === postMigrationVoucherId)).toBe(false);
-  }, 60_000);
+    expect(execute.status).toBe(410);
+    expect(execute.body.code).toBe("ACCOUNT_MIGRATION_RETIRED");
+    const undo = await agent.post("/api/admin/account-migration/undo").send({ migrationId: "any" });
+    expect(undo.status).toBe(410);
+    expect(await accountCompany(source)).toBe(ctx.companyId);
+    expect(await voucherCompany(voucherId)).toBe(ctx.companyId);
+  });
 });

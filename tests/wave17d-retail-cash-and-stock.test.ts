@@ -328,22 +328,31 @@ describe("RETAIL-INVENTORY connected to the Retail stock (decision 3)", () => {
     const plan = await agent.get(`/api/retail/financial/inventory-opening/preview?openingDate=${today()}`);
     expect(plan.status).toBe(200);
     expect(plan.body).toMatchObject({ subLedgerValue: "70.00", ledgerBalance: "0.00", amount: "70.00", blockers: [] });
-    const stale = await agent
-      .post("/api/retail/financial/inventory-opening/apply")
-      .send({ openingDate: today(), planHash: "0".repeat(64), confirm: true });
+    const stale = await agent.post("/api/retail/financial/inventory-opening/apply").send({
+      openingDate: today(),
+      planHash: "0".repeat(64),
+      confirm: true,
+      signOff: "Reviewed the opening difference",
+    });
     expect(stale.status).toBe(409);
     expect(stale.body.code).toBe("RETAIL_INVENTORY_OPENING_PLAN_CHANGED");
-    const applied = await agent
-      .post("/api/retail/financial/inventory-opening/apply")
-      .send({ openingDate: today(), planHash: plan.body.planHash, confirm: true });
+    const applied = await agent.post("/api/retail/financial/inventory-opening/apply").send({
+      openingDate: today(),
+      planHash: plan.body.planHash,
+      confirm: true,
+      signOff: "Reviewed the opening difference",
+    });
     expect(applied.status).toBe(200);
     expect(await voucherLines(`RETAIL-INV-OPEN-${ctx.companyId}`)).toEqual([
       { code: "RETAIL-INVENTORY", d: "70.00", c: "0.00" },
       { code: "OPENING_BALANCE_EQUITY", d: "0.00", c: "70.00" },
     ]);
-    const again = await agent
-      .post("/api/retail/financial/inventory-opening/apply")
-      .send({ openingDate: today(), planHash: plan.body.planHash, confirm: true });
+    const again = await agent.post("/api/retail/financial/inventory-opening/apply").send({
+      openingDate: today(),
+      planHash: plan.body.planHash,
+      confirm: true,
+      signOff: "Reviewed the opening difference",
+    });
     expect(again.status).toBe(409);
     expect(again.body.code).toBe("RETAIL_INVENTORY_OPENING_ALREADY_APPLIED");
     const audit = await pool.query(

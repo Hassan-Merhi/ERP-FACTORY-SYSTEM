@@ -86,8 +86,15 @@ export function registerBalanceRepairUndoRoutes(app: Express) {
           });
         }
 
-        // 5. Re-insert deleted inter_company_transfers rows
+        // 5. Restore the transfer links: a link soft-deleted by the repair
+        // (phase 26, MC-11) is undeleted; one hard-deleted by an older repair
+        // is re-inserted.
         for (const t of snapshot.transfersDeleted ?? []) {
+          await db.execute(sql`
+            UPDATE inter_company_transfers
+               SET deleted_at = NULL, deleted_by = NULL, delete_reason = NULL, updated_at = now()
+             WHERE id = ${t.id} AND deleted_at IS NOT NULL
+          `);
           await db.execute(sql`
             INSERT INTO inter_company_transfers
               (id, transfer_type, from_company_id, to_company_id, transfer_date, amount,

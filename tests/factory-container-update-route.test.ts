@@ -360,26 +360,22 @@ describe("PATCH /api/factory/containers/:id — commission FX", () => {
     expect(Number(after.commission_amount)).toBe(0);
   });
 
-  it("accepts a same-currency commission on an UNCONFIRMED container rate — see note", async () => {
-    // Documented gap, pinned deliberately rather than asserted as desirable.
-    //
-    // The guard reads `if (!containerFxNum || containerFxNum <= 0)` but its
-    // message says "container FX rate is not confirmed". It tests the *value*,
-    // not `fx_rate_confirmed`. `fx_rate_to_usd` is NOT NULL and defaults to
-    // '1', so an unresolved AUD container carries a placeholder 1 that passes
-    // this check — and the commission converts 1:1 in silence, while the
-    // container's own FX path (resolveStoredFxRate, which does consult
-    // fx_rate_confirmed) would refuse the very same row.
-    //
-    // Change the guard to check fx_rate_confirmed and this test should be
-    // updated to expect 400.
+  it("refuses a same-currency commission on an UNCONFIRMED container rate (currency trigger v3)", async () => {
+    // Was a documented gap: the route's guard tests the container rate's
+    // *value*, not `fx_rate_confirmed`, and `fx_rate_to_usd` defaults to a
+    // placeholder 1, so an unresolved AUD container's commission converted 1:1
+    // in silence. Phase 23 (DI5/M8, currency trigger v3) now refuses the
+    // commission journal's line at a rate more than 0.5% from the recorded
+    // factory rate (0.66 on the arrival date in this fixture), so the PATCH is
+    // refused and nothing is written.
     const id = await seedContainer({ currencyCode: "AUD", fxRateToUsd: "1", fxRateConfirmed: false });
 
     const response = await patchContainer(id, { commissionAmount: "200", commissionCurrencyCode: "AUD" });
 
-    expect(response.status).toBe(200);
+    expect(response.status).toBe(400);
+    expect(String(response.body.message)).toMatch(/VOUCHER_LINE_RATE_MISMATCH/);
     const after = await containerRow(id);
-    expect(Number(after.commission_fx_rate_to_usd)).toBeCloseTo(1, 8);
+    expect(Number(after.commission_amount)).toBe(0);
     // The container itself is still an unconfirmed rate.
     expect(after.fx_rate_confirmed).toBe(false);
   });

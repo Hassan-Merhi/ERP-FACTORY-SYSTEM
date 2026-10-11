@@ -23,6 +23,7 @@ import {
   CURRENCY_NORMALIZATION_FUNCTION_DDL,
   CURRENCY_NORMALIZATION_GUARD_VERSION,
   CURRENCY_NORMALIZATION_MIGRATION,
+  CURRENCY_NORMALIZATION_REQUIRED_COLUMNS,
   CURRENCY_NORMALIZATION_TRIGGER,
   CURRENCY_NORMALIZATION_TRIGGER_DDL,
   ensureCurrencyNormalizationGuard,
@@ -115,22 +116,11 @@ describe("currency normalization installer (decision 4)", () => {
     const release = vi.fn();
     const query = vi.fn(async (text: string) => {
       if (text.includes("information_schema.columns")) {
+        // Phase 23: every required column (v3 also reads companies, exchange_rates, factory_fx_rates).
         return {
-          rows: [
-            ...["id", "currency", "exchange_rate"].map((c) => ({ name: `vouchers.${c}` })),
-            ...[
-              "voucher_id",
-              "debit_amount",
-              "credit_amount",
-              "transaction_currency",
-              "transaction_debit_amount",
-              "transaction_credit_amount",
-              "base_debit_amount",
-              "base_credit_amount",
-              "historical_exchange_rate",
-              "rate_convention",
-            ].map((c) => ({ name: `voucher_entries.${c}` })),
-          ],
+          rows: Object.entries(CURRENCY_NORMALIZATION_REQUIRED_COLUMNS).flatMap(([table, columns]) =>
+            columns.map((column) => ({ name: `${table}.${column}` }))
+          ),
         };
       }
       if (/CREATE|DROP|COMMENT/.test(text)) throw new Error("lock timeout");
@@ -299,9 +289,11 @@ describe("wave 6 legacy repair at a dated factory rate (decision 1)", () => {
       plan.lines
         .filter((line) => line.voucherId === voucherIds[key])
         .map((line) => [line.rate, line.rateSource, line.rateEffectiveDate, line.newStoredAmount, line.skipReason]);
+    // Phase 24 (M1, decision): the latest recorded rate on or before the date wins,
+    // manual first only on the same date — the auto rate of 09-05 beats the manual one of 09-01.
     expect(of("eur")).toEqual([
-      ["1.1000000000", "dated-manual", "2026-09-01", "110.00", null],
-      ["1.1000000000", "dated-manual", "2026-09-01", "110.00", null],
+      ["1.2000000000", "dated-auto", "2026-09-05", "120.00", null],
+      ["1.2000000000", "dated-auto", "2026-09-05", "120.00", null],
     ]);
     expect(of("aud")).toEqual([
       ["0.6500000000", "dated-auto", "2026-09-08", "32.50", null],
@@ -346,10 +338,10 @@ describe("wave 6 legacy repair at a dated factory rate (decision 1)", () => {
     ).rows;
     const of = (key: string) => rows.filter((row) => row.voucher_number === `${PREFIX}-${key}`);
     expect(of("eur").map((row) => [row.d, row.c, row.tc, row.r, row.rc])).toEqual([
-      ["110.00", "0.00", "EUR", "1.1000000000", "BASE_PER_TRANSACTION"],
-      ["0.00", "110.00", "EUR", "1.1000000000", "BASE_PER_TRANSACTION"],
+      ["120.00", "0.00", "EUR", "1.2000000000", "BASE_PER_TRANSACTION"],
+      ["0.00", "120.00", "EUR", "1.2000000000", "BASE_PER_TRANSACTION"],
     ]);
-    expect(of("eur")[0]).toMatchObject({ td: "100.000000", bd: "110.000000" });
+    expect(of("eur")[0]).toMatchObject({ td: "100.000000", bd: "120.000000" });
     expect(of("aud").map((row) => [row.d, row.c, row.r])).toEqual([
       ["32.50", "0.00", "0.6500000000"],
       ["0.00", "32.50", "0.6500000000"],
@@ -382,8 +374,8 @@ describe("wave 6 legacy repair at a dated factory rate (decision 1)", () => {
     expect(repair[0].changes.lines.new.map((line: { rateSource: string }) => line.rateSource).sort()).toEqual([
       "dated-auto",
       "dated-auto",
-      "dated-manual",
-      "dated-manual",
+      "dated-auto",
+      "dated-auto",
       "line",
       "line",
     ]);

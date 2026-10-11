@@ -1,4 +1,4 @@
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 import { interCompanyTransfers, propertyPayments } from "@shared/schema";
 
 import { db } from "../../db";
@@ -41,7 +41,8 @@ export async function autoTransferCounterpartiesForPayments(
     .where(
       and(
         eq(interCompanyTransfers.fromCompanyId, companyId),
-        inArray(interCompanyTransfers.sourcePaymentId, [...paymentIds])
+        inArray(interCompanyTransfers.sourcePaymentId, [...paymentIds]),
+        isNull(interCompanyTransfers.deletedAt)
       )
     );
   return rows.map((row) => row.id).filter((id) => id !== companyId);

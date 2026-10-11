@@ -33,6 +33,12 @@ import { registerBaleTransferRoutes } from "./baleTransferRoutes";
 import { registerProductionBaleRoutes } from "./productionBaleRoutes";
 import { registerProductionRawStockRoutes } from "./productionRawStockRoutes";
 import { registerBaleLookupRoutes } from "./baleLookupRoutes";
+import {
+  customerLedgerNetBefore,
+  loadCustomerLedgerLines,
+  loadCustomerNotInLedger,
+} from "../services/accounting/balances/customerLedgerStatement";
+import { CUSTOMER_BALANCES_MEMO_LABEL } from "../services/accounting/allocations/openItemDiagnostics";
 
 class LabelPrintRequestError extends Error {}
 
@@ -642,11 +648,29 @@ export function registerBaleRoutes(app: Express) {
         return res.status(400).json({ message: "Invalid customer ID" });
       }
 
-      const startDate = req.query.startDate as string | undefined;
-      const endDate = req.query.endDate as string | undefined;
+      const startDate = typeof req.query.startDate === "string" ? req.query.startDate : undefined;
+      const endDate = typeof req.query.endDate === "string" ? req.query.endDate : undefined;
 
-      const statement = await storage.getCustomerStatement(customerId, companyId, startDate, endDate);
-      res.json(statement);
+      // Phase 25 (AR-6): the statement is the ledger (the engine's customer
+      // lines and period opening); the customer_balances cache is a labelled
+      // read-only memo beside it, never the balance.
+      const window = { companyId, customerId, from: startDate ?? null, to: endDate ?? null };
+      const [transactions, preNetBalance, notInLedger, memoRows] = await Promise.all([
+        loadCustomerLedgerLines(db, window),
+        customerLedgerNetBefore(db, companyId, customerId, startDate),
+        loadCustomerNotInLedger(db, window),
+        storage.getCustomerStatement(customerId, companyId, startDate, endDate),
+      ]);
+      res.json({
+        basis: "ledger",
+        customerId,
+        startDate: startDate ?? null,
+        endDate: endDate ?? null,
+        preNetBalance,
+        transactions,
+        notInLedger,
+        operationalMemo: { label: CUSTOMER_BALANCES_MEMO_LABEL, rows: memoRows },
+      });
     } catch (error: unknown) {
       logger.error("Error fetching customer statement:", { error: error });
       res.status(500).json({ message: getErrorMessage(error) });

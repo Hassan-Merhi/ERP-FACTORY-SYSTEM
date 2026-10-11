@@ -92,7 +92,7 @@ const VOUCHER_RETIREMENT_CALL = /\bretireVouchers(?:Tx|ByNumberTx|WithClient|For
 // Phase 22 (B): a route that posts through the ERP or factory engine helpers writes
 // vouchers just as much as one that inserts them itself.
 const VOUCHER_POSTING_CALL =
-  /\b(?:postErpVoucherTx|postErpEntriesTx|postManualVoucherTx|postEmployeeVoucherTx|postAccrualPassTx|postFactoryVoucherTx|postFactoryPartyLineVoucherTx)\s*\(/;
+  /\b(?:postErpVoucherTx|postErpEntriesTx|postManualVoucherTx|postEmployeeVoucherTx|postAccrualPassTx|postFactoryVoucherTx|postFactoryPartyLineVoucherTx|postFactoryPayrollPaymentVoucherTx)\s*\(/;
 
 /** Ways this codebase writes: drizzle builders and raw SQL alike. */
 function writesSensitiveTable(source) {

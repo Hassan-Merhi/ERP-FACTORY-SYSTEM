@@ -9,6 +9,12 @@ import {
   type CashBankCurrencySummary,
 } from "../../services/accounting/cashBankRevaluationService";
 
+/** Phase 24 (M13): an optional `asOf` (YYYY-MM-DD); false when it is malformed. */
+function asOfQuery(value: unknown): string | null | false {
+  if (value === undefined) return null;
+  return typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : false;
+}
+
 function round2(value: number): number {
   return Math.round((value + Number.EPSILON) * 100) / 100;
 }
@@ -237,7 +243,9 @@ export function registerStatsMultiCurrencyRoutes(app: Express) {
     try {
       const companyId = req.session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });
-      return res.json(await getCashBankRevaluation(companyId));
+      const asOf = asOfQuery(req.query?.asOf);
+      if (asOf === false) return res.status(400).json({ message: "asOf must be a single YYYY-MM-DD value" });
+      return res.json(await getCashBankRevaluation(companyId, asOf ? { asOf } : {}));
     } catch (error: unknown) {
       logger.error("Multi-currency cash/bank revaluation failed:", {
         error: error,
@@ -260,7 +268,9 @@ export function registerStatsMultiCurrencyRoutes(app: Express) {
         return res.status(400).json({ message: "Invalid account ID" });
       }
 
-      const summary = await getCashBankAccountSummary(companyId, kind, accountId);
+      const asOf = asOfQuery(req.query?.asOf);
+      if (asOf === false) return res.status(400).json({ message: "asOf must be a single YYYY-MM-DD value" });
+      const summary = await getCashBankAccountSummary(companyId, kind, accountId, asOf ?? undefined);
       if (!summary) return res.status(404).json({ message: "Cash/bank account not found" });
       return res.json(summary);
     } catch (error: unknown) {

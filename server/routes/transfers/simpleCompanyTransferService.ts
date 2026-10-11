@@ -5,6 +5,10 @@ import {
   type CentralPostingRequest,
   type PostingActor,
 } from "../../services/accounting";
+import {
+  postIntercompanyTransferTx,
+  softDeleteTransferLinkTx,
+} from "../../services/accounting/intercompany/intercompanyTransferPosting";
 import { requireCompanyAccess } from "./transferRequestContext";
 import { TransferRouteError } from "./transferErrors";
 import { transferRepository } from "./transferRepository";
@@ -13,20 +17,6 @@ import { parseSimpleTransferInput } from "./transferValidation";
 const postingDependencies = createDatabasePostingDependencies();
 
 type TransferSide = "from" | "to";
-
-async function getOrCreateClearingAccount(companyId: number) {
-  const accounts = await transferRepository.listLedgerAccounts(companyId);
-  const existing = accounts.find((account) => account.code === "TRANSFER-CLEARING");
-  if (existing) return existing;
-  return transferRepository.createLedgerAccount({
-    companyId,
-    code: "TRANSFER-CLEARING",
-    name: "Transfer Clearing",
-    accountType: "Equity",
-    openingBalance: "0",
-    active: true,
-  });
-}
 
 function buildTransferReversalRequest(input: {
   transferId: number;
@@ -92,76 +82,81 @@ export const simpleCompanyTransferService = {
     if (!fromCompany || !toCompany) throw new TransferRouteError(404, "Company not found");
 
     const description = parsed.description || `Transfer to ${toCompany.name}`;
-    const [fromClearing, toClearing] = await Promise.all([
-      getOrCreateClearingAccount(parsed.fromCompanyId),
-      getOrCreateClearingAccount(parsed.toCompanyId),
-    ]);
     const voucherTimestamp = Date.now();
+    let clientRequestId: unknown = parsed.clientRequestId;
 
+    // Phase 26 (MC-1, decided by default): a simple transfer posts against the
+    // companies' intercompany accounts (IC-TO-/IC-FROM-, type Intercompany)
+    // through the one intercompany service, no longer against the Equity-typed
+    // TRANSFER-CLEARING account (kept for history; group reports eliminate it).
     return transferRepository.transaction(async (tx) => {
-      const fromNarration = `Transfer out to ${toCompany.name}`;
-      const fromBuilt = buildCompanyTransferPostingRequest({
-        companyId: parsed.fromCompanyId,
-        voucherNumber: `TR-OUT-${voucherTimestamp}`,
-        voucherType: "Payment",
-        voucherDate: parsed.transferDate,
-        description: `${description} → ${toCompany.name}`,
-        debitNarration: fromNarration,
-        creditNarration: fromNarration,
-        amount: parsed.amount,
-        debitLedgerAccountId: fromClearing.id,
-        creditLedgerAccountId: parsed.fromLedgerAccountId,
-        clientRequestId: parsed.clientRequestId,
-        sourceType: "simple-company-transfer",
-        sourceSide: "from",
-        actor: actor ?? { userId, reason: "Simple company transfer source posting" },
-      });
-      const fromPosted = await postBalancedVoucherTx(tx, fromBuilt.request, postingDependencies);
-
-      const toNarration = `Transfer in from ${fromCompany.name}`;
-      const toBuilt = buildCompanyTransferPostingRequest({
-        companyId: parsed.toCompanyId,
-        voucherNumber: `TR-IN-${voucherTimestamp}`,
-        voucherType: "Receipt",
-        voucherDate: parsed.transferDate,
-        description: `Transfer from ${fromCompany.name}`,
-        debitNarration: toNarration,
-        creditNarration: toNarration,
-        amount: parsed.amount,
-        debitLedgerAccountId: parsed.toLedgerAccountId,
-        creditLedgerAccountId: toClearing.id,
-        clientRequestId: fromBuilt.clientRequestId,
-        sourceType: "simple-company-transfer",
-        sourceSide: "to",
-        actor: actor ?? { userId, reason: "Simple company transfer destination posting" },
-      });
-      const toPosted = await postBalancedVoucherTx(tx, toBuilt.request, postingDependencies);
-
-      const existingTransfer = await transferRepository.findTransferByVoucherIdsTx(
-        tx,
-        Number((fromPosted.voucher as { id: unknown }).id),
-        Number((toPosted.voucher as { id: unknown }).id)
-      );
-      if (existingTransfer) return existingTransfer;
-
-      return transferRepository.createTransferTx(tx, {
-        transferType: "Cash",
+      const { transfer } = await postIntercompanyTransferTx(tx, {
         fromCompanyId: parsed.fromCompanyId,
         toCompanyId: parsed.toCompanyId,
+        amount: parsed.amount,
         transferDate: parsed.transferDate,
-        amount: fromBuilt.amount,
-        fromLedgerAccountId: parsed.fromLedgerAccountId,
-        toLedgerAccountId: parsed.toLedgerAccountId,
-        fromVoucherId: Number((fromPosted.voucher as { id: unknown }).id),
-        toVoucherId: Number((toPosted.voucher as { id: unknown }).id),
+        transferType: "Cash",
         description,
+        sourceType: "simple-company-transfer",
+        authorization: "membership-checked",
+        actor: actor ?? { userId },
+        from: {
+          accountId: parsed.fromLedgerAccountId,
+          post: async (legTx, leg) => {
+            const fromNarration = `Transfer out to ${toCompany.name}`;
+            const built = buildCompanyTransferPostingRequest({
+              companyId: leg.companyId,
+              voucherNumber: `TR-OUT-${voucherTimestamp}`,
+              voucherType: "Payment",
+              voucherDate: parsed.transferDate,
+              description: `${description} → ${toCompany.name}`,
+              debitNarration: fromNarration,
+              creditNarration: fromNarration,
+              amount: leg.amount,
+              debitLedgerAccountId: leg.debitAccountId,
+              creditLedgerAccountId: leg.creditAccountId,
+              clientRequestId,
+              sourceType: "simple-company-transfer",
+              sourceSide: "from",
+              actor: actor ?? { userId, reason: "Simple company transfer source posting" },
+            });
+            clientRequestId = built.clientRequestId;
+            const posted = await postBalancedVoucherTx(legTx, built.request, postingDependencies);
+            return Number((posted.voucher as { id: unknown }).id);
+          },
+        },
+        to: {
+          accountId: parsed.toLedgerAccountId,
+          post: async (legTx, leg) => {
+            const toNarration = `Transfer in from ${fromCompany.name}`;
+            const built = buildCompanyTransferPostingRequest({
+              companyId: leg.companyId,
+              voucherNumber: `TR-IN-${voucherTimestamp}`,
+              voucherType: "Receipt",
+              voucherDate: parsed.transferDate,
+              description: `Transfer from ${fromCompany.name}`,
+              debitNarration: toNarration,
+              creditNarration: toNarration,
+              amount: leg.amount,
+              debitLedgerAccountId: leg.debitAccountId,
+              creditLedgerAccountId: leg.creditAccountId,
+              clientRequestId,
+              sourceType: "simple-company-transfer",
+              sourceSide: "to",
+              actor: actor ?? { userId, reason: "Simple company transfer destination posting" },
+            });
+            const posted = await postBalancedVoucherTx(legTx, built.request, postingDependencies);
+            return Number((posted.voucher as { id: unknown }).id);
+          },
+        },
       });
+      return transfer;
     });
   },
 
   async delete(userId: string, transferId: number, actor?: PostingActor) {
     const transfer = await transferRepository.getSimpleTransfer(transferId);
-    if (!transfer) {
+    if (!transfer || transfer.deletedAt) {
       if (await transferRepository.hasCompletedTransferReversal(transferId)) {
         return { success: true, replayed: true };
       }
@@ -171,7 +166,7 @@ export const simpleCompanyTransferService = {
 
     return transferRepository.transaction(async (tx) => {
       const lockedTransfer = await transferRepository.getSimpleTransferForUpdateTx(tx, transferId);
-      if (!lockedTransfer) return { success: true, replayed: true };
+      if (!lockedTransfer || lockedTransfer.deletedAt) return { success: true, replayed: true };
 
       const fromVoucherId = Number(lockedTransfer.fromVoucherId);
       const toVoucherId = Number(lockedTransfer.toVoucherId);
@@ -211,8 +206,12 @@ export const simpleCompanyTransferService = {
         postingDependencies
       );
 
-      // Replaces the legacy deleteTransferVoucher behavior: originals remain for audit.
-      await transferRepository.deleteSimpleTransferTx(tx, transferId);
+      // Replaces the legacy deleteTransferVoucher behavior: originals remain for
+      // audit, and the link is soft-deleted (phase 26, MC-11), not removed.
+      await softDeleteTransferLinkTx(tx, transferId, {
+        reason: `Reverse company transfer ${transferId}`,
+        actor: reversalActor,
+      });
       return {
         success: true,
         replayed: fromReversal.replayed && toReversal.replayed,

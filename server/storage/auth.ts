@@ -59,9 +59,42 @@ export async function getCompanyById(id: number): Promise<Company | undefined> {
   return company;
 }
 
-export async function createCompany(company: InsertCompany): Promise<Company> {
-  const [created] = await db.insert(schema.companies).values(company).returning();
-  return created;
+/**
+ * Phase 23 (C1): the company, its standard chart of accounts
+ * (chartOfAccountsTemplate.ts) and the audit row are written in one
+ * transaction. The new company's accounts are written in its own tenant scope:
+ * it did not exist when the request scope was resolved, so the scope is set on
+ * this transaction only (set_config is transaction-local).
+ */
+export async function createCompany(
+  company: InsertCompany,
+  actor?: { userId?: string | null; username?: string | null }
+): Promise<Company> {
+  const { provisionChartOfAccountsTemplateTx } = await import("../services/accounting/chartOfAccountsTemplate");
+  const { writeAuditEvent } = await import("../services/audit");
+  return db.transaction(async (tx) => {
+    const [created] = await tx.insert(schema.companies).values(company).returning();
+    await tx.execute(sql`SELECT set_config('app.current_company_id', ${String(created.id)}, true)`);
+    const chart = await provisionChartOfAccountsTemplateTx(tx, created.id);
+    await writeAuditEvent(
+      {
+        userId: actor?.userId ?? undefined,
+        username: actor?.username || "system",
+        companyId: created.id,
+        action: "create",
+        tableName: "companies",
+        recordId: created.id,
+        recordIdentifier: created.code,
+        changes: {
+          name: { old: null, new: created.name },
+          chartOfAccountsTemplate: { old: null, new: chart.version },
+          accountsCreated: { old: null, new: chart.created.map((account) => account.code) },
+        },
+      },
+      tx
+    );
+    return created;
+  });
 }
 
 export async function updateCompany(id: number, updates: Partial<InsertCompany>): Promise<Company> {
@@ -139,23 +172,37 @@ export async function setSystemSetting(key: string, value: string | null): Promi
   }
 }
 
-// 5-minute in-memory cache for the parent company ID setting.
-let _parentCompanyIdCache: { value: number | null; expiresAt: number } | null = null;
-const _PARENT_ID_TTL_MS = 5 * 60 * 1000;
-
-export async function getParentCompanyId(): Promise<number | null> {
-  const now = Date.now();
-  if (_parentCompanyIdCache && now < _parentCompanyIdCache.expiresAt) {
-    return _parentCompanyIdCache.value;
+/**
+ * The parent company (accounting audit phase 26, MC-7, decided by default):
+ * `companies.parent_company_id` is the ONE parent model. The global system
+ * setting `parentCompanyId` (one parent for the whole installation) is retired
+ * and no longer read; container/PO postings used it while the engine and the
+ * group reports used the companies column, so the two could disagree.
+ *
+ *   - with a company: that company's parent; the company itself when it is a
+ *     parent of other companies (a parent's own PO is a same-company sync);
+ *     null for a standalone company;
+ *   - without a company (legacy callers that have none): the group parent when
+ *     exactly one top-level company has subsidiaries, else null (ambiguous or
+ *     no group: callers treat it as "no parent configured").
+ */
+export async function getParentCompanyId(companyId?: number | null): Promise<number | null> {
+  const rows = await db
+    .select({ id: schema.companies.id, parentCompanyId: schema.companies.parentCompanyId })
+    .from(schema.companies);
+  const parentIds = new Set(rows.map((row) => row.parentCompanyId).filter((id): id is number => !!id));
+  if (companyId) {
+    const company = rows.find((row) => row.id === companyId);
+    if (!company) return null;
+    if (company.parentCompanyId) return company.parentCompanyId;
+    return parentIds.has(company.id) ? company.id : null;
   }
-  const setting = await getSystemSetting("parentCompanyId");
-  const value = setting?.value ? parseInt(setting.value, 10) || null : null;
-  _parentCompanyIdCache = { value, expiresAt: now + _PARENT_ID_TTL_MS };
-  return value;
+  const topLevelParents = rows.filter((row) => !row.parentCompanyId && parentIds.has(row.id));
+  return topLevelParents.length === 1 ? topLevelParents[0].id : null;
 }
 
+/** Retired with the global setting (phase 26, MC-7): only clears the stored legacy value. */
 export async function setParentCompanyId(companyId: number | null): Promise<void> {
-  _parentCompanyIdCache = null;
   await setSystemSetting("parentCompanyId", companyId?.toString() ?? null);
 }
 

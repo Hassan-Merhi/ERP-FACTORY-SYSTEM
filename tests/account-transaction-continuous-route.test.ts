@@ -31,6 +31,8 @@ vi.mock("../server/services/accounting/balances/customerLedgerStatement", () => 
 vi.mock("../server/services/accounting/balances/partyLineRules", () => ({
   customerOwnedLinePredicate: () => "TRUE",
   liveVoucherPredicate: () => "TRUE",
+  // Phase 25 (AR-2): bank / fixed-asset / employee statements filter owned lines too.
+  higherPriorityTargetsAbsent: () => "TRUE",
 }));
 vi.mock("../server/services/accounting/accountStatementCurrency", () => ({
   summarizeAccountStatementCurrency: () => [],

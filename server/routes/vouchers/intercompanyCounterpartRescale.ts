@@ -26,7 +26,7 @@
  * total, refuses the edit (409).
  */
 import type Decimal from "decimal.js";
-import { and, eq, or } from "drizzle-orm";
+import { and, eq, isNull, or } from "drizzle-orm";
 import { factoryDaybookEntries, interCompanyTransfers, voucherEntries, vouchers } from "@shared/schema";
 import { db, type DbTransaction } from "../../db";
 import { HttpError } from "../../lib/httpError";
@@ -59,7 +59,12 @@ export async function findIntercompanyCounterpart(
   const [transfer] = await db
     .select()
     .from(interCompanyTransfers)
-    .where(or(eq(interCompanyTransfers.fromVoucherId, voucherId), eq(interCompanyTransfers.toVoucherId, voucherId)))
+    .where(
+      and(
+        or(eq(interCompanyTransfers.fromVoucherId, voucherId), eq(interCompanyTransfers.toVoucherId, voucherId)),
+        isNull(interCompanyTransfers.deletedAt)
+      )
+    )
     .limit(1);
   if (!transfer) return null;
   const isSource = transfer.fromVoucherId === voucherId;
@@ -121,7 +126,7 @@ export async function syncIntercompanyCounterpartTx(
     if (transfer && transfer.transferDate !== params.newVoucherDate) {
       await tx
         .update(interCompanyTransfers)
-        .set({ transferDate: params.newVoucherDate })
+        .set({ transferDate: params.newVoucherDate, updatedAt: new Date() })
         .where(eq(interCompanyTransfers.id, counterpart.transferId));
     }
     return;
@@ -223,7 +228,7 @@ export async function syncIntercompanyCounterpartTx(
   if (transfer && newTransferAmount !== null) {
     await tx
       .update(interCompanyTransfers)
-      .set({ amount: newTransferAmount, transferDate: params.newVoucherDate })
+      .set({ amount: newTransferAmount, transferDate: params.newVoucherDate, updatedAt: new Date() })
       .where(eq(interCompanyTransfers.id, counterpart.transferId));
   }
   // The counterpart's rescaled lines are audited under its own company, in this transaction.

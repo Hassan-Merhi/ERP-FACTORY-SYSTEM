@@ -45,9 +45,14 @@ describe("Phase 2 backend module separation", () => {
 
     expect(containerSales).toContain("db.transaction");
     expect(containerSales).toContain('status: "SOLD"');
-    expect(interCompany).toContain("IC-TO-");
-    expect(interCompany).toContain("IC-FROM-");
-    expect(simpleTransfer).toContain("TRANSFER-CLEARING");
+    // Phase 26 (MC-1): both transfer forms post through the one intercompany
+    // service (IC-TO-/IC-FROM- accounts typed Intercompany, ids on the link);
+    // TRANSFER-CLEARING is no longer posted.
+    const intercompanyService = read("server/services/accounting/intercompany/intercompanyTransferPosting.ts");
+    expect(interCompany).toContain("postIntercompanyTransferTx");
+    expect(simpleTransfer).toContain("postIntercompanyTransferTx");
+    expect(intercompanyService).toContain("IC-TO-");
+    expect(intercompanyService).toContain("IC-FROM-");
     expect(simpleTransfer).toContain("deleteTransferVoucher");
   });
 

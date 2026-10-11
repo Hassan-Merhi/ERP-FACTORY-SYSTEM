@@ -17,10 +17,9 @@
  *     factory writers store it), never a current rate. A voucher whose own
  *     rate was never set is rated, per line, at the factory's confirmed rate
  *     for its currency ON OR BEFORE the voucher date (wave 14, owner decision
- *     1; wave 17 C, owner decision 4, repairRateFor: a rate dated exactly on
- *     the voucher date, manual or auto, first; else the latest manual rate on
- *     or before it, else the latest recorded auto rate; never a rate dated
- *     after the voucher). Such a line is only
+ *     1; phase 24 M1, repairRateFor: the one resolver's latest recorded rate
+ *     on or before the voucher date, manual before auto on the same date;
+ *     never a rate dated after the voucher). Such a line is only
  *     repaired when it holds the native amount (the voucher total): with an
  *     unset rate the writers stored native amounts on every leg. Each line
  *     shows its rate and the rate's source ("line", "dated-manual",
@@ -46,11 +45,7 @@ import { sql } from "drizzle-orm";
 import { db, type DbTransaction } from "../../db";
 import { MoneyDecimal, toMoney } from "../../lib/money";
 import { writeAuditEvent, type AuditActor } from "../audit";
-import {
-  findFactoryFxRateOnOrBefore,
-  storedFactoryFxRateOnOrBefore,
-  type FactoryFxRateOnDate,
-} from "./factoryFxRateOnDate";
+import { findFactoryFxRateOnOrBefore, type FactoryFxRateOnDate } from "./factoryFxRateOnDate";
 
 type Executor = typeof db | DbTransaction;
 
@@ -256,10 +251,9 @@ async function repairRateFor(
   currency: string,
   voucherDate: string
 ): Promise<FactoryFxRateOnDate | null> {
-  for (const source of ["manual", "auto"] as const) {
-    const exact = await storedFactoryFxRateOnOrBefore(executor, companyId, currency, voucherDate, source);
-    if (exact && exact.effectiveDate === voucherDate) return exact;
-  }
+  // Phase 24 (M1): the one resolver's rule (the latest recorded rate on or
+  // before the voucher date, manual first on the same date) — which already
+  // puts a rate dated on the voucher date ahead of an older manual one.
   return findFactoryFxRateOnOrBefore(executor, companyId, currency, voucherDate);
 }
 

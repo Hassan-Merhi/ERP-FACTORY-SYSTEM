@@ -9,9 +9,8 @@
  * the latest committed sale state instead of stale pre-transaction snapshots.
  */
 import { db, type DbTransaction } from "../../../db";
-import { logger } from "../../../lib/logger";
 import { storage } from "../../../storage";
-import { recalculateIntercompanyForDate } from "../../../routes/_helpers";
+import { rebuildIntercompanyPosDateTx } from "../../../routes/helpers/intercompanyHelpers";
 import { writePosSaleUpdateAuditTx } from "./posSaleUpdateAudit";
 import { salesItems, voucherEntries, stockItems, vouchers } from "@shared/schema";
 import { and, eq } from "drizzle-orm";
@@ -360,12 +359,21 @@ export async function updatePosSale(
     const result = await applyPosSaleUpdateTx(tx, params, spContextResult.context);
     if (!result.error) {
       await writePosSaleUpdateAuditTx(tx, { voucherId, companyId: currentCompanyId, userId, username }, result);
+      // Phase 26 (MC-4): the intercompany cash mirror of the edited dates is
+      // rebuilt in the edit's transaction (it ran after the commit and only
+      // logged a failure).
+      if (!result.isGoldenCoastEdit && result.existingVoucher) {
+        const oldDate = String(result.existingVoucher.voucherDate);
+        const newDate = voucherDate ? String(voucherDate) : oldDate;
+        for (const date of new Set([oldDate, newDate])) {
+          await rebuildIntercompanyPosDateTx(tx, currentCompanyId, date);
+        }
+      }
     }
     return result;
   });
   if (transactionResult.error) return err(transactionResult.error);
 
-  const existingVoucher = transactionResult.existingVoucher!;
   const targetLocationId = transactionResult.targetLocationId!;
 
   const [updatedVoucher] = await db.select().from(vouchers).where(eq(vouchers.id, voucherId)).limit(1);
@@ -396,20 +404,6 @@ export async function updatePosSale(
     const debitEntry = updatedEntries.find((entry) => toMoney(entry.debitAmount).gt(0));
     if (debitEntry?.ledgerAccountId) {
       customerAccount = await storage.getLedgerAccountById(debitEntry.ledgerAccountId);
-    }
-  }
-
-  const oldDate = existingVoucher.voucherDate;
-  // The request's voucherDate is untyped JSON; the string form is what the
-  // recalculation set and the comparison below have always received.
-  const newDate = voucherDate ? String(voucherDate) : oldDate;
-  const datesToRecalc = new Set<string>([oldDate]);
-  if (newDate !== oldDate) datesToRecalc.add(newDate);
-  if (!transactionResult.isGoldenCoastEdit) {
-    for (const date of datesToRecalc) {
-      recalculateIntercompanyForDate(currentCompanyId, date).catch((error) =>
-        logger.error("[IntercompanyPOS Recalc] Unhandled:", { error })
-      );
     }
   }
 

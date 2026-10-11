@@ -142,6 +142,7 @@ async function bale(values: {
   totalCost: string;
   mixBatchId?: number | null;
   product?: boolean;
+  article?: string;
 }) {
   baleSeq += 1;
   return (
@@ -160,7 +161,7 @@ async function bale(values: {
         values.mixBatchId ?? null,
         values.product === false ? null : productId,
         locationId,
-        `${PREFIX}ART`,
+        values.article ?? `${PREFIX}ART`,
       ]
     )
   ).id;
@@ -623,9 +624,23 @@ describe("after the cut-over", () => {
 
 describe("the reviewed bale re-cost", () => {
   it("is Owner-only, applies only the reviewed plan, never re-costs SOLD bales, and posts nothing before the cut-over", async () => {
-    // A stock-entry bale costed by the old rule (production price × kg = 1,000).
-    const stale = await bale({ status: "IN_STOCK", weight: "25", costPerKg: "40", totalCost: "1000" });
-    const staleSold = await bale({ status: "SOLD", weight: "25", costPerKg: "40", totalCost: "1000" });
+    // Phase 28 (F4): a no-mix bale is no longer re-costed at the catalogue price
+    // (the no-mix resolution handles it); a garbage HMD16 bale costed by the old
+    // rule (1,000) is re-costed to nothing, which this test follows.
+    const stale = await bale({
+      status: "IN_STOCK",
+      weight: "25",
+      costPerKg: "40",
+      totalCost: "1000",
+      article: "HMD16-W11",
+    });
+    const staleSold = await bale({
+      status: "SOLD",
+      weight: "25",
+      costPerKg: "40",
+      totalCost: "1000",
+      article: "HMD16-W11",
+    });
 
     const preview = await call("GET /api/factory/bale-cost/recost-preview", { user: { role: "Owner" } });
     expect(preview.statusCode).toBe(200);
@@ -634,9 +649,9 @@ describe("the reviewed bale re-cost", () => {
     expect(line).toMatchObject({
       basis: "production-price",
       oldTotalCost: "1000.0000000",
-      newTotalCost: "40.0000000",
-      newCostPerKg: "1.6000000",
-      change: "-960.00",
+      newTotalCost: "0.0000000",
+      newCostPerKg: "0.0000000",
+      change: "-1000.00",
     });
     expect(preview.body.bales.some((row: { id: number }) => row.id === staleSold)).toBe(false);
 
@@ -660,7 +675,7 @@ describe("the reviewed bale re-cost", () => {
       message: undefined,
     });
     expect(applied.body.voucherId).toBeNull();
-    expect((await baleCost(stale)).total_cost).toBe("40.0000000");
+    expect((await baleCost(stale)).total_cost).toBe("0.0000000");
     expect((await baleCost(staleSold)).total_cost).toBe("1000.0000000");
     const run = await one(`SELECT plan_hash, voucher_id FROM factory_bale_recost_runs WHERE id = $1`, [
       applied.body.runId,
@@ -674,7 +689,13 @@ describe("the reviewed bale re-cost", () => {
   });
 
   it("posts the value change to Factory Stock Revaluation after the cut-over", async () => {
-    const stale = await bale({ status: "IN_STOCK", weight: "25", costPerKg: "4", totalCost: "100" });
+    const stale = await bale({
+      status: "IN_STOCK",
+      weight: "25",
+      costPerKg: "4",
+      totalCost: "100",
+      article: "HMD16-W11",
+    });
     await setCutover(true);
     try {
       const preview = await call("GET /api/factory/bale-cost/recost-preview", { user: { role: "Owner" } });
@@ -684,7 +705,7 @@ describe("the reviewed bale re-cost", () => {
         body: { confirm: true, planHash: preview.body.planHash },
       });
       expect(applied.statusCode).toBe(200);
-      expect((await baleCost(stale)).total_cost).toBe("40.0000000");
+      expect((await baleCost(stale)).total_cost).toBe("0.0000000");
       const lines = await all(
         `SELECT la.code, ve.debit_amount::text AS d, ve.credit_amount::text AS c
            FROM vouchers v JOIN voucher_entries ve ON ve.voucher_id = v.id JOIN ledger_accounts la ON la.id = ve.ledger_account_id

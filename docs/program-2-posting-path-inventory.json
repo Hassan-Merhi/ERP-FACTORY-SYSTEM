@@ -116,7 +116,7 @@
       "classification": "read-only-or-repair",
       "phaseOwner": "foundation",
       "entryPoints": ["reconciliation report", "approved repair execution", "period lock"],
-      "evidence": ["server/services/accounting/partyReconciliationService.ts", "server/services/accounting/reconciliationRepairService.ts", "server/services/accounting/periodLockService.ts"],
+      "evidence": ["server/services/accounting/partyReconciliationService.ts", "server/services/accounting/reconciliationRepairService.ts", "server/services/accounting/closedPeriodGuard.ts"],
       "reason": "not ordinary live posting; repair execution must remain explicit and controlled"
     }
   ]

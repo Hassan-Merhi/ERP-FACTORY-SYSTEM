@@ -66,7 +66,8 @@ describe("Golden Coast Phase 7 HADI transfer route surface", () => {
   it("requires the exact child and parent Intercompany roles and rejects ambiguous/wrong-type accounts", () => {
     expect(routeSource).toContain('"sp_hadi_intercompany"');
     expect(routeSource).toContain('"hadi_sp_intercompany"');
-    expect(routeSource).toContain('rows[0].accountType !== "Intercompany"');
+    // Phase 23 (C3): the type check is the classifier's (case/space-insensitive).
+    expect(routeSource).toContain('!isAccountType(rows[0].accountType, "Intercompany")');
     expect(routeSource).toContain(".limit(2)");
     expect(routeSource).toContain("GC_PHASE7_INTERCOMPANY_INVALID");
   });

@@ -22,24 +22,9 @@ export async function setSystemSetting(key: string, value: string | null): Promi
   }
 }
 
-let _parentCompanyIdCache: { value: number | null; expiresAt: number } | null = null;
-const _PARENT_ID_TTL_MS = 5 * 60 * 1000;
-
-export async function getParentCompanyId(): Promise<number | null> {
-  const now = Date.now();
-  if (_parentCompanyIdCache && now < _parentCompanyIdCache.expiresAt) {
-    return _parentCompanyIdCache.value;
-  }
-  const setting = await getSystemSetting("parentCompanyId");
-  const value = setting?.value ? parseInt(setting.value, 10) || null : null;
-  _parentCompanyIdCache = { value, expiresAt: now + _PARENT_ID_TTL_MS };
-  return value;
-}
-
-export async function setParentCompanyId(companyId: number | null): Promise<void> {
-  _parentCompanyIdCache = null;
-  await setSystemSetting("parentCompanyId", companyId?.toString() ?? null);
-}
+// Phase 26 (MC-7): the parent comes from companies.parent_company_id; the
+// global "parentCompanyId" system setting is retired (storage/auth.ts).
+export { getParentCompanyId, setParentCompanyId } from "../auth";
 
 // ---------------------------------------------------------------------------
 // Spreadsheets

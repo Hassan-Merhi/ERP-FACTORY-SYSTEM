@@ -474,9 +474,19 @@ describe("fiscal close and the opening-balance lock", () => {
   }
 
   beforeAll(async () => {
-    retainedId = await account("RE", "Equity", "0", "Cr");
+    // Phase 23 (G12): the close posts to the RETAINED_EARNINGS system account,
+    // and the trial balance must balance: the P&L openings (50 Cr, 20 Dr) have
+    // their 30 Dr counterpart.
+    retainedId = (
+      await pool.query(
+        `INSERT INTO ledger_accounts (company_id, code, name, account_type, opening_balance, opening_balance_side)
+         VALUES ($1, 'RETAINED_EARNINGS', 'Retained Earnings', 'Equity', 0, 'Cr') RETURNING id`,
+        [ctx.companyId]
+      )
+    ).rows[0].id;
     incomeId = await account("INCOME", "Income", "50.00", "Cr");
     expenseId = await account("EXPENSE", "EXPENSE", "20.00", "Dr");
+    await account("OPENCASH", "Asset", "30.00", "Dr");
     bankId = (
       await pool.query(
         `INSERT INTO bank_accounts (company_id, code, name, account_number, bank_name, opening_balance, opening_balance_side)

@@ -11,6 +11,8 @@ import { CLOSED_PERIOD_LOCK_NAMESPACE } from "../../services/accounting/closedPe
 import { accountTypeNamesOf, classifyAccountType } from "../../services/accounting/accountClassification";
 import { signedMasterOpening } from "../../services/accounting/balances/openingSide";
 import { writeAuditEvent } from "../../services/audit/auditService";
+import { buildTrialBalance } from "../../services/accounting/integrity/trialBalance";
+import { loadBalanceRows } from "../../services/accounting/balances/ledgerBalanceEngine";
 
 export class FiscalPeriodCloseError extends Error {
   constructor(
@@ -129,6 +131,77 @@ async function incomeExpenseActivityTx(
   return result.rows as unknown as IncomeExpenseBalanceRow[];
 }
 
+/** Phase 23 (G12): the registry code the closing journal's retained-earnings account must carry. */
+export const RETAINED_EARNINGS_CODE = "RETAINED_EARNINGS";
+
+/** The company's live RETAINED_EARNINGS system account, or null. */
+export async function retainedEarningsAccountIdTx(
+  executor: DbTransaction | typeof db,
+  companyId: number
+): Promise<number | null> {
+  const result = await executor.execute(sql`
+    SELECT id FROM ledger_accounts
+     WHERE company_id = ${companyId} AND code = ${RETAINED_EARNINGS_CODE} AND deleted_at IS NULL
+     LIMIT 1`);
+  const id = (result.rows[0] as { id: number } | undefined)?.id;
+  return id ? Number(id) : null;
+}
+
+/**
+ * Phase 23 (G12), refusals before any closing line is written:
+ *   - the retained-earnings account must be the company's RETAINED_EARNINGS
+ *     system account (any "Equity" account used to pass);
+ *   - no ledger account whose type the classifier does not know may carry a
+ *     balance at the period end: it would be left out of the close silently
+ *     (fix its type first);
+ *   - the trial balance at the period end must balance (openings included):
+ *     closing books that do not balance would carry the difference into a
+ *     closed year (post the opening journal and correct the unbalanced
+ *     vouchers first).
+ */
+async function assertClosableBooksTx(
+  tx: DbTransaction,
+  companyId: number,
+  periodEndDate: string,
+  retainedEarningsAccountId: number
+): Promise<void> {
+  const registryAccountId = await retainedEarningsAccountIdTx(tx, companyId);
+  if (registryAccountId === null) {
+    throw new FiscalPeriodCloseError(
+      "The company has no RETAINED_EARNINGS system account; it is created at the next start, or by the chart of accounts template.",
+      409
+    );
+  }
+  if (registryAccountId !== retainedEarningsAccountId) {
+    throw new FiscalPeriodCloseError(
+      "The retained earnings account must be the company's RETAINED_EARNINGS system account.",
+      400
+    );
+  }
+  const rows = await loadBalanceRows(tx, { companyId, asOf: periodEndDate, kind: "ledger" });
+  const unknownWithBalance = rows.filter((row) => {
+    if (classifyAccountType(row.accountType) !== "unknown") return false;
+    return !row.masterOpening.plus(row.periodDebit).minus(row.periodCredit).isZero();
+  });
+  if (unknownWithBalance.length > 0) {
+    const list = unknownWithBalance
+      .map((row) => `${row.name} (#${row.id}, type "${row.accountType ?? ""}")`)
+      .join("; ");
+    throw new FiscalPeriodCloseError(
+      `Accounts of an unknown type carry a balance at ${periodEndDate}: ${list}. Give them a known account type before closing.`,
+      409
+    );
+  }
+  const trialBalance = await buildTrialBalance(companyId, periodEndDate, tx);
+  if (!trialBalance.balanced) {
+    const parts = trialBalance.differenceComponents;
+    throw new FiscalPeriodCloseError(
+      `The trial balance at ${periodEndDate} does not balance (difference ${trialBalance.unexplainedDifference}: openings ${parts.openingBalances}, one-sided stock vouchers ${parts.singleSidedStockVouchers}, other unbalanced vouchers ${parts.otherUnbalancedVouchers}). Correct it before closing.`,
+      409
+    );
+  }
+}
+
 /**
  * Closes a fiscal period: one journal moves every Income/Expense balance at
  * the period end (opening plus every entry dated, by effective date else
@@ -204,6 +277,9 @@ export async function closeFiscalPeriod(
         );
       }
     }
+
+    // Phase 23 (G12): the close is made only on books it can close completely.
+    await assertClosableBooksTx(tx, companyId, periodEndDate, retainedEarningsAccountId);
 
     const allAccounts = await incomeExpenseBalanceThroughTx(tx, companyId, periodEndDate);
     const balanceOf = (account: IncomeExpenseBalanceRow) =>
@@ -361,7 +437,8 @@ export async function closeFiscalPeriod(
  * Reopens the most recent closed period: the closing journal is soft-deleted
  * (under the closed-period override, inside this transaction only), the
  * Income/Expense opening balances the close zeroed are restored, and the
- * closure is removed, which lifts the lock back to the previous close.
+ * closure is moved to fiscal_period_closure_history (phase 23: kept, with who
+ * reopened it and why), which lifts the lock back to the previous close.
  * Closures made before snapshots existed get their opening balances
  * reconstructed from the closing journal minus the period's activity.
  */
@@ -369,7 +446,9 @@ export async function reopenFiscalPeriod(
   companyId: number,
   closureId: number,
   // Phase 21 (B): the caller's reopen audit, written on this transaction.
-  auditTx?: (tx: DbTransaction, closure: schema.FiscalPeriodClosure) => Promise<void>
+  auditTx?: (tx: DbTransaction, closure: schema.FiscalPeriodClosure) => Promise<void>,
+  // Phase 23 (G12): who reopens it and why, kept with the closure in its history.
+  reopenedBy?: { userId?: string | null; reason?: string | null }
 ): Promise<schema.FiscalPeriodClosure> {
   return await db.transaction(async (tx) => {
     await tx.execute(sql`SELECT pg_advisory_xact_lock(${CLOSED_PERIOD_LOCK_NAMESPACE}, ${companyId})`);
@@ -446,6 +525,21 @@ export async function reopenFiscalPeriod(
         .where(eq(schema.ledgerAccounts.id, entry.accountId));
     }
 
+    // Phase 23 (G12): the closure is kept, as it was, in its history before it
+    // leaves the active table (which every lock and report reads).
+    await tx.insert(schema.fiscalPeriodClosureHistory).values({
+      closureId: closure.id,
+      companyId: closure.companyId,
+      periodStartDate: String(closure.periodStartDate),
+      periodEndDate: String(closure.periodEndDate),
+      closingVoucherId: closure.closingVoucherId,
+      retainedEarningsAccountId: closure.retainedEarningsAccountId,
+      closedByUserId: closure.closedByUserId,
+      closedAt: closure.closureDate,
+      reopenedByUserId: reopenedBy?.userId ?? null,
+      reason: reopenedBy?.reason ?? null,
+      closure: JSON.parse(JSON.stringify(closure)) as Record<string, unknown>,
+    });
     await tx.delete(schema.fiscalPeriodClosures).where(eq(schema.fiscalPeriodClosures.id, closure.id));
     if (auditTx) await auditTx(tx, closure);
     return closure;

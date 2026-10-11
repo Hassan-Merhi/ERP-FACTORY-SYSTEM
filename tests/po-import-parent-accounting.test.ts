@@ -398,4 +398,47 @@ describe("PO import parent accounting", () => {
       ])
     );
   });
+
+  it("keeps a subsidiary's own supplier on its books and sends only parent-paid freight to the parent (G17)", async () => {
+    await db.update(schema.companies).set({ companyType: "erp" }).where(eq(schema.companies.id, ctx.companyId));
+
+    const result = await agent.post("/api/po-import/import").send(
+      importPayload({
+        suffix: "ERP-OWN",
+        poNumber: "PO-ERP-OWN",
+        itemTotal: 70,
+        freight: 9,
+        freightPaidBy: "parent",
+        supplierId: childSupplierId,
+      })
+    );
+    expect(result.status).toBe(200);
+
+    // The parent's journal names no supplier: Dr the subsidiary receivable 9 / Cr its freight account 9.
+    const parentPosting = await postingFor("PO-ERP-OWN");
+    expect(parentPosting).not.toBeNull();
+    expect(parentPosting!.entries.every((entry) => entry.supplier_id === null)).toBe(true);
+    expect(parentPosting!.entries).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ ledger_account_id: parentFreightAccountId, credit_amount: "9.00" }),
+        expect.objectContaining({ debit_amount: "9.00" }),
+      ])
+    );
+
+    // The subsidiary owes its supplier the goods and the parent the freight.
+    const local = await pool.query<{ supplier_id: number | null; credit_amount: string; debit_amount: string }>(
+      `SELECT ve.supplier_id, ve.debit_amount, ve.credit_amount
+         FROM voucher_entries ve JOIN vouchers v ON v.id = ve.voucher_id
+        WHERE v.company_id = $1 AND v.voucher_type = 'Purchase' AND v.description LIKE $2
+        ORDER BY ve.id`,
+      [ctx.companyId, `${TEST_PREFIX}-CONT-ERP-OWN%`]
+    );
+    expect(local.rows).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ supplier_id: childSupplierId, credit_amount: "70.00" }),
+        expect.objectContaining({ supplier_id: null, credit_amount: "9.00" }),
+        expect.objectContaining({ debit_amount: "79.00" }),
+      ])
+    );
+  });
 });

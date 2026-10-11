@@ -33,6 +33,7 @@ import {
 import { getCompanyRequestRuntimeContext } from "../../services/security/companyRequestRuntimeContext";
 import { assertTransactionCompanyScope } from "../../services/security/transactionCompanyScope";
 import { getCurrentExchangeRate } from "../helpers/exchangeRateHelpers";
+import { isAccountType } from "../../services/accounting/accountClassification";
 
 const postingDependencies = createDatabasePostingDependencies();
 
@@ -199,7 +200,7 @@ async function activeIntercompanyAccount(
       "GC_PHASE6_AUTO_HADI_INTERCOMPANY_INVALID"
     );
   }
-  if (rows[0].accountType !== "Intercompany") {
+  if (!isAccountType(rows[0].accountType, "Intercompany")) {
     throw new GoldenCoastPhase6AutoHadiError(
       `${label} must have account type Intercompany, not ${rows[0].accountType}.`,
       "GC_PHASE6_AUTO_HADI_INTERCOMPANY_INVALID"

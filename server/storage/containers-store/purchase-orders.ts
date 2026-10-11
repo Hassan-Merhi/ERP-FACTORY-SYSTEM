@@ -21,6 +21,24 @@ type PoChargeFields = Pick<
 const poChargesOf = (po: PoChargeFields) =>
   sumMoney([po.freight, po.surcharge, po.fumigation, po.documentCharges, po.otherCharges]).minus(toMoney(po.discount));
 
+/**
+ * Phase 24 (M5): a PO whose voucher the caller already posted, written in the
+ * caller's transaction with its lines (the PO import: voucher, PO and lines
+ * commit together). Goods in transit follow the PO as in createPurchaseOrder.
+ */
+export async function insertLinkedPurchaseOrderTx(
+  tx: DbTransaction,
+  po: InsertPurchaseOrder & { voucherId: number },
+  lines: ReadonlyArray<Omit<schema.InsertPOLineItem, "poId">>
+): Promise<PurchaseOrder> {
+  const [created] = await tx.insert(schema.purchaseOrders).values(po).returning();
+  if (lines.length > 0) {
+    await tx.insert(schema.poLineItems).values(lines.map((line) => ({ ...line, poId: created.id })));
+  }
+  if (created.companyId) await syncPurchaseOrderGitTx(tx, created.companyId, created.id);
+  return created;
+}
+
 export async function createPurchaseOrder(
   po: InsertPurchaseOrder,
   voucherDateOverride?: string
@@ -44,6 +62,7 @@ export async function createPurchaseOrder(
     if (poTotal.gt(0) && po.companyId) {
       let containerNum = "";
       let supplierDisplayName = "";
+      let supplierCompanyId: number | null = null;
       if (po.containerId) {
         const [cont] = await tx
           .select({ containerNumber: schema.containers.containerNumber })
@@ -54,11 +73,13 @@ export async function createPurchaseOrder(
       }
       if (po.supplierId) {
         const [sup] = await tx
-          .select({ legalName: schema.suppliers.legalName })
+          // suppliers.company_id is a boot-migrated column (not in the drizzle table).
+          .select({ legalName: schema.suppliers.legalName, companyId: sql`company_id`.mapWith(Number) })
           .from(schema.suppliers)
           .where(eq(schema.suppliers.id, po.supplierId))
           .limit(1);
         supplierDisplayName = sup?.legalName || "";
+        supplierCompanyId = sup?.companyId ?? null;
       }
       const descBase =
         containerNum || supplierDisplayName ? [containerNum, supplierDisplayName].filter(Boolean).join(" ") : "";
@@ -113,6 +134,19 @@ export async function createPurchaseOrder(
         const isParentFreight = po.freightPaidBy === "parent" && poFreight.gt(0);
         const poIntercoTotal = isParentFreight ? poTotal.minus(poFreight) : poTotal;
         const freightParentAcctId: number | null = isParentFreight ? (po.freightParentAccountId ?? null) : null;
+
+        // Phases 23–29 integration (G17, decided by default: a parent's supplier
+        // goes through the due-to / due-from intercompany accounts). A supplier
+        // the subsidiary owns is never posted in the parent's books: the
+        // subsidiary credits it itself, and the parent's voucher carries only the
+        // freight it pays (PARENT-FREIGHT-{po}: Dr due-from subsidiary / Cr the
+        // freight account; the subsidiary Cr due-to parent). A parent's supplier
+        // keeps the intercompany model below (subsidiary Cr due-to parent; parent
+        // Dr due-from subsidiary / Cr its supplier).
+        const ownSupplierId = po.supplierId && supplierCompanyId === po.companyId ? po.supplierId : null;
+        const parentFreightDue =
+          ownSupplierId && isParentFreight && freightParentAcctId ? poFreight : new MoneyDecimal(0);
+        const ownSupplierCredit = poTotal.minus(parentFreightDue);
 
         const parentCreditCode = parentCompany.name.toUpperCase().replace(/\s+/g, "_") + "_CREDIT";
         const parentCreditName = parentCompany.name + " Credit";
@@ -171,11 +205,31 @@ export async function createPurchaseOrder(
                   },
                 ]
               : []),
-            {
-              ledgerAccountId: parentCreditAccount[0].id,
-              credit: poTotal.toFixed(2),
-              narration: `PO ${created.poNumber} - ${parentCompany.name} paid supplier`,
-            },
+            ...(ownSupplierId
+              ? [
+                  // G17: the subsidiary's own supplier stays on its own books.
+                  {
+                    supplierId: ownSupplierId,
+                    credit: ownSupplierCredit.toFixed(2),
+                    narration: `PO ${created.poNumber} - Supplier`,
+                  },
+                  ...(parentFreightDue.gt(0)
+                    ? [
+                        {
+                          ledgerAccountId: parentCreditAccount[0].id,
+                          credit: parentFreightDue.toFixed(2),
+                          narration: `PO ${created.poNumber} - Freight (paid by ${parentCompany.name})`,
+                        },
+                      ]
+                    : []),
+                ]
+              : [
+                  {
+                    ledgerAccountId: parentCreditAccount[0].id,
+                    credit: poTotal.toFixed(2),
+                    narration: `PO ${created.poNumber} - ${parentCompany.name} paid supplier`,
+                  },
+                ]),
           ],
         });
 
@@ -221,42 +275,77 @@ export async function createPurchaseOrder(
           : `PO ${created.poNumber} - ${currentCompany?.name || "Subsidiary"} owes us`;
         // INTERCO-PARENT-{po}- is read as identity (containerHelpers sync), so
         // the family number is kept with the PO id as its suffix (was Date.now()).
-        // The parent's voucher credits the subsidiary's supplier (a party of the
-        // other company); the engine refuses a target another company owns, so
-        // it goes through the party-line writer (identity, Decimal, exact
-        // balance) until the parent-supplier model (G17: due-to/due-from
-        // accounts) is decided.
-        await postFactoryPartyLineVoucherTx(tx, {
-          companyId: parentCompany.id,
-          voucherNumber: `INTERCO-PARENT-${created.poNumber}-${created.id}`,
-          voucherDate,
-          description: descBase
-            ? `${descBase} - ${currentCompany?.name || "Subsidiary"}`
-            : `Inter-company PO ${created.poNumber} - ${currentCompany?.name || "Subsidiary"}`,
-          sourceModule: "ERP",
-          source: { sourceType: "purchase-order", sourceId: `${po.companyId}:${created.poNumber}`, phase: "purchase" },
-          lines: [
-            {
-              ledgerAccountId: subsidiaryReceivableAccount[0].id,
-              debit: poTotal.toFixed(2),
-              narration: intercoNarration,
+        // The parent's voucher credits the supplier through the party-line
+        // writer (identity, Decimal, exact balance). G17 (phases 23–29
+        // integration): only a supplier the parent owns (the target guard
+        // refuses any other); the subsidiary's own supplier stays on its books
+        // and the parent posts only the freight it pays (PARENT-FREIGHT-).
+        if (ownSupplierId) {
+          const containerSuffix = containerNum ? ` (${containerNum})` : "";
+          if (parentFreightDue.gt(0) && freightParentAcctId) {
+            await postFactoryVoucherTx(tx, {
+              companyId: parentCompany.id,
+              voucherNumber: `PARENT-FREIGHT-${created.poNumber}`,
+              voucherDate,
+              description: `Parent freight - ${created.poNumber}${containerSuffix}`,
+              sourceModule: "ERP",
+              source: {
+                sourceType: "parent-freight-journal",
+                sourceId: `${po.companyId}:${created.poNumber}`,
+                phase: "voucher",
+              },
+              lines: [
+                {
+                  ledgerAccountId: subsidiaryReceivableAccount[0].id,
+                  debit: parentFreightDue.toFixed(2),
+                  narration: `Freight receivable - ${intercoNarration}`,
+                },
+                {
+                  ledgerAccountId: freightParentAcctId,
+                  credit: parentFreightDue.toFixed(2),
+                  narration: containerNum
+                    ? `Freight - ${currentCompany?.name || "Subsidiary"} PO ${created.poNumber} - Container ${containerNum}`
+                    : `Freight - PO ${created.poNumber}`,
+                },
+              ],
+            });
+          }
+        } else
+          await postFactoryPartyLineVoucherTx(tx, {
+            companyId: parentCompany.id,
+            voucherNumber: `INTERCO-PARENT-${created.poNumber}-${created.id}`,
+            voucherDate,
+            description: descBase
+              ? `${descBase} - ${currentCompany?.name || "Subsidiary"}`
+              : `Inter-company PO ${created.poNumber} - ${currentCompany?.name || "Subsidiary"}`,
+            sourceModule: "ERP",
+            source: {
+              sourceType: "purchase-order",
+              sourceId: `${po.companyId}:${created.poNumber}`,
+              phase: "purchase",
             },
-            ...(po.supplierId
-              ? [{ supplierId: po.supplierId, credit: poIntercoTotal.toFixed(2), narration: intercoNarration }]
-              : []),
-            ...(isParentFreight && freightParentAcctId
-              ? [
-                  {
-                    ledgerAccountId: freightParentAcctId,
-                    credit: poFreight.toFixed(2),
-                    narration: containerNum
-                      ? `Freight - ${currentCompany?.name || "Subsidiary"} PO ${created.poNumber} - Container ${containerNum}`
-                      : `Freight - PO ${created.poNumber}`,
-                  },
-                ]
-              : []),
-          ],
-        });
+            lines: [
+              {
+                ledgerAccountId: subsidiaryReceivableAccount[0].id,
+                debit: poTotal.toFixed(2),
+                narration: intercoNarration,
+              },
+              ...(po.supplierId
+                ? [{ supplierId: po.supplierId, credit: poIntercoTotal.toFixed(2), narration: intercoNarration }]
+                : []),
+              ...(isParentFreight && freightParentAcctId
+                ? [
+                    {
+                      ledgerAccountId: freightParentAcctId,
+                      credit: poFreight.toFixed(2),
+                      narration: containerNum
+                        ? `Freight - ${currentCompany?.name || "Subsidiary"} PO ${created.poNumber} - Container ${containerNum}`
+                        : `Freight - PO ${created.poNumber}`,
+                    },
+                  ]
+                : []),
+            ],
+          });
       } else {
         const creditTarget = resolvePoImportCreditTarget({
           companyType: currentCompany?.companyType,

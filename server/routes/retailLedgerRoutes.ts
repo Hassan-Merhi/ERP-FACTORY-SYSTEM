@@ -5,8 +5,10 @@
  *   GET  /api/retail/financial/cash-reasons                 reasons and the account each posts to
  *   PUT  /api/retail/financial/cash-reasons                 { reasons: [{ reasonCode, ledgerAccountId, bankAccountId }] }
  *   GET  /api/retail/financial/inventory-opening/preview    Owner, ?openingDate=YYYY-MM-DD, read-only plan + planHash
- *   POST /api/retail/financial/inventory-opening/apply      Owner, { openingDate, planHash, confirm: true }
+ *   POST /api/retail/financial/inventory-opening/apply      Owner, { openingDate, planHash, confirm: true, signOff }
  *   GET  /api/retail/financial/inventory-reconciliation     RETAIL-INVENTORY against the Retail stock sub-ledger
+ *   GET  /api/retail/financial/grni-aging                   phase 29 (I6): open received-not-invoiced receipts, aged
+ *   POST /api/retail/financial/supplier-invoices            phase 29 (I6), Admin/Owner: a supplier invoice clears receipts
  */
 import type { Express } from "express";
 import { z } from "zod";
@@ -29,10 +31,26 @@ import {
   retailInventoryReconciliationTx,
 } from "../services/retail/retailInventoryJournal";
 import { RetailAccountConflictError } from "../services/retail/retailFinancialService";
+import {
+  RetailSupplierInvoiceRefusal,
+  postRetailSupplierInvoice,
+  retailGrniAging,
+} from "../services/retail/retailSupplierInvoices";
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 const PLAN_HASH = /^[0-9a-f]{64}$/;
 const optionalId = z.union([z.coerce.number().int().positive(), z.null()]).optional();
+
+const supplierInvoiceSchema = z.object({
+  supplierId: z.coerce.number().int().positive(),
+  invoiceNumber: z.string().trim().min(1).max(100),
+  invoiceDate: z.string().regex(ISO_DATE),
+  amount: z
+    .string()
+    .trim()
+    .regex(/^\d+(\.\d{1,2})?$/),
+  receiptVoucherIds: z.array(z.coerce.number().int().positive()).min(1).max(500),
+});
 
 const reasonsSchema = z.object({
   reasons: z
@@ -49,6 +67,7 @@ const reasonsSchema = z.object({
 
 function sendError(res: import("express").Response, error: unknown) {
   if (error instanceof RetailInventoryOpeningRefusal) return res.status(error.statusCode).json(error.body);
+  if (error instanceof RetailSupplierInvoiceRefusal) return res.status(error.statusCode).json(error.body);
   if (error instanceof RetailAccountConflictError) {
     return res.status(409).json({ message: error.message, code: error.code, conflicts: error.conflicts });
   }
@@ -121,7 +140,35 @@ export function registerRetailLedgerRoutes(app: Express): void {
         await applyRetailInventoryOpening(companyId, {
           openingDate,
           planHash,
+          // Phase 29 (I7): the Owner's sign-off of the opening difference.
+          signOff: typeof req.body?.signOff === "string" ? req.body.signOff : null,
           actor: { userId: currentUserId(req), username: req.user?.username ?? req.session.username ?? null },
+        })
+      );
+    } catch (error) {
+      sendError(res, error);
+    }
+  });
+
+  app.get("/api/retail/financial/grni-aging", requireAuth, requireNonPOS, async (req, res) => {
+    try {
+      const companyId = await requireRetailCompany(req, res);
+      if (!companyId) return;
+      res.json(await retailGrniAging(companyId));
+    } catch (error) {
+      sendError(res, error);
+    }
+  });
+
+  app.post("/api/retail/financial/supplier-invoices", requireAuth, requireRole("Admin", "Owner"), async (req, res) => {
+    try {
+      const companyId = await requireRetailCompany(req, res);
+      if (!companyId) return;
+      const body = supplierInvoiceSchema.parse(req.body);
+      res.status(201).json(
+        await postRetailSupplierInvoice(companyId, {
+          ...body,
+          actor: { userId: currentUserId(req), username: req.user?.username ?? req.session.username ?? "unknown" },
         })
       );
     } catch (error) {

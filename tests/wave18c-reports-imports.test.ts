@@ -493,14 +493,17 @@ describe("3: spreadsheet stock imports and the cut-over", () => {
 });
 
 describe("4: aging", () => {
-  it("ages factory suppliers in USD base amounts from the company's business date", async () => {
+  // Phase 25 (AR-3, AR-4): the book amounts (debit/credit columns, which the
+  // currency normalization writes as the 100 USD base) aged by days past due
+  // (40 days ago + 30 days terms).
+  it("ages factory suppliers in book amounts by due date from the company's business date", async () => {
     const response = await agent.get("/api/reports/aging?kind=factorySupplier");
     expect(response.status).toBe(200);
     expect(response.body.referenceDate).toBe(getCompanyBusinessDate(TIMEZONE));
-    expect(response.body.amountBasis).toBe("historicalBase");
+    expect(response.body.amountBasis).toBe("book");
     const row = response.body.parties.find((party: { id: number }) => party.id === ids.FS);
     expect(row.balance).toBe("100.00");
-    expect(row.buckets).toMatchObject({ days31to60: "100.00", current: "0.00", opening: "0.00" });
+    expect(row.buckets).toMatchObject({ days1to30: "100.00", notDue: "0.00", opening: "0.00" });
     expect((await agent.get("/api/reports/aging?kind=other")).status).toBe(400);
   });
 });

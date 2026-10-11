@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, or } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, or } from "drizzle-orm";
 import { auditLog, interCompanyTransfers, ledgerAccounts, voucherEntries, vouchers } from "@shared/schema";
 import type { InsertLedgerAccount, LedgerAccount } from "@shared/schema";
 
@@ -36,25 +36,6 @@ export const transferRepository = {
     return storage.getAllInterCompanyTransfers(companyId);
   },
 
-  async createTransferTx(
-    tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
-    values: typeof interCompanyTransfers.$inferInsert
-  ) {
-    const [transfer] = await tx.insert(interCompanyTransfers).values(values).returning();
-    return transfer;
-  },
-
-  async findTransferByVoucherIdsTx(tx: Parameters<Parameters<typeof db.transaction>[0]>[0], fromVoucherId: number, toVoucherId: number) {
-    const [transfer] = await tx
-      .select()
-      .from(interCompanyTransfers)
-      .where(
-        and(eq(interCompanyTransfers.fromVoucherId, fromVoucherId), eq(interCompanyTransfers.toVoucherId, toVoucherId))
-      )
-      .limit(1);
-    return transfer ?? null;
-  },
-
   getSimpleTransfer(transferId: number) {
     return db
       .select()
@@ -82,7 +63,11 @@ export const transferRepository = {
     return transfer ?? null;
   },
 
-  async getVoucherSnapshotTx(tx: Parameters<Parameters<typeof db.transaction>[0]>[0], companyId: number, voucherId: number) {
+  async getVoucherSnapshotTx(
+    tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
+    companyId: number,
+    voucherId: number
+  ) {
     const [voucher] = await tx
       .select()
       .from(vouchers)
@@ -97,7 +82,12 @@ export const transferRepository = {
     const transfers = await db
       .select()
       .from(interCompanyTransfers)
-      .where(or(eq(interCompanyTransfers.fromCompanyId, companyId), eq(interCompanyTransfers.toCompanyId, companyId)))
+      .where(
+        and(
+          or(eq(interCompanyTransfers.fromCompanyId, companyId), eq(interCompanyTransfers.toCompanyId, companyId)),
+          isNull(interCompanyTransfers.deletedAt)
+        )
+      )
       .orderBy(desc(interCompanyTransfers.createdAt));
 
     const accountIds = Array.from(
@@ -109,7 +99,7 @@ export const transferRepository = {
       storage.getAllCompanies(),
       accountIds.length > 0
         ? db.select().from(ledgerAccounts).where(inArray(ledgerAccounts.id, accountIds))
-        : Promise.resolve(([])),
+        : Promise.resolve([]),
     ]);
     const companyMap = new Map(companies.map((company) => [company.id, company]));
     const accountMap = new Map(accounts.map((account) => [account.id, account]));
@@ -121,9 +111,5 @@ export const transferRepository = {
       fromAccountName: accountMap.get(transfer.fromLedgerAccountId)?.name ?? "Unknown",
       toAccountName: accountMap.get(transfer.toLedgerAccountId)?.name ?? "Unknown",
     }));
-  },
-
-  async deleteSimpleTransferTx(tx: Parameters<Parameters<typeof db.transaction>[0]>[0], transferId: number): Promise<void> {
-    await tx.delete(interCompanyTransfers).where(eq(interCompanyTransfers.id, transferId));
   },
 };

@@ -19,6 +19,7 @@ import {
   vouchers,
 } from "@shared/schema";
 import { MoneyDecimal, toMoney } from "../../lib/money";
+import { retireVouchersTx, sessionRetirementActor } from "../../services/accounting/voucherRetirement";
 
 export function registerPayrollRunLifecycleRoutes(app: Express) {
   // Delete a DRAFT payroll run
@@ -66,9 +67,16 @@ export function registerPayrollRunLifecycleRoutes(app: Express) {
               isNull(vouchers.deletedAt)
             )
           );
-        for (const v of salVouchers) {
-          await tx.update(vouchers).set({ deletedAt: new Date() }).where(eq(vouchers.id, v.id));
-        }
+        // Phase 23 (phase 22 leftover): retired, not only soft-deleted — the
+        // number is given up (~DEL{id}, the original kept) and the posting
+        // identity released, so the next payment of the run is a new
+        // generation; audited in this transaction.
+        await retireVouchersTx(tx, {
+          companyId,
+          voucherIds: salVouchers.map((v) => v.id),
+          reason: "erp-payroll-run-undo",
+          actor: sessionRetirementActor(req),
+        });
 
         // 2. Reverse advance deductions for each run item
         const runItems = await tx.select().from(erpPayrollRunItems).where(eq(erpPayrollRunItems.runId, runId));

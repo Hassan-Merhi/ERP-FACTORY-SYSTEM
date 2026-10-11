@@ -107,6 +107,7 @@ const SENSITIVE_WRITE_ROUTES = [
   "DELETE /api/factory/employee-advances/:id",
   "DELETE /api/factory/employee-bonuses/:id",
   "DELETE /api/factory/mix-batches/:id",
+  "DELETE /api/factory/payroll/:id",
   "DELETE /api/factory/pos/sales/:id",
   "DELETE /api/factory/raw-stock/adjustments/:id",
   "DELETE /api/factory/raw-stock/batch-source",
@@ -150,6 +151,7 @@ const SENSITIVE_WRITE_ROUTES = [
   "PATCH /api/factory/daybook/:entryId/cost-edit",
   "PATCH /api/factory/dispatch-batches/:id",
   "PATCH /api/factory/mix-batches/:id",
+  "PATCH /api/factory/payroll/:id",
   "PATCH /api/factory/payrolls/:id/fix-accounting",
   "PATCH /api/factory/payrolls/:id/mark-paid",
   "PATCH /api/factory/raw-stock/opening-balance/:id",
@@ -291,6 +293,7 @@ const SENSITIVE_WRITE_ROUTES = [
   "POST /api/factory/mix-batches/:id/assign-bales",
   "POST /api/factory/mix-batches/:id/finalize",
   "POST /api/factory/mix-batches/:id/top-up",
+  "POST /api/factory/payroll/:id/undo",
   "POST /api/factory/payrolls/generate-bulk",
   "POST /api/factory/payrolls/mark-paid-bulk",
   "POST /api/factory/pos/sale",
@@ -461,10 +464,10 @@ afterAll(() => {
  * and the route now answers 409 HISTORICAL_SALE_COST_IMMUTABLE without writing.
  *
  * PATCH and DELETE /api/factory/payroll/:id and POST /api/factory/payroll/:id/undo
- * joined them in wave 7 (2026-10-09):
- * the payment voucher of a payroll marked PAID, and its removal on un-mark or
- * undo, moved to services/payroll/factoryPayrollPaymentVoucher.ts, so the route
- * file no longer names the voucher tables itself; the routes still post them.
+ * were listed here from wave 7 (2026-10-09) to phase 28: their payment voucher
+ * moved to services/payroll/factoryPayrollPaymentVoucher.ts. Phase 28 taught the
+ * coverage audit that postFactoryPayrollPaymentVoucherTx posts vouchers (the
+ * mark-paid routes call it too), so they are back in the sensitive list.
  *
  * The factory V3 load routes joined them in wave 17 B: the load finalize (bales
  * SOLD, the invoice and its journal) moved to services/factory/v3LoadInvoice.ts,
@@ -482,9 +485,6 @@ const DELEGATED_WRITE_ROUTES = [
   "POST /api/factory/v3/loads",
   "POST /api/factory/v3/loads/:id/bales",
   "POST /api/factory/v3/loads/:id/finalize",
-  "DELETE /api/factory/payroll/:id",
-  "PATCH /api/factory/payroll/:id",
-  "POST /api/factory/payroll/:id/undo",
   "DELETE /api/waste-dispatches/:id",
   "POST /api/factory/customer-orders/:id/auto-recover-bales",
   "POST /api/factory/customer-orders/:id/recover-bales",

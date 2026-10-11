@@ -1,11 +1,21 @@
 import type { Express } from "express";
 
-import { and, eq, gte, isNull, lt, lte, ne, sql } from "drizzle-orm";
+import { and, eq, ne, sql } from "drizzle-orm";
 import { requireAuth } from "../auth";
 import { db } from "../db";
 import { getErrorMessage } from "../lib/httpHandlers";
-import { debitMinusCredit, signedOpeningBalance, sumMoney, toMoney } from "../lib/money";
-import { ledgerAccounts, locations, suppliers, voucherEntries, vouchers } from "@shared/schema";
+import { sumMoney, toMoney } from "../lib/money";
+import { ledgerAccounts, locations, suppliers, voucherEntries } from "@shared/schema";
+import { companyBusinessDate } from "../services/accounting/companyBusinessDate";
+import {
+  engineOpeningAt,
+  ledgerOwnership,
+  monthEnd,
+  monthlyMovements,
+  monthsBetween,
+} from "../services/accounting/reporting/ledgerMonthlySummary";
+
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 export function registerReportsLedgerRoutes(app: Express) {
   app.get("/api/reports/ledger-monthly-summary/:accountId", requireAuth, async (req, res) => {
@@ -25,53 +35,19 @@ export function registerReportsLedgerRoutes(app: Express) {
         .then((rows) => rows[0]);
       if (!account) return res.status(404).json({ message: "Account not found" });
 
-      const start = startDate ? new Date(startDate as string) : new Date(new Date().getFullYear(), 0, 1);
-      const end = endDate ? new Date(endDate as string) : new Date(new Date().getFullYear(), 11, 31);
-
-      const openingEntries = await db
-        .select({
-          debit: sql<string>`COALESCE("voucher_entries"."base_debit_amount", "voucher_entries"."debit_amount")`,
-          credit: sql<string>`COALESCE("voucher_entries"."base_credit_amount", "voucher_entries"."credit_amount")`,
-        })
-        .from(voucherEntries)
-        .innerJoin(vouchers, eq(voucherEntries.voucherId, vouchers.id))
-        .where(
-          and(
-            eq(voucherEntries.ledgerAccountId, accountId),
-            eq(vouchers.companyId, companyId),
-            isNull(vouchers.deletedAt),
-            eq(vouchers.optional, false),
-            lt(vouchers.voucherDate, start.toISOString().split("T")[0])
-          )
-        )
-        .execute();
-
-      const openingBalSideMonthly = (account.openingBalanceSide as string) || "Dr";
+      // Phase 27 (RP-9): on the engine (services/accounting/reporting/ledgerMonthlySummary.ts).
+      // Dates are calendar strings; without dates the company's business year.
+      const businessYear = (await companyBusinessDate(companyId)).slice(0, 4);
+      const start = typeof startDate === "string" && ISO_DATE.test(startDate) ? startDate : `${businessYear}-01-01`;
+      const end = typeof endDate === "string" && ISO_DATE.test(endDate) ? endDate : `${businessYear}-12-31`;
+      if (start > end) return res.status(400).json({ message: "startDate is after endDate" });
+      const owner = await ledgerOwnership(companyId, accountId);
+      const [openingDebit, movements] = await Promise.all([
+        engineOpeningAt(companyId, owner, start),
+        monthlyMovements(companyId, owner, start, end),
+      ]);
       // Credit-positive, as this report has always signed it.
-      const openingBalance = toMoney(0)
-        .minus(signedOpeningBalance(account.openingBalance, openingBalSideMonthly))
-        .minus(debitMinusCredit(openingEntries.map((e) => ({ debitAmount: e.debit, creditAmount: e.credit }))));
-
-      const entries = await db
-        .select({
-          voucherId: vouchers.id,
-          date: vouchers.voucherDate,
-          debit: sql<string>`COALESCE("voucher_entries"."base_debit_amount", "voucher_entries"."debit_amount")`,
-          credit: sql<string>`COALESCE("voucher_entries"."base_credit_amount", "voucher_entries"."credit_amount")`,
-        })
-        .from(voucherEntries)
-        .innerJoin(vouchers, eq(voucherEntries.voucherId, vouchers.id))
-        .where(
-          and(
-            eq(voucherEntries.ledgerAccountId, accountId),
-            eq(vouchers.companyId, companyId),
-            isNull(vouchers.deletedAt),
-            eq(vouchers.optional, false),
-            gte(vouchers.voucherDate, start.toISOString().split("T")[0]),
-            lte(vouchers.voucherDate, end.toISOString().split("T")[0])
-          )
-        )
-        .execute();
+      const openingBalance = openingDebit.negated();
 
       const monthNames = [
         "January",
@@ -87,25 +63,32 @@ export function registerReportsLedgerRoutes(app: Express) {
         "November",
         "December",
       ];
-      const monthlyData: { month: number; monthName: string; debit: number; credit: number; closingBalance: number }[] =
-        [];
+      const monthlyData: Array<{
+        month: number;
+        year: number;
+        yearMonth: string;
+        monthName: string;
+        debit: number;
+        credit: number;
+        closingBalance: number;
+      }> = [];
       let runningBalance = openingBalance;
       const monthDebits = [];
       const monthCredits = [];
 
-      for (let month = 0; month < 12; month++) {
-        const monthEntries = entries.filter((entry) => {
-          const date = new Date(entry.date);
-          return date.getMonth() === month && date.getFullYear() === start.getFullYear();
-        });
-        const debit = sumMoney(monthEntries.map((entry) => entry.debit));
-        const credit = sumMoney(monthEntries.map((entry) => entry.credit));
+      for (const yearMonth of monthsBetween(start, end)) {
+        const movement = movements.get(yearMonth);
+        const debit = movement?.debit ?? toMoney(0);
+        const credit = movement?.credit ?? toMoney(0);
         monthDebits.push(debit);
         monthCredits.push(credit);
         runningBalance = runningBalance.plus(credit).minus(debit);
+        const month = Number(yearMonth.slice(5, 7));
         monthlyData.push({
-          month: month + 1,
-          monthName: monthNames[month],
+          month,
+          year: Number(yearMonth.slice(0, 4)),
+          yearMonth,
+          monthName: monthNames[month - 1],
           debit: debit.toNumber(),
           credit: credit.toNumber(),
           closingBalance: runningBalance.toNumber(),
@@ -114,6 +97,7 @@ export function registerReportsLedgerRoutes(app: Express) {
 
       res.json({
         account: { id: account.id, code: account.code, name: account.name },
+        balanceOwner: { kind: owner.kind, id: owner.id },
         openingBalance: openingBalance.toNumber(),
         months: monthlyData,
         grandTotal: {
@@ -121,10 +105,7 @@ export function registerReportsLedgerRoutes(app: Express) {
           credit: sumMoney(monthCredits).toNumber(),
           closingBalance: runningBalance.toNumber(),
         },
-        dateRange: {
-          startDate: start.toISOString().split("T")[0],
-          endDate: end.toISOString().split("T")[0],
-        },
+        dateRange: { startDate: start, endDate: end },
       });
     } catch (error: unknown) {
       res.status(500).json({ message: getErrorMessage(error) });
@@ -166,57 +147,51 @@ export function registerReportsLedgerRoutes(app: Express) {
         "November",
         "December",
       ];
-      const startOfMonth = new Date(year, month - 1, 1);
-      const endOfMonth = new Date(year, month, 0);
-
-      const openingEntries = await db
-        .select({ debit: voucherEntries.debitAmount, credit: voucherEntries.creditAmount })
-        .from(voucherEntries)
-        .innerJoin(vouchers, eq(voucherEntries.voucherId, vouchers.id))
-        .where(
-          and(
-            eq(voucherEntries.ledgerAccountId, accountId),
-            eq(vouchers.companyId, companyId),
-            isNull(vouchers.deletedAt),
-            eq(vouchers.optional, false),
-            lt(vouchers.voucherDate, startOfMonth.toISOString().split("T")[0])
-          )
-        )
-        .execute();
-
-      const openingBalSide = (account.openingBalanceSide as string) || "Dr";
+      if (month < 1 || month > 12) return res.status(400).json({ message: "Invalid parameters" });
+      // Phase 27 (RP-9): the engine's opening at the month start and its owned lines,
+      // booked on COALESCE(effective_date, voucher_date); calendar-string month bounds.
+      const yearMonth = `${year}-${String(month).padStart(2, "0")}`;
+      const startOfMonth = `${yearMonth}-01`;
+      const endOfMonth = monthEnd(yearMonth);
+      const owner = await ledgerOwnership(companyId, accountId);
       // Credit-positive, as this report has always signed it.
-      const openingBalance = toMoney(0)
-        .minus(signedOpeningBalance(account.openingBalance, openingBalSide))
-        .minus(debitMinusCredit(openingEntries.map((e) => ({ debitAmount: e.debit, creditAmount: e.credit }))));
+      const openingBalance = (await engineOpeningAt(companyId, owner, startOfMonth)).negated();
 
-      const voucherEntriesData = await db
-        .select({
-          entryId: voucherEntries.id,
-          voucherId: vouchers.id,
-          voucherNumber: vouchers.voucherNumber,
-          voucherType: vouchers.voucherType,
-          date: vouchers.voucherDate,
-          debit: voucherEntries.debitAmount,
-          credit: voucherEntries.creditAmount,
-          supplierId: voucherEntries.supplierId,
-          locationId: vouchers.locationId,
-          narration: voucherEntries.narration,
-        })
-        .from(voucherEntries)
-        .innerJoin(vouchers, eq(voucherEntries.voucherId, vouchers.id))
-        .where(
-          and(
-            eq(voucherEntries.ledgerAccountId, accountId),
-            eq(vouchers.companyId, companyId),
-            isNull(vouchers.deletedAt),
-            eq(vouchers.optional, false),
-            gte(vouchers.voucherDate, startOfMonth.toISOString().split("T")[0]),
-            lte(vouchers.voucherDate, endOfMonth.toISOString().split("T")[0])
-          )
-        )
-        .orderBy(vouchers.voucherDate, vouchers.voucherNumber)
-        .execute();
+      const lineRows = await db.execute<{
+        entry_id: number;
+        voucher_id: number;
+        voucher_number: string;
+        voucher_type: string;
+        booked_on: string;
+        debit: string | null;
+        credit: string | null;
+        supplier_id: number | null;
+        location_id: number | null;
+        narration: string | null;
+      }>(sql`
+        SELECT ve.id AS entry_id, v.id AS voucher_id, v.voucher_number, v.voucher_type,
+               COALESCE(v.effective_date, v.voucher_date)::text AS booked_on,
+               ve.debit_amount::text AS debit, ve.credit_amount::text AS credit,
+               ve.supplier_id, v.location_id, ve.narration
+          FROM voucher_entries ve
+          JOIN vouchers v ON v.id = ve.voucher_id
+         WHERE v.company_id = ${companyId} AND v.deleted_at IS NULL AND v.optional = false
+           AND COALESCE(v.effective_date, v.voucher_date) BETWEEN ${startOfMonth}::date AND ${endOfMonth}::date
+           AND ${owner.lines}
+         ORDER BY 5, v.voucher_number, ve.id
+      `);
+      const voucherEntriesData = lineRows.rows.map((row) => ({
+        entryId: row.entry_id,
+        voucherId: row.voucher_id,
+        voucherNumber: row.voucher_number,
+        voucherType: row.voucher_type,
+        date: row.booked_on,
+        debit: row.debit,
+        credit: row.credit,
+        supplierId: row.supplier_id,
+        locationId: row.location_id,
+        narration: row.narration,
+      }));
 
       const vouchersWithDetails = await Promise.all(
         voucherEntriesData.map(async (entry) => {

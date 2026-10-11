@@ -160,6 +160,10 @@ export const companySettings = pgTable("company_settings", {
   logoUpdatedAt: timestamp("logo_updated_at"),
   invoiceFooter: text("invoice_footer"),
   parentCreditAccountId: integer("parent_credit_account_id"),
+  // Phase 26 (MC-9): in a subsidiary's settings, the receivable account in its
+  // PARENT company that the PO import posts against (it was found by the name
+  // "<subsidiary> Credit"). Paired with parentCreditAccountId for elimination.
+  parentReceivableAccountId: integer("parent_receivable_account_id"),
   netPositionAdjustment: decimal("net_position_adjustment", { precision: 15, scale: 2 }).default("0"),
   posExcelImportEnabled: boolean("pos_excel_import_enabled").default(false),
   timezone: text("timezone"),
@@ -182,6 +186,7 @@ export const insertCompanySettingsSchema = createInsertSchema(companySettings)
     logoFileName: z.string().optional(),
     invoiceFooter: z.string().optional(),
     parentCreditAccountId: z.number().nullable().optional(),
+    parentReceivableAccountId: z.number().nullable().optional(),
     netPositionAdjustment: z.string().optional(),
     posExcelImportEnabled: z.boolean().optional(),
     timezone: z.string().optional(),

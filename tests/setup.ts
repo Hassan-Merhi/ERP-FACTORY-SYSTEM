@@ -1,4 +1,5 @@
 import express from "express";
+import { runOutsideDatabaseScope } from "../server/services/security/databaseScopeRuntimeContext";
 import { createHttpApp } from "../server/httpApp";
 import session from "express-session";
 import { registerRoutes } from "../server/routes";
@@ -96,6 +97,9 @@ function testCompanyType(prefix: string): "erp" | "factory" {
 
 export async function setupTestApp(): Promise<express.Express> {
   const app = createHttpApp();
+  // A request starts with no database scope, as in production, whatever scope
+  // the test sending it runs in (tests/rlsFixtureScope.mjs).
+  app.use((_req, _res, next) => runOutsideDatabaseScope(next));
   app.use(express.json());
   app.use(express.urlencoded({ extended: false }));
 

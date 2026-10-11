@@ -44,6 +44,7 @@ import { payrollAdvancePostingChecks } from "./payrollAdvancePostingChecks";
 import { retailLedgerChecks } from "./retailLedgerChecks";
 import { ledgerShapeChecks } from "./ledgerShapeChecks";
 import { auditTrailChecks } from "./auditTrailChecks";
+import { reportTieOutChecks } from "./reportTieOutChecks";
 import { getPartyBalances, liveVouchersOf } from "../balances/ledgerBalanceEngine";
 
 export type IntegrityStatus = "pass" | "warn" | "fail";
@@ -844,6 +845,8 @@ export async function runAccountingIntegrityDiagnostic(companyId: number): Promi
   checks.push(...(await ledgerShapeChecks(companyId)));
   // Phase 21 (A): audit triggers present and enabled, unknown actors, hash chain.
   checks.push(...(await auditTrailChecks(companyId)));
+  // Phase 27 (RP-14): balance-sheet earnings = P&L, aging = control, net position = balance sheet.
+  checks.push(...(await reportTieOutChecks(companyId)));
 
   const status: IntegrityStatus = checks.some((c) => c.status === "fail")
     ? "fail"

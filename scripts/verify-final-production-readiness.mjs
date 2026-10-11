@@ -111,14 +111,18 @@ requireMarkers("server/lib/observabilityBootstrap.ts", [
 ]);
 
 // Wave 10: the overdue balance is the balance engine's customer closing (voucher
-// receipts reduce it); the cache only dates operational invoices not yet posted.
+// receipts reduce it). Accounting audit phase 25 (AR-4, 2026-10-11): overdue is
+// now read from the aging report's open items — the engine's customer balances
+// (getAgingReport -> allocations/openItems.ts -> getPartyBalances, kind
+// "customer") with invoices settled
+// through the allocation table and due by payment terms — per company, so the
+// customer_balances cache markers of wave 10 were replaced by these.
+requireMarkers("server/services/accounting/allocations/openItems.ts", ["getPartyBalances"]);
 const overdueQuerySource = requireMarkers("server/services/scheduler/overdueCustomerQuery.ts", [
-  "getPartyBalances",
-  'kind: "customer"',
-  "cb.debit_amount",
-  "cb.transaction_date",
-  "cb.company_id = c.company_id",
-  "v.company_id = c.company_id",
+  'getAgingReport(companyId, "customer"',
+  "party.balance",
+  "daysPastDue",
+  "namesByCompany.get(companyId)",
 ]);
 for (const forbiddenColumn of ["cb.entry_type", "cb.entry_date", "cb.amount"]) {
   if (overdueQuerySource.includes(forbiddenColumn)) {

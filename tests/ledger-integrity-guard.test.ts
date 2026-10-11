@@ -3,9 +3,9 @@
  *
  * Production held lines on hard-deleted, soft-deleted and other-company
  * accounts, and accounts with history had been deleted. The guards must refuse
- * each of those writes whatever code path issues them, allow the group's
- * shared-supplier pattern (a subsidiary posting against its parent's
- * supplier), and leave existing rows editable for non-financial fields.
+ * each of those writes whatever code path issues them (phase 23: a parent's
+ * supplier in a subsidiary's books too), and leave existing rows editable for
+ * non-financial fields.
  */
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
@@ -137,7 +137,10 @@ describe("voucher_entries target guard", () => {
     expect(await attempt(insertLine, [voucherA, accountA, null, "5", "5"])).not.toBeNull();
   });
 
-  it("lets a subsidiary post against its parent's supplier but not an unrelated company's", async () => {
+  // Phase 23 (G17, decided by default): a parent's supplier is no longer posted
+  // in a subsidiary's books (it goes through the due-to / due-from accounts),
+  // so both are refused now; this pinned the old shared-supplier exception.
+  it("refuses a subsidiary posting against its parent's supplier as well as an unrelated company's", async () => {
     let parentSupplier = 0;
     let otherSupplier = 0;
     await maintenance<{ id: number }>(async (q) => {
@@ -151,7 +154,9 @@ describe("voucher_entries target guard", () => {
       parentSupplier = await supplier(companyA, "SUP-A");
       otherSupplier = await supplier(companyB, "SUP-B");
     });
-    expect(await attempt(insertBalancedLines, [voucherSub, null, parentSupplier, "0", "10", accountSub])).toBeNull();
+    expect(await attempt(insertBalancedLines, [voucherSub, null, parentSupplier, "0", "10", accountSub])).toMatch(
+      /SUPPLIER_COMPANY_MISMATCH/
+    );
     expect(await attempt(insertBalancedLines, [voucherSub, null, otherSupplier, "0", "10", accountSub])).toMatch(
       /SUPPLIER_COMPANY_MISMATCH/
     );

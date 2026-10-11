@@ -1,4 +1,8 @@
 import type { Express, Request } from "express";
+import {
+  FunctionalCurrencyLockedError,
+  assertFunctionalCurrencyChangeAllowed,
+} from "../../services/accounting/functionalCurrency";
 
 import { requireAuth, requireRole } from "../../auth";
 import { db, pool } from "../../db";
@@ -215,7 +219,13 @@ export function registerCompanyAccessRoutes(app: Express) {
   app.post("/api/companies", requireAuth, requireRole("Admin"), async (req, res) => {
     try {
       const payload = await prepareCompanyPayload(req.body, undefined, true);
-      res.status(201).json(await storage.createCompany(payload as Parameters<typeof storage.createCompany>[0]));
+      // Phase 23 (C1): the company is created with its standard chart of accounts, audited.
+      res.status(201).json(
+        await storage.createCompany(payload as Parameters<typeof storage.createCompany>[0], {
+          userId: req.user?.id ?? null,
+          username: req.user?.username ?? null,
+        })
+      );
     } catch (error: unknown) {
       res.status(400).json({ message: getErrorMessage(error) });
     }
@@ -237,9 +247,20 @@ export function registerCompanyAccessRoutes(app: Express) {
     try {
       const companyId = await resolveAuthorizedCompanyId(req, req.params.id);
       const payload = await prepareCompanyPayload(req.body, companyId);
+      // Phase 23 (G15): the base (functional) currency is fixed once the company has posted vouchers.
+      if (payload.baseCurrency !== undefined && req.user) {
+        const accessibleCompanyIds = await getAccessibleCompanyIds(req.user.id);
+        await runWithDatabaseScopeRuntimeContext(
+          createTenantDatabaseScope(companyId, [...accessibleCompanyIds], "authorized-companies"),
+          () => assertFunctionalCurrencyChangeAllowed(companyId, payload.baseCurrency)
+        );
+      }
       res.json(await storage.updateCompany(companyId, payload as Parameters<typeof storage.updateCompany>[1]));
     } catch (error: unknown) {
       if (error instanceof CompanyAccessError) return sendCompanyAccessError(res, error);
+      if (error instanceof FunctionalCurrencyLockedError) {
+        return res.status(409).json({ code: error.code, message: error.message });
+      }
       res.status(400).json({ message: getErrorMessage(error) });
     }
   });

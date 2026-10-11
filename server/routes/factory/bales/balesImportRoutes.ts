@@ -8,9 +8,13 @@ import type { Express, Request, Response } from "express";
 import { getErrorMessage } from "../../../lib/httpHandlers";
 import { logger } from "../../../lib/logger";
 import { parseId } from "../../../lib/parseId";
-import { db, type DatabaseOrTransaction } from "../../../db";
+import { db } from "../../../db";
 import { requireAuth, requireRole } from "../../../auth";
 import { writeAuditEvent } from "../../../services/audit/auditService";
+import {
+  FactoryOpeningRecalcAfterCutoverError,
+  recalcOpeningRawStockUsageTx,
+} from "../../../services/factory/openingRawStockRecalc";
 import {
   assertStockImportAllowedTx,
   RAW_STOCK_IMPORT_AUDIT,
@@ -23,13 +27,11 @@ import {
   factorySuppliers,
   factoryContainers,
   factoryRawStock,
-  factoryMixBatches,
-  factoryMixBatchSources,
   factoryBales,
   factoryBaleSequences,
   factoryBaleImportBatches,
 } from "@shared/schema";
-import { eq, and, asc, desc, sql, inArray, ilike } from "drizzle-orm";
+import { eq, and, asc, desc, sql, ilike } from "drizzle-orm";
 import { lineAmount, MoneyDecimal, parseMoneyInput } from "../../../lib/money";
 
 export function registerBalesImportRoutes(app: Express) {
@@ -449,95 +451,29 @@ export function registerBalesImportRoutes(app: Express) {
     }
   });
 
-  // ── Opening Raw Stock Recalc Helper ────────────────────────────────────────
-  // Allocation rule: for each supplierId, sum all factory_mix_batch_sources.weightKg
-  // attributed to that supplier, then FIFO-allocate against that supplier's OPENING_BALANCE
-  // factory_raw_stock records (ordered by offloadedAt ASC, id ASC).
-  // Idempotent: resets usedKg to 0 on all OB records before recalculating.
-  // Only OB raw stock (containers with status='OPENING_BALANCE') is touched.
-  // Non-OB (container offload) raw stock is never modified.
-  async function recalcOpeningStockUsage(
-    companyId: number,
-    executor: DatabaseOrTransaction = db
-  ): Promise<{ suppliersProcessed: number; totalAllocatedKg: number; unmatchedKg: number }> {
-    const obRawStocks = await executor
-      .select({
-        id: factoryRawStock.id,
-        receivedKg: factoryRawStock.receivedKg,
-        supplierId: factoryContainers.supplierId,
-        offloadedAt: factoryRawStock.offloadedAt,
-      })
-      .from(factoryRawStock)
-      .innerJoin(factoryContainers, eq(factoryRawStock.containerId, factoryContainers.id))
-      .where(and(eq(factoryRawStock.companyId, companyId), eq(factoryContainers.status, "OPENING_BALANCE")))
-      .orderBy(factoryRawStock.offloadedAt, factoryRawStock.id);
-
-    if (obRawStocks.length === 0) return { suppliersProcessed: 0, totalAllocatedKg: 0, unmatchedKg: 0 };
-
-    const obIds = obRawStocks.map((r) => r.id);
-    await executor.update(factoryRawStock).set({ usedKg: "0" }).where(inArray(factoryRawStock.id, obIds));
-
-    const consumed = await executor
-      .select({
-        supplierId: factoryMixBatchSources.supplierId,
-        totalKg: sql<string>`COALESCE(SUM(${factoryMixBatchSources.weightKg}), '0')`,
-      })
-      .from(factoryMixBatchSources)
-      .innerJoin(factoryMixBatches, eq(factoryMixBatchSources.mixBatchId, factoryMixBatches.id))
-      .where(and(eq(factoryMixBatches.companyId, companyId), sql`${factoryMixBatchSources.supplierId} IS NOT NULL`))
-      .groupBy(factoryMixBatchSources.supplierId);
-
-    const consumedBySupplier = new Map<number, number>();
-    for (const row of consumed) {
-      if (row.supplierId != null) {
-        consumedBySupplier.set(row.supplierId, parseFloat(row.totalKg) || 0);
+  // Phase 29: Admin/Owner, one audited transaction under the cut-over lock,
+  // refused after the cut-over, Decimal (services/factory/openingRawStockRecalc.ts).
+  app.post(
+    "/api/factory/raw-stock/recalc-opening",
+    requireAuth,
+    requireRole("Admin", "Owner"),
+    async (req: Request, res: Response) => {
+      try {
+        const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
+        const actor = {
+          userId: String(req.session.userId ?? ""),
+          username: req.session.username || String(req.session.userId ?? "unknown"),
+        };
+        const stats = await db.transaction((tx) => recalcOpeningRawStockUsageTx(tx, companyId, { actor }));
+        res.json(stats);
+      } catch (error: unknown) {
+        if (error instanceof FactoryOpeningRecalcAfterCutoverError) return res.status(409).json(error.body);
+        logger.error("Error recalculating opening stock:", { error: error });
+        res.status(500).json({ message: getErrorMessage(error) });
       }
     }
-
-    const obBySupplier = new Map<number, typeof obRawStocks>();
-    for (const r of obRawStocks) {
-      if (r.supplierId == null) continue;
-      if (!obBySupplier.has(r.supplierId)) obBySupplier.set(r.supplierId, []);
-      obBySupplier.get(r.supplierId)!.push(r);
-    }
-
-    let totalAllocatedKg = 0;
-    let unmatchedKg = 0;
-    const suppliersProcessed = consumedBySupplier.size;
-
-    for (const [supplierId, totalConsumed] of consumedBySupplier) {
-      const records = obBySupplier.get(supplierId) || [];
-      let remaining = totalConsumed;
-
-      for (const rec of records) {
-        if (remaining <= 0.001) break;
-        const cap = parseFloat(rec.receivedKg as string) || 0;
-        const deduct = Math.min(remaining, cap);
-        await executor
-          .update(factoryRawStock)
-          .set({ usedKg: String(deduct.toFixed(3)) })
-          .where(eq(factoryRawStock.id, rec.id));
-        remaining -= deduct;
-        totalAllocatedKg += deduct;
-      }
-
-      if (remaining > 0.001) unmatchedKg += remaining;
-    }
-
-    return { suppliersProcessed, totalAllocatedKg, unmatchedKg };
-  }
-
-  app.post("/api/factory/raw-stock/recalc-opening", requireAuth, async (req: Request, res: Response) => {
-    try {
-      const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
-      const stats = await recalcOpeningStockUsage(companyId);
-      res.json(stats);
-    } catch (error: unknown) {
-      logger.error("Error recalculating opening stock:", { error: error });
-      res.status(500).json({ message: getErrorMessage(error) });
-    }
-  });
+  );
 
   // Phase 19 C (F7/DI10): Admin/Owner; one transaction that takes the cut-over
   // lock and is refused once the cut-over is applied (409
@@ -695,7 +631,8 @@ export function registerBalesImportRoutes(app: Express) {
             }
           }
 
-          const recalcStats = imported > 0 ? await recalcOpeningStockUsage(companyId, tx) : null;
+          const recalcStats =
+            imported > 0 ? await recalcOpeningRawStockUsageTx(tx, companyId, { checkCutover: false }) : null;
           return { imported, errors, recalcStats };
         });
 

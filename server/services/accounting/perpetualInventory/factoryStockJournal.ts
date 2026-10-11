@@ -37,6 +37,22 @@
  * only, replaced whole when it is run again the same day, and never recomputed
  * for a past day. The scheduler runs it every evening for each company whose
  * cut-over is applied; Admins can run it on demand.
+ *
+ * Phase 28 (F9), the dated factory value ledger:
+ *   - "today" is the company's business date (its timezone), not the UTC day;
+ *   - every journal run records what the costing held, per stock account, in
+ *     factory_stock_valuation_snapshots (one row per company and day, replaced
+ *     with the journal), so the reconciliation of a past day compares the
+ *     ledger with the costing of that day's journal instead of today's;
+ *   - catch-up (catchUpFactoryStockJournalsTx, run by the evening runner before
+ *     today's journal and on demand): a business day after the last journal
+ *     with no journal of its own (a missed evening run) is posted, dated that
+ *     day, when nothing in the factory changed after it ended (bales, mixes,
+ *     adjustments, receipts and value events carry no later timestamp), so the
+ *     costing now is that day's costing; later unchanged days get the same
+ *     snapshot with no journal. A missed day after which the factory changed
+ *     cannot be valued any more: it is reported (`notRecoverable`) and the
+ *     next journal carries its movement, as before.
  */
 import type Decimal from "decimal.js";
 import { sql } from "drizzle-orm";
@@ -46,6 +62,7 @@ import { db } from "../../../db";
 import { isClosedPeriodError } from "../../../lib/closedPeriodError";
 import { logger } from "../../../lib/logger";
 import { MoneyDecimal, toMoney } from "../../../lib/money";
+import { companyBusinessDate } from "../companyBusinessDate";
 import { companyClosedThrough, isDateInClosedPeriod, runInCompanyPostingScope } from "../scheduledPostingScope";
 import { isPerpetualInventoryActive } from "./cutover";
 import { factoryStockValuation } from "./factoryValuation";
@@ -100,6 +117,160 @@ async function rows<T>(executor: DatabaseOrTransaction, query: ReturnType<typeof
 
 export function todayUtc(): string {
   return new Date().toISOString().slice(0, 10);
+}
+
+/** Phase 28 (F9): records what the costing held for the journal of `date`. */
+async function recordValuationSnapshotTx(
+  tx: DbTransaction,
+  params: {
+    companyId: number;
+    date: string;
+    raw: Decimal;
+    wip: Decimal;
+    finished: Decimal;
+    unvalued: number;
+    voucherId: number | null;
+    basis: "journal" | "catch-up" | "catch-up-unchanged";
+  }
+): Promise<void> {
+  await tx.execute(sql`
+    INSERT INTO factory_stock_valuation_snapshots
+      (company_id, valuation_date, raw, wip, finished, unvalued, voucher_id, basis, recorded_at)
+    VALUES (${params.companyId}, ${params.date}::date, ${params.raw.toFixed(2)}, ${params.wip.toFixed(2)},
+            ${params.finished.toFixed(2)}, ${params.unvalued}, ${params.voucherId}, ${params.basis}, now())
+    ON CONFLICT (company_id, valuation_date) DO UPDATE
+      SET raw = EXCLUDED.raw, wip = EXCLUDED.wip, finished = EXCLUDED.finished, unvalued = EXCLUDED.unvalued,
+          voucher_id = EXCLUDED.voucher_id, basis = EXCLUDED.basis, recorded_at = now()
+  `);
+}
+
+/** Phase 28 (F9): the factory valuation a past day's journal recorded, or null. */
+export async function factoryValuationSnapshotOn(
+  executor: DatabaseOrTransaction,
+  companyId: number,
+  date: string
+): Promise<{ raw: Decimal; wip: Decimal; finished: Decimal; basis: string } | null> {
+  const [row] = await rows<{ raw: string; wip: string; finished: string; basis: string }>(
+    executor,
+    sql`SELECT raw::text AS raw, wip::text AS wip, finished::text AS finished, basis
+          FROM factory_stock_valuation_snapshots WHERE company_id = ${companyId} AND valuation_date = ${date}::date`
+  );
+  return row
+    ? { raw: toMoney(row.raw), wip: toMoney(row.wip), finished: toMoney(row.finished), basis: row.basis }
+    : null;
+}
+
+const addDays = (date: string, days: number) => {
+  const d = new Date(`${date}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+};
+
+/**
+ * Whether anything the factory costing reads changed after the end of the
+ * business day `date` (company timezone): bales and mixes updated, raw stock
+ * created or deleted, adjustments, receipts and value events recorded.
+ */
+async function factoryChangedAfterTx(tx: DbTransaction, companyId: number, date: string): Promise<boolean> {
+  const [row] = await rows<{ changed: boolean }>(
+    tx,
+    sql`
+      WITH tz AS (
+        SELECT COALESCE(NULLIF((SELECT timezone FROM company_settings WHERE company_id = ${companyId} LIMIT 1), ''),
+                        'UTC') AS zone
+      ),
+      stamps AS (
+        SELECT updated_at AS at FROM factory_bales WHERE company_id = ${companyId}
+        UNION ALL SELECT updated_at FROM factory_mix_batches WHERE company_id = ${companyId}
+        UNION ALL SELECT created_at FROM factory_raw_stock WHERE company_id = ${companyId}
+        UNION ALL SELECT deleted_at FROM factory_raw_stock WHERE company_id = ${companyId} AND deleted_at IS NOT NULL
+        UNION ALL SELECT created_at FROM factory_raw_material_adjustments WHERE company_id = ${companyId}
+        UNION ALL SELECT deleted_at FROM factory_raw_material_adjustments
+                   WHERE company_id = ${companyId} AND deleted_at IS NOT NULL
+        UNION ALL SELECT created_at FROM factory_container_receipts WHERE company_id = ${companyId}
+        UNION ALL SELECT deleted_at FROM factory_container_receipts
+                   WHERE company_id = ${companyId} AND deleted_at IS NOT NULL
+        UNION ALL SELECT created_at FROM factory_stock_value_events
+                   WHERE company_id = ${companyId} AND kind <> ${FACTORY_RECEIPT_CREDIT_KIND}
+      )
+      SELECT EXISTS (
+        SELECT 1 FROM stamps, tz WHERE (stamps.at AT TIME ZONE 'UTC' AT TIME ZONE tz.zone)::date > ${date}::date
+      ) AS changed
+    `
+  );
+  return Boolean(row?.changed);
+}
+
+export interface FactoryStockCatchUpResult {
+  companyId: number;
+  /** Missed business days whose journal was posted (dated that day), or given an unchanged snapshot. */
+  posted: FactoryStockJournalResult[];
+  unchangedDays: string[];
+  /** Missed days that can no longer be valued: the next journal carries their movement. */
+  notRecoverable: string[];
+}
+
+/**
+ * Phase 28 (F9): posts the journals of missed business days before `today`
+ * (see the module comment). Runs inside the caller's transaction (company
+ * tenant scope).
+ */
+export async function catchUpFactoryStockJournalsTx(
+  tx: DbTransaction,
+  companyId: number,
+  today: string
+): Promise<FactoryStockCatchUpResult> {
+  const result: FactoryStockCatchUpResult = { companyId, posted: [], unchangedDays: [], notRecoverable: [] };
+  const [cut] = await rows<{ effective_from: string }>(
+    tx,
+    sql`SELECT effective_from::text AS effective_from FROM gl_inventory_cutovers WHERE company_id = ${companyId}`
+  );
+  if (!cut) return result;
+  const [last] = await rows<{ last: string | null }>(
+    tx,
+    sql`SELECT GREATEST(
+          (SELECT MAX(valuation_date) FROM factory_stock_valuation_snapshots WHERE company_id = ${companyId}),
+          (SELECT MAX(voucher_date) FROM vouchers WHERE company_id = ${companyId} AND deleted_at IS NULL
+              AND voucher_number LIKE ${`GL-FACTORY-STOCK-${companyId}-%`})
+        )::text AS last`
+  );
+  const start = last?.last ? addDays(last.last, 1) : cut.effective_from;
+  const missed: string[] = [];
+  for (let day = start < cut.effective_from ? cut.effective_from : start; day < today; day = addDays(day, 1)) {
+    missed.push(day);
+    if (missed.length > 366) break;
+  }
+  if (missed.length === 0) return result;
+  let firstUnchanged = -1;
+  for (let index = 0; index < missed.length; index += 1) {
+    if (!(await factoryChangedAfterTx(tx, companyId, missed[index]))) {
+      firstUnchanged = index;
+      break;
+    }
+  }
+  if (firstUnchanged < 0) {
+    result.notRecoverable = missed;
+    return result;
+  }
+  result.notRecoverable = missed.slice(0, firstUnchanged);
+  const [first, ...rest] = missed.slice(firstUnchanged);
+  const journal = await syncFactoryStockJournalTx(tx, companyId, first, { basis: "catch-up" });
+  result.posted.push(journal);
+  const valuation = await factoryStockValuation(tx, companyId);
+  for (const day of rest) {
+    await recordValuationSnapshotTx(tx, {
+      companyId,
+      date: day,
+      raw: valuation.raw,
+      wip: valuation.wip,
+      finished: valuation.finished,
+      unvalued: valuation.unvalued.length,
+      voucherId: null,
+      basis: "catch-up-unchanged",
+    });
+    result.unchangedDays.push(day);
+  }
+  return result;
 }
 
 /** What the daily journals credited for a container's receipts (wave 17 B evidence rows). */
@@ -295,8 +466,11 @@ async function receiptCreditsTx(tx: DbTransaction, companyId: number, through: s
 export async function syncFactoryStockJournalTx(
   tx: DbTransaction,
   companyId: number,
-  date: string = todayUtc()
+  requestedDate?: string,
+  options: { basis?: "journal" | "catch-up" } = {}
 ): Promise<FactoryStockJournalResult> {
+  // Phase 28 (F9): the company's business date by default (was the UTC day).
+  const date = requestedDate ?? (await companyBusinessDate(companyId, tx));
   const empty = { accounts: [], received: "0.00", variance: "0.00", explained: {}, unvalued: 0 };
   // One run per company at a time.
   await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext('gl_factory_stock_journal'), ${companyId})`);
@@ -372,6 +546,16 @@ export async function syncFactoryStockJournalTx(
     identity: { sourceType: "perpetual-factory-stock", sourceId: `${companyId}:${date}` },
     lines,
   });
+  await recordValuationSnapshotTx(tx, {
+    companyId,
+    date,
+    raw: valuation.raw,
+    wip: valuation.wip,
+    finished: valuation.finished,
+    unvalued: valuation.unvalued.length,
+    voucherId,
+    basis: options.basis ?? "journal",
+  });
   return {
     companyId,
     date,
@@ -397,13 +581,13 @@ export async function syncFactoryStockJournalTx(
  * and the opening lock apply. A date in a closed period is skipped and
  * reported (`period-closed`), never forced.
  */
-export async function runFactoryStockJournals(date: string = todayUtc()): Promise<FactoryStockJournalResult[]> {
+export async function runFactoryStockJournals(requestedDate?: string): Promise<FactoryStockJournalResult[]> {
   const companies = await rows<{ company_id: number }>(
     db,
-    sql`SELECT company_id FROM gl_inventory_cutovers WHERE effective_from <= ${date}::date ORDER BY company_id`
+    sql`SELECT company_id FROM gl_inventory_cutovers ORDER BY company_id`
   );
   const results: FactoryStockJournalResult[] = [];
-  const periodClosed = (companyId: number, closedThrough: string | null): FactoryStockJournalResult => ({
+  const periodClosed = (companyId: number, date: string, closedThrough: string | null): FactoryStockJournalResult => ({
     companyId,
     date,
     voucherId: null,
@@ -416,11 +600,25 @@ export async function runFactoryStockJournals(date: string = todayUtc()): Promis
     unvalued: 0,
   });
   for (const { company_id } of companies) {
+    // Phase 28 (F9): each company's own business date unless one is given.
+    const date = requestedDate ?? (await companyBusinessDate(company_id));
     try {
       const result = await runInCompanyPostingScope(company_id, () =>
         db.transaction(async (tx) => {
           const closedThrough = await companyClosedThrough(company_id, tx);
-          if (isDateInClosedPeriod(closedThrough, date)) return periodClosed(company_id, closedThrough);
+          if (isDateInClosedPeriod(closedThrough, date)) return periodClosed(company_id, date, closedThrough);
+          if (!(await isPerpetualInventoryActive(tx, company_id, date))) {
+            return syncFactoryStockJournalTx(tx, company_id, date);
+          }
+          // Missed evening runs first (each dated its own day), then today.
+          const catchUp = await catchUpFactoryStockJournalsTx(tx, company_id, date);
+          if (catchUp.notRecoverable.length > 0) {
+            logger.warn("Factory stock journal: missed days could not be valued; today's journal carries them", {
+              module: "perpetual-inventory",
+              companyId: company_id,
+              days: catchUp.notRecoverable,
+            });
+          }
           return syncFactoryStockJournalTx(tx, company_id, date);
         })
       );
@@ -435,7 +633,7 @@ export async function runFactoryStockJournals(date: string = todayUtc()): Promis
       results.push(result);
     } catch (error: unknown) {
       if (isClosedPeriodError(error)) {
-        results.push(periodClosed(company_id, null));
+        results.push(periodClosed(company_id, date, null));
         logger.warn("Factory stock journal skipped: the closed-period guard refused it", {
           module: "perpetual-inventory",
           companyId: company_id,

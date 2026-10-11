@@ -309,7 +309,8 @@ export async function applyPurchaseOrderItemsUpdate(
     // ── Inter-company sync: only for true subsidiary POs (not same-company).
     // Freight for same-company POs is embedded directly in the PO voucher above.
     {
-      const _b1ParentId = await storage.getParentCompanyId();
+      // Phase 26 (MC-7): the parent of the PO's company (companies.parent_company_id).
+      const _b1ParentId = await storage.getParentCompanyId(existingPO.companyId);
       if (_b1ParentId && existingPO.companyId !== _b1ParentId) {
         const _b1FreightParentAccountId: number | null =
           req.body.freightParentAccountId !== undefined

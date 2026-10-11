@@ -1,44 +1,14 @@
 import { randomUUID } from "node:crypto";
-import { logger } from "../../../lib/logger";
-import { postErpVoucherTx } from "../../../services/accounting/erpVoucherPosting";
-import { getErrorMessage } from "../../../lib/httpHandlers";
-import { db, type DbTransaction } from "../../../db";
-import { ledgerAccounts, rentalAutoTransferConfigs, interCompanyTransfers, companies } from "@shared/schema";
+import type { DbTransaction } from "../../../db";
+import { rentalAutoTransferConfigs, interCompanyTransfers, companies } from "@shared/schema";
 import { eq, and, inArray, isNull } from "drizzle-orm";
+import type { PostingActor } from "../../../services/accounting/centralPostingEngine";
+import {
+  postIntercompanyTransferTx,
+  softDeleteTransferLinkTx,
+} from "../../../services/accounting/intercompany/intercompanyTransferPosting";
 import { retireVouchersTx, type VoucherRetirementActor } from "../../../services/accounting/voucherRetirement";
-import { runWithAutoTransferCounterparties } from "../../../services/rental/autoTransferScope";
 import { RentalModule } from "./ledger";
-
-/**
- * The company's TRANSFER-CLEARING account. A soft-deleted row still owns the
- * unique (company_id, code) key; it is not revived here (accounting audit,
- * wave 18 B: account helpers reuse an account as it is and never unhide a
- * deleted one), so the transfer is not posted (null, logged) until an Admin
- * restores the account from Deleted Items.
- */
-async function getOrCreateClearingTx(tx: DbTransaction, companyId: number) {
-  const [existing] = await tx
-    .select()
-    .from(ledgerAccounts)
-    .where(and(eq(ledgerAccounts.companyId, companyId), eq(ledgerAccounts.code, "TRANSFER-CLEARING")))
-    .limit(1);
-  if (existing && !existing.deletedAt) return existing;
-  if (existing) {
-    logger.error("[RentalAutoTransfer] TRANSFER-CLEARING account is deleted; transfer not posted", { companyId });
-    return null;
-  }
-  const [created] = await tx
-    .insert(ledgerAccounts)
-    .values({
-      companyId,
-      code: "TRANSFER-CLEARING",
-      name: "Transfer Clearing",
-      accountType: "Equity",
-      active: true,
-    })
-    .returning();
-  return created;
-}
 
 /**
  * Retire both sides of every auto-transfer posted for these payments and drop
@@ -56,10 +26,18 @@ export async function reverseAutoTransfersTx(
   const linked = await tx
     .select()
     .from(interCompanyTransfers)
-    .where(inArray(interCompanyTransfers.sourcePaymentId, [...sourcePaymentIds]));
+    .where(
+      and(
+        inArray(interCompanyTransfers.sourcePaymentId, [...sourcePaymentIds]),
+        isNull(interCompanyTransfers.deletedAt)
+      )
+    );
   for (const transfer of linked) {
-    // Drop the link first: it holds restrict foreign keys on both vouchers.
-    await tx.delete(interCompanyTransfers).where(eq(interCompanyTransfers.id, transfer.id));
+    // Phase 26 (MC-11): the link is soft-deleted (kept, audited) with its legs.
+    await softDeleteTransferLinkTx(tx, transfer.id, {
+      reason: retirement?.reason ?? "rental-auto-transfer-reversal",
+      actor: retirement?.actor ?? null,
+    });
     if (transfer.fromVoucherId) {
       await retireVouchersTx(tx, {
         companyId: transfer.fromCompanyId,
@@ -77,145 +55,124 @@ export async function reverseAutoTransfersTx(
   }
 }
 
-export async function maybeRunAutoTransfer(
+export interface RentalAutoTransferInput {
+  companyId: number;
+  module: RentalModule;
+  /** The cash account the rent was received in (the rule's source filter). */
+  fromLedgerAccountId: number;
+  amount: string;
+  transferDate: string;
+  unitLabel: string;
+  /** The rental payment row; a reversal finds the transfer by it. */
+  sourcePaymentId?: number | null;
+  /** Posting identity when there is no payment row (e.g. a guarantee statement). */
+  sourceKey?: string | null;
+  notes?: string | null;
+  actor?: PostingActor;
+}
+
+/** The enabled rule of the company/module for the source cash account, or null. */
+export async function findRentalAutoTransferRuleTx(
+  tx: DbTransaction,
   companyId: number,
   module: RentalModule,
-  fromLedgerAccountId: number,
-  amount: string,
-  transferDate: string,
-  unitLabel: string,
-  sourcePaymentId?: number,
-  notes?: string
+  fromLedgerAccountId: number
 ) {
-  try {
-    // Fetch ALL active rules for this company+module
-    const configs = await db
-      .select()
-      .from(rentalAutoTransferConfigs)
-      .where(
-        and(
-          eq(rentalAutoTransferConfigs.companyId, companyId),
-          eq(rentalAutoTransferConfigs.module, module),
-          eq(rentalAutoTransferConfigs.enabled, true)
-        )
-      );
-    if (configs.length === 0) return;
-
-    // Find the FIRST rule that matches the source account.
-    // Rules with a specific sourceCashAccountIds list take precedence; fallback to the
-    // first rule with an empty filter only when no specific rule matched.
-    const specificMatch = configs.find((c) => {
-      const ids = (c.sourceCashAccountIds ?? []) as number[];
-      return ids.length > 0 && ids.includes(fromLedgerAccountId);
-    });
-    const fallbackMatch = configs.find((c) => {
-      const ids = (c.sourceCashAccountIds ?? []) as number[];
-      return ids.length === 0;
-    });
-    const cfg = specificMatch ?? fallbackMatch;
-    if (!cfg) return;
-
-    // Both sides post in one transaction, with the receiving company in scope.
-    await runWithAutoTransferCounterparties([cfg.destCompanyId], () =>
-      db.transaction(async (tx) => {
-        // One transfer per payment: a retried or repeated call posts nothing more.
-        if (sourcePaymentId) {
-          const [already] = await tx
-            .select({ id: interCompanyTransfers.id })
-            .from(interCompanyTransfers)
-            .where(eq(interCompanyTransfers.sourcePaymentId, sourcePaymentId))
-            .limit(1);
-          if (already) return;
-        }
-
-        const [fromCompany] = await tx.select().from(companies).where(eq(companies.id, companyId));
-        const [toCompany] = await tx.select().from(companies).where(eq(companies.id, cfg.destCompanyId));
-        if (!fromCompany || !toCompany) return;
-
-        const [destAccount] = await tx
-          .select({ id: ledgerAccounts.id })
-          .from(ledgerAccounts)
-          .where(
-            and(
-              eq(ledgerAccounts.id, cfg.destLedgerAccountId),
-              eq(ledgerAccounts.companyId, cfg.destCompanyId),
-              isNull(ledgerAccounts.deletedAt)
-            )
-          );
-        if (!destAccount) {
-          throw new Error(
-            `Auto-transfer rule ${cfg.id}: account ${cfg.destLedgerAccountId} is not a live account of company ${cfg.destCompanyId}`
-          );
-        }
-
-        const fromClearing = await getOrCreateClearingTx(tx, companyId);
-        const toClearing = await getOrCreateClearingTx(tx, cfg.destCompanyId);
-        if (!fromClearing || !toClearing) return;
-        const baseDesc = `Auto rent transfer - ${unitLabel}`;
-        const desc = notes ? `${baseDesc} - ${notes}` : baseDesc;
-        // Phase 22 (B): both legs post through the central engine (numbers
-        // allocated per company, identity = the rental payment).
-        const transferSourceId = sourcePaymentId ? String(sourcePaymentId) : `once-${randomUUID()}`;
-
-        const outNarration = notes
-          ? `Transfer out to ${toCompany.name} - ${notes}`
-          : `Transfer out to ${toCompany.name}`;
-        const inNarration = notes
-          ? `Transfer in from ${fromCompany.name} - ${notes}`
-          : `Transfer in from ${fromCompany.name}`;
-
-        // Voucher in FROM company (Payment — money leaves)
-        const { voucher: fromVoucher } = await postErpVoucherTx(tx, {
-          companyId,
-          voucherType: "Payment",
-          voucherDate: transferDate,
-          description: `${desc} → ${toCompany.name}`,
-          lines: [
-            { ledgerAccountId: fromClearing.id, debit: amount, narration: outNarration },
-            { ledgerAccountId: fromLedgerAccountId, credit: amount, narration: outNarration },
-          ],
-          source: { type: "rental-auto-transfer-out", id: transferSourceId },
-        });
-
-        // Voucher in TO company (Receipt — money arrives)
-        // DR destLedgerAccountId (cash/account receives money), CR toClearing (clearing settled)
-        const { voucher: toVoucher } = await postErpVoucherTx(tx, {
-          companyId: cfg.destCompanyId,
-          voucherType: "Receipt",
-          voucherDate: transferDate,
-          description: notes ? `Transfer from ${fromCompany.name} - ${notes}` : `Transfer from ${fromCompany.name}`,
-          lines: [
-            { ledgerAccountId: cfg.destLedgerAccountId, debit: amount, narration: inNarration },
-            { ledgerAccountId: toClearing.id, credit: amount, narration: inNarration },
-          ],
-          source: { type: "rental-auto-transfer-in", id: transferSourceId },
-        });
-
-        // Record link (sourcePaymentId links this transfer back to the originating payment)
-        await tx.insert(interCompanyTransfers).values({
-          transferType: "Cash",
-          fromCompanyId: companyId,
-          toCompanyId: cfg.destCompanyId,
-          transferDate: transferDate,
-          amount,
-          fromLedgerAccountId,
-          toLedgerAccountId: cfg.destLedgerAccountId,
-          fromVoucherId: fromVoucher.id,
-          toVoucherId: toVoucher.id,
-          description: desc,
-          sourcePaymentId: sourcePaymentId ?? null,
-        });
-      })
+  const configs = await tx
+    .select()
+    .from(rentalAutoTransferConfigs)
+    .where(
+      and(
+        eq(rentalAutoTransferConfigs.companyId, companyId),
+        eq(rentalAutoTransferConfigs.module, module),
+        eq(rentalAutoTransferConfigs.enabled, true)
+      )
     );
-  } catch (err) {
-    // The payment itself is already posted; a failed transfer must not undo it,
-    // but it has to be visible: nothing else records that the money did not move.
-    logger.error("[RentalAutoTransfer] failed:", {
-      companyId,
-      module,
-      sourcePaymentId: sourcePaymentId ?? null,
-      amount,
-      error: getErrorMessage(err),
-    });
+  // Rules with a specific sourceCashAccountIds list take precedence; the first
+  // rule with an empty filter applies only when no specific rule matched.
+  const specificMatch = configs.find((c) => {
+    const ids = (c.sourceCashAccountIds ?? []) as number[];
+    return ids.length > 0 && ids.includes(fromLedgerAccountId);
+  });
+  const fallbackMatch = configs.find((c) => ((c.sourceCashAccountIds ?? []) as number[]).length === 0);
+  return specificMatch ?? fallbackMatch ?? null;
+}
+
+/**
+ * The rental auto-transfer, posted INSIDE the payment's transaction (phase 26,
+ * MC-3): the payment and both legs of the transfer commit together, or the
+ * whole payment is refused. It used to run after the payment committed and
+ * only log a failure (money recorded as received and never moved). Both legs
+ * and the link go through the one intercompany service: Dr due-from <dest> /
+ * Cr cash in the paying company, Dr the rule's configured destination account
+ * / Cr due-to <source> in the receiving one (no longer the Equity-typed
+ * TRANSFER-CLEARING on both sides), with the requesting user's membership of
+ * the receiving company checked. One transfer per payment: a replay posts
+ * nothing more. Returns the link id, or null when no rule applies.
+ */
+export async function runRentalAutoTransferTx(
+  tx: DbTransaction,
+  input: RentalAutoTransferInput
+): Promise<number | null> {
+  const cfg = await findRentalAutoTransferRuleTx(tx, input.companyId, input.module, input.fromLedgerAccountId);
+  if (!cfg) return null;
+
+  if (input.sourcePaymentId) {
+    const [already] = await tx
+      .select({ id: interCompanyTransfers.id })
+      .from(interCompanyTransfers)
+      .where(
+        and(eq(interCompanyTransfers.sourcePaymentId, input.sourcePaymentId), isNull(interCompanyTransfers.deletedAt))
+      )
+      .limit(1);
+    if (already) return already.id;
   }
+
+  const [fromCompany] = await tx.select().from(companies).where(eq(companies.id, input.companyId));
+  const [toCompany] = await tx.select().from(companies).where(eq(companies.id, cfg.destCompanyId));
+  if (!fromCompany || !toCompany) {
+    throw new Error(`Auto-transfer rule ${cfg.id}: company ${input.companyId} or ${cfg.destCompanyId} not found`);
+  }
+
+  const baseDesc = `Auto rent transfer - ${input.unitLabel}`;
+  const desc = input.notes ? `${baseDesc} - ${input.notes}` : baseDesc;
+  const transferSourceId = input.sourcePaymentId
+    ? String(input.sourcePaymentId)
+    : input.sourceKey || `once-${randomUUID()}`;
+  const outNarration = input.notes
+    ? `Transfer out to ${toCompany.name} - ${input.notes}`
+    : `Transfer out to ${toCompany.name}`;
+  const inNarration = input.notes
+    ? `Transfer in from ${fromCompany.name} - ${input.notes}`
+    : `Transfer in from ${fromCompany.name}`;
+
+  const { transfer } = await postIntercompanyTransferTx(tx, {
+    fromCompanyId: input.companyId,
+    toCompanyId: cfg.destCompanyId,
+    amount: input.amount,
+    transferDate: input.transferDate,
+    transferType: "Cash",
+    description: desc,
+    sourceType: "rental-auto-transfer",
+    sourcePaymentId: input.sourcePaymentId ?? null,
+    authorization: "verify-membership",
+    actor: input.actor ?? { reason: "Rental auto-transfer" },
+    from: {
+      accountId: input.fromLedgerAccountId,
+      voucherType: "Payment",
+      description: `${desc} → ${toCompany.name}`,
+      narration: outNarration,
+      source: { type: "rental-auto-transfer-out", id: transferSourceId },
+    },
+    to: {
+      accountId: cfg.destLedgerAccountId,
+      voucherType: "Receipt",
+      description: input.notes
+        ? `Transfer from ${fromCompany.name} - ${input.notes}`
+        : `Transfer from ${fromCompany.name}`,
+      narration: inNarration,
+      source: { type: "rental-auto-transfer-in", id: transferSourceId },
+    },
+  });
+  return transfer.id;
 }

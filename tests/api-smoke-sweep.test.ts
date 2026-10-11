@@ -79,7 +79,9 @@ interface ShapeBaseline {
   /**
    * Routes whose shape varies between identical runs; reported, never asserted.
    *
-   * Both entries today are workbook endpoints. Their bodies parse into an
+   * Every entry today is a workbook endpoint (the group net position workbook
+   * joined them in the phases 23–29 integration: its length moved by a byte
+   * between two runs of the same fixture). Their bodies parse into an
    * object keyed by byte offset, so the "shape" is thousands of indices that
    * shift whenever the zip container's timestamps change the file's length.
    * They stay in the sweep — liveness is still checked, and net-profit-excel

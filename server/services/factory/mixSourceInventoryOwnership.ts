@@ -46,14 +46,11 @@ export function resolveInventorySupplierId(input: MixSourceOwnershipInput): numb
  * Validates that a non-BATCH source has a resolvable inventorySupplierId.
  * Throws a descriptive error rather than silently storing an unowned raw-material source.
  */
-export function requireInventorySupplierId(
-  inventorySupplierId: number | null,
-  sourceBatchId?: number | null
-): void {
+export function requireInventorySupplierId(inventorySupplierId: number | null, sourceBatchId?: number | null): void {
   if (sourceBatchId != null) return; // BATCH sources are intentionally null — valid.
   if (inventorySupplierId != null) return; // Resolved — valid.
   throw new Error(
     "INVENTORY_SUPPLIER_UNRESOLVED: cannot create a raw-material source without a " +
-    "resolvable supplier. Provide supplierId or ensure the container has a linked supplier."
+      "resolvable supplier. Provide supplierId or ensure the container has a linked supplier."
   );
 }

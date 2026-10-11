@@ -22,6 +22,7 @@ import { postFactoryVoucherTx } from "../../services/factory/factoryVoucherPosti
 const num = (value: unknown): Decimal =>
   parseMoneyInput(typeof value === "number" ? value : String(value ?? "0")) ?? toMoney(0);
 import { resultRows } from "../../lib/queryResult";
+import { isAccountType } from "../../services/accounting/accountClassification";
 
 type SpSaleLotRow = {
   id: number;
@@ -114,7 +115,7 @@ export function registerSpSalesRoutes(app: Express) {
             )
           )
           .limit(1);
-        if (!cashLedger || cashLedger.accountType !== "Cash") {
+        if (!cashLedger || !isAccountType(cashLedger.accountType, "Cash")) {
           return res.status(400).json({ message: "Invalid cash account — account not found for this company" });
         }
         settlementLedgerAccountId = cashLedger.id;

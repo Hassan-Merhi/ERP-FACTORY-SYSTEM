@@ -151,7 +151,16 @@ beforeAll(async () => {
   await account("HIDEXP", "Expense", { hidden: true });
   await account("DELB", "Expense");
   await account("DELZ", "Expense");
-  await account("RE", "Equity");
+  // Phase 23 (G12): the close posts to the RETAINED_EARNINGS system account.
+  ids.RE = await insertId(
+    `INSERT INTO ledger_accounts (company_id, code, name, account_type, opening_balance, opening_balance_side)
+     VALUES ($1, 'RETAINED_EARNINGS', 'Retained Earnings', 'Equity', 0, 'Cr') RETURNING id`,
+    [ctx.companyId]
+  );
+  // Phase 23 (G12): the close requires a balanced trial balance, so the
+  // openings below (INC2 50 Cr, LIAB 100 Cr, the bank 70 Dr) have their
+  // equity counterpart (80 Dr).
+  await account("OPENEQ", "Equity", { opening: "80", side: "Dr" });
   await voucher(monthDay(-6, 10), [
     { ledger: cash, debit: "1000.00" },
     { ledger: ids.REV, credit: "1000.00" },
@@ -453,16 +462,19 @@ describe("7: statements follow the engine's end-date rule", () => {
 });
 
 describe("8: aging on the engine", () => {
-  it("buckets the balance by the lines that raised it, newest first", async () => {
+  // Phase 25 (AR-4): aged by days past the due date (booked + 30 days), the
+  // receipt settling the oldest due invoice first (it aged by booked date).
+  it("buckets the open invoices by days past due, the receipt settling the oldest due first", async () => {
     const response = await agent.get(`/api/reports/aging?kind=customer&asOf=${today}`);
     expect(response.status).toBe(200);
     const row = response.body.parties.find((party: { id: number }) => party.id === ids.CU2);
     expect(row.balance).toBe("140.00");
     expect(row.buckets).toMatchObject({
-      current: "20.00",
-      days31to60: "50.00",
-      days61to90: "0.00",
-      over90: "70.00",
+      notDue: "20.00",
+      days1to30: "50.00",
+      days31to60: "0.00",
+      days61to90: "70.00",
+      over90: "0.00",
       opening: "0.00",
     });
     expect((await agent.get("/api/reports/aging?kind=other")).status).toBe(400);

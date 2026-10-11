@@ -32,6 +32,12 @@ import { MoneyDecimal, toMoney } from "../../../lib/money";
 import type Decimal from "decimal.js";
 import { classifyVoucherLedgerExpectation } from "../voucherLedgerExpectation";
 import { liveVouchersOf, loadBalanceRows, type BalanceRowKind } from "../balances/ledgerBalanceEngine";
+import {
+  controlAccountCodeOf,
+  presentUnderControlAccounts,
+  type ControlAccountCode,
+  type ControlAccountPresentation,
+} from "../controlAccounts";
 
 export type TrialBalanceRowKind = BalanceRowKind;
 
@@ -50,6 +56,12 @@ export interface TrialBalanceRow {
   periodCredit: string;
   closingDebit: string;
   closingCredit: string;
+  /**
+   * Phase 23 (C9): the control account a party row is presented under
+   * (customers: ACCOUNTS_RECEIVABLE; suppliers and factory suppliers:
+   * ACCOUNTS_PAYABLE; employees: PAYROLL_PAYABLE); null for account rows.
+   */
+  controlAccountCode: ControlAccountCode | null;
 }
 
 export interface TrialBalanceReport {
@@ -74,6 +86,8 @@ export interface TrialBalanceReport {
     otherUnbalancedVouchers: string;
   };
   openingSidesAssumed: number;
+  /** Phase 23 (C9): each control account's own lines plus the party rows presented under it. */
+  controlAccounts: ControlAccountPresentation[];
 }
 
 interface RawVoucherDiffRow {
@@ -138,6 +152,7 @@ export async function buildTrialBalance(
       periodCredit: money(cr),
       closingDebit: money(c.debit),
       closingCredit: money(c.credit),
+      controlAccountCode: controlAccountCodeOf(row.kind),
     });
   }
   out.sort((a, b) => a.kind.localeCompare(b.kind) || (a.code ?? a.name).localeCompare(b.code ?? b.name));
@@ -172,5 +187,6 @@ export async function buildTrialBalance(
       otherUnbalancedVouchers: money(otherUnbalanced),
     },
     openingSidesAssumed,
+    controlAccounts: presentUnderControlAccounts(out),
   };
 }

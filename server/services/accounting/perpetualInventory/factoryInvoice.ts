@@ -44,7 +44,9 @@ import { HttpError } from "../../../lib/httpHandlers";
 import { MoneyDecimal, toMoney } from "../../../lib/money";
 import { findFactoryFxRateOnOrBefore, normalizeFactoryCurrency } from "../../factory/factoryFxRateOnDate";
 import { postFactoryVoucherTx, type FactoryVoucherLine } from "../../factory/factoryVoucherPosting";
-import { getInventoryCutover, isPerpetualInventoryActive } from "./cutover";
+import { isPerpetualInventoryActive } from "./cutover";
+import { factoryRevenuePostingFrom, isFactoryRevenuePostingActive } from "../../factory/factoryOpeningReceivable";
+import { syncFactoryInvoiceMirrorTx } from "../../inventory/baleMirrorWriteOff";
 import {
   isSupplierPartnerCompany,
   ledgerAccountByCodeTx,
@@ -144,9 +146,18 @@ export async function syncFactoryInvoiceTx(
        WHERE co.id = ${orderId} AND co.company_id = ${companyId}
     `
   );
-  if (!order || order.status !== "FINALIZED" || order.deleted_at !== null || !order.invoice_number) return null;
-  if (!order.invoice_date || !(await isPerpetualInventoryActive(tx, companyId, order.invoice_date))) return null;
+  const invoiced =
+    order && order.status === "FINALIZED" && order.deleted_at === null && order.invoice_number && order.invoice_date;
+  // Phase 28 (F1): the receivable and revenue post from the factory receivable
+  // cut-over (or the inventory cut-over), whatever the inventory switch; the
+  // cost of sales only under perpetual inventory.
+  const revenueActive = invoiced ? await isFactoryRevenuePostingActive(tx, companyId, order.invoice_date!) : false;
+  // Phase 28 (I8): the ERP bale mirror gives up the invoiced bales (re-synced, reversed when un-invoiced).
+  await syncFactoryInvoiceMirrorTx(tx, companyId, orderId, revenueActive);
+  if (!order || !invoiced || !revenueActive) return null;
   if (await isSupplierPartnerCompany(tx, companyId)) return null;
+  const invoiceDate = String(order.invoice_date);
+  const perpetual = await isPerpetualInventoryActive(tx, companyId, invoiceDate);
 
   // Charges with their own CHARGE- voucher already debit the customer.
   const [vouchered] = await rows<{ amount: string }>(
@@ -171,11 +182,11 @@ export async function syncFactoryInvoiceTx(
        WHERE cob.order_id = ${orderId}
     `
   );
-  const cogs = toMoney(cost?.cost ?? 0).toDecimalPlaces(2);
+  const cogs = perpetual ? toMoney(cost?.cost ?? 0).toDecimalPlaces(2) : new MoneyDecimal(0);
   if (receivable.isZero() && cogs.isZero()) return null;
   const currency = normalizeFactoryCurrency(order.currency);
-  const rate = await findFactoryFxRateOnOrBefore(tx, companyId, currency, order.invoice_date);
-  if (!rate) throw new FactoryInvoiceRateRefusalError(currency, order.invoice_date);
+  const rate = await findFactoryFxRateOnOrBefore(tx, companyId, currency, invoiceDate);
+  if (!rate) throw new FactoryInvoiceRateRefusalError(currency, invoiceDate);
 
   const zero = new MoneyDecimal(0);
   const accounts = await systemAccountIdsTx(tx, companyId, ["COGS", "FACTORY_FINISHED_GOODS"]);
@@ -188,7 +199,7 @@ export async function syncFactoryInvoiceTx(
   );
   const customerAccountId = await customerLedgerAccountTx(tx, companyId, order.customer_id);
   const number = factoryInvoiceVoucherNumber(companyId, orderId);
-  const invoice = order.invoice_number;
+  const invoice = order.invoice_number!;
   const debitReceivable = receivable.isNegative() ? zero : receivable;
   const creditReceivable = receivable.isNegative() ? receivable.negated() : zero;
   const invoiceLines: LinkedJournalLine[] = [
@@ -226,7 +237,7 @@ export async function syncFactoryInvoiceTx(
     return postLinkedJournalTx(tx, {
       companyId,
       voucherNumber: number,
-      voucherDate: order.invoice_date,
+      voucherDate: invoiceDate,
       description,
       identity,
       lines: [...invoiceLines, ...costLines],
@@ -235,7 +246,7 @@ export async function syncFactoryInvoiceTx(
   return postForeignCurrencyInvoiceTx(tx, {
     companyId,
     voucherNumber: number,
-    voucherDate: order.invoice_date,
+    voucherDate: invoiceDate,
     description,
     identity,
     currency,
@@ -316,8 +327,9 @@ export async function listUnpostedFactoryInvoices(
   executor: DatabaseOrTransaction,
   companyId: number
 ): Promise<UnpostedFactoryInvoice[]> {
-  const cutover = await getInventoryCutover(executor, companyId);
-  if (!cutover) return [];
+  // Phase 28 (F1): invoices post from the earlier of the receivable and inventory cut-overs.
+  const postingFrom = await factoryRevenuePostingFrom(executor, companyId);
+  if (!postingFrom) return [];
   const result = await rows<{
     id: number;
     invoice_number: string;
@@ -333,7 +345,7 @@ export async function listUnpostedFactoryInvoices(
         LEFT JOIN customer_dispatch_batches b ON b.id = co.dispatch_batch_id AND b.company_id = co.company_id
        WHERE co.company_id = ${companyId} AND co.status = 'FINALIZED' AND co.deleted_at IS NULL
          AND co.invoice_number IS NOT NULL
-         AND COALESCE(co.finalized_at, co.created_at)::date >= ${cutover.effectiveFrom}::date
+         AND COALESCE(co.finalized_at, co.created_at)::date >= ${postingFrom}::date
          AND NOT EXISTS (
            SELECT 1 FROM vouchers v
             WHERE v.company_id = ${companyId} AND v.deleted_at IS NULL

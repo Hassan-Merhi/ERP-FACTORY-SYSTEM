@@ -346,15 +346,17 @@ describe("rental units GET only reads; post due accruals now posts and audits", 
   });
 
   it("is Admin/Owner only, posts on the business date, audits, and skips a closed-period scheduled payment", async () => {
-    await closeBooksThrough(closureDate);
     const scheduledDate = addDays(closureDate, -1);
     const [year, month] = scheduledDate.split("-").map(Number);
+    // Phase 23 (DI3): rental payments are period-locked, so the scheduled payment
+    // exists before the books are closed over its date.
     await pool.query(
       `INSERT INTO property_payments (company_id, module, contract_id, unit_id, amount, payment_date, for_year, for_month,
          posting_status, payment_group_id, cash_account_id)
        VALUES ($1, 'ERP', $2, $3, '500.00', $4, $5, $6, 'SCHEDULED', 'PG-W18-CLOSED', $7)`,
       [ctx.companyId, contractId, unitId, scheduledDate, year, month, ctx.cashAccountId]
     );
+    await closeBooksThrough(closureDate);
 
     const res = await agent.post("/api/erp/rental/accruals/post-due");
     expect(res.status).toBe(200);

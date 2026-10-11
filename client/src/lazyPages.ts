@@ -75,6 +75,7 @@ export const ImportCycleDiagnostics = lazy(() => import("@/pages/ImportCycleDiag
 export const InventoryRepair = lazy(() => import("@/pages/InventoryRepair"));
 export const BalanceRepair = lazy(() => import("@/pages/BalanceRepair"));
 export const ConvergenceReconciliation = lazy(() => import("@/pages/ConvergenceReconciliation"));
+export const FinancialReports = lazy(() => import("@/pages/FinancialReports"));
 export const NetProfitDetails = lazy(() => import("@/pages/NetProfitDetails"));
 export const NetProfitReport = lazy(() => import("@/pages/NetProfitReport"));
 export const CompanyDataReset = lazy(() => import("@/pages/CompanyDataReset"));

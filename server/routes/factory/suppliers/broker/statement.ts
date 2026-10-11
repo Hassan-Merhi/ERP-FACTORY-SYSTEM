@@ -17,6 +17,7 @@ import { db } from "../../../../db";
 import {
   emptyFactorySupplierLedgerView,
   FACTORY_SUPPLIER_OPERATIONAL_MEMO_LABEL,
+  loadFactorySupplierLedgerLines,
   loadFactorySupplierLedgerViews,
 } from "../balance/factorySupplierLedger";
 import { MoneyDecimal, toMoney, type MoneyInput } from "../../../../lib/money";
@@ -90,12 +91,59 @@ export function registerSupplierBrokerStatementRoutes(app: Express) {
         freight: "FFFFF3E0",
       };
 
+      // Phase 25 (AR-8): the statement is the ledger. The first sheet lists the
+      // ledger lines of the broker and each linked supplier (the lines the
+      // engine attributes to them, USD book amounts, running balance Cr
+      // positive from the ledger opening); the currency sheets after it are the
+      // operational container view, a memo.
+      const parties = [
+        { id: data.supplier.id, name: data.supplier.name },
+        ...(data.linkedSuppliers ?? []).map((linked) => ({ id: linked.id, name: linked.name })),
+      ];
+      const views = await loadFactorySupplierLedgerViews(db, companyId, { ids: parties.map((party) => party.id) });
+      const ledgerWs = wb.addWorksheet("Ledger");
+      ledgerWs.addRow([`Supplier Ledger — ${data.supplier.name}`]).font = { bold: true, size: 13 };
+      ledgerWs.addRow([]);
+      const ledgerHdr = ledgerWs.addRow(["Supplier", "Date", "Voucher", "Description", "Debit", "Credit", "Balance"]);
+      ledgerHdr.font = { bold: true, color: { argb: "FFFFFFFF" } };
+      ledgerHdr.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF1F3864" } };
+      for (const party of parties) {
+        const view = views.get(party.id) ?? emptyFactorySupplierLedgerView(party.id);
+        const lines = await loadFactorySupplierLedgerLines(db, companyId, party.id, toMoney(view.openingBalanceUsd));
+        ledgerWs.addRow([party.name, "", "", "Opening Balance", "", "", cell(view.openingBalanceUsd)]);
+        for (const line of lines) {
+          ledgerWs.addRow([
+            party.name,
+            line.date,
+            line.voucherNumber,
+            line.description,
+            cell(line.debitUsd),
+            cell(line.creditUsd),
+            cell(line.runningBalanceUsd),
+          ]);
+        }
+        ledgerWs.addRow([party.name, "", "", "Ledger balance", "", "", cell(view.ledgerBalanceUsd)]).font = {
+          bold: true,
+        };
+      }
+      ledgerWs.columns = [
+        { width: 24 },
+        { width: 12 },
+        { width: 22 },
+        { width: 40 },
+        { width: 14, style: { numFmt: "#,##0.00" } },
+        { width: 14, style: { numFmt: "#,##0.00" } },
+        { width: 16, style: { numFmt: "#,##0.00" } },
+      ];
+
       for (const section of data.currencyLedgers) {
-        const ws = wb.addWorksheet(section.currencyCode);
+        const ws = wb.addWorksheet(`${section.currencyCode} (memo)`);
         ws.properties.defaultRowHeight = 15;
 
         // Title row
-        const titleRow = ws.addRow([`Broker Statement — ${data.supplier.name} — ${section.currencyCode}`]);
+        const titleRow = ws.addRow([
+          `Broker Statement — ${data.supplier.name} — ${section.currencyCode} — ${FACTORY_SUPPLIER_OPERATIONAL_MEMO_LABEL}`,
+        ]);
         titleRow.font = { bold: true, size: 13 };
         ws.mergeCells(`A${titleRow.number}:G${titleRow.number}`);
         ws.addRow([]);

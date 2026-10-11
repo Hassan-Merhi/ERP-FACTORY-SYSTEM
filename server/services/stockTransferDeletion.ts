@@ -1,4 +1,4 @@
-import { and, eq, inArray, or } from "drizzle-orm";
+import { and, eq, inArray, or, isNull } from "drizzle-orm";
 import { softDeleteVoucherTx } from "./accounting/voucherSoftDelete";
 import { db, type DbTransaction } from "../db";
 import type Decimal from "decimal.js";
@@ -17,6 +17,7 @@ import { journalStockTransferLeg, nextStockTransferRevision } from "./inventory/
 import { postTransferResidualTx, reverseTransferLegExactTx } from "./inventory/conservedStockTransfer";
 import { lineValueMoved, reversalDate } from "./inventory/valueExactReversal";
 import { applyEmployeeBalanceDeltasTx } from "./accounting/employeeBalancePosting";
+import { softDeleteTransferLinkTx } from "./accounting/intercompany/intercompanyTransferPosting";
 
 export class StockTransferDeletionError extends Error {
   constructor(
@@ -283,10 +284,16 @@ export async function deleteStockTransferVoucher(input: {
     const linkedTransfers = await tx
       .select()
       .from(interCompanyTransfers)
-      .where(or(eq(interCompanyTransfers.fromVoucherId, voucherId), eq(interCompanyTransfers.toVoucherId, voucherId)));
+      .where(
+        and(
+          or(eq(interCompanyTransfers.fromVoucherId, voucherId), eq(interCompanyTransfers.toVoucherId, voucherId)),
+          isNull(interCompanyTransfers.deletedAt)
+        )
+      );
     for (const linked of linkedTransfers) {
       const otherVoucherId = linked.fromVoucherId === voucherId ? linked.toVoucherId : linked.fromVoucherId;
-      await tx.delete(interCompanyTransfers).where(eq(interCompanyTransfers.id, linked.id));
+      // Phase 26 (MC-11): the link is soft-deleted and audited, not removed.
+      await softDeleteTransferLinkTx(tx, linked.id, { reason: `Stock transfer voucher ${voucherId} deleted` });
       if (otherVoucherId && otherVoucherId !== voucherId) {
         await softDeleteVoucherTx(tx, otherVoucherId);
       }

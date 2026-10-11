@@ -25,6 +25,10 @@
  * An open mix recorded unvalued (a source with no USD rate before the
  * cut-over: cost 0) is listed with the rows that carry no cost.
  *
+ * Phase 28: raw material also counts the manual ADD / REMOVE adjustments and
+ * the over-used rows (F8, rawMaterialAdjustmentsValue); garbage HMD16 bales
+ * cost nothing by rule and are not listed as unvalued (F5).
+ *
  * The opening journal and the daily factory stock journal both value the
  * factory with this function. Rows that carry no cost are listed, never valued
  * at a guess.
@@ -34,6 +38,7 @@ import { sql } from "drizzle-orm";
 
 import type { DatabaseOrTransaction } from "../../../db";
 import { MoneyDecimal, toMoney } from "../../../lib/money";
+import { findFactoryFxRateOnOrBefore } from "../../factory/factoryFxRateOnDate";
 
 /** Order statuses whose bales left stock with the order (the SQL below lists them inline). */
 export const INVOICED_ORDER_STATUSES = ["FINALIZED", "DISPATCHED", "SOLD", "INVOICED", "COMPLETED"] as const;
@@ -41,7 +46,7 @@ export const INVOICED_ORDER_STATUSES = ["FINALIZED", "DISPATCHED", "SOLD", "INVO
 export const OPEN_ORDER_STATUSES = ["DRAFT", "LOADING", "PENDING_VERIFICATION", "VERIFIED"] as const;
 
 export interface UnvaluedRow {
-  source: "factory_raw_stock" | "factory_mix_batches" | "factory_bales";
+  source: "factory_raw_stock" | "factory_mix_batches" | "factory_bales" | "factory_raw_material_adjustments";
   id: number;
   reason: string;
 }
@@ -70,22 +75,31 @@ export async function factoryStockValuation(
 ): Promise<FactoryStockValuation> {
   const unvalued: UnvaluedRow[] = [];
 
+  // Phase 28 (F8): over-used rows (more kg used than received: the mixes drew
+  // on stock a manual adjustment added) are valued too, negatively, at the
+  // row's USD cost; they were left out, so the pool they drew on was counted
+  // whole.
   const raw = await rows<{ id: number; remaining: string; cost: string | null }>(
     executor,
     sql`
       SELECT id, (received_kg - used_kg)::text AS remaining, cost_per_kg_usd::text AS cost
         FROM factory_raw_stock
-       WHERE company_id = ${companyId} AND deleted_at IS NULL AND received_kg - used_kg > 0
+       WHERE company_id = ${companyId} AND deleted_at IS NULL AND received_kg - used_kg <> 0
     `
   );
   let rawValue: Decimal = new MoneyDecimal(0);
   for (const row of raw) {
     if (row.cost === null) {
-      unvalued.push({ source: "factory_raw_stock", id: row.id, reason: "no USD cost per kg" });
+      unvalued.push({
+        source: "factory_raw_stock",
+        id: row.id,
+        reason: toMoney(row.remaining).isNegative() ? "over-used row with no USD cost per kg" : "no USD cost per kg",
+      });
       continue;
     }
     rawValue = rawValue.plus(toMoney(row.remaining).times(toMoney(row.cost)));
   }
+  rawValue = rawValue.plus(await rawMaterialAdjustmentsValue(executor, companyId, unvalued));
 
   const mixes = await rows<{ id: number; remaining: string; cost: string }>(
     executor,
@@ -106,7 +120,9 @@ export async function factoryStockValuation(
     executor,
     sql`
       SELECT status, COALESCE(SUM(total_cost), 0)::text AS cost,
-             COALESCE(array_agg(id) FILTER (WHERE COALESCE(total_cost, 0) = 0), '{}') AS zero_cost
+             COALESCE(array_agg(id) FILTER (
+               WHERE COALESCE(total_cost, 0) = 0 AND COALESCE(article_code, '') NOT LIKE 'HMD16%'
+             ), '{}') AS zero_cost
         FROM factory_bales
        WHERE company_id = ${companyId} AND deleted_at IS NULL
          AND status IN ('PENDING_PRESSING', 'IN_STOCK', 'RESERVED_FOR_ORDER', 'RESERVED_FOR_DISPATCH')
@@ -168,6 +184,89 @@ export async function factoryStockValuation(
     soldNotInvoiced: { bales: sold?.count ?? 0, cost: soldCost.toFixed(2) },
     reservedForOrders: { bales: reserved?.count ?? 0, cost: toMoney(reserved?.cost ?? 0).toFixed(2) },
   };
+}
+
+/**
+ * Phase 28 (F8): the manual raw-material adjustments (ADD / REMOVE, live), in
+ * USD (a DEDUCT changes the raw-stock rows themselves and is valued there). An ADD adds its kg at its own cost per kg (USD, or its currency at the
+ * confirmed factory rate on or before its date); an ADD with no cost (quantity
+ * only) and every REMOVE are valued at the supplier's locked USD rate, else
+ * the USD average of the ADD adjustments of the same material label. One
+ * that cannot be valued is listed as unvalued, never guessed. Before, the
+ * adjustments were not in the valuation at all: a manual purchase's debit to
+ * Factory Raw Material Stock was reversed into Production Variance by the
+ * daily factory journal, and a REMOVE changed nothing.
+ */
+async function rawMaterialAdjustmentsValue(
+  executor: DatabaseOrTransaction,
+  companyId: number,
+  unvalued: UnvaluedRow[]
+): Promise<Decimal> {
+  const adjustments = await rows<{
+    id: number;
+    date: string;
+    type: string;
+    kg: string;
+    cost: string | null;
+    currency: string | null;
+    supplier_rate: string | null;
+    label: string | null;
+  }>(
+    executor,
+    sql`
+      SELECT a.id, a.date, UPPER(a.type) AS type, a.kg::text AS kg, a.cost_per_kg::text AS cost,
+             a.currency_code AS currency, COALESCE(a.material_label, '') AS label,
+             CASE WHEN s.current_raw_material_cost_per_kg_usd > 0
+                  THEN s.current_raw_material_cost_per_kg_usd::text END AS supplier_rate
+        FROM factory_raw_material_adjustments a
+        LEFT JOIN factory_suppliers s ON s.id = a.supplier_id AND s.company_id = ${companyId}
+       WHERE a.company_id = ${companyId} AND a.deleted_at IS NULL AND a.kg <> 0
+         AND UPPER(a.type) IN ('ADD', 'REMOVE')
+       ORDER BY a.id
+    `
+  );
+  let total: Decimal = new MoneyDecimal(0);
+  const addCost = new Map<string, { kg: Decimal; usd: Decimal }>();
+  const pending: typeof adjustments = [];
+  for (const row of adjustments) {
+    const kg = toMoney(row.kg);
+    const cost = toMoney(row.cost ?? 0);
+    if (row.type === "ADD" && cost.gt(0)) {
+      const currency = String(row.currency || "USD").toUpperCase();
+      const date = /^\d{4}-\d{2}-\d{2}/.test(row.date) ? row.date.slice(0, 10) : null;
+      const rate =
+        currency === "USD"
+          ? new MoneyDecimal(1)
+          : date
+            ? toMoney((await findFactoryFxRateOnOrBefore(executor, companyId, currency, date))?.rate ?? 0)
+            : new MoneyDecimal(0);
+      if (!rate.gt(0)) {
+        unvalued.push({ source: "factory_raw_material_adjustments", id: row.id, reason: "no confirmed USD rate" });
+        continue;
+      }
+      const usd = kg.times(cost).times(rate);
+      total = total.plus(usd);
+      const pool = addCost.get(row.label ?? "") ?? { kg: new MoneyDecimal(0), usd: new MoneyDecimal(0) };
+      addCost.set(row.label ?? "", { kg: pool.kg.plus(kg), usd: pool.usd.plus(usd) });
+      continue;
+    }
+    pending.push(row);
+  }
+  for (const row of pending) {
+    const kg = toMoney(row.kg);
+    const pool = addCost.get(row.label ?? "");
+    const rate = row.supplier_rate
+      ? toMoney(row.supplier_rate)
+      : pool && pool.kg.gt(0)
+        ? pool.usd.dividedBy(pool.kg)
+        : null;
+    if (!rate) {
+      unvalued.push({ source: "factory_raw_material_adjustments", id: row.id, reason: "no USD rate to value it" });
+      continue;
+    }
+    total = row.type === "REMOVE" ? total.minus(kg.times(rate)) : total.plus(kg.times(rate));
+  }
+  return total;
 }
 
 /**

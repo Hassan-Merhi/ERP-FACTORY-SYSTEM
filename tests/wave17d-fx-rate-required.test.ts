@@ -183,7 +183,9 @@ describe("factory supplier payment", () => {
 
   it("posts normalized lines at the payment's own rate once a dated rate exists", async () => {
     await pool.query(
-      `INSERT INTO factory_fx_rates (company_id, currency_code, rate_to_usd, effective_date, source) VALUES ($1, 'EUR', '1.08', '2026-08-01', 'manual')`,
+      // Phase 23 (currency trigger v3): the payment's own rate (1.10) must be within
+      // 0.5% of the recorded rate; 1.08 (1.9% away) is now refused, 1.098 is not.
+      `INSERT INTO factory_fx_rates (company_id, currency_code, rate_to_usd, effective_date, source) VALUES ($1, 'EUR', '1.098', '2026-08-01', 'manual')`,
       [ctx.companyId]
     );
     const posted = await agent.post("/api/factory/supplier-payments").send(payment("w17d-pay-0002"));
@@ -332,6 +334,13 @@ describe("currency trigger v2", () => {
 
   it("accepts normalized EUR lines and normalizes a legacy USD line", async () => {
     await withFixtureTransaction(async (client) => {
+      // Phase 23 (currency trigger v3): the lines' rate (1.1) is checked against
+      // the recorded EUR rate on the voucher date.
+      await client.query(
+        `INSERT INTO factory_fx_rates (company_id, currency_code, rate_to_usd, effective_date, source)
+         VALUES ($1, 'EUR', '1.10', '2026-09-20', 'manual')`,
+        [ctx.companyId]
+      );
       const id = await eurVoucher(client);
       for (const [debit, credit] of [
         ["11.000000", "0"],

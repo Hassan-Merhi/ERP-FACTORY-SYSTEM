@@ -1,4 +1,5 @@
 import { pool } from "../../db";
+import { toMoney } from "../../lib/money";
 
 export interface RealizedProfitQuery {
   text: string;
@@ -16,15 +17,17 @@ export function buildRealizedProfitQuery(
   toDate: string | null | undefined
 ): RealizedProfitQuery {
   const params: Array<number | string> = [companyId];
-  const predicates = ["v.voucher_type = 'Sales'", "v.deleted_at IS NULL"];
+  // Phase 27 (RP-11): optional vouchers are not sales, and a voucher counts
+  // from COALESCE(effective_date, voucher_date) as in every report.
+  const predicates = ["v.voucher_type = 'Sales'", "v.deleted_at IS NULL", "v.optional = false"];
 
   if (baselineDate) {
     params.push(baselineDate);
-    predicates.push(`v.voucher_date >= $${params.length}`);
+    predicates.push(`COALESCE(v.effective_date, v.voucher_date) >= $${params.length}`);
   }
   if (toDate) {
     params.push(toDate);
-    predicates.push(`v.voucher_date <= $${params.length}`);
+    predicates.push(`COALESCE(v.effective_date, v.voucher_date) <= $${params.length}`);
   }
 
   return {
@@ -46,5 +49,7 @@ export async function getSupplierPartnerPosProfit(
 ): Promise<number> {
   const query = buildRealizedProfitQuery(companyId, baselineDate, toDate);
   const result = await pool.query<{ total: string | null }>(query.text, query.params);
-  return Number(result.rows[0]?.total ?? 0);
+  return toMoney(result.rows[0]?.total ?? 0)
+    .toDecimalPlaces(2)
+    .toNumber();
 }

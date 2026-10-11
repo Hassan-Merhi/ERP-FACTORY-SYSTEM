@@ -47,7 +47,8 @@ export async function buildCompanyWorkbook(
   // ── Customers ─────────────────────────────────────────────────────────────
   addSheet(wb, "Customers", data.customers);
   addSheet(wb, "Customer Transactions", data.customerTransactions);
-  addSheet(wb, "Customer Balances", data.customerBalances);
+  // Phase 25 (AR-6): the customer_balances cache is a read-only memo, not the ledger.
+  addSheet(wb, "Customer Balances (memo)", data.customerBalances);
   addSheet(wb, "Customer Orders", data.customerOrders);
   addSheet(wb, "Customer Order Lines", data.customerOrderLines);
   addSheet(wb, "Customer Order Bales", data.customerOrderBales);
@@ -208,7 +209,7 @@ export async function buildCompanyWorkbook(
   addSheet(wb, "Stock Transfer Detail", data.stockTransferDetail);
   addSheet(wb, "Supplier Balances", data.supplierBalances);
   addSheet(wb, "Supplier Txn Detail", data.supplierTxnDetail);
-  addSheet(wb, "Customer Balances Detail", data.customerBalancesDetail);
+  addSheet(wb, "Customer Bal Detail (memo)", data.customerBalancesDetail);
   addSheet(wb, "Customer Order Detail", data.customerOrderDetail);
   addSheet(wb, "Credit-Debit Note Detail", data.creditNoteDetail);
   addSheet(wb, "Salary Advances Detail", data.salaryAdvancesDetail);

@@ -1,5 +1,6 @@
 export * from "./common";
 export * from "./accounting";
+export * from "./ledgerModel";
 export * from "./users";
 export * from "./security";
 export * from "./inventory";

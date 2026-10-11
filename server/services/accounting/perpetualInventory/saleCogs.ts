@@ -10,6 +10,11 @@
  *
  * Nothing is posted unless the company's perpetual-inventory cut-over is
  * applied and the sale is dated on or after it.
+ *
+ * Phase 29 (I3): the journal is dated on the sale's effective date when it has
+ * one (COALESCE(effective_date, voucher_date), the date the ledger books the
+ * sale on and the stock replay uses), not on its voucher date; a re-date of the
+ * sale's voucher or effective date moves it with the sale (redateSaleCogsTx).
  */
 import type Decimal from "decimal.js";
 import { sql } from "drizzle-orm";
@@ -44,6 +49,24 @@ export function relievedValue(
   return toMoney(result.previousTotalValue).minus(toMoney(result.newTotalValue)).toDecimalPlaces(2);
 }
 
+/**
+ * Phase 29 (I3): the date the ledger books a sale on: its effective date when
+ * it has one, else its voucher date (`fallback` before the sale row exists).
+ */
+export async function saleBookingDateTx(
+  executor: DatabaseOrTransaction,
+  companyId: number,
+  saleVoucherId: number,
+  fallback: string
+): Promise<string> {
+  const found = await executor.execute(sql`
+    SELECT COALESCE(effective_date, voucher_date)::text AS booked FROM vouchers
+     WHERE id = ${saleVoucherId} AND company_id = ${companyId}
+  `);
+  const booked = (found.rows[0] as { booked: string | null } | undefined)?.booked;
+  return booked ? booked.slice(0, 10) : String(fallback).slice(0, 10);
+}
+
 /** Removes a sale's COGS journal and its posting identity, if any. */
 export async function removeSaleCogsTx(tx: DbTransaction, companyId: number, saleVoucherId: number): Promise<void> {
   await removeLinkedJournalTx(tx, companyId, saleCogsVoucherNumber(saleVoucherId));
@@ -68,7 +91,9 @@ export async function postSaleCogsTx(
   }
 ): Promise<number | null> {
   await removeSaleCogsTx(tx, params.companyId, params.saleVoucherId);
-  if (!(await isPerpetualInventoryActive(tx, params.companyId, params.voucherDate))) return null;
+  // Phase 29 (I3): the sale's effective date when it has one.
+  const bookedOn = await saleBookingDateTx(tx, params.companyId, params.saleVoucherId, params.voucherDate);
+  if (!(await isPerpetualInventoryActive(tx, params.companyId, bookedOn))) return null;
   if (await isSupplierPartnerCompany(tx, params.companyId)) return null;
   const relieved = params.relieved.toDecimalPlaces(2);
   if (relieved.isZero()) return null;
@@ -81,7 +106,7 @@ export async function postSaleCogsTx(
   return postLinkedJournalTx(tx, {
     companyId: params.companyId,
     voucherNumber: saleCogsVoucherNumber(params.saleVoucherId),
-    voucherDate: params.voucherDate,
+    voucherDate: bookedOn,
     description: ["Cost of goods sold", params.saleVoucherNumber].join(" - "),
     identity: { sourceType: "perpetual-sale-cogs", sourceId: params.saleVoucherId },
     locationId: params.locationId,
@@ -133,12 +158,21 @@ export interface SaleRedate {
   voucherType: string;
   oldDate: string;
   newDate: string;
+  /** Phase 29 (I3): the effective dates before and after, when the edit carries them. */
+  oldEffectiveDate?: string | null;
+  newEffectiveDate?: string | null;
 }
 
 function redateDates(params: SaleRedate): { oldDate: string; newDate: string } | null {
   if (params.voucherType !== "Sales" && params.voucherType !== "Receipt") return null;
-  const oldDate = String(params.oldDate ?? "").slice(0, 10);
-  const newDate = String(params.newDate ?? "").slice(0, 10);
+  // Phase 29 (I3): compare the booking dates (effective date, else voucher date).
+  const oldDate = String(params.oldEffectiveDate || params.oldDate || "").slice(0, 10);
+  const newVoucherDate = String(params.newDate ?? "").slice(0, 10) || oldDate;
+  const newDate = String(
+    params.newEffectiveDate !== undefined
+      ? params.newEffectiveDate || newVoucherDate
+      : params.oldEffectiveDate || newVoucherDate
+  ).slice(0, 10);
   if (!newDate || oldDate === newDate) return null;
   return { oldDate, newDate };
 }
@@ -160,8 +194,10 @@ export async function redateSaleCogsTx(tx: DbTransaction, params: SaleRedate): P
   const dates = redateDates(params);
   if (!dates) return;
   await assertSaleRedateAllowed(tx, params);
+  // The sale row is updated first by the callers; its booking date wins.
+  const bookedOn = await saleBookingDateTx(tx, params.companyId, params.saleVoucherId, dates.newDate);
   await tx.execute(sql`
-    UPDATE vouchers SET voucher_date = ${dates.newDate}
+    UPDATE vouchers SET voucher_date = ${bookedOn}
      WHERE company_id = ${params.companyId} AND voucher_number = ${saleCogsVoucherNumber(params.saleVoucherId)}
        AND deleted_at IS NULL
   `);

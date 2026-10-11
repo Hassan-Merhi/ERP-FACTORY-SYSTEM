@@ -238,10 +238,12 @@ describe("Phase 15 costing edge cases", () => {
     });
 
     // Phase 19 C (M2): a non-USD offload needs a recorded dated factory rate;
-    // the rate entered on the offload is then used.
+    // the rate entered on the offload is then used. Phase 23 (currency trigger
+    // v3): the entered rate must be within 0.5% of the recorded one (1.23 here;
+    // it was 1.20, 2.9% away, which v3 refuses).
     await pool.query(
       `INSERT INTO factory_fx_rates (company_id, currency_code, rate_to_usd, effective_date, source)
-       VALUES ($1, 'EUR', '1.20000000', '2026-09-01', 'manual')`,
+       VALUES ($1, 'EUR', '1.23000000', '2026-09-01', 'manual')`,
       [ctx.companyId]
     );
     const response = await agent.post("/api/factory/raw-stock/offload").send({
@@ -316,6 +318,13 @@ describe("Phase 15 costing edge cases", () => {
   it("posts a non-USD additional charge's USD voucher legs at the exact cents", async () => {
     const containerId = await makeContainer({ suffix: "addl", totalKg: "100", ratePerKg: "1", supplierId: null });
 
+    // Phase 23 (currency trigger v3): the charge's rate is checked against the
+    // recorded EUR rate on the offload date, so record the one this charge uses.
+    await pool.query(
+      `INSERT INTO factory_fx_rates (company_id, currency_code, rate_to_usd, effective_date, source)
+       VALUES ($1, 'EUR', '0.35000000', '2026-09-13', 'manual')`,
+      [ctx.companyId]
+    );
     const response = await agent.post("/api/factory/raw-stock/offload").send({
       containerId: String(containerId),
       receivedKg: "100",

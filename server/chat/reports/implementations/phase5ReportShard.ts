@@ -1,7 +1,6 @@
 import { db, sql } from "./reportShardSupport";
-import { defaultOpeningSide } from "../../../services/accounting/accountClassification";
-import { toMoney } from "../../../lib/money";
 import type { DataQueryContext, DataQueryResult, ReportImplementationShard } from "../types";
+import { cashFlowSummaryReport, ledgerAccountBalanceReport, trialBalanceReport } from "./financialStatementReports";
 
 export const phase5QueryTypes = [
   "trial_balance",
@@ -22,88 +21,8 @@ async function runPhase5Report(ctx: DataQueryContext): Promise<DataQueryResult> 
 
   switch (params.queryType) {
     case "trial_balance": {
-      const rows = await db.execute<{
-        name: string;
-        account_type: string;
-        code: string | null;
-        total_dr: string;
-        total_cr: string;
-      }>(sql`
-        SELECT la.name, la.account_type, la.code,
-          COALESCE(SUM(CAST(ve.debit_amount AS numeric)), 0) AS total_dr,
-          COALESCE(SUM(CAST(ve.credit_amount AS numeric)), 0) AS total_cr
-        FROM ledger_accounts la
-        -- Only lines of live, non-optional vouchers of this company dated in the
-        -- range are summed. The voucher filters used to sit on a second LEFT
-        -- JOIN, which kept every entry (deleted, optional and out-of-range
-        -- vouchers included) and only dropped the voucher row.
-        LEFT JOIN (
-          voucher_entries ve
-          JOIN vouchers v ON v.id = ve.voucher_id
-            AND v.company_id = ${companyId}
-            AND v.deleted_at IS NULL AND v.optional = false
-            AND CAST(COALESCE(v.effective_date, v.voucher_date) AS text) BETWEEN ${dateFrom} AND ${dateTo}
-        ) ON ve.ledger_account_id = la.id
-        WHERE la.company_id = ${companyId}
-          AND la.deleted_at IS NULL
-          AND la.is_hidden = false
-        GROUP BY la.id, la.name, la.account_type, la.code
-        HAVING COALESCE(SUM(CAST(ve.debit_amount AS numeric)), 0) > 0
-          OR COALESCE(SUM(CAST(ve.credit_amount AS numeric)), 0) > 0
-        ORDER BY la.account_type, la.name
-      `);
-      let grandDrExact = toMoney(0),
-        grandCrExact = toMoney(0);
-      const tableRows5 = rows.rows.map((r) => {
-        const drExact = toMoney(r.total_dr);
-        const crExact = toMoney(r.total_cr);
-        grandDrExact = grandDrExact.plus(drExact);
-        grandCrExact = grandCrExact.plus(crExact);
-        const dr = drExact.toNumber();
-        const cr = crExact.toNumber();
-        const net = drExact.minus(crExact).toNumber();
-        return [
-          r.code || "—",
-          r.name,
-          r.account_type,
-          fmt(dr),
-          fmt(cr),
-          net >= 0 ? fmt(net) : "—",
-          net < 0 ? fmt(Math.abs(net)) : "—",
-        ];
-      });
-      const grandDr = grandDrExact.toNumber();
-      const grandCr = grandCrExact.toNumber();
-      tableRows5.push([
-        "",
-        "GRAND TOTAL",
-        "",
-        fmt(grandDr),
-        fmt(grandCr),
-        grandDr >= grandCr ? fmt(grandDr - grandCr) : "—",
-        grandCr > grandDr ? fmt(grandCr - grandDr) : "—",
-      ]);
-      const stats5 = [
-        { label: "Total Accounts", value: String(tableRows5.length - 1) },
-        { label: "Total Debits", value: fmt(grandDr) },
-        { label: "Total Credits", value: fmt(grandCr) },
-        {
-          label: "Net",
-          value: fmt(Math.abs(grandDr - grandCr)),
-          highlight: Math.abs(grandDr - grandCr) < 0.01 ? "positive" : "negative",
-        },
-      ];
-      dataQueryResult = {
-        queryType: "trial_balance",
-        title: "Trial Balance",
-        subtitle: `${dateFrom} → ${dateTo}`,
-        stats: stats5,
-        table: {
-          headers: ["Code", "Account", "Type", "Debit", "Credit", "Dr Balance", "Cr Balance"],
-          rows: tableRows5,
-        },
-        noData: tableRows5.length <= 1,
-      };
+      // Phase 27 (RP-13): on the report services (financialStatementReports.ts).
+      dataQueryResult = await trialBalanceReport(ctx);
       break;
     }
 
@@ -455,175 +374,14 @@ async function runPhase5Report(ctx: DataQueryContext): Promise<DataQueryResult> 
     }
 
     case "cash_flow_summary": {
-      const rows = await db.execute<{
-        account_name: string;
-        account_type: string;
-        total_in: string;
-        total_out: string;
-        tx_count: string;
-      }>(sql`
-        SELECT la.name AS account_name, la.account_type,
-          COALESCE(SUM(CAST(ve.debit_amount AS numeric)), 0) AS total_in,
-          COALESCE(SUM(CAST(ve.credit_amount AS numeric)), 0) AS total_out,
-          COUNT(DISTINCT v.id) AS tx_count
-        FROM voucher_entries ve
-        JOIN vouchers v ON v.id = ve.voucher_id
-          AND v.deleted_at IS NULL AND v.optional = false
-          AND CAST(COALESCE(v.effective_date, v.voucher_date) AS text) BETWEEN ${dateFrom} AND ${dateTo}
-        JOIN ledger_accounts la ON la.id = ve.ledger_account_id
-          AND LOWER(TRIM(la.account_type)) IN ('bank', 'cash')
-        WHERE la.company_id = ${companyId}
-        GROUP BY la.id, la.name, la.account_type
-        ORDER BY total_in DESC
-      `);
-      let grandIn = 0,
-        grandOut = 0;
-      const tableRows5 = rows.rows.map((r) => {
-        const inflow = parseFloat(r.total_in || "0");
-        const outflow = parseFloat(r.total_out || "0");
-        const net = inflow - outflow;
-        grandIn += inflow;
-        grandOut += outflow;
-        return [
-          r.account_name,
-          r.account_type,
-          fmt(inflow),
-          fmt(outflow),
-          net >= 0 ? fmt(net) : `(${fmt(Math.abs(net))})`,
-          String(r.tx_count),
-        ];
-      });
-      tableRows5.push([
-        "TOTAL",
-        "",
-        fmt(grandIn),
-        fmt(grandOut),
-        grandIn >= grandOut ? fmt(grandIn - grandOut) : `(${fmt(grandOut - grandIn)})`,
-        "",
-      ]);
-      const stats5 = [
-        { label: "Total Cash In", value: fmt(grandIn), highlight: "positive" },
-        { label: "Total Cash Out", value: fmt(grandOut) },
-        {
-          label: "Net Position",
-          value: grandIn >= grandOut ? fmt(grandIn - grandOut) : `(${fmt(grandOut - grandIn)})`,
-          highlight: grandIn >= grandOut ? "positive" : "negative",
-        },
-      ];
-      dataQueryResult = {
-        queryType: "cash_flow_summary",
-        title: "Cash Flow Summary",
-        subtitle: `${dateFrom} → ${dateTo} · Bank & Cash accounts`,
-        stats: stats5,
-        table: {
-          headers: ["Account", "Type", "Inflow (Dr)", "Outflow (Cr)", "Net", "Transactions"],
-          rows: tableRows5,
-        },
-        noData: tableRows5.length <= 1,
-      };
+      // Phase 27 (RP-13): on the report services (financialStatementReports.ts).
+      dataQueryResult = await cashFlowSummaryReport(ctx);
       break;
     }
 
     case "ledger_account_balance": {
-      const acctName5 = params.entityName || params.locationName;
-      if (!acctName5) {
-        dataQueryResult = {
-          queryType: "ledger_account_balance",
-          title: "Ledger Account Balance",
-          summary: "Please specify an account name.",
-        };
-        break;
-      }
-      const acctRow5 = await db.execute<{
-        id: number;
-        name: string;
-        account_type: string;
-        code: string | null;
-        opening_balance: string;
-        opening_balance_side: string | null;
-      }>(sql`
-        SELECT id, name, account_type, code,
-          CAST(opening_balance AS numeric) AS opening_balance, opening_balance_side
-        FROM ledger_accounts
-        WHERE company_id = ${companyId} AND deleted_at IS NULL
-          AND name ILIKE ${"%" + acctName5 + "%"}
-        ORDER BY name LIMIT 1
-      `);
-      if (!acctRow5.rows.length) {
-        dataQueryResult = {
-          queryType: "ledger_account_balance",
-          title: "Ledger Account Balance",
-          summary: `No account found matching "${acctName5}".`,
-        };
-        break;
-      }
-      const la5 = acctRow5.rows[0];
-      const txRows5 = await db.execute<{
-        voucher_date: string;
-        voucher_type: string;
-        voucher_number: string;
-        description: string | null;
-        dr: string;
-        cr: string;
-      }>(sql`
-        SELECT v.voucher_date, v.voucher_type, v.voucher_number, v.description,
-          CAST(ve.debit_amount AS numeric) AS dr,
-          CAST(ve.credit_amount AS numeric) AS cr
-        FROM voucher_entries ve
-        JOIN vouchers v ON v.id = ve.voucher_id
-          AND v.deleted_at IS NULL AND v.optional = false
-          AND CAST(COALESCE(v.effective_date, v.voucher_date) AS text) BETWEEN ${dateFrom} AND ${dateTo}
-        WHERE ve.ledger_account_id = ${la5.id}
-        ORDER BY v.voucher_date, v.id
-        LIMIT ${rowLimit}
-      `);
-      // A sideless opening is on its type's usual side, as in the balance engine (wave 13, C1).
-      const obSide5 =
-        la5.opening_balance_side === "Dr" || la5.opening_balance_side === "Cr"
-          ? la5.opening_balance_side
-          : (defaultOpeningSide(la5.account_type) ?? "Dr");
-      const ob = parseFloat(la5.opening_balance || "0") * (obSide5 === "Cr" ? -1 : 1);
-      let runningBal = ob;
-      let totalDr = 0,
-        totalCr = 0;
-      const tableRows5 = txRows5.rows.map((r) => {
-        const dr = parseFloat(r.dr || "0");
-        const cr = parseFloat(r.cr || "0");
-        runningBal += dr - cr;
-        totalDr += dr;
-        totalCr += cr;
-        return [
-          String(r.voucher_date).slice(0, 10),
-          r.voucher_number,
-          r.voucher_type,
-          (r.description || "").slice(0, 35),
-          dr > 0 ? fmt(dr) : "—",
-          cr > 0 ? fmt(cr) : "—",
-          fmt(Math.abs(runningBal)) + (runningBal >= 0 ? " Dr" : " Cr"),
-        ];
-      });
-      const stats5 = [
-        { label: "Account", value: `${la5.code ? la5.code + " — " : ""}${la5.name}` },
-        { label: "Type", value: la5.account_type },
-        { label: "Total Debit", value: fmt(totalDr) },
-        { label: "Total Credit", value: fmt(totalCr) },
-        {
-          label: "Closing Balance",
-          value: fmt(Math.abs(runningBal)) + (runningBal >= 0 ? " Dr" : " Cr"),
-          highlight: "positive",
-        },
-      ];
-      dataQueryResult = {
-        queryType: "ledger_account_balance",
-        title: `Ledger: ${la5.name}`,
-        subtitle: `${dateFrom} → ${dateTo}`,
-        stats: stats5,
-        table: {
-          headers: ["Date", "Voucher #", "Type", "Description", "Dr", "Cr", "Balance"],
-          rows: tableRows5,
-        },
-        noData: tableRows5.length === 0,
-      };
+      // Phase 27 (RP-13): on the report services (financialStatementReports.ts).
+      dataQueryResult = await ledgerAccountBalanceReport(ctx);
       break;
     }
 

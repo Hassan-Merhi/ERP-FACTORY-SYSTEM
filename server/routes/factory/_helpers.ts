@@ -16,7 +16,7 @@ import {
 } from "@shared/schema";
 import { eq, and } from "drizzle-orm";
 import bcrypt from "bcryptjs";
-import { createHash, timingSafeEqual } from "node:crypto";
+import { verifyAndUpgradeSupervisorPassword } from "../../services/security/legacyPasswordRehash";
 import { resolveStoredFxRate, UnresolvedExchangeRateError } from "../../services/factory/currencyConversion";
 import type { DbTransaction, DatabaseOrTransaction } from "../../db";
 import type Decimal from "decimal.js";
@@ -92,13 +92,15 @@ export function isLegacySHA256Hash(hash: string): boolean {
   return /^[a-f0-9]{64}$/i.test(hash);
 }
 
-export async function verifySupervisorPassword(password: string, hash: string): Promise<boolean> {
-  if (isLegacySHA256Hash(hash)) {
-    const actual = createHash("sha256").update(password, "utf8").digest();
-    const expected = Buffer.from(hash, "hex");
-    return actual.length === expected.length && timingSafeEqual(actual, expected);
-  }
-  return bcrypt.compare(password, hash);
+/**
+ * A supervisor's password check with the legacy SHA-256 digest rehashed to
+ * bcrypt on success (phase 26 leftover; legacyPasswordRehash.ts).
+ */
+export async function verifySupervisorPasswordForUser(
+  password: string,
+  user: { id: string; username?: string | null; password: string }
+): Promise<boolean> {
+  return verifyAndUpgradeSupervisorPassword(user, password, (plain, hash) => bcrypt.compare(plain, hash));
 }
 
 export async function recalculateOrderTotals(dbConn: DatabaseOrTransaction, orderId: number) {

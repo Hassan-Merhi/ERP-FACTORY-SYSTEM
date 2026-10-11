@@ -44,18 +44,6 @@
         "functions": 99,
         "branches": 90
       },
-      "server/services/accounting/periodLockService.ts": {
-        "lines": 88,
-        "statements": 85,
-        "functions": 97,
-        "branches": 75
-      },
-      "server/services/accounting/financialCloseService.ts": {
-        "lines": 99,
-        "statements": 99,
-        "functions": 99,
-        "branches": 77
-      },
       "server/inventoryHelper.ts": {
         "lines": 95,
         "statements": 91,

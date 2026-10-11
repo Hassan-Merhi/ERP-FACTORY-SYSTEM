@@ -175,6 +175,12 @@ export const purchaseOrders = pgTable(
     freightOwnAccountId: integer("freight_own_account_id"),
     freightParentAccountId: integer("freight_parent_account_id"),
     status: text("status").notNull().default("Open"),
+    // Phase 24 (M5): the imported currency, its rate (units per USD) and the
+    // native totals; the money columns above hold USD. NULL on legacy rows.
+    nativeCurrency: varchar("native_currency", { length: 10 }),
+    exchangeRate: decimal("exchange_rate", { precision: 20, scale: 10 }),
+    nativeItemsTotal: decimal("native_items_total", { precision: 20, scale: 2 }),
+    nativeGrandTotal: decimal("native_grand_total", { precision: 20, scale: 2 }),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
   (t) => ({
@@ -219,6 +225,9 @@ export const poLineItems = pgTable("po_line_items", {
   quantity: decimal("quantity", { precision: 15, scale: 3 }).notNull(),
   rate: decimal("rate", { precision: 15, scale: 2 }).notNull(),
   lineTotal: decimal("line_total", { precision: 20, scale: 2 }).notNull(),
+  // Phase 24 (M5): the imported (native) rate and line total; rate / lineTotal hold USD.
+  nativeRate: decimal("native_rate", { precision: 20, scale: 6 }),
+  nativeLineTotal: decimal("native_line_total", { precision: 20, scale: 2 }),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 

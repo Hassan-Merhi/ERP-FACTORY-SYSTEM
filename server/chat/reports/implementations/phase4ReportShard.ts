@@ -103,6 +103,7 @@ async function runPhase4Report(ctx: DataQueryContext): Promise<DataQueryResult> 
         JOIN companies fc ON fc.id = ict.from_company_id
         JOIN companies tc ON tc.id = ict.to_company_id
         WHERE (ict.from_company_id = ${companyId} OR ict.to_company_id = ${companyId})
+          AND ict.deleted_at IS NULL
           AND CAST(ict.transfer_date AS text) BETWEEN ${dateFrom} AND ${dateTo}
         ORDER BY ict.transfer_date DESC
         LIMIT ${rowLimit}

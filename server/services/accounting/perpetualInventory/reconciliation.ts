@@ -37,6 +37,17 @@
  * guess; the dated record of what the costing was is the daily
  * GL-FACTORY-STOCK journal itself.
  *
+ * Phase 28 (F9): a past date with a recorded factory valuation (the
+ * GL-FACTORY-STOCK journal of that business day wrote it,
+ * factory_stock_valuation_snapshots) compares the ledger with that day's
+ * costing, as-of; only a day with no recorded valuation still compares with
+ * today's costing ("current").
+ *
+ * Phase 29 (I5): the ledger carries stock only from the cut-over, and the
+ * stock evidence (canonical movements, inventory_value_movements) is complete
+ * only from then, so a date before the applied cut-over is refused
+ * (ReconciliationBeforeCutoverError, 400) instead of reported as a difference.
+ *
  * The ledger side books each voucher on its effective date when it has one
  * (ledgerBalancesByCode). The report lists factory invoices that carry no
  * ledger journal. It is read-only: a difference is shown, never posted.
@@ -53,7 +64,8 @@ import {
 } from "../../inventory/stockValuation";
 import { getInventoryCutover } from "./cutover";
 import { listUnpostedFactoryInvoices, type UnpostedFactoryInvoice } from "./factoryInvoice";
-import { factoryGoodsInTransitHeld } from "./factoryStockJournal";
+import { factoryGoodsInTransitHeld, factoryValuationSnapshotOn } from "./factoryStockJournal";
+import { HttpError } from "../../../lib/httpHandlers";
 import { factoryStockValuation } from "./factoryValuation";
 import { isSupplierPartnerCompany, ledgerBalancesByCode } from "./linkedJournal";
 import { retailInventoryReconciliationTx } from "../../retail/retailInventoryJournal";
@@ -80,6 +92,21 @@ export interface PerpetualInventoryReconciliation {
   unpostedFactoryInvoices: UnpostedFactoryInvoice[];
   /** True when every line agrees to the cent and no invoice is unposted. */
   reconciled: boolean;
+}
+
+export const RECONCILIATION_BEFORE_CUTOVER = "RECONCILIATION_BEFORE_CUTOVER" as const;
+export const RECONCILIATION_BEFORE_CUTOVER_MESSAGE =
+  "The ledger carries stock only from the perpetual inventory cut-over. Choose a date on or after it.";
+
+export class ReconciliationBeforeCutoverError extends HttpError {
+  readonly code = RECONCILIATION_BEFORE_CUTOVER;
+  constructor(readonly effectiveFrom: string) {
+    super(400, RECONCILIATION_BEFORE_CUTOVER_MESSAGE);
+    this.name = "ReconciliationBeforeCutoverError";
+  }
+  get body() {
+    return { code: this.code, message: this.message, effectiveFrom: this.effectiveFrom };
+  }
 }
 
 async function rows<T>(executor: DatabaseOrTransaction, query: ReturnType<typeof sql>): Promise<T[]> {
@@ -132,13 +159,17 @@ export async function reconcilePerpetualInventory(
   asOf: string = new Date().toISOString().slice(0, 10)
 ): Promise<PerpetualInventoryReconciliation> {
   const cutover = await getInventoryCutover(executor, companyId);
+  if (cutover && asOf < cutover.effectiveFrom) throw new ReconciliationBeforeCutoverError(cutover.effectiveFrom);
   const supplierPartner = await isSupplierPartnerCompany(executor, companyId);
   const today = new Date().toISOString().slice(0, 10);
-  const factory = await factoryStockValuation(executor, companyId);
-  const factoryHistorical = asOf < today;
-  const factoryBasis = factoryHistorical
-    ? `factory costing today, not as of ${asOf} (the factory costing keeps no history; the difference includes every factory movement since)`
-    : "factory costing";
+  const snapshot = asOf < today ? await factoryValuationSnapshotOn(executor, companyId, asOf) : null;
+  const factory = snapshot ?? (await factoryStockValuation(executor, companyId));
+  const factoryHistorical = asOf < today && snapshot === null;
+  const factoryBasis = snapshot
+    ? `factory costing recorded by the factory stock journal of ${asOf}`
+    : factoryHistorical
+      ? `factory costing today, not as of ${asOf} (no factory valuation was recorded that day; the difference includes every factory movement since)`
+      : "factory costing";
   const erpStock = supplierPartner ? null : await erpStockSubLedger(executor, companyId, asOf, today);
   const expected: Array<{ accountCode: string; value: Decimal; basis: string; current?: boolean }> = [
     ...(erpStock === null

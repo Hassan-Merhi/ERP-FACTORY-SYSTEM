@@ -24,7 +24,7 @@ export function OpeningStockImport() {
   const [result, setResult] = useState<{
     imported: number;
     errors: string[];
-    recalcStats?: { totalAllocatedKg: number };
+    recalcStats?: { totalAllocatedKg: number | string };
   } | null>(null);
   const { toast } = useToast();
 
@@ -106,8 +106,8 @@ export function OpeningStockImport() {
               <div className="flex items-center gap-3 mt-2 justify-center flex-wrap">
                 {result.imported > 0 && <Badge variant="secondary">{result.imported} records created</Badge>}
                 {result.errors.length > 0 && <Badge variant="destructive">{result.errors.length} errors</Badge>}
-                {result.recalcStats && result.recalcStats.totalAllocatedKg > 0 && (
-                  <Badge variant="outline">{result.recalcStats.totalAllocatedKg.toFixed(1)} kg allocated</Badge>
+                {result.recalcStats && Number(result.recalcStats.totalAllocatedKg) > 0 && (
+                  <Badge variant="outline">{Number(result.recalcStats.totalAllocatedKg).toFixed(1)} kg allocated</Badge>
                 )}
               </div>
             </div>

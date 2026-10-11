@@ -3,7 +3,6 @@ import {
   ArrowUpRight,
   Building2,
   Eraser,
-  Loader2,
   Trash2,
   PieChart,
   Layers3,
@@ -18,10 +17,7 @@ import type { ReactNode } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { useMutation, useQuery } from "@tanstack/react-query";
-import { apiRequest, queryClient } from "@/lib/queryClient";
-import { useToast } from "@/hooks/use-toast";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useQuery } from "@tanstack/react-query";
 import { CleanEmptyAccountsDialog } from "./CleanEmptyAccountsDialog";
 import { ResetCompanyDataDialog } from "./SystemMaintenanceDialogs";
 import { GroupNetPositionPage } from "./GroupNetPositionPage";
@@ -105,7 +101,6 @@ function SystemToolCard({ card }: { card: ToolCard }) {
 }
 
 export function SystemToolsTab({ appMode, currentUser, selectedCompany, companies }: SystemToolsTabProps) {
-  const { toast } = useToast();
   const [, navigate] = useLocation();
   const isDev = currentUser?.role === "Developer";
   const isFactory = appMode === "factory";
@@ -118,17 +113,6 @@ export function SystemToolsTab({ appMode, currentUser, selectedCompany, companie
   const { data: parentCompanyData } = useQuery<{ parentCompanyId: number | null }>({
     queryKey: ["/api/system/parent-company"],
     enabled: ["Admin", "Owner", "Developer"].includes(currentUser?.role || ""),
-  });
-
-  const setParentCompanyMutation = useMutation({
-    mutationFn: async (companyId: number | null) => apiRequest("POST", "/api/system/parent-company", { companyId }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/system/parent-company"] });
-      toast({ title: "Saved", description: "Parent company updated." });
-    },
-    onError: () => {
-      toast({ title: "Error", description: "Failed to update parent company.", variant: "destructive" });
-    },
   });
 
   const netPositionPath = isFactory
@@ -277,28 +261,15 @@ export function SystemToolsTab({ appMode, currentUser, selectedCompany, companie
                 <div>
                   <h4 className="text-sm font-semibold tracking-tight">Master parent company</h4>
                   <p className="mt-1 max-w-xl text-sm leading-5 text-muted-foreground">
-                    The primary company used for net position reporting.
+                    The company that other companies name as their parent. Set each subsidiary's parent under Settings
+                    &gt; Companies.
                   </p>
                 </div>
               </div>
-              <div className="flex items-center gap-3 sm:min-w-[280px]">
-                <Select
-                  value={parentCompanyData?.parentCompanyId?.toString() || "none"}
-                  onValueChange={(val) => setParentCompanyMutation.mutate(val === "none" ? null : parseInt(val))}
-                >
-                  <SelectTrigger className="w-full" data-testid="select-parent-company">
-                    <SelectValue placeholder="No parent company set" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">None (Disabled)</SelectItem>
-                    {companies.map((c) => (
-                      <SelectItem key={c.id} value={c.id.toString()}>
-                        {c.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {setParentCompanyMutation.isPending && <Loader2 className="h-4 w-4 shrink-0 animate-spin" />}
+              <div className="flex items-center gap-3 sm:min-w-[280px]" data-testid="text-parent-company">
+                <p className="text-sm">
+                  {companies.find((c) => c.id === parentCompanyData?.parentCompanyId)?.name ?? "No parent company set"}
+                </p>
               </div>
             </CardContent>
           </Card>

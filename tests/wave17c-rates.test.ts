@@ -322,7 +322,7 @@ describe("wave 6 repair apply (decision 4)", () => {
     });
   }, 60000);
 
-  it("rates a line at the rate dated on the voucher date first, else manual-first, and closes by effective date", async () => {
+  it("rates a line at the latest recorded rate on or before the voucher date (manual first on the same date), and closes by effective date", async () => {
     const plan = await asMaintenance(() => planFactoryFxLegacyRepair(ctx.companyId));
     const of = (key: string) =>
       plan.lines
@@ -332,9 +332,10 @@ describe("wave 6 repair apply (decision 4)", () => {
       ["0.1500000000", "dated-auto", "2026-09-10", null],
       ["0.1500000000", "dated-auto", "2026-09-10", null],
     ]);
+    // Phase 24 (M1, decision): a newer recorded auto rate beats an older manual one.
     expect(of("pln")).toEqual([
-      ["0.2500000000", "dated-manual", "2026-09-01", null],
-      ["0.2500000000", "dated-manual", "2026-09-01", null],
+      ["0.2600000000", "dated-auto", "2026-09-05", null],
+      ["0.2600000000", "dated-auto", "2026-09-05", null],
     ]);
     expect(of("closed").map((line) => line[3])).toEqual(["PERIOD_CLOSED", "PERIOD_CLOSED"]);
   });

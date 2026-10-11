@@ -33,8 +33,9 @@ describe("supplier partner net position inclusion", () => {
     const excel = read("server/routes/stats/statsNetPositionRoutes.ts");
     for (const source of [asOf, excel]) {
       expect(source).toContain("classifyEquityAccounts");
-      expect(source).toContain('a.accountType === "Loan"');
-      expect(source).toContain('a.accountType === "Loans"');
+      // Phase 23 (C3): exact type comparisons move to the classifier's isAccountType.
+      expect(source).toMatch(/a\.accountType === "Loan"|isAccountType\(a\.accountType, "Loan"\)/);
+      expect(source).toMatch(/a\.accountType === "Loans"|isAccountType\(a\.accountType, "Loans"\)/);
       // Wave 10: customers come from the balance engine and are excluded for
       // supplier partners (the old customer-like ledger clause never admitted
       // an account: its helper listed every customer-like ledger as excluded).

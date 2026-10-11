@@ -11,8 +11,12 @@ export async function getAllBankAccounts(companyId: number): Promise<BankAccount
     .orderBy(asc(schema.bankAccounts.code));
 }
 
-export async function getBankAccountByCode(code: string): Promise<BankAccount | undefined> {
-  const [account] = await db.select().from(schema.bankAccounts).where(eq(schema.bankAccounts.code, code));
+/** Phase 23 (C10): codes are unique per company, so the lookup is by company. */
+export async function getBankAccountByCode(code: string, companyId: number): Promise<BankAccount | undefined> {
+  const [account] = await db
+    .select()
+    .from(schema.bankAccounts)
+    .where(and(eq(schema.bankAccounts.code, code), eq(schema.bankAccounts.companyId, companyId)));
   return account;
 }
 
@@ -100,8 +104,12 @@ export async function getAllFixedAssets(companyId: number): Promise<FixedAsset[]
     .orderBy(asc(schema.fixedAssets.code));
 }
 
-export async function getFixedAssetByCode(code: string): Promise<FixedAsset | undefined> {
-  const [asset] = await db.select().from(schema.fixedAssets).where(eq(schema.fixedAssets.code, code));
+/** Phase 23 (C10): codes are unique per company, so the lookup is by company. */
+export async function getFixedAssetByCode(code: string, companyId: number): Promise<FixedAsset | undefined> {
+  const [asset] = await db
+    .select()
+    .from(schema.fixedAssets)
+    .where(and(eq(schema.fixedAssets.code, code), eq(schema.fixedAssets.companyId, companyId)));
   return asset;
 }
 

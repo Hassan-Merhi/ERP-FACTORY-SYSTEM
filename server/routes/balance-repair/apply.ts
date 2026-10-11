@@ -15,7 +15,6 @@ import {
   propertyUnits,
   vouchers,
   voucherEntries,
-  interCompanyTransfers,
 } from "../../../shared/schema";
 import { eq, sql } from "drizzle-orm";
 
@@ -24,6 +23,7 @@ import type Decimal from "decimal.js";
 import { MoneyDecimal, toMoney } from "../../lib/money";
 import { resultRows } from "../../lib/queryResult";
 import { retireVouchersTx, sessionRetirementActor } from "../../services/accounting/voucherRetirement";
+import { softDeleteTransferLinkTx } from "../../services/accounting/intercompany/intercompanyTransferPosting";
 
 export function registerBalanceRepairApplyRoutes(app: Express) {
   // ── POST /api/admin/repair-balances/apply ────────────────────────────────
@@ -215,7 +215,8 @@ export function registerBalanceRepairApplyRoutes(app: Express) {
           FROM inter_company_transfers ict
           LEFT JOIN vouchers fv ON fv.id = ict.from_voucher_id
           LEFT JOIN vouchers tv ON tv.id = ict.to_voucher_id
-          WHERE ict.from_company_id = ${companyId} OR ict.to_company_id = ${companyId}
+          WHERE (ict.from_company_id = ${companyId} OR ict.to_company_id = ${companyId})
+            AND ict.deleted_at IS NULL
         `);
 
         for (const row of resultRows<{
@@ -286,7 +287,11 @@ export function registerBalanceRepairApplyRoutes(app: Express) {
           // voucher is retired (soft delete with its lines, audited, number
           // released) in the same transaction, not hard-deleted.
           await db.transaction(async (tx) => {
-            await tx.delete(interCompanyTransfers).where(eq(interCompanyTransfers.id, Number(row.id)));
+            // Phase 26 (MC-11): the link is soft-deleted and audited, not removed.
+            await softDeleteTransferLinkTx(tx, Number(row.id), {
+              reason: "balance-repair-orphaned-transfer-voucher",
+              actor: sessionRetirementActor(req),
+            });
             if (orphVoucher) {
               await retireVouchersTx(tx, {
                 companyId: orphVoucher.companyId,

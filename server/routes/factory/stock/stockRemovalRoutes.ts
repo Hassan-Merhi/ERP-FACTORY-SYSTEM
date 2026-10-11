@@ -13,7 +13,7 @@ import { requireAuth } from "../../../auth";
 // (wave 11) for the valued bales it removes, in the same transaction.
 import { deletePhysicalFactoryBalesTx } from "./physicalBaleDeletion";
 import { PRIORITY_SCAN_LOCK_NAMESPACE } from "../customer-orders/priorityScanQueue";
-import { verifySupervisorPassword } from "../_helpers";
+import { verifySupervisorPasswordForUser } from "../_helpers";
 import { factoryBales, users, userCompanyRoles } from "@shared/schema";
 import { eq, and, sql, isNull, asc } from "drizzle-orm";
 
@@ -44,7 +44,7 @@ export function registerFactoryStockRemovalRoutes(app: Express) {
         return res.status(403).json({ message: "Supervisor not found" });
       }
 
-      const passwordValid = await verifySupervisorPassword(supervisorPassword, supervisor.password);
+      const passwordValid = await verifySupervisorPasswordForUser(supervisorPassword, supervisor);
       if (!passwordValid) {
         return res.status(403).json({ message: "Invalid supervisor password" });
       }
@@ -95,7 +95,7 @@ export function registerFactoryStockRemovalRoutes(app: Express) {
 
       if (!supervisor) return res.status(403).json({ message: "Supervisor not found" });
 
-      const passwordValid = await verifySupervisorPassword(supervisorPassword, supervisor.password);
+      const passwordValid = await verifySupervisorPasswordForUser(supervisorPassword, supervisor);
       if (!passwordValid) return res.status(403).json({ message: "Invalid supervisor password" });
 
       const [role] = await db

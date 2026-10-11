@@ -193,7 +193,10 @@ async function importCostAccountIdTx(tx: DbTransaction, companyId: number, conta
 export async function syncContainerCommissionJournalTx(
   tx: DbTransaction,
   companyId: number,
-  containerId: number
+  containerId: number,
+  // Phase 28 (F11): the reviewed legacy back-fill dates a journal whose
+  // container date is in a closed period at the cut-over date instead.
+  options: { voucherDate?: string } = {}
 ): Promise<ContainerCommissionJournalResult> {
   await removeContainerCommissionJournalTx(tx, companyId, containerId);
   const [row] = await rowsOf<CommissionRow>(
@@ -246,7 +249,7 @@ export async function syncContainerCommissionJournalTx(
   const { voucher } = await postFactoryVoucherTx(tx, {
     companyId,
     voucherNumber: containerCommissionVoucherNumber(containerId),
-    voucherDate: row.date,
+    voucherDate: options.voucherDate ?? row.date,
     description: ["Commission - container", row.container_number].join(" "),
     currency,
     fxRateToUsd: rateText,

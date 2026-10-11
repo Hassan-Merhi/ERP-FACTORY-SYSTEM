@@ -42,6 +42,7 @@ import { parseId } from "../../lib/parseId";
 import { getClientDate } from "../../lib/dateUtils";
 import type Decimal from "decimal.js";
 import { MoneyDecimal, toMoney } from "../../lib/money";
+import { softDeleteTransferLinkTx } from "../../services/accounting/intercompany/intercompanyTransferPosting";
 
 export const RENTAL_POSTING_PERIOD_CLOSED_MESSAGE =
   "The books are closed through this date, so rent cannot be accrued on it.";
@@ -314,16 +315,15 @@ export function registerRentalPaymentsAccrualRoutes(
           const linkedTransfers = await tx
             .select()
             .from(interCompanyTransfers)
-            .where(eq(interCompanyTransfers.sourcePaymentId, paymentId));
+            .where(and(eq(interCompanyTransfers.sourcePaymentId, paymentId), isNull(interCompanyTransfers.deletedAt)));
 
           for (const transfer of linkedTransfers) {
             const fvid = transfer.fromVoucherId;
             const tvid = transfer.toVoucherId;
-            // Delete the transfer record FIRST to release FK "restrict" constraints
-            // on fromVoucherId / toVoucherId before hard-deleting those voucher rows.
-            await tx.delete(interCompanyTransfers).where(eq(interCompanyTransfers.id, transfer.id));
             // Phase 21 (B): each leg retired with its audit row and the actor.
             const legRetirement = { reason: "rental-payment-delete-transfer-leg", actor: sessionRetirementActor(req) };
+            // Phase 26 (MC-11): the link is soft-deleted and audited, not removed.
+            await softDeleteTransferLinkTx(tx, transfer.id, legRetirement);
             if (fvid)
               await retireVouchersTx(tx, { companyId: transfer.fromCompanyId, voucherIds: [fvid], ...legRetirement });
             if (tvid)

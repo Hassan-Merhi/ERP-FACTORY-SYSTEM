@@ -137,6 +137,8 @@ export const suppliers = pgTable("suppliers", {
   address: text("address"),
   taxId: text("tax_id"),
   paymentTerms: text("payment_terms"),
+  // Phase 25 (AR-4): days from an invoice's booked date to its due date; NULL = 30.
+  paymentTermsDays: integer("payment_terms_days"),
   openingBalance: decimal("opening_balance", { precision: 15, scale: 2 }).default("0"),
   active: boolean("active").notNull().default(true),
   deletedAt: timestamp("deleted_at"),
@@ -157,6 +159,7 @@ export const insertSupplierSchema = createInsertSchema(suppliers)
     address: z.string().optional(),
     taxId: z.string().optional(),
     paymentTerms: z.string().optional(),
+    paymentTermsDays: z.number().int().positive().optional().nullable(),
     openingBalance: z.string().optional(),
   });
 

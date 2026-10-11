@@ -5,12 +5,20 @@ import { wave8ReleaseTranslationsPart1 } from "./wave8ReleaseTranslations.part1"
 import { wave8ReleaseTranslationsPart2 } from "./wave8ReleaseTranslations.part2";
 import { wave8ReleaseTranslationsPart3 } from "./wave8ReleaseTranslations.part3";
 import { wave8ReleaseTranslationsPart4 } from "./wave8ReleaseTranslations.part4";
+import { wave8ReleaseTranslationsPhase23 } from "./wave8ReleaseTranslations.phase23";
+import { wave8ReleaseTranslationsPhase28 } from "./wave8ReleaseTranslations.phase28";
+import { wave8ReleaseTranslationsPhase26 } from "./wave8ReleaseTranslations.phase26";
+import { wave8ReleaseTranslationsPhase27 } from "./wave8ReleaseTranslations.phase27";
 
 export const wave8ReleaseTranslations: readonly Phase3SharedUiEntry[] = [
   ...wave8ReleaseTranslationsPart1,
   ...wave8ReleaseTranslationsPart2,
   ...wave8ReleaseTranslationsPart3,
   ...wave8ReleaseTranslationsPart4,
+  ...wave8ReleaseTranslationsPhase23,
+  ...wave8ReleaseTranslationsPhase28,
+  ...wave8ReleaseTranslationsPhase26,
+  ...wave8ReleaseTranslationsPhase27,
 ];
 
 const exactTranslations = new Map<string, Phase3SharedUiEntry>();

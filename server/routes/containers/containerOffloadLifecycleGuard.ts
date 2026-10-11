@@ -8,6 +8,7 @@ import {
   collectContainerOffloadLedgerIds,
   collectContainerOffloadParentAgentIds,
 } from "../../services/containers/containerOffloadLifecyclePolicy";
+import { isAccountType } from "../../services/accounting/accountClassification";
 
 interface LedgerSnapshot {
   id: number;
@@ -215,7 +216,10 @@ async function guardContainerOffload(req: Request, res: Response, next: NextFunc
     for (const ledgerId of additionalLedgerIds) {
       const account = accountById.get(ledgerId);
       if (!account) continue;
-      if (account.account_type === "Direct Expense" || account.account_type === "Indirect Expense") {
+      if (
+        isAccountType(account.account_type, "Direct Expense") ||
+        isAccountType(account.account_type, "Indirect Expense")
+      ) {
         res.status(400).json({
           message: `Additional charges cannot credit the "${account.name ?? `ID ${ledgerId}`}" expense account.`,
         });

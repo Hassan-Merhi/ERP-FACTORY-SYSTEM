@@ -77,8 +77,9 @@ export async function calculateNetPositionAsOf(
       return await db.execute<RawQueryRow<LedgerBalanceRow>>(sql`
         SELECT
           ve.ledger_account_id,
-          SUM(CAST(COALESCE(ve.base_debit_amount, ve.debit_amount) AS numeric)) AS total_debit,
-          SUM(CAST(COALESCE(ve.base_credit_amount, ve.credit_amount) AS numeric)) AS total_credit
+          -- Phase 29 (M10/AR-3): the ledger amount (2dp, what the guard sums), not base_*.
+          SUM(CAST(ve.debit_amount AS numeric)) AS total_debit,
+          SUM(CAST(ve.credit_amount AS numeric)) AS total_credit
         FROM voucher_entries ve
         INNER JOIN vouchers v ON ve.voucher_id = v.id
         INNER JOIN ledger_accounts la ON ve.ledger_account_id = la.id

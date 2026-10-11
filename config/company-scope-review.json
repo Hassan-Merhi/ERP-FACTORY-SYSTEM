@@ -237,6 +237,10 @@
     {
       "path": "server/storage/stock-ops/transfers-update.ts",
       "reason": "Transfer and adjustment updates lock inventory inside the company-scoped transaction."
+    },
+    {
+      "path": "server/services/accounting/ledgerIntegrityGuard.ts",
+      "reason": "Phase 23: boot-time DDL installer; its only data query reads the system catalogs (pg_trigger, pg_constraint, information_schema) to check the installed guard version, never tenant rows."
     }
   ]
 }

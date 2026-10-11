@@ -16,6 +16,7 @@ import { MoneyDecimal } from "../../lib/money";
 import { postBalancedVoucherTx } from "../accounting/centralPostingEngine";
 import { companyBusinessDate } from "../accounting/companyBusinessDate";
 import { createDatabasePostingDependencies } from "../accounting/databasePostingDependencies";
+import { retailEntriesInCurrency, retailVoucherCurrencyTx } from "../accounting/fx/retailCurrency";
 import { ensureSystemAccounts, systemAccountDefinition } from "../accounting/systemAccounts";
 import { RetailAccountConflictError, type RetailAccountConflict } from "./retailFinancialService";
 
@@ -151,6 +152,24 @@ export async function postRetailJournalTx(
   const credit = lines.filter((line) => line.amount.lt(0)).reduce((acc, line) => acc.minus(line.amount), cents(0));
   if (!debit.eq(credit)) throw new Error(`Retail journal ${input.voucherNumber} does not balance`);
 
+  const voucherDate = input.voucherDate ?? (await companyBusinessDate(input.companyId, tx));
+  // Phase 24 (M11): a non-USD company posts native amounts at the dated rate.
+  const voucherCurrency = await retailVoucherCurrencyTx(
+    tx,
+    input.companyId,
+    await companyCurrency(tx, input.companyId),
+    voucherDate
+  );
+  const inCurrency = retailEntriesInCurrency(
+    lines.map((line) => ({
+      ...(line.bankAccountId ? { bankAccountId: line.bankAccountId } : { ledgerAccountId: line.ledgerAccountId }),
+      debitAmount: line.amount.gt(0) ? line.amount.toFixed(2) : "0",
+      creditAmount: line.amount.lt(0) ? line.amount.negated().toFixed(2) : "0",
+      narration: line.narration,
+    })),
+    voucherCurrency,
+    debit.toFixed(2)
+  );
   const posted = await postBalancedVoucherTx(
     tx,
     {
@@ -158,19 +177,15 @@ export async function postRetailJournalTx(
         companyId: input.companyId,
         voucherNumber: input.voucherNumber,
         voucherType: "Journal",
-        voucherDate: input.voucherDate ?? (await companyBusinessDate(input.companyId, tx)),
-        totalAmount: debit.toFixed(2),
+        voucherDate,
+        totalAmount: inCurrency.totalAmount,
         description: input.description,
         locationId: input.locationId ?? null,
-        currency: await companyCurrency(tx, input.companyId),
+        currency: voucherCurrency.currency,
+        exchangeRate: voucherCurrency.rate,
         sourceModule: "Retail",
       },
-      entries: lines.map((line) => ({
-        ...(line.bankAccountId ? { bankAccountId: line.bankAccountId } : { ledgerAccountId: line.ledgerAccountId }),
-        debitAmount: line.amount.gt(0) ? line.amount.toFixed(2) : "0",
-        creditAmount: line.amount.lt(0) ? line.amount.negated().toFixed(2) : "0",
-        narration: line.narration,
-      })),
+      entries: inCurrency.entries,
       source: {
         sourceType: input.sourceType,
         sourceId: input.sourceId,

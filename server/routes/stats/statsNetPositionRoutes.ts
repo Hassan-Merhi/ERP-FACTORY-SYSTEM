@@ -19,6 +19,7 @@ import {
 import { loadNetPositionParties } from "../../services/accounting/balances/netPositionParties";
 import { ledgerCarriesStock } from "../../services/accounting/perpetualInventory/reportBasis";
 import { companyStockValue } from "../../services/inventory/stockValuation";
+import { isAccountType } from "../../services/accounting/accountClassification";
 
 export function registerStatsNetPositionRoutes(app: Express) {
   app.get("/api/stats/net-position-excel", requireAuth, requireNonPOS, async (req, res) => {
@@ -111,16 +112,16 @@ export function registerStatsNetPositionRoutes(app: Express) {
         isSupplierPartner
           ? companyAccounts.filter(
               (a) =>
-                a.accountType === "Cash" ||
-                a.accountType === "Loan" ||
-                a.accountType === "Loans" ||
+                isAccountType(a.accountType, "Cash") ||
+                isAccountType(a.accountType, "Loan") ||
+                isAccountType(a.accountType, "Loans") ||
                 a.subType === "sp_payable"
             )
           : companyAccounts.filter(
               (a) =>
                 a.subType !== "sp_stock" &&
                 a.subType !== "sp_cost_clearing" &&
-                !(a.accountType === "Liability" && (a.name as string)?.startsWith("Insurance"))
+                !(isAccountType(a.accountType, "Liability") && (a.name as string)?.startsWith("Insurance"))
             )
       ).filter((a) => !parties.customerLedgerIds.has(a.id));
       // Perpetual inventory (wave 8.5): from the cut-over the ledger carries the stock.

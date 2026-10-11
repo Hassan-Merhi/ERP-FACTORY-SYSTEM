@@ -30,6 +30,8 @@ export async function getLineItemsByPO(poId: number): Promise<POLineItem[]> {
       quantity: schema.poLineItems.quantity,
       rate: schema.poLineItems.rate,
       lineTotal: schema.poLineItems.lineTotal,
+      nativeRate: schema.poLineItems.nativeRate,
+      nativeLineTotal: schema.poLineItems.nativeLineTotal,
       createdAt: schema.poLineItems.createdAt,
       totalCost: schema.poLineItems.lineTotal,
       stockGroupId: schema.stockItems.stockGroupId,

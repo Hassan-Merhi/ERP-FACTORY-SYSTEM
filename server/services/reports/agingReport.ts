@@ -1,51 +1,50 @@
 /**
- * AR/AP aging on the one balance engine (accounting audit wave 17 A).
+ * AR/AP aging on open items (accounting audit wave 17 A, phase 25 AR-4).
  *
- * GET /api/reports/aging?kind=customer|supplier|factorySupplier&asOf=YYYY-MM-DD
+ * GET /api/reports/aging?kind=customer|supplier|factorySupplier|employee&asOf=YYYY-MM-DD
  *
- *   - each party's balance is the engine's closing (getPartyBalances) as of
- *     `asOf` (everything posted without it), in this company's vouchers, by
+ *   - each party's balance is the engine's closing as of `asOf` (everything
+ *     posted without it), in this company's vouchers, by
  *     COALESCE(effective_date, voucher_date), each line owned once by the
  *     engine's rules (partyLineRules.ts);
- *   - the balance owed (a customer's debit, a supplier's credit) is aged by
- *     the lines that raised it, newest first (payments and credits settle the
- *     oldest amounts first): each part falls in the bucket of its line's
- *     booked date, counted in days before the reference date (`asOf`, else
- *     the server's business date);
- *   - whatever the dated lines do not explain is the master opening (or older
- *     history) and is reported in the `opening` bucket;
- *   - a party in credit (a customer's advance, a supplier we overpaid) is not
- *     aged: its balance is in `unappliedCredit` (negative);
- *   - lines dated after the reference date are in `future`.
- * The buckets of a party always add up to its engine balance.
+ *   - the items are the party's vouchers netted per voucher
+ *     (allocations/openItems.ts): invoices (what raised the balance) and
+ *     credits (receipts, payments, credit/debit notes, advances);
+ *   - credits settle invoices through the allocation table (manual, note and
+ *     automatic rows), and what no row settles yet is projected by the same
+ *     FIFO-by-due-date rule the allocation run writes (`pendingAllocations`
+ *     counts the projected rows not yet written);
+ *   - an open invoice is aged by days past its due date (booked date + the
+ *     party's payment terms, 30 days when it has none), counted to the
+ *     reference date (`asOf`, else the company's business date): `notDue`,
+ *     `days1to30`, `days31to60`, `days61to90`, `over90`; the master opening
+ *     has no date and is in `opening`; an invoice booked after the reference
+ *     date is in `future`;
+ *   - credits no invoice takes are listed (`unappliedCredits`) and in the
+ *     `unappliedCredit` bucket (negative).
+ * The buckets of a party always add up to its engine balance, and the report
+ * carries the tie-out of its total to the engine's rows of the kind (the
+ * control account's party detail).
  *
- * Wave 18 C: factory suppliers are aged too (the engine's kind
- * `factorySupplier`, credit owed like an ERP supplier); amounts are the
- * engine's USD base amounts, COALESCE(base_debit_amount, debit_amount) and
- * the credit likewise (the engine's `historicalBaseClosing`), so a
- * foreign-currency line ages at its posting-rate USD value; the reference date
- * is the company's business date (its timezone), not UTC.
+ * Phase 25 (AR-3, owner decision decided by default): amounts are the book
+ * amounts, debit_amount / credit_amount — the ledger's 2-dp columns, the same
+ * as the trial balance — no longer the historical base columns.
  */
-import { sql } from "drizzle-orm";
 import type Decimal from "decimal.js";
 
 import { db, type DatabaseOrTransaction } from "../../db";
-import { MoneyDecimal, toMoney } from "../../lib/money";
-import { getPartyBalances, liveVouchersOf, VOUCHER_BOOKED_ON } from "../accounting/balances/ledgerBalanceEngine";
-import {
-  customerLinksBody,
-  higherPriorityTargetsAbsent,
-  intLiteral,
-  noNonCustomerTarget,
-} from "../accounting/balances/partyLineRules";
+import { MoneyDecimal } from "../../lib/money";
 import { companyBusinessDate } from "../accounting/companyBusinessDate";
+import { planFifoAllocations } from "../accounting/allocations/fifoPlan";
+import { loadLiveAllocations, loadPartyOpenItems } from "../accounting/allocations/openItems";
 
-export type AgingKind = "customer" | "supplier" | "factorySupplier";
-export const AGING_KINDS: readonly AgingKind[] = ["customer", "supplier", "factorySupplier"];
+export type AgingKind = "customer" | "supplier" | "factorySupplier" | "employee";
+export const AGING_KINDS: readonly AgingKind[] = ["customer", "supplier", "factorySupplier", "employee"];
 
 export const AGING_BUCKETS = [
   "future",
-  "current",
+  "notDue",
+  "days1to30",
   "days31to60",
   "days61to90",
   "over90",
@@ -54,97 +53,83 @@ export const AGING_BUCKETS = [
 ] as const;
 export type AgingBucket = (typeof AGING_BUCKETS)[number];
 
+export interface AgingOpenItem {
+  voucherId: number | null;
+  voucherNumber: string | null;
+  voucherType: string | null;
+  bookedOn: string | null;
+  dueDate: string | null;
+  amount: string;
+  open: string;
+  /** Days past the due date at the reference date (negative = not due yet); null for the opening. */
+  daysPastDue: number | null;
+  bucket: AgingBucket;
+}
+
+export interface AgingCredit {
+  voucherId: number | null;
+  voucherNumber: string | null;
+  voucherType: string | null;
+  bookedOn: string | null;
+  amount: string;
+  unapplied: string;
+}
+
 export interface AgingPartyRow {
-  id: number | null;
+  id: number;
   code: string | null;
   name: string;
-  /** Owed to us (customers) or by us (suppliers), positive; negative when the party is in credit. */
+  /** Owed to us (customers) or by us (suppliers, factory suppliers, employees), positive; negative when in credit. */
   balance: string;
+  paymentTermsDays: number;
   buckets: Record<AgingBucket, string>;
+  openItems: AgingOpenItem[];
+  unappliedCredits: AgingCredit[];
+  /** Allocations the report projected that the allocation run has not written yet. */
+  pendingAllocations: number;
 }
 
 export interface AgingReport {
   companyId: number;
   kind: AgingKind;
   basis: "ledger";
-  /** The amounts aged: the engine's historical USD base amounts (base columns, else debit/credit). */
-  amountBasis: "historicalBase";
+  /** Book amounts: debit_amount / credit_amount (owner decision AR-3). */
+  amountBasis: "book";
+  allocationMethod: "fifo_by_due_date";
   asOf: string | null;
   /** The date ages are counted from. */
   referenceDate: string;
-  bucketDays: { current: "0-30"; days31to60: "31-60"; days61to90: "61-90"; over90: ">90" };
+  bucketDays: {
+    notDue: "not yet due";
+    days1to30: "1-30 past due";
+    days31to60: "31-60 past due";
+    days61to90: "61-90 past due";
+    over90: ">90 past due";
+  };
   parties: AgingPartyRow[];
   totals: { balance: string; buckets: Record<AgingBucket, string> };
-}
-
-/** The engine's USD base amounts of a line (ledgerBalanceEngine's base_net), alias `ve`. */
-const BASE_DEBIT = sql.raw("COALESCE(ve.base_debit_amount, ve.debit_amount, 0)");
-const BASE_CREDIT = sql.raw("COALESCE(ve.base_credit_amount, ve.credit_amount, 0)");
-
-interface IncreaseRow {
-  party_id: number;
-  booked_on: string;
-  increase: string;
-}
-
-/** Per party and booked date, the amounts that raised what is owed (debits for a customer, credits for a supplier). */
-async function loadIncreases(
-  executor: DatabaseOrTransaction,
-  companyId: number,
-  kind: AgingKind,
-  asOf: string | null
-): Promise<IncreaseRow[]> {
-  const live = liveVouchersOf(companyId, asOf);
-  if (kind === "customer") {
-    const result = await executor.execute<IncreaseRow & Record<string, unknown>>(sql`
-      WITH customer_links AS (${sql.raw(customerLinksBody(intLiteral(companyId)))}),
-      owned AS (
-        SELECT COALESCE(cl.customer_id,
-                        CASE WHEN ${sql.raw(noNonCustomerTarget("ve"))} THEN ve.customer_id END) AS party_id,
-               ${VOUCHER_BOOKED_ON} AS booked_on,
-               ${BASE_DEBIT} - ${BASE_CREDIT} AS net
-          FROM voucher_entries ve
-          JOIN vouchers v ON v.id = ve.voucher_id
-          LEFT JOIN customer_links cl ON cl.ledger_account_id = ve.ledger_account_id
-         WHERE v.company_id = ${companyId} AND ${live}
-      )
-      SELECT party_id, booked_on::text AS booked_on, SUM(GREATEST(net, 0))::text AS increase
-        FROM owned
-       WHERE party_id IS NOT NULL
-       GROUP BY party_id, booked_on
-      HAVING SUM(GREATEST(net, 0)) > 0
-    `);
-    return result.rows;
-  }
-  // Suppliers and factory suppliers: the lines the engine attributes to them
-  // (no target of higher priority), credits raise what is owed.
-  const column = kind === "supplier" ? sql.raw("ve.supplier_id") : sql.raw("ve.factory_supplier_id");
-  const owned = sql.raw(higherPriorityTargetsAbsent("ve", kind === "supplier" ? "supplier_id" : "factory_supplier_id"));
-  const result = await executor.execute<IncreaseRow & Record<string, unknown>>(sql`
-    SELECT ${column} AS party_id, (${VOUCHER_BOOKED_ON})::text AS booked_on,
-           SUM(GREATEST(${BASE_CREDIT} - ${BASE_DEBIT}, 0))::text AS increase
-      FROM voucher_entries ve
-      JOIN vouchers v ON v.id = ve.voucher_id
-     WHERE v.company_id = ${companyId} AND ${live}
-       AND ${column} IS NOT NULL
-       AND ${owned}
-     GROUP BY ${column}, ${VOUCHER_BOOKED_ON}
-    HAVING SUM(GREATEST(${BASE_CREDIT} - ${BASE_DEBIT}, 0)) > 0
-  `);
-  return result.rows;
+  /**
+   * The aging total against the engine's rows of the kind (the trial
+   * balance's party detail under the control account): `tied` when equal.
+   */
+  controlTieOut: { engineTotal: string; agingTotal: string; difference: string; tied: boolean };
 }
 
 function daysBetween(from: string, to: string): number {
   return Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86_400_000);
 }
 
-function bucketOf(bookedOn: string, referenceDate: string): AgingBucket {
-  const age = daysBetween(bookedOn, referenceDate);
-  if (age < 0) return "future";
-  if (age <= 30) return "current";
-  if (age <= 60) return "days31to60";
-  if (age <= 90) return "days61to90";
-  return "over90";
+export function agingBucketOf(item: { bookedOn: string | null; dueDate: string | null }, referenceDate: string) {
+  if (item.dueDate === null || item.bookedOn === null) return { bucket: "opening" as AgingBucket, daysPastDue: null };
+  const daysPastDue = daysBetween(item.dueDate, referenceDate);
+  let bucket: AgingBucket;
+  if (daysBetween(item.bookedOn, referenceDate) < 0) bucket = "future";
+  else if (daysPastDue <= 0) bucket = "notDue";
+  else if (daysPastDue <= 30) bucket = "days1to30";
+  else if (daysPastDue <= 60) bucket = "days31to60";
+  else if (daysPastDue <= 90) bucket = "days61to90";
+  else bucket = "over90";
+  return { bucket, daysPastDue };
 }
 
 function emptyBuckets(): Record<AgingBucket, Decimal> {
@@ -168,64 +153,98 @@ export async function getAgingReport(
   executor: DatabaseOrTransaction = db
 ): Promise<AgingReport> {
   const referenceDate = asOf ?? (await companyBusinessDate(companyId, executor));
-  const [balances, increases] = await Promise.all([
-    getPartyBalances(executor, { companyId, kind, asOf }),
-    loadIncreases(executor, companyId, kind, asOf),
-  ]);
-
-  const increasesByParty = new Map<number, Array<{ bookedOn: string; amount: Decimal }>>();
-  for (const row of increases) {
-    const id = Number(row.party_id);
-    const list = increasesByParty.get(id) ?? [];
-    list.push({ bookedOn: String(row.booked_on).slice(0, 10), amount: toMoney(row.increase) });
-    increasesByParty.set(id, list);
-  }
+  const parties = await loadPartyOpenItems(executor, { companyId, kind, asOf });
+  const allocations = await loadLiveAllocations(executor, { companyId, kind });
 
   const totals = emptyBuckets();
-  let totalBalance = new MoneyDecimal(0);
-  const parties: AgingPartyRow[] = [];
-  for (const party of balances.parties) {
-    const base = toMoney(party.historicalBaseClosing);
-    const owed = kind === "customer" ? base : base.negated();
-    if (owed.isZero()) continue;
+  let agingTotal = new MoneyDecimal(0);
+  let engineTotal = new MoneyDecimal(0);
+  const rows: AgingPartyRow[] = [];
+  for (const party of parties) {
+    engineTotal = engineTotal.plus(party.owed);
+    const plan = planFifoAllocations({
+      invoices: party.invoices,
+      credits: party.credits,
+      allocations: allocations.get(party.partyId) ?? [],
+      // A full view drops rows whose source is gone, as the run will; an
+      // as-of view does not load later items and ignores their rows.
+      releaseMissing: asOf === null,
+    });
     const buckets = emptyBuckets();
-    if (owed.isNegative()) {
-      buckets.unappliedCredit = owed;
-    } else {
-      let remaining = owed;
-      const lines = [...(party.id === null ? [] : (increasesByParty.get(party.id) ?? []))].sort((a, b) =>
-        b.bookedOn.localeCompare(a.bookedOn)
-      );
-      for (const line of lines) {
-        if (!remaining.isPositive()) break;
-        const part = MoneyDecimal.min(remaining, line.amount);
-        const bucket = bucketOf(line.bookedOn, referenceDate);
-        buckets[bucket] = buckets[bucket].plus(part);
-        remaining = remaining.minus(part);
-      }
-      if (remaining.isPositive()) buckets.opening = buckets.opening.plus(remaining);
+    const openItems: AgingOpenItem[] = [];
+    for (const state of plan.invoices) {
+      if (!state.remaining.greaterThan(0)) continue;
+      const { bucket, daysPastDue } = agingBucketOf(state.item, referenceDate);
+      buckets[bucket] = buckets[bucket].plus(state.remaining);
+      openItems.push({
+        voucherId: state.item.voucherId,
+        voucherNumber: state.item.voucherNumber,
+        voucherType: state.item.voucherType,
+        bookedOn: state.item.bookedOn,
+        dueDate: state.item.dueDate,
+        amount: state.item.amount.toFixed(2),
+        open: state.remaining.toFixed(2),
+        daysPastDue,
+        bucket,
+      });
     }
+    const unappliedCredits: AgingCredit[] = [];
+    for (const state of plan.credits) {
+      if (!state.remaining.greaterThan(0)) continue;
+      buckets.unappliedCredit = buckets.unappliedCredit.minus(state.remaining);
+      unappliedCredits.push({
+        voucherId: state.item.voucherId,
+        voucherNumber: state.item.voucherNumber,
+        voucherType: state.item.voucherType,
+        bookedOn: state.item.bookedOn,
+        amount: state.item.amount.toFixed(2),
+        unapplied: state.remaining.toFixed(2),
+      });
+    }
+    const balance = AGING_BUCKETS.reduce((sum, bucket) => sum.plus(buckets[bucket]), new MoneyDecimal(0));
+    if (balance.isZero() && openItems.length === 0 && unappliedCredits.length === 0) continue;
     for (const bucket of AGING_BUCKETS) totals[bucket] = totals[bucket].plus(buckets[bucket]);
-    totalBalance = totalBalance.plus(owed);
-    parties.push({
-      id: party.id,
+    agingTotal = agingTotal.plus(balance);
+    openItems.sort((a, b) => (a.dueDate ?? "").localeCompare(b.dueDate ?? ""));
+    rows.push({
+      id: party.partyId,
       code: party.code,
       name: party.name,
-      balance: owed.toFixed(2),
+      balance: balance.toFixed(2),
+      paymentTermsDays: party.paymentTermsDays,
       buckets: money(buckets),
+      openItems,
+      unappliedCredits,
+      pendingAllocations: plan.creates.length + plan.releases.length,
     });
   }
-  parties.sort((a, b) => toMoney(b.balance).comparedTo(toMoney(a.balance)) || a.name.localeCompare(b.name));
+  rows.sort(
+    (a, b) => new MoneyDecimal(b.balance).comparedTo(new MoneyDecimal(a.balance)) || a.name.localeCompare(b.name)
+  );
+  const difference = agingTotal.minus(engineTotal);
 
   return {
     companyId,
     kind,
     basis: "ledger",
-    amountBasis: "historicalBase",
+    amountBasis: "book",
+    allocationMethod: "fifo_by_due_date",
     asOf,
     referenceDate,
-    bucketDays: { current: "0-30", days31to60: "31-60", days61to90: "61-90", over90: ">90" },
-    parties,
-    totals: { balance: totalBalance.toFixed(2), buckets: money(totals) },
+    bucketDays: {
+      notDue: "not yet due",
+      days1to30: "1-30 past due",
+      days31to60: "31-60 past due",
+      days61to90: "61-90 past due",
+      over90: ">90 past due",
+    },
+    parties: rows,
+    totals: { balance: agingTotal.toFixed(2), buckets: money(totals) },
+    controlTieOut: {
+      engineTotal: engineTotal.toFixed(2),
+      agingTotal: agingTotal.toFixed(2),
+      difference: difference.toFixed(2),
+      tied: difference.isZero(),
+    },
   };
 }

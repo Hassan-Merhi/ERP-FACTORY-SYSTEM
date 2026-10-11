@@ -86,8 +86,23 @@ beforeAll(async () => {
   ).toBe(200);
   expect((await agent.post("/api/auth/set-company").send({ companyId: ctx.companyId })).status).toBe(200);
 
-  retainedId = await account("RE", "Retained Earnings", "Equity", "0", "Cr");
+  // Phase 23 (G12): the close posts to the company's RETAINED_EARNINGS system
+  // account, and the trial balance must balance, so the rent opening has its
+  // equity counterpart.
+  const [retained] = await db
+    .insert(schema.ledgerAccounts)
+    .values({
+      companyId: ctx.companyId,
+      code: "RETAINED_EARNINGS",
+      name: "Retained Earnings",
+      accountType: "Equity",
+      openingBalance: "0",
+      openingBalanceSide: "Cr",
+    })
+    .returning();
+  retainedId = retained.id;
   rentId = await account("RENT", "Rent Expense", "Expense", "40.00", "Dr");
+  await account("OBE", "Opening Balance Equity", "Equity", "40.00", "Cr");
   // An income account that ends the period with a debit balance.
   refundsId = await account("REFUNDS", "Refunds Income", "Income");
 

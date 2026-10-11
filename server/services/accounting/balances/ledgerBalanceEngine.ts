@@ -249,7 +249,9 @@ async function loadOpenings(executor: DatabaseOrTransaction, scope: BalanceScope
              (e.deleted_at IS NOT NULL), NULL, e.opening_balance::text, e.opening_balance_side::text
         FROM employees e WHERE e.company_id = ${companyId}
       UNION ALL
-      SELECT 'factorySupplier', fs.id, NULL, fs.name, 'Factory Supplier', false, NULL, fs.opening_balance::text, NULL
+      -- Phase 25 (AR-9): the factory supplier opening carries its side (NULL = Cr, as before).
+      SELECT 'factorySupplier', fs.id, NULL, fs.name, 'Factory Supplier', false, NULL, fs.opening_balance::text,
+             fs.opening_balance_side::text
         FROM factory_suppliers fs WHERE fs.company_id = ${companyId}
       UNION ALL
       -- Every customer carries its own opening (rule 1), linked ledger or not.
@@ -350,7 +352,12 @@ export interface PartyBalance {
   periodCredit: string;
   /** opening + periodDebit − periodCredit. */
   closing: string;
-  /** masterOpening + historical base amounts of every line up to `asOf` (USD at posting rates). */
+  /**
+   * masterOpening + historical base amounts of every line up to `asOf` (USD at posting rates).
+   * @deprecated Phase 25 (AR-3, owner decision decided by default): the book amount is
+   * `closing` (debit_amount / credit_amount). Lines where the base columns differ are listed by
+   * GET /api/open-items/diagnostics (`bookAmountColumn`); readers move to `closing`.
+   */
   historicalBaseClosing: string;
   openingSideAssumed: boolean;
   /**

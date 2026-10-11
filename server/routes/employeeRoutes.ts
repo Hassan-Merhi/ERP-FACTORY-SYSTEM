@@ -8,6 +8,23 @@ import { eq } from "drizzle-orm";
 import { registerEmployeeGroupRoutes } from "./employeeGroupRoutes";
 import { registerPayrollRoutes } from "./erp-payroll";
 import { parseMoneyInput, toMoney } from "../lib/money";
+import { getPartyBalances } from "../services/accounting/balances/ledgerBalanceEngine";
+
+/**
+ * Phase 25 (AR-1): employee balances from the one balance engine (kind
+ * `employee`, the company's vouchers, the opening with its side), shown Cr
+ * positive (owed to the employee). employees.current_balance is a cache kept
+ * by the payroll writers; it is returned only as `cachedBalance` (memo) and
+ * compared by GET /api/open-items/diagnostics.
+ */
+async function engineEmployeeOwed(companyId: number, ids?: number[]): Promise<Map<number, string>> {
+  const { parties } = await getPartyBalances(db, { companyId, kind: "employee", ids });
+  return new Map(
+    parties
+      .filter((party) => party.id !== null)
+      .map((party) => [party.id as number, toMoney(party.closing).negated().toFixed(2)])
+  );
+}
 
 export function registerEmployeeRoutes(app: Express) {
   app.get("/api/employees", requireAuth, async (req, res) => {
@@ -18,11 +35,11 @@ export function registerEmployeeRoutes(app: Express) {
         return res.status(400).json({ message: "No company selected" });
       }
       const employees = await storage.getAllEmployees(req.session.currentCompanyId);
+      const owedById = await engineEmployeeOwed(req.session.currentCompanyId);
       // Ensure proper camelCase field names for frontend
       const transformedEmployees = employees.map((emp) => {
-        // Use stored currentBalance which is kept in sync by payroll operations and journal vouchers
-        // The syncEmployeePayrollBalance function updates currentBalance when vouchers are created/edited/deleted
-        const currentBalance = toMoney(emp.currentBalance).toNumber();
+        // The engine's balance (AR-1); the stored current_balance is a memo cache.
+        const currentBalance = owedById.get(emp.id) ?? "0.00";
 
         return {
           ...emp,
@@ -82,8 +99,10 @@ export function registerEmployeeRoutes(app: Express) {
                 balesBonusRate: string | null;
               } & { last_name: unknown }
             ).last_name,
-          currentBalance: currentBalance.toFixed(2),
-          calculatedBalance: currentBalance.toFixed(2),
+          currentBalance,
+          calculatedBalance: currentBalance,
+          cachedBalance: toMoney(emp.currentBalance).toFixed(2),
+          balanceBasis: "ledger",
         };
       });
       res.json(transformedEmployees);
@@ -107,8 +126,8 @@ export function registerEmployeeRoutes(app: Express) {
       if (!employee) {
         return res.status(404).json({ message: "Employee not found" });
       }
-      const balance = toMoney(employee.currentBalance).toFixed(2);
-      res.json({ balance });
+      const balance = (await engineEmployeeOwed(req.session.currentCompanyId, [employeeId])).get(employeeId) ?? "0.00";
+      res.json({ balance, balanceBasis: "ledger", cachedBalance: toMoney(employee.currentBalance).toFixed(2) });
     } catch (error: unknown) {
       res.status(500).json({ message: getErrorMessage(error) });
     }

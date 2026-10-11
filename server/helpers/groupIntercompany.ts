@@ -7,24 +7,35 @@
  * "Intercompany difference" line. Accounts are recognised from what the
  * system itself records, never from a name or code pattern:
  *
- *   - inter_company_transfers: the from-company's from_ledger_account_id is
- *     its account with the to-company, and the reverse;
+ *   - inter_company_transfers (phase 26, MC-1): the intercompany account each
+ *     leg posted against, recorded on the link (from_ic_account_id in the
+ *     from company, to_ic_account_id in the to company). A link written before
+ *     phase 26 has no ids: its leg's account other than the cash account the
+ *     link names is used (the IC-TO-/IC-FROM- or TRANSFER-CLEARING line).
+ *     The cash accounts themselves are never intercompany accounts (they used
+ *     to be taken as such, so group elimination removed cash);
  *   - intercompany_pos_configs: source_interco_account_id (source company)
  *     with the destination company, dest_interco_account_id (destination)
  *     with the source company;
- *   - the parent-credit pair the PO import posts: a subsidiary's configured
- *     company_settings.parent_credit_account_id with its parent, and in the
- *     parent the receivable the PO import itself finds or creates for that
- *     subsidiary, the account named exactly "<subsidiary name> Credit"
- *     (routes/import/po-import.ts looks it up by that name in the parent);
+ *   - the parent-credit pair the PO import posts, BY ID (phase 26, MC-9): a
+ *     subsidiary's company_settings.parent_credit_account_id with its parent,
+ *     and in the parent the receivable recorded in the subsidiary's
+ *     company_settings.parent_receivable_account_id (the PO import writes it;
+ *     it used to be found by the name "<subsidiary> Credit");
  *   - every ledger account typed Intercompany (the classifier's party type),
  *     whose counterpart is unknown when no link above names it.
  *
  * Each read runs for one company at a time, inside that company's own scope
  * (the caller wraps it), so no cross-company query is needed.
  */
-import { and, eq, isNull, or } from "drizzle-orm";
-import { interCompanyTransfers, intercompanyPosConfigs, ledgerAccounts } from "@shared/schema";
+import { and, eq, inArray, isNull, or } from "drizzle-orm";
+import {
+  companySettings,
+  interCompanyTransfers,
+  intercompanyPosConfigs,
+  ledgerAccounts,
+  voucherEntries,
+} from "@shared/schema";
 
 import { db } from "../db";
 import { toMoney } from "../lib/money";
@@ -51,6 +62,23 @@ interface CompanyLike {
   parentCompanyId?: number | null;
 }
 
+/** The parent-side receivable of each direct subsidiary, by the id in the subsidiary's settings. */
+async function loadChildParentReceivables(
+  companyId: number,
+  allCompanies: readonly CompanyLike[]
+): Promise<{ childCompanyId: number; receivableAccountId: number | null }[]> {
+  const childIds = allCompanies.filter((child) => Number(child.parentCompanyId) === companyId).map((c) => c.id);
+  if (childIds.length === 0) return [];
+  const rows = await db
+    .select({
+      companyId: companySettings.companyId,
+      parentReceivableAccountId: companySettings.parentReceivableAccountId,
+    })
+    .from(companySettings)
+    .where(inArray(companySettings.companyId, childIds));
+  return rows.map((row) => ({ childCompanyId: row.companyId, receivableAccountId: row.parentReceivableAccountId }));
+}
+
 /** The intercompany accounts of one company and their balances (run inside the company's scope). */
 export async function loadCompanyIntercompanyAccounts(
   company: CompanyLike,
@@ -67,16 +95,25 @@ export async function loadCompanyIntercompanyAccounts(
     links.set(accountId, entry);
   };
 
-  const [transfers, posConfigs, settings, accounts] = await Promise.all([
+  const [transfers, posConfigs, settings, accounts, childSettings] = await Promise.all([
     db
-      .selectDistinct({
+      .select({
         fromCompanyId: interCompanyTransfers.fromCompanyId,
         toCompanyId: interCompanyTransfers.toCompanyId,
         fromLedgerAccountId: interCompanyTransfers.fromLedgerAccountId,
         toLedgerAccountId: interCompanyTransfers.toLedgerAccountId,
+        fromVoucherId: interCompanyTransfers.fromVoucherId,
+        toVoucherId: interCompanyTransfers.toVoucherId,
+        fromIcAccountId: interCompanyTransfers.fromIcAccountId,
+        toIcAccountId: interCompanyTransfers.toIcAccountId,
       })
       .from(interCompanyTransfers)
-      .where(or(eq(interCompanyTransfers.fromCompanyId, companyId), eq(interCompanyTransfers.toCompanyId, companyId))),
+      .where(
+        and(
+          or(eq(interCompanyTransfers.fromCompanyId, companyId), eq(interCompanyTransfers.toCompanyId, companyId)),
+          isNull(interCompanyTransfers.deletedAt)
+        )
+      ),
     db
       .select()
       .from(intercompanyPosConfigs)
@@ -88,11 +125,41 @@ export async function loadCompanyIntercompanyAccounts(
       .select({ id: ledgerAccounts.id, name: ledgerAccounts.name, accountType: ledgerAccounts.accountType })
       .from(ledgerAccounts)
       .where(and(eq(ledgerAccounts.companyId, companyId), isNull(ledgerAccounts.deletedAt))),
+    loadChildParentReceivables(companyId, allCompanies),
   ]);
 
+  // Legacy links (no recorded intercompany account): the leg's non-cash account.
+  const legacyLegs = new Map<number, { cashAccountId: number; counterparty: number }>();
   for (const transfer of transfers) {
-    if (transfer.fromCompanyId === companyId) link(transfer.fromLedgerAccountId, transfer.toCompanyId, "transfer");
-    if (transfer.toCompanyId === companyId) link(transfer.toLedgerAccountId, transfer.fromCompanyId, "transfer");
+    if (transfer.fromCompanyId === companyId) {
+      if (transfer.fromIcAccountId) link(transfer.fromIcAccountId, transfer.toCompanyId, "transfer");
+      else if (transfer.fromVoucherId) {
+        legacyLegs.set(transfer.fromVoucherId, {
+          cashAccountId: transfer.fromLedgerAccountId,
+          counterparty: transfer.toCompanyId,
+        });
+      }
+    }
+    if (transfer.toCompanyId === companyId) {
+      if (transfer.toIcAccountId) link(transfer.toIcAccountId, transfer.fromCompanyId, "transfer");
+      else if (transfer.toVoucherId) {
+        legacyLegs.set(transfer.toVoucherId, {
+          cashAccountId: transfer.toLedgerAccountId,
+          counterparty: transfer.fromCompanyId,
+        });
+      }
+    }
+  }
+  if (legacyLegs.size > 0) {
+    const legLines = await db
+      .select({ voucherId: voucherEntries.voucherId, ledgerAccountId: voucherEntries.ledgerAccountId })
+      .from(voucherEntries)
+      .where(inArray(voucherEntries.voucherId, [...legacyLegs.keys()]));
+    for (const line of legLines) {
+      const leg = legacyLegs.get(line.voucherId);
+      if (!leg || !line.ledgerAccountId || line.ledgerAccountId === leg.cashAccountId) continue;
+      link(line.ledgerAccountId, leg.counterparty, "transfer");
+    }
   }
   for (const config of posConfigs) {
     if (config.sourceCompanyId === companyId) link(config.sourceIntercoAccountId, config.destCompanyId, "posConfig");
@@ -102,11 +169,7 @@ export async function loadCompanyIntercompanyAccounts(
     link(Number(settings?.parentCreditAccountId) || null, company.parentCompanyId, "parentCredit");
   }
   const accountById = new Map(accounts.map((account) => [account.id, account]));
-  const accountIdByName = new Map(accounts.map((account) => [account.name, account.id]));
-  for (const child of allCompanies) {
-    if (Number(child.parentCompanyId) !== companyId) continue;
-    link(accountIdByName.get(`${child.name} Credit`), child.id, "parentCredit");
-  }
+  for (const child of childSettings) link(child.receivableAccountId, child.childCompanyId, "parentCredit");
   for (const account of accounts) {
     if (canonicalAccountType(account.accountType) === "Intercompany") link(account.id, null, "intercompanyType");
   }

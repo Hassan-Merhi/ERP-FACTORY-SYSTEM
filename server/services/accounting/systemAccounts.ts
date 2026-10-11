@@ -62,6 +62,56 @@ export const SYSTEM_ACCOUNTS: readonly SystemAccountDefinition[] = [
     required: true,
     purpose: "Base-currency rounding remainder of vouchers converted line by line (a credit balance is a gain).",
   },
+  // Phase 23, C9 (decided by default): the control accounts. Party detail
+  // stays on the line (customer_id, supplier_id, employee_id,
+  // factory_supplier_id); reports present the party rows under these accounts
+  // (controlAccounts.ts). New per-party ledger accounts are not created for
+  // payroll workers (FACTORY_SALARY_EXPENSE / FACTORY_BONUS_EXPENSE below).
+  {
+    code: "ACCOUNTS_RECEIVABLE",
+    name: "Accounts Receivable",
+    accountType: "Asset",
+    subType: "Accounts Receivable",
+    required: true,
+    purpose: "Receivables control account: customers are presented under it, with the customer on each line.",
+  },
+  {
+    code: "ACCOUNTS_PAYABLE",
+    name: "Accounts Payable",
+    accountType: "Liability",
+    subType: "Accounts Payable",
+    required: true,
+    purpose: "Payables control account: suppliers and factory suppliers are presented under it.",
+  },
+  {
+    code: "PAYROLL_PAYABLE",
+    name: "Payroll Payable",
+    accountType: "Liability",
+    required: true,
+    purpose: "Payroll control account: net pay owed to workers and employees (employees are presented under it).",
+  },
+  // Phase 23, G7: the default destination of a reviewed legacy line repair.
+  {
+    code: "SUSPENSE",
+    name: "Suspense (Legacy Line Repair)",
+    accountType: "Liability",
+    required: false,
+    purpose: "Holds amounts of legacy lines with no valid account until the owner reclassifies them.",
+  },
+  {
+    code: "FACTORY_SALARY_EXPENSE",
+    name: "Salary Expense - Workers (pooled)",
+    accountType: "Expense",
+    required: false,
+    purpose: "Salary of factory workers without a legacy per-worker account (the worker is named on the line).",
+  },
+  {
+    code: "FACTORY_BONUS_EXPENSE",
+    name: "Bonus Expense - Workers (pooled)",
+    accountType: "Expense",
+    required: false,
+    purpose: "Bonus of factory workers without a legacy per-worker account (the worker is named on the line).",
+  },
   {
     code: "PURCHASES",
     name: "Purchases",
@@ -204,6 +254,23 @@ export const SYSTEM_ACCOUNTS: readonly SystemAccountDefinition[] = [
     accountType: "Indirect Expense",
     required: false,
     purpose: "Exchange differences.",
+  },
+  // Phase 24 (M6, M7): realized exchange differences on settlement and the
+  // month-end revaluation of monetary balances (reversed on day 1).
+  {
+    code: "FX_GAIN_LOSS",
+    name: "Realized Exchange Gain/Loss",
+    accountType: "Indirect Expense",
+    required: false,
+    purpose: "Realized exchange difference when a foreign-currency item is settled (a credit balance is a gain).",
+  },
+  {
+    code: "UNREALIZED_FX",
+    name: "Unrealized Exchange Gain/Loss",
+    accountType: "Indirect Expense",
+    required: false,
+    purpose:
+      "Month-end revaluation of foreign-currency monetary balances, reversed on the first day of the next month.",
   },
   {
     code: "FACTORY_CHARGES_PAYABLE",

@@ -42,6 +42,8 @@ import {
 } from "../../services/accounting/systemAccounts";
 import { runAccountingIntegrityDiagnostic } from "../../services/accounting/integrity/accountingIntegrityDiagnostic";
 import { buildTrialBalance } from "../../services/accounting/integrity/trialBalance";
+import { requireFinancialReportAccess } from "../stats/financialReportAccess";
+import { asOfReportContext } from "../stats/financialStatementRoutes";
 import {
   FactoryFxRepairPlanChangedError,
   applyFactoryFxLegacyRepair,
@@ -54,7 +56,10 @@ import {
 } from "../../services/accounting/perpetualInventory/openingJournal";
 import { syncFactoryStockJournalTx } from "../../services/accounting/perpetualInventory/factoryStockJournal";
 import { listUnpostedFactoryInvoices } from "../../services/accounting/perpetualInventory/factoryInvoice";
-import { reconcilePerpetualInventory } from "../../services/accounting/perpetualInventory/reconciliation";
+import {
+  ReconciliationBeforeCutoverError,
+  reconcilePerpetualInventory,
+} from "../../services/accounting/perpetualInventory/reconciliation";
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -69,13 +74,22 @@ export function registerAccountingIntegrityRoutes(app: Express) {
     }
   });
 
-  app.get("/api/accounting/trial-balance", requireAuth, requireRole("Admin", "Owner"), async (req, res) => {
+  // Phase 27: the financial-report roles (RP-15, was Admin/Owner); without asOf
+  // the trial balance stops at the company's business date and flags the
+  // vouchers booked after it (RP-8; it included them before).
+  app.get("/api/accounting/trial-balance", requireAuth, requireFinancialReportAccess, async (req, res) => {
     try {
       const companyId = req.session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });
       const asOf = typeof req.query.asOf === "string" && req.query.asOf ? req.query.asOf : null;
       if (asOf && !ISO_DATE.test(asOf)) return res.status(400).json({ message: "Invalid date" });
-      res.json(await buildTrialBalance(companyId, asOf));
+      const context = await asOfReportContext(companyId, asOf ?? undefined, "asOf");
+      res.json({
+        ...(await buildTrialBalance(companyId, context.asOf)),
+        asOfDefaulted: context.defaulted,
+        businessDate: context.businessDate,
+        futureDated: context.futureDated,
+      });
     } catch (error: unknown) {
       res.status(500).json({ message: getErrorMessage(error) });
     }
@@ -290,8 +304,12 @@ export function registerAccountingIntegrityRoutes(app: Express) {
       try {
         const companyId = req.session.currentCompanyId;
         if (!companyId) return res.status(400).json({ message: "No company selected" });
-        res.json(await reconcilePerpetualInventory(db, companyId));
+        // Phase 29 (I5): ?asOf= (on or after the cut-over).
+        const asOf = typeof req.query.asOf === "string" && req.query.asOf ? req.query.asOf : undefined;
+        if (asOf && !ISO_DATE.test(asOf)) return res.status(400).json({ message: "Invalid date" });
+        res.json(await reconcilePerpetualInventory(db, companyId, asOf));
       } catch (error: unknown) {
+        if (error instanceof ReconciliationBeforeCutoverError) return res.status(400).json(error.body);
         res.status(500).json({ message: getErrorMessage(error) });
       }
     }

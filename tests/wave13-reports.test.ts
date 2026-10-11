@@ -3,7 +3,8 @@
  *
  * One seeded company carries every case, so the file seeds once:
  *   - R1 the balance sheet classifies every row with classifyAccountType:
- *     Government Taxes is an expense (current earnings), Profit is equity,
+ *     Government Taxes is a tax account (phase 23, C3: a liability, no longer
+ *     an expense in current earnings), Profit is equity,
  *     Intercompany counts by sign; current earnings equal the P&L's net profit
  *     to the same date, and the difference is still the trial balance's;
  *   - C1 a sideless Liability opening is counted Cr by the engine (and the
@@ -23,6 +24,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { db, pool } from "../server/db";
 import { getBalanceSheet, getProfitLoss } from "../server/services/reports/financialReportsService";
+import { toMoney } from "../server/lib/money";
 import { buildTrialBalance } from "../server/services/accounting/integrity/trialBalance";
 import { getPartyBalances } from "../server/services/accounting/balances/ledgerBalanceEngine";
 import { calculateIncomeStatementForPeriod } from "../server/helpers/calculateIncomeStatementForPeriod";
@@ -197,9 +199,9 @@ type SheetLine = { kind: string; id: number | null; balance: string };
 const lineOf = (lines: SheetLine[], id: number) => lines.find((line) => line.kind === "ledger" && line.id === id);
 
 describe("R1: balance sheet on the classifier", () => {
-  it("puts Government Taxes in earnings, Profit in equity, Intercompany by sign", async () => {
+  it("puts Government Taxes in the balance sheet (a tax account), Profit in equity, Intercompany by sign", async () => {
     const sheet = await getBalanceSheet(ctx.companyId, today);
-    expect(lineOf(sheet.liabilities.lines, ids.GOVTAX)).toBeUndefined();
+    expect(lineOf(sheet.liabilities.lines, ids.GOVTAX) ?? lineOf(sheet.assets.lines, ids.GOVTAX)).toBeDefined();
     expect(lineOf(sheet.unclassified.lines, ids.GOVTAX)).toBeUndefined();
     expect(lineOf(sheet.equity.lines, ids.CAPITAL)?.balance).toBe("500.00");
     expect(lineOf(sheet.assets.lines, ids.INTERCO)?.balance).toBe("200.00");
@@ -211,9 +213,15 @@ describe("R1: balance sheet on the classifier", () => {
       getProfitLoss(ctx.companyId, undefined, today),
       buildTrialBalance(ctx.companyId, today),
     ]);
-    // 1000 + 400 sales + 30 indirect income − 50 duties − 120 rent.
-    expect(profitLoss.netProfit).toBe(1260);
-    expect(sheet.equity.currentEarnings).toBe(profitLoss.netProfit.toFixed(2));
+    // 1000 + 400 sales + 30 indirect income − 120 rent (the 50 duties are a tax account since phase 23).
+    expect(profitLoss.netProfit).toBe(1310);
+    // Phase 27 (RP-4): earnings are split at the fiscal year (calendar year);
+    // together they are the P&L's net profit to the same date.
+    expect(toMoney(sheet.equity.currentEarnings).plus(sheet.equity.retainedEarnings).toFixed(2)).toBe(
+      profitLoss.netProfit.toFixed(2)
+    );
+    const fiscalYear = await getProfitLoss(ctx.companyId, `${today.slice(0, 4)}-01-01`, today);
+    expect(sheet.equity.currentEarnings).toBe(fiscalYear.sections.netProfit);
     expect(sheet.difference).toBe(trialBalance.unexplainedDifference);
   });
 });
@@ -238,25 +246,20 @@ describe("R2: one date basis, COALESCE(effective_date, voucher_date)", () => {
     const period = await getProfitLoss(ctx.companyId, periodFrom, periodTo);
     const prior = await getProfitLoss(ctx.companyId, priorFrom, priorTo);
     expect(period.expenseItems.find((item) => item.id === ids.RENT)?.balance).toBe(120);
-    expect(period.totalExpenses).toBe(170);
+    expect(period.totalExpenses).toBe(120);
     expect(prior.expenseItems.find((item) => item.id === ids.RENT)).toBeUndefined();
-    expect(period.netProfit).toBe(30 - 50 - 120);
+    expect(period.netProfit).toBe(30 - 120);
 
     const statement = await calculateIncomeStatementForPeriod(ctx.companyId, periodFrom, periodTo);
     expect(statement.totalRevenue).toBe(30);
-    expect(statement.totalExpenses).toBe(170);
+    expect(statement.totalExpenses).toBe(120);
     const priorStatement = await calculateIncomeStatementForPeriod(ctx.companyId, priorFrom, priorTo);
     expect(priorStatement.totalExpenses).toBe(0);
   });
 
   it("filters the net-profit drill-downs by the period on the same basis", async () => {
     const period = await loadNetProfitDrillDown(ctx.companyId, "indirectExpense", "debit", periodFrom, periodTo);
-    expect(period.accounts.map((a) => [a.id, a.balance]).sort()).toEqual(
-      [
-        [ids.GOVTAX, 50],
-        [ids.RENT, 120],
-      ].sort()
-    );
+    expect(period.accounts.map((a) => [a.id, a.balance]).sort()).toEqual([[ids.RENT, 120]]);
     const prior = await loadNetProfitDrillDown(ctx.companyId, "indirectExpense", "debit", priorFrom, priorTo);
     expect(prior.total).toBe(0);
   });
@@ -280,9 +283,8 @@ describe("R2: one date basis, COALESCE(effective_date, voucher_date)", () => {
       });
     const names = (result: unknown) =>
       ((result as { table?: { rows: string[][] } }).table?.rows ?? []).map((row) => row[0]);
-    expect(names(await run(periodFrom, periodTo))).toEqual(
-      expect.arrayContaining([`${TEST_PREFIX} RENT`, `${TEST_PREFIX} GOVTAX`])
-    );
+    expect(names(await run(periodFrom, periodTo))).toEqual(expect.arrayContaining([`${TEST_PREFIX} RENT`]));
+    expect(names(await run(periodFrom, periodTo))).not.toContain(`${TEST_PREFIX} GOVTAX`);
     expect(names(await run(priorFrom, priorTo))).not.toContain(`${TEST_PREFIX} RENT`);
   });
 });
@@ -294,7 +296,7 @@ describe("R3: dashboard monthly data", () => {
     // Last year's sale in this month is not added to this month.
     expect(current).toMatchObject({ sales: 400, profit: 400 });
     const period = months.find((month) => month.yearMonth === periodFrom.slice(0, 7));
-    expect(period).toMatchObject({ sales: 0, profit: 30 - 50 - 120 });
+    expect(period).toMatchObject({ sales: 0, profit: 30 - 120 });
   });
 });
 
@@ -305,8 +307,8 @@ describe("R4: ratios", () => {
     const sheet = await getBalanceSheet(ctx.companyId, today);
     expect(res.body.underlying).toMatchObject({
       totalIncome: 1430,
-      totalExpenses: 170,
-      netProfit: 1260,
+      totalExpenses: 120,
+      netProfit: 1310,
       totalAssets: Number(sheet.assets.total),
       totalLiabilities: Number(sheet.liabilities.total),
     });
@@ -342,8 +344,8 @@ describe("R5: net-profit workbook", () => {
       return values ? values[values.length - 1] : undefined;
     };
     expect(total("Indirect Incomes")).toBe(30);
-    // Rent (mis-cased EXPENSE) and duties (Government Taxes) are in a section now.
-    expect(total("Indirect Expenses")).toBe(170);
+    // Rent (mis-cased EXPENSE) is in a section; duties (Government Taxes) are a tax account since phase 23.
+    expect(total("Indirect Expenses")).toBe(120);
   });
 });
 

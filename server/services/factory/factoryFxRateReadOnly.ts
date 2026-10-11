@@ -1,6 +1,6 @@
 import { db } from "../../db";
 import { getErrorMessage } from "../../lib/httpHandlers";
-import { recordedFactoryFxRateForDate, storedFactoryFxRateOnOrBefore } from "./factoryFxRateOnDate";
+import { findFactoryFxRateOnOrBefore } from "./factoryFxRateOnDate";
 
 function buildValidatedFxUrl(dateISO: string, currencyCode: string): string {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(dateISO)) {
@@ -48,15 +48,14 @@ export interface FactoryFxRateResolution {
 }
 
 /**
- * The factory rate (USD per unit) for a currency on a date. Precedence:
- *   1. the latest manual rate dated on or before `dateISO`;
- *   2. the rate already recorded (auto) for exactly that date;
- *   3. the external historical rate for that date, returned but NOT stored
- *      (wave 17 C, owner decision 1: reads never write rates);
- *   4. when the external source fails, the latest recorded rate dated on or
- *      before `dateISO`.
- * A rate dated after the transaction is never used; with none of the above it
- * throws. It never writes, so every caller is read-only on factory_fx_rates.
+ * The factory rate (USD per unit) for a currency on a date. Phase 24 (M1, one
+ * resolver): the recorded rate dated on or before `dateISO` (manual before auto
+ * on the same date, `findFactoryFxRateOnOrBefore`); only when none is recorded,
+ * the external historical rate for that date, returned but NOT stored (wave 17
+ * C, owner decision 1: reads never write rates) and flagged `saved: false`.
+ * Before phase 24 a manual rate of any earlier date beat a recorded auto rate
+ * and the external rate was fetched ahead of an older recorded auto rate. A rate
+ * dated after the transaction is never used; with none of the above it throws.
  */
 export async function resolveFactoryFxRateToUsd(
   companyId: number,
@@ -66,22 +65,15 @@ export async function resolveFactoryFxRateToUsd(
   const normalizedCurrency = currencyCode.trim().toUpperCase();
   if (normalizedCurrency === "USD") return { rate: "1", effectiveDate: dateISO, source: "identity", saved: true };
 
-  const manualRate = await storedFactoryFxRateOnOrBefore(db, companyId, normalizedCurrency, dateISO, "manual");
-  if (manualRate) {
-    return { rate: manualRate.rate, effectiveDate: manualRate.effectiveDate, source: "manual", saved: true };
+  const recorded = await findFactoryFxRateOnOrBefore(db, companyId, normalizedCurrency, dateISO);
+  if (recorded) {
+    return { rate: recorded.rate, effectiveDate: recorded.effectiveDate, source: recorded.source, saved: true };
   }
-
-  const existingExactRate = await recordedFactoryFxRateForDate(db, companyId, normalizedCurrency, dateISO);
-  if (existingExactRate) return { rate: existingExactRate, effectiveDate: dateISO, source: "auto", saved: true };
 
   try {
     const fetched = await fetchExternalFactoryFxRate(normalizedCurrency, dateISO);
     return { rate: fetched, effectiveDate: dateISO, source: "fetched", saved: false };
   } catch (error: unknown) {
-    const fallback = await storedFactoryFxRateOnOrBefore(db, companyId, normalizedCurrency, dateISO);
-    if (fallback) {
-      return { rate: fallback.rate, effectiveDate: fallback.effectiveDate, source: fallback.source, saved: true };
-    }
     throw new Error(
       `No FX rate available for ${dateISO}/${normalizedCurrency}. External API error: ${getErrorMessage(error)}`,
       {

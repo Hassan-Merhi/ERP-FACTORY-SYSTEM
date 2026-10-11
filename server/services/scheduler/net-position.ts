@@ -5,7 +5,8 @@ import { getWaSettings, getActiveRecipients, sendWhatsAppFile, sendWhatsAppText 
 import { generateNetPositionExcel } from "../../helpers/generateNetPositionExcel";
 import { storage } from "../../storage";
 import { getTodayLabel } from "./daily-export";
-import { loadOverdueCustomerBalances } from "./overdueCustomerQuery";
+import { loadOverdueCustomerBalances, type OverdueCustomerBalanceRow } from "./overdueCustomerQuery";
+import { toMoney } from "../../lib/money";
 
 export async function isScheduleEnabled(): Promise<boolean> {
   try {
@@ -61,8 +62,10 @@ export async function runMonthlyWhatsAppNetPosition() {
 }
 
 /**
- * Check all factory customers who have payment terms set and an outstanding debit balance
- * whose oldest unpaid invoice has passed its due date (invoice_date + payment_terms_days).
+ * Customers with an open invoice past its due date (accounting audit phase 25,
+ * AR-4/AR-13): the aging's open items (overdueCustomerQuery.ts) — invoices
+ * settled through the allocation table, due their booked date + the
+ * customer's payment terms — in each company's book currency, exact amounts.
  * Sends a single consolidated WhatsApp text message listing all overdue customers.
  */
 export async function checkOverdueCustomers(): Promise<void> {
@@ -75,46 +78,13 @@ export async function checkOverdueCustomers(): Promise<void> {
   }
 
   try {
-    // Find customers with payment terms set, their net balance (debit = they owe us),
-    // and the earliest finalized invoice date per customer.
-    const customerBalances = await loadOverdueCustomerBalances();
-
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    const overdue: { name: string; balance: number; dueDate: string; daysOverdue: number }[] = [];
-
-    for (const row of customerBalances) {
-      const earliestInvoiceDate = row.earliest_invoice_date ? new Date(row.earliest_invoice_date) : null;
-      if (!earliestInvoiceDate) continue;
-
-      const dueDate = new Date(earliestInvoiceDate);
-      dueDate.setDate(dueDate.getDate() + Number(row.payment_terms_days));
-      dueDate.setHours(0, 0, 0, 0);
-
-      if (dueDate <= today) {
-        const daysOverdue = Math.floor((today.getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24));
-        overdue.push({
-          name: row.legal_name,
-          balance: parseFloat(row.net_balance),
-          dueDate: dueDate.toISOString().substring(0, 10),
-          daysOverdue,
-        });
-      }
-    }
-
+    const overdue = await loadOverdueCustomerBalances();
     if (overdue.length === 0) {
       logger.info("[OverdueCheck] No overdue customers today.");
       return;
     }
 
-    const lines = overdue.map(
-      (c) =>
-        `• ${c.name}: $${c.balance.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} — due ${c.dueDate} (${c.daysOverdue === 0 ? "due today" : `${c.daysOverdue}d overdue`})`
-    );
-
-    const message = `*Payment Reminder*\n\nThe following customers have outstanding balances past their due date:\n\n${lines.join("\n")}\n\nPlease follow up.`;
-
+    const message = formatOverdueReminder(overdue);
     const waRes = await sendWhatsAppText(message);
     if (waRes.success) {
       logger.info(`[OverdueCheck] Reminder sent for ${overdue.length} overdue customer(s).`);
@@ -124,6 +94,25 @@ export async function checkOverdueCustomers(): Promise<void> {
   } catch (err: unknown) {
     logger.error("[OverdueCheck] Error during overdue check:", { error: getErrorMessage(err) });
   }
+}
+
+/** The reminder text: each customer's overdue amount and balance in its company's currency (no float). */
+export function formatOverdueReminder(rows: readonly OverdueCustomerBalanceRow[]): string {
+  const amount = (value: string, currency: string) => `${currency} ${formatMoneyGrouped(value)}`;
+  const lines = rows.map(
+    (c) =>
+      `• ${c.legal_name}: ${amount(c.overdue_amount, c.currency)} overdue of ${amount(c.net_balance, c.currency)} — due ${c.due_date} (${c.days_overdue}d overdue)`
+  );
+  return `*Payment Reminder*\n\nThe following customers have outstanding balances past their due date:\n\n${lines.join("\n")}\n\nPlease follow up.`;
+}
+
+/** 1234567.5 → "1,234,567.50" from the exact string. */
+function formatMoneyGrouped(value: string): string {
+  const fixed = toMoney(value).toFixed(2);
+  const negative = fixed.startsWith("-");
+  const [whole, cents] = (negative ? fixed.slice(1) : fixed).split(".");
+  const grouped = whole.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  return `${negative ? "-" : ""}${grouped}.${cents}`;
 }
 
 /**

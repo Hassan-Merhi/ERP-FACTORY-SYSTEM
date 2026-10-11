@@ -12,7 +12,7 @@ export type FactoryCostInput = Decimal.Value | null | undefined;
 export class FactoryCostingError extends Error {
   constructor(
     public readonly code: string,
-    message: string,
+    message: string
   ) {
     super(message);
     this.name = "FactoryCostingError";
@@ -22,7 +22,7 @@ export class FactoryCostingError extends Error {
 function parseDecimal(
   value: FactoryCostInput,
   field: string,
-  options: { allowNegative?: boolean; allowZero?: boolean } = {},
+  options: { allowNegative?: boolean; allowZero?: boolean } = {}
 ): Decimal {
   let parsed: Decimal;
   try {
@@ -46,33 +46,31 @@ function parseDecimal(
 export function factoryCostDecimal(
   value: FactoryCostInput,
   field = "value",
-  options: { allowNegative?: boolean; allowZero?: boolean } = {},
+  options: { allowNegative?: boolean; allowZero?: boolean } = {}
 ): Decimal {
   return parseDecimal(value, field, options);
 }
 
 export function formatFactoryQuantity(value: FactoryCostInput): string {
-  return parseDecimal(value, "quantity").toDecimalPlaces(FACTORY_COST_PRECISION.quantity).toFixed(
-    FACTORY_COST_PRECISION.quantity,
-  );
+  return parseDecimal(value, "quantity")
+    .toDecimalPlaces(FACTORY_COST_PRECISION.quantity)
+    .toFixed(FACTORY_COST_PRECISION.quantity);
 }
 
 export function formatFactoryRate(value: FactoryCostInput): string {
-  return parseDecimal(value, "rate").toDecimalPlaces(FACTORY_COST_PRECISION.rate).toFixed(
-    FACTORY_COST_PRECISION.rate,
-  );
+  return parseDecimal(value, "rate").toDecimalPlaces(FACTORY_COST_PRECISION.rate).toFixed(FACTORY_COST_PRECISION.rate);
 }
 
 export function formatFactoryLockedRate(value: FactoryCostInput): string {
-  return parseDecimal(value, "lockedRate").toDecimalPlaces(FACTORY_COST_PRECISION.lockedRate).toFixed(
-    FACTORY_COST_PRECISION.lockedRate,
-  );
+  return parseDecimal(value, "lockedRate")
+    .toDecimalPlaces(FACTORY_COST_PRECISION.lockedRate)
+    .toFixed(FACTORY_COST_PRECISION.lockedRate);
 }
 
 export function formatFactoryTotal(value: FactoryCostInput): string {
-  return parseDecimal(value, "total").toDecimalPlaces(FACTORY_COST_PRECISION.total).toFixed(
-    FACTORY_COST_PRECISION.total,
-  );
+  return parseDecimal(value, "total")
+    .toDecimalPlaces(FACTORY_COST_PRECISION.total)
+    .toFixed(FACTORY_COST_PRECISION.total);
 }
 
 export function factoryRatesEqual(a: FactoryCostInput, b: FactoryCostInput): boolean {
@@ -87,10 +85,7 @@ export interface CostLineResult {
   totalCost: Decimal;
 }
 
-export function calculateCostLine(
-  quantityKg: FactoryCostInput,
-  unitCostPerKg: FactoryCostInput,
-): CostLineResult {
+export function calculateCostLine(quantityKg: FactoryCostInput, unitCostPerKg: FactoryCostInput): CostLineResult {
   const quantity = parseDecimal(quantityKg, "quantityKg");
   const unitCost = parseDecimal(unitCostPerKg, "unitCostPerKg");
   return {
@@ -129,13 +124,11 @@ export function calculateWeightedAverageCost(sources: readonly WeightedCostSourc
     if (!hasPersistedTotal && !hasUnitCost) {
       throw new FactoryCostingError(
         "FACTORY_COST_SOURCE_RATE_MISSING",
-        `sources[${index}] must provide totalCost or unitCostPerKg`,
+        `sources[${index}] must provide totalCost or unitCostPerKg`
       );
     }
 
-    const persistedTotal = hasPersistedTotal
-      ? parseDecimal(source.totalCost, `sources[${index}].totalCost`)
-      : null;
+    const persistedTotal = hasPersistedTotal ? parseDecimal(source.totalCost, `sources[${index}].totalCost`) : null;
     const calculatedTotal = hasUnitCost
       ? quantity.times(parseDecimal(source.unitCostPerKg, `sources[${index}].unitCostPerKg`))
       : null;
@@ -183,10 +176,7 @@ export function calculateMovingAverageRate(input: MovingAverageRateInput): Decim
   const incomingRate = parseDecimal(input.incomingRatePerKg, "incomingRatePerKg");
   const combinedQuantity = existingQuantity.plus(incomingQuantity);
 
-  return existingQuantity
-    .times(existingRate)
-    .plus(incomingQuantity.times(incomingRate))
-    .div(combinedQuantity);
+  return existingQuantity.times(existingRate).plus(incomingQuantity.times(incomingRate)).div(combinedQuantity);
 }
 
 export interface InventoryValueDeltaInput {
@@ -206,9 +196,7 @@ export function calculateRateAfterInventoryValueDelta(input: InventoryValueDelta
   const valueDelta = parseDecimal(input.valueDelta, "valueDelta", { allowNegative: true });
   const fallbackRate = parseDecimal(input.fallbackRatePerKg, "fallbackRatePerKg");
 
-  const nextRate = inventoryQuantity.gt(0)
-    ? currentRate.plus(valueDelta.div(inventoryQuantity))
-    : fallbackRate;
+  const nextRate = inventoryQuantity.gt(0) ? currentRate.plus(valueDelta.div(inventoryQuantity)) : fallbackRate;
   return Decimal.max(0, nextRate);
 }
 
@@ -224,16 +212,14 @@ export interface RemainingInventoryCorrectionInput {
  * Converts a landed-cost correction into the exact value delta that still
  * belongs to inventory, then spreads that delta across supplier remaining kg.
  */
-export function calculateRemainingInventoryCorrection(
-  input: RemainingInventoryCorrectionInput,
-): { valueDelta: Decimal; newLockedRatePerKg: Decimal } {
-  const correctedRemainingKg = parseDecimal(
-    input.correctedContainerRemainingKg,
-    "correctedContainerRemainingKg",
-  );
+export function calculateRemainingInventoryCorrection(input: RemainingInventoryCorrectionInput): {
+  valueDelta: Decimal;
+  newLockedRatePerKg: Decimal;
+} {
+  const correctedRemainingKg = parseDecimal(input.correctedContainerRemainingKg, "correctedContainerRemainingKg");
   const oldRemainingValue = parseDecimal(
     input.oldCorrectedContainerRemainingValue,
-    "oldCorrectedContainerRemainingValue",
+    "oldCorrectedContainerRemainingValue"
   );
   const newContainerRate = parseDecimal(input.newContainerRatePerKg, "newContainerRatePerKg");
   const newRemainingValue = correctedRemainingKg.times(newContainerRate);
@@ -262,9 +248,7 @@ export interface ProportionalInventoryDeltaInput {
  * freight/commission/charge corrections so consumed production is not put back
  * into the supplier's current moving average.
  */
-export function calculateProportionalInventoryValueDelta(
-  input: ProportionalInventoryDeltaInput,
-): Decimal {
+export function calculateProportionalInventoryValueDelta(input: ProportionalInventoryDeltaInput): Decimal {
   const oldFullValue = parseDecimal(input.oldFullValue, "oldFullValue");
   const newFullValue = parseDecimal(input.newFullValue, "newFullValue");
   const remainingKg = parseDecimal(input.remainingKg, "remainingKg");

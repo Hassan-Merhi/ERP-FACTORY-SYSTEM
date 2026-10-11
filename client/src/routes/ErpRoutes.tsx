@@ -37,6 +37,7 @@ import {
   ErpRentalPayments,
   ErpRentalShops,
   ErpRentalWarehouses,
+  FinancialReports,
   GITMockup,
   ImportCycleDiagnostics,
   ImportStockItems,
@@ -115,6 +116,8 @@ export function ErpRoutes({ user }: ErpRoutesProps) {
   const isOwner = effectiveRole === "Owner";
   const isAdminOrDev = effectiveRole === "Admin" || isDeveloper;
   const isAdminOwnerOrDev = effectiveRole === "Admin" || effectiveRole === "Owner" || isDeveloper;
+  // Phase 27 (RP-15): the financial statements are for Admin, Owner and Manager (as the API).
+  const canReadFinancialStatements = isAdminOwnerOrDev || effectiveRole === "Manager";
   const canAccess = (key: FeatureKey) => canAccessErpFeature(erpAccess, key);
   const canAccessAny = (keys: readonly FeatureKey[]) => canAccessAnyErpFeature(erpAccess, keys);
   const G = (path: string, key: FeatureKey, Comp: RouteComponent) =>
@@ -429,6 +432,13 @@ export function ErpRoutes({ user }: ErpRoutesProps) {
       {R("/inventory-repair", isAdminOrDev, InventoryRepair)}
       {R("/balance-repair", isAdminOrDev, BalanceRepair)}
       {R("/convergence-reconciliation", isAdminOwnerOrDev, ConvergenceReconciliation)}
+      {R("/financial-reports", canReadFinancialStatements, FinancialReports)}
+      <Route path="/reports/profit-loss">
+        <Redirect replace to="/financial-reports?tab=profit-loss" />
+      </Route>
+      <Route path="/reports/balance-sheet">
+        <Redirect replace to="/financial-reports?tab=balance-sheet" />
+      </Route>
       {R("/net-position-details", isAdminOrDev, NetProfitDetails)}
       {R("/company-data-reset", isAdminOrDev, CompanyDataReset)}
       {R("/account-migration", isAdminOrDev, AccountMigration)}

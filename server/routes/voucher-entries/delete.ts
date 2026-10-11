@@ -11,7 +11,8 @@ import { writeAuditEvent } from "../../services/audit";
 import { storage } from "../../storage";
 import { requireAuth, requireRole } from "../../auth";
 import { voucherMutationBlockReason } from "../../lib/migratedVoucherGuard";
-import { recalculateIntercompanyForDate } from "../helpers/intercompanyHelpers";
+import { rebuildIntercompanyPosDateTx } from "../helpers/intercompanyHelpers";
+import { withIntercompanyCompaniesTx } from "../../services/accounting/intercompany/intercompanyScope";
 import { syncEmployeeBalancesFromEntries, buildVoucherChangesForDelete } from "../_helpers";
 import { readVoucherAuditState, writeVoucherAuditTx } from "../helpers/voucherAuditTrail";
 import {
@@ -21,10 +22,11 @@ import {
   propertyPayments,
   intercompanyPaymentRequests,
 } from "@shared/schema";
-import { eq, and, or, sql } from "drizzle-orm";
+import { eq, and, or, sql, isNull } from "drizzle-orm";
 import { reverseVoucherStockTx } from "../../services/inventory/voucherStockReversal";
 import { syncPurchaseOrderGitForVoucherTx } from "../../services/accounting/perpetualInventory/stockReceipts";
 import { syncFactoryInvoiceForChargeVoucherTx } from "../../services/accounting/perpetualInventory/factoryInvoice";
+import { softDeleteTransferLinkTx } from "../../services/accounting/intercompany/intercompanyTransferPosting";
 
 type InterCompanyTransferRow = typeof interCompanyTransfers.$inferSelect;
 
@@ -33,8 +35,8 @@ type InterCompanyTransferRow = typeof interCompanyTransfers.$inferSelect;
  * the other company's side out of the books by soft delete — deleted_at set,
  * lines kept, exactly like the voucher being deleted — never by hard delete.
  * The counterpart's audit row is written in the same transaction, under the
- * counterpart's company. The transfer link row is still removed, as before; the
- * audit row keeps a copy of it.
+ * counterpart's company. The transfer link row is soft-deleted by the caller
+ * (phase 26, MC-11); the audit row keeps a copy of it.
  */
 export async function softDeleteInterCompanyCounterpartTx(
   tx: DbTransaction,
@@ -49,6 +51,25 @@ export async function softDeleteInterCompanyCounterpartTx(
   const otherVoucherId = transfer.fromVoucherId === voucherId ? transfer.toVoucherId : transfer.fromVoucherId;
   if (!otherVoucherId || otherVoucherId === voucherId) return;
 
+  // Phase 26: the other company is brought into this transaction's scope (the
+  // user's membership of it is checked); under row-level security the
+  // counterpart was otherwise invisible and silently left in the books.
+  await withIntercompanyCompaniesTx(tx, [transfer.fromCompanyId, transfer.toCompanyId], "verify-membership", () =>
+    softDeleteCounterpartInScopeTx(tx, params, otherVoucherId)
+  );
+}
+
+async function softDeleteCounterpartInScopeTx(
+  tx: DbTransaction,
+  params: {
+    transfer: InterCompanyTransferRow;
+    voucherId: number;
+    voucherNumber: string;
+    actor: { userId?: string | null; username?: string | null };
+  },
+  otherVoucherId: number
+): Promise<void> {
+  const { transfer, voucherId } = params;
   const [counterpart] = await tx.select().from(vouchers).where(eq(vouchers.id, otherVoucherId));
   if (!counterpart || counterpart.deletedAt) return;
 
@@ -173,9 +194,18 @@ export function registerVoucherDeleteRoutes(app: Express) {
         const linkedTransfersSingle = await tx
           .select()
           .from(interCompanyTransfers)
-          .where(or(eq(interCompanyTransfers.fromVoucherId, id), eq(interCompanyTransfers.toVoucherId, id)));
+          .where(
+            and(
+              or(eq(interCompanyTransfers.fromVoucherId, id), eq(interCompanyTransfers.toVoucherId, id)),
+              isNull(interCompanyTransfers.deletedAt)
+            )
+          );
         for (const transfer of linkedTransfersSingle) {
-          await tx.delete(interCompanyTransfers).where(eq(interCompanyTransfers.id, transfer.id));
+          // Phase 26 (MC-11): the link is soft-deleted and audited, not removed.
+          await softDeleteTransferLinkTx(tx, transfer.id, {
+            reason: `Voucher ${voucher.voucherNumber} deleted`,
+            actor: { userId: req.session.userId, username: req.session.username },
+          });
           await softDeleteInterCompanyCounterpartTx(tx, {
             transfer,
             voucherId: id,
@@ -212,14 +242,14 @@ export function registerVoucherDeleteRoutes(app: Express) {
           after: null,
           extra: { softDelete: { new: true } },
         });
-      });
 
-      // A deleted cash sale must leave the intercompany POS mirror for its date.
-      // The rebuild is atomic and never throws; a failure is logged and leaves
-      // the previous mirror in place for a later recalculation.
-      if (voucher.voucherType === "Sales" && !voucher.optional) {
-        await recalculateIntercompanyForDate(companyId, voucher.voucherDate);
-      }
+        // A deleted cash sale must leave the intercompany POS mirror for its
+        // date: rebuilt in this transaction (phase 26, MC-4), so the delete and
+        // the mirror commit together.
+        if (voucher.voucherType === "Sales" && !voucher.optional) {
+          await rebuildIntercompanyPosDateTx(tx, companyId, voucher.voucherDate);
+        }
+      });
 
       res.json({ message: "Voucher deleted successfully" });
     } catch (error: unknown) {

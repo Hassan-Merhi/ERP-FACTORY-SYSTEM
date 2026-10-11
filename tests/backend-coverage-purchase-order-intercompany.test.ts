@@ -2,11 +2,14 @@
  * Purchase orders and the accounting they raise.
  *
  * A PO posts differently depending on who owes whom. A standalone company owes
- * its supplier directly. A subsidiary with an explicit parent does not: the
- * parent settles the supplier, so the subsidiary owes the parent and the parent
- * carries a receivable against the subsidiary — with the supplier credit on the
- * parent's side, and freight carved out of the intercompany balance when the
- * parent pays it directly. A supplier-partner company owns its supplier
+ * its supplier directly. A subsidiary with an explicit parent buying from the
+ * PARENT's supplier does not: the subsidiary owes the parent (due-to) and the
+ * parent carries a receivable against the subsidiary (due-from) with the
+ * supplier credit on the parent's side. Phases 23–29 integration (G17, decided
+ * by default): a supplier the subsidiary owns stays on the subsidiary's books —
+ * the parent's voucher never carries it; only freight the parent pays goes
+ * through the intercompany accounts (subsidiary Cr due-to parent; parent
+ * PARENT-FREIGHT: Dr due-from subsidiary / Cr its freight account). A supplier-partner company owns its supplier
  * relationships whatever its parent link says, so it must never take the
  * intercompany path; that is the distinction this file is most concerned with,
  * because getting it wrong hides a payable in the wrong tenant's ledger.
@@ -242,7 +245,7 @@ describe("standalone purchase order accounting", () => {
 });
 
 describe("intercompany purchase order accounting", () => {
-  it("makes the subsidiary owe the parent and the parent owe the supplier", async () => {
+  it("keeps the subsidiary's own supplier on its books; the parent posts nothing for it (G17)", async () => {
     await asSubsidiaryOf(parentCtx.companyId);
     const poNumber = nextPoNumber();
 
@@ -262,22 +265,49 @@ describe("intercompany purchase order accounting", () => {
     const subsidiaryEntries = await entriesForCompany(ctx.companyId, poNumber);
     expect(subsidiaryEntries.length).toBeGreaterThan(0);
     expect(netOf(subsidiaryEntries)).toBeCloseTo(0, 2);
-    // The subsidiary's credit is to the parent, not to the supplier.
-    expect(subsidiaryEntries.some((row) => row.supplier_id === supplierId)).toBe(false);
+    const supplierCredit = subsidiaryEntries.find((row) => row.supplier_id === supplierId);
+    expect(Number(supplierCredit?.credit_amount)).toBeCloseTo(300, 2);
+    expect(subsidiaryEntries.some((row) => row.code?.endsWith("_CREDIT"))).toBe(false);
+
+    // The parent's books never name the subsidiary's supplier.
+    expect(await entriesForCompany(parentCtx.companyId, poNumber)).toEqual([]);
+  }, 180_000);
+
+  it("makes the subsidiary owe the parent and the parent owe the parent's own supplier", async () => {
+    await asSubsidiaryOf(parentCtx.companyId);
+    const poNumber = nextPoNumber();
+    const parentSupplierId = await insertSupplier(parentCtx.companyId, `${TEST_PREFIX}PS${sequence}`);
+
+    await createPurchaseOrder(
+      {
+        companyId: ctx.companyId,
+        poNumber,
+        containerId,
+        supplierId: parentSupplierId,
+        currency: "USD",
+        status: "Open",
+        itemsTotal: "300.00",
+      },
+      "2026-09-15"
+    );
+
+    const subsidiaryEntries = await entriesForCompany(ctx.companyId, poNumber);
+    expect(netOf(subsidiaryEntries)).toBeCloseTo(0, 2);
+    // The subsidiary's credit is to the parent (due-to), not to the parent's supplier.
+    expect(subsidiaryEntries.some((row) => row.supplier_id === parentSupplierId)).toBe(false);
     const parentCredit = subsidiaryEntries.find((row) => row.code?.endsWith("_CREDIT"));
     expect(Number(parentCredit?.credit_amount)).toBeCloseTo(300, 2);
 
     const parentEntries = await entriesForCompany(parentCtx.companyId, poNumber);
-    expect(parentEntries.length).toBeGreaterThan(0);
     expect(netOf(parentEntries)).toBeCloseTo(0, 2);
-    // The parent carries the receivable and the supplier payable.
+    // The parent carries the receivable (due-from) and its supplier's payable.
     const receivable = parentEntries.find((row) => Number(row.debit_amount) > 0);
     expect(Number(receivable?.debit_amount)).toBeCloseTo(300, 2);
-    const supplierCredit = parentEntries.find((row) => row.supplier_id === supplierId);
+    const supplierCredit = parentEntries.find((row) => row.supplier_id === parentSupplierId);
     expect(Number(supplierCredit?.credit_amount)).toBeCloseTo(300, 2);
   }, 180_000);
 
-  it("leaves freight the parent pays out of what the subsidiary owes", async () => {
+  it("puts only the freight the parent pays through the intercompany accounts", async () => {
     await asSubsidiaryOf(parentCtx.companyId);
     const poNumber = nextPoNumber();
     const freightAccount = await pool.query<{ id: number }>(
@@ -302,20 +332,22 @@ describe("intercompany purchase order accounting", () => {
       "2026-09-15"
     );
 
+    // The subsidiary owes its supplier the goods and the parent the freight.
+    const subsidiaryEntries = await entriesForCompany(ctx.companyId, poNumber);
+    expect(netOf(subsidiaryEntries)).toBeCloseTo(0, 2);
+    const supplierCredit = subsidiaryEntries.find((row) => row.supplier_id === supplierId);
+    expect(Number(supplierCredit?.credit_amount)).toBeCloseTo(400, 2);
+    const parentCredit = subsidiaryEntries.find((row) => row.code?.endsWith("_CREDIT"));
+    expect(Number(parentCredit?.credit_amount)).toBeCloseTo(50, 2);
+
+    // The parent: Dr due-from subsidiary 50 / Cr its freight account 50; no supplier line.
     const parentEntries = await entriesForCompany(parentCtx.companyId, poNumber);
     expect(netOf(parentEntries)).toBeCloseTo(0, 2);
-
-    // The supplier is credited for the goods only; the freight sits on the
-    // parent's own freight account instead.
-    const supplierCredit = parentEntries.find((row) => row.supplier_id === supplierId);
-    expect(Number(supplierCredit?.credit_amount)).toBeCloseTo(400, 2);
+    expect(parentEntries.some((row) => row.supplier_id !== null)).toBe(false);
     const freightCredit = parentEntries.find((row) => row.ledger_account_id === freightAccount.rows[0].id);
     expect(Number(freightCredit?.credit_amount)).toBeCloseTo(50, 2);
-
-    // The subsidiary still owes the parent the whole 450.
-    const subsidiaryEntries = await entriesForCompany(ctx.companyId, poNumber);
-    const parentCredit = subsidiaryEntries.find((row) => row.code?.endsWith("_CREDIT"));
-    expect(Number(parentCredit?.credit_amount)).toBeCloseTo(450, 2);
+    const receivable = parentEntries.find((row) => Number(row.debit_amount) > 0);
+    expect(Number(receivable?.debit_amount)).toBeCloseTo(50, 2);
   }, 180_000);
 
   it("keeps a supplier-partner company's payable in its own books despite a parent link", async () => {

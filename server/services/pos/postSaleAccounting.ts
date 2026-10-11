@@ -27,6 +27,7 @@ import { findLinkedCustomerId } from "./updateCustomerBalance";
 import { MoneyDecimal, sumMoney, toMoney, type MoneyInput } from "../../lib/money";
 import type { ErpVoucherLine } from "../accounting/erpVoucherPosting";
 import { posSaleLines, type PosLineTarget } from "./saleAccountingLines";
+import { isAccountType } from "../accounting/accountClassification";
 
 /**
  * Get or create SALES revenue account (outside transaction for simplicity).
@@ -46,7 +47,7 @@ export async function getOrCreateSalesRevenueAccount(
     active: true,
   });
 
-  if (salesAccount.accountType !== "Income") {
+  if (!isAccountType(salesAccount.accountType, "Income")) {
     // Validate that Sales account is of type Income for proper import cycle balance
     logger.warn(
       `[POS Sale] WARNING: SALES account has type "${salesAccount.accountType}" instead of "Income". This will cause import cycle imbalance!`

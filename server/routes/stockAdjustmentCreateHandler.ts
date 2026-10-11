@@ -100,7 +100,8 @@ async function createWithVoucher(
     typeof header.voucherNumber === "string" && header.voucherNumber.trim()
       ? header.voucherNumber.trim()
       : `${input.adjustmentType.toUpperCase()}-${Date.now()}`;
-  const exchangeRate = await getCurrentExchangeRate(companyId);
+  // Phase 24 (M4): the display rate recorded on or before the voucher date, not today's.
+  const exchangeRate = await getCurrentExchangeRate(companyId, voucherDate);
   try {
     const created = await storage.createStockAdjustmentWithVoucher(
       {

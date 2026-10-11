@@ -7,6 +7,12 @@ vi.mock("../server/chat/reports/implementations/reportShardSupport", () => ({
   sql: (strings: TemplateStringsArray, ...values: unknown[]) => ({ strings: Array.from(strings), values }),
 }));
 
+// Phase 27 (RP-13): the trial-balance case reads the period trial balance service.
+const periodTrialBalance = vi.hoisted(() => ({ build: vi.fn() }));
+vi.mock("../server/services/accounting/reporting/periodTrialBalance", () => ({
+  buildPeriodTrialBalance: periodTrialBalance.build,
+}));
+
 import { phase5QueryTypes, phase5ReportShard } from "../server/chat/reports/implementations/phase5ReportShard";
 
 function ctx(queryType: string, extraParams: Record<string, unknown> = {}) {
@@ -66,26 +72,55 @@ describe("Phase 33F phase 5 report shard", () => {
     expect(harness.execute).not.toHaveBeenCalled();
   });
 
-  it("builds a balanced trial-balance table and grand totals from scoped rows", async () => {
-    harness.execute.mockResolvedValueOnce({
+  it("builds the trial-balance table from the period trial balance service", async () => {
+    const columns = (pd: string, pc: string, cd: string, cc: string) => ({
+      openingDebit: "0.00",
+      openingCredit: "0.00",
+      periodDebit: pd,
+      periodCredit: pc,
+      closingDebit: cd,
+      closingCredit: cc,
+    });
+    periodTrialBalance.build.mockResolvedValueOnce({
+      from: "2026-09-01",
+      to: "2026-09-30",
       rows: [
-        { name: "Cash", account_type: "ASSET", code: "1000", total_dr: "125", total_cr: "25" },
-        { name: "Sales", account_type: "INCOME", code: "4000", total_dr: "5", total_cr: "105" },
+        {
+          kind: "ledger",
+          id: 1,
+          code: "1000",
+          name: "Cash",
+          accountType: "ASSET",
+          ...columns("125.00", "25.00", "100.00", "0.00"),
+        },
+        {
+          kind: "ledger",
+          id: 2,
+          code: "4000",
+          name: "Sales",
+          accountType: "INCOME",
+          ...columns("5.00", "105.00", "0.00", "100.00"),
+        },
       ],
+      totals: columns("130.00", "130.00", "100.00", "100.00"),
+      unexplainedDifference: "0.00",
+      balanced: true,
     });
 
     const result = await phase5ReportShard.run(ctx("trial_balance"));
+    expect(periodTrialBalance.build).toHaveBeenCalledWith({ companyId: 7, from: "2026-09-01", to: "2026-09-30" });
     expect(result.queryType).toBe("trial_balance");
     expect(result.noData).toBe(false);
     expect(result.table?.rows).toHaveLength(3);
-    expect(result.table?.rows.at(-1)).toEqual(["", "GRAND TOTAL", "", "$130.00", "$130.00", "$0.00", "—"]);
+    expect(result.table?.rows.at(-1)).toEqual(["", "GRAND TOTAL", "", "$130.00", "$130.00", "$100.00", "$100.00"]);
     expect(result.stats).toEqual(
       expect.arrayContaining([
         { label: "Total Debits", value: "$130.00" },
         { label: "Total Credits", value: "$130.00" },
-        { label: "Net", value: "$0.00", highlight: "positive" },
+        { label: "Unexplained Difference", value: "$0.00", highlight: "positive" },
       ])
     );
+    expect(harness.execute).not.toHaveBeenCalled();
   });
 
   it("reports a clean no-match result for unknown purchase orders", async () => {

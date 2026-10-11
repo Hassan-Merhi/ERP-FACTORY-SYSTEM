@@ -132,7 +132,9 @@ async function syncIntercoParentVoucherOn(
   // Always a transaction here (syncIntercoParentVoucher opens one).
   const tx = dbOrTx as DbTransaction;
   try {
-    const parentCompanyId = await storage.getParentCompanyId();
+    // Phase 26 (MC-7): the parent from companies.parent_company_id (of the
+    // subsidiary when known; else the one group parent).
+    const parentCompanyId = await storage.getParentCompanyId(freightOpts?.subsidiaryCompanyId ?? null);
     if (!parentCompanyId) return { found: false, updated: false, amount: amountStr };
 
     const nums = Array.isArray(poNumbers) ? poNumbers.filter(Boolean) : [poNumbers];

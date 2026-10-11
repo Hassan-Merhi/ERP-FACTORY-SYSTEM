@@ -4,8 +4,8 @@
   "pins": {
     "GET /api/stats/net-profit": {
       "status": 200,
-      "shape": "{currency,currencyRevaluation,equity,expenses,expensesTotal,forUs,forUsTotal,income,incomeTotal,netPosition,netPositionBreakdown,netPositionLabel,netProfit,netWorth,notInLedger,onUs,onUsTotal,ownersCapital,spPosProfit,totalExpenses,totalIncome}",
-      "hash": "f8f6baf6da5f94f513ba6935c0a96de070ec9315d4fb69dc31b352f358ae23ec"
+      "shape": "{balanceSheetReconciliation,currency,currencyRevaluation,equity,expenses,expensesTotal,forUs,forUsTotal,income,incomeTotal,netPosition,netPositionBreakdown,netPositionLabel,netProfit,netWorth,notInLedger,onUs,onUsTotal,ownersCapital,spPosProfit,totalExpenses,totalIncome}",
+      "hash": "7c9456a22b8ec4b4c776803d8ad85713f87130ae7d96fdf88e5f20c39e04533d"
     },
     "GET /api/reports/net-profit-excel": {
       "status": 200,
@@ -20,12 +20,12 @@
     "GET /api/factory/suppliers/:supplierId/statement": {
       "status": 200,
       "shape": "{balanceBasis,brokerContainers,currencyGroups,fxTransfers,ledger,ledgerView,linkedSupplierGroups,obCommissions,offloadCharges,operationalMemoLabel,payments,statement,summary,supplier,voucherPayments}",
-      "hash": "9d1f53b585be70655b670f0cb7026995c1e25e952937900833a9a345e8e39b28"
+      "hash": "b8a4ba2f32d9291bad006ae925d78d43b169fc95ff5f204c5b3e0d8e7e1399c4"
     },
     "PATCH /api/purchase-orders/:poId": {
       "status": 200,
-      "shape": "{chargesEdited,companyId,containerId,createdAt,currency,discount,documentCharges,freight,freightOwnAccountId,freightPaidBy,freightParentAccountId,fumigation,id,itemsTotal,otherCharges,poNumber,status,supplierId,surcharge,voucherId}",
-      "hash": "69b8c4af5f779ba4f55c187626c307bc05387fd1e2dec54a6ad3dae1252ba918"
+      "shape": "{chargesEdited,companyId,containerId,createdAt,currency,discount,documentCharges,exchangeRate,freight,freightOwnAccountId,freightPaidBy,freightParentAccountId,fumigation,id,itemsTotal,nativeCurrency,nativeGrandTotal,nativeItemsTotal,otherCharges,poNumber,status,supplierId,surcharge,voucherId}",
+      "hash": "7bd4c6490a08ae2785484f6f0ce000139e12328e6add85912c4ae074f9762106"
     },
     "POST /api/factory/raw-stock/offload": {
       "status": 200,

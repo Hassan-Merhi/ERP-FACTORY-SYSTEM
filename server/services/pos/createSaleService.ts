@@ -3,6 +3,7 @@
  *
  * PHASE 19 — POS Backend Sale Creation Structural Split.
  */
+import { isDocumentRateError, voucherHeaderRate } from "../accounting/fx/clientRateCheck";
 import { randomUUID } from "node:crypto";
 import { logger } from "../../lib/logger";
 import {
@@ -15,7 +16,8 @@ import {
 } from "../../lib/inventoryMath";
 import { db } from "../../db";
 import { storage } from "../../storage";
-import { logAudit, runIntercompanyPosTransfer } from "../../routes/_helpers";
+import { logAudit } from "../../routes/_helpers";
+import { postIntercompanyPosMirrorTx } from "../../routes/helpers/intercompanyHelpers";
 import { stockItems, stockItemLocationPrices, salesItems } from "@shared/schema";
 import { eq, and } from "drizzle-orm";
 import type {
@@ -176,6 +178,24 @@ export async function createPosSale(
 
   const voucherDate = providedVoucherDate || voucherDateFallback;
 
+  // Phase 24 (M4): the sale's rate is the one recorded on or before its date;
+  // the client's rate is accepted only within 0.5% of it (409 otherwise), and a
+  // non-USD sale with no recorded rate is refused. Before: the client's rate as sent.
+  let saleRate: string | null;
+  try {
+    saleRate = (
+      await voucherHeaderRate({
+        companyId: currentCompanyId,
+        voucherCurrency: currency || "USD",
+        voucherDate: String(voucherDate).slice(0, 10),
+        clientRate: exchangeRate,
+      })
+    ).rate;
+  } catch (error: unknown) {
+    if (isDocumentRateError(error)) return { status: error.statusCode, body: error.body };
+    throw error;
+  }
+
   const stockExistsError = await validateStockItemsExist(currentCompanyId, items);
   if (stockExistsError) return err(stockExistsError.error);
 
@@ -237,7 +257,7 @@ export async function createPosSale(
         salesAccount,
         spCtx,
         currency: currency || "USD",
-        exchangeRate: exchangeRate ? String(exchangeRate) : null,
+        exchangeRate: saleRate,
       });
       const posted = await postErpVoucherTx(tx, {
         companyId: currentCompanyId,
@@ -250,7 +270,7 @@ export async function createPosSale(
             : `POS Sale at ${location.name}`),
         locationId: parsedLocationId,
         currency: currency || "USD",
-        exchangeRate: exchangeRate != null && exchangeRate !== "" ? String(exchangeRate) : null,
+        exchangeRate: saleRate,
         lines: saleLines,
         source: { type: "pos-sale", id: clientSaleId || `legacy-${randomUUID()}` },
         actor: { userId, username, reason: "POS sale" },
@@ -379,6 +399,18 @@ export async function createPosSale(
         });
       }
 
+      // Phase 26 (MC-4): the intercompany cash mirror posts with the sale.
+      if (!goldenCoastSaleDetected && !isCreditSale && accountType === "cash") {
+        await postIntercompanyPosMirrorTx(tx, {
+          sourceCompanyId: currentCompanyId,
+          cashAccountId: accountId,
+          saleAmount: grandTotal,
+          saleDate: voucherDate,
+          saleVoucherId: txVoucher.id,
+          actor: { userId, username, reason: "Intercompany POS cash mirror" },
+        });
+      }
+
       // Phase 21 (B): the create audit commits with the sale or rolls it back.
       await logAudit(
         {
@@ -443,12 +475,6 @@ export async function createPosSale(
 
   const voucher = txResult.voucher;
   const saleItems = txResult.saleItems;
-
-  if (!goldenCoastSaleDetected && !isCreditSale && accountType === "cash") {
-    runIntercompanyPosTransfer(currentCompanyId, accountId, grandTotal, voucherDate, voucher.id).catch((error) =>
-      logger.error("[IntercompanyPOS] Unhandled:", { error })
-    );
-  }
 
   return {
     status: 200,

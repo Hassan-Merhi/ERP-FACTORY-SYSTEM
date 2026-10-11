@@ -8,21 +8,26 @@
  */
 import type { Express, Request, Response } from "express";
 import { parseId, parseOptionalId } from "../../../lib/parseId";
-import { getErrorMessage } from "../../../lib/httpHandlers";
+import { HttpError, getErrorMessage } from "../../../lib/httpHandlers";
 import { getClientDate } from "../../../lib/dateUtils";
 import { db } from "../../../db";
 import { requireAuth } from "../../../auth";
-import { eq, and, gte, lte, inArray } from "drizzle-orm";
+import { eq, and, gte, lte, inArray, isNull } from "drizzle-orm";
 import {
   factoryWorkers,
   factoryPayrolls,
   factoryAttendance,
   factoryDaybookEntries,
   ledgerAccounts,
+  vouchers,
 } from "@shared/schema";
 import { findOrCreateLedger, getFactoryCompanyId, writeDaybookEntry } from "./_helpers";
 import type Decimal from "decimal.js";
-import { postErpVoucherTx } from "../../../services/accounting/erpVoucherPosting";
+import {
+  factoryPayrollPaymentVoucherNumber,
+  postFactoryPayrollPaymentVoucherTx,
+  resolveFactoryPayrollPaymentAccountTx,
+} from "../../../services/payroll/factoryPayrollPaymentVoucher";
 import {
   getProductionBonusTotalsForPayrollIds,
   prepareProductionBonusesForPayroll,
@@ -69,13 +74,45 @@ async function ensureNoPendingProductionBonuses(companyId: number, payrollIds: n
   return { ok: true as const };
 }
 
+export const PAYROLL_COMPANY_MISMATCH_MESSAGE = "This payroll request names another company than the one selected.";
+export const PAYROLL_ALREADY_PAID = "PAYROLL_ALREADY_PAID" as const;
+export const PAYROLL_ALREADY_PAID_MESSAGE =
+  "This payroll is already paid. Undo the payment first to pay it again with another date or account.";
+
+class PayrollAlreadyPaidError extends Error {
+  constructor(readonly payrollIds: number[]) {
+    super(PAYROLL_ALREADY_PAID_MESSAGE);
+    this.name = "PayrollAlreadyPaidError";
+  }
+}
+
 /**
- * Phase 22 (B): the payroll payment voucher (Dr Payroll Payable / Cr cash)
- * through the central engine. The PAYMENT-PAY-<payrollId>- family prefix is
- * kept (the integrity diagnostic and the worker-statement repair find the
- * payment by it) with the payment date as a deterministic suffix instead of
- * Date.now(); the posting identity is the payroll and its payment date, so a
- * repeated mark-paid returns the voucher already posted.
+ * Phase 28 (F12): the session's company only. The routes used
+ * `req.body.companyId || session`, so a body could pay another company's
+ * payroll; a body naming another company is now refused (403).
+ */
+function sessionPayrollCompany(req: Request, res: Response): number | null {
+  const companyId = getFactoryCompanyId(req);
+  if (!companyId) {
+    res.status(400).json({ message: "No company selected" });
+    return null;
+  }
+  const named = req.body?.companyId;
+  if (named !== undefined && named !== null && named !== "" && Number(named) !== Number(companyId)) {
+    res.status(403).json({ code: "PAYROLL_COMPANY_MISMATCH", message: PAYROLL_COMPANY_MISMATCH_MESSAGE });
+    return null;
+  }
+  return Number(companyId);
+}
+
+/**
+ * Phase 28 (F12): the payroll payment voucher through the reviewed service
+ * (factoryPayrollPaymentVoucher.ts, the PATCH /api/factory/payroll/:id path):
+ * number PAYMENT-PAY-{payroll}-PAID and identity
+ * factory-payroll-payment:{company}:{payroll}:payment — one payment per
+ * payroll whatever the date, so a second mark-paid with another date can no
+ * longer post a second payment (the identity was the payroll and its date).
+ * The paying account must be a live account of the company, not the payable.
  */
 async function postPayrollPaymentVoucherTx(
   tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
@@ -83,25 +120,43 @@ async function postPayrollPaymentVoucherTx(
     companyId: number;
     payrollId: number;
     paymentDate: string;
-    narration: string;
+    workerName: string;
+    periodStart: string;
+    periodEnd: string;
     amount: Decimal;
     payableAccountId: number;
     cashAccountId: number;
   }
-) {
-  return postErpVoucherTx(tx, {
+): Promise<{ voucherId: number | null; replayed: boolean }> {
+  const cashAccountId = await resolveFactoryPayrollPaymentAccountTx(
+    tx,
+    input.companyId,
+    input.cashAccountId,
+    input.payableAccountId
+  );
+  const [existing] = await tx
+    .select({ id: vouchers.id })
+    .from(vouchers)
+    .where(
+      and(
+        eq(vouchers.companyId, input.companyId),
+        eq(vouchers.voucherNumber, factoryPayrollPaymentVoucherNumber(input.payrollId)),
+        isNull(vouchers.deletedAt)
+      )
+    )
+    .limit(1);
+  const { voucherId } = await postFactoryPayrollPaymentVoucherTx(tx, {
     companyId: input.companyId,
-    voucherNumber: `PAYMENT-PAY-${input.payrollId}-${input.paymentDate.replace(/-/g, "")}`,
-    voucherType: "Payment",
-    voucherDate: input.paymentDate,
-    description: input.narration,
-    sourceModule: "FACTORY",
-    lines: [
-      { ledgerAccountId: input.payableAccountId, debit: input.amount, narration: input.narration },
-      { ledgerAccountId: input.cashAccountId, credit: input.amount, narration: input.narration },
-    ],
-    source: { type: "payroll-payment", id: input.payrollId, revision: input.paymentDate },
+    payrollId: input.payrollId,
+    workerName: input.workerName,
+    periodStart: input.periodStart,
+    periodEnd: input.periodEnd,
+    netSalary: input.amount,
+    payableAccountId: input.payableAccountId,
+    cashAccountId,
+    paymentDate: input.paymentDate,
   });
+  return { voucherId, replayed: Boolean(existing && existing.id === voucherId) };
 }
 
 function workerDisplayName(value: string | null | undefined, workerId: number): string {
@@ -167,8 +222,8 @@ export function registerPayrollMarkPaidRoutes(app: Express) {
 
   app.patch("/api/factory/payrolls/:id/mark-paid", requireAuth, async (req: Request, res: Response) => {
     try {
-      const companyId = req.body.companyId || getFactoryCompanyId(req);
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
+      const companyId = sessionPayrollCompany(req, res);
+      if (!companyId) return;
       const id = parseId(req.params.id);
       if (id === null) return res.status(400).json({ message: "Invalid id" });
       const cashAccountId = req.body.cashAccountId ? parseInt(req.body.cashAccountId) : null;
@@ -195,6 +250,15 @@ export function registerPayrollMarkPaidRoutes(app: Express) {
           }),
         },
         async (tx) => {
+          // Phase 28 (F12): a paid payroll is not paid again (409); a repeated
+          // request with the same idempotency key replays above instead.
+          const [current] = await tx
+            .select({ status: factoryPayrolls.status })
+            .from(factoryPayrolls)
+            .where(and(eq(factoryPayrolls.id, id), eq(factoryPayrolls.companyId, companyId)))
+            .for("update");
+          if (!current) throw new Error("Payroll record not found");
+          if (current.status === "PAID") throw new PayrollAlreadyPaidError([id]);
           const [payroll] = await tx
             .update(factoryPayrolls)
             .set({ status: "PAID", paidAt: new Date(paymentDate), cashAccountId })
@@ -213,12 +277,13 @@ export function registerPayrollMarkPaidRoutes(app: Express) {
           let paymentReplayed = false;
           if (netAmt.gt(0)) {
             const payableAcc = payableAccSingle!;
-            const narration = `Payroll payment: ${workerName} (${payroll.periodStart} – ${payroll.periodEnd})`;
             const { replayed } = await postPayrollPaymentVoucherTx(tx, {
               companyId: Number(companyId),
               payrollId: payroll.id,
               paymentDate: paymentDate,
-              narration,
+              workerName,
+              periodStart: payroll.periodStart,
+              periodEnd: payroll.periodEnd,
               amount: netAmt,
               payableAccountId: payableAcc.id,
               cashAccountId: cashAccountId!,
@@ -243,6 +308,12 @@ export function registerPayrollMarkPaidRoutes(app: Express) {
 
       res.json(operation.value);
     } catch (error: unknown) {
+      if (error instanceof PayrollAlreadyPaidError) {
+        return res
+          .status(409)
+          .json({ code: PAYROLL_ALREADY_PAID, message: error.message, payrollIds: error.payrollIds });
+      }
+      if (error instanceof HttpError) return res.status(error.statusCode).json({ message: error.message });
       if (getErrorMessage(error) === "Payroll record not found")
         return res.status(404).json({ message: getErrorMessage(error) });
       const message = getErrorMessage(error);
@@ -254,8 +325,8 @@ export function registerPayrollMarkPaidRoutes(app: Express) {
 
   app.patch("/api/factory/payrolls/:id/fix-accounting", requireAuth, async (req: Request, res: Response) => {
     try {
-      const companyId = req.body.companyId || getFactoryCompanyId(req);
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
+      const companyId = sessionPayrollCompany(req, res);
+      if (!companyId) return;
       const id = parseId(req.params.id);
       if (id === null) return res.status(400).json({ message: "Invalid id" });
       const cashAccountId = req.body.cashAccountId ? parseInt(req.body.cashAccountId) : null;
@@ -285,20 +356,19 @@ export function registerPayrollMarkPaidRoutes(app: Express) {
         const workerName = workerDisplayName(worker?.fullName, payroll.workerId);
         const paidDate = payroll.paidAt ? new Date(payroll.paidAt).toISOString().split("T")[0] : getClientDate(req);
         const netAmt = toMoney(payroll.netSalary);
-        const narration = `Payroll payment (backdated): ${workerName} (${payroll.periodStart} – ${payroll.periodEnd})`;
-
         let voucherId: number | null = null;
         if (netAmt.gt(0)) {
-          const { voucher: pVoucher } = await postPayrollPaymentVoucherTx(tx, {
+          ({ voucherId } = await postPayrollPaymentVoucherTx(tx, {
             companyId: Number(companyId),
             payrollId: payroll.id,
             paymentDate: paidDate,
-            narration,
+            workerName,
+            periodStart: payroll.periodStart,
+            periodEnd: payroll.periodEnd,
             amount: netAmt,
             payableAccountId: payableAcc.id,
             cashAccountId: cashAccountId,
-          });
-          voucherId = pVoucher.id;
+          }));
         }
 
         await tx.update(factoryPayrolls).set({ cashAccountId }).where(eq(factoryPayrolls.id, id));
@@ -347,8 +417,8 @@ export function registerPayrollMarkPaidRoutes(app: Express) {
 
   app.post("/api/factory/payrolls/mark-paid-bulk", requireAuth, async (req: Request, res: Response) => {
     try {
-      const companyId = req.body.companyId || getFactoryCompanyId(req);
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
+      const companyId = sessionPayrollCompany(req, res);
+      if (!companyId) return;
       const { payrollIds, cashAccountId } = req.body;
       if (!payrollIds?.length) return res.status(400).json({ message: "payrollIds required" });
       const normalizedIds = [
@@ -380,9 +450,15 @@ export function registerPayrollMarkPaidRoutes(app: Express) {
           const payrollsToMark = await tx
             .select()
             .from(factoryPayrolls)
-            .where(and(eq(factoryPayrolls.companyId, companyId), inArray(factoryPayrolls.id, normalizedIds)));
+            .where(and(eq(factoryPayrolls.companyId, companyId), inArray(factoryPayrolls.id, normalizedIds)))
+            .for("update");
           if (payrollsToMark.length !== normalizedIds.length)
             throw new Error("One or more payroll records were not found");
+          // Phase 28 (F12): the whole request is refused when one payroll is already paid.
+          const alreadyPaid = payrollsToMark
+            .filter((payroll) => payroll.status === "PAID")
+            .map((payroll) => payroll.id);
+          if (alreadyPaid.length > 0) throw new PayrollAlreadyPaidError(alreadyPaid);
           if (!cashId && payrollsToMark.some((payroll) => toMoney(payroll.netSalary).gt(0))) {
             throw new Error("cashAccountId is required for non-zero payroll payment");
           }
@@ -405,15 +481,15 @@ export function registerPayrollMarkPaidRoutes(app: Express) {
               workerMap.get(payroll.workerId) as string | null | undefined,
               payroll.workerId
             );
-            const narration = `Payroll payment: ${workerName} (${payroll.periodStart} – ${payroll.periodEnd})`;
-
             let paymentReplayed = false;
             if (netAmt.gt(0) && cashId && payableAccBulk) {
               const { replayed } = await postPayrollPaymentVoucherTx(tx, {
                 companyId: Number(companyId),
                 payrollId: payroll.id,
                 paymentDate: paymentDate,
-                narration,
+                workerName,
+                periodStart: payroll.periodStart,
+                periodEnd: payroll.periodEnd,
                 amount: netAmt,
                 payableAccountId: payableAccBulk.id,
                 cashAccountId: cashId,
@@ -439,6 +515,12 @@ export function registerPayrollMarkPaidRoutes(app: Express) {
 
       res.json(operation.value);
     } catch (error: unknown) {
+      if (error instanceof PayrollAlreadyPaidError) {
+        return res
+          .status(409)
+          .json({ code: PAYROLL_ALREADY_PAID, message: error.message, payrollIds: error.payrollIds });
+      }
+      if (error instanceof HttpError) return res.status(error.statusCode).json({ message: error.message });
       const message = getErrorMessage(error);
       if (message === "cashAccountId is required for non-zero payroll payment")
         return res.status(400).json({ message });

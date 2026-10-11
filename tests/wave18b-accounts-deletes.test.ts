@@ -273,8 +273,8 @@ describe("bank accounts", () => {
     await expect(pool.query(`UPDATE bank_accounts SET deleted_at = NOW() WHERE id = $1`, [bankId])).rejects.toThrow(
       /BANK_ACCOUNT_HAS_BALANCE/
     );
-    // v3 added the bank delete guard; phase 19 B (v4) keeps it and adds the account tree.
-    expect(LEDGER_INTEGRITY_GUARD_VERSION).toBe("2026-10-ledger-integrity-v4");
+    // v3 added the bank delete guard; phase 19 B (v4) the account tree; phase 23 (v5) leaf-only posting, live parties, the account class.
+    expect(LEDGER_INTEGRITY_GUARD_VERSION).toBe("2026-10-ledger-integrity-v5");
   });
 
   it("refuses deleting a bank whose linked ledger has lines, and refuses moving its linked ledger", async () => {

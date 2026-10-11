@@ -252,31 +252,36 @@ export function registerAccountStatementRoutes(app: Express) {
           const [r] = await db
             .select({ name: ledgerAccounts.name })
             .from(ledgerAccounts)
-            .where(eq(ledgerAccounts.id, accountId));
+            .where(and(eq(ledgerAccounts.id, accountId), eq(ledgerAccounts.companyId, companyId)));
           resolvedName = r?.name ?? resolvedName;
         } else if (accountType === "bank") {
           const [r] = await db
             .select({ name: bankAccounts.name })
             .from(bankAccounts)
-            .where(eq(bankAccounts.id, accountId));
+            .where(and(eq(bankAccounts.id, accountId), eq(bankAccounts.companyId, companyId)));
           resolvedName = r?.name ?? resolvedName;
         } else if (accountType === "fixed-asset") {
           const [r] = await db
             .select({ name: fixedAssets.name })
             .from(fixedAssets)
-            .where(eq(fixedAssets.id, accountId));
+            .where(and(eq(fixedAssets.id, accountId), eq(fixedAssets.companyId, companyId)));
           resolvedName = r?.name ?? resolvedName;
         } else if (accountType === "supplier") {
+          // Phase 26 (MC-8): suppliers are scoped by row-level security (a
+          // subsidiary may name its parent's supplier).
           const [r] = await db.select({ name: suppliers.legalName }).from(suppliers).where(eq(suppliers.id, accountId));
           resolvedName = r?.name ?? resolvedName;
         } else if (accountType === "customer") {
-          const [r] = await db.select({ name: customers.legalName }).from(customers).where(eq(customers.id, accountId));
+          const [r] = await db
+            .select({ name: customers.legalName })
+            .from(customers)
+            .where(and(eq(customers.id, accountId), eq(customers.companyId, companyId)));
           resolvedName = r?.name ?? resolvedName;
         } else if (accountType === "employee") {
           const [r] = await db
             .select({ firstName: employees.firstName, lastName: employees.lastName })
             .from(employees)
-            .where(eq(employees.id, accountId));
+            .where(and(eq(employees.id, accountId), eq(employees.companyId, companyId)));
           if (r) resolvedName = `${r.firstName} ${r.lastName}`.trim();
         }
       } catch {

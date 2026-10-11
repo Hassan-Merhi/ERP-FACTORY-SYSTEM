@@ -27,23 +27,32 @@ import { getErrorMessage } from "../../lib/httpHandlers";
  */
 
 /** Bump whenever the definition below changes (and add a migration for it). */
-export const CURRENCY_NORMALIZATION_GUARD_VERSION = "2026-10-09-001-currency-normalization-v2";
+export const CURRENCY_NORMALIZATION_GUARD_VERSION = "2026-10-11-001-currency-normalization-v3";
 
 /**
  * The migration holding the current definition. v1 is
  * migrations/20260720_005 (USD/CFA normalized, other currencies left
  * unresolved). v2 (wave 17 D, owner decision 1 of 2026-10-09) refuses a new
  * line of any other currency without its transaction_* amounts; existing rows
- * are untouched.
+ * are untouched. v3 (phase 23, DI5/M8, decided by default) refuses a new line
+ * of a document-currency voucher whose currency is neither the voucher's nor
+ * the company's base (USD) — a base-currency voucher may mix line currencies —
+ * and a converted line or CFA header whose rate is more than 0.5% from the
+ * recorded rate on or before the voucher date (erp_recorded_rate; a date with
+ * no recorded rate is not checked). Lines whose currency fields do not change
+ * keep the legacy exemption.
  */
-export const CURRENCY_NORMALIZATION_MIGRATION = "migrations/20261009_001_voucher_entry_currency_normalization_v2.sql";
+export const CURRENCY_NORMALIZATION_MIGRATION = "migrations/20261011_023_voucher_entry_currency_normalization_v3.sql";
 
 export const CURRENCY_NORMALIZATION_TRIGGER = "voucher_entries_normalize_currency_before_write";
 export const CURRENCY_NORMALIZATION_FUNCTION = "normalize_voucher_entry_currency_amounts";
 
 /** Columns the function reads or writes, by table. */
 export const CURRENCY_NORMALIZATION_REQUIRED_COLUMNS: Readonly<Record<string, readonly string[]>> = {
-  vouchers: ["id", "currency", "exchange_rate"],
+  vouchers: ["id", "currency", "exchange_rate", "company_id", "voucher_date", "effective_date"],
+  companies: ["id", "base_currency"],
+  exchange_rates: ["company_id", "from_currency", "to_currency", "rate", "effective_date"],
+  factory_fx_rates: ["company_id", "currency_code", "rate_to_usd", "effective_date", "source"],
   voucher_entries: [
     "voucher_id",
     "debit_amount",
@@ -58,6 +67,50 @@ export const CURRENCY_NORMALIZATION_REQUIRED_COLUMNS: Readonly<Record<string, re
   ],
 };
 
+/**
+ * v3 (phase 23): the company's recorded rate for a currency on or before a
+ * date, in the line's convention and from that convention's store (the rule of
+ * fx/rateResolver.ts, phase 24): TRANSACTION_PER_BASE (units per USD, e.g. CFA
+ * per USD) from exchange_rates (a USD→currency or currency→USD row, latest
+ * date then latest row); BASE_PER_TRANSACTION (USD per unit, the factory
+ * convention) from factory_fx_rates (latest date, a manual rate before an auto
+ * one on the same date). CFA and XOF are one currency. NULL when the store has
+ * none (the line is then not checked).
+ */
+export const RECORDED_RATE_FUNCTION_DDL = `CREATE OR REPLACE FUNCTION erp_recorded_rate(p_company_id integer, p_currency text, p_date date, p_convention text)
+RETURNS numeric
+LANGUAGE sql
+STABLE
+AS $$
+  WITH aliases AS (
+    SELECT CASE WHEN UPPER(p_currency) IN ('CFA', 'XOF') THEN ARRAY['CFA', 'XOF'] ELSE ARRAY[UPPER(p_currency)] END AS codes
+  ), company_rate AS (
+    SELECT CASE WHEN UPPER(er.from_currency) = 'USD' THEN er.rate::numeric ELSE 1 / NULLIF(er.rate::numeric, 0) END
+             AS units_per_usd
+      FROM exchange_rates er, aliases a
+     WHERE er.company_id = p_company_id
+       AND er.effective_date <= p_date
+       AND er.rate::numeric > 0
+       AND ((UPPER(er.from_currency) = 'USD' AND UPPER(er.to_currency) = ANY (a.codes))
+            OR (UPPER(er.to_currency) = 'USD' AND UPPER(er.from_currency) = ANY (a.codes)))
+     ORDER BY er.effective_date DESC, CASE WHEN UPPER(er.from_currency) = 'USD' THEN 1 ELSE 0 END DESC, er.id DESC
+     LIMIT 1
+  ), factory_rate AS (
+    SELECT fr.rate_to_usd::numeric AS usd_per_unit
+      FROM factory_fx_rates fr, aliases a
+     WHERE fr.company_id = p_company_id
+       AND fr.effective_date <= p_date
+       AND fr.rate_to_usd::numeric > 0
+       AND UPPER(fr.currency_code) = ANY (a.codes)
+     ORDER BY fr.effective_date DESC, CASE WHEN fr.source = 'manual' THEN 1 ELSE 0 END DESC, fr.id DESC
+     LIMIT 1
+  )
+  SELECT CASE
+           WHEN p_convention = 'BASE_PER_TRANSACTION' THEN (SELECT usd_per_unit FROM factory_rate)
+           ELSE (SELECT units_per_usd FROM company_rate)
+         END
+$$`;
+
 /** The function, verbatim from CURRENCY_NORMALIZATION_MIGRATION. */
 export const CURRENCY_NORMALIZATION_FUNCTION_DDL = `CREATE OR REPLACE FUNCTION normalize_voucher_entry_currency_amounts()
 RETURNS trigger
@@ -66,16 +119,24 @@ AS $$
 DECLARE
   voucher_currency text;
   voucher_rate numeric(20, 10);
+  voucher_company integer;
+  voucher_booked_on date;
+  company_base text;
+  recorded_rate numeric;
   raw_debit numeric(20, 6);
   raw_credit numeric(20, 6);
   expected_base_debit numeric(20, 6);
   expected_base_credit numeric(20, 6);
   dual_fields_changed boolean;
 BEGIN
-  SELECT UPPER(COALESCE(v.currency, 'USD')), v.exchange_rate::numeric
-    INTO voucher_currency, voucher_rate
+  SELECT UPPER(COALESCE(v.currency, 'USD')), v.exchange_rate::numeric, v.company_id,
+         COALESCE(v.effective_date, v.voucher_date)
+    INTO voucher_currency, voucher_rate, voucher_company, voucher_booked_on
     FROM vouchers v
    WHERE v.id = NEW.voucher_id;
+  IF voucher_currency = 'XOF' THEN
+    voucher_currency := 'CFA';
+  END IF;
 
   IF voucher_currency IS NULL THEN
     RAISE EXCEPTION 'Voucher % not found while normalizing voucher entry', NEW.voucher_id;
@@ -158,6 +219,37 @@ BEGIN
     raw_debit := NEW.transaction_debit_amount::numeric;
     raw_credit := NEW.transaction_credit_amount::numeric;
 
+    -- v3 (phase 23, DI5/M8): a new or re-currencied line of a voucher in a
+    -- document currency is in that currency or the company's base currency
+    -- (USD); a base-currency voucher may carry lines of several currencies (a
+    -- multi-currency voucher, balanced in base). A converted line's rate is
+    -- within 0.5% of the recorded rate of its convention's store on or before
+    -- the voucher's date, when one is recorded. Existing lines whose currency
+    -- fields are unchanged are exempt (history), and so is a legacy line being
+    -- normalized at its own historical rate (OLD.transaction_currency NULL: the
+    -- reviewed legacy currency repairs).
+    IF TG_OP = 'INSERT' OR (dual_fields_changed AND OLD.transaction_currency IS NOT NULL) THEN
+      SELECT UPPER(COALESCE(c.base_currency, 'USD')) INTO company_base FROM companies c WHERE c.id = voucher_company;
+      company_base := CASE WHEN COALESCE(company_base, 'USD') = 'XOF' THEN 'CFA' ELSE COALESCE(company_base, 'USD') END;
+      IF voucher_currency NOT IN (company_base, 'USD')
+         AND NEW.transaction_currency NOT IN (voucher_currency, company_base, 'USD') THEN
+        RAISE EXCEPTION
+          'VOUCHER_LINE_CURRENCY_MISMATCH: a % line cannot be posted on a % voucher (voucher %)',
+          NEW.transaction_currency, voucher_currency, NEW.voucher_id
+          USING ERRCODE = '23514';
+      END IF;
+      IF NEW.rate_convention IN ('TRANSACTION_PER_BASE', 'BASE_PER_TRANSACTION') THEN
+        recorded_rate := erp_recorded_rate(voucher_company, NEW.transaction_currency, voucher_booked_on, NEW.rate_convention);
+        IF recorded_rate IS NOT NULL AND recorded_rate > 0
+           AND abs(NEW.historical_exchange_rate::numeric - recorded_rate) > recorded_rate * 0.005 THEN
+          RAISE EXCEPTION
+            'VOUCHER_LINE_RATE_MISMATCH: the % rate % of voucher % differs from the recorded rate % on %',
+            NEW.transaction_currency, NEW.historical_exchange_rate, NEW.voucher_id, recorded_rate, voucher_booked_on
+            USING ERRCODE = '23514';
+        END IF;
+      END IF;
+    END IF;
+
     IF raw_debit < 0 OR raw_credit < 0 THEN
       RAISE EXCEPTION 'Voucher entry amounts cannot be negative';
     END IF;
@@ -230,6 +322,14 @@ BEGIN
     IF voucher_rate IS NULL OR voucher_rate <= 0 THEN
       RAISE EXCEPTION 'CFA voucher % requires a positive historical exchange rate', NEW.voucher_id;
     END IF;
+    -- v3 (phase 23, M8): the header rate is checked against the recorded rate too.
+    recorded_rate := erp_recorded_rate(voucher_company, 'CFA', voucher_booked_on, 'TRANSACTION_PER_BASE');
+    IF recorded_rate IS NOT NULL AND recorded_rate > 0 AND abs(voucher_rate - recorded_rate) > recorded_rate * 0.005 THEN
+      RAISE EXCEPTION
+        'VOUCHER_LINE_RATE_MISMATCH: the CFA rate % of voucher % differs from the recorded rate % on %',
+        voucher_rate, NEW.voucher_id, recorded_rate, voucher_booked_on
+        USING ERRCODE = '23514';
+    END IF;
     NEW.transaction_currency := 'CFA';
     NEW.transaction_debit_amount := raw_debit;
     NEW.transaction_credit_amount := raw_credit;
@@ -280,6 +380,7 @@ FOR EACH ROW
 EXECUTE FUNCTION normalize_voucher_entry_currency_amounts()`;
 
 export const CURRENCY_NORMALIZATION_DDL: readonly string[] = [
+  RECORDED_RATE_FUNCTION_DDL,
   CURRENCY_NORMALIZATION_FUNCTION_DDL,
   "DROP TRIGGER IF EXISTS voucher_entries_normalize_currency_before_insert ON voucher_entries",
   `DROP TRIGGER IF EXISTS ${CURRENCY_NORMALIZATION_TRIGGER} ON voucher_entries`,

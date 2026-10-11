@@ -44,6 +44,14 @@ import {
 } from "../services/accounting/voucherCorrection";
 import { rebalanceVoucherRoundingTx } from "../services/accounting/engineRounding";
 import { allocateVoucherNumberTx } from "../services/accounting/voucherNumbering";
+import { toMoney } from "../lib/money";
+import { allocateNoteToInvoiceTx } from "../services/accounting/allocations/allocationService";
+import {
+  applyOriginalCostTx,
+  assertOpenInvoiceTx,
+  noteParty,
+  noteReferencesInvoice,
+} from "../services/accounting/allocations/noteInvoiceReference";
 
 type CreditNoteItemInput = {
   stockItemId?: unknown;
@@ -129,7 +137,12 @@ export function registerCreditNoteRoutes(app: Express) {
         return res.status(400).json({ message: "Invalid note type. Must be 'Credit Note' or 'Debit Note'" });
       }
       if (!voucherDate) return res.status(400).json({ message: "Voucher date is required" });
-      if (!cashAccountId || !cashAccountType) return res.status(400).json({ message: "Cash/Bank account is required" });
+      // Phase 25 (AR-7): a note for a customer / supplier credits / debits the
+      // party instead of refunding cash, and references the invoice it adjusts.
+      const party = noteParty(noteType, req.body ?? {});
+      if (!party && (!cashAccountId || !cashAccountType)) {
+        return res.status(400).json({ message: "Cash/Bank account is required" });
+      }
       if (!items || !Array.isArray(items) || items.length === 0) {
         return res.status(400).json({ message: "At least one item is required" });
       }
@@ -162,6 +175,21 @@ export function registerCreditNoteRoutes(app: Express) {
       }
 
       const voucher = await db.transaction(async (tx) => {
+        let invoiceNumber: string | null = null;
+        if (party) {
+          invoiceNumber = (await assertOpenInvoiceTx(tx, companyId, party)).voucherNumber;
+          // A customer return restocks at the invoice's original cost.
+          if (party.kind === "customer") {
+            await applyOriginalCostTx(tx, companyId, party.invoiceVoucherId, items);
+            totalInventoryValue = toInventoryDecimal(0);
+            for (const item of items) {
+              totalInventoryValue = addInventoryValues(
+                totalInventoryValue,
+                multiplyInventoryValues(toInventoryDecimal(item.quantity), toInventoryDecimal(item.inventoryCost))
+              );
+            }
+          }
+        }
         // Phase 22 (B), PE8: the gapless number (CN-/DN-<company>-YYYY-000001).
         // The lines stay direct writes: the inventory lines are the value the
         // sub-ledger moved, known only after the stock movements, which are
@@ -181,7 +209,14 @@ export function registerCreditNoteRoutes(app: Express) {
 
         const cashDebit = noteType === "Debit Note" ? totalRefundAmount : toInventoryDecimal(0);
         const cashCredit = noteType === "Credit Note" ? totalRefundAmount : toInventoryDecimal(0);
-        if (cashAccountType === "bank") {
+        if (party) {
+          await tx.insert(voucherEntries).values({
+            voucherId: createdVoucher.id,
+            ...(party.kind === "customer" ? { customerId: party.id } : { supplierId: party.id }),
+            ...normEntryAmounts(cashDebit, cashCredit),
+            narration: `${noteType} against invoice ${invoiceNumber ?? party.invoiceVoucherId}`,
+          });
+        } else if (cashAccountType === "bank") {
           await tx.insert(voucherEntries).values({
             voucherId: createdVoucher.id,
             bankAccountId: cashAccountId,
@@ -321,6 +356,19 @@ export function registerCreditNoteRoutes(app: Express) {
           }
         }
 
+        let allocationId: number | null = null;
+        if (party) {
+          allocationId = await allocateNoteToInvoiceTx(tx, {
+            companyId,
+            kind: party.kind,
+            partyId: party.id,
+            noteVoucherId: createdVoucher.id,
+            invoiceVoucherId: party.invoiceVoucherId,
+            amount: toMoney(inventoryMoney(totalRefundAmount)),
+            actor: { userId: String(req.session.userId ?? "unknown"), username: req.session.username || "unknown" },
+          });
+        }
+
         // Wave 16 (B): audited in the creating transaction.
         const auditItems = await tx
           .select({
@@ -353,7 +401,14 @@ export function registerCreditNoteRoutes(app: Express) {
               totalAmount: { old: null, new: inventoryMoney(totalRefundAmount) },
               itemCount: { old: null, new: auditItems.length },
               items: { new: auditItems },
-              cashAccount: { old: null, new: cashAccountId },
+              cashAccount: { old: null, new: party ? null : cashAccountId },
+              ...(party
+                ? {
+                    party: { new: { kind: party.kind, id: party.id } },
+                    invoiceVoucherId: { new: party.invoiceVoucherId },
+                    allocationId: { new: allocationId },
+                  }
+                : {}),
             },
           },
           tx
@@ -509,6 +564,14 @@ export function registerCreditNoteRoutes(app: Express) {
       const noteType = voucher.voucherType;
       if (!["Credit Note", "Debit Note"].includes(noteType || "")) {
         return res.status(400).json({ message: "Not a credit/debit note" });
+      }
+      // Phase 25 (AR-7): a note that references an invoice is corrected by
+      // reversal and a new note (its party line and allocation stay as posted).
+      if (await noteReferencesInvoice(voucherId)) {
+        return res.status(409).json({
+          code: "NOTE_REFERENCES_INVOICE_REVERSE_INSTEAD",
+          message: "This note references an invoice: reverse it and issue a new note instead of editing it",
+        });
       }
 
       if (items && Array.isArray(items)) {

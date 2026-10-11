@@ -31,8 +31,9 @@
  * values; the ERP figure is computed as of the eve), with no document yet
  * posted on or after that date (it would carry none of its perpetual-inventory
  * postings). Applying computes the plan inside its own transaction (repeatable
- * read, after taking the company's cut-over lock), so the journal posts the
- * figures of one consistent snapshot, and records the cut-over in the same
+ * read, started after the company's cut-over lock is granted — phase 29),
+ * so the journal posts the figures of one consistent snapshot that includes
+ * every import committed before it, and records the cut-over in the same
  * transaction, once per company.
  *
  * Wave 15 apply guards (owner decision 2, re-audit M3). The apply is refused
@@ -80,7 +81,10 @@ import { sql } from "drizzle-orm";
 
 import { voucherEntries } from "@shared/schema";
 
-import { db, type DatabaseOrTransaction, type DbTransaction } from "../../../db";
+import { drizzle } from "drizzle-orm/node-postgres";
+import * as schema from "@shared/schema";
+
+import { db, pool, type DatabaseOrTransaction, type DbTransaction } from "../../../db";
 import { MoneyDecimal, toMoney } from "../../../lib/money";
 import { planReadinessResolutionTx } from "../../inventory/inventoryReadinessResolution";
 import { companyStockValuationAsOf } from "../../inventory/stockValuation";
@@ -459,13 +463,24 @@ export async function applyOpeningInventoryJournal(
     throw new OpeningJournalRefusal("CUTOVER_IN_FUTURE", "The cut-over can be applied on or after its date");
   }
 
-  // Repeatable read: the snapshot is taken at the lock statement, so an apply
-  // that committed while this one waited for the lock is not visible to it;
-  // the primary key refuses the second row, reported as ALREADY_APPLIED.
-  const applied = await db
-    .transaction(
+  // Phase 29 (cut-over race): the company's cut-over lock is taken BEFORE the
+  // repeatable-read snapshot. Before, the lock was the transaction's first
+  // statement, and a repeatable-read snapshot is taken at the start of that
+  // statement, before it waits: a stock import (which takes the same lock,
+  // assertStockImportAllowedTx) or another apply that committed while this one
+  // waited was not in the plan. Now a session-level advisory lock is held on a
+  // dedicated connection, then the transaction starts on that connection, so
+  // its snapshot (and every read of the plan) sees everything committed before
+  // the lock was granted; the lock is released after the commit or rollback.
+  const client = await pool.connect();
+  let locked = false;
+  const lockedDb = drizzle(client, { schema });
+  const applied = await (async () => {
+    await client.query("SELECT pg_advisory_lock(hashtext('gl_inventory_cutover'), $1)", [companyId]);
+    locked = true;
+    return lockedDb.transaction(
       async (tx) => {
-        // Serializes concurrent applies for the company; the primary key refuses a second row.
+        // Kept: the same session already holds the lock, so this is granted at once.
         await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext('gl_inventory_cutover'), ${companyId})`);
         if (await getInventoryCutover(tx, companyId)) {
           throw new OpeningJournalRefusal("ALREADY_APPLIED", "The cut-over is already applied for this company");
@@ -544,13 +559,21 @@ export async function applyOpeningInventoryJournal(
         return { plan, voucherId: id };
       },
       { isolationLevel: "repeatable read" }
-    )
+    );
+  })()
     .catch((error: unknown) => {
       const failure = error as { code?: string; cause?: { code?: string } } | null;
       if (failure?.code === "23505" || failure?.cause?.code === "23505") {
         throw new OpeningJournalRefusal("ALREADY_APPLIED", "The cut-over is already applied for this company");
       }
       throw error;
+    })
+    .finally(async () => {
+      try {
+        if (locked) await client.query("SELECT pg_advisory_unlock(hashtext('gl_inventory_cutover'), $1)", [companyId]);
+      } finally {
+        client.release();
+      }
     });
   return applied;
 }

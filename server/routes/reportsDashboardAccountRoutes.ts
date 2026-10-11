@@ -7,12 +7,13 @@
  */
 import type { Express } from "express";
 import { getErrorMessage } from "../lib/httpHandlers";
-import { and, eq, inArray, isNull, or, sql } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { db } from "../db";
 import { storage } from "../storage";
 import { requireAuth } from "../auth";
 import type Decimal from "decimal.js";
-import { debitMinusCredit, signedOpeningBalance, toMoney } from "../lib/money";
+import { toMoney } from "../lib/money";
+import { bankAccountClosings, ledgerAccountClosings } from "../services/accounting/reporting/dashboardBalances";
 import {
   bankAccounts,
   dashboardAccountSelections,
@@ -21,8 +22,6 @@ import {
   insertDashboardCashAccountSchema,
   insertDashboardPayableAccountSchema,
   ledgerAccounts,
-  voucherEntries,
-  vouchers,
 } from "@shared/schema";
 
 export function registerDashboardAccountRoutes(app: Express) {
@@ -46,74 +45,35 @@ export function registerDashboardAccountRoutes(app: Express) {
       const ledgerIds = accounts.filter((a) => a.accountType === "ledger").map((a) => a.accountId);
       const bankIds = accounts.filter((a) => a.accountType === "bank").map((a) => a.accountId);
 
-      // Batch-fetch all account details and aggregate entry sums in parallel (4 queries total regardless of account count)
-      const [ledgerRows, bankRows, ledgerSums, bankSums] = await Promise.all([
-        ledgerIds.length > 0
-          ? db.select().from(ledgerAccounts).where(inArray(ledgerAccounts.id, ledgerIds)).execute()
-          : [],
-        bankIds.length > 0 ? db.select().from(bankAccounts).where(inArray(bankAccounts.id, bankIds)).execute() : [],
+      // Phase 27 (RP-10): accounts read in this company only, balances from the engine.
+      const [ledgerRows, bankRows, ledgerBalMap, bankBalMap] = await Promise.all([
         ledgerIds.length > 0
           ? db
-              .select({
-                accountId: voucherEntries.ledgerAccountId,
-                totalDebit: sql<string>`COALESCE(SUM(${voucherEntries.debitAmount}::numeric), 0)`,
-                totalCredit: sql<string>`COALESCE(SUM(${voucherEntries.creditAmount}::numeric), 0)`,
-              })
-              .from(voucherEntries)
-              .innerJoin(vouchers, eq(voucherEntries.voucherId, vouchers.id))
-              .where(
-                and(
-                  inArray(voucherEntries.ledgerAccountId, ledgerIds),
-                  eq(vouchers.companyId, companyId),
-                  isNull(vouchers.deletedAt),
-                  eq(vouchers.optional, false)
-                )
-              )
-              .groupBy(voucherEntries.ledgerAccountId)
+              .select()
+              .from(ledgerAccounts)
+              .where(and(inArray(ledgerAccounts.id, ledgerIds), eq(ledgerAccounts.companyId, companyId)))
               .execute()
           : [],
         bankIds.length > 0
           ? db
-              .select({
-                accountId: voucherEntries.bankAccountId,
-                totalDebit: sql<string>`COALESCE(SUM(${voucherEntries.debitAmount}::numeric), 0)`,
-                totalCredit: sql<string>`COALESCE(SUM(${voucherEntries.creditAmount}::numeric), 0)`,
-              })
-              .from(voucherEntries)
-              .innerJoin(vouchers, eq(voucherEntries.voucherId, vouchers.id))
-              .where(
-                and(
-                  inArray(voucherEntries.bankAccountId, bankIds),
-                  eq(vouchers.companyId, companyId),
-                  isNull(vouchers.deletedAt),
-                  eq(vouchers.optional, false)
-                )
-              )
-              .groupBy(voucherEntries.bankAccountId)
+              .select()
+              .from(bankAccounts)
+              .where(and(inArray(bankAccounts.id, bankIds), eq(bankAccounts.companyId, companyId)))
               .execute()
           : [],
+        ledgerAccountClosings(companyId, ledgerIds),
+        bankAccountClosings(companyId, bankIds),
       ]);
 
       const ledgerMap = new Map(ledgerRows.map((l) => [l.id, l]));
       const bankMap = new Map(bankRows.map((b) => [b.id, b]));
-      const ledgerBalMap = new Map(
-        ledgerSums.map((r) => [Number(r.accountId), { d: toMoney(r.totalDebit), c: toMoney(r.totalCredit) }])
-      );
-      const bankBalMap = new Map(
-        bankSums.map((r) => [Number(r.accountId), { d: toMoney(r.totalDebit), c: toMoney(r.totalCredit) }])
-      );
-
-      const calcBal = (opening: string, side: string | null, sums?: { d: Decimal; c: Decimal }) => {
-        let bal = signedOpeningBalance(opening, side === "Cr" ? "Cr" : "Dr");
-        if (sums) bal = bal.plus(sums.d).minus(sums.c);
-        return bal.toNumber();
-      };
+      const calcBal = (closing: Decimal | undefined) => (closing ?? toMoney(0)).toNumber();
 
       const enrichedAccounts = accounts.map((account) => {
         if (account.accountType === "ledger") {
           const ledger = ledgerMap.get(account.accountId);
           if (!ledger) return null;
-          const balance = calcBal(ledger.openingBalance || "0", ledger.openingBalanceSide, ledgerBalMap.get(ledger.id));
+          const balance = calcBal(ledgerBalMap.get(ledger.id));
           return {
             id: account.id,
             accountType: account.accountType,
@@ -124,7 +84,7 @@ export function registerDashboardAccountRoutes(app: Express) {
         } else if (account.accountType === "bank") {
           const bank = bankMap.get(account.accountId);
           if (!bank) return null;
-          const balance = calcBal(bank.openingBalance || "0", bank.openingBalanceSide, bankBalMap.get(bank.id));
+          const balance = calcBal(bankBalMap.get(bank.id));
           return {
             id: account.id,
             accountType: account.accountType,
@@ -241,44 +201,22 @@ export function registerDashboardAccountRoutes(app: Express) {
 
       const ledgerIds = accounts.map((a) => a.accountId);
 
-      // Batch-fetch account details and aggregate sums in parallel (2 queries total regardless of account count)
-      const [ledgerRows, ledgerSums] = await Promise.all([
-        db.select().from(ledgerAccounts).where(inArray(ledgerAccounts.id, ledgerIds)).execute(),
+      // Phase 27 (RP-10): accounts read in this company only, balances from the engine.
+      const [ledgerRows, ledgerBalMap] = await Promise.all([
         db
-          .select({
-            accountId: voucherEntries.ledgerAccountId,
-            totalDebit: sql<string>`COALESCE(SUM(${voucherEntries.debitAmount}::numeric), 0)`,
-            totalCredit: sql<string>`COALESCE(SUM(${voucherEntries.creditAmount}::numeric), 0)`,
-          })
-          .from(voucherEntries)
-          .innerJoin(vouchers, eq(voucherEntries.voucherId, vouchers.id))
-          .where(
-            and(
-              inArray(voucherEntries.ledgerAccountId, ledgerIds),
-              eq(vouchers.companyId, companyId),
-              isNull(vouchers.deletedAt),
-              eq(vouchers.optional, false)
-            )
-          )
-          .groupBy(voucherEntries.ledgerAccountId)
+          .select()
+          .from(ledgerAccounts)
+          .where(and(inArray(ledgerAccounts.id, ledgerIds), eq(ledgerAccounts.companyId, companyId)))
           .execute(),
+        ledgerAccountClosings(companyId, ledgerIds),
       ]);
 
       const ledgerMap = new Map(ledgerRows.map((l) => [l.id, l]));
-      const ledgerBalMap = new Map(
-        ledgerSums.map((r) => [Number(r.accountId), { d: toMoney(r.totalDebit), c: toMoney(r.totalCredit) }])
-      );
 
       const enrichedAccounts = accounts.map((account) => {
         const ledger = ledgerMap.get(account.accountId);
         if (!ledger) return null;
-        let exactBalance = signedOpeningBalance(
-          ledger.openingBalance,
-          ledger.openingBalanceSide === "Cr" ? "Cr" : "Dr"
-        );
-        const sums = ledgerBalMap.get(ledger.id);
-        if (sums) exactBalance = exactBalance.plus(sums.d).minus(sums.c);
-        const balance = exactBalance.toNumber();
+        const balance = (ledgerBalMap.get(ledger.id) ?? toMoney(0)).toNumber();
         return {
           id: account.accountId,
           accountId: account.accountId,
@@ -401,46 +339,21 @@ export function registerDashboardAccountRoutes(app: Express) {
         return res.json({ accountIds: [], accounts: [] });
       }
 
-      // Fetch account details for the selected account IDs
+      // Fetch account details for the selected account IDs; balances from the
+      // engine (phase 27, RP-10), one scan for every selected account.
       const accounts = [];
       if (selection.accountIds && selection.accountIds.length > 0) {
         const allLedgerAccounts = await storage.getAllLedgerAccounts(companyId);
-
+        const closings = await ledgerAccountClosings(companyId, selection.accountIds);
         for (const accountId of selection.accountIds) {
           const account = allLedgerAccounts.find((a) => a.id === accountId);
           if (account) {
-            // Calculate current balance from voucher entries (excluding optional vouchers)
-            const entries = await db
-              .select({
-                debitAmount: voucherEntries.debitAmount,
-                creditAmount: voucherEntries.creditAmount,
-              })
-              .from(voucherEntries)
-              .innerJoin(vouchers, eq(voucherEntries.voucherId, vouchers.id))
-              .where(
-                and(
-                  eq(voucherEntries.ledgerAccountId, accountId),
-                  eq(vouchers.companyId, companyId),
-                  isNull(vouchers.deletedAt),
-                  or(eq(vouchers.optional, false), isNull(vouchers.optional))
-                )
-              )
-              .execute();
-
-            // Opening balance (Dr positive) plus the account's lines, exactly.
-            const balance = signedOpeningBalance(
-              account.openingBalance,
-              account.openingBalanceSide === "Cr" ? "Cr" : "Dr"
-            )
-              .plus(debitMinusCredit(entries))
-              .toNumber();
-
             accounts.push({
               id: account.id,
               code: account.code,
               name: account.name,
               accountType: account.accountType,
-              balance: balance,
+              balance: (closings.get(account.id) ?? toMoney(0)).toNumber(),
             });
           }
         }
