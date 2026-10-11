@@ -1,7 +1,7 @@
 {
   "formatVersion": 1,
   "description": "Ordered snapshot of every registered Express route (method, path, guard chain) and middleware mount. Regenerate with UPDATE_ROUTE_MANIFEST=1 only when a route change is intended; during a file split the manifest must not change at all.",
-  "routeCount": 2170,
+  "routeCount": 2172,
   "middlewareMountCount": 130,
   "routes": [
     "GET /api/admin/operational-monitoring [requireAuth > <anonymous> > <anonymous>]",
@@ -240,6 +240,7 @@
     "GET /api/factory/fx-rates/:currencyCode/:date [requireAuth > <anonymous>]",
     "POST /api/factory/fx-rates/fetched [requireAuth > <anonymous> > <anonymous>]",
     "POST /api/factory/fx-rates [requireAuth > <anonymous> > <anonymous>]",
+    "POST /api/factory/fx-rates/batch [requireAuth > <anonymous> > <anonymous>]",
     "DELETE /api/factory/fx-rates/:currency [requireAuth > <anonymous> > <anonymous>]",
     "POST /api/factory/pressing/create-and-print [requireAuth > <anonymous>]",
     "POST /api/factory/pressing/create-multi [requireAuth > <anonymous>]",
@@ -1041,6 +1042,7 @@
     "GET /api/exchange-rates [requireAuth > <anonymous>]",
     "GET /api/exchange-rates/latest [requireAuth > <anonymous>]",
     "POST /api/exchange-rates [requireAuth > <anonymous> > <anonymous>]",
+    "POST /api/exchange-rates/batch [requireAuth > <anonymous> > <anonymous>]",
     "POST /api/auth/passkey/register/options [requireAuth > <anonymous>]",
     "POST /api/auth/passkey/register/verify [requireAuth > <anonymous>]",
     "POST /api/auth/passkey/authenticate/options [<anonymous>]",

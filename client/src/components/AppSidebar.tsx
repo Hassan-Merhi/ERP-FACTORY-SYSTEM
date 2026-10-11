@@ -28,6 +28,7 @@ import {
   ShieldCheck,
   ArrowRight,
   Replace,
+  ListChecks,
 } from "lucide-react";
 import { useConnectivity } from "@/contexts/ConnectivityContext";
 import { Sidebar, SidebarContent } from "@/components/ui/sidebar";
@@ -66,6 +67,7 @@ const defaultPinnedItems: NavItem[] = [
 ];
 
 export const SETTINGS_HIDDEN_ROLES = new Set(["Admin", "Developer"]);
+export const ACCOUNTING_CLEANUP_ROLES = new Set(["Owner", "Admin", "Developer"]);
 
 export const ERP_NAV_SECTIONS: NavSection[] = [
   {
@@ -403,6 +405,15 @@ export function AppSidebar({ user, onLogout }: { user?: SidebarUser; onLogout: (
           />
           {isItemVisible({ title: "Settings", url: "/settings", icon: Settings }) && (
             <SidebarFlatLink href="/settings" icon={Settings} label="Settings" testId="link-settings" />
+          )}
+          {/* Owner production steps (accounting audit): the Owner has no ERP Settings page. */}
+          {ACCOUNTING_CLEANUP_ROLES.has(currentRole) && (
+            <SidebarFlatLink
+              href="/accounting-cleanup"
+              icon={ListChecks}
+              label="Accounting clean-up"
+              testId="link-accounting-cleanup"
+            />
           )}
           {isItemVisible({ title: "IC Links", url: "/intercompany-links", icon: Settings }) && (
             <SidebarFlatLink href="/intercompany-links" icon={ArrowRight} label="IC Links" testId="link-ic-links" />

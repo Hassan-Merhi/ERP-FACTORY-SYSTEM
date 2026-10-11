@@ -57,6 +57,7 @@ export const STATIC_ROUTES = [
   "/factory/conflicts",
   "/factory/deleted-items",
   "/factory/import-cycle-diagnostics",
+  "/factory/accounting-cleanup",
   "/factory/inventory-repair",
   "/factory/company-data-reset",
   "/my-settings",

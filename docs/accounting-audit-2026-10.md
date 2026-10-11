@@ -1304,6 +1304,16 @@ Integration of the phase 23–29 entries above on one tree (phase 27 left no ent
 - **Checks (final tree)** — `npm run check` clean; eslint 0 errors / 0 warnings (ratchet 0), prettier on every changed file; write-evidence 15/15 and 3/3, company-scope 0 unreviewed (72 reviewed), write-routes 0 uncovered (334), god-files and type-escapes pass; i18n PR ratchet 55 → 55 against the merge base `c431528` and 58 → 55 against `4b697a0`; Performance & Database Safety: strict query review 0 unresolved high, the five verify scripts pass; production-readiness and Program 2 phase 1 contracts verified; route manifest 2,170. Backend on fresh databases: superuser 1,031/1,033 files (the other two passed on rerun: a stale pin read before its fix, a probe role left by a concurrent suite); **CI-exact run (Node 24.21.0, Postgres 18, coverage) 1,034/1,034 files, 7,174 tests, coverage floors met (all files 72.9% lines)**; as the non-superuser role 1,025/1,033 files, the 8 others being the environment-only differences listed above. Frontend 240 files / 2,216 tests; UI quality static checks (i18n classifier, 7D accessibility/RTL, RTL prettier set, UX consistency, mobile phase 11, i18n contracts, mobile UI tests) pass; API smoke sweep 5/5 on a fresh database. First boot as `erp_app`: clean on a fresh database and on one holding suppliers (the old supplier bridge fails there with `app.current_company_id is required`).
 - **Remaining owner decisions / notes** — (1) whether an Admin (not only the Owner) may run later allocation rounds (default: yes); (2) the first allocation run per company is an Owner step after deploy (it no longer happens by itself), then review and apply the realized-FX history plan; (3) RLS: production is subject to it (see above) — deploy to a staging copy of production first and exercise login, factory, payroll, supplier and report pages as `erp_user`; (4) the PO edit / interco sync readers (`containerHelpers.syncIntercoParentVoucher`) still edit an existing parent voucher in place for POs posted before this change.
 
+### Owner accounting clean-up page (2026-10-11) — complete in code
+
+Owner decision of 2026-10-11 ("Yes build it and add all those"): every owner production step runnable from the app. Production was not touched.
+
+- **Page** `client/src/pages/AccountingCleanup.tsx` (+ `client/src/pages/accounting-cleanup/`): ERP `/accounting-cleanup` (Admin/Owner/Developer; sidebar footer link "Accounting clean-up", the Owner has no ERP Settings page) and Factory `/factory/accounting-cleanup` (registry key `factory/accounting-cleanup`, new access level `owner` = Owner/Admin/Developer; Settings → System Tools card in both modes). Fifteen numbered cards in production order (section 14) plus a read-only "Where the books stand" card (`GET /api/accounting/integrity`: findings by severity, the audit-trail checks). Each tool: Preview (the tool's GET plan, rendered as figures and tables, plan hash kept), status badge (not started / previewed / blocked / nothing to do / applied, from the plan), Apply disabled until a preview without blockers, a confirmation repeating the totals, `{ confirm: true, planHash, … }` to the existing audited route, the result with links to the vouchers posted; 409 `*PLAN_CHANGED` ("data changed since the preview — preview again", Apply disabled until a new preview), period closed, nothing to apply, already applied, maintenance-role and 403 refusals translated. A plan whose `companyId` is not the selected company cannot be applied. Factory-only tools (opening AR, no-mix bales, legacy factory postings, bale re-cost, factory shop rent) show in Factory mode, the ERP bale-mirror write-off and ERP/Properties rent in ERP mode. No posting logic in the client. The ERP Import Cycle Diagnostics route (card 4's investigation link) now admits the Owner, as the Factory one did; its Factory registry entry moved from `admin` to `owner`.
+- **Dated rates (card 2; Settings → FX Rates)**: the FX Rates card takes an effective date (back-dated entry; a date after today refused client-side) and "Import rates file". New `POST /api/factory/fx-rates/batch` and `POST /api/exchange-rates/batch` (Admin/Owner; `services/accounting/exchangeRateImport.ts`): every row validated first (currency, ISO date, positive rate, no row twice, **no date after the company business date**), rows equal to the rate recorded on their date skipped, differing rows refused (409 `RATE_IMPORT_CONFLICT`) unless `replaceConflicts`, rates and one audit row in one transaction. The importer reads `currency,date,rate_to_usd[,source]`, `from_currency,to_currency,date,rate` and the prepared ECB table as it is (`factory_rate`, source = the ECB fixing date) and previews each row as new / same as recorded / differs. ERP-side dated rates (`exchange_rates`, the phase 24 resolver for ERP vouchers) had a date field only in the Developer-only POS setup: card 2 in ERP mode gives the Owner dated entry and the same import. The single `POST /api/factory/fx-rates` still accepts a future `effectiveDate` from a direct API call (unchanged; the batch route refuses it).
+- **Not wired for the Owner**: `POST /api/accounting/factory-fx-repair/apply` is a maintenance path ("repair"), admitted only to an Admin with `administration.repair` or a Developer — the Owner previews card 3 and an Admin applies. The perpetual switch is not on the page. `POST …/perpetual-inventory/factory-stock-journal/catch-up` (no plan) is not on the page.
+- **i18n**: `client/src/i18n/wave8ReleaseTranslations.ownerCleanup.ts` and `.ownerCleanupSteps.ts` (en/ar/fr, `{{0}}` placeholders; the blocker texts reuse the services' translated messages), registered in the aggregator and in `scripts/audit-i18n-phase14.mjs`.
+- **Tests**: `tests/ui/owner-accounting-cleanup.test.tsx` (8: cards in order and per mode, preview figures, Apply disabled before/blocked/empty, apply body, voucher links, 409 PLAN_CHANGED, other-company plan, Admin preview-only), `tests/ui/owner-accounting-cleanup-rates.test.tsx` (6: ECB header, simple formats, future/invalid/duplicate rows, classification, panel save body, FX Rates dated entry), `tests/owner-cleanup-rate-import.test.ts` (5, database: roles, validation, future date, audit row in the transaction, identical skip, 409 conflict, replace).
+
 ## 7. Re-audit (2026-10-07, branch `claude/erp-accounting-audit-27nl3e` at `d151801`)
 
 Method: three independent read-only reviews of the code on the branch (posting and integrity; inventory and factory; chart of accounts, AR/AP, currency, multi-company and reporting). They verified the wave log against the code rather than taking it as given, and ran the targeted tests. The production database could not be queried: its IP allowlist is empty, so the 2026-10-06 production figures are the latest. **Production runs `main` (`9f2e4ce`); nothing on this branch is deployed.**
@@ -1495,11 +1505,13 @@ Company 10 (supplier partner) and 13 (properties) have no perpetual stock cut-ov
 ### Order of operations before turning the switch on
 
 1. Merge and deploy the branch (stops the plug writer and FX revaluation; installs the guards and the cut-over table).
-2. Factory: enter dated EUR/AUD rates back to February 2026, and keep a dated rate entered for every day non-USD factory documents are written — since wave 17 D supplier payments, raw-stock purchase adjustments, reverse offloads and post-offload charges in EUR/AUD refuse (409 `FACTORY_FX_RATE_REQUIRED`) without a confirmed rate on or before their date, and the currency trigger refuses a non-USD line without native amounts; run the wave 6 repair plan, review, apply; run the bale re-cost preview, review, apply; re-date or account for the two future-dated journals.
-3. ERP companies: run the readiness resolution preview per company; choose restore or write-off per missing location; write off anomalous values; apply.
-4. Run GET /api/accounting/perpetual-inventory/readiness — no blockers listed.
-5. Opening plan per company, review, apply (cut-over date on the first of a month with no later-dated documents).
-6. Run the reconciliation; only then set `PERPETUAL_INVENTORY_POSTING_READY = true`.
+Every step below is a card of the Owner **Accounting clean-up** page (section 14); the card number is given in brackets.
+
+2. [Cards 2, 3, 14] Factory: enter dated EUR/AUD rates back to February 2026, and keep a dated rate entered for every day non-USD factory documents are written — since wave 17 D supplier payments, raw-stock purchase adjustments, reverse offloads and post-offload charges in EUR/AUD refuse (409 `FACTORY_FX_RATE_REQUIRED`) without a confirmed rate on or before their date, and the currency trigger refuses a non-USD line without native amounts; run the wave 6 repair plan, review, apply; run the bale re-cost preview, review, apply; re-date or account for the two future-dated journals.
+3. [Card 14, "Readiness resolution"] ERP companies: run the readiness resolution preview per company; choose restore or write-off per missing location; write off anomalous values; apply.
+4. [Card 14, "Perpetual readiness"] Run GET /api/accounting/perpetual-inventory/readiness — no blockers listed.
+5. [Card 14, "Perpetual opening plan" (preview only; the apply goes with the switch)] Opening plan per company, review, apply (cut-over date on the first of a month with no later-dated documents).
+6. [Card 14, "Reconciliation"] Run the reconciliation; only then set `PERPETUAL_INVENTORY_POSTING_READY = true` (code; not on the page).
 
 ## 10. Re-audit (2026-10-09, branch working tree after waves 12–15)
 
@@ -1722,13 +1734,13 @@ Method: five read-only reviews. Four swept the code category by category (not on
 | ID | Step |
 |---|---|
 | A1 | Merge the PR into `main` (Render auto-deploys `main`). Before 11-01, or the month-start rental run posts more back-dated reclass vouchers (A3). |
-| B19 | Create RETAINED_EARNINGS in every company (`POST /api/accounting/system-accounts/ensure`). |
-| A2 | Plug values (12: −26.8M, 1: −6.3M, 13: +1.5M, 8: −542K, 17: −149K, 10: −69K, 9: +4.9K, 7: −115): investigate each import-cycle difference, post reviewed corrections, then clear the stored value. **Needs a new Owner clear tool (code, S).** |
+| B19 | Create RETAINED_EARNINGS in every company (`POST /api/accounting/system-accounts/ensure`) — clean-up page card 1. |
+| A2 | Plug values (12: −26.8M, 1: −6.3M, 13: +1.5M, 8: −542K, 17: −149K, 10: −69K, 9: +4.9K, 7: −115): investigate each import-cycle difference, post reviewed corrections, then clear the stored value. **Needs a new Owner clear tool (code, S).** Page card 4. |
 | B1 | Company 9 FX-REVAL vouchers (9, 3,513.21): reverse or keep. |
-| B2 | Main's boot backfill INVENTORY lines: accept for companies 1, 8, 9, 17 (absorbed by the opening plan); reverse for company 10 (supplier partner) — **needs a reversal tool (code, S)**; teach the sync to recognise the backfill narration. |
-| B14–B17 | Review and apply the Owner tools: insurance journal direction, legacy prepaid recognition (34 back-dated vouchers), deferred rent (should be empty), phase 3 historical repair per company. |
+| B2 | Main's boot backfill INVENTORY lines: accept for companies 1, 8, 9, 17 (absorbed by the opening plan); reverse for company 10 (supplier partner) — **needs a reversal tool (code, S)**; teach the sync to recognise the backfill narration. Page card 5. |
+| B14–B17 | Review and apply the Owner tools: insurance journal direction, legacy prepaid recognition (34 back-dated vouchers), deferred rent (should be empty), phase 3 historical repair per company. Page cards 6, 7, 8 (and 9, SP supplier links). |
 | B4–B8, B10, B21 | Vouchers with no lines (retire non-transfer headers; find the writer creating them), lines with no target (14), lines on missing accounts (25), company 10's 149 lines on deleted accounts (2.7M), duplicated customer openings (4), future-dated vouchers (3), master openings and sides — each through the reviewed edit/restore/transfer-account flows. |
-| B11 / M9 | Enter dated EUR/AUD rates (ECB table prepared; confirm coverage back to 2026-02-01), then preview and apply the wave 6 FX repair (462 lines). |
+| B11 / M9 | Enter dated EUR/AUD rates (ECB table prepared; confirm coverage back to 2026-02-01), then preview and apply the wave 6 FX repair (462 lines). Page cards 2 and 3. |
 
 ### Phase 21 — Audit trail complete (code)
 
@@ -1771,6 +1783,8 @@ F1 (CRITICAL by design): factory revenue and receivables posted independently of
 5. Reconciliation zero, account by account (C9-prod); then set `PERPETUAL_INVENTORY_POSTING_READY = true` and drop the one-sided stock exemption from the balance guard (D4).
 6. First fiscal close with RETAINED_EARNINGS (B19, B20), which turns the period lock on.
 
+Phase 29 on the clean-up page (section 14): item 2 → cards 2, 3 and 14 (no-mix bales, bale re-cost); item 3 → card 14 (readiness resolution, bale-mirror write-off) and card 5 (company 10); item 4 → card 14 (readiness, opening plan); item 5 → card 14 (reconciliation; the switch stays in code); item 6 → card 15. Phases 23–26 owner steps → cards 10 (legacy lines, constraints, opening journal, reclassification), 11 (month-end revaluation), 12 (first allocation, realized FX history, open-items diagnostics), 13 (company 13 lines, multi-company diagnostic); phase 28 → card 14.
+
 ### Owner decisions, in the order they are needed
 
 1. Merge/deploy before 2026-11-01 (Phase 20).
@@ -1797,3 +1811,25 @@ F1 (CRITICAL by design): factory revenue and receivables posted independently of
 | 25–27 | 93 | ~80 |
 | 28 | 96 | ~85 |
 | 29 | 100 | ~100 once the cut-over reconciles and the first close is done |
+
+## 14. Owner how-to — the Accounting clean-up page (2026-10-11)
+
+Open **Accounting clean-up** (ERP: sidebar footer; Factory: Settings → System Tools, or `/factory/accounting-cleanup`). Choose the company at the top (ERP mode; in Factory mode the page acts on the current factory company). Run "Where the books stand" before and after each step. For each card, in order: **Preview** → read the figures, blockers and skipped rows → make the card's choices if it has any (dates, offsets, actions per bale or location) and preview again → **Apply** → check the totals in the confirmation → confirm. If the page says the data changed since the preview, preview again. Repeat per company.
+
+| Card | Step | Production item |
+|---|---|---|
+| 1 | Required system accounts (RETAINED_EARNINGS, OPENING_BALANCE_EQUITY, ROUNDING, AR/AP/PAYROLL_PAYABLE, FX_GAIN_LOSS, UNREALIZED_FX) | B19 |
+| 2 | Dated rates: enter or import the ECB table (factory rates in Factory mode, company rates in ERP mode) | B11 / M9, phase 24 step 1 |
+| 3 | Factory FX repair (Owner previews, an Admin with the repair permission applies) | B11 / M9 |
+| 4 | Plug values: investigate in Import Cycle Diagnostics, then clear the stored value | A2 |
+| 5 | Company 10 backfill reversal (offset; override with a reason for other companies) | B2 |
+| 6 | Insurance journal direction | B14 |
+| 7 | Legacy prepaid rent (ERP or factory shops) and Properties deferred rent | B15, B16 |
+| 8 | Phase 3 historical repair | B17 |
+| 9 | Supplier Partner voucher links | wave 16 A |
+| 10 | Legacy line reclassification, validate constraints, opening journal (cut-over date), account reclassification | phase 23 (G7, G6, G5) |
+| 11 | Month-end FX revaluation (month end) | phase 24 step 4 |
+| 12 | First allocation run, realized FX history, open-items diagnostics | phase 25 / integration |
+| 13 | Company 13 cross-company lines, multi-company diagnostic | phase 26 (MC-10) |
+| 14 | Factory mode: opening AR, no-mix bales, legacy factory postings, bale re-cost; ERP mode: bale-mirror write-off; both: readiness resolution, opening plan, readiness, reconciliation — not the switch | phases 28, 29 (items 2–5) |
+| 15 | Fiscal close pre-check (trial balance, RETAINED_EARNINGS, unknown-type balances) and the close/reopen flow | phase 29 item 6 |

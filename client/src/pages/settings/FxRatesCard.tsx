@@ -1,7 +1,7 @@
 import type { ClientErrorLike } from "@/lib/clientError";
 import { useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { queryClient, apiRequest } from "@/lib/queryClient";
+import { queryClient, apiRequest, getAppDate } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -10,24 +10,54 @@ import { Loader2, Plus, Trash2, TrendingUp } from "lucide-react";
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table";
 import { authenticatedUserQueryOptions } from "@/contracts/sessionQueryContracts";
 import { canEditExchangeRates } from "@/lib/exchangeRateEditors";
+import { RateFileImportPanel } from "@/pages/accounting-cleanup/RateFileImportPanel";
+import type { RecordedRate } from "@/pages/accounting-cleanup/rateFileImport";
+
+interface FactoryFxRateRow {
+  id: number;
+  currencyCode: string;
+  rateToUsd: string;
+  effectiveDate: string;
+}
+
+/** Factory rates as the import preview compares them (USD per 1 unit). */
+export function factoryRecordedRates(rates: FactoryFxRateRow[]): RecordedRate[] {
+  return rates.map((rate) => ({
+    fromCurrency: rate.currencyCode,
+    toCurrency: "USD",
+    effectiveDate: String(rate.effectiveDate).slice(0, 10),
+    rate: String(rate.rateToUsd),
+    id: rate.id,
+  }));
+}
 
 export function FxRatesCard() {
   const { toast } = useToast();
   const [newCurrency, setNewCurrency] = useState("");
   const [newRate, setNewRate] = useState("");
+  // Dated entry (Accounting clean-up, step 2): a back-dated rate applies from
+  // its date; a date after today is refused here (the import route refuses it too).
+  const today = getAppDate();
+  const [newDate, setNewDate] = useState(today);
   // Saving or removing a rate is Admin/Owner/Developer only (enforced by the server).
   const { data: currentUser } = useQuery(authenticatedUserQueryOptions());
   const canEdit = canEditExchangeRates(currentUser?.role);
 
-  const { data: rates = [], isLoading } = useQuery<
-    { currencyCode: string; rateToUsd: string; effectiveDate: string }[]
-  >({
+  const { data: rates = [], isLoading } = useQuery<FactoryFxRateRow[]>({
     queryKey: ["/api/factory/fx-rates"],
   });
 
   const saveMutation = useMutation({
-    mutationFn: async ({ currencyCode, rateToUsd }: { currencyCode: string; rateToUsd: string }) => {
-      const res = await apiRequest("POST", "/api/factory/fx-rates", { currencyCode, rateToUsd });
+    mutationFn: async ({
+      currencyCode,
+      rateToUsd,
+      effectiveDate,
+    }: {
+      currencyCode: string;
+      rateToUsd: string;
+      effectiveDate: string;
+    }) => {
+      const res = await apiRequest("POST", "/api/factory/fx-rates", { currencyCode, rateToUsd, effectiveDate });
       return res.json();
     },
     onSuccess: () => {
@@ -37,6 +67,7 @@ export function FxRatesCard() {
       queryClient.invalidateQueries({ queryKey: ["/api/factory/net-position"] });
       setNewCurrency("");
       setNewRate("");
+      setNewDate(today);
     },
     onError: (err: ClientErrorLike) =>
       toast({ title: "Failed to save rate", description: err.message, variant: "destructive" }),
@@ -82,7 +113,10 @@ export function FxRatesCard() {
     if (!cc || cc.length < 2 || cc.length > 6)
       return toast({ title: "Enter a valid currency code (2–6 letters)", variant: "destructive" });
     if (isNaN(rate) || rate <= 0) return toast({ title: "Enter a positive rate", variant: "destructive" });
-    saveMutation.mutate({ currencyCode: cc, rateToUsd: newRate });
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(newDate))
+      return toast({ title: "Enter the date the rate applies from", variant: "destructive" });
+    if (newDate > today) return toast({ title: "A rate cannot be dated after today", variant: "destructive" });
+    saveMutation.mutate({ currencyCode: cc, rateToUsd: newRate, effectiveDate: newDate });
   };
 
   return (
@@ -94,7 +128,11 @@ export function FxRatesCard() {
         </CardTitle>
         <CardDescription>
           Set the exchange rates used to convert foreign-currency supplier balances to USD in Net Position and on
-          supplier cards. For example: EUR = 1.18 means 1 EUR = 1.18 USD.
+          supplier cards. For example: EUR = 1.18 means 1 EUR = 1.18 USD.{" "}
+          <span className="mt-1 block">
+            Each rate applies from its date until the next dated rate of that currency; enter past dates to rate older
+            documents.
+          </span>
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -108,19 +146,24 @@ export function FxRatesCard() {
               <TableRow>
                 <TableHead>Currency</TableHead>
                 <TableHead>Rate to USD</TableHead>
-                <TableHead>Last Updated</TableHead>
+                <TableHead>Effective from</TableHead>
                 <TableHead />
               </TableRow>
             </TableHeader>
             <TableBody>
-              {rates.map((r) => (
-                <TableRow key={r.currencyCode} data-testid={`row-fxrate-${r.currencyCode}`}>
+              {rates.map((r, index) => (
+                <TableRow
+                  key={r.id ?? `${r.currencyCode}-${r.effectiveDate}`}
+                  data-testid={`row-fxrate-${r.currencyCode}`}
+                >
                   <TableCell className="font-mono font-semibold">{r.currencyCode}</TableCell>
                   <TableCell className="font-mono">{parseFloat(r.rateToUsd).toFixed(4)}</TableCell>
                   <TableCell className="text-muted-foreground text-sm">{r.effectiveDate}</TableCell>
                   <TableCell>
-                    {canEdit && (
+                    {/* Removing is by currency: offered once, on its latest row. */}
+                    {canEdit && rates.findIndex((other) => other.currencyCode === r.currencyCode) === index && (
                       <Button
+                        aria-label={`Remove unused ${r.currencyCode} rates`}
                         size="icon"
                         variant="ghost"
                         onClick={() => deleteMutation.mutate(r.currencyCode)}
@@ -155,6 +198,15 @@ export function FxRatesCard() {
               min="0"
               data-testid="input-fxrate-rate"
             />
+            <Input
+              type="date"
+              value={newDate}
+              max={today}
+              onChange={(e) => setNewDate(e.target.value)}
+              className="w-44"
+              aria-label="Effective from"
+              data-testid="input-fxrate-date"
+            />
             <Button onClick={handleAdd} disabled={saveMutation.isPending} data-testid="button-add-fxrate">
               {saveMutation.isPending ? (
                 <Loader2 className="h-4 w-4 animate-spin mr-2" />
@@ -178,6 +230,19 @@ export function FxRatesCard() {
               Save today's market rate
             </Button>
           </div>
+        )}
+        {canEdit && (
+          <RateFileImportPanel
+            kind="factory"
+            recorded={factoryRecordedRates(rates)}
+            importUrl="/api/factory/fx-rates/batch"
+            today={today}
+            onSaved={() => {
+              queryClient.invalidateQueries({ queryKey: ["/api/factory/fx-rates"] });
+              queryClient.invalidateQueries({ queryKey: ["/api/factory/suppliers/with-balances"] });
+              queryClient.invalidateQueries({ queryKey: ["/api/factory/net-position"] });
+            }}
+          />
         )}
       </CardContent>
     </Card>

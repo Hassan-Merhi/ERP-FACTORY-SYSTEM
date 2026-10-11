@@ -134,6 +134,7 @@ export const ERP_ROUTES = [
   "/inventory-repair",
   "/balance-repair",
   "/convergence-reconciliation",
+  "/accounting-cleanup",
   "/net-position-details",
   "/company-data-reset",
   "/account-migration",

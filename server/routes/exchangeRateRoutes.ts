@@ -12,6 +12,11 @@ import { requireAuth, requireRole } from "../auth";
 import { getCompanyBusinessDate } from "../lib/dateUtils";
 import { insertExchangeRateSchema } from "@shared/schema";
 import { saveCompanyExchangeRate } from "../services/accounting/exchangeRateWrites";
+import {
+  RateImportRefusal,
+  importCompanyExchangeRates,
+  parseCompanyRateImportRows,
+} from "../services/accounting/exchangeRateImport";
 
 export function registerExchangeRateRoutes(app: Express) {
   // Check if today's exchange rate exists
@@ -127,6 +132,30 @@ export function registerExchangeRateRoutes(app: Express) {
 
       res.json(rate);
     } catch (error: unknown) {
+      res.status(500).json({ message: getErrorMessage(error) });
+    }
+  });
+  // Saves a reviewed rates file of company rates (Owner "Accounting clean-up"
+  // page, card 2): { rows: [{ fromCurrency, toCurrency, effectiveDate, rate }],
+  // replaceConflicts? }. Same rules as the factory import: validated first, no
+  // date after the business date, identical rows skipped, differing rows only
+  // with replaceConflicts (409 RATE_IMPORT_CONFLICT), one transaction with one
+  // audit row (services/accounting/exchangeRateImport.ts).
+  app.post("/api/exchange-rates/batch", requireAuth, requireRole("Admin", "Owner"), async (req, res) => {
+    try {
+      const companyId = req.session.currentCompanyId;
+      if (!companyId) {
+        return res.status(400).json({ message: "Company not selected" });
+      }
+      const rows = parseCompanyRateImportRows(req.body);
+      const result = await importCompanyExchangeRates(
+        { userId: req.session.userId!, username: req.session.username || "unknown", companyId },
+        rows,
+        { replaceConflicts: req.body?.replaceConflicts === true }
+      );
+      res.json(result);
+    } catch (error: unknown) {
+      if (error instanceof RateImportRefusal) return res.status(error.status).json(error.body);
       res.status(500).json({ message: getErrorMessage(error) });
     }
   });

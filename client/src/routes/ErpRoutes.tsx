@@ -8,6 +8,7 @@ import SpOverview from "@/pages/sp/SpOverview";
 import {
   AICommandCenter,
   AccountGroups,
+  AccountingCleanup,
   AccountMigration,
   AccountTransfer,
   AccountingCreate,
@@ -428,11 +429,14 @@ export function ErpRoutes({ user }: ErpRoutesProps) {
       {R("/chatbot-settings", isAdminOrDev, ChatbotSettings)}
       {R("/notification-settings", isAdminOrDev, NotificationSettings)}
       {R("/account-groups", isAdminOrDev, AccountGroups)}
-      {R("/import-cycle-diagnostics", isAdminOrDev, ImportCycleDiagnostics)}
+      {/* The Owner investigates the plug values from the Accounting clean-up page (step 4); the page only reads. */}
+      {R("/import-cycle-diagnostics", isAdminOwnerOrDev, ImportCycleDiagnostics)}
       {R("/inventory-repair", isAdminOrDev, InventoryRepair)}
       {R("/balance-repair", isAdminOrDev, BalanceRepair)}
       {R("/convergence-reconciliation", isAdminOwnerOrDev, ConvergenceReconciliation)}
       {R("/financial-reports", canReadFinancialStatements, FinancialReports)}
+      {/* Owner production steps (accounting audit); Admin may preview where the API allows. */}
+      {R("/accounting-cleanup", isAdminOwnerOrDev, AccountingCleanup)}
       <Route path="/reports/profit-loss">
         <Redirect replace to="/financial-reports?tab=profit-loss" />
       </Route>

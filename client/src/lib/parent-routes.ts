@@ -54,6 +54,7 @@ export function getParentRoute(pathname: string): string | null {
     }
     if (/^\/factory\/financial-snapshot/.test(cleanPath)) return "/factory/analytics";
     if (/^\/factory\/import-cycle-diagnostics/.test(cleanPath)) return "/factory/settings";
+    if (/^\/factory\/accounting-cleanup/.test(cleanPath)) return "/factory/settings";
     if (/^\/factory\/inventory-repair/.test(cleanPath)) return "/factory/settings";
     if (/^\/factory\/company-data-reset/.test(cleanPath)) return "/factory/settings";
     if (/^\/factory\/orphaned-records/.test(cleanPath)) return "/factory/settings";

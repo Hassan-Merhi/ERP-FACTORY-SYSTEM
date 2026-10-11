@@ -4,7 +4,7 @@
  * This file is UI-framework agnostic. Settings, navigation, route guards and
  * backend authorization consume this same registry so Factory access cannot drift.
  */
-export type FactoryAccessLevel = "user" | "admin" | "developer";
+export type FactoryAccessLevel = "user" | "admin" | "developer" | "owner";
 
 export interface FactoryPageDefinition {
   key: string;
@@ -498,7 +498,17 @@ export const FACTORY_ACCESS_REGISTRY: readonly FactoryPageDefinition[] = [
     group: "Other",
     route: "/factory/import-cycle-diagnostics",
     settingsVisible: false,
-    accessLevel: "admin",
+    // Read only; the Owner investigates the plug values from it (Accounting clean-up, step 4).
+    accessLevel: "owner",
+  },
+  {
+    // Owner production steps (accounting audit); Admin may preview where the API allows.
+    key: "factory/accounting-cleanup",
+    label: "Accounting clean-up",
+    group: "Other",
+    route: "/factory/accounting-cleanup",
+    settingsVisible: false,
+    accessLevel: "owner",
   },
   {
     key: "factory/inventory-repair",
@@ -569,6 +579,8 @@ export function factoryPageAllowsRole(page: FactoryPageDefinition, role?: string
   const level = page.accessLevel ?? "user";
   if (level === "developer") return role === "Developer";
   if (level === "admin") return role === "Admin" || role === "Developer";
+  // The Owner's accounting pages (Accounting clean-up and the diagnostics it links to).
+  if (level === "owner") return role === "Owner" || role === "Admin" || role === "Developer";
   return true;
 }
 

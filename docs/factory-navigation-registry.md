@@ -79,6 +79,7 @@ This document is the authoritative inventory for Factory Mode navigation. It rec
 | `/factory/net-position-details` | Financial Intelligence | `/factory/intelligence/financial-hub?section=net-position` | partially mapped | section is not preserved |
 | `/factory/financial-snapshot` | Financial Intelligence | `/factory/intelligence/financial-hub?section=financial-snapshot` | currently maps to Analytics | destination should be normalized |
 | `/factory/import-cycle-diagnostics` | Settings | `/factory/settings` | mapped | correct basic parent |
+| `/factory/accounting-cleanup` | Settings | `/factory/settings` | mapped | correct basic parent (Owner accounting clean-up) |
 | `/factory/inventory-repair` | Settings | `/factory/settings` | unresolved | add deterministic parent |
 | `/factory/orphaned-records` | Settings | `/factory/settings` | unresolved | add deterministic parent |
 | `/factory/deleted-items` | Settings | `/factory/settings` | unresolved | add deterministic parent |

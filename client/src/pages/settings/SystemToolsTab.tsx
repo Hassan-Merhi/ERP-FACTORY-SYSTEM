@@ -11,6 +11,7 @@ import {
   ShieldCheck,
   Sparkles,
   Wrench,
+  ListChecks,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type { ReactNode } from "react";
@@ -149,6 +150,21 @@ export function SystemToolsTab({ appMode, currentUser, selectedCompany, companie
       onAction: () => navigate("/import-cycle-diagnostics"),
       testId: "card-import-cycle",
     },
+    ...(!isProperties
+      ? [
+          {
+            category: "Financials",
+            categoryColor: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300",
+            icon: <ListChecks className="h-6 w-6 text-emerald-500" />,
+            iconBg: "bg-emerald-500/10",
+            title: "Accounting clean-up",
+            description: "The Owner's production steps: preview and apply each reviewed accounting tool, in order.",
+            actionLabel: "Open",
+            onAction: () => navigate(isFactory ? "/factory/accounting-cleanup" : "/accounting-cleanup"),
+            testId: "card-accounting-cleanup",
+          },
+        ]
+      : []),
     {
       category: "Financials",
       categoryColor: "bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300",

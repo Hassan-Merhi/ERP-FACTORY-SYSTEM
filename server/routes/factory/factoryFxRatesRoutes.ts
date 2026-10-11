@@ -20,6 +20,11 @@ import {
   saveFactoryFxRate,
   saveFetchedFactoryFxRate,
 } from "../../services/accounting/exchangeRateWrites";
+import {
+  RateImportRefusal,
+  importFactoryFxRates,
+  parseFactoryRateImportRows,
+} from "../../services/accounting/exchangeRateImport";
 
 /** Saving or removing a rate (wave 14, owner decision 2); Developer passes requireRole too. */
 const RATE_EDITOR_ROLES = ["Admin", "Owner"] as const;
@@ -137,6 +142,14 @@ export function registerFactoryFxRatesRoutes(app: Express) {
           companyId,
           source: "manual",
         });
+        // A rate cannot be dated after the company's business date (same rule
+        // as the batch import), or later documents would post at it early.
+        if (String(parsed.effectiveDate) > (await companyBusinessDate(companyId))) {
+          return res.status(400).json({
+            code: "RATE_IMPORT_FUTURE_DATE",
+            message: "A rate cannot be dated after the company's business date.",
+          });
+        }
         const rate = await saveFactoryFxRate(
           { userId: req.session.userId!, username: req.session.username || "unknown", companyId },
           {
@@ -148,6 +161,34 @@ export function registerFactoryFxRatesRoutes(app: Express) {
         res.json(rate);
       } catch (error: unknown) {
         res.status(400).json({ message: getErrorMessage(error) });
+      }
+    }
+  );
+
+  // Saves a reviewed rates file (Owner "Accounting clean-up" page, card 2):
+  // { rows: [{ currencyCode, effectiveDate, rateToUsd }], replaceConflicts? }.
+  // Every row is validated first (no date after the business date); rows equal
+  // to the rate recorded on their date are skipped, rows that differ need
+  // replaceConflicts (409 RATE_IMPORT_CONFLICT otherwise); the rates and one
+  // audit row commit together (services/accounting/exchangeRateImport.ts).
+  app.post(
+    "/api/factory/fx-rates/batch",
+    requireAuth,
+    requireRole(...RATE_EDITOR_ROLES),
+    async (req: Request, res: Response) => {
+      try {
+        const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
+        const rows = parseFactoryRateImportRows(req.body);
+        const result = await importFactoryFxRates(
+          { userId: req.session.userId!, username: req.session.username || "unknown", companyId },
+          rows,
+          { replaceConflicts: req.body?.replaceConflicts === true }
+        );
+        res.json(result);
+      } catch (error: unknown) {
+        if (error instanceof RateImportRefusal) return res.status(error.status).json(error.body);
+        res.status(500).json({ message: getErrorMessage(error) });
       }
     }
   );

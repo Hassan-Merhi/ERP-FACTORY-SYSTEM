@@ -93,6 +93,8 @@ const compatibilityTranslationFiles = [
   "client/src/i18n/wave8ReleaseTranslations.phase26.ts",
   "client/src/i18n/wave8ReleaseTranslations.phase27.ts",
   "client/src/i18n/wave8ReleaseTranslations.phase28.ts",
+  "client/src/i18n/wave8ReleaseTranslations.ownerCleanup.ts",
+  "client/src/i18n/wave8ReleaseTranslations.ownerCleanupSteps.ts",
   "client/src/i18n/payrollUiTranslations.ts",
 ];
 

@@ -84,6 +84,7 @@ import {
   FactoryVouchers,
   FactoryWorkerDetail,
   ImportCycleDiagnostics,
+  AccountingCleanup,
   IntercompanyLinks,
   IntercompanyRequests,
   InventoryRepair,
@@ -284,6 +285,7 @@ export function FactoryRoutes({ user, myAccess, factoryDefaultPage }: FactoryRou
       {isAdminOwnerOrDev && <Route path="/factory/orphaned-records" component={OrphanedRecords} />}
       {isAdminOwnerOrDev && <Route path="/factory/chatbot-settings" component={ChatbotSettings} />}
       {isAdminOwnerOrDev && <Route path="/factory/import-cycle-diagnostics" component={ImportCycleDiagnostics} />}
+      {isAdminOwnerOrDev && <Route path="/factory/accounting-cleanup" component={AccountingCleanup} />}
       {isAdminOwnerOrDev && <Route path="/factory/inventory-repair" component={InventoryRepair} />}
       {isAdminOwnerOrDev && <Route path="/factory/company-data-reset" component={CompanyDataReset} />}
       <Route path="/factory/net-position-details" component={FactoryNetPositionDetails} />
