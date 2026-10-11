@@ -69,14 +69,21 @@ const harness = vi.hoisted(() => {
     update,
     execute,
     delete: del,
+    // Phase 21 (B): the proforma header, its lines, the delete and the audit
+    // share one transaction; header inserts and deletes keep their recorders.
     transaction: vi.fn(async (callback: (tx: any) => unknown) =>
       callback({
-        insert: vi.fn((table: unknown) => ({
-          values: vi.fn(async (values: unknown) => {
-            transactionInserted.push({ table, values });
-            return [];
-          }),
-        })),
+        insert: vi.fn((table: any) =>
+          table?.supplierId
+            ? insert(table)
+            : {
+                values: vi.fn(async (values: unknown) => {
+                  transactionInserted.push({ table, values });
+                  return [];
+                }),
+              }
+        ),
+        delete: del,
       })
     ),
   };
@@ -287,7 +294,8 @@ describe("supplier proforma route behavior", () => {
       },
     ]);
     expect(harness.logAudit).toHaveBeenCalledWith(
-      expect.objectContaining({ companyId: 4, action: "create", tableName: "supplier_proformas", recordId: 10 })
+      expect.objectContaining({ companyId: 4, action: "create", tableName: "supplier_proformas", recordId: 10 }),
+      expect.anything()
     );
     expect(res.body).toMatchObject({ id: 10, reference: "PF-NEW", lines: expect.any(Array) });
   });
@@ -389,7 +397,8 @@ describe("supplier proforma route behavior", () => {
     );
     expect(harness.deletedTables).toHaveLength(2);
     expect(harness.logAudit).toHaveBeenCalledWith(
-      expect.objectContaining({ companyId: 4, action: "delete", tableName: "supplier_proformas", recordId: 10 })
+      expect.objectContaining({ companyId: 4, action: "delete", tableName: "supplier_proformas", recordId: 10 }),
+      expect.anything()
     );
     expect(res.body).toEqual({ success: true });
   });

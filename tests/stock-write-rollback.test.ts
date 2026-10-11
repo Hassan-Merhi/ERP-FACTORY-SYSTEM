@@ -156,8 +156,11 @@ describe("stock writes roll back completely", () => {
 
     // The form creates the voucher first and the adjustment second, so a failed
     // adjustment must take its own empty voucher with it rather than leave a
-    // shell in the Daybook.
-    const survivors = await countWhere(`SELECT count(*)::int AS count FROM vouchers WHERE id = $1`, [voucherId]);
+    // shell in the Daybook. The voucher is retired (soft-deleted, wave 16 A), not erased.
+    const survivors = await countWhere(
+      `SELECT count(*)::int AS count FROM vouchers WHERE id = $1 AND deleted_at IS NULL`,
+      [voucherId]
+    );
     expect(survivors).toBe(0);
     expect(await journalCount()).toBe(journalBefore);
   }, 60000);

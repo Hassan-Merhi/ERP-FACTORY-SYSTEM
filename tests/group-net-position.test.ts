@@ -5,6 +5,14 @@ const harness = vi.hoisted(() => ({
   getCompanySettings: vi.fn(),
   getHistoricalCurrencyReadiness: vi.fn(),
   erpResponse: vi.fn(),
+  intercompanyAccounts: vi.fn(),
+}));
+
+// Wave 13: intercompany accounts come from the recorded links (transfers, POS
+// configuration, parent credit accounts, Intercompany-typed accounts); the
+// focused test supplies them directly.
+vi.mock("../server/helpers/groupIntercompany", () => ({
+  loadCompanyIntercompanyAccounts: (company: { id: number }) => harness.intercompanyAccounts(company.id),
 }));
 
 vi.mock("../server/storage", () => ({
@@ -114,6 +122,7 @@ describe("Group Net Position", () => {
     harness.getCompanySettings.mockResolvedValue({});
     harness.getHistoricalCurrencyReadiness.mockResolvedValue(ready);
     harness.erpResponse.mockImplementation(() => baseResponse());
+    harness.intercompanyAccounts.mockResolvedValue([]);
   });
 
   it("includes normal active companies while excluding Supplier Partner, Factory, and JNAH", async () => {
@@ -221,7 +230,12 @@ describe("Group Net Position", () => {
     );
   });
 
-  it("excludes legacy intercompany balances while keeping HADI L'SHI's Lebanon credit visible", async () => {
+  // Wave 13 (owner decision 1): this test used to pin the name/code exclusion
+  // ("<Subsidiary> Credit", IC-TO-*, the HMD Lebanon credit removed everywhere
+  // except at HADI L'SHI). Nothing configures the HMD account as a pair, so it
+  // is now an ordinary account on both sides; the recorded intercompany
+  // accounts are eliminated in pairs and the mismatch is shown.
+  it("eliminates recorded intercompany accounts in pairs and shows the unmatched difference", async () => {
     harness.getAllCompanies.mockResolvedValue([
       { id: 1, code: "HADI", name: "HADI L'SHI", companyType: "erp", active: true, parentCompanyId: null },
       { id: 2, code: "B", name: "Beta", companyType: "erp", active: true, parentCompanyId: 1 },
@@ -275,18 +289,64 @@ describe("Group Net Position", () => {
       };
     });
 
+    harness.intercompanyAccounts.mockImplementation(async (companyId: number) =>
+      companyId === 1
+        ? [
+            {
+              companyId: 1,
+              accountId: 900,
+              accountName: "Beta Credit",
+              counterpartyCompanyIds: [2],
+              sources: ["parentCredit"],
+              balance: "75.00",
+            },
+            {
+              companyId: 1,
+              accountId: 901,
+              accountName: "Inter-Company - Beta",
+              counterpartyCompanyIds: [2],
+              sources: ["transfer"],
+              balance: "25.00",
+            },
+          ]
+        : [
+            {
+              companyId: 2,
+              accountId: 501,
+              accountName: "HADI L'SHI Credit",
+              counterpartyCompanyIds: [1],
+              sources: ["parentCredit"],
+              balance: "-40.00",
+            },
+          ]
+    );
+
     const result = await calculateGroupNetPosition("2026-09-10");
     const alpha = result.companies.find((company) => company.companyId === 1)!;
     const beta = result.companies.find((company) => company.companyId === 2)!;
 
     expect(alpha.forUsTotal).toBe(150);
     expect(alpha.forUsLines.map((line) => line.label)).toEqual(["Cash", "HMD INTERNATIONAL GROUP LEBANON CREDIT"]);
-    expect(beta.onUsTotal).toBe(50);
-    expect(beta.onUsLines.map((line) => line.label)).toEqual(["BANK LOAN"]);
+    expect(beta.onUsTotal).toBe(100);
+    expect(beta.onUsLines.map((line) => line.label)).toEqual(["BANK LOAN", "HMD INTERNATIONAL GROUP LEBANON CREDIT"]);
+    // Receivables 100 against the payable 40: 40 eliminated, 60 unmatched.
+    expect(result.intercompany).toMatchObject({ mode: "paired-elimination", additionalElimination: 40 });
+    expect(result.intercompany.pairs).toEqual([
+      expect.objectContaining({
+        companyIds: [1, 2],
+        receivables: 100,
+        payables: 40,
+        difference: 60,
+        status: "mismatched",
+      }),
+    ]);
+    expect(result.intercompany.differences).toEqual([
+      expect.objectContaining({ value: 60, side: "forUs", category: "Intercompany difference" }),
+    ]);
     expect(result.totals).toMatchObject({
-      forUsTotal: 230,
-      onUsTotal: 50,
-      netPosition: 180,
+      forUsTotal: 290,
+      onUsTotal: 100,
+      netPosition: 190,
       netAdjustments: 0,
     });
   });
@@ -332,8 +392,9 @@ describe("Group Net Position", () => {
       netAdjustment: 0,
       netPosition: 50,
     });
-    expect(result.intercompany.mode).toBe("already-excluded");
+    expect(result.intercompany.mode).toBe("paired-elimination");
     expect(result.intercompany.additionalElimination).toBe(0);
+    expect(result.intercompany.differences).toEqual([]);
   });
 
   it("treats Properties as eligible while Supplier Partner and Factory remain ineligible", () => {

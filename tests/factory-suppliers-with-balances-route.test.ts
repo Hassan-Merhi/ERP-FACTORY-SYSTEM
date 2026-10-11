@@ -28,6 +28,7 @@ import request from "supertest";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { pool } from "../server/db";
+import { withFixtureTransaction } from "./helpers/voucherFixtureTransaction";
 import { cleanupTestData, closeTestServer, seedTestData, type TestContext } from "./setup";
 
 const TEST_PREFIX = "fswb";
@@ -46,11 +47,16 @@ interface SupplierBalance {
   totalContainers: number;
   receivedContainers: number;
   fxUnresolved: boolean;
+  operationalMemo: { totalValue: string; fxUnresolved: boolean };
 }
 
-/** Balance owed, as a number. */
+/**
+ * Operational balance owed, as a number. Wave 13 (owner decision 3): the
+ * primary `totalValue` is the ledger balance from the balance engine; the
+ * container formula these tests pin is returned as `operationalMemo`.
+ */
 function balanceOf(row: SupplierBalance): number {
-  return Number(row.totalValue);
+  return Number(row.operationalMemo.totalValue);
 }
 
 function paidOf(row: SupplierBalance): number {
@@ -96,29 +102,41 @@ async function makeContainer(
   return row.rows[0].id;
 }
 
-/** A voucher carrying a debit against a factory supplier — a payment. */
+/**
+ * A voucher carrying a debit against a factory supplier — a payment — and its
+ * balancing cash credit, written together: the voucher balance guard checks the
+ * voucher at COMMIT. The cash leg names no supplier, so it moves no balance.
+ */
 async function makeSupplierVoucher(
   supplierId: number,
   options: { amount: string; voucherNumber: string; optional?: boolean; currency?: string; exchangeRate?: string }
 ) {
-  const voucher = await pool.query<{ id: number }>(
-    `INSERT INTO vouchers (company_id, voucher_type, voucher_number, voucher_date, total_amount, currency, exchange_rate, optional)
-     VALUES ($1, 'Payment', $2, '2026-06-10', $3, $4, $5, $6) RETURNING id`,
-    [
-      ctx.companyId,
-      `${TEST_PREFIX}-${options.voucherNumber}`,
-      options.amount,
-      options.currency ?? "USD",
-      options.exchangeRate ?? null,
-      options.optional ?? false,
-    ]
-  );
-  await pool.query(
-    `INSERT INTO voucher_entries (voucher_id, factory_supplier_id, debit_amount, credit_amount)
-     VALUES ($1, $2, $3, '0')`,
-    [voucher.rows[0].id, supplierId, options.amount]
-  );
-  return voucher.rows[0].id;
+  return withFixtureTransaction(async (client) => {
+    const voucher = await client.query<{ id: number }>(
+      `INSERT INTO vouchers (company_id, voucher_type, voucher_number, voucher_date, total_amount, currency, exchange_rate, optional)
+       VALUES ($1, 'Payment', $2, '2026-06-10', $3, $4, $5, $6) RETURNING id`,
+      [
+        ctx.companyId,
+        `${TEST_PREFIX}-${options.voucherNumber}`,
+        options.amount,
+        options.currency ?? "USD",
+        options.exchangeRate ?? null,
+        options.optional ?? false,
+      ]
+    );
+    // A non-USD/CFA voucher here models a legacy row (native amount in the USD
+    // columns): the currency trigger v2 (wave 17 D) refuses a new one, so it is
+    // written with the triggers off, as history left it.
+    if (!["USD", "CFA"].includes(options.currency ?? "USD")) {
+      await client.query("SET LOCAL session_replication_role = replica");
+    }
+    await client.query(
+      `INSERT INTO voucher_entries (voucher_id, company_id, factory_supplier_id, ledger_account_id, debit_amount, credit_amount)
+       VALUES ($1, $5, $2, NULL, $3, '0'), ($1, $5, NULL, $4, '0', $3)`,
+      [voucher.rows[0].id, supplierId, options.amount, ctx.cashAccountId, ctx.companyId]
+    );
+    return voucher.rows[0].id;
+  });
 }
 
 async function fetchBalances(query = ""): Promise<SupplierBalance[]> {
@@ -165,7 +183,7 @@ describe("GET /api/factory/suppliers/with-balances", () => {
     expect(balanceOf(supplier)).toBeCloseTo(350, 2);
     expect(paidOf(supplier)).toBeCloseTo(0, 2);
     expect(supplier.receivedContainers).toBe(2);
-    expect(supplier.fxUnresolved).toBe(false);
+    expect(supplier.operationalMemo.fxUnresolved).toBe(false);
   });
 
   it("counts a direct supplier payment against the balance", async () => {
@@ -206,17 +224,19 @@ describe("GET /api/factory/suppliers/with-balances", () => {
        VALUES ($1, $2, '80', 'USD', '1', '80', '2026-06-11')`,
       [ctx.companyId, supplierId]
     );
-    // The auto-generated mirror of that same payment.
-    const mirror = await pool.query<{ id: number }>(
-      `INSERT INTO vouchers (company_id, voucher_type, voucher_number, voucher_date, total_amount, currency)
-       VALUES ($1, 'Payment', $2, '2026-06-11', '80', 'USD') RETURNING id`,
-      [ctx.companyId, `FACTORY-PAY-${supplierId}-1`]
-    );
-    await pool.query(
-      `INSERT INTO voucher_entries (voucher_id, factory_supplier_id, debit_amount, credit_amount)
-       VALUES ($1, $2, '80', '0')`,
-      [mirror.rows[0].id, supplierId]
-    );
+    // The auto-generated mirror of that same payment, with its cash leg.
+    await withFixtureTransaction(async (client) => {
+      const mirror = await client.query<{ id: number }>(
+        `INSERT INTO vouchers (company_id, voucher_type, voucher_number, voucher_date, total_amount, currency)
+         VALUES ($1, 'Payment', $2, '2026-06-11', '80', 'USD') RETURNING id`,
+        [ctx.companyId, `FACTORY-PAY-${supplierId}-1`]
+      );
+      await client.query(
+        `INSERT INTO voucher_entries (voucher_id, factory_supplier_id, ledger_account_id, debit_amount, credit_amount)
+         VALUES ($1, $2, NULL, '80', '0'), ($1, NULL, $3, '0', '80')`,
+        [mirror.rows[0].id, supplierId, ctx.cashAccountId]
+      );
+    });
 
     const supplier = findSupplier(await fetchBalances(), supplierId);
 
@@ -235,7 +255,7 @@ describe("GET /api/factory/suppliers/with-balances", () => {
     // A draft must not settle anything.
     expect(paidOf(supplier)).toBeCloseTo(0, 2);
     expect(balanceOf(supplier)).toBeCloseTo(200, 2);
-    expect(supplier.fxUnresolved).toBe(false);
+    expect(supplier.operationalMemo.fxUnresolved).toBe(false);
   });
 
   it("excludes an unresolvable-currency payment and flags the supplier instead of guessing", async () => {
@@ -254,7 +274,7 @@ describe("GET /api/factory/suppliers/with-balances", () => {
 
     expect(paidOf(supplier)).toBeCloseTo(0, 2);
     expect(balanceOf(supplier)).toBeCloseTo(200, 2);
-    expect(supplier.fxUnresolved).toBe(true);
+    expect(supplier.operationalMemo.fxUnresolved).toBe(true);
   });
 
   it("puts a post-offload charge on the supplier only when the charge names one", async () => {

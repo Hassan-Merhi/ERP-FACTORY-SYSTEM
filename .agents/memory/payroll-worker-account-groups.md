@@ -15,8 +15,6 @@ Same pattern for bonuses: "Bonus Expense - Workers" → "Bonus Expense - [Name]"
 **How to apply:**
 - `findOrCreateLedger` in both `payrollCoreRoutes.ts` (local) and `_payrollAccountingHelper.ts` (shared) accepts `opts?: { parentId?, subType? }`.
 - Generation pre-resolution: always create group headers first, then pass `parentId` when creating worker accounts.
-- Migration endpoints available:
-  - `POST /api/factory/payroll/migrate-worker-names` — re-labels DR entries in existing vouchers from city-name to worker-name accounts.
-  - `POST /api/factory/payroll/migrate-salary-groups` — creates the group headers and re-parents all matching accounts under them (idempotent).
+- The migration endpoints (`migrate-worker-names`, `migrate-salary-groups`, `migrate-city-split`, `runs/migrate-group-expenses`) are retired (wave 18 B, phase 19 A): they rewrote posted lines with no audit.
 - The UI (AccountTable.tsx) already supports parent/child hierarchy via `parentId` + `subType === "Group"`; no frontend changes needed.
 - `findOrCreateLedger` truncation bug: the Edit tool has truncated the sql template literal on line 93 multiple times. Use Python script to fix if it recurs — replace lines 76-93 directly.

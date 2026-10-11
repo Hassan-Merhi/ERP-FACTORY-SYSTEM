@@ -49,9 +49,7 @@ const TYPES = new Set<DeletedItemScopeType>([
 ]);
 
 export function classifyDeletedItemScope(path: string): DeletedItemScopeMatch | null {
-  const match = path.match(
-    /^\/api\/deleted-items\/([^/]+)\/(\d+)\/(restore|permanent)$/
-  );
+  const match = path.match(/^\/api\/deleted-items\/([^/]+)\/(\d+)\/(restore|permanent)$/);
   if (!match) return null;
 
   const type = match[1] as DeletedItemScopeType;
@@ -62,6 +60,9 @@ export function classifyDeletedItemScope(path: string): DeletedItemScopeMatch | 
     type,
     id,
     operation: match[3] as "restore" | "permanent",
-    globalMaintenance: type === "supplier",
+    // Wave 18 (B): suppliers are company-owned (suppliers.company_id), so they
+    // are scoped to the active company like every other type; no type is
+    // global maintenance any more (the field stays for callers).
+    globalMaintenance: false,
   };
 }

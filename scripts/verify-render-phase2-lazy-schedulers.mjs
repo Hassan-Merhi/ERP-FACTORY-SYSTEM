@@ -91,7 +91,8 @@ requireDynamicImport(
 );
 
 for (const [specifier, label] of [
-  ["../../routes/rental/shared", "rental accrual"],
+  // Wave 18 A: the daily rental job posts through the shared due-rental service.
+  ["../rental/dueRentalPosting", "rental accrual"],
   ["../accounting/scheduledConvergenceReconciliation", "convergence reconciliation"],
   ["./daily-export", "daily export"],
   ["./maintenance", "maintenance"],

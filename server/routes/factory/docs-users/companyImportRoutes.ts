@@ -8,7 +8,8 @@ import type { Express, Request, Response } from "express";
 import { getErrorMessage } from "../../../lib/httpHandlers";
 import { logger } from "../../../lib/logger";
 import { db } from "../../../db";
-import { requireAuth } from "../../../auth";
+import { requireAuth, requireRole } from "../../../auth";
+import { assertStockImportAllowedTx, sendStockImportRefusal } from "../../../services/factory/stockImportPolicy";
 import {
   factorySuppliers,
   factoryCategories,
@@ -59,6 +60,7 @@ import {
   vouchers,
 } from "@shared/schema";
 import { eq, sql } from "drizzle-orm";
+import { writeAuditEvent } from "../../../services/audit/auditService";
 import type { PgColumn, PgTable } from "drizzle-orm/pg-core";
 
 type DynamicTable = PgTable & { id: PgColumn };
@@ -72,8 +74,15 @@ const asDynamicInsert = (rec: ImportRow): never => rec as never;
 const insertedIdOf = (inserted: { id: unknown } | undefined): number | null =>
   inserted && typeof inserted.id === "number" ? inserted.id : null;
 
+// Split out of this file (phase 19 C) to keep it under the god-file limit.
+export { IMPORT_UNBALANCED_VOUCHERS_MESSAGE, unbalancedImportedVouchers } from "./companyImportValidation";
+import { unbalancedImportedVouchers, IMPORT_UNBALANCED_VOUCHERS_MESSAGE } from "./companyImportValidation";
+
+/** Phase 19 C (F7/DI10): Admin/Owner (Developer passes); the import was sign-in only. */
+const adminOrOwner = requireRole("Admin", "Owner");
+
 export function registerFactoryCompanyImportRoutes(app: Express) {
-  app.post("/api/factory/import-company-data", requireAuth, async (req: Request, res: Response) => {
+  app.post("/api/factory/import-company-data", requireAuth, adminOrOwner, async (req: Request, res: Response) => {
     try {
       const multer = (await import("multer")).default;
       const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 200 * 1024 * 1024 } });
@@ -127,10 +136,19 @@ export function registerFactoryCompanyImportRoutes(app: Express) {
             });
           }
 
-          await db.delete(factorySettings).where(eq(factorySettings.companyId, targetCompanyId));
-          await db.delete(factoryBaleSequences).where(eq(factoryBaleSequences.companyId, targetCompanyId));
-          await db.delete(customerInvoiceSequences).where(eq(customerInvoiceSequences.companyId, targetCompanyId));
-          await db.delete(companySettings).where(eq(companySettings.companyId, targetCompanyId));
+          // Wave 12: every posted voucher in the file must balance. The balance
+          // guard would refuse them at commit anyway (an imported voucher is never
+          // history, whatever created_at the file carries), and the file has no stock
+          // adjustment documents, so a one-sided stock voucher is refused as well.
+          const unbalancedVouchers = unbalancedImportedVouchers(payload.tables);
+          if (unbalancedVouchers.length > 0) {
+            return res.status(400).json({
+              message: IMPORT_UNBALANCED_VOUCHERS_MESSAGE,
+              code: "IMPORT_UNBALANCED_VOUCHERS",
+              vouchers: unbalancedVouchers.slice(0, 50),
+              count: unbalancedVouchers.length,
+            });
+          }
 
           const t = payload.tables;
           const summary: Record<string, number> = {};
@@ -249,6 +267,14 @@ export function registerFactoryCompanyImportRoutes(app: Express) {
           }
 
           await db.transaction(async (tx) => {
+            // Phase 19 C (F7/DI10): takes the cut-over lock and is refused once the
+            // cut-over is applied (409); the replaced settings are cleared in this
+            // transaction (they were cleared before it, so a failed import lost them).
+            await assertStockImportAllowedTx(tx, targetCompanyId);
+            await tx.delete(factorySettings).where(eq(factorySettings.companyId, targetCompanyId));
+            await tx.delete(factoryBaleSequences).where(eq(factoryBaleSequences.companyId, targetCompanyId));
+            await tx.delete(customerInvoiceSequences).where(eq(customerInvoiceSequences.companyId, targetCompanyId));
+            await tx.delete(companySettings).where(eq(companySettings.companyId, targetCompanyId));
             async function insertAndMap(
               tableName: string,
               drizzleTable: DynamicTable,
@@ -798,6 +824,25 @@ export function registerFactoryCompanyImportRoutes(app: Express) {
                 }
               );
             }
+            // Audited inside the import transaction (wave 12): no audit row, no import.
+            await writeAuditEvent(
+              {
+                userId: req.session.userId,
+                username: req.session.username || "unknown",
+                companyId: targetCompanyId,
+                action: "import",
+                tableName: "companies",
+                recordId: targetCompanyId,
+                recordIdentifier: "company-data-import",
+                changes: {
+                  sourceCompanyId: { new: payload.sourceCompanyId },
+                  fileName: { new: req.file?.originalname ?? null },
+                  totalRecords: { new: totalRecords },
+                  tables: { new: summary },
+                },
+              },
+              tx
+            );
           });
 
           res.json({
@@ -807,6 +852,7 @@ export function registerFactoryCompanyImportRoutes(app: Express) {
             details: summary,
           });
         } catch (importError: unknown) {
+          if (sendStockImportRefusal(res, importError)) return;
           logger.error("Import company data error:", { error: importError });
           res.status(500).json({ message: "Import failed: " + getErrorMessage(importError) });
         }

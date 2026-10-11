@@ -1,22 +1,26 @@
 import type { Express } from "express";
-import { getErrorMessage } from "../lib/httpHandlers";
+import { errorStatus, getErrorMessage } from "../lib/httpHandlers";
 import { logger } from "../lib/logger";
 import { createHash } from "crypto";
 import Decimal from "decimal.js";
 import { db, pool } from "../db";
 import { storage } from "../storage";
-import { requireAuth, requireNonPOS } from "../auth";
+import { requireAuth, requireNonPOS, requireRole } from "../auth";
 import { upload, logAudit } from "./_helpers";
-import {
-  fixedAssets,
-  insertBankAccountSchema,
-  insertFixedAssetSchema,
-  ledgerAccounts,
-  exchangeRates,
-} from "@shared/schema";
+import { registerBankAccountRoutes } from "./bankAccountRoutes";
+import { fixedAssets, insertFixedAssetSchema, ledgerAccounts, exchangeRates } from "@shared/schema";
 import { eq, and, or, desc, sql, isNull } from "drizzle-orm";
+import { buildAuditChanges } from "../services/audit";
+
 import { readExcel, sheetToJson } from "../excelHelper";
 import { parseMoneyInput, toMoney } from "../lib/money";
+
+export const FIXED_ASSET_HAS_OPENING_CODE = "FIXED_ASSET_HAS_OPENING" as const;
+export const FIXED_ASSET_HAS_OPENING_MESSAGE =
+  "This fixed asset has an opening balance, so it cannot be deleted. Move the balance with a journal first.";
+export const FIXED_ASSET_HAS_ENTRIES_CODE = "FIXED_ASSET_HAS_ENTRIES" as const;
+export const FIXED_ASSET_HAS_ENTRIES_MESSAGE =
+  "This fixed asset has voucher lines, so it cannot be deleted. Deactivate it instead.";
 
 /**
  * The container-import spreadsheet, as this route reads it.
@@ -66,173 +70,8 @@ interface ContainerGroup {
 }
 
 export function registerBankAssetRoutes(app: Express) {
-  app.get("/api/bank-accounts", requireAuth, async (req, res) => {
-    try {
-      if (!req.session.currentCompanyId) {
-        return res.status(400).json({ message: "No company selected" });
-      }
-      const accounts = await storage.getAllBankAccounts(req.session.currentCompanyId);
-      res.json(accounts);
-    } catch (error: unknown) {
-      res.status(500).json({ message: getErrorMessage(error) });
-    }
-  });
-
-  app.post("/api/bank-accounts", requireAuth, async (req, res) => {
-    try {
-      if (!req.session.currentCompanyId) {
-        return res.status(400).json({ message: "No company selected" });
-      }
-
-      const parsed = insertBankAccountSchema.parse(req.body);
-
-      // Check for duplicate code
-      const existing = await storage.getBankAccountByCode(parsed.code);
-      if (existing) {
-        return res.status(400).json({ message: "Bank account code already exists" });
-      }
-
-      // Validate opening balance amount and side must both be present or both absent
-      const hasBalance = parsed.openingBalance && !toMoney(parsed.openingBalance).isZero();
-      const hasSide = !!parsed.openingBalanceSide;
-
-      if (hasBalance && !hasSide) {
-        return res.status(400).json({ message: "Opening balance requires Dr/Cr side" });
-      }
-
-      if (!hasBalance && hasSide) {
-        return res.status(400).json({ message: "Dr/Cr side requires opening balance amount" });
-      }
-
-      // Validate linked ledger is Bank or Cash type
-      if (parsed.linkedLedgerId) {
-        const allLedgers = await storage.getAllLedgerAccounts(req.session.currentCompanyId!);
-        const linkedLedger = allLedgers.find((l) => l.id === parsed.linkedLedgerId);
-
-        if (!linkedLedger) {
-          return res.status(400).json({ message: "Linked ledger account not found" });
-        }
-
-        if (linkedLedger.accountType !== "Bank" && linkedLedger.accountType !== "Cash") {
-          return res.status(400).json({
-            message: `Linked ledger must be Bank or Cash type. Found: ${linkedLedger.accountType}`,
-          });
-        }
-      }
-
-      const account = await storage.createBankAccount(parsed);
-      try {
-        await logAudit({
-          userId: req.session.userId!,
-          username: req.session.username || "unknown",
-          companyId: req.session.currentCompanyId!,
-          action: "create",
-          tableName: "bank_accounts",
-          recordId: account.id,
-          recordIdentifier: account.name,
-          changes: {
-            name: { old: undefined, new: account.name },
-            code: { old: undefined, new: account.code },
-            bankName: { old: undefined, new: account.bankName || null },
-            accountNumber: { old: undefined, new: account.accountNumber || null },
-            openingBalance: { old: undefined, new: account.openingBalance || "0" },
-            openingBalanceSide: { old: undefined, new: account.openingBalanceSide || null },
-          },
-        });
-      } catch {
-        /* non-fatal */
-      }
-      res.status(201).json(account);
-    } catch (error: unknown) {
-      res.status(400).json({ message: getErrorMessage(error) });
-    }
-  });
-
-  app.put("/api/bank-accounts/:id", requireAuth, async (req, res) => {
-    try {
-      if (!req.session.currentCompanyId) {
-        return res.status(400).json({ message: "No company selected" });
-      }
-
-      const id = parseInt(req.params.id);
-      const existingBankAcc = await storage.getBankAccountById(id, req.session.currentCompanyId);
-      const parsed = insertBankAccountSchema.partial().parse(req.body);
-
-      // Validate opening balance amount and side must both be present or both absent
-      const hasBalance = parsed.openingBalance && !toMoney(parsed.openingBalance).isZero();
-      const hasSide = !!parsed.openingBalanceSide;
-
-      if (hasBalance && !hasSide) {
-        return res.status(400).json({ message: "Opening balance requires Dr/Cr side" });
-      }
-
-      if (!hasBalance && hasSide) {
-        return res.status(400).json({ message: "Dr/Cr side requires opening balance amount" });
-      }
-
-      const account = await storage.updateBankAccount(id, parsed, req.session.currentCompanyId);
-      try {
-        if (existingBankAcc) {
-          const _bankChanges: Record<string, { old?: unknown; new?: unknown }> = {};
-          for (const _f of ["name", "code", "openingBalance", "openingBalanceSide"] as const) {
-            if (String(existingBankAcc[_f] ?? "") !== String(account[_f] ?? "")) {
-              _bankChanges[_f] = { old: existingBankAcc[_f], new: account[_f] };
-            }
-          }
-          await logAudit({
-            userId: req.session.userId!,
-            username: req.session.username || "unknown",
-            companyId: req.session.currentCompanyId!,
-            action: "update",
-            tableName: "bank_accounts",
-            recordId: account.id,
-            recordIdentifier: account.name,
-            changes: _bankChanges,
-          });
-        }
-      } catch {
-        /* non-fatal */
-      }
-      res.json(account);
-    } catch (error: unknown) {
-      res.status(400).json({ message: getErrorMessage(error) });
-    }
-  });
-
-  app.delete("/api/bank-accounts/:id", requireAuth, async (req, res) => {
-    try {
-      if (!req.session.currentCompanyId) {
-        return res.status(400).json({ message: "No company selected" });
-      }
-
-      const id = parseInt(req.params.id);
-      const existingBankAccDel = await storage.getBankAccountById(id, req.session.currentCompanyId);
-      await storage.deleteBankAccount(id, req.session.currentCompanyId);
-      try {
-        if (existingBankAccDel) {
-          await logAudit({
-            userId: req.session.userId!,
-            username: req.session.username || "unknown",
-            companyId: req.session.currentCompanyId!,
-            action: "delete",
-            tableName: "bank_accounts",
-            recordId: existingBankAccDel.id,
-            recordIdentifier: existingBankAccDel.name,
-            changes: {
-              name: { old: existingBankAccDel.name, new: null },
-              code: { old: existingBankAccDel.code, new: null },
-              openingBalance: { old: existingBankAccDel.openingBalance || "0", new: null },
-            },
-          });
-        }
-      } catch {
-        /* non-fatal */
-      }
-      res.status(204).send();
-    } catch (error: unknown) {
-      res.status(400).json({ message: getErrorMessage(error) });
-    }
-  });
+  // Bank account master routes first (their registration order is unchanged).
+  registerBankAccountRoutes(app);
 
   // Cash/bank account revaluation — live translation at current rate vs. historical base.
   //
@@ -538,40 +377,95 @@ export function registerBankAssetRoutes(app: Express) {
         });
       }
 
-      const asset = await storage.createFixedAsset(parsed);
+      // Wave 16 (B): the asset and its opening are audited in the same
+      // transaction (the opening-balance lock refuses a non-zero opening after
+      // a close).
+      const asset = await db.transaction(async (tx) => {
+        const [created] = await tx.insert(fixedAssets).values(parsed).returning();
+        await logAudit(
+          {
+            userId: req.session.userId!,
+            username: req.session.username || "unknown",
+            companyId,
+            action: "create",
+            tableName: "fixed_assets",
+            recordId: created.id,
+            recordIdentifier: created.name,
+            changes: buildAuditChanges(null, created, [
+              "code",
+              "name",
+              "category",
+              "purchaseDate",
+              "purchaseAmount",
+              "openingBalance",
+            ]),
+          },
+          tx
+        );
+        return created;
+      });
       res.status(201).json(asset);
     } catch (error: unknown) {
-      res.status(400).json({ message: getErrorMessage(error) });
+      res.status(errorStatus(error, 400)).json({ message: getErrorMessage(error) });
     }
   });
 
-  app.delete("/api/fixed-assets/:id", requireAuth, async (req, res) => {
+  // Phase 19 (B), PE7: Admin or Owner; a soft delete (the row stays, with its
+  // code, for the history), refused while the asset has an opening or any
+  // voucher line (live or deleted voucher), audited in the same transaction.
+  // It was sign-in only and a hard delete with no audit.
+  app.delete("/api/fixed-assets/:id", requireAuth, requireRole("Admin", "Owner"), async (req, res) => {
     try {
       const companyId = req.session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });
       const id = parseInt(req.params.id);
       if (isNaN(id)) return res.status(400).json({ message: "Invalid asset ID" });
 
-      // Check for linked voucher entries
-      const entryCheck = await db.execute(
-        sql`SELECT COUNT(*) as cnt FROM voucher_entries WHERE fixed_asset_id = ${id}`
-      );
-      const entryCount = parseInt((entryCheck.rows[0] as { cnt: string })?.cnt || "0");
-      if (entryCount > 0) {
-        return res.status(400).json({
-          message: `Cannot delete: this asset has ${entryCount} voucher entry/entries. Remove related transactions first.`,
-        });
-      }
-
-      const [deleted] = await db
-        .delete(fixedAssets)
-        .where(and(eq(fixedAssets.id, id), eq(fixedAssets.companyId, companyId)))
-        .returning({ id: fixedAssets.id });
-
-      if (!deleted) return res.status(404).json({ message: "Fixed asset not found" });
-      res.json({ message: "Fixed asset deleted successfully" });
+      const outcome = await db.transaction(async (tx) => {
+        const [asset] = await tx
+          .select()
+          .from(fixedAssets)
+          .where(and(eq(fixedAssets.id, id), eq(fixedAssets.companyId, companyId), isNull(fixedAssets.deletedAt)))
+          .for("update");
+        if (!asset) return { status: 404 as const, body: { message: "Fixed asset not found" } };
+        if (!toMoney(asset.openingBalance).isZero()) {
+          return {
+            status: 409 as const,
+            body: { message: FIXED_ASSET_HAS_OPENING_MESSAGE, code: FIXED_ASSET_HAS_OPENING_CODE },
+          };
+        }
+        const entryCheck = await tx.execute<{ cnt: string } & Record<string, unknown>>(
+          sql`SELECT COUNT(*)::text AS cnt FROM voucher_entries WHERE fixed_asset_id = ${id}`
+        );
+        if (Number(entryCheck.rows[0]?.cnt ?? 0) > 0) {
+          return {
+            status: 409 as const,
+            body: { message: FIXED_ASSET_HAS_ENTRIES_MESSAGE, code: FIXED_ASSET_HAS_ENTRIES_CODE },
+          };
+        }
+        const [deleted] = await tx
+          .update(fixedAssets)
+          .set({ deletedAt: new Date(), active: false })
+          .where(eq(fixedAssets.id, id))
+          .returning();
+        await logAudit(
+          {
+            userId: req.session.userId!,
+            username: req.session.username || "unknown",
+            companyId,
+            action: "delete",
+            tableName: "fixed_assets",
+            recordId: deleted.id,
+            recordIdentifier: deleted.name,
+            changes: buildAuditChanges(asset, deleted, ["code", "name", "category", "purchaseAmount", "active"]),
+          },
+          tx
+        );
+        return { status: 200 as const, body: { message: "Fixed asset deleted successfully" } };
+      });
+      res.status(outcome.status).json(outcome.body);
     } catch (error: unknown) {
-      res.status(500).json({ message: getErrorMessage(error) });
+      res.status(errorStatus(error, 500)).json({ message: getErrorMessage(error) });
     }
   });
 

@@ -12,23 +12,12 @@ import { buildSafeFilename, contentDisposition } from "../../../lib/contentDispo
 import { getClientDate } from "../../../lib/dateUtils";
 import { db } from "../../../db";
 import { requireAuth } from "../../../auth";
-import { customerOrders, customerBalances, customers, voucherEntries, companies, vouchers } from "@shared/schema";
-import { eq, and, sql, inArray } from "drizzle-orm";
+import { customerOrders, customers, companies } from "@shared/schema";
+import { eq, and, inArray } from "drizzle-orm";
+import { MoneyDecimal } from "../../../lib/money";
+import { buildFactoryCustomerStatement } from "./statementRows";
 import path from "path";
 import fs from "fs";
-
-type StatementVoucherRow = {
-  transactionDate: string;
-  transactionType: string;
-  referenceType: string;
-  referenceNumber: string;
-  description: string | null;
-  debitAmount: string;
-  creditAmount: string;
-  referenceId?: number | null;
-  rowNote?: string | null;
-  _fromVoucher: boolean;
-};
 
 export function registerFactoryCustomerStatementExcelRoutes(app: Express) {
   // ── Customer Statement: Excel Export ────────────────────────────────────
@@ -47,64 +36,24 @@ export function registerFactoryCustomerStatementExcelRoutes(app: Express) {
 
       const [_company] = await db.select().from(companies).where(eq(companies.id, companyId));
 
-      const balanceRows = await db
-        .select()
-        .from(customerBalances)
-        .where(and(eq(customerBalances.companyId, companyId), eq(customerBalances.customerId, customerId)))
-        .orderBy(customerBalances.transactionDate, customerBalances.id);
-
-      // Pull voucher entries (same logic as statement endpoint)
-      const voucherRowsXlsx: StatementVoucherRow[] = [];
-      const ledgerAccountIdXlsx = customer.ledgerAccountId;
-      const voucherCondXlsx = ledgerAccountIdXlsx
-        ? sql`(${voucherEntries.ledgerAccountId} = ${ledgerAccountIdXlsx} OR ${voucherEntries.customerId} = ${customerId})`
-        : sql`${voucherEntries.customerId} = ${customerId}`;
-      const rawVeXlsx = await db
-        .select({
-          id: voucherEntries.id,
-          voucherId: voucherEntries.voucherId,
-          voucherNumber: vouchers.voucherNumber,
-          voucherType: vouchers.voucherType,
-          voucherDate: vouchers.voucherDate,
-          description: vouchers.description,
-          debitAmount: voucherEntries.debitAmount,
-          creditAmount: voucherEntries.creditAmount,
-          narration: voucherEntries.narration,
-          optional: vouchers.optional,
-        })
-        .from(voucherEntries)
-        .innerJoin(
-          vouchers,
-          and(
-            eq(voucherEntries.voucherId, vouchers.id),
-            eq(vouchers.companyId, companyId),
-            sql`${vouchers.voucherNumber} NOT LIKE 'CHARGE-%'`,
-            sql`${vouchers.voucherNumber} NOT LIKE 'INV-%'`
-          )
-        )
-        .where(voucherCondXlsx)
-        .orderBy(vouchers.voucherDate, voucherEntries.id);
-      for (const ve of rawVeXlsx) {
-        if (ve.optional) continue; // optional vouchers don't affect the balance
-        voucherRowsXlsx.push({
-          transactionDate: ve.voucherDate,
-          transactionType: ve.voucherType || "VOUCHER",
-          referenceType: "VOUCHER",
-          referenceNumber: ve.voucherNumber,
-          description: ve.narration || ve.description || ve.voucherType,
-          debitAmount: ve.debitAmount ?? "0",
-          creditAmount: ve.creditAmount ?? "0",
-          _fromVoucher: true,
-        });
-      }
-      const allRowsXlsx = [...balanceRows.map((r) => ({ ...r, _fromVoucher: false })), ...voucherRowsXlsx].sort(
-        (a, b) => {
-          const da = (a.transactionDate || "").toString(),
-            db2 = (b.transactionDate || "").toString();
-          if (da !== db2) return da < db2 ? -1 : 1;
-          return (a._fromVoucher ? 1 : 0) - (b._fromVoucher ? 1 : 0);
-        }
-      );
+      // Ledger rows from the balance engine plus the amounts not yet in the
+      // ledger, flagged (statementRows.ts). Debit/credit are each row's effect
+      // on the combined figure the statement has always closed on; the closing
+      // is then split into its ledger and not-yet-in-the-ledger parts.
+      const statement = await buildFactoryCustomerStatement(companyId, customerId);
+      const allRowsXlsx = statement.rows.map((row) => ({
+        transactionDate: row.transactionDate,
+        transactionType: row.transactionType,
+        referenceType: row.referenceType,
+        referenceId: row.referenceId,
+        description: row.notInLedger
+          ? `${row.description || row.referenceNumber || ""} — not yet in the ledger`
+          : row.description,
+        rowNote: row.rowNote,
+        notInLedger: row.notInLedger,
+        combinedEffect: row.combinedEffect,
+        ledgerEffect: row.ledgerEffect,
+      }));
 
       // Build destination map for Excel
       const xlsxInvoiceRefIds = [
@@ -123,34 +72,36 @@ export function registerFactoryCustomerStatementExcelRoutes(app: Express) {
         }
       }
 
-      const openingBalance = parseFloat(customer.openingBalance || "0");
-      const openingSide = customer.openingBalanceSide || "Dr";
-      let _runningBalance = openingSide === "Dr" ? openingBalance : -openingBalance;
+      const openingExact = statement.opening;
+      const openingBalance = openingExact.abs().toNumber();
+      const openingSide = openingExact.lessThan(0) ? "Cr" : "Dr";
 
       // Read filter params (forwarded from frontend export button)
       const dateFromXlsx = ((req.query.dateFrom as string) || "").trim();
       const dateToXlsx = ((req.query.dateTo as string) || "").trim();
       const destFilterXlsx = ((req.query.destination as string) || "").trim().toLowerCase();
 
-      // First pass: enrich ALL rows with running balance (needed before filtering)
+      // First pass: enrich ALL rows (needed before filtering)
       const allEnrichedXlsx = allRowsXlsx.map((row) => {
-        const debit = parseFloat(row.debitAmount || "0");
-        const credit = parseFloat(row.creditAmount || "0");
-        _runningBalance += debit - credit;
+        const debit = row.combinedEffect.greaterThan(0) ? row.combinedEffect.toNumber() : 0;
+        const credit = row.combinedEffect.lessThan(0) ? row.combinedEffect.negated().toNumber() : 0;
         const destination =
           row.referenceType === "INVOICE" && row.referenceId ? destinationMapXlsx.get(row.referenceId) || "" : "";
         return { ...row, debit, credit, destination };
       });
 
-      // Compute brought-forward balance (balance before dateFromXlsx)
-      let bfRunningXlsx = openingSide === "Dr" ? openingBalance : -openingBalance;
+      // Brought-forward balances (before dateFromXlsx): combined and ledger
+      let bfCombined = openingExact;
+      let bfLedger = openingExact;
       if (dateFromXlsx) {
         for (const r of allEnrichedXlsx) {
           const rDate = (r.transactionDate || "").toString().slice(0, 10);
-          if (rDate < dateFromXlsx) bfRunningXlsx += r.debit - r.credit;
-          else break;
+          if (rDate >= dateFromXlsx) break;
+          bfCombined = bfCombined.plus(r.combinedEffect);
+          bfLedger = bfLedger.plus(r.ledgerEffect);
         }
       }
+      const bfRunningXlsx = bfCombined.toNumber();
 
       // Apply filters (mirrors frontend filteredHistory logic)
       const rows = allEnrichedXlsx.filter((row) => {
@@ -166,11 +117,21 @@ export function registerFactoryCustomerStatementExcelRoutes(app: Express) {
         return true;
       });
 
-      const totalDr = rows.reduce((s: number, r) => s + r.debit, 0);
-      const totalCr = rows.reduce((s: number, r) => s + r.credit, 0);
-      const closingRawXlsx = bfRunningXlsx + (totalDr - totalCr);
-      const closingBalance = Math.abs(closingRawXlsx);
-      const closingBalanceSide = closingRawXlsx >= 0 ? "Dr" : "Cr";
+      const totalDrExact = rows.reduce(
+        (sum, r) => sum.plus(MoneyDecimal.max(r.combinedEffect, 0)),
+        new MoneyDecimal(0)
+      );
+      const totalCrExact = rows.reduce(
+        (sum, r) => sum.plus(MoneyDecimal.max(r.combinedEffect.negated(), 0)),
+        new MoneyDecimal(0)
+      );
+      const totalDr = totalDrExact.toNumber();
+      const totalCr = totalCrExact.toNumber();
+      const closingCombined = bfCombined.plus(totalDrExact).minus(totalCrExact);
+      const closingLedger = rows.reduce((sum, r) => sum.plus(r.ledgerEffect), bfLedger);
+      const closingNotInLedger = closingCombined.minus(closingLedger);
+      const closingBalance = closingCombined.abs().toNumber();
+      const closingBalanceSide = closingCombined.lessThan(0) ? "Cr" : "Dr";
 
       const txLabel = (type: string) => {
         const map: Record<string, string> = {
@@ -359,6 +320,28 @@ export function registerFactoryCustomerStatementExcelRoutes(app: Express) {
       cbRow.getCell(6).numFmt = numFmt;
       cbRow.getCell(5).alignment = { horizontal: "right" };
       cbRow.getCell(6).alignment = { horizontal: "right" };
+
+      // The closing split: what the ledger holds, and what is not in it yet.
+      for (const [label, value] of [
+        ["of which in the ledger", closingLedger],
+        ["of which not yet in the ledger", closingNotInLedger],
+      ] as const) {
+        const splitRow = sheet.addRow([
+          "",
+          "",
+          label,
+          "",
+          value.greaterThan(0) ? value.toNumber() : null,
+          value.lessThan(0) ? value.negated().toNumber() : null,
+          "",
+        ]);
+        splitRow.eachCell((cell) => {
+          cell.font = { italic: true };
+          cell.border = allBorders;
+        });
+        splitRow.getCell(5).numFmt = numFmt;
+        splitRow.getCell(6).numFmt = numFmt;
+      }
 
       // Statement note (if set)
       if (customer.statementNote) {

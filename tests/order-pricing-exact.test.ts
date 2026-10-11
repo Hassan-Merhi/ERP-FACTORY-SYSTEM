@@ -30,18 +30,21 @@ vi.mock("../server/db", async () => {
       Promise.resolve(value).then(resolve, reject);
     return q;
   };
-  return {
-    db: {
-      select: () => ({ from: (table: never) => chain(rowsFor(table)) }),
-      update: () => ({
-        set: (values: Record<string, unknown>) => ({
-          where: async () => {
-            state.updates.push(values);
-          },
-        }),
+  const db: Record<string, unknown> = {
+    select: () => ({ from: (table: never) => chain(rowsFor(table)) }),
+    update: () => ({
+      set: (values: Record<string, unknown>) => ({
+        where: async () => {
+          state.updates.push(values);
+        },
       }),
-    },
+    }),
+    // Phase 22 (C): the repair runs per order in a transaction that locks the
+    // order row (SELECT … FOR UPDATE) first.
+    execute: async () => ({ rows: [] }),
   };
+  db.transaction = async (fn: (tx: unknown) => Promise<unknown>) => fn(db);
+  return { db };
 });
 
 import { registerOrderPricingRoutes } from "../server/routes/factory/customer-orders/orderPricingRoutes";

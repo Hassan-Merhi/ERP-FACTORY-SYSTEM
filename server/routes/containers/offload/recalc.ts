@@ -4,8 +4,6 @@
  * Registered by ./index.ts in the original order; Express resolves
  * first-match, so that order is behaviour.
  */
-import type Decimal from "decimal.js";
-import { lineAmount, MoneyDecimal, toMoney } from "../../../lib/money";
 import type { Express } from "express";
 import { parseId } from "../../../lib/parseId";
 import { getErrorMessage } from "../../../lib/httpHandlers";
@@ -13,12 +11,19 @@ import { logger } from "../../../lib/logger";
 import { db } from "../../../db";
 import { storage } from "../../../storage";
 import { requireAuth, requireRole } from "../../../auth";
-import { containers, containerOffloads, containerOffloadItems, vouchers, voucherEntries } from "@shared/schema";
+import { containers, containerOffloads, containerOffloadItems, vouchers } from "@shared/schema";
 import { eq, and, sql } from "drizzle-orm";
+import Decimal from "decimal.js";
 import { reverseInventoryByExactValue } from "../../../inventoryHelper";
-import { deleteInfrastructurePostingIdentityForVoucherTx } from "../../../services/accounting/infrastructureVoucherIdentity";
+import { MoneyDecimal, toMoney } from "../../../lib/money";
+import { buildItemMap } from "../../../services/containers/offload-lifecycle/types";
 import { createDatabaseStockMovementAdapter } from "../../../services/inventory/databaseStockMovementAdapter";
 import { postStockMovementTx } from "../../../services/inventory/stockMovementIntegrityService";
+import {
+  postPreCutoverOffloadMovementTx,
+  syncContainerStockInTx,
+} from "../../../services/accounting/perpetualInventory/stockReceipts";
+import { retireVouchersTx, sessionRetirementActor } from "../../../services/accounting/voucherRetirement";
 
 const canonicalStockMovementAdapter = createDatabaseStockMovementAdapter();
 
@@ -51,11 +56,17 @@ export function registerContainerOffloadRecalcRoutes(app: Express) {
           .limit(1);
 
         if (!offloadRecord) {
-          await db.update(containers).set({ status: "OTW" }).where(eq(containers.id, containerId));
+          await db.update(containers).set({ status: "OTW", offloadDate: null }).where(eq(containers.id, containerId));
           return res.json({ message: "Container status reversed to OTW (no offload record to clean up)" });
         }
 
+        // The date the offload is booked at, before the reversal clears it (wave 15, C1).
+        const bookedOffloadDate =
+          container.offloadDate ??
+          (offloadRecord.offloadedAt ? new Date(offloadRecord.offloadedAt).toISOString().slice(0, 10) : null);
+
         await db.transaction(async (tx) => {
+          let subLedgerDelta: Decimal = new MoneyDecimal(0);
           const storedOffloadItems = await tx
             .select()
             .from(containerOffloadItems)
@@ -67,25 +78,34 @@ export function registerContainerOffloadRecalcRoutes(app: Express) {
             reason: `Reverse offload for container ${container.containerNumber}`,
           };
 
+          // The stock comes back out at exactly the value the offload moved
+          // into the sub-ledger (value_moved; the line value on a legacy
+          // line), with the company so a reversal into shortage records its
+          // negative layer (wave 11).
           if (storedOffloadItems.length > 0) {
             for (const offloadItem of storedOffloadItems) {
-              const quantity = parseFloat(offloadItem.quantity);
-              const totalValue = parseFloat(offloadItem.totalValue);
-              await reverseInventoryByExactValue(
+              const quantity = toMoney(offloadItem.quantity);
+              const totalValue = toMoney(offloadItem.valueMoved ?? offloadItem.totalValue);
+              const reversed = await reverseInventoryByExactValue(
                 tx,
                 offloadRecord.locationId,
                 offloadItem.stockItemId,
-                quantity,
-                totalValue
+                quantity.toNumber(),
+                totalValue.toFixed(2),
+                container.companyId,
+                `container-reverse-offload:${offloadRecord.id}`
               );
+              if (reversed) subLedgerDelta = subLedgerDelta.plus(toMoney(reversed.valueDelta));
               await postStockMovementTx(
                 tx,
                 {
                   companyId: container.companyId,
                   stockItemId: offloadItem.stockItemId,
                   kind: "adjustment",
-                  quantity: String(Math.abs(quantity)),
-                  unitCost: String(quantity !== 0 ? Math.max(totalValue / quantity, 0) : 0),
+                  quantity: quantity.abs().toString(),
+                  unitCost: quantity.isZero()
+                    ? "0"
+                    : Decimal.max(totalValue.dividedBy(quantity), 0).toDecimalPlaces(6).toString(),
                   fromLocationId: offloadRecord.locationId,
                   occurredAt,
                   source: {
@@ -108,44 +128,37 @@ export function registerContainerOffloadRecalcRoutes(app: Express) {
             const allLineItems = [];
             for (const po of pos) allLineItems.push(...(await storage.getLineItemsByPO(po.id)));
 
-            // Exact sums: the reversed value is the same cents the offload added.
-            const itemsMap = new Map<number, { totalQuantity: Decimal; weightedRateSum: Decimal }>();
-            for (const item of allLineItems) {
-              const stockItemId = item.stockItemId;
-              if (!stockItemId || stockItemId === 0) continue;
-              const existing = itemsMap.get(stockItemId) ?? {
-                totalQuantity: new MoneyDecimal(0),
-                weightedRateSum: new MoneyDecimal(0),
-              };
-              itemsMap.set(stockItemId, {
-                totalQuantity: existing.totalQuantity.plus(toMoney(item.quantity)),
-                weightedRateSum: existing.weightedRateSum.plus(lineAmount(item.quantity, item.rate)),
-              });
-            }
+            const additionalCostPerBale = toMoney(offloadRecord.additionalCostPerBale);
+            const itemsMap = buildItemMap(
+              allLineItems
+                .filter((item) => item.stockItemId)
+                .map((item) => ({ stockItemId: item.stockItemId, quantity: item.quantity, rate: item.rate }))
+            );
 
-            for (const [stockItemId, exact] of Array.from(itemsMap)) {
-              const estimated = exact.weightedRateSum.plus(
-                lineAmount(exact.totalQuantity, offloadRecord.additionalCostPerBale)
-              );
-              const estimatedValue = estimated.toNumber();
-              const data = { totalQuantity: exact.totalQuantity.toNumber() };
-              await reverseInventoryByExactValue(
+            for (const [stockItemId, data] of Array.from(itemsMap)) {
+              const estimatedValue = data.weightedRateSum
+                .plus(data.totalQuantity.times(additionalCostPerBale))
+                .toDecimalPlaces(2);
+              const reversed = await reverseInventoryByExactValue(
                 tx,
                 offloadRecord.locationId,
                 stockItemId,
-                data.totalQuantity,
-                estimatedValue
+                data.totalQuantity.toNumber(),
+                estimatedValue.toFixed(2),
+                container.companyId,
+                `container-reverse-offload:${offloadRecord.id}`
               );
+              if (reversed) subLedgerDelta = subLedgerDelta.plus(toMoney(reversed.valueDelta));
               await postStockMovementTx(
                 tx,
                 {
                   companyId: container.companyId,
                   stockItemId,
                   kind: "adjustment",
-                  quantity: String(Math.abs(data.totalQuantity)),
-                  unitCost: exact.totalQuantity.isZero()
+                  quantity: data.totalQuantity.abs().toString(),
+                  unitCost: data.totalQuantity.isZero()
                     ? "0"
-                    : MoneyDecimal.max(estimated.dividedBy(exact.totalQuantity), 0).toFixed(),
+                    : Decimal.max(estimatedValue.dividedBy(data.totalQuantity), 0).toDecimalPlaces(6).toString(),
                   fromLocationId: offloadRecord.locationId,
                   occurredAt,
                   source: {
@@ -189,12 +202,15 @@ export function registerContainerOffloadRecalcRoutes(app: Express) {
               )
             );
 
-          const reversedAt = new Date();
-          for (const voucher of containerVouchers) {
-            await deleteInfrastructurePostingIdentityForVoucherTx(tx, voucher.id);
-            await tx.delete(voucherEntries).where(eq(voucherEntries.voucherId, voucher.id));
-            await tx.update(vouchers).set({ deletedAt: reversedAt }).where(eq(vouchers.id, voucher.id));
-          }
+          // Wave 16 (A): retired — soft-deleted with their lines (they used to be
+          // stripped of them), audited, numbers and posting identities released,
+          // so the next offload is a new posting cycle.
+          await retireVouchersTx(tx, {
+            companyId: req.session.currentCompanyId!,
+            voucherIds: containerVouchers.map((voucher) => voucher.id),
+            reason: "container-offload-recalc-reverse",
+            actor: sessionRetirementActor(req),
+          });
 
           const hadiSpVouchers = await tx
             .select()
@@ -205,14 +221,32 @@ export function registerContainerOffloadRecalcRoutes(app: Express) {
                 sql`${vouchers.voucherNumber} LIKE ${"SP-AGENT-ERP-" + containerId + "-%"}`
               )
             );
-          for (const v of hadiSpVouchers) {
-            await deleteInfrastructurePostingIdentityForVoucherTx(tx, v.id);
-            await tx.delete(voucherEntries).where(eq(voucherEntries.voucherId, v.id));
-            await tx.update(vouchers).set({ deletedAt: reversedAt }).where(eq(vouchers.id, v.id));
-          }
+          await retireVouchersTx(tx, {
+            companyId: 1,
+            voucherIds: hadiSpVouchers.map((voucher) => voucher.id),
+            reason: "container-offload-recalc-reverse",
+            actor: sessionRetirementActor(req),
+          });
 
           await tx.delete(containerOffloads).where(eq(containerOffloads.id, offloadRecord.id));
-          await tx.update(containers).set({ status: "OTW" }).where(eq(containers.id, containerId));
+          // Back on the way: no offload date, so the container's POs read as in
+          // transit again (the reconciliation and opening plan go by it).
+          await tx.update(containers).set({ status: "OTW", offloadDate: null }).where(eq(containers.id, containerId));
+          // Perpetual inventory (wave 8.2): nothing is received any more, so the stock-in journal goes.
+          await syncContainerStockInTx(tx, container.companyId, containerId);
+          // Wave 15 (C1): a container offloaded before the cut-over had no
+          // stock-in journal; the stock it takes out is journalled now.
+          await postPreCutoverOffloadMovementTx(tx, {
+            companyId: container.companyId,
+            containerId,
+            containerNumber: container.containerNumber,
+            offloadDate: bookedOffloadDate,
+            locationId: offloadRecord.locationId,
+            valueDelta: subLedgerDelta,
+            mode: "toTransit",
+            reason: "Offload reversed",
+            actor: { userId: String(req.session.userId ?? "unknown"), username: req.session.username || "unknown" },
+          });
         });
 
         res.json({ success: true, message: "Container offload reversed successfully" });

@@ -1,7 +1,7 @@
 import { and, eq, inArray, or } from "drizzle-orm";
 import { softDeleteVoucherTx } from "./accounting/voucherSoftDelete";
 import { db, type DbTransaction } from "../db";
-import { reverseInventoryByExactValue } from "../inventoryHelper";
+import type Decimal from "decimal.js";
 import {
   interCompanyTransfers,
   intercompanyPaymentRequests,
@@ -14,7 +14,8 @@ import {
 } from "@shared/schema";
 import { voucherMutationBlockReason } from "../lib/migratedVoucherGuard";
 import { journalStockTransferLeg, nextStockTransferRevision } from "./inventory/stockTransferJournal";
-import { restoreInventoryByExactValue } from "./inventory/exactValueInventory";
+import { postTransferResidualTx, reverseTransferLegExactTx } from "./inventory/conservedStockTransfer";
+import { lineValueMoved, reversalDate } from "./inventory/valueExactReversal";
 import { applyEmployeeBalanceDeltasTx } from "./accounting/employeeBalancePosting";
 
 export class StockTransferDeletionError extends Error {
@@ -106,6 +107,14 @@ async function assertPersistedTransferScope(input: {
 export async function deleteStockTransferVoucher(input: {
   companyId: number;
   voucherId: number;
+  /**
+   * Wave 16 (B): writes the delete's audit row in the deleting transaction
+   * (not called on a replay); a failure rolls the delete back.
+   */
+  audit?: (
+    tx: DbTransaction,
+    deleted: { voucher: typeof vouchers.$inferSelect; entries: (typeof voucherEntries.$inferSelect)[] }
+  ) => Promise<void>;
 }): Promise<StockTransferDeletionResult> {
   const companyId = Number(input.companyId);
   const voucherId = Number(input.voucherId);
@@ -197,11 +206,16 @@ export async function deleteStockTransferVoucher(input: {
         });
 
         const canonicalRevision = await nextStockTransferRevision(tx, companyId, Number(transfer.id));
+        const deltas: Decimal[] = [];
 
         for (const item of scopedItems) {
           const quantity = Number(item.row.quantity);
           const rate = Number(item.row.rate ?? 0);
-          const storedValue = Math.abs(Number(item.row.totalAmount ?? quantity * rate));
+          // Wave 11: the exact value the line moved (legacy lines: their total).
+          const storedValue = lineValueMoved({
+            valueMoved: item.row.valueMoved,
+            total: item.row.totalAmount ?? quantity * rate,
+          }).toNumber();
           if (
             !Number.isFinite(quantity) ||
             quantity <= 0 ||
@@ -220,24 +234,17 @@ export async function deleteStockTransferVoucher(input: {
           // Undo the transfer's exact historical effect. Reconstructing the
           // destination issue from its blended current average can restore the
           // right quantity while leaving the wrong asset value behind.
-          await restoreInventoryByExactValue(
-            tx,
+          const reversed = await reverseTransferLegExactTx(tx, {
             companyId,
-            item.sourceLocationId,
-            item.stockItemId,
-            quantity,
-            storedValue
-          );
-          await reverseInventoryByExactValue(
-            tx,
+            sourceLocationId: item.sourceLocationId,
             destinationLocationId,
-            item.stockItemId,
+            stockItemId: item.stockItemId,
             quantity,
-            storedValue,
-            companyId,
-            "stock_transfer_delete_reverse",
-            voucherId
-          );
+            value: storedValue,
+            sourceVoucherType: "stock_transfer_delete_reverse",
+            sourceVoucherId: voucherId,
+          });
+          deltas.push(reversed.sourceDelta, reversed.destinationDelta);
 
           await journalStockTransferLeg(tx, {
             companyId,
@@ -250,6 +257,13 @@ export async function deleteStockTransferVoucher(input: {
           });
         }
         reversedInventory = transferItems.length > 0;
+        await postTransferResidualTx(tx, {
+          companyId,
+          transferId: Number(transfer.id),
+          date: reversalDate(),
+          reference: lockedVoucher.voucherNumber,
+          deltas,
+        });
       }
 
       await tx.delete(stockTransferItems).where(eq(stockTransferItems.transferId, transfer.id));
@@ -289,6 +303,8 @@ export async function deleteStockTransferVoucher(input: {
       .set({ deletedAt: new Date() })
       .where(and(eq(vouchers.id, voucherId), eq(vouchers.companyId, companyId)))
       .returning();
+
+    await input.audit?.(tx, { voucher: deletedVoucher ?? lockedVoucher, entries });
 
     return {
       handled: true,

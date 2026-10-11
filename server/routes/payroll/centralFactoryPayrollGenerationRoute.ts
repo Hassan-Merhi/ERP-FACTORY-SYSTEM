@@ -28,35 +28,37 @@ export function registerCentralFactoryPayrollGenerationRoute(app: Express, requi
       const companyId = Number(req.body?.companyId);
       const startDate = String(req.body?.startDate ?? "");
       const endDate = String(req.body?.endDate ?? "");
-      const result = await generateFactoryPayrollBatch({
-        companyId,
-        startDate,
-        endDate,
-        txDate: getClientDate(req),
-        createdBy: req.session?.userId ? String(req.session.userId) : null,
-      });
+      // Phase 21 (B): the generation audit is written on the batch's transaction.
+      const result = await generateFactoryPayrollBatch(
+        {
+          companyId,
+          startDate,
+          endDate,
+          txDate: getClientDate(req),
+          createdBy: req.session?.userId ? String(req.session.userId) : null,
+        },
+        async (tx, generated) => {
+          if (generated.createdCount <= 0) return;
+          await logAudit(
+            {
+              userId: req.session.userId!,
+              username: req.session.username || req.session.userId!,
+              companyId,
+              action: "create",
+              tableName: "factory_payrolls",
+              recordId: null,
+              recordIdentifier: `Payroll generated — ${generated.createdCount} worker(s), ${startDate} to ${endDate}`,
+              changes: {
+                atomicBatch: { old: false, new: true },
+                createdCount: { old: 0, new: generated.createdCount },
+              },
+            },
+            tx
+          );
+        }
+      );
 
       if (result.replayed) res.setHeader("X-Idempotent-Replay", "true");
-
-      if (result.createdCount > 0) {
-        try {
-          await logAudit({
-            userId: req.session.userId!,
-            username: req.session.username || req.session.userId!,
-            companyId,
-            action: "create",
-            tableName: "factory_payrolls",
-            recordId: null,
-            recordIdentifier: `Payroll generated — ${result.createdCount} worker(s), ${startDate} to ${endDate}`,
-            changes: {
-              atomicBatch: { old: false, new: true },
-              createdCount: { old: 0, new: result.createdCount },
-            },
-          });
-        } catch (auditError) {
-          logger.error("[central payroll generate audit] non-fatal", { error: auditError });
-        }
-      }
 
       res.json(result.payrolls);
     } catch (error: unknown) {

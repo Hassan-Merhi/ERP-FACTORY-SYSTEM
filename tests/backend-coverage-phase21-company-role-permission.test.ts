@@ -11,6 +11,7 @@ import request from "supertest";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { pool } from "../server/db";
+import { deleteAuditLogRowsForTests } from "./helpers/auditLogCleanup";
 import { cleanupTestData, closeTestServer, seedTestData, type TestContext } from "./setup";
 
 const PREFIX = `p21perm-${Date.now().toString(36)}`;
@@ -85,7 +86,7 @@ afterAll(async () => {
       .query(`DELETE FROM user_security_permissions WHERE company_id = $1`, [secondCompanyId])
       .catch(() => undefined);
     await pool.query(`DELETE FROM user_company_roles WHERE company_id = $1`, [secondCompanyId]).catch(() => undefined);
-    await pool.query(`DELETE FROM audit_log WHERE company_id = $1`, [secondCompanyId]).catch(() => undefined);
+    await deleteAuditLogRowsForTests(pool, "company_id = $1", [secondCompanyId]).catch(() => undefined);
     await pool.query(`DELETE FROM login_history WHERE company_id = $1`, [secondCompanyId]).catch(() => undefined);
     await pool.query(`DELETE FROM ledger_accounts WHERE company_id = $1`, [secondCompanyId]).catch(() => undefined);
     await pool.query(`DELETE FROM locations WHERE company_id = $1`, [secondCompanyId]).catch(() => undefined);

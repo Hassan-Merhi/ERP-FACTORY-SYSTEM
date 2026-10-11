@@ -3,6 +3,14 @@
  *
  * Intentionally authored WITHOUT executing tests. Claude verifies the single
  * feature PR later; do not interpret these assertions as passing yet.
+ *
+ * Merged into the accounting audit branch (phase 19 C, F3): the generic bale
+ * routes (Bale History DELETE, status DELETED, bulk status) delete only a
+ * pre-stock bale; a valued (IN_STOCK) bale answers 409 and is removed through
+ * the supervised Stock Removal, which runs the same physical-deletion service
+ * (and records the WASTE value event). The cases below that deleted IN_STOCK
+ * bales through the generic routes now assert that refusal and remove the
+ * bale through Stock Removal instead; the reversal assertions are unchanged.
  */
 import request from "supertest";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -240,8 +248,16 @@ describe("Phase 6: physical deletion is atomic and permanent-history safe", () =
     expect(await removedMovements()).toBe(1);
   });
 
-  it("general Bale History delete removes unallocated stock inventory too", async () => {
-    const deleted = await agent.delete(`/api/factory/bales/${unusedBale.id}`);
+  it("general Bale History delete refuses stock; Stock Removal removes unallocated stock inventory too", async () => {
+    const refused = await agent.delete(`/api/factory/bales/${unusedBale.id}`);
+    expect(refused.status).toBe(409);
+    expect(await inventoryQty()).toBe(1);
+    const deleted = await agent.post(API).send({
+      baleIds: [unusedBale.id],
+      supervisorUsername: `${PREFIX}_testuser`,
+      supervisorPassword: "testpassword123",
+      reason: "Unallocated bale removed",
+    });
     expect(deleted.status).toBe(200);
     expect(await inventoryQty()).toBe(0);
     expect(await removedMovements()).toBe(2);
@@ -265,16 +281,24 @@ describe("Phase 6: physical deletion is atomic and permanent-history safe", () =
     expect(await inventoryQty()).toBe(0);
   });
 
-  it("bulk status DELETED uses stock journal, while nondelete bulk update cannot revive deleted stock", async () => {
+  it("bulk status DELETED refuses stock (Stock Removal reverses it), and bulk update cannot revive deleted stock", async () => {
     const newStock = await agent.post("/api/factory/stock-entry").send({
       erpLocationId: ctx.locationId,
       items: [{ productId, quantity: 2, weightPerBale: "40" }],
     });
     expect(newStock.status).toBe(200);
     const ids = newStock.body.bales.map((b: { id: number }) => b.id);
-    const deletion = await agent.patch("/api/factory/bales/bulk-status").send({ ids, status: "DELETED" });
+    const refused = await agent.patch("/api/factory/bales/bulk-status").send({ ids, status: "DELETED" });
+    expect(refused.status).toBe(409);
+    expect(await removedMovements()).toBe(2);
+    const deletion = await agent.post(API).send({
+      baleIds: ids,
+      supervisorUsername: `${PREFIX}_testuser`,
+      supervisorPassword: "testpassword123",
+      reason: "Bulk removal",
+    });
     expect(deletion.status).toBe(200);
-    expect(deletion.body.updated).toBe(2);
+    expect(deletion.body.removed).toBe(2);
     expect(await removedMovements()).toBe(4);
     const revive = await agent.patch("/api/factory/bales/bulk-status").send({ ids, status: "IN_STOCK" });
     expect(revive.status).toBeGreaterThanOrEqual(400);
@@ -356,7 +380,13 @@ describe("Phase 6 review fixes: every deletion path, live links only", () => {
     const before = await inventoryQty();
     const movementsBefore = await removedMovements();
 
-    const deleted = await agent.delete(`/api/factory/bales/${bale.id}`);
+    expect((await agent.delete(`/api/factory/bales/${bale.id}`)).status).toBe(409);
+    const deleted = await agent.post(API).send({
+      baleIds: [bale.id],
+      supervisorUsername: `${PREFIX}_testuser`,
+      supervisorPassword: "testpassword123",
+      reason: "Cancelled loading bale removed",
+    });
     expect(deleted.status).toBe(200);
     expect(await inventoryQty()).toBe(before - 1);
     expect(await removedMovements()).toBe(movementsBefore + 1);
@@ -460,7 +490,7 @@ describe("Phase 6 review fixes: every deletion path, live links only", () => {
     const single = await agent.patch(`/api/factory/bales/${bale.id}/status`).send({ status: "SOLD" });
     expect(single.status).toBe(409);
     const bulk = await agent.patch("/api/factory/bales/bulk-status").send({ ids: [bale.id], status: "PRESSED" });
-    expect(bulk.status).toBe(400);
+    expect(bulk.status).toBe(409);
     expect((await baleStatus(bale.id)).status).toBe("IN_STOCK");
   }, 60000);
 });

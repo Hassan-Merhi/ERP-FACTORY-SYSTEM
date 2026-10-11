@@ -11,7 +11,12 @@ import {
   uniqueIndex,
   index,
   jsonb,
+  bigserial,
+  bigint,
+  primaryKey,
+  type AnyPgColumn,
 } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import { companies, locations } from "../common";
@@ -44,10 +49,52 @@ export const vouchers = pgTable(
     deletedAt: timestamp("deleted_at"),
     effectiveDate: date("effective_date"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
+    // Phase 21 (A), AT3: kept by the database trigger from the request's actor
+    // setting (server/services/audit/voucherAuditTrigger.ts); never written by
+    // the application. NULL = written before tracking.
+    createdBy: text("created_by"),
+    updatedBy: text("updated_by"),
+    deletedBy: text("deleted_by"),
+    /** The number before a retirement renamed it `{number}~DEL{id}`. */
+    originalVoucherNumber: varchar("original_voucher_number", { length: 100 }),
+    // Phase 22 (A), PE9: the voucher this one reverses (reverseVoucherTx). At
+    // most one live reversal per original (partial unique index below).
+    // Phase 22 (A), D3: written by the central posting engine, which balances
+    // the voucher exactly (ROUNDING line); the balance guard then allows no
+    // base difference. Set once (the guard's marker trigger refuses clearing it).
+    postedByEngine: boolean("posted_by_engine").notNull().default(false),
+    // NO ACTION (checked at the end of the statement), so a company cleanup
+    // deleting both vouchers in one statement works; the original alone cannot go.
+    reversalOfVoucherId: integer("reversal_of_voucher_id").references((): AnyPgColumn => vouchers.id),
   },
   (t) => ({
     companyIdx: index("vouchers_company_idx").on(t.companyId),
     companyDateIdx: index("vouchers_company_date_idx").on(t.companyId, t.voucherDate),
+    reversalOfUnique: uniqueIndex("vouchers_reversal_of_live_unique")
+      .on(t.reversalOfVoucherId)
+      .where(sql`reversal_of_voucher_id IS NOT NULL AND deleted_at IS NULL`),
+  })
+);
+
+/**
+ * Gapless voucher number counters (phase 22 A, PE8/G9): one row per company,
+ * number prefix (voucher type) and year, locked FOR UPDATE by
+ * allocateVoucherNumberTx (server/services/accounting/voucherNumbering.ts).
+ * Also created at boot by ensureRuntimeSchema.
+ */
+export const voucherNumberSequences = pgTable(
+  "voucher_number_sequences",
+  {
+    companyId: integer("company_id")
+      .notNull()
+      .references(() => companies.id, { onDelete: "cascade" }),
+    prefix: varchar("prefix", { length: 20 }).notNull(),
+    year: integer("year").notNull(),
+    lastValue: bigint("last_value", { mode: "number" }).notNull().default(0),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.companyId, t.prefix, t.year] }),
   })
 );
 
@@ -55,6 +102,12 @@ export const insertVoucherSchema = createInsertSchema(vouchers)
   .omit({
     id: true,
     createdAt: true,
+    createdBy: true,
+    updatedBy: true,
+    deletedBy: true,
+    originalVoucherNumber: true,
+    reversalOfVoucherId: true,
+    postedByEngine: true,
   })
   .extend({
     companyId: z.number().min(1, "Company is required"),
@@ -222,6 +275,8 @@ export const creditNoteItems = pgTable("credit_note_items", {
   rate: decimal("rate", { precision: 20, scale: 2 }).notNull(),
   inventoryCost: decimal("inventory_cost", { precision: 20, scale: 2 }).notNull().default("0"),
   totalValue: decimal("total_value", { precision: 20, scale: 2 }).notNull(),
+  // Wave 11: the exact sub-ledger value the line moved; null on legacy lines.
+  valueMoved: decimal("value_moved", { precision: 20, scale: 2 }),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
@@ -304,3 +359,50 @@ export const insertFiscalPeriodClosureSchema = createInsertSchema(fiscalPeriodCl
 
 export type InsertFiscalPeriodClosure = z.infer<typeof insertFiscalPeriodClosureSchema>;
 export type FiscalPeriodClosure = typeof fiscalPeriodClosures.$inferSelect;
+
+/**
+ * Perpetual-inventory cut-over per company (2026-10 accounting audit, wave 8).
+ * One row once an Owner applies the opening inventory journal; documents dated
+ * on or after `effectiveFrom` then post under perpetual inventory. Also created
+ * at boot by ensureInventoryCutoverSchema (production skips schema pushes).
+ */
+export const glInventoryCutovers = pgTable("gl_inventory_cutovers", {
+  companyId: integer("company_id")
+    .primaryKey()
+    .references(() => companies.id, { onDelete: "restrict" }),
+  effectiveFrom: date("effective_from").notNull(),
+  status: text("status").notNull().default("ACTIVE"),
+  openingVoucherId: integer("opening_voucher_id").references(() => vouchers.id, { onDelete: "restrict" }),
+  openingPlan: jsonb("opening_plan").notNull(),
+  appliedBy: text("applied_by"),
+  appliedAt: timestamp("applied_at").notNull().defaultNow(),
+});
+
+/**
+ * Dated evidence of stock sub-ledger movements that leave no document line
+ * (wave 15): the lines of every INV-MOVE source (quick adjustments, archive and
+ * restore, location imports, cost corrections, readiness resolutions, ...),
+ * recorded before and after the cut-over and replaced whole with their source.
+ * The as-of stock valuation replays them by movement date. Also created at
+ * boot by ensureInventoryCutoverSchema (same names, no foreign keys).
+ */
+export const inventoryValueMovements = pgTable(
+  "inventory_value_movements",
+  {
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    companyId: integer("company_id").notNull(),
+    sourceNumber: text("source_number").notNull(),
+    sourceType: text("source_type").notNull(),
+    sourceId: text("source_id").notNull(),
+    movementDate: date("movement_date").notNull(),
+    stockItemId: integer("stock_item_id"),
+    locationId: integer("location_id"),
+    quantityDelta: decimal("quantity_delta", { precision: 18, scale: 3 }),
+    valueDelta: decimal("value_delta", { precision: 20, scale: 2 }).notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => ({
+    companyDateIdx: index("inventory_value_movements_company_date_idx").on(t.companyId, t.movementDate),
+    companySourceIdx: index("inventory_value_movements_company_source_idx").on(t.companyId, t.sourceNumber),
+  })
+);

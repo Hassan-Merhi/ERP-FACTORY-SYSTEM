@@ -13,8 +13,8 @@ describe("factory container voucher FX normalization", () => {
       transactionCreditAmount: "0.000000",
       baseDebitAmount: "11334.889125",
       baseCreditAmount: "0.000000",
-      historicalExchangeRate: "1.4034102870",
-      rateConvention: RateConvention.TRANSACTION_PER_BASE,
+      historicalExchangeRate: "0.7125500000",
+      rateConvention: RateConvention.BASE_PER_TRANSACTION,
       debitAmount: "11334.889125",
       creditAmount: "0.000000",
     });
@@ -25,7 +25,7 @@ describe("factory container voucher FX normalization", () => {
 
     expect(entry.transactionCurrency).toBe("LBP");
     expect(entry.baseCreditAmount).toBe("10.024000");
-    expect(entry.rateConvention).toBe(RateConvention.TRANSACTION_PER_BASE);
+    expect(entry.rateConvention).toBe(RateConvention.BASE_PER_TRANSACTION);
   });
 
   it("keeps USD entries at identity rate", () => {

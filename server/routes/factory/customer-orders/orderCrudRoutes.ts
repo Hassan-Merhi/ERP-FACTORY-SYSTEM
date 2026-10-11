@@ -1,4 +1,5 @@
 import { logAudit } from "../../helpers/auditHelpers";
+import { orderAuditIdentifier } from "./orderAuditIdentifier";
 import { getErrorMessage, HttpError, sendHttpError } from "../../../lib/httpHandlers";
 import { logger } from "../../../lib/logger";
 import { parseId, parseOptionalId } from "../../../lib/parseId";
@@ -374,6 +375,7 @@ export function registerOrderCrudRoutes(app: Express) {
         totalMarginPct: hideCostData ? null : totalMarginPct,
         partialCostData: !totalCostKnown,
         costHidden: hideCostData,
+        costBasis: "catalogue-production-price-per-bale", // Wave 11: a selling value, not the bales' recorded cost.
       });
     } catch (error: unknown) {
       logger.error("Error fetching order profitability:", { error: error });
@@ -404,52 +406,25 @@ export function registerOrderCrudRoutes(app: Express) {
           if (!guard.allowed) return { ok: false, rejection: guard } as const;
         }
         const [created] = await tx.insert(customerOrders).values(parsed).returning();
+        // Phase 21 (B): the create audit commits with the order.
+        await logAudit(
+          {
+            userId: req.session.userId!,
+            username: req.session.username || req.session.userId!,
+            companyId,
+            action: "create",
+            tableName: "factory_customer_orders",
+            recordId: created.id,
+            recordIdentifier: orderAuditIdentifier(created, created.id),
+            changes: null,
+          },
+          tx
+        );
         return { ok: true, order: created } as const;
       });
 
       if (!creation.ok) return res.status(creation.rejection.status).json(creation.rejection.body);
       const order = creation.order;
-      await logAudit({
-        userId: req.session.userId!,
-        username: req.session.username || req.session.userId!,
-        companyId,
-        action: "create",
-        tableName: "factory_customer_orders",
-        recordId: order.id,
-        recordIdentifier:
-          (
-            order as unknown as {
-              id: number;
-              companyId: number;
-              deletedAt: Date | null;
-              createdAt: Date;
-              updatedAt: Date;
-              isHidden: boolean;
-              containerNumber: string | null;
-              status: string;
-              grandTotal: string;
-              customerId: number;
-              invoiceNumber: string | null;
-              orderDate: string;
-              proformaIdUsed: number | null;
-              subtotalBales: string;
-              freightAmount: string;
-              otherChargesTotal: string;
-              totalQtyBales: number;
-              shippingCompany: string | null;
-              containerNotes: string | null;
-              destination: string | null;
-              verifiedByUserId: number | null;
-              verifiedAt: Date | null;
-              loadingStartedAt: Date | null;
-              loadingFinalizedAt: Date | null;
-              finalizedAt: Date | null;
-              locationId: number | null;
-              dispatchBatchId: number | null;
-            } & { orderNumber: string | null | undefined }
-          ).orderNumber || `Order #${order.id}`,
-        changes: null,
-      });
       res.json(order);
     } catch (error: unknown) {
       logger.error("Error creating customer order:", { error: error });
@@ -571,52 +546,28 @@ export function registerOrderCrudRoutes(app: Express) {
         .where(and(eq(customerOrders.id, orderId), eq(customerOrders.companyId, companyId)));
       if (!order) return res.status(404).json({ message: "Loading not found" });
 
-      const [updated] = await db
-        .update(customerOrders)
-        .set({ containerNotes: note?.trim() || null, updatedAt: new Date() })
-        .where(eq(customerOrders.id, orderId))
-        .returning();
+      // Phase 21 (B): the write and its audit commit together.
+      const updated = await db.transaction(async (tx) => {
+        const [written] = await tx
+          .update(customerOrders)
+          .set({ containerNotes: note?.trim() || null, updatedAt: new Date() })
+          .where(eq(customerOrders.id, orderId))
+          .returning();
 
-      await logAudit({
-        userId: req.session.userId!,
-        username: req.session.username || req.session.userId!,
-        companyId,
-        action: "update",
-        tableName: "factory_customer_orders",
-        recordId: orderId,
-        recordIdentifier:
-          (
-            order as unknown as {
-              id: number;
-              companyId: number;
-              customerId: number;
-              invoiceNumber: string | null;
-              orderDate: string;
-              proformaIdUsed: number | null;
-              status: string;
-              subtotalBales: string;
-              freightAmount: string;
-              otherChargesTotal: string;
-              grandTotal: string;
-              totalQtyBales: number;
-              containerNumber: string | null;
-              shippingCompany: string | null;
-              containerNotes: string | null;
-              destination: string | null;
-              verifiedByUserId: number | null;
-              verifiedAt: Date | null;
-              loadingStartedAt: Date | null;
-              loadingFinalizedAt: Date | null;
-              finalizedAt: Date | null;
-              locationId: number | null;
-              dispatchBatchId: number | null;
-              isHidden: boolean;
-              deletedAt: Date | null;
-              createdAt: Date;
-              updatedAt: Date;
-            } & { orderNumber: string | null | undefined }
-          ).orderNumber || `Order #${orderId}`,
-        changes: { loadingNote: { old: order.containerNotes ?? null, new: note?.trim() || null } },
+        await logAudit(
+          {
+            userId: req.session.userId!,
+            username: req.session.username || req.session.userId!,
+            companyId,
+            action: "update",
+            tableName: "factory_customer_orders",
+            recordId: orderId,
+            recordIdentifier: orderAuditIdentifier(order, orderId),
+            changes: { loadingNote: { old: order.containerNotes ?? null, new: note?.trim() || null } },
+          },
+          tx
+        );
+        return written;
       });
       res.json({ success: true, order: updated });
     } catch (error: unknown) {
@@ -671,18 +622,21 @@ export function registerOrderCrudRoutes(app: Express) {
           .update(customerOrders)
           .set({ deletedAt: new Date(), updatedAt: new Date() })
           .where(eq(customerOrders.id, orderId));
+        await logAudit(
+          {
+            userId: req.session.userId!,
+            username: req.session.username || req.session.userId!,
+            companyId,
+            action: "delete",
+            tableName: "factory_customer_orders",
+            recordId: orderId,
+            recordIdentifier: `Order #${orderId}`,
+            changes: null,
+          },
+          tx
+        );
       });
 
-      await logAudit({
-        userId: req.session.userId!,
-        username: req.session.username || req.session.userId!,
-        companyId,
-        action: "delete",
-        tableName: "factory_customer_orders",
-        recordId: orderId,
-        recordIdentifier: `Order #${orderId}`,
-        changes: null,
-      });
       res.json({ success: true, message: "Invoice moved to Deleted Items" });
     } catch (error: unknown) {
       logger.error("Error deleting customer order:", { error: error });
@@ -709,52 +663,28 @@ export function registerOrderCrudRoutes(app: Express) {
       if (order.status !== "DRAFT")
         return res.status(400).json({ message: "Only DRAFT orders can have their date changed" });
 
-      const [updated] = await db
-        .update(customerOrders)
-        .set({ orderDate, updatedAt: new Date() })
-        .where(eq(customerOrders.id, orderId))
-        .returning();
+      // Phase 21 (B): the write and its audit commit together.
+      const updated = await db.transaction(async (tx) => {
+        const [written] = await tx
+          .update(customerOrders)
+          .set({ orderDate, updatedAt: new Date() })
+          .where(eq(customerOrders.id, orderId))
+          .returning();
 
-      await logAudit({
-        userId: req.session.userId!,
-        username: req.session.username || req.session.userId!,
-        companyId,
-        action: "update",
-        tableName: "factory_customer_orders",
-        recordId: orderId,
-        recordIdentifier:
-          (
-            order as unknown as {
-              id: number;
-              companyId: number;
-              customerId: number;
-              invoiceNumber: string | null;
-              orderDate: string;
-              proformaIdUsed: number | null;
-              status: string;
-              subtotalBales: string;
-              freightAmount: string;
-              otherChargesTotal: string;
-              grandTotal: string;
-              totalQtyBales: number;
-              containerNumber: string | null;
-              shippingCompany: string | null;
-              containerNotes: string | null;
-              destination: string | null;
-              verifiedByUserId: number | null;
-              verifiedAt: Date | null;
-              loadingStartedAt: Date | null;
-              loadingFinalizedAt: Date | null;
-              finalizedAt: Date | null;
-              locationId: number | null;
-              dispatchBatchId: number | null;
-              isHidden: boolean;
-              deletedAt: Date | null;
-              createdAt: Date;
-              updatedAt: Date;
-            } & { orderNumber: string | null | undefined }
-          ).orderNumber || `Order #${orderId}`,
-        changes: { orderDate: { old: order.orderDate ?? null, new: orderDate } },
+        await logAudit(
+          {
+            userId: req.session.userId!,
+            username: req.session.username || req.session.userId!,
+            companyId,
+            action: "update",
+            tableName: "factory_customer_orders",
+            recordId: orderId,
+            recordIdentifier: orderAuditIdentifier(order, orderId),
+            changes: { orderDate: { old: order.orderDate ?? null, new: orderDate } },
+          },
+          tx
+        );
+        return written;
       });
       res.json(updated);
     } catch (error: unknown) {
@@ -769,7 +699,6 @@ export function registerOrderCrudRoutes(app: Express) {
       if (!companyId) return res.status(400).json({ message: "No company selected" });
 
       const orderId = parseId(req.params.id);
-
       if (orderId === null) return res.status(400).json({ message: "Invalid id" });
       const { containerNumber, shippingCompany, containerNotes, bookingInfo, destination } = req.body;
 
@@ -789,65 +718,41 @@ export function registerOrderCrudRoutes(app: Express) {
       if (bookingInfo !== undefined) updateData.bookingInfo = bookingInfo;
       if (destination !== undefined) updateData.destination = destination || null;
 
-      const [updated] = await db
-        .update(customerOrders)
-        .set(updateData)
-        .where(eq(customerOrders.id, orderId))
-        .returning();
+      // Phase 21 (B): the write and its audit commit together.
+      const updated = await db.transaction(async (tx) => {
+        const [written] = await tx
+          .update(customerOrders)
+          .set(updateData)
+          .where(eq(customerOrders.id, orderId))
+          .returning();
 
-      // Shipping company is order-specific. The customers table has no
-      // defaultShippingCompany field, so do not perform a swallowed invalid update.
+        // Shipping company is order-specific. The customers table has no
+        // defaultShippingCompany field, so do not perform a swallowed invalid update.
 
-      await logAudit({
-        userId: req.session.userId!,
-        username: req.session.username || req.session.userId!,
-        companyId,
-        action: "update",
-        tableName: "factory_customer_orders",
-        recordId: orderId,
-        recordIdentifier:
-          (
-            order as unknown as {
-              id: number;
-              companyId: number;
-              customerId: number;
-              invoiceNumber: string | null;
-              orderDate: string;
-              proformaIdUsed: number | null;
-              status: string;
-              subtotalBales: string;
-              freightAmount: string;
-              otherChargesTotal: string;
-              grandTotal: string;
-              totalQtyBales: number;
-              containerNumber: string | null;
-              shippingCompany: string | null;
-              containerNotes: string | null;
-              destination: string | null;
-              verifiedByUserId: number | null;
-              verifiedAt: Date | null;
-              loadingStartedAt: Date | null;
-              loadingFinalizedAt: Date | null;
-              finalizedAt: Date | null;
-              locationId: number | null;
-              dispatchBatchId: number | null;
-              isHidden: boolean;
-              deletedAt: Date | null;
-              createdAt: Date;
-              updatedAt: Date;
-            } & { orderNumber: string | null | undefined }
-          ).orderNumber || `Order #${orderId}`,
-        changes: {
-          ...(containerNumber !== undefined
-            ? { containerNumber: { old: order.containerNumber ?? null, new: containerNumber } }
-            : {}),
-          ...(destination !== undefined
-            ? { destination: { old: order.destination ?? null, new: destination || null } }
-            : {}),
-          ...(shippingCompany !== undefined
-            ? { shippingCompany: { old: order.shippingCompany ?? null, new: shippingCompany } }
-            : {}),
-        },
+        await logAudit(
+          {
+            userId: req.session.userId!,
+            username: req.session.username || req.session.userId!,
+            companyId,
+            action: "update",
+            tableName: "factory_customer_orders",
+            recordId: orderId,
+            recordIdentifier: orderAuditIdentifier(order, orderId),
+            changes: {
+              ...(containerNumber !== undefined
+                ? { containerNumber: { old: order.containerNumber ?? null, new: containerNumber } }
+                : {}),
+              ...(destination !== undefined
+                ? { destination: { old: order.destination ?? null, new: destination || null } }
+                : {}),
+              ...(shippingCompany !== undefined
+                ? { shippingCompany: { old: order.shippingCompany ?? null, new: shippingCompany } }
+                : {}),
+            },
+          },
+          tx
+        );
+        return written;
       });
       res.json(updated);
     } catch (error: unknown) {

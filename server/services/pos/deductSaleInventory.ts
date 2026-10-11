@@ -5,7 +5,9 @@
  * for one POS sale item.
  */
 import { sql } from "drizzle-orm";
+import type Decimal from "decimal.js";
 import { adjustInventory } from "../../inventoryHelper";
+import { relievedValue } from "../accounting/perpetualInventory/saleCogs";
 import { inventoryQuantity, inventoryUnitCost, toInventoryDecimal } from "../../lib/inventoryMath";
 import { createDatabaseStockMovementAdapter } from "../inventory/databaseStockMovementAdapter";
 import { postStockMovementTx } from "../inventory/stockMovementIntegrityService";
@@ -21,6 +23,8 @@ const canonicalStockMovementAdapter = createDatabaseStockMovementAdapter();
 export interface LockedInventoryResult {
   lockedQty: number;
   costPrice: number;
+  /** The exact value the issue took out of inventory (its cost of goods sold). */
+  relieved: Decimal;
 }
 
 export async function lockAndDeductInventoryForSaleItem(
@@ -55,7 +59,7 @@ export async function lockAndDeductInventoryForSaleItem(
   const attributableVoucherId =
     Number.isSafeInteger(sourceVoucherId) && sourceVoucherId > 0 ? sourceVoucherId : undefined;
 
-  await adjustInventory(
+  const issued = await adjustInventory(
     tx,
     locationId,
     item.stockItemId,
@@ -98,5 +102,6 @@ export async function lockAndDeductInventoryForSaleItem(
   return {
     lockedQty: lockedQuantity.toNumber(),
     costPrice: costPrice.toNumber(),
+    relieved: relievedValue(issued),
   };
 }

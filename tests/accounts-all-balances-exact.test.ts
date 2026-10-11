@@ -7,6 +7,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("../server/auth", () => ({ requireAuth: () => undefined }));
+vi.mock("../server/routes/helpers/partyOpeningSide", () => ({ loadPartyOpeningSides: async () => new Map() }));
 vi.mock("../server/storage", () => ({
   storage: {
     getCompanyById: async () => ({ id: 7, companyType: "erp" }),
@@ -24,30 +25,38 @@ vi.mock("../server/storage", () => ({
     getAllCustomers: async () => [],
   },
 }));
-vi.mock("../server/db", () => {
-  const movement = (row: Record<string, unknown>) => ({
-    ledgerAccountId: null,
-    bankAccountId: null,
-    fixedAssetId: null,
-    employeeId: null,
-    debits: "0",
-    credits: "0",
-    ...row,
+vi.mock("../server/db", () => ({ db: {} }));
+
+// Wave 18 C: the balances are the balance engine's rows (its SQL sums the
+// lines exactly); a bank line that also names the ledger is the ledger's.
+vi.mock("../server/services/accounting/balances/ledgerBalanceEngine", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../server/services/accounting/balances/ledgerBalanceEngine")>();
+  const { MoneyDecimal } = await import("../server/lib/money");
+  const row = (kind: string, id: number, opening: string, debit: string, credit: string) => ({
+    kind,
+    id,
+    code: null,
+    name: kind,
+    accountType: null,
+    deleted: false,
+    linkedLedgerAccountId: null,
+    masterOpening: new MoneyDecimal(opening),
+    openingSideAssumed: false,
+    carriedForward: new MoneyDecimal(0),
+    periodDebit: new MoneyDecimal(debit),
+    periodCredit: new MoneyDecimal(credit),
+    baseMovement: new MoneyDecimal(0),
   });
-  const rows = [
-    movement({ ledgerAccountId: 1, debits: "1.015" }),
-    movement({ bankAccountId: 2, debits: "0.2" }),
-    movement({ bankAccountId: 2, debits: "0.005" }),
-    movement({ employeeId: 3, credits: "1.005" }),
-  ];
-  const chain = (value: unknown) => {
-    const q: Record<string, unknown> = {};
-    for (const step of ["where", "innerJoin", "groupBy"]) q[step] = () => q;
-    q.then = (resolve: (v: unknown) => unknown, reject: (r: unknown) => unknown) =>
-      Promise.resolve(value).then(resolve, reject);
-    return q;
+  return {
+    ...actual,
+    // Customer-owned ledgers come from the balance engine (none here).
+    getPartyBalances: async () => ({ parties: [] }),
+    loadBalanceRows: async () => [
+      row("ledger", 1, "0", "1.015", "0"),
+      row("bank", 2, "0.1", "0.205", "0"),
+      row("employee", 3, "0", "0", "1.005"),
+    ],
   };
-  return { db: { select: () => ({ from: () => chain(rows) }) } };
 });
 
 import { serveAccountListForCompany } from "../server/routes/accounts/all";

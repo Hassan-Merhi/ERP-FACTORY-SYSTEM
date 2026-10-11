@@ -1,14 +1,25 @@
-import { getErrorMessage } from "../../lib/httpHandlers";
+import { getErrorMessage, HttpError, sendHttpError } from "../../lib/httpHandlers";
+import { closedPeriodErrorResponse } from "../../lib/closedPeriodError";
 import { firstRow } from "../../lib/queryResult";
 import { toFiniteNumber } from "@shared/typeGuards";
 import { logger } from "../../lib/logger";
-import type { Express } from "express";
-import { db, pool } from "../../db";
+import type { Express, Request, Response } from "express";
+import { db, pool, type DbTransaction } from "../../db";
 import { storage } from "../../storage";
 import { requireAuth, requireRole } from "../../auth";
+import { writeAuditEvent } from "../../services/audit";
 
-import { stockItems, containers, vouchers, voucherEntries, ledgerAccounts } from "@shared/schema";
-import { eq, and, inArray, sql, isNotNull } from "drizzle-orm";
+import {
+  stockItems,
+  containers,
+  vouchers,
+  voucherEntries,
+  ledgerAccounts,
+  accountingPostingRequests,
+  auditLog,
+  fiscalPeriodClosures,
+} from "@shared/schema";
+import { eq, and, inArray, sql, isNull, desc } from "drizzle-orm";
 
 /**
  * Both resets delete vouchers in bulk. The closed-period guard refuses any of
@@ -27,21 +38,110 @@ async function closedBooksResetRefusal(companyId: number): Promise<string | null
     : null;
 }
 
-export function registerCompanySettingsRoutes(app: Express) {
-  app.post("/api/admin/reset-company-data", requireAuth, requireRole("Admin"), async (req, res) => {
-    try {
-      const { companyId } = req.body;
+// ── Wave 9 (ledger safety) ───────────────────────────────────────────────────
+// The three reset routes rewrite a company's accounting history, so they are
+// Owner-only, act on the session's company only, run in one transaction and
+// leave an audit_log row that records what they removed or zeroed.
 
-      if (!companyId) {
-        return res.status(400).json({ message: "Please select a company to reset." });
-      }
+/** audit_log.table_name of every reset / undo record. */
+const RESET_AUDIT_TABLE = "company_data_reset";
+/** record_identifier of the hard reset (POST /api/admin/reset-company-data). */
+const HARD_RESET_IDENTIFIER = "reset-company-data";
+/** record_identifier of the soft reset (POST /api/admin/company-data-reset) that undo reverses. */
+const SOFT_RESET_IDENTIFIER = "company-data-reset";
+const UNDO_RESET_IDENTIFIER = "undo-company-reset";
+
+const RESET_OTHER_COMPANY_MESSAGE = "You can only reset the company you are currently working in";
+const NO_RESET_TO_UNDO_MESSAGE = "There is no company data reset to undo for this company";
+const CLOSING_VOUCHER_MESSAGE = "A fiscal-period closing voucher cannot be deleted";
+
+/** The audit sanitizer keeps 100 items per array; nest pages of 100 so up to 10,000 rows survive. */
+const AUDIT_PAGE_SIZE = 100;
+const AUDIT_MAX_ROWS = AUDIT_PAGE_SIZE * AUDIT_PAGE_SIZE;
+/** Keeps every IN (...) list far below PostgreSQL's bind-parameter limit. */
+const ID_CHUNK_SIZE = 5_000;
+
+function chunk<T>(rows: readonly T[], size: number): T[][] {
+  const pages: T[][] = [];
+  for (let index = 0; index < rows.length; index += size) pages.push(rows.slice(index, index + size));
+  return pages;
+}
+
+function auditPages<T>(rows: readonly T[]): T[][] {
+  return chunk(rows, AUDIT_PAGE_SIZE);
+}
+
+/**
+ * The company a reset acts on: always the session's current company. The reset
+ * page still sends a companyId; it is accepted only when it names that company.
+ */
+function resetCompanyId(req: Request): number {
+  const companyId = req.session.currentCompanyId;
+  if (!companyId) throw new HttpError(400, "No company selected");
+  const requested = (req.body as { companyId?: unknown } | undefined)?.companyId;
+  if (requested !== undefined && requested !== null && requested !== "" && Number(requested) !== companyId) {
+    throw new HttpError(403, RESET_OTHER_COMPANY_MESSAGE);
+  }
+  return companyId;
+}
+
+function auditActor(req: Request) {
+  return {
+    userId: req.session.userId ?? "unknown",
+    username: req.session.username || "unknown",
+  };
+}
+
+/** Refuses (409) when any of the vouchers is the closing journal of a fiscal period. */
+async function refuseClosingVouchers(tx: DbTransaction, voucherIds: readonly number[]): Promise<void> {
+  for (const ids of chunk(voucherIds, ID_CHUNK_SIZE)) {
+    const [closing] = await tx
+      .select({ id: fiscalPeriodClosures.id })
+      .from(fiscalPeriodClosures)
+      .where(inArray(fiscalPeriodClosures.closingVoucherId, ids))
+      .limit(1);
+    if (closing) throw new HttpError(409, CLOSING_VOUCHER_MESSAGE);
+  }
+}
+
+/** Closed-period trigger rejections become 409 (the transaction has rolled back); the rest go through sendHttpError. */
+function sendResetError(res: Response, error: unknown, label: string) {
+  const closedPeriod = closedPeriodErrorResponse(error);
+  if (closedPeriod) return res.status(closedPeriod.status).json(closedPeriod.body);
+  if (!(error instanceof HttpError)) logger.error(label, { error: error });
+  return sendHttpError(res, error);
+}
+
+/** The soft reset's marker as written to its audit row, or null for a row without one. */
+function softResetMarker(changes: unknown): { resetAt: Date; voucherIds: number[] | null } | null {
+  const record = changes as Record<string, { old?: unknown; new?: unknown } | undefined> | null;
+  const marker = record?.resetMarker?.new as { resetAt?: unknown; voucherCount?: unknown } | undefined;
+  const resetAt = typeof marker?.resetAt === "string" ? new Date(marker.resetAt) : null;
+  if (!resetAt || Number.isNaN(resetAt.getTime())) return null;
+  const voucherCount = Number(marker?.voucherCount);
+  const pages = record?.vouchers?.old;
+  const voucherIds = Array.isArray(pages)
+    ? pages.flatMap((page) => (Array.isArray(page) ? page : [])).map((row) => Number((row as { id?: unknown })?.id))
+    : [];
+  const complete =
+    Number.isInteger(voucherCount) &&
+    voucherIds.length === voucherCount &&
+    voucherIds.every((id) => Number.isInteger(id) && id > 0);
+  return { resetAt, voucherIds: complete ? voucherIds : null };
+}
+
+export function registerCompanySettingsRoutes(app: Express) {
+  // Hard reset: deletes the company's Payment, Receipt and Journal vouchers and their lines.
+  app.post("/api/admin/reset-company-data", requireAuth, requireRole("Owner"), async (req, res) => {
+    try {
+      const companyId = resetCompanyId(req);
 
       const company = await storage.getCompanyById(companyId);
       if (!company) {
         return res.status(400).json({ message: "Company not found." });
       }
 
-      const closedRefusal = await closedBooksResetRefusal(Number(companyId));
+      const closedRefusal = await closedBooksResetRefusal(companyId);
       if (closedRefusal) {
         return res.status(409).json({ message: closedRefusal, code: "ACCOUNTING_PERIOD_CLOSED" });
       }
@@ -49,43 +149,87 @@ export function registerCompanySettingsRoutes(app: Express) {
       // Define voucher types to DELETE (Payment, Receipt, Journal - excluding POS, Production, Consumption, Stock Transfer)
       const voucherTypesToDelete = ["Payment", "Receipt", "Journal"];
 
-      // Get all vouchers of these types for this company
-      const vouchersToDelete = await db
-        .select()
-        .from(vouchers)
-        .where(and(eq(vouchers.companyId, companyId), inArray(vouchers.voucherType, voucherTypesToDelete)));
+      // One transaction for the whole reset: a refusal or failure part-way
+      // (closed period, a referenced voucher) leaves every voucher in place.
+      const outcome = await db.transaction(async (tx) => {
+        const vouchersToDelete = await tx
+          .select({
+            id: vouchers.id,
+            voucherType: vouchers.voucherType,
+            voucherNumber: vouchers.voucherNumber,
+            voucherDate: vouchers.voucherDate,
+            totalAmount: vouchers.totalAmount,
+          })
+          .from(vouchers)
+          .where(and(eq(vouchers.companyId, companyId), inArray(vouchers.voucherType, voucherTypesToDelete)))
+          .orderBy(vouchers.id);
+        const voucherIds = vouchersToDelete.map((v) => v.id);
 
-      let deletedVoucherCount = 0;
-      let deletedEntryCount = 0;
-      const details: Array<{ voucherType: string; voucherNumber: string; amount: string }> = [];
+        await refuseClosingVouchers(tx, voucherIds);
 
-      // Delete voucher entries first, then vouchers (respecting foreign keys)
-      for (const v of vouchersToDelete) {
-        // Count entries for this voucher
-        const entries = await db.select().from(voucherEntries).where(eq(voucherEntries.voucherId, v.id));
+        let deletedEntryCount = 0;
+        let deletedPostingRequestCount = 0;
+        for (const ids of chunk(voucherIds, ID_CHUNK_SIZE)) {
+          // Engine-posted vouchers keep a posting-request identity whose FK is
+          // ON DELETE RESTRICT; drop it first, as
+          // deleteInfrastructurePostingIdentityForVoucherTx does per voucher.
+          const postingRequests = await tx
+            .delete(accountingPostingRequests)
+            .where(inArray(accountingPostingRequests.voucherId, ids))
+            .returning({ id: accountingPostingRequests.id });
+          deletedPostingRequestCount += postingRequests.length;
+          // Then the lines, then the vouchers (respecting foreign keys).
+          const entries = await tx
+            .delete(voucherEntries)
+            .where(inArray(voucherEntries.voucherId, ids))
+            .returning({ id: voucherEntries.id });
+          deletedEntryCount += entries.length;
+          await tx.delete(vouchers).where(and(eq(vouchers.companyId, companyId), inArray(vouchers.id, ids)));
+        }
 
-        deletedEntryCount += entries.length;
+        // Summary by type
+        const typeSummary = voucherTypesToDelete.map((type) => ({
+          type,
+          count: vouchersToDelete.filter((v) => v.voucherType === type).length,
+        }));
 
-        // Delete entries
-        await db.delete(voucherEntries).where(eq(voucherEntries.voucherId, v.id));
+        await writeAuditEvent(
+          {
+            ...auditActor(req),
+            companyId,
+            action: "delete",
+            tableName: RESET_AUDIT_TABLE,
+            recordIdentifier: HARD_RESET_IDENTIFIER,
+            changes: {
+              summary: {
+                old: {
+                  deletedVouchers: vouchersToDelete.length,
+                  deletedEntries: deletedEntryCount,
+                  deletedPostingRequests: deletedPostingRequestCount,
+                  typeSummary,
+                  vouchersRecordedInFull: vouchersToDelete.length <= AUDIT_MAX_ROWS,
+                },
+              },
+              vouchers: {
+                old: auditPages(
+                  vouchersToDelete.map((v) => ({
+                    id: v.id,
+                    voucherNumber: v.voucherNumber,
+                    voucherType: v.voucherType,
+                    voucherDate: v.voucherDate,
+                    amount: v.totalAmount || "0",
+                  }))
+                ),
+              },
+            },
+          },
+          tx
+        );
 
-        // Delete voucher
-        await db.delete(vouchers).where(eq(vouchers.id, v.id));
-        deletedVoucherCount++;
+        return { deletedVoucherCount: vouchersToDelete.length, deletedEntryCount, typeSummary };
+      });
 
-        details.push({
-          voucherType: v.voucherType,
-          voucherNumber: v.voucherNumber,
-          amount: v.totalAmount || "0",
-        });
-      }
-
-      // Summary by type
-      const typeSummary = voucherTypesToDelete.map((type) => ({
-        type,
-        count: details.filter((d) => d.voucherType === type).length,
-      }));
-
+      const { deletedVoucherCount, deletedEntryCount, typeSummary } = outcome;
       res.json({
         message: `Reset complete for ${company.name}. Deleted ${deletedVoucherCount} voucher(s) and ${deletedEntryCount} entries.`,
         deletedVouchers: deletedVoucherCount,
@@ -103,8 +247,7 @@ export function registerCompanySettingsRoutes(app: Express) {
         ],
       });
     } catch (error: unknown) {
-      logger.error("Reset company data error:", { error: error });
-      res.status(500).json({ message: getErrorMessage(error) });
+      return sendResetError(res, error, "Reset company data error:");
     }
   });
 
@@ -160,15 +303,16 @@ export function registerCompanySettingsRoutes(app: Express) {
   });
 
   // Company Data Reset - Delete vouchers (keep OTW container vouchers only) and clear opening balances
-  app.post("/api/admin/company-data-reset", requireAuth, requireRole("Admin"), async (req, res) => {
+  app.post("/api/admin/company-data-reset", requireAuth, requireRole("Owner"), async (req, res) => {
     try {
-      const { companyId, accountIds, clearStockOpeningBalances } = req.body;
+      const companyId = resetCompanyId(req);
+      const { accountIds, clearStockOpeningBalances } = req.body;
 
-      if (!companyId || !Array.isArray(accountIds)) {
+      if (!Array.isArray(accountIds)) {
         return res.status(400).json({ message: "companyId and accountIds array are required" });
       }
 
-      const closedRefusal = await closedBooksResetRefusal(Number(companyId));
+      const closedRefusal = await closedBooksResetRefusal(companyId);
       if (closedRefusal) {
         return res.status(409).json({ message: closedRefusal, code: "ACCOUNTING_PERIOD_CLOSED" });
       }
@@ -178,6 +322,10 @@ export function registerCompanySettingsRoutes(app: Express) {
         openingBalancesCleared: 0,
         stockOpeningBalancesCleared: 0,
       };
+
+      // Every voucher this reset soft-deletes carries this exact deleted_at. It
+      // is recorded in the audit row and is what undo-company-reset matches on.
+      const resetAt = new Date();
 
       // Start a transaction
       await db.transaction(async (tx) => {
@@ -210,11 +358,18 @@ export function registerCompanySettingsRoutes(app: Express) {
         const interCompanyVoucherIds = new Set(interCompanyVoucherEntries.map((e) => e.voucherId));
         logger.info("Vouchers involving inter-company accounts to preserve", { count: interCompanyVoucherIds.size });
 
-        // 4. Get ALL vouchers for this company
+        // 4. Get the company's live vouchers. Vouchers that were already deleted
+        //    keep their own deleted_at, so an undo of this reset never revives them.
         const allVouchers = await tx
-          .select({ id: vouchers.id, voucherType: vouchers.voucherType, description: vouchers.description })
+          .select({
+            id: vouchers.id,
+            voucherType: vouchers.voucherType,
+            voucherNumber: vouchers.voucherNumber,
+            description: vouchers.description,
+          })
           .from(vouchers)
-          .where(eq(vouchers.companyId, companyId));
+          .where(and(eq(vouchers.companyId, companyId), isNull(vouchers.deletedAt)))
+          .orderBy(vouchers.id);
 
         // 5. Filter out vouchers that should be preserved:
         //    - Purchase vouchers that belong to OTW containers
@@ -250,13 +405,34 @@ export function registerCompanySettingsRoutes(app: Express) {
         if (voucherIdsToDelete.length > 0) {
           // SOFT DELETE vouchers only - DON'T delete voucher entries
           // This allows undo to work properly
-          await tx.update(vouchers).set({ deletedAt: new Date() }).where(inArray(vouchers.id, voucherIdsToDelete));
+          for (const ids of chunk(voucherIdsToDelete, ID_CHUNK_SIZE)) {
+            await tx.update(vouchers).set({ deletedAt: resetAt }).where(inArray(vouchers.id, ids));
+          }
 
           results.vouchersDeleted = voucherIdsToDelete.length;
         }
 
-        // 4. Clear opening balances for selected accounts
+        // 6. Clear opening balances for selected accounts, recording them first
+        let previousOpeningBalances: Array<{
+          id: number;
+          code: string;
+          name: string;
+          openingBalance: string | null;
+          openingBalanceSide: string | null;
+        }> = [];
         if (accountIds.length > 0) {
+          previousOpeningBalances = await tx
+            .select({
+              id: ledgerAccounts.id,
+              code: ledgerAccounts.code,
+              name: ledgerAccounts.name,
+              openingBalance: ledgerAccounts.openingBalance,
+              openingBalanceSide: ledgerAccounts.openingBalanceSide,
+            })
+            .from(ledgerAccounts)
+            .where(and(eq(ledgerAccounts.companyId, companyId), inArray(ledgerAccounts.id, accountIds)))
+            .orderBy(ledgerAccounts.id);
+
           await tx
             .update(ledgerAccounts)
             .set({ openingBalance: "0", openingBalanceSide: null })
@@ -265,7 +441,14 @@ export function registerCompanySettingsRoutes(app: Express) {
           results.openingBalancesCleared = accountIds.length;
         }
 
-        // 5. Clear stock item opening balances if requested
+        // 7. Clear stock item opening balances if requested, recording the non-zero ones first
+        let previousStockOpenings: Array<{
+          id: number;
+          code: string;
+          openingQty: string | null;
+          openingRate: string | null;
+          openingValue: string | null;
+        }> = [];
         if (clearStockOpeningBalances) {
           // Count first
           const stockItemCount = await tx
@@ -275,38 +458,159 @@ export function registerCompanySettingsRoutes(app: Express) {
 
           results.stockOpeningBalancesCleared = Number(stockItemCount[0]?.count) || 0;
 
+          previousStockOpenings = await tx
+            .select({
+              id: stockItems.id,
+              code: stockItems.code,
+              openingQty: stockItems.openingQty,
+              openingRate: stockItems.openingRate,
+              openingValue: stockItems.openingValue,
+            })
+            .from(stockItems)
+            .where(
+              and(
+                eq(stockItems.companyId, companyId),
+                sql`(COALESCE(${stockItems.openingQty}, 0) <> 0 OR COALESCE(${stockItems.openingRate}, 0) <> 0 OR COALESCE(${stockItems.openingValue}, 0) <> 0)`
+              )
+            )
+            .orderBy(stockItems.id);
+
           await tx
             .update(stockItems)
             .set({ openingQty: "0", openingRate: "0", openingValue: "0" })
             .where(eq(stockItems.companyId, companyId));
         }
+
+        // 8. Audit, in the same transaction: the undo marker, the vouchers
+        //    soft-deleted and the opening balances as they were before zeroing.
+        await writeAuditEvent(
+          {
+            ...auditActor(req),
+            companyId,
+            action: "delete",
+            tableName: RESET_AUDIT_TABLE,
+            recordIdentifier: SOFT_RESET_IDENTIFIER,
+            changes: {
+              resetMarker: {
+                new: {
+                  resetAt: resetAt.toISOString(),
+                  voucherCount: vouchersToDelete.length,
+                  vouchersRecordedInFull: vouchersToDelete.length <= AUDIT_MAX_ROWS,
+                },
+              },
+              summary: { new: results },
+              vouchers: {
+                old: auditPages(
+                  vouchersToDelete.map((v) => ({
+                    id: v.id,
+                    voucherNumber: v.voucherNumber,
+                    voucherType: v.voucherType,
+                  }))
+                ),
+                new: { deletedAt: resetAt.toISOString() },
+              },
+              openingBalances: {
+                old: auditPages(previousOpeningBalances),
+                new: { openingBalance: "0", openingBalanceSide: null },
+              },
+              ...(clearStockOpeningBalances
+                ? {
+                    stockOpeningBalances: {
+                      old: auditPages(previousStockOpenings),
+                      new: { openingQty: "0", openingRate: "0", openingValue: "0" },
+                    },
+                  }
+                : {}),
+            },
+          },
+          tx
+        );
       });
 
       logger.info(`Company data reset completed for company ${companyId}:`, { results: results });
       res.json({ success: true, results });
     } catch (error: unknown) {
-      logger.error("Company data reset error:", { error: error });
-      res.status(500).json({ message: getErrorMessage(error) });
+      return sendResetError(res, error, "Company data reset error:");
     }
   });
 
-  // Undo Last Reset - Restore soft-deleted vouchers for a company
-  app.post("/api/admin/undo-company-reset", requireAuth, requireRole("Admin"), async (req, res) => {
+  // Undo Last Reset - Restore the vouchers the company's last soft reset deleted.
+  //
+  // Only that reset's vouchers come back: those whose deleted_at is exactly the
+  // reset's timestamp (written as one value for the whole reset and recorded in
+  // its audit row), further limited to the voucher ids the audit row lists when
+  // it lists all of them. Vouchers deleted any other way keep their deletion.
+  app.post("/api/admin/undo-company-reset", requireAuth, requireRole("Owner"), async (req, res) => {
     try {
-      const { companyId } = req.body;
+      const companyId = resetCompanyId(req);
 
-      if (!companyId) {
-        return res.status(400).json({ message: "companyId is required" });
-      }
+      const restoredCount = await db.transaction(async (tx) => {
+        const [lastReset] = await tx
+          .select({ id: auditLog.id, changes: auditLog.changes })
+          .from(auditLog)
+          .where(
+            and(
+              eq(auditLog.companyId, companyId),
+              eq(auditLog.tableName, RESET_AUDIT_TABLE),
+              eq(auditLog.action, "delete"),
+              eq(auditLog.recordIdentifier, SOFT_RESET_IDENTIFIER)
+            )
+          )
+          .orderBy(desc(auditLog.id))
+          .limit(1);
+        const marker = lastReset ? softResetMarker(lastReset.changes) : null;
+        if (!lastReset || !marker) throw new HttpError(404, NO_RESET_TO_UNDO_MESSAGE);
 
-      // Restore soft-deleted vouchers by clearing deletedAt
-      const result = await db
-        .update(vouchers)
-        .set({ deletedAt: null })
-        .where(and(eq(vouchers.companyId, companyId), isNotNull(vouchers.deletedAt)))
-        .returning({ id: vouchers.id });
+        const [alreadyUndone] = await tx
+          .select({ id: auditLog.id })
+          .from(auditLog)
+          .where(
+            and(
+              eq(auditLog.companyId, companyId),
+              eq(auditLog.tableName, RESET_AUDIT_TABLE),
+              eq(auditLog.action, "restore"),
+              eq(auditLog.recordId, lastReset.id)
+            )
+          )
+          .limit(1);
+        if (alreadyUndone) throw new HttpError(404, NO_RESET_TO_UNDO_MESSAGE);
 
-      const restoredCount = result.length;
+        const restored: number[] = [];
+        const scopes = marker.voucherIds ? chunk(marker.voucherIds, ID_CHUNK_SIZE) : [null];
+        for (const ids of scopes) {
+          const rows = await tx
+            .update(vouchers)
+            .set({ deletedAt: null })
+            .where(
+              and(
+                eq(vouchers.companyId, companyId),
+                eq(vouchers.deletedAt, marker.resetAt),
+                ...(ids ? [inArray(vouchers.id, ids)] : [])
+              )
+            )
+            .returning({ id: vouchers.id });
+          restored.push(...rows.map((row) => row.id));
+        }
+
+        await writeAuditEvent(
+          {
+            ...auditActor(req),
+            companyId,
+            action: "restore",
+            tableName: RESET_AUDIT_TABLE,
+            recordId: lastReset.id,
+            recordIdentifier: UNDO_RESET_IDENTIFIER,
+            changes: {
+              vouchers: {
+                old: { deletedAt: marker.resetAt.toISOString() },
+                new: { deletedAt: null, vouchersRestored: restored.length, voucherIds: auditPages(restored) },
+              },
+            },
+          },
+          tx
+        );
+        return restored.length;
+      });
 
       logger.info(`Undo reset completed for company ${companyId}: restored ${restoredCount} vouchers`);
       res.json({
@@ -315,8 +619,7 @@ export function registerCompanySettingsRoutes(app: Express) {
         vouchersRestored: restoredCount,
       });
     } catch (error: unknown) {
-      logger.error("Undo company reset error:", { error: error });
-      res.status(500).json({ message: getErrorMessage(error) });
+      return sendResetError(res, error, "Undo company reset error:");
     }
   });
 

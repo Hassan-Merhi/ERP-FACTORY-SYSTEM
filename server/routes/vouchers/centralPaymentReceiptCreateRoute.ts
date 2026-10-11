@@ -146,7 +146,6 @@ async function createCentralPaymentReceipt(req: Request, res: Response, next: Ne
     const result = await db.transaction(async (tx) => {
       const built = await buildPaymentReceiptPostingRequest({
         companyId,
-        voucherNumber: `${String(body.voucherType).toUpperCase()}-${Date.now()}`,
         voucherType: body.voucherType,
         voucherDate: body.voucherDate,
         paymentAccountType: body.paymentAccountType,
@@ -180,6 +179,22 @@ async function createCentralPaymentReceipt(req: Request, res: Response, next: Ne
           companyId,
           voucher: posted.voucher,
         });
+        // Wave 16 (B): audited in the posting transaction; an audit failure
+        // rolls the voucher back.
+        const entrySnapshot = await snapshotVoucherEntries(posted.entries, tx);
+        await logAudit(
+          {
+            userId: userId!,
+            username: req.session.username || "unknown",
+            companyId,
+            action: "create",
+            tableName: "vouchers",
+            recordId: posted.voucher.id,
+            recordIdentifier: posted.voucher.voucherNumber,
+            changes: buildVoucherChangesForCreate(posted.voucher, entrySnapshot),
+          },
+          tx
+        );
       }
 
       return { posted, clientRequestId: built.clientRequestId };
@@ -204,26 +219,6 @@ async function createCentralPaymentReceipt(req: Request, res: Response, next: Ne
         });
       } catch (error: unknown) {
         logger.error("Central Payment/Receipt WhatsApp check failed (non-fatal)", {
-          companyId,
-          voucherId: posted.voucher.id,
-          error,
-        });
-      }
-
-      try {
-        const entrySnapshot = await snapshotVoucherEntries(posted.entries);
-        await logAudit({
-          userId: userId!,
-          username: req.session.username || "unknown",
-          companyId,
-          action: "create",
-          tableName: "vouchers",
-          recordId: posted.voucher.id,
-          recordIdentifier: posted.voucher.voucherNumber,
-          changes: buildVoucherChangesForCreate(posted.voucher, entrySnapshot),
-        });
-      } catch (error: unknown) {
-        logger.error("Central Payment/Receipt audit write failed (non-fatal)", {
           companyId,
           voucherId: posted.voucher.id,
           error,

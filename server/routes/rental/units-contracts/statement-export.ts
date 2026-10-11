@@ -10,11 +10,11 @@ import { getErrorMessage } from "../../../lib/httpHandlers";
 import { logger } from "../../../lib/logger";
 import { buildSafeFilename, contentDisposition } from "../../../lib/contentDisposition";
 import type ExcelJS from "exceljs";
-import { getCompanyId, ensureMonthlyLedgerRows } from "../shared";
+import { getCompanyId, monthlyLedgerRowsForRead } from "../shared";
 import { db } from "../../../db";
 import { requireAuth } from "../../../auth";
 import { eq, and, desc } from "drizzle-orm";
-import { propertyUnits, propertyContracts, propertyMonthlyLedger, propertyPayments } from "@shared/schema";
+import { propertyUnits, propertyContracts, propertyPayments } from "@shared/schema";
 import { parseId } from "../../../lib/parseId";
 
 export function registerRentalStatementExportRoutes(app: Express, ctx: RentalRoutesContext) {
@@ -48,12 +48,8 @@ export function registerRentalStatementExportRoutes(app: Express, ctx: RentalRou
         );
       if (!contract) return res.status(404).json({ message: "No active contract" });
 
-      await ensureMonthlyLedgerRows(contract.id);
-      const ledger = await db
-        .select()
-        .from(propertyMonthlyLedger)
-        .where(eq(propertyMonthlyLedger.contractId, contract.id))
-        .orderBy(propertyMonthlyLedger.year, propertyMonthlyLedger.month);
+      // Phase 19 (B), PE2: read only (it created and updated monthly rows).
+      const ledger = await monthlyLedgerRowsForRead(contract.id);
       const allPaymentsExport = await db
         .select()
         .from(propertyPayments)

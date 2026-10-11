@@ -68,89 +68,93 @@ export function registerSupplierFxTransferRoutes(app: Express) {
       // Overpayments are allowed — the remaining balance will go negative (CR),
       // visible on the statement so the company knows the supplier owes money back.
 
-      const [created] = await db.insert(factorySupplierFxTransfers).values(parsed).returning();
+      // The transfer, its container allocations and its daybook row are written
+      // together. An allocation failure used to be logged and swallowed, leaving
+      // a transfer that statements counted but no container allocation for it.
+      const created = await db.transaction(async (tx) => {
+        const [created] = await tx.insert(factorySupplierFxTransfers).values(parsed).returning();
 
-      // ── Phase 1: Oldest-first allocation persistence ──────────────────────────
-      // Allocate this FX transfer against containers ordered by creation date
-      try {
-        const allContainers = await db
-          .select({
-            id: factoryContainers.id,
-            finalPayableAmount: factoryContainers.finalPayableAmount,
-            actualReceivedKg: factoryContainers.actualReceivedKg,
-            totalKg: factoryContainers.totalKg,
-            ratePerKg: factoryContainers.ratePerKg,
-            freight: factoryContainers.freight,
-          })
-          .from(factoryContainers)
-          .where(
-            and(
-              eq(factoryContainers.companyId, companyId),
-              eq(factoryContainers.supplierId, fromSupId),
-              eq(factoryContainers.currencyCode, currCode)
+        // ── Phase 1: Oldest-first allocation persistence ──────────────────────────
+        // Allocate this FX transfer against containers ordered by creation date
+        {
+          const allContainers = await tx
+            .select({
+              id: factoryContainers.id,
+              finalPayableAmount: factoryContainers.finalPayableAmount,
+              actualReceivedKg: factoryContainers.actualReceivedKg,
+              totalKg: factoryContainers.totalKg,
+              ratePerKg: factoryContainers.ratePerKg,
+              freight: factoryContainers.freight,
+            })
+            .from(factoryContainers)
+            .where(
+              and(
+                eq(factoryContainers.companyId, companyId),
+                eq(factoryContainers.supplierId, fromSupId),
+                eq(factoryContainers.currencyCode, currCode)
+              )
             )
-          )
-          .orderBy(factoryContainers.createdAt); // oldest first
+            .orderBy(factoryContainers.createdAt); // oldest first
 
-        const cIds = allContainers.map((c) => c.id);
-        const prevAllocs =
-          cIds.length > 0
-            ? await db
-                .select({
-                  containerId: factoryFxAllocations.containerId,
-                  allocatedAmount: factoryFxAllocations.allocatedAmount,
-                })
-                .from(factoryFxAllocations)
-                .where(
-                  and(eq(factoryFxAllocations.companyId, companyId), inArray(factoryFxAllocations.containerId, cIds))
-                )
-            : [];
+          const cIds = allContainers.map((c) => c.id);
+          const prevAllocs =
+            cIds.length > 0
+              ? await tx
+                  .select({
+                    containerId: factoryFxAllocations.containerId,
+                    allocatedAmount: factoryFxAllocations.allocatedAmount,
+                  })
+                  .from(factoryFxAllocations)
+                  .where(
+                    and(eq(factoryFxAllocations.companyId, companyId), inArray(factoryFxAllocations.containerId, cIds))
+                  )
+              : [];
 
-        const allocatedPerContainer = new Map<number, Decimal>();
-        for (const a of prevAllocs)
-          allocatedPerContainer.set(
-            a.containerId,
-            (allocatedPerContainer.get(a.containerId) ?? new MoneyDecimal(0)).plus(toMoney(a.allocatedAmount))
-          );
+          const allocatedPerContainer = new Map<number, Decimal>();
+          for (const a of prevAllocs)
+            allocatedPerContainer.set(
+              a.containerId,
+              (allocatedPerContainer.get(a.containerId) ?? new MoneyDecimal(0)).plus(toMoney(a.allocatedAmount))
+            );
 
-        let rem = toMoney(created.fromAmount);
-        const rows = [];
-        for (const c of allContainers) {
-          if (rem.lessThanOrEqualTo(0.001)) break;
-          // Use totalKg (agreed weight) for FX allocation ceiling — same as supplier balance.
-          const val = toMoney(c.totalKg).times(toMoney(c.ratePerKg)).plus(toMoney(c.freight));
-          const used = allocatedPerContainer.get(c.id) ?? new MoneyDecimal(0);
-          const avail = MoneyDecimal.max(0, val.minus(used));
-          if (avail.lessThanOrEqualTo(0.001)) continue;
-          const toAlloc = MoneyDecimal.min(rem, avail);
-          rows.push({
-            companyId,
-            fxTransferId: created.id,
-            containerId: c.id,
-            sourceType: created.sourceType || "supplier",
-            allocatedAmount: toAlloc.toFixed(4),
-            currencyCode: currCode,
-          });
-          rem = rem.minus(toAlloc);
+          let rem = toMoney(created.fromAmount);
+          const rows = [];
+          for (const c of allContainers) {
+            if (rem.lessThanOrEqualTo(0.001)) break;
+            // Use totalKg (agreed weight) for FX allocation ceiling — same as supplier balance.
+            const val = toMoney(c.totalKg).times(toMoney(c.ratePerKg)).plus(toMoney(c.freight));
+            const used = allocatedPerContainer.get(c.id) ?? new MoneyDecimal(0);
+            const avail = MoneyDecimal.max(0, val.minus(used));
+            if (avail.lessThanOrEqualTo(0.001)) continue;
+            const toAlloc = MoneyDecimal.min(rem, avail);
+            rows.push({
+              companyId,
+              fxTransferId: created.id,
+              containerId: c.id,
+              sourceType: created.sourceType || "supplier",
+              allocatedAmount: toAlloc.toFixed(4),
+              currencyCode: currCode,
+            });
+            rem = rem.minus(toAlloc);
+          }
+          if (rows.length > 0) await tx.insert(factoryFxAllocations).values(rows);
         }
-        if (rows.length > 0) await db.insert(factoryFxAllocations).values(rows);
-      } catch (allocErr) {
-        logger.error("FX allocation error (non-fatal):", { error: allocErr });
-      }
-      // ─────────────────────────────────────────────────────────────────────────
+        // ─────────────────────────────────────────────────────────────────────────
 
-      const transferKind = created.sourceType === "commission" ? "Commission Transfer" : "FX Transfer";
-      await writeDaybookEntry(db, {
-        companyId,
-        txDate: created.date,
-        txType: "SUPPLIER_FX_TRANSFER",
-        referenceId: created.id,
-        referenceTable: "factory_supplier_fx_transfers",
-        description: `${transferKind}: ${fromSupplier.name} ${created.fromCurrencyCode} ${parseFloat(created.fromAmount).toFixed(2)} → ${toSupplier.name} USD ${parseFloat(created.toAmountUsd).toFixed(2)}`,
-        amountCurrency: toMoney(created.fromAmount).toNumber(),
-        amountUsd: toMoney(created.toAmountUsd).toNumber(),
-        currencyCode: created.fromCurrencyCode,
-        effectiveDate: (req.body.effectiveDate as string) || null,
+        const transferKind = created.sourceType === "commission" ? "Commission Transfer" : "FX Transfer";
+        await writeDaybookEntry(tx, {
+          companyId,
+          txDate: created.date,
+          txType: "SUPPLIER_FX_TRANSFER",
+          referenceId: created.id,
+          referenceTable: "factory_supplier_fx_transfers",
+          description: `${transferKind}: ${fromSupplier.name} ${created.fromCurrencyCode} ${parseFloat(created.fromAmount).toFixed(2)} → ${toSupplier.name} USD ${parseFloat(created.toAmountUsd).toFixed(2)}`,
+          amountCurrency: toMoney(created.fromAmount).toNumber(),
+          amountUsd: toMoney(created.toAmountUsd).toNumber(),
+          currencyCode: created.fromCurrencyCode,
+          effectiveDate: (req.body.effectiveDate as string) || null,
+        });
+        return created;
       });
 
       res.json(created);
@@ -172,32 +176,34 @@ export function registerSupplierFxTransferRoutes(app: Express) {
         .where(and(eq(factorySupplierFxTransfers.id, id), eq(factorySupplierFxTransfers.companyId, companyId)));
       if (!transfer) return res.status(404).json({ message: "Transfer not found" });
 
-      // Cascade-delete allocation rows before removing the transfer
-      await db
-        .delete(factoryFxAllocations)
-        .where(and(eq(factoryFxAllocations.fxTransferId, id), eq(factoryFxAllocations.companyId, companyId)));
+      await db.transaction(async (tx) => {
+        // Cascade-delete allocation rows before removing the transfer
+        await tx
+          .delete(factoryFxAllocations)
+          .where(and(eq(factoryFxAllocations.fxTransferId, id), eq(factoryFxAllocations.companyId, companyId)));
 
-      await db
-        .delete(factorySupplierFxTransfers)
-        .where(and(eq(factorySupplierFxTransfers.id, id), eq(factorySupplierFxTransfers.companyId, companyId)));
+        await tx
+          .delete(factorySupplierFxTransfers)
+          .where(and(eq(factorySupplierFxTransfers.id, id), eq(factorySupplierFxTransfers.companyId, companyId)));
 
-      // Remove the original daybook entry that was written when this transfer was created.
-      // Without this, the SUPPLIER_FX_TRANSFER row lingers in the daybook even after deletion.
-      await db
-        .delete(factoryDaybookEntries)
-        .where(
-          and(
-            eq(factoryDaybookEntries.companyId, companyId),
-            eq(factoryDaybookEntries.txType, "SUPPLIER_FX_TRANSFER"),
-            eq(factoryDaybookEntries.referenceId, id)
-          )
-        );
+        // Remove the original daybook entry that was written when this transfer was created.
+        // Without this, the SUPPLIER_FX_TRANSFER row lingers in the daybook even after deletion.
+        await tx
+          .delete(factoryDaybookEntries)
+          .where(
+            and(
+              eq(factoryDaybookEntries.companyId, companyId),
+              eq(factoryDaybookEntries.txType, "SUPPLIER_FX_TRANSFER"),
+              eq(factoryDaybookEntries.referenceId, id)
+            )
+          );
 
-      await writeDaybookEntry(db, {
-        companyId,
-        txDate: getClientDate(req),
-        txType: "SUPPLIER_FX_TRANSFER_DELETE",
-        description: `FX Transfer deleted: ${transfer.fromCurrencyCode} ${parseFloat(transfer.fromAmount).toFixed(2)} → USD ${parseFloat(transfer.toAmountUsd).toFixed(2)} (dated ${transfer.date})`,
+        await writeDaybookEntry(tx, {
+          companyId,
+          txDate: getClientDate(req),
+          txType: "SUPPLIER_FX_TRANSFER_DELETE",
+          description: `FX Transfer deleted: ${transfer.fromCurrencyCode} ${parseFloat(transfer.fromAmount).toFixed(2)} → USD ${parseFloat(transfer.toAmountUsd).toFixed(2)} (dated ${transfer.date})`,
+        });
       });
 
       res.json({ message: "FX transfer deleted" });

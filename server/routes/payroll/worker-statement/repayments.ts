@@ -6,16 +6,18 @@
  */
 import type { Express, Request, Response } from "express";
 import { parseId, parseOptionalId } from "../../../lib/parseId";
-import { getErrorMessage } from "../../../lib/httpHandlers";
+import { sendHttpError } from "../../../lib/httpHandlers";
 import { logger } from "../../../lib/logger";
 import { getClientDate } from "../../../lib/dateUtils";
 import { db } from "../../../db";
 import { requireAuth } from "../../../auth";
-import { eq, and } from "drizzle-orm";
-import { factoryWorkers, factoryWorkerAdvances, factoryAdvanceRepayments } from "@shared/schema";
+import { eq, and, like, or } from "drizzle-orm";
+import { factoryWorkers, factoryWorkerAdvances, factoryAdvanceRepayments, vouchers } from "@shared/schema";
+import { logAudit } from "../../helpers/auditHelpers";
 
 import { getFactoryCompanyId, writeDaybookEntry } from "./_helpers";
 import { toMoney } from "../../../lib/money";
+import { retireVouchersTx, sessionRetirementActor } from "../../../services/accounting/voucherRetirement";
 
 export function registerWorkerRepaymentDeleteRoutes(app: Express) {
   app.delete("/api/factory/advance-repayments/:id", requireAuth, async (req: Request, res: Response) => {
@@ -43,7 +45,17 @@ export function registerWorkerRepaymentDeleteRoutes(app: Express) {
       const repayAmt = toMoney(repayment.amount);
       const restoredBal = toMoney(advance?.remainingBalance).plus(repayAmt);
 
-      await db.transaction(async (tx) => {
+      const [worker] = await db
+        .select({ fullName: factoryWorkers.fullName })
+        .from(factoryWorkers)
+        .where(eq(factoryWorkers.id, repayment.workerId));
+
+      // Wave 7: the repayment, its receipt voucher (RECEIPT-REPAY-{id}-* or
+      // REPAY-SAL-{id}-*, Dr cash / Cr Factory Worker Advances), the restored
+      // advance balance, the daybook row and the audit row commit together.
+      // Before, the voucher was left behind, so the advance account kept a
+      // credit the repayment no longer had.
+      const removedVoucherIds = await db.transaction(async (tx) => {
         await tx.delete(factoryAdvanceRepayments).where(eq(factoryAdvanceRepayments.id, repaymentId));
 
         if (advance) {
@@ -55,30 +67,69 @@ export function registerWorkerRepaymentDeleteRoutes(app: Express) {
             })
             .where(eq(factoryWorkerAdvances.id, advance.id));
         }
+
+        const receiptVouchers = await tx
+          .select({ id: vouchers.id })
+          .from(vouchers)
+          .where(
+            and(
+              eq(vouchers.companyId, companyId),
+              or(
+                like(vouchers.voucherNumber, `RECEIPT-REPAY-${repaymentId}-%`),
+                like(vouchers.voucherNumber, `REPAY-SAL-${repaymentId}-%`)
+              )
+            )
+          );
+        const voucherIds = receiptVouchers.map((v) => v.id);
+        if (voucherIds.length > 0) {
+          // Wave 16 (A): retired (soft delete with lines, audited here), not hard-deleted.
+          await retireVouchersTx(tx, {
+            companyId,
+            voucherIds,
+            reason: "advance-repayment-delete",
+            actor: sessionRetirementActor(req),
+          });
+        }
+
+        await writeDaybookEntry(tx, {
+          companyId,
+          txDate: getClientDate(req),
+          txType: "ADVANCE_REPAYMENT_DELETED",
+          referenceId: repaymentId,
+          referenceTable: "factory_advance_repayments",
+          description: `Repayment deleted for ${worker?.fullName || "Worker"}: $${repayAmt.toFixed(2)} (advance #${repayment.advanceId})`,
+          amountCurrency: repayAmt.toNumber(),
+          currencyCode: "USD",
+          amountUsd: repayAmt.toNumber(),
+          createdBy: req.session.userId ?? undefined,
+        });
+        await logAudit(
+          {
+            userId: req.session.userId!,
+            username: req.session.username || req.session.userId!,
+            companyId,
+            action: "delete",
+            tableName: "factory_advance_repayments",
+            recordId: repaymentId,
+            recordIdentifier: `Repayment #${repaymentId} (advance #${repayment.advanceId})`,
+            changes: {
+              amount: { old: repayment.amount, new: null },
+              vouchersRemoved: { old: voucherIds.join(", ") || null, new: null },
+            },
+          },
+          tx
+        );
+        return voucherIds;
       });
 
-      const [worker] = await db
-        .select({ fullName: factoryWorkers.fullName })
-        .from(factoryWorkers)
-        .where(eq(factoryWorkers.id, repayment.workerId));
-
-      await writeDaybookEntry(db, {
-        companyId,
-        txDate: getClientDate(req),
-        txType: "ADVANCE_REPAYMENT_DELETED",
-        referenceId: repaymentId,
-        referenceTable: "factory_advance_repayments",
-        description: `Repayment deleted for ${worker?.fullName || "Worker"}: $${repayAmt.toFixed(2)} (advance #${repayment.advanceId})`,
-        amountCurrency: repayAmt.toNumber(),
-        currencyCode: "USD",
-        amountUsd: repayAmt.toNumber(),
-        createdBy: req.session.userId ?? undefined,
+      res.json({
+        message: "Repayment deleted",
+        restoredBalance: restoredBal.toFixed(2),
+        vouchersRemoved: removedVoucherIds.length,
       });
-
-      res.json({ message: "Repayment deleted", restoredBalance: restoredBal.toFixed(2) });
     } catch (error: unknown) {
       logger.error("Error deleting repayment:", { error: error });
-      res.status(500).json({ message: getErrorMessage(error) });
+      sendHttpError(res, error);
     }
   });
 }

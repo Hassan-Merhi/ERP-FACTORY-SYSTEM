@@ -218,8 +218,8 @@ export function InitializeBalancesDialog({ open, onOpenChange }: InitializeBalan
             <div className="text-foreground">
               {!result ? (
                 <p className="text-muted-foreground">
-                  This will create Owner's Capital accounts for each company to balance the Import Cycle. This action
-                  cannot be easily undone.
+                  This checks each company's Import Cycle difference and shows what a balancing entry would need. No
+                  balances are changed: a difference is corrected with a reviewed, posted entry.
                 </p>
               ) : (
                 <div className="space-y-4 mt-4">
@@ -285,7 +285,7 @@ export function InitializeBalancesDialog({ open, onOpenChange }: InitializeBalan
           <AlertDialogCancel>Close</AlertDialogCancel>
           {!result && (
             <AlertDialogAction onClick={() => mutation.mutate()} disabled={mutation.isPending}>
-              {mutation.isPending ? "Processing..." : "Initialize All Companies"}
+              {mutation.isPending ? "Checking..." : "Check All Companies"}
             </AlertDialogAction>
           )}
         </AlertDialogFooter>

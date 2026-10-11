@@ -105,7 +105,8 @@ async function recipientsOf(linkIdArg: number): Promise<string[]> {
 
 async function destVoucherCount(): Promise<number> {
   const result = await pool.query<{ count: string }>(
-    `SELECT COUNT(*)::text AS count FROM vouchers WHERE company_id = $1 AND voucher_number LIKE 'IC-RCPT-%'`,
+    // Phase 22 (B): the receipt is numbered by the engine (RV-...); found by its type.
+    `SELECT COUNT(*)::text AS count FROM vouchers WHERE company_id = $1 AND voucher_type = 'Receipt' AND deleted_at IS NULL`,
     [destCompanyId]
   );
   return Number(result.rows[0].count);

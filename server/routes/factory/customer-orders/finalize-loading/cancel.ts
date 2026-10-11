@@ -35,15 +35,17 @@ async function releaseOrderBalesInBulk(tx: DbTransaction, baleIds: number[]): Pr
     .where(inArray(factoryBales.id, uniqueBaleIds));
 }
 
-async function writeCancelAudit(
+// Phase 21 (B): written on the cancel's transaction, so a failed audit rolls
+// the cancel back (it used to run after commit and be non-fatal).
+async function writeCancelAuditTx(
+  tx: DbTransaction,
   req: Request,
   companyId: number,
   orderId: number,
-  order: CustomerOrder,
-  label: string
+  order: CustomerOrder
 ): Promise<void> {
-  try {
-    await logAudit({
+  await logAudit(
+    {
       userId: req.session.userId!,
       username: req.session.username || req.session.userId!,
       companyId,
@@ -52,10 +54,9 @@ async function writeCancelAudit(
       recordId: orderId,
       recordIdentifier: getOrderIdentifier(order, orderId),
       changes: { status: { old: order.status, new: "CANCELLED" } },
-    });
-  } catch (auditErr) {
-    logger.error(label, { error: auditErr });
-  }
+    },
+    tx
+  );
 }
 
 export function registerOrderCancelRoutes(app: Express) {
@@ -166,16 +167,9 @@ export function registerOrderCancelRoutes(app: Express) {
             : `Order cancelled: ${cancelCustomer?.legalName || "Customer"}, ${orderBales.length} bale${orderBales.length !== 1 ? "s" : ""} released`,
         });
 
+        await writeCancelAuditTx(tx, req, companyId, orderId, order);
         return cancelledOrder;
       });
-
-      await writeCancelAudit(
-        req,
-        companyId,
-        orderId,
-        order,
-        isV5Loading ? "[order cancel V5 audit] non-fatal:" : "[order cancel audit] non-fatal:"
-      );
 
       return res.json(updated);
     } catch (error: unknown) {
@@ -206,46 +200,50 @@ export function registerOrderCancelRoutes(app: Express) {
         return res.status(400).json({ message: "Only CANCELLED orders can be restored" });
       if (!order.loadingStartedAt) return res.status(400).json({ message: "This order was not a loading order" });
 
-      const orderBales = await db.select().from(customerOrderBales).where(eq(customerOrderBales.orderId, orderId));
-      if (!order.proformaIdUsed) {
-        for (const ob of orderBales) {
-          await db
-            .update(factoryBales)
-            .set({ status: "RESERVED_FOR_ORDER", updatedAt: new Date() })
-            .where(and(eq(factoryBales.id, ob.baleId), eq(factoryBales.status, "IN_STOCK")));
+      // Phase 21 (B): the restore and its audit commit together (it ran
+      // statement by statement with an after-commit, non-fatal audit).
+      const restored = await db.transaction(async (tx) => {
+        const orderBales = await tx.select().from(customerOrderBales).where(eq(customerOrderBales.orderId, orderId));
+        if (!order.proformaIdUsed) {
+          for (const ob of orderBales) {
+            await tx
+              .update(factoryBales)
+              .set({ status: "RESERVED_FOR_ORDER", updatedAt: new Date() })
+              .where(and(eq(factoryBales.id, ob.baleId), eq(factoryBales.status, "IN_STOCK")));
+          }
         }
-      }
 
-      const [restored] = await db
-        .update(customerOrders)
-        .set({ status: "LOADING", updatedAt: new Date() })
-        .where(eq(customerOrders.id, orderId))
-        .returning();
+        const [restoredOrder] = await tx
+          .update(customerOrders)
+          .set({ status: "LOADING", updatedAt: new Date() })
+          .where(eq(customerOrders.id, orderId))
+          .returning();
 
-      await db
-        .delete(factoryDaybookEntries)
-        .where(
-          and(
-            eq(factoryDaybookEntries.companyId, companyId),
-            eq(factoryDaybookEntries.txType, "ORDER_CANCELLED"),
-            eq(factoryDaybookEntries.referenceId, orderId)
-          )
+        await tx
+          .delete(factoryDaybookEntries)
+          .where(
+            and(
+              eq(factoryDaybookEntries.companyId, companyId),
+              eq(factoryDaybookEntries.txType, "ORDER_CANCELLED"),
+              eq(factoryDaybookEntries.referenceId, orderId)
+            )
+          );
+
+        await logAudit(
+          {
+            userId: req.session.userId!,
+            username: req.session.username || req.session.userId!,
+            companyId,
+            action: "update",
+            tableName: "factory_customer_orders",
+            recordId: orderId,
+            recordIdentifier: getOrderIdentifier(order, orderId),
+            changes: { status: { old: "CANCELLED", new: "LOADING" } },
+          },
+          tx
         );
-
-      try {
-        await logAudit({
-          userId: req.session.userId!,
-          username: req.session.username || req.session.userId!,
-          companyId,
-          action: "update",
-          tableName: "factory_customer_orders",
-          recordId: orderId,
-          recordIdentifier: getOrderIdentifier(order, orderId),
-          changes: { status: { old: "CANCELLED", new: "LOADING" } },
-        });
-      } catch (auditErr) {
-        logger.error("[order restore-loading audit] non-fatal:", { error: auditErr });
-      }
+        return restoredOrder;
+      });
 
       return res.json(restored);
     } catch (error: unknown) {

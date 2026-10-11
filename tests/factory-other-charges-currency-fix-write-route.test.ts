@@ -71,13 +71,27 @@ beforeAll(async () => {
     [ctx.companyId, `FACTORY-OC-${containerId}-${chargeId}-OLD`, `${TEST_PREFIX} old charge voucher`]
   );
   oldVoucherId = voucher.rows[0].id;
-  await pool.query(
-    `INSERT INTO voucher_entries
-       (voucher_id, ledger_account_id, debit_amount, credit_amount, narration)
-     VALUES ($1, $2, '25', '0', $3),
-            ($1, $4, '0', '25', $3)`,
-    [oldVoucherId, ctx.cashAccountId, `${TEST_PREFIX} old charge`, chargeAccountId]
-  );
+  // The old voucher is legacy-shaped (native EUR in the USD columns), as history
+  // left it: the currency trigger v2 (wave 17 D) refuses a new such line, so it is
+  // written with the triggers off.
+  const legacy = await pool.connect();
+  try {
+    await legacy.query("BEGIN");
+    await legacy.query("SET LOCAL session_replication_role = replica");
+    await legacy.query(
+      `INSERT INTO voucher_entries
+         (voucher_id, company_id, ledger_account_id, debit_amount, credit_amount, narration)
+       VALUES ($1, $5, $2, '25', '0', $3),
+              ($1, $5, $4, '0', '25', $3)`,
+      [oldVoucherId, ctx.cashAccountId, `${TEST_PREFIX} old charge`, chargeAccountId, ctx.companyId]
+    );
+    await legacy.query("COMMIT");
+  } catch (error) {
+    await legacy.query("ROLLBACK");
+    throw error;
+  } finally {
+    legacy.release();
+  }
 }, 120000);
 
 afterAll(async () => {
@@ -121,8 +135,17 @@ describe("POST /api/factory/admin/fix-other-charges-currency", () => {
     expect(Number(charge.rows[0].amount)).toBeCloseTo(25, 2);
 
     // The old non-USD posting must not coexist with the replacement.
-    expect((await pool.query(`SELECT id FROM vouchers WHERE id = $1`, [oldVoucherId])).rowCount).toBe(0);
-    expect((await pool.query(`SELECT id FROM voucher_entries WHERE voucher_id = $1`, [oldVoucherId])).rowCount).toBe(0);
+    expect(
+      (await pool.query(`SELECT id FROM vouchers WHERE id = $1 AND deleted_at IS NULL`, [oldVoucherId])).rowCount
+    ).toBe(0);
+    expect(
+      (
+        await pool.query(
+          `SELECT ve.id FROM voucher_entries ve JOIN vouchers v ON v.id = ve.voucher_id AND v.deleted_at IS NULL WHERE ve.voucher_id = $1`,
+          [oldVoucherId]
+        )
+      ).rowCount
+    ).toBe(0);
 
     const replacement = await pool.query<{
       id: number;

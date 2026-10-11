@@ -80,9 +80,13 @@ async function entriesForCompany(companyId: number, poNumber: string): Promise<E
        FROM voucher_entries ve
        JOIN vouchers v ON v.id = ve.voucher_id
        LEFT JOIN ledger_accounts la ON la.id = ve.ledger_account_id
-      WHERE v.company_id = $1 AND v.voucher_number LIKE $2
+      WHERE v.company_id = $1
+        AND (v.voucher_number LIKE $2
+             -- Phase 22 (C): the PO's own purchase voucher is engine-numbered
+             -- (PU-{company}-{year}-{n}); it is found by the PO's voucher link.
+             OR v.id IN (SELECT voucher_id FROM purchase_orders WHERE po_number = $3 AND voucher_id IS NOT NULL))
       ORDER BY ve.id`,
-    [companyId, `%${poNumber}%`]
+    [companyId, `%${poNumber}%`, poNumber]
   );
   return result.rows;
 }

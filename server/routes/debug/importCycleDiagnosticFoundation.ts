@@ -1,4 +1,5 @@
 import { db } from "../../db";
+import { companyStockValue } from "../../services/inventory/stockValuation";
 import { storage } from "../../storage";
 import { isParentCompanyContext } from "../helpers/supplierBalanceHelpers";
 import {
@@ -106,6 +107,7 @@ export async function collectImportCycleBalanceSnapshot(companyId: number): Prom
       locationName: locations.name,
       quantity: inventory.quantity,
       averageRate: inventory.averageRate,
+      totalValue: inventory.totalValue,
     })
     .from(inventory)
     .innerJoin(stockItems, eq(inventory.stockItemId, stockItems.id))
@@ -115,7 +117,13 @@ export async function collectImportCycleBalanceSnapshot(companyId: number): Prom
   for (const item of negativeInventory) {
     const qty = toMoney(item.quantity).toNumber();
     const rate = toMoney(item.averageRate).toNumber();
-    const impact = toMoney(item.quantity).times(toMoney(item.averageRate)).abs().toNumber();
+    // The shortage's provisional value as the sub-ledger holds it (wave 11
+    // negative-stock policy). A short row written before wave 11 holds no
+    // value, so its impact is estimated at the cost memory (display only).
+    const heldValue = toMoney(item.totalValue);
+    const impact = (heldValue.isZero() ? toMoney(item.quantity).times(toMoney(item.averageRate)) : heldValue)
+      .abs()
+      .toNumber();
     issues.push({
       id: generateIssueId(),
       type: "negative_inventory",
@@ -145,6 +153,7 @@ export async function collectImportCycleBalanceSnapshot(companyId: number): Prom
       locationId: inventory.locationId,
       quantity: inventory.quantity,
       averageRate: inventory.averageRate,
+      totalValue: inventory.totalValue,
     })
     .from(inventory)
     .innerJoin(stockItems, eq(inventory.stockItemId, stockItems.id))
@@ -154,7 +163,8 @@ export async function collectImportCycleBalanceSnapshot(companyId: number): Prom
   for (const item of orphanedInventory) {
     const qty = toMoney(item.quantity).toNumber();
     const rate = toMoney(item.averageRate).toNumber();
-    const exactImpact = toMoney(item.quantity).times(toMoney(item.averageRate)).abs();
+    // The value the sub-ledger holds on the row (total_value, wave 11).
+    const exactImpact = toMoney(item.totalValue).abs();
     const impact = exactImpact.toNumber();
     if (exactImpact.greaterThan(0.01)) {
       issues.push({
@@ -399,14 +409,8 @@ export async function collectImportCycleBalanceSnapshot(companyId: number): Prom
   const equityTransactionBalance = await getTransactionOnlyBalance(companyId, "Equity", true);
   const apTransactionBalance = await getTransactionOnlyBalance(companyId, "Accounts Payable", true);
 
-  const inventoryItems = await db
-    .select({ quantity: inventory.quantity, averageRate: inventory.averageRate })
-    .from(inventory)
-    .innerJoin(locations, eq(inventory.locationId, locations.id))
-    .where(and(eq(inventory.companyId, companyId), isNull(locations.deletedAt)));
-  const stockOnFloorValue = sumMoney(
-    inventoryItems.map((item) => toMoney(item.quantity).times(toMoney(item.averageRate)))
-  );
+  // Wave 11: the one stock valuation (stockValuation.ts, SUM(total_value)).
+  const stockOnFloorValue = toMoney(await companyStockValue(db, companyId));
 
   const cogsData = await db
     .select({ totalCost: salesItems.totalCost })

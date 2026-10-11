@@ -232,54 +232,48 @@ async function checkAndRunScheduledDailyExport(): Promise<void> {
  * Contracts can bill on any day of the month, so a once-a-month cron cannot
  * reliably recognise prepaid rent on the correct billing date. This job is
  * idempotent: already-recognised/accrued rows are skipped.
+ *
+ * Wave 18 A: the companies are listed from the scheduler's maintenance scope,
+ * but each company posts in its own tenant scope (closed-period guard and
+ * opening lock apply), dated by its business date, through the same code path
+ * as the Admin/Owner "post due accruals now" action: due scheduled payments,
+ * then accruals. A posting in a closed period is skipped and reported here.
+ * The legacy prepaid recognition no longer runs here (an Owner tool now).
  */
-async function runDailyRentalAccrual() {
+export async function runDailyRentalAccrual(): Promise<{
+  accrued: number;
+  scheduledPaymentsPosted: number;
+  skipped: number;
+  failed: number;
+}> {
   logger.info("[RentalAccrual] Daily billing-date catch-up started.");
+  const totals = { accrued: 0, scheduledPaymentsPosted: 0, skipped: 0, failed: 0 };
   try {
-    const [{ ensureMonthlyForCompany, postRentAccrualForCompany }, { getUtcTodayString }, repairModule] =
-      await Promise.all([
-        import("../../routes/rental/shared"),
-        import("../rental/rentalPeriodService"),
-        import("../rental/legacyPrepaidRecognitionRepair"),
-      ]);
-    const { repairLegacyFullyPrepaidRentRecognition } = repairModule;
-    const asOfDate = getUtcTodayString();
-    const { rows } = await pool.query<{ id: number }>("SELECT id FROM companies");
-    const modules: Array<{ module: string; income: string; expense: string }> = [
-      { module: "ERP", income: "Rental Income - ERP", expense: "Rent Expense - ERP Shops" },
-      { module: "FACTORY", income: "Rental Income - Factory", expense: "Rent Expense - Factory Shops" },
-      { module: "PROPERTIES", income: "Rental Income - Properties", expense: "Rent Expense - Property Shops" },
-    ];
+    const { postDueRentalForCompany } = await import("../rental/dueRentalPosting");
+    const { rows } = await pool.query<{ id: number }>("SELECT id FROM companies ORDER BY id");
+    const modules = ["ERP", "FACTORY", "PROPERTIES"] as const;
 
-    let totalRepaired = 0;
-    let totalAccrued = 0;
     for (const { id: companyId } of rows) {
-      for (const { module, income, expense } of modules) {
+      for (const module of modules) {
         try {
-          await ensureMonthlyForCompany(
-            companyId,
-            module as unknown as Parameters<typeof ensureMonthlyForCompany>[1],
-            asOfDate
-          );
-
-          if (module === "ERP" || module === "FACTORY") {
-            const { repaired } = await repairLegacyFullyPrepaidRentRecognition(companyId, module, expense, asOfDate);
-            totalRepaired += repaired;
-          }
-
-          const { accrued } = await postRentAccrualForCompany(companyId, expense, module, income, asOfDate);
-          totalAccrued += accrued;
+          const result = await postDueRentalForCompany(companyId, module, { trigger: "scheduler" });
+          totals.accrued += result.accrued;
+          totals.scheduledPaymentsPosted += result.scheduledPaymentsPosted;
+          totals.failed += result.scheduledPaymentsFailed;
+          totals.skipped += result.skipped.length;
         } catch (err: unknown) {
+          totals.failed += 1;
           logger.error(`[RentalAccrual] company=${companyId} module=${module}: ${getErrorMessage(err)}`);
         }
       }
     }
     logger.info(
-      `[RentalAccrual] Daily billing-date catch-up complete — ${totalRepaired} legacy row(s) repaired, ${totalAccrued} row(s) accrued/recognised.`
+      `[RentalAccrual] Daily billing-date catch-up complete — ${totals.scheduledPaymentsPosted} scheduled payment group(s) posted, ${totals.accrued} row(s) accrued/recognised, ${totals.skipped} posting(s) skipped (closed period), ${totals.failed} failure(s).`
     );
   } catch (err: unknown) {
     logger.error("[RentalAccrual] Fatal error:", { error: getErrorMessage(err) });
   }
+  return totals;
 }
 
 export function startScheduler() {
@@ -314,9 +308,15 @@ export function startScheduler() {
   // Run every day at 6:00 AM ET. Rental contracts can bill on the 1st, 20th,
   // or any other day, so daily catch-up is required for correct monthly expense
   // recognition. The posting functions are idempotent and skip completed rows.
-  cron.schedule("0 6 * * *", createSchedulerTick("dailyRentalAccrual", runDailyRentalAccrual), {
-    timezone: "America/New_York",
-  });
+  cron.schedule(
+    "0 6 * * *",
+    createSchedulerTick("dailyRentalAccrual", async () => {
+      await runDailyRentalAccrual();
+    }),
+    {
+      timezone: "America/New_York",
+    }
+  );
 
   // Keep the hourly maintenance checks isolated. A slow WhatsApp upload/export
   // must never hold one shared in-process lock and suppress every other hourly

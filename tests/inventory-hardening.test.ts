@@ -25,9 +25,7 @@ async function loginAndSelectCompany(): Promise<void> {
   });
   expect(loginRes.status).toBe(200);
 
-  const switchRes = await agent
-    .post("/api/auth/set-company")
-    .send({ companyId: ctx.companyId });
+  const switchRes = await agent.post("/api/auth/set-company").send({ companyId: ctx.companyId });
   expect(switchRes.status).toBe(200);
 }
 
@@ -36,7 +34,7 @@ async function setInventory(
   stockItemId: number,
   quantity: number,
   averageRate: number,
-  totalValue: number,
+  totalValue: number
 ): Promise<void> {
   const existing = await getInventoryRecord(locationId, stockItemId);
 
@@ -150,7 +148,11 @@ describe("Inventory API hardening", () => {
 });
 
 describe("Negative-stock costing invariants", () => {
-  it("zeros on-hand value while preserving non-negative cost memory below zero", async () => {
+  // Wave 11 (owner decision: negative stock is costed provisionally): the
+  // 50 short are relieved at the cost memory (10.00), so the row holds -500.00
+  // and the issue's COGS includes them. The test used to pin a short row at
+  // zero value, which dropped the shortage's cost from the sub-ledger.
+  it("relieves the shortage at the non-negative cost memory below zero", async () => {
     const result = await adjustInventory(
       db as any,
       ctx.locationId,
@@ -158,16 +160,16 @@ describe("Negative-stock costing invariants", () => {
       -150,
       ctx.companyId,
       undefined,
-      "TEST",
+      "TEST"
     );
 
     expect(result.newQuantity).toBe(-50);
-    expect(result.newTotalValue).toBe(0);
+    expect(result.newTotalValue).toBe(-500);
     expect(result.averageRate).toBeGreaterThanOrEqual(0);
 
     const record = await getInventoryRecord(ctx.locationId, ctx.stockItemIds[0]);
     expect(Number(record!.quantity)).toBe(-50);
-    expect(Number(record!.totalValue)).toBe(0);
+    expect(Number(record!.totalValue)).toBe(-500);
     expect(Number(record!.averageRate)).toBeGreaterThanOrEqual(0);
   });
 
@@ -181,7 +183,7 @@ describe("Negative-stock costing invariants", () => {
       200,
       1000,
       ctx.companyId,
-      "TEST",
+      "TEST"
     );
 
     const record = await getInventoryRecord(ctx.locationId, ctx.stockItemIds[0]);
@@ -201,7 +203,7 @@ describe("Negative-stock costing invariants", () => {
         200,
         ctx.companyId,
         5,
-        "TEST",
+        "TEST"
       );
 
       let record = await getInventoryRecord(ctx.locationId, ctx.stockItemIds[0]);
@@ -216,7 +218,7 @@ describe("Negative-stock costing invariants", () => {
         200,
         receipt.newTotalValue,
         ctx.companyId,
-        "TEST",
+        "TEST"
       );
 
       record = await getInventoryRecord(ctx.locationId, ctx.stockItemIds[0]);
@@ -229,13 +231,7 @@ describe("Negative-stock costing invariants", () => {
   it("maintains the positive-stock value equation after a partial deduction", async () => {
     await setInventory(ctx.locationId, ctx.stockItemIds[0], 200, 5, 1000);
 
-    const result = await adjustInventory(
-      db as any,
-      ctx.locationId,
-      ctx.stockItemIds[0],
-      -40,
-      ctx.companyId,
-    );
+    const result = await adjustInventory(db as any, ctx.locationId, ctx.stockItemIds[0], -40, ctx.companyId);
 
     expect(result.newQuantity).toBe(160);
     expect(result.newTotalValue).toBe(800);
@@ -251,22 +247,13 @@ describe("Negative-stock costing invariants", () => {
 
 describe("Inventory row isolation", () => {
   it("does not alter a different item at the same location", async () => {
-    await adjustInventory(
-      db as any,
-      ctx.locationId,
-      ctx.stockItemIds[0],
-      -10,
-      ctx.companyId,
-    );
+    await adjustInventory(db as any, ctx.locationId, ctx.stockItemIds[0], -10, ctx.companyId);
 
     const untouched = await db
       .select()
       .from(schema.inventory)
       .where(
-        and(
-          eq(schema.inventory.locationId, ctx.locationId),
-          eq(schema.inventory.stockItemId, ctx.stockItemIds[1]),
-        ),
+        and(eq(schema.inventory.locationId, ctx.locationId), eq(schema.inventory.stockItemId, ctx.stockItemIds[1]))
       );
 
     expect(Number(untouched[0].quantity)).toBe(100);

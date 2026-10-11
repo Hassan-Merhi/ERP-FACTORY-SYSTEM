@@ -305,26 +305,29 @@ export function registerSpMigrationSetupRoutes(app: Express) {
         const amtStr = toMoney(amount).toFixed(2);
         const voucherNumber = `OB-${targetId}-${Date.now()}`;
 
-        const [vRow] = (
-          await db.execute(sql`
+        const voucherId = await db.transaction(async (tx) => {
+          const [vRow] = (
+            await tx.execute(sql`
         INSERT INTO vouchers (company_id, voucher_number, voucher_type, voucher_date, description, total_amount, currency, source_module)
         VALUES (${targetId}, ${voucherNumber}, 'Journal', ${date},
                 ${narration ?? "GC Opening Cash Balance"}, ${amtStr}, 'USD', 'ERP')
         RETURNING id
       `)
-        ).rows;
-        const voucherId = pn(vRow.id);
+          ).rows;
+          const voucherId = pn(vRow.id);
 
-        // Dr selected Cash/Bank account
-        await db.execute(sql`
+          // Dr selected Cash/Bank account
+          await tx.execute(sql`
         INSERT INTO voucher_entries (voucher_id, ledger_account_id, debit_amount, credit_amount, narration)
         VALUES (${voucherId}, ${cashId}, ${amtStr}, '0.00', ${narration ?? "Opening cash balance"})
       `);
-        // Cr SP-OPNBAL
-        await db.execute(sql`
+          // Cr SP-OPNBAL
+          await tx.execute(sql`
         INSERT INTO voucher_entries (voucher_id, ledger_account_id, debit_amount, credit_amount, narration)
         VALUES (${voucherId}, ${opnBalId}, '0.00', ${amtStr}, ${narration ?? "Opening cash balance"})
       `);
+          return voucherId;
+        });
 
         return res.json({ success: true, voucherId, voucherNumber, amount: amtStr, cashAccountName: cashAcctRow.name });
       } catch (err: unknown) {

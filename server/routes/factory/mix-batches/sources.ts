@@ -13,14 +13,20 @@ import { requireAuth } from "../../../auth";
 import {
   factorySuppliers,
   factoryContainers,
-  factoryRawStock,
   factoryMixBatches,
   factoryMixBatchSources,
   factoryBales,
 } from "@shared/schema";
 import { eq, and, sql, inArray } from "drizzle-orm";
-import { getStableSupplierCost } from "../../../services/factory/rawStockStableCost";
 import { MoneyDecimal, sumMoney, toMoney } from "../../../lib/money";
+import { getClientDate } from "../../../lib/dateUtils";
+import {
+  baleCostFromMix,
+  FACTORY_COST_SCALE,
+  mixCostForPressing,
+  rawSourceUsdRate,
+  sendFactoryCostBasisRefusal,
+} from "../../../services/factory/baleCostBasis";
 
 export function registerFactoryMixBatchSourceRoutes(app: Express) {
   // Assign existing (unlinked) bales to a mix batch
@@ -46,7 +52,12 @@ export function registerFactoryMixBatchSourceRoutes(app: Express) {
       if (!batch) return res.status(404).json({ message: "Mix batch not found" });
 
       const bales = await db
-        .select({ id: factoryBales.id, weightKg: factoryBales.weightKg, mixBatchId: factoryBales.mixBatchId })
+        .select({
+          id: factoryBales.id,
+          weightKg: factoryBales.weightKg,
+          mixBatchId: factoryBales.mixBatchId,
+          status: factoryBales.status,
+        })
         .from(factoryBales)
         .where(and(eq(factoryBales.companyId, companyId), inArray(factoryBales.id, baleIds)));
 
@@ -71,6 +82,29 @@ export function registerFactoryMixBatchSourceRoutes(app: Express) {
       await db.transaction(async (tx) => {
         await tx.update(factoryBales).set({ mixBatchId, updatedAt: now }).where(inArray(factoryBales.id, baleIds));
 
+        // Wave 11: a bale from a mix costs weight × the mix's USD cost per kg, so
+        // the mix weight this relieves is the bale value. Unsold bales take it;
+        // sold bales keep the cost their sale took. A mix with no cost refuses
+        // under perpetual inventory and leaves the bales' cost before it.
+        const mixCost = await mixCostForPressing(tx, companyId, getClientDate(req), batch);
+        if (mixCost.gt(0)) {
+          for (const bale of bales) {
+            if (
+              !["IN_STOCK", "RESERVED_FOR_ORDER", "RESERVED_FOR_DISPATCH", "PENDING_PRESSING"].includes(bale.status)
+            ) {
+              continue;
+            }
+            const cost = baleCostFromMix(bale.weightKg, mixCost);
+            await tx
+              .update(factoryBales)
+              .set({
+                costPerKg: cost.costPerKg.toFixed(FACTORY_COST_SCALE),
+                totalCost: cost.totalCost.toFixed(FACTORY_COST_SCALE),
+              })
+              .where(and(eq(factoryBales.id, bale.id), eq(factoryBales.companyId, companyId)));
+          }
+        }
+
         await tx
           .update(factoryMixBatches)
           .set({ usedKg: sql`${factoryMixBatches.usedKg} + ${totalKg.toFixed(3)}`, updatedAt: now })
@@ -79,6 +113,7 @@ export function registerFactoryMixBatchSourceRoutes(app: Express) {
 
       res.json({ success: true, balesUpdated: baleIds.length, totalKg: totalKg.toNumber() });
     } catch (error: unknown) {
+      if (sendFactoryCostBasisRefusal(res, error)) return;
       logger.error("Error assigning bales to mix batch:", { error: error });
       res.status(500).json({ message: getErrorMessage(error) });
     }
@@ -127,35 +162,15 @@ export function registerFactoryMixBatchSourceRoutes(app: Express) {
         results.map(async (src) => {
           if (toMoney(src.costPerKg).greaterThan(0)) return src;
 
-          // Try to find a raw stock cost via containerId first, then supplierId.
-          // Uses the same stable receipt-weighted rate as the write paths (getStableSupplierCost)
-          // so the display fallback can never disagree with what was actually costed.
-          let fallbackCost = new MoneyDecimal(0);
-          if (src.containerId) {
-            const rows = await db
-              .select({
-                costPerKgUsd: factoryRawStock.costPerKgUsd,
-                costPerKg: factoryRawStock.costPerKg,
-                receivedKg: factoryRawStock.receivedKg,
-              })
-              .from(factoryRawStock)
-              .where(and(eq(factoryRawStock.containerId, src.containerId), eq(factoryRawStock.companyId, companyId)));
-            let wSum = new MoneyDecimal(0);
-            let wWeight = new MoneyDecimal(0);
-            for (const r of rows) {
-              const kg = toMoney(r.receivedKg);
-              const usd = toMoney(r.costPerKgUsd);
-              const c = usd.isZero() ? toMoney(r.costPerKg) : usd;
-              wSum = wSum.plus(kg.times(c));
-              wWeight = wWeight.plus(kg);
-            }
-            fallbackCost = wWeight.greaterThan(0) ? wSum.dividedBy(wWeight) : new MoneyDecimal(0);
-          } else if (src.supplierId) {
-            const stable = await getStableSupplierCost(db, companyId, src.supplierId);
-            fallbackCost = toMoney(stable.costPerKgUsd);
-          }
-
-          if (!fallbackCost.greaterThan(0)) return src;
+          // Show the source's USD rate now (the supplier's locked rate, else the
+          // container's landed USD cost; never a native-currency cost). A source
+          // with none is flagged: its mix is unvalued (wave 11).
+          const usdRate = await rawSourceUsdRate(db, companyId, {
+            supplierId: src.supplierId,
+            containerId: src.containerId,
+          });
+          const fallbackCost = usdRate?.rate ?? new MoneyDecimal(0);
+          if (!fallbackCost.greaterThan(0)) return { ...src, noUsdRate: true };
           // Shown at the stored column scale (7 places), half up.
           return {
             ...src,

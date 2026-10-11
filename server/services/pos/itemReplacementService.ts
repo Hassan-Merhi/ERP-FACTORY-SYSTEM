@@ -244,16 +244,29 @@ export async function applyPosItemReplacements(
         }
 
         completedVoucherIds.push(voucherId);
-        auditRowsByVoucher.set(
-          voucherId,
-          replacements
-            .filter((row) => saleRowById.get(row.saleItemId)?.voucherId === voucherId)
-            .map((row) => ({
-              saleItemId: row.saleItemId,
-              fromStockItemId: saleRowById.get(row.saleItemId)!.saleItem.stockItemId,
-              toStockItemId: row.replacementStockItemId,
-              quantity: row.quantity,
-            }))
+        const voucherAuditRows = replacements
+          .filter((row) => saleRowById.get(row.saleItemId)?.voucherId === voucherId)
+          .map((row) => ({
+            saleItemId: row.saleItemId,
+            fromStockItemId: saleRowById.get(row.saleItemId)!.saleItem.stockItemId,
+            toStockItemId: row.replacementStockItemId,
+            quantity: row.quantity,
+          }));
+        auditRowsByVoucher.set(voucherId, voucherAuditRows);
+        // Phase 21 (B): one audit row per corrected sale, on the outer
+        // transaction: a failed audit rolls every correction back.
+        await logAudit(
+          {
+            userId: actor.userId,
+            username: actor.username,
+            companyId: actor.companyId,
+            action: "update",
+            tableName: "sales_items",
+            recordId: voucherId,
+            recordIdentifier: voucher.voucherNumber ?? String(voucherId),
+            changes: { posItemReplacement: { old: null, new: voucherAuditRows } },
+          },
+          tx
         );
       }
 
@@ -264,32 +277,6 @@ export async function applyPosItemReplacements(
         voucherById,
       };
     });
-
-    // Audit only after the outer transaction commits. If any voucher failed,
-    // the transaction rolled back and no misleading partial audit is written.
-    for (const voucherId of committed.updatedVoucherIds) {
-      try {
-        const voucher = committed.voucherById.get(voucherId);
-        await logAudit({
-          userId: actor.userId,
-          username: actor.username,
-          companyId: actor.companyId,
-          action: "update",
-          tableName: "sales_items",
-          recordId: voucherId,
-          recordIdentifier: voucher?.voucherNumber ?? String(voucherId),
-          changes: {
-            posItemReplacement: {
-              old: null,
-              new: committed.auditRowsByVoucher.get(voucherId) || [],
-            },
-          },
-        });
-      } catch {
-        // Auditing is non-fatal after the committed correction, matching the
-        // existing single-sale POS edit behavior.
-      }
-    }
 
     return {
       status: 200,

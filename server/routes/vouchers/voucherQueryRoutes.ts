@@ -8,38 +8,10 @@ import { requireAuth, requireNonPOS } from "../../auth";
 import { containers, vouchers, posShifts, userLocations } from "@shared/schema";
 import { eq, and, inArray, sql, isNull } from "drizzle-orm";
 
-import { isParentCompanyContext } from "../helpers/supplierBalanceHelpers";
 import { buildVoucherPage, filterAndSortVouchers, parseVoucherListQuery } from "./voucherListPaging";
 import { loadVoucherRelatedData } from "./voucherDetailBatching";
+import { buildUnifiedSupplierLedger } from "./unifiedSupplierLedger";
 
-/**
- * One line of the supplier statement.
- *
- * The synthetic "opening" row carries no voucher, so the voucher-derived fields
- * are nullable on this shape even though the underlying columns are NOT NULL.
- */
-interface SupplierStatementTransaction {
-  type: "voucher" | "opening";
-  date: string | null;
-  companyId: number | null;
-  companyName: string;
-  docNumber: string;
-  voucherId: number | null;
-  description: string;
-  voucherType: string;
-  debit: number;
-  credit: number;
-}
-
-/**
- * A statement line with its running balance. Container fields are filled in
- * afterwards for rows whose narration mentions an ISO 6346 container number.
- */
-interface SupplierStatementRow extends SupplierStatementTransaction {
-  balance: number;
-  containerNumber?: string;
-  containerId?: number | null;
-}
 import {
   assertActiveCompanyAccess,
   getAccessibleCompanyIds,
@@ -138,87 +110,16 @@ export function registerVoucherQueryRoutes(app: Express) {
           ? [...(await getAccessibleCompanyIds(access.userId))].sort((left, right) => left - right)
           : [access.activeCompanyId];
 
-      const voucherEntryGroups = await Promise.all(
-        companyIds.map((allowedCompanyId) =>
-          storage.getVoucherEntriesBySupplier(
-            supplierId,
-            allowedCompanyId,
-            startDate as string | undefined,
-            endDate as string | undefined
-          )
-        )
-      );
-      const voucherEntries = voucherEntryGroups.flat();
-
-      const companyRows = await Promise.all(
-        companyIds.map((allowedCompanyId) => storage.getCompanyById(allowedCompanyId))
-      );
-      const companyMap = new Map(companyRows.filter(Boolean).map((company) => [company!.id, company!] as const));
-
-      // Combine all transactions with company information
-      const transactions: SupplierStatementTransaction[] = [];
-
-      // Add voucher entries (which already include PO-generated vouchers)
-      // No need to add POs separately as they're already represented by voucher entries
-      for (const entry of voucherEntries) {
-        const company = companyMap.get(entry.companyId);
-        transactions.push({
-          type: "voucher",
-          date: entry.voucherDate,
-          companyId: entry.companyId,
-          companyName: company?.name || "Unknown",
-          docNumber: entry.voucherNumber,
-          voucherId: entry.voucherId,
-          description: entry.narration || entry.voucherDescription || "",
-          voucherType: entry.voucherType,
-          debit: parseFloat(entry.debitAmount || "0"),
-          credit: parseFloat(entry.creditAmount || "0"),
-        });
-      }
-
-      // Sort by date ascending (oldest first) for correct running balance
-      transactions.sort((a, b) => {
-        const dateA = a.date ? new Date(a.date).getTime() : 0;
-        const dateB = b.date ? new Date(b.date).getTime() : 0;
-        return dateA - dateB;
+      // Wave 14: one supplier rule (the posting company) — the engine's lines
+      // and period opening per company, never the global parent setting.
+      const isoDay = (value: unknown) =>
+        typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : undefined;
+      const result = await buildUnifiedSupplierLedger({
+        supplierId,
+        companyIds,
+        startDate: isoDay(startDate),
+        endDate: isoDay(endDate),
       });
-
-      // Get supplier opening balance
-      const supplier = await storage.getSupplierById(supplierId);
-      const globalOpeningBalance = parseFloat(supplier?.openingBalance || "0");
-
-      // Opening balance is a historical property belonging to the explicitly
-      // configured parent company — never guessed via "lowest company ID".
-      // Use filterCompanyId if set, otherwise fall back to the session company so that
-      // viewing "All Companies" from a sub-company session also hides the opening balance.
-      const effectiveCompanyId = companyIds.length === 1 ? companyIds[0] : access.activeCompanyId;
-      const isParentContext = await isParentCompanyContext(effectiveCompanyId);
-      const openingBalance = isParentContext ? globalOpeningBalance : 0;
-
-      // Add opening balance as first row if it exists
-      const result: SupplierStatementRow[] = [];
-      if (openingBalance !== 0) {
-        result.push({
-          type: "opening",
-          date: null,
-          companyId: null,
-          companyName: "Opening Balance",
-          docNumber: "-",
-          voucherId: null,
-          description: "Opening Balance",
-          voucherType: "Opening",
-          debit: 0,
-          credit: 0,
-          balance: openingBalance,
-        });
-      }
-
-      // Calculate running balance starting from opening balance
-      let balance = openingBalance;
-      for (const t of transactions) {
-        balance += t.credit - t.debit;
-        result.push({ ...t, balance });
-      }
 
       // Extract container numbers from narrations and resolve their IDs so the
       // frontend can build direct links.  Shipping container numbers follow the
@@ -335,9 +236,7 @@ export function registerVoucherQueryRoutes(app: Express) {
 
       let filtered = results;
       if (search) {
-        filtered = filtered.filter((r) =>
-          searchAny(search, r.voucherNumber, r.description, r.locationName)
-        );
+        filtered = filtered.filter((r) => searchAny(search, r.voucherNumber, r.description, r.locationName));
       }
 
       res.json(filtered);

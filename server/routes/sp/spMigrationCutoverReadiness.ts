@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import { db } from "../../db";
+import { assertNoInventoryCutoverTx } from "../../services/accounting/perpetualInventory/cutoverRefusal";
 import { ensurePhase2Schema, getSuspenseReview, loadStockItemMap, pn } from "./spMigrationPhase2Common";
 import { ensureCutoverSchema } from "./spMigrationCutoverState";
 import { resultRows, firstRow } from "../../lib/queryResult";
@@ -202,10 +203,7 @@ export type CutoverReadiness = {
   unmappedInventory: CutoverReadinessUnmappedInventory[];
 };
 
-export async function buildCutoverReadiness(
-  sourceId: number,
-  targetId: number
-): Promise<CutoverReadiness> {
+export async function buildCutoverReadiness(sourceId: number, targetId: number): Promise<CutoverReadiness> {
   await Promise.all([ensurePhase2Schema(), ensureCutoverSchema()]);
   const blockers: Array<{ code: string; message: string; count?: number }> = [];
   const deltas: Array<{ code: string; message: string; count: number }> = [];
@@ -506,6 +504,8 @@ export async function synchronizeCutoverStock(
   sourceId: number,
   targetId: number
 ): Promise<{ updated: number; inserted: number; unchanged: number }> {
+  // Wave 11: stock rewrites with no journal are refused after the cut-over.
+  await assertNoInventoryCutoverTx(db, targetId, "sp-migration-stock");
   await ensureCutoverSchema();
   const stockItemMap = await loadStockItemMap(sourceId, targetId);
   const sourceResult = await db.execute(sql`
@@ -603,6 +603,8 @@ export async function restoreCutoverStock(
   cutoverId: number,
   targetId: number
 ): Promise<{ restored: number; deleted: number }> {
+  // Wave 11: stock rewrites with no journal are refused after the cut-over.
+  await assertNoInventoryCutoverTx(db, targetId, "sp-migration-stock");
   await ensureCutoverSchema();
   const result = await db.execute(sql`
     SELECT * FROM sp_migration_cutover_stock_deltas

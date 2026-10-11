@@ -9,7 +9,6 @@ import {
   factoryMixBatches,
   factoryMixBatchSources,
   factoryContainerCommissions,
-  voucherEntries,
   factoryDaybookEntries,
   factoryOffloadAdditionalCharges,
   vouchers,
@@ -37,6 +36,12 @@ import {
   financialOperationFingerprint,
   withDurableFinancialOperation,
 } from "../../../services/accounting/durableFinancialOperation";
+import { postFactoryVoucherTx } from "../../../services/factory/factoryVoucherPosting";
+import { toMoney } from "../../../lib/money";
+import { FactoryFxRateRequiredError, factoryDocumentRate } from "../../../services/factory/factoryDocumentFxRate";
+import { restoreRetiredPreOffloadFreightTx } from "../../../services/factory/reverseOffloadFreight";
+import { syncContainerCommissionJournalTx } from "../../../services/factory/containerCommissionJournal";
+import { retireVouchersTx, sessionRetirementActor } from "../../../services/accounting/voucherRetirement";
 
 const REVERSAL_STATUS_MESSAGE = "Only OFFLOADED or PARTIALLY_RECEIVED containers can be reversed";
 const REVERSAL_SUCCESS_MESSAGE = "Offload reversed successfully. Container is back to its previous status.";
@@ -253,8 +258,13 @@ export function registerRawStockReverseOffloadRoute(app: Express) {
           );
         if (containerVouchers.length > 0) {
           const vIds = containerVouchers.map((v) => v.id);
-          await tx.delete(voucherEntries).where(inArray(voucherEntries.voucherId, vIds));
-          await tx.delete(vouchers).where(inArray(vouchers.id, vIds));
+          // Wave 16 (A): retired (soft delete with lines, audited here), not hard-deleted.
+          await retireVouchersTx(tx, {
+            companyId,
+            voucherIds: vIds,
+            reason: "factory-raw-stock-offload-reverse",
+            actor: sessionRetirementActor(req),
+          });
         }
 
         // 4b. Correct the supplier's locked rate before removing this container's
@@ -359,7 +369,7 @@ export function registerRawStockReverseOffloadRoute(app: Express) {
         // posts (`FACTORY-FREIGHT-{containerId}`) rather than carrying a timestamp:
         // this is the same voucher being restored, so it keeps one identity that the
         // next offload's cleanup can find exactly.
-        const restoredFreightAmt = parseFloat(restoredFreight || "0");
+        const restoredFreightAmt = toMoney(restoredFreight || "0").toNumber();
         // A voucher with only a debit leg is an unbalanced posting: it inflates one
         // side of the ledger and reports as VOUCHER_NOT_BALANCED in the convergence
         // reconciliation. The freight credit has to land on somebody — the paying
@@ -368,61 +378,76 @@ export function registerRawStockReverseOffloadRoute(app: Express) {
         const restoredFreightCreditSupplierId = restoredFreightSupplierId ?? null;
         const restoredFreightCreditAccountId = Number(container.freightOwnAccountId ?? NaN);
         const hasRestoredFreightCreditLedger = Number.isInteger(restoredFreightCreditAccountId);
-        if (
+        // Wave 17 (D): the pre-offload freight voucher the offload retired is
+        // restored exactly as it was posted (same lines, legacy-shaped or not;
+        // nothing is converted). Only when there is none (an offload before wave
+        // 16 A hard-deleted it) is a new voucher posted below, normalized.
+        const restoredOriginalFreightId =
+          restoredFreightAmt > 0 && restoredFreightAccountId
+            ? await restoreRetiredPreOffloadFreightTx(tx, {
+                companyId,
+                containerId,
+                currency: restoredFreightCurrencyCode,
+                amount: restoredFreight,
+                freightAccountId: restoredFreightAccountId,
+                actor: sessionRetirementActor(req),
+              })
+            : null;
+        if (restoredOriginalFreightId !== null) {
+          // Restored as posted; nothing to post.
+        } else if (
           restoredFreightAmt > 0 &&
           restoredFreightAccountId &&
           (restoredFreightCreditSupplierId !== null || hasRestoredFreightCreditLedger)
         ) {
           const restoredFreightVoucherNum = `FACTORY-FREIGHT-${containerId}`;
-          const [restoredFreightVoucher] = await tx
-            .insert(vouchers)
-            .values({
+          const restoredFreightDate = container.arrivalDate || getClientDate(req);
+          // A new posting of a non-USD document: the container's own rate when it
+          // is in that currency and set, and a confirmed factory rate on or before
+          // the date must exist (409 FACTORY_FX_RATE_REQUIRED otherwise). It used
+          // to fall back to the legacy shape at the container's rate or 1.
+          const restoredFreightRate = (
+            await factoryDocumentRate(
+              tx,
               companyId,
-              voucherType: "Journal",
-              voucherNumber: restoredFreightVoucherNum,
-              voucherDate: container.arrivalDate || getClientDate(req),
-              description: `Freight on container ${container.containerNumber}`,
-              totalAmount: String(restoredFreightAmt),
-              currency: restoredFreightCurrencyCode,
-              // This re-posts a voucher that already existed pre-offload, using the
-              // exact rate the original offload already booked its financials with —
-              // it is not a new forward-going financial decision, so we reuse the
-              // container's stored rate as-is rather than requiring it to be
-              // "confirmed" (which would incorrectly block reversing legacy
-              // containers offloaded before the fxRateConfirmed flag existed).
-              exchangeRate: String(container.fxRateToUsd ?? "1"),
-              sourceModule: "FACTORY",
-            })
-            .returning();
-          // Dr Freight Expense
-          await tx.insert(voucherEntries).values({
-            voucherId: restoredFreightVoucher.id,
-            ledgerAccountId: restoredFreightAccountId,
-            debitAmount: String(restoredFreightAmt),
-            creditAmount: "0",
-            narration: `Freight expense - container ${container.containerNumber}`,
+              restoredFreightCurrencyCode,
+              String(restoredFreightDate).slice(0, 10),
+              restoredFreightCurrencyCode === (container.currencyCode || "USD")
+                ? { rate: container.fxRateToUsd, confirmed: container.fxRateConfirmed }
+                : undefined
+            )
+          ).rate;
+          // Phase 22 (C): through the engine with the container's freight posting
+          // identity (the create route's), Dr Freight Expense / Cr the supplier when
+          // pre-offload freight was supplier-paid, else the own account (never
+          // container.supplierId — that would debit the material supplier).
+          await postFactoryVoucherTx(tx, {
+            companyId,
+            voucherNumber: restoredFreightVoucherNum,
+            voucherDate: restoredFreightDate,
+            description: `Freight on container ${container.containerNumber}`,
+            currency: restoredFreightCurrencyCode,
+            fxRateToUsd: restoredFreightRate,
+            source: { sourceType: "factory-container-freight", sourceId: containerId, phase: "freight" },
+            lines: [
+              {
+                ledgerAccountId: restoredFreightAccountId,
+                debit: restoredFreight,
+                narration: `Freight expense - container ${container.containerNumber}`,
+              },
+              restoredFreightCreditSupplierId !== null
+                ? {
+                    factorySupplierId: restoredFreightCreditSupplierId,
+                    credit: restoredFreight,
+                    narration: `Freight payable to supplier - container ${container.containerNumber}`,
+                  }
+                : {
+                    ledgerAccountId: restoredFreightCreditAccountId,
+                    credit: restoredFreight,
+                    narration: `Freight paid via own account - container ${container.containerNumber}`,
+                  },
+            ],
           });
-          // Cr: supplier when pre-offload freight was supplier-paid;
-          //     own account when it was own-account paid (never fall back
-          //     to container.supplierId — that would silently debit the
-          //     material supplier for freight they didn't owe).
-          if (restoredFreightCreditSupplierId !== null) {
-            await tx.insert(voucherEntries).values({
-              voucherId: restoredFreightVoucher.id,
-              factorySupplierId: restoredFreightCreditSupplierId,
-              debitAmount: "0",
-              creditAmount: String(restoredFreightAmt),
-              narration: `Freight payable to supplier - container ${container.containerNumber}`,
-            });
-          } else if (hasRestoredFreightCreditLedger) {
-            await tx.insert(voucherEntries).values({
-              voucherId: restoredFreightVoucher.id,
-              ledgerAccountId: restoredFreightCreditAccountId,
-              debitAmount: "0",
-              creditAmount: String(restoredFreightAmt),
-              narration: `Freight paid via own account - container ${container.containerNumber}`,
-            });
-          }
         } else if (restoredFreightAmt > 0 && restoredFreightAccountId) {
           // The freight itself is still restored onto the container in step 10, so
           // no amount is lost — but with no counterparty to credit there is no
@@ -503,7 +528,22 @@ export function registerRawStockReverseOffloadRoute(app: Express) {
             updatedAt: new Date(),
           })
           .where(eq(factoryContainers.id, containerId));
+        // Wave 8.4 continuation: the commission journal follows the commission just written.
+        await syncContainerCommissionJournalTx(tx, companyId, containerId);
 
+        await logAudit(
+          {
+            userId: req.session.userId!,
+            username: req.session.username || req.session.userId!,
+            companyId,
+            action: "reverse",
+            tableName: "production_raw_stock",
+            recordId: containerId,
+            recordIdentifier: `Container #${containerId} offload reversed`,
+            changes: null,
+          },
+          tx
+        );
         return { message: REVERSAL_SUCCESS_MESSAGE, containerStatus: container.status };
       };
 
@@ -530,21 +570,12 @@ export function registerRawStockReverseOffloadRoute(app: Express) {
           ).value
         : await db.transaction((tx) => reverseOffload(tx, ""));
 
-      await logAudit({
-        userId: req.session.userId!,
-        username: req.session.username || req.session.userId!,
-        companyId,
-        action: "reverse",
-        tableName: "production_raw_stock",
-        recordId: containerId,
-        recordIdentifier: `Container #${containerId} offload reversed`,
-        changes: null,
-      });
       res.json({ message: outcome.message });
     } catch (error: unknown) {
       if (error instanceof ReverseOffloadError) {
         return res.status(error.status).json({ message: error.message });
       }
+      if (error instanceof FactoryFxRateRequiredError) return res.status(409).json(error.body);
       if (error instanceof DurableFinancialOperationError) {
         return res.status(financialOperationErrorStatus(error)).json({ message: error.message });
       }

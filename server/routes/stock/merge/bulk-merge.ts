@@ -24,6 +24,7 @@ import {
   poLineItems,
 } from "@shared/schema";
 import { eq, and, sql, isNull } from "drizzle-orm";
+import { repointMergedItemLinesTx } from "./repointDocumentLines";
 
 export function registerStockItemBulkMergeRoutes(app: Express) {
   app.post("/api/stock-items/bulk-merge", requireAuth, requireNonPOS, async (req: Request, res: Response) => {
@@ -251,6 +252,8 @@ export function registerStockItemBulkMergeRoutes(app: Express) {
               .update(poLineItems)
               .set({ stockItemId: keptId, itemName: keptItem.name })
               .where(eq(poLineItems.stockItemId, duplicateId));
+            // Wave 15 (M9): the stock document lines follow the stock (repointDocumentLines.ts).
+            snapshotAfter.repointedLines = await repointMergedItemLinesTx(tx, companyId, duplicateId, keptId);
 
             await tx
               .update(stockItems)

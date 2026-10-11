@@ -5,6 +5,13 @@
  * rate. It is weighted by RECEIVED kg — never remaining kg — so FIFO consumption
  * cannot move the fallback calculation. Normal business reads use the persisted,
  * event-driven rate from rawStockLockedRate.ts.
+ *
+ * Wave 11: every reader takes the result as a USD rate (it is persisted as the
+ * supplier's locked USD rate), so a row whose cost is held only in the
+ * container's native currency (cost_per_kg_usd missing) is never read as
+ * dollars. Such a row is listed in `unvaluedRowIds` and makes the weighted
+ * fallback unvalued (0, which every reader treats as "no rate"): averaging
+ * only the USD rows would mis-weight the supplier's cost.
  */
 import { eq, and, isNull, sql } from "drizzle-orm";
 import Decimal from "decimal.js";
@@ -17,13 +24,19 @@ export interface StableSupplierRawStockRow {
   containerId: number;
   receivedKg: number;
   usedKg: number;
-  costPerKgUsd: number;
+  /** USD cost/kg; null when the row's cost is held only in its native currency. */
+  costPerKgUsd: number | null;
   offloadedAt: Date;
 }
 
 export interface StableSupplierCostResult {
-  /** Receipt-weighted cost/kg (USD). 0 if the supplier has no received stock. */
+  /**
+   * Receipt-weighted cost/kg (USD). 0 if the supplier has no received stock or
+   * any received row has no USD cost (see unvaluedRowIds).
+   */
   costPerKgUsd: number;
+  /** Received rows whose cost is native-currency only (no USD rate): the fallback is unvalued. */
+  unvaluedRowIds: number[];
   /** Total received kg across all non-deleted offloaded rows (used as the weight). */
   totalReceivedKg: number;
   /** Raw stock rows for this supplier, oldest-first, for FIFO allocation only. */
@@ -67,7 +80,9 @@ export async function getStableSupplierCost(
   const rows: StableSupplierRawStockRow[] = rawRows.map((row) => {
     const receivedKg = new Decimal(row.receivedKg || 0).toNumber();
     const rawUsdRate = new Decimal(row.costPerKgUsd || 0);
-    const costPerKgUsd = rawUsdRate.gt(0) ? rawUsdRate.toNumber() : new Decimal(row.costPerKg || 0).toNumber();
+    // Never the native cost_per_kg as dollars: a row with a native cost and no
+    // USD rate is unvalued (null). A row with no cost in either is zero cost.
+    const costPerKgUsd = rawUsdRate.gt(0) ? rawUsdRate.toNumber() : new Decimal(row.costPerKg || 0).gt(0) ? null : 0;
 
     return {
       id: row.id,
@@ -82,13 +97,15 @@ export async function getStableSupplierCost(
   const aggregate = calculateWeightedAverageCost(
     rows.map((row) => ({
       quantityKg: row.receivedKg,
-      unitCostPerKg: row.costPerKgUsd,
+      unitCostPerKg: row.costPerKgUsd ?? 0,
     }))
   );
+  const unvaluedRowIds = rows.filter((row) => row.costPerKgUsd === null && row.receivedKg > 0).map((row) => row.id);
 
   return {
-    costPerKgUsd: aggregate.weightedUnitCostPerKg.toNumber(),
+    costPerKgUsd: unvaluedRowIds.length > 0 ? 0 : aggregate.weightedUnitCostPerKg.toNumber(),
     totalReceivedKg: aggregate.totalQuantityKg.toNumber(),
     rows,
+    unvaluedRowIds,
   };
 }

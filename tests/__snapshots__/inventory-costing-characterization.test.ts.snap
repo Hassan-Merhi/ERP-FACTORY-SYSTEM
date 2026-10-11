@@ -5,16 +5,16 @@ exports[`adjustInventory costing — characterization > a rate carrying more pre
   {
     "negativeLayers": [],
     "returned": {
-      "averageRate": "1.005000",
+      "averageRate": "1.010000",
       "created": true,
       "newQuantity": "1.000000",
-      "newTotalValue": "1.005000",
+      "newTotalValue": "1.010000",
       "previousQuantity": "0.000000",
       "previousTotalValue": "0.000000",
     },
     "step": "adjust delta=1 rate=1.005",
     "stored": {
-      "averageRate": "1.01",
+      "averageRate": "1.0100000",
       "quantity": "1.000",
       "totalValue": "1.01",
     },
@@ -22,16 +22,16 @@ exports[`adjustInventory costing — characterization > a rate carrying more pre
   {
     "negativeLayers": [],
     "returned": {
-      "averageRate": "1.677835",
+      "averageRate": "1.680000",
       "created": false,
       "newQuantity": "2.000000",
-      "newTotalValue": "3.355670",
+      "newTotalValue": "3.360000",
       "previousQuantity": "1.000000",
       "previousTotalValue": "1.010000",
     },
     "step": "adjust delta=1 rate=2.34567",
     "stored": {
-      "averageRate": "1.68",
+      "averageRate": "1.6800000",
       "quantity": "2.000",
       "totalValue": "3.36",
     },
@@ -39,16 +39,16 @@ exports[`adjustInventory costing — characterization > a rate carrying more pre
   {
     "negativeLayers": [],
     "returned": {
-      "averageRate": "1.120017",
+      "averageRate": "1.120000",
       "created": false,
       "newQuantity": "3.000000",
-      "newTotalValue": "3.360050",
+      "newTotalValue": "3.360000",
       "previousQuantity": "2.000000",
       "previousTotalValue": "3.360000",
     },
     "step": "adjust delta=1 rate=0.00005",
     "stored": {
-      "averageRate": "1.12",
+      "averageRate": "1.1200000",
       "quantity": "3.000",
       "totalValue": "3.36",
     },
@@ -64,15 +64,15 @@ exports[`adjustInventory costing — characterization > a rate carrying more pre
       "averageRate": "1.120000",
       "created": false,
       "newQuantity": "-1.000000",
-      "newTotalValue": "0.000000",
+      "newTotalValue": "-1.120000",
       "previousQuantity": "3.000000",
       "previousTotalValue": "3.360000",
     },
     "step": "adjust delta=-4",
     "stored": {
-      "averageRate": "1.12",
+      "averageRate": "1.1200000",
       "quantity": "-1.000",
-      "totalValue": "0.00",
+      "totalValue": "-1.12",
     },
   },
 ]
@@ -92,7 +92,7 @@ exports[`adjustInventory costing — characterization > a zero-quantity adjustme
     },
     "step": "adjust delta=12 rate=7.77",
     "stored": {
-      "averageRate": "7.77",
+      "averageRate": "7.7700000",
       "quantity": "12.000",
       "totalValue": "93.24",
     },
@@ -109,7 +109,7 @@ exports[`adjustInventory costing — characterization > a zero-quantity adjustme
     },
     "step": "adjust delta=0 rate=999",
     "stored": {
-      "averageRate": "7.77",
+      "averageRate": "7.7700000",
       "quantity": "12.000",
       "totalValue": "93.24",
     },
@@ -131,7 +131,7 @@ exports[`adjustInventory costing — characterization > crossing zero exactly 1`
     },
     "step": "adjust delta=0.3 rate=5",
     "stored": {
-      "averageRate": "5.00",
+      "averageRate": "5.0000000",
       "quantity": "0.300",
       "totalValue": "1.50",
     },
@@ -148,7 +148,7 @@ exports[`adjustInventory costing — characterization > crossing zero exactly 1`
     },
     "step": "adjust delta=-0.1",
     "stored": {
-      "averageRate": "5.00",
+      "averageRate": "5.0000000",
       "quantity": "0.200",
       "totalValue": "1.00",
     },
@@ -165,7 +165,7 @@ exports[`adjustInventory costing — characterization > crossing zero exactly 1`
     },
     "step": "adjust delta=-0.2",
     "stored": {
-      "averageRate": "5.00",
+      "averageRate": "5.0000000",
       "quantity": "0.000",
       "totalValue": "0.00",
     },
@@ -187,7 +187,7 @@ exports[`adjustInventory costing — characterization > exact-value reversal, in
     },
     "step": "adjust delta=20 rate=6.5",
     "stored": {
-      "averageRate": "6.50",
+      "averageRate": "6.5000000",
       "quantity": "20.000",
       "totalValue": "130.00",
     },
@@ -204,7 +204,7 @@ exports[`adjustInventory costing — characterization > exact-value reversal, in
     },
     "step": "reverse qty=5 value=32.5",
     "stored": {
-      "averageRate": "6.50",
+      "averageRate": "6.5000000",
       "quantity": "15.000",
       "totalValue": "97.50",
     },
@@ -226,9 +226,9 @@ exports[`adjustInventory costing — characterization > exact-value reversal, in
     },
     "step": "reverse qty=20 value=130",
     "stored": {
-      "averageRate": "6.50",
+      "averageRate": "6.5000000",
       "quantity": "-5.000",
-      "totalValue": "0.00",
+      "totalValue": "-32.50",
     },
   },
   {
@@ -239,11 +239,11 @@ exports[`adjustInventory costing — characterization > exact-value reversal, in
       "newQuantity": "5.000000",
       "newTotalValue": "32.500000",
       "previousQuantity": "-5.000000",
-      "previousTotalValue": "0.000000",
+      "previousTotalValue": "-32.500000",
     },
     "step": "adjust delta=10 rate=6.5",
     "stored": {
-      "averageRate": "6.50",
+      "averageRate": "6.5000000",
       "quantity": "5.000",
       "totalValue": "32.50",
     },
@@ -261,18 +261,18 @@ exports[`adjustInventory costing — characterization > first touch is an issue,
       },
     ],
     "returned": {
-      "averageRate": "0.000000",
+      "averageRate": "2.250000",
       "created": true,
       "newQuantity": "-7.500000",
-      "newTotalValue": "0.000000",
+      "newTotalValue": "-16.880000",
       "previousQuantity": "0.000000",
       "previousTotalValue": "0.000000",
     },
     "step": "adjust delta=-7.5 rate=2.25",
     "stored": {
-      "averageRate": "0.00",
+      "averageRate": "2.2500000",
       "quantity": "-7.500",
-      "totalValue": "0.00",
+      "totalValue": "-16.88",
     },
   },
   {
@@ -283,18 +283,18 @@ exports[`adjustInventory costing — characterization > first touch is an issue,
       },
     ],
     "returned": {
-      "averageRate": "2.250000",
+      "averageRate": "2.252000",
       "created": false,
       "newQuantity": "-5.000000",
-      "newTotalValue": "0.000000",
+      "newTotalValue": "-11.250000",
       "previousQuantity": "-7.500000",
-      "previousTotalValue": "0.000000",
+      "previousTotalValue": "-16.880000",
     },
     "step": "adjust delta=2.5 rate=2.25",
     "stored": {
-      "averageRate": "2.25",
+      "averageRate": "2.2520000",
       "quantity": "-5.000",
-      "totalValue": "0.00",
+      "totalValue": "-11.25",
     },
   },
   {
@@ -305,11 +305,11 @@ exports[`adjustInventory costing — characterization > first touch is an issue,
       "newQuantity": "5.000000",
       "newTotalValue": "15.000000",
       "previousQuantity": "-5.000000",
-      "previousTotalValue": "0.000000",
+      "previousTotalValue": "-11.250000",
     },
     "step": "adjust delta=10 rate=3",
     "stored": {
-      "averageRate": "3.00",
+      "averageRate": "3.0000000",
       "quantity": "5.000",
       "totalValue": "15.00",
     },
@@ -331,7 +331,7 @@ exports[`adjustInventory costing — characterization > going short and settling
     },
     "step": "adjust delta=10 rate=4",
     "stored": {
-      "averageRate": "4.00",
+      "averageRate": "4.0000000",
       "quantity": "10.000",
       "totalValue": "40.00",
     },
@@ -347,15 +347,15 @@ exports[`adjustInventory costing — characterization > going short and settling
       "averageRate": "4.000000",
       "created": false,
       "newQuantity": "-5.000000",
-      "newTotalValue": "0.000000",
+      "newTotalValue": "-20.000000",
       "previousQuantity": "10.000000",
       "previousTotalValue": "40.000000",
     },
     "step": "adjust delta=-15",
     "stored": {
-      "averageRate": "4.00",
+      "averageRate": "4.0000000",
       "quantity": "-5.000",
-      "totalValue": "0.00",
+      "totalValue": "-20.00",
     },
   },
   {
@@ -373,15 +373,15 @@ exports[`adjustInventory costing — characterization > going short and settling
       "averageRate": "4.000000",
       "created": false,
       "newQuantity": "-10.000000",
-      "newTotalValue": "0.000000",
+      "newTotalValue": "-40.000000",
       "previousQuantity": "-5.000000",
-      "previousTotalValue": "0.000000",
+      "previousTotalValue": "-20.000000",
     },
     "step": "adjust delta=-5",
     "stored": {
-      "averageRate": "4.00",
+      "averageRate": "4.0000000",
       "quantity": "-10.000",
-      "totalValue": "0.00",
+      "totalValue": "-40.00",
     },
   },
   {
@@ -399,15 +399,15 @@ exports[`adjustInventory costing — characterization > going short and settling
       "averageRate": "6.000000",
       "created": false,
       "newQuantity": "-6.000000",
-      "newTotalValue": "0.000000",
+      "newTotalValue": "-24.000000",
       "previousQuantity": "-10.000000",
-      "previousTotalValue": "0.000000",
+      "previousTotalValue": "-40.000000",
     },
     "step": "adjust delta=4 rate=6",
     "stored": {
-      "averageRate": "6.00",
+      "averageRate": "6.0000000",
       "quantity": "-6.000",
-      "totalValue": "0.00",
+      "totalValue": "-24.00",
     },
   },
   {
@@ -421,15 +421,15 @@ exports[`adjustInventory costing — characterization > going short and settling
       "averageRate": "7.000000",
       "created": false,
       "newQuantity": "-3.000000",
-      "newTotalValue": "0.000000",
+      "newTotalValue": "-12.000000",
       "previousQuantity": "-6.000000",
-      "previousTotalValue": "0.000000",
+      "previousTotalValue": "-24.000000",
     },
     "step": "adjust delta=3 rate=7",
     "stored": {
-      "averageRate": "7.00",
+      "averageRate": "7.0000000",
       "quantity": "-3.000",
-      "totalValue": "0.00",
+      "totalValue": "-12.00",
     },
   },
   {
@@ -440,11 +440,11 @@ exports[`adjustInventory costing — characterization > going short and settling
       "newQuantity": "17.000000",
       "newTotalValue": "136.000000",
       "previousQuantity": "-3.000000",
-      "previousTotalValue": "0.000000",
+      "previousTotalValue": "-12.000000",
     },
     "step": "adjust delta=20 rate=8",
     "stored": {
-      "averageRate": "8.00",
+      "averageRate": "8.0000000",
       "quantity": "17.000",
       "totalValue": "136.00",
     },
@@ -466,7 +466,7 @@ exports[`adjustInventory costing — characterization > many small receipts accu
     },
     "step": "adjust delta=0.1 rate=1.1",
     "stored": {
-      "averageRate": "1.10",
+      "averageRate": "1.1000000",
       "quantity": "0.100",
       "totalValue": "0.11",
     },
@@ -483,7 +483,7 @@ exports[`adjustInventory costing — characterization > many small receipts accu
     },
     "step": "adjust delta=0.1 rate=1.1",
     "stored": {
-      "averageRate": "1.10",
+      "averageRate": "1.1000000",
       "quantity": "0.200",
       "totalValue": "0.22",
     },
@@ -500,7 +500,7 @@ exports[`adjustInventory costing — characterization > many small receipts accu
     },
     "step": "adjust delta=0.1 rate=1.1",
     "stored": {
-      "averageRate": "1.10",
+      "averageRate": "1.1000000",
       "quantity": "0.300",
       "totalValue": "0.33",
     },
@@ -517,7 +517,7 @@ exports[`adjustInventory costing — characterization > many small receipts accu
     },
     "step": "adjust delta=0.1 rate=1.1",
     "stored": {
-      "averageRate": "1.10",
+      "averageRate": "1.1000000",
       "quantity": "0.400",
       "totalValue": "0.44",
     },
@@ -534,7 +534,7 @@ exports[`adjustInventory costing — characterization > many small receipts accu
     },
     "step": "adjust delta=0.1 rate=1.1",
     "stored": {
-      "averageRate": "1.10",
+      "averageRate": "1.1000000",
       "quantity": "0.500",
       "totalValue": "0.55",
     },
@@ -551,7 +551,7 @@ exports[`adjustInventory costing — characterization > many small receipts accu
     },
     "step": "adjust delta=0.1 rate=1.1",
     "stored": {
-      "averageRate": "1.10",
+      "averageRate": "1.1000000",
       "quantity": "0.600",
       "totalValue": "0.66",
     },
@@ -568,7 +568,7 @@ exports[`adjustInventory costing — characterization > many small receipts accu
     },
     "step": "adjust delta=0.1 rate=1.1",
     "stored": {
-      "averageRate": "1.10",
+      "averageRate": "1.1000000",
       "quantity": "0.700",
       "totalValue": "0.77",
     },
@@ -585,7 +585,7 @@ exports[`adjustInventory costing — characterization > many small receipts accu
     },
     "step": "adjust delta=0.1 rate=1.1",
     "stored": {
-      "averageRate": "1.10",
+      "averageRate": "1.1000000",
       "quantity": "0.800",
       "totalValue": "0.88",
     },
@@ -602,7 +602,7 @@ exports[`adjustInventory costing — characterization > many small receipts accu
     },
     "step": "adjust delta=0.1 rate=1.1",
     "stored": {
-      "averageRate": "1.10",
+      "averageRate": "1.1000000",
       "quantity": "0.900",
       "totalValue": "0.99",
     },
@@ -619,7 +619,7 @@ exports[`adjustInventory costing — characterization > many small receipts accu
     },
     "step": "adjust delta=0.1 rate=1.1",
     "stored": {
-      "averageRate": "1.10",
+      "averageRate": "1.1000000",
       "quantity": "1.000",
       "totalValue": "1.10",
     },
@@ -636,7 +636,7 @@ exports[`adjustInventory costing — characterization > many small receipts accu
     },
     "step": "adjust delta=0.1 rate=1.1",
     "stored": {
-      "averageRate": "1.10",
+      "averageRate": "1.1000000",
       "quantity": "1.100",
       "totalValue": "1.21",
     },
@@ -653,7 +653,7 @@ exports[`adjustInventory costing — characterization > many small receipts accu
     },
     "step": "adjust delta=0.1 rate=1.1",
     "stored": {
-      "averageRate": "1.10",
+      "averageRate": "1.1000000",
       "quantity": "1.200",
       "totalValue": "1.32",
     },
@@ -670,7 +670,7 @@ exports[`adjustInventory costing — characterization > many small receipts accu
     },
     "step": "adjust delta=0.1 rate=1.1",
     "stored": {
-      "averageRate": "1.10",
+      "averageRate": "1.1000000",
       "quantity": "1.300",
       "totalValue": "1.43",
     },
@@ -687,7 +687,7 @@ exports[`adjustInventory costing — characterization > many small receipts accu
     },
     "step": "adjust delta=0.1 rate=1.1",
     "stored": {
-      "averageRate": "1.10",
+      "averageRate": "1.1000000",
       "quantity": "1.400",
       "totalValue": "1.54",
     },
@@ -704,7 +704,7 @@ exports[`adjustInventory costing — characterization > many small receipts accu
     },
     "step": "adjust delta=0.1 rate=1.1",
     "stored": {
-      "averageRate": "1.10",
+      "averageRate": "1.1000000",
       "quantity": "1.500",
       "totalValue": "1.65",
     },
@@ -721,7 +721,7 @@ exports[`adjustInventory costing — characterization > many small receipts accu
     },
     "step": "adjust delta=0.1 rate=1.1",
     "stored": {
-      "averageRate": "1.10",
+      "averageRate": "1.1000000",
       "quantity": "1.600",
       "totalValue": "1.76",
     },
@@ -738,7 +738,7 @@ exports[`adjustInventory costing — characterization > many small receipts accu
     },
     "step": "adjust delta=0.1 rate=1.1",
     "stored": {
-      "averageRate": "1.10",
+      "averageRate": "1.1000000",
       "quantity": "1.700",
       "totalValue": "1.87",
     },
@@ -755,7 +755,7 @@ exports[`adjustInventory costing — characterization > many small receipts accu
     },
     "step": "adjust delta=0.1 rate=1.1",
     "stored": {
-      "averageRate": "1.10",
+      "averageRate": "1.1000000",
       "quantity": "1.800",
       "totalValue": "1.98",
     },
@@ -772,7 +772,7 @@ exports[`adjustInventory costing — characterization > many small receipts accu
     },
     "step": "adjust delta=0.1 rate=1.1",
     "stored": {
-      "averageRate": "1.10",
+      "averageRate": "1.1000000",
       "quantity": "1.900",
       "totalValue": "2.09",
     },
@@ -789,7 +789,7 @@ exports[`adjustInventory costing — characterization > many small receipts accu
     },
     "step": "adjust delta=0.1 rate=1.1",
     "stored": {
-      "averageRate": "1.10",
+      "averageRate": "1.1000000",
       "quantity": "2.000",
       "totalValue": "2.20",
     },
@@ -806,7 +806,7 @@ exports[`adjustInventory costing — characterization > many small receipts accu
     },
     "step": "adjust delta=0.1 rate=1.1",
     "stored": {
-      "averageRate": "1.10",
+      "averageRate": "1.1000000",
       "quantity": "2.100",
       "totalValue": "2.31",
     },
@@ -823,7 +823,7 @@ exports[`adjustInventory costing — characterization > many small receipts accu
     },
     "step": "adjust delta=0.1 rate=1.1",
     "stored": {
-      "averageRate": "1.10",
+      "averageRate": "1.1000000",
       "quantity": "2.200",
       "totalValue": "2.42",
     },
@@ -840,7 +840,7 @@ exports[`adjustInventory costing — characterization > many small receipts accu
     },
     "step": "adjust delta=0.1 rate=1.1",
     "stored": {
-      "averageRate": "1.10",
+      "averageRate": "1.1000000",
       "quantity": "2.300",
       "totalValue": "2.53",
     },
@@ -857,7 +857,7 @@ exports[`adjustInventory costing — characterization > many small receipts accu
     },
     "step": "adjust delta=0.1 rate=1.1",
     "stored": {
-      "averageRate": "1.10",
+      "averageRate": "1.1000000",
       "quantity": "2.400",
       "totalValue": "2.64",
     },
@@ -874,7 +874,7 @@ exports[`adjustInventory costing — characterization > many small receipts accu
     },
     "step": "adjust delta=0.1 rate=1.1",
     "stored": {
-      "averageRate": "1.10",
+      "averageRate": "1.1000000",
       "quantity": "2.500",
       "totalValue": "2.75",
     },
@@ -891,7 +891,7 @@ exports[`adjustInventory costing — characterization > many small receipts accu
     },
     "step": "adjust delta=0.1 rate=1.1",
     "stored": {
-      "averageRate": "1.10",
+      "averageRate": "1.1000000",
       "quantity": "2.600",
       "totalValue": "2.86",
     },
@@ -908,7 +908,7 @@ exports[`adjustInventory costing — characterization > many small receipts accu
     },
     "step": "adjust delta=0.1 rate=1.1",
     "stored": {
-      "averageRate": "1.10",
+      "averageRate": "1.1000000",
       "quantity": "2.700",
       "totalValue": "2.97",
     },
@@ -925,7 +925,7 @@ exports[`adjustInventory costing — characterization > many small receipts accu
     },
     "step": "adjust delta=0.1 rate=1.1",
     "stored": {
-      "averageRate": "1.10",
+      "averageRate": "1.1000000",
       "quantity": "2.800",
       "totalValue": "3.08",
     },
@@ -942,7 +942,7 @@ exports[`adjustInventory costing — characterization > many small receipts accu
     },
     "step": "adjust delta=0.1 rate=1.1",
     "stored": {
-      "averageRate": "1.10",
+      "averageRate": "1.1000000",
       "quantity": "2.900",
       "totalValue": "3.19",
     },
@@ -959,7 +959,7 @@ exports[`adjustInventory costing — characterization > many small receipts accu
     },
     "step": "adjust delta=0.1 rate=1.1",
     "stored": {
-      "averageRate": "1.10",
+      "averageRate": "1.1000000",
       "quantity": "3.000",
       "totalValue": "3.30",
     },
@@ -976,7 +976,7 @@ exports[`adjustInventory costing — characterization > many small receipts accu
     },
     "step": "adjust delta=0.1 rate=1.1",
     "stored": {
-      "averageRate": "1.10",
+      "averageRate": "1.1000000",
       "quantity": "3.100",
       "totalValue": "3.41",
     },
@@ -993,7 +993,7 @@ exports[`adjustInventory costing — characterization > many small receipts accu
     },
     "step": "adjust delta=0.1 rate=1.1",
     "stored": {
-      "averageRate": "1.10",
+      "averageRate": "1.1000000",
       "quantity": "3.200",
       "totalValue": "3.52",
     },
@@ -1010,7 +1010,7 @@ exports[`adjustInventory costing — characterization > many small receipts accu
     },
     "step": "adjust delta=0.1 rate=1.1",
     "stored": {
-      "averageRate": "1.10",
+      "averageRate": "1.1000000",
       "quantity": "3.300",
       "totalValue": "3.63",
     },
@@ -1027,7 +1027,7 @@ exports[`adjustInventory costing — characterization > many small receipts accu
     },
     "step": "adjust delta=0.1 rate=1.1",
     "stored": {
-      "averageRate": "1.10",
+      "averageRate": "1.1000000",
       "quantity": "3.400",
       "totalValue": "3.74",
     },
@@ -1044,7 +1044,7 @@ exports[`adjustInventory costing — characterization > many small receipts accu
     },
     "step": "adjust delta=0.1 rate=1.1",
     "stored": {
-      "averageRate": "1.10",
+      "averageRate": "1.1000000",
       "quantity": "3.500",
       "totalValue": "3.85",
     },
@@ -1061,7 +1061,7 @@ exports[`adjustInventory costing — characterization > many small receipts accu
     },
     "step": "adjust delta=0.1 rate=1.1",
     "stored": {
-      "averageRate": "1.10",
+      "averageRate": "1.1000000",
       "quantity": "3.600",
       "totalValue": "3.96",
     },
@@ -1078,7 +1078,7 @@ exports[`adjustInventory costing — characterization > many small receipts accu
     },
     "step": "adjust delta=0.1 rate=1.1",
     "stored": {
-      "averageRate": "1.10",
+      "averageRate": "1.1000000",
       "quantity": "3.700",
       "totalValue": "4.07",
     },
@@ -1095,7 +1095,7 @@ exports[`adjustInventory costing — characterization > many small receipts accu
     },
     "step": "adjust delta=0.1 rate=1.1",
     "stored": {
-      "averageRate": "1.10",
+      "averageRate": "1.1000000",
       "quantity": "3.800",
       "totalValue": "4.18",
     },
@@ -1112,7 +1112,7 @@ exports[`adjustInventory costing — characterization > many small receipts accu
     },
     "step": "adjust delta=0.1 rate=1.1",
     "stored": {
-      "averageRate": "1.10",
+      "averageRate": "1.1000000",
       "quantity": "3.900",
       "totalValue": "4.29",
     },
@@ -1129,7 +1129,7 @@ exports[`adjustInventory costing — characterization > many small receipts accu
     },
     "step": "adjust delta=0.1 rate=1.1",
     "stored": {
-      "averageRate": "1.10",
+      "averageRate": "1.1000000",
       "quantity": "4.000",
       "totalValue": "4.40",
     },
@@ -1146,7 +1146,7 @@ exports[`adjustInventory costing — characterization > many small receipts accu
     },
     "step": "adjust delta=0.1 rate=1.1",
     "stored": {
-      "averageRate": "1.10",
+      "averageRate": "1.1000000",
       "quantity": "4.100",
       "totalValue": "4.51",
     },
@@ -1163,7 +1163,7 @@ exports[`adjustInventory costing — characterization > many small receipts accu
     },
     "step": "adjust delta=0.1 rate=1.1",
     "stored": {
-      "averageRate": "1.10",
+      "averageRate": "1.1000000",
       "quantity": "4.200",
       "totalValue": "4.62",
     },
@@ -1180,7 +1180,7 @@ exports[`adjustInventory costing — characterization > many small receipts accu
     },
     "step": "adjust delta=0.1 rate=1.1",
     "stored": {
-      "averageRate": "1.10",
+      "averageRate": "1.1000000",
       "quantity": "4.300",
       "totalValue": "4.73",
     },
@@ -1197,7 +1197,7 @@ exports[`adjustInventory costing — characterization > many small receipts accu
     },
     "step": "adjust delta=0.1 rate=1.1",
     "stored": {
-      "averageRate": "1.10",
+      "averageRate": "1.1000000",
       "quantity": "4.400",
       "totalValue": "4.84",
     },
@@ -1214,7 +1214,7 @@ exports[`adjustInventory costing — characterization > many small receipts accu
     },
     "step": "adjust delta=0.1 rate=1.1",
     "stored": {
-      "averageRate": "1.10",
+      "averageRate": "1.1000000",
       "quantity": "4.500",
       "totalValue": "4.95",
     },
@@ -1231,7 +1231,7 @@ exports[`adjustInventory costing — characterization > many small receipts accu
     },
     "step": "adjust delta=0.1 rate=1.1",
     "stored": {
-      "averageRate": "1.10",
+      "averageRate": "1.1000000",
       "quantity": "4.600",
       "totalValue": "5.06",
     },
@@ -1248,7 +1248,7 @@ exports[`adjustInventory costing — characterization > many small receipts accu
     },
     "step": "adjust delta=0.1 rate=1.1",
     "stored": {
-      "averageRate": "1.10",
+      "averageRate": "1.1000000",
       "quantity": "4.700",
       "totalValue": "5.17",
     },
@@ -1265,7 +1265,7 @@ exports[`adjustInventory costing — characterization > many small receipts accu
     },
     "step": "adjust delta=0.1 rate=1.1",
     "stored": {
-      "averageRate": "1.10",
+      "averageRate": "1.1000000",
       "quantity": "4.800",
       "totalValue": "5.28",
     },
@@ -1282,7 +1282,7 @@ exports[`adjustInventory costing — characterization > many small receipts accu
     },
     "step": "adjust delta=0.1 rate=1.1",
     "stored": {
-      "averageRate": "1.10",
+      "averageRate": "1.1000000",
       "quantity": "4.900",
       "totalValue": "5.39",
     },
@@ -1299,7 +1299,7 @@ exports[`adjustInventory costing — characterization > many small receipts accu
     },
     "step": "adjust delta=0.1 rate=1.1",
     "stored": {
-      "averageRate": "1.10",
+      "averageRate": "1.1000000",
       "quantity": "5.000",
       "totalValue": "5.50",
     },
@@ -1316,7 +1316,7 @@ exports[`adjustInventory costing — characterization > many small receipts accu
     },
     "step": "adjust delta=0.1 rate=1.1",
     "stored": {
-      "averageRate": "1.10",
+      "averageRate": "1.1000000",
       "quantity": "5.100",
       "totalValue": "5.61",
     },
@@ -1333,7 +1333,7 @@ exports[`adjustInventory costing — characterization > many small receipts accu
     },
     "step": "adjust delta=0.1 rate=1.1",
     "stored": {
-      "averageRate": "1.10",
+      "averageRate": "1.1000000",
       "quantity": "5.200",
       "totalValue": "5.72",
     },
@@ -1350,7 +1350,7 @@ exports[`adjustInventory costing — characterization > many small receipts accu
     },
     "step": "adjust delta=0.1 rate=1.1",
     "stored": {
-      "averageRate": "1.10",
+      "averageRate": "1.1000000",
       "quantity": "5.300",
       "totalValue": "5.83",
     },
@@ -1367,7 +1367,7 @@ exports[`adjustInventory costing — characterization > many small receipts accu
     },
     "step": "adjust delta=0.1 rate=1.1",
     "stored": {
-      "averageRate": "1.10",
+      "averageRate": "1.1000000",
       "quantity": "5.400",
       "totalValue": "5.94",
     },
@@ -1384,7 +1384,7 @@ exports[`adjustInventory costing — characterization > many small receipts accu
     },
     "step": "adjust delta=0.1 rate=1.1",
     "stored": {
-      "averageRate": "1.10",
+      "averageRate": "1.1000000",
       "quantity": "5.500",
       "totalValue": "6.05",
     },
@@ -1401,7 +1401,7 @@ exports[`adjustInventory costing — characterization > many small receipts accu
     },
     "step": "adjust delta=0.1 rate=1.1",
     "stored": {
-      "averageRate": "1.10",
+      "averageRate": "1.1000000",
       "quantity": "5.600",
       "totalValue": "6.16",
     },
@@ -1418,7 +1418,7 @@ exports[`adjustInventory costing — characterization > many small receipts accu
     },
     "step": "adjust delta=0.1 rate=1.1",
     "stored": {
-      "averageRate": "1.10",
+      "averageRate": "1.1000000",
       "quantity": "5.700",
       "totalValue": "6.27",
     },
@@ -1435,7 +1435,7 @@ exports[`adjustInventory costing — characterization > many small receipts accu
     },
     "step": "adjust delta=0.1 rate=1.1",
     "stored": {
-      "averageRate": "1.10",
+      "averageRate": "1.1000000",
       "quantity": "5.800",
       "totalValue": "6.38",
     },
@@ -1452,7 +1452,7 @@ exports[`adjustInventory costing — characterization > many small receipts accu
     },
     "step": "adjust delta=0.1 rate=1.1",
     "stored": {
-      "averageRate": "1.10",
+      "averageRate": "1.1000000",
       "quantity": "5.900",
       "totalValue": "6.49",
     },
@@ -1469,7 +1469,7 @@ exports[`adjustInventory costing — characterization > many small receipts accu
     },
     "step": "adjust delta=0.1 rate=1.1",
     "stored": {
-      "averageRate": "1.10",
+      "averageRate": "1.1000000",
       "quantity": "6.000",
       "totalValue": "6.60",
     },
@@ -1486,7 +1486,7 @@ exports[`adjustInventory costing — characterization > many small receipts accu
     },
     "step": "adjust delta=0.1 rate=1.1",
     "stored": {
-      "averageRate": "1.10",
+      "averageRate": "1.1000000",
       "quantity": "6.100",
       "totalValue": "6.71",
     },
@@ -1503,7 +1503,7 @@ exports[`adjustInventory costing — characterization > many small receipts accu
     },
     "step": "adjust delta=0.1 rate=1.1",
     "stored": {
-      "averageRate": "1.10",
+      "averageRate": "1.1000000",
       "quantity": "6.200",
       "totalValue": "6.82",
     },
@@ -1520,7 +1520,7 @@ exports[`adjustInventory costing — characterization > many small receipts accu
     },
     "step": "adjust delta=0.1 rate=1.1",
     "stored": {
-      "averageRate": "1.10",
+      "averageRate": "1.1000000",
       "quantity": "6.300",
       "totalValue": "6.93",
     },
@@ -1537,7 +1537,7 @@ exports[`adjustInventory costing — characterization > many small receipts accu
     },
     "step": "adjust delta=0.1 rate=1.1",
     "stored": {
-      "averageRate": "1.10",
+      "averageRate": "1.1000000",
       "quantity": "6.400",
       "totalValue": "7.04",
     },
@@ -1554,7 +1554,7 @@ exports[`adjustInventory costing — characterization > many small receipts accu
     },
     "step": "adjust delta=0.1 rate=1.1",
     "stored": {
-      "averageRate": "1.10",
+      "averageRate": "1.1000000",
       "quantity": "6.500",
       "totalValue": "7.15",
     },
@@ -1571,7 +1571,7 @@ exports[`adjustInventory costing — characterization > many small receipts accu
     },
     "step": "adjust delta=0.1 rate=1.1",
     "stored": {
-      "averageRate": "1.10",
+      "averageRate": "1.1000000",
       "quantity": "6.600",
       "totalValue": "7.26",
     },
@@ -1588,7 +1588,7 @@ exports[`adjustInventory costing — characterization > many small receipts accu
     },
     "step": "adjust delta=0.1 rate=1.1",
     "stored": {
-      "averageRate": "1.10",
+      "averageRate": "1.1000000",
       "quantity": "6.700",
       "totalValue": "7.37",
     },
@@ -1605,7 +1605,7 @@ exports[`adjustInventory costing — characterization > many small receipts accu
     },
     "step": "adjust delta=0.1 rate=1.1",
     "stored": {
-      "averageRate": "1.10",
+      "averageRate": "1.1000000",
       "quantity": "6.800",
       "totalValue": "7.48",
     },
@@ -1622,7 +1622,7 @@ exports[`adjustInventory costing — characterization > many small receipts accu
     },
     "step": "adjust delta=0.1 rate=1.1",
     "stored": {
-      "averageRate": "1.10",
+      "averageRate": "1.1000000",
       "quantity": "6.900",
       "totalValue": "7.59",
     },
@@ -1639,7 +1639,7 @@ exports[`adjustInventory costing — characterization > many small receipts accu
     },
     "step": "adjust delta=0.1 rate=1.1",
     "stored": {
-      "averageRate": "1.10",
+      "averageRate": "1.1000000",
       "quantity": "7.000",
       "totalValue": "7.70",
     },
@@ -1656,7 +1656,7 @@ exports[`adjustInventory costing — characterization > many small receipts accu
     },
     "step": "adjust delta=0.1 rate=1.1",
     "stored": {
-      "averageRate": "1.10",
+      "averageRate": "1.1000000",
       "quantity": "7.100",
       "totalValue": "7.81",
     },
@@ -1673,7 +1673,7 @@ exports[`adjustInventory costing — characterization > many small receipts accu
     },
     "step": "adjust delta=0.1 rate=1.1",
     "stored": {
-      "averageRate": "1.10",
+      "averageRate": "1.1000000",
       "quantity": "7.200",
       "totalValue": "7.92",
     },
@@ -1690,7 +1690,7 @@ exports[`adjustInventory costing — characterization > many small receipts accu
     },
     "step": "adjust delta=0.1 rate=1.1",
     "stored": {
-      "averageRate": "1.10",
+      "averageRate": "1.1000000",
       "quantity": "7.300",
       "totalValue": "8.03",
     },
@@ -1707,7 +1707,7 @@ exports[`adjustInventory costing — characterization > many small receipts accu
     },
     "step": "adjust delta=0.1 rate=1.1",
     "stored": {
-      "averageRate": "1.10",
+      "averageRate": "1.1000000",
       "quantity": "7.400",
       "totalValue": "8.14",
     },
@@ -1724,7 +1724,7 @@ exports[`adjustInventory costing — characterization > many small receipts accu
     },
     "step": "adjust delta=0.1 rate=1.1",
     "stored": {
-      "averageRate": "1.10",
+      "averageRate": "1.1000000",
       "quantity": "7.500",
       "totalValue": "8.25",
     },
@@ -1741,7 +1741,7 @@ exports[`adjustInventory costing — characterization > many small receipts accu
     },
     "step": "adjust delta=0.1 rate=1.1",
     "stored": {
-      "averageRate": "1.10",
+      "averageRate": "1.1000000",
       "quantity": "7.600",
       "totalValue": "8.36",
     },
@@ -1758,7 +1758,7 @@ exports[`adjustInventory costing — characterization > many small receipts accu
     },
     "step": "adjust delta=0.1 rate=1.1",
     "stored": {
-      "averageRate": "1.10",
+      "averageRate": "1.1000000",
       "quantity": "7.700",
       "totalValue": "8.47",
     },
@@ -1775,7 +1775,7 @@ exports[`adjustInventory costing — characterization > many small receipts accu
     },
     "step": "adjust delta=0.1 rate=1.1",
     "stored": {
-      "averageRate": "1.10",
+      "averageRate": "1.1000000",
       "quantity": "7.800",
       "totalValue": "8.58",
     },
@@ -1792,7 +1792,7 @@ exports[`adjustInventory costing — characterization > many small receipts accu
     },
     "step": "adjust delta=0.1 rate=1.1",
     "stored": {
-      "averageRate": "1.10",
+      "averageRate": "1.1000000",
       "quantity": "7.900",
       "totalValue": "8.69",
     },
@@ -1809,7 +1809,7 @@ exports[`adjustInventory costing — characterization > many small receipts accu
     },
     "step": "adjust delta=0.1 rate=1.1",
     "stored": {
-      "averageRate": "1.10",
+      "averageRate": "1.1000000",
       "quantity": "8.000",
       "totalValue": "8.80",
     },
@@ -1826,7 +1826,7 @@ exports[`adjustInventory costing — characterization > many small receipts accu
     },
     "step": "adjust delta=0.1 rate=1.1",
     "stored": {
-      "averageRate": "1.10",
+      "averageRate": "1.1000000",
       "quantity": "8.100",
       "totalValue": "8.91",
     },
@@ -1843,7 +1843,7 @@ exports[`adjustInventory costing — characterization > many small receipts accu
     },
     "step": "adjust delta=0.1 rate=1.1",
     "stored": {
-      "averageRate": "1.10",
+      "averageRate": "1.1000000",
       "quantity": "8.200",
       "totalValue": "9.02",
     },
@@ -1860,7 +1860,7 @@ exports[`adjustInventory costing — characterization > many small receipts accu
     },
     "step": "adjust delta=0.1 rate=1.1",
     "stored": {
-      "averageRate": "1.10",
+      "averageRate": "1.1000000",
       "quantity": "8.300",
       "totalValue": "9.13",
     },
@@ -1877,7 +1877,7 @@ exports[`adjustInventory costing — characterization > many small receipts accu
     },
     "step": "adjust delta=0.1 rate=1.1",
     "stored": {
-      "averageRate": "1.10",
+      "averageRate": "1.1000000",
       "quantity": "8.400",
       "totalValue": "9.24",
     },
@@ -1894,7 +1894,7 @@ exports[`adjustInventory costing — characterization > many small receipts accu
     },
     "step": "adjust delta=0.1 rate=1.1",
     "stored": {
-      "averageRate": "1.10",
+      "averageRate": "1.1000000",
       "quantity": "8.500",
       "totalValue": "9.35",
     },
@@ -1911,7 +1911,7 @@ exports[`adjustInventory costing — characterization > many small receipts accu
     },
     "step": "adjust delta=0.1 rate=1.1",
     "stored": {
-      "averageRate": "1.10",
+      "averageRate": "1.1000000",
       "quantity": "8.600",
       "totalValue": "9.46",
     },
@@ -1928,7 +1928,7 @@ exports[`adjustInventory costing — characterization > many small receipts accu
     },
     "step": "adjust delta=0.1 rate=1.1",
     "stored": {
-      "averageRate": "1.10",
+      "averageRate": "1.1000000",
       "quantity": "8.700",
       "totalValue": "9.57",
     },
@@ -1945,7 +1945,7 @@ exports[`adjustInventory costing — characterization > many small receipts accu
     },
     "step": "adjust delta=0.1 rate=1.1",
     "stored": {
-      "averageRate": "1.10",
+      "averageRate": "1.1000000",
       "quantity": "8.800",
       "totalValue": "9.68",
     },
@@ -1962,7 +1962,7 @@ exports[`adjustInventory costing — characterization > many small receipts accu
     },
     "step": "adjust delta=0.1 rate=1.1",
     "stored": {
-      "averageRate": "1.10",
+      "averageRate": "1.1000000",
       "quantity": "8.900",
       "totalValue": "9.79",
     },
@@ -1979,7 +1979,7 @@ exports[`adjustInventory costing — characterization > many small receipts accu
     },
     "step": "adjust delta=0.1 rate=1.1",
     "stored": {
-      "averageRate": "1.10",
+      "averageRate": "1.1000000",
       "quantity": "9.000",
       "totalValue": "9.90",
     },
@@ -1996,7 +1996,7 @@ exports[`adjustInventory costing — characterization > many small receipts accu
     },
     "step": "adjust delta=0.1 rate=1.1",
     "stored": {
-      "averageRate": "1.10",
+      "averageRate": "1.1000000",
       "quantity": "9.100",
       "totalValue": "10.01",
     },
@@ -2013,7 +2013,7 @@ exports[`adjustInventory costing — characterization > many small receipts accu
     },
     "step": "adjust delta=0.1 rate=1.1",
     "stored": {
-      "averageRate": "1.10",
+      "averageRate": "1.1000000",
       "quantity": "9.200",
       "totalValue": "10.12",
     },
@@ -2030,7 +2030,7 @@ exports[`adjustInventory costing — characterization > many small receipts accu
     },
     "step": "adjust delta=0.1 rate=1.1",
     "stored": {
-      "averageRate": "1.10",
+      "averageRate": "1.1000000",
       "quantity": "9.300",
       "totalValue": "10.23",
     },
@@ -2047,7 +2047,7 @@ exports[`adjustInventory costing — characterization > many small receipts accu
     },
     "step": "adjust delta=0.1 rate=1.1",
     "stored": {
-      "averageRate": "1.10",
+      "averageRate": "1.1000000",
       "quantity": "9.400",
       "totalValue": "10.34",
     },
@@ -2064,7 +2064,7 @@ exports[`adjustInventory costing — characterization > many small receipts accu
     },
     "step": "adjust delta=0.1 rate=1.1",
     "stored": {
-      "averageRate": "1.10",
+      "averageRate": "1.1000000",
       "quantity": "9.500",
       "totalValue": "10.45",
     },
@@ -2081,7 +2081,7 @@ exports[`adjustInventory costing — characterization > many small receipts accu
     },
     "step": "adjust delta=0.1 rate=1.1",
     "stored": {
-      "averageRate": "1.10",
+      "averageRate": "1.1000000",
       "quantity": "9.600",
       "totalValue": "10.56",
     },
@@ -2098,7 +2098,7 @@ exports[`adjustInventory costing — characterization > many small receipts accu
     },
     "step": "adjust delta=0.1 rate=1.1",
     "stored": {
-      "averageRate": "1.10",
+      "averageRate": "1.1000000",
       "quantity": "9.700",
       "totalValue": "10.67",
     },
@@ -2115,7 +2115,7 @@ exports[`adjustInventory costing — characterization > many small receipts accu
     },
     "step": "adjust delta=0.1 rate=1.1",
     "stored": {
-      "averageRate": "1.10",
+      "averageRate": "1.1000000",
       "quantity": "9.800",
       "totalValue": "10.78",
     },
@@ -2132,7 +2132,7 @@ exports[`adjustInventory costing — characterization > many small receipts accu
     },
     "step": "adjust delta=0.1 rate=1.1",
     "stored": {
-      "averageRate": "1.10",
+      "averageRate": "1.1000000",
       "quantity": "9.900",
       "totalValue": "10.89",
     },
@@ -2149,7 +2149,7 @@ exports[`adjustInventory costing — characterization > many small receipts accu
     },
     "step": "adjust delta=0.1 rate=1.1",
     "stored": {
-      "averageRate": "1.10",
+      "averageRate": "1.1000000",
       "quantity": "10.000",
       "totalValue": "11.00",
     },
@@ -2166,7 +2166,7 @@ exports[`adjustInventory costing — characterization > many small receipts accu
     },
     "step": "adjust delta=-10",
     "stored": {
-      "averageRate": "1.10",
+      "averageRate": "1.1000000",
       "quantity": "0.000",
       "totalValue": "0.00",
     },
@@ -2188,7 +2188,7 @@ exports[`adjustInventory costing — characterization > non-terminating rates an
     },
     "step": "adjust delta=3 rate=3.3333333333333335",
     "stored": {
-      "averageRate": "3.33",
+      "averageRate": "3.3333333",
       "quantity": "3.000",
       "totalValue": "10.00",
     },
@@ -2205,7 +2205,7 @@ exports[`adjustInventory costing — characterization > non-terminating rates an
     },
     "step": "adjust delta=7 rate=14.285714285714286",
     "stored": {
-      "averageRate": "11.00",
+      "averageRate": "11.0000000",
       "quantity": "10.000",
       "totalValue": "110.00",
     },
@@ -2222,7 +2222,7 @@ exports[`adjustInventory costing — characterization > non-terminating rates an
     },
     "step": "adjust delta=-1",
     "stored": {
-      "averageRate": "11.00",
+      "averageRate": "11.0000000",
       "quantity": "9.000",
       "totalValue": "99.00",
     },
@@ -2239,7 +2239,7 @@ exports[`adjustInventory costing — characterization > non-terminating rates an
     },
     "step": "adjust delta=0.1 rate=0.2",
     "stored": {
-      "averageRate": "10.88",
+      "averageRate": "10.8813187",
       "quantity": "9.100",
       "totalValue": "99.02",
     },
@@ -2256,7 +2256,7 @@ exports[`adjustInventory costing — characterization > non-terminating rates an
     },
     "step": "adjust delta=0.2 rate=0.1",
     "stored": {
-      "averageRate": "10.65",
+      "averageRate": "10.6494624",
       "quantity": "9.300",
       "totalValue": "99.04",
     },
@@ -2264,18 +2264,18 @@ exports[`adjustInventory costing — characterization > non-terminating rates an
   {
     "negativeLayers": [],
     "returned": {
-      "averageRate": "10.649444",
+      "averageRate": "10.649462",
       "created": false,
       "newQuantity": "9.000000",
-      "newTotalValue": "95.845000",
+      "newTotalValue": "95.850000",
       "previousQuantity": "9.300000",
       "previousTotalValue": "99.040000",
     },
     "step": "adjust delta=-0.30000000000000004",
     "stored": {
-      "averageRate": "10.65",
+      "averageRate": "10.6494624",
       "quantity": "9.000",
-      "totalValue": "95.84",
+      "totalValue": "95.85",
     },
   },
 ]
@@ -2295,7 +2295,7 @@ exports[`adjustInventory costing — characterization > receipts and issues that
     },
     "step": "adjust delta=100 rate=10",
     "stored": {
-      "averageRate": "10.00",
+      "averageRate": "10.0000000",
       "quantity": "100.000",
       "totalValue": "1000.00",
     },
@@ -2312,7 +2312,7 @@ exports[`adjustInventory costing — characterization > receipts and issues that
     },
     "step": "adjust delta=50 rate=12.5",
     "stored": {
-      "averageRate": "10.83",
+      "averageRate": "10.8333333",
       "quantity": "150.000",
       "totalValue": "1625.00",
     },
@@ -2320,52 +2320,52 @@ exports[`adjustInventory costing — characterization > receipts and issues that
   {
     "negativeLayers": [],
     "returned": {
-      "averageRate": "10.834167",
+      "averageRate": "10.833333",
       "created": false,
       "newQuantity": "120.000000",
-      "newTotalValue": "1300.100000",
+      "newTotalValue": "1300.000000",
       "previousQuantity": "150.000000",
       "previousTotalValue": "1625.000000",
     },
     "step": "adjust delta=-30",
     "stored": {
-      "averageRate": "10.83",
+      "averageRate": "10.8333333",
       "quantity": "120.000",
-      "totalValue": "1300.10",
+      "totalValue": "1300.00",
     },
   },
   {
     "negativeLayers": [],
     "returned": {
-      "averageRate": "10.688621",
+      "averageRate": "10.687931",
       "created": false,
       "newQuantity": "145.000000",
-      "newTotalValue": "1549.850000",
+      "newTotalValue": "1549.750000",
       "previousQuantity": "120.000000",
-      "previousTotalValue": "1300.100000",
+      "previousTotalValue": "1300.000000",
     },
     "step": "adjust delta=25 rate=9.99",
     "stored": {
-      "averageRate": "10.69",
+      "averageRate": "10.6879310",
       "quantity": "145.000",
-      "totalValue": "1549.85",
+      "totalValue": "1549.75",
     },
   },
   {
     "negativeLayers": [],
     "returned": {
-      "averageRate": "10.687647",
+      "averageRate": "10.687931",
       "created": false,
       "newQuantity": "85.000000",
-      "newTotalValue": "908.450000",
+      "newTotalValue": "908.470000",
       "previousQuantity": "145.000000",
-      "previousTotalValue": "1549.850000",
+      "previousTotalValue": "1549.750000",
     },
     "step": "adjust delta=-60",
     "stored": {
-      "averageRate": "10.69",
+      "averageRate": "10.6879310",
       "quantity": "85.000",
-      "totalValue": "908.45",
+      "totalValue": "908.47",
     },
   },
 ]
@@ -2385,7 +2385,7 @@ exports[`adjustInventory costing — characterization > shortage quantities that
     },
     "step": "adjust delta=1 rate=3",
     "stored": {
-      "averageRate": "3.00",
+      "averageRate": "3.0000000",
       "quantity": "1.000",
       "totalValue": "3.00",
     },
@@ -2395,14 +2395,14 @@ exports[`adjustInventory costing — characterization > shortage quantities that
     "returned": {
       "averageRate": "3.000000",
       "created": false,
-      "newQuantity": "-0.000400",
+      "newQuantity": "0.000000",
       "newTotalValue": "0.000000",
       "previousQuantity": "1.000000",
       "previousTotalValue": "3.000000",
     },
     "step": "adjust delta=-1.0004",
     "stored": {
-      "averageRate": "3.00",
+      "averageRate": "3.0000000",
       "quantity": "0.000",
       "totalValue": "0.00",
     },
@@ -2424,7 +2424,7 @@ exports[`adjustInventory costing — characterization > shortage quantities that
     },
     "step": "adjust delta=-0.0006",
     "stored": {
-      "averageRate": "3.00",
+      "averageRate": "3.0000000",
       "quantity": "-0.001",
       "totalValue": "0.00",
     },
@@ -2446,7 +2446,7 @@ exports[`adjustInventory costing — characterization > shortage quantities that
     },
     "step": "adjust delta=0.0004 rate=3",
     "stored": {
-      "averageRate": "3.00",
+      "averageRate": "3.0000000",
       "quantity": "-0.001",
       "totalValue": "0.00",
     },
@@ -2454,16 +2454,16 @@ exports[`adjustInventory costing — characterization > shortage quantities that
   {
     "negativeLayers": [],
     "returned": {
-      "averageRate": "3.000000",
+      "averageRate": "3.001501",
       "created": false,
       "newQuantity": "1.999000",
-      "newTotalValue": "5.997000",
+      "newTotalValue": "6.000000",
       "previousQuantity": "-0.001000",
       "previousTotalValue": "0.000000",
     },
     "step": "adjust delta=2 rate=3",
     "stored": {
-      "averageRate": "3.00",
+      "averageRate": "3.0015008",
       "quantity": "1.999",
       "totalValue": "6.00",
     },

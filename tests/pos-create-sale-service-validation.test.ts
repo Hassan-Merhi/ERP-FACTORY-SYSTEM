@@ -11,8 +11,8 @@ const harness = vi.hoisted(() => ({
   validateInventoryAvailability: vi.fn(),
   getOrCreateSalesRevenueAccount: vi.fn(),
   fetchSupplierPartnerAccountingContext: vi.fn(),
-  insertSaleAccountingEntries: vi.fn(),
-  insertSaleVoucher: vi.fn(),
+  buildSaleAccountingLines: vi.fn(),
+  postErpVoucherTx: vi.fn(),
   lockAndDeductInventoryForSaleItem: vi.fn(),
   lockAndFindExistingPosSaleTx: vi.fn(),
   getShiftById: vi.fn(),
@@ -39,9 +39,10 @@ vi.mock("../server/services/pos/buildSaleItems", () => ({
 vi.mock("../server/services/pos/postSaleAccounting", () => ({
   getOrCreateSalesRevenueAccount: harness.getOrCreateSalesRevenueAccount,
   fetchSupplierPartnerAccountingContext: harness.fetchSupplierPartnerAccountingContext,
-  insertSaleAccountingEntries: harness.insertSaleAccountingEntries,
+  buildSaleAccountingLines: harness.buildSaleAccountingLines,
 }));
-vi.mock("../server/services/pos/createSaleVoucher", () => ({ insertSaleVoucher: harness.insertSaleVoucher }));
+// Phase 22 (B): the sale voucher posts through the central engine.
+vi.mock("../server/services/accounting/erpVoucherPosting", () => ({ postErpVoucherTx: harness.postErpVoucherTx }));
 vi.mock("../server/services/pos/deductSaleInventory", () => ({
   lockAndDeductInventoryForSaleItem: harness.lockAndDeductInventoryForSaleItem,
 }));

@@ -25,16 +25,16 @@ import { db } from "../../../db";
 import { requireAuth } from "../../../auth";
 import { z } from "zod";
 import { eq, and, sql } from "drizzle-orm";
-import {
-  propertyUnits,
-  propertyContracts,
-  propertyMonthlyLedger,
-  propertyPayments,
-  vouchers,
-  voucherEntries,
-} from "@shared/schema";
+import { propertyUnits, propertyContracts, propertyMonthlyLedger, propertyPayments } from "@shared/schema";
 import { parseId } from "../../../lib/parseId";
 import { parseMoneyInput } from "../../../lib/money";
+import { retireVouchersTx, sessionRetirementActor } from "../../../services/accounting/voucherRetirement";
+import { nextGuaranteeVoucherNumberTx } from "../shared/guarantee-number";
+import {
+  erpRequestSourceId,
+  postErpVoucherTx,
+  sessionPostingActor as postingActor,
+} from "../../../services/accounting/erpVoucherPosting";
 
 export function registerRentalGuaranteeRoutes(app: Express, ctx: RentalRoutesContext) {
   const { module, urlPrefix, incomeAccountName, shopExpenseAccountName } = ctx;
@@ -104,23 +104,20 @@ export function registerRentalGuaranteeRoutes(app: Express, ctx: RentalRoutesCon
               "SEC-DEP-PAID"
             );
             const narration = `Guarantee paid - ${unitLabel}`;
-            const [v] = await tx
-              .insert(vouchers)
-              .values({
-                companyId,
-                voucherNumber: `GUAR-${Date.now()}-${Math.random().toString(36).slice(2, 7)}-${id}`,
-                voucherType: "Payment",
-                voucherDate: dateStr,
-                description: narration,
-                totalAmount: amount,
-                currency: contract.currency || "USD",
-                sourceModule: "ERP",
-              })
-              .returning();
-            await tx.insert(voucherEntries).values([
-              { voucherId: v.id, ledgerAccountId: depositAccountId, debitAmount: amount, creditAmount: "0", narration },
-              { voucherId: v.id, ledgerAccountId: cashAccountId, debitAmount: "0", creditAmount: amount, narration },
-            ]);
+            await postErpVoucherTx(tx, {
+              companyId,
+              voucherType: "Payment",
+              voucherDate: dateStr,
+              description: narration,
+              currency: contract.currency || "USD",
+              lines: [
+                { ledgerAccountId: depositAccountId, debit: amount, narration },
+                { ledgerAccountId: cashAccountId, credit: amount, narration },
+              ],
+              voucherNumber: await nextGuaranteeVoucherNumberTx(tx, { companyId, contractId: id, kind: "GUAR" }),
+              source: { type: "rental-guarantee-statement", id: String(id) },
+              actor: postingActor(req),
+            });
           } else {
             // Landlord perspective: company RECEIVES the guarantee — Dr Cash / Cr Tenant Deposits (Liability)
             const depositAccountId = await findOrCreateLedgerAccount(
@@ -131,23 +128,20 @@ export function registerRentalGuaranteeRoutes(app: Express, ctx: RentalRoutesCon
               "TENANT-DEP"
             );
             const narration = `Guarantee deposit - ${unitLabel}`;
-            const [v] = await tx
-              .insert(vouchers)
-              .values({
-                companyId,
-                voucherNumber: `GUAR-${Date.now()}-${Math.random().toString(36).slice(2, 7)}-${id}`,
-                voucherType: "Receipt",
-                voucherDate: dateStr,
-                description: narration,
-                totalAmount: amount,
-                currency: contract.currency || "USD",
-                sourceModule: "ERP",
-              })
-              .returning();
-            await tx.insert(voucherEntries).values([
-              { voucherId: v.id, ledgerAccountId: cashAccountId, debitAmount: amount, creditAmount: "0", narration },
-              { voucherId: v.id, ledgerAccountId: depositAccountId, debitAmount: "0", creditAmount: amount, narration },
-            ]);
+            await postErpVoucherTx(tx, {
+              companyId,
+              voucherType: "Receipt",
+              voucherDate: dateStr,
+              description: narration,
+              currency: contract.currency || "USD",
+              lines: [
+                { ledgerAccountId: cashAccountId, debit: amount, narration },
+                { ledgerAccountId: depositAccountId, credit: amount, narration },
+              ],
+              voucherNumber: await nextGuaranteeVoucherNumberTx(tx, { companyId, contractId: id, kind: "GUAR" }),
+              source: { type: "rental-guarantee-statement", id: String(id) },
+              actor: postingActor(req),
+            });
           }
         }
       });
@@ -226,59 +220,44 @@ export function registerRentalGuaranteeRoutes(app: Express, ctx: RentalRoutesCon
       const dateStr = paymentDate || getClientDate(req);
 
       const tenantPays = module === "ERP" || module === "FACTORY";
+      const requestSourceId = erpRequestSourceId(req);
       let voucherId: number | null = null;
+      let replayed = false;
       await db.transaction(async (tx) => {
         const narration = notes
           ? `Guarantee moved to cash - ${unitLabel} - ${notes}`
           : `Guarantee moved to cash - ${unitLabel}`;
-        const [v] = await tx
-          .insert(vouchers)
-          .values({
-            companyId,
-            voucherNumber: `GUAR-CASH-${Date.now()}-${Math.random().toString(36).slice(2, 7)}-${id}`,
-            voucherType: "Journal",
-            voucherDate: dateStr,
-            description: narration,
-            totalAmount: amount,
-            currency: "USD",
-            sourceModule: "ERP",
-          })
-          .returning();
-        voucherId = v.id;
-        if (tenantPays) {
-          // Tenant perspective: company RECOVERS the guarantee back as cash — Dr Cash / Cr Security Deposits Paid (Asset)
-          const depositAccountId = await findOrCreateLedgerAccount(
-            tx,
-            companyId,
-            "Security Deposits Paid",
-            "Asset",
-            "SEC-DEP-PAID"
-          );
-          await tx.insert(voucherEntries).values([
-            { voucherId: v.id, ledgerAccountId: cashAccountId, debitAmount: amount, creditAmount: "0", narration },
-            { voucherId: v.id, ledgerAccountId: depositAccountId, debitAmount: "0", creditAmount: amount, narration },
-          ]);
-        } else {
-          // Landlord perspective: deposit moves into cash — Dr Cash / Cr Tenant Deposits (Liability)
-          // Auto-transfer then debits Transfer Clearing and credits Cash, netting the cashbox to zero.
-          const depositAccountId = await findOrCreateLedgerAccount(
-            tx,
-            companyId,
-            "Tenant Deposits",
-            "Liability",
-            "TENANT-DEP"
-          );
-          await tx.insert(voucherEntries).values([
-            { voucherId: v.id, ledgerAccountId: cashAccountId, debitAmount: amount, creditAmount: "0", narration },
-            { voucherId: v.id, ledgerAccountId: depositAccountId, debitAmount: "0", creditAmount: amount, narration },
-          ]);
-        }
+        // Tenant: Dr Cash / Cr Security Deposits Paid (the guarantee comes back).
+        // Landlord: Dr Cash / Cr Tenant Deposits; the auto-transfer then debits
+        // Transfer Clearing and credits Cash, netting the cashbox to zero.
+        const depositAccountId = tenantPays
+          ? await findOrCreateLedgerAccount(tx, companyId, "Security Deposits Paid", "Asset", "SEC-DEP-PAID")
+          : await findOrCreateLedgerAccount(tx, companyId, "Tenant Deposits", "Liability", "TENANT-DEP");
+        const posted = await postErpVoucherTx(tx, {
+          companyId,
+          voucherType: "Journal",
+          voucherDate: dateStr,
+          description: narration,
+          currency: "USD",
+          lines: [
+            { ledgerAccountId: cashAccountId, debit: amount, narration },
+            { ledgerAccountId: depositAccountId, credit: amount, narration },
+          ],
+          voucherNumber: await nextGuaranteeVoucherNumberTx(tx, { companyId, contractId: id, kind: "GUAR-CASH" }),
+          source: { type: "rental-guarantee-cash", id: `${id}:${requestSourceId}` },
+          actor: postingActor(req),
+        });
+        voucherId = posted.voucher.id;
+        replayed = posted.replayed;
         // Mark guarantee as paid on the contract
         await tx
           .update(propertyContracts)
           .set({ guaranteePostedToStatement: true, guaranteePostedAmount: amount })
           .where(eq(propertyContracts.id, id));
       });
+
+      // A resent request (same clientRequestId) posted nothing new.
+      if (replayed) return res.json({ ok: true });
 
       // Record in payments log so it's visible in cash flow / payments history
       const pd = new Date(dateStr);
@@ -386,6 +365,7 @@ export function registerRentalGuaranteeRoutes(app: Express, ctx: RentalRoutesCon
           : `Guarantee applied to rent - ${unitLabel} - ${monthSpan}`;
 
         // Journal: no cash account involved
+        const requestSourceId = erpRequestSourceId(req);
         let voucherId: number;
         if (tenantPays && isShop) {
           // Tenant/shop pays rent: Dr Rent Expense - Shops (expense↑) / Cr Security Deposits Paid (asset↓)
@@ -403,24 +383,21 @@ export function registerRentalGuaranteeRoutes(app: Express, ctx: RentalRoutesCon
             "Asset",
             "SEC-DEP-PAID"
           );
-          const [v] = await tx
-            .insert(vouchers)
-            .values({
-              companyId,
-              voucherNumber: `GUAR-RENT-${Date.now()}-${Math.random().toString(36).slice(2, 7)}-${id}`,
-              voucherType: "Journal",
-              voucherDate: paymentDate,
-              description: narration,
-              totalAmount: amount,
-              currency: "USD",
-              sourceModule: "ERP",
-            })
-            .returning();
+          const { voucher: v } = await postErpVoucherTx(tx, {
+            companyId,
+            voucherType: "Journal",
+            voucherDate: paymentDate,
+            description: narration,
+            currency: "USD",
+            lines: [
+              { ledgerAccountId: expenseAccountId, debit: amount, narration },
+              { ledgerAccountId: depositAccountId, credit: amount, narration },
+            ],
+            voucherNumber: await nextGuaranteeVoucherNumberTx(tx, { companyId, contractId: id, kind: "GUAR-RENT" }),
+            source: { type: "rental-guarantee-rent", id: `${id}:${requestSourceId}` },
+            actor: postingActor(req),
+          });
           voucherId = v.id;
-          await tx.insert(voucherEntries).values([
-            { voucherId: v.id, ledgerAccountId: expenseAccountId, debitAmount: amount, creditAmount: "0", narration },
-            { voucherId: v.id, ledgerAccountId: depositAccountId, debitAmount: "0", creditAmount: amount, narration },
-          ]);
         } else if (tenantPays) {
           // Non-shop tenant: Dr Rent Expense / Cr Security Deposits Paid
           const expenseAccountId = await findOrCreateLedgerAccount(
@@ -437,24 +414,21 @@ export function registerRentalGuaranteeRoutes(app: Express, ctx: RentalRoutesCon
             "Asset",
             "SEC-DEP-PAID"
           );
-          const [v] = await tx
-            .insert(vouchers)
-            .values({
-              companyId,
-              voucherNumber: `GUAR-RENT-${Date.now()}-${Math.random().toString(36).slice(2, 7)}-${id}`,
-              voucherType: "Journal",
-              voucherDate: paymentDate,
-              description: narration,
-              totalAmount: amount,
-              currency: "USD",
-              sourceModule: "ERP",
-            })
-            .returning();
+          const { voucher: v } = await postErpVoucherTx(tx, {
+            companyId,
+            voucherType: "Journal",
+            voucherDate: paymentDate,
+            description: narration,
+            currency: "USD",
+            lines: [
+              { ledgerAccountId: expenseAccountId, debit: amount, narration },
+              { ledgerAccountId: depositAccountId, credit: amount, narration },
+            ],
+            voucherNumber: await nextGuaranteeVoucherNumberTx(tx, { companyId, contractId: id, kind: "GUAR-RENT" }),
+            source: { type: "rental-guarantee-rent", id: `${id}:${requestSourceId}` },
+            actor: postingActor(req),
+          });
           voucherId = v.id;
-          await tx.insert(voucherEntries).values([
-            { voucherId: v.id, ledgerAccountId: expenseAccountId, debitAmount: amount, creditAmount: "0", narration },
-            { voucherId: v.id, ledgerAccountId: depositAccountId, debitAmount: "0", creditAmount: amount, narration },
-          ]);
         } else {
           // Landlord: Dr Tenant Deposits (liability↓) / Cr Rent Income (income↑)
           const depositAccountId = await findOrCreateLedgerAccount(
@@ -472,25 +446,31 @@ export function registerRentalGuaranteeRoutes(app: Express, ctx: RentalRoutesCon
             "RENT-INC",
             "Indirect Income"
           );
-          const [v] = await tx
-            .insert(vouchers)
-            .values({
-              companyId,
-              voucherNumber: `GUAR-RENT-${Date.now()}-${Math.random().toString(36).slice(2, 7)}-${id}`,
-              voucherType: "Journal",
-              voucherDate: paymentDate,
-              description: narration,
-              totalAmount: amount,
-              currency: "USD",
-              sourceModule: "ERP",
-            })
-            .returning();
+          const { voucher: v } = await postErpVoucherTx(tx, {
+            companyId,
+            voucherType: "Journal",
+            voucherDate: paymentDate,
+            description: narration,
+            currency: "USD",
+            lines: [
+              { ledgerAccountId: depositAccountId, debit: amount, narration },
+              { ledgerAccountId: incomeAccId, credit: amount, narration },
+            ],
+            voucherNumber: await nextGuaranteeVoucherNumberTx(tx, { companyId, contractId: id, kind: "GUAR-RENT" }),
+            source: { type: "rental-guarantee-rent", id: `${id}:${requestSourceId}` },
+            actor: postingActor(req),
+          });
           voucherId = v.id;
-          await tx.insert(voucherEntries).values([
-            { voucherId: v.id, ledgerAccountId: depositAccountId, debitAmount: amount, creditAmount: "0", narration },
-            { voucherId: v.id, ledgerAccountId: incomeAccId, debitAmount: "0", creditAmount: amount, narration },
-          ]);
         }
+
+        // A resent request (same clientRequestId) returned the voucher it
+        // already posted; its payment rows exist and are not added twice.
+        const [alreadyApplied] = await tx
+          .select({ id: propertyPayments.id })
+          .from(propertyPayments)
+          .where(and(eq(propertyPayments.companyId, companyId), eq(propertyPayments.voucherId, voucherId)))
+          .limit(1);
+        if (alreadyApplied) return;
 
         // Create one payment row per allocated month and update ledger
         for (const alloc of allocations) {
@@ -602,13 +582,24 @@ export function registerRentalGuaranteeRoutes(app: Express, ctx: RentalRoutesCon
                     and(eq(propertyPayments.voucherId, payment.voucherId), sql`${propertyPayments.id} != ${payment.id}`)
                   );
                 if (siblings.length === 0) {
-                  await tx.execute(sql`UPDATE vouchers SET deleted_at = NOW() WHERE id = ${payment.voucherId}`);
+                  // Phase 22 (B): retired (audited, number and posting identity
+                  // released) instead of a bare deleted_at update.
+                  await retireVouchersTx(tx, {
+                    companyId,
+                    voucherIds: [payment.voucherId],
+                    reason: "guarantee-as-rent-undo",
+                    actor: sessionRetirementActor(req),
+                  });
                 }
               }
 
-              // 3. Reverse any auto-transfers created for this payment (both sides
-              //    soft-deleted, as the other payment deletion paths do).
-              await reverseAutoTransfersTx(tx, [payment.id]);
+              // 3. Reverse any auto-transfers created for this payment: both sides,
+              //    the receiving company's included (main #2138), retired and
+              //    audited with the signed-in user (wave 16 A).
+              await reverseAutoTransfersTx(tx, [payment.id], {
+                reason: "guarantee-as-rent-undo-transfer",
+                actor: sessionRetirementActor(req),
+              });
 
               // 4. Delete the payment row
               await tx.delete(propertyPayments).where(eq(propertyPayments.id, payment.id));

@@ -52,27 +52,29 @@ export function registerStockItemBulkRoutes(app: Express) {
         });
       }
 
-      await storage.bulkDeleteStockItems(validIds);
-      try {
+      // Phase 21 (B): the soft delete and one audit row per item commit together.
+      await db.transaction(async (tx) => {
+        await storage.bulkDeleteStockItems(validIds, tx);
         for (const deletedItem of validItems) {
-          await logAudit({
-            userId: req.session.userId!,
-            username: req.session.username || "unknown",
-            companyId: req.session.currentCompanyId!,
-            action: "delete",
-            tableName: "stock_items",
-            recordId: deletedItem.id,
-            recordIdentifier: deletedItem.name,
-            changes: {
-              name: { old: deletedItem.name },
-              code: { old: deletedItem.code },
-              uom: { old: deletedItem.uom },
+          await logAudit(
+            {
+              userId: req.session.userId!,
+              username: req.session.username || "unknown",
+              companyId: req.session.currentCompanyId!,
+              action: "delete",
+              tableName: "stock_items",
+              recordId: deletedItem.id,
+              recordIdentifier: deletedItem.name,
+              changes: {
+                name: { old: deletedItem.name },
+                code: { old: deletedItem.code },
+                uom: { old: deletedItem.uom },
+              },
             },
-          });
+            tx
+          );
         }
-      } catch {
-        /* non-fatal */
-      }
+      });
 
       const skippedCount = ids.length - validIds.length;
       const message =
@@ -196,29 +198,27 @@ export function registerStockItemBulkRoutes(app: Express) {
                 set: { sellingPrice: u.sellingPrice, updatedAt: new Date() },
               });
           }
+          // Phase 21 (B): the bulk price audit commits with the prices.
+          await logAudit(
+            {
+              userId: req.session.userId!,
+              username: req.session.username || "unknown",
+              companyId: companyId,
+              action: "update",
+              tableName: "stock_items",
+              recordId: 0,
+              recordIdentifier: `Bulk price update (${updated} items)`,
+              changes: {
+                pricesUpdated: { new: updated },
+                barcodesNotFound: { new: notFound },
+              },
+            },
+            tx
+          );
         });
       }
 
       const message = `Updated ${updated} price(s)${notFound > 0 ? `. ${notFound} barcode(s) not found.` : "."}`;
-      try {
-        if (updated > 0) {
-          await logAudit({
-            userId: req.session.userId!,
-            username: req.session.username || "unknown",
-            companyId: companyId,
-            action: "update",
-            tableName: "stock_items",
-            recordId: 0,
-            recordIdentifier: `Bulk price update (${updated} items)`,
-            changes: {
-              pricesUpdated: { new: updated },
-              barcodesNotFound: { new: notFound },
-            },
-          });
-        }
-      } catch {
-        /* non-fatal */
-      }
       res.json({ message, updated, notFound });
     } catch (error: unknown) {
       res.status(500).json({ message: getErrorMessage(error) });

@@ -4,11 +4,13 @@ import type { Phase3SharedUiEntry } from "./sharedUiPhase3TranslationTypes";
 import { wave8ReleaseTranslationsPart1 } from "./wave8ReleaseTranslations.part1";
 import { wave8ReleaseTranslationsPart2 } from "./wave8ReleaseTranslations.part2";
 import { wave8ReleaseTranslationsPart3 } from "./wave8ReleaseTranslations.part3";
+import { wave8ReleaseTranslationsPart4 } from "./wave8ReleaseTranslations.part4";
 
 export const wave8ReleaseTranslations: readonly Phase3SharedUiEntry[] = [
   ...wave8ReleaseTranslationsPart1,
   ...wave8ReleaseTranslationsPart2,
   ...wave8ReleaseTranslationsPart3,
+  ...wave8ReleaseTranslationsPart4,
 ];
 
 const exactTranslations = new Map<string, Phase3SharedUiEntry>();

@@ -33,7 +33,11 @@ const harness = vi.hoisted(() => {
         where: vi.fn(() => builder),
         // Row locks (limit(1).for("update")) return the purchase order as the
         // route saw it; the fixtures have no container, so only the PO is locked.
-        limit: vi.fn(() => ({ for: vi.fn(async () => [{ id: 10, containerId: null }]) })),
+        // A plain limit(1) read (the audit's re-read of the edited PO, wave 7) returns no row.
+        limit: vi.fn(() => ({
+          for: vi.fn(async () => [{ id: 10, containerId: null }]),
+          then: (resolve: (value: unknown[]) => unknown) => Promise.resolve([]).then(resolve),
+        })),
         then: (resolve: (value: unknown[]) => unknown) => Promise.resolve([]).then(resolve),
       };
       return builder;
@@ -64,6 +68,10 @@ const harness = vi.hoisted(() => {
   };
 });
 
+// Perpetual inventory journals are covered by their own suite; this harness has no SQL executor.
+vi.mock("../server/services/accounting/perpetualInventory/stockReceipts", () => ({
+  syncPurchaseOrderGitTx: async () => null,
+}));
 vi.mock("../server/db", () => ({ db: harness.db }));
 vi.mock("../server/storage", () => ({ storage: harness.storage }));
 vi.mock("../server/routes/_helpers", () => ({ logAudit: harness.logAudit }));
@@ -192,13 +200,15 @@ describe("Phase 33 3C purchase-order item repricing", () => {
       supplierCode: "SUP-A",
       items: [expect.objectContaining({ itemName: "Renamed item", lineTotal: "10.00" })],
     });
+    // Wave 7: the audit row is written in the edit's transaction.
     expect(harness.logAudit).toHaveBeenCalledWith(
       expect.objectContaining({
         companyId: 7,
         action: "update",
         tableName: "purchase_orders",
         recordId: 10,
-      })
+      }),
+      harness.tx
     );
   });
 
@@ -263,10 +273,7 @@ describe("Phase 33 3C purchase-order item repricing", () => {
       harness.state.txUpdates.some(({ values }) => {
         const row = values as Record<string, unknown>;
         return (
-          row.freight === "0.00" &&
-          row.surcharge === "0.00" &&
-          row.discount === "0.00" &&
-          row.chargesEdited === true
+          row.freight === "0.00" && row.surcharge === "0.00" && row.discount === "0.00" && row.chargesEdited === true
         );
       })
     ).toBe(true);

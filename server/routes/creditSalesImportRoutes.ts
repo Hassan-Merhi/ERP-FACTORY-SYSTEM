@@ -19,14 +19,13 @@ import { postStockMovementTx } from "../services/inventory/stockMovementIntegrit
 import { readExcel, sheetToJson, createWorkbook, jsonToSheet, writeWorkbook } from "../excelHelper";
 import { getClientDate } from "../lib/dateUtils";
 import { MoneyDecimal, moneyString, parseMoneyInput, sumMoney, toMoney } from "../lib/money";
+import { postErpVoucherTx, sessionPostingActor } from "../services/accounting/erpVoucherPosting";
 import type Decimal from "decimal.js";
 import { generateInvoicePdf } from "../helpers/generateInvoicePdf";
 import { generateStockPdf } from "../helpers/generateStockPdf";
 import { getErpExportVisibility } from "../helpers/exportVisibility";
 import { sendWhatsAppFileByUploadPos, sendWhatsAppFileToChatIdPos } from "../services/whatsappService";
 import {
-  vouchers,
-  voucherEntries,
   salesItems,
   companies,
   customerBalances,
@@ -42,6 +41,11 @@ import {
   financialOperationRequestPayload,
   resolveFinancialOperationKey,
 } from "../services/accounting/financialOperationRequest";
+import { postSaleCogsTx, relievedValue } from "../services/accounting/perpetualInventory/saleCogs";
+import {
+  assertNoBaleMirrorMovementTx,
+  sendBaleMirrorMovementRefusal,
+} from "../services/accounting/perpetualInventory/cutoverRefusal";
 
 const canonicalStockMovementAdapter = createDatabaseStockMovementAdapter();
 
@@ -297,30 +301,50 @@ export function registerCreditSalesImportRoutes(app: Express) {
           }),
         },
         async (tx) => {
-          const voucherNumber = `CREDIT-SALES-${Date.now()}`;
+          // Phase 22 (B): the credit sale posts through the central engine first
+          // (number allocated there; identity = the durable operation key). Its
+          // lines are the sale value, each line at cents as the sale items store it.
+          const totalSales = sumMoney(
+            lineAmounts.map((amounts) => moneyString(amounts!.quantity.times(amounts!.rate)))
+          ).toFixed(2);
+          let relieved = new MoneyDecimal(0);
+          const { voucher } = await postErpVoucherTx(tx, {
+            companyId: req.session.currentCompanyId!,
+            locationId,
+            voucherType: "Sales",
+            voucherDate: saleDate,
+            description: `Credit Sale Import - ${items.length} items - Customer: ${customer.legalName}`,
+            lines: [
+              {
+                ledgerAccountId: customerLedgerAccountId!,
+                debit: totalSales,
+                narration: `Credit Sale to ${customer.legalName} - ${items.length} items`,
+              },
+              {
+                ledgerAccountId: salesRevenueAccount.id,
+                credit: totalSales,
+                narration: `Credit Sale Revenue - ${items.length} items`,
+              },
+            ],
+            source: { type: "credit-sales-import", id: `${req.session.currentCompanyId}:${operationKey}` },
+            actor: sessionPostingActor(req, "Credit sales import"),
+            metadata: { locationName: location.name, isCreditSale: true },
+          });
+          const voucherNumber = voucher.voucherNumber;
 
-          const [voucher] = await tx
-            .insert(vouchers)
-            .values({
-              companyId: req.session.currentCompanyId!,
-              locationId,
-              locationName: location.name,
-              voucherNumber,
-              voucherType: "Sales",
-              voucherDate: saleDate,
-              description: `Credit Sale Import - ${items.length} items - Customer: ${customer.legalName}`,
-              totalAmount: "0",
-              isCreditSale: true,
-            })
-            .returning();
-
-          const lineSales: string[] = [];
           for (const [index, item] of items.entries()) {
             const { quantity, rate } = lineAmounts[index]!;
             const stockItem = await storage.getStockItemByCodeOrAlias(item.barcode, req.session.currentCompanyId!);
             if (!stockItem) {
               throw new Error(`Stock item not found for barcode: ${item.barcode}`);
             }
+            // Wave 11: a factory bale-mirror item is sold in the factory after the cut-over.
+            await assertNoBaleMirrorMovementTx(
+              tx,
+              req.session.currentCompanyId!,
+              [stockItem.id],
+              "credit-sales-import"
+            );
 
             const [inventoryRecord] = await tx
               .select()
@@ -334,8 +358,6 @@ export function registerCreditSalesImportRoutes(app: Express) {
             const itemSales = moneyString(quantity.times(rate));
             const itemCost = moneyString(quantity.times(costPrice));
             const profit = toMoney(itemSales).minus(itemCost).toFixed(2);
-
-            lineSales.push(itemSales);
 
             // Look up configured price for this item/location
             const [importCreditLocPrice] = await tx
@@ -352,6 +374,13 @@ export function registerCreditSalesImportRoutes(app: Express) {
               importCreditLocPrice?.sellingPrice || stockItem.sellingPrice || "0"
             );
 
+            const issued = await adjustInventory(
+              tx,
+              locationId,
+              stockItem.id,
+              -quantity.toNumber(),
+              req.session.currentCompanyId!
+            );
             const [saleItem] = await tx
               .insert(salesItems)
               .values({
@@ -364,10 +393,12 @@ export function registerCreditSalesImportRoutes(app: Express) {
                 totalCost: itemCost,
                 profit,
                 configuredPrice: importCreditConfiguredPrice.gt(0) ? importCreditConfiguredPrice.toFixed(6) : null,
+                // Wave 11: the exact value the issue relieved, what a reversal restores.
+                valueMoved: relievedValue(issued).toFixed(2),
               })
               .returning({ id: salesItems.id });
 
-            await adjustInventory(tx, locationId, stockItem.id, -quantity.toNumber(), req.session.currentCompanyId!);
+            relieved = relieved.plus(relievedValue(issued));
             await postStockMovementTx(
               tx,
               {
@@ -394,36 +425,16 @@ export function registerCreditSalesImportRoutes(app: Express) {
             );
           }
 
-          const totalSales = sumMoney(lineSales).toFixed(2);
-
-          // Create voucher entries for credit sale
-          // Entry 1: Debit Customer's Ledger Account (Customer owes money)
-          await tx.insert(voucherEntries).values({
-            voucherId: voucher.id,
-            ledgerAccountId: customerLedgerAccountId!,
-            debitAmount: totalSales,
-            creditAmount: "0",
-            narration: `Credit Sale to ${customer.legalName} - ${items.length} items`,
-          });
-
-          // Entry 2: Credit Sales Revenue (Income increases with credit)
-          await tx.insert(voucherEntries).values({
-            voucherId: voucher.id,
-            ledgerAccountId: salesRevenueAccount.id,
-            debitAmount: "0",
-            creditAmount: totalSales,
-            narration: `Credit Sale Revenue - ${items.length} items`,
-          });
-
-          // Update voucher with total amount
-          await tx
-            .update(vouchers)
-            .set({
-              totalAmount: totalSales,
-            })
-            .where(eq(vouchers.id, voucher.id));
-
           createdVoucher = voucher;
+          // Perpetual inventory (wave 8.1): the exact value the import took out of stock.
+          await postSaleCogsTx(tx, {
+            companyId: req.session.currentCompanyId!,
+            saleVoucherId: voucher.id,
+            saleVoucherNumber: voucherNumber,
+            voucherDate: saleDate,
+            locationId,
+            relieved,
+          });
 
           // Add customer balance transaction (credit sale = debit to customer = they owe us)
           // Get current running balance for this customer
@@ -544,6 +555,7 @@ export function registerCreditSalesImportRoutes(app: Express) {
         });
       }
     } catch (error: unknown) {
+      if (sendBaleMirrorMovementRefusal(res, error)) return;
       logger.error("Credit Sales Import error:", { error: error });
       res.status(500).json({ message: getErrorMessage(error) });
     }

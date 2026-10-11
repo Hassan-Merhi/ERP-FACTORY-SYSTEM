@@ -6,14 +6,8 @@ import type { Express, Request, Response } from "express";
 import { db } from "../../../db";
 import { requireAuth } from "../../../auth";
 import { eq, and, desc, sql, inArray } from "drizzle-orm";
-import {
-  factoryWorkers,
-  factoryWorkerAdvances,
-  factoryAdvanceRepayments,
-  ledgerAccounts,
-  vouchers,
-  voucherEntries,
-} from "@shared/schema";
+import { postErpVoucherTx } from "../../../services/accounting/erpVoucherPosting";
+import { factoryWorkers, factoryWorkerAdvances, factoryAdvanceRepayments, ledgerAccounts } from "@shared/schema";
 import { getFactoryCompanyId, writeDaybookEntry } from "./helpers";
 import { parseMoneyInput } from "../../../lib/money";
 
@@ -180,7 +174,7 @@ export function registerWorkerAdvancesRoutes(app: Express) {
             const maxCodeResult = await tx
               .select({ maxCode: sql<number | null>`MAX(CAST(code AS INTEGER))` })
               .from(ledgerAccounts)
-              .where(and(eq(ledgerAccounts.companyId, companyId), sql`code ~ '^\d+$'`));
+              .where(and(eq(ledgerAccounts.companyId, companyId), sql`code ~ '^[0-9]+$'`));
             const nextCode = String((maxCodeResult[0]?.maxCode ?? 0) + 1);
 
             [advancesAccount] = await tx
@@ -196,41 +190,25 @@ export function registerWorkerAdvancesRoutes(app: Express) {
               .returning();
           }
 
-          const voucherNumber = `PAYMENT-ADV-${advance.id}-${Date.now()}`;
+          const voucherNumber = `PAYMENT-ADV-${advance.id}-1`;
           const narration = `Advance to ${worker.fullName}: $${amount.toFixed(2)}`;
 
-          const [createdVoucher] = await tx
-            .insert(vouchers)
-            .values({
-              companyId,
-              voucherNumber,
-              voucherType: "Payment",
-              voucherDate: advanceDate,
-              description: narration,
-              totalAmount: amount.toFixed(2),
-              currency: "USD",
-              sourceModule: "FACTORY",
-            })
-            .returning();
+          const { voucher: createdVoucher } = await postErpVoucherTx(tx, {
+            companyId,
+            voucherNumber,
+            voucherType: "Payment",
+            voucherDate: advanceDate,
+            description: narration,
+            currency: "USD",
+            sourceModule: "FACTORY",
+            lines: [
+              { ledgerAccountId: advancesAccount.id, debit: amount.toFixed(2), narration: narration },
+              { ledgerAccountId: cashAccountId, credit: amount.toFixed(2), narration: narration },
+            ],
+            source: { type: "worker-advance", id: advance.id },
+          });
 
           voucherId = createdVoucher.id;
-
-          await tx.insert(voucherEntries).values([
-            {
-              voucherId: createdVoucher.id,
-              ledgerAccountId: advancesAccount.id,
-              debitAmount: amount.toFixed(2),
-              creditAmount: "0",
-              narration,
-            },
-            {
-              voucherId: createdVoucher.id,
-              ledgerAccountId: cashAccountId,
-              debitAmount: "0",
-              creditAmount: amount.toFixed(2),
-              narration,
-            },
-          ]);
         }
 
         await writeDaybookEntry(tx, {

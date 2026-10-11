@@ -24,6 +24,7 @@ import {
   RetailStockConflictError,
   writeVariantInventoryWithMovement,
 } from "../services/retail/retailProductStockWrites";
+import { trackRetailStockValueTx } from "../services/retail/retailInventoryJournal";
 
 const normalize = (value: string) => value.trim().toLowerCase().replace(/\s+/g, " ");
 const asNumber = (value: unknown) => Number(value ?? 0);
@@ -706,6 +707,10 @@ export function registerRetailRoutes(app: Express) {
         let productsCreated = 0;
         let variantsCreated = 0;
         let stockRowsWritten = 0;
+        // Wave 17 (D): the import sets quantities and costs; once the Retail inventory
+        // opening is applied the value it changed is journalled against
+        // RETAIL-INVENTORY-ADJUSTMENT (one journal per import).
+        const stockValue = await trackRetailStockValueTx(tx, companyId, []);
 
         for (const row of rows) {
           const locationId = locationMap.get(normalize(row.location));
@@ -773,6 +778,7 @@ export function registerRetailRoutes(app: Express) {
             variantsCreated += 1;
           }
 
+          await stockValue.include([{ variantId: variant.id, locationId }]);
           const [previousInventory] = await tx
             .select({ quantity: retailVariantInventory.quantity })
             .from(retailVariantInventory)
@@ -835,6 +841,12 @@ export function registerRetailRoutes(app: Express) {
           stockRowsWritten += 1;
         }
 
+        await stockValue.post({
+          kind: "import",
+          sourceId: importBatchKey,
+          description: `Retail stock import ${importBatchKey}`.slice(0, 255),
+          actor: { userId: req.user!.id, username: req.user?.username ?? null },
+        });
         return { rowsProcessed: rows.length, productsCreated, variantsCreated, stockRowsWritten };
       });
 

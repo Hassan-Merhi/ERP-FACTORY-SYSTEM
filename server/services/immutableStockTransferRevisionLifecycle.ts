@@ -1,7 +1,11 @@
+import { finishWithAudit, type AuditTxHook } from "../lib/auditTxHook";
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
+import type Decimal from "decimal.js";
 import { db } from "../db";
-import { adjustInventory } from "../inventoryHelper";
+import { assertNoBaleMirrorMovementTx } from "./accounting/perpetualInventory/cutoverRefusal";
+import { applyTransferRevisionDeltaTx, postTransferResidualTx } from "./inventory/conservedStockTransfer";
 import { journalStockTransferLeg, nextStockTransferRevision } from "./inventory/stockTransferJournal";
+import { lineValueMoved, reversalDate } from "./inventory/valueExactReversal";
 import {
   inventory,
   locations,
@@ -208,7 +212,8 @@ async function assertSubmittedBaseline(
 }
 
 export async function createImmutableStockTransferRevision(
-  input: CreateImmutableRevisionInput
+  input: CreateImmutableRevisionInput,
+  auditTx?: AuditTxHook<ImmutableRevisionResult>
 ): Promise<ImmutableRevisionResult> {
   const companyId = positiveInteger(input.companyId, "Company ID");
   const transferId = positiveInteger(input.transferId, "Transfer ID");
@@ -219,6 +224,7 @@ export async function createImmutableStockTransferRevision(
   const hash = immutableRevisionPayloadHash(normalized, note);
 
   return db.transaction(async (tx) => {
+    const finish = finishWithAudit(tx, auditTx);
     const transfer = await lockTransfer(tx, transferId);
     assertTransfer(transfer, companyId);
     const destinationLocationId = positiveInteger(transfer.destination_location_id, "Destination location ID");
@@ -339,7 +345,7 @@ export async function createImmutableStockTransferRevision(
     const distinctSources = Array.from(
       new Set(savedItems.map((item) => item.sourceLocationName).filter((name): name is string => Boolean(name)))
     );
-    return {
+    return finish({
       revisionId,
       transferId,
       revisionNumber,
@@ -358,7 +364,7 @@ export async function createImmutableStockTransferRevision(
       destinationLocationId,
       destinationLocationName: String(transfer.destination_location_name || "Unknown"),
       items: savedItems,
-    };
+    });
   });
 }
 
@@ -407,7 +413,8 @@ async function lockedRevision(tx: Parameters<Parameters<typeof db.transaction>[0
 export async function approveImmutableStockTransferRevision(
   companyIdInput: number,
   revisionIdInput: number,
-  reviewerIdInput: string
+  reviewerIdInput: string,
+  auditTx?: AuditTxHook<ReviewImmutableRevisionResult>
 ): Promise<ReviewImmutableRevisionResult> {
   const companyId = positiveInteger(companyIdInput, "Company ID");
   const revisionId = positiveInteger(revisionIdInput, "Revision ID");
@@ -415,6 +422,7 @@ export async function approveImmutableStockTransferRevision(
   if (!reviewerId) throw new Error("Reviewer ID is required");
 
   return db.transaction(async (tx) => {
+    const finish = finishWithAudit(tx, auditTx);
     const requested = await lockedRevision(tx, revisionId);
     if (!requested) throw new Error("Revision not found");
     if (Number(requested.company_id) !== companyId) {
@@ -437,7 +445,7 @@ export async function approveImmutableStockTransferRevision(
         .select()
         .from(stockTransferRevisionItems)
         .where(eq(stockTransferRevisionItems.revisionId, revisionId));
-      return {
+      return finish({
         revisionId,
         transferId,
         voucherId,
@@ -450,7 +458,7 @@ export async function approveImmutableStockTransferRevision(
           .reduce((sum, item) => sum.plus(lineAmount(item.quantity, item.rate)), new MoneyDecimal(0))
           .toFixed(2),
         items: toRevisionAuditItems(currentRevisionItems),
-      };
+      });
     }
     if (requested.status !== "pending") {
       throw lifecycleError(
@@ -628,8 +636,39 @@ export async function approveImmutableStockTransferRevision(
     }
 
     const canonicalRevision = await nextStockTransferRevision(tx, companyId, transferId);
+    if (inventoryApplied) {
+      // Wave 11: a factory bale-mirror item is moved in the factory after the cut-over.
+      await assertNoBaleMirrorMovementTx(
+        tx,
+        companyId,
+        changes.filter((change) => Math.abs(change.delta) >= 0.0005).map((change) => change.stockItemId),
+        "stock-transfer-revision"
+      );
+    }
 
+    // Wave 15: the revision moves value conserved and each line keeps its
+    // value_moved (see applyTransferRevisionDeltaTx).
+    const deltas: Decimal[] = [];
     for (const change of changes) {
+      let valueMoved: string | null | undefined = change.existing?.valueMoved;
+      if (inventoryApplied && Math.abs(change.delta) >= 0.0005) {
+        const applied = await applyTransferRevisionDeltaTx(tx, {
+          companyId,
+          sourceLocationId: change.sourceLocationId,
+          destinationLocationId,
+          stockItemId: change.stockItemId,
+          oldQuantity: change.existing?.quantity ?? 0,
+          newQuantity: change.newQuantity.toFixed(3),
+          lineValue: change.existing
+            ? lineValueMoved({ valueMoved: change.existing.valueMoved, total: change.existing.totalAmount })
+            : 0,
+          fallbackRate: change.rate,
+          sourceVoucherType: "Stock Transfer",
+          sourceVoucherId: voucherId,
+        });
+        deltas.push(...applied.deltas);
+        valueMoved = applied.valueMoved.toFixed(2);
+      }
       if (change.existing) {
         if (change.newQuantity <= 0) {
           await tx.delete(stockTransferItems).where(eq(stockTransferItems.id, change.existing.id));
@@ -639,6 +678,7 @@ export async function approveImmutableStockTransferRevision(
             .set({
               quantity: toMoney(change.newQuantity).toFixed(3),
               totalAmount: lineAmount(change.newQuantity, change.rate).toFixed(2),
+              valueMoved: valueMoved ?? null,
             })
             .where(eq(stockTransferItems.id, change.existing.id));
         }
@@ -650,13 +690,11 @@ export async function approveImmutableStockTransferRevision(
           quantity: toMoney(change.newQuantity).toFixed(3),
           rate: toMoney(change.rate).toFixed(2),
           totalAmount: lineAmount(change.newQuantity, change.rate).toFixed(2),
+          valueMoved: valueMoved ?? null,
         });
       }
 
       if (inventoryApplied && Math.abs(change.delta) >= 0.0005) {
-        await adjustInventory(tx, change.sourceLocationId, change.stockItemId, -change.delta, companyId, change.rate);
-        await adjustInventory(tx, destinationLocationId, change.stockItemId, change.delta, companyId, change.rate);
-
         // A revision applies a delta, not a whole quantity: positive moves more
         // stock out to the destination, negative brings some of it back. The
         // journal records the direction the stock actually travelled, so the
@@ -673,6 +711,14 @@ export async function approveImmutableStockTransferRevision(
         });
       }
     }
+
+    await postTransferResidualTx(tx, {
+      companyId,
+      transferId,
+      date: reversalDate(),
+      reference: `Transfer ${transferId}`,
+      deltas,
+    });
 
     const finalItems = await tx.select().from(stockTransferItems).where(eq(stockTransferItems.transferId, transferId));
     const totalAmount = finalItems
@@ -723,7 +769,7 @@ export async function approveImmutableStockTransferRevision(
     const auditRates = new Map(
       changes.map((change) => [`${change.stockItemId}:${change.sourceLocationId}`, change.rate] as const)
     );
-    return {
+    return finish({
       revisionId,
       transferId,
       voucherId,
@@ -734,7 +780,7 @@ export async function approveImmutableStockTransferRevision(
       inventoryApplied,
       totalAmount,
       items: toRevisionAuditItems(revisionItems, auditRates),
-    };
+    });
   });
 }
 
@@ -742,7 +788,8 @@ export async function rejectImmutableStockTransferRevision(
   companyIdInput: number,
   revisionIdInput: number,
   reviewerIdInput: string,
-  reasonInput?: string | null
+  reasonInput?: string | null,
+  auditTx?: AuditTxHook<ReviewImmutableRevisionResult>
 ): Promise<ReviewImmutableRevisionResult> {
   const companyId = positiveInteger(companyIdInput, "Company ID");
   const revisionId = positiveInteger(revisionIdInput, "Revision ID");
@@ -751,6 +798,7 @@ export async function rejectImmutableStockTransferRevision(
   const reason = reasonInput?.trim() || null;
 
   return db.transaction(async (tx) => {
+    const finish = finishWithAudit(tx, auditTx);
     const requested = await lockedRevision(tx, revisionId);
     if (!requested) throw new Error("Revision not found");
     if (Number(requested.company_id) !== companyId) {
@@ -770,7 +818,7 @@ export async function rejectImmutableStockTransferRevision(
         .select({ quantity: stockTransferItems.quantity, rate: stockTransferItems.rate })
         .from(stockTransferItems)
         .where(eq(stockTransferItems.transferId, transferId));
-      return {
+      return finish({
         revisionId,
         transferId,
         voucherId,
@@ -782,7 +830,7 @@ export async function rejectImmutableStockTransferRevision(
           .reduce((sum, item) => sum.plus(lineAmount(item.quantity, item.rate)), new MoneyDecimal(0))
           .toFixed(2),
         items: toRevisionAuditItems(rejectedRevisionItems),
-      };
+      });
     }
     if (requested.status !== "pending") {
       throw lifecycleError(
@@ -805,7 +853,7 @@ export async function rejectImmutableStockTransferRevision(
       .select({ quantity: stockTransferItems.quantity, rate: stockTransferItems.rate })
       .from(stockTransferItems)
       .where(eq(stockTransferItems.transferId, transferId));
-    return {
+    return finish({
       revisionId,
       transferId,
       voucherId,
@@ -817,6 +865,6 @@ export async function rejectImmutableStockTransferRevision(
         .reduce((sum, item) => sum.plus(lineAmount(item.quantity, item.rate)), new MoneyDecimal(0))
         .toFixed(2),
       items: toRevisionAuditItems(rejectedRevisionItems),
-    };
+    });
   });
 }

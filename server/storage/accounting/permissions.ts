@@ -1,5 +1,5 @@
 import { eq, and } from "drizzle-orm";
-import { db } from "../../db";
+import { db, type DatabaseOrTransaction } from "../../db";
 import * as schema from "@shared/schema";
 
 export async function getRoleFeaturePermissions(companyId: number): Promise<schema.RoleFeaturePermission[]> {
@@ -28,9 +28,10 @@ export async function getRoleFeaturePermission(
 }
 
 export async function upsertRoleFeaturePermission(
-  permission: schema.InsertRoleFeaturePermission
+  permission: schema.InsertRoleFeaturePermission,
+  executor: DatabaseOrTransaction = db
 ): Promise<schema.RoleFeaturePermission> {
-  const [result] = await db
+  const [result] = await executor
     .insert(schema.roleFeaturePermissions)
     .values(permission)
     .onConflictDoUpdate({
@@ -46,12 +47,14 @@ export async function upsertRoleFeaturePermission(
 }
 
 export async function bulkUpsertRoleFeaturePermissions(
-  permissions: schema.InsertRoleFeaturePermission[]
+  permissions: schema.InsertRoleFeaturePermission[],
+  // Phase 21 (B): the caller's transaction, so its audit rows commit with the upserts.
+  executor: DatabaseOrTransaction = db
 ): Promise<schema.RoleFeaturePermission[]> {
   if (permissions.length === 0) return [];
   const results: schema.RoleFeaturePermission[] = [];
   for (const permission of permissions) {
-    const result = await upsertRoleFeaturePermission(permission);
+    const result = await upsertRoleFeaturePermission(permission, executor);
     results.push(result);
   }
   return results;

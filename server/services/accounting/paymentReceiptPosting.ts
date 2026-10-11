@@ -16,7 +16,8 @@ export interface PaymentReceiptLineInput {
 
 export interface BuildPaymentReceiptPostingInput {
   companyId: number;
-  voucherNumber: string;
+  /** Phase 22 (B): omitted for new vouchers; the engine allocates the gapless number. */
+  voucherNumber?: string;
   voucherType: PaymentReceiptVoucherType | string;
   voucherDate: string;
   paymentAccountType: string;
@@ -37,8 +38,6 @@ export interface BuiltPaymentReceiptPosting {
   clientRequestId: string;
   transactionTotal: string;
 }
-
-const MAX_ROUNDING_ADJUSTMENT = new Decimal("0.001000");
 
 function positiveId(value: unknown, field: string): number {
   const id = Number(value);
@@ -104,42 +103,6 @@ function normalizeLeg(input: {
     rateConvention: normalized.rateConvention,
     narration: input.narration,
   };
-}
-
-function adjustBaseSideToTarget(entries: VoucherEntryInsertFields[], side: "debit" | "credit", target: Decimal): void {
-  const amountField = side === "debit" ? "debitAmount" : "creditAmount";
-  const baseField = side === "debit" ? "baseDebitAmount" : "baseCreditAmount";
-  const current = entries.reduce((sum, entry) => sum.plus(new Decimal(entry[amountField] ?? "0")), new Decimal(0));
-  const adjustment = target.minus(current);
-  if (adjustment.isZero()) return;
-  if (adjustment.abs().gt(MAX_ROUNDING_ADJUSTMENT)) {
-    throw new PostingValidationError(
-      "POSTING_CURRENCY_ROUNDING_INVALID",
-      `Payment/Receipt ${side} conversion differs from the aggregate total by ${adjustment.toFixed(6)}`
-    );
-  }
-
-  for (let index = entries.length - 1; index >= 0; index -= 1) {
-    const entry = entries[index];
-    const currentAmount = new Decimal(entry[amountField] ?? "0");
-    if (currentAmount.lte(0)) continue;
-    const adjusted = currentAmount.plus(adjustment);
-    if (adjusted.lte(0)) {
-      throw new PostingValidationError(
-        "POSTING_CURRENCY_ROUNDING_INVALID",
-        `Payment/Receipt ${side} rounding would make an entry non-positive`
-      );
-    }
-    const value = adjusted.toDecimalPlaces(6).toFixed(6);
-    entry[amountField] = value;
-    entry[baseField] = value;
-    return;
-  }
-
-  throw new PostingValidationError(
-    "POSTING_CURRENCY_ROUNDING_INVALID",
-    `Payment/Receipt has no ${side} entry available for rounding adjustment`
-  );
 }
 
 function fingerprint(input: {
@@ -279,9 +242,15 @@ export async function buildPaymentReceiptPostingRequest(
     );
   }
 
-  const baseTotal = new Decimal(aggregate.baseDebitAmount);
-  adjustBaseSideToTarget(normalizedEntries, "debit", baseTotal);
-  adjustBaseSideToTarget(normalizedEntries, "credit", baseTotal);
+  // Phase 22 A (D3): each line keeps the exact base of its own amount (the
+  // currency trigger refuses a base that does not match its rate, so the old
+  // per-line adjustment to the aggregate could never be stored); the central
+  // engine posts the conversion remainder to the ROUNDING account. The header
+  // carries the debit base total.
+  const baseTotal = normalizedEntries.reduce(
+    (sum, entry) => sum.plus(new Decimal(entry.debitAmount ?? "0")),
+    new Decimal(0)
+  );
 
   const clientRequestId = resolveManualJournalClientRequestId(input.clientRequestId);
   const voucherExchangeRate =

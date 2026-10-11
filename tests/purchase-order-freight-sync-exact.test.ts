@@ -36,6 +36,13 @@ vi.mock("../server/storage", () => ({
     }),
   },
 }));
+// Phase 22 (C): the resync is an in-place edit of a posted voucher, run through
+// the correction policy (closed-period refusal, before/after audit), which the
+// phase 22 (C) suite covers against a database. Here it only wraps the edit.
+vi.mock("../server/services/factory/factoryVoucherCorrection", () => ({
+  editPostedFactoryVoucherTx: async (_tx: unknown, _input: unknown, edit: () => Promise<unknown>) => edit(),
+  sendVoucherCorrectionRefusal: () => false,
+}));
 vi.mock("../server/db", async () => {
   const { getTableName } = await import("drizzle-orm");
   const chain = (value: unknown) => {
@@ -96,11 +103,13 @@ describe("purchase order freight sync", () => {
     );
 
     expect(body).toMatchObject({ updated: true, amount: "12345678901234577.89" });
+    // Phase 22 (C): an edited line gets every amount column (usdLineAmounts, 6 dp
+    // like the currency trigger stores them), still exact.
     expect(h.writes).toEqual(
       expect.arrayContaining([
-        ["update", "voucher_entries", expect.objectContaining({ debitAmount: "12345678901234577.89" })],
-        ["update", "voucher_entries", expect.objectContaining({ creditAmount: "12345678901234567.89" })],
-        ["insert", "voucher_entries", expect.objectContaining({ creditAmount: "10.00", ledgerAccountId: 9 })],
+        ["update", "voucher_entries", expect.objectContaining({ debitAmount: "12345678901234577.890000" })],
+        ["update", "voucher_entries", expect.objectContaining({ creditAmount: "12345678901234567.890000" })],
+        ["insert", "voucher_entries", expect.objectContaining({ creditAmount: "10.000000", ledgerAccountId: 9 })],
       ])
     );
   });
@@ -131,8 +140,8 @@ describe("purchase order freight sync", () => {
     expect(h.writes).toEqual(
       expect.arrayContaining([
         ["update", "vouchers", { totalAmount: "12345678901234577.89" }],
-        ["update", "voucher_entries", { debitAmount: "12345678901234577.89" }],
-        ["update", "voucher_entries", { creditAmount: "12345678901234567.89" }],
+        ["update", "voucher_entries", expect.objectContaining({ debitAmount: "12345678901234577.890000" })],
+        ["update", "voucher_entries", expect.objectContaining({ creditAmount: "12345678901234567.890000" })],
       ])
     );
     h.parentCompanyId = null;

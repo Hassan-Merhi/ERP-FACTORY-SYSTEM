@@ -155,25 +155,22 @@ export function registerStockItemRoutes(app: Express) {
             .set({ name: row.newName })
             .where(and(eq(stockItems.id, item.id), eq(stockItems.companyId, companyId), isNull(stockItems.deletedAt)));
           changed.push({ id: item.id, code: item.code, oldName: item.name, newName: row.newName });
+          // Phase 21 (B): each rename's audit row commits with the renames.
+          await logAudit(
+            {
+              userId: req.session.userId!,
+              username: req.session.username || "unknown",
+              companyId,
+              action: "update",
+              tableName: "stock_items",
+              recordId: item.id,
+              recordIdentifier: `${item.code} - ${row.newName}`,
+              changes: { name: { old: item.name, new: row.newName } },
+            },
+            tx
+          );
         }
       });
-
-      for (const item of changed) {
-        try {
-          await logAudit({
-            userId: req.session.userId!,
-            username: req.session.username || "unknown",
-            companyId,
-            action: "update",
-            tableName: "stock_items",
-            recordId: item.id,
-            recordIdentifier: `${item.code} - ${item.newName}`,
-            changes: { name: { old: item.oldName, new: item.newName } },
-          });
-        } catch {
-          /* non-fatal */
-        }
-      }
 
       return res.json({
         message: `Name update complete: ${changed.length} updated, ${unchanged} unchanged, ${notFoundCodes.length} code(s) not found`,
@@ -219,28 +216,31 @@ export function registerStockItemRoutes(app: Express) {
         parsed.openingValue = (qty * rate).toFixed(2);
       }
 
-      const item = await storage.createStockItem(parsed);
-      try {
-        await logAudit({
-          userId: req.session.userId!,
-          username: req.session.username || "unknown",
-          companyId: req.session.currentCompanyId!,
-          action: "create",
-          tableName: "stock_items",
-          recordId: item.id,
-          recordIdentifier: item.name,
-          changes: {
-            name: { new: item.name },
-            code: { new: item.code },
-            uom: { new: item.uom },
-            sellingPrice: { new: item.sellingPrice || "0" },
-            openingQty: { new: item.openingQty || "0" },
-            openingRate: { new: item.openingRate || "0" },
+      // Phase 21 (B): the write and its audit commit together.
+      const item = await db.transaction(async (tx) => {
+        const written = await storage.createStockItem(parsed, tx);
+        await logAudit(
+          {
+            userId: req.session.userId!,
+            username: req.session.username || "unknown",
+            companyId: req.session.currentCompanyId!,
+            action: "create",
+            tableName: "stock_items",
+            recordId: written.id,
+            recordIdentifier: written.name,
+            changes: {
+              name: { new: written.name },
+              code: { new: written.code },
+              uom: { new: written.uom },
+              sellingPrice: { new: written.sellingPrice || "0" },
+              openingQty: { new: written.openingQty || "0" },
+              openingRate: { new: written.openingRate || "0" },
+            },
           },
-        });
-      } catch {
-        /* non-fatal */
-      }
+          tx
+        );
+        return written;
+      });
       res.status(201).json(item);
     } catch (error: unknown) {
       res.status(400).json({ message: getErrorMessage(error) });
