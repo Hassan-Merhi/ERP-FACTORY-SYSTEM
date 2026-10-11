@@ -196,7 +196,7 @@ function UserPicker({
               }}
               data-testid={`option-user-${u.id}`}
             >
-              <span className="flex items-center justify-center h-6 w-6 rounded-full bg-muted text-[10px] font-semibold shrink-0">
+              <span className="flex items-center justify-center h-6 w-6 rounded-full bg-muted text-[11px] font-semibold shrink-0">
                 {initials(u.username)}
               </span>
               <span>{u.username}</span>
@@ -336,7 +336,7 @@ export default function NotificationSettings() {
                               className="inline-flex items-center gap-1.5 h-7 pl-2 pr-1.5 rounded-full border bg-muted/60 text-xs font-medium"
                               data-testid={`badge-recipient-${event.id}-${uid}`}
                             >
-                              <span className="flex items-center justify-center h-4 w-4 rounded-full bg-primary/20 text-[9px] font-bold text-primary">
+                              <span className="flex items-center justify-center h-4 w-4 rounded-full bg-primary/20 text-[11px] font-bold text-primary">
                                 {initials(getUserName(uid))}
                               </span>
                               {getUserName(uid)}

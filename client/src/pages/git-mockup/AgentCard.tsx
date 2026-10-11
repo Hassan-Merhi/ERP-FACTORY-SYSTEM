@@ -82,11 +82,14 @@ export function AgentCard({
       return null;
     }
   });
-  const saveOrder = useCallback((order: number[] | null) => {
-    if (order === null) localStorage.removeItem(storageKey);
-    else localStorage.setItem(storageKey, JSON.stringify(order));
-    setCustomOrder(order);
-  }, [storageKey]);
+  const saveOrder = useCallback(
+    (order: number[] | null) => {
+      if (order === null) localStorage.removeItem(storageKey);
+      else localStorage.setItem(storageKey, JSON.stringify(order));
+      setCustomOrder(order);
+    },
+    [storageKey]
+  );
   const resetOrder = () => saveOrder(null);
 
   // ── Prepaid designations ──────────────────────────────────────────────────
@@ -158,7 +161,7 @@ export function AgentCard({
   // ── Adjustments ──────────────────────────────────────────────────────────
   const adjQKey = [`/api/git/agent-adjustments/${companyId}/${encodeURIComponent(agent.agentName)}`];
   const { data: adjData } = useQuery<AdjEntry[]>({ queryKey: adjQKey, initialData: [], staleTime: 120_000 });
-  const adjustments: AdjEntry[] = useMemo(() => (adjData ?? []), [adjData]);
+  const adjustments: AdjEntry[] = useMemo(() => adjData ?? [], [adjData]);
   const createAdjMutation = useMutation({
     mutationFn: (body: { description: string; amount: number; type: "debit" | "credit" }) =>
       apiRequest("POST", `/api/git/agent-adjustments/${companyId}/${encodeURIComponent(agent.agentName)}`, body),
@@ -169,13 +172,15 @@ export function AgentCard({
       setNewType("debit");
       setShowAdjForm(false);
     },
-    onError: (e: ClientErrorLike) => toast({ title: "Failed to add entry", description: e.message, variant: "destructive" }),
+    onError: (e: ClientErrorLike) =>
+      toast({ title: "Failed to add entry", description: e.message, variant: "destructive" }),
   });
   const deleteAdjMutation = useMutation({
     mutationFn: (id: number) =>
       apiRequest("DELETE", `/api/git/agent-adjustments/${companyId}/${encodeURIComponent(agent.agentName)}/${id}`),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: adjQKey }),
-    onError: (e: ClientErrorLike) => toast({ title: "Failed to delete", description: e.message, variant: "destructive" }),
+    onError: (e: ClientErrorLike) =>
+      toast({ title: "Failed to delete", description: e.message, variant: "destructive" }),
   });
   const saveAdj = () => {
     const amt = parseFloat(newAmount);
@@ -341,7 +346,7 @@ export function AgentCard({
     if (staleIds.length === 0) return;
     setPendingGraduationIds((prev) => [...new Set([...prev, ...staleIds])]);
     setAllPrepaidMutation.mutate(dbPrepaidIds.filter((id) => validTransitIdSet.has(id)));
-  }, [dbPrepaidIds, isDbOverride, setAllPrepaidMutation, validTransitIdSet]); 
+  }, [dbPrepaidIds, isDbOverride, setAllPrepaidMutation, validTransitIdSet]);
   useEffect(() => {
     if (pendingGraduationIds.length === 0) return;
     const openPartialIdSet = new Set(allOpenPartial.map((r) => r.id));
@@ -350,7 +355,7 @@ export function AgentCard({
     setPendingGraduationIds((prev) => prev.filter((id) => !openPartialIdSet.has(id)));
     const existing = customOrder ?? allOpenPartial.map((r) => r.id);
     saveOrder([...toPromote, ...existing.filter((id) => !toPromote.includes(id))]);
-  }, [allOpenPartial, customOrder, pendingGraduationIds, saveOrder]); 
+  }, [allOpenPartial, customOrder, pendingGraduationIds, saveOrder]);
 
   const confidenceBadge = {
     exact: { label: "Exact match", cls: "bg-green-700 text-white" },
@@ -389,7 +394,7 @@ export function AgentCard({
             <span />
             <span className="font-bold tracking-widest text-sm uppercase self-center text-center">{agentName}</span>
             <span className="flex justify-end items-center">
-              <Badge className={cn("text-[10px] no-default-active-elevate shrink-0", confidenceBadge.cls)}>
+              <Badge className={cn("text-[11px] no-default-active-elevate shrink-0", confidenceBadge.cls)}>
                 {confidenceBadge.label}
               </Badge>
             </span>
@@ -481,7 +486,7 @@ export function AgentCard({
                     <Badge
                       variant="outline"
                       className={cn(
-                        "text-[10px] shrink-0 no-default-active-elevate",
+                        "text-[11px] shrink-0 no-default-active-elevate",
                         a.type === "debit" ? "text-green-700 border-green-400" : "text-red-600 border-red-400"
                       )}
                     >
@@ -522,7 +527,7 @@ export function AgentCard({
                   className="w-24 text-xs rounded border border-input bg-background px-2 py-1 focus:outline-none focus:ring-1 focus:ring-ring text-right"
                   data-testid={`input-adj-amount-${agentName}`}
                 />
-                <div className="flex rounded border border-input overflow-hidden text-[10px] font-bold shrink-0">
+                <div className="flex rounded border border-input overflow-hidden text-[11px] font-bold shrink-0">
                   <button
                     type="button"
                     onClick={() => setNewType("debit")}
@@ -554,7 +559,7 @@ export function AgentCard({
                   type="button"
                   onClick={saveAdj}
                   disabled={createAdjMutation.isPending}
-                  className="px-2.5 py-1 rounded bg-primary text-primary-foreground text-[10px] font-semibold disabled:opacity-50 shrink-0"
+                  className="px-2.5 py-1 rounded bg-primary text-primary-foreground text-[11px] font-semibold disabled:opacity-50 shrink-0"
                   data-testid={`button-adj-save-${agentName}`}
                 >
                   {createAdjMutation.isPending ? "…" : "Save"}

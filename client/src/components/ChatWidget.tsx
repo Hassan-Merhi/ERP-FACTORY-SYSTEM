@@ -654,14 +654,14 @@ export function ChatWidget() {
                     {sessionReadFiles.map((fp) => (
                       <span
                         key={fp}
-                        className="inline-flex items-center gap-1 text-[10px] font-mono bg-muted rounded px-1.5 py-0.5 text-muted-foreground"
+                        className="inline-flex items-center gap-1 text-[11px] font-mono bg-muted rounded px-1.5 py-0.5 text-muted-foreground"
                       >
                         <FileCode className="h-2.5 w-2.5 shrink-0" />
                         {fp.replace(/^.*\//, "")}
                       </span>
                     ))}
                     <button
-                      className="text-[10px] text-muted-foreground/60 hover:text-muted-foreground transition-colors px-1"
+                      className="text-[11px] text-muted-foreground/60 hover:text-muted-foreground transition-colors px-1"
                       onClick={() => {
                         setSessionReadFiles([]);
                         setShowSessionFiles(false);

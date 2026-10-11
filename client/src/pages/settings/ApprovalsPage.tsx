@@ -316,7 +316,7 @@ export function ApprovalsPage({ currentUser }: Props) {
                       <Clock className="h-3.5 w-3.5 mr-1.5" />
                       Pending
                       {byStatus("pending").length > 0 && (
-                        <Badge className="ml-1.5 h-4 text-[10px] px-1">{byStatus("pending").length}</Badge>
+                        <Badge className="ml-1.5 h-4 text-[11px] px-1">{byStatus("pending").length}</Badge>
                       )}
                     </TabsTrigger>
                     <TabsTrigger

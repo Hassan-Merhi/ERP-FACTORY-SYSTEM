@@ -116,7 +116,8 @@ export function OtwContainersTable({
       ) : (
         <Card>
           <CardContent className="p-0 overflow-x-auto">
-            <Table>
+            {/* The container number stays in view while the wide table scrolls sideways. */}
+            <Table stickyFirstColumn>
               <OtwContainerTableHeader />
               <TableBody>
                 {filteredOtwContainers.map((container) => (

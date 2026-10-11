@@ -55,7 +55,10 @@ export function CompactRunPayrollSelection({ model }: CompactRunPayrollSelection
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
 
   const draftCount = useMemo(() => payrollRuns.filter((run) => run.status === "DRAFT").length, [payrollRuns]);
-  const visibleWorkerCount = useMemo(() => workers.filter((worker) => filtered.has(worker.id)).length, [workers, filtered]);
+  const visibleWorkerCount = useMemo(
+    () => workers.filter((worker) => filtered.has(worker.id)).length,
+    [workers, filtered]
+  );
 
   const toggleExpanded = (key: GroupKey) => {
     const normalized = String(key);
@@ -69,10 +72,7 @@ export function CompactRunPayrollSelection({ model }: CompactRunPayrollSelection
     const expanded = expandedGroups[String(groupKey)] === true;
     const selectedVisible = visibleIds.filter((id) => selectedWorkers.has(id));
     const allVisibleSelected = visibleIds.every((id) => selectedWorkers.has(id));
-    const groupBase = visibleIds.reduce(
-      (sum, id) => sum + parseFloat(workerById[id]?.monthlySalary || "0"),
-      0
-    );
+    const groupBase = visibleIds.reduce((sum, id) => sum + parseFloat(workerById[id]?.monthlySalary || "0"), 0);
 
     return (
       <section key={groupKey} className="overflow-hidden border-b last:border-b-0">
@@ -175,7 +175,7 @@ export function CompactRunPayrollSelection({ model }: CompactRunPayrollSelection
                       <TableCell className="text-center">
                         <Badge
                           variant={worker.active ? "outline" : "secondary"}
-                          className="text-[10px] no-default-active-elevate"
+                          className="text-[11px] no-default-active-elevate"
                         >
                           {worker.active ? "Active" : "Inactive"}
                         </Badge>
@@ -226,7 +226,7 @@ export function CompactRunPayrollSelection({ model }: CompactRunPayrollSelection
           <History className="mr-2 h-4 w-4" />
           Payroll History
           {draftCount > 0 && (
-            <Badge variant="outline" className="ml-2 text-[10px] no-default-active-elevate">
+            <Badge variant="outline" className="ml-2 text-[11px] no-default-active-elevate">
               {draftCount} draft
             </Badge>
           )}

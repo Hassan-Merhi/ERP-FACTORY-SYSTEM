@@ -380,7 +380,7 @@ function TransporterStatement({ transporterId, onBack }: { transporterId: number
             >
               ${fmt(data.outstanding)}
             </div>
-            <p className="text-[10px] text-muted-foreground mt-1">positive = you owe them</p>
+            <p className="text-[11px] text-muted-foreground mt-1">positive = you owe them</p>
           </CardContent>
         </Card>
       </div>

@@ -340,12 +340,12 @@ export default function ImportCycleDiagnostics() {
             <div className="flex items-center gap-1.5 mb-1">
               <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Net Balance</span>
               {isBalanced ? (
-                <Badge variant="outline" className="status-success text-[10px] px-1 py-0">
+                <Badge variant="outline" className="status-success text-[11px] px-1 py-0">
                   <CheckCircle2 className="h-2.5 w-2.5 mr-0.5" />
                   Balanced
                 </Badge>
               ) : (
-                <Badge variant="destructive" className="text-[10px] px-1 py-0">
+                <Badge variant="destructive" className="text-[11px] px-1 py-0">
                   <AlertCircle className="h-2.5 w-2.5 mr-0.5" />
                   Off
                 </Badge>

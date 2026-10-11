@@ -84,15 +84,15 @@ export default function SmartTransferFeedbackSummaryCard() {
         <>
           <div className="mt-3 grid grid-cols-3 gap-2 text-center">
             <div className="rounded-md border p-2">
-              <p className="text-[10px] text-muted-foreground">Approved</p>
+              <p className="text-[11px] text-muted-foreground">Approved</p>
               <p className="text-base font-semibold">{data.counts.approvals}</p>
             </div>
             <div className="rounded-md border p-2">
-              <p className="text-[10px] text-muted-foreground">Qty kept</p>
+              <p className="text-[11px] text-muted-foreground">Qty kept</p>
               <p className="text-base font-semibold">{formatNumber(data.editing.quantityKeptPct, 0)}%</p>
             </div>
             <div className="rounded-md border p-2">
-              <p className="text-[10px] text-muted-foreground">Source kept</p>
+              <p className="text-[11px] text-muted-foreground">Source kept</p>
               <p className="text-base font-semibold">{formatNumber(data.editing.sourceKeptPct, 0)}%</p>
             </div>
           </div>
@@ -100,8 +100,10 @@ export default function SmartTransferFeedbackSummaryCard() {
           <div className="mt-2 rounded-md bg-muted/50 p-2 text-xs">
             {data.performance.sampleSize > 0 ? (
               <p>
-                Forecast accuracy: <span className="font-semibold">{formatNumber(data.performance.forecastAccuracyPct, 0)}%</span>
-                {" · "}{data.performance.sampleSize} finalized sample(s)
+                Forecast accuracy:{" "}
+                <span className="font-semibold">{formatNumber(data.performance.forecastAccuracyPct, 0)}%</span>
+                {" · "}
+                {data.performance.sampleSize} finalized sample(s)
               </p>
             ) : (
               <p>Post-transfer accuracy appears after finalized transfers have at least seven days of sales history.</p>

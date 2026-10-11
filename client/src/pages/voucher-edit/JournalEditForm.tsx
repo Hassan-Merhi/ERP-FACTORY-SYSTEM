@@ -436,11 +436,11 @@ export function JournalEditForm({
                     <td className="p-3">
                       <div className="grid grid-cols-1 gap-1">
                         <div className="flex justify-between items-center text-sm">
-                          <span className="text-muted-foreground uppercase text-[10px] font-bold">DR:</span>
+                          <span className="text-muted-foreground uppercase text-[11px] font-bold">DR:</span>
                           <span className="font-mono font-bold">{formatAmount(drTotal)}</span>
                         </div>
                         <div className="flex justify-between items-center text-sm border-t pt-1">
-                          <span className="text-muted-foreground uppercase text-[10px] font-bold">CR:</span>
+                          <span className="text-muted-foreground uppercase text-[11px] font-bold">CR:</span>
                           <span className="font-mono font-bold">{formatAmount(crTotal)}</span>
                         </div>
                       </div>

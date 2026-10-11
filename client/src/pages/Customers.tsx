@@ -464,7 +464,7 @@ export default function Customers() {
                     </div>
                     {getCustomerCurrencyBalances(customer) &&
                       Object.keys(getCustomerCurrencyBalances(customer)!).length > 0 && (
-                        <div className="mt-1 text-[10px] text-muted-foreground">
+                        <div className="mt-1 text-[11px] text-muted-foreground">
                           Native:{" "}
                           {Object.entries(getCustomerCurrencyBalances(customer)!)
                             .map(

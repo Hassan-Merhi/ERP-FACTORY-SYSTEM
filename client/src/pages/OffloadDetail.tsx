@@ -112,7 +112,7 @@ function LiveBadge({ original, live }: { original: number; live: number }) {
       <TooltipTrigger asChild>
         <Badge
           variant="outline"
-          className="text-amber-600 border-amber-500 bg-amber-500/10 gap-1 ml-2 text-[10px] px-1 py-0"
+          className="text-amber-600 border-amber-500 bg-amber-500/10 gap-1 ml-2 text-[11px] px-1 py-0"
         >
           <Zap className="w-2.5 h-2.5" />
           updated
@@ -429,7 +429,7 @@ export default function OffloadDetail() {
                       <td className="p-3 pl-5 flex items-center gap-1">
                         Additional Charges
                         {live?.hasVouchers && (
-                          <Badge variant="outline" className="text-[10px] px-1 py-0 gap-0.5">
+                          <Badge variant="outline" className="text-[11px] px-1 py-0 gap-0.5">
                             <Zap className="w-2.5 h-2.5" />
                             live
                           </Badge>

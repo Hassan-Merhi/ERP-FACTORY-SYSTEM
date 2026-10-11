@@ -54,7 +54,7 @@ const SheetLayoutContext = createContext(false);
 
 function Lbl({ children }: { children: React.ReactNode }) {
   return (
-    <span className="block text-[10px] font-medium text-muted-foreground/70 uppercase tracking-wide mb-1 leading-none">
+    <span className="block text-[11px] font-medium text-muted-foreground/70 uppercase tracking-wide mb-1 leading-none">
       {children}
     </span>
   );

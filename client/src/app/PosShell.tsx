@@ -126,7 +126,7 @@ export function PosShell({
             </SidebarHeader>
             <SidebarContent className="px-2 py-3">
               <SidebarGroup className="p-0">
-                <SidebarGroupLabel className="mb-2 px-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-sidebar-foreground/45">
+                <SidebarGroupLabel className="mb-2 px-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-sidebar-foreground/45">
                   Workspace
                 </SidebarGroupLabel>
                 <SidebarGroupContent>
@@ -146,7 +146,7 @@ export function PosShell({
                           {item.badge !== undefined && item.badge > 0 && (
                             <Badge
                               variant={item.active ? "secondary" : "default"}
-                              className="min-w-5 justify-center rounded-full px-1.5 text-[10px]"
+                              className="min-w-5 justify-center rounded-full px-1.5 text-[11px]"
                               aria-label={`${item.badge} unread`}
                               data-testid="badge-chat-unread-pos"
                             >
@@ -220,7 +220,7 @@ export function PosShell({
                     data-testid="button-open-palette"
                   >
                     <Search className="h-4 w-4" aria-hidden="true" />
-                    <kbd className="hidden h-5 items-center gap-1 rounded border bg-muted px-1.5 font-mono text-[10px] lg:inline-flex">
+                    <kbd className="hidden h-5 items-center gap-1 rounded border bg-muted px-1.5 font-mono text-[11px] lg:inline-flex">
                       {typeof navigator !== "undefined" && /Mac|iPod|iPhone|iPad/.test(navigator.platform)
                         ? "⌘ /"
                         : "Ctrl /"}

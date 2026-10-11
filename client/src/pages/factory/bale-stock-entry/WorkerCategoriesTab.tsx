@@ -143,7 +143,7 @@ export function WorkerCategoriesManager({ compact = false }: { compact?: boolean
                       {catWorkers
                         .filter((w) => w.active !== false && (cat.workerIds || []).includes(w.id))
                         .map((w) => (
-                          <Badge key={w.id} variant="secondary" className="text-[10px]">
+                          <Badge key={w.id} variant="secondary" className="text-[11px]">
                             {w.fullName || w.name}
                           </Badge>
                         ))}
@@ -223,7 +223,7 @@ export function WorkerCategoriesManager({ compact = false }: { compact?: boolean
                         </div>
                         <span className="text-xs font-medium truncate">{w.fullName || w.name}</span>
                         {inactive && (
-                          <Badge variant="secondary" className="ml-auto text-[9px]">
+                          <Badge variant="secondary" className="ml-auto text-[11px]">
                             Inactive
                           </Badge>
                         )}

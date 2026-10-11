@@ -38,7 +38,7 @@ export function RunRow({ run }: { run: BackupRun }) {
     <div className="flex flex-col gap-2 p-3 rounded-md border bg-card/50 text-xs" data-testid={`run-row-${run.id}`}>
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <div className="flex items-center gap-2">
-          <Badge className={`px-1.5 py-0 text-[10px] uppercase font-bold border-0 ${runTypeBadgeClass(run.runType)}`}>
+          <Badge className={`px-1.5 py-0 text-[11px] uppercase font-bold border-0 ${runTypeBadgeClass(run.runType)}`}>
             {runTypeLabel(run.runType)}
           </Badge>
           <span className="font-medium text-muted-foreground">{fmtTime(run.startedAt)}</span>

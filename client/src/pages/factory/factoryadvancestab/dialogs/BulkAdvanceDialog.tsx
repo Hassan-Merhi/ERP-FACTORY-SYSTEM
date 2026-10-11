@@ -78,8 +78,7 @@ export function BulkAdvanceDialog({
     refetchOnWindowFocus: false,
   });
 
-  const fmtDue = (n: number) =>
-    n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const fmtDue = (n: number) => n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const fmtDate = (s: string) =>
     new Date(s + "T00:00:00").toLocaleDateString(undefined, { month: "short", day: "numeric" });
 
@@ -297,7 +296,7 @@ export function BulkAdvanceDialog({
                                       </span>
                                     </div>
                                   </div>
-                                  <p className="text-[10px] text-muted-foreground/50 mt-2 leading-relaxed">
+                                  <p className="text-[11px] text-muted-foreground/50 mt-2 leading-relaxed">
                                     Calendar-day proration · Absences &amp; advances deducted
                                   </p>
                                 </PopoverContent>

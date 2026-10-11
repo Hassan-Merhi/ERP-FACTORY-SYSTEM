@@ -98,7 +98,7 @@ export function FactoryStockAllocationV5Dialog4({ model }: { model: Model }) {
                         <div className="font-medium truncate">{order.containerNumber}</div>
                         <div className="text-muted-foreground truncate">{order.customerName}</div>
                         {customerMismatch && (
-                          <div className="text-destructive text-[10px]">Customer mismatch — cannot link</div>
+                          <div className="text-destructive text-[11px]">Customer mismatch — cannot link</div>
                         )}
                       </div>
                       <div className="text-right font-mono tabular-nums">
@@ -109,7 +109,7 @@ export function FactoryStockAllocationV5Dialog4({ model }: { model: Model }) {
                         {new Date(order.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
                       </div>
                       <div>
-                        <Badge variant="outline" className="text-[9px] h-4 px-1">
+                        <Badge variant="outline" className="text-[11px] h-4 px-1">
                           {STATUS_LABELS[order.status] ?? order.status}
                         </Badge>
                       </div>

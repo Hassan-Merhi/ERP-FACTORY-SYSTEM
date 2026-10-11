@@ -338,7 +338,7 @@ export default function Suppliers() {
                     data-testid={`text-balance-${supplier.id}`}
                   >
                     {formatAmount(Math.abs(supplier.balance))}
-                    <span className="ml-1 opacity-70 text-[10px]">{supplier.balance > 0 ? "Cr" : "Dr"}</span>
+                    <span className="ml-1 opacity-70 text-[11px]">{supplier.balance > 0 ? "Cr" : "Dr"}</span>
                   </span>
                 )}
               </div>

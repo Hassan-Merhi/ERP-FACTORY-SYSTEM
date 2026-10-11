@@ -277,7 +277,7 @@ export function AdvancesTab({ cashAccounts = [] }: AdvancesTabProps) {
           {formatAmount(parseFloat(advance.remainingBalance))}
         </TableCell>
         <TableCell>
-          <Badge variant="outline" className="text-[10px]">
+          <Badge variant="outline" className="text-[11px]">
             {advance.isOpeningBalance ? "Opening Balance" : "Advance"}
           </Badge>
         </TableCell>

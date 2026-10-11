@@ -111,7 +111,7 @@ function ShortcutsDialog({ open, onClose, isFactory }: { open: boolean; onClose:
         <div className="space-y-5 mt-1">
           {groups.map((group) => (
             <div key={group.label}>
-              <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-2">
+              <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground mb-2">
                 {group.label}
               </p>
               <div className="space-y-2">

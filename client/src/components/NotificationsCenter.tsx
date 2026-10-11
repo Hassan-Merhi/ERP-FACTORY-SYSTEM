@@ -258,7 +258,7 @@ export function NotificationsCenter() {
             </Button>
             {totalBadge > 0 && (
               <span
-                className="absolute -top-0.5 -right-0.5 h-4 min-w-4 px-0.5 rounded-full bg-destructive text-destructive-foreground text-[10px] font-bold flex items-center justify-center pointer-events-none"
+                className="absolute -top-0.5 -right-0.5 h-4 min-w-4 px-0.5 rounded-full bg-destructive text-destructive-foreground text-[11px] font-bold flex items-center justify-center pointer-events-none"
                 data-testid="badge-notif-count"
               >
                 {totalBadge > 99 ? "99+" : totalBadge}
@@ -329,12 +329,12 @@ export function NotificationsCenter() {
               >
                 {tab.label}
                 {tab.id === "intercompany" && (icCountData?.count ?? 0) > 0 && (
-                  <span className="ml-1 inline-flex h-3.5 min-w-3.5 px-0.5 items-center justify-center rounded-full bg-destructive text-destructive-foreground text-[9px] font-bold">
+                  <span className="ml-1 inline-flex h-3.5 min-w-3.5 px-0.5 items-center justify-center rounded-full bg-destructive text-destructive-foreground text-[11px] font-bold">
                     {icCountData!.count}
                   </span>
                 )}
                 {tab.id === "all" && (unreadData?.count ?? 0) > 0 && (
-                  <span className="ml-1 inline-flex h-3.5 min-w-3.5 px-0.5 items-center justify-center rounded-full bg-destructive text-destructive-foreground text-[9px] font-bold">
+                  <span className="ml-1 inline-flex h-3.5 min-w-3.5 px-0.5 items-center justify-center rounded-full bg-destructive text-destructive-foreground text-[11px] font-bold">
                     {unreadData!.count}
                   </span>
                 )}
@@ -439,7 +439,7 @@ export function NotificationsCenter() {
                           {meta && (
                             <Badge
                               variant="outline"
-                              className={cn("text-[9px] px-1 h-4 font-medium shrink-0", meta.className)}
+                              className={cn("text-[11px] px-1 h-4 font-medium shrink-0", meta.className)}
                             >
                               {meta.label}
                             </Badge>
@@ -448,10 +448,10 @@ export function NotificationsCenter() {
                         <p className="text-xs text-muted-foreground leading-snug line-clamp-2">{item.message}</p>
                         {/* Company info */}
                         {item.companyName && (
-                          <p className="text-[10px] text-muted-foreground font-medium">{item.companyName}</p>
+                          <p className="text-[11px] text-muted-foreground font-medium">{item.companyName}</p>
                         )}
                         <div className="flex items-center justify-between gap-2">
-                          <span className="text-[10px] text-muted-foreground leading-tight">
+                          <span className="text-[11px] text-muted-foreground leading-tight">
                             {formatDistanceToNow(new Date(item.createdAt), { addSuffix: true })}
                             {item.triggeredByUsername && ` · by ${item.triggeredByUsername}`}
                           </span>
@@ -462,7 +462,7 @@ export function NotificationsCenter() {
                                   e.stopPropagation();
                                   markReadMutation.mutate(item.id);
                                 }}
-                                className="text-[10px] text-muted-foreground underline hover:text-foreground"
+                                className="text-[11px] text-muted-foreground underline hover:text-foreground"
                                 data-testid={`button-mark-read-${item.id}`}
                               >
                                 Mark read
@@ -472,7 +472,7 @@ export function NotificationsCenter() {
                               <Button
                                 size="sm"
                                 variant="outline"
-                                className="h-6 text-[10px] px-2 gap-0.5"
+                                className="h-6 text-[11px] px-2 gap-0.5"
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   handleNotifClick(item);

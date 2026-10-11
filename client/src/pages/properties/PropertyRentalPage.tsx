@@ -283,7 +283,7 @@ export default function PropertyRentalPage({
           <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-2">
             <Card>
               <CardHeader className="px-3 pt-3 pb-1">
-                <CardTitle className="text-[10px] text-muted-foreground font-normal tracking-wide">
+                <CardTitle className="text-[11px] text-muted-foreground font-normal tracking-wide">
                   TOTAL UNITS
                 </CardTitle>
               </CardHeader>
@@ -295,7 +295,7 @@ export default function PropertyRentalPage({
             </Card>
             <Card>
               <CardHeader className="px-3 pt-3 pb-1">
-                <CardTitle className="text-[10px] text-muted-foreground font-normal tracking-wide">
+                <CardTitle className="text-[11px] text-muted-foreground font-normal tracking-wide">
                   RENT / MONTH
                 </CardTitle>
               </CardHeader>
@@ -306,12 +306,12 @@ export default function PropertyRentalPage({
                 >
                   ${fmtMoney(totals.totalMonthlyRent)}
                 </div>
-                <p className="text-[10px] text-muted-foreground mt-0.5">expected from active leases</p>
+                <p className="text-[11px] text-muted-foreground mt-0.5">expected from active leases</p>
               </CardContent>
             </Card>
             <Card>
               <CardHeader className="px-3 pt-3 pb-1">
-                <CardTitle className="text-[10px] text-muted-foreground font-normal tracking-wide">
+                <CardTitle className="text-[11px] text-muted-foreground font-normal tracking-wide">
                   TOTAL GUARANTEE
                 </CardTitle>
               </CardHeader>
@@ -323,7 +323,7 @@ export default function PropertyRentalPage({
             </Card>
             <Card>
               <CardHeader className="px-3 pt-3 pb-1">
-                <CardTitle className="text-[10px] text-muted-foreground font-normal tracking-wide">
+                <CardTitle className="text-[11px] text-muted-foreground font-normal tracking-wide">
                   TOTAL PAID
                 </CardTitle>
               </CardHeader>
@@ -338,7 +338,7 @@ export default function PropertyRentalPage({
             </Card>
             <Card>
               <CardHeader className="px-3 pt-3 pb-1">
-                <CardTitle className="text-[10px] text-muted-foreground font-normal tracking-wide">
+                <CardTitle className="text-[11px] text-muted-foreground font-normal tracking-wide">
                   OUTSTANDING
                 </CardTitle>
               </CardHeader>
@@ -349,12 +349,12 @@ export default function PropertyRentalPage({
                 >
                   ${fmtMoney(totals.totalOwed)}
                 </div>
-                <p className="text-[10px] text-muted-foreground mt-0.5">owed by tenants</p>
+                <p className="text-[11px] text-muted-foreground mt-0.5">owed by tenants</p>
               </CardContent>
             </Card>
             <Card>
               <CardHeader className="px-3 pt-3 pb-1">
-                <CardTitle className="text-[10px] text-muted-foreground font-normal tracking-wide">CREDIT</CardTitle>
+                <CardTitle className="text-[11px] text-muted-foreground font-normal tracking-wide">CREDIT</CardTitle>
               </CardHeader>
               <CardContent className="px-3 pb-3">
                 <div
@@ -363,7 +363,7 @@ export default function PropertyRentalPage({
                 >
                   ${fmtMoney(totals.totalCredit)}
                 </div>
-                <p className="text-[10px] text-muted-foreground mt-0.5">advance / overpaid</p>
+                <p className="text-[11px] text-muted-foreground mt-0.5">advance / overpaid</p>
               </CardContent>
             </Card>
           </div>

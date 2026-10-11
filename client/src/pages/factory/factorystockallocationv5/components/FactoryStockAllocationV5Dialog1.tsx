@@ -64,7 +64,7 @@ export function FactoryStockAllocationV5Dialog1({ model }: { model: Model }) {
                       className={cn("flex-1", isDupe && "border-destructive focus-visible:ring-destructive")}
                       data-testid={`input-v5-ct-name-${idx}`}
                     />
-                    {isDupe && <span className="text-[10px] text-destructive shrink-0">duplicate</span>}
+                    {isDupe && <span className="text-[11px] text-destructive shrink-0">duplicate</span>}
                   </div>
                 );
               })}

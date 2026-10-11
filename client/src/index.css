@@ -516,12 +516,17 @@
 
 /* Print styles for account statements */
 @media print {
-  /* Universal print hygiene — applies to every printed view */
+  /* Universal print hygiene — applies to every printed view. The print rules follow the
+     Tailwind utilities in this file, so equal-specificity selectors win by order and nothing
+     here is marked important; `[class]` lifts the universal reset to utility specificity. */
   *,
   *::before,
-  *::after {
-    box-shadow: none !important;
-    text-shadow: none !important;
+  *::after,
+  [class],
+  [class]::before,
+  [class]::after {
+    box-shadow: none;
+    text-shadow: none;
   }
 
   /* Status pills: render as monochrome outlined chips on paper */
@@ -530,22 +535,22 @@
   .status-info,
   .status-danger,
   .status-muted {
-    background: white !important;
-    color: #111 !important;
-    border: 1px solid #999 !important;
+    background: white;
+    color: #111;
+    border: 1px solid #999;
   }
 
   /* Hide non-essential interactive chrome from prints */
   [data-print-hide],
   .no-print {
-    display: none !important;
+    display: none;
   }
 
   body {
-    background: white !important;
-    color: #111 !important;
-    font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif !important;
-    font-size: 11px !important;
+    background: white;
+    color: #111;
+    font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    font-size: 11px;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
     margin: 0;
@@ -553,7 +558,7 @@
   }
 
   .print-container {
-    background: white !important;
+    background: white;
     padding: 10mm 12mm;
   }
 
@@ -571,14 +576,14 @@
 
   .print-container th,
   .print-container td {
-    border: 1px solid #ccc !important;
+    border: 1px solid #ccc;
     padding: 5px 8px;
     text-align: left;
     vertical-align: middle;
   }
 
   .print-container th {
-    background-color: #eaeaea !important;
+    background-color: #eaeaea;
     font-weight: 700;
     font-size: 10px;
     text-transform: uppercase;
@@ -587,23 +592,23 @@
   }
 
   .print-container tbody tr:nth-child(even) {
-    background-color: #f7f7f7 !important;
+    background-color: #f7f7f7;
   }
 
   .print-container [data-testid="row-opening-balance"] {
-    background-color: #e8ecf0 !important;
+    background-color: #e8ecf0;
     font-weight: 600;
     page-break-inside: avoid;
   }
 
   .print-container .bg-accent\/50 {
-    background-color: #dde3ea !important;
+    background-color: #dde3ea;
     font-weight: 700;
     page-break-inside: avoid;
   }
 
   .print-container .bg-muted\/30 {
-    background-color: #f0f2f4 !important;
+    background-color: #f0f2f4;
   }
 
   .print-container .text-right {
@@ -632,52 +637,52 @@
   }
 
   .print-container .col-date {
-    width: 90px !important;
+    width: 90px;
     min-width: 90px;
   }
 
   .print-container .col-type {
-    width: 80px !important;
+    width: 80px;
     min-width: 80px;
   }
 
   .print-container .col-particulars {
-    width: auto !important;
+    width: auto;
   }
 
   .print-container .col-amount {
-    width: 100px !important;
+    width: 100px;
     min-width: 100px;
   }
 
   .print-container .col-balance {
-    width: 100px !important;
+    width: 100px;
     min-width: 100px;
   }
 
   .print-container .row-totals {
-    background-color: #f0f2f4 !important;
+    background-color: #f0f2f4;
     font-weight: 600;
-    border-top: 1px solid #bbb !important;
+    border-top: 1px solid #bbb;
     page-break-inside: avoid;
   }
 
   .print-container .border-t-2 {
-    border-top: 2px solid #999 !important;
+    border-top: 2px solid #999;
   }
 
   /* ── App chrome: hide sidebar, app header, and no-print elements ── */
   [data-slot="sidebar-wrapper"],
   .no-print,
   [data-no-print] {
-    display: none !important;
+    display: none;
   }
 
   /* Expand content to fill the page width */
-  main {
-    overflow: visible !important;
-    height: auto !important;
-    width: 100% !important;
+  main#main-content {
+    overflow: visible;
+    height: auto;
+    width: 100%;
   }
 
   /* Hide common action buttons when printing */
@@ -687,7 +692,7 @@
   [data-testid="button-export-pdf-with-cost"],
   [data-testid="button-export-pdf-no-cost"],
   [data-testid="button-print"] {
-    display: none !important;
+    display: none;
   }
 }
 

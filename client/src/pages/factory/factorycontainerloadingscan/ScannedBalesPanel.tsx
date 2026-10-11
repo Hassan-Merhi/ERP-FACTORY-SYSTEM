@@ -424,7 +424,7 @@ export function ScannedBalesPanel({ model }: { model: FactoryContainerLoadingSca
             >
               <div className="h-2.5 w-2.5 shrink-0 rounded-full bg-green-500" />
               <div className="min-w-0 flex-1">
-                <div className="text-[10px] font-semibold uppercase tracking-wider text-green-700 dark:text-green-300">
+                <div className="text-[11px] font-semibold uppercase tracking-wider text-green-700 dark:text-green-300">
                   {model.tr("lastScanned")}
                 </div>
                 <div className="truncate font-mono text-sm font-semibold text-green-950 dark:text-green-100">

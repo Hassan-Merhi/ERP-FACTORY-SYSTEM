@@ -48,7 +48,7 @@ export function FactoryStockAllocationV5Dialog2({ model }: { model: Model }) {
                       <div className="font-medium truncate max-w-[180px]" title={a.productName}>
                         {a.productName}
                       </div>
-                      <div className="text-[10px] text-muted-foreground font-mono">{a.articleCode}</div>
+                      <div className="text-[11px] text-muted-foreground font-mono">{a.articleCode}</div>
                     </div>
                     <span className="text-right font-mono tabular-nums text-muted-foreground">
                       {a.currentExpectedQty}

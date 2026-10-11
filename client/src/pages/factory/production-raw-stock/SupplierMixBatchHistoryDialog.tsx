@@ -146,7 +146,7 @@ export function SupplierMixBatchHistoryDialog({
                         <div className="flex flex-col">
                           <span className="font-medium text-sm font-mono">{row.ref}</span>
                           <span className="text-[11px] text-muted-foreground">{row.label}</span>
-                          {row.notes && <span className="text-[10px] text-muted-foreground/70">{row.notes}</span>}
+                          {row.notes && <span className="text-[11px] text-muted-foreground/70">{row.notes}</span>}
                         </div>
                       </TableCell>
                       <TableCell className="py-2.5 text-sm text-muted-foreground">
@@ -166,7 +166,7 @@ export function SupplierMixBatchHistoryDialog({
                         ${(row.costPerKg || 0).toFixed(6)}
                       </TableCell>
                       <TableCell className="py-2.5">
-                        <Badge variant="outline" className={`text-[10px] gap-1 ${meta.badgeClass}`}>
+                        <Badge variant="outline" className={`text-[11px] gap-1 ${meta.badgeClass}`}>
                           <Icon className="h-2.5 w-2.5" />
                           {meta.label}
                         </Badge>

@@ -508,7 +508,7 @@ export function AuditLog({
                       <TableCell className="py-3">
                         <Badge
                           variant={actionBadgeVariant(log.action)}
-                          className="text-[10px] min-h-5 max-w-[140px] whitespace-normal break-words leading-tight"
+                          className="text-[11px] min-h-5 max-w-[140px] whitespace-normal break-words leading-tight"
                         >
                           {actionLabel(log.action)}
                         </Badge>

@@ -288,7 +288,7 @@ function OtwContainerPicker({ model }: { model: ProfitModel }) {
         <Container className="w-3.5 h-3.5 text-blue-500" />
         <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">OTW Containers</span>
         {model.otwContainerIds.length > 0 && (
-          <Badge className="bg-blue-500 text-white text-[10px] px-1.5 py-0 h-4">
+          <Badge className="bg-blue-500 text-white text-[11px] px-1.5 py-0 h-4">
             {model.otwContainerIds.length} selected
           </Badge>
         )}
@@ -333,7 +333,7 @@ function OtwContainerPicker({ model }: { model: ProfitModel }) {
                 />
                 <div>
                   <div className="font-mono font-semibold">{container.container_number}</div>
-                  <div className="text-muted-foreground text-[10px]">
+                  <div className="text-muted-foreground text-[11px]">
                     {itemCount > 0 ? `${itemCount} items` : "No items loaded"}
                     {container.eta ? ` · ETA ${container.eta}` : ""}
                   </div>
@@ -400,7 +400,7 @@ function LandingCharges({ model }: { model: ProfitModel }) {
               key={metric.label}
               className={`rounded-lg px-3 py-1.5 text-center ${metric.highlight ? "bg-amber-500/15 border border-amber-500/30" : "bg-background border"}`}
             >
-              <div className="text-[10px] text-muted-foreground font-medium uppercase tracking-wide">
+              <div className="text-[11px] text-muted-foreground font-medium uppercase tracking-wide">
                 {metric.label}
               </div>
               <div className={`text-sm font-bold tabular-nums ${metric.highlight ? "text-amber-500" : ""}`}>

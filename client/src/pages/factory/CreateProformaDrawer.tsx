@@ -500,7 +500,7 @@ export default function CreateProformaDrawer({ open, onClose, articleRows, onSuc
                         {row.displayName}
                       </div>
                       {row.displayName !== row.articleCode && (
-                        <div className="text-[10px] text-muted-foreground font-mono">{row.articleCode}</div>
+                        <div className="text-[11px] text-muted-foreground font-mono">{row.articleCode}</div>
                       )}
                     </td>
 
@@ -568,10 +568,10 @@ export default function CreateProformaDrawer({ open, onClose, articleRows, onSuc
                           data-testid={`input-qty-${row.articleCode}`}
                         />
                         {hasError && (
-                          <span className="text-[10px] text-destructive">{errors[`qty_${row.articleCode}`]}</span>
+                          <span className="text-[11px] text-destructive">{errors[`qty_${row.articleCode}`]}</span>
                         )}
                         {overFtp && !hasError && (
-                          <span className="text-[10px] text-amber-600 dark:text-amber-400 flex items-center gap-0.5 whitespace-nowrap">
+                          <span className="text-[11px] text-amber-600 dark:text-amber-400 flex items-center gap-0.5 whitespace-nowrap">
                             <AlertTriangle className="h-2.5 w-2.5" />+{overBy} over FTP
                           </span>
                         )}
@@ -633,7 +633,7 @@ export default function CreateProformaDrawer({ open, onClose, articleRows, onSuc
                 {warningCount} over Free to Promise
               </span>
             )}
-            <span className="text-[10px] text-muted-foreground/60">Ctrl/⌘+S to save</span>
+            <span className="text-[11px] text-muted-foreground/60">Ctrl/⌘+S to save</span>
           </div>
           <div className="flex items-center gap-2">
             <Button variant="outline" size="default" onClick={onClose} data-testid="button-cancel-proforma">

@@ -185,12 +185,16 @@ export function RetailCatalogList({
                                 <RetailImage
                                   key={src || `empty-${variant.id}`}
                                   src={src}
-                                  alt={src ? `${product.name} · ${variant.color} · ${variant.size} photo ${imageIndex + 1}` : ""}
+                                  alt={
+                                    src
+                                      ? `${product.name} · ${variant.color} · ${variant.size} photo ${imageIndex + 1}`
+                                      : ""
+                                  }
                                   className="h-10 w-10 rounded border-2 border-background"
                                 />
                               ))}
                               {images.length > 3 && (
-                                <span className="flex h-10 w-10 items-center justify-center rounded border-2 border-background bg-muted text-[10px] font-bold">
+                                <span className="flex h-10 w-10 items-center justify-center rounded border-2 border-background bg-muted text-[11px] font-bold">
                                   +{images.length - 3}
                                 </span>
                               )}

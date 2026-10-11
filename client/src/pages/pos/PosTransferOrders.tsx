@@ -251,7 +251,7 @@ export default function PosTransferOrders({ posUser }: PosTransferOrdersProps) {
 
                 <div className="shrink-0 rounded-lg bg-muted/50 px-2.5 py-2 text-center">
                   <div className="font-mono text-lg font-bold leading-none tabular-nums">{transfer.itemCount}</div>
-                  <div className="mt-1 text-[10px] uppercase tracking-wide text-muted-foreground">items</div>
+                  <div className="mt-1 text-[11px] uppercase tracking-wide text-muted-foreground">items</div>
                 </div>
               </div>
 

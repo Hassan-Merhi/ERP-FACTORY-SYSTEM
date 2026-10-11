@@ -39,7 +39,9 @@ export default function FactoryContainerLoadingScan() {
             </div>
             <div className="min-w-0">
               <div className="flex min-w-0 flex-wrap items-center gap-2">
-                <h1 className="truncate text-lg font-semibold leading-tight sm:text-xl">{model.tr("containerLoading")}</h1>
+                <h1 className="truncate text-lg font-semibold leading-tight sm:text-xl">
+                  {model.tr("containerLoading")}
+                </h1>
                 {isResuming && orderId && (
                   <Badge
                     variant="secondary"
@@ -56,9 +58,7 @@ export default function FactoryContainerLoadingScan() {
                   </Badge>
                 )}
               </div>
-              <p className="mt-0.5 text-xs text-muted-foreground sm:text-sm">
-                {model.tr("containerLoadingSubtitle")}
-              </p>
+              <p className="mt-0.5 text-xs text-muted-foreground sm:text-sm">{model.tr("containerLoadingSubtitle")}</p>
             </div>
           </div>
 
@@ -69,7 +69,9 @@ export default function FactoryContainerLoadingScan() {
                   <Package className="h-4 w-4 text-muted-foreground" />
                 </div>
                 <div>
-                  <div className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">{model.tr("bales")}</div>
+                  <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                    {model.tr("bales")}
+                  </div>
                   <div className="font-mono text-sm font-semibold">{model.bales.length}</div>
                 </div>
               </div>
@@ -78,8 +80,12 @@ export default function FactoryContainerLoadingScan() {
                   <Scale className="h-4 w-4 text-muted-foreground" />
                 </div>
                 <div>
-                  <div className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">{model.tr("weight")}</div>
-                  <div className="font-mono text-sm font-semibold">{formatNumber(model.totalWeight, 2)} {model.tr("kgUnit")}</div>
+                  <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                    {model.tr("weight")}
+                  </div>
+                  <div className="font-mono text-sm font-semibold">
+                    {formatNumber(model.totalWeight, 2)} {model.tr("kgUnit")}
+                  </div>
                 </div>
               </div>
             </div>

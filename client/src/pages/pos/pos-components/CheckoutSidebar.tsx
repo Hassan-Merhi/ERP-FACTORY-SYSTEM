@@ -82,7 +82,7 @@ export function CheckoutSidebar({
     <div className="w-full lg:w-80 flex flex-col gap-4">
       <div className="bg-muted/10 p-4 rounded-lg border border-muted/50 space-y-4">
         <div className="flex flex-col items-end border-b border-muted pb-4 mb-2">
-          <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-bold">Grand Total</span>
+          <span className="text-[11px] uppercase tracking-wider text-muted-foreground font-bold">Grand Total</span>
           <span className="text-3xl font-black font-mono tracking-tighter text-primary" data-testid="text-grand-total">
             {formatDisplayAmount(total)}
           </span>
@@ -90,13 +90,13 @@ export function CheckoutSidebar({
 
         <div className="grid grid-cols-2 gap-4">
           <div className="flex flex-col">
-            <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-bold">Items</span>
+            <span className="text-[11px] uppercase tracking-wider text-muted-foreground font-bold">Items</span>
             <span className="text-lg font-bold font-mono" data-testid="text-item-count">
               {rows.filter((r) => r.amount > 0).length}
             </span>
           </div>
           <div className="flex flex-col">
-            <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-bold">Total Qty</span>
+            <span className="text-[11px] uppercase tracking-wider text-muted-foreground font-bold">Total Qty</span>
             <span className="text-lg font-bold font-mono" data-testid="text-total-qty">
               {totalQty.toFixed(2)}
             </span>
@@ -113,7 +113,7 @@ export function CheckoutSidebar({
           if (!anyConfig) return null;
           return (
             <div className="flex flex-col pt-2 border-t border-muted/50">
-              <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-bold">Total P/L</span>
+              <span className="text-[11px] uppercase tracking-wider text-muted-foreground font-bold">Total P/L</span>
               <span
                 className={cn(
                   "text-lg font-bold font-mono",

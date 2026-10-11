@@ -208,7 +208,7 @@ export function FactoryBaleProductAllMonths() {
                       {bale.status === "IN_STOCK" && bale.isInLoadingOrder ? (
                         <Badge
                           variant="outline"
-                          className="text-[10px] px-1.5 py-0.5 border-amber-400 text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 no-default-active-elevate"
+                          className="text-[11px] px-1.5 py-0.5 border-amber-400 text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 no-default-active-elevate"
                         >
                           Loading
                         </Badge>

@@ -217,7 +217,7 @@ export function LocationDialogs({
                 placeholder="0.00"
                 data-testid="input-rename-deduction"
               />
-              <p className="text-[10px] text-muted-foreground">
+              <p className="text-[11px] text-muted-foreground">
                 {releaseDebtEnglish("Amount automatically deducted from SP payables for this location.")}
               </p>
             </div>
@@ -383,7 +383,7 @@ export function LocationDialogs({
                       <span className="block text-sm font-medium truncate">{chat.name}</span>
                       <span
                         className={cn(
-                          "block text-[10px] font-mono truncate",
+                          "block text-[11px] font-mono truncate",
                           waGroupSelectedId === chat.id ? "text-primary-foreground/70" : "text-muted-foreground"
                         )}
                       >
@@ -402,7 +402,7 @@ export function LocationDialogs({
                   <div className="min-w-0">
                     <p className="text-xs text-muted-foreground">{releaseDebtEnglish("Linked destination")}</p>
                     <p className="text-sm font-medium truncate">{selectedWaGroupName || "Selected WhatsApp group"}</p>
-                    <p className="text-[10px] font-mono text-muted-foreground break-all">{waGroupSelectedId}</p>
+                    <p className="text-[11px] font-mono text-muted-foreground break-all">{waGroupSelectedId}</p>
                   </div>
                   <Button
                     variant="ghost"

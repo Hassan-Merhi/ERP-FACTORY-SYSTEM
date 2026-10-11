@@ -80,7 +80,7 @@ export function POImportDraftCard({
           <ShoppingCart className="h-4 w-4 text-orange-600 dark:text-orange-400 shrink-0" />
           <span className="text-sm font-semibold text-orange-700 dark:text-orange-400">PO Import Preview</span>
           {unresolvedCount > 0 && (
-            <Badge variant="outline" className="text-[10px] px-1.5 text-orange-600 border-orange-400">
+            <Badge variant="outline" className="text-[11px] px-1.5 text-orange-600 border-orange-400">
               {unresolvedCount} unresolved
             </Badge>
           )}
@@ -180,7 +180,7 @@ export function POImportDraftCard({
           {/* PO header fields */}
           <div className="px-3 pt-2 pb-1 grid grid-cols-2 gap-x-3 gap-y-1.5">
             <div>
-              <p className="text-[10px] text-muted-foreground mb-0.5">PO Number</p>
+              <p className="text-[11px] text-muted-foreground mb-0.5">PO Number</p>
               <Input
                 value={poNumber}
                 onChange={(e) => setPoNumber(e.target.value)}
@@ -190,7 +190,7 @@ export function POImportDraftCard({
               />
             </div>
             <div>
-              <p className="text-[10px] text-muted-foreground mb-0.5">Container</p>
+              <p className="text-[11px] text-muted-foreground mb-0.5">Container</p>
               <Input
                 value={containerNumber}
                 onChange={(e) => setContainerNumber(e.target.value)}
@@ -200,7 +200,7 @@ export function POImportDraftCard({
               />
             </div>
             <div>
-              <p className="text-[10px] text-muted-foreground mb-0.5">Import Date</p>
+              <p className="text-[11px] text-muted-foreground mb-0.5">Import Date</p>
               <Input
                 type="date"
                 value={importDate}
@@ -210,7 +210,7 @@ export function POImportDraftCard({
               />
             </div>
             <div>
-              <p className="text-[10px] text-muted-foreground mb-0.5">
+              <p className="text-[11px] text-muted-foreground mb-0.5">
                 Supplier {draft.unresolvedSupplier && <span className="text-orange-500">(not matched)</span>}
               </p>
               <Select value={supplierId ? String(supplierId) : ""} onValueChange={(v) => setSupplierId(Number(v))}>
@@ -230,7 +230,7 @@ export function POImportDraftCard({
 
           {/* Line items */}
           <div className="border-t mt-1">
-            <div className="grid grid-cols-[1fr_48px_56px_60px] gap-x-1 px-3 py-1 bg-muted/40 text-[10px] text-muted-foreground font-medium">
+            <div className="grid grid-cols-[1fr_48px_56px_60px] gap-x-1 px-3 py-1 bg-muted/40 text-[11px] text-muted-foreground font-medium">
               <span>Item</span>
               <span className="text-right">Qty</span>
               <span className="text-right">Rate</span>
@@ -292,7 +292,7 @@ export function POImportDraftCard({
                 {(["freight", "surcharge", "fumigation", "documentCharges", "discount", "otherCharges"] as const).map(
                   (key) => (
                     <div key={key}>
-                      <p className="text-[10px] text-muted-foreground capitalize mb-0.5">
+                      <p className="text-[11px] text-muted-foreground capitalize mb-0.5">
                         {key === "documentCharges"
                           ? "Doc Charges"
                           : key === "otherCharges"

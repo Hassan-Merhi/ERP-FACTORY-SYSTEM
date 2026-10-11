@@ -318,7 +318,7 @@ export function EmployeesTab({
                           >
                             {employee.firstName} {employee.lastName}
                           </button>
-                          <Badge variant={employee.active ? "outline" : "secondary"} className="shrink-0 text-[10px]">
+                          <Badge variant={employee.active ? "outline" : "secondary"} className="shrink-0 text-[11px]">
                             {employee.active ? "Active" : "Inactive"}
                           </Badge>
                         </div>

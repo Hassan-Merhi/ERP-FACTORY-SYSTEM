@@ -42,7 +42,7 @@ export function AccountSearchResults({ model }: { model: AccountsLegacyModel }) 
               <div className="flex-1 min-w-0 flex items-center gap-2.5">
                 <span className="text-sm font-medium truncate">{acc.name}</span>
                 {acc.accountId && (
-                  <span className="text-[10px] text-muted-foreground font-mono shrink-0">#{acc.accountId}</span>
+                  <span className="text-[11px] text-muted-foreground font-mono shrink-0">#{acc.accountId}</span>
                 )}
               </div>
               {!hideBalances && (
@@ -55,7 +55,7 @@ export function AccountSearchResults({ model }: { model: AccountsLegacyModel }) 
                   )}
                 >
                   {model.formatAmountForAccount(Math.abs(acc.balance), acc.type)}
-                  <span className="ml-1 text-[10px] opacity-60">{balanceSide}</span>
+                  <span className="ml-1 text-[11px] opacity-60">{balanceSide}</span>
                 </span>
               )}
             </button>

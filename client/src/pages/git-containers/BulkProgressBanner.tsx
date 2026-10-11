@@ -40,7 +40,7 @@ export function BulkProgressBanner({
               </span>
             </div>
             <div className="flex items-center gap-3">
-              <span className="text-[10px] font-mono text-muted-foreground uppercase">
+              <span className="text-[11px] font-mono text-muted-foreground uppercase">
                 {bulkProgress.processed} / {bulkProgress.total} PROCESSED
               </span>
               <button
@@ -53,12 +53,12 @@ export function BulkProgressBanner({
           </div>
           <Progress value={Math.min(100, (bulkProgress.processed / bulkProgress.total) * 100)} className="h-1.5 mb-2" />
           {bulkProgress.running && bulkProgress.current && (
-            <p className="text-[10px] text-muted-foreground italic truncate">
+            <p className="text-[11px] text-muted-foreground italic truncate">
               Tracking: <span className="font-mono text-sky-700 dark:text-sky-400">{bulkProgress.current}</span>
             </p>
           )}
           {!bulkProgress.running && (
-            <p className="text-[10px] text-green-700 dark:text-green-400 font-medium">
+            <p className="text-[11px] text-green-700 dark:text-green-400 font-medium">
               Run finished at {new Date(bulkProgress.completedAt!).toLocaleTimeString()}. Table will refresh in 6 s.
             </p>
           )}

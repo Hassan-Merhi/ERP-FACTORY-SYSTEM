@@ -115,7 +115,7 @@ export function DetailedHistoryTable({
               <td className="px-3 py-1.5 text-right">{formatDailyNum(parseFloat(bale.weightKg || "0"))}</td>
               <td className="px-3 py-1.5">
                 <span
-                  className={`inline-flex items-center px-1.5 py-0.5 rounded-md text-[10px] font-semibold ${STATUS_COLORS[bale.status] || "bg-muted text-muted-foreground"}`}
+                  className={`inline-flex items-center px-1.5 py-0.5 rounded-md text-[11px] font-semibold ${STATUS_COLORS[bale.status] || "bg-muted text-muted-foreground"}`}
                 >
                   {bale.status}
                 </span>

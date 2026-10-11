@@ -184,7 +184,7 @@ export function FactoryWorkersRosterPanel({ model }: FactoryWorkersModelProps) {
             <SlidersHorizontal className="h-4 w-4 mr-1.5" />
             Filter
             {activeFilterCount > 0 && (
-              <span className="ml-1.5 bg-background text-foreground text-[10px] font-bold rounded-full w-4 h-4 flex items-center justify-center">
+              <span className="ml-1.5 bg-background text-foreground text-[11px] font-bold rounded-full w-4 h-4 flex items-center justify-center">
                 {activeFilterCount}
               </span>
             )}
@@ -699,7 +699,7 @@ export function FactoryWorkersRosterPanel({ model }: FactoryWorkersModelProps) {
                                   </span>
                                 </div>
                               </div>
-                              <p className="text-[10px] text-muted-foreground/50 mt-2 leading-relaxed">
+                              <p className="text-[11px] text-muted-foreground/50 mt-2 leading-relaxed">
                                 Calendar-day proration · Absences &amp; advances deducted
                               </p>
                             </PopoverContent>

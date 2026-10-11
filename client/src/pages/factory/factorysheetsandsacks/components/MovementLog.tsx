@@ -297,7 +297,7 @@ export function MovementLog({ items }: { items: SheetsAndSacksItem[] }) {
                           <TableCell>
                             <Badge
                               variant="secondary"
-                              className={`text-[10px] ${
+                              className={`text-[11px] ${
                                 e.itemType === "Sheet"
                                   ? "bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
                                   : e.itemType === "Sack"
@@ -310,7 +310,7 @@ export function MovementLog({ items }: { items: SheetsAndSacksItem[] }) {
                           </TableCell>
                           <TableCell>
                             <Badge
-                              className={`text-[10px] font-bold ${
+                              className={`text-[11px] font-bold ${
                                 e.action === "IN"
                                   ? "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-400 border-green-200"
                                   : e.action === "OUT"

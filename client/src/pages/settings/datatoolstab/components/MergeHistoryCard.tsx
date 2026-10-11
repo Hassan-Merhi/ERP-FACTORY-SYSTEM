@@ -133,7 +133,7 @@ export function MergeHistoryCard({ embedded }: { embedded?: boolean }) {
                   <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
                     {new Date(log.mergedAt).toLocaleDateString()}
                     {log.source === "historical" && (
-                      <Badge variant="outline" className="ml-2 text-[10px]">
+                      <Badge variant="outline" className="ml-2 text-[11px]">
                         Historical
                       </Badge>
                     )}

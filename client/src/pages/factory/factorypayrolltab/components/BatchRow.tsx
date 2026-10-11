@@ -181,7 +181,7 @@ export function BatchRow({
                       {pendingBonus > 0 && (
                         <button
                           type="button"
-                          className="mt-1 text-[10px] font-medium text-amber-600 underline-offset-2 hover:underline dark:text-amber-400"
+                          className="mt-1 text-[11px] font-medium text-amber-600 underline-offset-2 hover:underline dark:text-amber-400"
                           onClick={() => setBonusPayrollId(payroll.id)}
                           data-testid={`button-pending-production-bonus-${payroll.id}`}
                         >

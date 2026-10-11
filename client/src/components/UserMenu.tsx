@@ -56,7 +56,7 @@ export function UserMenu({ accentColor, user, onLogout }: UserMenuProps) {
           className="h-8 max-w-[15rem] gap-2 rounded-full border border-border/40 bg-muted/30 px-1.5 md:px-2.5"
         >
           <span
-            className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[9px] font-bold text-white"
+            className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[11px] font-bold text-white"
             style={{ backgroundColor: accentColor }}
             aria-hidden="true"
           >

@@ -54,7 +54,7 @@ export function FactoryStockAllocationV5Dialog5({ model }: { model: Model }) {
                 <div className="flex flex-col gap-0.5 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="font-medium text-sm">{order.containerNumber}</span>
-                    <Badge variant="outline" className="text-[10px] h-4 px-1">
+                    <Badge variant="outline" className="text-[11px] h-4 px-1">
                       {order.wasLoading ? "Was Loading" : "Was Draft"}
                     </Badge>
                   </div>
@@ -62,7 +62,7 @@ export function FactoryStockAllocationV5Dialog5({ model }: { model: Model }) {
                     {order.customerName}
                     {order.proformaName ? ` · ${order.proformaName}` : ""}
                   </span>
-                  <span className="text-[10px] text-muted-foreground">
+                  <span className="text-[11px] text-muted-foreground">
                     Cancelled {new Date(order.cancelledAt).toLocaleDateString()}
                   </span>
                 </div>

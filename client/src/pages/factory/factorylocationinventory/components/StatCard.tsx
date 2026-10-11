@@ -16,7 +16,7 @@ export function StatCard({ icon, label, value, sub, accent }: StatCardProps) {
         <div className="min-w-0">
           <div className="truncate text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{label}</div>
           <div className="truncate text-xl font-bold leading-tight tracking-tight">{value}</div>
-          {sub && <div className="mt-0.5 truncate text-[10px] text-muted-foreground/70">{sub}</div>}
+          {sub && <div className="mt-0.5 truncate text-[11px] text-muted-foreground/70">{sub}</div>}
         </div>
       </div>
     </div>

@@ -545,7 +545,7 @@ export function PaymentReceiptTab({
 
                   {/* Running total — stated up front, not discovered at the bottom */}
                   <div className="rounded-lg border bg-muted/20 px-4 py-3 flex flex-col justify-center">
-                    <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                       {title.replace(" Voucher", "")} Total
                     </span>
                     <span
@@ -673,13 +673,13 @@ export function PaymentReceiptTab({
                 <div className="flex items-center justify-between gap-4 flex-wrap">
                   <div className="flex items-center gap-5">
                     <div className="flex flex-col max-sm:hidden">
-                      <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                      <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                         Lines
                       </span>
                       <span className="text-sm font-semibold font-mono tabular-nums">{validEntryCount}</span>
                     </div>
                     <div className="flex flex-col">
-                      <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                      <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                         Total
                       </span>
                       <span
@@ -752,8 +752,8 @@ export function PaymentReceiptTab({
                         </span>
                       ) : (
                         <span className="text-[11px] text-muted-foreground hidden sm:block">
-                          <kbd className="px-1 py-0.5 bg-muted rounded text-[10px]">⌘</kbd>
-                          <kbd className="px-1 py-0.5 bg-muted rounded text-[10px] ml-1">↵</kbd> to save
+                          <kbd className="px-1 py-0.5 bg-muted rounded text-[11px]">⌘</kbd>
+                          <kbd className="px-1 py-0.5 bg-muted rounded text-[11px] ml-1">↵</kbd> to save
                         </span>
                       )}
                     </div>

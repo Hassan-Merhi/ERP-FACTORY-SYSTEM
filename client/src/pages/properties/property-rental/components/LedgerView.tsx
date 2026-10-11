@@ -341,13 +341,13 @@ function LedgerView({
                         {MONTH_NAMES[r.month]} {r.year}
                       </span>
                       {!isDue && (
-                        <span className="text-[10px] text-muted-foreground italic">{statusLabel ?? "not due"}</span>
+                        <span className="text-[11px] text-muted-foreground italic">{statusLabel ?? "not due"}</span>
                       )}
                       {isDue && credit > 0.005 && (
-                        <span className="text-[10px] text-green-600 dark:text-green-400 font-medium">+credit</span>
+                        <span className="text-[11px] text-green-600 dark:text-green-400 font-medium">+credit</span>
                       )}
                       {statusLabel === "SCHEDULED" && (
-                        <Badge variant="outline" className="text-[10px] border-amber-500 text-amber-600">
+                        <Badge variant="outline" className="text-[11px] border-amber-500 text-amber-600">
                           Scheduled
                         </Badge>
                       )}
@@ -355,7 +355,7 @@ function LedgerView({
                         <>
                           <Badge
                             variant="secondary"
-                            className="text-[10px]"
+                            className="text-[11px]"
                             data-testid={`badge-accrued-${r.year}-${r.month}`}
                           >
                             Accrued
@@ -401,7 +401,7 @@ function LedgerView({
             })}
             <tr className="border-t-2 bg-muted/30 font-semibold">
               <td className="px-3 py-2">
-                TOTALS <span className="font-normal text-[10px] text-muted-foreground">(as of today)</span>
+                TOTALS <span className="font-normal text-[11px] text-muted-foreground">(as of today)</span>
               </td>
               <td className="px-3 py-2 text-right tabular-nums">
                 {fmtMoneyCurrency(totalExpected, contract.currency)}

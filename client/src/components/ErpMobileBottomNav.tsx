@@ -24,7 +24,7 @@ interface MobileSection {
 }
 
 const mobileNavButtonClassName =
-  "flex min-w-0 flex-col items-center justify-center gap-0.5 rounded-lg px-1 py-1.5 text-[10px] font-medium transition-colors touch-manipulation";
+  "flex min-w-0 flex-col items-center justify-center gap-0.5 rounded-lg px-1 py-1.5 text-[11px] font-medium transition-colors touch-manipulation";
 
 const mobileSections: MobileSection[] = [
   {

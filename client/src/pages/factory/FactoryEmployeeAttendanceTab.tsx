@@ -693,7 +693,7 @@ function PerEmployeeView() {
                             }`}
                         >
                           <span className="font-medium">{dayNum}</span>
-                          <span className="text-[10px] opacity-70">{dayName}</span>
+                          <span className="text-[11px] opacity-70">{dayName}</span>
                         </button>
                       );
                     })}

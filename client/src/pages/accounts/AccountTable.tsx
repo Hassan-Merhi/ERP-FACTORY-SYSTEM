@@ -107,7 +107,7 @@ export function AccountTable({
                           {account.name}
                         </span>
                         {account.accountId && !isGroup && (
-                          <span className="text-[10px] text-muted-foreground font-mono shrink-0 max-sm:hidden">
+                          <span className="text-[11px] text-muted-foreground font-mono shrink-0 max-sm:hidden">
                             #{account.accountId}
                           </span>
                         )}
@@ -142,7 +142,7 @@ export function AccountTable({
                             )}
                           >
                             {fmtBalance(Math.abs(account.balance), account.type)}
-                            <span className="ml-1 text-[10px] opacity-60">{balanceSide}</span>
+                            <span className="ml-1 text-[11px] opacity-60">{balanceSide}</span>
                           </span>
                         )}
                       </TableCell>
@@ -164,7 +164,7 @@ export function AccountTable({
                             <div className="flex items-center gap-2 min-w-0">
                               <span className="truncate text-sm text-muted-foreground">{child.name}</span>
                               {child.accountId && (
-                                <span className="text-[10px] text-muted-foreground/60 font-mono shrink-0">
+                                <span className="text-[11px] text-muted-foreground/60 font-mono shrink-0">
                                   #{child.accountId}
                                 </span>
                               )}
@@ -194,7 +194,7 @@ export function AccountTable({
                                 )}
                               >
                                 {fmtBalance(Math.abs(child.balance), child.type)}
-                                <span className="ml-1 text-[10px] opacity-60">{childSide}</span>
+                                <span className="ml-1 text-[11px] opacity-60">{childSide}</span>
                               </span>
                             </TableCell>
                           )}
