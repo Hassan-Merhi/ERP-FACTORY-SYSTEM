@@ -271,7 +271,7 @@
 
   /* Tabular numerals everywhere — keeps numeric columns aligned in tables/KPIs */
   .font-mono,
-  [class*="tabular-nums"],
+  .tabular-nums,
   td,
   th {
     font-variant-numeric: tabular-nums;

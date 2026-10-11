@@ -1,14 +1,16 @@
 /*
  * Phone card layout for record tables (`<Table mobileLayout="cards">`). The Table only sets
- * `data-mobile-cards` on ERP and Factory phone layouts, so tablet/desktop tables are untouched. Each body
- * row becomes a card: the first record cell is the card title, the remaining cells are
- * label/value lines (labels come from the column headers), and control-only cells form an
- * action row.
+ * `data-mobile-cards` on ERP, Factory and Properties phone layouts, so tablet/desktop tables are
+ * untouched. Each body row becomes a card: the first record cell is the card title, the remaining
+ * cells are label/value lines (labels come from the column headers), and control-only cells form
+ * an action row. Every selector here names the table and a cell role, so it out-ranks the
+ * utility classes on the cells without `!important`; the Table itself drops its scroll-region
+ * cap and sticky first column in card mode.
  */
 [data-table-scroll-region][data-mobile-cards="true"] {
-  max-height: none !important;
-  overflow: visible !important;
-  border: 0 !important;
+  max-height: none;
+  overflow: visible;
+  border: 0;
   border-radius: 0;
 }
 
@@ -16,12 +18,12 @@ table[data-mobile-cards="true"] {
   /* Contains the visually hidden header so it cannot extend the document. */
   position: relative;
   display: block;
-  min-width: 0 !important;
+  min-width: 0;
   width: 100%;
 }
 
 table[data-mobile-cards="true"] > thead {
-  position: absolute !important;
+  position: absolute;
   top: 0;
   left: 0;
   width: 1px;
@@ -50,7 +52,7 @@ table[data-mobile-cards="true"] > tfoot > tr {
   align-items: center;
   column-gap: 0.5rem;
   min-width: 0;
-  border: 1px solid hsl(var(--border)) !important;
+  border: 1px solid hsl(var(--border));
   border-radius: 0.5rem;
   padding: 0.5rem 0.75rem;
 }
@@ -58,7 +60,7 @@ table[data-mobile-cards="true"] > tfoot > tr {
 /* Desktop row heights (`h-12` rows) would clip the stacked card. */
 table[data-mobile-cards="true"] > tbody > tr,
 table[data-mobile-cards="true"] > tfoot > tr {
-  height: auto !important;
+  height: auto;
 }
 
 /* Zero specificity: row state colours from the page (status, unpriced, totals) still win. */
@@ -84,13 +86,13 @@ table[data-mobile-cards="true"] > tfoot > tr > th {
   align-items: flex-start;
   gap: 0.125rem;
   min-width: 0;
-  height: auto !important;
-  border: 0 !important;
-  padding: 0.25rem 0 !important;
+  height: auto;
+  border: 0;
+  padding: 0.25rem 0;
   font-size: 0.8125rem;
   line-height: 1.35;
-  text-align: start !important;
-  white-space: normal !important;
+  text-align: start;
+  white-space: normal;
   overflow-wrap: anywhere;
 }
 
@@ -124,7 +126,7 @@ table[data-mobile-cards="true"] [data-mobile-cell="title"] {
   order: -1;
   flex: 1 1 0;
   min-width: 60%;
-  padding-bottom: 0.25rem !important;
+  padding-bottom: 0.25rem;
   font-size: 0.875rem;
   font-weight: 600;
 }
@@ -147,8 +149,8 @@ table[data-mobile-cards="true"] [data-mobile-cell="actions"] {
   flex-wrap: wrap;
   justify-content: flex-end;
   margin-top: 0.25rem;
-  border-top: 1px solid hsl(var(--border)) !important;
-  padding-top: 0.5rem !important;
+  border-top: 1px solid hsl(var(--border));
+  padding-top: 0.5rem;
 }
 
 /* Row controls drawn as bare icons for dense desktop grids get a touch-sized hit area in cards,
@@ -166,17 +168,17 @@ table[data-mobile-cards="true"] [data-mobile-cell="actions"] .flex-col {
 
 table[data-mobile-cards="true"] [data-mobile-cell="full"] {
   align-items: center;
-  text-align: center !important;
+  text-align: center;
 }
 
 table[data-mobile-cards="true"] [data-mobile-cell="hidden"],
 table[data-mobile-cards="true"] td[data-mobile-cell="field"]:empty {
-  display: none !important;
+  display: none;
 }
 
 /* Bounded-rendering spacer rows have no meaning in the card stack. */
 table[data-mobile-cards="true"] > tbody > tr[aria-hidden="true"] {
-  display: none !important;
+  display: none;
 }
 
 /* RTL hardening pins `.tabular-nums` (which every Table carries) to LTR; cards follow the page. */
@@ -193,5 +195,5 @@ table[data-mobile-cards="true"] > tbody > tr,
 table[data-mobile-cards="true"] > tfoot > tr,
 table[data-mobile-cards="true"] > tbody > tr > *,
 table[data-mobile-cards="true"] > tfoot > tr > * {
-  position: static !important;
+  position: static;
 }

@@ -360,7 +360,7 @@ export default function FactoryStockAllocationV5() {
         <>
           <FactoryStockAllocationV5MobileList model={model} />
 
-          <div data-horizontal-scroll="true" className="hidden overflow-x-auto md:block">
+          <div data-horizontal-scroll="true" className="hidden overflow-x-auto md:block phone-land:hidden">
             <table className="w-full text-sm border-collapse min-w-max">
               <thead>
                 <tr className="bg-muted sticky top-0 z-30">

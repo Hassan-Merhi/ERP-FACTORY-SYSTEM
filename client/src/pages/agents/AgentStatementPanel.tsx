@@ -88,7 +88,7 @@ export function AgentStatementPanel({
   const closingSide = balanceSideLabel(closingBalance, selectedAccount.type);
 
   return (
-    <div className={phone ? "space-y-4" : "p-6 space-y-5 max-w-5xl"} data-testid="agent-statement-panel">
+    <div className={phone ? "space-y-4" : "p-6 space-y-5 max-w-5xl max-md:p-3"} data-testid="agent-statement-panel">
       {/* Header */}
       <div className="flex flex-wrap items-start justify-between gap-4">
         {phone && (

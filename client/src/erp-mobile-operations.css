@@ -1,19 +1,12 @@
 /*
- * ERP Wave 3 mobile-operation utilities.
+ * ERP mobile-operation rules.
  *
- * The ERP shell keeps tablet/desktop layouts intact at 768px and above, while
- * short-height coarse-pointer landscape phones (for example 844x390) continue
- * to receive the phone interaction model. Components opt into these helpers so
- * we do not globally rewrite legacy desktop layouts.
+ * The ERP shell keeps tablet/desktop layouts intact at 768px and above, while short-height
+ * coarse-pointer landscape phones (for example 844x390) continue to receive the phone
+ * interaction model. Every rule names the ERP route or shell, so it out-ranks utility classes by
+ * specificity and the stylesheet needs no `!important`. Components declare their own phone and
+ * touch behaviour with the `max-sm:`, `touch:` and `phone-land:` variants.
  */
-
-.erp-phone-only {
-  display: none;
-}
-
-.erp-desktop-data-only {
-  display: block;
-}
 
 .erp-mobile-scroll-tabs {
   max-width: 100%;
@@ -29,35 +22,7 @@
 
 /* Edge fades for strips that can scroll live in mobile-browser-compat.css (data-scroll-overflow). */
 
-.erp-mobile-action-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-  min-width: 0;
-}
-
-.erp-mobile-touch-visible {
-  transition: opacity 150ms ease;
-}
-
-@media (max-width: 767px) {
-  .erp-phone-only {
-    display: block;
-  }
-
-  .erp-desktop-data-only {
-    display: none !important;
-  }
-
-  .erp-mobile-full-width {
-    width: 100% !important;
-  }
-
-  .erp-mobile-touch-visible {
-    opacity: 1 !important;
-    visibility: visible !important;
-  }
-
+@media (max-width: 767px), (hover: none) and (pointer: coarse) and (max-height: 500px) {
   .erp-mobile-touch-target {
     min-height: 44px;
     min-width: 44px;
@@ -65,47 +30,6 @@
 
   [data-erp-route] button {
     min-width: 44px;
-  }
-
-  .erp-mobile-card-grid {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr);
-    gap: 0.75rem;
-  }
-}
-
-/* Landscape phones can cross Tailwind's sm/md widths while still being phone-class touch devices. */
-@media (hover: none) and (pointer: coarse) and (max-height: 500px) {
-  .erp-phone-only {
-    display: block !important;
-  }
-
-  .erp-desktop-data-only {
-    display: none !important;
-  }
-
-  .erp-mobile-full-width {
-    width: 100% !important;
-  }
-
-  .erp-mobile-touch-visible {
-    opacity: 1 !important;
-    visibility: visible !important;
-  }
-
-  .erp-mobile-touch-target {
-    min-height: 44px;
-    min-width: 44px;
-  }
-
-  [data-erp-route] button {
-    min-width: 44px;
-  }
-
-  .erp-mobile-card-grid {
-    display: grid !important;
-    grid-template-columns: minmax(0, 1fr) !important;
-    gap: 0.75rem;
   }
 }
 
@@ -118,10 +42,10 @@
 @media (max-width: 767px), (hover: none) and (pointer: coarse) and (max-height: 500px) {
   [data-erp-route] button:is([role="checkbox"], [role="radio"], [role="switch"]) {
     position: relative;
-    min-height: 2.75rem !important;
-    min-width: 2.75rem !important;
-    border-color: transparent !important;
-    background-color: transparent !important;
+    min-height: 2.75rem;
+    min-width: 2.75rem;
+    border-color: transparent;
+    background-color: transparent;
   }
 
   [data-erp-route] button:is([role="checkbox"], [role="radio"], [role="switch"]) > * {
@@ -179,7 +103,7 @@
  */
 @media (max-width: 639px), (hover: none) and (pointer: coarse) and (max-height: 500px) {
   html[data-app-shell="erp"] [data-erp-route="/settings"] [data-responsive-tabs="true"] {
-    flex-wrap: wrap !important;
+    flex-wrap: wrap;
     overflow: visible;
     border-radius: 1rem;
   }
@@ -201,19 +125,11 @@
  */
 @media (max-width: 639px), (hover: none) and (pointer: coarse) and (max-height: 500px) {
   [data-erp-route] :is(.text-\[9px\], .text-\[10px\]) {
-    font-size: 0.6875rem !important;
+    font-size: 0.6875rem;
   }
 
   html[dir="rtl"] [data-erp-route] :is(.text-\[9px\], .text-\[10px\], .text-\[11px\]) {
-    font-size: 0.75rem !important;
-  }
-}
-
-/* The floating notes button covered page content on ERP phones; the ERP workspace menu opens
-   notes there. Other shells have no such menu entry, so they keep the button. */
-@media (max-width: 639px), (hover: none) and (pointer: coarse) and (max-height: 500px) {
-  html[data-app-shell="erp"] [data-testid="button-open-user-notes"] {
-    display: none !important;
+    font-size: 0.75rem;
   }
 }
 
@@ -221,7 +137,7 @@
 @media print {
   [data-testid="page-header"] > nav,
   [data-testid="page-header-actions"] {
-    display: none !important;
+    display: none;
   }
 }
 

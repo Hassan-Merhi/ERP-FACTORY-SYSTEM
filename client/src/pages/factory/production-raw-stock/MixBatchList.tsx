@@ -285,7 +285,7 @@ export function MixBatchList({
           </div>
         ) : mixBatches.length > 0 ? (
           <>
-            <div className="space-y-3 md:hidden" data-testid="mix-batch-mobile-list">
+            <div className="space-y-3 md:hidden phone-land:block" data-testid="mix-batch-mobile-list">
               <div className="grid grid-cols-2 gap-2 rounded-xl border bg-muted/30 p-3">
                 <div>
                   <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Total Weight</div>
@@ -393,7 +393,7 @@ export function MixBatchList({
               )}
             </div>
 
-            <div className="hidden overflow-x-auto md:block">
+            <div className="hidden overflow-x-auto md:block phone-land:hidden">
               <Table>
                 <TableHeader>
                   <TableRow>

@@ -148,132 +148,6 @@ body {
   #main-content [data-responsive-tabs="true"] {
     width: 100%;
   }
-
-  [data-mobile="true"][data-sidebar="sidebar"] {
-    width: min(20rem, calc(100vw - 0.5rem)) !important;
-    max-width: calc(100vw - 0.5rem) !important;
-    padding-top: var(--safe-area-top) !important;
-    padding-bottom: var(--safe-area-bottom) !important;
-    overscroll-behavior: contain;
-  }
-
-  [data-mobile="true"][data-sidebar="sidebar"] > button {
-    top: max(0.75rem, var(--safe-area-top)) !important;
-    right: 0.75rem !important;
-    z-index: 30;
-    display: inline-flex !important;
-    width: 2.5rem;
-    height: 2.5rem;
-    align-items: center;
-    justify-content: center;
-    border: 1px solid hsl(var(--sidebar-border));
-    border-radius: 0.5rem;
-    background: hsl(var(--sidebar) / 0.94);
-    opacity: 1;
-    backdrop-filter: blur(8px);
-  }
-
-  [data-mobile="true"][data-sidebar="sidebar"] :where(a[data-testid^="link-"], button[data-testid^="button-section-"]) {
-    min-height: var(--mobile-control-min-height);
-    touch-action: manipulation;
-  }
-}
-
-@media (max-width: 767px) {
-  /*
-   * Phase 1 critical legacy master/detail layouts.
-   *
-   * Stable route markers come from WorkspaceRouteBoundary, so these rules do
-   * not depend on relational selectors and work across the documented browser baseline.
-   * Tablet/desktop layout remains untouched because these overrides stop at md.
-   */
-  [data-workspace-route^="/agents"] > .flex.h-full,
-  [data-workspace-route^="/factory/agents"] > .flex.h-full,
-  [data-workspace-route^="/account-groups"] > .min-h-screen > .flex,
-  [data-workspace-route^="/chat"] > [data-testid="chat-page"],
-  [data-workspace-route^="/factory/chat"] > [data-testid="chat-page"] {
-    flex-direction: column !important;
-    width: 100%;
-    min-width: 0;
-  }
-
-  [data-workspace-route^="/agents"] > .flex.h-full,
-  [data-workspace-route^="/factory/agents"] > .flex.h-full {
-    height: auto !important;
-    min-height: 100%;
-    overflow: visible;
-  }
-
-  [data-workspace-route^="/agents"] > .flex.h-full > .w-72,
-  [data-workspace-route^="/factory/agents"] > .flex.h-full > .w-72 {
-    width: 100% !important;
-    max-height: min(42dvh, 22rem);
-    flex: none;
-    border-right: 0;
-    border-bottom: 1px solid hsl(var(--border));
-  }
-
-  [data-workspace-route^="/agents"] > .flex.h-full > .flex-1,
-  [data-workspace-route^="/factory/agents"] > .flex.h-full > .flex-1 {
-    width: 100%;
-    min-width: 0;
-    overflow: visible;
-  }
-
-  [data-workspace-route^="/agents"] > .flex.h-full > .flex-1 > .p-6,
-  [data-workspace-route^="/factory/agents"] > .flex.h-full > .flex-1 > .p-6 {
-    padding: 0.75rem !important;
-  }
-
-  [data-workspace-route^="/account-groups"] > .min-h-screen {
-    min-height: 100%;
-  }
-
-  [data-workspace-route^="/account-groups"] > .min-h-screen > .border-b {
-    padding-inline: 0.75rem !important;
-  }
-
-  [data-workspace-route^="/account-groups"] > .min-h-screen > .flex {
-    height: auto !important;
-    min-height: 0;
-  }
-
-  [data-workspace-route^="/account-groups"] > .min-h-screen > .flex > .w-72 {
-    width: 100% !important;
-    max-height: min(44dvh, 24rem);
-    flex: none;
-    border-right: 0;
-    border-bottom: 1px solid hsl(var(--border));
-  }
-
-  [data-workspace-route^="/account-groups"] > .min-h-screen > .flex > .flex-1 {
-    width: 100%;
-    min-width: 0;
-    padding: 0.75rem !important;
-    overflow: visible;
-  }
-
-  [data-workspace-route^="/chat"] > [data-testid="chat-page"],
-  [data-workspace-route^="/factory/chat"] > [data-testid="chat-page"] {
-    height: calc(var(--app-viewport-height) - 7rem) !important;
-    max-height: calc(var(--app-viewport-height) - 7rem);
-    min-height: 0;
-    overflow: hidden;
-    gap: 0.75rem;
-  }
-
-  [data-testid="chat-page"] > .w-64 {
-    width: 100% !important;
-    max-height: min(36dvh, 20rem);
-    flex: none;
-  }
-
-  [data-testid="chat-page"] > .flex-1 {
-    width: 100%;
-    min-width: 0;
-    min-height: 0;
-    overflow: hidden;
-  }
 }
 
 @media (max-width: 639px) {
@@ -288,7 +162,7 @@ body {
   }
 
   [data-radix-popper-content-wrapper] {
-    max-width: calc(100vw - 1rem) !important;
+    max-width: calc(100vw - 1rem);
   }
 
   .mobile-action-bar {
@@ -316,27 +190,6 @@ body {
   }
 }
 
-/*
- * Wave 2 Factory floor cards use Tailwind's md breakpoint for their ordinary
- * portrait-phone/tablet split. A touch phone in landscape can be wider than
- * 768px while still needing the compact card interaction model. Limit this
- * override to short-height coarse-pointer devices so 768x1024 tablets and
- * desktop layouts retain their existing md+ presentation.
- */
-@media (hover: none) and (pointer: coarse) and (max-height: 500px) {
-  [data-testid="raw-stock-mobile-list"],
-  [data-testid="mix-batch-mobile-list"],
-  [data-testid="v5-mobile-list"] {
-    display: block !important;
-  }
-
-  [data-testid="raw-stock-mobile-list"] + div,
-  [data-testid="mix-batch-mobile-list"] + div,
-  [data-testid="v5-mobile-list"] + div {
-    display: none !important;
-  }
-}
-
 @media (prefers-reduced-motion: reduce) {
   html:focus-within {
     scroll-behavior: auto;
@@ -350,11 +203,6 @@ body {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
-}
-
-/* Hide only the resolved currency context card; provisional warnings must remain visible. */
-[data-testid="net-position-currency-context"].bg-muted\/20 {
-  display: none !important;
 }
 
 /*
@@ -411,12 +259,14 @@ body {
 }
 
 /*
- * Properties phones: the floating notes launcher covered dashboard and rental cards; the
- * workspace menu offers "My notes" there instead (same arrangement as the ERP and Factory shells).
+ * ERP, Factory and Properties phones: the floating notes launcher covered page content and
+ * workflow bars; the workspace menu offers "My notes" there instead. The launcher mounts outside
+ * the shells (App.tsx), so it keys off the document marker the shells set. POS keeps the button.
  */
 @media (max-width: 639px), (hover: none) and (pointer: coarse) and (max-height: 500px) {
-  html[data-app-shell="properties"] [data-testid="button-open-user-notes"] {
-    display: none !important;
+  html:is([data-app-shell="erp"], [data-app-shell="factory"], [data-app-shell="properties"])
+    [data-testid="button-open-user-notes"] {
+    display: none;
   }
 }
 

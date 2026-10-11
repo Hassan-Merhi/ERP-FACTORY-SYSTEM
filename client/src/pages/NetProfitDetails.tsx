@@ -528,11 +528,9 @@ export default function NetProfitDetails() {
         )}
       </div>
 
-      {data?.currency && (
-        <Card
-          className={data.currency.totalsProvisional ? "border-amber-500/40 bg-amber-500/5" : "bg-muted/20"}
-          data-testid="net-position-currency-context"
-        >
+      {/* Only provisional totals need the warning; resolved historical rates are not news. */}
+      {data?.currency?.totalsProvisional && (
+        <Card className="border-amber-500/40 bg-amber-500/5" data-testid="net-position-currency-context">
           <CardContent className="p-4 space-y-2">
             <div className="flex items-center justify-between gap-3 flex-wrap">
               <p className="text-sm font-semibold">Currency context</p>

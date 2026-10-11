@@ -12,8 +12,10 @@ describe("Mobile Wave 3 ERP operational workflows", () => {
 
     expect(shell).toContain('import "@/erp-mobile-operations.css"');
     expect(shell).toContain("data-erp-route={routePath}");
-    expect(css).toContain("@media (max-width: 767px)");
-    expect(css).toContain("@media (hover: none) and (pointer: coarse) and (max-height: 500px)");
+    // One media list covers portrait phones and short coarse-pointer landscape phones.
+    expect(css).toContain("@media (max-width: 767px), (hover: none) and (pointer: coarse) and (max-height: 500px)");
+    // Specific selectors, not !important, give the rules their weight (comments may mention it).
+    expect(css.replace(/\/\*[\s\S]*?\*\//g, "")).not.toContain("!important");
     // Touch floors are owned by the shared mobile stylesheet (one rule for every shell).
     const compat = source("client/src/mobile-browser-compat.css");
     expect(compat).toContain("--mobile-control-min-height: 2.75rem");
@@ -39,7 +41,7 @@ describe("Mobile Wave 3 ERP operational workflows", () => {
     const filters = source("client/src/pages/containers/ContainerFilters.tsx");
 
     expect(rows).toContain("flex flex-col gap-3 hover-elevate sm:flex-row");
-    expect(rows).toContain("erp-mobile-touch-visible erp-mobile-touch-target");
+    expect(rows).toContain("erp-mobile-touch-target opacity-0 group-hover:opacity-100 touch:opacity-100");
     expect(rows).toContain('className="w-full sm:w-auto"');
     expect(filters).toContain("w-full min-w-0 sm:flex-1 sm:min-w-[200px]");
     expect(filters).toContain("overflow-x-auto");
@@ -57,7 +59,9 @@ describe("Mobile Wave 3 ERP operational workflows", () => {
   it("keeps existing mobile data alternatives active on landscape phones", () => {
     // Each page declares it with the `phone-land` variant instead of a route-scoped override.
     const tailwind = source("tailwind.config.ts");
-    expect(tailwind).toContain('"phone-land": { raw: "(hover: none) and (pointer: coarse) and (max-height: 500px)" }');
+    expect(tailwind).toContain(
+      'addVariant("phone-land", "@media (hover: none) and (pointer: coarse) and (max-height: 500px) { &:is(&) }")'
+    );
     for (const file of [
       "client/src/pages/stockitems/StockItemsView.tsx",
       "client/src/pages/StockQuery.tsx",

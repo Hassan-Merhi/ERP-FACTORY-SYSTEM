@@ -34,7 +34,7 @@ describe("mobile sidebar drawer", () => {
   it("clamps the drawer to the phone width", () => {
     renderDrawer();
     const drawer = document.querySelector('[data-sidebar="sidebar"][data-mobile="true"]') as HTMLElement;
-    expect(drawer.style.getPropertyValue("--sidebar-width")).toBe("min(18rem, calc(100vw - 1rem))");
+    expect(drawer.style.getPropertyValue("--sidebar-width")).toBe("min(20rem, calc(100vw - 0.5rem))");
   });
 
   it("closes as soon as a destination is chosen, even the current page", () => {

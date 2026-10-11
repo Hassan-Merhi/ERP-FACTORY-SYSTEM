@@ -43,7 +43,7 @@ export function AgentListPanel({
       className={
         phone
           ? "flex w-full min-w-0 flex-col rounded-xl border bg-muted/20"
-          : "w-72 shrink-0 border-r flex flex-col h-full overflow-hidden bg-muted/20"
+          : "w-72 shrink-0 border-r flex flex-col h-full overflow-hidden bg-muted/20 max-md:w-full max-md:max-h-[min(42dvh,22rem)] max-md:flex-none max-md:border-r-0 max-md:border-b"
       }
       data-testid="agent-list-panel"
     >

@@ -20,7 +20,7 @@ const SIDEBAR_COOKIE_NAME = "sidebar_state";
 const SIDEBAR_COOKIE_MAX_AGE = 60 * 60 * 24 * 7;
 const SIDEBAR_WIDTH = "16rem";
 // Never wider than the phone: a 320px screen keeps a strip of page visible to tap closed.
-const SIDEBAR_WIDTH_MOBILE = "min(18rem, calc(100vw - 1rem))";
+const SIDEBAR_WIDTH_MOBILE = "min(20rem, calc(100vw - 0.5rem))";
 const SIDEBAR_WIDTH_ICON = "3rem";
 const SIDEBAR_KEYBOARD_SHORTCUT = "b";
 
@@ -189,7 +189,9 @@ function Sidebar({
           data-sidebar="sidebar"
           data-slot="sidebar"
           data-mobile="true"
-          className="bg-sidebar text-sidebar-foreground w-[var(--sidebar-width)] max-w-[var(--sidebar-width)] overflow-x-hidden p-0 [&>button]:hidden"
+          // Safe-area padding keeps the first and last rows clear of the notch and home
+          // indicator; the sheet's close control becomes a bordered 40px button at the top edge.
+          className="w-[var(--sidebar-width)] max-w-[var(--sidebar-width)] overflow-x-hidden overscroll-contain bg-sidebar p-0 pb-[var(--safe-area-bottom)] pt-[var(--safe-area-top)] text-sidebar-foreground [&>button]:right-3 [&>button]:top-[max(0.75rem,var(--safe-area-top))] [&>button]:z-30 [&>button]:inline-flex [&>button]:h-10 [&>button]:w-10 [&>button]:items-center [&>button]:justify-center [&>button]:rounded-lg [&>button]:border [&>button]:border-sidebar-border [&>button]:bg-sidebar/95 [&>button]:opacity-100 [&>button]:backdrop-blur [&_a[data-testid^=link-]]:min-h-11 [&_a[data-testid^=link-]]:touch-manipulation [&_button[data-testid^=button-section-]]:min-h-11 [&_button[data-testid^=button-section-]]:touch-manipulation"
           style={
             {
               "--sidebar-width": SIDEBAR_WIDTH_MOBILE,

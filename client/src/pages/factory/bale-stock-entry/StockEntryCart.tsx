@@ -119,7 +119,7 @@ export function StockEntryCart({
   return (
     <div className="min-w-0 max-w-full" data-factory-stock-entry-cart="true">
       {isMobile ? (
-        <div className="md:hidden">
+        <div className="md:hidden phone-land:block">
           {cart.length === 0 ? (
             <ResponsiveDataListEmpty>No items added yet. Scan a code or type to search.</ResponsiveDataListEmpty>
           ) : (
@@ -256,7 +256,7 @@ export function StockEntryCart({
           )}
         </div>
       ) : (
-        <div className="hidden overflow-hidden rounded-xl border bg-card/50 md:block">
+        <div className="hidden overflow-hidden rounded-xl border bg-card/50 md:block phone-land:hidden">
           <Table scrollLabel="Bales ready for stock entry" minimumWidth="56rem">
             <TableHeader>
               <TableRow className="bg-muted/30">

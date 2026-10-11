@@ -92,7 +92,7 @@ export function RawStockTable({ rawStock, onAdjust, onDeduct, onAddToBatch }: Ra
           )}
         </div>
 
-        <div className="space-y-3 md:hidden" data-testid="raw-stock-mobile-list">
+        <div className="space-y-3 md:hidden phone-land:block" data-testid="raw-stock-mobile-list">
           {categories.length === 0 ? (
             <div className="rounded-xl border bg-card px-4 py-8 text-center text-sm text-muted-foreground">
               {zeroBalanceCount > 0 ? "All sources currently have a zero free balance." : "No raw stock available"}
@@ -239,7 +239,7 @@ export function RawStockTable({ rawStock, onAdjust, onDeduct, onAddToBatch }: Ra
           )}
         </div>
 
-        <div className="hidden overflow-hidden rounded-md border bg-card shadow-sm md:block">
+        <div className="hidden overflow-hidden rounded-md border bg-card shadow-sm md:block phone-land:hidden">
           <Table>
             <TableHeader className="bg-muted">
               <TableRow className="hover:bg-transparent">

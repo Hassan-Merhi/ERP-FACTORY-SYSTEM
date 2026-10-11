@@ -172,12 +172,13 @@ export default function Agents() {
   }
 
   return (
-    <div className="flex h-full">
+    // Below md the panes stack: the list is a bounded pane above the statement.
+    <div className="flex h-full max-md:h-auto max-md:min-h-full max-md:flex-col max-md:overflow-visible">
       {/* ── Left panel — agent list ─────────────────────────────────────── */}
       {listPanel}
 
       {/* ── Right panel — statement ─────────────────────────────────────── */}
-      <div className="flex-1 overflow-y-auto bg-background">
+      <div className="flex-1 overflow-y-auto bg-background max-md:w-full max-md:min-w-0 max-md:overflow-visible">
         {!selectedAccount ? (
           <div className="h-full flex items-center justify-center">
             <div className="flex flex-col items-center gap-4 text-center max-w-xs">

@@ -156,9 +156,11 @@ const Table = React.forwardRef<HTMLTableElement, TableProps>(
           stickyFirstColumn &&
             !cards &&
             "[&_tr>*:first-child]:sticky [&_tr>*:first-child]:left-0 [&_tr>*:first-child]:z-20 [&_thead_tr>*:first-child]:bg-muted [&_tbody_tr>*:first-child]:bg-background [&_tr>*:first-child]:shadow-[1px_0_0_hsl(var(--border))]",
-          wrapperClassName
+          wrapperClassName,
+          // A card stack is part of the page: no scroll cap, no frame.
+          cards && "max-h-none overflow-visible rounded-none border-0"
         )}
-        style={{ maxHeight }}
+        style={{ maxHeight: cards ? undefined : maxHeight }}
       >
         <span id={descriptionId} className="sr-only">
           {scrollDescription ??

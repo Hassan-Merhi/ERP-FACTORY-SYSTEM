@@ -33,7 +33,7 @@ export function FactoryStockAllocationV5MobileList({ model }: { model: Model }) 
   } = model;
 
   return (
-    <div className="space-y-3 overflow-y-auto p-3 md:hidden" data-testid="v5-mobile-list">
+    <div className="space-y-3 overflow-y-auto p-3 md:hidden phone-land:block" data-testid="v5-mobile-list">
       {totals && (
         <div className="grid grid-cols-2 gap-2 rounded-xl border bg-muted/30 p-3" data-testid="v5-mobile-totals">
           <div>

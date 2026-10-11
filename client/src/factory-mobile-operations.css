@@ -1,8 +1,9 @@
 /*
- * Factory Mode phone/touch utilities, loaded by FactoryShell. Like the ERP equivalents in
+ * Factory Mode phone/touch rules, loaded by FactoryShell. Like the ERP equivalents in
  * `erp-mobile-operations.css`, these key off the Factory workspace (`[data-factory-workspace]`)
  * or `html[data-app-shell="factory"]` for portalled content, so they never leak into ERP, POS or
- * Properties. Tablet/desktop layouts are untouched.
+ * Properties, and that scoping out-ranks utility classes without `!important`. Tablet/desktop
+ * layouts are untouched.
  */
 
 /*
@@ -23,7 +24,7 @@
  */
 @media (max-width: 639px) {
   html[data-app-shell="factory"] [data-radix-popper-content-wrapper] > * {
-    max-width: calc(100vw - 1rem) !important;
+    max-width: calc(100vw - 1rem);
   }
 }
 
@@ -43,27 +44,5 @@
     min-height: 2.75rem;
     white-space: nowrap;
     scroll-snap-align: start;
-  }
-}
-
-/*
- * The floating notes button covered page content and workflow bars on Factory phones (portrait
- * and touch landscape). There the "…" workspace menu (portrait) and the account menu (landscape)
- * open the notes panel instead, as the ERP shell does; tablet and desktop keep the button.
- */
-@media (max-width: 639px), (hover: none) and (pointer: coarse) and (max-height: 500px) {
-  html[data-app-shell="factory"] [data-testid="button-open-user-notes"] {
-    display: none !important;
-  }
-}
-
-/*
- * Stock Entry's cart renders its card list on landscape phones (the phone-layout rule), but the
- * list keeps its md:hidden portrait/tablet split; short touch screens show it anyway, like the
- * Wave 2 floor lists in mobile-browser-compat.css.
- */
-@media (hover: none) and (pointer: coarse) and (max-height: 500px) {
-  [data-factory-stock-entry-cart="true"] > .md\:hidden {
-    display: block !important;
   }
 }

@@ -122,7 +122,19 @@ function assertLayout(layout, mode, label) {
   return failures;
 }
 
+/**
+ * Every navigation reloads the SPA, which shows its "Loading application" boundary until the
+ * session and company bootstrap resolve. Wait for the workspace (or the login form) to exist
+ * before measuring, so a slow bootstrap is not reported as a missing shell; a route that never
+ * settles is still measured and reported after the timeout.
+ */
 async function waitForSettledUi(page) {
+  await page
+    .waitForFunction(
+      () => Boolean(document.getElementById("main-content") || document.querySelector('[data-testid="input-username"]')),
+      { timeout: TIMEOUT_MS },
+    )
+    .catch(() => {});
   await new Promise((resolve) => setTimeout(resolve, 1_500));
   await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
 }

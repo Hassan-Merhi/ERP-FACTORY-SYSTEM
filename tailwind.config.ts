@@ -1,17 +1,29 @@
 import type { Config } from "tailwindcss";
+import plugin from "tailwindcss/plugin";
+
+/**
+ * Touch and landscape-phone variants.
+ *
+ * They are plugin variants, not `screens`: once any screen is a raw media query, Tailwind stops
+ * generating the `max-*` variants and the arbitrary `min-[360px]:` variants for the whole
+ * project, and the phone layouts built on them silently disappear. Plugin variants are emitted
+ * before the responsive ones, so each rule doubles its own selector (`&:is(&)`) to out-rank an
+ * `md:` utility on the same element: `phone-land:block` must win over `md:hidden` on a landscape
+ * phone, and `touch:opacity-100` over any width-based opacity.
+ */
+const touchVariants = plugin(({ addVariant }) => {
+  // Touch-first devices: hover-revealed controls stay visible, shortcut hints hide.
+  addVariant("touch", "@media (hover: none) and (pointer: coarse) { &:is(&) }");
+  // Landscape phones are wider than `sm`/`md` but still short touch screens: keep the phone
+  // card/list presentation there (same query as ERP_PHONE_LAYOUT_QUERY's second clause).
+  addVariant("phone-land", "@media (hover: none) and (pointer: coarse) and (max-height: 500px) { &:is(&) }");
+});
 
 export default {
   darkMode: ["class"],
   content: ["./client/index.html", "./client/src/**/*.{js,jsx,ts,tsx}"],
   theme: {
     extend: {
-      screens: {
-        // Touch-first devices: hover-revealed controls stay visible, shortcut hints hide.
-        touch: { raw: "(hover: none) and (pointer: coarse)" },
-        // Landscape phones are wider than `sm`/`md` but still short touch screens: keep the phone
-        // card/list presentation there (same query as ERP_PHONE_LAYOUT_QUERY's second clause).
-        "phone-land": { raw: "(hover: none) and (pointer: coarse) and (max-height: 500px)" },
-      },
       borderRadius: {
         lg: ".5rem",
         md: ".375rem",
@@ -140,5 +152,5 @@ export default {
       },
     },
   },
-  plugins: [require("tailwindcss-animate"), require("@tailwindcss/typography")],
+  plugins: [require("tailwindcss-animate"), require("@tailwindcss/typography"), touchVariants],
 } satisfies Config;
