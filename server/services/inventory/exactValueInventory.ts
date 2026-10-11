@@ -5,7 +5,8 @@ import { firstRow, resultRows } from "../../lib/queryResult";
 
 const ZERO = new Decimal(0);
 const QTY_DP = 3;
-const RATE_DP = 2;
+/** inventory.average_rate is numeric(20,7) since wave 11 (display / cost memory). */
+const RATE_DP = 7;
 const VALUE_DP = 2;
 const QTY_EPSILON = new Decimal("0.0005");
 
@@ -34,6 +35,8 @@ export interface ExactInventoryRestoreResult {
   newTotalValue: number;
   averageRate: number;
   created: boolean;
+  /** Signed change of the stored total_value (2dp): the value restored. */
+  valueDelta: string;
 }
 
 /**
@@ -86,10 +89,20 @@ async function releaseResolvedNegativeLayers(
  * Restore a historical inventory issue using its exact stored quantity and value.
  *
  * This is intentionally different from a normal receipt. It does not recost the
- * historical issue or rebuild value from today's rounded average. If live stock
- * is negative, however, increasing quantity necessarily resolves part of that
- * shortage, so the matching aggregate quantity is released from the negative
- * layer ledger as part of the same transaction.
+ * historical issue or rebuild value from today's average: the row takes back
+ * exactly the quantity and value the issue relieved, because the reversal of the
+ * issue's ledger posting (its COGS or stock journal) takes back exactly that
+ * value, and the sub-ledger and the INVENTORY account must move together
+ * (wave 11). That holds whatever the row's state:
+ *   - stock on hand: value + restored value;
+ *   - short (negative value under the negative-stock policy): the negative value
+ *     moves up by the restored value, and the matching shortage quantity is
+ *     released from the negative layer ledger. A historical reversal is not a new
+ *     receipt, so no settlement variance is booked: the restored units carry the
+ *     value they left with, and the row's average becomes value / quantity.
+ * The previous implementation valued a reversal that crossed back above zero at
+ * its rate for the newly positive quantity only, dropping the rest of the value
+ * from the sub-ledger while the ledger reversal restored all of it.
  */
 export async function restoreInventoryByExactValue(
   tx: DbTransaction,
@@ -97,10 +110,11 @@ export async function restoreInventoryByExactValue(
   locationId: number,
   stockItemId: number,
   quantityToRestore: number,
-  valueToRestore: number
+  valueToRestore: number | string
 ): Promise<ExactInventoryRestoreResult> {
   const restoreQty = Decimal.max(decimal(quantityToRestore), ZERO);
-  const restoreValue = Decimal.max(decimal(valueToRestore), ZERO);
+  // Kept clamp: a restore puts back what an issue relieved, which is never negative.
+  const restoreValue = Decimal.max(decimal(valueToRestore), ZERO).toDecimalPlaces(VALUE_DP);
   const restoreRate = restoreQty.gt(ZERO) ? restoreValue.dividedBy(restoreQty) : ZERO;
 
   const lockResult = await tx.execute(sql`
@@ -122,57 +136,47 @@ export async function restoreInventoryByExactValue(
         newTotalValue: 0,
         averageRate: 0,
         created: false,
+        valueDelta: "0.00",
       };
     }
 
-    const initialValue = restoreQty.gt(ZERO) ? restoreValue : ZERO;
-    const initialRate = restoreQty.gt(ZERO) ? restoreRate : ZERO;
     await tx.execute(sql`
       INSERT INTO inventory
         (company_id, location_id, stock_item_id, quantity, average_rate, total_value, last_updated)
       VALUES
         (${companyId}, ${locationId}, ${stockItemId}, ${restoreQty.toFixed(QTY_DP)},
-         ${initialRate.toFixed(RATE_DP)}, ${initialValue.toFixed(VALUE_DP)}, NOW())
+         ${restoreRate.toFixed(RATE_DP)}, ${restoreValue.toFixed(VALUE_DP)}, NOW())
     `);
 
     return {
       previousQuantity: 0,
       newQuantity: restoreQty.toNumber(),
       previousTotalValue: 0,
-      newTotalValue: initialValue.toNumber(),
-      averageRate: initialRate.toNumber(),
+      newTotalValue: restoreValue.toNumber(),
+      averageRate: restoreRate.toNumber(),
       created: true,
+      valueDelta: restoreValue.toFixed(VALUE_DP),
     };
   }
 
   const currentQty = decimal(existing.quantity);
   const currentRate = Decimal.max(decimal(existing.average_rate), ZERO);
-  const currentValue = Decimal.max(decimal(existing.total_value), ZERO);
+  const currentValue = decimal(existing.total_value).toDecimalPlaces(VALUE_DP);
   const newQty = currentQty.plus(restoreQty);
   const shortageResolved = currentQty.isNegative() ? Decimal.min(currentQty.abs(), restoreQty) : ZERO;
 
   await releaseResolvedNegativeLayers(tx, companyId, locationId, stockItemId, shortageResolved);
 
-  let newValue = ZERO;
+  const newValue = currentValue.plus(restoreValue);
   let newRate = restoreRate.gt(ZERO) ? restoreRate : currentRate;
-
-  if (newQty.gt(ZERO)) {
-    if (currentQty.gt(ZERO)) {
-      newValue = currentValue.plus(restoreValue);
-    } else {
-      // There is no asset value while stock is zero/negative. If this exact
-      // reversal crosses back above zero, value only the newly-positive balance
-      // at the historical restoration rate.
-      newValue = newQty.times(newRate);
-    }
-    newRate = newValue.gt(ZERO) ? newValue.dividedBy(newQty) : newRate;
-  }
+  if (newQty.gt(QTY_EPSILON) && newValue.gt(ZERO)) newRate = newValue.dividedBy(newQty);
+  else if (newQty.lt(QTY_EPSILON.negated()) && newValue.isNegative()) newRate = newValue.dividedBy(newQty);
 
   await tx.execute(sql`
     UPDATE inventory
     SET quantity = ${newQty.toFixed(QTY_DP)},
         average_rate = ${Decimal.max(newRate, ZERO).toFixed(RATE_DP)},
-        total_value = ${Decimal.max(newValue, ZERO).toFixed(VALUE_DP)},
+        total_value = ${newValue.toFixed(VALUE_DP)},
         last_updated = NOW()
     WHERE id = ${existing.id}
   `);
@@ -184,5 +188,6 @@ export async function restoreInventoryByExactValue(
     newTotalValue: newValue.toNumber(),
     averageRate: newRate.toNumber(),
     created: false,
+    valueDelta: restoreValue.toFixed(VALUE_DP),
   };
 }

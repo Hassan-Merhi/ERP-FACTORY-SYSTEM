@@ -7,7 +7,6 @@
 import type { RentalRoutesContext } from "./_helpers";
 import type { Express, Request, Response } from "express";
 import { getErrorMessage } from "../../../lib/httpHandlers";
-import { logger } from "../../../lib/logger";
 import { getCompanyId } from "../shared";
 import { db } from "../../../db";
 import { requireAuth } from "../../../auth";
@@ -25,19 +24,26 @@ export function registerRentalUnitsWriteRoutes(app: Express, ctx: RentalRoutesCo
       const companyId = getCompanyId(req);
       if (!companyId) return res.status(400).json({ message: "No company selected" });
       const data = insertPropertyUnitSchema.parse({ ...req.body, companyId });
-      const [created] = await db
-        .insert(propertyUnits)
-        .values({ ...data, module })
-        .returning();
-      await logAudit({
-        userId: req.session.userId!,
-        username: req.session.username || "unknown",
-        companyId,
-        action: "create",
-        tableName: "property_units",
-        recordId: created.id,
-        recordIdentifier: created.unitNumber || String(created.id),
-        changes: { unitNumber: { old: null, new: created.unitNumber } },
+      // Phase 21 (B): the write and its audit commit together.
+      const created = await db.transaction(async (tx) => {
+        const [written] = await tx
+          .insert(propertyUnits)
+          .values({ ...data, module })
+          .returning();
+        await logAudit(
+          {
+            userId: req.session.userId!,
+            username: req.session.username || "unknown",
+            companyId,
+            action: "create",
+            tableName: "property_units",
+            recordId: written.id,
+            recordIdentifier: written.unitNumber || String(written.id),
+            changes: { unitNumber: { old: null, new: written.unitNumber } },
+          },
+          tx
+        );
+        return written;
       });
       res.json(created);
     } catch (e: unknown) {
@@ -64,13 +70,16 @@ export function registerRentalUnitsWriteRoutes(app: Express, ctx: RentalRoutesCo
         .where(and(eq(propertyUnits.id, id), eq(propertyUnits.companyId, companyId), eq(propertyUnits.module, module)));
       if (!existing) return res.status(404).json({ message: "Unit not found" });
 
-      const [updated] = await db
-        .update(propertyUnits)
-        .set(updates)
-        .where(and(eq(propertyUnits.id, id), eq(propertyUnits.companyId, companyId), eq(propertyUnits.module, module)))
-        .returning();
+      // Phase 21 (B): the write and its audit commit together.
+      const updated = await db.transaction(async (tx) => {
+        const [written] = await tx
+          .update(propertyUnits)
+          .set(updates)
+          .where(
+            and(eq(propertyUnits.id, id), eq(propertyUnits.companyId, companyId), eq(propertyUnits.module, module))
+          )
+          .returning();
 
-      try {
         const changes: Record<string, { old: unknown; new: unknown }> = {};
         for (const k of Object.keys(updates)) {
           changes[k] = {
@@ -78,19 +87,21 @@ export function registerRentalUnitsWriteRoutes(app: Express, ctx: RentalRoutesCo
             new: (updates as Record<string, unknown>)[k],
           };
         }
-        await logAudit({
-          userId: req.session.userId!,
-          username: req.session.username || "unknown",
-          companyId,
-          action: "update",
-          tableName: "property_units",
-          recordId: id,
-          recordIdentifier: existing.unitNumber || String(id),
-          changes,
-        });
-      } catch (auditErr) {
-        logger.error("[unit update audit] non-fatal:", { error: auditErr });
-      }
+        await logAudit(
+          {
+            userId: req.session.userId!,
+            username: req.session.username || "unknown",
+            companyId,
+            action: "update",
+            tableName: "property_units",
+            recordId: id,
+            recordIdentifier: existing.unitNumber || String(id),
+            changes,
+          },
+          tx
+        );
+        return written;
+      });
 
       res.json(updated);
     } catch (e: unknown) {
@@ -124,25 +135,29 @@ export function registerRentalUnitsWriteRoutes(app: Express, ctx: RentalRoutesCo
         .from(propertyUnits)
         .where(and(eq(propertyUnits.id, id), eq(propertyUnits.companyId, companyId), eq(propertyUnits.module, module)));
 
-      await db
-        .update(propertyUnits)
-        .set({ active: false })
-        .where(and(eq(propertyUnits.id, id), eq(propertyUnits.companyId, companyId), eq(propertyUnits.module, module)));
+      // Phase 21 (B): the write and its audit commit together.
+      await db.transaction(async (tx) => {
+        await tx
+          .update(propertyUnits)
+          .set({ active: false })
+          .where(
+            and(eq(propertyUnits.id, id), eq(propertyUnits.companyId, companyId), eq(propertyUnits.module, module))
+          );
 
-      try {
-        await logAudit({
-          userId: req.session.userId!,
-          username: req.session.username || "unknown",
-          companyId,
-          action: "delete",
-          tableName: "property_units",
-          recordId: id,
-          recordIdentifier: unitToDelete?.unitNumber || String(id),
-          changes: { active: { old: true, new: false } },
-        });
-      } catch (auditErr) {
-        logger.error("[unit delete audit] non-fatal:", { error: auditErr });
-      }
+        await logAudit(
+          {
+            userId: req.session.userId!,
+            username: req.session.username || "unknown",
+            companyId,
+            action: "delete",
+            tableName: "property_units",
+            recordId: id,
+            recordIdentifier: unitToDelete?.unitNumber || String(id),
+            changes: { active: { old: true, new: false } },
+          },
+          tx
+        );
+      });
 
       res.json({ ok: true });
     } catch (e: unknown) {

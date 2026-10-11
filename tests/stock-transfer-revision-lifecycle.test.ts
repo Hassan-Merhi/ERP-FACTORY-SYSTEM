@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { and, eq, inArray } from "drizzle-orm";
-import { db } from "../server/db";
+import { db, pool } from "../server/db";
 import {
   companies,
   inventory,
@@ -50,6 +50,10 @@ async function cleanup() {
   await db.delete(stockTransferItems).where(eq(stockTransferItems.transferId, transferId));
   await db.delete(stockTransferVouchers).where(eq(stockTransferVouchers.id, transferId));
   await db.delete(vouchers).where(eq(vouchers.id, voucherId));
+  // The revision approvals write canonical stock evidence for the company's items.
+  await pool.query(`DELETE FROM canonical_stock_movement_audit WHERE company_id = $1`, [companyId]);
+  await pool.query(`DELETE FROM canonical_stock_movement_requests WHERE company_id = $1`, [companyId]);
+  await pool.query(`DELETE FROM canonical_stock_movements WHERE company_id = $1`, [companyId]);
   await db.delete(inventory).where(eq(inventory.companyId, companyId));
   await db.delete(stockItems).where(eq(stockItems.companyId, companyId));
   await db.delete(locations).where(eq(locations.companyId, companyId));

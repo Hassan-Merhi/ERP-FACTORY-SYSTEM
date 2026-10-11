@@ -13,7 +13,14 @@ import { postableAdjustments } from "./postableAdjustments";
 import { storage } from "../../storage";
 import { requireAuth, requireNonPOS } from "../../auth";
 import { syncEmployeeBalancesFromEntries } from "../_helpers";
-import { employeeGroupMembers, employeeGroups, employees, voucherEntries, vouchers } from "@shared/schema";
+import { employeeGroupMembers, employeeGroups, employees } from "@shared/schema";
+import {
+  erpRequestSourceId,
+  pairLines,
+  postErpVoucherTx,
+  sessionPostingActor,
+  type ErpVoucherLine,
+} from "../../services/accounting/erpVoucherPosting";
 
 export function registerPayrollEmployeeDepositRoutes(app: Express) {
   // Payroll - Employee Balance Deposit
@@ -79,53 +86,41 @@ export function registerPayrollEmployeeDepositRoutes(app: Express) {
         });
       }
 
-      // Create voucher
-      const voucherNumber = `SAL-DEP-${Date.now()}`;
-      const [voucher] = await db
-        .insert(vouchers)
-        .values({
-          companyId: req.session.currentCompanyId,
-          voucherNumber,
+      // Phase 22 (B): Dr salary expense / Cr employee through the central engine.
+      const requestSourceId = erpRequestSourceId(req);
+      const voucher = await db.transaction(async (tx) => {
+        const posted = await postErpVoucherTx(tx, {
+          companyId: req.session.currentCompanyId!,
           voucherType: "Journal",
           voucherDate: date,
           description: notes || `Salary deposit for ${employee.firstName} ${employee.lastName}`,
-          totalAmount: depositAmount.toFixed(2),
-        })
-        .returning();
-
-      // Create voucher entries (double-entry)
-      // Debit: Salary Expense - {Group} (or Salary Expense for ungrouped)
-      await db.insert(voucherEntries).values({
-        voucherId: voucher.id,
-        ledgerAccountId: depSalaryAccount.id,
-        debitAmount: depositAmount.toFixed(2),
-        creditAmount: "0",
-        narration: `Salary deposit - ${voucherNumber}`,
+          lines: pairLines(
+            { ledgerAccountId: depSalaryAccount.id },
+            { employeeId: employee.id },
+            depositAmount,
+            "Salary deposit"
+          ),
+          source: { type: "employee-salary-deposit", id: `${employee.id}:${requestSourceId}` },
+          actor: sessionPostingActor(req, "Salary deposit"),
+        });
+        const { voucher } = posted;
+        if (posted.replayed) return voucher;
+        // Wave 12: the balance moves in the voucher's transaction.
+        await syncEmployeeBalancesFromEntries(
+          [
+            {
+              ledgerAccountId: null,
+              employeeId: employee.id,
+              debitAmount: "0",
+              creditAmount: depositAmount.toFixed(2),
+            },
+          ],
+          req.session.currentCompanyId!,
+          false,
+          tx
+        );
+        return voucher;
       });
-
-      // Credit: Employee (using employeeId field directly instead of separate ledger account)
-      await db.insert(voucherEntries).values({
-        voucherId: voucher.id,
-        ledgerAccountId: null,
-        employeeId: employee.id,
-        debitAmount: "0",
-        creditAmount: depositAmount.toFixed(2),
-        narration: `Salary deposit - ${voucherNumber}`,
-      });
-
-      // Sync employee balance from voucher entries (instead of direct update)
-      // This ensures consistent behavior with voucher edit/delete operations
-      await syncEmployeeBalancesFromEntries(
-        [
-          {
-            ledgerAccountId: null,
-            employeeId: employee.id,
-            debitAmount: "0",
-            creditAmount: depositAmount.toFixed(2),
-          },
-        ],
-        req.session.currentCompanyId!
-      );
 
       // Get updated employee balance after sync
       const [updatedDepositEmployee] = await db.select().from(employees).where(eq(employees.id, employee.id));
@@ -185,19 +180,8 @@ export function registerPayrollEmployeeDepositRoutes(app: Express) {
       // Calculate total amount
       const totalAmount = sumMoney(postable.map((d) => d.amount)).toNumber();
 
-      // Create single voucher for all deposits
-      const voucherNumber = `SAL-DEP-BULK-${Date.now()}`;
-      const [voucher] = await db
-        .insert(vouchers)
-        .values({
-          companyId: req.session.currentCompanyId,
-          voucherNumber,
-          voucherType: "Journal",
-          voucherDate: date,
-          description: notes || `Bulk salary deposit for ${postable.length} employees`,
-          totalAmount: totalAmount.toFixed(2),
-        })
-        .returning();
+      // One voucher for all deposits (number allocated by the central engine).
+      const requestSourceId = erpRequestSourceId(req);
 
       // Group deposits by employee group and create one debit per group
       const bulkDepByGroup = new Map<string, ReturnType<typeof toMoney>>();
@@ -206,6 +190,7 @@ export function registerPayrollEmployeeDepositRoutes(app: Express) {
         bulkDepByGroup.set(grp, (bulkDepByGroup.get(grp) ?? toMoney(0)).plus(d.amount));
       }
       const bulkDepFreshAccounts = await storage.getAllLedgerAccounts(req.session.currentCompanyId);
+      const bulkDepGroupDebits: ErpVoucherLine[] = [];
       for (const [grp, grpTotal] of bulkDepByGroup) {
         const isDefault = grp === "__default__";
         const expCode = isDefault
@@ -226,52 +211,54 @@ export function registerPayrollEmployeeDepositRoutes(app: Express) {
             active: true,
           });
         }
-        await db.insert(voucherEntries).values({
-          voucherId: voucher.id,
+        bulkDepGroupDebits.push({
           ledgerAccountId: expAccount.id,
-          debitAmount: grpTotal.toFixed(2),
-          creditAmount: "0",
-          narration: isDefault
-            ? `Bulk salary deposit - ${postable.length} employees - ${voucherNumber}`
-            : `Salary expense - ${grp} - ${voucherNumber}`,
+          debit: grpTotal,
+          narration: isDefault ? `Bulk salary deposit - ${postable.length} employees` : `Salary expense - ${grp}`,
         });
       }
 
-      // Process each employee deposit
-      const results = [];
-      for (const deposit of postable) {
-        const { employee } = deposit;
-        const depositAmount = deposit.amount.toNumber();
-
-        // Credit employee (using employeeId field directly instead of separate ledger account)
-        await db.insert(voucherEntries).values({
-          voucherId: voucher.id,
-          ledgerAccountId: null,
-          employeeId: employee.id,
-          debitAmount: "0",
-          creditAmount: depositAmount.toFixed(2),
-          narration: `Salary deposit for ${employee.firstName} ${employee.lastName} - ${voucherNumber}`,
+      // Voucher header and every entry commit together (balanced-voucher trigger).
+      const { voucher, results } = await db.transaction(async (tx) => {
+        // Credit each employee (employeeId on the line, no separate ledger account).
+        const results = postable.map((deposit) => ({
+          employeeId: deposit.employee.id,
+          name: `${deposit.employee.firstName} ${deposit.employee.lastName}`,
+          amount: deposit.amount.toNumber(),
+        }));
+        const posted = await postErpVoucherTx(tx, {
+          companyId: req.session.currentCompanyId!,
+          voucherType: "Journal",
+          voucherDate: date,
+          description: notes || `Bulk salary deposit for ${postable.length} employees`,
+          lines: [
+            ...bulkDepGroupDebits,
+            ...postable.map((deposit) => ({
+              employeeId: deposit.employee.id,
+              credit: deposit.amount,
+              narration: `Salary deposit for ${deposit.employee.firstName} ${deposit.employee.lastName}`,
+            })),
+          ],
+          source: { type: "employee-salary-deposit-bulk", id: requestSourceId },
+          actor: sessionPostingActor(req, "Bulk salary deposit"),
         });
-
-        results.push({
-          employeeId: employee.id,
-          name: `${employee.firstName} ${employee.lastName}`,
-          amount: depositAmount,
-        });
-      }
-
-      // Sync all employee balances from voucher entries
-      const allDepositEntries = await db.select().from(voucherEntries).where(eq(voucherEntries.voucherId, voucher.id));
-
-      await syncEmployeeBalancesFromEntries(
-        allDepositEntries.map((e) => ({
-          ledgerAccountId: e.ledgerAccountId,
-          employeeId: e.employeeId,
-          debitAmount: e.debitAmount,
-          creditAmount: e.creditAmount,
-        })),
-        req.session.currentCompanyId!
-      );
+        const { voucher } = posted;
+        // Sync all employee balances from voucher entries, in the voucher's transaction (wave 12).
+        if (!posted.replayed) {
+          await syncEmployeeBalancesFromEntries(
+            posted.entries.map((e) => ({
+              ledgerAccountId: e.ledgerAccountId,
+              employeeId: e.employeeId,
+              debitAmount: e.debitAmount,
+              creditAmount: e.creditAmount,
+            })),
+            req.session.currentCompanyId!,
+            false,
+            tx
+          );
+        }
+        return { voucher, results };
+      });
 
       // Get updated balances for all employees
       const updatedResults = [];

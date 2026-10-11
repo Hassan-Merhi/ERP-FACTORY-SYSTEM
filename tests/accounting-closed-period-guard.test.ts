@@ -12,8 +12,8 @@
  *   - entries of a closed voucher cannot be added, changed or removed;
  *   - narrative fields (description, narration) stay editable;
  *   - vouchers dated after the close date post normally;
- *   - an explicit transaction-local override and the maintenance scope bypass
- *     the lock (process-owned repair work);
+ *   - an explicit transaction-local override bypasses the lock; the
+ *     maintenance scope no longer does (phase 19 B, DI2);
  *   - a close waits for in-flight voucher writes in the company.
  */
 import request from "supertest";
@@ -243,7 +243,8 @@ describe("closed fiscal period lock — database triggers", () => {
     expect(voucher.description).toBe("Reworded");
   });
 
-  it("lets an explicit transaction-local override and the maintenance scope through", async () => {
+  // Phase 19 (B), DI2: only the override passes; the maintenance scope is refused.
+  it("lets an explicit transaction-local override through, not the maintenance scope", async () => {
     await inTenantTransaction(async (client) => {
       await client.query("SELECT set_config('app.closed_period_override', 'on', true)");
       await client.query(`UPDATE vouchers SET total_amount = total_amount WHERE id = $1`, [openVoucherId]);
@@ -257,8 +258,9 @@ describe("closed fiscal period lock — database triggers", () => {
     try {
       await client.query("BEGIN");
       await client.query("SELECT set_config('app.company_scope_maintenance', 'on', true)");
-      const result = await client.query(`UPDATE vouchers SET exchange_rate = '1' WHERE id = $1`, [openVoucherId]);
-      expect(result.rowCount).toBe(1);
+      await expect(
+        client.query(`UPDATE vouchers SET exchange_rate = '1' WHERE id = $1`, [openVoucherId])
+      ).rejects.toThrow(/ACCOUNTING_PERIOD_CLOSED/);
       await client.query("ROLLBACK");
     } finally {
       client.release();

@@ -35,7 +35,10 @@ describe("supplier partner net position inclusion", () => {
       expect(source).toContain("classifyEquityAccounts");
       expect(source).toContain('a.accountType === "Loan"');
       expect(source).toContain('a.accountType === "Loans"');
-      expect(source).toContain('a.subType === "Accounts Receivable"');
+      // Wave 10: customers come from the balance engine and are excluded for
+      // supplier partners (the old customer-like ledger clause never admitted
+      // an account: its helper listed every customer-like ledger as excluded).
+      expect(source).toContain("customers: !isSupplierPartner");
       expect(source).toContain("equityContribution");
       expect(source).toContain("forUsTotal - onUsTotal + equityContribution");
     }

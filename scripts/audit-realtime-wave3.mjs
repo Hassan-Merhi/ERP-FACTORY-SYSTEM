@@ -65,21 +65,20 @@ export function auditRealtimeWave3(root = repoRoot) {
 
   const netPositionPath = "server/helpers/calculateNetPositionAsOf.ts";
   const netPosition = readAtRoot(netPositionPath);
+  // Wave 10 (one balance engine): customers, suppliers and employees come from
+  // the engine, whose grouped SQL aggregate is checked below; the ledger-account
+  // aggregate stays in the snapshot, on the effective-date basis.
   const requiredSqlContracts = [
     /db\.execute<RawQueryRow<LedgerBalanceRow>>\(sql`/,
-    /db\.execute<RawQueryRow<PartyBalanceRow>>\(sql`/,
     /SUM\(CAST\(ve\.debit_amount\s+AS numeric\)\) AS total_debit/,
     /SUM\(CAST\(ve\.credit_amount\s+AS numeric\)\) AS total_credit/,
     /la\.company_id\s+=\s+\$\{companyId\}/,
-    /v\.company_id\s+=\s+\$\{companyId\}/,
     /v\.optional\s+=\s+false/,
     /v\.deleted_at\s+IS NULL/,
-    /v\.voucher_date\s+<=\s+\$\{toDate\}/,
+    /COALESCE\(v\.effective_date, v\.voucher_date\)\s+<=\s+\$\{toDate\}/,
     /GROUP BY ve\.ledger_account_id/,
-    /GROUP BY ve\.supplier_id, ve\.employee_id/,
     /const accountBalances = new Map<number, \{ debit: number; credit: number \}>\(\)/,
-    /const supplierBalances = new Map<number, \{ debit: number; credit: number \}>\(\)/,
-    /const employeeBalances = new Map<number, \{ debit: number; credit: number \}>\(\)/,
+    /loadNetPositionParties\(companyId, \{/,
     /classifyNetPositionAccounts\(accountsForClassify, accountBalances/,
     /classifyEquityAccounts\(companyAccounts, accountBalances\)/,
   ];
@@ -87,6 +86,14 @@ export function auditRealtimeWave3(root = repoRoot) {
   for (const required of requiredSqlContracts) {
     if (!required.test(netPosition)) {
       errors.push(`${netPositionPath}: SQL aggregation contract is missing (${required})`);
+    }
+  }
+
+  const enginePath = "server/services/accounting/balances/ledgerBalanceEngine.ts";
+  const engine = readAtRoot(enginePath);
+  for (const required of [/GROUP BY a\.kind, a\.target_id/, /v\.company_id = \$\{companyId\} AND v\.deleted_at IS NULL AND v\.optional = false/]) {
+    if (!required.test(engine)) {
+      errors.push(`${enginePath}: SQL aggregation contract is missing (${required})`);
     }
   }
 

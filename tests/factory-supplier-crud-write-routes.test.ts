@@ -253,7 +253,10 @@ describe("PATCH /api/factory/suppliers/:id/set-broker", () => {
 });
 
 describe("DELETE /api/factory/suppliers/:id/permanent", () => {
-  it("removes the supplier along with its containers and raw stock", async () => {
+  // Phase 19 (B), PE6: a supplier with history is refused and nothing is
+  // removed (the delete used to cascade through containers and raw stock with
+  // no transaction or audit, orphaning their journals).
+  it("refuses a supplier with containers and raw stock, removing nothing", async () => {
     const supplier = await createSupplier(`${TEST_PREFIX}_permanent`);
 
     const container = await pool.query<{ id: number }>(
@@ -270,15 +273,17 @@ describe("DELETE /api/factory/suppliers/:id/permanent", () => {
     );
 
     const response = await agent.delete(`/api/factory/suppliers/${supplier.id}/permanent`);
-    expect(response.status).toBe(200);
+    expect(response.status).toBe(409);
+    expect(response.body).toMatchObject({
+      code: "FACTORY_SUPPLIER_HAS_HISTORY",
+      history: { containers: 1, rawStock: 1 },
+    });
 
-    // Nothing may be left pointing at a supplier that no longer exists — an
-    // orphaned raw-stock row still sums into the factory's stock value.
-    expect(await supplierRow(supplier.id)).toBeNull();
+    expect(await supplierRow(supplier.id)).not.toBeNull();
     const containers = await pool.query(`SELECT id FROM factory_containers WHERE id = $1`, [containerId]);
-    expect(containers.rowCount).toBe(0);
+    expect(containers.rowCount).toBe(1);
     const rawStock = await pool.query(`SELECT id FROM factory_raw_stock WHERE container_id = $1`, [containerId]);
-    expect(rawStock.rowCount).toBe(0);
+    expect(rawStock.rowCount).toBe(1);
   });
 
   it("does not hard-delete a supplier owned by another company", async () => {

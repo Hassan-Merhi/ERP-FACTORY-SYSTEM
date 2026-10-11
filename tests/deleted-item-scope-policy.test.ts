@@ -17,12 +17,12 @@ describe("deleted item scope policy", () => {
     });
   });
 
-  it("marks the globally shared supplier table as Developer maintenance", () => {
+  it("scopes suppliers to the active company like every other type (wave 18 B)", () => {
     expect(classifyDeletedItemScope("/api/deleted-items/supplier/8/permanent")).toEqual({
       type: "supplier",
       id: 8,
       operation: "permanent",
-      globalMaintenance: true,
+      globalMaintenance: false,
     });
   });
 

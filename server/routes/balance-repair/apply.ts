@@ -19,8 +19,11 @@ import {
 } from "../../../shared/schema";
 import { eq, sql } from "drizzle-orm";
 
-import { ApplySnapshot, findOrCreateLedgerAccount, parseNum } from "./_helpers";
+import { ApplySnapshot, findOrCreateLedgerAccount } from "./_helpers";
+import type Decimal from "decimal.js";
+import { MoneyDecimal, toMoney } from "../../lib/money";
 import { resultRows } from "../../lib/queryResult";
+import { retireVouchersTx, sessionRetirementActor } from "../../services/accounting/voucherRetirement";
 
 export function registerBalanceRepairApplyRoutes(app: Express) {
   // ── POST /api/admin/repair-balances/apply ────────────────────────────────
@@ -53,15 +56,16 @@ export function registerBalanceRepairApplyRoutes(app: Express) {
           FROM property_payments WHERE company_id = ${companyId} AND ledger_row_id IS NOT NULL
           GROUP BY ledger_row_id
         `);
-        const pmtMap = new Map<number, number>();
+        // Phase 22 (B), PE13: exact decimals (the sums were floats).
+        const pmtMap = new Map<number, Decimal>();
         for (const row of resultRows(pmtSumsRows)) {
-          pmtMap.set(Number(row.ledger_row_id), parseNum(row.total_paid));
+          pmtMap.set(Number(row.ledger_row_id), toMoney(row.total_paid as string));
         }
         for (const row of allLedger) {
-          const computed = pmtMap.get(row.id) ?? 0;
-          const stored = parseNum(row.paidAmount);
-          if (Math.abs(computed - stored) > 0.005) {
-            snapshot.ledgerSnapshots.push({ id: row.id, oldPaid: stored, newPaid: computed });
+          const computed = (pmtMap.get(row.id) ?? new MoneyDecimal(0)).toDecimalPlaces(2);
+          const stored = toMoney(row.paidAmount).toDecimalPlaces(2);
+          if (!computed.equals(stored)) {
+            snapshot.ledgerSnapshots.push({ id: row.id, oldPaid: stored.toNumber(), newPaid: computed.toNumber() });
             await db
               .update(propertyMonthlyLedger)
               .set({ paidAmount: computed.toFixed(2) })
@@ -133,7 +137,7 @@ export function registerBalanceRepairApplyRoutes(app: Express) {
           );
           const cnt = Number(resultRows(countAfter)[0]?.cnt ?? 0);
           if (cnt === 0 && cashAccId) {
-            const amtStr = String(amount);
+            const amtStr = toMoney(amount).toFixed(2);
             let incomeOrExpenseId: number | null = null;
 
             if (isShop) {
@@ -278,10 +282,20 @@ export function registerBalanceRepairApplyRoutes(app: Express) {
           });
           snapshot.transfersDeleted.push(transferSnap);
 
-          // Delete: transfer first (FK restrict), then entries, then voucher
-          await db.delete(interCompanyTransfers).where(eq(interCompanyTransfers.id, Number(row.id)));
-          await db.execute(sql`DELETE FROM voucher_entries WHERE voucher_id = ${orphanedVid}`);
-          await db.execute(sql`DELETE FROM vouchers WHERE id = ${orphanedVid}`);
+          // Transfer row first, then the orphaned voucher. Wave 16 (A): the
+          // voucher is retired (soft delete with its lines, audited, number
+          // released) in the same transaction, not hard-deleted.
+          await db.transaction(async (tx) => {
+            await tx.delete(interCompanyTransfers).where(eq(interCompanyTransfers.id, Number(row.id)));
+            if (orphVoucher) {
+              await retireVouchersTx(tx, {
+                companyId: orphVoucher.companyId,
+                voucherIds: [orphanedVid],
+                reason: "balance-repair-orphaned-transfer-voucher",
+                actor: sessionRetirementActor(req),
+              });
+            }
+          });
         }
 
         // ── 4. Fix deposit flags ──────────────────────────────────────────────
@@ -290,21 +304,23 @@ export function registerBalanceRepairApplyRoutes(app: Express) {
           WHERE company_id = ${companyId} AND deleted_at IS NULL AND voucher_number LIKE 'GUAR-%'
         `);
         const guarContractIds2 = new Set<number>();
-        const guarAmountMap2 = new Map<number, number>();
+        const guarAmountMap2 = new Map<number, Decimal>();
         for (const row of resultRows(guarRows2)) {
           const parts = String(row.voucher_number ?? "").split("-");
           const cid = parseInt(parts[parts.length - 1]);
           if (!isNaN(cid)) {
             guarContractIds2.add(cid);
-            guarAmountMap2.set(cid, parseNum(row.total_amount));
+            guarAmountMap2.set(cid, toMoney(row.total_amount as string));
           }
         }
         for (const c of contracts) {
-          const gAmt = parseNum(c.guaranteeAmount);
+          const gAmt = toMoney(c.guaranteeAmount).toNumber();
           const flagOn = c.guaranteePostedToStatement;
           const hasVouc = guarContractIds2.has(c.id);
-          const postedAmt = parseNum(c.guaranteePostedAmount ?? String(gAmt));
-          const voucherAmt = guarAmountMap2.get(c.id) ?? 0;
+          const postedAmtExact = toMoney(c.guaranteePostedAmount ?? String(gAmt));
+          const postedAmt = postedAmtExact.toNumber();
+          const voucherAmtExact = guarAmountMap2.get(c.id) ?? new MoneyDecimal(0);
+          const voucherAmt = voucherAmtExact.toNumber();
 
           if (flagOn && !hasVouc) {
             // Reset flag — no voucher entry exists, UI was showing green incorrectly
@@ -332,7 +348,7 @@ export function registerBalanceRepairApplyRoutes(app: Express) {
               .update(propertyContracts)
               .set({ guaranteePostedToStatement: true, guaranteePostedAmount: String(gAmt) })
               .where(eq(propertyContracts.id, c.id));
-          } else if (flagOn && hasVouc && Math.abs(voucherAmt - postedAmt) > 0.01) {
+          } else if (flagOn && hasVouc && voucherAmtExact.minus(postedAmtExact).abs().gt("0.01")) {
             // Sync amount on contract to match actual voucher amount
             snapshot.depositSnapshots.push({
               contractId: c.id,
@@ -343,7 +359,7 @@ export function registerBalanceRepairApplyRoutes(app: Express) {
             });
             await db
               .update(propertyContracts)
-              .set({ guaranteePostedAmount: String(voucherAmt) })
+              .set({ guaranteePostedAmount: voucherAmtExact.toFixed(2) })
               .where(eq(propertyContracts.id, c.id));
           }
         }

@@ -1,8 +1,7 @@
 import type { DbTransaction } from "../../../db";
-import {
-  infrastructurePostingIdentity,
-  insertInfrastructureVoucherTx,
-} from "../../accounting/infrastructureVoucherIdentity";
+import type Decimal from "decimal.js";
+import { sumMoney } from "../../../lib/money";
+import { postFactoryPartyLineVoucherTx, postFactoryVoucherTx } from "../../factory/factoryVoucherPosting";
 import { and, eq, isNull } from "drizzle-orm";
 import * as schema from "@shared/schema";
 
@@ -36,9 +35,15 @@ export async function postSupplierPartnerJournals(
     .limit(1);
   if (company?.companyType !== "supplier_partner") return;
 
-  const validAgentLines = (input.agentChargeLines ?? []).filter((line) => line.amountUsd > 0);
-  const totalAgentAmount = validAgentLines.reduce((sum, line) => sum + line.amountUsd, 0);
-  const totalOtw = amount(container.grandTotal);
+  // Phase 22 (C): exact Decimal amounts (were float sums) and every journal
+  // through the engine with its offload posting identity; the SP-* family
+  // numbers are read as identity (offload reverse, voucher lists), so they keep
+  // their prefix with the container id as the suffix (was Date.now()).
+  const validAgentLines = (input.agentChargeLines ?? [])
+    .map((line) => ({ ...line, amount: amount(line.amountUsd).toDecimalPlaces(2) }))
+    .filter((line) => line.amount.greaterThan(0));
+  const totalAgentAmount = sumMoney(validAgentLines.map((line) => line.amount));
+  const totalOtw = amount(container.grandTotal).toDecimalPlaces(2);
 
   const otw = await getSpAccount(tx, container.companyId, "sp_goods_otw");
   const otwClearing = await getSpAccount(tx, container.companyId, "sp_otw_clearing");
@@ -69,185 +74,139 @@ export async function postSupplierPartnerJournals(
     }
   }
 
-  if (totalOtw > 0) {
-    const { voucher: reversalVoucher } = await insertInfrastructureVoucherTx(
-      tx,
-      {
-        companyId: container.companyId,
-        voucherType: "Journal",
-        voucherNumber: `SP-OTW-REV-ERP-${container.id}-${Date.now()}`,
-        voucherDate: input.offloadDate,
-        description: `Goods OTW Reversal — ERP container #${container.id}`,
-        totalAmount: String(totalOtw),
-        currency: "USD",
-        exchangeRate: "1",
-        sourceModule: "SP",
-      },
-      infrastructurePostingIdentity("sp-container-offload", `${container.companyId}:${container.id}`, "otw-reversal"),
-      { totalOtw, purchaseOrders }
-    );
-
+  if (totalOtw.greaterThan(0)) {
     const poTotals = purchaseOrders
       .map((po) => ({
         supplierId: po.supplierId,
-        value:
-          amount(po.itemsTotal) +
-          amount(po.freight) +
-          amount(po.otherCharges) +
-          amount(po.surcharge) +
-          amount(po.fumigation) +
-          amount(po.documentCharges) -
-          amount(po.discount),
+        value: amount(po.itemsTotal)
+          .plus(amount(po.freight))
+          .plus(amount(po.otherCharges))
+          .plus(amount(po.surcharge))
+          .plus(amount(po.fumigation))
+          .plus(amount(po.documentCharges))
+          .minus(amount(po.discount))
+          .toDecimalPlaces(2),
       }))
-      .filter((row) => row.value > 0);
+      .filter((row) => row.value.greaterThan(0));
 
+    // The OTW clearing lines carry the clearing account AND the purchase
+    // supplier (party detail read by the SP OTW reports). The engine takes one
+    // target per line (customer + linked ledger is its only pair), so this one
+    // journal goes through the party-line writer (identity, Decimal, a
+    // deterministic number) until the control-account model (C9) decides how a
+    // party rides on a control-account line.
+    type ReversalLine = { supplierId: number | null; debit: Decimal };
+    const reversalLines: ReversalLine[] = [];
     if (poTotals.length === 0) {
-      await tx.insert(schema.voucherEntries).values({
-        voucherId: reversalVoucher.id,
-        ledgerAccountId: otwClearing.id,
-        supplierId: null,
-        debitAmount: String(totalOtw),
-        creditAmount: "0",
-        narration: `OTW Clearing reversal — ERP container #${container.id}`,
-      });
+      reversalLines.push({ supplierId: null, debit: totalOtw });
     } else {
-      const calculatedTotal = poTotals.reduce((sum, row) => sum + row.value, 0);
+      const calculatedTotal = sumMoney(poTotals.map((row) => row.value));
       for (let index = 0; index < poTotals.length; index += 1) {
         const row = poTotals[index];
-        const debit = index === poTotals.length - 1 ? row.value + (totalOtw - calculatedTotal) : row.value;
-        if (debit <= 0) {
+        const debit = index === poTotals.length - 1 ? row.value.plus(totalOtw.minus(calculatedTotal)) : row.value;
+        if (debit.lessThanOrEqualTo(0)) {
           throw new ContainerOffloadLifecycleError(
             "SP purchase-order totals do not reconcile to the container OTW value.",
             409,
             "CONTAINER_OFFLOAD_SP_OTW_MISMATCH"
           );
         }
-        await tx.insert(schema.voucherEntries).values({
-          voucherId: reversalVoucher.id,
-          ledgerAccountId: otwClearing.id,
-          supplierId: row.supplierId ?? null,
-          debitAmount: debit.toFixed(2),
-          creditAmount: "0",
-          narration: `OTW Clearing reversal — ERP container #${container.id}`,
-        });
+        reversalLines.push({ supplierId: row.supplierId ?? null, debit });
       }
     }
-
-    await tx.insert(schema.voucherEntries).values({
-      voucherId: reversalVoucher.id,
-      ledgerAccountId: otw.id,
-      debitAmount: "0",
-      creditAmount: totalOtw.toFixed(2),
-      narration: `Goods OTW reversal — ERP container #${container.id}`,
+    await postFactoryPartyLineVoucherTx(tx, {
+      companyId: container.companyId,
+      voucherNumber: (generation) => `SP-OTW-REV-ERP-${container.id}-${generation}`,
+      voucherDate: input.offloadDate,
+      description: `Goods OTW Reversal — ERP container #${container.id}`,
+      sourceModule: "SP",
+      source: {
+        sourceType: "sp-container-offload",
+        sourceId: `${container.companyId}:${container.id}`,
+        phase: "otw-reversal",
+      },
+      lines: [
+        ...reversalLines.map((line) => ({
+          ledgerAccountId: otwClearing.id,
+          supplierId: line.supplierId,
+          debit: line.debit,
+          narration: `OTW Clearing reversal — ERP container #${container.id}`,
+        })),
+        { ledgerAccountId: otw.id, credit: totalOtw, narration: `Goods OTW reversal — ERP container #${container.id}` },
+      ],
     });
 
-    const { voucher: stockVoucher } = await insertInfrastructureVoucherTx(
-      tx,
-      {
-        companyId: container.companyId,
-        voucherType: "Journal",
-        voucherNumber: `SP-STOCK-ERP-${container.id}-${Date.now()}`,
-        voucherDate: input.offloadDate,
-        description: `Stock cost recognition — ERP container #${container.id}`,
-        totalAmount: totalOtw.toFixed(2),
-        currency: "USD",
-        exchangeRate: "1",
-        sourceModule: "SP",
+    await postFactoryVoucherTx(tx, {
+      companyId: container.companyId,
+      voucherNumber: (generation) => `SP-STOCK-ERP-${container.id}-${generation}`,
+      voucherDate: input.offloadDate,
+      description: `Stock cost recognition — ERP container #${container.id}`,
+      sourceModule: "SP",
+      source: {
+        sourceType: "sp-container-offload",
+        sourceId: `${container.companyId}:${container.id}`,
+        phase: "stock-recognition",
       },
-      infrastructurePostingIdentity(
-        "sp-container-offload",
-        `${container.companyId}:${container.id}`,
-        "stock-recognition"
-      ),
-      { totalOtw }
-    );
-    await tx.insert(schema.voucherEntries).values([
-      {
-        voucherId: stockVoucher.id,
-        ledgerAccountId: stock.id,
-        debitAmount: totalOtw.toFixed(2),
-        creditAmount: "0",
-        narration: `Stock on floor — ERP container #${container.id}`,
-      },
-      {
-        voucherId: stockVoucher.id,
-        ledgerAccountId: costClearing.id,
-        debitAmount: "0",
-        creditAmount: totalOtw.toFixed(2),
-        narration: `Base goods cost payable — ERP container #${container.id}`,
-      },
-    ]);
+      lines: [
+        { ledgerAccountId: stock.id, debit: totalOtw, narration: `Stock on floor — ERP container #${container.id}` },
+        {
+          ledgerAccountId: costClearing.id,
+          credit: totalOtw,
+          narration: `Base goods cost payable — ERP container #${container.id}`,
+        },
+      ],
+    });
   }
 
   if (validAgentLines.length > 0 && parentIntercompany && spIntercompany && prepaidExpenses) {
-    const { voucher: settlement } = await insertInfrastructureVoucherTx(
-      tx,
-      {
-        companyId: container.companyId,
-        voucherType: "Journal",
-        voucherNumber: `SP-AGENT-SETTLE-${container.id}-${Date.now()}`,
-        voucherDate: input.offloadDate,
-        description: `Agent charge settlement via parent company — container #${container.id}`,
-        totalAmount: totalAgentAmount.toFixed(2),
-        currency: "USD",
-        exchangeRate: "1",
-        sourceModule: "SP",
+    await postFactoryVoucherTx(tx, {
+      companyId: container.companyId,
+      voucherNumber: (generation) => `SP-AGENT-SETTLE-${container.id}-${generation}`,
+      voucherDate: input.offloadDate,
+      description: `Agent charge settlement via parent company — container #${container.id}`,
+      sourceModule: "SP",
+      source: {
+        sourceType: "sp-container-offload",
+        sourceId: `${container.companyId}:${container.id}`,
+        phase: "agent-settlement",
       },
-      infrastructurePostingIdentity(
-        "sp-container-offload",
-        `${container.companyId}:${container.id}`,
-        "agent-settlement"
-      ),
-      { validAgentLines, totalAgentAmount }
-    );
-    await tx.insert(schema.voucherEntries).values([
-      {
-        voucherId: settlement.id,
-        ledgerAccountId: spIntercompany.id,
-        debitAmount: totalAgentAmount.toFixed(2),
-        creditAmount: "0",
-        narration: `Agent charges via parent company — ERP container #${container.id}`,
-      },
-      {
-        voucherId: settlement.id,
-        ledgerAccountId: prepaidExpenses.id,
-        debitAmount: "0",
-        creditAmount: totalAgentAmount.toFixed(2),
-        narration: `Prepaid expenses used for agent charges — ERP container #${container.id}`,
-      },
-    ]);
-
-    const { voucher: parentVoucher } = await insertInfrastructureVoucherTx(
-      tx,
-      {
-        companyId: parentCompanyId,
-        voucherType: "Journal",
-        voucherNumber: `SP-AGENT-ERP-${container.id}-${Date.now()}`,
-        voucherDate: input.offloadDate,
-        description: `Agent charges for ERP offload — container #${container.id}`,
-        totalAmount: totalAgentAmount.toFixed(2),
-        currency: "USD",
-        exchangeRate: "1",
-        sourceModule: "SP",
-      },
-      infrastructurePostingIdentity("sp-container-offload", `${container.companyId}:${container.id}`, "parent-agent"),
-      { validAgentLines, totalAgentAmount, parentCompanyId }
-    );
-    await tx.insert(schema.voucherEntries).values({
-      voucherId: parentVoucher.id,
-      ledgerAccountId: parentIntercompany.id,
-      debitAmount: totalAgentAmount.toFixed(2),
-      creditAmount: "0",
-      narration: `ERP container offload agent charges — container #${container.id}`,
+      lines: [
+        {
+          ledgerAccountId: spIntercompany.id,
+          debit: totalAgentAmount,
+          narration: `Agent charges via parent company — ERP container #${container.id}`,
+        },
+        {
+          ledgerAccountId: prepaidExpenses.id,
+          credit: totalAgentAmount,
+          narration: `Prepaid expenses used for agent charges — ERP container #${container.id}`,
+        },
+      ],
     });
-    for (const line of validAgentLines) {
-      await tx.insert(schema.voucherEntries).values({
-        voucherId: parentVoucher.id,
-        ledgerAccountId: line.parentAgentAccountId,
-        debitAmount: "0",
-        creditAmount: line.amountUsd.toFixed(2),
-        narration: `Agent credit for ERP container #${container.id}${line.description ? ` — ${line.description}` : ""}`,
-      });
-    }
+
+    await postFactoryVoucherTx(tx, {
+      companyId: parentCompanyId,
+      voucherNumber: (generation) => `SP-AGENT-ERP-${container.id}-${generation}`,
+      voucherDate: input.offloadDate,
+      description: `Agent charges for ERP offload — container #${container.id}`,
+      sourceModule: "SP",
+      source: {
+        sourceType: "sp-container-offload",
+        sourceId: `${container.companyId}:${container.id}`,
+        phase: "parent-agent",
+      },
+      lines: [
+        {
+          ledgerAccountId: parentIntercompany.id,
+          debit: totalAgentAmount,
+          narration: `ERP container offload agent charges — container #${container.id}`,
+        },
+        ...validAgentLines.map((line) => ({
+          ledgerAccountId: line.parentAgentAccountId,
+          credit: line.amount,
+          narration: `Agent credit for ERP container #${container.id}${line.description ? ` — ${line.description}` : ""}`,
+        })),
+      ],
+    });
   }
 }

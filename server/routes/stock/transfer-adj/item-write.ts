@@ -106,33 +106,36 @@ export function registerStockItemWriteRoutes(app: Express) {
         }
       }
 
-      const updated = await storage.updateStockItem(stockItemId, updates);
-      try {
+      // Phase 21 (B): the write and its audit commit together.
+      const updated = await db.transaction(async (tx) => {
+        const written = await storage.updateStockItem(stockItemId, updates, tx);
         const _stockChanges: Record<string, { old?: unknown; new?: unknown }> = {};
         for (const _f of ["name", "code", "uom", "barcode", "sellingPrice", "active"] as const) {
           if (
             String((existingItem as { [key: string]: unknown })[_f] ?? "") !==
-            String((updated as { [key: string]: unknown })[_f] ?? "")
+            String((written as { [key: string]: unknown })[_f] ?? "")
           ) {
             _stockChanges[_f] = {
               old: (existingItem as { [key: string]: unknown })[_f],
-              new: (updated as { [key: string]: unknown })[_f],
+              new: (written as { [key: string]: unknown })[_f],
             };
           }
         }
-        await logAudit({
-          userId: req.session.userId!,
-          username: req.session.username || "unknown",
-          companyId: req.session.currentCompanyId!,
-          action: "update",
-          tableName: "stock_items",
-          recordId: updated.id,
-          recordIdentifier: updated.name,
-          changes: _stockChanges,
-        });
-      } catch {
-        /* non-fatal */
-      }
+        await logAudit(
+          {
+            userId: req.session.userId!,
+            username: req.session.username || "unknown",
+            companyId: req.session.currentCompanyId!,
+            action: "update",
+            tableName: "stock_items",
+            recordId: written.id,
+            recordIdentifier: written.name,
+            changes: _stockChanges,
+          },
+          tx
+        );
+        return written;
+      });
       res.json(updated);
     } catch (error: unknown) {
       res.status(500).json({ message: getErrorMessage(error) });
@@ -175,26 +178,28 @@ export function registerStockItemWriteRoutes(app: Express) {
         });
       }
 
-      await storage.deleteStockItem(stockItemId);
-      try {
-        await logAudit({
-          userId: req.session.userId!,
-          username: req.session.username || "unknown",
-          companyId: req.session.currentCompanyId!,
-          action: "delete",
-          tableName: "stock_items",
-          recordId: existingItem.id,
-          recordIdentifier: existingItem.name,
-          changes: {
-            name: { old: existingItem.name },
-            code: { old: existingItem.code },
-            uom: { old: existingItem.uom },
-            sellingPrice: { old: existingItem.sellingPrice || "0" },
+      // Phase 21 (B): the write and its audit commit together.
+      await db.transaction(async (tx) => {
+        await storage.deleteStockItem(stockItemId, tx);
+        await logAudit(
+          {
+            userId: req.session.userId!,
+            username: req.session.username || "unknown",
+            companyId: req.session.currentCompanyId!,
+            action: "delete",
+            tableName: "stock_items",
+            recordId: existingItem.id,
+            recordIdentifier: existingItem.name,
+            changes: {
+              name: { old: existingItem.name },
+              code: { old: existingItem.code },
+              uom: { old: existingItem.uom },
+              sellingPrice: { old: existingItem.sellingPrice || "0" },
+            },
           },
-        });
-      } catch {
-        /* non-fatal */
-      }
+          tx
+        );
+      });
       res.json({ message: "Stock item deleted successfully" });
     } catch (error: unknown) {
       res.status(500).json({ message: getErrorMessage(error) });

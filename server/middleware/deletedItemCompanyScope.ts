@@ -20,6 +20,7 @@ import {
   suppliers,
   vouchers,
 } from "@shared/schema";
+import { companyScopedSuppliers } from "@shared/schema/supplierCompanyScope";
 import { db } from "../db";
 import { logger } from "../lib/logger";
 import { resolveActiveCompanyId } from "../routes/helpers/resolveActiveCompanyId";
@@ -38,6 +39,7 @@ const SCOPE_TABLES: Partial<Record<DeletedItemScopeType, CompanyScopedTable>> = 
   ledgerAccount: ledgerAccounts,
   employee: employees,
   customer: customers,
+  supplier: companyScopedSuppliers,
   bankAccount: bankAccounts,
   voucher: vouchers,
   orphanedPosSale: vouchers,

@@ -7,6 +7,7 @@
  * under ./accountslegacy. The account table, statement view and the existing
  * AccountDialogs bundle are unchanged.
  */
+import { NotInLedgerSection } from "./accountslegacy/NotInLedgerSection";
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Layers, Plus, Search, X } from "lucide-react";
@@ -251,35 +252,44 @@ export default function Accounts() {
                   )}
                 </div>
               ) : (
-                <AccountStatementView
-                  selectedAccount={presentedSelectedAccount ?? selectedAccount}
-                  onClose={closeSelectedAccount}
-                  periodFilter={model.periodFilter}
-                  setPeriodFilter={model.setPeriodFilter}
-                  vouchersWithBalance={presentedStatement.vouchersWithBalance}
-                  closingBalance={presentedStatement.closingBalance}
-                  openingBalance={presentedStatement.openingBalance}
-                  transactionsLoading={model.transactionsLoading}
-                  transactionError={(model.transactionsQueryError as Error | null)?.message ?? null}
-                  selectedVoucherIds={model.selectedVoucherIds}
-                  toggleSelectAll={model.toggleSelectAll}
-                  setShowBulkDeleteConfirm={model.setShowBulkDeleteConfirm}
-                  showDeletedVouchers={model.showDeletedVouchers}
-                  setShowDeletedVouchers={model.setShowDeletedVouchers}
-                  formatAmount={(amt) => model.formatAmountForAccount(amt, selectedAccount?.type)}
-                  hideBalances={model.hideBalances}
-                  printRef={model.printRef}
-                  appMode={model.appMode}
-                  formatDisplayDate={model.formatDisplayDate}
-                  toggleVoucherSelection={model.toggleVoucherSelection}
-                  handleOpenVoucher={model.handleOpenVoucher}
-                  waRule={selectedAccountIsLedger ? (model.waRule ?? null) : null}
-                  openWaRuleDialog={selectedAccountIsLedger ? model.openWaRuleDialog : () => {}}
-                  sendWaStatementMutation={model.sendWaStatementMutation}
-                  isBrokerSupplier={false}
-                  factoryStatementLoading={false}
-                  brokerStatementLoading={false}
-                />
+                <>
+                  <AccountStatementView
+                    selectedAccount={presentedSelectedAccount ?? selectedAccount}
+                    onClose={closeSelectedAccount}
+                    periodFilter={model.periodFilter}
+                    setPeriodFilter={model.setPeriodFilter}
+                    vouchersWithBalance={presentedStatement.vouchersWithBalance}
+                    closingBalance={presentedStatement.closingBalance}
+                    openingBalance={presentedStatement.openingBalance}
+                    transactionsLoading={model.transactionsLoading}
+                    transactionError={(model.transactionsQueryError as Error | null)?.message ?? null}
+                    selectedVoucherIds={model.selectedVoucherIds}
+                    toggleSelectAll={model.toggleSelectAll}
+                    setShowBulkDeleteConfirm={model.setShowBulkDeleteConfirm}
+                    showDeletedVouchers={model.showDeletedVouchers}
+                    setShowDeletedVouchers={model.setShowDeletedVouchers}
+                    formatAmount={(amt) => model.formatAmountForAccount(amt, selectedAccount?.type)}
+                    hideBalances={model.hideBalances}
+                    printRef={model.printRef}
+                    appMode={model.appMode}
+                    formatDisplayDate={model.formatDisplayDate}
+                    toggleVoucherSelection={model.toggleVoucherSelection}
+                    handleOpenVoucher={model.handleOpenVoucher}
+                    waRule={selectedAccountIsLedger ? (model.waRule ?? null) : null}
+                    openWaRuleDialog={selectedAccountIsLedger ? model.openWaRuleDialog : () => {}}
+                    sendWaStatementMutation={model.sendWaStatementMutation}
+                    isBrokerSupplier={false}
+                    factoryStatementLoading={false}
+                    brokerStatementLoading={false}
+                  />
+                  {model.notInLedger && (
+                    <NotInLedgerSection
+                      data={model.notInLedger}
+                      formatAmount={(amt) => model.formatAmountForAccount(amt, selectedAccount?.type)}
+                      formatDisplayDate={model.formatDisplayDate}
+                    />
+                  )}
+                </>
               )}
             </TabsContent>
           )}

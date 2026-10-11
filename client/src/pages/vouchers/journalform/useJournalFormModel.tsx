@@ -341,8 +341,8 @@ export function useJournalFormModel({ voucherIdToEdit, isPOS }: JournalFormProps
   const focusVisibleJournalInput = (testIds: string[], select = false, delay = 50) => {
     setTimeout(() => {
       if (typeof document === "undefined") return;
-      const candidates = testIds.flatMap((testId) =>
-        Array.from(document.querySelectorAll(`[data-testid="${testId}"]`)) as HTMLInputElement[]
+      const candidates = testIds.flatMap(
+        (testId) => Array.from(document.querySelectorAll(`[data-testid="${testId}"]`)) as HTMLInputElement[]
       );
       const input = candidates.find((candidate) => candidate.offsetParent !== null) || candidates[0];
       input?.focus();
@@ -360,10 +360,7 @@ export function useJournalFormModel({ voucherIdToEdit, isPOS }: JournalFormProps
     setJournalAccountHighlightedIndex(0);
     setShowAccountSidebar(false);
     setActiveJournalRowState(null);
-    focusVisibleJournalInput(
-      [`input-journal-amount-${rowIndex}`, `input-journal-amount-mobile-${rowIndex}`],
-      true
-    );
+    focusVisibleJournalInput([`input-journal-amount-${rowIndex}`, `input-journal-amount-mobile-${rowIndex}`], true);
   };
 
   const getAccountBalance = (accountType: string, accountId: number): number =>
@@ -388,10 +385,7 @@ export function useJournalFormModel({ voucherIdToEdit, isPOS }: JournalFormProps
         journalForm.setValue(`entries.${index}.amount`, formatNumber(remaining));
       }
     }
-    focusVisibleJournalInput(
-      [`input-journal-account-${index}`, `input-journal-account-mobile-${index}`],
-      false
-    );
+    focusVisibleJournalInput([`input-journal-account-${index}`, `input-journal-account-mobile-${index}`], false);
   };
 
   useEffect(() => {
@@ -486,10 +480,19 @@ export function useJournalFormModel({ voucherIdToEdit, isPOS }: JournalFormProps
         exchangeRate: transactionRate ? transactionRate.toString() : undefined,
         effectiveDate: journalEffectiveDate || null,
       };
-      const response = voucherIdToEdit
-        ? await modeApiRequest("PATCH", `/api/vouchers/${voucherIdToEdit}/journal`, payload)
-        : await modeApiRequest("POST", "/api/vouchers/journal", payload);
-      return response.json();
+      if (voucherIdToEdit) {
+        return (await modeApiRequest("PATCH", `/api/vouchers/${voucherIdToEdit}/journal`, payload)).json();
+      }
+      try {
+        return (await modeApiRequest("POST", "/api/vouchers/journal", payload)).json();
+      } catch (error: unknown) {
+        // Phase 22 (B), D6: a Golden Coast owner withdrawal is posted as its
+        // template only when the user confirms it (OK); Cancel posts it as entered.
+        if ((error as { code?: unknown } | null)?.code !== "GC_OWNER_WITHDRAWAL_TEMPLATE_CONFIRM") throw error;
+        const useTemplate = window.confirm(errorMessage(error, ""));
+        const confirmed = { ...payload, goldenCoastOwnerWithdrawalTemplate: useTemplate };
+        return (await modeApiRequest("POST", "/api/vouchers/journal", confirmed)).json();
+      }
     },
     onSuccess: async (data: unknown) => {
       const editing = !!voucherIdToEdit;

@@ -10,83 +10,113 @@ import { db } from "../../db";
 import { storage } from "../../storage";
 import { requireAuth, requireRole, requireNonPOS } from "../../auth";
 import { logAudit } from "../_helpers";
+import { toMoney } from "../../lib/money";
 import { ledgerAccounts, voucherEntries } from "@shared/schema";
 import { eq, and, inArray, isNull } from "drizzle-orm";
-import { toMoney } from "../../lib/money";
+import { isSystemResolvedAccountCode } from "../../services/accounting/systemAccounts";
+import { ledgerParentErrorResponse } from "./write";
+
+// Phase 19 (B), C6: the accounts the system resolves by code are never deleted
+// (the close would lose its retained-earnings account, postings their control
+// accounts).
+export const SYSTEM_ACCOUNT_DELETE_REFUSED_CODE = "SYSTEM_ACCOUNT_DELETE_REFUSED" as const;
+export const SYSTEM_ACCOUNT_DELETE_REFUSED_MESSAGE = "This is a system account: it cannot be deleted.";
 
 export function registerLedgerAccountDeleteRoutes(app: Express) {
-  app.delete("/api/ledger-accounts/:id", requireAuth, requireNonPOS, async (req, res) => {
-    try {
-      if (!req.session.currentCompanyId) {
-        return res.status(400).json({ message: "No company selected" });
-      }
-
-      const accountId = parseInt(req.params.id);
-      if (isNaN(accountId)) {
-        return res.status(400).json({ message: "Invalid account ID" });
-      }
-
-      // Verify account exists and belongs to current company
-      const existingAccount = await storage.getLedgerAccountById(accountId);
-      if (!existingAccount) {
-        return res.status(404).json({ message: "Account not found" });
-      }
-      if (existingAccount.companyId !== req.session.currentCompanyId) {
-        return res.status(403).json({
-          message: "Access denied: Account belongs to a different company",
-        });
-      }
-
-      // Check if account is used in any voucher entries (scoped to this company)
-      const entries = await storage.getVoucherEntriesByLedger(
-        accountId,
-        undefined,
-        undefined,
-        req.session.currentCompanyId
-      );
-      if (entries && entries.length > 0) {
-        return res.status(400).json({
-          message:
-            "Cannot delete ledger account: It has been used in transactions. Please remove all related transactions first.",
-        });
-      }
-
-      // Check if account is a parent to other accounts
-      const allAccounts = await storage.getAllLedgerAccounts(req.session.currentCompanyId);
-      const hasChildren = allAccounts.some((acc) => acc.parentId === accountId);
-      if (hasChildren) {
-        return res.status(400).json({
-          message:
-            "Cannot delete ledger account: It is a parent account. Please remove or reassign child accounts first.",
-        });
-      }
-
-      await storage.deleteLedgerAccount(accountId);
+  // Phase 19 (B), C6: Admin or Owner (it was any non-POS user).
+  app.delete(
+    "/api/ledger-accounts/:id",
+    requireAuth,
+    requireNonPOS,
+    requireRole("Admin", "Owner"),
+    async (req, res) => {
       try {
-        await logAudit({
-          userId: req.session.userId!,
-          username: req.session.username || "unknown",
-          companyId: req.session.currentCompanyId!,
-          action: "delete",
-          tableName: "ledger_accounts",
-          recordId: existingAccount.id,
-          recordIdentifier: existingAccount.name,
-          changes: {
-            name: { old: existingAccount.name },
-            code: { old: existingAccount.code },
-            accountType: { old: existingAccount.accountType },
-            subType: { old: existingAccount.subType || null },
-            openingBalance: { old: existingAccount.openingBalance || "0" },
-          },
+        if (!req.session.currentCompanyId) {
+          return res.status(400).json({ message: "No company selected" });
+        }
+
+        const accountId = parseInt(req.params.id);
+        if (isNaN(accountId)) {
+          return res.status(400).json({ message: "Invalid account ID" });
+        }
+
+        // Verify account exists and belongs to current company
+        const existingAccount = await storage.getLedgerAccountById(accountId);
+        if (!existingAccount) {
+          return res.status(404).json({ message: "Account not found" });
+        }
+        if (existingAccount.companyId !== req.session.currentCompanyId) {
+          return res.status(403).json({
+            message: "Access denied: Account belongs to a different company",
+          });
+        }
+
+        if (isSystemResolvedAccountCode(existingAccount.code)) {
+          return res
+            .status(409)
+            .json({ message: SYSTEM_ACCOUNT_DELETE_REFUSED_MESSAGE, code: SYSTEM_ACCOUNT_DELETE_REFUSED_CODE });
+        }
+
+        // Check if account is used in any voucher entries (scoped to this company)
+        const entries = await storage.getVoucherEntriesByLedger(
+          accountId,
+          undefined,
+          undefined,
+          req.session.currentCompanyId
+        );
+        if (entries && entries.length > 0) {
+          return res.status(400).json({
+            message:
+              "Cannot delete ledger account: It has been used in transactions. Please remove all related transactions first.",
+          });
+        }
+
+        // Check if account is a parent to other accounts
+        const allAccounts = await storage.getAllLedgerAccounts(req.session.currentCompanyId);
+        const hasChildren = allAccounts.some((acc) => acc.parentId === accountId);
+        if (hasChildren) {
+          return res.status(400).json({
+            message:
+              "Cannot delete ledger account: It is a parent account. Please remove or reassign child accounts first.",
+          });
+        }
+
+        // Wave 16 (B): retired and audited in one transaction (the delete guard
+        // refuses an account that still has a balance).
+        await db.transaction(async (tx) => {
+          await tx
+            .update(ledgerAccounts)
+            .set({ deletedAt: new Date(), active: false })
+            .where(eq(ledgerAccounts.id, accountId));
+          await logAudit(
+            {
+              userId: req.session.userId!,
+              username: req.session.username || "unknown",
+              companyId: req.session.currentCompanyId!,
+              action: "delete",
+              tableName: "ledger_accounts",
+              recordId: existingAccount.id,
+              recordIdentifier: existingAccount.name,
+              changes: {
+                name: { old: existingAccount.name },
+                code: { old: existingAccount.code },
+                accountType: { old: existingAccount.accountType },
+                subType: { old: existingAccount.subType || null },
+                openingBalance: { old: existingAccount.openingBalance || "0" },
+                openingBalanceSide: { old: existingAccount.openingBalanceSide || null },
+              },
+            },
+            tx
+          );
         });
-      } catch {
-        /* non-fatal */
+        res.json({ message: "Ledger account deleted successfully" });
+      } catch (error: unknown) {
+        const parentRefused = ledgerParentErrorResponse(error);
+        if (parentRefused) return res.status(parentRefused.status).json(parentRefused.body);
+        res.status(400).json({ message: getErrorMessage(error) });
       }
-      res.json({ message: "Ledger account deleted successfully" });
-    } catch (error: unknown) {
-      res.status(400).json({ message: getErrorMessage(error) });
     }
-  });
+  );
 
   // Bulk-delete empty ledger accounts
   app.post("/api/ledger-accounts/bulk-delete", requireAuth, requireRole("Admin"), requireNonPOS, async (req, res) => {
@@ -127,6 +157,10 @@ export function registerLedgerAccountDeleteRoutes(app: Express) {
           skipped.push({ id, reason: "Not found or wrong company" });
           continue;
         }
+        if (isSystemResolvedAccountCode(account.code)) {
+          skipped.push({ id, reason: "System account" });
+          continue;
+        }
         if (usedIds.has(id)) {
           skipped.push({ id, reason: "Has voucher entries" });
           continue;
@@ -135,12 +169,35 @@ export function registerLedgerAccountDeleteRoutes(app: Express) {
           skipped.push({ id, reason: "Is a parent account" });
           continue;
         }
-        const ob = toMoney(account.openingBalance).toNumber();
-        if (Math.abs(ob) > 0.001) {
+        if (!toMoney(account.openingBalance).isZero()) {
           skipped.push({ id, reason: "Has opening balance" });
           continue;
         }
-        await storage.deleteLedgerAccount(id);
+        // Wave 16 (B): each retirement is audited in its own transaction.
+        await db.transaction(async (tx) => {
+          await tx
+            .update(ledgerAccounts)
+            .set({ deletedAt: new Date(), active: false })
+            .where(and(eq(ledgerAccounts.id, id), eq(ledgerAccounts.companyId, companyId)));
+          await logAudit(
+            {
+              userId: req.session.userId!,
+              username: req.session.username || "unknown",
+              companyId,
+              action: "delete",
+              tableName: "ledger_accounts",
+              recordId: id,
+              recordIdentifier: account.name,
+              changes: {
+                name: { old: account.name },
+                code: { old: account.code },
+                accountType: { old: account.accountType },
+                reason: { new: "bulk-delete of empty accounts" },
+              },
+            },
+            tx
+          );
+        });
         deleted.push(id);
       }
 

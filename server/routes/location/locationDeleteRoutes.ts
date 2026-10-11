@@ -1,5 +1,6 @@
 import type { Express } from "express";
-import { pool } from "../../db";
+import { db, pool } from "../../db";
+import { sql } from "drizzle-orm";
 import { requireAuth } from "../../auth";
 import { storage } from "../../storage";
 import { getErrorMessage } from "../../lib/httpHandlers";
@@ -30,7 +31,8 @@ export function registerLocationDeleteRoutes(app: Express) {
              FROM inventory
             WHERE location_id = $1
               AND company_id = $2
-              AND ABS(COALESCE(NULLIF(quantity::text, '')::numeric, 0)) > 0`,
+              AND (ABS(COALESCE(NULLIF(quantity::text, '')::numeric, 0)) > 0
+                   OR ABS(COALESCE(total_value, 0)) > 0)`,
           [locationId, companyId]
         ),
         pool.query(
@@ -53,37 +55,48 @@ export function registerLocationDeleteRoutes(app: Express) {
         });
       }
 
-      const result = await pool.query(
-        `UPDATE locations
-            SET active = FALSE,
-                deleted_at = NOW()
-          WHERE id = $1
-            AND company_id = $2
-            AND deleted_at IS NULL
-        RETURNING id, name, code, active, deleted_at`,
-        [locationId, companyId]
-      );
-
-      if (result.rowCount === 0) {
-        return res.status(404).json({ message: "Location not found" });
-      }
-
-      try {
-        await logAudit({
-          userId: req.session.userId!,
-          username: req.session.username || "unknown",
-          companyId,
-          action: "delete",
-          tableName: "locations",
-          recordId: locationId,
-          recordIdentifier: location.name,
-          changes: {
-            active: { old: location.active, new: false },
-            deletedAt: { old: location.deletedAt ?? null, new: result.rows[0].deleted_at },
+      // Phase 21 (B): the archive and its audit row commit together (the audit
+      // ran after commit and its failure was swallowed).
+      const archived = await db.transaction(async (tx) => {
+        const result = await tx.execute<{ id: number; name: string; deleted_at: Date | string | null }>(sql`
+          UPDATE locations
+             SET active = FALSE,
+                 deleted_at = NOW()
+           WHERE id = ${locationId}
+             AND company_id = ${companyId}
+             AND deleted_at IS NULL
+             -- Wave 11: re-checked in the same statement, so stock that arrives
+             -- between the check above and this update still blocks the delete.
+             AND NOT EXISTS (
+               SELECT 1 FROM inventory
+                WHERE location_id = ${locationId}
+                  AND (ABS(COALESCE(quantity, 0)) > 0 OR ABS(COALESCE(total_value, 0)) > 0)
+             )
+          RETURNING id, name, code, active, deleted_at
+        `);
+        const row = result.rows[0];
+        if (!row) return null;
+        await logAudit(
+          {
+            userId: req.session.userId!,
+            username: req.session.username || "unknown",
+            companyId,
+            action: "delete",
+            tableName: "locations",
+            recordId: locationId,
+            recordIdentifier: location.name,
+            changes: {
+              active: { old: location.active, new: false },
+              deletedAt: { old: location.deletedAt ?? null, new: row.deleted_at },
+            },
           },
-        });
-      } catch {
-        // Audit failures must not leave a successfully archived location visible.
+          tx
+        );
+        return row;
+      });
+
+      if (!archived) {
+        return res.status(404).json({ message: "Location not found" });
       }
 
       res.json({

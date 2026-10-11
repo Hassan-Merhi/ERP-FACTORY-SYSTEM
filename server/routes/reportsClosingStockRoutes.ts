@@ -11,9 +11,16 @@ import { logger } from "../lib/logger";
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { db } from "../db";
 import { storage } from "../storage";
-import { getAccessibleCompanyIds } from "../security/companyAccessBoundary";
 import { requireAuth, requireRole } from "../auth";
-import { adjustInventory } from "../inventoryHelper";
+import {
+  assertNoInventoryCutoverTx,
+  sendInventoryCutoverRefusal,
+} from "../services/accounting/perpetualInventory/cutoverRefusal";
+import { factoryBaleMirrorStockItemIds } from "../services/accounting/perpetualInventory/factoryValuation";
+import { countedStockRowValue } from "../services/inventory/stockValuation";
+
+export const TRANSFER_CLOSING_STOCK_RETIRED_MESSAGE =
+  "Transferring closing stock to another company has been retired: it moved stock value with no journal in either company. Use stock documents or the opening inventory journal instead.";
 import {
   inventory,
   stockItems,
@@ -47,6 +54,37 @@ function averageRate({ quantity, totalValue }: StockTotal): Decimal {
   return quantity.greaterThan(0) ? totalValue.dividedBy(quantity) : ZERO;
 }
 
+/**
+ * Stock by item over every non-deleted location of the company (active or
+ * inactive), each row valued as the stock valuation counts it
+ * (countedStockRowValue: total_value of a row holding stock, never negative)
+ * and bale-mirror items at zero value (the factory values those bales), so
+ * the report totals equal companyStockValuation().total (wave 11).
+ */
+async function countedInventoryByItem(companyId: number, itemIds?: number[]): Promise<Map<number, StockTotal>> {
+  const conditions = [eq(locations.companyId, companyId), isNull(locations.deletedAt)];
+  if (itemIds) conditions.push(inArray(inventory.stockItemId, itemIds));
+  const [rows, mirror] = await Promise.all([
+    db
+      .select({
+        stockItemId: inventory.stockItemId,
+        quantity: inventory.quantity,
+        totalValue: inventory.totalValue,
+      })
+      .from(inventory)
+      .innerJoin(locations, eq(inventory.locationId, locations.id))
+      .where(and(...conditions))
+      .execute(),
+    factoryBaleMirrorStockItemIds(db, companyId),
+  ]);
+  const byItem = new Map<number, StockTotal>();
+  for (const row of rows) {
+    const value = mirror.has(row.stockItemId) ? ZERO : countedStockRowValue(row.quantity, row.totalValue);
+    addStock(byItem, row.stockItemId, toMoney(row.quantity), value);
+  }
+  return byItem;
+}
+
 export function registerReportsClosingStockRoutes(app: Express) {
   // Closing Stock Summary - Current inventory values by stock group
   app.get("/api/reports/closing-stock-summary", requireAuth, async (req, res) => {
@@ -62,24 +100,7 @@ export function registerReportsClosingStockRoutes(app: Express) {
       // Get all stock items for the company
       const allStockItems = await storage.getAllStockItems(companyId);
 
-      // Get inventory data from active locations only
-      const inventoryData = await db
-        .select({
-          stockItemId: inventory.stockItemId,
-          quantity: inventory.quantity,
-          averageRate: inventory.averageRate,
-        })
-        .from(inventory)
-        .innerJoin(locations, eq(inventory.locationId, locations.id))
-        .where(and(eq(inventory.companyId, companyId), eq(locations.active, true), isNull(locations.deletedAt)))
-        .execute();
-
-      // Aggregate inventory by stock item - calculate value dynamically as qty * rate
-      const inventoryByItem = new Map<number, StockTotal>();
-      for (const inv of inventoryData) {
-        const qty = toMoney(inv.quantity);
-        addStock(inventoryByItem, inv.stockItemId, qty, qty.times(toMoney(inv.averageRate)));
-      }
+      const inventoryByItem = await countedInventoryByItem(companyId);
 
       // Build stock groups summary
       const stockGroupSummary = allStockGroups
@@ -134,143 +155,13 @@ export function registerReportsClosingStockRoutes(app: Express) {
     }
   });
 
-  // Transfer Closing Stock to Another Company as Opening Stock
-  app.post("/api/reports/transfer-closing-stock", requireAuth, requireRole("Admin"), async (req, res) => {
-    try {
-      const sourceCompanyId = req.session.currentCompanyId;
-      if (!sourceCompanyId) {
-        return res.status(400).json({ message: "No company selected" });
-      }
-
-      const { targetCompanyId: rawTargetId } = req.body;
-      if (!rawTargetId) {
-        return res.status(400).json({ message: "Target company is required" });
-      }
-
-      const targetCompanyId = typeof rawTargetId === "string" ? parseInt(rawTargetId, 10) : rawTargetId;
-      if (isNaN(targetCompanyId)) {
-        return res.status(400).json({ message: "Invalid target company ID" });
-      }
-
-      if (sourceCompanyId === targetCompanyId) {
-        return res.status(400).json({ message: "Cannot transfer to the same company" });
-      }
-
-      // Verify user has access to target company
-      const accessibleCompanyIds = await getAccessibleCompanyIds(req.user!.id);
-      if (!accessibleCompanyIds.has(targetCompanyId)) {
-        return res.status(403).json({ message: "You don't have access to the target company" });
-      }
-
-      // Get source company inventory from active locations
-      const sourceInventory = await db
-        .select({
-          stockItemId: inventory.stockItemId,
-          quantity: inventory.quantity,
-          averageRate: inventory.averageRate,
-        })
-        .from(inventory)
-        .innerJoin(locations, eq(inventory.locationId, locations.id))
-        .where(and(eq(inventory.companyId, sourceCompanyId), eq(locations.active, true), isNull(locations.deletedAt)))
-        .execute();
-
-      if (sourceInventory.length === 0) {
-        return res.status(400).json({ message: "No inventory found in source company" });
-      }
-
-      // Aggregate by stock item (combine quantities from multiple locations)
-      const aggregatedInventory = new Map<number, StockTotal>();
-      for (const inv of sourceInventory) {
-        const qty = toMoney(inv.quantity);
-        addStock(aggregatedInventory, inv.stockItemId, qty, qty.times(toMoney(inv.averageRate)));
-      }
-
-      // Check if target company already has inventory
-      const existingTargetInventory = await db
-        .select({ id: inventory.id })
-        .from(inventory)
-        .where(eq(inventory.companyId, targetCompanyId))
-        .limit(1);
-
-      if (existingTargetInventory.length > 0) {
-        return res.status(400).json({ message: "Target company already has inventory. Please reset it first." });
-      }
-
-      // Get the first location in target company (or create a default one)
-      const targetLocations = await storage.getAllLocations(targetCompanyId);
-      if (targetLocations.length === 0) {
-        return res
-          .status(400)
-          .json({ message: "Target company has no locations. Please create at least one location first." });
-      }
-      const defaultLocation = targetLocations[0];
-
-      // Get stock items that exist in source - we need to ensure they exist in target
-      const sourceStockItemIds = Array.from(aggregatedInventory.keys());
-      const sourceStockItems = await db.select().from(stockItems).where(inArray(stockItems.id, sourceStockItemIds));
-
-      // Map source stock item codes to target stock items — single batch query (was N queries)
-      const sourceCodes = sourceStockItems.map((i) => i.code).filter(Boolean) as string[];
-      const targetItemsInBatch =
-        sourceCodes.length > 0
-          ? await db
-              .select({ id: stockItems.id, code: stockItems.code })
-              .from(stockItems)
-              .where(and(eq(stockItems.companyId, targetCompanyId), inArray(stockItems.code, sourceCodes)))
-              .execute()
-          : [];
-      const targetItemsByCode = new Map(targetItemsInBatch.map((i) => [i.code, i.id]));
-
-      const stockItemMapping = new Map<number, number>();
-      for (const sourceItem of sourceStockItems) {
-        const targetId = targetItemsByCode.get(sourceItem.code);
-        if (targetId !== undefined) {
-          stockItemMapping.set(sourceItem.id, targetId);
-        } else {
-          return res.status(400).json({
-            message: `Stock item "${sourceItem.name}" (code: ${sourceItem.code}) doesn't exist in target company. Please create matching stock items first.`,
-          });
-        }
-      }
-
-      // Calculate total value for the opening balance voucher
-      let totalTransferValue = ZERO;
-      for (const [, data] of Array.from(aggregatedInventory)) {
-        totalTransferValue = totalTransferValue.plus(data.totalValue);
-      }
-
-      // Create opening inventory records in target company
-      await db.transaction(async (tx) => {
-        for (const [sourceStockItemId, data] of Array.from(aggregatedInventory)) {
-          const targetStockItemId = stockItemMapping.get(sourceStockItemId);
-          if (!targetStockItemId) continue;
-
-          await adjustInventory(
-            tx,
-            defaultLocation.id,
-            targetStockItemId,
-            data.quantity.toNumber(),
-            targetCompanyId,
-            averageRate(data).toNumber()
-          );
-        }
-      });
-
-      // Get company names for response
-      const sourceCompany = await storage.getCompanyById(sourceCompanyId);
-      const targetCompany = await storage.getCompanyById(targetCompanyId);
-
-      res.json({
-        success: true,
-        message: `Successfully transferred closing stock from ${sourceCompany?.name} to ${targetCompany?.name}`,
-        itemsTransferred: aggregatedInventory.size,
-        totalValue: totalTransferValue.toFixed(2),
-        targetLocation: defaultLocation.name,
-      });
-    } catch (error: unknown) {
-      logger.error("Error transferring closing stock:", { error: error });
-      res.status(500).json({ message: getErrorMessage(error) });
-    }
+  // Transfer Closing Stock to Another Company as Opening Stock — retired (wave 11).
+  // It copied one company's stock into another as opening stock with no journal
+  // in either company, so after a perpetual-inventory cut-over it would part the
+  // ledger from the sub-ledger. It is gone for every company; the read-only
+  // closing-stock reports stay.
+  app.post("/api/reports/transfer-closing-stock", requireAuth, requireRole("Admin"), (_req, res) => {
+    res.status(410).json({ code: "TRANSFER_CLOSING_STOCK_RETIRED", message: TRANSFER_CLOSING_STOCK_RETIRED_MESSAGE });
   });
 
   // Carry Forward Closing Stock to Opening Stock (same company)
@@ -281,28 +172,16 @@ export function registerReportsClosingStockRoutes(app: Express) {
         return res.status(400).json({ message: "No company selected" });
       }
 
+      // Wave 11: rewriting the opening stock is refused after the cut-over.
+      await assertNoInventoryCutoverTx(db, companyId, "carryforward-closing-stock");
+
       const { asOfDate } = req.body;
       const targetDate = asOfDate ? new Date(asOfDate) : new Date();
       const targetDateStr = targetDate.toISOString().split("T")[0];
 
-      // Get current inventory from active locations, aggregated by stock item
-      const currentInventory = await db
-        .select({
-          stockItemId: inventory.stockItemId,
-          quantity: inventory.quantity,
-          averageRate: inventory.averageRate,
-        })
-        .from(inventory)
-        .innerJoin(locations, eq(inventory.locationId, locations.id))
-        .where(and(eq(inventory.companyId, companyId), eq(locations.active, true), isNull(locations.deletedAt)))
-        .execute();
-
-      // Aggregate by stock item (combine quantities from multiple locations)
-      const aggregatedInventory = new Map<number, StockTotal>();
-      for (const inv of currentInventory) {
-        const qty = toMoney(inv.quantity);
-        addStock(aggregatedInventory, inv.stockItemId, qty, qty.times(toMoney(inv.averageRate)));
-      }
+      // Current inventory of every non-deleted location, by stock item, valued
+      // by total_value (the stock valuation policy).
+      const aggregatedInventory = await countedInventoryByItem(companyId);
 
       // Get sales items from vouchers AFTER the target date and add them back
       // (Sales reduce inventory, so we add them back to get historical inventory)
@@ -444,6 +323,7 @@ export function registerReportsClosingStockRoutes(app: Express) {
         asOfDate: targetDateStr,
       });
     } catch (error: unknown) {
+      if (sendInventoryCutoverRefusal(res, error)) return;
       logger.error("Error carrying forward closing stock:", { error: error });
       res.status(500).json({ message: getErrorMessage(error) });
     }
@@ -475,33 +355,8 @@ export function registerReportsClosingStockRoutes(app: Express) {
       // Get inventory for these items from active locations
       const itemIds = groupItems.map((i) => i.id);
 
-      const inventoryData =
-        itemIds.length > 0
-          ? await db
-              .select({
-                stockItemId: inventory.stockItemId,
-                quantity: inventory.quantity,
-                averageRate: inventory.averageRate,
-              })
-              .from(inventory)
-              .innerJoin(locations, eq(inventory.locationId, locations.id))
-              .where(
-                and(
-                  eq(inventory.companyId, companyId),
-                  inArray(inventory.stockItemId, itemIds),
-                  eq(locations.active, true),
-                  isNull(locations.deletedAt)
-                )
-              )
-              .execute()
-          : [];
-
-      // Aggregate by stock item - calculate value dynamically as qty * rate
-      const inventoryByItem = new Map<number, StockTotal>();
-      for (const inv of inventoryData) {
-        const qty = toMoney(inv.quantity);
-        addStock(inventoryByItem, inv.stockItemId, qty, qty.times(toMoney(inv.averageRate)));
-      }
+      const inventoryByItem =
+        itemIds.length > 0 ? await countedInventoryByItem(companyId, itemIds) : new Map<number, StockTotal>();
 
       // Build items list
       const items = groupItems

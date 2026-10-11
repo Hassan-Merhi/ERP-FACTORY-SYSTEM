@@ -96,6 +96,9 @@ const harness = vi.hoisted(() => {
     assertNoLaterSupplierCostEvents: vi.fn(),
     resolveLegacyPostOffloadAccountingLinks: vi.fn(),
     updateContainerCost: vi.fn(),
+    postFactoryVoucherTx: vi.fn(),
+    retireVouchersTx: vi.fn(),
+    editPostedFactoryVoucherTx: vi.fn(async (_tx: unknown, _input: unknown, edit: () => Promise<unknown>) => edit()),
   };
 });
 
@@ -130,6 +133,19 @@ vi.mock("../server/services/factory/post-offload-charge/loaders", () => ({
   computeRemainingFraction: harness.computeRemainingFraction,
   loadActiveCharges: harness.loadActiveCharges,
   loadCostInputs: harness.loadCostInputs,
+}));
+
+// Phase 22 (C): the charge voucher is posted through the engine (postFactoryVoucherTx),
+// an in-place edit runs inside editPostedFactoryVoucherTx (audited; 409 when the
+// period is closed) and a reversed charge's voucher is retired.
+vi.mock("../server/services/factory/factoryVoucherPosting", () => ({
+  postFactoryVoucherTx: harness.postFactoryVoucherTx,
+}));
+vi.mock("../server/services/factory/factoryVoucherCorrection", () => ({
+  editPostedFactoryVoucherTx: harness.editPostedFactoryVoucherTx,
+}));
+vi.mock("../server/services/accounting/voucherRetirement", () => ({
+  retireVouchersTx: harness.retireVouchersTx,
 }));
 
 import { applyPostOffloadChargeMutation } from "../server/services/factory/post-offload-charge/apply";
@@ -172,6 +188,7 @@ describe("post-offload charge mutation positive paths", () => {
     harness.getAuthoritativeSupplierRemainingKg.mockResolvedValue(200);
     harness.cascadeContainerCostChange.mockResolvedValue({ updatedRawStockRows: 2 });
     harness.writeDaybookEntry.mockResolvedValue({ id: 301 });
+    harness.postFactoryVoucherTx.mockResolvedValue({ voucher: { id: 51 }, entries: [], replayed: false });
     harness.resolveLegacyPostOffloadAccountingLinks.mockImplementation(
       async (_tx: unknown, _companyId: number, _containerId: number, charge: unknown) => charge
     );
@@ -181,7 +198,7 @@ describe("post-offload charge mutation positive paths", () => {
     harness.selectResults.push([container], [{ rate: "5.24000000" }]);
     harness.loadActiveCharges.mockResolvedValue([]);
     harness.computeCorrectContainerCost.mockReturnValueOnce(oldCost).mockReturnValueOnce(newCost);
-    harness.returningResults.push([{ id: 41, ...chargeData }], [{ id: 51 }]);
+    harness.returningResults.push([{ id: 41, ...chargeData }]);
 
     const result = await applyPostOffloadChargeMutation(harness.tx, {
       action: "CREATE",
@@ -218,18 +235,21 @@ describe("post-offload charge mutation positive paths", () => {
         amountCurrency: 60,
       })
     );
-    expect(harness.insertedValues.filter(({ table }) => table === harness.tables.voucherEntries)).toHaveLength(2);
-    expect(harness.insertedValues).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          table: harness.tables.accountingPostingRequests,
-          values: expect.objectContaining({
-            sourceId: "4:9:41:voucher",
-            idempotencyKey: "infra:factory-post-offload-charge:4:9:41:voucher",
-          }),
-        }),
-      ])
+    expect(harness.postFactoryVoucherTx).toHaveBeenCalledWith(
+      harness.tx,
+      expect.objectContaining({
+        companyId: 4,
+        currency: "EUR",
+        fxRateToUsd: "2",
+        source: { sourceType: "factory-post-offload-charge", sourceId: "4:9:41", phase: "voucher" },
+        lines: [
+          expect.objectContaining({ ledgerAccountId: 88, debit: "60" }),
+          expect.objectContaining({ ledgerAccountId: 55, credit: "60" }),
+        ],
+      })
     );
+    const numberOf = harness.postFactoryVoucherTx.mock.calls[0][1].voucherNumber as (generation: number) => string;
+    expect(numberOf(1)).toBe("FACTORY-POC-9-41-1");
     expect(harness.updatedValues).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -249,7 +269,7 @@ describe("post-offload charge mutation positive paths", () => {
       daybookEntryId: 301,
       voucherId: 51,
     };
-    harness.selectResults.push([container], [existing], [{ rate: "5.08000000" }]);
+    harness.selectResults.push([container], [existing], [{ rate: "5.08000000" }], [{ companyId: 4 }]);
     harness.loadActiveCharges
       .mockResolvedValueOnce([{ id: 41, amount: "50" }])
       .mockResolvedValueOnce([{ id: 41, amount: "60" }]);
@@ -275,7 +295,14 @@ describe("post-offload charge mutation positive paths", () => {
         expect.objectContaining({ table: harness.tables.vouchers }),
       ])
     );
-    expect(harness.insertedValues.filter(({ table }) => table === harness.tables.voucherEntries)).toHaveLength(2);
+    expect(harness.editPostedFactoryVoucherTx).toHaveBeenCalledWith(
+      harness.tx,
+      expect.objectContaining({ companyId: 4, voucherIds: [51], newVoucherDate: "2026-08-11" }),
+      expect.any(Function)
+    );
+    const rebuilt = harness.insertedValues.filter(({ table }) => table === harness.tables.voucherEntries);
+    expect(rebuilt).toHaveLength(1);
+    expect(rebuilt[0].values).toHaveLength(2);
   });
 
   it("repairs missing daybook/accounting links during an edit and credits the selected supplier", async () => {
@@ -293,7 +320,7 @@ describe("post-offload charge mutation positive paths", () => {
       .mockResolvedValueOnce([{ id: 41, amount: "50" }])
       .mockResolvedValueOnce([{ id: 41, amount: "60" }]);
     harness.computeCorrectContainerCost.mockReturnValueOnce(oldCost).mockReturnValueOnce(newCost);
-    harness.returningResults.push([{ id: 52 }]);
+    harness.postFactoryVoucherTx.mockResolvedValue({ voucher: { id: 52 }, entries: [], replayed: false });
     harness.writeDaybookEntry.mockResolvedValue({ id: 303 });
 
     const result = await applyPostOffloadChargeMutation(harness.tx, {
@@ -316,21 +343,16 @@ describe("post-offload charge mutation positive paths", () => {
         amountCurrency: 60,
       })
     );
-    expect(harness.insertedValues).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ table: harness.tables.vouchers }),
-        expect.objectContaining({
-          table: harness.tables.accountingPostingRequests,
-          values: expect.objectContaining({
-            sourceId: "4:9:41:voucher",
-            idempotencyKey: "infra:factory-post-offload-charge:4:9:41:voucher",
-          }),
-        }),
-        expect.objectContaining({
-          table: harness.tables.voucherEntries,
-          values: expect.objectContaining({ factorySupplierId: 66, creditAmount: "60" }),
-        }),
-      ])
+    expect(harness.postFactoryVoucherTx).toHaveBeenCalledWith(
+      harness.tx,
+      expect.objectContaining({
+        currency: "EUR",
+        source: { sourceType: "factory-post-offload-charge", sourceId: "4:9:41", phase: "voucher" },
+        lines: [
+          expect.objectContaining({ ledgerAccountId: 88, debit: "60" }),
+          expect.objectContaining({ factorySupplierId: 66, credit: "60" }),
+        ],
+      })
     );
     expect(harness.updatedValues).toEqual(
       expect.arrayContaining([
@@ -358,6 +380,7 @@ describe("post-offload charge mutation positive paths", () => {
       [container],
       [existing],
       [{ rate: "4.76000000" }],
+      [{ companyId: 4 }],
       [{ currencyCode: "EUR", amountCurrency: "60", fxRateToUsd: "2", amountUsd: "120" }]
     );
     harness.loadActiveCharges.mockResolvedValue([{ id: 41, amount: "60" }]);
@@ -381,6 +404,11 @@ describe("post-offload charge mutation positive paths", () => {
       supplierInventoryValueDeltaUsd: "-48.000000",
       reversalDaybookEntryId: 302,
     });
+    // The voucher is retired (audited, number and identity released), not tombstoned in place.
+    expect(harness.retireVouchersTx).toHaveBeenCalledWith(
+      harness.tx,
+      expect.objectContaining({ companyId: 4, voucherIds: [51], reason: "post-offload-charge-reversed" })
+    );
     expect(harness.writeDaybookEntry).toHaveBeenCalledWith(
       harness.tx,
       expect.objectContaining({
@@ -391,10 +419,6 @@ describe("post-offload charge mutation positive paths", () => {
     );
     expect(harness.updatedValues).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({
-          table: harness.tables.vouchers,
-          values: expect.objectContaining({ deletedAt: expect.any(Date) }),
-        }),
         expect.objectContaining({
           table: harness.tables.factoryOffloadAdditionalCharges,
           values: expect.objectContaining({ reversalDaybookEntryId: 302 }),

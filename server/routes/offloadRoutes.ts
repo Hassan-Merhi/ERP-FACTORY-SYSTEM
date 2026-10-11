@@ -52,6 +52,8 @@ import {
   findContainerChargeVoucherDriftTx,
   repairContainerChargeVoucherDriftTx,
 } from "../services/containers/offload-lifecycle/charge-voucher-repair";
+import { normFactoryEntry } from "../services/factory/factoryVoucherEntryAmounts";
+import { FactoryFxRateRequiredError, factoryDocumentRate } from "../services/factory/factoryDocumentFxRate";
 
 /**
  * The state the caller asked for, when it stated one.
@@ -594,7 +596,8 @@ export function registerOffloadRoutes(app: Express) {
         let scanned = 0,
           created = 0,
           skippedExisting = 0,
-          errors = 0;
+          errors = 0,
+          refusedNoRate = 0;
         const errorDetails: string[] = [];
 
         // Fetch all post-offload charges that have a ledger account chosen
@@ -606,6 +609,7 @@ export function registerOffloadRoutes(app: Express) {
           c.amount,
           c.currency_code,
           c.fx_rate_to_usd,
+          c.fx_rate_confirmed,
           c.ledger_account_id,
           c.created_at,
           fc.container_number
@@ -621,6 +625,7 @@ export function registerOffloadRoutes(app: Express) {
           amount: string | null;
           currency_code: string | null;
           fx_rate_to_usd: string | null;
+          fx_rate_confirmed: boolean | null;
           ledger_account_id: number;
           created_at: Date | string | null;
           container_number: string;
@@ -637,7 +642,6 @@ export function registerOffloadRoutes(app: Express) {
             const description: string = row.description || "Post-offload charge";
             const amount = toMoney(row.amount);
             const chargeCcy: string = row.currency_code || "USD";
-            const chargeFx = row.fx_rate_to_usd ? toMoney(row.fx_rate_to_usd) : toMoney(1);
             const voucherDate: string = row.created_at
               ? new Date(row.created_at).toISOString().slice(0, 10)
               : new Date().toISOString().slice(0, 10);
@@ -678,6 +682,27 @@ export function registerOffloadRoutes(app: Express) {
               continue;
             }
 
+            // Wave 17 (D): a non-USD charge is posted normalized at its own confirmed
+            // rate, else at the factory's confirmed rate on or before the voucher
+            // date; with no such rate it is refused (listed, nothing posted). It
+            // used to be posted in the legacy shape.
+            let chargeFx: string;
+            try {
+              chargeFx = (
+                await factoryDocumentRate(db, voucherCompanyId, chargeCcy, voucherDate, {
+                  rate: row.fx_rate_to_usd,
+                  confirmed: row.fx_rate_confirmed,
+                })
+              ).rate;
+            } catch (rateError) {
+              if (!(rateError instanceof FactoryFxRateRequiredError)) throw rateError;
+              refusedNoRate++;
+              errorDetails.push(
+                `chargeId=${chargeId}: ${rateError.code} (${rateError.currency} on ${rateError.documentDate})`
+              );
+              continue;
+            }
+
             // Get or create FACTORY_CHARGES_PAYABLE in the ledger account's company
             const cpAcctId = await getOrCreateLedgerAccount(
               voucherCompanyId,
@@ -687,36 +712,37 @@ export function registerOffloadRoutes(app: Express) {
 
             // Insert the voucher
             const voucherNum = `FACTORY-POC-BACKFILL-${containerId}-${chargeId}`;
-            const [voucher] = await db
-              .insert(vouchers)
-              .values({
-                companyId: voucherCompanyId,
-                voucherType: "Journal",
-                voucherNumber: voucherNum,
-                voucherDate,
-                description: `${description} (post-offload) — container ${containerNumber}`,
-                totalAmount: amount.toFixed(),
-                currency: chargeCcy,
-                exchangeRate: chargeFx.toFixed(),
-                sourceModule: "FACTORY",
-              })
-              .returning();
+            const voucher = await db.transaction(async (tx) => {
+              const [posted] = await tx
+                .insert(vouchers)
+                .values({
+                  companyId: voucherCompanyId,
+                  voucherType: "Journal",
+                  voucherNumber: voucherNum,
+                  voucherDate,
+                  description: `${description} (post-offload) — container ${containerNumber}`,
+                  totalAmount: amount.toFixed(),
+                  currency: chargeCcy,
+                  exchangeRate: chargeFx,
+                  sourceModule: "FACTORY",
+                })
+                .returning();
 
-            // DR FACTORY_CHARGES_PAYABLE
-            await db.insert(voucherEntries).values({
-              voucherId: voucher.id,
-              ledgerAccountId: cpAcctId,
-              debitAmount: amount.toFixed(),
-              creditAmount: "0",
-              narration: `${description} payable — container ${containerNumber}`,
-            });
-            // CR chosen ledger account
-            await db.insert(voucherEntries).values({
-              voucherId: voucher.id,
-              ledgerAccountId,
-              debitAmount: "0",
-              creditAmount: amount.toFixed(),
-              narration: `${description} — container ${containerNumber}`,
+              // DR FACTORY_CHARGES_PAYABLE
+              await tx.insert(voucherEntries).values({
+                voucherId: posted.id,
+                ledgerAccountId: cpAcctId,
+                ...normFactoryEntry(chargeCcy, amount.toFixed(), "0", chargeFx),
+                narration: `${description} payable — container ${containerNumber}`,
+              });
+              // CR chosen ledger account
+              await tx.insert(voucherEntries).values({
+                voucherId: posted.id,
+                ledgerAccountId,
+                ...normFactoryEntry(chargeCcy, "0", amount.toFixed(), chargeFx),
+                narration: `${description} — container ${containerNumber}`,
+              });
+              return posted;
             });
 
             created++;
@@ -730,7 +756,7 @@ export function registerOffloadRoutes(app: Express) {
           }
         }
 
-        res.json({ scanned, created, skippedExisting, errors, errorDetails });
+        res.json({ scanned, created, skippedExisting, errors, refusedNoRate, errorDetails });
       } catch (error: unknown) {
         logger.error("Backfill post-offload vouchers error:", { error: error });
         return sendCompanyAccessError(res, error);

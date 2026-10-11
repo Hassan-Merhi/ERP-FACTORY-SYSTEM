@@ -9,6 +9,7 @@ import request from "supertest";
 import { and, eq } from "drizzle-orm";
 import { cleanupTestData, closeTestServer, seedTestData, type TestContext } from "./setup";
 import { db, pool } from "../server/db";
+import { deleteAuditLogRowsForTests } from "./helpers/auditLogCleanup";
 import * as schema from "../shared/schema";
 import { spContainerLines, spContainers, spOffloads } from "../shared/schema/sp";
 
@@ -156,7 +157,7 @@ afterAll(async () => {
     await pool.query(`DELETE FROM sp_idempotency_keys WHERE company_id = $1`, [spCompanyId]);
     await pool.query(`DELETE FROM sp_permission_grants WHERE company_id = $1`, [spCompanyId]);
     await pool.query(`DELETE FROM user_company_roles WHERE company_id = $1`, [spCompanyId]);
-    await pool.query(`DELETE FROM audit_log WHERE company_id = $1`, [spCompanyId]);
+    await deleteAuditLogRowsForTests(pool, "company_id = $1", [spCompanyId]);
     await pool.query(`DELETE FROM login_history WHERE company_id = $1`, [spCompanyId]);
     await pool.query(`DELETE FROM companies WHERE id = $1`, [spCompanyId]);
     await pool.query(`DELETE FROM users WHERE username = $1`, [`${TEST_PREFIX}_spuser`]);

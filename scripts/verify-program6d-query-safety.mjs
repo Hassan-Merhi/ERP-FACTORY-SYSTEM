@@ -44,17 +44,27 @@ assert(
   netProfitDataLoad.includes("WHERE la.company_id = $1"),
   "Net-profit migrated-account attribution must remain account-company scoped (la.company_id = $1)."
 );
+// Wave 10 moved supplier and employee figures to the one balance engine
+// (netPositionParties.ts over ledgerBalanceEngine.ts): every line is scoped to its
+// voucher's company, and a line carrying both a debit and a credit is netted
+// rather than dropped (the earlier pure-credit/pure-debit filters lost amounts).
+const balanceEngine = read("server/services/accounting/balances/ledgerBalanceEngine.ts");
+const netPositionParties = read("server/services/accounting/balances/netPositionParties.ts");
 assert(
-  netProfitDataLoad.includes("WHERE v.company_id    = $1"),
-  "Net-profit supplier and employee attribution must remain voucher-company scoped (v.company_id = $1)."
+  netProfitDataLoad.includes("netPositionParties"),
+  "Net-profit supplier and employee figures must come from the balance engine (netPositionParties)."
 );
 assert(
-  netProfitDataLoad.includes("ve.credit_amount::numeric = 0"),
-  "Supplier pure-credit SQL filter (mixed FX exclusion) must remain in grouped SQL."
+  netPositionParties.includes("getPartyBalances"),
+  "Net-position party figures must be read through getPartyBalances."
 );
 assert(
-  netProfitDataLoad.includes("ve.debit_amount::numeric  = 0"),
-  "Supplier pure-debit SQL filter (mixed FX exclusion) must remain in grouped SQL."
+  balanceEngine.includes("v.company_id = ${companyId} AND v.deleted_at IS NULL AND v.optional = false"),
+  "Balance-engine lines must remain voucher-company scoped and exclude deleted and optional vouchers."
+);
+assert(
+  balanceEngine.includes("COALESCE(ve.debit_amount, 0) - COALESCE(ve.credit_amount, 0) AS net"),
+  "Balance-engine lines carrying both sides must be netted, never dropped."
 );
 
 if (failures.length > 0) {

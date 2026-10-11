@@ -20,6 +20,7 @@ import {
   isPaymentReceiptVoucherType,
   shouldUseCentralPaymentReceiptDeletion,
 } from "../../services/accounting/paymentReceiptDeletionPolicy";
+import { softDeleteInterCompanyCounterpartTx } from "../voucher-entries/delete";
 import { buildVoucherChangesForDelete, logAudit, snapshotVoucherEntries } from "../_helpers";
 import type { DatabaseOrTransaction } from "../../db";
 
@@ -142,8 +143,8 @@ async function deleteActivePaymentReceipt(req: Request, res: Response, next: Nex
         await tx.delete(propertyPayments).where(eq(propertyPayments.id, payment.id));
       }
 
-      // Preserve the existing intercompany cleanup order: remove the transfer
-      // row first, then hard-delete the counterpart entries and voucher.
+      // Inter-company counterpart: the transfer row is removed and the other
+      // company's voucher is soft-deleted and audited (wave 9), never hard-deleted.
       const linkedTransfers = await tx
         .select()
         .from(interCompanyTransfers)
@@ -153,11 +154,14 @@ async function deleteActivePaymentReceipt(req: Request, res: Response, next: Nex
       for (const transfer of linkedTransfers) {
         const otherVoucherId = transfer.fromVoucherId === voucherId ? transfer.toVoucherId : transfer.fromVoucherId;
         await tx.delete(interCompanyTransfers).where(eq(interCompanyTransfers.id, transfer.id));
+        await softDeleteInterCompanyCounterpartTx(tx, {
+          transfer,
+          voucherId,
+          voucherNumber: voucher.voucherNumber,
+          actor: { userId, username: req.session.username },
+        });
         if (otherVoucherId && otherVoucherId !== voucherId) {
-          await tx.delete(voucherEntries).where(eq(voucherEntries.voucherId, otherVoucherId));
-          await tx.delete(vouchers).where(eq(vouchers.id, otherVoucherId));
-          // The counterpart voucher is gone entirely, so its mirror would
-          // reference nothing at all.
+          // The counterpart is out of the books, so its Daybook mirror goes too.
           await removeFactoryDaybookMirrorTx({ tx, voucherId: otherVoucherId });
         }
       }
@@ -181,34 +185,29 @@ async function deleteActivePaymentReceipt(req: Request, res: Response, next: Nex
         .set({ deletedAt: new Date() })
         .where(and(eq(vouchers.id, voucherId), eq(vouchers.companyId, companyId)));
 
-      return {
-        replayed: false,
-        voucher: lockedVoucher,
-        entries,
-      };
-    });
-
-    if (!deletion.replayed) {
-      try {
-        const entrySnapshot = await snapshotVoucherEntries(deletion.entries);
-        await logAudit({
+      // Wave 16 (B): audited in the deleting transaction; an audit failure
+      // rolls the delete back.
+      const entrySnapshot = await snapshotVoucherEntries(entries, tx);
+      await logAudit(
+        {
           userId: userId!,
           username: req.session.username || "unknown",
           companyId,
           action: "delete",
           tableName: "vouchers",
           recordId: voucherId,
-          recordIdentifier: deletion.voucher.voucherNumber,
-          changes: buildVoucherChangesForDelete(deletion.voucher, entrySnapshot),
-        });
-      } catch (error: unknown) {
-        logger.error("Central Payment/Receipt delete audit failed (non-fatal)", {
-          companyId,
-          voucherId,
-          error,
-        });
-      }
-    }
+          recordIdentifier: lockedVoucher.voucherNumber,
+          changes: buildVoucherChangesForDelete(lockedVoucher, entrySnapshot),
+        },
+        tx
+      );
+
+      return {
+        replayed: false,
+        voucher: lockedVoucher,
+        entries,
+      };
+    });
 
     logger.info("central Payment/Receipt delete succeeded", {
       module: "vouchers",

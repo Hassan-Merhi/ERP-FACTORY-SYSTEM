@@ -401,12 +401,16 @@ describe("Insurance multi-sheet Excel import", () => {
   });
 });
 
-describe("POST /api/insurance/admin/repair-reversed-journals", () => {
-  it("defaults to a dry run", async () => {
-    const response = await agent.post("/api/insurance/admin/repair-reversed-journals").send({});
-    expect(response.status).toBe(200);
-    expect(response.body.dryRun).toBe(true);
-    expect(response.body.confirmationRequired).toBe("REPAIR_REVERSED_INSURANCE_JOURNALS");
+describe("insurance journal direction repair (wave 16 A: Owner preview/apply)", () => {
+  it("is Owner-only: an Admin can neither preview nor apply, and the old dry-run route is gone", async () => {
+    const preview = await agent.get("/api/insurance/admin/journal-direction/plan");
+    expect(preview.status).toBe(403);
+    const apply = await agent
+      .post("/api/insurance/admin/journal-direction/apply")
+      .send({ confirm: true, planHash: "0".repeat(64) });
+    expect(apply.status).toBe(403);
+    const retired = await agent.post("/api/insurance/admin/repair-reversed-journals").send({});
+    expect(retired.status).toBe(404);
   });
 });
 
@@ -445,7 +449,7 @@ describe("POST /api/insurance/admin/clear-all", () => {
       [ctx.companyId]
     );
     const remainingInsuranceVouchers = await pool.query(
-      `SELECT id FROM vouchers WHERE company_id = $1 AND voucher_number ILIKE 'INS-%'`,
+      `SELECT id FROM vouchers WHERE company_id = $1 AND voucher_number ILIKE 'INS-%' AND deleted_at IS NULL`,
       [ctx.companyId]
     );
     const unrelatedStillExists = await pool.query(`SELECT id FROM vouchers WHERE id = $1 AND company_id = $2`, [

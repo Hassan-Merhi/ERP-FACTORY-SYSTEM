@@ -174,33 +174,33 @@ export function registerFactoryProductionBonusRoutes(app: Express, requireAuth: 
         `);
         await rebuildPayrollGenVoucher(tx, Number(companyId), String(payroll.periodStart), String(payroll.periodEnd));
 
-        return {
+        const decisionResult = {
           details: await getProductionBonusDetailsForPayroll(tx, id),
           otherBonus,
           totalBonus: totalBonusAfter,
           netSalary,
           affected: requested.length,
         };
-      });
-
-      try {
-        await logAudit({
-          userId: req.session.userId!,
-          username: req.session.username || req.session.userId!,
-          companyId: Number(companyId),
-          action: "update",
-          tableName: "factory_production_bonus_allocations",
-          recordId: null,
-          recordIdentifier: `Payroll #${id} production bonuses — ${decision}`,
-          changes: {
-            decision: { old: null, new: decision },
-            affectedAllocations: { old: 0, new: result.affected },
-            totalApprovedProductionBonus: { old: null, new: result.details.totals.approved },
+        await logAudit(
+          {
+            userId: req.session.userId!,
+            username: req.session.username || req.session.userId!,
+            companyId: Number(companyId),
+            action: "update",
+            tableName: "factory_production_bonus_allocations",
+            recordId: null,
+            recordIdentifier: `Payroll #${id} production bonuses — ${decision}`,
+            changes: {
+              decision: { old: null, new: decision },
+              affectedAllocations: { old: 0, new: decisionResult.affected },
+              totalApprovedProductionBonus: { old: null, new: decisionResult.details.totals.approved },
+            },
           },
-        });
-      } catch (auditError) {
-        logger.error("[production bonus decision audit] non-fatal", { error: auditError });
-      }
+          tx
+        );
+
+        return decisionResult;
+      });
 
       res.json(result);
     } catch (error: unknown) {

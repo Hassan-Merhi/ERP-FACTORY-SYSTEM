@@ -70,13 +70,17 @@ async function containerRow(id: number) {
   return result.rows[0] ?? null;
 }
 
+// Wave 16 (A): a removed voucher is retired (soft-deleted with its lines), not hard-deleted.
 async function voucherExists(id: number): Promise<boolean> {
-  const result = await pool.query(`SELECT id FROM vouchers WHERE id = $1`, [id]);
+  const result = await pool.query(`SELECT id FROM vouchers WHERE id = $1 AND deleted_at IS NULL`, [id]);
   return (result.rowCount ?? 0) > 0;
 }
 
 async function voucherEntryCount(voucherId: number): Promise<number> {
-  const result = await pool.query(`SELECT id FROM voucher_entries WHERE voucher_id = $1`, [voucherId]);
+  const result = await pool.query(
+    `SELECT ve.id FROM voucher_entries ve JOIN vouchers v ON v.id = ve.voucher_id AND v.deleted_at IS NULL WHERE ve.voucher_id = $1`,
+    [voucherId]
+  );
   return result.rowCount ?? 0;
 }
 

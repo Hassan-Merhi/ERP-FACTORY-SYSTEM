@@ -34,6 +34,17 @@ const harness = vi.hoisted(() => {
 });
 
 vi.mock("../server/db", () => ({ db: { select: harness.select } }));
+// Wave 13: supplier and customer balances in the ERP context come from the
+// balance engine (raw SQL), which this select-only db harness cannot run.
+vi.mock("../server/services/accounting/balances/ledgerBalanceEngine", () => ({
+  getPartyBalances: async (_db: unknown, query: { companyId: number; kind: string }) => ({
+    companyId: query.companyId,
+    kind: query.kind,
+    basis: "ledger",
+    period: { from: null, to: null },
+    parties: [],
+  }),
+}));
 vi.mock("../server/lib/operationalEvents", () => ({ recordOperationalEvent: harness.recordOperationalEvent }));
 vi.mock("../server/lib/requestPerformanceContext", () => ({
   getRequestPerformanceMetrics: () => ({ dbQueryCount: 2, dbDurationMs: 7 }),
@@ -164,6 +175,8 @@ describe("Phase 33G — ERP context", () => {
     expect(context.financialSummary).toEqual({
       totalPayables: 0,
       totalReceivables: 0,
+      // Wave 13: receivables not yet in the ledger, beside the engine total.
+      receivablesNotInLedger: 0,
       openPurchaseOrders: 0,
       pendingContainerSales: 0,
     });

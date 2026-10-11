@@ -8,9 +8,14 @@ import type { Express, Request, Response } from "express";
 import { getErrorMessage } from "../../../../lib/httpHandlers";
 import { db } from "../../../../db";
 import { requireAuth } from "../../../../auth";
-import { ledgerAccounts, voucherEntries, employees, vouchers } from "@shared/schema";
+import { ledgerAccounts, employees } from "@shared/schema";
 import { eq, and } from "drizzle-orm";
 import { parseMoneyInput, toMoney } from "../../../../lib/money";
+import {
+  factoryRequestSourceId,
+  factorySessionActor,
+  postFactoryVoucherTx,
+} from "../../../../services/factory/factoryVoucherPosting";
 
 export function registerFactoryEmployeeCashRoutes(app: Express) {
   // POST /api/factory/employees/:id/deposit - single deposit
@@ -57,38 +62,31 @@ export function registerFactoryEmployeeCashRoutes(app: Express) {
             .returning();
         }
 
-        const voucherNumber = `EMP-DEP-${Date.now()}`;
-        const [voucher] = await tx
-          .insert(vouchers)
-          .values({
-            companyId,
-            voucherNumber,
-            voucherType: "Journal",
-            voucherDate: date,
-            effectiveDate: (effectiveDate as string) || null,
-            description: notes || `Salary deposit for ${emp.firstName} ${emp.lastName}`,
-            totalAmount: depositAmount.toFixed(2),
-          })
-          .returning();
-
-        // DR: Payroll Expense
-        await tx.insert(voucherEntries).values({
-          voucherId: voucher.id,
-          ledgerAccountId: payrollExpenseAccount.id,
-          debitAmount: depositAmount.toFixed(2),
-          creditAmount: "0",
-          narration: notes || `Salary deposit - ${voucherNumber}`,
+        // Phase 22 (C): through the engine, engine-numbered (was EMP-DEP-{Date.now()}),
+        // with the request's identity (clientRequestId / X-Idempotency-Key: a resend
+        // returns the voucher already posted). DR: Payroll Expense / CR: Employee.
+        const narration = notes || `Salary deposit - ${emp.firstName} ${emp.lastName}`;
+        const { voucher, replayed } = await postFactoryVoucherTx(tx, {
+          companyId,
+          voucherDate: date,
+          effectiveDate: (effectiveDate as string) || null,
+          description: notes || `Salary deposit for ${emp.firstName} ${emp.lastName}`,
+          sourceModule: "ERP",
+          source: {
+            sourceType: "factory-employee-deposit",
+            sourceId: `${id}:${factoryRequestSourceId(req)}`,
+            phase: "voucher",
+          },
+          actor: factorySessionActor(req),
+          lines: [
+            { ledgerAccountId: payrollExpenseAccount.id, debit: depositAmount, narration },
+            { employeeId: id, credit: depositAmount, narration },
+          ],
         });
-
-        // CR: Employee
-        await tx.insert(voucherEntries).values({
-          voucherId: voucher.id,
-          ledgerAccountId: null,
-          employeeId: id,
-          debitAmount: "0",
-          creditAmount: depositAmount.toFixed(2),
-          narration: notes || `Salary deposit - ${voucherNumber}`,
-        });
+        if (replayed) {
+          const [unchanged] = await tx.select().from(employees).where(eq(employees.id, id));
+          return { voucher, employee: unchanged };
+        }
 
         // Update employee balance
         const newBalance = toMoney(emp.currentBalance).plus(depositAmount);
@@ -143,37 +141,29 @@ export function registerFactoryEmployeeCashRoutes(app: Express) {
           .where(and(eq(ledgerAccounts.id, parseInt(cashAccountId)), eq(ledgerAccounts.companyId, companyId)));
         if (!cashAccount) throw new Error("CASH_ACCOUNT_NOT_FOUND");
 
-        const voucherNumber = `EMP-WD-${Date.now()}`;
-        const [voucher] = await tx
-          .insert(vouchers)
-          .values({
-            companyId,
-            voucherNumber,
-            voucherType: "Journal",
-            voucherDate: date,
-            description: notes || `Withdrawal for ${emp.firstName} ${emp.lastName}`,
-            totalAmount: withdrawAmount.toFixed(2),
-          })
-          .returning();
-
-        // DR: Employee
-        await tx.insert(voucherEntries).values({
-          voucherId: voucher.id,
-          ledgerAccountId: null,
-          employeeId: id,
-          debitAmount: withdrawAmount.toFixed(2),
-          creditAmount: "0",
-          narration: notes || `Withdrawal - ${voucherNumber}`,
+        // Phase 22 (C): through the engine, engine-numbered (was EMP-WD-{Date.now()}),
+        // with the request's identity. DR: Employee / CR: Cash.
+        const narration = notes || `Withdrawal - ${emp.firstName} ${emp.lastName}`;
+        const { voucher, replayed } = await postFactoryVoucherTx(tx, {
+          companyId,
+          voucherDate: date,
+          description: notes || `Withdrawal for ${emp.firstName} ${emp.lastName}`,
+          sourceModule: "ERP",
+          source: {
+            sourceType: "factory-employee-withdrawal",
+            sourceId: `${id}:${factoryRequestSourceId(req)}`,
+            phase: "voucher",
+          },
+          actor: factorySessionActor(req),
+          lines: [
+            { employeeId: id, debit: withdrawAmount, narration },
+            { ledgerAccountId: cashAccount.id, credit: withdrawAmount, narration },
+          ],
         });
-
-        // CR: Cash
-        await tx.insert(voucherEntries).values({
-          voucherId: voucher.id,
-          ledgerAccountId: cashAccount.id,
-          debitAmount: "0",
-          creditAmount: withdrawAmount.toFixed(2),
-          narration: notes || `Withdrawal - ${voucherNumber}`,
-        });
+        if (replayed) {
+          const [unchanged] = await tx.select().from(employees).where(eq(employees.id, id));
+          return { voucher, employee: unchanged };
+        }
 
         // Update employee balance (can go negative)
         const newBalance = toMoney(emp.currentBalance).minus(withdrawAmount);

@@ -424,11 +424,13 @@ export async function buildGcMigrationPreview(sourceId: number, targetId: number
   if (targetComp.company_type !== "supplier_partner")
     return { status: 400, body: { message: "Target company must be type 'supplier_partner'" } };
 
-  // Stock items with positive inventory in source
+  // Stock items with positive inventory in source, valued by the stored
+  // total_value (wave 11: quantity x average_rate drifts by the rounding of
+  // every issue).
   const stockRows = (
     await db.execute(sql`
     SELECT si.id AS stock_item_id, si.code, si.name, inv.quantity, inv.average_rate,
-           ROUND(inv.quantity * COALESCE(inv.average_rate, 0), 4) AS total_value
+           COALESCE(inv.total_value, 0) AS total_value
     FROM stock_items si
     JOIN inventory inv ON inv.stock_item_id = si.id AND inv.company_id = ${sourceId}
     WHERE si.company_id = ${sourceId} AND si.deleted_at IS NULL AND inv.quantity > 0

@@ -156,44 +156,12 @@ export const securityNotificationsAndPrecision: string[] = [
         DELETE FROM factory_daybook_entries
           WHERE tx_type = 'OFFLOAD_RAW_STOCK'
             AND reference_id IN (SELECT id FROM factory_raw_material_adjustments WHERE deleted_at IS NOT NULL);
-        -- Orphaned voucher_entries for soft-deleted adjustments (FACTORY-MANUAL-{id}-* pattern)
-        DELETE FROM voucher_entries
-          WHERE voucher_id IN (
-            SELECT v.id FROM vouchers v
-            JOIN factory_raw_material_adjustments a ON v.voucher_number LIKE 'FACTORY-MANUAL-' || a.id || '-%'
-            WHERE v.source_module = 'FACTORY' AND a.deleted_at IS NOT NULL
-          );
-        DELETE FROM vouchers
-          WHERE source_module = 'FACTORY'
-            AND id IN (
-              SELECT v.id FROM vouchers v
-              JOIN factory_raw_material_adjustments a ON v.voucher_number LIKE 'FACTORY-MANUAL-' || a.id || '-%'
-              WHERE a.deleted_at IS NOT NULL
-            );
+        -- Wave 16 (A): the vouchers of soft-deleted adjustments and containers are no
+        -- longer hard-deleted here (posted history, no audit); only the daybook mirror is.
         -- Orphaned factory daybook entries for soft-deleted containers
         DELETE FROM factory_daybook_entries
           WHERE tx_type IN ('FREIGHT','OTHER_CHARGE','DUTY','CONTAINER_IMPORT','PURCHASE')
             AND reference_id IN (SELECT id FROM factory_containers WHERE deleted_at IS NOT NULL);
-        -- Orphaned voucher_entries for soft-deleted containers
-        DELETE FROM voucher_entries
-          WHERE voucher_id IN (
-            SELECT v.id FROM vouchers v
-            JOIN factory_containers fc ON v.voucher_number LIKE 'FACTORY-IMPORT-' || fc.id || '-%'
-                                       OR v.voucher_number LIKE 'FACTORY-COMM-'   || fc.id || '-%'
-                                       OR v.voucher_number LIKE 'FACTORY-FREIGHT-'|| fc.id || '-%'
-                                       OR v.voucher_number LIKE 'FACTORY-OC-'     || fc.id || '-%'
-            WHERE v.source_module = 'FACTORY' AND fc.deleted_at IS NOT NULL
-          );
-        DELETE FROM vouchers
-          WHERE source_module = 'FACTORY'
-            AND id IN (
-              SELECT v.id FROM vouchers v
-              JOIN factory_containers fc ON v.voucher_number LIKE 'FACTORY-IMPORT-' || fc.id || '-%'
-                                         OR v.voucher_number LIKE 'FACTORY-COMM-'   || fc.id || '-%'
-                                         OR v.voucher_number LIKE 'FACTORY-FREIGHT-'|| fc.id || '-%'
-                                         OR v.voucher_number LIKE 'FACTORY-OC-'     || fc.id || '-%'
-              WHERE fc.deleted_at IS NOT NULL
-            );
         INSERT INTO migrations_log(key) VALUES ('orphan-factory-daybook-cleanup-v1');
       END IF;
     END $$`,
@@ -503,11 +471,54 @@ END $$`,
   // Fixes rows where company_id was never set or became stale after data migrations.
   // Safe: only touches rows where company_id is NULL or mismatched — never changes
   // ownership of a row that already has the correct company_id.
-  `UPDATE inventory inv
-     SET company_id = loc.company_id
-     FROM locations loc
-     WHERE inv.location_id = loc.id
-       AND (inv.company_id IS NULL OR inv.company_id <> loc.company_id)`,
+  //
+  // Wave 11: a no-op (no UPDATE, no row locks) when nothing is mismatched, which
+  // is every boot after the first. Moving a row between companies moves its
+  // stock value from one company's books to the other's, so a row whose old or
+  // new company has a perpetual-inventory cut-over is never moved silently: it
+  // is left as it is and reported with a WARNING (the server log) for review.
+  `DO $$
+     DECLARE
+       pending integer;
+       held integer := 0;
+       held_value numeric := 0;
+       has_cutovers boolean := to_regclass('gl_inventory_cutovers') IS NOT NULL;
+     BEGIN
+       SELECT COUNT(*) INTO pending
+         FROM inventory inv JOIN locations loc ON loc.id = inv.location_id
+        WHERE inv.company_id IS NULL OR inv.company_id <> loc.company_id;
+       IF pending = 0 THEN
+         RETURN;
+       END IF;
+       IF has_cutovers THEN
+         EXECUTE $q$
+           SELECT COUNT(*), COALESCE(SUM(inv.total_value), 0)
+             FROM inventory inv JOIN locations loc ON loc.id = inv.location_id
+            WHERE (inv.company_id IS NULL OR inv.company_id <> loc.company_id)
+              AND EXISTS (SELECT 1 FROM gl_inventory_cutovers c
+                           WHERE c.company_id = inv.company_id OR c.company_id = loc.company_id)
+         $q$ INTO held, held_value;
+         IF held > 0 THEN
+           RAISE WARNING 'inventory.company_id backfill: % row(s) holding % of stock value belong to a company with a perpetual inventory cut-over and were NOT moved; review them',
+             held, held_value;
+         END IF;
+         EXECUTE $q$
+           UPDATE inventory inv
+              SET company_id = loc.company_id
+             FROM locations loc
+            WHERE inv.location_id = loc.id
+              AND (inv.company_id IS NULL OR inv.company_id <> loc.company_id)
+              AND NOT EXISTS (SELECT 1 FROM gl_inventory_cutovers c
+                               WHERE c.company_id = inv.company_id OR c.company_id = loc.company_id)
+         $q$;
+       ELSE
+         UPDATE inventory inv
+            SET company_id = loc.company_id
+           FROM locations loc
+          WHERE inv.location_id = loc.id
+            AND (inv.company_id IS NULL OR inv.company_id <> loc.company_id);
+       END IF;
+     END $$`,
   // Insurance Members table (June 2026)
   `CREATE TABLE IF NOT EXISTS insurance_members (
       id serial PRIMARY KEY,

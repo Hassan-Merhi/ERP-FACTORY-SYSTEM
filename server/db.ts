@@ -10,6 +10,7 @@ import { resolveDatabaseSsl } from "./lib/databaseSsl.mjs";
 import { logDatabasePoolSnapshot, logSlowDatabaseQuery } from "./lib/databaseTelemetry";
 import { isRequestPerformanceContextActive, recordDatabaseQuery } from "./lib/requestPerformanceContext";
 import { getDatabaseScopeRuntimeContext } from "./services/security/databaseScopeRuntimeContext";
+import { auditActorSettingValues } from "./services/audit/auditActorContext";
 
 let connectionString: string;
 let databaseSource: "DATABASE_URL" | "PG_ENV";
@@ -134,16 +135,28 @@ function desiredDatabaseScope(): {
 
 async function ensureDatabaseClientScope(client: PoolClient): Promise<void> {
   const desired = desiredDatabaseScope();
-  if (clientScopeSignatures.get(client) === desired.signature) return;
+  // Phase 21 (A): the audit actor and request metadata travel with the scope
+  // (services/audit/auditActorContext.ts). The audit triggers on vouchers,
+  // voucher_entries and audit_log read them; a lease without an actor clears
+  // them, so one request's actor never reaches another's writes.
+  const actor = auditActorSettingValues();
+  const signature = `${desired.signature}|${actor.signature}`;
+  if (clientScopeSignatures.get(client) === signature) return;
 
   await client.query(
     `SELECT
        set_config('app.company_scope_maintenance', $1, false),
        set_config('app.current_company_id', $2, false),
-       set_config('app.authorized_company_ids', $3, false)`,
-    [desired.maintenance, desired.companyId, desired.authorizedCompanyIds]
+       set_config('app.authorized_company_ids', $3, false),
+       set_config('app.current_actor', $4, false),
+       set_config('app.current_actor_name', $5, false),
+       set_config('app.request_id', $6, false),
+       set_config('app.request_ip', $7, false),
+       set_config('app.session_hash', $8, false),
+       set_config('app.audit_reason', $9, false)`,
+    [desired.maintenance, desired.companyId, desired.authorizedCompanyIds, ...actor.values]
   );
-  clientScopeSignatures.set(client, desired.signature);
+  clientScopeSignatures.set(client, signature);
 }
 
 const scopedPoolConnect = (async () => {

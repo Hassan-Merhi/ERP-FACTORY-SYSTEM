@@ -42,6 +42,7 @@ describe("Phase 8C domain audit coverage", () => {
     const contents = moduleSource("server/routes/helpers/auditWriteAdapter.ts");
 
     expect(contents).toContain('from "../../services/audit"');
-    expect(contents).toContain("await writeAuditEvent(params)");
+    // Wave 12: the adapter forwards the caller's transaction, if any, as the executor.
+    expect(contents).toContain("await writeAuditEvent(params, executor)");
   });
 });

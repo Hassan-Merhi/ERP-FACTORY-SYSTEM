@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import request from "supertest";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { db, pool } from "../server/db";
 import * as schema from "../shared/schema";
 import { cleanupTestData, closeTestServer, seedTestData, type TestContext } from "./setup";
@@ -88,6 +88,14 @@ afterAll(async () => {
   await pool.query(`DELETE FROM sp_prepaid_charges WHERE company_id = $1`, [ctx.companyId]);
   await pool.query(`DELETE FROM sp_container_lines WHERE company_id = $1`, [ctx.companyId]);
   await pool.query(`DELETE FROM sp_containers WHERE company_id = $1`, [ctx.companyId]);
+  // Lines on these bank accounts go first: voucher_entries.bank_account_id is a
+  // RESTRICT foreign key. Every line of their vouchers goes with them, in one
+  // statement, so no voucher is left one-sided for the voucher balance guard.
+  await db
+    .delete(schema.voucherEntries)
+    .where(
+      sql`${schema.voucherEntries.voucherId} IN (SELECT voucher_id FROM voucher_entries WHERE bank_account_id IN (SELECT id FROM bank_accounts WHERE company_id = ${ctx.companyId}))`
+    );
   await db.delete(schema.bankAccounts).where(eq(schema.bankAccounts.companyId, ctx.companyId));
   await cleanupTestData(TEST_PREFIX);
   closeTestServer();

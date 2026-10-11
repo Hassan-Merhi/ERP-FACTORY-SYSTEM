@@ -73,8 +73,36 @@ const harness = vi.hoisted(() => {
     })),
   };
 
+  // Phase 22 (B): each pass posts through the ERP door to the engine
+  // (rental/shared/accrual-posting.ts -> postErpVoucherTx). The door is
+  // covered against a database by tests/phase22b-erp-writers-engine.test.ts;
+  // here it records what each pass posts.
+  const postedVouchers: Array<Record<string, unknown>> = [];
+  const postErpVoucherTx = vi.fn(async (_tx: unknown, input: Record<string, unknown>) => {
+    postedVouchers.push(input);
+    const lines = input.lines as Array<{
+      ledgerAccountId: number;
+      debit?: { toFixed(dp: number): string };
+      credit?: { toFixed(dp: number): string };
+      narration?: string;
+    }>;
+    const id = ++voucherId;
+    return {
+      voucher: { id, voucherNumber: `JV-4-2026-${String(id).padStart(6, "0")}`, voucherDate: input.voucherDate },
+      entries: lines.map((line) => ({
+        ledgerAccountId: line.ledgerAccountId,
+        debitAmount: line.debit?.toFixed(2) ?? "0.00",
+        creditAmount: line.credit?.toFixed(2) ?? "0.00",
+        narration: line.narration ?? null,
+      })),
+      replayed: false,
+    };
+  });
+
   return {
     tables,
+    postedVouchers,
+    postErpVoucherTx,
     queryResults,
     executeResults,
     voucherValues,
@@ -87,6 +115,7 @@ const harness = vi.hoisted(() => {
     findOrCreateLedgerAccount: vi.fn(),
     isRentalPeriodDue: vi.fn(),
     logger: { info: vi.fn(), error: vi.fn() },
+    writeAuditEvent: vi.fn(),
   };
 });
 
@@ -94,6 +123,9 @@ vi.mock("../server/db", () => ({
   db: { select: harness.select, transaction: harness.transaction },
 }));
 vi.mock("../server/lib/logger", () => ({ logger: harness.logger }));
+vi.mock("../server/services/accounting/erpVoucherPosting", () => ({ postErpVoucherTx: harness.postErpVoucherTx }));
+// Wave 18 A: each accrual voucher is audited in its posting transaction.
+vi.mock("../server/services/audit", () => ({ writeAuditEvent: harness.writeAuditEvent }));
 vi.mock("../server/services/rental/rentalPeriodService", () => ({
   getUtcTodayString: () => "2026-08-11",
   isRentalPeriodDue: harness.isRentalPeriodDue,
@@ -135,6 +167,7 @@ describe("rental accrual positive paths", () => {
     harness.voucherValues.splice(0);
     harness.voucherEntryValues.splice(0);
     harness.ledgerUpdates.splice(0);
+    harness.postedVouchers.splice(0);
     harness.isRentalPeriodDue.mockReturnValue(true);
     harness.findOrCreateLedgerAccount.mockImplementation(
       async (_tx: unknown, _companyId: number, name: string) =>
@@ -194,24 +227,67 @@ describe("rental accrual positive paths", () => {
 
     expect(result).toEqual({ accrued: 4, skipped: 1 });
     expect(harness.transaction).toHaveBeenCalledTimes(4);
-    expect(harness.voucherValues).toEqual(
+    expect(harness.writeAuditEvent).toHaveBeenCalledTimes(4);
+    for (const [, executor] of harness.writeAuditEvent.mock.calls) expect(executor).toBe(harness.tx);
+    type PostedLine = {
+      ledgerAccountId: number;
+      debit?: { toFixed(dp: number): string };
+      credit?: { toFixed(dp: number): string };
+    };
+    const posted = harness.postedVouchers.map((input) => {
+      const lines = input.lines as PostedLine[];
+      const total = lines.reduce((sum, line) => sum + Number(line.debit?.toFixed(2) ?? 0), 0);
+      return {
+        description: input.description,
+        currency: input.currency,
+        voucherType: input.voucherType,
+        total: total.toFixed(2),
+      };
+    });
+    expect(posted).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ description: "Rent accrual - 4 - 08/2026", totalAmount: "275", currency: "USD" }),
-        expect.objectContaining({ description: "Advance rent recognition - 4 - 08/2026", totalAmount: "100" }),
-        expect.objectContaining({ description: "Prepaid rent recognized - 4 - 08/2026", totalAmount: "120" }),
-        expect.objectContaining({
+        { description: "Rent accrual - 4 - 08/2026", currency: "USD", voucherType: "Journal", total: "275.00" },
+        {
+          description: "Advance rent recognition - 4 - 08/2026",
+          currency: "USD",
+          voucherType: "Journal",
+          total: "100.00",
+        },
+        {
+          description: "Prepaid rent recognized - 4 - 08/2026",
+          currency: "USD",
+          voucherType: "Journal",
+          total: "120.00",
+        },
+        {
           description: "Deferred rent recognized - 4 - 08/2026",
-          totalAmount: "150",
           currency: "EUR",
-        }),
+          voucherType: "Journal",
+          total: "150.00",
+        },
       ])
     );
-    const flattenedEntries = harness.voucherEntryValues.flat() as Array<Record<string, unknown>>;
+    // Each pass has its own posting identity (pass + date + the rows it stamps).
+    expect(new Set(harness.postedVouchers.map((input) => (input.source as { type: string }).type))).toEqual(
+      new Set([
+        "rental-accrual",
+        "rental-advance-recognition",
+        "rental-prepaid-recognition",
+        "rental-deferred-recognition",
+      ])
+    );
+    const flattenedEntries = harness.postedVouchers
+      .flatMap((input) => input.lines as PostedLine[])
+      .map((line) => ({
+        ledgerAccountId: line.ledgerAccountId,
+        debitAmount: line.debit?.toFixed(2) ?? "0.00",
+        creditAmount: line.credit?.toFixed(2) ?? "0.00",
+      }));
     expect(flattenedEntries).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ ledgerAccountId: 401, debitAmount: "75" }),
-        expect.objectContaining({ ledgerAccountId: 402, creditAmount: "275" }),
-        expect.objectContaining({ ledgerAccountId: 403, creditAmount: "60" }),
+        expect.objectContaining({ ledgerAccountId: 401, debitAmount: "75.00" }),
+        expect.objectContaining({ ledgerAccountId: 402, creditAmount: "275.00" }),
+        expect.objectContaining({ ledgerAccountId: 403, creditAmount: "60.00" }),
         expect.objectContaining({ ledgerAccountId: 404, creditAmount: "80.00" }),
         expect.objectContaining({ ledgerAccountId: 405, creditAmount: "150.00" }),
         expect.objectContaining({ ledgerAccountId: 406, debitAmount: "150.00" }),

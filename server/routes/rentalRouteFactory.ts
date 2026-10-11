@@ -6,7 +6,9 @@ import { registerCentralRentalPaymentDeletionRoute } from "./rental/centralRenta
 import { registerRentalPaymentsAccrualRoutes } from "./rental/rentalPaymentsAccrualRoutes";
 import { registerRentalAccrualConfigRoutes } from "./rental/rentalAccrualConfigRoutes";
 import { runRentalReconciliation } from "../services/rental/rentalReconciliationService";
-import { reclassifyLegacyDeferredRentForProperties } from "../services/rental/reclassifyDeferredRentService";
+import { registerDeferredRentReclassificationRoutes } from "./rental/deferredRentReclassificationRoutes";
+import { registerDueRentalPostingRoutes } from "./rental/dueRentalPostingRoutes";
+import { registerLegacyPrepaidRecognitionRoutes } from "./rental/legacyPrepaidRecognitionRoutes";
 import { requireAuth } from "../auth";
 import { getClientDate } from "../lib/dateUtils";
 import { getCompanyId } from "./rental/shared";
@@ -21,25 +23,18 @@ export function registerRentalRoutes(
   incomeAccountName: string,
   shopExpenseAccountName: string = "Rent Expense - Shops"
 ) {
-  // Properties-mode landlord accounting now recognises rent immediately on receipt.
-  // Run the legacy Deferred Rent Revenue cleanup automatically at route startup.
-  // If startup happens before a fresh database is fully ready, request middleware
-  // may retry only after tenant isolation has established a verified tenant scope.
-  if (module === "PROPERTIES") {
-    const ensurePropertiesIncomeCleanup = (origin: "startup" | "request") =>
-      reclassifyLegacyDeferredRentForProperties(origin).catch((error: unknown) => {
-        logger.error("[PROPERTIES/rental] deferred-rent reclassification failed", {
-          error: getErrorMessage(error),
-          origin,
-        });
-      });
-
-    void ensurePropertiesIncomeCleanup("startup");
-    app.use(urlPrefix, (_req, _res, next) => {
-      void ensurePropertiesIncomeCleanup("request");
-      next();
-    });
+  // Properties-mode landlord accounting recognises rent on receipt. The legacy
+  // Deferred Rent Revenue reclassification no longer runs at registration or on
+  // requests (accounting audit wave 16 A, owner decision of 2026-10-09): it is an
+  // Owner preview/apply tool (deferredRentReclassificationRoutes.ts).
+  if (module === "PROPERTIES") registerDeferredRentReclassificationRoutes(app, urlPrefix);
+  // Wave 18 A: the legacy prepaid shop rent recognition left the daily job and is
+  // an Owner preview/apply tool; "post due accruals now" replaces the posting the
+  // units page load did (Admin/Owner, same code path as the daily job).
+  if (module === "ERP" || module === "FACTORY") {
+    registerLegacyPrepaidRecognitionRoutes(app, module, urlPrefix, shopExpenseAccountName);
   }
+  registerDueRentalPostingRoutes(app, module, urlPrefix, incomeAccountName, shopExpenseAccountName);
 
   registerRentalUnitsContractsRoutes(app, module, urlPrefix, incomeAccountName, shopExpenseAccountName);
   // The central route owns DELETE /payments/:id. Registration order keeps the

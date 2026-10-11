@@ -6,9 +6,13 @@
  *   - **Voiding a sale takes it back out of the books**: its daybook rows and
  *     credit-customer balance rows go, and its receipt voucher is soft-deleted
  *     so balances exclude it while the audit trail keeps it.
+ *
+ *   Merged into the accounting audit branch: the receipt is FPOS-RCPT-{sale}
+ *   (wave 8.4; a legacy FPOS-{sale}-{timestamp} is still recognised) and is
+ *   retired with its number released (FPOS-RCPT-{sale}~DEL{id}, wave 16 A).
  *   - **Editing a credit sale to cash** leaves no stale customer debt, and the
- *     sale gains a receipt voucher for the cash it now takes in; editing it back
- *     to credit with no deposit retires that voucher.
+ *     sale's voucher becomes a receipt for the cash it now takes in; editing it
+ *     back to credit with no deposit retires that receipt for a receivable one.
  */
 import request from "supertest";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -109,13 +113,13 @@ async function books(saleId: number) {
     ),
     pool.query<{ id: number; total_amount: string }>(
       `SELECT id, total_amount FROM vouchers WHERE company_id = $1 AND source_module = 'FACTORY_POS'
-          AND voucher_number LIKE $2 AND deleted_at IS NULL`,
-      [ctx.companyId, `FPOS-${saleId}-%`]
+          AND (voucher_number = $2 OR voucher_number LIKE $3) AND deleted_at IS NULL`,
+      [ctx.companyId, `FPOS-RCPT-${saleId}`, `FPOS-${saleId}-%`]
     ),
     pool.query(
       `SELECT id FROM vouchers WHERE company_id = $1 AND source_module = 'FACTORY_POS'
-          AND voucher_number LIKE $2 AND deleted_at IS NOT NULL`,
-      [ctx.companyId, `FPOS-${saleId}-%`]
+          AND (voucher_number LIKE $2 OR voucher_number LIKE $3) AND deleted_at IS NOT NULL`,
+      [ctx.companyId, `FPOS-RCPT-${saleId}~DEL%`, `FPOS-${saleId}-%`]
     ),
   ]);
   return {
@@ -182,7 +186,9 @@ describe("editing a Factory POS sale's payment type", () => {
     const saleId = await createSale({ cashAccountId: posCashAccountId, paymentType: "CREDIT", customerId });
     const before = await books(saleId);
     expect(before.balances).toHaveLength(1);
-    expect(before.liveVouchers).toHaveLength(0);
+    // Accounting audit branch: a credit sale posts its receivable voucher too
+    // (FPOS-RCPT-{sale}: Dr customer / Cr sales income), replaced whole on edit.
+    expect(before.liveVouchers).toHaveLength(1);
 
     const edit = await agent
       .put(`/api/factory/pos/sales/${saleId}`)
@@ -209,7 +215,8 @@ describe("editing a Factory POS sale's payment type", () => {
     expect(edit.status, JSON.stringify(edit.body)).toBe(200);
 
     const after = await books(saleId);
-    expect(after.liveVouchers).toHaveLength(0);
+    // The cash receipt is retired and replaced by the credit sale's receivable voucher.
+    expect(after.liveVouchers).toHaveLength(1);
     expect(after.retiredVouchers).toBe(1);
     expect(after.balances).toHaveLength(1);
   });

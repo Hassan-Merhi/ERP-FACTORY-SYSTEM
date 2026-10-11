@@ -29,8 +29,9 @@ async function insertVoucher(companyId: number, number: string): Promise<number>
   return result.rows[0].id;
 }
 
+// A deleted voucher is retired (soft-deleted, wave 16 A), so "exists" means live.
 async function exists(id: number) {
-  const result = await pool.query(`SELECT 1 FROM vouchers WHERE id = $1`, [id]);
+  const result = await pool.query(`SELECT 1 FROM vouchers WHERE id = $1 AND deleted_at IS NULL`, [id]);
   return result.rowCount === 1;
 }
 

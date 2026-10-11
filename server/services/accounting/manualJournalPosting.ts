@@ -1,11 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import Decimal from "decimal.js";
 import type { VoucherEntryInsertFields } from "./accountingTypes";
-import {
-  PostingValidationError,
-  type CentralPostingRequest,
-  type PostingActor,
-} from "./centralPostingEngine";
+import { PostingValidationError, type CentralPostingRequest, type PostingActor } from "./centralPostingEngine";
 import { normalizeVoucherEntryAmounts } from "./currencyAmounts";
 
 const ACCOUNT_TARGET_BY_TYPE = {
@@ -31,7 +27,8 @@ export interface ManualJournalEntryInput {
 
 export interface BuildManualJournalPostingInput {
   companyId: number;
-  voucherNumber: string;
+  /** Phase 22 (B): omitted for new vouchers; the engine allocates the gapless number. */
+  voucherNumber?: string;
   voucherDate: string;
   entries: ManualJournalEntryInput[];
   notes?: string | null;
@@ -51,15 +48,11 @@ export interface BuiltManualJournalPosting {
 
 const MAX_REQUEST_ID_LENGTH = 128;
 const REQUEST_ID_PATTERN = /^[A-Za-z0-9._:-]+$/;
-const MAX_ROUNDING_ADJUSTMENT = new Decimal("0.001000");
 
 function positiveAccountId(value: unknown): number {
   const accountId = Number(value);
   if (!Number.isInteger(accountId) || accountId <= 0) {
-    throw new PostingValidationError(
-      "POSTING_TARGET_ID_INVALID",
-      "Journal accountId must be a positive integer"
-    );
+    throw new PostingValidationError("POSTING_TARGET_ID_INVALID", "Journal accountId must be a positive integer");
   }
   return accountId;
 }
@@ -69,17 +62,11 @@ function positiveAmount(value: unknown, index: number): Decimal {
   try {
     amount = new Decimal(String(value ?? ""));
   } catch {
-    throw new PostingValidationError(
-      "POSTING_AMOUNT_INVALID",
-      `Journal entry ${index + 1} has an invalid amount`
-    );
+    throw new PostingValidationError("POSTING_AMOUNT_INVALID", `Journal entry ${index + 1} has an invalid amount`);
   }
 
   if (!amount.isFinite() || amount.lte(0)) {
-    throw new PostingValidationError(
-      "POSTING_AMOUNT_INVALID",
-      `Journal entry ${index + 1} amount must be positive`
-    );
+    throw new PostingValidationError("POSTING_AMOUNT_INVALID", `Journal entry ${index + 1} amount must be positive`);
   }
   return amount;
 }
@@ -100,58 +87,9 @@ export function resolveManualJournalClientRequestId(value: unknown): string {
 function accountTarget(accountType: string, accountId: number): VoucherEntryInsertFields {
   const targetField = ACCOUNT_TARGET_BY_TYPE[accountType as ManualJournalAccountType];
   if (!targetField) {
-    throw new PostingValidationError(
-      "POSTING_TARGET_INVALID",
-      `Unsupported journal account type: ${accountType}`
-    );
+    throw new PostingValidationError("POSTING_TARGET_INVALID", `Unsupported journal account type: ${accountType}`);
   }
   return { [targetField]: accountId } as VoucherEntryInsertFields;
-}
-
-function adjustBaseSideToTarget(
-  entries: VoucherEntryInsertFields[],
-  side: "debit" | "credit",
-  target: Decimal
-): void {
-  const amountField = side === "debit" ? "debitAmount" : "creditAmount";
-  const baseField = side === "debit" ? "baseDebitAmount" : "baseCreditAmount";
-  const current = entries.reduce(
-    (sum, entry) => sum.plus(new Decimal(entry[amountField] ?? "0")),
-    new Decimal(0)
-  );
-  const adjustment = target.minus(current);
-  if (adjustment.isZero()) return;
-
-  if (adjustment.abs().gt(MAX_ROUNDING_ADJUSTMENT)) {
-    throw new PostingValidationError(
-      "POSTING_CURRENCY_ROUNDING_INVALID",
-      `Journal ${side} conversion differs from the aggregate total by ${adjustment.toFixed(6)}`
-    );
-  }
-
-  for (let index = entries.length - 1; index >= 0; index -= 1) {
-    const entry = entries[index];
-    const currentEntryAmount = new Decimal(entry[amountField] ?? "0");
-    if (currentEntryAmount.lte(0)) continue;
-
-    const adjusted = currentEntryAmount.plus(adjustment);
-    if (adjusted.lte(0)) {
-      throw new PostingValidationError(
-        "POSTING_CURRENCY_ROUNDING_INVALID",
-        `Journal ${side} rounding adjustment would make an entry non-positive`
-      );
-    }
-
-    const value = adjusted.toDecimalPlaces(6).toFixed(6);
-    entry[amountField] = value;
-    entry[baseField] = value;
-    return;
-  }
-
-  throw new PostingValidationError(
-    "POSTING_CURRENCY_ROUNDING_INVALID",
-    `Journal has no ${side} entry available for rounding adjustment`
-  );
 }
 
 function postingFingerprint(input: {
@@ -194,9 +132,7 @@ function postingFingerprint(input: {
     .digest("hex");
 }
 
-export function buildManualJournalPostingRequest(
-  input: BuildManualJournalPostingInput
-): BuiltManualJournalPosting {
+export function buildManualJournalPostingRequest(input: BuildManualJournalPostingInput): BuiltManualJournalPosting {
   if (!Number.isInteger(input.companyId) || input.companyId <= 0) {
     throw new PostingValidationError("POSTING_COMPANY_INVALID", "A valid companyId is required");
   }
@@ -211,10 +147,7 @@ export function buildManualJournalPostingRequest(
   let transactionCreditTotal = new Decimal(0);
   const normalizedEntries: VoucherEntryInsertFields[] = input.entries.map((entry, index) => {
     if (entry.type !== "DR" && entry.type !== "CR") {
-      throw new PostingValidationError(
-        "POSTING_ENTRY_SIDE_INVALID",
-        `Journal entry ${index + 1} must be DR or CR`
-      );
+      throw new PostingValidationError("POSTING_ENTRY_SIDE_INVALID", `Journal entry ${index + 1} must be DR or CR`);
     }
 
     const amount = positiveAmount(entry.amount, index);
@@ -275,9 +208,15 @@ export function buildManualJournalPostingRequest(
     );
   }
 
-  const baseTotal = new Decimal(aggregate.baseDebitAmount);
-  adjustBaseSideToTarget(normalizedEntries, "debit", baseTotal);
-  adjustBaseSideToTarget(normalizedEntries, "credit", baseTotal);
+  // Phase 22 A (D3): each line keeps the exact base of its own amount (the
+  // currency trigger refuses a base that does not match its rate, so the old
+  // per-line adjustment to the aggregate could never be stored); the central
+  // engine posts the conversion remainder to the ROUNDING account. The header
+  // carries the debit base total.
+  const baseTotal = normalizedEntries.reduce(
+    (sum, entry) => sum.plus(new Decimal(entry.debitAmount ?? "0")),
+    new Decimal(0)
+  );
 
   const clientRequestId = resolveManualJournalClientRequestId(input.clientRequestId);
   const currency = aggregate.transactionCurrency;

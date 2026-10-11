@@ -1,5 +1,6 @@
 import type { Express } from "express";
-import { pool } from "../../db";
+import { db, pool } from "../../db";
+import { sql } from "drizzle-orm";
 import { storage } from "../../storage";
 import { requireAuth } from "../../auth";
 import { requireExportAccess } from "../../lib/permissionMiddleware";
@@ -84,68 +85,58 @@ export function registerLocationWhatsappLegacyCompatibilityRoutes(app: Express) 
         // into stock-report delivery. Existing enablement is preserved.
         const reportEnabled = group ? previous?.enabled === true : false;
 
-        const client = await pool.connect();
-        try {
-          await client.query("BEGIN");
-          await client.query(
-            `UPDATE locations
-                SET name = $1,
-                    whatsapp_group_chat_id = $2
-              WHERE id = $3 AND company_id = $4`,
-            [requestedName, group?.id ?? null, locationId, companyId]
+        // Phase 21 (B): the location, its report settings and the audit row
+        // commit together (the audit ran after commit and was non-fatal).
+        await db.transaction(async (tx) => {
+          await tx.execute(sql`
+            UPDATE locations
+               SET name = ${requestedName},
+                   whatsapp_group_chat_id = ${group?.id ?? null}
+             WHERE id = ${locationId} AND company_id = ${companyId}
+          `);
+          await tx.execute(sql`
+            INSERT INTO location_whatsapp_stock_reports (
+              location_id, company_id, whatsapp_group_chat_id, whatsapp_group_name, enabled, updated_at
+            )
+            VALUES (${locationId}, ${companyId}, ${group?.id ?? null}, ${group?.name ?? null}, ${reportEnabled}, now())
+            ON CONFLICT (location_id) DO UPDATE SET
+              company_id = EXCLUDED.company_id,
+              whatsapp_group_chat_id = EXCLUDED.whatsapp_group_chat_id,
+              whatsapp_group_name = EXCLUDED.whatsapp_group_name,
+              enabled = EXCLUDED.enabled,
+              updated_at = now()
+          `);
+          await logAudit(
+            {
+              userId: req.session.userId!,
+              username: req.session.username || "unknown",
+              companyId,
+              action: "update_location_whatsapp_group_legacy",
+              tableName: "location_whatsapp_stock_reports",
+              recordId: locationId,
+              recordIdentifier: requestedName,
+              changes: {
+                ...(requestedName !== location.name ? { name: { old: location.name, new: requestedName } } : {}),
+                whatsappGroupChatId: {
+                  old: previous?.whatsapp_group_chat_id ?? location.whatsappGroupChatId ?? null,
+                  new: group?.id ?? null,
+                },
+                whatsappGroupName: {
+                  old: previous?.whatsapp_group_name ?? null,
+                  new: group?.name ?? null,
+                },
+                enabled: {
+                  old: previous?.enabled === true,
+                  new: reportEnabled,
+                },
+              },
+            },
+            tx
           );
-          await client.query(
-            `INSERT INTO location_whatsapp_stock_reports (
-                location_id, company_id, whatsapp_group_chat_id, whatsapp_group_name, enabled, updated_at
-              )
-              VALUES ($1, $2, $3, $4, $5, now())
-              ON CONFLICT (location_id) DO UPDATE SET
-                company_id = EXCLUDED.company_id,
-                whatsapp_group_chat_id = EXCLUDED.whatsapp_group_chat_id,
-                whatsapp_group_name = EXCLUDED.whatsapp_group_name,
-                enabled = EXCLUDED.enabled,
-                updated_at = now()`,
-            [locationId, companyId, group?.id ?? null, group?.name ?? null, reportEnabled]
-          );
-          await client.query("COMMIT");
-        } catch (error) {
-          await client.query("ROLLBACK");
-          throw error;
-        } finally {
-          client.release();
-        }
+        });
 
         const updated = await storage.getLocationById(locationId);
         if (!updated) return res.status(404).json({ message: "Location not found after update" });
-
-        try {
-          await logAudit({
-            userId: req.session.userId!,
-            username: req.session.username || "unknown",
-            companyId,
-            action: "update_location_whatsapp_group_legacy",
-            tableName: "location_whatsapp_stock_reports",
-            recordId: locationId,
-            recordIdentifier: updated.name,
-            changes: {
-              ...(requestedName !== location.name ? { name: { old: location.name, new: requestedName } } : {}),
-              whatsappGroupChatId: {
-                old: previous?.whatsapp_group_chat_id ?? location.whatsappGroupChatId ?? null,
-                new: group?.id ?? null,
-              },
-              whatsappGroupName: {
-                old: previous?.whatsapp_group_name ?? null,
-                new: group?.name ?? null,
-              },
-              enabled: {
-                old: previous?.enabled === true,
-                new: reportEnabled,
-              },
-            },
-          });
-        } catch {
-          /* audit failure must not roll back an already committed configuration */
-        }
 
         res.json({
           ...updated,

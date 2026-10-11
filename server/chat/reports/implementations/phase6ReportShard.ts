@@ -411,7 +411,7 @@ async function runPhase6Report(ctx: DataQueryContext): Promise<DataQueryResult> 
         FROM sales_items sal
         JOIN vouchers v ON v.id = sal.voucher_id AND v.deleted_at IS NULL
         WHERE v.company_id = ${companyId}
-          AND CAST(v.voucher_date AS text) BETWEEN ${dateFrom} AND ${dateTo}
+          AND CAST(COALESCE(v.effective_date, v.voucher_date) AS text) BETWEEN ${dateFrom} AND ${dateTo}
         GROUP BY week_start
         ORDER BY week_start DESC
         LIMIT ${rowLimit}
@@ -597,7 +597,7 @@ async function runPhase6Report(ctx: DataQueryContext): Promise<DataQueryResult> 
           AND v.deleted_at IS NULL
           AND v.voucher_type = 'Journal'
           AND v.optional = false
-          AND CAST(v.voucher_date AS text) BETWEEN ${dateFrom} AND ${dateTo}
+          AND CAST(COALESCE(v.effective_date, v.voucher_date) AS text) BETWEEN ${dateFrom} AND ${dateTo}
         GROUP BY v.id, v.voucher_date, v.voucher_number, v.description, v.total_amount, v.currency
         ORDER BY v.voucher_date DESC
         LIMIT ${rowLimit}

@@ -81,6 +81,7 @@ async function paymentVouchers(payrollId: number) {
        FROM vouchers
       WHERE company_id = $1
         AND voucher_number LIKE $2
+        AND deleted_at IS NULL -- wave 16 (A): removed vouchers are retired
       ORDER BY id`,
     [ctx.companyId, `PAYMENT-PAY-${payrollId}-%`]
   );
@@ -127,10 +128,18 @@ beforeAll(async () => {
 
 afterAll(async () => {
   if (ctx) {
-    await pool.query(`DELETE FROM accounting_posting_requests WHERE company_id = $1`, [ctx.companyId]).catch(() => undefined);
-    await pool.query(`DELETE FROM factory_advance_repayments WHERE company_id = $1`, [ctx.companyId]).catch(() => undefined);
-    await pool.query(`DELETE FROM factory_worker_advances WHERE company_id = $1`, [ctx.companyId]).catch(() => undefined);
-    await pool.query(`DELETE FROM factory_daybook_entries WHERE company_id = $1`, [ctx.companyId]).catch(() => undefined);
+    await pool
+      .query(`DELETE FROM accounting_posting_requests WHERE company_id = $1`, [ctx.companyId])
+      .catch(() => undefined);
+    await pool
+      .query(`DELETE FROM factory_advance_repayments WHERE company_id = $1`, [ctx.companyId])
+      .catch(() => undefined);
+    await pool
+      .query(`DELETE FROM factory_worker_advances WHERE company_id = $1`, [ctx.companyId])
+      .catch(() => undefined);
+    await pool
+      .query(`DELETE FROM factory_daybook_entries WHERE company_id = $1`, [ctx.companyId])
+      .catch(() => undefined);
     await pool.query(`DELETE FROM factory_payrolls WHERE company_id = $1`, [ctx.companyId]).catch(() => undefined);
     await pool.query(`DELETE FROM factory_workers WHERE company_id = $1`, [ctx.companyId]).catch(() => undefined);
     await cleanupTestData(PREFIX);

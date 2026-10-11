@@ -130,209 +130,203 @@ export function registerVoucherTransferOnlyRoutes(app: Express) {
       const occurredAt = new Date().toISOString();
 
       // Wrap the entire operation in a transaction for atomicity
-      const { updatedVoucher: updated, transferItemsData: updatedTransferItemsData } = await db.transaction(
-        async (tx) => {
-          // Find or create the associated transfer voucher
-          let transferVoucher = await tx
-            .select()
-            .from(stockTransferVouchers)
-            .where(eq(stockTransferVouchers.voucherId, id))
-            .limit(1)
-            .then((rows) => rows[0]);
+      const { updatedVoucher: updated } = await db.transaction(async (tx) => {
+        // Find or create the associated transfer voucher
+        let transferVoucher = await tx
+          .select()
+          .from(stockTransferVouchers)
+          .where(eq(stockTransferVouchers.voucherId, id))
+          .limit(1)
+          .then((rows) => rows[0]);
 
-          // If no transfer voucher exists, create one
-          if (!transferVoucher) {
-            const [newTransfer] = await tx
-              .insert(stockTransferVouchers)
-              .values({
-                voucherId: id,
-                sourceLocationId: parseInt(sourceLocationId),
-                destinationLocationId: parseInt(destinationLocationId),
-                notes: description || "",
-              })
-              .returning();
-            transferVoucher = newTransfer;
-          }
-
-          // Calculate totals and prepare items data
-          // Each line is quantity × rate at cents, exact; the voucher total is
-          // the sum of those lines, so the two always agree.
-          let totalAmount: Decimal = new MoneyDecimal(0);
-
-          const transferItemsData = items.map((item) => {
-            const itemTotal = toMoney(item.quantity).times(toMoney(item.rate)).toDecimalPlaces(2);
-
-            totalAmount = totalAmount.plus(itemTotal);
-
-            return {
-              transferId: transferVoucher.id,
-              stockItemId: item.stockItemId,
-              quantity: item.quantity,
-              rate: item.rate,
-              totalAmount: itemTotal.toFixed(2),
-              sourceLocationId: parseInt(sourceLocationId),
-            };
-          });
-
-          // STEP 1: Reverse inventory for old transfer items before deleting
-          const oldTransferItems = await tx
-            .select()
-            .from(stockTransferItems)
-            .where(eq(stockTransferItems.transferId, transferVoucher.id));
-
-          const oldSourceLocationId = transferVoucher.sourceLocationId;
-          const oldDestinationLocationId = transferVoucher.destinationLocationId;
-          if (oldSourceLocationId == null || oldDestinationLocationId == null) {
-            throw new Error("Existing stock transfer is missing source or destination location");
-          }
-
-          for (const oldItem of oldTransferItems) {
-            const quantity = toMoney(oldItem.quantity);
-            const rate = toMoney(oldItem.rate);
-
-            // Add back to source location (reverse the subtraction)
-            await adjustInventory(
-              tx,
-              oldSourceLocationId,
-              oldItem.stockItemId,
-              quantity.toNumber(),
-              existingVoucher.companyId!,
-              rate.toNumber()
-            );
-
-            // Subtract from destination location (reverse the addition)
-            await adjustInventory(
-              tx,
-              oldDestinationLocationId,
-              oldItem.stockItemId,
-              -quantity.toNumber(),
-              existingVoucher.companyId!
-            );
-
-            await postStockMovementTx(
-              tx,
-              {
-                companyId: existingVoucher.companyId!,
-                stockItemId: oldItem.stockItemId,
-                kind: "transfer",
-                quantity: quantity.toFixed(),
-                unitCost: MoneyDecimal.max(rate, 0).toFixed(),
-                fromLocationId: oldDestinationLocationId,
-                toLocationId: oldSourceLocationId,
-                occurredAt,
-                source: {
-                  sourceType: "voucher_stock_transfer_edit_reverse",
-                  sourceId: String(id),
-                  idempotencyKey: `voucher-transfer-edit:reverse:${existingVoucher.companyId}:${id}:${oldItem.id}`,
-                },
-                actor: {
-                  userId: req.session.userId,
-                  username: req.session.username,
-                  reason: `Edit stock transfer ${existingVoucher.voucherNumber}`,
-                },
-                allowNegativeStock: true,
-              },
-              canonicalStockMovementAdapter
-            );
-          }
-
-          // STEP 2: Delete existing transfer items
-          await tx.delete(stockTransferItems).where(eq(stockTransferItems.transferId, transferVoucher.id));
-
-          // STEP 3: Apply inventory for new transfer items
-          const newSourceLocationId = parseInt(sourceLocationId);
-          const newDestinationLocationId = parseInt(destinationLocationId);
-
-          for (let index = 0; index < transferItemsData.length; index++) {
-            const newItem = transferItemsData[index];
-            const quantity = toMoney(newItem.quantity);
-            const rate = toMoney(newItem.rate);
-
-            // Subtract from new source location
-            await adjustInventory(
-              tx,
-              newSourceLocationId,
-              newItem.stockItemId,
-              -quantity.toNumber(),
-              existingVoucher.companyId
-            );
-
-            // Add to new destination location
-            await adjustInventory(
-              tx,
-              newDestinationLocationId,
-              newItem.stockItemId,
-              quantity.toNumber(),
-              existingVoucher.companyId,
-              rate.toNumber()
-            );
-
-            await postStockMovementTx(
-              tx,
-              {
-                companyId: existingVoucher.companyId!,
-                stockItemId: newItem.stockItemId,
-                kind: "transfer",
-                quantity: quantity.toFixed(),
-                unitCost: MoneyDecimal.max(rate, 0).toFixed(),
-                fromLocationId: newSourceLocationId,
-                toLocationId: newDestinationLocationId,
-                occurredAt,
-                source: {
-                  sourceType: "voucher_stock_transfer_edit_apply",
-                  sourceId: String(id),
-                  idempotencyKey: `voucher-transfer-edit:apply:${existingVoucher.companyId}:${id}:${editOperationId}:${index}`,
-                },
-                actor: {
-                  userId: req.session.userId,
-                  username: req.session.username,
-                  reason: `Edit stock transfer ${existingVoucher.voucherNumber}`,
-                },
-                allowNegativeStock: true,
-              },
-              canonicalStockMovementAdapter
-            );
-          }
-
-          // STEP 4: Insert new transfer items
-          await tx.insert(stockTransferItems).values(transferItemsData);
-
-          // Update the transfer voucher (locations can be changed, but shouldn't affect old inventory)
-          await tx
-            .update(stockTransferVouchers)
-            .set({
+        // If no transfer voucher exists, create one
+        if (!transferVoucher) {
+          const [newTransfer] = await tx
+            .insert(stockTransferVouchers)
+            .values({
+              voucherId: id,
               sourceLocationId: parseInt(sourceLocationId),
               destinationLocationId: parseInt(destinationLocationId),
               notes: description || "",
             })
-            .where(eq(stockTransferVouchers.id, transferVoucher.id));
-
-          // Update the main voucher
-          const parsedSourceLocationId = parseInt(sourceLocationId);
-          const voucherUpdates: VoucherUpdate = {
-            totalAmount: totalAmount.toFixed(2),
-            locationId: parsedSourceLocationId, // Use source location as the primary location for the voucher
-          };
-          // Also save the location name for when the location is later deleted
-          const sourceLocation = await storage.getLocationById(parsedSourceLocationId);
-          if (sourceLocation) {
-            voucherUpdates.locationName = sourceLocation.name;
-          }
-          if (voucherDate !== undefined) voucherUpdates.voucherDate = voucherDate;
-          if (description !== undefined) voucherUpdates.description = description;
-
-          const [updatedVoucher] = await tx.update(vouchers).set(voucherUpdates).where(eq(vouchers.id, id)).returning();
-
-          return { updatedVoucher, transferItemsData };
+            .returning();
+          transferVoucher = newTransfer;
         }
-      );
 
-      try {
+        // Calculate totals and prepare items data
+        // Each line is quantity × rate at cents, exact; the voucher total is
+        // the sum of those lines, so the two always agree.
+        let totalAmount: Decimal = new MoneyDecimal(0);
+
+        const transferItemsData = items.map((item) => {
+          const itemTotal = toMoney(item.quantity).times(toMoney(item.rate)).toDecimalPlaces(2);
+
+          totalAmount = totalAmount.plus(itemTotal);
+
+          return {
+            transferId: transferVoucher.id,
+            stockItemId: item.stockItemId,
+            quantity: item.quantity,
+            rate: item.rate,
+            totalAmount: itemTotal.toFixed(2),
+            sourceLocationId: parseInt(sourceLocationId),
+          };
+        });
+
+        // STEP 1: Reverse inventory for old transfer items before deleting
+        const oldTransferItems = await tx
+          .select()
+          .from(stockTransferItems)
+          .where(eq(stockTransferItems.transferId, transferVoucher.id));
+
+        const oldSourceLocationId = transferVoucher.sourceLocationId;
+        const oldDestinationLocationId = transferVoucher.destinationLocationId;
+        if (oldSourceLocationId == null || oldDestinationLocationId == null) {
+          throw new Error("Existing stock transfer is missing source or destination location");
+        }
+
+        for (const oldItem of oldTransferItems) {
+          const quantity = toMoney(oldItem.quantity);
+          const rate = toMoney(oldItem.rate);
+
+          // Add back to source location (reverse the subtraction)
+          await adjustInventory(
+            tx,
+            oldSourceLocationId,
+            oldItem.stockItemId,
+            quantity.toNumber(),
+            existingVoucher.companyId!,
+            rate.toNumber()
+          );
+
+          // Subtract from destination location (reverse the addition)
+          await adjustInventory(
+            tx,
+            oldDestinationLocationId,
+            oldItem.stockItemId,
+            -quantity.toNumber(),
+            existingVoucher.companyId!
+          );
+
+          await postStockMovementTx(
+            tx,
+            {
+              companyId: existingVoucher.companyId!,
+              stockItemId: oldItem.stockItemId,
+              kind: "transfer",
+              quantity: quantity.toFixed(),
+              unitCost: MoneyDecimal.max(rate, 0).toFixed(),
+              fromLocationId: oldDestinationLocationId,
+              toLocationId: oldSourceLocationId,
+              occurredAt,
+              source: {
+                sourceType: "voucher_stock_transfer_edit_reverse",
+                sourceId: String(id),
+                idempotencyKey: `voucher-transfer-edit:reverse:${existingVoucher.companyId}:${id}:${oldItem.id}`,
+              },
+              actor: {
+                userId: req.session.userId,
+                username: req.session.username,
+                reason: `Edit stock transfer ${existingVoucher.voucherNumber}`,
+              },
+              allowNegativeStock: true,
+            },
+            canonicalStockMovementAdapter
+          );
+        }
+
+        // STEP 2: Delete existing transfer items
+        await tx.delete(stockTransferItems).where(eq(stockTransferItems.transferId, transferVoucher.id));
+
+        // STEP 3: Apply inventory for new transfer items
+        const newSourceLocationId = parseInt(sourceLocationId);
+        const newDestinationLocationId = parseInt(destinationLocationId);
+
+        for (let index = 0; index < transferItemsData.length; index++) {
+          const newItem = transferItemsData[index];
+          const quantity = toMoney(newItem.quantity);
+          const rate = toMoney(newItem.rate);
+
+          // Subtract from new source location
+          await adjustInventory(
+            tx,
+            newSourceLocationId,
+            newItem.stockItemId,
+            -quantity.toNumber(),
+            existingVoucher.companyId
+          );
+
+          // Add to new destination location
+          await adjustInventory(
+            tx,
+            newDestinationLocationId,
+            newItem.stockItemId,
+            quantity.toNumber(),
+            existingVoucher.companyId,
+            rate.toNumber()
+          );
+
+          await postStockMovementTx(
+            tx,
+            {
+              companyId: existingVoucher.companyId!,
+              stockItemId: newItem.stockItemId,
+              kind: "transfer",
+              quantity: quantity.toFixed(),
+              unitCost: MoneyDecimal.max(rate, 0).toFixed(),
+              fromLocationId: newSourceLocationId,
+              toLocationId: newDestinationLocationId,
+              occurredAt,
+              source: {
+                sourceType: "voucher_stock_transfer_edit_apply",
+                sourceId: String(id),
+                idempotencyKey: `voucher-transfer-edit:apply:${existingVoucher.companyId}:${id}:${editOperationId}:${index}`,
+              },
+              actor: {
+                userId: req.session.userId,
+                username: req.session.username,
+                reason: `Edit stock transfer ${existingVoucher.voucherNumber}`,
+              },
+              allowNegativeStock: true,
+            },
+            canonicalStockMovementAdapter
+          );
+        }
+
+        // STEP 4: Insert new transfer items
+        await tx.insert(stockTransferItems).values(transferItemsData);
+
+        // Update the transfer voucher (locations can be changed, but shouldn't affect old inventory)
+        await tx
+          .update(stockTransferVouchers)
+          .set({
+            sourceLocationId: parseInt(sourceLocationId),
+            destinationLocationId: parseInt(destinationLocationId),
+            notes: description || "",
+          })
+          .where(eq(stockTransferVouchers.id, transferVoucher.id));
+
+        // Update the main voucher
+        const parsedSourceLocationId = parseInt(sourceLocationId);
+        const voucherUpdates: VoucherUpdate = {
+          totalAmount: totalAmount.toFixed(2),
+          locationId: parsedSourceLocationId, // Use source location as the primary location for the voucher
+        };
+        // Also save the location name for when the location is later deleted
+        const sourceLocation = await storage.getLocationById(parsedSourceLocationId);
+        if (sourceLocation) {
+          voucherUpdates.locationName = sourceLocation.name;
+        }
+        if (voucherDate !== undefined) voucherUpdates.voucherDate = voucherDate;
+        if (description !== undefined) voucherUpdates.description = description;
+
+        const [updatedVoucher] = await tx.update(vouchers).set(voucherUpdates).where(eq(vouchers.id, id)).returning();
+
         const _xfrChanges: Record<string, { old: unknown; new: unknown }> = {};
-        if (existingVoucher.voucherDate !== updated.voucherDate)
-          _xfrChanges.date = { old: existingVoucher.voucherDate, new: updated.voucherDate };
-        if (existingVoucher.totalAmount !== updated.totalAmount)
-          _xfrChanges.totalAmount = { old: existingVoucher.totalAmount, new: updated.totalAmount };
+        if (existingVoucher.voucherDate !== updatedVoucher.voucherDate)
+          _xfrChanges.date = { old: existingVoucher.voucherDate, new: updatedVoucher.voucherDate };
+        if (existingVoucher.totalAmount !== updatedVoucher.totalAmount)
+          _xfrChanges.totalAmount = { old: existingVoucher.totalAmount, new: updatedVoucher.totalAmount };
         if (_preTransfer && parseInt(sourceLocationId) !== _preTransfer.sourceLocationId)
           _xfrChanges.sourceLocation = { old: _preTransfer.sourceLocationId, new: parseInt(sourceLocationId) };
         if (_preTransfer && parseInt(destinationLocationId) !== _preTransfer.destinationLocationId)
@@ -340,8 +334,8 @@ export function registerVoucherTransferOnlyRoutes(app: Express) {
             old: _preTransfer.destinationLocationId,
             new: parseInt(destinationLocationId),
           };
-        if ((existingVoucher.description ?? "") !== (updated.description ?? ""))
-          _xfrChanges.description = { old: existingVoucher.description ?? "", new: updated.description ?? "" };
+        if ((existingVoucher.description ?? "") !== (updatedVoucher.description ?? ""))
+          _xfrChanges.description = { old: existingVoucher.description ?? "", new: updatedVoucher.description ?? "" };
         const _resolveXfrName = async (id: number) => (await storage.getStockItemById(id))?.name ?? `Item #${id}`;
         const _xfrItemDiff = await buildItemLevelChanges(
           _oldXfrItems.map((it) => ({
@@ -350,7 +344,7 @@ export function registerVoucherTransferOnlyRoutes(app: Express) {
             rate: it.rate,
             totalAmount: it.totalAmount,
           })),
-          updatedTransferItemsData.map((it) => ({
+          transferItemsData.map((it) => ({
             stockItemId: it.stockItemId,
             quantity: it.quantity,
             rate: it.rate,
@@ -358,19 +352,23 @@ export function registerVoucherTransferOnlyRoutes(app: Express) {
           })),
           _resolveXfrName
         );
-        await logAudit({
-          userId: req.session.userId!,
-          username: req.session.username || "unknown",
-          companyId: req.session.currentCompanyId!,
-          action: "update",
-          tableName: "vouchers",
-          recordId: updated.id,
-          recordIdentifier: updated.voucherNumber,
-          changes: { ..._xfrChanges, ..._xfrItemDiff },
-        });
-      } catch {
-        /* non-fatal */
-      }
+        await logAudit(
+          {
+            userId: req.session.userId!,
+            username: req.session.username || "unknown",
+            companyId: req.session.currentCompanyId!,
+            action: "update",
+            tableName: "vouchers",
+            recordId: updatedVoucher.id,
+            recordIdentifier: updatedVoucher.voucherNumber,
+            changes: { ..._xfrChanges, ..._xfrItemDiff },
+          },
+          tx
+        );
+
+        return { updatedVoucher, transferItemsData };
+      });
+
       logger.info(`[Stock Transfer Edit] Successfully updated voucher ${id}`);
       res.json(updated);
     } catch (error: unknown) {

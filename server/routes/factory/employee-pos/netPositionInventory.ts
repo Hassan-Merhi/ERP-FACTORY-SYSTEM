@@ -36,14 +36,32 @@ export interface NetPositionInventoryContext {
 }
 
 export interface NetPositionInventory {
-  /** Legacy alias retained for callers/tests; this is the cost valuation. */
+  /**
+   * Legacy name retained for callers/tests: the bales at COST (SUM of
+   * factory_bales.total_cost), reserved bales included.
+   */
   inventorySellValue: number;
+  /** Selling view: the catalogue selling price per bale of the same bales. */
   inventorySellingValue: number;
   rawMaterialStockValue: number;
   stockOtwValue: number;
   balanceOnTableValue: number;
   balanceOnTableSellingValue: number;
+  /** Of `inventorySellValue`: the bales of unfinalized orders (count and cost). */
+  reservedBaleCount: number;
+  reservedBaleCost: number;
 }
+
+/**
+ * A raw-stock row's USD cost per kg (wave 11): the landed USD cost, or the
+ * container's own cost when its currency is USD; 0 (not valued) otherwise.
+ * The container alias is `fc`, the raw-stock alias `frs`.
+ */
+const USD_COST_PER_KG = sql.raw(`CASE
+        WHEN frs.cost_per_kg_usd::numeric > 0 THEN frs.cost_per_kg_usd::numeric
+        WHEN UPPER(COALESCE(fc.currency_code, 'USD')) = 'USD' THEN COALESCE(frs.cost_per_kg::numeric, 0)
+        ELSE 0
+      END`);
 
 /**
  * Usage not tied to a specific container draws the supplier's remaining stock
@@ -59,32 +77,41 @@ function drawDown(stock: { recv: Decimal; used: Decimal; remValUsd: Decimal; rem
 }
 
 export async function computeNetPositionInventory(ctx: NetPositionInventoryContext): Promise<NetPositionInventory> {
-  // ── 3. Inventory (Stock In Hand) — direct SQL sum of production price ──────
-  // Single query: sum production_price for every IN_STOCK bale that has a
-  // matched product, scoped strictly to ctx.companyId.
-  // Production price (cost to manufacture) is used here, not selling price.
+  // ── 3. Inventory (Stock In Hand) — bales at cost (wave 11) ─────────────────
+  // Each bale at its recorded cost, factory_bales.total_cost: USD material cost
+  // (services/factory/baleCostBasis.ts). It used to be SUM(production_price)
+  // of the products, one catalogue price per bale. The selling view keeps the
+  // catalogue selling price per bale.
   //
-  // Must exclude "stale" IN_STOCK bales — bales still marked IN_STOCK in the
-  // DB but whose order was actually FINALIZED/DISPATCHED/SOLD (status never
-  // got updated). Location Inventory and Bale Ledger already exclude these;
-  // without the same exclusion here, Stock In Hand is inflated and drifts
-  // out of sync with what Location Inventory shows.
-  //
-  // Must ALSO exclude bales tied to an order that's currently LOADING /
-  // PENDING_VERIFICATION / VERIFIED. Location Inventory's Cost Value KPI
-  // subtracts these ("loadingCount") from its total, and they're already
-  // counted separately here as "Loading Orders" / "Verified Orders" /
-  // "Pending Orders" receivables — leaving them in Stock In Hand as well
-  // double-counts them.
+  // Stock is the bales the factory still holds:
+  //   - IN_STOCK, RESERVED_FOR_ORDER and RESERVED_FOR_DISPATCH bales, and bales
+  //     already marked SOLD on an unfinalized order (pending verification,
+  //     verified, loading). Owner decision (wave 11): bales reserved for
+  //     unfinalized orders are stock at cost; those orders are listed under
+  //     `notInLedger` for information only, with no amount added anywhere;
+  //   - never a "stale" IN_STOCK bale whose order was FINALIZED / DISPATCHED /
+  //     SOLD (its status never got updated): its invoice took it.
   const invResult = await db.execute(sql`
   SELECT
-    COALESCE(SUM(p.production_price::numeric), 0) AS total_cost,
-    COALESCE(SUM(p.selling_price::numeric), 0) AS total_selling
+    COALESCE(SUM(b.total_cost::numeric), 0) AS total_cost,
+    COALESCE(SUM(p.selling_price::numeric), 0) AS total_selling,
+    COALESCE(SUM(b.total_cost::numeric) FILTER (WHERE r.reserved), 0) AS reserved_cost,
+    COUNT(*) FILTER (WHERE r.reserved) AS reserved_count
   FROM   factory_bales   b
-  JOIN   factory_bale_products p ON p.id = b.product_id
+  LEFT   JOIN factory_bale_products p ON p.id = b.product_id AND p.company_id = ${ctx.companyId}
+  CROSS  JOIN LATERAL (
+    SELECT EXISTS (
+      SELECT 1 FROM customer_order_bales cob
+      INNER JOIN customer_orders co ON co.id = cob.order_id
+      WHERE cob.bale_id = b.id
+        AND co.status IN ('LOADING', 'PENDING_VERIFICATION', 'VERIFIED')
+        AND co.company_id = ${ctx.companyId}
+        AND co.deleted_at IS NULL
+    ) AS reserved
+  ) r
   WHERE  b.company_id = ${ctx.companyId}
-    AND  b.status     = 'IN_STOCK'
-    AND  p.company_id = ${ctx.companyId}
+    AND  b.deleted_at IS NULL
+    AND  (b.status IN ('IN_STOCK', 'RESERVED_FOR_ORDER', 'RESERVED_FOR_DISPATCH') OR (b.status = 'SOLD' AND r.reserved))
     AND  NOT EXISTS (
       SELECT 1 FROM customer_order_bales cob
       INNER JOIN customer_orders co ON co.id = cob.order_id
@@ -92,17 +119,12 @@ export async function computeNetPositionInventory(ctx: NetPositionInventoryConte
         AND co.status IN ('FINALIZED', 'DISPATCHED', 'SOLD')
         AND co.company_id = ${ctx.companyId}
     )
-    AND  NOT EXISTS (
-      SELECT 1 FROM customer_order_bales cob
-      INNER JOIN customer_orders co ON co.id = cob.order_id
-      WHERE cob.bale_id = b.id
-        AND co.status IN ('LOADING', 'PENDING_VERIFICATION', 'VERIFIED')
-        AND co.company_id = ${ctx.companyId}
-    )
 `);
   const invRow = resultRows(invResult)[0] ?? {};
   const inventorySellValue = cents(col(invRow?.total_cost));
   const inventorySellingValue = cents(col(invRow?.total_selling));
+  const reservedBaleCost = cents(col(invRow?.reserved_cost));
+  const reservedBaleCount = Number(invRow?.reserved_count ?? 0);
 
   // ── 3b. Raw material stock value — direct SQL, mirrors /api/factory/raw-stock
   //
@@ -123,16 +145,16 @@ export async function computeNetPositionInventory(ctx: NetPositionInventoryConte
     -- the remaining-value total itself.
     SUM(frs.received_kg::numeric * frs.cost_per_kg::numeric)
       / NULLIF(SUM(frs.received_kg::numeric), 0)                             AS avg_cpk_local,
-    -- USD cost per kg (falls back to local when cost_per_kg_usd is zero/null)
-    SUM(frs.received_kg::numeric *
-        COALESCE(NULLIF(frs.cost_per_kg_usd::numeric, 0), frs.cost_per_kg::numeric, 0))
+    -- USD cost per kg: the landed USD cost, or the container's own cost when
+    -- its currency is USD. Never the native cost of another currency (wave
+    -- 11): a row with no USD cost is not valued (it counts as zero).
+    SUM(frs.received_kg::numeric * ${USD_COST_PER_KG})
       / NULLIF(SUM(frs.received_kg::numeric), 0)                             AS avg_cpk_usd,
     -- Per-row remaining cost basis, summed — mirrors rawStockReceiptRoutes.ts's
     -- rowRemainingValueLocal/rowRemainingValueUsd accumulation exactly.
     SUM((frs.received_kg::numeric - frs.used_kg::numeric) * frs.cost_per_kg::numeric)
                                                                                AS remaining_value_local,
-    SUM((frs.received_kg::numeric - frs.used_kg::numeric) *
-        COALESCE(NULLIF(frs.cost_per_kg_usd::numeric, 0), frs.cost_per_kg::numeric, 0))
+    SUM((frs.received_kg::numeric - frs.used_kg::numeric) * ${USD_COST_PER_KG})
                                                                                AS remaining_value_usd
   FROM   factory_raw_stock   frs
   JOIN   factory_containers  fc  ON fc.id  = frs.container_id
@@ -145,7 +167,8 @@ export async function computeNetPositionInventory(ctx: NetPositionInventoryConte
   const rawRows = resultRows(rawResult);
 
   const adjResult = await db.execute(sql`
-  SELECT supplier_id, type, kg::numeric AS kg, cost_per_kg::numeric AS cpk, material_label
+  SELECT supplier_id, type, kg::numeric AS kg, cost_per_kg::numeric AS cpk, material_label,
+         UPPER(COALESCE(currency_code, 'USD')) AS currency
   FROM   factory_raw_material_adjustments
   WHERE  company_id = ${ctx.companyId}
     AND  deleted_at IS NULL
@@ -188,7 +211,9 @@ export async function computeNetPositionInventory(ctx: NetPositionInventoryConte
     // into a single MANUAL bucket would incorrectly blend distinct materials' weighted costs.
     const key = a.supplier_id ? `s${a.supplier_id}` : `MANUAL__${a.material_label || "unknown"}`;
     const kg = col(a.kg);
-    const cpk = col(a.cpk);
+    // An adjustment's cost per kg is in its own currency; only a USD one is a
+    // USD value (wave 11: never a native-currency value).
+    const cpk = a.currency === "USD" ? col(a.cpk) : ZERO;
     const isAdd = a.type === "ADD";
     const ex = supMap.get(key);
     if (ex) {
@@ -376,5 +401,7 @@ export async function computeNetPositionInventory(ctx: NetPositionInventoryConte
     stockOtwValue,
     balanceOnTableValue,
     balanceOnTableSellingValue,
+    reservedBaleCount,
+    reservedBaleCost,
   };
 }

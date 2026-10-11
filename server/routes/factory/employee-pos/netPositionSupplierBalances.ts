@@ -13,9 +13,13 @@ import { db } from "../../../db";
 import { buildBrokerStatement } from "../suppliers/broker";
 import { isSupplierPaidFreight } from "../suppliers/_supplierStatementHelpers";
 import { resolveStoredFxRate } from "../../../services/factory/currencyConversion";
-import { getLockedSupplierRate } from "../../../services/factory/rawStockLockedRate";
 import type Decimal from "decimal.js";
 import { MoneyDecimal, toMoney } from "../../../lib/money";
+import {
+  entryNativeAmounts,
+  isNormalizedEntry,
+  voucherEntryCurrencyColumns,
+} from "../../../services/factory/voucherEntryCurrency";
 
 /**
  * Section 1 of the factory net-position report: what the company owes its
@@ -38,6 +42,13 @@ export interface NetPositionSupplierContext {
   asOf: string;
   round2: (n: number) => number;
   getConfigFx: (cc: string) => number;
+  /**
+   * Load only the container context (locked rates and containers) the
+   * inventory valuations need. The factory net position takes its supplier
+   * figures from the balance engine (wave 10); the balance part below is the
+   * Suppliers-page formula and is kept for comparison callers.
+   */
+  contextOnly?: boolean;
 }
 
 export interface NetPositionSupplierBalances {
@@ -61,13 +72,15 @@ export async function computeNetPositionSupplierBalances(
   // Authoritative locked rate (USD) per supplier — same map rawStockReceiptRoutes.ts
   // builds, so "Factory Raw Material Stock" here can never disagree with the Raw
   // Materials page's "Stock Value". Never recompute a rate from receipt history.
+  // Wave 11: only a persisted locked rate. The legacy receipt-weighted fallback
+  // (getLockedSupplierRate) can carry a native-currency cost and wrote the rate
+  // from this read; a supplier with no locked rate is valued per container at
+  // its landed USD cost (./netPositionInventory).
   const supplierLockedRateMapNp = new Map<number, number>();
   for (const s of suppliersList) {
     const persisted = s.currentRawMaterialCostPerKgUsd;
     if (persisted !== null && persisted !== undefined) {
       supplierLockedRateMapNp.set(s.id, toMoney(persisted as string).toNumber());
-    } else {
-      supplierLockedRateMapNp.set(s.id, await getLockedSupplierRate(db, ctx.companyId, s.id));
     }
   }
 
@@ -81,6 +94,16 @@ export async function computeNetPositionSupplierBalances(
         sql`DATE(${factoryContainers.createdAt}) <= ${ctx.asOf}::date`
       )
     );
+
+  if (ctx.contextOnly) {
+    return {
+      supplierLockedRateMapNp,
+      allContainersF,
+      supplierItems: [],
+      totalSupplierLiabilities: 0,
+      totalSupplierOverpayments: 0,
+    };
+  }
 
   const allPaymentsF = await db
     .select()
@@ -121,8 +144,7 @@ export async function computeNetPositionSupplierBalances(
     const voucherRows = await db
       .select({
         factorySupplierId: voucherEntries.factorySupplierId,
-        debitAmount: voucherEntries.debitAmount,
-        currency: vouchers.currency,
+        ...voucherEntryCurrencyColumns,
         exchangeRate: vouchers.exchangeRate,
         optional: vouchers.optional,
       })
@@ -131,6 +153,11 @@ export async function computeNetPositionSupplierBalances(
       .where(
         and(
           inArray(voucherEntries.factorySupplierId, allSupplierIds),
+          // A voucher line belongs to its voucher's company; deleted and optional
+          // vouchers never reach a balance (soft delete keeps the lines).
+          eq(vouchers.companyId, ctx.companyId),
+          eq(vouchers.optional, false),
+          isNull(vouchers.deletedAt),
           sql`${voucherEntries.debitAmount}::numeric > 0`,
           sql`${vouchers.voucherNumber} NOT LIKE 'FACTORY-PAY-%'`,
           sql`COALESCE(${vouchers.effectiveDate}, ${vouchers.voucherDate}) <= ${ctx.asOf}`
@@ -140,9 +167,12 @@ export async function computeNetPositionSupplierBalances(
       const sid = row.factorySupplierId;
       if (!sid) continue;
       if (row.optional) continue; // optional vouchers don't affect the balance
-      const amt = toMoney(row.debitAmount);
-      const cc = row.currency || "USD";
-      if (cc !== "USD") {
+      // Bucketed in the entry's own currency. A normalized entry carries its
+      // native amount and rate; only a legacy one depends on the voucher's rate.
+      const native = entryNativeAmounts(row);
+      const amt = native.debit;
+      const cc = native.currency;
+      if (cc !== "USD" && !isNormalizedEntry(row)) {
         // vouchers.exchangeRate has no fxRateConfirmed column yet — legacy heuristic stopgap.
         const { looksSet } = resolveStoredFxRate(cc, row.exchangeRate);
         // Exclude this payment from the total rather than guess at a rate of 1.

@@ -305,7 +305,8 @@ describe("PATCH /api/vouchers/:id/purchase", () => {
 
     const audit = await pool.query<{ action: string; table_name: string; record_id: number }>(
       `SELECT action, table_name, record_id FROM audit_log
-        WHERE company_id = $1 AND table_name = 'vouchers' AND record_id = $2`,
+        WHERE company_id = $1 AND table_name = 'vouchers' AND record_id = $2
+          AND action NOT LIKE 'row\\_%'` /* phase 21 A: application rows, not the database row audit */,
       [ctx.companyId, voucher.id]
     );
     expect(audit.rows).toHaveLength(1);

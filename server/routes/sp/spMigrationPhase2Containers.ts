@@ -173,86 +173,90 @@ export async function importContainers(req: Request, res: Response): Promise<Res
             voucherId = pn(firstRow(existingVoucher)?.id);
           }
 
-          if (!voucherId) {
-            const insertedVoucher = await db.execute(sql`
-              INSERT INTO vouchers
-                (company_id, supplier_id, voucher_number, voucher_type, voucher_date, description,
-                 total_amount, currency, source_module)
-              VALUES
-                (${pair.targetId}, ${supplier.supplierId}, ${deterministicNumber}, 'Journal',
-                 ${sourceContainer.import_date},
-                 ${`GC Migration — Goods OTW for container ${sourceContainer.container_number}`},
-                 ${money(invoiceTotal)}, 'USD', 'SP_MIGRATION')
-              RETURNING id
-            `);
-            voucherId = pn(resultRows(insertedVoucher)[0].id);
-            await trackRow(runId, "vouchers", voucherId);
-            rowsCreated++;
-            otwVouchersCreated++;
-          } else {
-            await db.execute(sql`
-              UPDATE vouchers
-              SET supplier_id = ${supplier.supplierId},
-                  voucher_date = ${sourceContainer.import_date},
-                  total_amount = ${money(invoiceTotal)}
-              WHERE id = ${voucherId} AND company_id = ${pair.targetId}
-            `);
-            otwVouchersReused++;
-          }
+          const pendingTracks: Array<[string, number]> = [];
+          await db.transaction(async (tx) => {
+            if (!voucherId) {
+              const insertedVoucher = await tx.execute(sql`
+                INSERT INTO vouchers
+                  (company_id, supplier_id, voucher_number, voucher_type, voucher_date, description,
+                   total_amount, currency, source_module)
+                VALUES
+                  (${pair.targetId}, ${supplier.supplierId}, ${deterministicNumber}, 'Journal',
+                   ${sourceContainer.import_date},
+                   ${`GC Migration — Goods OTW for container ${sourceContainer.container_number}`},
+                   ${money(invoiceTotal)}, 'USD', 'SP_MIGRATION')
+                RETURNING id
+              `);
+              voucherId = pn(resultRows(insertedVoucher)[0].id);
+              pendingTracks.push(["vouchers", voucherId]);
+              rowsCreated++;
+              otwVouchersCreated++;
+            } else {
+              await tx.execute(sql`
+                UPDATE vouchers
+                SET supplier_id = ${supplier.supplierId},
+                    voucher_date = ${sourceContainer.import_date},
+                    total_amount = ${money(invoiceTotal)}
+                WHERE id = ${voucherId} AND company_id = ${pair.targetId}
+              `);
+              otwVouchersReused++;
+            }
 
-          const debitEntry = await db.execute(sql`
-            SELECT id FROM voucher_entries
-            WHERE voucher_id = ${voucherId} AND ledger_account_id = ${pn(otwAssetAccount.id)}
-            LIMIT 1
-          `);
-          if (!firstRow(debitEntry)) {
-            const inserted = await db.execute(sql`
-              INSERT INTO voucher_entries (voucher_id, ledger_account_id, debit_amount, credit_amount, narration)
-              VALUES (${voucherId}, ${pn(otwAssetAccount.id)}, ${money(invoiceTotal)}, '0.0000',
-                      ${`Goods OTW — container ${sourceContainer.container_number}`})
-              RETURNING id
+            const debitEntry = await tx.execute(sql`
+              SELECT id FROM voucher_entries
+              WHERE voucher_id = ${voucherId} AND ledger_account_id = ${pn(otwAssetAccount.id)}
+              LIMIT 1
             `);
-            await trackRow(runId, "voucher_entries", pn(resultRows(inserted)[0].id));
-            rowsCreated++;
-          } else {
-            await db.execute(sql`
-              UPDATE voucher_entries
-              SET debit_amount = ${money(invoiceTotal)}, credit_amount = '0.0000',
-                  narration = ${`Goods OTW — container ${sourceContainer.container_number}`}
-              WHERE id = ${pn(resultRows(debitEntry)[0].id)}
-            `);
-          }
+            if (!firstRow(debitEntry)) {
+              const inserted = await tx.execute(sql`
+                INSERT INTO voucher_entries (voucher_id, ledger_account_id, debit_amount, credit_amount, narration)
+                VALUES (${voucherId}, ${pn(otwAssetAccount.id)}, ${money(invoiceTotal)}, '0.0000',
+                        ${`Goods OTW — container ${sourceContainer.container_number}`})
+                RETURNING id
+              `);
+              pendingTracks.push(["voucher_entries", pn(resultRows(inserted)[0].id)]);
+              rowsCreated++;
+            } else {
+              await tx.execute(sql`
+                UPDATE voucher_entries
+                SET debit_amount = ${money(invoiceTotal)}, credit_amount = '0.0000',
+                    narration = ${`Goods OTW — container ${sourceContainer.container_number}`}
+                WHERE id = ${pn(resultRows(debitEntry)[0].id)}
+              `);
+            }
 
-          const creditEntry = await db.execute(sql`
-            SELECT id FROM voucher_entries
-            WHERE voucher_id = ${voucherId} AND ledger_account_id = ${pn(otwClearingAccount.id)}
-            LIMIT 1
-          `);
-          if (!firstRow(creditEntry)) {
-            const inserted = await db.execute(sql`
-              INSERT INTO voucher_entries
-                (voucher_id, ledger_account_id, supplier_id, debit_amount, credit_amount, narration)
-              VALUES (${voucherId}, ${pn(otwClearingAccount.id)}, ${supplier.supplierId}, '0.0000',
-                      ${money(invoiceTotal)}, ${`Goods OTW clearing — container ${sourceContainer.container_number}`})
-              RETURNING id
+            const creditEntry = await tx.execute(sql`
+              SELECT id FROM voucher_entries
+              WHERE voucher_id = ${voucherId} AND ledger_account_id = ${pn(otwClearingAccount.id)}
+              LIMIT 1
             `);
-            await trackRow(runId, "voucher_entries", pn(resultRows(inserted)[0].id));
-            rowsCreated++;
-          } else {
-            await db.execute(sql`
-              UPDATE voucher_entries
-              SET supplier_id = ${supplier.supplierId}, debit_amount = '0.0000',
-                  credit_amount = ${money(invoiceTotal)},
-                  narration = ${`Goods OTW clearing — container ${sourceContainer.container_number}`}
-              WHERE id = ${pn(resultRows(creditEntry)[0].id)}
-            `);
-          }
+            if (!firstRow(creditEntry)) {
+              const inserted = await tx.execute(sql`
+                INSERT INTO voucher_entries
+                  (voucher_id, ledger_account_id, supplier_id, debit_amount, credit_amount, narration)
+                VALUES (${voucherId}, ${pn(otwClearingAccount.id)}, ${supplier.supplierId}, '0.0000',
+                        ${money(invoiceTotal)}, ${`Goods OTW clearing — container ${sourceContainer.container_number}`})
+                RETURNING id
+              `);
+              pendingTracks.push(["voucher_entries", pn(resultRows(inserted)[0].id)]);
+              rowsCreated++;
+            } else {
+              await tx.execute(sql`
+                UPDATE voucher_entries
+                SET supplier_id = ${supplier.supplierId}, debit_amount = '0.0000',
+                    credit_amount = ${money(invoiceTotal)},
+                    narration = ${`Goods OTW clearing — container ${sourceContainer.container_number}`}
+                WHERE id = ${pn(resultRows(creditEntry)[0].id)}
+              `);
+            }
 
-          await db.execute(sql`
-            UPDATE sp_containers
-            SET goods_otw_voucher_id = ${voucherId}, supplier_id = ${supplier.supplierId}
-            WHERE id = ${spContainerId} AND company_id = ${pair.targetId}
-          `);
+            await tx.execute(sql`
+              UPDATE sp_containers
+              SET goods_otw_voucher_id = ${voucherId}, supplier_id = ${supplier.supplierId}
+              WHERE id = ${spContainerId} AND company_id = ${pair.targetId}
+            `);
+          });
+          for (const [tableName, rowId] of pendingTracks) await trackRow(runId, tableName, rowId);
         }
       }
 

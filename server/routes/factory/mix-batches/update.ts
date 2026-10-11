@@ -22,7 +22,13 @@ import {
 } from "@shared/schema";
 import { eq, and, desc, sql } from "drizzle-orm";
 import { getStableSupplierCost } from "../../../services/factory/rawStockStableCost";
-import { getLockedSupplierRate } from "../../../services/factory/rawStockLockedRate";
+import {
+  containerUsdRate,
+  MixCostAccumulator,
+  sendFactoryCostBasisRefusal,
+  supplierLockedUsdRate,
+} from "../../../services/factory/baleCostBasis";
+import { recordFactoryStockValueEventTx } from "../../../services/factory/factoryStockValueEvents";
 import Decimal from "decimal.js";
 import { MoneyDecimal, parseMoneyInput, toMoney } from "../../../lib/money";
 
@@ -50,31 +56,34 @@ export function registerFactoryMixBatchUpdateRoutes(app: Express) {
         if (name !== undefined) updates.name = name?.trim() || null;
         if (notes !== undefined) updates.notes = notes?.trim() || null;
         if (batchDate !== undefined) updates.batchDate = batchDate || null;
-        const [updated] = await db
-          .update(factoryMixBatches)
-          .set(updates)
-          .where(eq(factoryMixBatches.id, id))
-          .returning();
-        try {
-          await logAudit({
-            userId: req.session.userId!,
-            username: req.session.username || req.session.userId!,
-            companyId,
-            action: "update",
-            tableName: "factory_mix_batches",
-            recordId: id,
-            recordIdentifier: batch.batchCode + (updated.name ? ` – ${updated.name}` : ""),
-            changes: {
-              ...(name !== undefined ? { name: { old: batch.name ?? null, new: updated.name ?? null } } : {}),
-              ...(notes !== undefined ? { notes: { old: batch.notes ?? null, new: updated.notes ?? null } } : {}),
-              ...(batchDate !== undefined
-                ? { batchDate: { old: batch.batchDate ?? null, new: updated.batchDate ?? null } }
-                : {}),
+        // Phase 21 (B): the write and its audit commit together.
+        const updated = await db.transaction(async (tx) => {
+          const [written] = await tx
+            .update(factoryMixBatches)
+            .set(updates)
+            .where(eq(factoryMixBatches.id, id))
+            .returning();
+          await logAudit(
+            {
+              userId: req.session.userId!,
+              username: req.session.username || req.session.userId!,
+              companyId,
+              action: "update",
+              tableName: "factory_mix_batches",
+              recordId: id,
+              recordIdentifier: batch.batchCode + (written.name ? ` – ${written.name}` : ""),
+              changes: {
+                ...(name !== undefined ? { name: { old: batch.name ?? null, new: written.name ?? null } } : {}),
+                ...(notes !== undefined ? { notes: { old: batch.notes ?? null, new: written.notes ?? null } } : {}),
+                ...(batchDate !== undefined
+                  ? { batchDate: { old: batch.batchDate ?? null, new: written.batchDate ?? null } }
+                  : {}),
+              },
             },
-          });
-        } catch (auditErr) {
-          logger.error("[mix-batch simple-patch audit] non-fatal:", { error: auditErr });
-        }
+            tx
+          );
+          return written;
+        });
         return res.json(updated);
       }
 
@@ -111,7 +120,15 @@ export function registerFactoryMixBatchUpdateRoutes(app: Express) {
           .from(factoryMixBatchSources)
           .where(eq(factoryMixBatchSources.mixBatchId, id));
 
+        // The material price difference the old sources carried, reversed below.
+        let oldPriceDelta = new MoneyDecimal(0);
         for (const src of oldSources) {
+          if (src.containerId) {
+            const landed = await containerUsdRate(tx, companyId, src.containerId);
+            const rate = toMoney(src.costPerKg);
+            if (landed && rate.gt(0))
+              oldPriceDelta = oldPriceDelta.plus(toMoney(src.weightKg).times(rate.minus(landed)));
+          }
           if (src.containerId) {
             const [rsRow] = await tx
               .select()
@@ -166,9 +183,8 @@ export function registerFactoryMixBatchUpdateRoutes(app: Express) {
         await tx.delete(factoryMixBatchSources).where(eq(factoryMixBatchSources.mixBatchId, id));
 
         // ── 3. Apply new sources ──
-        // DEFECT 15 FIX: use Decimal.js for cost accumulation (edit route).
-        let dTotalWeightKg = new Decimal(0);
-        let dTotalCost = new Decimal(0);
+        // Wave 11: every source at its USD rate (services/factory/baleCostBasis.ts).
+        const mixCost = new MixCostAccumulator();
         const sourceRecords = [];
 
         for (const source of supplierSources || []) {
@@ -179,8 +195,11 @@ export function registerFactoryMixBatchUpdateRoutes(app: Express) {
           // Locked, offload-time moving-average rate — never derived from remaining/
           // available kg or all-time received kg, so it doesn't shift depending on
           // which container FIFO happens to draw from.
-          const [costPerKg, { rows: supplierRawStocks }] = await Promise.all([
-            getLockedSupplierRate(tx, companyId, supplierId, { forUpdate: true }),
+          // The persisted locked rate only (the legacy receipt-weighted fallback
+          // can carry a native-currency cost); with none, each FIFO container is
+          // priced at its own landed USD cost.
+          const [lockedRate, { rows: supplierRawStocks }] = await Promise.all([
+            supplierLockedUsdRate(tx, companyId, supplierId),
             getStableSupplierCost(tx, companyId, supplierId, { forUpdate: true }),
           ]);
 
@@ -211,30 +230,34 @@ export function registerFactoryMixBatchUpdateRoutes(app: Express) {
             else perRsDeductions.push({ containerId: lastRs.containerId, deduct: remaining });
           }
 
-          const dW = weight;
-          const dCpk = new Decimal(costPerKg);
-          dTotalWeightKg = dTotalWeightKg.plus(dW);
-          dTotalCost = dTotalCost.plus(dW.times(dCpk));
           if (supplierRawStocks.length === 0) {
-            if (costPerKg <= 0) {
+            if (lockedRate === null) {
               throw new Error(
                 `Supplier has no established raw-material rate yet. Record a container offload or opening-balance/ADD adjustment before using it as a mix-batch source.`
               );
             }
+            mixCost.add(weight, lockedRate, { supplierId });
             sourceRecords.push({
               supplierId,
               weightKg: weight.toFixed(),
-              costPerKg: String(costPerKg),
-              totalCost: dW.times(dCpk).toDecimalPlaces(6).toFixed(6),
+              costPerKg: lockedRate.toFixed(),
+              totalCost: weight.times(lockedRate).toDecimalPlaces(6).toFixed(6),
             });
           }
           for (const d of perRsDeductions) {
+            const landed = await containerUsdRate(tx, companyId, d.containerId);
+            const rate = lockedRate ?? landed;
+            mixCost.add(d.deduct, rate, { supplierId, containerId: d.containerId });
+            mixCost.addPriceDifference(d.deduct, rate, landed);
             sourceRecords.push({
               supplierId,
               containerId: d.containerId,
               weightKg: d.deduct.toFixed(),
-              costPerKg: String(costPerKg),
-              totalCost: d.deduct.times(dCpk).toDecimalPlaces(6).toFixed(6),
+              costPerKg: (rate ?? ZERO).toFixed(),
+              totalCost: d.deduct
+                .times(rate ?? 0)
+                .toDecimalPlaces(6)
+                .toFixed(6),
             });
           }
         }
@@ -256,27 +279,22 @@ export function registerFactoryMixBatchUpdateRoutes(app: Express) {
             .update(factoryMixBatches)
             .set({ usedKg: sql`${factoryMixBatches.usedKg} + ${weight.toFixed()}`, updatedAt: new Date() })
             .where(eq(factoryMixBatches.id, srcBatch.id));
-          const dWb = weight;
-          const dCostB = cost;
-          dTotalWeightKg = dTotalWeightKg.plus(dWb);
-          dTotalCost = dTotalCost.plus(dWb.times(dCostB));
+          mixCost.add(weight, cost.gt(0) ? cost : null, { sourceBatchId });
           sourceRecords.push({
             sourceBatchId,
             weightKg: weight.toFixed(),
             costPerKg: cost.toFixed(),
-            totalCost: dWb.times(dCostB).toDecimalPlaces(6).toFixed(6),
+            totalCost: weight.times(cost).toDecimalPlaces(6).toFixed(6),
           });
         }
 
-        const blendedCostPerKg = dTotalWeightKg.gt(0)
-          ? dTotalCost.div(dTotalWeightKg).toDecimalPlaces(6).toNumber()
-          : 0;
+        const settled = await mixCost.settle(tx, companyId, batchDate || batch.batchDate || getClientDate(req));
 
         // ── 5. Update batch totals ──
         const batchUpdates: Partial<typeof factoryMixBatches.$inferInsert> = {
-          totalWeightKg: dTotalWeightKg.toDecimalPlaces(6).toFixed(6),
-          costPerKg: new Decimal(blendedCostPerKg).toFixed(6),
-          totalCost: dTotalCost.toDecimalPlaces(6).toFixed(6),
+          totalWeightKg: settled.totalWeight.toDecimalPlaces(6).toFixed(6),
+          costPerKg: settled.costPerKg.toFixed(7),
+          totalCost: settled.totalCost.toFixed(7),
           updatedAt: new Date(),
         };
         if (name !== undefined) batchUpdates.name = name?.trim() || null;
@@ -315,7 +333,36 @@ export function registerFactoryMixBatchUpdateRoutes(app: Express) {
           });
         }
 
-        return updated;
+        await recordFactoryStockValueEventTx(tx, {
+          companyId,
+          kind: "MATERIAL_PRICE",
+          amount: mixCost.materialPriceDelta.minus(oldPriceDelta),
+          sourceType: "factory-mix-batch-edit",
+          sourceId: id,
+        });
+
+        const edited = updated;
+        await logAudit(
+          {
+            userId: req.session.userId!,
+            username: req.session.username || req.session.userId!,
+            companyId,
+            action: "update",
+            tableName: "factory_mix_batches",
+            recordId: edited.id,
+            recordIdentifier: edited.batchCode + (edited.name ? ` – ${edited.name}` : ""),
+            changes: {
+              ...(name !== undefined ? { name: { old: batchBefore.name ?? null, new: name?.trim() || null } } : {}),
+              ...(notes !== undefined ? { notes: { old: batchBefore.notes ?? null, new: notes?.trim() || null } } : {}),
+              totalWeightKg: {
+                old: toMoney(batchBefore.totalWeightKg).toFixed(3),
+                new: toMoney(edited.totalWeightKg).toFixed(3),
+              },
+            },
+          },
+          tx
+        );
+        return edited;
       });
 
       // Update daybook entry
@@ -340,25 +387,9 @@ export function registerFactoryMixBatchUpdateRoutes(app: Express) {
         amountUsd: toMoney(result.totalCost).toNumber(),
       });
 
-      await logAudit({
-        userId: req.session.userId!,
-        username: req.session.username || req.session.userId!,
-        companyId,
-        action: "update",
-        tableName: "factory_mix_batches",
-        recordId: result.id,
-        recordIdentifier: result.batchCode + (result.name ? ` – ${result.name}` : ""),
-        changes: {
-          ...(name !== undefined ? { name: { old: batchBefore.name ?? null, new: name?.trim() || null } } : {}),
-          ...(notes !== undefined ? { notes: { old: batchBefore.notes ?? null, new: notes?.trim() || null } } : {}),
-          totalWeightKg: {
-            old: toMoney(batchBefore.totalWeightKg).toFixed(3),
-            new: toMoney(result.totalWeightKg).toFixed(3),
-          },
-        },
-      });
       res.json(result);
     } catch (error: unknown) {
+      if (sendFactoryCostBasisRefusal(res, error)) return;
       logger.error("Error updating mix batch:", { error: error });
       res.status(500).json({ message: getErrorMessage(error) });
     }

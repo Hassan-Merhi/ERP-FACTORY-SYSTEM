@@ -1,6 +1,6 @@
 import type { Express, Request, Response } from "express";
 import { and, eq, sql } from "drizzle-orm";
-import { spContainers, spOffloadCharges, spStockMovements, voucherEntries, vouchers } from "@shared/schema";
+import { spContainers, spOffloadCharges, spStockMovements, voucherEntries } from "@shared/schema";
 import { requireAuth, requireRole } from "../../auth";
 import { db, type RawQueryRow } from "../../db";
 import { getErrorMessage } from "../../lib/httpHandlers";
@@ -8,12 +8,12 @@ import { logger } from "../../lib/logger";
 import { adjustSpInventoryAtomic, respondToSpInventoryIntegrityError } from "../../services/sp/spInventoryIntegrity";
 import {
   appendSpLifecycleNote,
-  buildSpReversalEntries,
   normalizeSpLifecycleReason,
   respondToSpLifecycleError,
   SpLifecycleError,
 } from "../../services/sp/spLifecyclePolicy";
 import { SP_RELEASE_CURRENCY, SP_RELEASE_EXCHANGE_RATE } from "../../services/sp/spReleasePolicy";
+import { mirroredUsdLines, postFactoryPartyLineVoucherTx } from "../../services/factory/factoryVoucherPosting";
 import { requireSpCompany } from "./spHelpers";
 
 /**
@@ -132,25 +132,26 @@ async function createExactVoucherReversal(
     );
   }
 
-  const [reversalVoucher] = await tx
-    .insert(vouchers)
-    .values({
-      companyId: input.companyId,
-      voucherType: "Journal",
-      voucherNumber: `${input.numberPrefix}-${input.originalVoucherId}-${Date.now()}`,
-      voucherDate: input.reversalDate,
-      description: input.description,
-      totalAmount: String(originalVoucher.total_amount ?? originalVoucher.totalAmount ?? "0"),
-      currency: SP_RELEASE_CURRENCY,
-      exchangeRate: SP_RELEASE_EXCHANGE_RATE,
-      sourceModule: "SP",
-    })
-    .returning();
-
-  await tx
-    .insert(voucherEntries)
-    .values(buildSpReversalEntries(originalEntries, reversalVoucher.id, input.description));
-  return reversalVoucher.id;
+  // Phase 22 (C): the mirror is posted with the original's posting identity
+  // (a replay returns it), its family number keeps the prefix with the original
+  // voucher id and the posting generation (was Date.now()); the lines may carry
+  // a control account with its supplier party, so the party-line writer posts it.
+  const { voucherId } = await postFactoryPartyLineVoucherTx(tx, {
+    companyId: input.companyId,
+    voucherNumber: (generation) => `${input.numberPrefix}-${input.originalVoucherId}-${generation}`,
+    voucherDate: input.reversalDate,
+    description: input.description,
+    currency: SP_RELEASE_CURRENCY,
+    fxRateToUsd: SP_RELEASE_EXCHANGE_RATE,
+    sourceModule: "SP",
+    source: {
+      sourceType: "sp-voucher-reversal",
+      sourceId: `${input.numberPrefix}:${input.originalVoucherId}`,
+      phase: "mirror",
+    },
+    lines: mirroredUsdLines(originalEntries, input.description),
+  });
+  return voucherId;
 }
 
 export function registerSpOffloadLifecycleRoutes(app: Express): void {

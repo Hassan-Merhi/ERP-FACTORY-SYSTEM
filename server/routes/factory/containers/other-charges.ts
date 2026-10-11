@@ -12,11 +12,13 @@ import { logger } from "../../../lib/logger";
 import { db } from "../../../db";
 import { requireAuth } from "../../../auth";
 import { resolveStoredFxRate, UnresolvedExchangeRateError } from "../../../services/factory/currencyConversion";
-import { getOrFetchFxRateToUsd, getOrCreateLedgerAccount } from "../_helpers";
-import { factoryContainers, voucherEntries, factoryContainerOtherCharges, vouchers } from "@shared/schema";
-import { eq, and, inArray, ilike } from "drizzle-orm";
-import { normFactoryEntry } from "./_helpers";
+import { getOrCreateLedgerAccount } from "../_helpers";
+import { FactoryFxRateRequiredError, factoryDocumentRate } from "../../../services/factory/factoryDocumentFxRate";
+import { factoryContainers, factoryContainerOtherCharges, vouchers } from "@shared/schema";
+import { eq, and, ilike } from "drizzle-orm";
+import { postFactoryVoucherTx } from "../../../services/factory/factoryVoucherPosting";
 import { parseMoneyInput, sumMoney, toMoney } from "../../../lib/money";
+import { retireVouchersTx, sessionRetirementActor } from "../../../services/accounting/voucherRetirement";
 
 type OtherChargeInput = {
   description: string;
@@ -127,7 +129,8 @@ export function registerFactoryContainerOtherChargesRoutes(app: Express) {
             }
             fxRate = String(storedRate);
           } else {
-            fxRate = await getOrFetchFxRateToUsd(companyId, chargeCcy, voucherDate);
+            // Phase 19 C (M2): the recorded factory rate on or before the voucher date, or 409.
+            fxRate = (await factoryDocumentRate(db, companyId, chargeCcy, voucherDate)).rate;
           }
         }
 
@@ -166,8 +169,13 @@ export function registerFactoryContainerOtherChargesRoutes(app: Express) {
           );
         if (existingVouchers.length > 0) {
           const voucherIds = existingVouchers.map((voucher) => voucher.id);
-          await tx.delete(voucherEntries).where(inArray(voucherEntries.voucherId, voucherIds));
-          await tx.delete(vouchers).where(inArray(vouchers.id, voucherIds));
+          // Wave 16 (A): retired (soft delete with lines, audited here), not hard-deleted.
+          await retireVouchersTx(tx, {
+            companyId,
+            voucherIds,
+            reason: "factory-container-other-charge-delete",
+            actor: sessionRetirementActor(req),
+          });
         }
 
         await tx
@@ -195,36 +203,30 @@ export function registerFactoryContainerOtherChargesRoutes(app: Express) {
           if (chargeAmt.lte(0) || !charge.ledgerAccountId || !prepared.fxRate || !payableAccId) continue;
 
           const chargeCcy = charge.currencyCode || "USD";
-          const ocVoucherNum = `FACTORY-OC-${containerId}-${charge.id}-${Date.now()}-${index}`;
-          const [ocVoucher] = await tx
-            .insert(vouchers)
-            .values({
-              companyId,
-              voucherType: "Journal",
-              voucherNumber: ocVoucherNum,
-              voucherDate,
-              description: `${charge.description} - container ${container.containerNumber}`,
-              totalAmount: chargeAmt.toFixed(),
-              currency: chargeCcy,
-              exchangeRate: prepared.fxRate,
-              sourceModule: "FACTORY",
-            })
-            .returning();
-
-          await tx.insert(voucherEntries).values([
-            {
-              voucherId: ocVoucher.id,
-              ledgerAccountId: payableAccId,
-              ...normFactoryEntry(chargeCcy, chargeAmt.toFixed(), "0", prepared.fxRate),
-              narration: `${charge.description} payable - container ${container.containerNumber}`,
-            },
-            {
-              voucherId: ocVoucher.id,
-              ledgerAccountId: charge.ledgerAccountId,
-              ...normFactoryEntry(chargeCcy, "0", chargeAmt.toFixed(), prepared.fxRate),
-              narration: `${charge.description} - container ${container.containerNumber}`,
-            },
-          ]);
+          // Phase 22 (C): through the engine with the charge's posting identity;
+          // FACTORY-OC-{container}-{charge}- family number with the generation
+          // (was Date.now()). Dr Factory Charges Payable / Cr the charge account.
+          await postFactoryVoucherTx(tx, {
+            companyId,
+            voucherNumber: (generation) => `FACTORY-OC-${containerId}-${charge.id}-${generation}`,
+            voucherDate,
+            description: `${charge.description} - container ${container.containerNumber}`,
+            currency: chargeCcy,
+            fxRateToUsd: prepared.fxRate,
+            source: { sourceType: "factory-container-other-charge", sourceId: charge.id, phase: "voucher" },
+            lines: [
+              {
+                ledgerAccountId: payableAccId,
+                debit: chargeAmt,
+                narration: `${charge.description} payable - container ${container.containerNumber}`,
+              },
+              {
+                ledgerAccountId: charge.ledgerAccountId,
+                credit: chargeAmt,
+                narration: `${charge.description} - container ${container.containerNumber}`,
+              },
+            ],
+          });
         }
 
         return newCharges;
@@ -232,6 +234,7 @@ export function registerFactoryContainerOtherChargesRoutes(app: Express) {
 
       res.json({ charges: result, total: total.toFixed(2) });
     } catch (error: unknown) {
+      if (error instanceof FactoryFxRateRequiredError) return res.status(409).json(error.body);
       logger.error("Error syncing container other charges:", { error: error });
       res.status(500).json({ message: getErrorMessage(error) });
     }

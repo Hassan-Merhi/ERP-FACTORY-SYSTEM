@@ -39,6 +39,62 @@ export async function ensureMonthlyLedgerRows(contractId: number, asOfDate?: str
   }
 }
 
+type MonthlyLedgerRow = typeof propertyMonthlyLedger.$inferSelect;
+
+/**
+ * Phase 19 (B), PE2: the monthly rent rows of a contract for a read (the unit
+ * detail and the statement export), without writing. Stored rows are returned
+ * as they are; a due period with no stored row is computed in memory (its
+ * synthetic id is negative and `virtual` is true), and a due stored row whose
+ * expected amount is 0 shows the contract's rent, as ensureMonthlyLedgerRows
+ * would store it. Rows are created only by the writers (payments, the monthly
+ * run, the due-rental posting).
+ */
+export async function monthlyLedgerRowsForRead(
+  contractId: number,
+  asOfDate?: string
+): Promise<Array<MonthlyLedgerRow & { virtual?: boolean }>> {
+  const stored = await db
+    .select()
+    .from(propertyMonthlyLedger)
+    .where(eq(propertyMonthlyLedger.contractId, contractId))
+    .orderBy(propertyMonthlyLedger.year, propertyMonthlyLedger.month);
+  const [contract] = await db.select().from(propertyContracts).where(eq(propertyContracts.id, contractId));
+  if (!contract || contract.status !== "ACTIVE") return stored;
+
+  const billingDay = getRentalBillingDay(contract.startDate as string);
+  const due = getDuePeriods(contract.startDate as string, billingDay, asOfDate ?? getUtcTodayString());
+  const key = (year: number, month: number) => year * 100 + month;
+  const dueKeys = new Set(due.map((period) => key(period.year, period.month)));
+  const byPeriod = new Map(stored.map((row) => [key(row.year, row.month), row]));
+  const rows: Array<MonthlyLedgerRow & { virtual?: boolean }> = stored.map((row) =>
+    dueKeys.has(key(row.year, row.month)) && toMoney(row.expectedAmount).isZero()
+      ? { ...row, expectedAmount: String(contract.rentalAmount) }
+      : row
+  );
+  for (const period of due) {
+    if (byPeriod.has(key(period.year, period.month))) continue;
+    rows.push({
+      id: -key(period.year, period.month),
+      companyId: contract.companyId,
+      module: contract.module,
+      contractId: contract.id,
+      unitId: contract.unitId,
+      year: period.year,
+      month: period.month,
+      expectedAmount: String(contract.rentalAmount),
+      paidAmount: "0",
+      notes: null,
+      accrualVoucherId: null,
+      usedPrepaidAccount: false,
+      usedAdvanceAccount: false,
+      createdAt: new Date(0),
+      virtual: true,
+    });
+  }
+  return rows.sort((a, b) => key(a.year, a.month) - key(b.year, b.month));
+}
+
 // ── Oldest unpaid month finder ─────────────────────────────────────────────
 // Returns the earliest past-or-current month for this contract that still has
 // an outstanding balance.  Falls back to (fallbackYear, fallbackMonth) when

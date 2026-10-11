@@ -8,9 +8,15 @@ import type { Express, Request, Response } from "express";
 import { getErrorMessage } from "../../../../lib/httpHandlers";
 import { db, type RawQueryRow } from "../../../../db";
 import { requireAuth } from "../../../../auth";
-import { ledgerAccounts, voucherEntries, employees, vouchers } from "@shared/schema";
+import { ledgerAccounts, employees } from "@shared/schema";
 import { eq, and, sql, inArray } from "drizzle-orm";
 import { MoneyDecimal, parseMoneyInput, sumMoney, toMoney } from "../../../../lib/money";
+import {
+  factoryRequestSourceId,
+  factorySessionActor,
+  postFactoryVoucherTx,
+  type FactoryVoucherLine,
+} from "../../../../services/factory/factoryVoucherPosting";
 
 /** A request amount at cents, read as parseFloat reads it; unparsable input is zero, as it always was here. */
 const requestCents = (value: unknown) => (parseMoneyInput(value) ?? new MoneyDecimal(0)).toDecimalPlaces(2);
@@ -68,7 +74,6 @@ export function registerFactoryEmployeeBulkPayrollRoutes(app: Express) {
       const totalSalary = totalSalaryExact.toNumber();
       const totalDeduction = totalDeductionExact.toNumber();
       const totalNet = totalSalaryExact.minus(totalDeductionExact).toNumber();
-      const voucherNumber = `EMP-PAY-${Date.now()}`;
 
       const txResult = await db.transaction(async (tx) => {
         // Get or create PAYROLL_DEPOSIT_EXPENSE ledger account
@@ -109,82 +114,81 @@ export function registerFactoryEmployeeBulkPayrollRoutes(app: Express) {
             .returning();
         }
 
-        // Single bulk voucher (totalAmount = gross salary for accounting)
-        const [bulkVoucher] = await tx
-          .insert(vouchers)
-          .values({
-            companyId,
-            voucherNumber,
-            voucherType: "Journal",
-            voucherDate: date,
-            effectiveDate: (effectiveDate as string) || null,
-            description: notes || `Bulk payroll - ${validDeposits.length} employees`,
-            totalAmount: totalSalaryExact.minus(totalDeductionExact).abs().toFixed(2),
-          })
-          .returning();
-
-        // DR: Payroll Expense (gross salary)
-        if (totalSalary > 0) {
-          await tx.insert(voucherEntries).values({
-            voucherId: bulkVoucher.id,
+        // Phase 22 (C): one bulk voucher through the engine, engine-numbered (was
+        // EMP-PAY-{Date.now()}), with the request's identity (a resend returns it).
+        // DR Payroll Expense (gross) / CR Deduction Recovery; per employee CR the
+        // salary earned and DR the deduction applied.
+        const employeeRows = await tx
+          .select()
+          .from(employees)
+          .where(
+            and(
+              inArray(
+                employees.id,
+                validDeposits.map((d) => d.empId)
+              ),
+              eq(employees.companyId, companyId)
+            )
+          );
+        const employeeById = new Map(employeeRows.map((emp) => [emp.id, emp]));
+        const lines: FactoryVoucherLine[] = [];
+        if (totalSalaryExact.gt(0)) {
+          lines.push({
             ledgerAccountId: payrollExpenseAccount.id,
-            debitAmount: totalSalaryExact.toFixed(2),
-            creditAmount: "0",
-            narration: notes || `Bulk payroll gross - ${validDeposits.length} employees - ${voucherNumber}`,
+            debit: totalSalaryExact,
+            narration: notes || `Bulk payroll gross - ${validDeposits.length} employees`,
           });
         }
-
-        // CR: Deduction Recovery (total deductions)
-        if (totalDeduction > 0) {
-          await tx.insert(voucherEntries).values({
-            voucherId: bulkVoucher.id,
+        if (totalDeductionExact.gt(0)) {
+          lines.push({
             ledgerAccountId: deductionAccount.id,
-            debitAmount: "0",
-            creditAmount: totalDeductionExact.toFixed(2),
-            narration: `Payroll deductions - ${voucherNumber}`,
+            credit: totalDeductionExact,
+            narration: `Payroll deductions`,
           });
         }
+        for (const dep of validDeposits) {
+          const emp = employeeById.get(dep.empId);
+          if (!emp) continue;
+          if (dep.amount.gt(0)) {
+            lines.push({
+              employeeId: dep.empId,
+              credit: dep.amount,
+              narration: `Salary for ${emp.firstName} ${emp.lastName}`,
+            });
+          }
+          if (dep.deduction.gt(0)) {
+            lines.push({
+              employeeId: dep.empId,
+              debit: dep.deduction,
+              narration: `Deduction for ${emp.firstName} ${emp.lastName}`,
+            });
+          }
+        }
+        const { voucher: bulkVoucher, replayed } = await postFactoryVoucherTx(tx, {
+          companyId,
+          voucherDate: date,
+          effectiveDate: (effectiveDate as string) || null,
+          description: notes || `Bulk payroll - ${validDeposits.length} employees`,
+          sourceModule: "ERP",
+          source: { sourceType: "factory-bulk-payroll", sourceId: factoryRequestSourceId(req), phase: "voucher" },
+          actor: factorySessionActor(req),
+          lines,
+        });
+        const voucherNumber = bulkVoucher.voucherNumber;
+        if (replayed) return { bulkVoucher, results: [] };
 
-        // Per-employee: credit salary, debit deduction → net balance change
+        // Per-employee: the advances and the running balance follow the net change
         const results = [];
         for (const dep of validDeposits) {
           const { empId } = dep;
           const amount = dep.amount.toNumber();
           const deduction = dep.deduction.toNumber();
           const net = dep.amount.minus(dep.deduction).toNumber();
-
-          const [emp] = await tx
-            .select()
-            .from(employees)
-            .where(and(eq(employees.id, empId), eq(employees.companyId, companyId)));
+          const emp = employeeById.get(empId);
           if (!emp) continue;
 
-          // CR employee: salary earned
-          if (amount > 0) {
-            await tx.insert(voucherEntries).values({
-              voucherId: bulkVoucher.id,
-              ledgerAccountId: null,
-              employeeId: empId,
-              debitAmount: "0",
-              creditAmount: amount.toFixed(2),
-              narration: `Salary for ${emp.firstName} ${emp.lastName} - ${voucherNumber}`,
-            });
-          }
-
-          // DR employee: deduction applied
-          if (deduction > 0) {
-            await tx.insert(voucherEntries).values({
-              voucherId: bulkVoucher.id,
-              ledgerAccountId: null,
-              employeeId: empId,
-              debitAmount: deduction.toFixed(2),
-              creditAmount: "0",
-              narration: `Deduction for ${emp.firstName} ${emp.lastName} - ${voucherNumber}`,
-            });
-          }
-
           // Deduct outstanding advance balances FIFO (same as ERP payroll)
-          if (deduction > 0) {
+          if (dep.deduction.gt(0)) {
             const outstanding = await tx.execute<RawQueryRow<OutstandingAdvanceRow>>(sql`
               SELECT id, remaining_balance FROM employee_advances
               WHERE company_id = ${companyId} AND employee_id = ${empId} AND fully_paid = false
@@ -221,7 +225,7 @@ export function registerFactoryEmployeeBulkPayrollRoutes(app: Express) {
             .set({
               currentBalance: newBalance.toFixed(2),
               totalDeposits: newDeposits.toFixed(2),
-              ...(deduction > 0 ? { totalWithdrawals: newWithdrawals.toFixed(2) } : {}),
+              ...(dep.deduction.gt(0) ? { totalWithdrawals: newWithdrawals.toFixed(2) } : {}),
             })
             .where(eq(employees.id, empId));
 

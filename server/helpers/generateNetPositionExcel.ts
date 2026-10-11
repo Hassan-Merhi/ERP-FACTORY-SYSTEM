@@ -600,6 +600,21 @@ export async function generateNetPositionExcel(
       };
     });
 
+    // NOT YET IN THE LEDGER — listed for information, never in the totals (wave 10)
+    const memoLines = snap.notInLedger?.lines ?? [];
+    if (memoLines.length > 0) {
+      ws.addRow([]);
+      const memoSec = ws.addRow(["  NOT YET IN THE LEDGER (not included in the net position)", "", "", ""]);
+      memoSec.eachCell((cell) => {
+        cell.font = { bold: true, color: { argb: C.MUTED } };
+      });
+      for (const line of memoLines) {
+        const mr = ws.addRow([line.label, line.value, "", ""]);
+        mr.getCell(1).font = { italic: true, size: 10 };
+        mr.getCell(2).numFmt = signedFmt;
+      }
+    }
+
     ws.getColumn(1).width = 40;
     ws.getColumn(2).width = 20;
     ws.getColumn(3).width = 20;

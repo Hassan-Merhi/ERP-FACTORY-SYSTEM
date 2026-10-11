@@ -4,13 +4,19 @@
 import type { Database } from "../../db";
 import type { Express, Request, Response, RequestHandler } from "express";
 import { logAudit } from "../helpers/auditHelpers";
-import { getErrorMessage } from "../../lib/httpHandlers";
+import { errorStatus, getErrorMessage, HttpError } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
 import { parseId, parseOptionalId } from "../../lib/parseId";
 import { getClientDate } from "../../lib/dateUtils";
 import { checkFactoryAdmin } from "../factory/_helpers";
-import { eq, and, sql, inArray } from "drizzle-orm";
-import { rebuildPayrollGenVoucher } from "../payroll/_payrollAccountingHelper";
+import { eq, and, sql } from "drizzle-orm";
+import { findOrCreateLedger, rebuildPayrollGenVoucher } from "../payroll/_payrollAccountingHelper";
+import {
+  FACTORY_PAYROLL_PAYMENT_ACCOUNT_REQUIRED,
+  postFactoryPayrollPaymentVoucherTx,
+  removeFactoryPayrollPaymentVouchersTx,
+  resolveFactoryPayrollPaymentAccountTx,
+} from "../../services/payroll/factoryPayrollPaymentVoucher";
 import {
   getProductionBonusTotalsForPayrollIds,
   prepareProductionBonusesForPayroll,
@@ -20,8 +26,7 @@ import {
   factoryDaybookEntries,
   factoryWorkerAdvances,
   factoryAdvanceRepayments,
-  vouchers,
-  voucherEntries,
+  factoryWorkers,
 } from "@shared/schema";
 import { writeDaybookEntry } from "./_helpers";
 import type Decimal from "decimal.js";
@@ -47,6 +52,7 @@ export function registerFactoryPayrollUpdateRoutes(app: Express, requireAuth: Re
         paymentDate,
         paymentReference,
         effectiveDate,
+        cashAccountId,
       } = req.body;
 
       const [existing] = await db
@@ -139,84 +145,168 @@ export function registerFactoryPayrollUpdateRoutes(app: Express, requireAuth: Re
       if (status !== undefined) updateData.status = status;
       if (status === "APPROVED") updateData.approvedAt = new Date();
 
-      const [updated] = await db
-        .update(factoryPayrolls)
-        .set(updateData)
-        .where(and(eq(factoryPayrolls.id, id), eq(factoryPayrolls.companyId, companyId)))
-        .returning();
-
       const financialChanged =
         bonuses !== undefined ||
         otherBonuses !== undefined ||
         deductions !== undefined ||
         advances !== undefined ||
         overtimePay !== undefined;
-      if (financialChanged) {
-        await db.transaction(async (tx) => {
-          await rebuildPayrollGenVoucher(tx, current.companyId, current.periodStart, current.periodEnd);
+      const statusChanged = status !== undefined && status !== current.status;
+      const markingPaid = statusChanged && status === "PAID";
+      const unmarkingPaid = statusChanged && current.status === "PAID";
+      const netChanged = !netSalaryExact.equals(toMoney(current.netSalary));
+
+      // A paid payroll's amounts are what its payment voucher paid; changing them
+      // would leave the payment and the payable apart.
+      if (current.status === "PAID" && !unmarkingPaid && netChanged) {
+        return res.status(409).json({
+          message: "This payroll is paid. Un-mark the payment before changing its amounts.",
         });
       }
+      // Owner decision (wave 7): marking PAID posts the payment voucher, so the
+      // paying cash or bank account is required.
+      if (markingPaid && (cashAccountId === undefined || cashAccountId === null || cashAccountId === "")) {
+        return res.status(400).json({ message: FACTORY_PAYROLL_PAYMENT_ACCOUNT_REQUIRED });
+      }
+      const payableAccount = markingPaid
+        ? await findOrCreateLedger(current.companyId, "Payroll Payable", "Liability")
+        : null;
 
-      if (status && status !== current.status) {
-        const entryDate = status === "PAID" && paymentDate ? paymentDate : getClientDate(req);
-        if (status === "PAID") {
-          const source = paymentSource || "Cash";
-          const ref = paymentReference ? ` | Ref: ${paymentReference}` : "";
-          await writeDaybookEntry(db, {
-            companyId: current.companyId,
-            txDate: entryDate,
-            txType: "PAYROLL_PAYMENT",
-            referenceId: id,
-            referenceTable: "factory_payrolls",
-            description: `Payroll payment via ${source}${ref} — Payroll #${id}`,
-            amountCurrency: netSalary,
-            amountUsd: netSalary,
-            metaJson: JSON.stringify({ paymentSource: source, paymentReference: paymentReference || null }),
-            effectiveDate: (effectiveDate as string) || null,
-          });
-        } else {
-          await writeDaybookEntry(db, {
-            companyId: current.companyId,
-            txDate: entryDate,
-            txType: "PAYROLL_STATUS_CHANGE",
-            referenceId: id,
-            referenceTable: "factory_payrolls",
-            description: `Payroll #${id} status changed from ${current.status} to ${status}`,
-            amountCurrency: netSalary,
-            amountUsd: netSalary,
-          });
+      // Wave 7: the payroll row, its accrual (PAYROLL-GEN), the payment voucher
+      // (posted on PAID, removed on un-mark), the daybook rows and the audit row
+      // commit together.
+      const updated = await db.transaction(async (tx) => {
+        const [locked] = await tx
+          .select({ status: factoryPayrolls.status })
+          .from(factoryPayrolls)
+          .where(and(eq(factoryPayrolls.id, id), eq(factoryPayrolls.companyId, companyId)))
+          .for("update");
+        if (!locked) throw new HttpError(404, "Payroll record not found");
+        if (locked.status !== current.status) {
+          throw new HttpError(409, "Payroll changed concurrently. Reload and try again.");
         }
-      }
 
-      try {
-        await logAudit({
-          userId: req.session.userId!,
-          username: req.session.username || req.session.userId!,
-          companyId: current.companyId,
-          action: "update",
-          tableName: "factory_payrolls",
-          recordId: id,
-          recordIdentifier: `Payroll #${id} (Worker #${current.workerId})`,
-          changes: {
-            ...(bonuses !== undefined || otherBonuses !== undefined
-              ? {
-                  bonuses: { old: current.bonuses ?? null, new: updatedBonuses.toFixed(2) },
-                  productionBonus: { old: null, new: approvedBonusExact.toFixed(2) },
-                  otherBonus: { old: null, new: otherBonusExact.toFixed(2) },
-                }
-              : {}),
-            ...(deductions !== undefined
-              ? { deductions: { old: current.deductions ?? null, new: updatedDeductions.toFixed(2) } }
-              : {}),
-            ...(status !== undefined && status !== current.status
-              ? { status: { old: current.status, new: status } }
-              : {}),
-            ...(notes !== undefined ? { notes: { old: current.notes ?? null, new: notes } } : {}),
+        const entryDate = status === "PAID" && paymentDate ? paymentDate : getClientDate(req);
+        let paidCashAccountId: number | null = null;
+        if (markingPaid) {
+          paidCashAccountId = await resolveFactoryPayrollPaymentAccountTx(
+            tx,
+            current.companyId,
+            cashAccountId,
+            payableAccount!.id
+          );
+          updateData.paidAt = new Date(entryDate);
+          updateData.cashAccountId = paidCashAccountId;
+        }
+        if (unmarkingPaid) {
+          updateData.paidAt = null;
+          updateData.cashAccountId = null;
+        }
+
+        const [row] = await tx
+          .update(factoryPayrolls)
+          .set(updateData)
+          .where(and(eq(factoryPayrolls.id, id), eq(factoryPayrolls.companyId, companyId)))
+          .returning();
+
+        if (financialChanged) {
+          await rebuildPayrollGenVoucher(tx, current.companyId, current.periodStart, current.periodEnd);
+        }
+
+        if (unmarkingPaid) {
+          await removeFactoryPayrollPaymentVouchersTx(tx, current.companyId, id);
+          await tx
+            .delete(factoryDaybookEntries)
+            .where(
+              and(
+                eq(factoryDaybookEntries.companyId, current.companyId),
+                eq(factoryDaybookEntries.referenceId, id),
+                eq(factoryDaybookEntries.referenceTable, "factory_payrolls"),
+                eq(factoryDaybookEntries.txType, "PAYROLL_PAYMENT")
+              )
+            );
+        }
+
+        if (statusChanged) {
+          if (status === "PAID") {
+            const [worker] = await tx
+              .select({ fullName: factoryWorkers.fullName })
+              .from(factoryWorkers)
+              .where(eq(factoryWorkers.id, current.workerId));
+            await postFactoryPayrollPaymentVoucherTx(tx, {
+              companyId: current.companyId,
+              payrollId: id,
+              workerName: worker?.fullName?.trim() || `Worker #${current.workerId}`,
+              periodStart: current.periodStart,
+              periodEnd: current.periodEnd,
+              netSalary: netSalaryExact,
+              payableAccountId: payableAccount!.id,
+              cashAccountId: paidCashAccountId!,
+              paymentDate: entryDate,
+            });
+            const source = paymentSource || "Cash";
+            const ref = paymentReference ? ` | Ref: ${paymentReference}` : "";
+            await writeDaybookEntry(tx, {
+              companyId: current.companyId,
+              txDate: entryDate,
+              txType: "PAYROLL_PAYMENT",
+              referenceId: id,
+              referenceTable: "factory_payrolls",
+              description: `Payroll payment via ${source}${ref} — Payroll #${id}`,
+              amountCurrency: netSalary,
+              amountUsd: netSalary,
+              metaJson: JSON.stringify({
+                paymentSource: source,
+                paymentReference: paymentReference || null,
+                cashAccountId: paidCashAccountId,
+              }),
+              effectiveDate: (effectiveDate as string) || null,
+            });
+          } else {
+            await writeDaybookEntry(tx, {
+              companyId: current.companyId,
+              txDate: entryDate,
+              txType: "PAYROLL_STATUS_CHANGE",
+              referenceId: id,
+              referenceTable: "factory_payrolls",
+              description: `Payroll #${id} status changed from ${current.status} to ${status}`,
+              amountCurrency: netSalary,
+              amountUsd: netSalary,
+            });
+          }
+        }
+
+        await logAudit(
+          {
+            userId: req.session.userId!,
+            username: req.session.username || req.session.userId!,
+            companyId: current.companyId,
+            action: "update",
+            tableName: "factory_payrolls",
+            recordId: id,
+            recordIdentifier: `Payroll #${id} (Worker #${current.workerId})`,
+            changes: {
+              ...(bonuses !== undefined || otherBonuses !== undefined
+                ? {
+                    bonuses: { old: current.bonuses ?? null, new: updatedBonuses.toFixed(2) },
+                    productionBonus: { old: null, new: approvedBonusExact.toFixed(2) },
+                    otherBonus: { old: null, new: otherBonusExact.toFixed(2) },
+                  }
+                : {}),
+              ...(deductions !== undefined
+                ? { deductions: { old: current.deductions ?? null, new: updatedDeductions.toFixed(2) } }
+                : {}),
+              ...(statusChanged ? { status: { old: current.status, new: status } } : {}),
+              ...(markingPaid || unmarkingPaid
+                ? { cashAccountId: { old: current.cashAccountId ?? null, new: paidCashAccountId } }
+                : {}),
+              ...(notes !== undefined ? { notes: { old: current.notes ?? null, new: notes } } : {}),
+            },
           },
-        });
-      } catch (auditErr) {
-        logger.error("[payroll update audit] non-fatal", { error: auditErr });
-      }
+          tx
+        );
+        return row;
+      });
 
       res.json({
         ...updated,
@@ -225,8 +315,9 @@ export function registerFactoryPayrollUpdateRoutes(app: Express, requireAuth: Re
         otherBonuses: otherBonusExact.toFixed(2),
       });
     } catch (error: unknown) {
-      logger.error("Error updating payroll", { error });
-      res.status(500).json({ message: getErrorMessage(error) });
+      const httpStatus = error instanceof HttpError ? error.statusCode : errorStatus(error);
+      if (httpStatus >= 500) logger.error("Error updating payroll", { error });
+      res.status(httpStatus).json({ message: getErrorMessage(error) });
     }
   });
 
@@ -303,17 +394,9 @@ export function registerFactoryPayrollUpdateRoutes(app: Express, requireAuth: Re
             );
         }
 
-        const paymentVouchers = await tx
-          .select({ id: vouchers.id })
-          .from(vouchers)
-          .where(
-            and(eq(vouchers.companyId, companyId), sql`${vouchers.voucherNumber} LIKE ${"PAYMENT-PAY-" + id + "-%"}`)
-          );
-        if (paymentVouchers.length > 0) {
-          const voucherIds = paymentVouchers.map((voucher) => voucher.id);
-          await tx.delete(voucherEntries).where(inArray(voucherEntries.voucherId, voucherIds));
-          await tx.delete(vouchers).where(inArray(vouchers.id, voucherIds));
-        }
+        // Payment vouchers go with their posting identity (wave 7: the PATCH
+        // mark-PAID voucher has one, which would otherwise block the delete).
+        await removeFactoryPayrollPaymentVouchersTx(tx, companyId, id);
 
         // production-bonus allocation payroll_id is ON DELETE SET NULL. Decisions
         // survive a deleted draft and are reattached once if this period is regenerated.
@@ -334,6 +417,23 @@ export function registerFactoryPayrollUpdateRoutes(app: Express, requireAuth: Re
           await rebuildPayrollGenVoucher(tx, companyId, existing.periodStart, existing.periodEnd, id);
           await tx.delete(factoryPayrolls).where(eq(factoryPayrolls.id, id));
         }
+
+        await logAudit(
+          {
+            userId: req.session.userId!,
+            username: req.session.username || req.session.userId!,
+            companyId,
+            action: existing.status === "PAID" ? "update" : "delete",
+            tableName: "factory_payrolls",
+            recordId: id,
+            recordIdentifier: `Payroll #${id} (Worker #${existing.workerId})`,
+            changes:
+              existing.status === "PAID"
+                ? { status: { old: "PAID", new: "DRAFT" }, cashAccountId: { old: existing.cashAccountId, new: null } }
+                : { status: { old: existing.status, new: null }, netSalary: { old: existing.netSalary, new: null } },
+          },
+          tx
+        );
       });
 
       res.json({ message: "Payroll undone successfully", previousStatus: existing.status });
