@@ -7,6 +7,7 @@ import { db } from "../../../db";
 
 import { writeDaybookEntry } from "../_helpers";
 import { getLockedSupplierRateReadOnly } from "../../../services/factory/rawStockLockedRate";
+import { toMoney } from "../../../lib/money";
 
 /**
  * The continuation-receipt path of POST /api/factory/raw-stock/offload.
@@ -121,8 +122,8 @@ export async function applySubsequentReceipt(
     }
   }
 
-  const fixedCostPerKg = parseFloat(lockedRawStock.costPerKg || "0");
-  const fixedCostPerKgUsd = parseFloat(lockedRawStock.costPerKgUsd || "0");
+  const fixedCostPerKg = toMoney(lockedRawStock.costPerKg).toNumber();
+  const fixedCostPerKgUsd = toMoney(lockedRawStock.costPerKgUsd).toNumber();
   const thisReceiptKg = dReceivedKg.toNumber();
   const newCumulativeKg = dNewCumulativeKg.toDecimalPlaces(3).toNumber();
   const lockedValuationKgNum = lockedValuationKg.toDecimalPlaces(3).toNumber();
@@ -152,7 +153,7 @@ export async function applySubsequentReceipt(
   //    supplier-backed material. Container-direct material keeps its own fixed
   //    landed cost. Neither path mutates supplier cost during a continuation.
   for (const alloc of mixBatchAllocationsArr) {
-    const allocKg = parseFloat(alloc.weightKg || "0");
+    const allocKg = toMoney(alloc.weightKg).toNumber();
     if (!alloc.mixBatchId || allocKg <= 0) continue;
     const dAllocKg = new Decimal(allocKg);
     const dAllocRate = lockedContainer.supplierId ? new Decimal(supplierLockedRate) : new Decimal(fixedCostPerKgUsd);

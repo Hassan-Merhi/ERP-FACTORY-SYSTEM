@@ -17,6 +17,7 @@ import {
 } from "@shared/schema";
 import { eq, and, inArray } from "drizzle-orm";
 import { isPayableContainer } from "./_helpers";
+import { plusMoney, toMoney } from "../../../../lib/money";
 
 export function registerSupplierBulkFxPrefetchRoutes(app: Express) {
   // ── Bulk FX Prefetch (offline cache) ─────────────────────────────────────
@@ -101,11 +102,11 @@ export function registerSupplierBulkFxPrefetchRoutes(app: Express) {
 
       const paymentsBySupplier: Record<number, number> = {};
       for (const p of allPayments)
-        paymentsBySupplier[p.supplierId] = (paymentsBySupplier[p.supplierId] || 0) + parseFloat(p.amount || "0");
+        paymentsBySupplier[p.supplierId] = plusMoney(paymentsBySupplier[p.supplierId] || 0, p.amount);
 
       const fxOutBySupplier: Record<number, number> = {};
       for (const f of allFxOut)
-        fxOutBySupplier[f.fromSupplierId] = (fxOutBySupplier[f.fromSupplierId] || 0) + parseFloat(f.fromAmount || "0");
+        fxOutBySupplier[f.fromSupplierId] = plusMoney(fxOutBySupplier[f.fromSupplierId] || 0, f.fromAmount);
 
       const result: Array<{
         id: number;
@@ -117,12 +118,12 @@ export function registerSupplierBulkFxPrefetchRoutes(app: Express) {
       for (const sup of linkedSuppliers) {
         const supContainers = allContainers.filter((c) => c.supplierId === sup.id);
         const totalValue = supContainers.reduce((s: number, c) => {
-          const kg = parseFloat(c.actualReceivedKg || c.totalKg || "0");
-          const rate = parseFloat(c.ratePerKg || "0");
-          const freight = parseFloat(c.freight || "0");
+          const kg = toMoney(c.actualReceivedKg || c.totalKg).toNumber();
+          const rate = toMoney(c.ratePerKg).toNumber();
+          const freight = toMoney(c.freight).toNumber();
           const freightCc = c.freightCurrencyCode || c.currencyCode || currency;
           // Commission accumulates under supplier (true broker balance model)
-          const commAmt = parseFloat(c.commissionAmount || "0");
+          const commAmt = toMoney(c.commissionAmount).toNumber();
           const commCc = c.commissionCurrencyCode || c.currencyCode || currency;
           return s + (kg * rate + (freightCc === currency ? freight : 0) + (commCc === currency ? commAmt : 0));
         }, 0);

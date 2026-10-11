@@ -19,7 +19,7 @@ import {
 import { getClientDate } from "../../lib/dateUtils";
 import { resultRows } from "../../lib/queryResult";
 import { requireSpCompany, getSpAccount, parseNum } from "./spHelpers";
-import { parseMoneyInput, toMoney } from "../../lib/money";
+import { parseMoneyInput, plusMoney, toMoney } from "../../lib/money";
 import {
   postFactoryPartyLineVoucherTx,
   postFactoryVoucherTx,
@@ -466,13 +466,13 @@ export function registerSpContainerRoutes(app: Express) {
         });
       }
 
-      const discountFactor = 1 - parseFloat(container.discountPct || "0") / 100;
-      const totalQty = lines.reduce((s, l) => s + parseFloat(l.qty || "0"), 0);
+      const discountFactor = 1 - toMoney(container.discountPct).toNumber() / 100;
+      const totalQty = lines.reduce((s, l) => plusMoney(s, l.qty), 0);
 
       const enriched = lines.map((l) => {
         const alias = aliasMap.get(l.articleCode);
-        const qty = parseFloat(l.qty || "0");
-        const unitRate = parseFloat(l.unitRateUsd || "0");
+        const qty = toMoney(l.qty).toNumber();
+        const unitRate = toMoney(l.unitRateUsd).toNumber();
         const discountedBaseRate = unitRate * discountFactor;
         return {
           id: l.id,

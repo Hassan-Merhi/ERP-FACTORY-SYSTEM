@@ -35,6 +35,7 @@ import {
   parsePositiveCompanyId,
   sendCompanyAccessError,
 } from "../security/companyAccessBoundary";
+import { toMoney } from "../lib/money";
 
 async function resolveGlobalCompanyScope(req: Request): Promise<{ userId: string; companyIds: number[] }> {
   const access = getCompanyAccessContext(req);
@@ -458,9 +459,9 @@ export function registerGlobalTransactionRoutes(app: Express, requireAuth: Reque
 
         if (items.length > 0) {
           const itemRows = items.map((item) => {
-            const qty = parseFloat(item.quantity) || 0;
-            const price = parseFloat(item.sellingPrice) || 0;
-            const cfg = parseFloat(item.configuredPrice || "0");
+            const qty = toMoney(item.quantity).toNumber();
+            const price = toMoney(item.sellingPrice).toNumber();
+            const cfg = toMoney(item.configuredPrice).toNumber();
             const hassansProfit = cfg > 0 ? (price - cfg) * qty : 0;
             const hassansPercentage = cfg > 0 && cfg * qty > 0 ? (hassansProfit / (cfg * qty)) * 100 : 0;
             return {
@@ -552,7 +553,7 @@ export function registerGlobalTransactionRoutes(app: Express, requireAuth: Reque
           if (items.length > 0) {
             return res.json(
               items.map((item) => {
-                const qty = parseFloat(item.quantity || "0");
+                const qty = toMoney(item.quantity).toNumber();
                 const isProduction = type === "Production" || (type === "Mixed" && qty > 0);
                 const label = type === "Mixed" ? (qty > 0 ? "Production" : "Consumption") : type;
                 return {

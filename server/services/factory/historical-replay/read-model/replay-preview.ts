@@ -26,6 +26,7 @@ import {
 } from "./events";
 import { SupplierTimelineResult, replaySupplierTimeline } from "./timeline";
 import { computeCanonicalCosts, loadContainerUniverse } from "./universe-costs";
+import { lineAmount, plusMoney, toMoney } from "../../../../lib/money";
 
 export async function previewHistoricalCostReplayWithExecutor(
   executor: ReplayQueryExecutor,
@@ -397,9 +398,9 @@ async function computeFinancialImpact(
      WHERE company_id = $1 AND deleted_at IS NULL AND type = 'ADD'`,
     [companyId]
   );
-  let currentRawMaterialAsset = parseFloat(rawResult.rows[0]?.remaining_value_usd ?? "0") || 0;
+  let currentRawMaterialAsset = toMoney(rawResult.rows[0]?.remaining_value_usd).toNumber();
   for (const adj of adjResult.rows) {
-    currentRawMaterialAsset += parseFloat(adj.kg ?? "0") * parseFloat(adj.cpk ?? "0");
+    currentRawMaterialAsset = plusMoney(currentRawMaterialAsset, lineAmount(adj.kg, adj.cpk));
   }
 
   // Per-supplier value change from the replay.

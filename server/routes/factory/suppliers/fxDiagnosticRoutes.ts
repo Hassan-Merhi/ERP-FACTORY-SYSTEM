@@ -45,6 +45,7 @@ import {
   RepairTokenConfigurationError,
   REPAIR_TOKEN_TTL_MS,
 } from "../../../services/factory/repairToken";
+import { lineAmount, toMoney } from "../../../lib/money";
 
 const VALID_SOURCES: FxResolutionSource[] = ["container", "offload_additional_charge", "commission"];
 const ADMIN_ROLES = ["Admin", "Developer"] as const;
@@ -147,7 +148,7 @@ export function registerFactoryFxDiagnosticRoutes(app: Express) {
               currencyCode: c.currencyCode,
               storedFxRateToUsd: c.fxRateToUsd,
               fxRateConfirmed: !!c.fxRateConfirmed,
-              amountNative: c.ratePerKg && c.totalKg ? String(parseFloat(c.ratePerKg) * parseFloat(c.totalKg)) : null,
+              amountNative: c.ratePerKg && c.totalKg ? String(lineAmount(c.ratePerKg, c.totalKg).toNumber()) : null,
               description: `Container ${c.containerNumber}`,
             });
           }
@@ -289,7 +290,7 @@ export function registerFactoryFxDiagnosticRoutes(app: Express) {
 
         const { source, id, fxRateToUsd, confirm, confirmationToken } = req.body || {};
         const parsedId = parseInt(id);
-        const parsedRate = parseFloat(fxRateToUsd);
+        const parsedRate = toMoney(fxRateToUsd).toNumber();
 
         if (!VALID_SOURCES.includes(source)) {
           return res.status(400).json({ message: `source must be one of: ${VALID_SOURCES.join(", ")}` });

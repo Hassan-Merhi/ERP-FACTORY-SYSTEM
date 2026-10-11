@@ -10,6 +10,7 @@ import { getErrorMessage } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
 import { eq, and, sql } from "drizzle-orm";
 import { factorySettings, factoryBales, factoryMixBatches, factoryMixBatchSources } from "@shared/schema";
+import { plusMoney, toMoney } from "../../lib/money";
 
 /** A caller-supplied material offered to the optimizer when no history exists. */
 type MixOptimizeMaterialInput = {
@@ -44,8 +45,8 @@ export function registerFactoryMixOptimizeRoutes(app: Express, requireAuth: Auth
 
       const [settings] = await db.select().from(factorySettings).where(eq(factorySettings.companyId, companyId));
 
-      const laborCostPerKg = parseFloat(settings?.laborCostPerKg || "0");
-      const overheadPerKg = parseFloat(settings?.overheadPerKg || "0");
+      const laborCostPerKg = toMoney(settings?.laborCostPerKg).toNumber();
+      const overheadPerKg = toMoney(settings?.overheadPerKg).toNumber();
 
       const balesForProduct = await db
         .select()
@@ -81,15 +82,15 @@ export function registerFactoryMixOptimizeRoutes(app: Express, requireAuth: Auth
 
         const mixPerformance = mixes.map((mix) => {
           const mixSources = sources.filter((s) => s.mixBatchId === mix.id);
-          const totalInputKg = mixSources.reduce((s: number, src) => s + parseFloat(src.weightKg || "0"), 0);
+          const totalInputKg = mixSources.reduce((s: number, src) => plusMoney(s, src.weightKg), 0);
           const mixBales = balesForProduct.filter((b) => b.mixBatchId === mix.id);
-          const totalOutputKg = mixBales.reduce((s: number, b) => s + parseFloat(b.weightKg || "0"), 0);
+          const totalOutputKg = mixBales.reduce((s: number, b) => plusMoney(s, b.weightKg), 0);
           const wastePct = totalInputKg > 0 ? ((totalInputKg - totalOutputKg) / totalInputKg) * 100 : 100;
 
           const sourceRatios = mixSources.map((src) => ({
             containerId: src.containerId,
-            kgRatio: totalInputKg > 0 ? parseFloat(src.weightKg || "0") / totalInputKg : 0,
-            costPerKg: parseFloat(src.costPerKg || "0"),
+            kgRatio: totalInputKg > 0 ? toMoney(src.weightKg).toNumber() / totalInputKg : 0,
+            costPerKg: toMoney(src.costPerKg).toNumber(),
           }));
 
           return { mix, sourceRatios, wastePct, totalInputKg };
@@ -120,8 +121,7 @@ export function registerFactoryMixOptimizeRoutes(app: Express, requireAuth: Auth
       if (suggestions.length === 0 && availableMaterials && availableMaterials.length > 0) {
         const equalRatio = 1 / availableMaterials.length;
         const avgCost =
-          availableMaterials.reduce((s: number, m) => s + parseFloat(m.costPerKg || "0"), 0) /
-          availableMaterials.length;
+          availableMaterials.reduce((s: number, m) => plusMoney(s, m.costPerKg), 0) / availableMaterials.length;
         const avgBaleWeight = 25;
         const expectedCostPerBale = (avgCost + laborCostPerKg + overheadPerKg) * avgBaleWeight;
         const expectedSalePrice = expectedCostPerBale / (1 - (desiredMarginPct || 20) / 100);

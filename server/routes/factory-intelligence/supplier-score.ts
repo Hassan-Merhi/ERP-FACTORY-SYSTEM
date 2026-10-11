@@ -18,6 +18,7 @@ import {
   factoryMixBatchSources,
   factorySuppliers,
 } from "@shared/schema";
+import { plusMoney, toMoney } from "../../lib/money";
 
 export function registerFactorySupplierScoreRoutes(app: Express, requireAuth: AuthMiddleware, db: AppDb) {
   app.get("/api/factory/suppliers/score", requireAuth, async (req: Request, res: Response) => {
@@ -92,15 +93,15 @@ export function registerFactorySupplierScoreRoutes(app: Express, requireAuth: Au
           };
         }
 
-        const kg = parseFloat(rs.receivedKg || "0");
-        const cost = kg * parseFloat(rs.costPerKg || "0");
+        const kg = toMoney(rs.receivedKg).toNumber();
+        const cost = kg * toMoney(rs.costPerKg).toNumber();
         supplierStats[supplierId].totalKg += kg;
         supplierStats[supplierId].totalCost += cost;
       }
 
       for (const w of wasteEntries) {
         if (w.supplierId && supplierStats[w.supplierId]) {
-          supplierStats[w.supplierId].wasteKg += parseFloat(w.kgWaste || "0");
+          supplierStats[w.supplierId].wasteKg = plusMoney(supplierStats[w.supplierId].wasteKg, w.kgWaste);
         }
       }
 

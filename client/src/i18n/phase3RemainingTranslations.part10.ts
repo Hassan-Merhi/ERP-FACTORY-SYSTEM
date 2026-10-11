@@ -180,7 +180,7 @@ export const phase3RemainingTranslationsPart10: readonly Phase3SharedUiEntry[] =
   { en: "FX Settlement Log", ar: "FX Settlement Log", fr: "Journal de règlement FX" },
   { en: "FX transfer deleted", ar: "تحويل من طراز FX", fr: "Transfert FX supprimé" },
   {
-    en: "FX Transfer deleted: ${transfer.fromCurrencyCode} ${parseFloat(transfer.fromAmount).toFixed(2)} → USD ${parseFloat(transfer.toAmountUsd).toFixed(2)} (dated ${transfer.date})",
+    en: "FX Transfer deleted: ${transfer.fromCurrencyCode} ${toMoney(transfer.fromAmount).toFixed(2)} → USD ${toMoney(transfer.toAmountUsd).toFixed(2)} (dated ${transfer.date})",
     ar: "حُذفت التحويلات:{{0}} {{1}}→ USD{{2}}(مؤرخة){{3}})",
     fr: "Transfert FX supprimé:{{0}} {{1}}→ USD{{2}}(date{{3}})",
   },

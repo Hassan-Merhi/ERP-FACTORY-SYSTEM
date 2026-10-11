@@ -11,6 +11,7 @@ import { storage } from "../../storage";
 import { requireAuth, requireNonPOS } from "../../auth";
 import { stockTransferVouchers, stockTransferRevisions, stockTransferRevisionItems, vouchers } from "@shared/schema";
 import { eq, asc } from "drizzle-orm";
+import { toMoney } from "../../lib/money";
 
 export function registerStockTransferRevisionReadRoutes(app: Express) {
   // Stock Transfers - PATCH endpoint (notes-only update)
@@ -105,7 +106,7 @@ export function registerStockTransferRevisionReadRoutes(app: Express) {
                 delta: item.delta,
               });
             } else {
-              const netDelta = parseFloat(item.newQuantity) - parseFloat(existing.originalQuantity);
+              const netDelta = toMoney(item.newQuantity).minus(toMoney(existing.originalQuantity)).toNumber();
               netMap.set(key, {
                 ...existing,
                 newQuantity: item.newQuantity,
@@ -203,8 +204,8 @@ export function registerStockTransferRevisionReadRoutes(app: Express) {
               });
             } else {
               // Update with latest newQuantity and recompute net delta
-              const origQty = parseFloat(existing.originalQuantity);
-              const newQty = parseFloat(item.newQuantity);
+              const origQty = toMoney(existing.originalQuantity).toNumber();
+              const newQty = toMoney(item.newQuantity).toNumber();
               const netDelta = newQty - origQty;
               netMap.set(key, {
                 ...existing,
