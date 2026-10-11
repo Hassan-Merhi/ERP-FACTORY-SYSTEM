@@ -10,11 +10,23 @@ import { getErrorMessage } from "../../../lib/httpHandlers";
 import { logger } from "../../../lib/logger";
 import { getClientDate } from "../../../lib/dateUtils";
 import { db } from "../../../db";
-import { requireAuth } from "../../../auth";
+import { requireAuth, requireRole } from "../../../auth";
+import { writeAuditEvent } from "../../../services/audit/auditService";
+import { assertStockImportAllowedTx, sendStockImportRefusal } from "../../../services/factory/stockImportPolicy";
+import { toMoney } from "../../../lib/money";
 import { writeDaybookEntry } from "../_helpers";
-import { factoryCategories, factoryBaleProducts, factoryBales, factoryBaleSequences } from "@shared/schema";
+import {
+  factoryCategories,
+  factoryBaleProducts,
+  factoryBales,
+  factoryBaleSequences,
+  factoryBaleImportBatches,
+} from "@shared/schema";
 import { eq, and } from "drizzle-orm";
 import { isFactorySessionLocation } from "../../helpers/companyOwnership";
+
+/** Phase 19 C (F7/DI10): the bale Excel import is Admin/Owner (Developer passes). */
+const adminOrOwner = requireRole("Admin", "Owner");
 
 export function registerFactoryProductImportRoutes(app: Express) {
   app.post("/api/factory/bale-products/import-excel", requireAuth, async (req: Request, res: Response) => {
@@ -363,7 +375,13 @@ export function registerFactoryProductImportRoutes(app: Express) {
     }
   });
 
-  app.post("/api/factory/bales/import-excel", requireAuth, async (req: Request, res: Response) => {
+  // Phase 19 C (F7/DI10): the bale Excel import creates stock from a sheet with
+  // no journal and no cost. Admin/Owner (Developer passes); one transaction that
+  // takes the cut-over lock and is refused once the cut-over is applied (409
+  // FACTORY_STOCK_IMPORT_AFTER_CUTOVER); its bales belong to an import batch (the
+  // readiness report lists them; with no mix they still block the cut-over as
+  // no-mix bales, owner decision); one import audit row in the transaction.
+  app.post("/api/factory/bales/import-excel", requireAuth, adminOrOwner, async (req: Request, res: Response) => {
     try {
       const multer = (await import("multer")).default;
       const upload = multer({ storage: multer.memoryStorage() });
@@ -487,7 +505,23 @@ export function registerFactoryProductImportRoutes(app: Express) {
             return res.json({ totalBalesCreated: 0, skippedRows, skippedDetails: skippedDetails.slice(0, 20) });
           }
 
-          await db.transaction(async (tx) => {
+          const importBatchId = await db.transaction(async (tx) => {
+            await assertStockImportAllowedTx(tx, companyId);
+            const [batch] = await tx
+              .insert(factoryBaleImportBatches)
+              .values({
+                companyId,
+                fileName: req.file?.originalname || "bale-import.xlsx",
+                baleCount: totalBalesNeeded,
+                errorCount: skippedRows,
+                totalWeightKg: rowGroups
+                  .reduce((sum, group) => sum.plus(toMoney(group.weight).times(group.qty)), toMoney(0))
+                  .toFixed(3),
+                importedByUserId: String(req.session?.userId || ""),
+                importedByName: req.session?.username || null,
+                notes: "Bale Excel import (catalogue products, no cost)",
+              })
+              .returning({ id: factoryBaleImportBatches.id });
             const [seqRecord] = await tx
               .select()
               .from(factoryBaleSequences)
@@ -528,11 +562,33 @@ export function registerFactoryProductImportRoutes(app: Express) {
                   status: "IN_STOCK",
                   finalizedAt: group.prodDate,
                   createdAt: group.prodDate,
+                  importBatchId: batch.id,
                 });
                 baleIndex++;
               }
               totalBalesCreated += group.qty;
             }
+            await writeAuditEvent(
+              {
+                userId: req.session.userId ?? "unknown",
+                username: req.session.username || "unknown",
+                companyId,
+                action: "import",
+                tableName: "factory_bale_import_batches",
+                recordId: batch.id,
+                recordIdentifier: `bale Excel import: ${totalBalesCreated} bale(s) at no cost`,
+                metadata: {
+                  source: "factory_bale_import_excel",
+                  fileName: req.file?.originalname ?? null,
+                  locationId,
+                  bales: totalBalesCreated,
+                  firstReference: `REF${String(nextNumber).padStart(6, "0")}`,
+                  skippedRows,
+                },
+              },
+              tx
+            );
+            return batch.id;
           });
 
           if (totalBalesCreated > 0) {
@@ -544,8 +600,9 @@ export function registerFactoryProductImportRoutes(app: Express) {
               description: `Bale Excel import: ${totalBalesCreated} bale${totalBalesCreated !== 1 ? "s" : ""} created${skippedRows > 0 ? ` (${skippedRows} rows skipped)` : ""}`,
             });
           }
-          res.json({ totalBalesCreated, skippedRows, skippedDetails: skippedDetails.slice(0, 20) });
+          res.json({ totalBalesCreated, skippedRows, skippedDetails: skippedDetails.slice(0, 20), importBatchId });
         } catch (innerError: unknown) {
+          if (sendStockImportRefusal(res, innerError)) return;
           logger.error("Error processing bale Excel import:", { error: innerError });
           res.status(500).json({ message: getErrorMessage(innerError) });
         }

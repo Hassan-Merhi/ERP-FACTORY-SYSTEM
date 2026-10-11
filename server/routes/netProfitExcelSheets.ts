@@ -3,6 +3,7 @@ import type Decimal from "decimal.js";
 import type { LedgerAccount } from "@shared/schema";
 import { isInventoryValuationOnlyAccount } from "../lib/inventoryPnlAccounts";
 import { MoneyDecimal, toMoney } from "../lib/money";
+import { classifyAccountType, expenseCategory, isIndirectIncome } from "../services/accounting/accountClassification";
 /**
  * Statistics and ExcelJS sheet rendering for the net-profit workbook.
  *
@@ -51,6 +52,70 @@ export function computeBalancesFromEntries(
   return bal;
 }
 
+/**
+ * The section of the net-profit workbook an account belongs to, by the shared
+ * classifier (wave 13): case-insensitive types, both storage forms of a sub
+ * type ("Direct Expense" as the type or "Expense" + subType), Revenue,
+ * Government Taxes and COGS included. Every income- and expense-class account
+ * lands in exactly one section:
+ *   - "salesAccount": income accounts read through the sales total (SALES-named
+ *     and uncategorised income; the route adds their non-POS vouchers to it);
+ *   - "directIncome": Direct Income that is not SALES-named;
+ *   - "indirectIncome": Indirect Income (either storage form), below gross
+ *     profit; before wave 13 it was in no section;
+ *   - "purchase": PURCHASES / PURCHASES-* by code;
+ *   - "directExpense": Direct Expense, COGS and the IMPORT_CHARGES tree;
+ *   - "indirectExpense": every other expense (Indirect Expense, plain Expense,
+ *     Government Taxes). Before wave 13 a plain "Expense" account with no sub
+ *     type and Government Taxes were in no section, so the workbook's profit
+ *     left them out while the P&L counted them.
+ * Inventory-valuation-only accounts and non-P&L accounts are null.
+ */
+export type NetProfitSection =
+  "salesAccount" | "directIncome" | "indirectIncome" | "purchase" | "directExpense" | "indirectExpense";
+
+export function netProfitSection(
+  acc: Pick<LedgerAccount, "id" | "code" | "name" | "accountType" | "subType">,
+  importChargesIds: ReadonlySet<number>
+): NetProfitSection | null {
+  const accountClass = classifyAccountType(acc.accountType, acc.subType);
+  if (accountClass === "income") {
+    if (isIndirectIncome(acc.accountType, acc.subType)) return "indirectIncome";
+    const salesNamed = Boolean(acc.code?.includes("SALES") || acc.name?.toLowerCase().includes("sales"));
+    const direct = [acc.accountType, acc.subType].some((t) => (t ?? "").trim().toLowerCase() === "direct income");
+    return direct && !salesNamed ? "directIncome" : "salesAccount";
+  }
+  if (acc.code === "PURCHASES" || acc.code?.startsWith("PURCHASES-")) return "purchase";
+  if (accountClass !== "expense" && !importChargesIds.has(acc.id)) return null;
+  if (acc.code?.startsWith("PURCHASES")) return null;
+  if (isInventoryValuationOnlyAccount(acc)) return null;
+  if (importChargesIds.has(acc.id)) return "directExpense";
+  const category = expenseCategory(acc.accountType, acc.subType);
+  return category === "Direct Expense" || category === "COGS" ? "directExpense" : "indirectExpense";
+}
+
+type SectionDetail = { id: number; name: string; debit: number; credit: number; balance: number };
+
+function sectionDetails(
+  ctx: NetProfitSheetContext,
+  balances: Map<number, { debit: number; credit: number }>,
+  section: NetProfitSection,
+  normal: "debit" | "credit"
+): { total: number; details: SectionDetail[] } {
+  let total = new MoneyDecimal(0);
+  const details: SectionDetail[] = [];
+  for (const acc of ctx.companyAccounts) {
+    if (netProfitSection(acc, ctx.importChargesIds) !== section) continue;
+    const b = balances.get(acc.id) || { debit: 0, credit: 0 };
+    const net = normal === "debit" ? toMoney(b.debit).minus(b.credit) : toMoney(b.credit).minus(b.debit);
+    total = total.plus(net);
+    if (b.debit !== 0 || b.credit !== 0) {
+      details.push({ id: acc.id, name: acc.name, debit: b.debit, credit: b.credit, balance: net.toNumber() });
+    }
+  }
+  return { total: total.toNumber(), details };
+}
+
 export function computeStats(
   ctx: NetProfitSheetContext,
   balances: Map<number, { debit: number; credit: number }>,
@@ -59,86 +124,30 @@ export function computeStats(
   closingSt: number,
   monthlyMode = false
 ) {
-  // Direct Incomes (non-sales income accounts)
-  const directIncAccounts = ctx.companyAccounts.filter(
-    (acc) =>
-      acc.accountType === "Income" &&
-      acc.subType === "Direct Income" &&
-      !acc.code?.includes("SALES") &&
-      !acc.name?.toLowerCase().includes("sales")
+  const { total: directIncTotal, details: directIncDetails } = sectionDetails(ctx, balances, "directIncome", "credit");
+  const { total: indirectIncTotal, details: indirectIncDetails } = sectionDetails(
+    ctx,
+    balances,
+    "indirectIncome",
+    "credit"
   );
-  let directIncTotal = 0;
-  const directIncDetails = directIncAccounts
-    .map((acc) => {
-      const b = balances.get(acc.id) || { debit: 0, credit: 0 };
-      const net = b.credit - b.debit;
-      directIncTotal += net;
-      return { id: acc.id, name: acc.name, debit: b.debit, credit: b.credit, balance: net };
-    })
-    .filter((r) => r.debit !== 0 || r.credit !== 0);
-
-  const totalIncome = salesTotal + directIncTotal;
-
-  // Purchases
-  const purchaseAccounts = ctx.companyAccounts.filter(
-    (acc) => acc.code === "PURCHASES" || acc.code?.startsWith("PURCHASES-")
+  const totalIncome = toMoney(salesTotal).plus(directIncTotal).toNumber();
+  const { total: purchaseTotal, details: purchaseDetails } = sectionDetails(ctx, balances, "purchase", "debit");
+  const { total: directExpTotal, details: directExpDetails } = sectionDetails(ctx, balances, "directExpense", "debit");
+  const { total: indirectExpTotal, details: indirectExpDetails } = sectionDetails(
+    ctx,
+    balances,
+    "indirectExpense",
+    "debit"
   );
-  let purchaseTotal = 0;
-  const purchaseDetails = purchaseAccounts
-    .map((acc) => {
-      const b = balances.get(acc.id) || { debit: 0, credit: 0 };
-      const net = b.debit - b.credit;
-      purchaseTotal += net;
-      return { id: acc.id, name: acc.name, debit: b.debit, credit: b.credit, balance: net };
-    })
-    .filter((r) => r.debit !== 0 || r.credit !== 0);
-
-  // Direct Expenses
-  const directExpAccounts = ctx.companyAccounts.filter(
-    (acc) =>
-      acc.code !== "PURCHASES" &&
-      !acc.code?.startsWith("PURCHASES") &&
-      !isInventoryValuationOnlyAccount(acc) &&
-      (acc.accountType === "Direct Expense" ||
-        (acc.accountType === "Expense" && acc.subType === "Direct Expense") ||
-        ctx.importChargesIds.has(acc.id))
-  );
-  let directExpTotal = 0;
-  const directExpDetails = directExpAccounts
-    .map((acc) => {
-      const b = balances.get(acc.id) || { debit: 0, credit: 0 };
-      const net = b.debit - b.credit;
-      directExpTotal += net;
-      return { id: acc.id, name: acc.name, debit: b.debit, credit: b.credit, balance: net };
-    })
-    .filter((r) => r.debit !== 0 || r.credit !== 0);
-
-  // Indirect Expenses
-  const indirectExpAccounts = ctx.companyAccounts.filter(
-    (acc) =>
-      (acc.accountType === "Indirect Expense" ||
-        (acc.accountType === "Expense" && acc.subType === "Indirect Expense")) &&
-      !isInventoryValuationOnlyAccount(acc) &&
-      acc.code !== "PURCHASES" &&
-      !acc.code?.startsWith("PURCHASES")
-  );
-  let indirectExpTotal = 0;
-  const indirectExpDetails = indirectExpAccounts
-    .map((acc) => {
-      const b = balances.get(acc.id) || { debit: 0, credit: 0 };
-      const net = b.debit - b.credit;
-      indirectExpTotal += net;
-      return { id: acc.id, name: acc.name, debit: b.debit, credit: b.credit, balance: net };
-    })
-    .filter((r) => r.debit !== 0 || r.credit !== 0);
 
   // COGS: Opening + Purchases + Direct + Indirect - Closing (monthlyMode: no opening/closing)
-  const totalCOGS = monthlyMode
-    ? purchaseTotal + directExpTotal + indirectExpTotal
-    : openingSt + purchaseTotal + directExpTotal + indirectExpTotal - closingSt;
+  const cogsExact = toMoney(purchaseTotal).plus(directExpTotal).plus(indirectExpTotal);
+  const totalCOGS = (monthlyMode ? cogsExact : cogsExact.plus(openingSt).minus(closingSt)).toNumber();
 
-  const grossProfit = totalIncome - totalCOGS;
-  const netProfit = grossProfit;
+  const grossProfit = toMoney(totalIncome).minus(totalCOGS).toNumber();
+  // Indirect income is earned below gross profit (wave 13).
+  const netProfit = toMoney(grossProfit).plus(indirectIncTotal).toNumber();
   const grossMarginPct = totalIncome > 0 ? (grossProfit / totalIncome) * 100 : 0;
   const netMarginPct = totalIncome > 0 ? (netProfit / totalIncome) * 100 : 0;
 
@@ -147,6 +156,8 @@ export function computeStats(
     directIncTotal,
     directIncDetails,
     totalIncome,
+    indirectIncTotal,
+    indirectIncDetails,
     purchaseTotal,
     purchaseDetails,
     directExpTotal,
@@ -177,6 +188,8 @@ export function writeSheet(
     directIncTotal: _directIncTotal,
     directIncDetails,
     totalIncome,
+    indirectIncTotal,
+    indirectIncDetails,
     purchaseTotal,
     purchaseDetails,
     directExpTotal,
@@ -369,7 +382,15 @@ export function writeSheet(
   ws.mergeCells(`A${gpRow.number}:D${gpRow.number}`);
   ws.getRow(gpRow.number).height = 28;
 
-  // NET PROFIT (= Gross Profit since all expenses are in COGS)
+  // INDIRECT INCOME (wave 13): earned below gross profit. Shown only when the
+  // period has some, so a workbook without indirect income keeps its layout.
+  if (indirectIncDetails.length > 0) {
+    secHeader("INDIRECT INCOME", "FF0F766E");
+    addAccRows(indirectIncDetails);
+    subTot("Total Indirect Income", indirectIncTotal);
+  }
+
+  // NET PROFIT (= Gross Profit + Indirect Income; every expense is in COGS)
   const npRow = ws.addRow(["NET PROFIT", "", "", "", fmt(netProfit)]);
   npRow.eachCell((cell: ExcelJS.Cell) => {
     cell.font = { bold: true, size: 13, color: { argb: "FFFFFFFF" } };
@@ -578,6 +599,16 @@ export function writeSummarySheet(
 
   // === NET PROFIT ===
   writeSectionHdr("NET PROFIT", "FF2563EB");
+  // Indirect income (wave 13), only when some month has it, so the layout of
+  // a workbook without indirect income is unchanged.
+  if (totalStats.indirectIncDetails.length > 0 || monthStatsList.some((s) => s.indirectIncDetails.length > 0)) {
+    writeRow(
+      "Indirect Incomes",
+      monthStatsList.map((s) => s.indirectIncTotal),
+      totalStats.indirectIncTotal,
+      { colorize: true, indent: true }
+    );
+  }
   writeRow(
     "Net Profit",
     monthStatsList.map((s) => s.netProfit),

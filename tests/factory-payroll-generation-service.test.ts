@@ -76,6 +76,7 @@ const harness = vi.hoisted(() => {
     writeDaybookEntry: vi.fn(),
     syncProductionBonusProposalsForPeriod: vi.fn(),
     attachProductionBonusesToPayroll: vi.fn(),
+    rebuildPayrollGenVoucher: vi.fn(),
   };
 });
 
@@ -93,6 +94,10 @@ vi.mock("../server/routes/factory/_helpers", () => ({ writeDaybookEntry: harness
 vi.mock("../server/services/payroll/productionBonusPayrollService", () => ({
   syncProductionBonusProposalsForPeriod: harness.syncProductionBonusProposalsForPeriod,
   attachProductionBonusesToPayroll: harness.attachProductionBonusesToPayroll,
+}));
+
+vi.mock("../server/routes/payroll/_payrollAccountingHelper", () => ({
+  rebuildPayrollGenVoucher: harness.rebuildPayrollGenVoucher,
 }));
 
 import { generateFactoryPayrollBatch } from "../server/services/payroll/factoryPayrollGenerationService";
@@ -179,6 +184,8 @@ describe("factory payroll batch generation", () => {
     expect(harness.inserted.filter(({ table }) => table === harness.tables.factoryAdvanceRepayments)).toHaveLength(2);
     expect(harness.updated.filter(({ table }) => table === harness.tables.factoryWorkerAdvances)).toHaveLength(2);
     expect(harness.writeDaybookEntry).toHaveBeenCalledTimes(2);
+    // Wave 7: the period accrual (PAYROLL-GEN) is posted in the generation transaction.
+    expect(harness.rebuildPayrollGenVoucher).toHaveBeenCalledWith(harness.tx, 4, "2026-08-01", "2026-08-31");
     expect(harness.writeDaybookEntry).toHaveBeenCalledWith(
       harness.tx,
       expect.objectContaining({
@@ -204,5 +211,6 @@ describe("factory payroll batch generation", () => {
     expect(result).toEqual({ payrolls: [existing], createdCount: 0, replayed: true });
     expect(harness.syncProductionBonusProposalsForPeriod).not.toHaveBeenCalled();
     expect(harness.writeDaybookEntry).not.toHaveBeenCalled();
+    expect(harness.rebuildPayrollGenVoucher).not.toHaveBeenCalled();
   });
 });

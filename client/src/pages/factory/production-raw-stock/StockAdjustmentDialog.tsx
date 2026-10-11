@@ -25,11 +25,6 @@ export interface StockAdjustmentPayload {
   date: string;
 }
 
-export interface UpdateCostPayload {
-  supplierId: number | null;
-  newCostPerKg: string;
-}
-
 interface MutationLike<TVars> {
   isPending: boolean;
   mutate: (vars: TVars) => void;
@@ -42,7 +37,6 @@ interface StockAdjustmentDialogProps {
   isNewMaterial: boolean;
   factorySuppliers: SupplierOption[];
   createAdjustmentMutation: MutationLike<StockAdjustmentPayload>;
-  updateCostMutation: MutationLike<UpdateCostPayload>;
   wrapAdminAction: (action: () => void, title: string) => void;
 }
 
@@ -53,10 +47,9 @@ export function StockAdjustmentDialog({
   isNewMaterial,
   factorySuppliers,
   createAdjustmentMutation,
-  updateCostMutation,
   wrapAdminAction,
 }: StockAdjustmentDialogProps) {
-  const [adjType, setAdjType] = useState<"ADD" | "REMOVE" | "COST">("ADD");
+  const [adjType, setAdjType] = useState<"ADD" | "REMOVE">("ADD");
   const [adjKg, setAdjKg] = useState("");
   const [adjCostPerKg, setAdjCostPerKg] = useState("");
   const [adjCurrency, _setAdjCurrency] = useState("USD");
@@ -66,30 +59,20 @@ export function StockAdjustmentDialog({
   const [adjMaterialLabel, setAdjMaterialLabel] = useState("");
   const [adjSupplierId, setAdjSupplierId] = useState<string>("");
 
+  // The "Update Cost per KG" type is retired (accounting audit phase 19 C):
+  // supplier costs change through the reviewed bale re-cost only.
   const handleSubmit = () => {
-    if (adjType === "COST") {
-      if (!adjCostPerKg || parseFloat(adjCostPerKg) <= 0) return;
-      updateCostMutation.mutate({
-        supplierId: adjustingRow?.supplierId ?? null,
-        newCostPerKg: adjCostPerKg,
-      });
-    } else {
-      createAdjustmentMutation.mutate({
-        type: adjType === "ADD" ? "ADD" : "REMOVE",
-        kg: adjKg,
-        costPerKg: adjCostPerKg || "0",
-        currencyCode: adjCurrency,
-        supplierId: isNewMaterial
-          ? adjSupplierId
-            ? parseInt(adjSupplierId)
-            : null
-          : (adjustingRow?.supplierId ?? null),
-        materialLabel: isNewMaterial ? adjMaterialLabel : adjustingRow?.supplierName,
-        notes: adjNotes,
-        reference: adjReference,
-        date: adjDate,
-      });
-    }
+    createAdjustmentMutation.mutate({
+      type: adjType === "ADD" ? "ADD" : "REMOVE",
+      kg: adjKg,
+      costPerKg: adjCostPerKg || "0",
+      currencyCode: adjCurrency,
+      supplierId: isNewMaterial ? (adjSupplierId ? parseInt(adjSupplierId) : null) : (adjustingRow?.supplierId ?? null),
+      materialLabel: isNewMaterial ? adjMaterialLabel : adjustingRow?.supplierName,
+      notes: adjNotes,
+      reference: adjReference,
+      date: adjDate,
+    });
   };
 
   return (
@@ -101,9 +84,7 @@ export function StockAdjustmentDialog({
             {isNewMaterial ? "New Manual Material" : `Adjust Stock: ${adjustingRow?.supplierName}`}
           </DialogTitle>
           <DialogDescription>
-            {isNewMaterial
-              ? "Add a new material source manually."
-              : "Manually add or remove stock, or update the cost per kg."}
+            {isNewMaterial ? "Add a new material source manually." : "Manually add or remove stock."}
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
@@ -113,7 +94,7 @@ export function StockAdjustmentDialog({
               <Select
                 value={adjType}
                 onValueChange={(v) => {
-                  if (v === "ADD" || v === "REMOVE" || v === "COST") setAdjType(v);
+                  if (v === "ADD" || v === "REMOVE") setAdjType(v);
                 }}
               >
                 <SelectTrigger>
@@ -122,7 +103,6 @@ export function StockAdjustmentDialog({
                 <SelectContent>
                   <SelectItem value="ADD">Add Stock (+)</SelectItem>
                   <SelectItem value="REMOVE">Remove Stock (-)</SelectItem>
-                  <SelectItem value="COST">Update Cost per KG</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -162,21 +142,19 @@ export function StockAdjustmentDialog({
             <Input type="date" value={adjDate} onChange={(e) => setAdjDate(e.target.value)} />
           </div>
 
-          {adjType !== "COST" && (
-            <div className="space-y-1">
-              <Label>Quantity (KG)</Label>
-              <Input
-                type="number"
-                step="0.001"
-                value={adjKg}
-                onChange={(e) => setAdjKg(e.target.value)}
-                placeholder="0.000"
-              />
-            </div>
-          )}
+          <div className="space-y-1">
+            <Label>Quantity (KG)</Label>
+            <Input
+              type="number"
+              step="0.001"
+              value={adjKg}
+              onChange={(e) => setAdjKg(e.target.value)}
+              placeholder="0.000"
+            />
+          </div>
 
           <div className="space-y-1">
-            <Label>{adjType === "COST" ? "New Cost per KG ($)" : "Cost per KG ($)"}</Label>
+            <Label>Cost per KG ($)</Label>
             <Input
               type="number"
               step="0.0001"
@@ -186,26 +164,18 @@ export function StockAdjustmentDialog({
             />
           </div>
 
-          {adjType !== "COST" && (
-            <>
-              <div className="space-y-1">
-                <Label>Reference (optional)</Label>
-                <Input
-                  value={adjReference}
-                  onChange={(e) => setAdjReference(e.target.value)}
-                  placeholder="e.g. Inv #123"
-                />
-              </div>
-              <div className="space-y-1">
-                <Label>Notes (optional)</Label>
-                <Textarea
-                  value={adjNotes}
-                  onChange={(e) => setAdjNotes(e.target.value)}
-                  placeholder="Adjustment reason..."
-                />
-              </div>
-            </>
-          )}
+          <div className="space-y-1">
+            <Label>Reference (optional)</Label>
+            <Input value={adjReference} onChange={(e) => setAdjReference(e.target.value)} placeholder="e.g. Inv #123" />
+          </div>
+          <div className="space-y-1">
+            <Label>Notes (optional)</Label>
+            <Textarea
+              value={adjNotes}
+              onChange={(e) => setAdjNotes(e.target.value)}
+              placeholder="Adjustment reason..."
+            />
+          </div>
 
           <div className="flex justify-end gap-2 pt-2">
             <Button variant="outline" onClick={() => onOpenChange(false)}>
@@ -213,9 +183,9 @@ export function StockAdjustmentDialog({
             </Button>
             <Button
               onClick={() => wrapAdminAction(handleSubmit, isNewMaterial ? "Add Material" : "Adjust Stock")}
-              disabled={createAdjustmentMutation.isPending || updateCostMutation.isPending}
+              disabled={createAdjustmentMutation.isPending}
             >
-              {createAdjustmentMutation.isPending || updateCostMutation.isPending ? "Saving..." : "Save Adjustment"}
+              {createAdjustmentMutation.isPending ? "Saving..." : "Save Adjustment"}
             </Button>
           </div>
         </div>

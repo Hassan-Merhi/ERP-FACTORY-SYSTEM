@@ -12,6 +12,11 @@
 import type Decimal from "decimal.js";
 import { toMoney, type MoneyInput } from "./lib/money";
 import { isAccountMigrationClearingAccount } from "./lib/systemOnlyLedgerAccounts";
+import {
+  canonicalAccountType,
+  classifyAccountType,
+  defaultOpeningSide,
+} from "./services/accounting/accountClassification";
 
 export interface AccountLike {
   id: number;
@@ -31,6 +36,8 @@ export interface AccountBalance {
 
 export interface NetPositionAccount {
   id?: number;
+  /** A bank account line (bank_accounts id); `id` is only ever a ledger account id. */
+  bankAccountId?: number;
   name: string;
   code: string;
   value: number;
@@ -58,7 +65,22 @@ export interface ClassifyOptions {
    * Defaults to true.
    */
   includeSupplierTypeAccounts?: boolean;
+  /**
+   * Perpetual inventory (wave 8.5): the company's ledger carries its stock, so
+   * the system stock accounts count as assets and the caller adds no computed
+   * stock figure. Other stock-named accounts stay excluded.
+   */
+  ledgerStockAccounts?: boolean;
 }
+
+/** The stock accounts the perpetual-inventory postings keep (systemAccounts registry codes). */
+export const PERPETUAL_STOCK_ACCOUNT_CODES: ReadonlySet<string> = new Set([
+  "INVENTORY",
+  "GOODS_IN_TRANSIT",
+  "FACTORY_RAW_MATERIAL_STOCK",
+  "FACTORY_WIP",
+  "FACTORY_FINISHED_GOODS",
+]);
 
 export interface ClassifyResult {
   forUsTotal: number;
@@ -75,12 +97,22 @@ export interface ClassifyResult {
 }
 
 // ─── Constants (mirror the ERP route) ───────────────────────────────────────
+//
+// Account types are classified by the shared classifier (accountClassification,
+// wave 10), case-insensitively:
+//   - income and expense accounts (Income, Revenue, Indirect Income in either
+//     storage form, Expense, Direct/Indirect Expense, Government Taxes) are
+//     income-statement accounts; their net is earnings, never an asset or a
+//     liability, so they are left out of net position;
+//   - equity accounts (Equity, Profit) are left out (classifyEquityAccounts
+//     lists Equity for display);
+//   - liability accounts take the deposit/liability split below;
+//   - asset, party and unknown types take the sign-based split.
+// Intentional exclusions kept by type: Fixed Asset (valued separately) and
+// Intercompany (group net position eliminates it; see groupNetPosition.ts).
 
-const assetDefaultDrTypes = ["Asset", "Current Asset", "Bank", "Cash", "Customer"];
-const liabilityAccountTypes = ["Liability", "Duty Agent", "Transporter Agent", "Loan", "Loans"];
-const excludedAccountTypes = ["Income", "Profit", "Equity", "EQUITY", "Fixed Asset", "Intercompany"];
-export const expenseTypes = ["Expense", "Direct Expense", "Indirect Expense"];
-const assetAccountTypes = ["Asset", "Current Asset", "Fixed Asset", "Bank", "Cash"];
+/** Types left out of net position although they are balance-sheet types. */
+const excludedBalanceSheetTypes = new Set(["fixed asset", "intercompany"]);
 
 const fixedAssetNamePatterns = [
   "rover",
@@ -120,13 +152,24 @@ export const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 10
 // ─── Core helpers ────────────────────────────────────────────────────────────
 
 /**
+ * +1 (Dr) or -1 (Cr) for an opening balance with no recorded side: the
+ * classifier's default (Dr for assets, expenses and customers; Cr for
+ * liabilities, equity, income, suppliers and intercompany). An unknown type
+ * keeps the old default, Cr.
+ */
+/** The engine's sideless-opening rule: the type's usual side, Dr for a type the classifier does not know (wave 17 A). */
+function defaultOpeningSideSign(acc: AccountLike): 1 | -1 {
+  return defaultOpeningSide(acc.accountType, acc.subType) === "Cr" ? -1 : 1;
+}
+
+/**
  * Returns the signed net balance for a ledger account.
  * Positive  →  we hold an asset / they owe us.
  * Negative  →  we owe them / it is a liability.
  */
 export function getAccountNetBalance(acc: AccountLike, balanceMap: Map<number, AccountBalance>): number {
-  const opening = parseFloat(acc.openingBalance || "0");
-  const defaultSide = assetDefaultDrTypes.includes(acc.accountType || "") ? 1 : -1;
+  const opening = toMoney(acc.openingBalance).toNumber();
+  const defaultSide = defaultOpeningSideSign(acc);
   const openingSide = acc.openingBalanceSide === "Dr" ? 1 : acc.openingBalanceSide === "Cr" ? -1 : defaultSide;
   const signedOpening = opening * openingSide;
   const balance = balanceMap.get(acc.id) || { debit: 0, credit: 0 };
@@ -139,7 +182,7 @@ export function getAccountNetBalanceExact(
   balanceMap: Map<number, { debit: MoneyInput; credit: MoneyInput }>
 ): Decimal {
   const opening = toMoney(acc.openingBalance);
-  const defaultSide = assetDefaultDrTypes.includes(acc.accountType || "") ? 1 : -1;
+  const defaultSide = defaultOpeningSideSign(acc);
   const openingSide = acc.openingBalanceSide === "Dr" ? 1 : acc.openingBalanceSide === "Cr" ? -1 : defaultSide;
   const balance = balanceMap.get(acc.id);
   return (openingSide === 1 ? opening : opening.negated())
@@ -154,7 +197,7 @@ export function classifyEquityAccounts(accounts: AccountLike[], balanceMap: Map<
 
   for (const acc of accounts) {
     if (isAccountMigrationClearingAccount(acc)) continue;
-    if (!["Equity", "EQUITY"].includes(acc.accountType || "")) continue;
+    if (canonicalAccountType(acc.accountType) !== "Equity") continue;
 
     const netBalance = getAccountNetBalance(acc, balanceMap);
     if (Math.abs(netBalance) < 0.01) continue;
@@ -182,9 +225,10 @@ export function classifyEquityAccounts(accounts: AccountLike[], balanceMap: Map<
  * Classifies a set of ledger accounts into assets (forUs) and liabilities
  * (onUs) using the ERP sign-based formula.
  *
- *   • Expense / Income account types are always skipped — they do NOT feed
- *     into net position.
- *   • Excluded account types (Income, Profit, Equity, Fixed Asset) are skipped.
+ *   • Income and expense accounts (by the shared classifier) are always
+ *     skipped — they do NOT feed into net position.
+ *   • Equity accounts (Equity, Profit) and the Fixed Asset and Intercompany
+ *     types are skipped.
  *   • Stock / inventory ledger accounts are excluded so callers can add the
  *     computed inventory value separately (prevents double-counting).
  *   • Fixed-asset accounts identified by name pattern are excluded.
@@ -196,7 +240,11 @@ export function classifyNetPositionAccounts(
   balanceMap: Map<number, AccountBalance>,
   options: ClassifyOptions = {}
 ): ClassifyResult {
-  const { additionalExcludedCodes = new Set<string>(), includeSupplierTypeAccounts = true } = options;
+  const {
+    additionalExcludedCodes = new Set<string>(),
+    includeSupplierTypeAccounts = true,
+    ledgerStockAccounts = false,
+  } = options;
 
   // Build the set of accounts excluded from expense tracking (IMPORT_CHARGES
   // children, PURCHASES, etc.) — the same set the ERP uses.
@@ -221,9 +269,11 @@ export function classifyNetPositionAccounts(
 
   const isExcludedFromNetPosition = (acc: AccountLike): boolean => {
     if (isAccountMigrationClearingAccount(acc)) return true;
-    if (excludedAccountTypes.includes(acc.accountType || "")) return true;
+    if (classifyAccountType(acc.accountType, acc.subType) === "equity") return true;
+    const type = (acc.accountType || "").trim().toLowerCase();
+    if (excludedBalanceSheetTypes.has(type)) return true;
     if (acc.code === "PRODUCTION_ADJUSTMENT" || acc.code === "CONSUMPTION_EXPENSE") return true;
-    if (!includeSupplierTypeAccounts && acc.accountType === "Supplier") return true;
+    if (!includeSupplierTypeAccounts && type === "supplier") return true;
     if (additionalExcludedCodes.has((acc.code || "").trim().toUpperCase())) return true;
     // Deferred Rent Revenue is an internal accrual account; it offsets Rent Income
     // when rent is prepaid and should not appear as a net-position liability.
@@ -233,7 +283,8 @@ export function classifyNetPositionAccounts(
     const nameLower = (acc.name || "").toLowerCase();
     const codeLower = (acc.code || "").toLowerCase();
 
-    if (assetAccountTypes.includes(acc.accountType || "")) {
+    if (classifyAccountType(acc.accountType, acc.subType) === "asset") {
+      if (ledgerStockAccounts && PERPETUAL_STOCK_ACCOUNT_CODES.has((acc.code || "").trim().toUpperCase())) return false;
       if (stockInventoryPatterns.some((p) => nameLower.includes(p))) return true;
       if (stockInventoryCodes.some((c) => codeLower === c.toLowerCase() || codeLower.startsWith(c.toLowerCase() + "_")))
         return true;
@@ -241,7 +292,7 @@ export function classifyNetPositionAccounts(
       // to accounts explicitly typed as "Fixed Asset". Regular Asset / Current Asset
       // accounts (e.g. "Security Deposits Paid") are current assets and must appear in
       // the net position.
-      if (acc.accountType === "Fixed Asset" && fixedAssetNamePatterns.some((p) => nameLower.includes(p))) return true;
+      if (type === "fixed asset" && fixedAssetNamePatterns.some((p) => nameLower.includes(p))) return true;
     }
 
     return false;
@@ -254,17 +305,16 @@ export function classifyNetPositionAccounts(
   const categoryTotals: Record<string, number> = {};
 
   for (const acc of accounts) {
-    // Skip expense and income types — not part of balance-sheet net position
-    const isExpenseType = expenseTypes.includes(acc.accountType || "");
-    const isIncomeType = acc.accountType === "Income";
-    if (isExpenseType || isIncomeType) continue;
+    // Skip income-statement accounts — their net is earnings, not an asset or a liability.
+    const accountClass = classifyAccountType(acc.accountType, acc.subType);
+    if (accountClass === "income" || accountClass === "expense") continue;
 
     if (isExcludedFromNetPosition(acc)) continue;
 
     const netBalance = getAccountNetBalance(acc, balanceMap);
     if (Math.abs(netBalance) < 0.01) continue;
 
-    const isLiabilityType = liabilityAccountTypes.includes(acc.accountType || "");
+    const isLiabilityType = accountClass === "liability";
     const category = acc.accountType || "Other";
 
     if (isLiabilityType) {

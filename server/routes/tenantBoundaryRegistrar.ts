@@ -1,5 +1,6 @@
 import type { Express } from "express";
 
+import { auditRequestContextMiddleware } from "../middleware/auditRequestContext";
 import { poImportDatabaseScopeContinuityBoundary } from "../middleware/poImportDatabaseScopeContinuity";
 import { tenantCompanyParamBoundary, tenantIsolationBoundary } from "../middleware/tenantIsolationBoundary";
 import { enforcePrivilegedMaintenanceScope } from "../middleware/privilegedMaintenanceScope";
@@ -16,6 +17,9 @@ import { browserMutationFailClosedBoundary } from "../security/browserMutationBo
  * boundaries only guard routes registered after this call, so they run first.
  */
 export function registerTenantIsolationBoundary(app: Express): void {
+  // Phase 21 (A): the audit actor and request metadata for every API request
+  // (read by the database audit triggers through the lease settings).
+  app.use(auditRequestContextMiddleware);
   app.use(browserMutationFailClosedBoundary);
   app.use(tenantIsolationBoundary);
   app.use(enforcePrivilegedMaintenanceScope);

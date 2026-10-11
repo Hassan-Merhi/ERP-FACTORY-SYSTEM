@@ -10,7 +10,6 @@ import { registerFactoryCustomerCrudRoutes } from "./crud";
 import { registerFactoryCustomerStatementRoutes } from "./statement";
 import { registerFactoryCustomerStatementPdfRoutes } from "./statement-pdf";
 import { registerFactoryCustomerStatementExcelRoutes } from "./statement-excel";
-import { registerFactoryCustomerMigrationRoutes } from "./migrations";
 import { registerFactoryCustomerLogoRoutes } from "./logos";
 import { registerFactoryCustomerSubModules } from "./sub-modules";
 
@@ -19,7 +18,8 @@ export function registerFactoryCustomersRoutes(app: Express) {
   registerFactoryCustomerStatementRoutes(app);
   registerFactoryCustomerStatementPdfRoutes(app);
   registerFactoryCustomerStatementExcelRoutes(app);
-  registerFactoryCustomerMigrationRoutes(app);
+  // Phase 19 (A): POST /api/factory/migrate-voucher-descriptions is retired (it rewrote
+  // posted voucher descriptions and line narrations with no transaction or audit).
   registerFactoryCustomerLogoRoutes(app);
   registerFactoryCustomerSubModules(app);
 }

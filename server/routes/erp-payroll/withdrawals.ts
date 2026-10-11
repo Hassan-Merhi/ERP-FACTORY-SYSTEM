@@ -10,7 +10,13 @@ import { eq, and } from "drizzle-orm";
 import { db } from "../../db";
 import { requireAuth, requireNonPOS } from "../../auth";
 import { syncEmployeeBalancesFromEntries } from "../_helpers";
-import { bankAccounts, employees, ledgerAccounts, voucherEntries, vouchers } from "@shared/schema";
+import { bankAccounts, employees, ledgerAccounts } from "@shared/schema";
+import {
+  erpRequestSourceId,
+  pairLines,
+  postErpVoucherTx,
+  sessionPostingActor,
+} from "../../services/accounting/erpVoucherPosting";
 import { parseMoneyInput } from "../../lib/money";
 
 export function registerPayrollWithdrawalRoutes(app: Express) {
@@ -64,66 +70,43 @@ export function registerPayrollWithdrawalRoutes(app: Express) {
         if (!bank) return res.status(404).json({ message: "Payment account not found" });
       }
 
-      // Create voucher
-      const voucherNumber = `SAL-WD-${Date.now()}`;
-      const [voucher] = await db
-        .insert(vouchers)
-        .values({
-          companyId: req.session.currentCompanyId,
-          voucherNumber,
+      // Phase 22 (B): Dr employee / Cr cash or bank through the central engine
+      // (number allocated there; a resent request returns the same voucher).
+      const requestSourceId = erpRequestSourceId(req);
+      const voucher = await db.transaction(async (tx) => {
+        const narration = "Salary withdrawal";
+        const posted = await postErpVoucherTx(tx, {
+          companyId: req.session.currentCompanyId!,
           voucherType: "Payment",
           voucherDate: date,
           description: notes || `Salary withdrawal for ${employee.firstName} ${employee.lastName}`,
-          totalAmount: withdrawalAmount.toFixed(2),
-        })
-        .returning();
-
-      // Create voucher entries (double-entry)
-      // Debit: Employee (using employeeId field directly instead of separate ledger account)
-      await db.insert(voucherEntries).values({
-        voucherId: voucher.id,
-        ledgerAccountId: null,
-        employeeId: employee.id,
-        debitAmount: withdrawalAmount.toFixed(2),
-        creditAmount: "0",
-        narration: `Salary withdrawal - ${voucherNumber}`,
+          lines: pairLines(
+            { employeeId: employee.id },
+            accountType === "cash" ? { ledgerAccountId: Number(accountId) } : { bankAccountId: Number(accountId) },
+            withdrawalAmount,
+            narration
+          ),
+          source: { type: "employee-salary-withdrawal", id: `${employee.id}:${requestSourceId}` },
+          actor: sessionPostingActor(req, "Salary withdrawal"),
+        });
+        const { voucher } = posted;
+        if (posted.replayed) return voucher;
+        // Wave 12: the balance moves in the voucher's transaction.
+        await syncEmployeeBalancesFromEntries(
+          [
+            {
+              ledgerAccountId: null,
+              employeeId: employee.id,
+              debitAmount: withdrawalAmount.toFixed(2),
+              creditAmount: "0",
+            },
+          ],
+          req.session.currentCompanyId!,
+          false,
+          tx
+        );
+        return voucher;
       });
-
-      // Credit: Bank/Cash Account
-      const creditEntry: {
-        voucherId: number;
-        debitAmount: string;
-        creditAmount: string;
-        narration: string;
-        ledgerAccountId?: number;
-        bankAccountId?: number;
-      } = {
-        voucherId: voucher.id,
-        debitAmount: "0",
-        creditAmount: withdrawalAmount.toFixed(2),
-        narration: `Salary withdrawal - ${voucherNumber}`,
-      };
-
-      if (accountType === "cash") {
-        creditEntry.ledgerAccountId = accountId;
-      } else {
-        creditEntry.bankAccountId = accountId;
-      }
-
-      await db.insert(voucherEntries).values(creditEntry);
-
-      // Sync employee balance from voucher entries (instead of direct update)
-      await syncEmployeeBalancesFromEntries(
-        [
-          {
-            ledgerAccountId: null,
-            employeeId: employee.id,
-            debitAmount: withdrawalAmount.toFixed(2),
-            creditAmount: "0",
-          },
-        ],
-        req.session.currentCompanyId!
-      );
 
       // Get updated employee balance
       const [updatedEmployee] = await db.select().from(employees).where(eq(employees.id, employee.id));

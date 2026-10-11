@@ -1,6 +1,6 @@
 import { getErrorDetails } from "@shared/errorUtils";
 import type { Express, NextFunction, Request, Response } from "express";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { stockCategories, stockGroups } from "@shared/schema";
 import { db, pool } from "../../db";
 import { requireAuth, requireNonPOS } from "../../auth";
@@ -332,13 +332,20 @@ export function registerLocationWhatsappScheduleRoutes(app: Express) {
         );
         const previous = previousResult.rows[0] ?? null;
 
-        const result = await pool.query(
-          `INSERT INTO location_whatsapp_stock_schedules (
+        // Phase 21 (B): the schedule and its audit row commit together (the audit
+        // ran after the save and its failure was swallowed).
+        const savedRow = await db.transaction(async (tx) => {
+          const result = await tx.execute(sql`
+            INSERT INTO location_whatsapp_stock_schedules (
               location_id, company_id, enabled, frequency, days_of_week, send_time, timezone,
               include_cost, include_zero_stock, include_negative_stock,
               stock_group_id, category_id, updated_by_user_id, updated_at
             )
-            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,now())
+            VALUES (
+              ${locationId}, ${companyId}, ${enabled}, ${frequency}, ${`{${daysOfWeek.join(",")}}`}::integer[],
+              ${sendTime}, ${timezone}, ${includeCost}, ${includeZeroStock}, ${includeNegativeStock},
+              ${stockGroupId}, ${categoryId}, ${req.session.userId!}, now()
+            )
             ON CONFLICT (location_id) DO UPDATE SET
               company_id = EXCLUDED.company_id,
               enabled = EXCLUDED.enabled,
@@ -356,51 +363,36 @@ export function registerLocationWhatsappScheduleRoutes(app: Express) {
             RETURNING enabled, frequency, days_of_week, send_time, timezone,
                       include_cost, include_zero_stock, include_negative_stock,
                       stock_group_id, category_id, last_attempt_at, last_sent_at,
-                      last_scheduled_for, last_status, last_error`,
-          [
-            locationId,
-            companyId,
-            enabled,
-            frequency,
-            daysOfWeek,
-            sendTime,
-            timezone,
-            includeCost,
-            includeZeroStock,
-            includeNegativeStock,
-            stockGroupId,
-            categoryId,
-            req.session.userId!,
-          ]
-        );
-
-        try {
-          await logAudit({
-            userId: req.session.userId!,
-            username: req.session.username || "unknown",
-            companyId,
-            action: "update_location_whatsapp_stock_schedule",
-            tableName: "location_whatsapp_stock_schedules",
-            recordId: locationId,
-            recordIdentifier: location.name,
-            changes: {
-              enabled: { old: previous?.enabled ?? false, new: enabled },
-              frequency: { old: previous?.frequency ?? null, new: frequency },
-              daysOfWeek: { old: previous?.days_of_week ?? null, new: daysOfWeek },
-              sendTime: { old: previous?.send_time ?? null, new: sendTime },
-              timezone: { old: previous?.timezone ?? null, new: timezone },
-              includeCost: { old: previous?.include_cost ?? false, new: includeCost },
-              includeZeroStock: { old: previous?.include_zero_stock ?? false, new: includeZeroStock },
-              includeNegativeStock: { old: previous?.include_negative_stock ?? true, new: includeNegativeStock },
-              stockGroupId: { old: previous?.stock_group_id ?? null, new: stockGroupId },
-              categoryId: { old: previous?.category_id ?? null, new: categoryId },
+                      last_scheduled_for, last_status, last_error
+          `);
+          await logAudit(
+            {
+              userId: req.session.userId!,
+              username: req.session.username || "unknown",
+              companyId,
+              action: "update_location_whatsapp_stock_schedule",
+              tableName: "location_whatsapp_stock_schedules",
+              recordId: locationId,
+              recordIdentifier: location.name,
+              changes: {
+                enabled: { old: previous?.enabled ?? false, new: enabled },
+                frequency: { old: previous?.frequency ?? null, new: frequency },
+                daysOfWeek: { old: previous?.days_of_week ?? null, new: daysOfWeek },
+                sendTime: { old: previous?.send_time ?? null, new: sendTime },
+                timezone: { old: previous?.timezone ?? null, new: timezone },
+                includeCost: { old: previous?.include_cost ?? false, new: includeCost },
+                includeZeroStock: { old: previous?.include_zero_stock ?? false, new: includeZeroStock },
+                includeNegativeStock: { old: previous?.include_negative_stock ?? true, new: includeNegativeStock },
+                stockGroupId: { old: previous?.stock_group_id ?? null, new: stockGroupId },
+                categoryId: { old: previous?.category_id ?? null, new: categoryId },
+              },
             },
-          });
-        } catch {
-          /* schedule save remains valid if audit persistence is temporarily unavailable */
-        }
+            tx
+          );
+          return result.rows[0];
+        });
 
-        res.json(serializeSchedule(result.rows[0], locationId));
+        res.json(serializeSchedule(savedRow, locationId));
       } catch (error: unknown) {
         const message = getErrorMessage(error);
         if (message.startsWith("Invalid ") || message.includes("not found for this company"))

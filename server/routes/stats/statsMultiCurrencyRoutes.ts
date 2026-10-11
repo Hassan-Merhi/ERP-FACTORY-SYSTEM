@@ -16,6 +16,8 @@ function round2(value: number): number {
 /** One account line in a net-position side. */
 type NetPositionAccountRow = {
   id?: number;
+  /** A bank_accounts line (the report's engine bank rows and their translation). */
+  bankAccountId?: number;
   name: string;
   code?: string | null;
   value: number;
@@ -90,18 +92,22 @@ function applyCurrentCashTranslation(payload: NetPositionPayload, summaries: Cas
 
   const resolved = summaries.filter((row) => row.currentTranslatedBaseBalance !== null);
   const resolvedLedgerIds = new Set(resolved.filter((row) => row.accountKind === "ledger").map((row) => row.id));
+  // The report already lists every bank account at its historical base (engine
+  // "bank" rows, carrying bankAccountId): a resolved bank's row is replaced by
+  // its current translation below, exactly like a resolved ledger account, so a
+  // bank is never listed twice. An unresolved bank keeps its historical row.
+  const resolvedBankIds = new Set(resolved.filter((row) => row.accountKind === "bank").map((row) => row.id));
+  const isReplaced = (row: NetPositionAccountRow) =>
+    (row.bankAccountId != null && resolvedBankIds.has(row.bankAccountId)) ||
+    (row.bankAccountId == null && !!row.id && resolvedLedgerIds.has(row.id));
 
   const oldForUsAccounts = Array.isArray(payload.forUs.accounts) ? payload.forUs.accounts : [];
   const oldOnUsAccounts = Array.isArray(payload.onUs.accounts) ? payload.onUs.accounts : [];
-  const removedForUs = oldForUsAccounts.filter((row: NetPositionAccountRow) => row.id && resolvedLedgerIds.has(row.id));
-  const removedOnUs = oldOnUsAccounts.filter((row: NetPositionAccountRow) => row.id && resolvedLedgerIds.has(row.id));
+  const removedForUs = oldForUsAccounts.filter(isReplaced);
+  const removedOnUs = oldOnUsAccounts.filter(isReplaced);
 
-  const forUsAccounts = oldForUsAccounts.filter(
-    (row: NetPositionAccountRow) => !row.id || !resolvedLedgerIds.has(row.id)
-  );
-  const onUsAccounts = oldOnUsAccounts.filter(
-    (row: NetPositionAccountRow) => !row.id || !resolvedLedgerIds.has(row.id)
-  );
+  const forUsAccounts = oldForUsAccounts.filter((row: NetPositionAccountRow) => !isReplaced(row));
+  const onUsAccounts = oldOnUsAccounts.filter((row: NetPositionAccountRow) => !isReplaced(row));
 
   let forUsTotal = new Decimal(payload.forUs.total ?? payload.forUsTotal ?? 0);
   let onUsTotal = new Decimal(payload.onUs.total ?? payload.onUsTotal ?? 0);
@@ -112,6 +118,7 @@ function applyCurrentCashTranslation(payload: NetPositionPayload, summaries: Cas
     const translated = new Decimal(summary.currentTranslatedBaseBalance || 0);
     const accountRow = {
       id: summary.accountKind === "ledger" ? summary.id : undefined,
+      bankAccountId: summary.accountKind === "bank" ? summary.id : undefined,
       name: summary.name,
       code: summary.code,
       value: translated.abs().toDecimalPlaces(2).toNumber(),
@@ -172,10 +179,17 @@ export function registerStatsMultiCurrencyRoutes(app: Express) {
     if (!companyId) return next();
 
     try {
-      const revaluation = await getCashBankRevaluation(companyId);
+      // Engine attribution (wave 10 part 3): bank aggregates hold only the lines
+      // naming the bank and no ledger account, and a linked bank keeps its own
+      // row, so the translated rows partition the lines exactly as the report's
+      // historical ledger and bank rows do.
+      const revaluation = await getCashBankRevaluation(companyId, { attribution: "engine" });
       const resolvedAccounts = revaluation.accounts.filter((row) => row.currentTranslatedBaseBalance !== null);
       const currentTranslatedLedgerAccountIds = resolvedAccounts
         .filter((row) => row.accountKind === "ledger")
+        .map((row) => row.id);
+      const currentTranslatedBankAccountIds = resolvedAccounts
+        .filter((row) => row.accountKind === "bank")
         .map((row) => row.id);
       const currentCashBankTranslationDifference = round2(
         resolvedAccounts.reduce((total, row) => total.plus(row.translationDifference ?? 0), new Decimal(0)).toNumber()
@@ -206,6 +220,7 @@ export function registerStatsMultiCurrencyRoutes(app: Express) {
           appliedToCurrentSnapshotOnly: true,
           reportTotalsProvisional,
           currentTranslatedLedgerAccountIds,
+          currentTranslatedBankAccountIds,
           currentCashBankTranslationDifference,
         };
         return originalJson(adjusted);

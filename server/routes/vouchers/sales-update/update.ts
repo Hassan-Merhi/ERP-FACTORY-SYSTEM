@@ -10,11 +10,34 @@ import { db } from "../../../db";
 import { storage } from "../../../storage";
 import { requireAuth } from "../../../auth";
 import { voucherMutationBlockReason } from "../../../lib/migratedVoucherGuard";
-import { logAudit, syncEmployeeBalancesFromEntries, buildVoucherChangesForUpdate } from "../../_helpers";
+import {
+  assertNotIntercompanyTransferLeg,
+  sendIntercompanyTransferLegRefusal,
+} from "../../../services/accounting/intercompanyTransferLegGuard";
+import { syncEmployeeBalancesFromEntries } from "../../_helpers";
+import { readVoucherAuditState, writeVoucherAuditTx } from "../../helpers/voucherAuditTrail";
 import { vouchers, voucherEntries } from "@shared/schema";
 import { eq } from "drizzle-orm";
 import { applyVoucherOptionalInventoryChange } from "./optionalInventoryEvidence";
 import type { PgUpdateSetSource } from "drizzle-orm/pg-core";
+import {
+  assertReplacementEntryAmounts,
+  assertValidReplacementEntries,
+  linkCustomerLedgerTargets,
+  replacementErrorStatus,
+  storedEntriesAsAmountInput,
+  type ReplacementEntryInput,
+  type ReplacementEntryTargets,
+} from "../../../services/accounting/voucherEntryReplacement";
+import { syncStockAdjustmentInventoryTx } from "../../../services/accounting/perpetualInventory/stockAdjustments";
+import { stockVoucherTypeRefusal } from "../../../services/accounting/stockVoucherTypes";
+import {
+  redateSaleCogsTx,
+  SaleDateCrossesCutoverError,
+} from "../../../services/accounting/perpetualInventory/saleCogs";
+import { sendBaleMirrorMovementRefusal } from "../../../services/accounting/perpetualInventory/cutoverRefusal";
+import { assertVoucherEditableTx, sendVoucherCorrectionRefusal } from "../../../services/accounting/voucherCorrection";
+import { rebalanceVoucherRoundingTx } from "../../../services/accounting/engineRounding";
 
 /** The columns a voucher edit may set, checked against the vouchers table. */
 type VoucherUpdate = PgUpdateSetSource<typeof vouchers>;
@@ -45,7 +68,28 @@ export function registerVoucherUpdateRoutes(app: Express) {
         const updates: VoucherUpdate = {};
         if (req.body.voucherDate !== undefined) updates.voucherDate = req.body.voucherDate;
         if (Object.keys(updates).length > 0) {
-          await db.update(vouchers).set(updates).where(eq(vouchers.id, id));
+          // Wave 12: the POS date edit is audited in its own transaction (it was unaudited).
+          await db.transaction(async (tx) => {
+            // Phase 22 A: a re-date is a financial edit (open period only).
+            const { before } = await assertVoucherEditableTx(tx, id, {
+              companyId: existingVoucher.companyId,
+              newVoucherDate: String(updates.voucherDate ?? ""),
+            });
+            await tx.update(vouchers).set(updates).where(eq(vouchers.id, id));
+            const after = await readVoucherAuditState(tx, id);
+            await writeVoucherAuditTx(tx, {
+              actor: {
+                userId: req.session.userId,
+                username: req.session.username,
+                companyId: existingVoucher.companyId,
+              },
+              action: "update",
+              voucherId: id,
+              before,
+              after,
+              extra: { posDateEdit: { new: true } },
+            });
+          });
         }
         return res.json({ id, ...updates });
       }
@@ -66,10 +110,68 @@ export function registerVoucherUpdateRoutes(app: Express) {
         }
       }
 
+      // Phase 19 C (MC-2): the date, lines or posted state of an intercompany
+      // transfer leg are not changed here (409): the transfer is deleted (both
+      // legs) and recorded again. A description-only edit is allowed.
+      if (
+        (req.body.voucherDate !== undefined && req.body.voucherDate !== existingVoucher.voucherDate) ||
+        Array.isArray(req.body.entries) ||
+        (req.body.optional !== undefined && req.body.optional !== existingVoucher.optional)
+      ) {
+        try {
+          await assertNotIntercompanyTransferLeg(id);
+        } catch (legError: unknown) {
+          if (sendIntercompanyTransferLegRefusal(res, legError)) return;
+          throw legError;
+        }
+      }
+
       const oldEntries = await storage.getVoucherEntriesByVoucher(id);
       const wasOptional = existingVoucher.optional;
+      const willBeOptional = req.body.optional !== undefined ? req.body.optional === true : wasOptional;
+      const replacesEntries = Array.isArray(req.body.entries);
+      // Wave 12: a stock adjustment voucher's lines are replaced only through PUT /api/stock-adjustments/:id.
+      const stockTypeRefusal = replacesEntries ? stockVoucherTypeRefusal(existingVoucher.voucherType) : null;
+      if (stockTypeRefusal) return res.status(stockTypeRefusal.status).json(stockTypeRefusal.body);
 
-      await db.transaction(async (tx) => {
+      // Lines are replaced only when the request sends them. A header-only edit
+      // (date, description, optional flag) used to delete every line.
+      let replacementTargets: ReplacementEntryTargets[] = [];
+      try {
+        if (replacesEntries) {
+          replacementTargets = assertValidReplacementEntries(
+            existingVoucher.voucherType,
+            willBeOptional,
+            req.body.entries
+          );
+        } else if (wasOptional && !willBeOptional) {
+          // Activating an optional voucher posts its existing lines.
+          assertReplacementEntryAmounts(existingVoucher.voucherType, false, storedEntriesAsAmountInput(oldEntries));
+        }
+      } catch (validationError: unknown) {
+        const status = replacementErrorStatus(validationError);
+        if (status) return res.status(status).json({ message: getErrorMessage(validationError) });
+        throw validationError;
+      }
+
+      // Phase 22 A (correction policy, G10): a change of date, lines or the
+      // optional flag (posted -> optional included) is an edit: refused in a
+      // closed period (409 VOUCHER_CLOSED_PERIOD_REVERSE_INSTEAD, reverse
+      // instead) and audited with the full before/after in an open one. A
+      // description-only edit stays allowed.
+      const financialEdit =
+        (req.body.voucherDate !== undefined && req.body.voucherDate !== existingVoucher.voucherDate) ||
+        replacesEntries ||
+        (req.body.optional !== undefined && req.body.optional !== existingVoucher.optional);
+      const { updated, newEntries } = await db.transaction(async (tx) => {
+        const before = financialEdit
+          ? (
+              await assertVoucherEditableTx(tx, id, {
+                companyId: existingVoucher.companyId,
+                newVoucherDate: req.body.voucherDate !== undefined ? String(req.body.voucherDate) : null,
+              })
+            ).before
+          : await readVoucherAuditState(tx, id);
         const voucherUpdates: VoucherUpdate = {};
         if (req.body.voucherDate !== undefined) voucherUpdates.voucherDate = req.body.voucherDate;
         if (req.body.description !== undefined) voucherUpdates.description = req.body.description;
@@ -82,72 +184,78 @@ export function registerVoucherUpdateRoutes(app: Express) {
           });
         }
 
-        await tx.update(vouchers).set(voucherUpdates).where(eq(vouchers.id, id));
-        await tx.delete(voucherEntries).where(eq(voucherEntries.voucherId, id));
+        if (Object.keys(voucherUpdates).length > 0) {
+          await tx.update(vouchers).set(voucherUpdates).where(eq(vouchers.id, id));
+        }
+        // Wave 15 (M5): a re-dated sale's COGS journal takes the new date.
+        if (req.body.voucherDate !== undefined) {
+          await redateSaleCogsTx(tx, {
+            companyId: existingVoucher.companyId,
+            saleVoucherId: id,
+            voucherType: existingVoucher.voucherType,
+            oldDate: existingVoucher.voucherDate,
+            newDate: req.body.voucherDate,
+          });
+        }
 
-        if (req.body.entries && Array.isArray(req.body.entries)) {
-          for (const entry of req.body.entries) {
+        if (replacesEntries) {
+          const targets = await linkCustomerLedgerTargets(tx, existingVoucher.companyId, replacementTargets);
+          await tx.delete(voucherEntries).where(eq(voucherEntries.voucherId, id));
+          for (const [index, entry] of (req.body.entries as ReplacementEntryInput[]).entries()) {
             await tx.insert(voucherEntries).values({
               voucherId: id,
-              ledgerAccountId: entry.ledgerAccountId || null,
-              bankAccountId: entry.bankAccountId || null,
-              supplierId: entry.supplierId || null,
-              employeeId: entry.employeeId || null,
-              fixedAssetId: entry.fixedAssetId || null,
-              debitAmount: entry.debitAmount || "0",
-              creditAmount: entry.creditAmount || "0",
-              narration: entry.narration || "",
+              ...targets[index],
+              debitAmount: String(entry.debitAmount || "0"),
+              creditAmount: String(entry.creditAmount || "0"),
+              narration: typeof entry.narration === "string" ? entry.narration : "",
             });
           }
         }
+
+        // Phase 22 A (D3): an engine voucher keeps balancing exactly (ROUNDING line).
+        if (replacesEntries && !willBeOptional) {
+          await rebalanceVoucherRoundingTx(tx, { companyId: existingVoucher.companyId, voucherId: id });
+        }
+
+        // Perpetual inventory (wave 8.3): a stock adjustment voucher carries its inventory line.
+        await syncStockAdjustmentInventoryTx(tx, existingVoucher.companyId, id);
+
+        const after = await readVoucherAuditState(tx, id);
+        if (!after.voucher) throw new Error("Voucher not found after update");
+
+        // Wave 12: employee balances move in this transaction (they used to be
+        // written on the pool after commit).
+        if (!wasOptional) {
+          await syncEmployeeBalancesFromEntries(before.entries, existingVoucher.companyId, true, tx);
+        }
+        if (!after.voucher.optional) {
+          await syncEmployeeBalancesFromEntries(after.entries, existingVoucher.companyId, false, tx);
+        }
+
+        // Wave 12 (decision 2): full before/after snapshot in the same transaction;
+        // a failed audit write refuses the edit.
+        await writeVoucherAuditTx(tx, {
+          actor: {
+            userId: req.session.userId,
+            username: req.session.username,
+            companyId: existingVoucher.companyId,
+          },
+          action: "update",
+          voucherId: id,
+          before,
+          after,
+          ...(financialEdit ? { extra: { correctionPolicy: { new: "open-period-edit" } } } : {}),
+        });
+        return { updated: after.voucher, newEntries: after.entries };
       });
 
-      const updated = await storage.getVoucherById(id);
-      if (!updated) return res.status(404).json({ message: "Voucher not found after update" });
-      const newEntries = await storage.getVoucherEntriesByVoucher(id);
-
-      if (!wasOptional && req.session.currentCompanyId) {
-        await syncEmployeeBalancesFromEntries(
-          oldEntries.map((e) => ({
-            ledgerAccountId: e.ledgerAccountId,
-            employeeId: e.employeeId,
-            debitAmount: e.debitAmount,
-            creditAmount: e.creditAmount,
-          })),
-          req.session.currentCompanyId,
-          true
-        );
-      }
-
-      const isNowOptional = req.body.optional !== undefined ? req.body.optional : wasOptional;
-      if (!isNowOptional && req.session.currentCompanyId) {
-        await syncEmployeeBalancesFromEntries(
-          newEntries.map((e) => ({
-            ledgerAccountId: e.ledgerAccountId,
-            employeeId: e.employeeId,
-            debitAmount: e.debitAmount,
-            creditAmount: e.creditAmount,
-          })),
-          req.session.currentCompanyId
-        );
-      }
-
-      try {
-        await logAudit({
-          userId: req.session.userId!,
-          username: req.session.username || "unknown",
-          companyId: req.session.currentCompanyId!,
-          action: "update",
-          tableName: "vouchers",
-          recordId: updated.id,
-          recordIdentifier: updated.voucherNumber,
-          changes: buildVoucherChangesForUpdate(existingVoucher, updated, oldEntries, newEntries),
-        });
-      } catch {
-        /* non-fatal */
-      }
       res.json({ ...updated, entries: newEntries });
     } catch (error: unknown) {
+      if (sendBaleMirrorMovementRefusal(res, error)) return;
+      if (sendVoucherCorrectionRefusal(res, error)) return;
+      if (error instanceof SaleDateCrossesCutoverError) {
+        return res.status(409).json({ code: error.code, message: error.message, effectiveFrom: error.effectiveFrom });
+      }
       res.status(errorStatus(error)).json({ message: getErrorMessage(error) });
     }
   });

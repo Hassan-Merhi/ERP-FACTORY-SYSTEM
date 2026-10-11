@@ -23,20 +23,21 @@ vi.mock("../server/db", async () => {
       Promise.resolve(value).then(resolve, reject);
     return q;
   };
-  return {
-    db: {
-      select: () => ({ from: (table: never) => chain(rows[getTableName(table)] ?? []) }),
-      insert: (table: never) => ({
-        values: (value: Record<string, unknown>) => {
-          if (getTableName(table) === "factory_supplier_fx_transfers") {
-            return { returning: async () => [{ id: 50, ...value }] };
-          }
-          writes.push(value);
-          return Promise.resolve();
-        },
-      }),
-    },
+  const db: Record<string, unknown> = {
+    select: () => ({ from: (table: never) => chain(rows[getTableName(table)] ?? []) }),
+    insert: (table: never) => ({
+      values: (value: Record<string, unknown>) => {
+        if (getTableName(table) === "factory_supplier_fx_transfers") {
+          return { returning: async () => [{ id: 50, ...value }] };
+        }
+        writes.push(value);
+        return Promise.resolve();
+      },
+    }),
   };
+  // The create runs in one transaction; the fake transaction is the same fake db.
+  db.transaction = async (work: (tx: unknown) => Promise<unknown>) => work(db);
+  return { db };
 });
 
 import { registerSupplierFxTransferRoutes } from "../server/routes/factory/suppliers/fx/transfers";

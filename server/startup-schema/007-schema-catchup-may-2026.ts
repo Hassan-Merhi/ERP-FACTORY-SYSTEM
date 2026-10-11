@@ -117,37 +117,11 @@ export const schemaCatchupMay2026: string[] = [
   `ALTER TABLE customer_proformas ADD COLUMN IF NOT EXISTS deleted_at timestamp`,
   `ALTER TABLE customer_orders ADD COLUMN IF NOT EXISTS deleted_at timestamp`,
 
-  // ── Fix GUAR-CASH voucher entry orientation for landlord companies (May 2026) ──
-  // Bug: guarantee-to-cash for properties (landlord) companies created entries with
-  // Dr Tenant Deposits / Cr Cash instead of the correct Dr Cash / Cr Tenant Deposits.
-  // This made both the journal entry AND the auto-transfer credit the cashbox, doubling
-  // the outflow. The correct flow: Dr Cash (deposit in) then auto-transfer Cr Cash
-  // (cash out), netting to zero on the cashbox.
-  // Idempotent: once Tenant Deposits has credit_amount > 0, debit_amount = 0 condition
-  // no longer matches and the UPDATE is skipped.
-  `DO $$
-      DECLARE
-        bad_voucher_ids integer[];
-      BEGIN
-        SELECT ARRAY(
-          SELECT DISTINCT ve.voucher_id
-          FROM voucher_entries ve
-          JOIN vouchers v ON ve.voucher_id = v.id
-          JOIN companies c ON v.company_id = c.id
-          JOIN ledger_accounts la ON ve.ledger_account_id = la.id
-          WHERE v.voucher_number LIKE 'GUAR-CASH-%'
-            AND c.company_type = 'properties'
-            AND la.name = 'Tenant Deposits'
-            AND ve.debit_amount::numeric > 0
-            AND v.deleted_at IS NULL
-        ) INTO bad_voucher_ids;
-        IF array_length(bad_voucher_ids, 1) > 0 THEN
-          UPDATE voucher_entries
-          SET debit_amount = credit_amount,
-              credit_amount = debit_amount
-          WHERE voucher_id = ANY(bad_voucher_ids);
-        END IF;
-      END $$`,
+  // ── Retired (2026-10 accounting audit): a boot-time step here swapped the
+  // debit and credit of every GUAR-CASH-% voucher whose Tenant Deposits line was a
+  // debit. It ran on every boot, so it would also have flipped any later,
+  // legitimate deposit refund. Posted entries are corrected with a reversing
+  // entry, never rewritten at deploy time. Production had no matching lines left.
 
   // ── Factory Status Builder (experimental) ──────────────────────────────
   `CREATE TABLE IF NOT EXISTS status_report_templates (

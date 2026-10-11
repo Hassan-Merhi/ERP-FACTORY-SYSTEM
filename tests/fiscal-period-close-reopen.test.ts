@@ -6,9 +6,10 @@
  *     balances against retained earnings.
  *   - Periods are contiguous; the first close cannot leave earlier
  *     income/expense entries locked but never closed.
+ *   - Openings are left in place (wave 12): the closing line includes them.
  *   - Reopening the latest close removes the closing journal from the books,
- *     restores the opening balances the close zeroed, and lifts the lock back
- *     to the previous close; the same period can then be closed again.
+ *     restores the opening balances a legacy close zeroed, and lifts the lock
+ *     back to the previous close; the same period can then be closed again.
  *   - Only the latest close can be reopened, and only with a reason.
  */
 import request from "supertest";
@@ -138,7 +139,9 @@ describe("fiscal close", () => {
       expect(Number(entry.debitAmount)).toBeGreaterThanOrEqual(0);
       expect(Number(entry.creditAmount)).toBeGreaterThanOrEqual(0);
     }
-    expect(await openingOf(rentId)).toBe("0.00 Dr");
+    // Wave 12: the opening stays; the closing line already moved it (zeroing it
+    // too used to close it twice).
+    expect(await openingOf(rentId)).toBe("40.00 Dr");
   });
 
   it("requires the next period to start the day after the last close", async () => {
@@ -203,7 +206,25 @@ describe("fiscal reopen", () => {
       periodEndDate: string;
     }>;
     const january = closures.find((closure) => closure.periodEndDate === "2026-01-31")!;
-    await pool.query("UPDATE fiscal_period_closures SET opening_balance_snapshot = NULL WHERE id = $1", [january.id]);
+    // A legacy close recorded no snapshot and zeroed the openings it closed
+    // (wave 12 closes leave openings in place, so the legacy state is set up here).
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+      await client.query("SET LOCAL app.closed_period_override = 'on'");
+      await client.query("UPDATE fiscal_period_closures SET opening_balance_snapshot = NULL WHERE id = $1", [
+        january.id,
+      ]);
+      await client.query("UPDATE ledger_accounts SET opening_balance = 0, opening_balance_side = 'Dr' WHERE id = $1", [
+        rentId,
+      ]);
+      await client.query("COMMIT");
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
 
     const response = await agent.post(`/api/fiscal-period/${january.id}/reopen`).send({ reason: "Legacy" });
     expect(response.status).toBe(200);

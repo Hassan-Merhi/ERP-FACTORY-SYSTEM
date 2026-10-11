@@ -9,6 +9,8 @@ import { logger } from "../../../lib/logger";
 import { storage } from "../../../storage";
 import { calcPoAmounts } from "../containerHelpers";
 import { sumMoney, toMoney } from "../../../lib/money";
+import { syncPurchaseOrderGitTx } from "../../../services/accounting/perpetualInventory/stockReceipts";
+import { editPostedFactoryVoucherTx } from "../../../services/factory/factoryVoucherCorrection";
 
 interface StandaloneRepairSummary {
   handled: boolean;
@@ -181,75 +183,87 @@ export async function repairStandalonePurchaseOrderAccounting(companyId: number)
 
       const purchasesLedgerAccount = await resolvePurchasesAccount();
 
-      await db.transaction(async (tx) => {
-        const debitEntry = debitEntries[0];
-        const creditEntry = creditEntries[0];
-        const retainedIds = new Set<number>();
+      // Phase 22 (C), G4: an audited open-period edit of the posted PO voucher
+      // (the request's actor); a voucher in a closed period is refused (409) and
+      // reported for this PO in `errors`.
+      await db.transaction((tx) =>
+        editPostedFactoryVoucherTx(
+          tx,
+          { companyId: po.companyId, voucherIds: [po.voucherId!], reason: "standalone-po-voucher-repair" },
+          async () => {
+            const debitEntry = debitEntries[0];
+            const creditEntry = creditEntries[0];
+            const retainedIds = new Set<number>();
 
-        if (debitEntry) {
-          retainedIds.add(debitEntry.id);
-          await tx
-            .update(voucherEntries)
-            .set({
-              ledgerAccountId: purchasesLedgerAccount!.id,
-              supplierId: null,
-              ...normalizedUsdFields(grossTotal, 0),
-              narration: `PO ${po.poNumber} - Purchases (standalone repair)`,
-            })
-            .where(eq(voucherEntries.id, debitEntry.id));
-        } else {
-          const [createdDebit] = await tx
-            .insert(voucherEntries)
-            .values({
-              voucherId: po.voucherId!,
-              ledgerAccountId: purchasesLedgerAccount!.id,
-              supplierId: null,
-              ...normalizedUsdFields(grossTotal, 0),
-              narration: `PO ${po.poNumber} - Purchases (standalone repair)`,
-            })
-            .returning({ id: voucherEntries.id });
-          retainedIds.add(createdDebit.id);
-        }
+            if (debitEntry) {
+              retainedIds.add(debitEntry.id);
+              await tx
+                .update(voucherEntries)
+                .set({
+                  ledgerAccountId: purchasesLedgerAccount!.id,
+                  supplierId: null,
+                  ...normalizedUsdFields(grossTotal, 0),
+                  narration: `PO ${po.poNumber} - Purchases (standalone repair)`,
+                })
+                .where(eq(voucherEntries.id, debitEntry.id));
+            } else {
+              const [createdDebit] = await tx
+                .insert(voucherEntries)
+                .values({
+                  voucherId: po.voucherId!,
+                  ledgerAccountId: purchasesLedgerAccount!.id,
+                  supplierId: null,
+                  ...normalizedUsdFields(grossTotal, 0),
+                  narration: `PO ${po.poNumber} - Purchases (standalone repair)`,
+                })
+                .returning({ id: voucherEntries.id });
+              retainedIds.add(createdDebit.id);
+            }
 
-        if (creditEntry) {
-          retainedIds.add(creditEntry.id);
-          await tx
-            .update(voucherEntries)
-            .set({
-              ledgerAccountId: null,
-              supplierId: po.supplierId,
-              ...normalizedUsdFields(0, grossTotal),
-              narration: `PO ${po.poNumber} - Supplier (standalone repair)`,
-            })
-            .where(eq(voucherEntries.id, creditEntry.id));
-        } else {
-          const [createdCredit] = await tx
-            .insert(voucherEntries)
-            .values({
-              voucherId: po.voucherId!,
-              ledgerAccountId: null,
-              supplierId: po.supplierId,
-              ...normalizedUsdFields(0, grossTotal),
-              narration: `PO ${po.poNumber} - Supplier (standalone repair)`,
-            })
-            .returning({ id: voucherEntries.id });
-          retainedIds.add(createdCredit.id);
-        }
+            if (creditEntry) {
+              retainedIds.add(creditEntry.id);
+              await tx
+                .update(voucherEntries)
+                .set({
+                  ledgerAccountId: null,
+                  supplierId: po.supplierId,
+                  ...normalizedUsdFields(0, grossTotal),
+                  narration: `PO ${po.poNumber} - Supplier (standalone repair)`,
+                })
+                .where(eq(voucherEntries.id, creditEntry.id));
+            } else {
+              const [createdCredit] = await tx
+                .insert(voucherEntries)
+                .values({
+                  voucherId: po.voucherId!,
+                  ledgerAccountId: null,
+                  supplierId: po.supplierId,
+                  ...normalizedUsdFields(0, grossTotal),
+                  narration: `PO ${po.poNumber} - Supplier (standalone repair)`,
+                })
+                .returning({ id: voucherEntries.id });
+              retainedIds.add(createdCredit.id);
+            }
 
-        const extraEntryIds = entries.filter((entry) => !retainedIds.has(entry.id)).map((entry) => entry.id);
-        if (extraEntryIds.length > 0) {
-          await tx.delete(voucherEntries).where(inArray(voucherEntries.id, extraEntryIds));
-        }
+            const extraEntryIds = entries.filter((entry) => !retainedIds.has(entry.id)).map((entry) => entry.id);
+            if (extraEntryIds.length > 0) {
+              await tx.delete(voucherEntries).where(inArray(voucherEntries.id, extraEntryIds));
+            }
 
-        await tx.update(vouchers).set({ totalAmount: expected }).where(eq(vouchers.id, po.voucherId!));
+            await tx.update(vouchers).set({ totalAmount: expected }).where(eq(vouchers.id, po.voucherId!));
 
-        if (invalidParentFreight) {
-          await tx
-            .update(purchaseOrders)
-            .set({ freightPaidBy: "supplier", freightParentAccountId: null })
-            .where(eq(purchaseOrders.id, po.id));
-        }
-      });
+            if (invalidParentFreight) {
+              await tx
+                .update(purchaseOrders)
+                .set({ freightPaidBy: "supplier", freightParentAccountId: null })
+                .where(eq(purchaseOrders.id, po.id));
+            }
+
+            // Perpetual inventory (wave 8.2): goods in transit follows the repaired PO voucher.
+            await syncPurchaseOrderGitTx(tx, po.companyId, po.id);
+          }
+        )
+      );
 
       repairedStandaloneSupplierVouchers += 1;
       if (invalidParentFreight) normalizedStandaloneParentFreight += 1;

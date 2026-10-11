@@ -10,8 +10,8 @@ describe("audit detail completeness", () => {
     const routes = read("server/routes/vouchers/immutableStockTransferRevisionRoutes.ts");
     const compatibility = read("server/routes/vouchers/adminPostUpdateStockTransferRevisionRoute.ts");
 
-    expect(routes).toContain('items: { new: revisionItemsForAudit(result.items) }');
-    expect(routes).toContain('items: { new: result.items }');
+    expect(routes).toContain("items: { new: revisionItemsForAudit(written.items) }");
+    expect(routes).toContain("items: { new: written.items }");
     expect(routes).toContain('"approve",');
     expect(compatibility).toContain("stockItemName: item.stockItemName");
     expect(compatibility).toContain("originalQuantity: item.originalQuantity");
@@ -60,17 +60,20 @@ describe("audit detail completeness", () => {
 
   it("captures item detail for POS sales and credit notes", () => {
     const posCreate = read("server/services/pos/createSaleService.ts");
-    const posUpdate = read("server/services/pos/edit/updateSaleService.ts");
+    // Phase 21 (B): the edit audit moved into the edit's transaction (posSaleUpdateAudit.ts).
+    const posUpdate =
+      read("server/services/pos/edit/updateSaleService.ts") + read("server/services/pos/edit/posSaleUpdateAudit.ts");
     const creditNotes = read("server/routes/creditNoteRoutes.ts");
 
     expect(posCreate).toContain("items: {");
-    expect(posCreate).toContain('"stockItemName" in item ? item.stockItemName : undefined');
+    expect(posCreate).toContain("stockItemName: item.stockItemName");
     expect(posUpdate).toContain("auditOldItems");
     expect(posUpdate).toContain("changes.items = {");
     expect(posUpdate).toContain("old: oldAuditRows.map");
     expect(posUpdate).toContain("new: updatedSalesItems.map");
     expect(posUpdate).toContain("totalAmount: item.totalSales");
-    expect(creditNotes).toContain("const auditItems = await db");
+    // Wave 16 B: the credit-note audit (with its items) is written in the transaction.
+    expect(creditNotes).toContain("const auditItems = await tx");
     expect(creditNotes).toContain("items: { new: auditItems }");
   });
 

@@ -7,6 +7,7 @@
 import type { Express, Request, Response } from "express";
 import { logger } from "../../lib/logger";
 import { db } from "../../db";
+import { inventoryCutoverRefusal } from "../../services/accounting/perpetualInventory/cutoverRefusal";
 import { requireAuth, requireRole } from "../../auth";
 import {
   privilegedConcurrencyLimit,
@@ -135,6 +136,9 @@ export function registerSpMigrationRunRoutes(app: Express) {
 
         const targetId = pn(runRow.target_company_id);
         const sourceId = pn(runRow.source_company_id);
+        // Wave 11: deleting the run's stock rows is refused after the target's cut-over.
+        const inventoryRefusal = await inventoryCutoverRefusal(db, targetId, "sp-migration-rollback");
+        if (inventoryRefusal) return res.status(inventoryRefusal.status).json(inventoryRefusal.body);
 
         // Safety: never touch source company
         if (!targetId || targetId === sourceId) {
@@ -172,137 +176,146 @@ export function registerSpMigrationRunRoutes(app: Express) {
           "stock_categories",
           "locations",
         ];
-        for (const tbl of tableOrder) {
-          const ids = byTable[tbl];
-          if (!ids?.length) continue;
-          for (const id of ids) {
-            // Extra safety: verify the row belongs to target company before deleting
-            let verified = false;
-            if (tbl === "sp_stock_movements") {
-              const [chk] = (
-                await db.execute<{ company_id: number }>(
-                  sql`SELECT company_id FROM sp_stock_movements WHERE id = ${id} LIMIT 1`
-                )
-              ).rows;
-              verified = !!chk && pn(chk.company_id) === targetId;
-            } else if (tbl === "stock_item_code_aliases") {
-              const [chk] = (
-                await db.execute<{ company_id: number }>(
-                  sql`SELECT company_id FROM stock_item_code_aliases WHERE id = ${id} LIMIT 1`
-                )
-              ).rows;
-              verified = !!chk && pn(chk.company_id) === targetId;
-            } else if (tbl === "locations") {
-              const [chk] = (
-                await db.execute<{ company_id: number }>(sql`SELECT company_id FROM locations WHERE id = ${id} LIMIT 1`)
-              ).rows;
-              verified = !!chk && pn(chk.company_id) === targetId;
-            } else if (tbl === "vouchers") {
-              const [chk] = (
-                await db.execute<{ company_id: number }>(sql`SELECT company_id FROM vouchers WHERE id = ${id} LIMIT 1`)
-              ).rows;
-              verified = !!chk && pn(chk.company_id) === targetId;
-            } else if (tbl === "voucher_entries") {
-              // voucher_entries has no company_id — verify via parent voucher
-              const [chk] = (
-                await db.execute<{ company_id: number }>(sql`
+        // All tracked deletions commit together so no voucher is left with a partial set of entries.
+        await db.transaction(async (tx) => {
+          for (const tbl of tableOrder) {
+            const ids = byTable[tbl];
+            if (!ids?.length) continue;
+            for (const id of ids) {
+              // Extra safety: verify the row belongs to target company before deleting
+              let verified = false;
+              if (tbl === "sp_stock_movements") {
+                const [chk] = (
+                  await tx.execute<{ company_id: number }>(
+                    sql`SELECT company_id FROM sp_stock_movements WHERE id = ${id} LIMIT 1`
+                  )
+                ).rows;
+                verified = !!chk && pn(chk.company_id) === targetId;
+              } else if (tbl === "stock_item_code_aliases") {
+                const [chk] = (
+                  await tx.execute<{ company_id: number }>(
+                    sql`SELECT company_id FROM stock_item_code_aliases WHERE id = ${id} LIMIT 1`
+                  )
+                ).rows;
+                verified = !!chk && pn(chk.company_id) === targetId;
+              } else if (tbl === "locations") {
+                const [chk] = (
+                  await tx.execute<{ company_id: number }>(
+                    sql`SELECT company_id FROM locations WHERE id = ${id} LIMIT 1`
+                  )
+                ).rows;
+                verified = !!chk && pn(chk.company_id) === targetId;
+              } else if (tbl === "vouchers") {
+                const [chk] = (
+                  await tx.execute<{ company_id: number }>(
+                    sql`SELECT company_id FROM vouchers WHERE id = ${id} LIMIT 1`
+                  )
+                ).rows;
+                verified = !!chk && pn(chk.company_id) === targetId;
+              } else if (tbl === "voucher_entries") {
+                // voucher_entries has no company_id — verify via parent voucher
+                const [chk] = (
+                  await tx.execute<{ company_id: number }>(sql`
               SELECT v.company_id FROM voucher_entries ve
               JOIN vouchers v ON v.id = ve.voucher_id
               WHERE ve.id = ${id} LIMIT 1
             `)
-              ).rows;
-              verified = !!chk && pn(chk.company_id) === targetId;
-            } else if (tbl === "ledger_accounts") {
-              const [chk] = (
-                await db.execute<{ company_id: number }>(
-                  sql`SELECT company_id FROM ledger_accounts WHERE id = ${id} LIMIT 1`
-                )
-              ).rows;
-              verified = !!chk && pn(chk.company_id) === targetId;
-            } else if (tbl === "inventory") {
-              const [chk] = (
-                await db.execute<{ company_id: number }>(sql`SELECT company_id FROM inventory WHERE id = ${id} LIMIT 1`)
-              ).rows;
-              verified = !!chk && pn(chk.company_id) === targetId;
-            } else if (tbl === "stock_items") {
-              const [chk] = (
-                await db.execute<{ company_id: number }>(
-                  sql`SELECT company_id FROM stock_items WHERE id = ${id} LIMIT 1`
-                )
-              ).rows;
-              verified = !!chk && pn(chk.company_id) === targetId;
-            } else if (tbl === "stock_groups") {
-              const [chk] = (
-                await db.execute<{ company_id: number }>(
-                  sql`SELECT company_id FROM stock_groups WHERE id = ${id} LIMIT 1`
-                )
-              ).rows;
-              verified = !!chk && pn(chk.company_id) === targetId;
-            } else if (tbl === "stock_grades") {
-              const [chk] = (
-                await db.execute<{ company_id: number }>(
-                  sql`SELECT company_id FROM stock_grades WHERE id = ${id} LIMIT 1`
-                )
-              ).rows;
-              verified = !!chk && pn(chk.company_id) === targetId;
-            } else if (tbl === "stock_categories") {
-              const [chk] = (
-                await db.execute<{ company_id: number }>(
-                  sql`SELECT company_id FROM stock_categories WHERE id = ${id} LIMIT 1`
-                )
-              ).rows;
-              verified = !!chk && pn(chk.company_id) === targetId;
-            } else if (tbl === "sp_containers") {
-              const [chk] = (
-                await db.execute<{ company_id: number }>(
-                  sql`SELECT company_id FROM sp_containers WHERE id = ${id} LIMIT 1`
-                )
-              ).rows;
-              verified = !!chk && pn(chk.company_id) === targetId;
-            } else if (tbl === "sp_container_lines") {
-              const [chk] = (
-                await db.execute<{ company_id: number }>(
-                  sql`SELECT company_id FROM sp_container_lines WHERE id = ${id} LIMIT 1`
-                )
-              ).rows;
-              verified = !!chk && pn(chk.company_id) === targetId;
-            }
+                ).rows;
+                verified = !!chk && pn(chk.company_id) === targetId;
+              } else if (tbl === "ledger_accounts") {
+                const [chk] = (
+                  await tx.execute<{ company_id: number }>(
+                    sql`SELECT company_id FROM ledger_accounts WHERE id = ${id} LIMIT 1`
+                  )
+                ).rows;
+                verified = !!chk && pn(chk.company_id) === targetId;
+              } else if (tbl === "inventory") {
+                const [chk] = (
+                  await tx.execute<{ company_id: number }>(
+                    sql`SELECT company_id FROM inventory WHERE id = ${id} LIMIT 1`
+                  )
+                ).rows;
+                verified = !!chk && pn(chk.company_id) === targetId;
+              } else if (tbl === "stock_items") {
+                const [chk] = (
+                  await tx.execute<{ company_id: number }>(
+                    sql`SELECT company_id FROM stock_items WHERE id = ${id} LIMIT 1`
+                  )
+                ).rows;
+                verified = !!chk && pn(chk.company_id) === targetId;
+              } else if (tbl === "stock_groups") {
+                const [chk] = (
+                  await tx.execute<{ company_id: number }>(
+                    sql`SELECT company_id FROM stock_groups WHERE id = ${id} LIMIT 1`
+                  )
+                ).rows;
+                verified = !!chk && pn(chk.company_id) === targetId;
+              } else if (tbl === "stock_grades") {
+                const [chk] = (
+                  await tx.execute<{ company_id: number }>(
+                    sql`SELECT company_id FROM stock_grades WHERE id = ${id} LIMIT 1`
+                  )
+                ).rows;
+                verified = !!chk && pn(chk.company_id) === targetId;
+              } else if (tbl === "stock_categories") {
+                const [chk] = (
+                  await tx.execute<{ company_id: number }>(
+                    sql`SELECT company_id FROM stock_categories WHERE id = ${id} LIMIT 1`
+                  )
+                ).rows;
+                verified = !!chk && pn(chk.company_id) === targetId;
+              } else if (tbl === "sp_containers") {
+                const [chk] = (
+                  await tx.execute<{ company_id: number }>(
+                    sql`SELECT company_id FROM sp_containers WHERE id = ${id} LIMIT 1`
+                  )
+                ).rows;
+                verified = !!chk && pn(chk.company_id) === targetId;
+              } else if (tbl === "sp_container_lines") {
+                const [chk] = (
+                  await tx.execute<{ company_id: number }>(
+                    sql`SELECT company_id FROM sp_container_lines WHERE id = ${id} LIMIT 1`
+                  )
+                ).rows;
+                verified = !!chk && pn(chk.company_id) === targetId;
+              }
 
-            if (!verified) {
-              logger.warn(`[SP Rollback] Skipped ${tbl} id=${id} — company_id mismatch or row not found`);
-              continue;
-            }
+              if (!verified) {
+                logger.warn(`[SP Rollback] Skipped ${tbl} id=${id} — company_id mismatch or row not found`);
+                continue;
+              }
 
-            if (tbl === "inventory") {
-              await db.execute(sql`DELETE FROM inventory WHERE id = ${id}`);
-            } else if (tbl === "sp_stock_movements") {
-              await db.execute(sql`DELETE FROM sp_stock_movements WHERE id = ${id}`);
-            } else if (tbl === "stock_item_code_aliases") {
-              await db.execute(sql`DELETE FROM stock_item_code_aliases WHERE id = ${id}`);
-            } else if (tbl === "locations") {
-              await db.execute(sql`DELETE FROM locations WHERE id = ${id}`);
-            } else if (tbl === "voucher_entries") {
-              await db.execute(sql`DELETE FROM voucher_entries WHERE id = ${id}`);
-            } else if (tbl === "vouchers") {
-              await db.execute(sql`DELETE FROM vouchers WHERE id = ${id}`);
-            } else if (tbl === "ledger_accounts") {
-              await db.execute(sql`DELETE FROM ledger_accounts WHERE id = ${id}`);
-            } else if (tbl === "stock_items") {
-              await db.execute(sql`DELETE FROM stock_items WHERE id = ${id}`);
-            } else if (tbl === "stock_groups") {
-              await db.execute(sql`DELETE FROM stock_groups WHERE id = ${id}`);
-            } else if (tbl === "stock_grades") {
-              await db.execute(sql`DELETE FROM stock_grades WHERE id = ${id}`);
-            } else if (tbl === "stock_categories") {
-              await db.execute(sql`DELETE FROM stock_categories WHERE id = ${id}`);
-            } else if (tbl === "sp_container_lines") {
-              await db.execute(sql`DELETE FROM sp_container_lines WHERE id = ${id}`);
-            } else if (tbl === "sp_containers") {
-              await db.execute(sql`DELETE FROM sp_containers WHERE id = ${id}`);
+              if (tbl === "inventory") {
+                await tx.execute(sql`DELETE FROM inventory WHERE id = ${id}`);
+              } else if (tbl === "sp_stock_movements") {
+                await tx.execute(sql`DELETE FROM sp_stock_movements WHERE id = ${id}`);
+              } else if (tbl === "stock_item_code_aliases") {
+                await tx.execute(sql`DELETE FROM stock_item_code_aliases WHERE id = ${id}`);
+              } else if (tbl === "locations") {
+                await tx.execute(sql`DELETE FROM locations WHERE id = ${id}`);
+              } else if (tbl === "voucher_entries") {
+                await tx.execute(sql`DELETE FROM voucher_entries WHERE id = ${id}`);
+              } else if (tbl === "vouchers") {
+                await tx.execute(sql`DELETE FROM vouchers WHERE id = ${id}`);
+              } else if (tbl === "ledger_accounts") {
+                await tx.execute(sql`DELETE FROM ledger_accounts WHERE id = ${id}`);
+              } else if (tbl === "stock_items") {
+                await tx.execute(sql`DELETE FROM stock_items WHERE id = ${id}`);
+              } else if (tbl === "stock_groups") {
+                await tx.execute(sql`DELETE FROM stock_groups WHERE id = ${id}`);
+              } else if (tbl === "stock_grades") {
+                await tx.execute(sql`DELETE FROM stock_grades WHERE id = ${id}`);
+              } else if (tbl === "stock_categories") {
+                await tx.execute(sql`DELETE FROM stock_categories WHERE id = ${id}`);
+              } else if (tbl === "sp_container_lines") {
+                await tx.execute(sql`DELETE FROM sp_container_lines WHERE id = ${id}`);
+              } else if (tbl === "sp_containers") {
+                await tx.execute(sql`DELETE FROM sp_containers WHERE id = ${id}`);
+              }
+              deleted++;
             }
-            deleted++;
           }
-        }
+        });
 
         // Clean up provenance links written by this run (source-side rows are never touched)
         await db.execute(sql`DELETE FROM sp_migration_source_links WHERE run_id = ${runId}`);

@@ -8,7 +8,7 @@ import { requireAuth, checkPOSLocation } from "../../auth";
 import { requireExportAccess } from "../../lib/permissionMiddleware";
 import { logAudit } from "../_helpers";
 import { locations, insertLocationSchema } from "@shared/schema";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import {
   fetchGreenApiChats,
   getPosWaSettings,
@@ -181,27 +181,30 @@ export function registerLocationCrudRoutes(app: Express) {
         country: parsed.country || "",
       };
 
-      const location = await storage.createLocation(locationData);
-      try {
-        await logAudit({
-          userId: req.session.userId!,
-          username: req.session.username || "unknown",
-          companyId: req.session.currentCompanyId!,
-          action: "create",
-          tableName: "locations",
-          recordId: location.id,
-          recordIdentifier: location.name,
-          changes: {
-            name: { old: null, new: location.name },
-            code: { old: null, new: location.code },
-            city: { old: null, new: location.city || null },
-            state: { old: null, new: location.state || null },
-            country: { old: null, new: location.country || null },
+      // Phase 21 (B): the write and its audit commit together.
+      const location = await db.transaction(async (tx) => {
+        const written = await storage.createLocation(locationData, tx);
+        await logAudit(
+          {
+            userId: req.session.userId!,
+            username: req.session.username || "unknown",
+            companyId: req.session.currentCompanyId!,
+            action: "create",
+            tableName: "locations",
+            recordId: written.id,
+            recordIdentifier: written.name,
+            changes: {
+              name: { old: null, new: written.name },
+              code: { old: null, new: written.code },
+              city: { old: null, new: written.city || null },
+              state: { old: null, new: written.state || null },
+              country: { old: null, new: written.country || null },
+            },
           },
-        });
-      } catch {
-        /* non-fatal */
-      }
+          tx
+        );
+        return written;
+      });
       res.status(201).json(location);
     } catch (error: unknown) {
       res.status(400).json({ message: getErrorMessage(error) });
@@ -276,24 +279,27 @@ export function registerLocationCrudRoutes(app: Express) {
         updatePayload.supplierPartnerPayableDeductionPerQty = deductionVal.toFixed(4);
       }
 
-      const [updated] = await db.update(locations).set(updatePayload).where(eq(locations.id, locationId)).returning();
+      // Phase 21 (B): the write and its audit commit together.
+      const updated = await db.transaction(async (tx) => {
+        const [written] = await tx.update(locations).set(updatePayload).where(eq(locations.id, locationId)).returning();
 
-      try {
         const _locChanges: Record<string, { old?: unknown; new?: unknown }> = {};
-        if (location.name !== updated.name) _locChanges.name = { old: location.name, new: updated.name };
-        await logAudit({
-          userId: req.session.userId!,
-          username: req.session.username || "unknown",
-          companyId: req.session.currentCompanyId!,
-          action: "update",
-          tableName: "locations",
-          recordId: updated.id,
-          recordIdentifier: updated.name,
-          changes: _locChanges,
-        });
-      } catch {
-        /* non-fatal */
-      }
+        if (location.name !== written.name) _locChanges.name = { old: location.name, new: written.name };
+        await logAudit(
+          {
+            userId: req.session.userId!,
+            username: req.session.username || "unknown",
+            companyId: req.session.currentCompanyId!,
+            action: "update",
+            tableName: "locations",
+            recordId: written.id,
+            recordIdentifier: written.name,
+            changes: _locChanges,
+          },
+          tx
+        );
+        return written;
+      });
       res.json(updated);
     } catch (error: unknown) {
       res.status(500).json({ message: getErrorMessage(error) });
@@ -332,71 +338,62 @@ export function registerLocationCrudRoutes(app: Express) {
         const group = requestedChatId ? await resolveVerifiedWhatsAppGroup(requestedChatId) : null;
         const oldSettings = (await getLocationWhatsAppSettingsMap(companyId)).get(locationId);
 
-        const client = await pool.connect();
-        try {
-          await client.query("BEGIN");
-          await client.query(
-            `INSERT INTO location_whatsapp_stock_reports (
-                location_id, company_id, whatsapp_group_chat_id, whatsapp_group_name, enabled, updated_at
-              )
-              VALUES ($1, $2, $3, $4, $5, now())
-              ON CONFLICT (location_id) DO UPDATE SET
-                company_id = EXCLUDED.company_id,
-                whatsapp_group_chat_id = EXCLUDED.whatsapp_group_chat_id,
-                whatsapp_group_name = EXCLUDED.whatsapp_group_name,
-                enabled = EXCLUDED.enabled,
-                updated_at = now()`,
-            [locationId, companyId, group?.id ?? null, group?.name ?? null, enabled]
-          );
-          // Keep the existing location destination in sync because POS/revision
-          // flows already rely on this field for the same location WhatsApp group.
-          await client.query(
-            `UPDATE locations
-                SET whatsapp_group_chat_id = $1
-              WHERE id = $2 AND company_id = $3`,
-            [group?.id ?? null, locationId, companyId]
-          );
-          await client.query("COMMIT");
-        } catch (error) {
-          await client.query("ROLLBACK");
-          throw error;
-        } finally {
-          client.release();
-        }
-
         const updatedSettings: LocationWhatsAppSettings = {
           whatsappGroupChatId: group?.id ?? null,
           whatsappGroupName: group?.name ?? null,
           whatsappStockReportsEnabled: enabled,
         };
 
-        try {
-          await logAudit({
-            userId: req.session.userId!,
-            username: req.session.username || "unknown",
-            companyId,
-            action: "update_location_whatsapp_stock_reports",
-            tableName: "location_whatsapp_stock_reports",
-            recordId: locationId,
-            recordIdentifier: location.name,
-            changes: {
-              whatsappGroupChatId: {
-                old: oldSettings?.whatsappGroupChatId ?? location.whatsappGroupChatId ?? null,
-                new: updatedSettings.whatsappGroupChatId,
-              },
-              whatsappGroupName: {
-                old: oldSettings?.whatsappGroupName ?? null,
-                new: updatedSettings.whatsappGroupName,
-              },
-              enabled: {
-                old: oldSettings?.whatsappStockReportsEnabled ?? Boolean(location.whatsappGroupChatId),
-                new: enabled,
+        // Phase 21 (B): the settings, the location's group and the audit row
+        // commit together (a pooled client transaction with an after-commit,
+        // non-fatal audit before).
+        await db.transaction(async (tx) => {
+          await tx.execute(sql`
+            INSERT INTO location_whatsapp_stock_reports (
+              location_id, company_id, whatsapp_group_chat_id, whatsapp_group_name, enabled, updated_at
+            )
+            VALUES (${locationId}, ${companyId}, ${group?.id ?? null}, ${group?.name ?? null}, ${enabled}, now())
+            ON CONFLICT (location_id) DO UPDATE SET
+              company_id = EXCLUDED.company_id,
+              whatsapp_group_chat_id = EXCLUDED.whatsapp_group_chat_id,
+              whatsapp_group_name = EXCLUDED.whatsapp_group_name,
+              enabled = EXCLUDED.enabled,
+              updated_at = now()
+          `);
+          // Keep the existing location destination in sync because POS/revision
+          // flows already rely on this field for the same location WhatsApp group.
+          await tx.execute(sql`
+            UPDATE locations
+               SET whatsapp_group_chat_id = ${group?.id ?? null}
+             WHERE id = ${locationId} AND company_id = ${companyId}
+          `);
+          await logAudit(
+            {
+              userId: req.session.userId!,
+              username: req.session.username || "unknown",
+              companyId,
+              action: "update_location_whatsapp_stock_reports",
+              tableName: "location_whatsapp_stock_reports",
+              recordId: locationId,
+              recordIdentifier: location.name,
+              changes: {
+                whatsappGroupChatId: {
+                  old: oldSettings?.whatsappGroupChatId ?? location.whatsappGroupChatId ?? null,
+                  new: updatedSettings.whatsappGroupChatId,
+                },
+                whatsappGroupName: {
+                  old: oldSettings?.whatsappGroupName ?? null,
+                  new: updatedSettings.whatsappGroupName,
+                },
+                enabled: {
+                  old: oldSettings?.whatsappStockReportsEnabled ?? Boolean(location.whatsappGroupChatId),
+                  new: enabled,
+                },
               },
             },
-          });
-        } catch {
-          /* non-fatal */
-        }
+            tx
+          );
+        });
 
         res.json(
           withLocationWhatsAppSettings({ ...location, whatsappGroupChatId: group?.id ?? null }, updatedSettings)

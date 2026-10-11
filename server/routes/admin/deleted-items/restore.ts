@@ -5,8 +5,11 @@
  * first-match, so that order is behaviour.
  */
 import type { Express } from "express";
-import { getErrorMessage } from "../../../lib/httpHandlers";
+import { getErrorMessage, errorStatus } from "../../../lib/httpHandlers";
 import { db } from "../../../db";
+import { toMoney } from "../../../lib/money";
+import { voucherMutationBlockReason } from "../../../lib/migratedVoucherGuard";
+import { writeAuditEvent } from "../../../services/audit";
 import { firstRow } from "../../../lib/queryResult";
 import { PRIORITY_SCAN_LOCK_NAMESPACE } from "../../factory/customer-orders/priorityScanQueue";
 import { requireAuth, requireNonPOS } from "../../../auth";
@@ -25,13 +28,35 @@ import {
   stockGroups,
   bankAccounts,
   vouchers,
-  suppliers,
+  voucherEntries,
   customers,
   locations,
   employees,
   ledgerAccounts,
 } from "@shared/schema";
 import { eq, and, sql, isNotNull } from "drizzle-orm";
+import { companyScopedSuppliers } from "@shared/schema/supplierCompanyScope";
+import { syncPurchaseOrderGitForVoucherTx } from "../../../services/accounting/perpetualInventory/stockReceipts";
+import { syncStockAdjustmentInventoryTx } from "../../../services/accounting/perpetualInventory/stockAdjustments";
+import { syncFactoryInvoiceForChargeVoucherTx } from "../../../services/accounting/perpetualInventory/factoryInvoice";
+import {
+  isUnrestorableStockDocumentTx,
+  STOCK_DOCUMENT_NOT_RESTORABLE,
+  STOCK_DOCUMENT_NOT_RESTORABLE_MESSAGE,
+} from "../../../services/inventory/voucherStockReversal";
+import { syncContainerCommissionJournalTx } from "../../../services/factory/containerCommissionJournal";
+import {
+  isRetiredVoucherNumber,
+  RETIRED_VOUCHER_NOT_RESTORABLE,
+  RETIRED_VOUCHER_NOT_RESTORABLE_MESSAGE,
+} from "../../../services/accounting/voucherRetirement";
+
+/**
+ * Wave 9 (ledger safety): restoring a voucher puts it back into every balance,
+ * so it is an Admin/Owner action (Developer passes, as with requireRole). The
+ * other item types keep the route-level non-POS rule.
+ */
+const VOUCHER_RESTORE_ROLES = new Set(["Admin", "Owner", "Developer"]);
 
 export function registerDeletedItemsRestoreRoutes(app: Express) {
   // Restore a deleted item
@@ -86,7 +111,11 @@ export function registerDeletedItemsRestoreRoutes(app: Express) {
             .where(and(eq(customers.id, itemId), eq(customers.companyId, companyId)));
           break;
         case "supplier":
-          await db.update(suppliers).set({ deletedAt: null, active: true }).where(eq(suppliers.id, itemId));
+          // Wave 18 (B): the active company's supplier only.
+          await db
+            .update(companyScopedSuppliers)
+            .set({ deletedAt: null, active: true })
+            .where(and(eq(companyScopedSuppliers.id, itemId), eq(companyScopedSuppliers.companyId, companyId)));
           break;
         case "bankAccount":
           await db
@@ -94,12 +123,87 @@ export function registerDeletedItemsRestoreRoutes(app: Express) {
             .set({ deletedAt: null, active: true })
             .where(and(eq(bankAccounts.id, itemId), eq(bankAccounts.companyId, companyId)));
           break;
-        case "voucher":
-          await db
-            .update(vouchers)
-            .set({ deletedAt: null })
-            .where(and(eq(vouchers.id, itemId), eq(vouchers.companyId, companyId)));
+        case "voucher": {
+          if (!VOUCHER_RESTORE_ROLES.has(req.user?.role ?? "")) {
+            return res.status(403).json({ message: "Forbidden" });
+          }
+          const [voucher] = await db
+            .select()
+            .from(vouchers)
+            .where(and(eq(vouchers.id, itemId), eq(vouchers.companyId, companyId), isNotNull(vouchers.deletedAt)));
+          if (!voucher) {
+            return res.status(404).json({ message: `${type} not found in Deleted Items` });
+          }
+          // Wave 16 (A): a voucher the system retired when its source posted a
+          // replacement is not restorable: the replacement is live.
+          if (isRetiredVoucherNumber(voucher.voucherNumber)) {
+            return res
+              .status(409)
+              .json({ code: RETIRED_VOUCHER_NOT_RESTORABLE, message: RETIRED_VOUCHER_NOT_RESTORABLE_MESSAGE });
+          }
+          const blockedVoucherReason = voucherMutationBlockReason(voucher);
+          if (blockedVoucherReason) {
+            return res.status(403).json({ message: blockedVoucherReason });
+          }
+          // The closed-period trigger refuses clearing deleted_at on a voucher
+          // dated inside closed books; that error rolls this back and answers 409.
+          let notRestorable = false;
+          await db.transaction(async (tx) => {
+            // Wave 15 (C2): a stock document whose delete reversed and removed
+            // its stock lines is not restorable (voucherStockReversal.ts).
+            if (await isUnrestorableStockDocumentTx(tx, companyId, voucher)) {
+              notRestorable = true;
+              return;
+            }
+            await tx
+              .update(vouchers)
+              .set({ deletedAt: null })
+              .where(and(eq(vouchers.id, itemId), eq(vouchers.companyId, companyId)));
+            // Perpetual inventory (wave 8.2): a restored PO voucher is in transit again.
+            await syncPurchaseOrderGitForVoucherTx(tx, companyId, itemId);
+            // Perpetual inventory (wave 8.3): a restored stock adjustment carries its inventory line again.
+            await syncStockAdjustmentInventoryTx(tx, companyId, itemId);
+            // Perpetual inventory (wave 8.4): an order whose charge this voucher carries re-syncs its invoice journal.
+            await syncFactoryInvoiceForChargeVoucherTx(tx, companyId, itemId);
+            const entries = await tx
+              .select({
+                ledgerAccountId: voucherEntries.ledgerAccountId,
+                bankAccountId: voucherEntries.bankAccountId,
+                supplierId: voucherEntries.supplierId,
+                customerId: voucherEntries.customerId,
+                employeeId: voucherEntries.employeeId,
+                debitAmount: voucherEntries.debitAmount,
+                creditAmount: voucherEntries.creditAmount,
+              })
+              .from(voucherEntries)
+              .where(eq(voucherEntries.voucherId, itemId));
+            await writeAuditEvent(
+              {
+                userId: req.session.userId ?? "unknown",
+                username: req.session.username || "unknown",
+                companyId,
+                action: "restore",
+                tableName: "vouchers",
+                recordId: itemId,
+                recordIdentifier: voucher.voucherNumber,
+                changes: {
+                  deletedAt: { old: voucher.deletedAt, new: null },
+                  voucherType: { new: voucher.voucherType },
+                  date: { new: voucher.voucherDate },
+                  amount: { new: voucher.totalAmount },
+                  entries: { new: entries },
+                },
+              },
+              tx
+            );
+          });
+          if (notRestorable) {
+            return res
+              .status(409)
+              .json({ code: STOCK_DOCUMENT_NOT_RESTORABLE, message: STOCK_DOCUMENT_NOT_RESTORABLE_MESSAGE });
+          }
           break;
+        }
         // === Wave 1 restores ===
         case "factoryCategory":
           await db
@@ -120,10 +224,18 @@ export function registerDeletedItemsRestoreRoutes(app: Express) {
             .where(and(eq(factoryContainers.id, itemId), eq(factoryContainers.companyId, companyId)));
           break;
         case "factoryRawStock":
-          await db
-            .update(factoryRawStock)
-            .set({ deletedAt: null })
-            .where(and(eq(factoryRawStock.id, itemId), eq(factoryRawStock.companyId, companyId)));
+          // Wave 14: a commission held on the row comes back into the ledger
+          // (FACTORY-COMM-{container}) in the same transaction.
+          await db.transaction(async (tx) => {
+            const [restored] = await tx
+              .update(factoryRawStock)
+              .set({ deletedAt: null })
+              .where(and(eq(factoryRawStock.id, itemId), eq(factoryRawStock.companyId, companyId)))
+              .returning({ containerId: factoryRawStock.containerId, commission: factoryRawStock.commissionAmount });
+            if (restored && !toMoney(restored.commission ?? 0).isZero()) {
+              await syncContainerCommissionJournalTx(tx, companyId, restored.containerId);
+            }
+          });
           break;
         case "factoryRawMaterialAdjustment":
           await db
@@ -256,7 +368,7 @@ export function registerDeletedItemsRestoreRoutes(app: Express) {
 
       res.json({ message: `${type} restored successfully` });
     } catch (error: unknown) {
-      res.status(500).json({ message: getErrorMessage(error) });
+      res.status(errorStatus(error)).json({ message: getErrorMessage(error) });
     }
   });
 }

@@ -18,7 +18,13 @@ import {
   distinctBlockedItemLocations,
   hscrError,
 } from "./historicalSalesCostRepairTypes";
-import { companyIdsForRun, enableMaintenanceScope } from "./historicalSalesCostRepairLoaders";
+import {
+  assertSalesCostTargetsInOpenPeriods,
+  companyIdsForRun,
+  disableMaintenanceScope,
+  enableMaintenanceScope,
+  enableRunCompanyScope,
+} from "./historicalSalesCostRepairLoaders";
 import {
   assertSalesItemsUpdateHasNoSideEffectTriggers,
   inventoryEvidenceFingerprint,
@@ -506,7 +512,8 @@ export async function applyHistoricalSalesCostRepair(input: {
   const client = await pool.connect();
   try {
     await client.query("BEGIN ISOLATION LEVEL SERIALIZABLE");
-    await enableMaintenanceScope(client);
+    // Phase 19 (B), PE11: maintenance off; the run's companies' tenant scope below.
+    await disableMaintenanceScope(client);
     await client.query("SELECT pg_advisory_xact_lock(hashtext('historical-sales-cost-repair-apply'))");
 
     const runResult = await client.query<{
@@ -556,6 +563,8 @@ export async function applyHistoricalSalesCostRepair(input: {
     if (targetCompanyIds.length === 0) {
       throw hscrError("HSCR_RUN_SCOPE_EMPTY");
     }
+    await enableRunCompanyScope(client, targetCompanyIds);
+    await assertSalesCostTargetsInOpenPeriods(client, { kind: "run", runId: input.runId });
 
     // Recompute the exact V2 evidence bundle that was reviewed during dry-run.
     // This pins the immutable checkpoint/cutoff, canonical + legacy movements,

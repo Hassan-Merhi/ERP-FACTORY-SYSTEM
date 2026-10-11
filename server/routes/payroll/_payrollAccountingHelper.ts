@@ -1,42 +1,16 @@
-import {
-  deleteInfrastructurePostingIdentityForVoucherTx,
-  infrastructurePostingIdentity,
-  insertInfrastructureVoucherTx,
-} from "../../services/accounting/infrastructureVoucherIdentity";
 /**
  * Shared payroll accounting helpers.
  * Used by factoryPayrollRoutes (delete/undo) and workerStatementRoutes (repair utility)
  * to keep PAYROLL-GEN-* vouchers in sync when payroll records are removed.
  */
 
-import { db as globalDb, type DatabaseOrTransaction } from "../../db";
+import { db as globalDb, type DatabaseOrTransaction, type DbTransaction } from "../../db";
+import { postErpVoucherTx, type ErpVoucherLine } from "../../services/accounting/erpVoucherPosting";
 import { getErrorMessage } from "../../lib/httpHandlers";
-import { eq, and, sql, inArray, ne, isNull } from "drizzle-orm";
-import { ledgerAccounts, vouchers, voucherEntries, factoryPayrolls, factoryWorkers } from "@shared/schema";
-import { normalizeVoucherEntryAmounts } from "../../services/accounting/currencyAmounts";
+import { eq, and, sql, ne, isNull } from "drizzle-orm";
+import { ledgerAccounts, vouchers, factoryPayrolls, factoryWorkers } from "@shared/schema";
 import { allocatePayrollAccountingAmounts, moneyFromCents } from "../../services/accounting/payrollAccountingAmounts";
-
-/** Normalize a USD voucher entry (IDENTITY convention). */
-function normUsd(debit: string | number, credit: string | number) {
-  const norm = normalizeVoucherEntryAmounts({
-    transactionCurrency: "USD",
-    baseCurrency: "USD",
-    transactionDebitAmount: String(debit),
-    transactionCreditAmount: String(credit),
-    historicalRate: "1",
-  });
-  return {
-    transactionCurrency: norm.transactionCurrency,
-    transactionDebitAmount: norm.transactionDebitAmount,
-    transactionCreditAmount: norm.transactionCreditAmount,
-    baseDebitAmount: norm.baseDebitAmount,
-    baseCreditAmount: norm.baseCreditAmount,
-    historicalExchangeRate: norm.historicalExchangeRate,
-    rateConvention: norm.rateConvention,
-    debitAmount: norm.debitAmount,
-    creditAmount: norm.creditAmount,
-  };
-}
+import { retireVouchersTx } from "../../services/accounting/voucherRetirement";
 
 /**
  * Find or create a ledger account by name for a company.
@@ -112,7 +86,24 @@ export async function findOrCreateLedger(
  * (pass its id as `excludePayrollId`) so the remaining-payroll query excludes it.
  */
 export async function rebuildPayrollGenVoucher(
-  tx: DatabaseOrTransaction,
+  executor: DatabaseOrTransaction,
+  companyId: number,
+  periodStart: string,
+  periodEnd: string,
+  excludePayrollId?: number
+): Promise<void> {
+  // The retirement and the re-post commit together; a caller holding the
+  // pool itself (not a transaction) gets one here.
+  if (executor === globalDb) {
+    return globalDb.transaction((tx) =>
+      rebuildPayrollGenVoucherTx(tx, companyId, periodStart, periodEnd, excludePayrollId)
+    );
+  }
+  return rebuildPayrollGenVoucherTx(executor as DbTransaction, companyId, periodStart, periodEnd, excludePayrollId);
+}
+
+async function rebuildPayrollGenVoucherTx(
+  tx: DbTransaction,
   companyId: number,
   periodStart: string,
   periodEnd: string,
@@ -132,11 +123,12 @@ export async function rebuildPayrollGenVoucher(
 
   if (existingGenVouchers.length > 0) {
     const vIds = existingGenVouchers.map((v) => v.id);
-    for (const voucherId of vIds) {
-      await deleteInfrastructurePostingIdentityForVoucherTx(tx, voucherId);
-    }
-    await tx.delete(voucherEntries).where(inArray(voucherEntries.voucherId, vIds));
-    await tx.delete(vouchers).where(inArray(vouchers.id, vIds));
+    // Wave 16 (A): retired (soft delete with lines, audited here), not hard-deleted.
+    await retireVouchersTx(tx, {
+      companyId,
+      voucherIds: vIds,
+      reason: "payroll-generation-rebuild",
+    });
   }
 
   const remaining = await tx
@@ -216,63 +208,39 @@ export async function rebuildPayrollGenVoucher(
   const totalNet = moneyFromCents(totalNetCents);
   const totalAdvances = moneyFromCents(totalAdvancesCents);
 
-  const { voucher: genVoucher } = await insertInfrastructureVoucherTx(
-    tx,
-    {
-      companyId,
-      voucherNumber: `PAYROLL-GEN-${Date.now()}`,
-      voucherType: "Journal",
-      voucherDate: periodStart,
-      description: desc,
-      totalAmount: moneyFromCents(totalGrossCents),
-      currency: "USD",
-      sourceModule: "FACTORY",
-    },
-    infrastructurePostingIdentity("payroll-generation", `${companyId}:${periodStart}:${periodEnd}`, "rebuild"),
-    { workerRows, totalNet, totalAdvances }
-  );
-
-  const journalEntries = [];
-
+  // Phase 22 (B): through the central engine; PAYROLL-GEN- kept with the
+  // company and period as a deterministic suffix (numbers are unique across
+  // companies; the old journal was retired above, which released its number
+  // and posting identity).
+  const journalLines: ErpVoucherLine[] = [];
   for (const { workerId, workerName, salAmt, bonAmt } of workerRows) {
     const accs = workerAccCache.get(workerId)!;
-    if (Number(salAmt) > 0) {
-      journalEntries.push({
-        voucherId: genVoucher.id,
-        ledgerAccountId: accs.salaryId,
-        ...normUsd(salAmt, "0"),
-        narration: `Salary - ${workerName} (${periodStart} – ${periodEnd})`,
-      });
-    }
-    if (Number(bonAmt) > 0) {
-      journalEntries.push({
-        voucherId: genVoucher.id,
-        ledgerAccountId: accs.bonusId,
-        ...normUsd(bonAmt, "0"),
-        narration: `Bonus - ${workerName} (${periodStart} – ${periodEnd})`,
-      });
-    }
-  }
-
-  if (totalNetCents > 0) {
-    journalEntries.push({
-      voucherId: genVoucher.id,
-      ledgerAccountId: payableAcc.id,
-      ...normUsd("0", totalNet),
-      narration: desc,
+    journalLines.push({
+      ledgerAccountId: accs.salaryId,
+      debit: salAmt,
+      narration: `Salary - ${workerName} (${periodStart} – ${periodEnd})`,
+    });
+    journalLines.push({
+      ledgerAccountId: accs.bonusId,
+      debit: bonAmt,
+      narration: `Bonus - ${workerName} (${periodStart} – ${periodEnd})`,
     });
   }
+  journalLines.push({ ledgerAccountId: payableAcc.id, credit: totalNet, narration: desc });
+  journalLines.push({
+    ledgerAccountId: advancesAcc.id,
+    credit: totalAdvances,
+    narration: `Advance deductions settled - ${count} worker${count !== 1 ? "s" : ""} (${periodStart} – ${periodEnd})`,
+  });
 
-  if (totalAdvancesCents > 0) {
-    journalEntries.push({
-      voucherId: genVoucher.id,
-      ledgerAccountId: advancesAcc.id,
-      ...normUsd("0", totalAdvances),
-      narration: `Advance deductions settled - ${count} worker${count !== 1 ? "s" : ""} (${periodStart} – ${periodEnd})`,
-    });
-  }
-
-  if (journalEntries.length > 0) {
-    await tx.insert(voucherEntries).values(journalEntries);
-  }
+  await postErpVoucherTx(tx, {
+    companyId,
+    voucherNumber: `PAYROLL-GEN-${companyId}-${periodStart}-${periodEnd}`,
+    voucherType: "Journal",
+    voucherDate: periodStart,
+    description: desc,
+    sourceModule: "FACTORY",
+    lines: journalLines,
+    source: { type: "payroll-generation", id: `${companyId}:${periodStart}:${periodEnd}`, revision: "rebuild" },
+  });
 }

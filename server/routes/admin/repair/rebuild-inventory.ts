@@ -21,6 +21,10 @@ import {
 import { db } from "../../../db";
 import { requireAuth, requireRole } from "../../../auth";
 import {
+  assertNoInventoryCutoverTx,
+  sendInventoryCutoverRefusal,
+} from "../../../services/accounting/perpetualInventory/cutoverRefusal";
+import {
   inventory,
   stockItems,
   stockTransferVouchers,
@@ -45,6 +49,10 @@ export function registerAdminRebuildInventoryRoutes(app: Express) {
       const companyId = req.session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });
       const { dryRun = true } = req.body;
+      // Wave 11: applying the rebuild rewrites stock with no journal, so it is
+      // refused after the company's perpetual-inventory cut-over (the dry run
+      // stays available: it only reads).
+      if (!dryRun) await assertNoInventoryCutoverTx(db, companyId, "rebuild-inventory");
 
       const staleOptionalTrue = await db
         .select({ stId: stockTransferVouchers.id, voucherId: stockTransferVouchers.voucherId })
@@ -370,6 +378,7 @@ export function registerAdminRebuildInventoryRoutes(app: Express) {
         ],
       });
     } catch (error: unknown) {
+      if (sendInventoryCutoverRefusal(res, error)) return;
       logger.error("Rebuild inventory error:", { error });
       res.status(500).json({ message: getErrorMessage(error) });
     }

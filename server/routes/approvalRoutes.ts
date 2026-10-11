@@ -60,32 +60,39 @@ export function registerApprovalRoutes(app: Express) {
       const { actionType, targetTable, targetRecordId, targetIdentifier, payload, oldValue, newValue, amountValue } =
         req.body;
       if (!actionType) return res.status(400).json({ message: "actionType is required" });
-      const [row] = await db
-        .insert(approvalRequests)
-        .values({
-          companyId,
-          requestedByUserId: userId,
-          requestedByUsername: username,
-          actionType,
-          targetTable: targetTable ?? null,
-          targetRecordId: targetRecordId ?? null,
-          targetIdentifier: targetIdentifier ?? null,
-          payload: payload ?? null,
-          oldValue: oldValue ?? null,
-          newValue: newValue ?? null,
-          amountValue: amountValue ?? null,
-          status: "pending",
-        })
-        .returning();
-      await logAudit({
-        userId,
-        username,
-        companyId,
-        action: "create",
-        tableName: "approval_requests",
-        recordId: row.id,
-        recordIdentifier: actionType,
-        changes: { status: { old: null, new: "pending" } },
+      // Phase 21 (B): the write and its audit commit together.
+      const row = await db.transaction(async (tx) => {
+        const [written] = await tx
+          .insert(approvalRequests)
+          .values({
+            companyId,
+            requestedByUserId: userId,
+            requestedByUsername: username,
+            actionType,
+            targetTable: targetTable ?? null,
+            targetRecordId: targetRecordId ?? null,
+            targetIdentifier: targetIdentifier ?? null,
+            payload: payload ?? null,
+            oldValue: oldValue ?? null,
+            newValue: newValue ?? null,
+            amountValue: amountValue ?? null,
+            status: "pending",
+          })
+          .returning();
+        await logAudit(
+          {
+            userId,
+            username,
+            companyId,
+            action: "create",
+            tableName: "approval_requests",
+            recordId: written.id,
+            recordIdentifier: actionType,
+            changes: { status: { old: null, new: "pending" } },
+          },
+          tx
+        );
+        return written;
       });
       res.status(201).json(row);
     } catch (e: unknown) {
@@ -115,26 +122,33 @@ export function registerApprovalRoutes(app: Express) {
         return res.status(403).json({ message: "You cannot approve your own request" });
       }
       const { reviewerNote } = req.body;
-      const [updated] = await db
-        .update(approvalRequests)
-        .set({
-          status: "approved",
-          reviewedByUserId: userId,
-          reviewedByUsername: username,
-          reviewedAt: new Date(),
-          reviewerNote: reviewerNote ?? null,
-        })
-        .where(eq(approvalRequests.id, id))
-        .returning();
-      await logAudit({
-        userId,
-        username,
-        companyId,
-        action: "update",
-        tableName: "approval_requests",
-        recordId: id,
-        recordIdentifier: `Approved: ${existing.actionType}`,
-        changes: { status: { old: "pending", new: "approved" } },
+      // Phase 21 (B): the write and its audit commit together.
+      const updated = await db.transaction(async (tx) => {
+        const [written] = await tx
+          .update(approvalRequests)
+          .set({
+            status: "approved",
+            reviewedByUserId: userId,
+            reviewedByUsername: username,
+            reviewedAt: new Date(),
+            reviewerNote: reviewerNote ?? null,
+          })
+          .where(eq(approvalRequests.id, id))
+          .returning();
+        await logAudit(
+          {
+            userId,
+            username,
+            companyId,
+            action: "update",
+            tableName: "approval_requests",
+            recordId: id,
+            recordIdentifier: `Approved: ${existing.actionType}`,
+            changes: { status: { old: "pending", new: "approved" } },
+          },
+          tx
+        );
+        return written;
       });
       res.json(updated);
     } catch (e: unknown) {
@@ -164,26 +178,33 @@ export function registerApprovalRoutes(app: Express) {
         return res.status(403).json({ message: "You cannot reject your own request" });
       }
       const { reviewerNote } = req.body;
-      const [updated] = await db
-        .update(approvalRequests)
-        .set({
-          status: "rejected",
-          reviewedByUserId: userId,
-          reviewedByUsername: username,
-          reviewedAt: new Date(),
-          reviewerNote: reviewerNote ?? null,
-        })
-        .where(eq(approvalRequests.id, id))
-        .returning();
-      await logAudit({
-        userId,
-        username,
-        companyId,
-        action: "update",
-        tableName: "approval_requests",
-        recordId: id,
-        recordIdentifier: `Rejected: ${existing.actionType}`,
-        changes: { status: { old: "pending", new: "rejected" } },
+      // Phase 21 (B): the write and its audit commit together.
+      const updated = await db.transaction(async (tx) => {
+        const [written] = await tx
+          .update(approvalRequests)
+          .set({
+            status: "rejected",
+            reviewedByUserId: userId,
+            reviewedByUsername: username,
+            reviewedAt: new Date(),
+            reviewerNote: reviewerNote ?? null,
+          })
+          .where(eq(approvalRequests.id, id))
+          .returning();
+        await logAudit(
+          {
+            userId,
+            username,
+            companyId,
+            action: "update",
+            tableName: "approval_requests",
+            recordId: id,
+            recordIdentifier: `Rejected: ${existing.actionType}`,
+            changes: { status: { old: "pending", new: "rejected" } },
+          },
+          tx
+        );
+        return written;
       });
       res.json(updated);
     } catch (e: unknown) {
@@ -211,20 +232,27 @@ export function registerApprovalRoutes(app: Express) {
       if (existing.status !== "approved") {
         return res.status(400).json({ message: "Request must be approved before it can be executed" });
       }
-      const [updated] = await db
-        .update(approvalRequests)
-        .set({ status: "executed", executedAt: new Date() })
-        .where(eq(approvalRequests.id, id))
-        .returning();
-      await logAudit({
-        userId,
-        username,
-        companyId,
-        action: "update",
-        tableName: "approval_requests",
-        recordId: id,
-        recordIdentifier: `Executed: ${existing.actionType}`,
-        changes: { status: { old: "approved", new: "executed" } },
+      // Phase 21 (B): the write and its audit commit together.
+      const updated = await db.transaction(async (tx) => {
+        const [written] = await tx
+          .update(approvalRequests)
+          .set({ status: "executed", executedAt: new Date() })
+          .where(eq(approvalRequests.id, id))
+          .returning();
+        await logAudit(
+          {
+            userId,
+            username,
+            companyId,
+            action: "update",
+            tableName: "approval_requests",
+            recordId: id,
+            recordIdentifier: `Executed: ${existing.actionType}`,
+            changes: { status: { old: "approved", new: "executed" } },
+          },
+          tx
+        );
+        return written;
       });
       res.json(updated);
     } catch (e: unknown) {

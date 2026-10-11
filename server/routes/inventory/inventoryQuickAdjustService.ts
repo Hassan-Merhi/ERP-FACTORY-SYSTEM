@@ -8,8 +8,12 @@ import { getErrorMessage } from "../../lib/httpHandlers";
 import { inventoryQuantity } from "../../lib/inventoryMath";
 import { createDatabaseStockMovementAdapter } from "../../services/inventory/databaseStockMovementAdapter";
 import { postStockMovementTx } from "../../services/inventory/stockMovementIntegrityService";
+import {
+  inventoryMovementLine,
+  postInventoryMovementJournalTx,
+} from "../../services/accounting/perpetualInventory/inventoryMovementJournal";
+import { writeAuditEvent } from "../../services/audit";
 import { storage } from "../../storage";
-import { logAudit } from "../_helpers";
 import { InventoryRouteError } from "./inventoryErrors";
 import type { InventoryAuditActor, QuickAdjustmentInput } from "./inventoryRequestContext";
 
@@ -89,6 +93,41 @@ export async function quickAdjustInventory(companyId: number, input: QuickAdjust
         },
         canonicalStockMovementAdapter
       );
+      // Wave 11: under perpetual inventory the ledger moves with the sub-ledger
+      // (Dr/Cr Inventory against INVENTORY_ADJUSTMENT), in this transaction.
+      const journal = await postInventoryMovementJournalTx(tx, {
+        companyId,
+        sourceType: "quick-adjust",
+        sourceId: operationId,
+        date: new Date().toISOString().slice(0, 10),
+        reference: `${stockItem.code} @ ${location.name}`,
+        lines: [inventoryMovementLine(adjustment, { stockItemId: input.stockItemId, locationId: input.locationId })],
+        offsetAccountCode: "INVENTORY_ADJUSTMENT",
+        narration: "Inventory quick adjustment",
+        actor,
+        locationId: input.locationId,
+      });
+      // The audit is written with the movement: both commit or neither does.
+      await writeAuditEvent(
+        {
+          ...actor,
+          companyId,
+          action: "update",
+          tableName: "inventory",
+          recordId: stockItem.id,
+          recordIdentifier: `${stockItem.code} @ ${location.name}`,
+          changes: {
+            item: { old: stockItem.code, new: stockItem.code },
+            location: { new: location.name },
+            adjustmentType: { new: input.type === "add" ? "Add Stock" : "Subtract Stock" },
+            quantity: { old: String(adjustment.previousQuantity), new: String(adjustment.newQuantity) },
+            adjustment: { new: `${input.type === "add" ? "+" : "-"}${Math.abs(adjustedQuantity)}` },
+            valueDelta: { new: adjustment.valueDelta },
+            ...(journal ? { journal: { new: journal.voucherNumber } } : {}),
+          },
+        },
+        tx
+      );
       return {
         currentQuantity: adjustment.previousQuantity,
         newQuantity: adjustment.newQuantity,
@@ -102,28 +141,6 @@ export async function quickAdjustInventory(companyId: number, input: QuickAdjust
       throw new InventoryRouteError(400, message);
     }
     throw error;
-  }
-
-  try {
-    await logAudit({
-      ...actor,
-      companyId,
-      action: "update",
-      tableName: "inventory",
-      recordId: stockItem.id,
-      recordIdentifier: `${stockItem.code} @ ${location.name}`,
-      changes: {
-        item: { old: stockItem.code, new: stockItem.code },
-        location: { new: location.name },
-        adjustmentType: { new: input.type === "add" ? "Add Stock" : "Subtract Stock" },
-        quantity: { old: String(result.currentQuantity), new: String(result.newQuantity) },
-        adjustment: {
-          new: `${input.type === "add" ? "+" : "-"}${Math.abs(result.adjustedQuantity)}`,
-        },
-      },
-    });
-  } catch {
-    // Inventory mutation remains authoritative when the non-critical audit adapter is unavailable.
   }
 
   return {

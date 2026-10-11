@@ -1,22 +1,25 @@
 /**
  * Intercompany POS mirror (server/routes/helpers/intercompanyHelpers.ts).
  *
- * Each cash POS sale in a source company is mirrored into two daily
- * running-total journals: INTERCO-SRC in the source company and INTERCO-DST in
- * the destination. The properties held here:
+ * Phase 22 (B), D7: each cash POS sale in a source company is mirrored as ONE
+ * journal per sale in each company (source: Dr interco / Cr cash; destination:
+ * Dr the configured destination cash account / Cr interco), posted through the
+ * central engine with the sale as posting identity. The daily running-total
+ * journals (INTERCO-SRC / INTERCO-DST) are no longer written. The properties
+ * held here:
  *
- *   - **No lost updates.** Concurrent sales serialize on a per-source lock; the
- *     old read-modify-write let parallel sales overwrite each other's totals.
+ *   - **No lost or doubled postings.** Concurrent sales each post their own
+ *     journal; the same sale mirrored twice posts once.
  *   - **All or nothing.** If the destination side cannot be written, the
  *     source side is rolled back with it.
  *   - **Recalculation rebuilds exactly** from the day's cash sales, and only
  *     touches the recalculating source's journals: a second source feeding the
- *     same destination keeps its own DST voucher.
+ *     same destination keeps its own journals.
  *   - **Deleting a sale removes it from the mirror.**
  */
 import request from "supertest";
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import { and, eq, inArray, like } from "drizzle-orm";
+import { and, eq, inArray, isNull, like } from "drizzle-orm";
 
 import { db, pool } from "../server/db";
 import * as schema from "../shared/schema";
@@ -51,22 +54,61 @@ async function interco(companyId: number, prefix: string, label: string) {
   return account.id;
 }
 
-/** Debit and credit totals per ledger account for one voucher, as strings. */
-async function journalByNumber(companyId: number, voucherNumber: string) {
-  const [voucher] = await db
+const companyName = async (ctx: TestContext) =>
+  (
+    await db
+      .select({ name: schema.companies.name })
+      .from(schema.companies)
+      .where(eq(schema.companies.id, ctx.companyId))
+  )[0].name;
+
+/**
+ * The live mirror journals of `date` in `companyId` whose description starts
+ * with `prefix`, with their lines totalled per ledger account.
+ */
+async function mirrorJournals(companyId: number, date: string, prefix: string) {
+  const found = await db
     .select()
     .from(schema.vouchers)
-    .where(and(eq(schema.vouchers.companyId, companyId), eq(schema.vouchers.voucherNumber, voucherNumber)));
-  if (!voucher) return null;
-  const entries = await db.select().from(schema.voucherEntries).where(eq(schema.voucherEntries.voucherId, voucher.id));
+    .where(
+      and(
+        eq(schema.vouchers.companyId, companyId),
+        eq(schema.vouchers.voucherType, "Journal"),
+        eq(schema.vouchers.voucherDate, date),
+        like(schema.vouchers.description, `${prefix}%`),
+        isNull(schema.vouchers.deletedAt)
+      )
+    );
   const lines = new Map<number, { debit: number; credit: number }>();
-  for (const entry of entries) {
-    const line = lines.get(entry.ledgerAccountId!) ?? { debit: 0, credit: 0 };
-    line.debit += Number(entry.debitAmount);
-    line.credit += Number(entry.creditAmount);
-    lines.set(entry.ledgerAccountId!, line);
+  if (found.length > 0) {
+    const entries = await db
+      .select()
+      .from(schema.voucherEntries)
+      .where(
+        inArray(
+          schema.voucherEntries.voucherId,
+          found.map((voucher) => voucher.id)
+        )
+      );
+    for (const entry of entries) {
+      const line = lines.get(entry.ledgerAccountId!) ?? { debit: 0, credit: 0 };
+      line.debit += Number(entry.debitAmount);
+      line.credit += Number(entry.creditAmount);
+      lines.set(entry.ledgerAccountId!, line);
+    }
   }
-  return { voucher, lines };
+  const total = found.reduce((sum, voucher) => sum + Number(voucher.totalAmount), 0).toFixed(2);
+  return { vouchers: found, lines, total };
+}
+
+/** Source-side mirror journals of `ctx` on `date`. */
+async function sourceMirror(ctx: TestContext, date: string) {
+  return mirrorJournals(ctx.companyId, date, `Cash transferred to ${await companyName(dest)}`);
+}
+
+/** Destination-side mirror journals fed by `ctx` on `date`. */
+async function destMirror(ctx: TestContext, date: string) {
+  return mirrorJournals(dest.companyId, date, `Cash received from ${await companyName(ctx)}`);
 }
 
 async function postCashSale(ctx: TestContext, number: string, date: string, amount: string) {
@@ -87,15 +129,15 @@ async function postCashSale(ctx: TestContext, number: string, date: string, amou
   return voucher.id;
 }
 
-const srcNumber = (ctx: TestContext, date: string) => `INTERCO-SRC-${ctx.companyId}-${date}`;
-const dstNumber = (ctx: TestContext, date: string) => `INTERCO-DST-${dest.companyId}-${date}-S${ctx.companyId}`;
-
 async function cleanupConfigs() {
   const companyIds = [a, b, dest].filter(Boolean).map((ctx) => ctx.companyId);
   if (companyIds.length > 0) {
     await db
       .delete(schema.intercompanyPosConfigs)
       .where(inArray(schema.intercompanyPosConfigs.sourceCompanyId, companyIds));
+    await db
+      .delete(schema.intercompanyAccountLinks)
+      .where(inArray(schema.intercompanyAccountLinks.sourceCompanyId, companyIds));
   }
 }
 
@@ -116,6 +158,15 @@ beforeAll(async () => {
       destIntercoAccountId: destIntercoId,
       enabled: true,
     });
+    // Phase 22 (B), D7: the destination cash account is the configured link.
+    await db.insert(schema.intercompanyAccountLinks).values({
+      label: `${prefix} cash`,
+      sourceCompanyId: source.companyId,
+      sourceLedgerAccountId: source.cashAccountId,
+      destCompanyId: dest.companyId,
+      destLedgerAccountId: dest.cashAccountId,
+      active: true,
+    });
   }
 }, 180000);
 
@@ -128,21 +179,47 @@ afterAll(async () => {
 }, 90000);
 
 describe("intercompany POS mirror", () => {
-  it("keeps every concurrent sale in the running totals", async () => {
+  it("posts one journal per concurrent sale and never mirrors a sale twice", async () => {
     const date = "2026-04-01";
+    const sales = await Promise.all(
+      Array.from({ length: 20 }, (_, index) => postCashSale(a, `${SOURCE_A}-C${index}`, date, "1.10"))
+    );
     const results = await Promise.all(
-      Array.from({ length: 20 }, () => runIntercompanyPosTransfer(a.companyId, a.cashAccountId, 1.1, date))
+      sales.map((sale) => runIntercompanyPosTransfer(a.companyId, a.cashAccountId, "1.10", date, sale))
     );
     expect(results.every(Boolean)).toBe(true);
+    // The same sale mirrored again (a retry) posts nothing more.
+    expect(
+      (
+        await Promise.all(
+          Array.from({ length: 3 }, () =>
+            runIntercompanyPosTransfer(a.companyId, a.cashAccountId, "1.10", date, sales[0])
+          )
+        )
+      ).every(Boolean)
+    ).toBe(true);
 
-    const src = await journalByNumber(a.companyId, srcNumber(a, date));
-    expect(src!.voucher.totalAmount).toBe("22.00");
-    expect(src!.lines.get(a.cashAccountId)!.credit).toBeCloseTo(22, 2);
+    const src = await sourceMirror(a, date);
+    expect(src.vouchers).toHaveLength(20);
+    expect(src.total).toBe("22.00");
+    expect(src.lines.get(a.cashAccountId)!.credit).toBeCloseTo(22, 2);
 
-    const dst = await journalByNumber(dest.companyId, dstNumber(a, date));
-    expect(dst!.voucher.totalAmount).toBe("22.00");
-    expect(dst!.lines.get(dest.cashAccountId)!.debit).toBeCloseTo(22, 2);
-    expect(dst!.lines.get(destIntercoId)!.credit).toBeCloseTo(22, 2);
+    const dst = await destMirror(a, date);
+    expect(dst.vouchers).toHaveLength(20);
+    expect(dst.total).toBe("22.00");
+    expect(dst.lines.get(dest.cashAccountId)!.debit).toBeCloseTo(22, 2);
+    expect(dst.lines.get(destIntercoId)!.credit).toBeCloseTo(22, 2);
+    // No running-total journal is written any more.
+    const runningTotals = await db
+      .select({ id: schema.vouchers.id })
+      .from(schema.vouchers)
+      .where(
+        and(
+          inArray(schema.vouchers.companyId, [a.companyId, dest.companyId]),
+          like(schema.vouchers.voucherNumber, "INTERCO-%")
+        )
+      );
+    expect(runningTotals).toEqual([]);
   });
 
   it("rebuilds a date exactly from its cash sales and leaves another source's journal alone", async () => {
@@ -150,19 +227,24 @@ describe("intercompany POS mirror", () => {
     await postCashSale(a, `${SOURCE_A}-S1`, date, "30.00");
     await postCashSale(a, `${SOURCE_A}-S2`, date, "20.00");
     // A stale mirror that disagrees with the sales.
-    await runIntercompanyPosTransfer(a.companyId, a.cashAccountId, 999, date);
+    const stale = await postCashSale(a, `${SOURCE_A}-S3`, date, "0.01");
+    await runIntercompanyPosTransfer(a.companyId, a.cashAccountId, "999.00", date, stale);
+    await db.update(schema.vouchers).set({ deletedAt: new Date() }).where(eq(schema.vouchers.id, stale));
     // Source B feeds the same destination on the same date.
-    await runIntercompanyPosTransfer(b.companyId, b.cashAccountId, 7, date);
+    const otherSale = await postCashSale(b, `${SOURCE_B}-S1`, date, "7.00");
+    await runIntercompanyPosTransfer(b.companyId, b.cashAccountId, "7.00", date, otherSale);
 
     expect(await recalculateIntercompanyForDate(a.companyId, date)).toBe(true);
 
-    const src = await journalByNumber(a.companyId, srcNumber(a, date));
-    expect(src!.voucher.totalAmount).toBe("50.00");
-    const dst = await journalByNumber(dest.companyId, dstNumber(a, date));
-    expect(dst!.voucher.totalAmount).toBe("50.00");
+    const src = await sourceMirror(a, date);
+    expect(src.vouchers).toHaveLength(2);
+    expect(src.total).toBe("50.00");
+    const dst = await destMirror(a, date);
+    expect(dst.vouchers).toHaveLength(2);
+    expect(dst.total).toBe("50.00");
 
-    const otherSource = await journalByNumber(dest.companyId, dstNumber(b, date));
-    expect(otherSource!.voucher.totalAmount).toBe("7.00");
+    const otherSource = await destMirror(b, date);
+    expect(otherSource.total).toBe("7.00");
   });
 
   it("writes neither side when the destination side is refused", async () => {
@@ -191,8 +273,9 @@ describe("intercompany POS mirror", () => {
     });
 
     try {
-      expect(await runIntercompanyPosTransfer(a.companyId, a.cashAccountId, 12.5, date)).toBe(false);
-      expect(await journalByNumber(a.companyId, srcNumber(a, date))).toBeNull();
+      const sale = await postCashSale(a, `${SOURCE_A}-X1`, date, "12.50");
+      expect(await runIntercompanyPosTransfer(a.companyId, a.cashAccountId, "12.50", date, sale)).toBe(false);
+      expect((await sourceMirror(a, date)).vouchers).toEqual([]);
     } finally {
       await db.delete(schema.fiscalPeriodClosures).where(eq(schema.fiscalPeriodClosures.companyId, dest.companyId));
     }
@@ -203,7 +286,7 @@ describe("intercompany POS mirror", () => {
     await postCashSale(a, `${SOURCE_A}-D1`, date, "40.00");
     const deletedSaleId = await postCashSale(a, `${SOURCE_A}-D2`, date, "15.00");
     expect(await recalculateIntercompanyForDate(a.companyId, date)).toBe(true);
-    expect((await journalByNumber(dest.companyId, dstNumber(a, date)))!.voucher.totalAmount).toBe("55.00");
+    expect((await destMirror(a, date)).total).toBe("55.00");
 
     const agent = request.agent(a.app);
     expect(
@@ -214,23 +297,8 @@ describe("intercompany POS mirror", () => {
     const response = await agent.delete(`/api/vouchers/${deletedSaleId}`);
     expect(response.status).toBe(200);
 
-    expect((await journalByNumber(a.companyId, srcNumber(a, date)))!.voucher.totalAmount).toBe("40.00");
-    expect((await journalByNumber(dest.companyId, dstNumber(a, date)))!.voucher.totalAmount).toBe("40.00");
-  });
-
-  it("names destination journals per source company", async () => {
-    const shared = await db
-      .select({ number: schema.vouchers.voucherNumber })
-      .from(schema.vouchers)
-      .where(
-        and(
-          eq(schema.vouchers.companyId, dest.companyId),
-          like(schema.vouchers.voucherNumber, `INTERCO-DST-${dest.companyId}-2026-04-02%`)
-        )
-      );
-    expect(shared.map((row) => row.number).sort()).toEqual(
-      [dstNumber(a, "2026-04-02"), dstNumber(b, "2026-04-02")].sort()
-    );
+    expect((await sourceMirror(a, date)).total).toBe("40.00");
+    expect((await destMirror(a, date)).total).toBe("40.00");
   });
 });
 
@@ -245,14 +313,11 @@ describe("intercompany POS rebuild endpoint", () => {
     return agent;
   }
 
-  it("restores a missing destination journal for every sales date in the range", async () => {
+  it("restores a missing mirror for every sales date in the range", async () => {
     const date = "2026-04-10";
+    // The pre-fix state: the sale was never mirrored.
     await postCashSale(a, `${SOURCE_A}-R1`, date, "25.00");
-    expect(await recalculateIntercompanyForDate(a.companyId, date)).toBe(true);
-    // Simulate the pre-fix state: the destination side was never written.
-    const dst = await journalByNumber(dest.companyId, dstNumber(a, date));
-    await db.delete(schema.voucherEntries).where(eq(schema.voucherEntries.voucherId, dst!.voucher.id));
-    await db.delete(schema.vouchers).where(eq(schema.vouchers.id, dst!.voucher.id));
+    expect((await destMirror(a, date)).vouchers).toEqual([]);
 
     const agent = await adminAgent();
     const response = await agent
@@ -261,7 +326,8 @@ describe("intercompany POS rebuild endpoint", () => {
     expect(response.status).toBe(200);
     expect(response.body.failedDates).toEqual([]);
     expect(response.body.datesRebuilt).toBe(response.body.datesChecked);
-    expect((await journalByNumber(dest.companyId, dstNumber(a, date)))!.voucher.totalAmount).toBe("25.00");
+    expect((await destMirror(a, date)).total).toBe("25.00");
+    expect((await sourceMirror(a, date)).total).toBe("25.00");
   });
 
   it("refuses malformed, backwards and oversized ranges", async () => {

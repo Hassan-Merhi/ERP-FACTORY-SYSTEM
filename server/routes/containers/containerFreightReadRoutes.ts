@@ -21,6 +21,11 @@ import {
 import { eq, and, asc, inArray, like } from "drizzle-orm";
 import { calcPoAmountsExact, isCreditOnlyEntry, isDebitOnlyEntry, syncIntercoParentVoucher } from "./containerHelpers";
 import { toMoney } from "../../lib/money";
+import { usdLineAmounts } from "../../services/factory/factoryVoucherPosting";
+import {
+  editPostedFactoryVoucherTx,
+  sendVoucherCorrectionRefusal,
+} from "../../services/factory/factoryVoucherCorrection";
 
 export function registerContainerFreightReadRoutes(app: Express) {
   app.get("/api/purchase-orders/next-po-number", requireAuth, requireNonPOS, async (req, res) => {
@@ -51,6 +56,7 @@ export function registerContainerFreightReadRoutes(app: Express) {
       const next = String(maxSeq + 1).padStart(3, "0");
       res.json({ poNumber: `${prefix}${next}` });
     } catch (error: unknown) {
+      if (sendVoucherCorrectionRefusal(res, error)) return;
       res.status(500).json({ message: getErrorMessage(error) });
     }
   });
@@ -72,6 +78,7 @@ export function registerContainerFreightReadRoutes(app: Express) {
         .orderBy(asc(ledgerAccounts.name));
       res.json(accounts);
     } catch (error: unknown) {
+      if (sendVoucherCorrectionRefusal(res, error)) return;
       res.status(500).json({ message: getErrorMessage(error) });
     }
   });
@@ -153,43 +160,53 @@ export function registerContainerFreightReadRoutes(app: Express) {
         }
         freightCrEntryId = freightCrCandidates[0] ?? null;
         toDeleteIds.push(...freightCrCandidates.slice(1));
-        await db.transaction(async (tx) => {
-          if (toDeleteIds.length > 0) await tx.delete(voucherEntries).where(inArray(voucherEntries.id, toDeleteIds));
-          if (purchasesEntryId !== null)
-            await tx
-              .update(voucherEntries)
-              .set({ debitAmount: poGrossTotal.toFixed(2), creditAmount: "0" })
-              .where(eq(voucherEntries.id, purchasesEntryId));
-          if (mainCrEntryId !== null)
-            await tx
-              .update(voucherEntries)
-              .set({ creditAmount: poSupplierTotal.toFixed(2), debitAmount: "0" })
-              .where(eq(voucherEntries.id, mainCrEntryId));
-          const _syncBtnFreightNarration = `Freight - ${po.poNumber}${poContainerRow?.containerNumber ? ` (${poContainerRow.containerNumber})` : ""}`;
-          if (freightCrEntryId !== null) {
-            await tx
-              .update(voucherEntries)
-              .set({
-                creditAmount: poFreightAmt.toFixed(2),
-                debitAmount: "0",
-                ledgerAccountId: poFreightParentAcctId!,
-                narration: _syncBtnFreightNarration,
-              })
-              .where(eq(voucherEntries.id, freightCrEntryId));
-          } else {
-            await tx.insert(voucherEntries).values({
-              voucherId: po.voucherId!,
-              ledgerAccountId: poFreightParentAcctId!,
-              debitAmount: "0",
-              creditAmount: poFreightAmt.toFixed(2),
-              narration: _syncBtnFreightNarration,
-            });
-          }
-          await tx
-            .update(vouchers)
-            .set({ totalAmount: poGrossTotal.toFixed(2) })
-            .where(eq(vouchers.id, po.voucherId!));
-        });
+        await db.transaction((tx) =>
+          editPostedFactoryVoucherTx(
+            tx,
+            {
+              companyId: po.companyId,
+              voucherIds: [po.voucherId!],
+              reason: "purchase-order-sync-parent-voucher",
+              actor: { userId: req.session.userId, username: req.session.username },
+            },
+            async () => {
+              if (toDeleteIds.length > 0)
+                await tx.delete(voucherEntries).where(inArray(voucherEntries.id, toDeleteIds));
+              if (purchasesEntryId !== null)
+                await tx
+                  .update(voucherEntries)
+                  .set(usdLineAmounts(poGrossTotal.toFixed(2), 0))
+                  .where(eq(voucherEntries.id, purchasesEntryId));
+              if (mainCrEntryId !== null)
+                await tx
+                  .update(voucherEntries)
+                  .set(usdLineAmounts(0, poSupplierTotal.toFixed(2)))
+                  .where(eq(voucherEntries.id, mainCrEntryId));
+              const _syncBtnFreightNarration = `Freight - ${po.poNumber}${poContainerRow?.containerNumber ? ` (${poContainerRow.containerNumber})` : ""}`;
+              if (freightCrEntryId !== null) {
+                await tx
+                  .update(voucherEntries)
+                  .set({
+                    ...usdLineAmounts(0, poFreightAmt.toFixed(2)),
+                    ledgerAccountId: poFreightParentAcctId!,
+                    narration: _syncBtnFreightNarration,
+                  })
+                  .where(eq(voucherEntries.id, freightCrEntryId));
+              } else {
+                await tx.insert(voucherEntries).values({
+                  voucherId: po.voucherId!,
+                  ledgerAccountId: poFreightParentAcctId!,
+                  ...usdLineAmounts(0, poFreightAmt.toFixed(2)),
+                  narration: _syncBtnFreightNarration,
+                });
+              }
+              await tx
+                .update(vouchers)
+                .set({ totalAmount: poGrossTotal.toFixed(2) })
+                .where(eq(vouchers.id, po.voucherId!));
+            }
+          )
+        );
         return res.json({
           message: `Freight posted to account — PO voucher updated (${poFreightAmt.toFixed(2)})`,
           found: true,
@@ -254,42 +271,52 @@ export function registerContainerFreightReadRoutes(app: Express) {
         freightCrEntryId = freightCrCandidates2[0] ?? null;
         toDeleteIds.push(...freightCrCandidates2.slice(1));
         const _freightNarration = `Freight - ${po.poNumber}${poContainerRow?.containerNumber ? ` (${poContainerRow.containerNumber})` : ""}`;
-        await db.transaction(async (tx) => {
-          if (toDeleteIds.length > 0) await tx.delete(voucherEntries).where(inArray(voucherEntries.id, toDeleteIds));
-          if (purchasesEntryId !== null)
-            await tx
-              .update(voucherEntries)
-              .set({ debitAmount: poGrossTotal.toFixed(2), creditAmount: "0" })
-              .where(eq(voucherEntries.id, purchasesEntryId));
-          if (mainCrEntryId !== null)
-            await tx
-              .update(voucherEntries)
-              .set({ creditAmount: poSupplierTotal.toFixed(2), debitAmount: "0" })
-              .where(eq(voucherEntries.id, mainCrEntryId));
-          if (freightCrEntryId !== null) {
-            await tx
-              .update(voucherEntries)
-              .set({
-                creditAmount: poFreightAmt.toFixed(2),
-                debitAmount: "0",
-                ledgerAccountId: poFreightParentAcctId!,
-                narration: _freightNarration,
-              })
-              .where(eq(voucherEntries.id, freightCrEntryId));
-          } else {
-            await tx.insert(voucherEntries).values({
-              voucherId: po.voucherId!,
-              ledgerAccountId: poFreightParentAcctId!,
-              debitAmount: "0",
-              creditAmount: poFreightAmt.toFixed(2),
-              narration: _freightNarration,
-            });
-          }
-          await tx
-            .update(vouchers)
-            .set({ totalAmount: poGrossTotal.toFixed(2) })
-            .where(eq(vouchers.id, po.voucherId!));
-        });
+        await db.transaction((tx) =>
+          editPostedFactoryVoucherTx(
+            tx,
+            {
+              companyId: po.companyId,
+              voucherIds: [po.voucherId!],
+              reason: "purchase-order-sync-parent-voucher",
+              actor: { userId: req.session.userId, username: req.session.username },
+            },
+            async () => {
+              if (toDeleteIds.length > 0)
+                await tx.delete(voucherEntries).where(inArray(voucherEntries.id, toDeleteIds));
+              if (purchasesEntryId !== null)
+                await tx
+                  .update(voucherEntries)
+                  .set(usdLineAmounts(poGrossTotal.toFixed(2), 0))
+                  .where(eq(voucherEntries.id, purchasesEntryId));
+              if (mainCrEntryId !== null)
+                await tx
+                  .update(voucherEntries)
+                  .set(usdLineAmounts(0, poSupplierTotal.toFixed(2)))
+                  .where(eq(voucherEntries.id, mainCrEntryId));
+              if (freightCrEntryId !== null) {
+                await tx
+                  .update(voucherEntries)
+                  .set({
+                    ...usdLineAmounts(0, poFreightAmt.toFixed(2)),
+                    ledgerAccountId: poFreightParentAcctId!,
+                    narration: _freightNarration,
+                  })
+                  .where(eq(voucherEntries.id, freightCrEntryId));
+              } else {
+                await tx.insert(voucherEntries).values({
+                  voucherId: po.voucherId!,
+                  ledgerAccountId: poFreightParentAcctId!,
+                  ...usdLineAmounts(0, poFreightAmt.toFixed(2)),
+                  narration: _freightNarration,
+                });
+              }
+              await tx
+                .update(vouchers)
+                .set({ totalAmount: poGrossTotal.toFixed(2) })
+                .where(eq(vouchers.id, po.voucherId!));
+            }
+          )
+        );
         return res.json({
           message: `Freight split applied — supplier credited ${poSupplierTotal.toFixed(2)}, freight account credited ${poFreightAmt.toFixed(2)}`,
           found: true,
@@ -308,6 +335,7 @@ export function registerContainerFreightReadRoutes(app: Express) {
         updatedVouchers: 0,
       });
     } catch (error: unknown) {
+      if (sendVoucherCorrectionRefusal(res, error)) return;
       res.status(500).json({ message: getErrorMessage(error) });
     }
   });

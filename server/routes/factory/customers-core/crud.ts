@@ -4,24 +4,15 @@
  * Registered by ./index.ts in the original order; Express resolves
  * first-match, so that order is behaviour.
  */
-import type Decimal from "decimal.js";
 import type { Express, Request, Response } from "express";
 import { getErrorMessage } from "../../../lib/httpHandlers";
 import { logger } from "../../../lib/logger";
 import { db } from "../../../db";
 import { requireAuth } from "../../../auth";
-import {
-  customerOrders,
-  customerBalances,
-  customers,
-  insertCustomerSchema,
-  ledgerAccounts,
-  voucherEntries,
-  vouchers,
-} from "@shared/schema";
-import { eq, and, asc, desc, sql, inArray } from "drizzle-orm";
+import { customers, insertCustomerSchema, ledgerAccounts } from "@shared/schema";
+import { eq, and, asc, desc, sql } from "drizzle-orm";
+import { getCustomerLedgerAndMemo, splitBalanceFields } from "./customerLedgerSplit";
 import { registerFactoryDaybookRoutes } from "../factoryDaybookRoutes";
-import { sumMoney, toMoney } from "../../../lib/money";
 
 export function registerFactoryCustomerCrudRoutes(app: Express) {
   registerFactoryDaybookRoutes(app);
@@ -40,132 +31,19 @@ export function registerFactoryCustomerCrudRoutes(app: Express) {
         return res.json([]);
       }
 
-      const customerIds = allCustomers.map((c) => c.id);
-
-      // ── Balance calculation — mirrors the statement endpoint exactly ──────────
-      // The statement runs a ledger: opening + Σ(customerBalances debit-credit),
-      // with INVOICE rows for FINALIZED orders corrected to the live grandTotal.
-      // We replicate that here in two bulk queries so both pages always agree.
-
-      // 1. Net of ALL customerBalances rows (includes INVOICE type as stored)
-      const cbNetRows = await db
-        .select({
-          customerId: customerBalances.customerId,
-          net: sql<string>`COALESCE(SUM(CAST(${customerBalances.debitAmount} AS numeric) - CAST(${customerBalances.creditAmount} AS numeric)), 0)`,
-        })
-        .from(customerBalances)
-        .where(and(inArray(customerBalances.customerId, customerIds), eq(customerBalances.companyId, companyId)))
-        .groupBy(customerBalances.customerId);
-
-      // 2. Correction for INVOICE rows: replace stored debitAmount with the live
-      //    grandTotal of FINALIZED orders (same correction the statement makes).
-      const invCorrRows = await db
-        .select({
-          customerId: customerBalances.customerId,
-          correction: sql<string>`COALESCE(SUM(CAST(${customerOrders.grandTotal} AS numeric) - CAST(${customerBalances.debitAmount} AS numeric)), 0)`,
-        })
-        .from(customerBalances)
-        .innerJoin(
-          customerOrders,
-          and(
-            eq(customerOrders.id, customerBalances.referenceId),
-            eq(customerOrders.companyId, companyId),
-            eq(customerOrders.status, "FINALIZED")
-          )
-        )
-        .where(
-          and(
-            inArray(customerBalances.customerId, customerIds),
-            eq(customerBalances.companyId, companyId),
-            sql`${customerBalances.referenceType} = 'INVOICE'`
-          )
-        )
-        .groupBy(customerBalances.customerId);
-
-      // Fetch net voucher entries — two passes to match what the statement page shows:
-      // 1. Entries linked via the customer's ledgerAccountId
-      // 2. Entries linked directly via customerId (e.g. receipt vouchers)
-      // Exclude CHARGE-* vouchers: those amounts are already in salesTotal via grandTotal.
-      const ledgerAccountIds = allCustomers.filter((c) => c.ledgerAccountId).map((c) => c.ledgerAccountId!);
-
-      // net = debit - credit in Dr-positive convention (customer is an asset / receivable)
-      const voucherNetByLedger = new Map<number, Decimal>();
-      if (ledgerAccountIds.length > 0) {
-        const voucherNetRows = await db
-          .select({
-            ledgerAccountId: voucherEntries.ledgerAccountId,
-            net: sql<string>`COALESCE(SUM(CAST(${voucherEntries.debitAmount} AS numeric) - CAST(${voucherEntries.creditAmount} AS numeric)), 0)`,
-          })
-          .from(voucherEntries)
-          .innerJoin(
-            vouchers,
-            and(
-              eq(voucherEntries.voucherId, vouchers.id),
-              eq(vouchers.companyId, companyId),
-              sql`${vouchers.voucherNumber} NOT LIKE 'CHARGE-%'`,
-              sql`${vouchers.voucherNumber} NOT LIKE 'INV-%'`,
-              sql`${vouchers.optional} IS NOT TRUE`
-            )
-          )
-          .where(inArray(voucherEntries.ledgerAccountId, ledgerAccountIds))
-          .groupBy(voucherEntries.ledgerAccountId);
-
-        for (const row of voucherNetRows) {
-          if (row.ledgerAccountId) {
-            voucherNetByLedger.set(row.ledgerAccountId, toMoney(row.net));
-          }
-        }
-      }
-
-      // Net from entries linked directly via customerId (receipts posted without going through ledger)
-      const voucherNetByCustomerId = new Map<number, Decimal>();
-      if (customerIds.length > 0) {
-        const directRows = await db
-          .select({
-            customerId: voucherEntries.customerId,
-            net: sql<string>`COALESCE(SUM(CAST(${voucherEntries.debitAmount} AS numeric) - CAST(${voucherEntries.creditAmount} AS numeric)), 0)`,
-          })
-          .from(voucherEntries)
-          .innerJoin(
-            vouchers,
-            and(
-              eq(voucherEntries.voucherId, vouchers.id),
-              eq(vouchers.companyId, companyId),
-              sql`${vouchers.voucherNumber} NOT LIKE 'CHARGE-%'`,
-              sql`${vouchers.voucherNumber} NOT LIKE 'INV-%'`,
-              sql`${vouchers.optional} IS NOT TRUE`
-            )
-          )
-          .where(and(inArray(voucherEntries.customerId, customerIds), sql`${voucherEntries.ledgerAccountId} IS NULL`))
-          .groupBy(voucherEntries.customerId);
-
-        for (const row of directRows) {
-          if (row.customerId) {
-            voucherNetByCustomerId.set(row.customerId, toMoney(row.net));
-          }
-        }
-      }
-
-      const cbNetMap = new Map(cbNetRows.map((r) => [r.customerId, toMoney(r.net)]));
-      const invCorrMap = new Map(invCorrRows.map((r) => [r.customerId, toMoney(r.correction)]));
-
-      const customersWithBalances = allCustomers.map((customer) => {
-        // Exact: four float components summed to residue such as 0.30000000000000004.
-        const openingBalance = toMoney(customer.openingBalance);
-        const openingSide = customer.openingBalanceSide || "Dr";
-        const totalBalance = sumMoney([
-          openingSide === "Dr" ? openingBalance : openingBalance.negated(),
-          cbNetMap.get(customer.id),
-          invCorrMap.get(customer.id),
-          customer.ledgerAccountId ? voucherNetByLedger.get(customer.ledgerAccountId) : undefined,
-          voucherNetByCustomerId.get(customer.id),
-        ]);
-        return {
-          ...customer,
-          balance: totalBalance.abs().toNumber(),
-          balanceSide: totalBalance.gte(0) ? "Dr" : "Cr",
-        };
-      });
+      // Ledger balance from the one balance engine, plus the amounts that are
+      // not yet in the ledger (unposted factory invoices, factory POS credit
+      // sales, cache-only rows) as a separate memo total. `balance` keeps its
+      // meaning on this page — what the customer owes including those amounts
+      // — and is now explicitly ledger + not-in-ledger (`balanceBasis`).
+      const figures = await getCustomerLedgerAndMemo(
+        companyId,
+        allCustomers.map((c) => c.id)
+      );
+      const customersWithBalances = allCustomers.map((customer) => ({
+        ...customer,
+        ...splitBalanceFields(figures.get(customer.id)),
+      }));
 
       res.json(customersWithBalances);
     } catch (error: unknown) {

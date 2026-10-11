@@ -1,6 +1,7 @@
 import { auditLog } from "@shared/schema";
 import { db } from "../../db";
 import { logger } from "../../lib/logger";
+import { currentAuditActor, getAuditActorContext } from "./auditActorContext";
 
 export type AuditAction =
   | "create"
@@ -53,6 +54,8 @@ export interface AuditEvent extends AuditActor {
   entityType?: string;
   entityId?: number | null;
   metadata?: Record<string, unknown> | null;
+  /** Phase 21 (A), AT6: why the change was made (else the request's reason). */
+  reason?: string | null;
 }
 
 export interface AuditExecutor {
@@ -63,6 +66,20 @@ const REDACTED = "[REDACTED]";
 const MAX_DEPTH = 6;
 const MAX_STRING_LENGTH = 2_000;
 const MAX_ARRAY_LENGTH = 100;
+/**
+ * Wave 12 (audit trail): change fields that hold a document's line snapshot.
+ * A voucher can carry more than MAX_ARRAY_LENGTH lines, and an edit or delete
+ * audit that kept only the first 100 could not show what the voucher held, so
+ * these fields keep every element (each element is still sanitized and
+ * bounded). Other arrays stay capped at MAX_ARRAY_LENGTH.
+ */
+export const FULL_SNAPSHOT_AUDIT_FIELDS: ReadonlySet<string> = new Set([
+  "entries",
+  "entryRows",
+  "lines",
+  "items",
+  "salesItems",
+]);
 const MAX_OBJECT_KEYS = 100;
 const SENSITIVE_KEY_PATTERN =
   /(^|_)(password|passcode|pin|secret|token|cookie|authorization|api[_-]?key|session|csrf|private[_-]?key|connection[_-]?string)($|_)/i;
@@ -71,7 +88,7 @@ function sanitizeString(value: string): string {
   return value.length > MAX_STRING_LENGTH ? `${value.slice(0, MAX_STRING_LENGTH)}…` : value;
 }
 
-export function sanitizeAuditValue(value: unknown, key?: string, depth = 0): unknown {
+export function sanitizeAuditValue(value: unknown, key?: string, depth = 0, keepAllElements = false): unknown {
   if (key && SENSITIVE_KEY_PATTERN.test(key)) return REDACTED;
   if (depth > MAX_DEPTH) return "[MAX_DEPTH]";
   if (value == null || typeof value === "boolean" || typeof value === "number") return value;
@@ -85,7 +102,8 @@ export function sanitizeAuditValue(value: unknown, key?: string, depth = 0): unk
     };
   }
   if (Array.isArray(value)) {
-    return value.slice(0, MAX_ARRAY_LENGTH).map((item) => sanitizeAuditValue(item, undefined, depth + 1));
+    const kept = keepAllElements ? value : value.slice(0, MAX_ARRAY_LENGTH);
+    return kept.map((item) => sanitizeAuditValue(item, undefined, depth + 1));
   }
   if (typeof value === "object") {
     const entries = Object.entries(value as Record<string, unknown>).slice(0, MAX_OBJECT_KEYS);
@@ -102,8 +120,12 @@ export function sanitizeAuditChanges(changes?: AuditChanges | null): AuditChange
     Object.entries(changes).map(([field, change]) => [
       field,
       {
-        ...(Object.prototype.hasOwnProperty.call(change, "old") ? { old: sanitizeAuditValue(change.old, field) } : {}),
-        ...(Object.prototype.hasOwnProperty.call(change, "new") ? { new: sanitizeAuditValue(change.new, field) } : {}),
+        ...(Object.prototype.hasOwnProperty.call(change, "old")
+          ? { old: sanitizeAuditValue(change.old, field, 0, FULL_SNAPSHOT_AUDIT_FIELDS.has(field)) }
+          : {}),
+        ...(Object.prototype.hasOwnProperty.call(change, "new")
+          ? { new: sanitizeAuditValue(change.new, field, 0, FULL_SNAPSHOT_AUDIT_FIELDS.has(field)) }
+          : {}),
       },
     ])
   );
@@ -137,8 +159,15 @@ export function buildAuditChanges(
 
 export async function writeAuditEvent(event: AuditEvent, executor: AuditExecutor = db): Promise<void> {
   const tableName = String(event.tableName ?? event.entityType ?? "audit_event").trim();
-  const userId = String(event.userId ?? "system").trim();
-  const username = String(event.username ?? "system").trim();
+  // Phase 21 (A), AT4: a missing or "unknown" actor is the request's / job's
+  // actor (auditActorContext.ts) when there is one; "system" otherwise.
+  const contextActor = currentAuditActor({ userId: "system", username: "system" });
+  const givenUserId = String(event.userId ?? "").trim();
+  // An explicit blank id is still a caller error (refused below).
+  const actorMissing = event.userId === undefined || event.userId === null || givenUserId === "unknown";
+  const userId = actorMissing ? contextActor.userId : givenUserId;
+  const username = actorMissing ? contextActor.username || userId : String(event.username ?? "system").trim();
+  const reason = String(event.reason ?? getAuditActorContext()?.reason ?? "").trim() || null;
   const recordId = event.recordId ?? event.entityId ?? null;
   const changes = event.changes ?? (event.metadata ? { metadata: { new: event.metadata } } : null);
 
@@ -155,6 +184,8 @@ export async function writeAuditEvent(event: AuditEvent, executor: AuditExecutor
     recordId,
     recordIdentifier: event.recordIdentifier?.trim() || null,
     changes: sanitizeAuditChanges(changes),
+    // request_id, ip and session_id are filled by the audit_log trigger from the request settings.
+    ...(reason ? { reason: reason.slice(0, 500) } : {}),
   };
 
   try {

@@ -1,5 +1,5 @@
 import type { Express } from "express";
-import { getErrorMessage } from "../../lib/httpHandlers";
+import { getErrorMessage, HttpError } from "../../lib/httpHandlers";
 import { db } from "../../db";
 import { storage } from "../../storage";
 import { requireAuth, requireNonPOS } from "../../auth";
@@ -99,33 +99,36 @@ export function registerStockItemManageRoutes(app: Express) {
         }
       }
 
-      const updated = await storage.updateStockItem(stockItemId, updates);
-      try {
+      // Phase 21 (B): the write and its audit commit together.
+      const updated = await db.transaction(async (tx) => {
+        const written = await storage.updateStockItem(stockItemId, updates, tx);
         const _stockChanges: Record<string, { old?: unknown; new?: unknown }> = {};
         for (const _f of ["name", "code", "uom", "barcode", "sellingPrice", "active"] as const) {
           if (
             String((existingItem as { [key: string]: unknown })[_f] ?? "") !==
-            String((updated as { [key: string]: unknown })[_f] ?? "")
+            String((written as { [key: string]: unknown })[_f] ?? "")
           ) {
             _stockChanges[_f] = {
               old: (existingItem as { [key: string]: unknown })[_f],
-              new: (updated as { [key: string]: unknown })[_f],
+              new: (written as { [key: string]: unknown })[_f],
             };
           }
         }
-        await logAudit({
-          userId: req.session.userId!,
-          username: req.session.username || "unknown",
-          companyId: req.session.currentCompanyId!,
-          action: "update",
-          tableName: "stock_items",
-          recordId: updated.id,
-          recordIdentifier: updated.name,
-          changes: _stockChanges,
-        });
-      } catch {
-        /* non-fatal */
-      }
+        await logAudit(
+          {
+            userId: req.session.userId!,
+            username: req.session.username || "unknown",
+            companyId: req.session.currentCompanyId!,
+            action: "update",
+            tableName: "stock_items",
+            recordId: written.id,
+            recordIdentifier: written.name,
+            changes: _stockChanges,
+          },
+          tx
+        );
+        return written;
+      });
       res.json(updated);
     } catch (error: unknown) {
       res.status(500).json({ message: getErrorMessage(error) });
@@ -168,26 +171,28 @@ export function registerStockItemManageRoutes(app: Express) {
         });
       }
 
-      await storage.deleteStockItem(stockItemId);
-      try {
-        await logAudit({
-          userId: req.session.userId!,
-          username: req.session.username || "unknown",
-          companyId: req.session.currentCompanyId!,
-          action: "delete",
-          tableName: "stock_items",
-          recordId: existingItem.id,
-          recordIdentifier: existingItem.name,
-          changes: {
-            name: { old: existingItem.name },
-            code: { old: existingItem.code },
-            uom: { old: existingItem.uom },
-            sellingPrice: { old: existingItem.sellingPrice || "0" },
+      // Phase 21 (B): the write and its audit commit together.
+      await db.transaction(async (tx) => {
+        await storage.deleteStockItem(stockItemId, tx);
+        await logAudit(
+          {
+            userId: req.session.userId!,
+            username: req.session.username || "unknown",
+            companyId: req.session.currentCompanyId!,
+            action: "delete",
+            tableName: "stock_items",
+            recordId: existingItem.id,
+            recordIdentifier: existingItem.name,
+            changes: {
+              name: { old: existingItem.name },
+              code: { old: existingItem.code },
+              uom: { old: existingItem.uom },
+              sellingPrice: { old: existingItem.sellingPrice || "0" },
+            },
           },
-        });
-      } catch {
-        /* non-fatal */
-      }
+          tx
+        );
+      });
       res.json({ message: "Stock item deleted successfully" });
     } catch (error: unknown) {
       res.status(500).json({ message: getErrorMessage(error) });
@@ -445,28 +450,31 @@ export function registerStockItemManageRoutes(app: Express) {
         }
       }
 
-      const updated = await storage.updateStockTransferItem(itemId, req.body);
-      try {
+      // Phase 21 (B): the write and its audit commit together.
+      const updated = await db.transaction(async (tx) => {
+        const written = await storage.updateStockTransferItem(itemId, req.body, req.session.currentCompanyId, tx);
         const _sti: Record<string, { new: string }> = {};
         if (req.body.quantity !== undefined) _sti.quantity = { new: String(req.body.quantity) };
         if (req.body.rate !== undefined) _sti.rate = { new: String(req.body.rate) };
         if (req.body.stockItemId !== undefined) _sti.stockItemId = { new: String(req.body.stockItemId) };
-        await logAudit({
-          userId: req.session.userId!,
-          username: req.session.username || "unknown",
-          companyId: req.session.currentCompanyId!,
-          action: "update",
-          tableName: "stock_transfer_items",
-          recordId: itemId,
-          recordIdentifier: `Transfer item #${itemId}`,
-          changes: _sti,
-        });
-      } catch {
-        /* non-fatal */
-      }
+        await logAudit(
+          {
+            userId: req.session.userId!,
+            username: req.session.username || "unknown",
+            companyId: req.session.currentCompanyId!,
+            action: "update",
+            tableName: "stock_transfer_items",
+            recordId: itemId,
+            recordIdentifier: `Transfer item #${itemId}`,
+            changes: _sti,
+          },
+          tx
+        );
+        return written;
+      });
       res.json(updated);
     } catch (error: unknown) {
-      res.status(500).json({ message: getErrorMessage(error) });
+      res.status(error instanceof HttpError ? error.statusCode : 500).json({ message: getErrorMessage(error) });
     }
   });
 }

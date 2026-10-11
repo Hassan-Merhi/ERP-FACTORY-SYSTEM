@@ -9,16 +9,11 @@ import { getErrorMessage } from "../../../lib/httpHandlers";
 import { logger } from "../../../lib/logger";
 import { db } from "../../../db";
 import { requireAuth } from "../../../auth";
-import { eq, and, sql, inArray } from "drizzle-orm";
-import {
-  factoryPayrolls,
-  factoryWorkerAdvances,
-  factoryAdvanceRepayments,
-  vouchers,
-  voucherEntries,
-} from "@shared/schema";
+import { eq, and, sql } from "drizzle-orm";
+import { factoryPayrolls, factoryWorkerAdvances, factoryAdvanceRepayments, vouchers } from "@shared/schema";
 
 import { getFactoryCompanyId } from "./_helpers";
+import { retireVouchersTx, sessionRetirementActor } from "../../../services/accounting/voucherRetirement";
 
 export function registerOrphanedVoucherRepairRoutes(app: Express) {
   // POST /api/factory/repair-orphaned-vouchers
@@ -63,8 +58,13 @@ export function registerOrphanedVoucherRepairRoutes(app: Express) {
         }
 
         if (orphanedPayVoucherIds.length > 0) {
-          await tx.delete(voucherEntries).where(inArray(voucherEntries.voucherId, orphanedPayVoucherIds));
-          await tx.delete(vouchers).where(inArray(vouchers.id, orphanedPayVoucherIds));
+          // Wave 16 (A): retired (soft delete with lines, audited here), not hard-deleted.
+          await retireVouchersTx(tx, {
+            companyId,
+            voucherIds: orphanedPayVoucherIds,
+            reason: "worker-statement-orphan-repair",
+            actor: sessionRetirementActor(req),
+          });
           deletedPayrollVouchers = orphanedPayVoucherIds.length;
         }
 
@@ -94,8 +94,13 @@ export function registerOrphanedVoucherRepairRoutes(app: Express) {
         }
 
         if (orphanedAdvVoucherIds.length > 0) {
-          await tx.delete(voucherEntries).where(inArray(voucherEntries.voucherId, orphanedAdvVoucherIds));
-          await tx.delete(vouchers).where(inArray(vouchers.id, orphanedAdvVoucherIds));
+          // Wave 16 (A): retired (soft delete with lines, audited here), not hard-deleted.
+          await retireVouchersTx(tx, {
+            companyId,
+            voucherIds: orphanedAdvVoucherIds,
+            reason: "worker-statement-orphan-repair",
+            actor: sessionRetirementActor(req),
+          });
           deletedAdvanceVouchers = orphanedAdvVoucherIds.length;
         }
 
@@ -131,8 +136,13 @@ export function registerOrphanedVoucherRepairRoutes(app: Express) {
         }
 
         if (orphanedRepayVoucherIds.length > 0) {
-          await tx.delete(voucherEntries).where(inArray(voucherEntries.voucherId, orphanedRepayVoucherIds));
-          await tx.delete(vouchers).where(inArray(vouchers.id, orphanedRepayVoucherIds));
+          // Wave 16 (A): retired (soft delete with lines, audited here), not hard-deleted.
+          await retireVouchersTx(tx, {
+            companyId,
+            voucherIds: orphanedRepayVoucherIds,
+            reason: "worker-statement-orphan-repair",
+            actor: sessionRetirementActor(req),
+          });
           _deletedRepayVouchers = orphanedRepayVoucherIds.length;
         }
 
@@ -174,8 +184,13 @@ export function registerOrphanedVoucherRepairRoutes(app: Express) {
 
         let _deletedGenVouchers = 0;
         if (orphanedGenVoucherIds.length > 0) {
-          await tx.delete(voucherEntries).where(inArray(voucherEntries.voucherId, orphanedGenVoucherIds));
-          await tx.delete(vouchers).where(inArray(vouchers.id, orphanedGenVoucherIds));
+          // Wave 16 (A): retired (soft delete with lines, audited here), not hard-deleted.
+          await retireVouchersTx(tx, {
+            companyId,
+            voucherIds: orphanedGenVoucherIds,
+            reason: "worker-statement-orphan-repair",
+            actor: sessionRetirementActor(req),
+          });
           _deletedGenVouchers = orphanedGenVoucherIds.length;
         }
       });

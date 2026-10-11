@@ -36,12 +36,15 @@ import { validateItemsBasic, calculateGrandTotal, validateInventoryAvailability 
 import {
   getOrCreateSalesRevenueAccount,
   fetchSupplierPartnerAccountingContext,
-  insertSaleAccountingEntries,
+  buildSaleAccountingLines,
 } from "./postSaleAccounting";
-import { insertSaleVoucher } from "./createSaleVoucher";
+import { postErpVoucherTx } from "../accounting/erpVoucherPosting";
 import { lockAndDeductInventoryForSaleItem } from "./deductSaleInventory";
 import { lockAndFindExistingPosSaleTx, POS_CLIENT_SALE_ID_MAX_LENGTH } from "./posSaleIdempotency";
 import { isGoldenCoastPosCompany, postGoldenCoastPosAccountingTx } from "./goldenCoastPosAccounting";
+import { postSaleCogsTx } from "../accounting/perpetualInventory/saleCogs";
+import { baleMirrorMovementRefusal } from "../accounting/perpetualInventory/cutoverRefusal";
+import { MoneyDecimal } from "../../lib/money";
 import { spDeductionAmount, spPayableAfterDeduction } from "./spDeduction";
 
 function err(result: HandlerErrorResult): CreatePosSaleResult {
@@ -171,11 +174,19 @@ export async function createPosSale(
   if ("error" in locationResult) return err(locationResult.error);
   const { location } = locationResult;
 
-  const voucherNumber = `SALES-${Date.now()}-${randomUUID().slice(0, 8)}`;
   const voucherDate = providedVoucherDate || voucherDateFallback;
 
   const stockExistsError = await validateStockItemsExist(currentCompanyId, items);
   if (stockExistsError) return err(stockExistsError.error);
+
+  // Wave 11: a factory bale-mirror item is sold in the factory after the cut-over.
+  const mirrorRefusal = await baleMirrorMovementRefusal(
+    db,
+    currentCompanyId,
+    items.map((item: { stockItemId?: unknown }) => item?.stockItemId),
+    "pos-sale"
+  );
+  if (mirrorRefusal) return err({ status: mirrorRefusal.status, body: { ...mirrorRefusal.body } });
 
   let inventoryValidation: Awaited<ReturnType<typeof validateInventoryAvailability>>;
   try {
@@ -196,6 +207,7 @@ export async function createPosSale(
   const spCtx = spCtxResult;
 
   type PosSaleTxResult = { voucher: PosSaleVoucher; saleItems: PosSaleResponseItem[]; replayed: boolean };
+  let voucherNumber = "";
   let txResult: PosSaleTxResult;
   try {
     txResult = await db.transaction(async (tx): Promise<PosSaleTxResult> => {
@@ -208,25 +220,12 @@ export async function createPosSale(
         return { voucher: existing.voucher, saleItems: existing.saleItems, replayed: true };
       }
 
-      const txVoucher = await insertSaleVoucher(tx, {
-        companyId: currentCompanyId,
-        locationId: parsedLocationId,
-        locationName: location.name,
-        voucherNumber,
-        voucherDate,
-        notes,
-        isCreditSale,
-        customerAccountName: customerAccount ? customerAccount.name : undefined,
-        grandTotal,
-        effectiveShiftId,
-        clientSaleId,
-        currency,
-        exchangeRate,
-      });
-
-      await insertSaleAccountingEntries(tx, {
-        txVoucherId: txVoucher.id,
-        voucherNumber,
+      // Phase 22 (B): the sale voucher goes through the central engine, which
+      // allocates its number (SV-<company>-YYYY-000001). Modern clients send
+      // clientSaleId as the retry identity; older callers have none and get a
+      // one-shot identity (the clientSaleId lock above stays the replay check).
+      const saleLines = await buildSaleAccountingLines(tx, {
+        voucherLabel: location.name,
         grandTotal,
         isCreditSale,
         accountType,
@@ -240,16 +239,45 @@ export async function createPosSale(
         currency: currency || "USD",
         exchangeRate: exchangeRate ? String(exchangeRate) : null,
       });
+      const posted = await postErpVoucherTx(tx, {
+        companyId: currentCompanyId,
+        voucherType: "Sales",
+        voucherDate,
+        description:
+          notes ||
+          (isCreditSale
+            ? `Credit Invoice Sale at ${location.name} - ${customerAccount ? customerAccount.name : undefined}`
+            : `POS Sale at ${location.name}`),
+        locationId: parsedLocationId,
+        currency: currency || "USD",
+        exchangeRate: exchangeRate != null && exchangeRate !== "" ? String(exchangeRate) : null,
+        lines: saleLines,
+        source: { type: "pos-sale", id: clientSaleId || `legacy-${randomUUID()}` },
+        actor: { userId, username, reason: "POS sale" },
+        metadata: {
+          locationName: location.name,
+          shiftId: effectiveShiftId,
+          clientSaleId: clientSaleId || null,
+          isCreditSale: !!isCreditSale,
+        },
+      });
+      const txVoucher = posted.voucher;
+      if (posted.replayed) {
+        const replayedItems = await tx.select().from(salesItems).where(eq(salesItems.voucherId, txVoucher.id));
+        return { voucher: txVoucher, saleItems: replayedItems, replayed: true };
+      }
+      voucherNumber = txVoucher.voucherNumber;
 
       const txSaleItems = [];
       const issueOrdinalByStockItem = new Map<number, number>();
+      let relievedTotal = new MoneyDecimal(0);
 
       for (const validatedItem of inventoryValidation) {
         const { item } = validatedItem;
         const issueOrdinal = (issueOrdinalByStockItem.get(item.stockItemId) ?? 0) + 1;
         issueOrdinalByStockItem.set(item.stockItemId, issueOrdinal);
 
-        const { costPrice } = await lockAndDeductInventoryForSaleItem(
+        const { costPrice, relieved } = await lockAndDeductInventoryForSaleItem(
           tx,
           parsedLocationId,
           parsedLocationId,
@@ -262,6 +290,7 @@ export async function createPosSale(
           }
         );
 
+        relievedTotal = relievedTotal.plus(relieved);
         const [stockItem] = await tx.select().from(stockItems).where(eq(stockItems.id, item.stockItemId));
 
         const qty = toInventoryDecimal(item.quantity);
@@ -293,6 +322,11 @@ export async function createPosSale(
           totalCost: inventoryMoney(totalCost),
           profit: inventoryMoney(profit),
           configuredPrice: inventoryUnitCost(configuredPrice),
+          // Wave 11: the exact value the issue relieved (the COGS journal's
+          // amount), what a reversal restores. cost_price / total_cost stay the
+          // sale's costing at the pre-sale average rate, a display and profit
+          // figure; the sub-ledger and the ledger move by value_moved.
+          valueMoved: inventoryMoney(relieved),
         });
 
         const profitPerUnit = subtractInventoryValues(sellingPrice, configuredPrice);
@@ -331,6 +365,54 @@ export async function createPosSale(
         });
       }
 
+      // Perpetual inventory (wave 8.1): the exact value this sale took out of
+      // stock, as its COGS journal. Supplier-partner companies carry their stock
+      // in their own sp_stock accounts and are not posted here.
+      if (!isSpCompany) {
+        await postSaleCogsTx(tx, {
+          companyId: currentCompanyId,
+          saleVoucherId: txVoucher.id,
+          saleVoucherNumber: voucherNumber,
+          voucherDate: String(txVoucher.voucherDate),
+          locationId: parsedLocationId,
+          relieved: relievedTotal,
+        });
+      }
+
+      // Phase 21 (B): the create audit commits with the sale or rolls it back.
+      await logAudit(
+        {
+          userId,
+          username,
+          companyId: currentCompanyId,
+          action: "create",
+          tableName: "vouchers",
+          recordId: txVoucher.id,
+          recordIdentifier: voucherNumber,
+          changes: {
+            voucherNumber: { old: undefined, new: voucherNumber },
+            voucherType: { old: undefined, new: "Sales" },
+            saleType: { old: undefined, new: isCreditSale ? "Credit Invoice" : "Cash Sale" },
+            location: { old: undefined, new: location.name },
+            totalAmount: { old: undefined, new: grandTotal.toFixed(2) },
+            date: { old: undefined, new: voucherDate },
+            itemCount: { old: undefined, new: txSaleItems.length },
+            items: {
+              new: txSaleItems.map((item) => ({
+                stockItemId: item.stockItemId,
+                stockItemName: item.stockItemName,
+                code: item.stockItemCode,
+                quantity: item.quantity,
+                rate: item.rate,
+                totalAmount: item.amount,
+              })),
+            },
+            customer: { old: undefined, new: customerAccount ? customerAccount.name : null },
+          },
+        },
+        tx
+      );
+
       return { voucher: txVoucher, saleItems: txSaleItems, replayed: false };
     });
   } catch (error: unknown) {
@@ -362,42 +444,8 @@ export async function createPosSale(
   const voucher = txResult.voucher;
   const saleItems = txResult.saleItems;
 
-  try {
-    await logAudit({
-      userId,
-      username,
-      companyId: currentCompanyId,
-      action: "create",
-      tableName: "vouchers",
-      recordId: voucher.id,
-      recordIdentifier: voucherNumber,
-      changes: {
-        voucherNumber: { old: undefined, new: voucherNumber },
-        voucherType: { old: undefined, new: "Sales" },
-        saleType: { old: undefined, new: isCreditSale ? "Credit Invoice" : "Cash Sale" },
-        location: { old: undefined, new: location.name },
-        totalAmount: { old: undefined, new: grandTotal.toFixed(2) },
-        date: { old: undefined, new: voucherDate },
-        itemCount: { old: undefined, new: saleItems.length },
-        items: {
-          new: saleItems.map((item) => ({
-            stockItemId: item.stockItemId,
-            stockItemName: "stockItemName" in item ? item.stockItemName : undefined,
-            code: "stockItemCode" in item ? item.stockItemCode : undefined,
-            quantity: item.quantity,
-            rate: "rate" in item ? item.rate : item.sellingPrice,
-            totalAmount: "amount" in item ? item.amount : item.totalSales,
-          })),
-        },
-        customer: { old: undefined, new: customerAccount ? customerAccount.name : null },
-      },
-    });
-  } catch {
-    /* non-fatal */
-  }
-
   if (!goldenCoastSaleDetected && !isCreditSale && accountType === "cash") {
-    runIntercompanyPosTransfer(currentCompanyId, accountId, grandTotal, voucherDate).catch((error) =>
+    runIntercompanyPosTransfer(currentCompanyId, accountId, grandTotal, voucherDate, voucher.id).catch((error) =>
       logger.error("[IntercompanyPOS] Unhandled:", { error })
     );
   }

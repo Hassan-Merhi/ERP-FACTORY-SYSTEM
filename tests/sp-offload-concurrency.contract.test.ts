@@ -16,7 +16,8 @@ describe("SP offload concurrency and idempotency contracts", () => {
     const transactionStart = offload.indexOf("db.transaction");
     const containerLock = offload.indexOf('.for("update")', transactionStart);
     const statusCheck = offload.indexOf('container.status !== "open"', containerLock);
-    const firstVoucher = offload.indexOf("tx.insert(vouchers)", statusCheck);
+    // Phase 22 C: offload vouchers post through the engine (postFactoryVoucherTx).
+    const firstVoucher = offload.indexOf("postFactoryVoucherTx(tx", statusCheck);
 
     expect(transactionStart).toBeGreaterThan(-1);
     expect(containerLock).toBeGreaterThan(transactionStart);
@@ -28,7 +29,7 @@ describe("SP offload concurrency and idempotency contracts", () => {
     const containerLock = offload.indexOf('.for("update")');
     const lineRead = offload.indexOf(".from(spContainerLines)", containerLock);
     const lineCompanyScope = offload.indexOf("eq(spContainerLines.companyId, companyId)", lineRead);
-    const discountRead = offload.indexOf("parseNum(container.discountPct)", lineRead);
+    const discountRead = offload.indexOf("toMoney(container.discountPct)", lineRead);
 
     expect(lineRead).toBeGreaterThan(containerLock);
     expect(lineCompanyScope).toBeGreaterThan(lineRead);

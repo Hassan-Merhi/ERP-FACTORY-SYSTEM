@@ -88,7 +88,9 @@ export function registerFinancialSalesRoutes(app: Express) {
         periodEndDate,
         accountId,
         req.session.userId!,
-        notes
+        notes,
+        // The close writes its audit row in its own transaction (wave 17 A).
+        { username: req.session.username || "unknown" }
       );
 
       res.json(closure);
@@ -116,20 +118,25 @@ export function registerFinancialSalesRoutes(app: Express) {
       const reason = typeof req.body?.reason === "string" ? req.body.reason.trim() : "";
       if (!reason) return res.status(400).json({ message: "A reason is required to reopen a fiscal period" });
 
-      const closure = await storage.reopenFiscalPeriod(companyId, closureId);
-      await logAudit({
-        userId: req.session.userId!,
-        username: req.session.username || "unknown",
-        companyId,
-        action: "reverse",
-        tableName: "fiscal_period_closures",
-        recordId: closure.id,
-        recordIdentifier: `${closure.periodStartDate}..${closure.periodEndDate}`,
-        changes: {
-          status: { old: "CLOSED", new: "REOPENED" },
-          closingVoucherId: { old: closure.closingVoucherId, new: null },
-          reason: { old: undefined, new: reason },
-        },
+      // Phase 21 (B): the reopen audit is written on the reopen's transaction.
+      const closure = await storage.reopenFiscalPeriod(companyId, closureId, async (tx, reopened) => {
+        await logAudit(
+          {
+            userId: req.session.userId!,
+            username: req.session.username || "unknown",
+            companyId,
+            action: "reverse",
+            tableName: "fiscal_period_closures",
+            recordId: reopened.id,
+            recordIdentifier: `${reopened.periodStartDate}..${reopened.periodEndDate}`,
+            changes: {
+              status: { old: "CLOSED", new: "REOPENED" },
+              closingVoucherId: { old: reopened.closingVoucherId, new: null },
+              reason: { old: undefined, new: reason },
+            },
+          },
+          tx
+        );
       });
       res.json({ reopened: true, periodStartDate: closure.periodStartDate, periodEndDate: closure.periodEndDate });
     } catch (error: unknown) {

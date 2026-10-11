@@ -75,12 +75,34 @@ const harness = vi.hoisted(() => {
     financialOperationFingerprint: vi.fn(() => "fingerprint"),
     financialOperationRequestPayload: vi.fn((body: unknown) => body),
     loggerError: vi.fn(),
+    postReceipt: vi.fn(async (_tx: unknown, _input: any) => 1),
   };
 });
 
 vi.mock("../server/db", () => ({ db: harness.db }));
+// Perpetual-inventory cost of sales is covered by its own suite; this harness has no SQL executor.
+vi.mock("../server/services/accounting/perpetualInventory/factoryPosCogs", () => ({
+  factoryBalesCostTx: async () => ({ toDecimalPlaces: () => ({ gt: () => false }) }),
+  postFactoryPosCogsTx: async () => null,
+}));
+// Wave 11: the sale records its bales (factory_pos_sale_bales); covered with a
+// database by tests/wave11-factory-cost-basis.test.ts. This harness has no SQL executor.
+vi.mock("../server/services/factory/factoryPosSaleBales", () => ({
+  recordPosSaleBalesTx: async () => undefined,
+  releasePosSaleBalesTx: async () => ({ legacy: true, restored: [] }),
+  posSaleBalesCostTx: async () => ({ toDecimalPlaces: () => ({ gt: () => false }) }),
+}));
 vi.mock("../server/auth", () => ({ requireAuth: (_req: any, _res: any, next: any) => next() }));
 vi.mock("../server/routes/factory/_helpers", () => ({ getOrCreateLedgerAccount: harness.getOrCreateLedgerAccount }));
+// Wave 8.4 continuation: the sale's ledger voucher (FPOS-RCPT) is posted by
+// services/accounting/factoryPosReceipt.ts, covered with a database by
+// tests/wave8-4-factory-pos-commission.test.ts. Here the posting call is
+// recorded and its legs checked with the service's own pure helpers; the
+// refusal rules and the (USD) rate lookup run for real.
+vi.mock("../server/services/accounting/factoryPosReceipt", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../server/services/accounting/factoryPosReceipt")>()),
+  postFactoryPosReceiptTx: harness.postReceipt,
+}));
 vi.mock("../server/services/accounting/durableFinancialOperation", () => ({
   financialOperationFingerprint: harness.financialOperationFingerprint,
   withDurableFinancialOperation: harness.withDurableFinancialOperation,
@@ -93,13 +115,29 @@ vi.mock("../server/services/accounting/financialOperationRequest", () => ({
 // here the company owns every location and account the sale names.
 vi.mock("../server/routes/helpers/companyOwnership", () => ({
   allLedgerAccountsOwned: async () => true,
+  isCompanyCustomerOrAbsent: async () => true,
   isFactorySessionLocation: async () => true,
 }));
 vi.mock("../server/lib/dateUtils", () => ({ getClientDate: () => "2026-09-17" }));
-vi.mock("../server/lib/httpHandlers", () => ({ getErrorMessage: (error: any) => error?.message || String(error) }));
+vi.mock("../server/lib/httpHandlers", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../server/lib/httpHandlers")>()),
+  getErrorMessage: (error: any) => error?.message || String(error),
+}));
 vi.mock("../server/lib/logger", () => ({ logger: { error: harness.loggerError } }));
 
 import { registerPosSaleWriteRoutes } from "../server/routes/factory/employee-pos/pos-financial/sale-write";
+import { factoryPosCashLeg, factoryPosUnpaid } from "../server/services/accounting/factoryPosReceipt";
+
+/** The posting input of the n-th recorded receipt voucher, with its cash leg and unpaid part. */
+function postedReceipt(index = 0) {
+  const input = harness.postReceipt.mock.calls[index][1];
+  return {
+    input,
+    cash: factoryPosCashLeg(input).toFixed(2),
+    unpaid: factoryPosUnpaid(input).toFixed(2),
+    deductions: input.deductions.map((row: any) => [row.accountId, row.amount.toFixed(2)]),
+  };
+}
 
 type Handler = (req: any, res: any) => unknown;
 
@@ -238,21 +276,14 @@ describe("Phase 33D factory POS sale writes", () => {
     expect(
       harness.inserted.some((entry) => entry.values?.txType === "POS_EXPENSE" && entry.values.amountUsd === "2.00")
     ).toBe(true);
-    expect(
-      harness.inserted.some((entry) => entry.values?.ledgerAccountId === 12 && entry.values.debitAmount === "18.00")
-    ).toBe(true);
-    expect(
-      harness.inserted.some((entry) => entry.values?.ledgerAccountId === 30 && entry.values.debitAmount === "2.00")
-    ).toBe(true);
-    expect(
-      harness.inserted.some((entry) => entry.values?.ledgerAccountId === 900 && entry.values.creditAmount === "20.00")
-    ).toBe(true);
-    expect(harness.getOrCreateLedgerAccount).toHaveBeenCalledWith(
-      7,
-      "FACTORY_BALE_SALES_INCOME",
-      "Factory Bale Sales Income",
-      "Revenue"
-    );
+    // The receipt voucher: Dr cash 18.00 (20.00 less the 2.00 deduction), Dr
+    // the deduction account 2.00, Cr sales income 20.00 (the income account is
+    // created as Income; database coverage in the wave 8.4 continuation suite).
+    const posted = postedReceipt();
+    expect(posted.input).toMatchObject({ companyId: 7, saleId: 101, cashAccountId: 12, currency: "USD", rate: "1" });
+    expect(posted.input.total.toFixed(2)).toBe("20.00");
+    expect(posted.cash).toBe("18.00");
+    expect(posted.deductions).toEqual([[30, "2.00"]]);
   });
 
   it("rounds a half-cent expense before netting it, so the receipt voucher still balances", async () => {
@@ -275,14 +306,8 @@ describe("Phase 33D factory POS sale writes", () => {
     expect(res.statusCode).toBe(200);
     // 0.105 is 0.11 at cents, leaving 9.89 cash. In floats the expense leg was
     // 0.10 and the cash leg 9.89 against a 10.00 credit.
-    const legs = harness.inserted
-      .filter((entry) => entry.values?.voucherId !== undefined && entry.values?.debitAmount !== undefined)
-      .map((entry) => entry.values);
-    expect(legs.map((leg) => [leg.ledgerAccountId, leg.debitAmount, leg.creditAmount])).toEqual([
-      [12, "9.89", "0"],
-      [30, "0.11", "0"],
-      [900, "0", "10.00"],
-    ]);
+    const posted = postedReceipt();
+    expect([posted.cash, posted.deductions, posted.input.total.toFixed(2)]).toEqual(["9.89", [[30, "0.11"]], "10.00"]);
   });
 
   it("refuses an amount that does not parse before any write", async () => {
@@ -313,6 +338,9 @@ describe("Phase 33D factory POS sale writes", () => {
         body: {
           customerId: "9",
           customerName: "Credit Customer",
+          // Wave 8.4 continuation: the deposit is received in cash, so it needs a
+          // cash account (it used to post nothing when none was given).
+          cashAccountId: 12,
           paymentType: "CREDIT",
           depositAmount: "5",
           items: [{ productName: "Loose Bale", quantity: 2, unitPrice: "10" }],
@@ -337,6 +365,35 @@ describe("Phase 33D factory POS sale writes", () => {
         (entry) => entry.values?.txType === "BALE_SALE" && String(entry.values.description).includes("[CREDIT]")
       )
     ).toBe(true);
+    // The ledger voucher carries the full sale: Dr cash 5 (deposit), Dr customer 15 (unpaid), Cr income 20.
+    const posted = postedReceipt();
+    expect([posted.cash, posted.unpaid, posted.input.customerId]).toEqual(["5.00", "15.00", 9]);
+  });
+
+  it("refuses a sale the ledger cannot carry before any write", async () => {
+    const noCash = resHarness();
+    await routes.get("POST /api/factory/pos/sale")!(
+      req({ body: { paymentType: "CASH", items: [{ productName: "Bale", quantity: 1, unitPrice: "10" }] } }),
+      noCash
+    );
+    expect(noCash.statusCode).toBe(400);
+    expect(noCash.body).toEqual({ message: "Choose the cash account that receives this sale's payment." });
+
+    const noCustomer = resHarness();
+    await routes.get("POST /api/factory/pos/sale")!(
+      req({
+        body: {
+          paymentType: "CREDIT",
+          depositAmount: "0",
+          items: [{ productName: "Bale", quantity: 1, unitPrice: "10" }],
+        },
+      }),
+      noCustomer
+    );
+    expect(noCustomer.statusCode).toBe(400);
+    expect(noCustomer.body).toEqual({ message: "A credit sale with an unpaid amount needs a customer." });
+    expect(harness.withDurableFinancialOperation).not.toHaveBeenCalled();
+    expect(harness.inserted).toHaveLength(0);
   });
 
   it("locks physical bales and aborts the whole sale when requested stock is short", async () => {
@@ -349,6 +406,7 @@ describe("Phase 33D factory POS sale writes", () => {
       req({
         body: {
           locationId: 4,
+          cashAccountId: 12,
           paymentType: "CASH",
           items: [{ productId: 88, productName: "Shirts", quantity: 2, unitPrice: "10" }],
         },

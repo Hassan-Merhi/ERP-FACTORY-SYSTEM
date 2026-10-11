@@ -286,7 +286,8 @@ describe("POST /api/factory/raw-stock/offload — FX safeguard", () => {
       receivedKg: "1000",
     });
 
-    expect(res.status).toBe(400);
+    // Phase 19 C (M2): no recorded dated factory rate → 409 FACTORY_FX_RATE_REQUIRED.
+    expect(res.status).toBe(409);
     expect(JSON.stringify(res.body).toLowerCase()).toContain("fx");
   }, 60_000);
 });

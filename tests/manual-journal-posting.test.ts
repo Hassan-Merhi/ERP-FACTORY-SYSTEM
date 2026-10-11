@@ -52,7 +52,9 @@ describe("buildManualJournalPostingRequest", () => {
     ]);
   });
 
-  it("balances per-line CFA rounding to the aggregate historical base total", () => {
+  // Phase 22 A (D3): lines keep their exact base (the currency trigger refuses
+  // an adjusted one); the engine posts the remainder to ROUNDING.
+  it("keeps each CFA line's exact base and totals the header on the debit base", () => {
     const built = buildManualJournalPostingRequest({
       ...baseInput(),
       currency: "CFA",
@@ -64,18 +66,16 @@ describe("buildManualJournalPostingRequest", () => {
       ],
     });
 
-    const debitTotal = built.request.entries.reduce(
-      (sum, entry) => sum.plus(entry.debitAmount ?? "0"),
-      new Decimal(0)
-    );
+    const debitTotal = built.request.entries.reduce((sum, entry) => sum.plus(entry.debitAmount ?? "0"), new Decimal(0));
     const creditTotal = built.request.entries.reduce(
       (sum, entry) => sum.plus(entry.creditAmount ?? "0"),
       new Decimal(0)
     );
 
-    expect(debitTotal.toFixed(6)).toBe("0.666667");
+    expect(debitTotal.toFixed(6)).toBe("0.666666");
     expect(creditTotal.toFixed(6)).toBe("0.666667");
-    expect(built.request.voucher.totalAmount).toBe("0.666667");
+    expect(built.request.entries.map((entry) => entry.baseDebitAmount)).toEqual(["0.333333", "0.333333", "0.000000"]);
+    expect(built.request.voucher.totalAmount).toBe("0.666666");
     expect(built.request.voucher.exchangeRate).toBe("3");
   });
 
@@ -108,7 +108,8 @@ describe("resolveManualJournalClientRequestId", () => {
   });
 
   it("rejects unsafe request ids", () => {
-    expect(() => resolveManualJournalClientRequestId("bad request id"))
-      .toThrowError(expect.objectContaining<PostingValidationError>({ code: "POSTING_REQUEST_ID_INVALID" }));
+    expect(() => resolveManualJournalClientRequestId("bad request id")).toThrowError(
+      expect.objectContaining<PostingValidationError>({ code: "POSTING_REQUEST_ID_INVALID" })
+    );
   });
 });

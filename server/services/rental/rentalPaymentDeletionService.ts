@@ -1,6 +1,6 @@
 import { and, eq, inArray, isNull, like, notInArray, or, sql } from "drizzle-orm";
 import { autoTransferCounterpartiesForPaymentGroup, runWithAutoTransferCounterparties } from "./autoTransferScope";
-import { softDeleteVoucherTx } from "../accounting/voucherSoftDelete";
+import { retireVouchersTx, type VoucherRetirementActor } from "../accounting/voucherRetirement";
 import { db } from "../../db";
 import {
   interCompanyTransfers,
@@ -17,6 +17,8 @@ export interface DeleteRentalPaymentInput {
   companyId: number;
   module: RentalModule;
   paymentId: number;
+  /** Phase 21 (B): the user deleting the payment, recorded on the transfer legs' retirement audit. */
+  actor?: VoucherRetirementActor | null;
 }
 
 export interface DeleteRentalPaymentResult {
@@ -118,12 +120,25 @@ export async function deleteRentalPaymentGroup(input: DeleteRentalPaymentInput):
           const fromVoucherId = transfer.fromVoucherId;
           const toVoucherId = transfer.toVoucherId;
           await tx.delete(interCompanyTransfers).where(eq(interCompanyTransfers.id, transfer.id));
+          // Phase 21 (B): each leg is retired (soft delete with its lines, number
+          // released, one audit row with the actor, in this transaction) instead
+          // of a plain unaudited soft delete.
           if (fromVoucherId) {
-            await softDeleteVoucherTx(tx, fromVoucherId);
+            await retireVouchersTx(tx, {
+              companyId: transfer.fromCompanyId,
+              voucherIds: [fromVoucherId],
+              reason: "rental-payment-delete-transfer-leg",
+              actor: input.actor,
+            });
             await removeFactoryDaybookMirrorTx({ tx, voucherId: fromVoucherId });
           }
           if (toVoucherId) {
-            await softDeleteVoucherTx(tx, toVoucherId);
+            await retireVouchersTx(tx, {
+              companyId: transfer.toCompanyId,
+              voucherIds: [toVoucherId],
+              reason: "rental-payment-delete-transfer-leg",
+              actor: input.actor,
+            });
             await removeFactoryDaybookMirrorTx({ tx, voucherId: toVoucherId });
           }
         }

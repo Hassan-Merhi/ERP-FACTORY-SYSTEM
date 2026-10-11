@@ -138,6 +138,16 @@ export const auditLog = pgTable("audit_log", {
   recordIdentifier: text("record_identifier"),
   changes: jsonb("changes"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
+  // Phase 21 (A), AT6: filled from the request settings by the audit_log
+  // BEFORE INSERT trigger when the insert leaves them empty.
+  requestId: text("request_id"),
+  ip: text("ip"),
+  /** sha256 of the session id, never the id. */
+  sessionId: text("session_id"),
+  reason: text("reason"),
+  // AT5: hash chain, computed by the same trigger (verifyAuditLogChain).
+  prevHash: text("prev_hash"),
+  rowHash: text("row_hash"),
 });
 
 export type AuditLog = typeof auditLog.$inferSelect;

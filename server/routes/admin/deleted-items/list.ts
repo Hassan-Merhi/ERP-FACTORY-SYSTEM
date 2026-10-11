@@ -23,13 +23,13 @@ import {
   stockGroups,
   bankAccounts,
   vouchers,
-  suppliers,
   customers,
   locations,
   employees,
   ledgerAccounts,
 } from "@shared/schema";
 import { eq, and, or, desc, isNull, isNotNull } from "drizzle-orm";
+import { companyScopedSuppliers } from "@shared/schema/supplierCompanyScope";
 
 export function registerDeletedItemsListRoutes(app: Express) {
   // Get all deleted items (soft-deleted records)
@@ -85,12 +85,13 @@ export function registerDeletedItemsListRoutes(app: Express) {
       // Note: Vouchers are not included in deleted items because they are hard-deleted
       // with inventory reversal due to complex business logic. They cannot be recovered.
 
-      // Get deleted suppliers (suppliers are global, not company-specific)
+      // Get deleted suppliers. Wave 18 (B): suppliers are company-owned
+      // (suppliers.company_id); only the active company's are listed.
       const deletedSuppliers = await db
         .select()
-        .from(suppliers)
-        .where(isNotNull(suppliers.deletedAt))
-        .orderBy(desc(suppliers.deletedAt));
+        .from(companyScopedSuppliers)
+        .where(and(eq(companyScopedSuppliers.companyId, companyId), isNotNull(companyScopedSuppliers.deletedAt)))
+        .orderBy(desc(companyScopedSuppliers.deletedAt));
 
       // Get deleted bank accounts
       const deletedBankAccounts = await db

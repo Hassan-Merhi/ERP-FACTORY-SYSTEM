@@ -1,6 +1,5 @@
-import { db } from "../../db";
+import { db, type DatabaseOrTransaction } from "../../db";
 import { logger } from "../../lib/logger";
-import { inventorySnapshotFromStoredValues } from "../../services/inventory/inventoryValuationSnapshot";
 import {
   inventory,
   salesItems,
@@ -13,11 +12,12 @@ import {
   stockTransferItems,
   stockTransferVouchers,
   creditNoteItems,
+  inventoryValueMovements,
   stockItems as stockItemsTable,
   stockGroups as stockGroupsTable,
   stockCategories as stockCategoriesTable,
 } from "@shared/schema";
-import { eq, and, sql, gt, inArray, isNull } from "drizzle-orm";
+import { eq, and, sql, inArray, isNull } from "drizzle-orm";
 import type Decimal from "decimal.js";
 import { MoneyDecimal, toMoney } from "../../lib/money";
 
@@ -26,11 +26,22 @@ import { MoneyDecimal, toMoney } from "../../lib/money";
 // DEBUG_HISTORICAL_INVENTORY=1 when auditing an opening-stock discrepancy.
 const DEBUG_HISTORICAL_INVENTORY = process.env.DEBUG_HISTORICAL_INVENTORY === "1";
 
+/**
+ * The value a movement line moved, unsigned: the sub-ledger value it recorded
+ * (`value_moved`, wave 11) when present, else the line's stored total, else
+ * quantity × rate. value_moved is read as an amount whatever sign the writer
+ * gave it; the caller applies the direction.
+ */
 function exactMovementValue(
   exactTotal: string | number | null | undefined,
   quantity: Decimal,
-  fallbackRate: Decimal
+  fallbackRate: Decimal,
+  valueMoved?: string | number | null
 ): Decimal {
+  if (valueMoved !== null && valueMoved !== undefined && valueMoved !== "") {
+    const moved = toMoney(valueMoved);
+    if (moved.isFinite()) return moved.abs();
+  }
   if (exactTotal !== null && exactTotal !== undefined && exactTotal !== "") {
     try {
       const parsed = new MoneyDecimal(exactTotal);
@@ -89,14 +100,14 @@ export type HistoricalLocationInventoryRow = {
 export async function calculateHistoricalLocationInventory(
   locationId: number,
   companyId: number,
-  asOfDate: string
+  asOfDate: string,
+  executor: DatabaseOrTransaction = db
 ): Promise<HistoricalLocationInventoryRow[]> {
   const cutoffDateStr = asOfDate;
-  const cutoffTimestamp = new Date(asOfDate + "T23:59:59.999");
 
   const seedStockItemIds = new Set<number>();
 
-  const currentInventory = await db
+  const currentInventory = await executor
     .select({
       stockItemId: inventory.stockItemId,
       quantity: inventory.quantity,
@@ -109,7 +120,7 @@ export async function calculateHistoricalLocationInventory(
 
   for (const inv of currentInventory) seedStockItemIds.add(inv.stockItemId);
 
-  const salesStockItems = await db
+  const salesStockItems = await executor
     .selectDistinct({ stockItemId: salesItems.stockItemId })
     .from(salesItems)
     .innerJoin(vouchers, eq(salesItems.voucherId, vouchers.id))
@@ -117,7 +128,7 @@ export async function calculateHistoricalLocationInventory(
     .execute();
   for (const item of salesStockItems) seedStockItemIds.add(item.stockItemId);
 
-  const offloadStockItems = await db
+  const offloadStockItems = await executor
     .selectDistinct({ stockItemId: containerOffloadItems.stockItemId })
     .from(containerOffloadItems)
     .innerJoin(containerOffloads, eq(containerOffloadItems.offloadId, containerOffloads.id))
@@ -126,7 +137,7 @@ export async function calculateHistoricalLocationInventory(
     .execute();
   for (const item of offloadStockItems) seedStockItemIds.add(item.stockItemId);
 
-  const adjustmentStockItems = await db
+  const adjustmentStockItems = await executor
     .selectDistinct({ stockItemId: stockAdjustmentItems.stockItemId })
     .from(stockAdjustmentItems)
     .innerJoin(stockAdjustmentVouchers, eq(stockAdjustmentItems.adjustmentId, stockAdjustmentVouchers.id))
@@ -141,7 +152,7 @@ export async function calculateHistoricalLocationInventory(
     .execute();
   for (const item of adjustmentStockItems) seedStockItemIds.add(item.stockItemId);
 
-  const transfersInStockItems = await db
+  const transfersInStockItems = await executor
     .selectDistinct({ stockItemId: stockTransferItems.stockItemId })
     .from(stockTransferItems)
     .innerJoin(stockTransferVouchers, eq(stockTransferItems.transferId, stockTransferVouchers.id))
@@ -156,7 +167,7 @@ export async function calculateHistoricalLocationInventory(
     .execute();
   for (const item of transfersInStockItems) seedStockItemIds.add(item.stockItemId);
 
-  const transfersOutStockItems = await db
+  const transfersOutStockItems = await executor
     .selectDistinct({ stockItemId: stockTransferItems.stockItemId })
     .from(stockTransferItems)
     .innerJoin(stockTransferVouchers, eq(stockTransferItems.transferId, stockTransferVouchers.id))
@@ -174,7 +185,7 @@ export async function calculateHistoricalLocationInventory(
   // Credit/Debit notes — the monthly-summary route's per-month buckets fold these
   // in (Credit Note = inward, Debit Note = outward), so the historical opening
   // reconstruction must seed and reverse them too or opening balances drift.
-  const creditDebitNoteStockItems = await db
+  const creditDebitNoteStockItems = await executor
     .selectDistinct({ stockItemId: creditNoteItems.stockItemId })
     .from(creditNoteItems)
     .innerJoin(vouchers, eq(creditNoteItems.voucherId, vouchers.id))
@@ -184,6 +195,30 @@ export async function calculateHistoricalLocationInventory(
     .execute();
   for (const item of creditDebitNoteStockItems) seedStockItemIds.add(item.stockItemId);
 
+  // Movements that leave no document line (quick adjustments, archive and
+  // restore, location imports, cost corrections, readiness write-offs): their
+  // dated evidence (inventory_value_movements, wave 15) is replayed like a
+  // document line.
+  const evidenceAfterDate = await executor
+    .select({
+      stockItemId: inventoryValueMovements.stockItemId,
+      quantityDelta: inventoryValueMovements.quantityDelta,
+      valueDelta: inventoryValueMovements.valueDelta,
+    })
+    .from(inventoryValueMovements)
+    .where(
+      and(
+        eq(inventoryValueMovements.companyId, companyId),
+        eq(inventoryValueMovements.locationId, locationId),
+        sql`${inventoryValueMovements.stockItemId} IS NOT NULL`,
+        sql`${inventoryValueMovements.movementDate} > ${cutoffDateStr}::date`
+      )
+    )
+    .execute();
+  for (const movement of evidenceAfterDate) {
+    if (movement.stockItemId !== null) seedStockItemIds.add(movement.stockItemId);
+  }
+
   if (seedStockItemIds.size === 0) return [];
 
   const inventoryMap = new Map<number, HistoricalStock>();
@@ -191,23 +226,30 @@ export async function calculateHistoricalLocationInventory(
     inventoryMap.set(stockItemId, emptyHistoricalStock());
   }
 
-  // Seed the backward reconstruction from the exact stored asset value. The
-  // rounded average_rate remains cost memory only and must not regenerate value.
+  // Seed the backward reconstruction from the exact stored asset value, as
+  // stored: a short row's negative value (the negative-stock policy) is part
+  // of the sub-ledger and is replayed like any other. The average_rate is
+  // cost memory only and never regenerates value (wave 11).
   for (const inv of currentInventory) {
-    const snapshot = inventorySnapshotFromStoredValues(inv.quantity, inv.totalValue, inv.averageRate);
+    const quantity = toMoney(inv.quantity);
+    const totalValue = toMoney(inv.totalValue);
     inventoryMap.set(inv.stockItemId, {
-      quantity: new MoneyDecimal(snapshot.quantity),
-      totalValue: new MoneyDecimal(snapshot.totalValue),
-      rate: snapshot.rate,
+      quantity,
+      totalValue,
+      rate:
+        quantity.gt(0) && totalValue.gt(0)
+          ? totalValue.dividedBy(quantity).toNumber()
+          : Math.max(toMoney(inv.averageRate).toNumber(), 0),
     });
   }
 
-  const salesAfterDate = await db
+  const salesAfterDate = await executor
     .select({
       stockItemId: salesItems.stockItemId,
       quantity: salesItems.quantity,
       costPrice: salesItems.costPrice,
       totalCost: salesItems.totalCost,
+      valueMoved: salesItems.valueMoved,
     })
     .from(salesItems)
     .innerJoin(vouchers, eq(salesItems.voucherId, vouchers.id))
@@ -217,23 +259,24 @@ export async function calculateHistoricalLocationInventory(
         eq(vouchers.locationId, locationId),
         eq(vouchers.optional, false),
         isNull(vouchers.deletedAt),
-        sql`${vouchers.voucherDate} > ${cutoffDateStr}`
+        sql`COALESCE(${vouchers.effectiveDate}, ${vouchers.voucherDate}) > ${cutoffDateStr}`
       )
     )
     .execute();
 
   for (const sale of salesAfterDate) {
     const qty = toMoney(sale.quantity);
-    const value = exactMovementValue(sale.totalCost, qty, toMoney(sale.costPrice));
+    const value = exactMovementValue(sale.totalCost, qty, toMoney(sale.costPrice), sale.valueMoved);
     applyHistoricalMovement(inventoryMap, sale.stockItemId, qty, value);
   }
 
-  const adjustmentsAfterDate = await db
+  const adjustmentsAfterDate = await executor
     .select({
       stockItemId: stockAdjustmentItems.stockItemId,
       quantity: stockAdjustmentItems.quantity,
       rate: stockAdjustmentItems.rate,
       totalAmount: stockAdjustmentItems.totalAmount,
+      valueMoved: stockAdjustmentItems.valueMoved,
       adjustmentType: stockAdjustmentVouchers.adjustmentType,
     })
     .from(stockAdjustmentItems)
@@ -245,18 +288,23 @@ export async function calculateHistoricalLocationInventory(
         eq(stockAdjustmentVouchers.locationId, locationId),
         eq(vouchers.optional, false),
         isNull(vouchers.deletedAt),
-        sql`${vouchers.voucherDate} > ${cutoffDateStr}`
+        sql`COALESCE(${vouchers.effectiveDate}, ${vouchers.voucherDate}) > ${cutoffDateStr}`
       )
     )
     .execute();
 
   for (const adj of adjustmentsAfterDate) {
-    // stock_adjustment_items.quantity is stored signed. Reverse both quantity
-    // and the exact stored line value with the same sign so historical value is
-    // not reconstructed from the rounded rate.
-    const qty = toMoney(adj.quantity);
-    const absoluteValue = exactMovementValue(adj.totalAmount, qty, toMoney(adj.rate));
-    const signedValue = qty.lessThan(0) ? absoluteValue.negated() : absoluteValue;
+    // The line's direction is the writer's: a Production receives, a
+    // Consumption issues (its quantity is stored as entered, unsigned), and a
+    // Mixed line moves by the sign of its quantity. Reverse both quantity and
+    // the exact stored line value in that direction so historical value is not
+    // reconstructed from the rounded rate.
+    const rawQty = toMoney(adj.quantity);
+    const adjustmentType = (adj.adjustmentType ?? "").trim().toLowerCase();
+    const inward = adjustmentType === "production" || (adjustmentType !== "consumption" && !rawQty.lessThan(0));
+    const qty = inward ? rawQty.abs() : rawQty.abs().negated();
+    const absoluteValue = exactMovementValue(adj.totalAmount, qty, toMoney(adj.rate), adj.valueMoved);
+    const signedValue = inward ? absoluteValue : absoluteValue.negated();
     applyHistoricalMovement(inventoryMap, adj.stockItemId, qty.negated(), signedValue.negated());
   }
 
@@ -277,12 +325,13 @@ export async function calculateHistoricalLocationInventory(
     );
   }
 
-  const transfersInAfterDate = await db
+  const transfersInAfterDate = await executor
     .select({
       stockItemId: stockTransferItems.stockItemId,
       quantity: stockTransferItems.quantity,
       rate: stockTransferItems.rate,
       totalAmount: stockTransferItems.totalAmount,
+      valueMoved: stockTransferItems.valueMoved,
     })
     .from(stockTransferItems)
     .innerJoin(stockTransferVouchers, eq(stockTransferItems.transferId, stockTransferVouchers.id))
@@ -293,23 +342,24 @@ export async function calculateHistoricalLocationInventory(
         eq(stockTransferVouchers.destinationLocationId, locationId),
         eq(vouchers.optional, false),
         isNull(vouchers.deletedAt),
-        sql`${vouchers.voucherDate} > ${cutoffDateStr}`
+        sql`COALESCE(${vouchers.effectiveDate}, ${vouchers.voucherDate}) > ${cutoffDateStr}`
       )
     )
     .execute();
 
   for (const transfer of transfersInAfterDate) {
     const qty = toMoney(transfer.quantity);
-    const value = exactMovementValue(transfer.totalAmount, qty, toMoney(transfer.rate));
+    const value = exactMovementValue(transfer.totalAmount, qty, toMoney(transfer.rate), transfer.valueMoved);
     applyHistoricalMovement(inventoryMap, transfer.stockItemId, qty.negated(), value.negated());
   }
 
-  const transfersOutAfterDate = await db
+  const transfersOutAfterDate = await executor
     .select({
       stockItemId: stockTransferItems.stockItemId,
       quantity: stockTransferItems.quantity,
       rate: stockTransferItems.rate,
       totalAmount: stockTransferItems.totalAmount,
+      valueMoved: stockTransferItems.valueMoved,
     })
     .from(stockTransferItems)
     .innerJoin(stockTransferVouchers, eq(stockTransferItems.transferId, stockTransferVouchers.id))
@@ -320,23 +370,24 @@ export async function calculateHistoricalLocationInventory(
         eq(stockTransferItems.sourceLocationId, locationId),
         eq(vouchers.optional, false),
         isNull(vouchers.deletedAt),
-        sql`${vouchers.voucherDate} > ${cutoffDateStr}`
+        sql`COALESCE(${vouchers.effectiveDate}, ${vouchers.voucherDate}) > ${cutoffDateStr}`
       )
     )
     .execute();
 
   for (const transfer of transfersOutAfterDate) {
     const qty = toMoney(transfer.quantity);
-    const value = exactMovementValue(transfer.totalAmount, qty, toMoney(transfer.rate));
+    const value = exactMovementValue(transfer.totalAmount, qty, toMoney(transfer.rate), transfer.valueMoved);
     applyHistoricalMovement(inventoryMap, transfer.stockItemId, qty, value);
   }
 
-  const offloadsAfterDate = await db
+  const offloadsAfterDate = await executor
     .select({
       stockItemId: containerOffloadItems.stockItemId,
       quantity: containerOffloadItems.quantity,
       rate: containerOffloadItems.rate,
       totalValue: containerOffloadItems.totalValue,
+      valueMoved: containerOffloadItems.valueMoved,
     })
     .from(containerOffloadItems)
     .innerJoin(containerOffloads, eq(containerOffloadItems.offloadId, containerOffloads.id))
@@ -345,14 +396,22 @@ export async function calculateHistoricalLocationInventory(
       and(
         eq(containers.companyId, companyId),
         eq(containerOffloads.locationId, locationId),
-        gt(containerOffloads.offloadedAt, cutoffTimestamp)
+        // A suspended (optional) offload's stock is already out of inventory.
+        eq(containerOffloads.optional, false),
+        // Dated as the stock-in journal dates it: the container's offload date,
+        // else the offload's own timestamp (wave 15).
+        sql`COALESCE(${containers.offloadDate}, (${containerOffloads.offloadedAt})::date) > ${cutoffDateStr}::date`
       )
     )
     .execute();
 
   for (const offload of offloadsAfterDate) {
     const qty = toMoney(offload.quantity);
-    const value = exactMovementValue(offload.totalValue, qty, toMoney(offload.rate));
+    // An offload line's direction is the sign of its quantity: a net-negative
+    // PO line returned stock (its value_moved is negative too), so it is
+    // replayed as an issue, not as a receipt of a negative amount.
+    const amount = exactMovementValue(offload.totalValue, qty, toMoney(offload.rate), offload.valueMoved);
+    const value = qty.isNegative() ? amount.negated() : amount;
     applyHistoricalMovement(inventoryMap, offload.stockItemId, qty.negated(), value.negated());
   }
 
@@ -360,11 +419,12 @@ export async function calculateHistoricalLocationInventory(
   // stock (were inward) so reverse by subtracting; Debit Notes reduced stock
   // (were outward) so reverse by adding back — mirrors the sign convention
   // used in the monthly-summary month buckets.
-  const creditDebitNotesAfterDate = await db
+  const creditDebitNotesAfterDate = await executor
     .select({
       stockItemId: creditNoteItems.stockItemId,
       quantity: creditNoteItems.quantity,
       inventoryCost: creditNoteItems.inventoryCost,
+      valueMoved: creditNoteItems.valueMoved,
       noteType: vouchers.voucherType,
     })
     .from(creditNoteItems)
@@ -373,15 +433,17 @@ export async function calculateHistoricalLocationInventory(
       and(
         eq(vouchers.companyId, companyId),
         eq(creditNoteItems.locationId, locationId),
+        // An optional note is not in the ledger (wave 15).
+        eq(vouchers.optional, false),
         isNull(vouchers.deletedAt),
-        sql`${vouchers.voucherDate} > ${cutoffDateStr}`
+        sql`COALESCE(${vouchers.effectiveDate}, ${vouchers.voucherDate}) > ${cutoffDateStr}`
       )
     )
     .execute();
 
   for (const note of creditDebitNotesAfterDate) {
     const qty = toMoney(note.quantity);
-    const value = qty.times(toMoney(note.inventoryCost));
+    const value = exactMovementValue(null, qty, toMoney(note.inventoryCost), note.valueMoved);
     if (note.noteType === "Credit Note") {
       applyHistoricalMovement(inventoryMap, note.stockItemId, qty.negated(), value.negated());
     } else {
@@ -389,10 +451,22 @@ export async function calculateHistoricalLocationInventory(
     }
   }
 
+  // Reverse the evidenced movements after the date: each line is the signed
+  // change it made to the row.
+  for (const movement of evidenceAfterDate) {
+    if (movement.stockItemId === null) continue;
+    applyHistoricalMovement(
+      inventoryMap,
+      movement.stockItemId,
+      toMoney(movement.quantityDelta ?? 0).negated(),
+      toMoney(movement.valueDelta).negated()
+    );
+  }
+
   const stockItemIdList = Array.from(inventoryMap.keys());
   if (stockItemIdList.length === 0) return [];
 
-  const itemDetails = await db
+  const itemDetails = await executor
     .select({
       id: stockItemsTable.id,
       code: stockItemsTable.code,
@@ -432,4 +506,29 @@ export async function calculateHistoricalLocationInventory(
     });
   }
   return results;
+}
+
+/**
+ * Evidenced movements after `asOfDate` that name no stock item (a transfer's
+ * settlement residual, a reversal difference, a container's pre-cut-over
+ * offload movement): the signed value they changed, by location (null when the
+ * line names none). The as-of company valuation reverses them from the
+ * sub-ledger total; they cannot be placed on an item row.
+ */
+export async function unitemizedInventoryMovementsAfter(
+  executor: DatabaseOrTransaction,
+  companyId: number,
+  asOfDate: string
+): Promise<Map<number | null, Decimal>> {
+  const result = await executor.execute(sql`
+    SELECT location_id, SUM(value_delta)::text AS value
+      FROM inventory_value_movements
+     WHERE company_id = ${companyId} AND stock_item_id IS NULL AND movement_date > ${asOfDate}::date
+     GROUP BY location_id
+  `);
+  const byLocation = new Map<number | null, Decimal>();
+  for (const row of result.rows as unknown as { location_id: number | null; value: string }[]) {
+    byLocation.set(row.location_id === null ? null : Number(row.location_id), toMoney(row.value));
+  }
+  return byLocation;
 }

@@ -5,6 +5,7 @@ import { getErrorMessage } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
 import { deleteRentalPaymentGroup, type RentalModule } from "../../services/rental/rentalPaymentDeletionService";
 import { getCompanyId } from "./shared";
+import { sessionRetirementActor } from "../../services/accounting/voucherRetirement";
 
 export function registerCentralRentalPaymentDeletionRoute(app: Express, module: RentalModule, urlPrefix: string): void {
   app.delete(`${urlPrefix}/payments/:id`, requireAuth, async (req: Request, res: Response) => {
@@ -19,7 +20,12 @@ export function registerCentralRentalPaymentDeletionRoute(app: Express, module: 
         return res.status(400).json({ message: "Invalid payment id" });
       }
 
-      const result = await deleteRentalPaymentGroup({ companyId, module, paymentId });
+      const result = await deleteRentalPaymentGroup({
+        companyId,
+        module,
+        paymentId,
+        actor: sessionRetirementActor(req),
+      });
       if (!result.found) return res.status(404).json({ message: "Payment not found" });
 
       return res.json({

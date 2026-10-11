@@ -10,6 +10,7 @@ import { db } from "../../../db";
 import { requireAuth } from "../../../auth";
 import { inventory, stockItems, stockGroups, locations } from "@shared/schema";
 import { eq, and, isNull } from "drizzle-orm";
+import { toMoney } from "../../../lib/money";
 
 export function registerStockQueryRoutes(app: Express) {
   // Stock Query - Aggregated stock data across all locations
@@ -45,12 +46,14 @@ export function registerStockQueryRoutes(app: Express) {
           stockItemId: inventory.stockItemId,
           quantity: inventory.quantity,
           averageRate: inventory.averageRate,
+          totalValue: inventory.totalValue,
         })
         .from(inventory)
         .innerJoin(locations, eq(inventory.locationId, locations.id))
         .where(eq(locations.companyId, req.session.currentCompanyId));
 
-      // Aggregate inventory by stock item - calculate value dynamically as qty * rate
+      // Aggregate inventory by stock item at the stored total_value (wave 11),
+      // never quantity × the rounded average rate.
       const inventoryMap = new Map<number, { totalQty: number; totalValue: number }>();
 
       for (const record of inventoryRecords) {
@@ -59,9 +62,8 @@ export function registerStockQueryRoutes(app: Express) {
           totalValue: 0,
         };
         const qty = parseFloat(record.quantity || "0");
-        const rate = parseFloat(record.averageRate || "0");
         existing.totalQty += qty;
-        existing.totalValue += qty * rate;
+        existing.totalValue = toMoney(existing.totalValue).plus(toMoney(record.totalValue)).toNumber();
         inventoryMap.set(record.stockItemId, existing);
       }
 

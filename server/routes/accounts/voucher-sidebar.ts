@@ -11,6 +11,7 @@ import { storage } from "../../storage";
 import { requireAuth } from "../../auth";
 import { isSupplierVisibleToCompany } from "../helpers/supplierBalanceHelpers";
 import { getCustomersWithBalances } from "../customers/customerBalanceQuery";
+import { loadPartyOpeningSides } from "../helpers/partyOpeningSide";
 import {
   vouchers,
   voucherEntries,
@@ -110,21 +111,12 @@ export function registerAccountVoucherSidebarRoutes(app: Express) {
             factorySupplierId: voucherEntries.factorySupplierId,
             debits: sql<string>`COALESCE(SUM(CAST(${voucherEntries.debitAmount} AS numeric)), 0)`,
             credits: sql<string>`COALESCE(SUM(CAST(${voucherEntries.creditAmount} AS numeric)), 0)`,
-            supplierPureCredits: sql<string>`COALESCE(SUM(
+            // ERP supplier movement: every line nets credit − debit (a line
+            // carrying both is netted, not dropped).
+            supplierNet: sql<string>`COALESCE(SUM(
               CASE
                 WHEN ${voucherEntries.supplierId} IS NOT NULL
-                  AND CAST(${voucherEntries.creditAmount} AS numeric) > 0
-                  AND CAST(${voucherEntries.debitAmount} AS numeric) = 0
-                THEN CAST(${voucherEntries.creditAmount} AS numeric)
-                ELSE 0
-              END
-            ), 0)`,
-            supplierPureDebits: sql<string>`COALESCE(SUM(
-              CASE
-                WHEN ${voucherEntries.supplierId} IS NOT NULL
-                  AND CAST(${voucherEntries.debitAmount} AS numeric) > 0
-                  AND CAST(${voucherEntries.creditAmount} AS numeric) = 0
-                THEN CAST(${voucherEntries.debitAmount} AS numeric)
+                THEN CAST(${voucherEntries.creditAmount} AS numeric) - CAST(${voucherEntries.debitAmount} AS numeric)
                 ELSE 0
               END
             ), 0)`,
@@ -133,8 +125,12 @@ export function registerAccountVoucherSidebarRoutes(app: Express) {
                 WHEN ${voucherEntries.factorySupplierId} IS NOT NULL
                   AND COALESCE(${vouchers.voucherNumber}, '') NOT LIKE 'FACTORY-PAY-%'
                   AND CAST(${voucherEntries.debitAmount} AS numeric) > 0
-                  AND CAST(${voucherEntries.creditAmount} AS numeric) = 0
                 THEN CASE
+                  -- A normalized entry already holds its USD base; only a legacy
+                  -- foreign-currency entry is converted from the voucher's rate.
+                  WHEN ${voucherEntries.transactionCurrency} IS NOT NULL AND ${voucherEntries.transactionCurrency} <> ''
+                    AND ${voucherEntries.baseDebitAmount} IS NOT NULL AND ${voucherEntries.baseCreditAmount} IS NOT NULL
+                    THEN CAST(${voucherEntries.baseDebitAmount} AS numeric)
                   WHEN COALESCE(${vouchers.currency}, 'USD') = 'USD'
                     THEN CAST(${voucherEntries.debitAmount} AS numeric)
                   ELSE CAST(${voucherEntries.debitAmount} AS numeric) /
@@ -200,6 +196,16 @@ export function registerAccountVoucherSidebarRoutes(app: Express) {
       // a company resolving to itself never applies — and which would otherwise
       // also apply those suppliers' opening balances.
       const suppliers = allSuppliers.filter((supplier) => isSupplierVisibleToCompany(supplier, companyId));
+      const [employeeOpeningSides, supplierOpeningSides] = await Promise.all([
+        loadPartyOpeningSides(
+          "employees",
+          employees.map((employee) => employee.id)
+        ),
+        loadPartyOpeningSides(
+          "suppliers",
+          suppliers.map((supplier) => supplier.id)
+        ),
+      ]);
 
       // Fold the compact aggregate rows into the same balance maps used by
       // the response-building code below.
@@ -242,10 +248,7 @@ export function registerAccountVoucherSidebarRoutes(app: Express) {
 
         if (row.supplierId) {
           const existing = supplierBalances.get(row.supplierId) || ZERO;
-          supplierBalances.set(
-            row.supplierId,
-            existing.plus(toMoney(row.supplierPureCredits)).minus(toMoney(row.supplierPureDebits))
-          );
+          supplierBalances.set(row.supplierId, existing.plus(toMoney(row.supplierNet)));
         }
 
         if (row.factorySupplierId) {
@@ -299,10 +302,14 @@ export function registerAccountVoucherSidebarRoutes(app: Express) {
         ...employees.map((employee) => {
           const movements = employeeBalances.get(employee.id) || NO_MOVEMENT;
           const openingBalance = toMoney(employee.openingBalance);
+          const openingBalanceSide = employeeOpeningSides.get(employee.id) ?? "Cr";
           // Employee accounts are liability (Cr-normal): credits increase balance, debits decrease it.
-          // Positive netBalance = Cr (we owe them, the normal state).
+          // Positive netBalance = Cr (we owe them, the normal state). The opening
+          // follows employees.opening_balance_side (null → Cr).
           // This matches the payroll page's currentBalance convention.
-          const netBalance = openingBalance.plus(movements.credits).minus(movements.debits);
+          const netBalance = (openingBalanceSide === "Dr" ? openingBalance.negated() : openingBalance)
+            .plus(movements.credits)
+            .minus(movements.debits);
           const balanceSide = netBalance.greaterThanOrEqualTo(0) ? "Cr" : "Dr";
 
           return {
@@ -314,7 +321,7 @@ export function registerAccountVoucherSidebarRoutes(app: Express) {
             balance: netBalance.abs().toFixed(2),
             balanceSide,
             openingBalance: openingBalance.toNumber(),
-            openingBalanceSide: "Cr",
+            openingBalanceSide,
             active: employee.active,
             parentId: null,
           };
@@ -370,8 +377,12 @@ export function registerAccountVoucherSidebarRoutes(app: Express) {
           .filter((supplier) => !isChildCompany || supplierBalances.has(supplier.id))
           .map((supplier) => {
             const transactionBalance = supplierBalances.get(supplier.id) || ZERO;
-            const openingBalance = isChildCompany ? ZERO : toMoney(supplier.openingBalance);
-            // Suppliers are always Cr (we owe them). Negate so credit balance is negative in the signed system.
+            const openingAmount = isChildCompany ? ZERO : toMoney(supplier.openingBalance);
+            // Cr positive here (we owe them); the opening follows
+            // suppliers.opening_balance_side (null → Cr). Negate so a credit
+            // balance is negative in the signed system.
+            const openingBalance =
+              supplierOpeningSides.get(supplier.id) === "Dr" ? openingAmount.negated() : openingAmount;
             const balance = openingBalance.plus(transactionBalance).negated().toNumber();
 
             return {

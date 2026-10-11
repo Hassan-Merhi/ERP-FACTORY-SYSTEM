@@ -15,6 +15,7 @@ import {
   runWithDatabaseScopeRuntimeContext,
 } from "../../services/security/databaseScopeRuntimeContext";
 import { storage } from "../../storage";
+import { CompanyHasHistoryError } from "../../storage/company-deletion";
 import { companies } from "@shared/schema";
 import { eq } from "drizzle-orm";
 
@@ -243,7 +244,10 @@ export function registerCompanyAccessRoutes(app: Express) {
     }
   });
 
-  app.delete("/api/companies/:id", requireAuth, requireRole("Admin"), async (req, res) => {
+  // Wave 12 (owner decision 4): Owner only (Developer passes, as with every
+  // requireRole), and the Owner must hold the Owner role on the target company
+  // too. Only an empty company can be deleted; one with history is refused 409.
+  app.delete("/api/companies/:id", requireAuth, requireRole("Owner"), async (req, res) => {
     try {
       const companyId = await resolveAuthorizedCompanyId(req, req.params.id);
       if (Number(req.session.currentCompanyId) === companyId) {
@@ -253,6 +257,12 @@ export function registerCompanyAccessRoutes(app: Express) {
         });
       }
       if (!req.user) return res.status(401).json({ message: "Unauthorized" });
+      if (req.user.role !== "Developer") {
+        const targetRole = await storage.getUserCompanyRole(req.user.id, companyId);
+        if (targetRole?.role !== "Owner") {
+          return res.status(403).json({ message: "Only an Owner of the company can delete it." });
+        }
+      }
 
       // Company Management is intentionally cross-company for Admin/Developer.
       // The request's normal DB scope is still pinned to the active company, so
@@ -261,12 +271,15 @@ export function registerCompanyAccessRoutes(app: Express) {
       const accessibleCompanyIds = await getAccessibleCompanyIds(req.user.id);
       await runWithDatabaseScopeRuntimeContext(
         createTenantDatabaseScope(companyId, [...accessibleCompanyIds], "authorized-companies"),
-        () => storage.deleteCompany(companyId)
+        () => storage.deleteCompany(companyId, { userId: req.user?.id, username: req.user?.username })
       );
 
       res.json({ message: "Company deleted successfully" });
     } catch (error: unknown) {
       if (error instanceof CompanyAccessError) return sendCompanyAccessError(res, error);
+      if (error instanceof CompanyHasHistoryError) {
+        return res.status(409).json({ message: error.message, code: error.code, blockers: error.blockers });
+      }
       res.status(400).json({ message: getErrorMessage(error) });
     }
   });

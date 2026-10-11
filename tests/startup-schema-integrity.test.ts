@@ -169,8 +169,8 @@ import { startupMigrations } from "../server/startup-schema";
  * permissions into Overview (Factory POS is its own page again). Three
  * statements were edited in place; the count is unchanged.
  */
-const EXPECTED_STATEMENT_COUNT = 1416;
-const EXPECTED_CONTENT_HASH = "6a1d1d9da5cbdec5d98fa900bfcb3b3be40af9b0f0aae7a8674f12c2cc5e3777";
+const EXPECTED_STATEMENT_COUNT = 1422;
+const EXPECTED_CONTENT_HASH = "0fa96fd2b4d9c68ac55bc95b29a12a9c5509bcddd2691124c03cc07760b1dcbc";
 /**
  * sha256 of JSON.stringify(startupMigrations) for the reviewed composed array.
  *
@@ -229,6 +229,50 @@ const EXPECTED_CONTENT_HASH = "6a1d1d9da5cbdec5d98fa900bfcb3b3be40af9b0f0aae7a86
  * against factory_containers, so the validation compared rows against the wrong
  * parent table and raised foreign_key_violation on every boot of a database
  * holding factory rows. Only those three were deleted and no statement moved.
+ *
+ * Re-pinned again (2026-10 accounting audit) when two boot-time steps that
+ * rewrote posted history were retired: the GUAR-CASH debit/credit swap in 007
+ * and the duplicate-account merge in 009 (re-pointed voucher_entries and
+ * hard-deleted ledger accounts on every boot). main had 1415 statements against
+ * a stale pin of 1413; with the two removed the array is 1413, and nothing else
+ * moved.
+ *
+ * Re-pinned again (2026-10 accounting audit, wave 11): the orphan repair stage
+ * (005) copies rows into its archive tables by column name, not by position,
+ * and adds any source column an archive lacks (one statement per archived
+ * table, eight in all), because wave 11 added value_moved to
+ * stock_transfer_items and an archive created on an earlier boot would no
+ * longer line up. 010's inventory company backfill was made a no-op when
+ * nothing is mismatched and no longer moves a cut-over company's stock. The
+ * count goes from 1413 to 1421.
+ *
+ * Re-pinned again (2026-10 accounting audit, wave 12): 006 no longer adds
+ * audit_log_company_id_fkey and drops it instead. audit_log is append-only and
+ * outlives the company it describes, so an empty company's deletion keeps its
+ * audit rows; with the RESTRICT key no company could ever be deleted. One
+ * statement replaced, so the count is unchanged.
+ *
+ * Re-pinned again when the 2026-10 accounting audit branch merged main:
+ * main's array was 1416 (its notes above, the last being
+ * customer_orders.booking_info in 004) and this branch's was 1421 (the audit
+ * notes above). The 1413 -> 1415 step main describes (#2083, fe59923) was
+ * already in this branch's 1413 base, so the merge adds only main's
+ * booking_info ADD COLUMN to this branch's 1421: 1422. Nothing else
+ * moved.
+ *
+ * Re-pinned again (2026-10 accounting audit, wave 16 A) when four boot-time
+ * rewrites of posted history were retired in place: 010's
+ * orphan-factory-daybook-cleanup-v1 no longer hard-deletes vouchers (only the
+ * daybook mirror), 006's two orphan sweeps no longer clear party ids on posted
+ * lines (their foreign keys are added NOT VALID instead), and 006's
+ * accrued-rent-soft-delete-v1 no longer soft-deletes accounts by name. Every
+ * statement was edited in place, so the count is unchanged at 1422.
+ *
+ * Re-pinned when origin/main (Factory POS restored, #2129) was merged into the
+ * accounting audit branch: main's three in-place edits to
+ * 001-core-tables-and-columns (factory/pos permissions no longer folded into
+ * Overview) were combined with this branch's edits. No statement was added or
+ * moved, so the count stays at 1422; only the content hash changed.
  */
 
 function contentHash(statements: string[]): string {

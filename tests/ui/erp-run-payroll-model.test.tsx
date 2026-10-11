@@ -230,9 +230,10 @@ describe("ERP payroll model positive paths", () => {
     });
     act(() => result.current.enterPreview());
 
-    // Each render registers five mutations; take the latest render's set so the
-    // draft mutation closes over the preview items built above.
-    const [saveDraft, payRun, deleteRun, undoRun, migrate] = harness.mutationConfigs.slice(-5);
+    // Each render registers four mutations (the group-expense migration was
+    // retired in phase 19 A); take the latest render's set so the draft
+    // mutation closes over the preview items built above.
+    const [saveDraft, payRun, deleteRun, undoRun] = harness.mutationConfigs.slice(-4);
 
     await expect(saveDraft.mutationFn()).resolves.toEqual({ ok: true });
     expect(harness.apiRequest).toHaveBeenCalledWith(
@@ -247,25 +248,18 @@ describe("ERP payroll model positive paths", () => {
     await expect(payRun.mutationFn({ runId: 70, accountId: "90" })).resolves.toEqual({ ok: true });
     await expect(deleteRun.mutationFn(70)).resolves.toBeUndefined();
     await expect(undoRun.mutationFn(70)).resolves.toBeUndefined();
-    await expect(migrate.mutationFn()).resolves.toEqual({ ok: true });
 
     act(() => {
       saveDraft.onSuccess();
       payRun.onSuccess({});
       deleteRun.onSuccess();
       undoRun.onSuccess();
-      migrate.onSuccess({ migrated: 2, total: 2 });
-      migrate.onError(new Error("Owner approval required"));
     });
 
     expect(result.current.activeTab).toBe("history");
     expect(result.current.selectedWorkers.size).toBe(0);
-    expect(result.current.migrateConfirmOpen).toBe(false);
     expect(harness.invalidateQueries).toHaveBeenCalled();
     expect(harness.toast).toHaveBeenCalledWith(expect.objectContaining({ title: "Payroll paid" }));
     expect(harness.toast).toHaveBeenCalledWith(expect.objectContaining({ title: "Payroll undone" }));
-    expect(harness.toast).toHaveBeenCalledWith(
-      expect.objectContaining({ title: "Migration failed", variant: "destructive" })
-    );
   });
 });

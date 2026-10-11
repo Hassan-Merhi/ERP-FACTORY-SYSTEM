@@ -74,6 +74,12 @@ export const insertLedgerAccountSchema = createInsertSchema(ledgerAccounts)
       "Transporter Agent",
       "Accounts Payable",
       "Profit",
+      // Stored by bulk payroll (deduction recoveries) and read as income by
+      // every report (accountClassification.ts). "Intercompany" is left out on
+      // purpose: those accounts are created only by the Golden Coast / SP setup,
+      // which resolves them by subType and refuses a duplicate, so letting the
+      // generic ledger route create one would break those postings.
+      "Indirect Income",
     ]),
     subType: z.string().nullable().optional(),
     openingBalance: z.string().optional(),
@@ -164,6 +170,8 @@ export const fixedAssets = pgTable(
     openingBalance: decimal("opening_balance", { precision: 15, scale: 2 }),
     active: boolean("active").notNull().default(true),
     createdAt: timestamp("created_at").notNull().defaultNow(),
+    // Phase 19 (B), PE7: the delete is a soft delete (ensureRuntimeSchema adds the column).
+    deletedAt: timestamp("deleted_at"),
   },
   (t) => ({
     companyIdx: index("fixed_assets_company_idx").on(t.companyId),
@@ -174,6 +182,7 @@ export const insertFixedAssetSchema = createInsertSchema(fixedAssets)
   .omit({
     id: true,
     createdAt: true,
+    deletedAt: true,
   })
   .extend({
     companyId: z.number().min(1, "Company is required"),

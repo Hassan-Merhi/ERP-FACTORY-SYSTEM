@@ -2,27 +2,16 @@
  * The books a Factory POS sale writes outside its own tables, and how to take
  * them back out. Shared by the edit and void endpoints so both reverse exactly
  * what the sale endpoint posted.
+ *
+ * Merge of main #2129 into the accounting audit branch: the receipt voucher is
+ * removed through `removeFactoryPosReceiptTx` (FPOS-RCPT-{sale} and legacy
+ * FPOS-{sale}-{timestamp}; retired, audited, numbers released), not a plain
+ * soft delete; the edit re-posts it through `postFactoryPosReceiptTx`.
  */
-import { and, eq, isNull, or, sql } from "drizzle-orm";
-import { customerBalances, factoryDaybookEntries, vouchers } from "@shared/schema";
+import { and, eq, or } from "drizzle-orm";
+import { customerBalances, factoryDaybookEntries } from "@shared/schema";
 import type { DbTransaction } from "../../../../db";
-import { removeFactoryDaybookMirrorTx } from "../../../../services/accounting/factoryDaybookMirrorRemoval";
-import { softDeleteVoucherTx } from "../../../../services/accounting/voucherSoftDelete";
-
-/** The live receipt vouchers posted for a sale (numbered FPOS-<saleId>-<timestamp>). */
-export async function findFactoryPosSaleVouchersTx(tx: DbTransaction, companyId: number, saleId: number) {
-  return tx
-    .select()
-    .from(vouchers)
-    .where(
-      and(
-        eq(vouchers.companyId, companyId),
-        eq(vouchers.sourceModule, "FACTORY_POS"),
-        isNull(vouchers.deletedAt),
-        sql`voucher_number LIKE ${"FPOS-" + saleId + "-%"}`
-      )
-    );
-}
+import { removeFactoryPosReceiptTx } from "../../../../services/accounting/factoryPosReceipt";
 
 /** Removes the sale's credit-customer ledger rows (the sale debit and any deposit credit). */
 export async function removeFactoryPosCustomerBalancesTx(tx: DbTransaction, companyId: number, saleId: number) {
@@ -40,17 +29,11 @@ export async function removeFactoryPosCustomerBalancesTx(tx: DbTransaction, comp
     );
 }
 
-/** Soft-deletes one receipt voucher and drops any daybook mirror it has. */
-export async function retireFactoryPosVoucherTx(tx: DbTransaction, companyId: number, voucherId: number) {
-  await softDeleteVoucherTx(tx, voucherId);
-  await removeFactoryDaybookMirrorTx({ tx, voucherId, companyId });
-}
-
 /**
  * Takes everything a sale posted back out of the books: its daybook rows
  * (the bale sale and its expense deductions), its credit-customer balance
- * rows, and its receipt voucher. The voucher is soft-deleted so the audit
- * trail keeps it.
+ * rows, and its receipt voucher (retired, so the audit trail keeps it). The
+ * cost-of-sales journal and the bales are the caller's (sale-delete.ts).
  */
 export async function reverseFactoryPosSaleFinancialsTx(tx: DbTransaction, companyId: number, saleId: number) {
   await tx
@@ -63,7 +46,5 @@ export async function reverseFactoryPosSaleFinancialsTx(tx: DbTransaction, compa
       )
     );
   await removeFactoryPosCustomerBalancesTx(tx, companyId, saleId);
-  for (const voucher of await findFactoryPosSaleVouchersTx(tx, companyId, saleId)) {
-    await retireFactoryPosVoucherTx(tx, companyId, voucher.id);
-  }
+  await removeFactoryPosReceiptTx(tx, companyId, saleId);
 }
