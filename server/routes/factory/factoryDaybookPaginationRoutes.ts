@@ -6,6 +6,7 @@ import { requireAuth } from "../../auth";
 import { db, pool } from "../../db";
 import { buildPaginationIntegrityConditions } from "../../services/factory/daybookSourceIntegrity";
 import { factoryBaleProducts, factoryBales, factoryUserProfiles } from "@shared/schema";
+import { parseMoneyInput, toMoney } from "../../lib/money";
 
 const MAX_PAGE_SIZE = 250;
 const DEFAULT_PAGE_SIZE = 100;
@@ -109,7 +110,7 @@ async function deriveBaleStockEntryAmounts(rows: BaleStockDaybookRow[], companyI
   const priceByProductId = new Map<number, number>();
   const priceByArticleCode = new Map<string, number>();
   for (const product of products) {
-    const price = Number.parseFloat(product.productionPrice || "0") || 0;
+    const price = toMoney(product.productionPrice).toNumber();
     priceByProductId.set(product.id, price);
     if (product.articleCode) priceByArticleCode.set(product.articleCode, price);
   }
@@ -169,8 +170,8 @@ export function registerFactoryDaybookPaginationRoutes(app: Express): void {
           : undefined;
       const search = typeof req.query.search === "string" ? req.query.search.trim() : "";
       const optionalStatus = String(req.query.optionalStatus ?? req.query.statusFilter ?? "all");
-      const minAmount = Number.parseFloat(String(req.query.minAmount ?? ""));
-      const maxAmount = Number.parseFloat(String(req.query.maxAmount ?? ""));
+      const minAmount = parseMoneyInput(String(req.query.minAmount ?? ""))?.toNumber() ?? NaN;
+      const maxAmount = parseMoneyInput(String(req.query.maxAmount ?? ""))?.toNumber() ?? NaN;
       const sortDirection = req.query.sortOrder === "asc" ? "ASC" : "DESC";
       const { page, limit, offset } = parsePagination(req);
 

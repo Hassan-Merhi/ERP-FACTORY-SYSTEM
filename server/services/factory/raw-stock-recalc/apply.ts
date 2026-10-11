@@ -11,6 +11,7 @@ import {
 } from "@shared/schema";
 import { cascadeContainerCostChange } from "../rawStockCostCascade";
 import { COST_SCALE, computeCorrectContainerCost, computeRecalcFingerprint, costEquals, costRound } from "./cost-math";
+import { toMoney } from "../../../lib/money";
 
 export interface ApplyResult {
   containerId: number;
@@ -47,7 +48,11 @@ async function isFullyCorrect(
   tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
   containerId: number,
   next: ReturnType<typeof computeCorrectContainerCost>,
-  container: { finalPayableAmount: undefined | null | string | number; finalPayableAmountUsd: undefined | null | string | number; ratePerKgUsd: undefined | null | string | number },
+  container: {
+    finalPayableAmount: undefined | null | string | number;
+    finalPayableAmountUsd: undefined | null | string | number;
+    ratePerKgUsd: undefined | null | string | number;
+  },
   rawStockRow: { costPerKg: undefined | null | string | number; costPerKgUsd: undefined | null | string | number }
 ): Promise<boolean> {
   // A. Container snapshot
@@ -204,8 +209,8 @@ export async function applyRawStockRecalc(
       // Multi-layer "already correct" check (all 3 layers must match)
       const alreadyCorrect = await isFullyCorrect(tx, containerId, next, container, rawStockRow);
       if (alreadyCorrect) {
-        const receivedKg = parseFloat(container.actualReceivedKg || "0");
-        const usedKg = rawStockRow ? parseFloat(rawStockRow.usedKg || "0") : receivedKg;
+        const receivedKg = toMoney(container.actualReceivedKg).toNumber();
+        const usedKg = rawStockRow ? toMoney(rawStockRow.usedKg).toNumber() : receivedKg;
         const remainingKg = Math.max(0, receivedKg - usedKg);
         return {
           containerId,
@@ -248,8 +253,8 @@ export async function applyRawStockRecalc(
       }
 
       // Determine fully-used before writing (for locked-rate decision)
-      const receivedKg = parseFloat(container.actualReceivedKg || "0");
-      const usedKg = rawStockRow ? parseFloat(rawStockRow.usedKg || "0") : receivedKg;
+      const receivedKg = toMoney(container.actualReceivedKg).toNumber();
+      const usedKg = rawStockRow ? toMoney(rawStockRow.usedKg).toNumber() : receivedKg;
       const remainingKg = Math.max(0, receivedKg - usedKg);
       const fullyUsed = receivedKg > 0 && remainingKg === 0;
 

@@ -22,6 +22,7 @@ import {
   getPricingHealth,
   getBusinessSummary,
 } from "./aiTools";
+import { lineAmount, plusMoney, toMoney } from "./lib/money";
 
 export type ToolType = "read" | "draft" | "write";
 
@@ -311,7 +312,7 @@ export async function runTool(
           description: params.description || "",
           debitAccountId: params.debitAccountId ?? null,
           creditAccountId: params.creditAccountId ?? null,
-          amount: parseFloat(String(params.amount || "0")).toFixed(2),
+          amount: toMoney(String(params.amount ?? "")).toFixed(2),
         };
         return {
           ok: true,
@@ -326,10 +327,7 @@ export async function runTool(
 
       case "preparePurchaseOrderDraft": {
         const items = Array.isArray(params.items) ? params.items : [];
-        const totalAmount = items.reduce(
-          (s, i) => s + parseFloat(String(i.rate || "0")) * parseFloat(String(i.quantity || "0")),
-          0
-        );
+        const totalAmount = items.reduce((s, i) => plusMoney(s, lineAmount(i.rate, i.quantity)), 0);
         const preview = {
           supplierId: params.supplierId ?? null,
           description: params.description || "",
@@ -363,7 +361,7 @@ export async function runTool(
       }
 
       case "prepareStockAdjustmentDraft": {
-        const qty = parseFloat(String(params.quantity || "0"));
+        const qty = toMoney(String(params.quantity ?? "")).toNumber();
         const preview = {
           stockItemId: params.stockItemId ?? null,
           locationId: params.locationId ?? null,

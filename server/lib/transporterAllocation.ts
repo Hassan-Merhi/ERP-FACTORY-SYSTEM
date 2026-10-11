@@ -1,5 +1,6 @@
 import { db } from "../db";
 import { sql } from "drizzle-orm";
+import { toMoney } from "./money";
 
 /**
  * Fire-and-forget: checks which of the supplied ledger account IDs are
@@ -45,12 +46,12 @@ async function runFifoAllocation(companyId: number, accountId: number): Promise<
   if (!entries.length) return;
 
   const creditEntries = entries
-    .filter((e) => parseFloat(e.credit_amount || "0") > 0)
-    .map((e) => ({ id: e.id, remaining: parseFloat(e.credit_amount) }));
+    .filter((e) => toMoney(e.credit_amount).toNumber() > 0)
+    .map((e) => ({ id: e.id, remaining: toMoney(e.credit_amount).toNumber() }));
 
   const debitEntries = entries
-    .filter((e) => parseFloat(e.debit_amount || "0") > 0)
-    .map((e) => ({ id: e.id, remaining: parseFloat(e.debit_amount) }));
+    .filter((e) => toMoney(e.debit_amount).toNumber() > 0)
+    .map((e) => ({ id: e.id, remaining: toMoney(e.debit_amount).toNumber() }));
 
   // Clear existing allocations for all entries in this account
   const allIds = entries.map((e) => e.id);

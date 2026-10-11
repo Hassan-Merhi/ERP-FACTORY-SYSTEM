@@ -16,6 +16,7 @@ import { writeAuditEvent } from "../../services/audit";
 import { storage } from "../../storage";
 import { InventoryRouteError } from "./inventoryErrors";
 import type { InventoryAuditActor, QuickAdjustmentInput } from "./inventoryRequestContext";
+import { parseMoneyInput, toMoney } from "../../lib/money";
 
 const canonicalStockMovementAdapter = createDatabaseStockMovementAdapter();
 
@@ -51,12 +52,12 @@ export async function quickAdjustInventory(companyId: number, input: QuickAdjust
         .where(and(eq(inventory.stockItemId, input.stockItemId), eq(inventory.locationId, input.locationId)))
         .limit(1);
 
-      const normalizedQuantity = Number.parseFloat(inventoryQuantity(input.quantity));
+      const normalizedQuantity = parseMoneyInput(inventoryQuantity(input.quantity))?.toNumber() ?? NaN;
       if (!Number.isFinite(normalizedQuantity) || normalizedQuantity <= 0) {
         throw new InventoryRouteError(400, "Quantity must be at least 0.001 units.");
       }
 
-      const currentQuantity = existingInventory ? Number.parseFloat(existingInventory.quantity || "0") : 0;
+      const currentQuantity = existingInventory ? toMoney(existingInventory.quantity).toNumber() : 0;
       const adjustedQuantity = input.type === "add" ? normalizedQuantity : -normalizedQuantity;
       const newQuantity = currentQuantity + adjustedQuantity;
       if (newQuantity < 0) {
@@ -66,7 +67,7 @@ export async function quickAdjustInventory(companyId: number, input: QuickAdjust
         );
       }
 
-      const preAdjustmentRate = existingInventory ? Number.parseFloat(existingInventory.averageRate || "0") : 0;
+      const preAdjustmentRate = existingInventory ? toMoney(existingInventory.averageRate).toNumber() : 0;
       const adjustment = await adjustInventory(tx, input.locationId, input.stockItemId, adjustedQuantity, companyId);
       const operationId = randomUUID();
       const movementUnitCost =
