@@ -3,7 +3,7 @@ import * as schema from "@shared/schema";
 import { and, asc, desc, eq, ilike, inArray, isNull, or, sql, type SQL } from "drizzle-orm";
 import { callAIWithFallback, type AIProvider } from "./aiProviders";
 import { RE_ACCOUNT_QUERY, RE_PRICE_UPDATE, RE_STOCK_ITEM_CREATE, RE_VOUCHER_SEARCH } from "./intent";
-import { plusMoney, toMoney } from "../lib/money";
+import { parseMoneyInput, plusMoney, toMoney } from "../lib/money";
 export async function buildLookupDrafts(params: {
   userMessage: string;
   companyId: number;
@@ -392,7 +392,9 @@ If intent is not about an account query, respond with exactly: null`;
             const ob = toMoney(acct.openingBalance).toNumber();
             const obSide = acct.openingBalanceSide || "Dr";
             let running = obSide === "Cr" ? -ob : ob;
-            const target = toMoney(parsed.targetBalance).toNumber();
+            // A missing or invalid extracted target stays NaN, so it matches nothing
+            // instead of searching for a zero balance.
+            const target = parseMoneyInput(parsed.targetBalance)?.toNumber() ?? NaN;
             const tolerance = Math.max(Math.abs(target) * 0.01, 1); // 1% or ±1
 
             const matches = [];
