@@ -1,8 +1,10 @@
 import type { Express, NextFunction, Request, Response } from "express";
+import { sendBaleMirrorMovementRefusal } from "../../services/accounting/perpetualInventory/cutoverRefusal";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 
-import { stockTransferVouchers, vouchers } from "@shared/schema";
+import { stockTransferItems, stockTransferVouchers, vouchers } from "@shared/schema";
+import { writeAuditEvent } from "../../services/audit/auditService";
 import { requireAuth, requireNonPOS } from "../../auth";
 import { db } from "../../db";
 import { getErrorMessage, errorStatus } from "../../lib/httpHandlers";
@@ -109,24 +111,50 @@ export function registerExactStockTransferEditRoute(app: Express): void {
           return res.status(400).json({ message: "Stock item not found" });
         }
 
+        const oldItems = await db
+          .select()
+          .from(stockTransferItems)
+          .where(eq(stockTransferItems.transferId, transfer.id));
+        const uniqueSources = Array.from(new Set(items.map((item) => item.sourceLocationId)));
+        // Phase 21 (B): the voucher header and the edit's audit row (header and
+        // items before/after) commit with the edit; the header used to be written
+        // after commit and the edit was not audited.
         const updated = await storage.updateStockTransfer(
           transfer.id,
           parsed.destinationLocationId,
           parsed.description,
-          items
+          items,
+          async (tx, written) => {
+            const totalAmount = sumMoney(written.items.map((item) => item.totalAmount));
+            const [header] = await tx
+              .update(vouchers)
+              .set({
+                totalAmount: totalAmount.toFixed(2),
+                ...(uniqueSources.length === 1 ? { locationId: uniqueSources[0] } : {}),
+                ...(parsed.voucherDate !== undefined ? { voucherDate: parsed.voucherDate } : {}),
+                description: parsed.description,
+              })
+              .where(eq(vouchers.id, voucherId))
+              .returning();
+            await writeAuditEvent(
+              {
+                userId: req.session.userId ?? undefined,
+                username: req.session.username ?? undefined,
+                companyId,
+                action: "update",
+                tableName: "vouchers",
+                recordId: voucherId,
+                recordIdentifier: voucher.voucherNumber,
+                changes: {
+                  voucher: { old: voucher, new: header },
+                  items: { old: oldItems, new: written.items },
+                },
+              },
+              tx
+            );
+          }
         );
         const totalAmount = sumMoney(updated.items.map((item) => item.totalAmount));
-        const uniqueSources = Array.from(new Set(items.map((item) => item.sourceLocationId)));
-
-        await db
-          .update(vouchers)
-          .set({
-            totalAmount: totalAmount.toFixed(2),
-            ...(uniqueSources.length === 1 ? { locationId: uniqueSources[0] } : {}),
-            ...(parsed.voucherDate !== undefined ? { voucherDate: parsed.voucherDate } : {}),
-            description: parsed.description,
-          })
-          .where(eq(vouchers.id, voucherId));
 
         return res.json({
           success: true,
@@ -146,6 +174,7 @@ export function registerExactStockTransferEditRoute(app: Express): void {
         if (error instanceof z.ZodError) {
           return res.status(400).json({ message: "Invalid stock transfer data", errors: error.issues });
         }
+        if (sendBaleMirrorMovementRefusal(res, error)) return;
         return res.status(errorStatus(error)).json({ message: getErrorMessage(error) });
       }
     }

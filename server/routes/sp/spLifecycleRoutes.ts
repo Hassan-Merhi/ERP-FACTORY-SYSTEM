@@ -1,15 +1,7 @@
 import { releaseDebtEnglish } from "../../i18n/finalCloseoutEnglish";
 import type { Express, Request, Response } from "express";
 import { and, eq, sql } from "drizzle-orm";
-import {
-  spContainers,
-  spPrepaidCharges,
-  spSaleLines,
-  spSales,
-  spStockMovements,
-  voucherEntries,
-  vouchers,
-} from "@shared/schema";
+import { spContainers, spPrepaidCharges, spSaleLines, spSales, spStockMovements, voucherEntries } from "@shared/schema";
 import { requireAuth, requireRole } from "../../auth";
 import { db } from "../../db";
 import { getErrorMessage } from "../../lib/httpHandlers";
@@ -18,16 +10,15 @@ import {
   appendSpLifecycleNote,
   assertSpContainerCancellable,
   assertSpSaleReversible,
-  buildSpReversalEntries,
   normalizeSpLifecycleReason,
   respondToSpLifecycleError,
   restoredSpLotQuantity,
   SpLifecycleError,
 } from "../../services/sp/spLifecyclePolicy";
 import { SP_RELEASE_CURRENCY, SP_RELEASE_EXCHANGE_RATE } from "../../services/sp/spReleasePolicy";
+import { mirroredUsdLines, postFactoryPartyLineVoucherTx } from "../../services/factory/factoryVoucherPosting";
 import { requireSpCompany } from "./spHelpers";
 import { firstRow } from "../../lib/queryResult";
-
 
 function lifecycleDate(value: unknown): string {
   const date = String(value ?? "").trim();
@@ -136,20 +127,21 @@ export function registerSpLifecycleRoutes(app: Express) {
           );
         }
 
-        const [reversalVoucher] = await tx
-          .insert(vouchers)
-          .values({
-            companyId,
-            voucherType: "Journal",
-            voucherNumber: `SP-SALE-REV-${saleId}-${Date.now()}`,
-            voucherDate: reversalDate,
-            description: releaseDebtEnglish(`Supplier Partner sale reversal #${saleId} — ${reason}`),
-            totalAmount: String(sale.total_sale_price_usd),
-            currency: SP_RELEASE_CURRENCY,
-            exchangeRate: SP_RELEASE_EXCHANGE_RATE,
-            sourceModule: "SP",
-          })
-          .returning();
+        // Phase 22 (C): the exact mirror of the sale voucher, posted with the
+        // sale's reversal identity before the stock is restored (the stock
+        // events reference it); family number with the generation (was Date.now()).
+        const { voucherId: reversalVoucherId } = await postFactoryPartyLineVoucherTx(tx, {
+          companyId,
+          voucherNumber: (generation) => `SP-SALE-REV-${saleId}-${generation}`,
+          voucherDate: reversalDate,
+          description: releaseDebtEnglish(`Supplier Partner sale reversal #${saleId} — ${reason}`),
+          currency: SP_RELEASE_CURRENCY,
+          fxRateToUsd: SP_RELEASE_EXCHANGE_RATE,
+          sourceModule: "SP",
+          source: { sourceType: "sp-sale-reversal", sourceId: `${companyId}:${saleId}`, phase: "mirror" },
+          lines: mirroredUsdLines(originalEntries, `SP sale #${saleId} reversal`),
+        });
+        const reversalVoucher = { id: reversalVoucherId };
 
         for (const line of lines) {
           const movement = firstRow(
@@ -192,10 +184,6 @@ export function registerSpLifecycleRoutes(app: Express) {
             sourceVoucherId: reversalVoucher.id,
           });
         }
-
-        await tx
-          .insert(voucherEntries)
-          .values(buildSpReversalEntries(originalEntries, reversalVoucher.id, `SP sale #${saleId} reversal`));
 
         const notes = appendSpLifecycleNote({
           existingNotes: sale.notes,
@@ -303,30 +291,22 @@ export function registerSpLifecycleRoutes(app: Express) {
             );
           }
 
-          const [cancellationVoucher] = await tx
-            .insert(vouchers)
-            .values({
-              companyId,
-              voucherType: "Journal",
-              voucherNumber: `SP-OTW-CANCEL-${containerId}-${Date.now()}`,
-              voucherDate: cancellationDate,
-              description: releaseDebtEnglish(`Supplier Partner container cancellation #${containerId} — ${reason}`),
-              totalAmount: String(originalVoucher.total_amount),
-              currency: SP_RELEASE_CURRENCY,
-              exchangeRate: SP_RELEASE_EXCHANGE_RATE,
-              sourceModule: "SP",
-            })
-            .returning();
-
-          await tx
-            .insert(voucherEntries)
-            .values(
-              buildSpReversalEntries(
-                originalEntries,
-                cancellationVoucher.id,
-                `SP container #${containerId} cancellation`
-              )
-            );
+          const { voucherId: cancellationId } = await postFactoryPartyLineVoucherTx(tx, {
+            companyId,
+            voucherNumber: (generation) => `SP-OTW-CANCEL-${containerId}-${generation}`,
+            voucherDate: cancellationDate,
+            description: releaseDebtEnglish(`Supplier Partner container cancellation #${containerId} — ${reason}`),
+            currency: SP_RELEASE_CURRENCY,
+            fxRateToUsd: SP_RELEASE_EXCHANGE_RATE,
+            sourceModule: "SP",
+            source: {
+              sourceType: "sp-container-cancellation",
+              sourceId: `${companyId}:${containerId}`,
+              phase: "mirror",
+            },
+            lines: mirroredUsdLines(originalEntries, `SP container #${containerId} cancellation`),
+          });
+          const cancellationVoucher = { id: cancellationId };
           cancellationVoucherId = cancellationVoucher.id;
         } else if (Number(container.invoice_total_usd ?? 0) > 0.0001) {
           throw new SpLifecycleError(

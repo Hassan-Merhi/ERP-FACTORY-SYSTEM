@@ -163,10 +163,12 @@ describe("Phase 14 offload lifecycle", () => {
     ).toBe(0);
     expect((await activeChargeVouchers()).rowCount).toBe(0);
 
+    // Wave 16 (A): the reversed charge vouchers are retired with their lines
+    // (they used to be stripped); none of those lines is on a live voucher.
     const retiredEntries = await pool.query<{ count: string }>(
       `SELECT COUNT(*)::text AS count
-         FROM voucher_entries
-        WHERE voucher_id = ANY($1::int[])`,
+         FROM voucher_entries ve JOIN vouchers v ON v.id = ve.voucher_id AND v.deleted_at IS NULL
+        WHERE ve.voucher_id = ANY($1::int[])`,
       [firstCharges.rows.map((row) => row.id)]
     );
     expect(Number(retiredEntries.rows[0].count)).toBe(0);

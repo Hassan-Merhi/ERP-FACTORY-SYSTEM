@@ -2,11 +2,13 @@ import type { Express, Request, Response } from "express";
 import { parseId } from "../../lib/parseId";
 import { getErrorMessage } from "../../lib/httpHandlers";
 import { and, eq, sql } from "drizzle-orm";
-import { sqlArray } from "../../lib/sqlArray";
-import { resultRows } from "../../lib/queryResult";
 import { db } from "../../db";
 import { factoryV3Loads, factoryV3LoadBales } from "@shared/schema";
 import { requireAuth } from "../../auth";
+import { getClientDate } from "../../lib/dateUtils";
+import { requireFactoryTabAccess } from "../../lib/factoryAccessControl";
+import { FactoryInvoiceRateRefusalError } from "../../services/accounting/perpetualInventory/factoryInvoice";
+import { V3LoadFinalizeRefusalError, finalizeV3LoadTx } from "../../services/factory/v3LoadInvoice";
 
 function getCompanyId(req: Request): number | null {
   return req.session?.factoryCompanyId || req.session?.currentCompanyId || null;
@@ -449,54 +451,36 @@ export function registerFactoryStockAllocationV3Routes(app: Express) {
 
   // ──────────────────────────────────────────────────────────────
   // POST /api/factory/v3/loads/:id/finalize
-  // Marks all non-removed scanned bales as SOLD in factory_bales
+  // Invoices the load and marks its live bales SOLD, in one transaction
+  // (wave 17 B, services/factory/v3LoadInvoice.ts). Re-finalize is idempotent.
   // ──────────────────────────────────────────────────────────────
-  app.post("/api/factory/v3/loads/:id/finalize", requireAuth, async (req: Request, res: Response) => {
-    try {
-      const companyId = getCompanyId(req);
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
-      const id = parseId(req.params.id);
-      if (id === null) return res.status(400).json({ message: "Invalid id" });
+  app.post(
+    "/api/factory/v3/loads/:id/finalize",
+    requireAuth,
+    requireFactoryTabAccess("factory/invoicing", "hide_invoicing_invoices_tab"),
+    async (req: Request, res: Response) => {
+      try {
+        const companyId = getCompanyId(req);
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
+        const id = parseId(req.params.id);
+        if (id === null) return res.status(400).json({ message: "Invalid id" });
 
-      const [load] = await db
-        .select()
-        .from(factoryV3Loads)
-        .where(and(eq(factoryV3Loads.id, id), eq(factoryV3Loads.companyId, companyId)));
-      if (!load) return res.status(404).json({ message: "Load not found" });
-      if (load.status !== "loading")
-        return res.status(400).json({ message: "Can only finalize a load that is currently Loading" });
-
-      // Get all non-removed bales in this load
-      const baleRows = await db.execute(sql`
-        SELECT bale_id FROM factory_v3_load_bales
-        WHERE load_id = ${id} AND removed_at IS NULL
-      `);
-      const baleIds: number[] = resultRows<{ bale_id?: number; baleId?: number }>(baleRows).map(
-        (r) => (r.bale_id ?? r.baleId) as number
-      );
-
-      // Mark each bale as SOLD in factory_bales (same end-state as existing finalization)
-      if (baleIds.length > 0) {
-        await db.execute(sql`
-          UPDATE factory_bales
-          SET status = 'SOLD'
-          WHERE id = ANY(${sqlArray(baleIds)})
-            AND company_id = ${companyId}
-        `);
+        const result = await db.transaction((tx) =>
+          finalizeV3LoadTx(tx, {
+            companyId,
+            loadId: id,
+            user: getUserInfo(req),
+            statementDate: getClientDate(req),
+          })
+        );
+        res.json({ ...result.load, invoice: result.invoice, alreadyFinalized: result.alreadyFinalized });
+      } catch (e: unknown) {
+        if (e instanceof V3LoadFinalizeRefusalError) return res.status(e.statusCode).json(e.body);
+        if (e instanceof FactoryInvoiceRateRefusalError) return res.status(409).json(e.body);
+        res.status(500).json({ message: getErrorMessage(e) });
       }
-
-      const user = getUserInfo(req);
-      const [updated] = await db
-        .update(factoryV3Loads)
-        .set({ status: "finalized", finalizedAt: new Date(), finalizedBy: user.id, finalizedByName: user.name })
-        .where(eq(factoryV3Loads.id, id))
-        .returning();
-
-      res.json(updated);
-    } catch (e: unknown) {
-      res.status(500).json({ message: getErrorMessage(e) });
     }
-  });
+  );
 
   // ──────────────────────────────────────────────────────────────
   // PATCH /api/factory/v3/loads/:id/cancel

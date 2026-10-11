@@ -19,10 +19,10 @@ import {
   factoryAttendance,
   factoryDaybookEntries,
   ledgerAccounts,
-  vouchers,
-  voucherEntries,
 } from "@shared/schema";
-import { findOrCreateLedger, getFactoryCompanyId, normUsd, writeDaybookEntry } from "./_helpers";
+import { findOrCreateLedger, getFactoryCompanyId, writeDaybookEntry } from "./_helpers";
+import type Decimal from "decimal.js";
+import { postErpVoucherTx } from "../../../services/accounting/erpVoucherPosting";
 import {
   getProductionBonusTotalsForPayrollIds,
   prepareProductionBonusesForPayroll,
@@ -67,6 +67,41 @@ async function ensureNoPendingProductionBonuses(companyId: number, payrollIds: n
     };
   }
   return { ok: true as const };
+}
+
+/**
+ * Phase 22 (B): the payroll payment voucher (Dr Payroll Payable / Cr cash)
+ * through the central engine. The PAYMENT-PAY-<payrollId>- family prefix is
+ * kept (the integrity diagnostic and the worker-statement repair find the
+ * payment by it) with the payment date as a deterministic suffix instead of
+ * Date.now(); the posting identity is the payroll and its payment date, so a
+ * repeated mark-paid returns the voucher already posted.
+ */
+async function postPayrollPaymentVoucherTx(
+  tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
+  input: {
+    companyId: number;
+    payrollId: number;
+    paymentDate: string;
+    narration: string;
+    amount: Decimal;
+    payableAccountId: number;
+    cashAccountId: number;
+  }
+) {
+  return postErpVoucherTx(tx, {
+    companyId: input.companyId,
+    voucherNumber: `PAYMENT-PAY-${input.payrollId}-${input.paymentDate.replace(/-/g, "")}`,
+    voucherType: "Payment",
+    voucherDate: input.paymentDate,
+    description: input.narration,
+    sourceModule: "FACTORY",
+    lines: [
+      { ledgerAccountId: input.payableAccountId, debit: input.amount, narration: input.narration },
+      { ledgerAccountId: input.cashAccountId, credit: input.amount, narration: input.narration },
+    ],
+    source: { type: "payroll-payment", id: input.payrollId, revision: input.paymentDate },
+  });
 }
 
 function workerDisplayName(value: string | null | undefined, workerId: number): string {
@@ -175,42 +210,33 @@ export function registerPayrollMarkPaidRoutes(app: Express) {
           const netAmt = toMoney(payroll.netSalary);
           if (netAmt.gt(0) && !cashAccountId) throw new Error("cashAccountId is required for non-zero payroll payment");
 
+          let paymentReplayed = false;
           if (netAmt.gt(0)) {
             const payableAcc = payableAccSingle!;
             const narration = `Payroll payment: ${workerName} (${payroll.periodStart} – ${payroll.periodEnd})`;
-            const [pVoucher] = await tx
-              .insert(vouchers)
-              .values({
-                companyId,
-                voucherNumber: `PAYMENT-PAY-${payroll.id}-${Date.now()}`,
-                voucherType: "Payment",
-                voucherDate: paymentDate,
-                description: narration,
-                totalAmount: netAmt.toFixed(2),
-                currency: "USD",
-                sourceModule: "FACTORY",
-              })
-              .returning();
-            await tx.insert(voucherEntries).values([
-              { voucherId: pVoucher.id, ledgerAccountId: payableAcc.id, ...normUsd(netAmt.toFixed(2), "0"), narration },
-              {
-                voucherId: pVoucher.id,
-                ledgerAccountId: cashAccountId!,
-                ...normUsd("0", netAmt.toFixed(2)),
-                narration,
-              },
-            ]);
+            const { replayed } = await postPayrollPaymentVoucherTx(tx, {
+              companyId: Number(companyId),
+              payrollId: payroll.id,
+              paymentDate: paymentDate,
+              narration,
+              amount: netAmt,
+              payableAccountId: payableAcc.id,
+              cashAccountId: cashAccountId!,
+            });
+            paymentReplayed = replayed;
           }
 
-          await writePayrollPaymentDaybook(tx, {
-            companyId: Number(companyId),
-            payrollId: payroll.id,
-            paymentDate,
-            workerName,
-            netSalary: netAmt.toNumber(),
-            periodStart: payroll.periodStart,
-            periodEnd: payroll.periodEnd,
-          });
+          // A replayed payment (already posted) already has its daybook mirror.
+          if (!paymentReplayed)
+            await writePayrollPaymentDaybook(tx, {
+              companyId: Number(companyId),
+              payrollId: payroll.id,
+              paymentDate,
+              workerName,
+              netSalary: netAmt.toNumber(),
+              periodStart: payroll.periodStart,
+              periodEnd: payroll.periodEnd,
+            });
           return { value: payroll, resultReference: payroll.id };
         }
       );
@@ -263,24 +289,16 @@ export function registerPayrollMarkPaidRoutes(app: Express) {
 
         let voucherId: number | null = null;
         if (netAmt.gt(0)) {
-          const [pVoucher] = await tx
-            .insert(vouchers)
-            .values({
-              companyId,
-              voucherNumber: `PAYMENT-PAY-${payroll.id}-${Date.now()}`,
-              voucherType: "Payment",
-              voucherDate: paidDate,
-              description: narration,
-              totalAmount: netAmt.toFixed(2),
-              currency: "USD",
-              sourceModule: "FACTORY",
-            })
-            .returning();
+          const { voucher: pVoucher } = await postPayrollPaymentVoucherTx(tx, {
+            companyId: Number(companyId),
+            payrollId: payroll.id,
+            paymentDate: paidDate,
+            narration,
+            amount: netAmt,
+            payableAccountId: payableAcc.id,
+            cashAccountId: cashAccountId,
+          });
           voucherId = pVoucher.id;
-          await tx.insert(voucherEntries).values([
-            { voucherId: pVoucher.id, ledgerAccountId: payableAcc.id, ...normUsd(netAmt.toFixed(2), "0"), narration },
-            { voucherId: pVoucher.id, ledgerAccountId: cashAccountId, ...normUsd("0", netAmt.toFixed(2)), narration },
-          ]);
         }
 
         await tx.update(factoryPayrolls).set({ cashAccountId }).where(eq(factoryPayrolls.id, id));
@@ -389,40 +407,30 @@ export function registerPayrollMarkPaidRoutes(app: Express) {
             );
             const narration = `Payroll payment: ${workerName} (${payroll.periodStart} – ${payroll.periodEnd})`;
 
+            let paymentReplayed = false;
             if (netAmt.gt(0) && cashId && payableAccBulk) {
-              const [pVoucher] = await tx
-                .insert(vouchers)
-                .values({
-                  companyId,
-                  voucherNumber: `PAYMENT-PAY-${payroll.id}-${Date.now()}`,
-                  voucherType: "Payment",
-                  voucherDate: paymentDate,
-                  description: narration,
-                  totalAmount: netAmt.toFixed(2),
-                  currency: "USD",
-                  sourceModule: "FACTORY",
-                })
-                .returning();
-              await tx.insert(voucherEntries).values([
-                {
-                  voucherId: pVoucher.id,
-                  ledgerAccountId: payableAccBulk.id,
-                  ...normUsd(netAmt.toFixed(2), "0"),
-                  narration,
-                },
-                { voucherId: pVoucher.id, ledgerAccountId: cashId, ...normUsd("0", netAmt.toFixed(2)), narration },
-              ]);
+              const { replayed } = await postPayrollPaymentVoucherTx(tx, {
+                companyId: Number(companyId),
+                payrollId: payroll.id,
+                paymentDate: paymentDate,
+                narration,
+                amount: netAmt,
+                payableAccountId: payableAccBulk.id,
+                cashAccountId: cashId,
+              });
+              paymentReplayed = replayed;
             }
 
-            await writePayrollPaymentDaybook(tx, {
-              companyId: Number(companyId),
-              payrollId: payroll.id,
-              paymentDate,
-              workerName,
-              netSalary: netAmt.toNumber(),
-              periodStart: payroll.periodStart,
-              periodEnd: payroll.periodEnd,
-            });
+            if (!paymentReplayed)
+              await writePayrollPaymentDaybook(tx, {
+                companyId: Number(companyId),
+                payrollId: payroll.id,
+                paymentDate,
+                workerName,
+                netSalary: netAmt.toNumber(),
+                periodStart: payroll.periodStart,
+                periodEnd: payroll.periodEnd,
+              });
           }
 
           return { value: { updated: normalizedIds.length }, resultReference: operationKey };

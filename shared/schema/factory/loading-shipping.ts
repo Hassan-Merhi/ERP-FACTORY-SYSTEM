@@ -63,6 +63,9 @@ export const factoryV3Loads = pgTable(
     finalizedBy: varchar("finalized_by"),
     finalizedByName: text("finalized_by_name"),
     cancelledAt: timestamp("cancelled_at"),
+    // Wave 17 B: the factory invoice (customer_orders row) the finalize created;
+    // ensured at boot by ensureFactoryCostBasisSchema.
+    customerOrderId: integer("customer_order_id"),
   },
   (t) => ({
     companyIdx: index("factory_v3_loads_company_idx").on(t.companyId),

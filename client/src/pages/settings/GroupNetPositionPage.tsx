@@ -56,8 +56,10 @@ interface GroupNetPositionData {
     netPosition: number;
   };
   intercompany: {
-    mode: "already-excluded";
+    mode: "paired-elimination";
     additionalElimination: number;
+    /** Unmatched or mismatched intercompany amounts, part of the group totals (wave 13). */
+    differences?: GroupLineItem[];
     note: string;
   };
 }
@@ -413,6 +415,27 @@ export function GroupNetPositionPage({ onBack }: { onBack: () => void }) {
                         className={`py-3 pl-3 text-right font-mono tabular-nums font-semibold ${company.netPosition >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"}`}
                       >
                         {formatAmount(company.netPosition)}
+                      </td>
+                    </tr>
+                  ))}
+                  {(data.intercompany.differences ?? []).map((line) => (
+                    <tr
+                      key={line.label}
+                      className="border-b border-border/50"
+                      data-testid="row-intercompany-difference"
+                    >
+                      <td className="py-3 pr-4">
+                        <div className="font-medium">Intercompany difference</div>
+                        <div className="text-xs text-muted-foreground">{line.label}</div>
+                      </td>
+                      <td className="py-3 px-3 text-right font-mono tabular-nums">
+                        {line.side === "forUs" ? formatAmount(line.value) : "—"}
+                      </td>
+                      <td className="py-3 px-3 text-right font-mono tabular-nums">
+                        {line.side === "onUs" ? formatAmount(line.value) : "—"}
+                      </td>
+                      <td className="py-3 pl-3 text-right font-mono tabular-nums">
+                        {formatAmount(line.side === "forUs" ? line.value : -line.value)}
                       </td>
                     </tr>
                   ))}

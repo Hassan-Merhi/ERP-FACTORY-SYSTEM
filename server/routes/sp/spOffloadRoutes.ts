@@ -3,10 +3,9 @@ import { getErrorMessage } from "../../lib/httpHandlers";
 import { db } from "../../db";
 import { requireAuth } from "../../auth";
 import { sql, eq, and, isNull } from "drizzle-orm";
+import Decimal from "decimal.js";
 import {
   ledgerAccounts,
-  vouchers,
-  voucherEntries,
   locations,
   bankAccounts,
   spContainers,
@@ -17,7 +16,10 @@ import {
 } from "@shared/schema";
 import { adjustSpInventoryAtomic, respondToSpInventoryIntegrityError } from "../../services/sp/spInventoryIntegrity";
 import { SP_RELEASE_CURRENCY, SP_RELEASE_EXCHANGE_RATE } from "../../services/sp/spReleasePolicy";
-import { requireSpCompany, getSpAccount, parseNum } from "./spHelpers";
+import { requireSpCompany, getSpAccount } from "./spHelpers";
+import { sumMoney, toMoney } from "../../lib/money";
+import { postFactoryVoucherTx, type FactoryVoucherLine } from "../../services/factory/factoryVoucherPosting";
+import { PostingValidationError } from "../../services/accounting/centralPostingEngine";
 import { resultRows, firstRow } from "../../lib/queryResult";
 
 type SpOffloadChargeLine = {
@@ -131,11 +133,7 @@ export function registerSpOffloadRoutes(app: Express) {
           throw new SpOffloadRouteError("Container not found", 404, "SP_OFFLOAD_NOT_FOUND");
         }
         if (container.status !== "open") {
-          throw new SpOffloadRouteError(
-            "Container is already offloaded",
-            409,
-            "SP_OFFLOAD_ALREADY_DONE"
-          );
+          throw new SpOffloadRouteError("Container is already offloaded", 409, "SP_OFFLOAD_ALREADY_DONE");
         }
 
         // Read the posting inputs only after the lifecycle lock is held, so an edit
@@ -143,48 +141,68 @@ export function registerSpOffloadRoutes(app: Express) {
         const containerLines = await tx
           .select()
           .from(spContainerLines)
-          .where(
-            and(
-              eq(spContainerLines.containerId, container.id),
-              eq(spContainerLines.companyId, companyId)
-            )
-          );
+          .where(and(eq(spContainerLines.containerId, container.id), eq(spContainerLines.companyId, companyId)));
 
         if (containerLines.length === 0) {
           throw new SpOffloadRouteError("Container has no lines", 400, "SP_OFFLOAD_EMPTY");
         }
 
-        const discountPct = parseNum(container.discountPct);
-        const discountFactor = 1 - discountPct / 100;
-        const totalQty = containerLines.reduce((s, l) => s + parseNum(l.qty), 0);
-        const totalBaseCost = containerLines.reduce(
-          (s, l) => s + parseNum(l.qty) * parseNum(l.unitRateUsd) * discountFactor,
-          0
+        // Phase 22 (C): exact Decimal amounts (were parseFloat sums) and every
+        // journal through the engine with this offload's posting identity. The
+        // SP-OTW-REV- / SP-STOCK- / SP-AGENT- family numbers are read as identity
+        // (voucher lists, reconciliation), so they keep their prefix with the
+        // container id and posting generation as the suffix (was Date.now()).
+        const discountFactor = new Decimal(1).minus(toMoney(container.discountPct).div(100));
+        const totalQty = sumMoney(containerLines.map((l) => l.qty));
+        const totalBaseCost = sumMoney(
+          containerLines.map((l) => toMoney(l.qty).times(toMoney(l.unitRateUsd)).times(discountFactor))
         );
-        const totalLandedCost = charges.reduce((s: number, charge) => s + parseNum(charge.amountUsd), 0);
-        const landedPerUnit = totalQty > 0 ? totalLandedCost / totalQty : 0;
-        const totalFinalCost = totalBaseCost + totalLandedCost;
-        const invoiceTotal = parseNum(container.invoiceTotalUsd);
+        const chargeAmount = (charge: SpOffloadChargeLine) => toMoney(String(charge.amountUsd ?? "0"));
+        const totalLandedCost = sumMoney(charges.map(chargeAmount));
+        const landedPerUnit = totalQty.greaterThan(0) ? totalLandedCost.div(totalQty) : new Decimal(0);
+        const totalFinalCost = totalBaseCost.plus(totalLandedCost);
+        const invoiceTotal = toMoney(container.invoiceTotalUsd).toDecimalPlaces(2);
+        const spSource = (phase: string) => ({
+          sourceType: "sp-offload",
+          sourceId: `${companyId}:${container.id}`,
+          phase,
+        });
 
-        const [voucherA] = await tx.insert(vouchers).values({
-          companyId, voucherType: "Journal", voucherNumber: `SP-OTW-REV-${container.id}-${Date.now()}`,
-          voucherDate: offloadDate, description: `Goods OTW Reversal — ${container.supplierName} inv ${container.invoiceNumber}`,
-          totalAmount: String(invoiceTotal), currency: SP_RELEASE_CURRENCY, exchangeRate: SP_RELEASE_EXCHANGE_RATE, sourceModule: "SP",
-        }).returning();
-        await tx.insert(voucherEntries).values({ voucherId: voucherA.id, ledgerAccountId: otwClrAcct.id, debitAmount: String(invoiceTotal), creditAmount: "0", narration: `OTW Clearing reversal — container #${container.id}` });
-        await tx.insert(voucherEntries).values({ voucherId: voucherA.id, ledgerAccountId: otwAcct.id, debitAmount: "0", creditAmount: String(invoiceTotal), narration: `Goods OTW reversal — container #${container.id}` });
+        const { voucher: voucherA } = await postFactoryVoucherTx(tx, {
+          companyId,
+          voucherNumber: (generation) => `SP-OTW-REV-${container.id}-${generation}`,
+          voucherDate: offloadDate,
+          description: `Goods OTW Reversal — ${container.supplierName} inv ${container.invoiceNumber}`,
+          currency: SP_RELEASE_CURRENCY,
+          fxRateToUsd: SP_RELEASE_EXCHANGE_RATE,
+          sourceModule: "SP",
+          source: spSource("otw-reversal"),
+          lines: [
+            {
+              ledgerAccountId: otwClrAcct.id,
+              debit: invoiceTotal,
+              narration: `OTW Clearing reversal — container #${container.id}`,
+            },
+            {
+              ledgerAccountId: otwAcct.id,
+              credit: invoiceTotal,
+              narration: `Goods OTW reversal — container #${container.id}`,
+            },
+          ],
+        });
 
-        const [voucherB] = await tx.insert(vouchers).values({
-          companyId, voucherType: "Journal", voucherNumber: `SP-STOCK-${container.id}-${Date.now()}`,
-          voucherDate: offloadDate, description: `Stock offload — ${container.supplierName} inv ${container.invoiceNumber}`,
-          totalAmount: String(totalFinalCost), currency: SP_RELEASE_CURRENCY, exchangeRate: SP_RELEASE_EXCHANGE_RATE, sourceModule: "SP",
-        }).returning();
-        await tx.insert(voucherEntries).values({ voucherId: voucherB.id, ledgerAccountId: stockAcct.id, debitAmount: String(totalFinalCost), creditAmount: "0", narration: `Stock received — ${totalQty} units from container #${container.id}` });
-        await tx.insert(voucherEntries).values({ voucherId: voucherB.id, ledgerAccountId: costClrAcct.id, debitAmount: "0", creditAmount: String(totalBaseCost), narration: `Base supplier item cost — container #${container.id}` });
-
+        // The stock voucher: Cr base supplier cost and each charge (cents); Dr
+        // stock for exactly their sum.
+        const stockCredits: FactoryVoucherLine[] = [
+          {
+            ledgerAccountId: costClrAcct.id,
+            credit: totalBaseCost.toDecimalPlaces(2),
+            narration: `Base supplier item cost — container #${container.id}`,
+          },
+        ];
         for (const charge of charges) {
-          const chargeAmt = parseNum(charge.amountUsd);
-          if (chargeAmt <= 0) continue;
+          const chargeAmt = chargeAmount(charge).toDecimalPlaces(2);
+          if (chargeAmt.lessThanOrEqualTo(0)) continue;
 
           if (charge.chargeType === "prepaid_used" && charge.prepaidChargeId) {
             // Scope the lock itself, not just the pre-handler guard. This keeps the
@@ -192,84 +210,223 @@ export function registerSpOffloadRoutes(app: Express) {
             const prepaidRows = await tx.execute(
               sql`SELECT amount_paid_usd, amount_used_usd FROM sp_prepaid_charges WHERE id = ${parseInt(charge.prepaidChargeId)} AND company_id = ${companyId} FOR UPDATE`
             );
-            const prepaidRow = firstRow(prepaidRows) ?? (prepaidRows as unknown as { [key: string]: Record<string, unknown> | undefined })[0];
+            const prepaidRow =
+              firstRow(prepaidRows) ??
+              (prepaidRows as unknown as { [key: string]: Record<string, unknown> | undefined })[0];
             if (!prepaidRow) throw new Error(`Prepaid charge #${charge.prepaidChargeId} not found for this company`);
-            const alreadyUsed = parseNum(prepaidRow.amount_used_usd);
-            const totalPaid = parseNum(prepaidRow.amount_paid_usd);
-            const remaining = totalPaid - alreadyUsed;
-            if (chargeAmt > remaining + 0.0001) {
-              throw new Error(`Prepaid charge #${charge.prepaidChargeId} has only ${remaining.toFixed(4)} remaining (paid ${totalPaid}, used ${alreadyUsed}), cannot use ${chargeAmt}`);
+            const alreadyUsed = toMoney(String(prepaidRow.amount_used_usd ?? "0"));
+            const totalPaid = toMoney(String(prepaidRow.amount_paid_usd ?? "0"));
+            const remaining = totalPaid.minus(alreadyUsed);
+            if (chargeAmt.greaterThan(remaining.plus("0.0001"))) {
+              throw new Error(
+                `Prepaid charge #${charge.prepaidChargeId} has only ${remaining.toFixed(4)} remaining (paid ${totalPaid}, used ${alreadyUsed}), cannot use ${chargeAmt}`
+              );
             }
             if (prepaidAcct) {
-              await tx.insert(voucherEntries).values({ voucherId: voucherB.id, ledgerAccountId: prepaidAcct.id, debitAmount: "0", creditAmount: String(chargeAmt), narration: `Prepaid used — ${charge.description || "charge"} for container #${container.id}` });
+              stockCredits.push({
+                ledgerAccountId: prepaidAcct.id,
+                credit: chargeAmt,
+                narration: `Prepaid used — ${charge.description || "charge"} for container #${container.id}`,
+              });
             }
             await tx.execute(
-              sql`UPDATE sp_prepaid_charges SET amount_used_usd = amount_used_usd + ${chargeAmt} WHERE id = ${parseInt(charge.prepaidChargeId)} AND company_id = ${companyId}`
+              sql`UPDATE sp_prepaid_charges SET amount_used_usd = amount_used_usd + ${chargeAmt.toFixed(2)} WHERE id = ${parseInt(charge.prepaidChargeId)} AND company_id = ${companyId}`
             );
           } else if (charge.chargeType === "paid_now" && charge.creditBankAccountId) {
-            const [bankRow] = await tx.select().from(bankAccounts).where(and(eq(bankAccounts.id, parseInt(charge.creditBankAccountId)), eq(bankAccounts.companyId, companyId)));
+            const [bankRow] = await tx
+              .select()
+              .from(bankAccounts)
+              .where(
+                and(eq(bankAccounts.id, parseInt(charge.creditBankAccountId)), eq(bankAccounts.companyId, companyId))
+              );
             if (!bankRow) throw new Error(`Bank account #${charge.creditBankAccountId} not found for this company`);
-            await tx.insert(voucherEntries).values({ voucherId: voucherB.id, bankAccountId: parseInt(charge.creditBankAccountId), debitAmount: "0", creditAmount: String(chargeAmt), narration: `Cash paid at offload — ${charge.description || "charge"}` });
+            stockCredits.push({
+              bankAccountId: parseInt(charge.creditBankAccountId),
+              credit: chargeAmt,
+              narration: `Cash paid at offload — ${charge.description || "charge"}`,
+            });
           } else if (charge.chargeType === "unpaid_payable" && charge.creditLedgerAccountId) {
-            const [ledgerRow] = await tx.select().from(ledgerAccounts).where(and(eq(ledgerAccounts.id, parseInt(charge.creditLedgerAccountId)), eq(ledgerAccounts.companyId, companyId), isNull(ledgerAccounts.deletedAt)));
-            if (!ledgerRow) throw new Error(`Ledger account #${charge.creditLedgerAccountId} not found for this company`);
-            await tx.insert(voucherEntries).values({ voucherId: voucherB.id, ledgerAccountId: parseInt(charge.creditLedgerAccountId), debitAmount: "0", creditAmount: String(chargeAmt), narration: `Payable — ${charge.description || "charge"}` });
+            const [ledgerRow] = await tx
+              .select()
+              .from(ledgerAccounts)
+              .where(
+                and(
+                  eq(ledgerAccounts.id, parseInt(charge.creditLedgerAccountId)),
+                  eq(ledgerAccounts.companyId, companyId),
+                  isNull(ledgerAccounts.deletedAt)
+                )
+              );
+            if (!ledgerRow)
+              throw new Error(`Ledger account #${charge.creditLedgerAccountId} not found for this company`);
+            stockCredits.push({
+              ledgerAccountId: parseInt(charge.creditLedgerAccountId),
+              credit: chargeAmt,
+              narration: `Payable — ${charge.description || "charge"}`,
+            });
           } else if (charge.chargeType === "other" && charge.creditLedgerAccountId) {
-            const [otherRow] = await tx.select().from(ledgerAccounts).where(and(eq(ledgerAccounts.id, parseInt(charge.creditLedgerAccountId)), eq(ledgerAccounts.companyId, companyId), isNull(ledgerAccounts.deletedAt)));
-            if (!otherRow) throw new Error(`Ledger account #${charge.creditLedgerAccountId} not found for this company`);
-            await tx.insert(voucherEntries).values({ voucherId: voucherB.id, ledgerAccountId: parseInt(charge.creditLedgerAccountId), debitAmount: "0", creditAmount: String(chargeAmt), narration: `Other charge — ${charge.description || "charge"}` });
+            const [otherRow] = await tx
+              .select()
+              .from(ledgerAccounts)
+              .where(
+                and(
+                  eq(ledgerAccounts.id, parseInt(charge.creditLedgerAccountId)),
+                  eq(ledgerAccounts.companyId, companyId),
+                  isNull(ledgerAccounts.deletedAt)
+                )
+              );
+            if (!otherRow)
+              throw new Error(`Ledger account #${charge.creditLedgerAccountId} not found for this company`);
+            stockCredits.push({
+              ledgerAccountId: parseInt(charge.creditLedgerAccountId),
+              credit: chargeAmt,
+              narration: `Other charge — ${charge.description || "charge"}`,
+            });
           } else if (charge.chargeType === "parent_agent") {
             const prepaidExpAcct = await getSpAccount(companyId, "sp_prepaid_expenses");
-            if (!prepaidExpAcct) throw new Error("Prepaid Expenses account (SP-PREEXP) not found. Run SP setup or contact admin.");
-            await tx.insert(voucherEntries).values({ voucherId: voucherB.id, ledgerAccountId: prepaidExpAcct.id, debitAmount: "0", creditAmount: String(chargeAmt), narration: `Agent charge via HADI L'SHI — ${charge.description || ""}` });
+            if (!prepaidExpAcct)
+              throw new Error("Prepaid Expenses account (SP-PREEXP) not found. Run SP setup or contact admin.");
+            stockCredits.push({
+              ledgerAccountId: prepaidExpAcct.id,
+              credit: chargeAmt,
+              narration: `Agent charge via HADI L'SHI — ${charge.description || ""}`,
+            });
           } else {
-            await tx.insert(voucherEntries).values({ voucherId: voucherB.id, ledgerAccountId: costClrAcct.id, debitAmount: "0", creditAmount: String(chargeAmt), narration: `Supplier freight/other — ${charge.description || "charge"}` });
+            stockCredits.push({
+              ledgerAccountId: costClrAcct.id,
+              credit: chargeAmt,
+              narration: `Supplier freight/other — ${charge.description || "charge"}`,
+            });
           }
         }
+        const stockDebit = sumMoney(stockCredits.map((line) => line.credit ?? 0));
+        const { voucher: voucherB } = await postFactoryVoucherTx(tx, {
+          companyId,
+          voucherNumber: (generation) => `SP-STOCK-${container.id}-${generation}`,
+          voucherDate: offloadDate,
+          description: `Stock offload — ${container.supplierName} inv ${container.invoiceNumber}`,
+          currency: SP_RELEASE_CURRENCY,
+          fxRateToUsd: SP_RELEASE_EXCHANGE_RATE,
+          sourceModule: "SP",
+          source: spSource("stock"),
+          lines: [
+            {
+              ledgerAccountId: stockAcct.id,
+              debit: stockDebit,
+              narration: `Stock received — ${totalQty} units from container #${container.id}`,
+            },
+            ...stockCredits.filter((line) => toMoney(line.credit ?? 0).greaterThan(0)),
+          ],
+        });
 
-        const [offload] = await tx.insert(spOffloads).values({
-          companyId, containerId: container.id, offloadDate, totalQty: String(totalQty), totalBaseCostUsd: String(totalBaseCost),
-          totalLandedCostUsd: String(totalLandedCost), totalFinalCostUsd: String(totalFinalCost), voucherIdReversal: voucherA.id, voucherIdStock: voucherB.id,
-        }).returning();
+        const [offload] = await tx
+          .insert(spOffloads)
+          .values({
+            companyId,
+            containerId: container.id,
+            offloadDate,
+            totalQty: totalQty.toFixed(),
+            totalBaseCostUsd: totalBaseCost.toFixed(),
+            totalLandedCostUsd: totalLandedCost.toFixed(),
+            totalFinalCostUsd: totalFinalCost.toFixed(),
+            voucherIdReversal: voucherA.id,
+            voucherIdStock: voucherB.id,
+          })
+          .returning();
 
-        if (charges.length > 0) {
-          await tx.insert(spOffloadCharges).values(charges.filter((c) => parseNum(c.amountUsd) > 0).map((c) => ({
-            offloadId: offload.id, companyId, chargeType: c.chargeType, description: c.description || null,
-            amountUsd: String(parseNum(c.amountUsd)), prepaidChargeId: c.prepaidChargeId ? parseInt(c.prepaidChargeId) : null,
-            creditLedgerAccountId: c.chargeType === "parent_agent" && c.parentAgentAccountId ? parseInt(c.parentAgentAccountId) : c.creditLedgerAccountId ? parseInt(c.creditLedgerAccountId) : null,
-            creditBankAccountId: c.creditBankAccountId ? parseInt(c.creditBankAccountId) : null,
-          })));
+        const postedCharges = charges.filter((c) => chargeAmount(c).greaterThan(0));
+        if (postedCharges.length > 0) {
+          await tx.insert(spOffloadCharges).values(
+            postedCharges.map((c) => ({
+              offloadId: offload.id,
+              companyId,
+              chargeType: c.chargeType,
+              description: c.description || null,
+              amountUsd: chargeAmount(c).toFixed(),
+              prepaidChargeId: c.prepaidChargeId ? parseInt(c.prepaidChargeId) : null,
+              creditLedgerAccountId:
+                c.chargeType === "parent_agent" && c.parentAgentAccountId
+                  ? parseInt(c.parentAgentAccountId)
+                  : c.creditLedgerAccountId
+                    ? parseInt(c.creditLedgerAccountId)
+                    : null,
+              creditBankAccountId: c.creditBankAccountId ? parseInt(c.creditBankAccountId) : null,
+            }))
+          );
         }
 
-        const agentCharges = charges.filter((c) => c.chargeType === "parent_agent" && parseNum(c.amountUsd) > 0 && c.parentAgentAccountId);
+        const agentCharges = postedCharges.filter((c) => c.chargeType === "parent_agent" && c.parentAgentAccountId);
         if (agentCharges.length > 0) {
-          const [hadiSpInterco] = await tx.select().from(ledgerAccounts).where(and(eq(ledgerAccounts.companyId, 1), eq(ledgerAccounts.subType, "hadi_sp_intercompany"), isNull(ledgerAccounts.deletedAt)));
-          if (!hadiSpInterco) throw new Error("HADI L'SHI intercompany account not found (SP-IC). Run startup migrations or contact admin.");
-          const totalAgentAmt = agentCharges.reduce((s: number, c) => s + parseNum(c.amountUsd), 0);
-          const [voucherC] = await tx.insert(vouchers).values({
-            companyId: 1, voucherType: "Journal", voucherNumber: `SP-AGENT-${container.id}-${Date.now()}`, voucherDate: offloadDate,
-            description: `Agent charges for SP offload — ${container.supplierName} inv ${container.invoiceNumber}`, totalAmount: String(totalAgentAmt),
-            currency: SP_RELEASE_CURRENCY, exchangeRate: SP_RELEASE_EXCHANGE_RATE, sourceModule: "SP",
-          }).returning();
-          for (const ac of agentCharges) {
-            const agentLedgerId = parseInt(ac.parentAgentAccountId ?? "");
-            await tx.insert(voucherEntries).values({ voucherId: voucherC.id, ledgerAccountId: agentLedgerId, debitAmount: String(parseNum(ac.amountUsd)), creditAmount: "0", narration: `Agent charge for SP container #${container.id}${ac.description ? ` — ${ac.description}` : ""}` });
-          }
-          await tx.insert(voucherEntries).values({ voucherId: voucherC.id, ledgerAccountId: hadiSpInterco.id, debitAmount: "0", creditAmount: String(totalAgentAmt), narration: `SP offload agent charges total — container #${container.id}` });
+          const [hadiSpInterco] = await tx
+            .select()
+            .from(ledgerAccounts)
+            .where(
+              and(
+                eq(ledgerAccounts.companyId, 1),
+                eq(ledgerAccounts.subType, "hadi_sp_intercompany"),
+                isNull(ledgerAccounts.deletedAt)
+              )
+            );
+          if (!hadiSpInterco)
+            throw new Error(
+              "HADI L'SHI intercompany account not found (SP-IC). Run startup migrations or contact admin."
+            );
+          const agentLines: FactoryVoucherLine[] = agentCharges.map((ac) => ({
+            ledgerAccountId: parseInt(ac.parentAgentAccountId ?? ""),
+            debit: chargeAmount(ac).toDecimalPlaces(2),
+            narration: `Agent charge for SP container #${container.id}${ac.description ? ` — ${ac.description}` : ""}`,
+          }));
+          const totalAgentAmt = sumMoney(agentLines.map((line) => line.debit ?? 0));
+          await postFactoryVoucherTx(tx, {
+            companyId: 1,
+            voucherNumber: (generation) => `SP-AGENT-${container.id}-${generation}`,
+            voucherDate: offloadDate,
+            description: `Agent charges for SP offload — ${container.supplierName} inv ${container.invoiceNumber}`,
+            currency: SP_RELEASE_CURRENCY,
+            fxRateToUsd: SP_RELEASE_EXCHANGE_RATE,
+            sourceModule: "SP",
+            source: spSource("parent-agent"),
+            lines: [
+              ...agentLines,
+              {
+                ledgerAccountId: hadiSpInterco.id,
+                credit: totalAgentAmt,
+                narration: `SP offload agent charges total — container #${container.id}`,
+              },
+            ],
+          });
         }
 
         for (const line of containerLines) {
-          const qty = parseNum(line.qty);
-          const baseUnitCost = parseNum(line.unitRateUsd) * discountFactor;
-          const finalUnitCost = baseUnitCost + landedPerUnit;
-          const [movement] = await tx.insert(spStockMovements).values({
-            companyId, containerId: container.id, offloadId: offload.id, containerLineId: line.id, articleCode: line.articleCode,
-            description: line.description || null, stockItemId: line.stockItemId || null, locationId: offloadLocation.id,
-            qtyIn: String(qty), qtyRemaining: String(qty), baseUnitCostUsd: String(baseUnitCost), landedUnitCostUsd: String(landedPerUnit), finalUnitCostUsd: String(finalUnitCost),
-          }).returning();
+          const qty = toMoney(line.qty);
+          const baseUnitCost = toMoney(line.unitRateUsd).times(discountFactor);
+          const finalUnitCost = baseUnitCost.plus(landedPerUnit);
+          const [movement] = await tx
+            .insert(spStockMovements)
+            .values({
+              companyId,
+              containerId: container.id,
+              offloadId: offload.id,
+              containerLineId: line.id,
+              articleCode: line.articleCode,
+              description: line.description || null,
+              stockItemId: line.stockItemId || null,
+              locationId: offloadLocation.id,
+              qtyIn: qty.toFixed(),
+              qtyRemaining: qty.toFixed(),
+              baseUnitCostUsd: baseUnitCost.toFixed(),
+              landedUnitCostUsd: landedPerUnit.toFixed(),
+              finalUnitCostUsd: finalUnitCost.toFixed(),
+            })
+            .returning();
           await adjustSpInventoryAtomic(tx, {
-            companyId, locationId: offloadLocation.id, stockItemId: line.stockItemId, deltaQty: qty, incomingRate: finalUnitCost,
-            context: `SP offload container #${container.id} line #${line.id}`, sourceVoucherType: "SP_OFFLOAD", sourceVoucherId: offload.id,
+            companyId,
+            locationId: offloadLocation.id,
+            stockItemId: line.stockItemId,
+            deltaQty: qty.toNumber(),
+            incomingRate: finalUnitCost.toNumber(),
+            context: `SP offload container #${container.id} line #${line.id}`,
+            sourceVoucherType: "SP_OFFLOAD",
+            sourceVoucherId: offload.id,
           });
           if (!movement) throw new Error(`SP offload container #${container.id} failed to create its stock movement`);
         }
@@ -286,11 +443,7 @@ export function registerSpOffloadRoutes(app: Express) {
           )
           .returning({ id: spContainers.id });
         if (!closedContainer) {
-          throw new SpOffloadRouteError(
-            CONTAINER_ALREADY_OFFLOADED_MESSAGE,
-            409,
-            "SP_OFFLOAD_STATE_CONFLICT"
-          );
+          throw new SpOffloadRouteError(CONTAINER_ALREADY_OFFLOADED_MESSAGE, 409, "SP_OFFLOAD_STATE_CONFLICT");
         }
         return offload;
       });
@@ -301,6 +454,9 @@ export function registerSpOffloadRoutes(app: Express) {
         return res.status(error.status).json({ code: error.code, message: error.message });
       }
       if (respondToSpInventoryIntegrityError(res, error)) return;
+      if (error instanceof PostingValidationError) {
+        return res.status(400).json({ code: error.code, message: error.message });
+      }
       res.status(500).json({ message: getErrorMessage(error) });
     }
   });

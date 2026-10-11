@@ -5,6 +5,7 @@ import { getErrorMessage } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
 import { containerOffloads, containers, voucherEntries, vouchers } from "@shared/schema";
 import { and, eq, isNull, or, sql } from "drizzle-orm";
+import { retireVouchersTx, sessionRetirementActor } from "../../services/accounting/voucherRetirement";
 
 async function findReversedOtwContainers(companyId: number) {
   return db
@@ -126,8 +127,15 @@ export function registerOrphanedChargeVoucherRoutes(app: Express) {
         const chargeVouchersForContainer = await findChargeVouchers(companyId, container.containerNumber);
 
         for (const voucher of chargeVouchersForContainer) {
-          await db.delete(voucherEntries).where(eq(voucherEntries.voucherId, voucher.id));
-          await db.delete(vouchers).where(eq(vouchers.id, voucher.id));
+          // Wave 16 (A): retired (soft delete with its lines, audited), not hard-deleted.
+          await db.transaction((tx) =>
+            retireVouchersTx(tx, {
+              companyId,
+              voucherIds: [voucher.id],
+              reason: "orphaned-otw-charge-voucher-fix",
+              actor: sessionRetirementActor(req),
+            })
+          );
 
           deletedVouchers.push({
             voucherId: voucher.id,

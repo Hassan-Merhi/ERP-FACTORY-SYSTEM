@@ -1,4 +1,5 @@
 import { logger } from "../../lib/logger";
+import { assertRunBeforeCutover } from "./historicalSalesCostCutoverGuard";
 import {
   applyHistoricalSalesCostRepair,
   buildHistoricalSalesCostRepairDryRun,
@@ -100,6 +101,8 @@ export async function maybeRunHistoricalSalesCostRepairFromEnv(): Promise<void> 
       return;
     }
 
+    // Wave 11: refused once a company of the run has its perpetual-inventory cut-over.
+    await assertRunBeforeCutover(runId, "historical-sales-cost-apply");
     const result = await applyHistoricalSalesCostRepair({
       runId,
       auditHash,
@@ -126,6 +129,8 @@ export async function maybeRunHistoricalSalesCostRepairFromEnv(): Promise<void> 
     }
 
     if (mode === MODE_PARTIAL_ROLLBACK) {
+      // Wave 11: refused once a company of the run has its perpetual-inventory cut-over.
+      await assertRunBeforeCutover(runId, "historical-sales-cost-rollback");
       const result = await rollbackHistoricalSalesCostPartial({
         runId,
         auditHash,
@@ -160,6 +165,8 @@ export async function maybeRunHistoricalSalesCostRepairFromEnv(): Promise<void> 
       liveTargetDrift: preview.liveTargetDrift.count,
       reconciliation: preview.reconciliation.target,
     });
+    // Wave 11: refused once a company of the run has its perpetual-inventory cut-over.
+    await assertRunBeforeCutover(runId, "historical-sales-cost-partial-apply");
     const result = await applyHistoricalSalesCostPartial({
       runId,
       auditHash,

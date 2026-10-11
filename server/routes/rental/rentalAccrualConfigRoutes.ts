@@ -28,6 +28,32 @@ import {
   companies,
 } from "@shared/schema";
 import { parseId } from "../../lib/parseId";
+import { retireVouchersTx, sessionRetirementActor } from "../../services/accounting/voucherRetirement";
+import { postErpVoucherTx, sessionPostingActor } from "../../services/accounting/erpVoucherPosting";
+import { MoneyDecimal, toMoney } from "../../lib/money";
+import type Decimal from "decimal.js";
+import { createHash } from "node:crypto";
+
+/** A stable key for a set of ledger rows (the posting identity of a repair batch). */
+function ledgerRowsKey(ids: number[]): string {
+  return createHash("sha256")
+    .update([...ids].sort((a, b) => a - b).join(","))
+    .digest("hex")
+    .slice(0, 24);
+}
+
+/** Narrations of these per-row corrections already on a live voucher of the company. */
+async function correctedLedgerRowNarrations(companyId: number, narrations: string[]): Promise<Set<string>> {
+  if (narrations.length === 0) return new Set();
+  const rows = await db
+    .selectDistinct({ narration: voucherEntries.narration })
+    .from(voucherEntries)
+    .innerJoin(vouchers, eq(vouchers.id, voucherEntries.voucherId))
+    .where(
+      and(eq(vouchers.companyId, companyId), isNull(vouchers.deletedAt), inArray(voucherEntries.narration, narrations))
+    );
+  return new Set(rows.map((row) => row.narration ?? ""));
+}
 
 export function registerRentalAccrualConfigRoutes(
   app: Express,
@@ -116,13 +142,13 @@ export function registerRentalAccrualConfigRoutes(
           // For each candidate, check whether any payment voucher debited AP
           // (= post-accrual payment, already correct).  If no AP debit found,
           // the payment was pre-accrual and the phantom fix is needed.
-          let phantomFixTotal = 0;
-          type PhantomRow = { id: number; correction: number };
+          let phantomFixTotal = new MoneyDecimal(0);
+          type PhantomRow = { id: number; correction: Decimal };
           const phantomRows: PhantomRow[] = [];
 
           for (const row of candidateRows) {
-            const paid = Number(row.paidAmount);
-            if (paid <= 0) continue;
+            const paid = toMoney(row.paidAmount).toDecimalPlaces(2);
+            if (!paid.gt(0)) continue;
 
             // Find payment voucher IDs for this ledger row
             const paymentVouchers = await db
@@ -188,54 +214,37 @@ export function registerRentalAccrualConfigRoutes(
 
             if (!apDebitEntry && !apClearJournalDebit) {
               // No AP debit in any payment → pre-accrual payment → phantom
-              const correction = Math.min(paid, Number(row.expectedAmount));
+              const correction = MoneyDecimal.min(paid, toMoney(row.expectedAmount).toDecimalPlaces(2));
               phantomRows.push({ id: row.id, correction });
-              phantomFixTotal += correction;
+              phantomFixTotal = phantomFixTotal.plus(correction);
             }
           }
 
-          if (phantomRows.length > 0) {
-            logger.info(`[re-accrue] phantom fix: ${phantomRows.length} rows, total correction=${phantomFixTotal}`);
+          // A row corrected by an earlier run is not corrected again (the old
+          // code posted the same correction on every re-accrue).
+          const phantomNarration = (id: number) => `Phantom accrual correction — ledger row ${id}`;
+          const alreadyCorrected = await correctedLedgerRowNarrations(
+            companyId,
+            phantomRows.map((p) => phantomNarration(p.id))
+          );
+          const phantomToPost = phantomRows.filter((p) => !alreadyCorrected.has(phantomNarration(p.id)));
+          if (phantomToPost.length > 0) {
+            const phantomDescription = `Phantom accrual correction — Dr AP / Cr Rent Expense (${phantomToPost.length} rows)`;
+            logger.info(`[re-accrue] phantom fix: ${phantomToPost.length} rows, total correction=${phantomFixTotal}`);
             await db.transaction(async (tx) => {
-              const [corrV] = await tx
-                .insert(vouchers)
-                .values({
-                  companyId,
-                  voucherNumber: `PHANTOM-FIX-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-                  voucherType: "Journal",
-                  voucherDate: new Date().toISOString().slice(0, 10),
-                  description: `Phantom accrual correction — Dr AP / Cr Rent Expense (${phantomRows.length} rows)`,
-                  totalAmount: String(phantomFixTotal),
-                  currency: "USD",
-                  sourceModule: module,
-                })
-                .returning();
-
-              const corrEntries: {
-                voucherId: number;
-                ledgerAccountId: number;
-                debitAmount: string;
-                creditAmount: string;
-                narration: string;
-              }[] = [];
-
-              for (const p of phantomRows) {
-                corrEntries.push({
-                  voucherId: corrV.id,
-                  ledgerAccountId: apAcct.id,
-                  debitAmount: String(p.correction),
-                  creditAmount: "0",
-                  narration: `Phantom accrual correction — ledger row ${p.id}`,
-                });
-                corrEntries.push({
-                  voucherId: corrV.id,
-                  ledgerAccountId: expAcct.id,
-                  debitAmount: "0",
-                  creditAmount: String(p.correction),
-                  narration: `Phantom accrual correction — ledger row ${p.id}`,
-                });
-              }
-              await tx.insert(voucherEntries).values(corrEntries);
+              await postErpVoucherTx(tx, {
+                companyId,
+                voucherType: "Journal",
+                voucherDate: new Date().toISOString().slice(0, 10),
+                description: phantomDescription,
+                sourceModule: module,
+                lines: phantomToPost.flatMap((p) => [
+                  { ledgerAccountId: apAcct.id, debit: p.correction, narration: phantomNarration(p.id) },
+                  { ledgerAccountId: expAcct.id, credit: p.correction, narration: phantomNarration(p.id) },
+                ]),
+                source: { type: "rental-phantom-accrual-fix", id: ledgerRowsKey(phantomToPost.map((p) => p.id)) },
+                actor: sessionPostingActor(req, "Phantom accrual correction"),
+              });
             });
             logger.info(`[re-accrue] phantom fix voucher posted, total corrected=${phantomFixTotal}`);
           } else {
@@ -305,8 +314,8 @@ export function registerRentalAccrualConfigRoutes(
 
         if (apAcctD && expAcctD) {
           // For each dangling paid row, find how much was debited from AP in payment vouchers
-          let orphanedTotal = 0;
-          type OrphanRow = { ledgerRowId: number; apDebit: number };
+          let orphanedTotal = new MoneyDecimal(0);
+          type OrphanRow = { ledgerRowId: number; apDebit: Decimal };
           const orphanRows: OrphanRow[] = [];
 
           for (const dr of danglingRows) {
@@ -329,53 +338,35 @@ export function registerRentalAccrualConfigRoutes(
                   sql`${voucherEntries.debitAmount}::numeric > 0`
                 )
               );
-            const rowApDebit = apDebits.reduce((s, e) => s + Number(e.amount), 0);
-            if (rowApDebit > 0) {
+            const rowApDebit = apDebits.reduce((s, e) => s.plus(toMoney(e.amount)), new MoneyDecimal(0));
+            if (rowApDebit.gt(0)) {
               orphanRows.push({ ledgerRowId: dr.id, apDebit: rowApDebit });
-              orphanedTotal += rowApDebit;
+              orphanedTotal = orphanedTotal.plus(rowApDebit);
             }
           }
 
-          if (orphanRows.length > 0) {
+          const orphanNarration = (id: number) => `Orphaned AP debit correction — ledger row ${id}`;
+          const orphansCorrected = await correctedLedgerRowNarrations(
+            companyId,
+            orphanRows.map((o) => orphanNarration(o.ledgerRowId))
+          );
+          const orphansToPost = orphanRows.filter((o) => !orphansCorrected.has(orphanNarration(o.ledgerRowId)));
+          if (orphansToPost.length > 0) {
+            const orphanDescription = `Orphaned AP debit correction (${orphansToPost.length} row(s)) — Dr Rent Expense / Cr AP`;
             await db.transaction(async (tx) => {
-              const [corrV] = await tx
-                .insert(vouchers)
-                .values({
-                  companyId,
-                  voucherNumber: `ORPHAN-AP-FIX-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-                  voucherType: "Journal",
-                  voucherDate: new Date().toISOString().slice(0, 10),
-                  description: `Orphaned AP debit correction (${orphanRows.length} row${orphanRows.length > 1 ? "s" : ""}) — Dr Rent Expense / Cr AP`,
-                  totalAmount: String(orphanedTotal),
-                  currency: "USD",
-                  sourceModule: module,
-                })
-                .returning();
-
-              const corrEntries: {
-                voucherId: number;
-                ledgerAccountId: number;
-                debitAmount: string;
-                creditAmount: string;
-                narration: string;
-              }[] = [];
-              for (const o of orphanRows) {
-                corrEntries.push({
-                  voucherId: corrV.id,
-                  ledgerAccountId: expAcctD.id,
-                  debitAmount: String(o.apDebit),
-                  creditAmount: "0",
-                  narration: `Orphaned AP debit correction — ledger row ${o.ledgerRowId}`,
-                });
-                corrEntries.push({
-                  voucherId: corrV.id,
-                  ledgerAccountId: apAcctD.id,
-                  debitAmount: "0",
-                  creditAmount: String(o.apDebit),
-                  narration: `Orphaned AP debit correction — ledger row ${o.ledgerRowId}`,
-                });
-              }
-              await tx.insert(voucherEntries).values(corrEntries);
+              await postErpVoucherTx(tx, {
+                companyId,
+                voucherType: "Journal",
+                voucherDate: new Date().toISOString().slice(0, 10),
+                description: orphanDescription,
+                sourceModule: module,
+                lines: orphansToPost.flatMap((o) => [
+                  { ledgerAccountId: expAcctD.id, debit: o.apDebit, narration: orphanNarration(o.ledgerRowId) },
+                  { ledgerAccountId: apAcctD.id, credit: o.apDebit, narration: orphanNarration(o.ledgerRowId) },
+                ]),
+                source: { type: "rental-orphan-ap-fix", id: ledgerRowsKey(orphansToPost.map((o) => o.ledgerRowId)) },
+                actor: sessionPostingActor(req, "Orphaned AP debit correction"),
+              });
             });
             logger.info(
               `[re-accrue] orphaned AP debit fix: ${orphanRows.length} rows, total corrected=${orphanedTotal}`
@@ -449,10 +440,14 @@ export function registerRentalAccrualConfigRoutes(
       let reset = 0;
       if (voucherIdsToDelete.length > 0) {
         await db.transaction(async (tx) => {
-          await tx.delete(voucherEntries).where(inArray(voucherEntries.voucherId, voucherIdsToDelete));
-          await tx
-            .delete(vouchers)
-            .where(and(inArray(vouchers.id, voucherIdsToDelete), eq(vouchers.companyId, companyId)));
+          // Wave 16 (A): the unpaid accruals are retired (soft delete with their
+          // lines, audited here, numbers released) before they are posted again.
+          await retireVouchersTx(tx, {
+            companyId,
+            voucherIds: voucherIdsToDelete,
+            reason: "rent-accrual-reaccrue",
+            actor: sessionRetirementActor(req),
+          });
           // Clear stamps on all the rows we just wiped
           await tx
             .update(propertyMonthlyLedger)
@@ -523,13 +518,14 @@ export function registerRentalAccrualConfigRoutes(
         return res.status(400).json({ message: "Accrual reversal is only available for SHOP units" });
 
       // Block if payments have already been applied (they debited Accrued Rent Payable).
-      if (Number(row.paidAmount) > 0) {
+      if (toMoney(row.paidAmount).gt(0)) {
         return res.status(400).json({
           message: `Cannot reverse: ${row.paidAmount} has already been paid against this month. Void the payment first.`,
         });
       }
 
-      const amount = String(Number(row.expectedAmount) - Number(row.paidAmount));
+      const amount = toMoney(row.expectedAmount).minus(toMoney(row.paidAmount));
+      const accrualVoucherId = row.accrualVoucherId;
 
       const reversalVoucherId = await db.transaction(async (tx) => {
         const liabilityAccountId = await findOrCreateLedgerAccount(
@@ -551,27 +547,22 @@ export function registerRentalAccrualConfigRoutes(
         const unitLabel = `unit${row.unitId}${unit.unitNumber ? `-${unit.unitNumber}` : ""}`;
         const narration = `Accrual reversal - ${unitLabel} - ${monthStr}`;
 
-        const [v] = await tx
-          .insert(vouchers)
-          .values({
-            companyId,
-            voucherNumber: `ACCR-REV-${Date.now()}-${Math.random().toString(36).slice(2, 6)}-${rowId}`,
-            voucherType: "Journal",
-            voucherDate: new Date().toISOString().slice(0, 10),
-            description: narration,
-            totalAmount: amount,
-            currency: "USD",
-            sourceModule: "ERP",
-          })
-          .returning();
-
         // Mirror image of the original accrual:
         //   Original:  Dr Rent Expense  /  Cr Accrued Rent Payable
         //   Reversal:  Dr Accrued Rent Payable  /  Cr Rent Expense
-        await tx.insert(voucherEntries).values([
-          { voucherId: v.id, ledgerAccountId: liabilityAccountId, debitAmount: amount, creditAmount: "0", narration },
-          { voucherId: v.id, ledgerAccountId: expenseAccountId, debitAmount: "0", creditAmount: amount, narration },
-        ]);
+        const { voucher: v } = await postErpVoucherTx(tx, {
+          companyId,
+          voucherType: "Journal",
+          voucherDate: new Date().toISOString().slice(0, 10),
+          description: narration,
+          lines: [
+            { ledgerAccountId: liabilityAccountId, debit: amount, narration },
+            { ledgerAccountId: expenseAccountId, credit: amount, narration },
+          ],
+          // One reversal per accrual voucher of the row.
+          source: { type: "rental-accrual-reversal", id: `${rowId}:${accrualVoucherId}` },
+          actor: sessionPostingActor(req, "Accrual reversal"),
+        });
 
         // Clear the stamp — month is now clean and eligible to be re-accrued
         await tx

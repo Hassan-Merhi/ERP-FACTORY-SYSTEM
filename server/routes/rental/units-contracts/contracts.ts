@@ -51,25 +51,33 @@ export function registerRentalContractRoutes(app: Express, ctx: RentalRoutesCont
         );
       if (existing) return res.status(400).json({ message: "Unit already has an active contract" });
 
-      const [created] = await db
-        .insert(propertyContracts)
-        .values({ ...data, module })
-        .returning();
-      await ensureMonthlyLedgerRows(created.id);
-      await logAudit({
-        userId: req.session.userId!,
-        username: req.session.username || "unknown",
-        companyId,
-        action: "create",
-        tableName: "property_contracts",
-        recordId: created.id,
-        recordIdentifier: `Contract#${created.id} Unit#${created.unitId}`,
-        changes: {
-          unitId: { old: null, new: created.unitId },
-          rentalAmount: { old: null, new: created.rentalAmount },
-          startDate: { old: null, new: created.startDate },
-        },
+      // Phase 21 (B): the contract and its create audit commit together; the
+      // monthly ledger rows are still written after commit, as before.
+      const created = await db.transaction(async (tx) => {
+        const [contractRow] = await tx
+          .insert(propertyContracts)
+          .values({ ...data, module })
+          .returning();
+        await logAudit(
+          {
+            userId: req.session.userId!,
+            username: req.session.username || "unknown",
+            companyId,
+            action: "create",
+            tableName: "property_contracts",
+            recordId: contractRow.id,
+            recordIdentifier: `Contract#${contractRow.id} Unit#${contractRow.unitId}`,
+            changes: {
+              unitId: { old: null, new: contractRow.unitId },
+              rentalAmount: { old: null, new: contractRow.rentalAmount },
+              startDate: { old: null, new: contractRow.startDate },
+            },
+          },
+          tx
+        );
+        return contractRow;
       });
+      await ensureMonthlyLedgerRows(created.id);
       res.json(created);
     } catch (e: unknown) {
       if (e instanceof z.ZodError)
@@ -105,43 +113,45 @@ export function registerRentalContractRoutes(app: Express, ctx: RentalRoutesCont
         );
       if (!contract) return res.status(404).json({ message: "Contract not found" });
 
-      await db.update(propertyContracts).set({ rentalAmount: newAmount }).where(eq(propertyContracts.id, id));
+      // Phase 21 (B): the write and its audit commit together.
+      await db.transaction(async (tx) => {
+        await tx.update(propertyContracts).set({ rentalAmount: newAmount }).where(eq(propertyContracts.id, id));
 
-      const now = new Date();
-      let y = now.getUTCFullYear(),
-        m = now.getUTCMonth() + 1;
-      if (effectiveFrom === "next") {
-        m++;
-        if (m > 12) {
-          m = 1;
-          y++;
+        const now = new Date();
+        let y = now.getUTCFullYear(),
+          m = now.getUTCMonth() + 1;
+        if (effectiveFrom === "next") {
+          m++;
+          if (m > 12) {
+            m = 1;
+            y++;
+          }
         }
-      }
 
-      await db.execute(sql`
-        UPDATE property_monthly_ledger
-        SET expected_amount = ${newAmount}
-        WHERE contract_id = ${id} AND paid_amount = 0
-          AND ((year > ${y}) OR (year = ${y} AND month >= ${m}))
-      `);
+        await tx.execute(sql`
+          UPDATE property_monthly_ledger
+          SET expected_amount = ${newAmount}
+          WHERE contract_id = ${id} AND paid_amount = 0
+            AND ((year > ${y}) OR (year = ${y} AND month >= ${m}))
+        `);
 
-      try {
-        await logAudit({
-          userId: req.session.userId!,
-          username: req.session.username || "unknown",
-          companyId,
-          action: "update",
-          tableName: "property_contracts",
-          recordId: id,
-          recordIdentifier: `Contract#${id} Unit#${contract.unitId}`,
-          changes: {
-            rentalAmount: { old: contract.rentalAmount ?? null, new: newAmount },
-            rentEffectiveFrom: { old: null, new: effectiveFrom },
+        await logAudit(
+          {
+            userId: req.session.userId!,
+            username: req.session.username || "unknown",
+            companyId,
+            action: "update",
+            tableName: "property_contracts",
+            recordId: id,
+            recordIdentifier: `Contract#${id} Unit#${contract.unitId}`,
+            changes: {
+              rentalAmount: { old: contract.rentalAmount ?? null, new: newAmount },
+              rentEffectiveFrom: { old: null, new: effectiveFrom },
+            },
           },
-        });
-      } catch (auditErr) {
-        logger.error("[contract rent-update audit] non-fatal:", { error: auditErr });
-      }
+          tx
+        );
+      });
 
       res.json({ ok: true });
     } catch (e: unknown) {
@@ -184,68 +194,70 @@ export function registerRentalContractRoutes(app: Express, ctx: RentalRoutesCont
       if (guaranteePeriod !== undefined) contractUpdates.guaranteePeriod = guaranteePeriod;
       if (isInternal !== undefined) contractUpdates.isInternal = isInternal;
       if (linkedCompanyId !== undefined) contractUpdates.linkedCompanyId = linkedCompanyId;
-      await db.update(propertyContracts).set(contractUpdates).where(eq(propertyContracts.id, id));
+      // Phase 21 (B): the write and its audit commit together.
+      await db.transaction(async (tx) => {
+        await tx.update(propertyContracts).set(contractUpdates).where(eq(propertyContracts.id, id));
 
-      // Clean up ledger rows that are now before the new start date
-      const newStart = new Date(startDate);
-      const newStartYear = newStart.getUTCFullYear();
-      const newStartMonth = newStart.getUTCMonth() + 1;
+        // Clean up ledger rows that are now before the new start date
+        const newStart = new Date(startDate);
+        const newStartYear = newStart.getUTCFullYear();
+        const newStartMonth = newStart.getUTCMonth() + 1;
 
-      // Delete rows before the new start date that have no payments (zero or null paidAmount)
-      await db.execute(sql`
-        DELETE FROM property_monthly_ledger
-        WHERE contract_id = ${id}
-          AND (year < ${newStartYear} OR (year = ${newStartYear} AND month < ${newStartMonth}))
-          AND (paid_amount IS NULL OR paid_amount::numeric = 0)
-      `);
+        // Delete rows before the new start date that have no payments (zero or null paidAmount)
+        await tx.execute(sql`
+          DELETE FROM property_monthly_ledger
+          WHERE contract_id = ${id}
+            AND (year < ${newStartYear} OR (year = ${newStartYear} AND month < ${newStartMonth}))
+            AND (paid_amount IS NULL OR paid_amount::numeric = 0)
+        `);
 
-      // Zero out expected amount for rows before the new start date that DO have payments
-      // (they become pure credit entries rather than appearing as unpaid obligations)
-      await db.execute(sql`
-        UPDATE property_monthly_ledger
-        SET expected_amount = 0
-        WHERE contract_id = ${id}
-          AND (year < ${newStartYear} OR (year = ${newStartYear} AND month < ${newStartMonth}))
-          AND paid_amount::numeric > 0
-      `);
+        // Zero out expected amount for rows before the new start date that DO have payments
+        // (they become pure credit entries rather than appearing as unpaid obligations)
+        await tx.execute(sql`
+          UPDATE property_monthly_ledger
+          SET expected_amount = 0
+          WHERE contract_id = ${id}
+            AND (year < ${newStartYear} OR (year = ${newStartYear} AND month < ${newStartMonth}))
+            AND paid_amount::numeric > 0
+        `);
 
-      // Restore expected_amount for any paid months AT or AFTER the new start date
-      // that were accidentally zeroed by a previous start-date change.
-      // We set expected_amount = paid_amount so the month shows outstanding = $0
-      // (the tenant paid what they owed; the zeroed expected was a data inconsistency).
-      await db.execute(sql`
-        UPDATE property_monthly_ledger
-        SET expected_amount = paid_amount
-        WHERE contract_id = ${id}
-          AND (year > ${newStartYear} OR (year = ${newStartYear} AND month >= ${newStartMonth}))
-          AND expected_amount::numeric = 0
-          AND paid_amount::numeric > 0
-      `);
+        // Restore expected_amount for any paid months AT or AFTER the new start date
+        // that were accidentally zeroed by a previous start-date change.
+        // We set expected_amount = paid_amount so the month shows outstanding = $0
+        // (the tenant paid what they owed; the zeroed expected was a data inconsistency).
+        await tx.execute(sql`
+          UPDATE property_monthly_ledger
+          SET expected_amount = paid_amount
+          WHERE contract_id = ${id}
+            AND (year > ${newStartYear} OR (year = ${newStartYear} AND month >= ${newStartMonth}))
+            AND expected_amount::numeric = 0
+            AND paid_amount::numeric > 0
+        `);
 
-      try {
-        await logAudit({
-          userId: req.session.userId!,
-          username: req.session.username || "unknown",
-          companyId,
-          action: "update",
-          tableName: "property_contracts",
-          recordId: id,
-          recordIdentifier: `Contract#${id} Unit#${contract.unitId}`,
-          changes: {
-            ...(tenantName !== contract.tenantName
-              ? { tenantName: { old: contract.tenantName ?? null, new: tenantName } }
-              : {}),
-            ...(startDate !== contract.startDate
-              ? { startDate: { old: contract.startDate ?? null, new: startDate } }
-              : {}),
-            ...(guaranteeAmount !== undefined
-              ? { guaranteeAmount: { old: contract.guaranteeAmount ?? null, new: guaranteeAmount } }
-              : {}),
+        await logAudit(
+          {
+            userId: req.session.userId!,
+            username: req.session.username || "unknown",
+            companyId,
+            action: "update",
+            tableName: "property_contracts",
+            recordId: id,
+            recordIdentifier: `Contract#${id} Unit#${contract.unitId}`,
+            changes: {
+              ...(tenantName !== contract.tenantName
+                ? { tenantName: { old: contract.tenantName ?? null, new: tenantName } }
+                : {}),
+              ...(startDate !== contract.startDate
+                ? { startDate: { old: contract.startDate ?? null, new: startDate } }
+                : {}),
+              ...(guaranteeAmount !== undefined
+                ? { guaranteeAmount: { old: contract.guaranteeAmount ?? null, new: guaranteeAmount } }
+                : {}),
+            },
           },
-        });
-      } catch (auditErr) {
-        logger.error("[contract info-update audit] non-fatal:", { error: auditErr });
-      }
+          tx
+        );
+      });
 
       res.json({ ok: true });
     } catch (e: unknown) {

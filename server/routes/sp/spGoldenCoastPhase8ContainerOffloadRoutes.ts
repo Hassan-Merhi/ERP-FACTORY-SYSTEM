@@ -19,6 +19,7 @@ import { releaseDebtEnglish } from "../../i18n/finalCloseoutEnglish";
 import { getErrorMessage } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
 import { resultRows } from "../../lib/queryResult";
+import { sumMoney, toMoney } from "../../lib/money";
 import {
   privilegedMutationRateLimit,
   privilegedReadRateLimit,
@@ -352,12 +353,13 @@ async function loadFundedContainer(
     .from(voucherEntries)
     .where(eq(voucherEntries.voucherId, container.goodsOtwVoucherId));
   const stockEntry = entries.filter(
-    (entry) => Number(entry.ledgerAccountId) === accounts.stockOtwAccountId && Number(entry.debitAmount) > 0
+    (entry) => Number(entry.ledgerAccountId) === accounts.stockOtwAccountId && toMoney(entry.debitAmount).greaterThan(0)
   );
   const reserveEntry = entries.filter(
-    (entry) => Number(entry.ledgerAccountId) === accounts.containerReserveAccountId && Number(entry.debitAmount) > 0
+    (entry) =>
+      Number(entry.ledgerAccountId) === accounts.containerReserveAccountId && toMoney(entry.debitAmount).greaterThan(0)
   );
-  const creditEntries = entries.filter((entry) => Number(entry.creditAmount) > 0);
+  const creditEntries = entries.filter((entry) => toMoney(entry.creditAmount).greaterThan(0));
   if (stockEntry.length !== 1 || reserveEntry.length > 1 || creditEntries.length !== 1) {
     throw new GoldenCoastPhase8RouteError(
       origin === "cutover"
@@ -393,10 +395,11 @@ async function loadFundedContainer(
     await validateFundingAccount(tx, companyId, fundingAccount);
   }
 
-  const goodsCostUsd = Number(stockEntry[0].debitAmount).toFixed(2);
-  const reserveUsd = reserveEntry.length === 1 ? Number(reserveEntry[0].debitAmount).toFixed(2) : "0.00";
-  const expectedCredit = Number(goodsCostUsd) + Number(reserveUsd);
-  if (Math.abs(Number(credit.creditAmount) - expectedCredit) > 0.005) {
+  // Phase 22 (C), PE13: exact Decimal checks (were float arithmetic).
+  const goodsCostUsd = toMoney(stockEntry[0].debitAmount).toFixed(2);
+  const reserveUsd = reserveEntry.length === 1 ? toMoney(reserveEntry[0].debitAmount).toFixed(2) : "0.00";
+  const expectedCredit = toMoney(goodsCostUsd).plus(reserveUsd);
+  if (toMoney(credit.creditAmount).minus(expectedCredit).abs().greaterThan("0.005")) {
     throw new GoldenCoastPhase8RouteError(
       "Phase 8 funding voucher is not balanced to its funded assets",
       "GC_PHASE8_FUNDING_CORRUPT",
@@ -424,8 +427,8 @@ async function loadFundedContainer(
     companyId,
     lines.map((line) => line.stockItemId)
   );
-  const lineValue = lines.reduce((sum, line) => sum + Number(line.qty) * Number(line.unitRateUsd), 0);
-  if (Math.abs(lineValue - Number(goodsCostUsd)) > 0.01) {
+  const lineValue = sumMoney(lines.map((line) => toMoney(line.qty).times(toMoney(line.unitRateUsd))));
+  if (lineValue.minus(goodsCostUsd).abs().greaterThan("0.01")) {
     throw new GoldenCoastPhase8RouteError(
       "Container lines no longer reconcile to the funded Stock OTW amount",
       "GC_PHASE8_FUNDING_CORRUPT",

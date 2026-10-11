@@ -16,7 +16,12 @@ import type { voucherEntries, vouchers } from "@shared/schema";
 /** Minimal shape needed to insert a voucher row. */
 export interface VoucherInsertFields {
   companyId: number;
-  voucherNumber: string;
+  /**
+   * Omit it (or pass undefined) to let postBalancedVoucherTx allocate the next
+   * gapless number (phase 22 A, voucherNumbering.ts). A given number is kept
+   * (legacy callers).
+   */
+  voucherNumber?: string;
   voucherType: string;
   voucherDate: string;
   totalAmount: string;
@@ -27,6 +32,8 @@ export interface VoucherInsertFields {
   exchangeRate?: string | null;
   effectiveDate?: string | null;
   sourceModule?: string | null;
+  /** Phase 22 A: the voucher this one reverses (set by reverseVoucherTx only). */
+  reversalOfVoucherId?: number | null;
 }
 
 /** Minimal shape needed to insert a voucher entry row. */

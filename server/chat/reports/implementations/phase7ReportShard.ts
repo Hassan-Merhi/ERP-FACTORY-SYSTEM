@@ -1,5 +1,6 @@
-import { db, sql } from "./reportShardSupport";
+import { db, sql, accountTypesOfClassSql } from "./reportShardSupport";
 import type { DataQueryContext, DataQueryResult, ReportImplementationShard } from "../types";
+import { notFiscalClosingVoucher } from "../../../services/accounting/balances/periodReportRules";
 
 export const phase7QueryTypes = [
   "audit_trail",
@@ -152,7 +153,7 @@ async function runPhase7Report(ctx: DataQueryContext): Promise<DataQueryResult> 
         JOIN stock_items si ON si.id = sai.stock_item_id
         JOIN locations l ON l.id = sav.location_id
         WHERE v.company_id = ${companyId}
-          AND CAST(v.voucher_date AS text) BETWEEN ${dateFrom} AND ${dateTo}
+          AND CAST(COALESCE(v.effective_date, v.voucher_date) AS text) BETWEEN ${dateFrom} AND ${dateTo}
           ${adjTypeFilter ? sql`AND sav.adjustment_type = ${adjTypeFilter}` : sql``}
         ORDER BY v.voucher_date DESC
         LIMIT ${rowLimit}
@@ -421,9 +422,11 @@ async function runPhase7Report(ctx: DataQueryContext): Promise<DataQueryResult> 
         JOIN voucher_entries ve ON ve.ledger_account_id = la.id
         JOIN vouchers v ON v.id = ve.voucher_id
           AND v.deleted_at IS NULL AND v.optional = false
-          AND CAST(v.voucher_date AS text) BETWEEN ${dateFrom} AND ${dateTo}
+          AND CAST(COALESCE(v.effective_date, v.voucher_date) AS text) BETWEEN ${dateFrom} AND ${dateTo}
+          AND v.company_id = ${companyId}
+          AND ${notFiscalClosingVoucher("v")}
         WHERE la.company_id = ${companyId}
-          AND la.account_type IN ('Income')
+          AND LOWER(TRIM(la.account_type)) IN (${accountTypesOfClassSql("income")})
           AND la.deleted_at IS NULL
         GROUP BY la.id, la.name, la.account_type
         HAVING COALESCE(SUM(CAST(ve.credit_amount AS numeric) - CAST(ve.debit_amount AS numeric)), 0) > 0

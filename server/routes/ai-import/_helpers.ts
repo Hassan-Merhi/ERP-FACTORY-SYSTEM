@@ -434,6 +434,7 @@ export async function postRows(
   }
 }
 
+// Phase 21 (B): each row's create audit is written on the posting transaction.
 export async function postStockItemRows(
   companyId: number,
   userId: string,
@@ -461,16 +462,19 @@ export async function postStockItemRows(
       } as typeof stockItems.$inferInsert)
       .returning({ id: stockItems.id });
 
-    await logAudit({
-      userId,
-      username,
-      companyId,
-      action: "create",
-      tableName: "stock_items",
-      recordId: created.id,
-      recordIdentifier: d.code || d.name,
-      changes: null,
-    });
+    await logAudit(
+      {
+        userId,
+        username,
+        companyId,
+        action: "create",
+        tableName: "stock_items",
+        recordId: created.id,
+        recordIdentifier: d.code || d.name,
+        changes: null,
+      },
+      tx
+    );
 
     results.push({ rowId: row.id, recordType: "stock_item", recordId: created.id });
   }
@@ -502,16 +506,19 @@ export async function postCustomerRows(
       } as typeof customers.$inferInsert)
       .returning({ id: customers.id });
 
-    await logAudit({
-      userId,
-      username,
-      companyId,
-      action: "create",
-      tableName: "customers",
-      recordId: created.id,
-      recordIdentifier: d.code || d.name,
-      changes: null,
-    });
+    await logAudit(
+      {
+        userId,
+        username,
+        companyId,
+        action: "create",
+        tableName: "customers",
+        recordId: created.id,
+        recordIdentifier: d.code || d.name,
+        changes: null,
+      },
+      tx
+    );
 
     results.push({ rowId: row.id, recordType: "customer", recordId: created.id });
   }
@@ -543,16 +550,19 @@ export async function postSupplierRows(
       } as typeof suppliers.$inferInsert)
       .returning({ id: suppliers.id });
 
-    await logAudit({
-      userId,
-      username,
-      companyId,
-      action: "create",
-      tableName: "suppliers",
-      recordId: created.id,
-      recordIdentifier: d.code || d.legalName,
-      changes: null,
-    });
+    await logAudit(
+      {
+        userId,
+        username,
+        companyId,
+        action: "create",
+        tableName: "suppliers",
+        recordId: created.id,
+        recordIdentifier: d.code || d.legalName,
+        changes: null,
+      },
+      tx
+    );
 
     results.push({ rowId: row.id, recordType: "supplier", recordId: created.id });
   }

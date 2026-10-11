@@ -5,12 +5,7 @@ import { db } from "../server/db";
 import { storage } from "../server/storage";
 import * as schema from "../shared/schema";
 import { companyScopedSuppliers } from "../shared/schema/supplierCompanyScope";
-import {
-  cleanupTestData,
-  closeTestServer,
-  seedTestData,
-  type TestContext,
-} from "./setup";
+import { cleanupTestData, closeTestServer, seedTestData, type TestContext } from "./setup";
 
 const TEST_PREFIX = "supscope";
 
@@ -115,9 +110,7 @@ beforeAll(async () => {
     active: true,
   });
   if (parentSupplier.status !== 201) {
-    throw new Error(
-      `Parent supplier creation failed: ${parentSupplier.status} ${JSON.stringify(parentSupplier.body)}`
-    );
+    throw new Error(`Parent supplier creation failed: ${parentSupplier.status} ${JSON.stringify(parentSupplier.body)}`);
   }
   parentSupplierId = parentSupplier.body.id;
 
@@ -131,18 +124,25 @@ beforeAll(async () => {
     active: true,
   });
   if (childSupplier.status !== 201) {
-    throw new Error(
-      `Child supplier creation failed: ${childSupplier.status} ${JSON.stringify(childSupplier.body)}`
-    );
+    throw new Error(`Child supplier creation failed: ${childSupplier.status} ${JSON.stringify(childSupplier.body)}`);
   }
   childSupplierId = childSupplier.body.id;
 }, 60000);
 
 afterAll(async () => {
   if (parentSupplierId || childSupplierId) {
-    await db
-      .delete(schema.voucherEntries)
-      .where(inArray(schema.voucherEntries.supplierId, [parentSupplierId, childSupplierId].filter(Boolean)));
+    // Every line of a voucher carrying either supplier goes in one statement:
+    // deleting only the supplier legs would leave the vouchers one-sided, which
+    // the voucher balance guard refuses at commit.
+    await db.delete(schema.voucherEntries).where(
+      inArray(
+        schema.voucherEntries.voucherId,
+        db
+          .select({ voucherId: schema.voucherEntries.voucherId })
+          .from(schema.voucherEntries)
+          .where(inArray(schema.voucherEntries.supplierId, [parentSupplierId, childSupplierId].filter(Boolean)))
+      )
+    );
     await db
       .delete(companyScopedSuppliers)
       .where(inArray(companyScopedSuppliers.id, [parentSupplierId, childSupplierId].filter(Boolean)));
@@ -220,12 +220,7 @@ describe("strict supplier company ownership", () => {
     const [row] = await db
       .select({ stockGroupId: companyScopedSuppliers.stockGroupId })
       .from(companyScopedSuppliers)
-      .where(
-        and(
-          eq(companyScopedSuppliers.id, childSupplierId),
-          eq(companyScopedSuppliers.companyId, childCompanyId)
-        )
-      );
+      .where(and(eq(companyScopedSuppliers.id, childSupplierId), eq(companyScopedSuppliers.companyId, childCompanyId)));
     expect(row.stockGroupId).toBeNull();
   });
 });

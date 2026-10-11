@@ -1,11 +1,22 @@
 import { parseId, parseOptionalId } from "../../lib/parseId";
-import { getErrorMessage } from "../../lib/httpHandlers";
+import { getErrorMessage, HttpError, sendHttpError } from "../../lib/httpHandlers";
+import { logAudit } from "../helpers/auditHelpers";
+import { retireVouchersForRequestTx } from "../../services/accounting/voucherRetirement";
+
+export const ADVANCE_HAS_REPAYMENTS_MESSAGE =
+  "This advance has repayments. Reverse the repayments first, then delete the advance.";
 import { logger } from "../../lib/logger";
 import { getClientDate } from "../../lib/dateUtils";
 import type { Express, Request, Response } from "express";
 import { db } from "../../db";
 import { requireAuth } from "../../auth";
-import { eq, and, desc, sql, inArray, isNull } from "drizzle-orm";
+import { eq, and, sql, isNull, inArray } from "drizzle-orm";
+import { postErpVoucherTx } from "../../services/accounting/erpVoucherPosting";
+import {
+  assertVoucherEditableTx,
+  recordVoucherEditAuditTx,
+  sendVoucherCorrectionRefusal,
+} from "../../services/accounting/voucherCorrection";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
@@ -20,51 +31,10 @@ import {
   vouchers,
   voucherEntries,
 } from "@shared/schema";
-import { daybookAmountUsd, MoneyDecimal, sumMoney, toMoney } from "../../lib/money";
+import { MoneyDecimal, toMoney } from "../../lib/money";
 import type Decimal from "decimal.js";
-
-/** Prefer the factory-pinned company ID so cross-tab ERP company switches don't corrupt factory writes. */
-function getFactoryCompanyId(req: import("express").Request): number | undefined {
-  return req.session.factoryCompanyId || req.session.currentCompanyId;
-}
-
-/** Write a single daybook entry (factory audit log). */
-async function writeDaybookEntry(
-  dbOrTx: typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0],
-  opts: {
-    companyId: number;
-    txDate: string;
-    txType: string;
-    referenceId?: number;
-    referenceTable?: string;
-    description: string;
-    metaJson?: string;
-    currencyCode?: string;
-    amountCurrency?: number;
-    fxRateToUsd?: number;
-    amountUsd?: number;
-    createdBy?: string | null;
-  }
-) {
-  const currency = opts.currencyCode || "USD";
-  const fxRate = opts.fxRateToUsd || 1;
-  const amtCurrency = opts.amountCurrency || 0;
-  const amtUsd = daybookAmountUsd(currency, amtCurrency, fxRate, opts.amountUsd);
-  await dbOrTx.insert(factoryDaybookEntries).values({
-    companyId: opts.companyId,
-    txDate: opts.txDate,
-    txType: opts.txType,
-    referenceId: opts.referenceId || null,
-    referenceTable: opts.referenceTable || null,
-    description: opts.description,
-    metaJson: opts.metaJson || null,
-    currencyCode: currency,
-    amountCurrency: String(amtCurrency),
-    fxRateToUsd: String(fxRate),
-    amountUsd: amtUsd,
-    createdBy: opts.createdBy || null,
-  });
-}
+import { getFactoryCompanyId, writeDaybookEntry } from "./advanceRouteHelpers";
+import { registerUnvoucheredAdvancesRoute, registerWorkerAdvanceBalanceRoute } from "./advanceReadRoutes";
 
 /** Find or create a ledger account by name for a company. Returns the account row.
  *  Skips soft-deleted accounts and handles race-condition unique-constraint failures. */
@@ -301,26 +271,24 @@ export function registerAdvanceManagementRoutes(app: Express) {
 
       const today = getClientDate(req);
 
+      // Owner decision (wave 7): an advance with a live repayment is not deleted
+      // (its repayment vouchers would be left behind); the repayments are
+      // reversed first. An advance with none goes with its PAYMENT-ADV voucher,
+      // its daybook rows and an audit row, in one transaction.
       await db.transaction(async (tx: Parameters<Parameters<typeof db.transaction>[0]>[0]) => {
+        const [locked] = await tx
+          .select({ id: factoryWorkerAdvances.id })
+          .from(factoryWorkerAdvances)
+          .where(and(eq(factoryWorkerAdvances.id, id), eq(factoryWorkerAdvances.companyId, companyId)))
+          .for("update");
+        if (!locked) throw new HttpError(404, "Advance not found");
+
         const repayments = await tx
-          .select()
+          .select({ id: factoryAdvanceRepayments.id })
           .from(factoryAdvanceRepayments)
           .where(eq(factoryAdvanceRepayments.advanceId, id));
-
         if (repayments.length > 0) {
-          // Delete ADVANCE_REPAYMENT daybook entries for these repayments before
-          // removing the repayment records so orphaned daybook rows don't linger.
-          const repaymentIds = repayments.map((r) => r.id);
-          await tx
-            .delete(factoryDaybookEntries)
-            .where(
-              and(
-                eq(factoryDaybookEntries.companyId, companyId),
-                eq(factoryDaybookEntries.referenceTable, "factory_advance_repayments"),
-                inArray(factoryDaybookEntries.referenceId, repaymentIds)
-              )
-            );
-          await tx.delete(factoryAdvanceRepayments).where(eq(factoryAdvanceRepayments.advanceId, id));
+          throw new HttpError(409, ADVANCE_HAS_REPAYMENTS_MESSAGE);
         }
 
         // Delete the advance payment voucher (PAYMENT-ADV-{id}-*) and its entries.
@@ -334,8 +302,8 @@ export function registerAdvanceManagementRoutes(app: Express) {
           );
         if (advanceVouchers.length > 0) {
           const vIds = advanceVouchers.map((v) => v.id);
-          await tx.delete(voucherEntries).where(inArray(voucherEntries.voucherId, vIds));
-          await tx.delete(vouchers).where(inArray(vouchers.id, vIds));
+          // Wave 16 (A): retired (soft delete with lines, audited here), not hard-deleted.
+          await retireVouchersForRequestTx(tx, req, companyId, vIds, "advance-delete-or-reverse");
         }
 
         await tx
@@ -355,7 +323,6 @@ export function registerAdvanceManagementRoutes(app: Express) {
             )
           );
 
-        const repayNote = repayments.length > 0 ? ` (${repayments.length} repayment(s) also removed)` : "";
         const voucherNote = advanceVouchers.length > 0 ? "; voucher reversed" : "";
         await writeDaybookEntry(tx, {
           companyId,
@@ -363,15 +330,35 @@ export function registerAdvanceManagementRoutes(app: Express) {
           txType: "ADVANCE_DELETED",
           referenceId: id,
           referenceTable: "factory_worker_advances",
-          description: `Advance deleted for ${worker?.fullName || "Unknown"}: $${toMoney(advance.amount).toFixed(2)}${repayNote}${voucherNote}`,
+          description: `Advance deleted for ${worker?.fullName || "Unknown"}: $${toMoney(advance.amount).toFixed(2)}${voucherNote}`,
           createdBy: req.session.userId ?? undefined,
         });
+        await logAudit(
+          {
+            userId: req.session.userId!,
+            username: req.session.username || req.session.userId!,
+            companyId,
+            action: "delete",
+            tableName: "factory_worker_advances",
+            recordId: id,
+            recordIdentifier: `Advance #${id} (${worker?.fullName || `Worker #${advance.workerId}`})`,
+            changes: {
+              amount: { old: advance.amount, new: null },
+              remainingBalance: { old: advance.remainingBalance, new: null },
+              vouchersRemoved: { old: advanceVouchers.map((v) => v.id).join(", ") || null, new: null },
+            },
+          },
+          tx
+        );
       });
 
       res.json({ message: "Advance deleted" });
     } catch (error: unknown) {
-      logger.error("Error deleting advance:", { error: error });
-      res.status(500).json({ message: getErrorMessage(error) });
+      if (error instanceof HttpError && error.message === ADVANCE_HAS_REPAYMENTS_MESSAGE) {
+        return res.status(409).json({ message: error.message, code: "ADVANCE_HAS_REPAYMENTS" });
+      }
+      if (!(error instanceof HttpError)) logger.error("Error deleting advance:", { error: error });
+      sendHttpError(res, error);
     }
   });
 
@@ -408,6 +395,24 @@ export function registerAdvanceManagementRoutes(app: Express) {
           .where(eq(factoryAdvanceRepayments.advanceId, id));
 
         if (repayments.length > 0) {
+          // Wave 7: each repayment's receipt voucher (RECEIPT-REPAY-{id}-* /
+          // REPAY-SAL-{id}-*) goes with it, so reversing repayments leaves no
+          // credit on Factory Worker Advances behind.
+          for (const repayment of repayments) {
+            const receiptVouchers = await tx
+              .select({ id: vouchers.id })
+              .from(vouchers)
+              .where(
+                and(
+                  eq(vouchers.companyId, companyId),
+                  sql`(${vouchers.voucherNumber} LIKE ${"RECEIPT-REPAY-" + repayment.id + "-%"} OR ${vouchers.voucherNumber} LIKE ${"REPAY-SAL-" + repayment.id + "-%"})`
+                )
+              );
+            const receiptIds = receiptVouchers.map((v) => v.id);
+            if (receiptIds.length === 0) continue;
+            // Wave 16 (A): retired (soft delete with lines, audited here), not hard-deleted.
+            await retireVouchersForRequestTx(tx, req, companyId, receiptIds, "advance-delete-or-reverse");
+          }
           await tx.delete(factoryAdvanceRepayments).where(eq(factoryAdvanceRepayments.advanceId, id));
         }
 
@@ -426,6 +431,22 @@ export function registerAdvanceManagementRoutes(app: Express) {
           description: `Advance reversed for ${worker?.fullName || "Unknown"}: $${toMoney(advance.amount).toFixed(2)} restored to outstanding (${repayments.length} repayment(s) removed)`,
           createdBy: req.session.userId ?? undefined,
         });
+        await logAudit(
+          {
+            userId: req.session.userId!,
+            username: req.session.username || req.session.userId!,
+            companyId,
+            action: "update",
+            tableName: "factory_worker_advances",
+            recordId: id,
+            recordIdentifier: `Advance #${id} reversed`,
+            changes: {
+              remainingBalance: { old: advance.remainingBalance, new: advance.amount },
+              repaymentsRemoved: { old: repayments.map((r) => r.id).join(", ") || null, new: null },
+            },
+          },
+          tx
+        );
       });
 
       res.json({ message: "Advance reversed and restored to outstanding" });
@@ -435,47 +456,7 @@ export function registerAdvanceManagementRoutes(app: Express) {
     }
   });
 
-  app.get("/api/factory/advances/unvouchered", requireAuth, async (req: Request, res: Response) => {
-    try {
-      const companyId = req.query.companyId ? parseOptionalId(req.query.companyId) : getFactoryCompanyId(req);
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
-
-      const allAdvances = await db
-        .select({
-          id: factoryWorkerAdvances.id,
-          workerId: factoryWorkerAdvances.workerId,
-          advanceDate: factoryWorkerAdvances.advanceDate,
-          amount: factoryWorkerAdvances.amount,
-          remainingBalance: factoryWorkerAdvances.remainingBalance,
-          cashAccountId: factoryWorkerAdvances.cashAccountId,
-          notes: factoryWorkerAdvances.notes,
-          repaymentType: factoryWorkerAdvances.repaymentType,
-          workerName: factoryWorkers.fullName,
-        })
-        .from(factoryWorkerAdvances)
-        .innerJoin(factoryWorkers, eq(factoryWorkerAdvances.workerId, factoryWorkers.id))
-        .where(eq(factoryWorkerAdvances.companyId, companyId))
-        .orderBy(desc(factoryWorkerAdvances.advanceDate));
-
-      const existingVoucherAdvanceIds = await db
-        .select({ voucherNumber: vouchers.voucherNumber })
-        .from(vouchers)
-        .where(and(eq(vouchers.companyId, companyId), sql`${vouchers.voucherNumber} LIKE 'PAYMENT-ADV-%'`));
-
-      const voucheredIds = new Set<number>();
-      for (const v of existingVoucherAdvanceIds) {
-        const match = v.voucherNumber.match(/^PAYMENT-ADV-(\d+)-/);
-        if (match) voucheredIds.add(parseInt(match[1]));
-      }
-
-      const unvouchered = allAdvances.filter((a) => !voucheredIds.has(a.id) || a.cashAccountId === null);
-
-      res.json(unvouchered);
-    } catch (error: unknown) {
-      logger.error("Error fetching unvouchered advances:", { error: error });
-      res.status(500).json({ message: getErrorMessage(error) });
-    }
-  });
+  registerUnvoucheredAdvancesRoute(app);
 
   app.post("/api/factory/advances/post-accounting", requireAuth, async (req: Request, res: Response) => {
     try {
@@ -535,7 +516,7 @@ export function registerAdvanceManagementRoutes(app: Express) {
           const maxCodeResult = await tx
             .select({ maxCode: sql<number | null>`MAX(CAST(code AS INTEGER))` })
             .from(ledgerAccounts)
-            .where(and(eq(ledgerAccounts.companyId, companyId), sql`code ~ '^\d+$'`));
+            .where(and(eq(ledgerAccounts.companyId, companyId), sql`code ~ '^[0-9]+$'`));
           const nextCode = String((maxCodeResult[0]?.maxCode ?? 0) + 1);
 
           [advancesAccount] = await tx
@@ -566,39 +547,23 @@ export function registerAdvanceManagementRoutes(app: Express) {
           }
 
           const amount = toMoney(adv.amount);
-          const voucherNumber = `PAYMENT-ADV-${adv.id}-${Date.now()}`;
+          const voucherNumber = `PAYMENT-ADV-${adv.id}-1`;
           const narration = `Advance to ${adv.workerName}: $${amount.toFixed(2)} (retroactive)`;
 
-          const [createdVoucher] = await tx
-            .insert(vouchers)
-            .values({
-              companyId,
-              voucherNumber,
-              voucherType: "Payment",
-              voucherDate: adv.advanceDate,
-              description: narration,
-              totalAmount: amount.toFixed(2),
-              currency: "USD",
-              sourceModule: "FACTORY",
-            })
-            .returning();
-
-          await tx.insert(voucherEntries).values([
-            {
-              voucherId: createdVoucher.id,
-              ledgerAccountId: advancesAccount.id,
-              debitAmount: amount.toFixed(2),
-              creditAmount: "0",
-              narration,
-            },
-            {
-              voucherId: createdVoucher.id,
-              ledgerAccountId: cashAccountId,
-              debitAmount: "0",
-              creditAmount: amount.toFixed(2),
-              narration,
-            },
-          ]);
+          await postErpVoucherTx(tx, {
+            companyId,
+            voucherNumber,
+            voucherType: "Payment",
+            voucherDate: adv.advanceDate,
+            description: narration,
+            currency: "USD",
+            sourceModule: "FACTORY",
+            lines: [
+              { ledgerAccountId: advancesAccount.id, debit: amount.toFixed(2), narration: narration },
+              { ledgerAccountId: cashAccountId, credit: amount.toFixed(2), narration: narration },
+            ],
+            source: { type: "worker-advance", id: adv.id },
+          });
 
           await tx
             .update(factoryWorkerAdvances)
@@ -725,8 +690,11 @@ export function registerAdvanceManagementRoutes(app: Express) {
           const narration = `Advance to ${workerName}: $${amount.toFixed(2)}`;
 
           if (advVoucherMap.has(adv.id)) {
-            // Patch the credit leg of the existing voucher to the new cash account
+            // Patch the credit leg of the existing voucher to the new cash account.
+            // Phase 22 (B), G4: an open-period edit audited in this transaction;
+            // a voucher in a closed period is refused (409, reverse instead).
             const voucherId = advVoucherMap.get(adv.id)!;
+            const editContext = await assertVoucherEditableTx(tx, voucherId, { companyId });
             const entries = await tx
               .select({ id: voucherEntries.id, creditAmount: voucherEntries.creditAmount })
               .from(voucherEntries)
@@ -741,40 +709,31 @@ export function registerAdvanceManagementRoutes(app: Express) {
                 .update(voucherEntries)
                 .set({ ledgerAccountId: cashAccountId })
                 .where(eq(voucherEntries.id, creditEntry.id));
+              await recordVoucherEditAuditTx(tx, {
+                voucherId,
+                before: editContext.before,
+                actor: { userId: req.session.userId, username: req.session.username, companyId },
+                reason: "Advance cash account reassigned",
+              });
               vouchersPatched++;
             }
           } else {
             // No voucher existed — create one now: DR Factory Worker Advances / CR Cash
-            const voucherNumber = `PAYMENT-ADV-${adv.id}-${Date.now()}`;
-            const [createdVoucher] = await tx
-              .insert(vouchers)
-              .values({
-                companyId,
-                voucherNumber,
-                voucherType: "Payment",
-                voucherDate: advDate,
-                description: narration,
-                totalAmount: amount.toFixed(2),
-                currency: "USD",
-                sourceModule: "FACTORY",
-              })
-              .returning();
-            await tx.insert(voucherEntries).values([
-              {
-                voucherId: createdVoucher.id,
-                ledgerAccountId: advancesAccountId,
-                debitAmount: amount.toFixed(2),
-                creditAmount: "0",
-                narration,
-              },
-              {
-                voucherId: createdVoucher.id,
-                ledgerAccountId: cashAccountId,
-                debitAmount: "0",
-                creditAmount: amount.toFixed(2),
-                narration,
-              },
-            ]);
+            const voucherNumber = `PAYMENT-ADV-${adv.id}-1`;
+            await postErpVoucherTx(tx, {
+              companyId,
+              voucherNumber,
+              voucherType: "Payment",
+              voucherDate: advDate,
+              description: narration,
+              currency: "USD",
+              sourceModule: "FACTORY",
+              lines: [
+                { ledgerAccountId: advancesAccountId, debit: amount.toFixed(2), narration: narration },
+                { ledgerAccountId: cashAccountId, credit: amount.toFixed(2), narration: narration },
+              ],
+              source: { type: "worker-advance", id: adv.id },
+            });
             vouchersCreated++;
           }
 
@@ -803,36 +762,11 @@ export function registerAdvanceManagementRoutes(app: Express) {
       });
     } catch (error: unknown) {
       logger.error("Error bulk-updating advance cash accounts:", { error: error });
+      if (sendVoucherCorrectionRefusal(res, error)) return;
       res.status(500).json({ message: getErrorMessage(error) });
     }
   });
 
   // GET /api/factory/workers/:id/advance-balance - Get total outstanding advance balance
-  app.get("/api/factory/workers/:id/advance-balance", requireAuth, async (req: Request, res: Response) => {
-    try {
-      const companyId = req.query.companyId ? parseOptionalId(req.query.companyId) : getFactoryCompanyId(req);
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
-      const workerId = parseId(req.params.id);
-      if (workerId === null) return res.status(400).json({ message: "Invalid id" });
-
-      const outstanding = await db
-        .select()
-        .from(factoryWorkerAdvances)
-        .where(
-          and(
-            eq(factoryWorkerAdvances.companyId, companyId),
-            eq(factoryWorkerAdvances.workerId, workerId),
-            eq(factoryWorkerAdvances.fullyPaid, false)
-          )
-        );
-
-      const totalBalance = sumMoney(outstanding.map((a) => a.remainingBalance));
-      res.json({ totalBalance: totalBalance.toFixed(2), count: outstanding.length });
-    } catch (error: unknown) {
-      logger.error("Error fetching advance balance:", { error: error });
-      res.status(500).json({ message: getErrorMessage(error) });
-    }
-  });
-
-  // POST /api/factory/advances/repay-by-month - Bulk repay all outstanding advances for a given month
+  registerWorkerAdvanceBalanceRoute(app);
 }

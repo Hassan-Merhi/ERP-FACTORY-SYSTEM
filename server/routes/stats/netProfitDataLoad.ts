@@ -1,9 +1,9 @@
-import { eq, isNull, lte } from "drizzle-orm";
-
-import { vouchers, type Company } from "@shared/schema";
+import type { Company } from "@shared/schema";
 import { pool } from "../../db";
 import { storage } from "../../storage";
 import { resultRows } from "../../lib/queryResult";
+import { toMoney } from "../../lib/money";
+import { notFiscalClosingVoucherText } from "../../services/accounting/balances/periodReportRules";
 
 /** One ledger account row as mapped to camelCase below: the original columns
  *  guaranteed to exist in every deployment (including pre-migration prod).
@@ -28,17 +28,20 @@ export type NetProfitLedgerAccount = {
 export interface NetProfitData {
   companyRecord: Company | undefined;
   companyAccounts: NetProfitLedgerAccount[];
-  parentCompanyId: number | null;
   hasMigratedEntries: boolean;
   companyBaseCurrency: string;
   accountBalances: Map<number, { debit: number; credit: number }>;
-  supplierBalances: Map<number, { debit: number; credit: number }>;
-  employeeBalances: Map<number, { debit: number; credit: number }>;
+  /**
+   * The same balances without the fiscal closing journals (wave 17 A): the
+   * P&L pass reads these, so a closed year's profit is still reported; the
+   * balance-sheet side (and retained earnings) reads `accountBalances`.
+   */
+  profitAndLossBalances: Map<number, { debit: number; credit: number }>;
 }
 
 /**
  * Load everything /api/stats/net-profit computes from: the company row, its
- * ledger accounts, and the three grouped balance maps.
+ * ledger accounts, and the grouped ledger-account balances.
  *
  * Extracted verbatim from the handler. It is one step because the pieces are
  * genuinely coupled - the schema probe decides which SQL form every subsequent
@@ -48,32 +51,24 @@ export interface NetProfitData {
  * config/report-characterization.json pins the endpoint's output across the move.
  */
 export async function loadNetProfitData(companyId: number, toDate: string | null | undefined): Promise<NetProfitData> {
-  const voucherConditions = [
-    eq(vouchers.companyId, companyId),
-    eq(vouchers.optional, false),
-    isNull(vouchers.deletedAt),
-  ];
-  if (toDate) {
-    voucherConditions.push(lte(vouchers.voucherDate, toDate));
-  }
-
-  // Program 6D optimization: replace the two large per-row entry materialisations
-  // with three grouped-SQL queries.  This was validated by the Program 6D
-  // reconciliation script (995/995 cases, max diff < 1e-9, zero semantic mismatches)
-  // and by query-plan evidence showing 97-99% reduction in rows returned to the app.
+  // Program 6D optimization: replace the large per-row entry materialisations
+  // with grouped-SQL queries. Wave 10: customers, suppliers and employees come
+  // from the one balance engine (services/accounting/balances/netPositionParties.ts),
+  // so only the ledger-account aggregate is loaded here; vouchers count from
+  // COALESCE(effective_date, voucher_date). The grouped form was validated by the
+  // Program 6D reconciliation script (995/995 cases, max diff < 1e-9) and by
+  // query-plan evidence showing 97-99% reduction in rows returned to the app.
   //
-  // Three queries replace the original two:
-  //   1. groupedLedgerRows   — SUM per ledger_account_id, scoped by ACCOUNT's companyId
-  //      Preserves migrated-account attribution (rule 1+2).
-  //   2. groupedSupplierRows — SUM per supplier_id with SQL CASE for pure-side filtering,
-  //      scoped by VOUCHER's companyId.  Mixed debit+credit FX settlement rows
-  //      contribute 0 to both sides (rules 3+4+5).
-  //   3. groupedEmployeeRows — SUM per employee_id, scoped by VOUCHER's companyId (rule 3).
+  //   groupedLedgerRows — SUM per ledger_account_id of the company's own
+  //   vouchers on its own accounts (engine rule 4, wave 17 A). Before, lines
+  //   were read by the ACCOUNT's company, so another company's vouchers posted
+  //   on this company's accounts counted here but not on its balance sheet;
+  //   such lines are the engine's missingAccount bucket of the posting company.
   //
   // pool.query is used (not db.select) to avoid the Drizzle ::cast-in-sql-template
   // issue documented in the project memory.
   const _entryParams = toDate ? [companyId, toDate] : [companyId];
-  const _dateClause = toDate ? "AND v.voucher_date <= $2" : "";
+  const _dateClause = toDate ? "AND COALESCE(v.effective_date, v.voucher_date) <= $2" : "";
 
   // ── Schema-resilient column probe ────────────────────────────────────────
   // Production may be running with RUN_STARTUP_MIGRATIONS=false so the
@@ -83,15 +78,9 @@ export async function loadNetProfitData(companyId: number, toDate: string | null
   // the right SQL form for every subsequent query in this handler.
   // Both probes are run in the same parallel batch as the other startup calls
   // to add zero sequential latency on the happy path.
-  const [
-    companyRecord,
-    companyAccounts,
-    parentCompanyId,
-    groupedLedgerRows,
-    groupedSupplierRows,
-    groupedEmployeeRows,
-    hasMigratedResult,
-  ] = await Promise.all([
+  // Wave 13 (owner decision 2): the global parentCompanyId setting no longer
+  // gates supplier inclusion, so it is not loaded here.
+  const [companyRecord, companyAccounts, groupedLedgerRows, hasMigratedResult] = await Promise.all([
     storage.getCompanyById(companyId),
     // Use a raw pool query so we only SELECT the original columns that are
     // guaranteed to exist in every deployment (including pre-migration prod).
@@ -159,7 +148,10 @@ export async function loadNetProfitData(companyId: number, toDate: string | null
           accountType: row.account_type,
           subType: row.sub_type,
           openingBalance: row.opening_balance ?? "0",
-          openingBalanceSide: row.opening_balance_side ?? "Dr",
+          // A sideless opening keeps no side here, so getAccountNetBalance takes
+          // the engine's default side for the account type (wave 17 A); it was
+          // forced to Dr.
+          openingBalanceSide: row.opening_balance_side ?? "",
           active: row.active,
           isHidden: row.is_hidden,
           parentId: row.parent_id,
@@ -168,20 +160,30 @@ export async function loadNetProfitData(companyId: number, toDate: string | null
           category: row.category,
         }))
       ),
-    storage.getParentCompanyId(),
     // 1. Ledger-account balances — account-company scoped (migrated-account rule)
     // COALESCE(base_debit_amount, debit_amount): uses historical USD base when available
     // (i.e. after backfill), falls back to debit_amount for legacy rows.
     // Falls back to plain debit_amount/credit_amount when base columns are absent.
     pool
-      .query<{ ledger_account_id: string; total_debit: string; total_credit: string }>(
+      .query<{
+        ledger_account_id: string;
+        total_debit: string;
+        total_credit: string;
+        close_debit: string;
+        close_credit: string;
+      }>(
         `SELECT ve.ledger_account_id,
             SUM(COALESCE(ve.base_debit_amount,  ve.debit_amount)::numeric)  AS total_debit,
-            SUM(COALESCE(ve.base_credit_amount, ve.credit_amount)::numeric) AS total_credit
+            SUM(COALESCE(ve.base_credit_amount, ve.credit_amount)::numeric) AS total_credit,
+            COALESCE(SUM(COALESCE(ve.base_debit_amount,  ve.debit_amount)::numeric)
+              FILTER (WHERE NOT (${notFiscalClosingVoucherText("v")})), 0) AS close_debit,
+            COALESCE(SUM(COALESCE(ve.base_credit_amount, ve.credit_amount)::numeric)
+              FILTER (WHERE NOT (${notFiscalClosingVoucherText("v")})), 0) AS close_credit
      FROM voucher_entries ve
      JOIN vouchers        v  ON ve.voucher_id        = v.id
      JOIN ledger_accounts la ON ve.ledger_account_id = la.id
      WHERE la.company_id = $1
+       AND v.company_id  = $1
        AND v.optional    = false
        AND v.deleted_at IS NULL
        ${_dateClause}
@@ -189,88 +191,29 @@ export async function loadNetProfitData(companyId: number, toDate: string | null
         _entryParams
       )
       .catch(() =>
-        pool.query<{ ledger_account_id: string; total_debit: string; total_credit: string }>(
+        pool.query<{
+          ledger_account_id: string;
+          total_debit: string;
+          total_credit: string;
+          close_debit: string;
+          close_credit: string;
+        }>(
           `SELECT ve.ledger_account_id,
               SUM(ve.debit_amount::numeric)  AS total_debit,
-              SUM(ve.credit_amount::numeric) AS total_credit
+              SUM(ve.credit_amount::numeric) AS total_credit,
+              COALESCE(SUM(ve.debit_amount::numeric)
+                FILTER (WHERE NOT (${notFiscalClosingVoucherText("v")})), 0) AS close_debit,
+              COALESCE(SUM(ve.credit_amount::numeric)
+                FILTER (WHERE NOT (${notFiscalClosingVoucherText("v")})), 0) AS close_credit
        FROM voucher_entries ve
        JOIN vouchers        v  ON ve.voucher_id        = v.id
        JOIN ledger_accounts la ON ve.ledger_account_id = la.id
        WHERE la.company_id = $1
+         AND v.company_id  = $1
          AND v.optional    = false
          AND v.deleted_at IS NULL
          ${_dateClause}
        GROUP BY ve.ledger_account_id`,
-          _entryParams
-        )
-      ),
-    // 2. Supplier balances — voucher-company scoped, pure-side only (excludes mixed FX rows)
-    pool
-      .query<{ supplier_id: string; total_debit: string; total_credit: string }>(
-        `SELECT ve.supplier_id,
-            SUM(CASE WHEN COALESCE(ve.base_debit_amount,  ve.debit_amount)::numeric  > 0
-                          AND COALESCE(ve.base_credit_amount, ve.credit_amount)::numeric = 0
-                     THEN COALESCE(ve.base_debit_amount, ve.debit_amount)::numeric ELSE 0 END) AS total_debit,
-            SUM(CASE WHEN COALESCE(ve.base_credit_amount, ve.credit_amount)::numeric > 0
-                          AND COALESCE(ve.base_debit_amount,  ve.debit_amount)::numeric  = 0
-                     THEN COALESCE(ve.base_credit_amount, ve.credit_amount)::numeric ELSE 0 END) AS total_credit
-     FROM voucher_entries ve
-     JOIN vouchers v ON ve.voucher_id = v.id
-     WHERE v.company_id    = $1
-       AND ve.supplier_id IS NOT NULL
-       AND v.optional      = false
-       AND v.deleted_at   IS NULL
-       ${_dateClause}
-     GROUP BY ve.supplier_id`,
-        _entryParams
-      )
-      .catch(() =>
-        pool.query<{ supplier_id: string; total_debit: string; total_credit: string }>(
-          `SELECT ve.supplier_id,
-              SUM(CASE WHEN ve.debit_amount::numeric  > 0 AND ve.credit_amount::numeric = 0
-                       THEN ve.debit_amount::numeric ELSE 0 END) AS total_debit,
-              SUM(CASE WHEN ve.credit_amount::numeric > 0 AND ve.debit_amount::numeric  = 0
-                       THEN ve.credit_amount::numeric ELSE 0 END) AS total_credit
-       FROM voucher_entries ve
-       JOIN vouchers v ON ve.voucher_id = v.id
-       WHERE v.company_id    = $1
-         AND ve.supplier_id IS NOT NULL
-         AND v.optional      = false
-         AND v.deleted_at   IS NULL
-         ${_dateClause}
-       GROUP BY ve.supplier_id`,
-          _entryParams
-        )
-      ),
-    // 3. Employee balances — voucher-company scoped
-    pool
-      .query<{ employee_id: string; total_debit: string; total_credit: string }>(
-        `SELECT ve.employee_id,
-            SUM(COALESCE(ve.base_debit_amount,  ve.debit_amount)::numeric)  AS total_debit,
-            SUM(COALESCE(ve.base_credit_amount, ve.credit_amount)::numeric) AS total_credit
-     FROM voucher_entries ve
-     JOIN vouchers v ON ve.voucher_id = v.id
-     WHERE v.company_id    = $1
-       AND ve.employee_id IS NOT NULL
-       AND v.optional      = false
-       AND v.deleted_at   IS NULL
-       ${_dateClause}
-     GROUP BY ve.employee_id`,
-        _entryParams
-      )
-      .catch(() =>
-        pool.query<{ employee_id: string; total_debit: string; total_credit: string }>(
-          `SELECT ve.employee_id,
-              SUM(ve.debit_amount::numeric)  AS total_debit,
-              SUM(ve.credit_amount::numeric) AS total_credit
-       FROM voucher_entries ve
-       JOIN vouchers v ON ve.voucher_id = v.id
-       WHERE v.company_id    = $1
-         AND ve.employee_id IS NOT NULL
-         AND v.optional      = false
-         AND v.deleted_at   IS NULL
-         ${_dateClause}
-       GROUP BY ve.employee_id`,
           _entryParams
         )
       ),
@@ -298,47 +241,26 @@ export async function loadNetProfitData(companyId: number, toDate: string | null
   // Account-company scoped: migrated accounts carry their full balance to the
   // destination company regardless of which company their vouchers belong to.
   const accountBalances = new Map<number, { debit: number; credit: number }>();
+  const profitAndLossBalances = new Map<number, { debit: number; credit: number }>();
   for (const row of groupedLedgerRows.rows) {
     if (row.ledger_account_id) {
       accountBalances.set(Number(row.ledger_account_id), {
-        debit: parseFloat(row.total_debit || "0"),
-        credit: parseFloat(row.total_credit || "0"),
+        debit: toMoney(row.total_debit).toNumber(),
+        credit: toMoney(row.total_credit).toNumber(),
+      });
+      profitAndLossBalances.set(Number(row.ledger_account_id), {
+        debit: toMoney(row.total_debit).minus(toMoney(row.close_debit)).toNumber(),
+        credit: toMoney(row.total_credit).minus(toMoney(row.close_credit)).toNumber(),
       });
     }
   }
 
-  // Build supplierBalances from grouped SQL result.
-  // Pure-side filtering is performed in SQL (CASE expressions above) so mixed
-  // debit+credit FX settlement rows contribute 0 to both sides — matching the
-  // /api/suppliers/stats logic and the original per-row application filter.
-  const supplierBalances = new Map<number, { debit: number; credit: number }>();
-  for (const row of groupedSupplierRows.rows) {
-    if (row.supplier_id) {
-      supplierBalances.set(Number(row.supplier_id), {
-        debit: parseFloat(row.total_debit || "0"),
-        credit: parseFloat(row.total_credit || "0"),
-      });
-    }
-  }
-
-  // Build employeeBalances from grouped SQL result (voucher-company scoped).
-  const employeeBalances = new Map<number, { debit: number; credit: number }>();
-  for (const row of groupedEmployeeRows.rows) {
-    if (row.employee_id) {
-      employeeBalances.set(Number(row.employee_id), {
-        debit: parseFloat(row.total_debit || "0"),
-        credit: parseFloat(row.total_credit || "0"),
-      });
-    }
-  }
   return {
     companyRecord,
     companyAccounts,
-    parentCompanyId,
     hasMigratedEntries,
     companyBaseCurrency,
     accountBalances,
-    supplierBalances,
-    employeeBalances,
+    profitAndLossBalances,
   };
 }

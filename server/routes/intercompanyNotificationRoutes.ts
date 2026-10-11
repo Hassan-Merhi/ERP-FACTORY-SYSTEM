@@ -2,6 +2,12 @@ import type { Express } from "express";
 import { getErrorMessage } from "../lib/httpHandlers";
 import { logger } from "../lib/logger";
 import { db } from "../db";
+import {
+  pairLines,
+  postErpVoucherTx,
+  sessionPostingActor,
+  withAuthorizedPostingCompany,
+} from "../services/accounting/erpVoucherPosting";
 import { requireAuth, requireRole } from "../auth";
 import { dispatchNotification } from "../lib/notificationService";
 import {
@@ -9,7 +15,6 @@ import {
   intercompanyLinkRecipients,
   intercompanyPaymentRequests,
   vouchers,
-  voucherEntries,
   companies,
   ledgerAccounts,
   users,
@@ -548,71 +553,60 @@ export function registerIntercompanyNotificationRoutes(app: Express) {
           : `Received from ${crAccount?.name ?? "IC account"} into ${chosenAccount.name}`;
 
       const destCompanyId = link.destCompanyId;
-      const voucherNumber = `IC-RCPT-${Date.now()}`;
       const approvedAt = new Date();
 
       // ── Atomic transaction: conditional status claim + voucher creation ──────────
       // The UPDATE WHERE status='pending' is the single concurrency gate.
       // If zero rows update (already approved by another recipient), we abort.
-      const result = await db.transaction(async (tx) => {
-        // Claim the request atomically — only succeeds once
-        const claimed = await tx
-          .update(intercompanyPaymentRequests)
-          .set({
-            status: "approved",
-            destLedgerAccountId,
-            approvedByUserId: userId,
-            approvedAt,
-          })
-          .where(and(eq(intercompanyPaymentRequests.id, requestId), eq(intercompanyPaymentRequests.status, "pending")))
-          .returning({ id: intercompanyPaymentRequests.id });
+      // Phase 22 (B): the receipt posts into the destination company through the
+      // central engine (membership in it was checked above).
+      const result = await withAuthorizedPostingCompany(destCompanyId, () =>
+        db.transaction(async (tx) => {
+          // Claim the request atomically — only succeeds once
+          const claimed = await tx
+            .update(intercompanyPaymentRequests)
+            .set({
+              status: "approved",
+              destLedgerAccountId,
+              approvedByUserId: userId,
+              approvedAt,
+            })
+            .where(
+              and(eq(intercompanyPaymentRequests.id, requestId), eq(intercompanyPaymentRequests.status, "pending"))
+            )
+            .returning({ id: intercompanyPaymentRequests.id });
 
-        if (claimed.length === 0) {
-          throw new Error("ALREADY_PROCESSED");
-        }
+          if (claimed.length === 0) {
+            throw new Error("ALREADY_PROCESSED");
+          }
 
-        // Create Receipt voucher in dest company
-        // DR: chosen account (cash/bank received)
-        // CR: link.destLedgerAccountId (the intercompany account in dest)
-        const [createdVoucher] = await tx
-          .insert(vouchers)
-          .values({
+          // Create Receipt voucher in dest company
+          // DR: chosen account (cash/bank received)
+          // CR: link.destLedgerAccountId (the intercompany account in dest)
+          const { voucher: createdVoucher } = await postErpVoucherTx(tx, {
             companyId: destCompanyId,
-            voucherNumber,
             voucherType: "Receipt",
             voucherDate: request.fromVoucherDate,
             description: resolvedDescription,
-            totalAmount: request.amount,
-            optional: false,
-            sourceModule: "ERP",
-          })
-          .returning();
+            lines: pairLines(
+              { ledgerAccountId: destLedgerAccountId },
+              { ledgerAccountId: link.destLedgerAccountId },
+              request.amount,
+              resolvedDescription
+            ),
+            source: { type: "intercompany-payment-request", id: requestId },
+            actor: sessionPostingActor(req, "Intercompany payment request approval"),
+          });
 
-        await tx.insert(voucherEntries).values([
-          {
-            voucherId: createdVoucher.id,
-            ledgerAccountId: destLedgerAccountId,
-            debitAmount: request.amount,
-            creditAmount: "0",
-            narration: resolvedDescription,
-          },
-          {
-            voucherId: createdVoucher.id,
-            ledgerAccountId: link.destLedgerAccountId,
-            debitAmount: "0",
-            creditAmount: request.amount,
-            narration: resolvedDescription,
-          },
-        ]);
+          // Store the mirror voucher ID back on the request
+          await tx
+            .update(intercompanyPaymentRequests)
+            .set({ destVoucherId: createdVoucher.id })
+            .where(eq(intercompanyPaymentRequests.id, requestId));
 
-        // Store the mirror voucher ID back on the request
-        await tx
-          .update(intercompanyPaymentRequests)
-          .set({ destVoucherId: createdVoucher.id })
-          .where(eq(intercompanyPaymentRequests.id, requestId));
-
-        return { voucherId: createdVoucher.id, voucherNumber };
-      });
+          return { voucherId: createdVoucher.id, voucherNumber: createdVoucher.voucherNumber };
+        })
+      );
 
       res.json({ success: true, voucherId: result.voucherId, voucherNumber: result.voucherNumber });
     } catch (err: unknown) {

@@ -36,7 +36,7 @@ describe("recurring journal posting safety contract", () => {
     expect(source).toContain('.for("update")');
     expect(source).toContain("locked.nextRunDate !== scheduledFor");
     expect(source).toContain("factoryDaybookEntries");
-    expect(source).toContain("amountCurrency: String(transactionTotal)");
+    expect(source).toContain("amountCurrency: transactionTotal.toFixed()");
     expect(source).toContain("erpRateToDaybookFxRateToUsd");
   });
 });

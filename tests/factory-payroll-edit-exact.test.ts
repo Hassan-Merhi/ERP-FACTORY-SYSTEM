@@ -14,6 +14,7 @@ vi.mock("../server/routes/factory-payroll/_helpers", () => ({
 }));
 vi.mock("../server/routes/payroll/_payrollAccountingHelper", () => ({
   rebuildPayrollGenVoucher: async () => void h.writes.push(["rebuild"]),
+  findOrCreateLedger: async () => ({ id: 99 }),
 }));
 vi.mock("../server/services/payroll/productionBonusPayrollService", () => ({
   prepareProductionBonusesForPayroll: async () => undefined,
@@ -27,7 +28,8 @@ import { registerFactoryPayrollUpdateRoutes } from "../server/routes/factory-pay
 
 const chain = (value: () => unknown) => {
   const q: any = {};
-  for (const step of ["where", "returning"]) q[step] = () => q;
+  // "for": the edit locks the payroll row (wave 7: one transaction).
+  for (const step of ["where", "returning", "for"]) q[step] = () => q;
   q.then = (ok: any, bad: any) => Promise.resolve().then(value).then(ok, bad);
   return q;
 };

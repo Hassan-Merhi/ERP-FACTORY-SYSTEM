@@ -9,8 +9,13 @@ import { getErrorMessage } from "../../../lib/httpHandlers";
 import { logger } from "../../../lib/logger";
 import { db } from "../../../db";
 import { requireAuth, requireRole } from "../../../auth";
+import {
+  assertNoInventoryCutoverTx,
+  sendInventoryCutoverRefusal,
+} from "../../../services/accounting/perpetualInventory/cutoverRefusal";
 import { inventory, vouchers, voucherEntries, salesItems, locations } from "@shared/schema";
 import { eq, and, or, inArray, sql, isNull, isNotNull } from "drizzle-orm";
+import { retireVouchersTx, sessionRetirementActor } from "../../../services/accounting/voucherRetirement";
 
 export function registerAdminOrphanedPosRoutes(app: Express) {
   // Fix orphaned POS data that might be causing Import Cycle imbalance
@@ -127,10 +132,9 @@ export function registerAdminOrphanedPosRoutes(app: Express) {
           totalCredits,
         });
 
-        // Delete orphaned entries
-        for (const entry of allOrphanedEntries) {
-          await db.delete(voucherEntries).where(eq(voucherEntries.id, entry.id));
-        }
+        // Wave 16 (A): listed, not deleted. The lines of a deleted voucher are
+        // its history (a soft delete keeps them, and a retired linked journal
+        // keeps them); this repair used to erase every one of them.
       }
 
       // 3. Check for negative inventory and log (don't fix automatically)
@@ -246,6 +250,9 @@ export function registerAdminOrphanedPosRoutes(app: Express) {
       if (!companyId) {
         return res.status(400).json({ message: "No company selected" });
       }
+      // Wave 11: hard-deleting sales (and their COGS journals) would move the
+      // ledger's Inventory with no stock movement: refused after the cut-over.
+      await assertNoInventoryCutoverTx(db, companyId, "delete-orphaned-pos-sales");
 
       // Find all vouchers with locationId pointing to deleted or non-existent locations
       const orphanedVouchers = await db
@@ -273,18 +280,26 @@ export function registerAdminOrphanedPosRoutes(app: Express) {
 
       const voucherIds = orphanedVouchers.map((v) => v.id);
 
-      // Use batch deletes with inArray for efficiency
-      // Delete sales items first (foreign key constraint)
-      const salesResult = await db.delete(salesItems).where(inArray(salesItems.voucherId, voucherIds));
-      const deletedSalesItems = salesResult.rowCount || voucherIds.length;
-
-      // Delete voucher entries
-      const entriesResult = await db.delete(voucherEntries).where(inArray(voucherEntries.voucherId, voucherIds));
-      const deletedEntries = entriesResult.rowCount || voucherIds.length;
-
-      // Delete the vouchers themselves (hard delete since they're orphaned garbage)
-      const vouchersResult = await db.delete(vouchers).where(inArray(vouchers.id, voucherIds));
-      const deletedVouchers = vouchersResult.rowCount || voucherIds.length;
+      // Wave 16 (A): one transaction; the vouchers are retired (soft delete
+      // with their lines, audited here), not hard-deleted with their lines.
+      const { deletedSalesItems, deletedEntries, deletedVouchers } = await db.transaction(async (tx) => {
+        const salesResult = await tx.delete(salesItems).where(inArray(salesItems.voucherId, voucherIds));
+        const lineRows = await tx
+          .select({ id: voucherEntries.id })
+          .from(voucherEntries)
+          .where(inArray(voucherEntries.voucherId, voucherIds));
+        const retired = await retireVouchersTx(tx, {
+          companyId,
+          voucherIds,
+          reason: "orphaned-pos-sale-delete",
+          actor: sessionRetirementActor(req),
+        });
+        return {
+          deletedSalesItems: salesResult.rowCount ?? 0,
+          deletedEntries: lineRows.length,
+          deletedVouchers: retired.length,
+        };
+      });
 
       res.json({
         message: `Deleted ${deletedVouchers} orphaned POS vouchers, ${deletedEntries} entries, and ${deletedSalesItems} sales items`,
@@ -294,6 +309,7 @@ export function registerAdminOrphanedPosRoutes(app: Express) {
         voucherNumbers: orphanedVouchers.map((v) => v.voucherNumber),
       });
     } catch (error: unknown) {
+      if (sendInventoryCutoverRefusal(res, error)) return;
       logger.error("Delete orphaned POS sales error:", { error: error });
       res.status(500).json({ message: getErrorMessage(error) });
     }

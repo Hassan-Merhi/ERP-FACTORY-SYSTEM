@@ -10,6 +10,10 @@ import { logger } from "../../../lib/logger";
 import { resultRows } from "../../../lib/queryResult";
 import { db } from "../../../db";
 import { requireAuth, requireRole } from "../../../auth";
+import {
+  assertNoInventoryCutoverTx,
+  sendInventoryCutoverRefusal,
+} from "../../../services/accounting/perpetualInventory/cutoverRefusal";
 import {} from "@shared/schema";
 import { sql } from "drizzle-orm";
 
@@ -107,6 +111,8 @@ export function registerAdminInventoryValueRepairRoutes(app: Express) {
       if (!companyId) {
         return res.status(400).json({ message: "No company selected" });
       }
+      // Wave 11: refused after the company's perpetual-inventory cut-over.
+      await assertNoInventoryCutoverTx(db, companyId, "repair-inventory-values");
 
       const detectResult = await db.execute(
         sql`SELECT id, location_id, stock_item_id, quantity, average_rate, total_value
@@ -175,6 +181,7 @@ export function registerAdminInventoryValueRepairRoutes(app: Express) {
         rows: correctedRows,
       });
     } catch (error: unknown) {
+      if (sendInventoryCutoverRefusal(res, error)) return;
       logger.error("Inventory repair error:", { error: error });
       res.status(500).json({ message: getErrorMessage(error) });
     }

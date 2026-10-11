@@ -7,6 +7,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("../server/auth", () => ({ requireAuth: () => undefined }));
+vi.mock("../server/routes/helpers/partyOpeningSide", () => ({ loadPartyOpeningSides: async () => new Map() }));
 vi.mock("../server/routes/customers/customerBalanceQuery", () => ({ getCustomersWithBalances: async () => [] }));
 vi.mock("../server/storage", () => ({
   storage: {
@@ -30,8 +31,7 @@ vi.mock("../server/db", async () => {
     factorySupplierId: null,
     debits: "0",
     credits: "0",
-    supplierPureCredits: "0",
-    supplierPureDebits: "0",
+    supplierNet: "0",
     factorySupplierVoucherPaidUsd: "0",
     ...row,
   });
@@ -39,8 +39,8 @@ vi.mock("../server/db", async () => {
     if (getTableName(table) !== "voucher_entries" || (fields && "ledgerAccountId" in fields)) return [];
     return [
       movement({ employeeId: 3, credits: "1.005" }),
-      movement({ supplierId: 4, supplierPureCredits: "0.1" }),
-      movement({ supplierId: 4, supplierPureCredits: "0.2" }),
+      movement({ supplierId: 4, supplierNet: "0.1" }),
+      movement({ supplierId: 4, supplierNet: "0.2" }),
     ];
   };
   const chain = (value: unknown) => {

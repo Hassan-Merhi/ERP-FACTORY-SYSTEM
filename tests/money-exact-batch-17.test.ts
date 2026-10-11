@@ -51,7 +51,15 @@ beforeAll(async () => {
 }, 120000);
 
 afterAll(async () => {
-  await pool.query(`DELETE FROM voucher_entries WHERE employee_id = ANY($1)`, [[...employeeIds, foreignEmployeeId]]);
+  // The bulk withdrawal is one engine voucher (phase 22): remove all of its
+  // lines together, never only the employee legs (the balance guards refuse a
+  // voucher left one-sided).
+  await pool.query(
+    `DELETE FROM voucher_entries WHERE voucher_id IN (
+       SELECT voucher_id FROM voucher_entries WHERE employee_id = ANY($1)
+     )`,
+    [[...employeeIds, foreignEmployeeId]]
+  );
   await pool.query(`DELETE FROM employees WHERE id = ANY($1)`, [[...employeeIds, foreignEmployeeId]]);
   await pool.query(`DELETE FROM companies WHERE id = $1`, [foreignCompanyId]);
   await cleanupTestData(TEST_PREFIX);

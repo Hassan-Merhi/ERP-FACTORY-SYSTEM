@@ -3,6 +3,7 @@ import { createHttpApp } from "../server/httpApp";
 import session from "express-session";
 import { registerRoutes } from "../server/routes";
 import { db } from "../server/db";
+import { deleteAuditLogRowsForTests } from "./helpers/auditLogCleanup";
 import { pool } from "../server/db";
 import { eq, and, sql } from "drizzle-orm";
 import * as schema from "../shared/schema";
@@ -86,6 +87,7 @@ const FACTORY_COMPANY_PREFIXES = new Set([
   "autopriority",
   "autoe2e",
   "ordfin",
+  "p19af",
 ]);
 
 function testCompanyType(prefix: string): "erp" | "factory" {
@@ -166,13 +168,21 @@ export async function cleanupTestData(prefix: string): Promise<void> {
     // A closed fiscal period makes the closed-period guard refuse to delete the
     // vouchers it covers, so lift any closure before the voucher deletes below.
     await pool.query("DELETE FROM fiscal_period_closures WHERE company_id = $1", [company.id]);
-    await pool.query("DELETE FROM audit_log WHERE company_id = $1", [company.id]);
+    await deleteAuditLogRowsForTests(pool, "company_id = $1", [company.id]);
     await pool.query("DELETE FROM login_history WHERE company_id = $1", [company.id]);
     // Retail Wave 1 financial rows reference shifts, locations, ledger/bank accounts,
     // sales and users. Clear them before the shared parents are torn down.
     await pool.query("DELETE FROM retail_cash_movements WHERE company_id = $1", [company.id]);
     await pool.query("DELETE FROM retail_pos_payments WHERE company_id = $1", [company.id]);
     await pool.query("DELETE FROM retail_accounting_settings WHERE company_id = $1", [company.id]);
+    // Wave 17 (D): reason accounts restrict ledger/bank accounts. Tolerated when the
+    // table is not there yet (a database the boot schema guard has not run on).
+    await pool
+      .query("DELETE FROM retail_cash_reason_accounts WHERE company_id = $1", [company.id])
+      .catch(() => undefined);
+    await pool
+      .query("DELETE FROM retail_inventory_openings WHERE company_id = $1", [company.id])
+      .catch(() => undefined);
     await db.delete(schema.inventory).where(eq(schema.inventory.companyId, company.id));
     await db
       .delete(schema.salesItems)
@@ -442,7 +452,7 @@ export async function cleanupTestData(prefix: string): Promise<void> {
     // close it completely — nothing short of quiescing the middleware can — so
     // the delete below retries once, re-clearing whatever arrived in between.
     async function clearAsyncReferences(): Promise<void> {
-      await pool.query("DELETE FROM audit_log WHERE company_id = $1", [company.id]);
+      await deleteAuditLogRowsForTests(pool, "company_id = $1", [company.id]);
       await pool.query("DELETE FROM login_history WHERE company_id = $1", [company.id]);
     }
 

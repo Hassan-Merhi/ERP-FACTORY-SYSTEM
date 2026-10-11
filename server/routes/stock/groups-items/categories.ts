@@ -36,21 +36,24 @@ export function registerStockCategoryRoutes(app: Express) {
       const companyId = req.session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });
       const parsed = insertStockCategorySchema.parse({ ...req.body, companyId });
-      const [created] = await db.insert(stockCategories).values(parsed).returning();
-      try {
-        await logAudit({
-          userId: req.session.userId!,
-          username: req.session.username || "unknown",
-          companyId,
-          action: "create",
-          tableName: "stock_categories",
-          recordId: created.id,
-          recordIdentifier: created.name,
-          changes: { name: { old: null, new: created.name } },
-        });
-      } catch {
-        /* non-fatal */
-      }
+      // Phase 21 (B): the write and its audit commit together.
+      const created = await db.transaction(async (tx) => {
+        const [written] = await tx.insert(stockCategories).values(parsed).returning();
+        await logAudit(
+          {
+            userId: req.session.userId!,
+            username: req.session.username || "unknown",
+            companyId,
+            action: "create",
+            tableName: "stock_categories",
+            recordId: written.id,
+            recordIdentifier: written.name,
+            changes: { name: { old: null, new: written.name } },
+          },
+          tx
+        );
+        return written;
+      });
       res.status(201).json(created);
     } catch (error: unknown) {
       res.status(400).json({ message: getErrorMessage(error) });
@@ -75,23 +78,26 @@ export function registerStockCategoryRoutes(app: Express) {
         updates.name = n;
       }
       if (req.body.active !== undefined) updates.active = req.body.active;
-      const [updated] = await db.update(stockCategories).set(updates).where(eq(stockCategories.id, id)).returning();
-      try {
-        await logAudit({
-          userId: req.session.userId!,
-          username: req.session.username || "unknown",
-          companyId,
-          action: "update",
-          tableName: "stock_categories",
-          recordId: id,
-          recordIdentifier: updated.name,
-          changes: Object.fromEntries(
-            Object.entries(updates).map(([k, v]) => [k, { old: (existing as { [key: string]: unknown })[k], new: v }])
-          ),
-        });
-      } catch {
-        /* non-fatal */
-      }
+      // Phase 21 (B): the write and its audit commit together.
+      const updated = await db.transaction(async (tx) => {
+        const [written] = await tx.update(stockCategories).set(updates).where(eq(stockCategories.id, id)).returning();
+        await logAudit(
+          {
+            userId: req.session.userId!,
+            username: req.session.username || "unknown",
+            companyId,
+            action: "update",
+            tableName: "stock_categories",
+            recordId: id,
+            recordIdentifier: written.name,
+            changes: Object.fromEntries(
+              Object.entries(updates).map(([k, v]) => [k, { old: (existing as { [key: string]: unknown })[k], new: v }])
+            ),
+          },
+          tx
+        );
+        return written;
+      });
       res.json(updated);
     } catch (error: unknown) {
       res.status(500).json({ message: getErrorMessage(error) });
@@ -109,21 +115,23 @@ export function registerStockCategoryRoutes(app: Express) {
         .from(stockCategories)
         .where(and(eq(stockCategories.id, id), eq(stockCategories.companyId, companyId)));
       if (!existing) return res.status(404).json({ message: "Stock category not found" });
-      await db.update(stockCategories).set({ active: false }).where(eq(stockCategories.id, id));
-      try {
-        await logAudit({
-          userId: req.session.userId!,
-          username: req.session.username || "unknown",
-          companyId,
-          action: "update",
-          tableName: "stock_categories",
-          recordId: id,
-          recordIdentifier: existing.name,
-          changes: { active: { old: true, new: false } },
-        });
-      } catch {
-        /* non-fatal */
-      }
+      // Phase 21 (B): the write and its audit commit together.
+      await db.transaction(async (tx) => {
+        await tx.update(stockCategories).set({ active: false }).where(eq(stockCategories.id, id));
+        await logAudit(
+          {
+            userId: req.session.userId!,
+            username: req.session.username || "unknown",
+            companyId,
+            action: "update",
+            tableName: "stock_categories",
+            recordId: id,
+            recordIdentifier: existing.name,
+            changes: { active: { old: true, new: false } },
+          },
+          tx
+        );
+      });
       res.json({ message: "Stock category deactivated" });
     } catch (error: unknown) {
       res.status(500).json({ message: getErrorMessage(error) });

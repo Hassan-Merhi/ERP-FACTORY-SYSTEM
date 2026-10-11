@@ -229,6 +229,37 @@ export function registerAdminPostUpdateStockTransferRevisionRoute(app: Express) 
             `);
           }
 
+          await logAudit(
+            {
+              userId: actorId,
+              username: req.session.username || req.user?.username || "unknown",
+              companyId,
+              action: "update",
+              tableName: "stock_transfer_revisions",
+              recordId: revisionId,
+              recordIdentifier: `transfer-${transferId}-revision-${revisionNumber}`,
+              changes: {
+                revisionNumber: { new: revisionNumber },
+                status: { new: "approved" },
+                note: { new: note },
+                itemCount: { new: normalized.length },
+                compatibilityMode: { new: "post-update-baseline" },
+                items: {
+                  new: normalized.map((item) => ({
+                    stockItemId: item.stockItemId,
+                    stockItemName: item.stockItemName,
+                    sourceLocationId: item.sourceLocationId,
+                    sourceLocationName: item.sourceLocationName ?? null,
+                    originalQuantity: item.originalQuantity,
+                    newQuantity: item.newQuantity,
+                    delta: item.delta,
+                  })),
+                },
+              },
+            },
+            tx
+          );
+
           return {
             mode: "created" as const,
             revisionId,
@@ -259,38 +290,6 @@ export function registerAdminPostUpdateStockTransferRevisionRoute(app: Express) 
             stockItemId: result.stockItemId,
             sourceLocationId: result.sourceLocationId,
           });
-        }
-
-        try {
-          await logAudit({
-            userId: actorId,
-            username: req.session.username || req.user?.username || "unknown",
-            companyId,
-            action: "update",
-            tableName: "stock_transfer_revisions",
-            recordId: result.revisionId,
-            recordIdentifier: `transfer-${transferId}-revision-${result.revisionNumber}`,
-            changes: {
-              revisionNumber: { new: result.revisionNumber },
-              status: { new: "approved" },
-              note: { new: note },
-              itemCount: { new: result.itemCount },
-              compatibilityMode: { new: "post-update-baseline" },
-              items: {
-                new: normalized.map((item) => ({
-                  stockItemId: item.stockItemId,
-                  stockItemName: item.stockItemName,
-                  sourceLocationId: item.sourceLocationId,
-                  sourceLocationName: item.sourceLocationName ?? null,
-                  originalQuantity: item.originalQuantity,
-                  newQuantity: item.newQuantity,
-                  delta: item.delta,
-                })),
-              },
-            },
-          });
-        } catch {
-          // The revision is already committed; audit logging remains non-fatal.
         }
 
         return res.status(201).json({

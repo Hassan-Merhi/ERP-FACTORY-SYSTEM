@@ -6,31 +6,58 @@
  */
 import type { Express } from "express";
 import { getErrorMessage } from "../../lib/httpHandlers";
-import { db, pool } from "../../db";
+import { db } from "../../db";
+import { companyStockValue } from "../../services/inventory/stockValuation";
 import { storage } from "../../storage";
 import { requireAuth } from "../../auth";
 import {
-  inventory,
   stockItems,
   stockAdjustmentVouchers,
   stockAdjustmentItems,
   containers,
-  bankAccounts,
   vouchers,
-  voucherEntries,
   salesItems,
-  suppliers,
-  employees,
-  locations,
   salaryAdvances,
-  systemSettings,
 } from "@shared/schema";
-import { eq, and, sql, isNull, isNotNull } from "drizzle-orm";
-import type Decimal from "decimal.js";
-import { getAccountNetBalanceExact } from "../../netPositionHelper";
-import { MoneyDecimal, debitMinusCredit, sumMoney, toMoney } from "../../lib/money";
+import { eq, and, sql, isNull } from "drizzle-orm";
+import { classifyAccountType, expenseCategory } from "../../services/accounting/accountClassification";
+import { loadBalanceRows } from "../../services/accounting/balances/ledgerBalanceEngine";
+import { MoneyDecimal, sumMoney, toMoney } from "../../lib/money";
 
 import { _getCached, _setCached } from "./_helpers";
+
+const LEDGER = "ledger";
+const OPERATIONAL = "operational (memo)";
+const MEMO_ONLY = "memo, not in the formula";
+/** The basis of each import-cycle component (wave 17 A). */
+export const IMPORT_CYCLE_COMPONENT_BASIS: Readonly<Record<string, string>> = {
+  supplierBalance: LEDGER,
+  stockOtwValue: OPERATIONAL,
+  dutyAgentBalance: LEDGER,
+  transporterAgentBalance: LEDGER,
+  loansBalance: LEDGER,
+  cashBalance: LEDGER,
+  bankBalance: LEDGER,
+  assetBalance: LEDGER,
+  directExpenseBalance: `${LEDGER}; ${MEMO_ONLY}`,
+  indirectExpenseBalance: LEDGER,
+  generalExpenseBalance: `${LEDGER}; ${MEMO_ONLY}`,
+  governmentTaxesBalance: LEDGER,
+  incomeBalance: LEDGER,
+  liabilityBalance: LEDGER,
+  profitBalance: LEDGER,
+  equityTransactionBalance: LEDGER,
+  apTransactionBalance: LEDGER,
+  stockOnFloorValue: OPERATIONAL,
+  cogsBalance: OPERATIONAL,
+  consumptionBalance: `${OPERATIONAL}; ${MEMO_ONLY}`,
+  productionBalance: `${OPERATIONAL}; ${MEMO_ONLY}`,
+  payrollExpenseBalance: LEDGER,
+  salaryAdvancesBalance: `${OPERATIONAL}; ${MEMO_ONLY}`,
+  payrollLiabilitiesBalance: LEDGER,
+  openingBalanceEquity: LEDGER,
+  openingStockValue: OPERATIONAL,
+};
 
 export function registerImportCycleBalanceRoutes(app: Express) {
   app.get("/api/stats/import-cycle-balance", requireAuth, async (req, res) => {
@@ -44,140 +71,68 @@ export function registerImportCycleBalanceRoutes(app: Express) {
       const _cached = _getCached(_cacheKey);
       if (_cached) return res.json(_cached);
 
-      // Aggregate voucher entries in PostgreSQL instead of materialising every row
-      // into Node. Company 1 currently has ~19k matching entry rows; the grouped
-      // result is only a few hundred rows and preserves the exact ledger and
-      // pure-side supplier semantics used by this endpoint.
-      const groupedBalanceRows = await pool.query<{
-        kind: "ledger" | "supplier";
-        entity_id: number;
-        total_debit: string;
-        total_credit: string;
-      }>(
-        `WITH entries AS MATERIALIZED (
-           SELECT
-             ve.ledger_account_id,
-             ve.supplier_id,
-             ve.debit_amount::numeric AS debit_amount,
-             ve.credit_amount::numeric AS credit_amount
-           FROM voucher_entries ve
-           JOIN vouchers v ON v.id = ve.voucher_id
-           WHERE v.company_id = $1
-             AND v.optional = false
-             AND v.deleted_at IS NULL
-         )
-         SELECT
-           'ledger'::text AS kind,
-           ledger_account_id AS entity_id,
-           COALESCE(SUM(debit_amount), 0)::text AS total_debit,
-           COALESCE(SUM(credit_amount), 0)::text AS total_credit
-         FROM entries
-         WHERE ledger_account_id IS NOT NULL
-         GROUP BY ledger_account_id
-
-         UNION ALL
-
-         SELECT
-           'supplier'::text AS kind,
-           supplier_id AS entity_id,
-           COALESCE(SUM(CASE
-             WHEN debit_amount > 0 AND credit_amount = 0 THEN debit_amount
-             ELSE 0
-           END), 0)::text AS total_debit,
-           COALESCE(SUM(CASE
-             WHEN credit_amount > 0 AND debit_amount = 0 THEN credit_amount
-             ELSE 0
-           END), 0)::text AS total_credit
-         FROM entries
-         WHERE supplier_id IS NOT NULL
-         GROUP BY supplier_id`,
-        [companyId]
-      );
-
-      const accountBalances = new Map<number, { debit: Decimal; credit: Decimal }>();
-      const supplierBalancesMap = new Map<number, { debit: Decimal; credit: Decimal }>();
-
-      for (const row of groupedBalanceRows.rows) {
-        const balance = { debit: toMoney(row.total_debit), credit: toMoney(row.total_credit) };
-        if (row.kind === "ledger") accountBalances.set(Number(row.entity_id), balance);
-        else supplierBalancesMap.set(Number(row.entity_id), balance);
-      }
-
-      // The account list and parent-company lookup are independent.
-      const [companyAccounts, parentCompanyId] = await Promise.all([
+      // Every ledger figure comes from the balance engine (wave 17 A): this
+      // company's live vouchers by COALESCE(effective_date, voucher_date), each
+      // master's opening with its side (a sideless opening takes its type's
+      // usual side), each line counted once by the engine's ownership rule.
+      // Types are matched case-insensitively and in every stored spelling
+      // ("Loan" and "Loans"; "Expense" + subType "Indirect Expense"), and no
+      // figure is clamped at zero any more: a debit liability or a credit
+      // asset lowers its component instead of disappearing. Before, the route
+      // summed its own lines by voucher date, matched exact type names, clamped
+      // most components at zero and read employees.current_balance.
+      const [companyAccounts, engineRows] = await Promise.all([
         storage.getAllLedgerAccounts(companyId, true),
-        storage.getParentCompanyId(),
+        loadBalanceRows(db, { companyId }),
       ]);
+      const closingOf = (row: (typeof engineRows)[number]) =>
+        row.masterOpening.plus(row.periodDebit).minus(row.periodCredit);
+      const ledgerRowById = new Map(
+        engineRows.filter((row) => row.kind === "ledger" && row.id !== null).map((row) => [row.id as number, row])
+      );
+      const rowsOfKind = (kind: (typeof engineRows)[number]["kind"]) => engineRows.filter((row) => row.kind === kind);
 
-      // Signed net balance for a single account (mirrors getAccountNetBalance from netPositionHelper)
-      const nb = (acc: (typeof companyAccounts)[0]) => getAccountNetBalanceExact(acc, accountBalances);
-
-      // Sum net balances for accounts matching the given type(s)
-      const sumNB = (types: string[]) =>
-        sumMoney(companyAccounts.filter((a) => types.includes(a.accountType || "")).map(nb));
+      // Ledger rows counted in a component; their openings are offset by the
+      // opening-balance equity below.
+      const countedRows = new Set<(typeof engineRows)[number]>();
       const ZERO = new MoneyDecimal(0);
-      const atLeastZero = (value: Decimal) => MoneyDecimal.max(ZERO, value);
-
-      // 1. Supplier Balance — same pure-debit/credit logic as /api/stats/net-profit
-      const shouldIncludeSuppliers = parentCompanyId === null || companyId === parentCompanyId;
-
-      // These reads are independent. Keep the batch small so one analytics
-      // request cannot monopolise the application pool while still eliminating
-      // four sequential network/database round trips.
-      const [allSuppliers, otwContainers, standaloneBankAccountEntries, standaloneBankAccounts] = await Promise.all([
-        shouldIncludeSuppliers
-          ? db.select().from(suppliers).where(isNull(suppliers.deletedAt)).execute()
-          : Promise.resolve([]),
-        db
-          .select()
-          .from(containers)
-          .where(and(eq(containers.companyId, companyId), eq(containers.status, "OTW"))),
-        db
-          .select({
-            bankAccountId: voucherEntries.bankAccountId,
-            creditAmount: voucherEntries.creditAmount,
-            debitAmount: voucherEntries.debitAmount,
-          })
-          .from(voucherEntries)
-          .innerJoin(vouchers, eq(voucherEntries.voucherId, vouchers.id))
-          .innerJoin(bankAccounts, eq(voucherEntries.bankAccountId, bankAccounts.id))
-          .where(
-            and(
-              isNotNull(voucherEntries.bankAccountId),
-              isNull(voucherEntries.ledgerAccountId),
-              isNull(bankAccounts.linkedLedgerId),
-              eq(bankAccounts.companyId, companyId),
-              isNull(bankAccounts.deletedAt),
-              eq(vouchers.companyId, companyId),
-              isNull(vouchers.deletedAt),
-              eq(vouchers.optional, false)
-            )
-          ),
-        db
-          .select()
-          .from(bankAccounts)
-          .where(
-            and(
-              eq(bankAccounts.companyId, companyId),
-              isNull(bankAccounts.deletedAt),
-              isNull(bankAccounts.linkedLedgerId)
-            )
-          ),
-      ]);
-
-      let supplierLiabilities = ZERO;
-      let supplierAssets = ZERO;
-      if (shouldIncludeSuppliers) {
-        for (const sup of allSuppliers) {
-          const bal = supplierBalancesMap.get(sup.id);
-          if (!bal) continue;
-          const netBalance = toMoney(sup.openingBalance).plus(bal.credit).minus(bal.debit);
-          if (netBalance.greaterThan(0)) supplierLiabilities = supplierLiabilities.plus(netBalance);
-          else if (netBalance.lessThan(0)) supplierAssets = supplierAssets.plus(netBalance.abs());
+      const typeOf = (acc: (typeof companyAccounts)[number]) => (acc.accountType ?? "").trim().toLowerCase();
+      /** Debit-positive engine balance of the company's ledger accounts matching `match`. */
+      const sumLedger = (match: (acc: (typeof companyAccounts)[number]) => boolean, count = true) => {
+        let total = ZERO;
+        for (const acc of companyAccounts) {
+          if (!match(acc)) continue;
+          const row = ledgerRowById.get(acc.id);
+          if (!row) continue;
+          if (count) countedRows.add(row);
+          total = total.plus(closingOf(row));
         }
-      }
-      const supplierBalance = supplierLiabilities.minus(supplierAssets);
+        return total;
+      };
+      const ofTypes =
+        (...types: string[]) =>
+        (acc: (typeof companyAccounts)[number]) =>
+          types.includes(typeOf(acc));
+      const sumRows = (kind: (typeof engineRows)[number]["kind"]) => {
+        let total = ZERO;
+        for (const row of rowsOfKind(kind)) {
+          countedRows.add(row);
+          total = total.plus(closingOf(row));
+        }
+        return total;
+      };
 
+      const otwContainers = await db
+        .select()
+        .from(containers)
+        .where(and(eq(containers.companyId, companyId), eq(containers.status, "OTW")));
+
+      // 1. Supplier Balance (Cr positive: what we owe): the engine's suppliers
+      // of this company (wave 13 owner decision 2), netted, debit balances
+      // lowering it.
+      const supplierBalance = sumRows("supplier").negated();
+
+      // Operational (memo basis): containers on the way, at their invoice totals.
       const stockOtwValue = sumMoney(
         otwContainers.map((container) => {
           const gTotal = toMoney(container.grandTotal);
@@ -185,31 +140,20 @@ export function registerImportCycleBalanceRoutes(app: Express) {
         })
       );
 
-      // 3-5. Duty Agent / Transporter Agent / Loans
-      // NOTE: account type is "Loan" (singular) — matches netPositionHelper constants and DB values
-      const dutyAgentBalance = atLeastZero(sumNB(["Duty Agent"]).negated());
-      const transporterAgentBalance = atLeastZero(sumNB(["Transporter Agent"]).negated());
-      const loansBalance = atLeastZero(sumNB(["Loan"]).negated());
+      // 3-5. Duty Agent / Transporter Agent / Loans (Cr positive), every stored spelling.
+      const dutyAgentBalance = sumLedger(ofTypes("duty agent")).negated();
+      const transporterAgentBalance = sumLedger(ofTypes("transporter agent")).negated();
+      const loansBalance = sumLedger(ofTypes("loan", "loans")).negated();
 
-      // 6. Cash (asset — positive debit balance)
-      const cashBalance = atLeastZero(sumNB(["Cash"]));
+      // 6. Cash (Dr positive)
+      const cashBalance = sumLedger(ofTypes("cash"));
 
-      // 7. Bank — ledger "Bank" accounts + standalone bank accounts (no linked ledger)
-      const ledgerBankBalance = atLeastZero(sumNB(["Bank"]));
-
-      // Anything but "Dr" (the default side) counts as a credit opening.
-      const standaloneBankOpeningBalance = sumMoney(
-        standaloneBankAccounts.map((account) =>
-          (account.openingBalanceSide || "Dr") === "Dr"
-            ? toMoney(account.openingBalance)
-            : toMoney(account.openingBalance).negated()
-        )
-      );
-      const standaloneBankVoucherBalance = debitMinusCredit(standaloneBankAccountEntries);
-      const bankBalance = ledgerBankBalance.plus(standaloneBankOpeningBalance).plus(standaloneBankVoucherBalance);
+      // 7. Bank: ledger Bank accounts plus every bank account master (its own
+      // opening and the lines that name it and no ledger account, engine rule).
+      const bankBalance = sumLedger(ofTypes("bank")).plus(sumRows("bank"));
 
       // 8. Import Charges (directExpenseBalance) — accounts under IMPORT_CHARGES parent
-      // Uses already-loaded companyAccounts + accountBalances map (no extra DB query)
+      // Engine balances of the already-loaded accounts (no extra DB query).
       const importChargesParentAcc = companyAccounts.find((a) => a.code === "IMPORT_CHARGES");
       let directExpenseBalance = ZERO;
       if (importChargesParentAcc) {
@@ -217,84 +161,71 @@ export function registerImportCycleBalanceRoutes(app: Express) {
           importChargesParentAcc.id,
           ...companyAccounts.filter((a) => a.parentId === importChargesParentAcc.id).map((a) => a.id),
         ]);
-        for (const acc of companyAccounts) {
-          if (importChargeIds.has(acc.id)) {
-            directExpenseBalance = directExpenseBalance.plus(atLeastZero(nb(acc)));
-          }
-        }
+        // Display only (excluded from the formula): not counted.
+        directExpenseBalance = sumLedger((acc) => importChargeIds.has(acc.id), false);
       }
 
-      // 9. Indirect Expense
-      const indirectExpenseBalance = atLeastZero(sumNB(["Indirect Expense"]));
+      // 9. Indirect Expense, both storage forms (type, or Expense + subType).
+      const indirectExpenseBalance = sumLedger(
+        (acc) => expenseCategory(acc.accountType, acc.subType) === "Indirect Expense"
+      );
 
-      // 10. Income (credit balance = liability / revenue received)
-      const incomeBalance = atLeastZero(sumNB(["Income"]).negated());
+      // 10. Income (credit balance = liability / revenue received). Every income
+      // account by the shared classifier: Income, Revenue and Indirect Income in
+      // either storage form (an "Indirect Income"-typed account used to be left out).
+      const incomeBalance = sumLedger(
+        (acc) => classifyAccountType(acc.accountType, acc.subType) === "income"
+      ).negated();
 
       // 11. Stock Value on Floor (inventory in locations)
-      // Only include inventory at valid, non-deleted locations (excludes orphaned inventory)
-      // Calculate from quantity * averageRate to ensure accuracy (totalValue can get out of sync)
+      // Wave 11: the one stock valuation (stockValuation.ts): SUM(total_value) over
+      // the company's non-deleted locations, bale mirror left out, negative stock
+      // not subtracting. quantity × average_rate drifted from the stored value.
       // NOTE: Exclude the value impact of Mixed vouchers since their production/consumption net to 0
       // The remaining component reads are independent and individually short.
       // Run them as one bounded batch (six leases against a 15-connection app
       // pool) to remove the long sequential tail without recreating pool pressure.
-      const [inventoryItems, cogsData, adjustmentData, advancesData, employeesData, stockItemsWithOpening] =
-        await Promise.all([
-          db
-            .select({
-              quantity: inventory.quantity,
-              averageRate: inventory.averageRate,
-            })
-            .from(inventory)
-            .innerJoin(locations, eq(inventory.locationId, locations.id))
-            .where(and(eq(inventory.companyId, companyId), isNull(locations.deletedAt))),
-          db
-            .select({
-              totalCost: salesItems.totalCost,
-            })
-            .from(salesItems)
-            .innerJoin(vouchers, eq(salesItems.voucherId, vouchers.id))
-            .where(and(eq(vouchers.companyId, companyId), isNull(vouchers.deletedAt), eq(vouchers.optional, false))),
-          db
-            .select({
-              totalAmount: stockAdjustmentItems.totalAmount,
-              quantity: stockAdjustmentItems.quantity,
-              adjustmentType: stockAdjustmentVouchers.adjustmentType,
-            })
-            .from(stockAdjustmentItems)
-            .innerJoin(stockAdjustmentVouchers, eq(stockAdjustmentItems.adjustmentId, stockAdjustmentVouchers.id))
-            .innerJoin(vouchers, eq(stockAdjustmentVouchers.voucherId, vouchers.id))
-            .where(
-              and(
-                eq(vouchers.companyId, companyId),
-                isNull(vouchers.deletedAt),
-                eq(vouchers.optional, false),
-                sql`LOWER(${stockAdjustmentVouchers.adjustmentType}) IN ('consumption', 'production', 'mixed')`
-              )
-            ),
-          db
-            .select({
-              remainingBalance: salaryAdvances.remainingBalance,
-            })
-            .from(salaryAdvances)
-            .where(and(eq(salaryAdvances.companyId, companyId), eq(salaryAdvances.fullyPaid, false))),
-          db
-            .select({
-              currentBalance: employees.currentBalance,
-              openingBalance: employees.openingBalance,
-            })
-            .from(employees)
-            .where(and(eq(employees.companyId, companyId), isNull(employees.deletedAt))),
-          db
-            .select({
-              openingValue: stockItems.openingValue,
-            })
-            .from(stockItems)
-            .where(and(eq(stockItems.companyId, companyId), isNull(stockItems.deletedAt))),
-        ]);
+      const [stockValue, cogsData, adjustmentData, advancesData, stockItemsWithOpening] = await Promise.all([
+        companyStockValue(db, companyId),
+        db
+          .select({
+            totalCost: salesItems.totalCost,
+          })
+          .from(salesItems)
+          .innerJoin(vouchers, eq(salesItems.voucherId, vouchers.id))
+          .where(and(eq(vouchers.companyId, companyId), isNull(vouchers.deletedAt), eq(vouchers.optional, false))),
+        db
+          .select({
+            totalAmount: stockAdjustmentItems.totalAmount,
+            quantity: stockAdjustmentItems.quantity,
+            adjustmentType: stockAdjustmentVouchers.adjustmentType,
+          })
+          .from(stockAdjustmentItems)
+          .innerJoin(stockAdjustmentVouchers, eq(stockAdjustmentItems.adjustmentId, stockAdjustmentVouchers.id))
+          .innerJoin(vouchers, eq(stockAdjustmentVouchers.voucherId, vouchers.id))
+          .where(
+            and(
+              eq(vouchers.companyId, companyId),
+              isNull(vouchers.deletedAt),
+              eq(vouchers.optional, false),
+              sql`LOWER(${stockAdjustmentVouchers.adjustmentType}) IN ('consumption', 'production', 'mixed')`
+            )
+          ),
+        db
+          .select({
+            remainingBalance: salaryAdvances.remainingBalance,
+          })
+          .from(salaryAdvances)
+          .where(and(eq(salaryAdvances.companyId, companyId), eq(salaryAdvances.fullyPaid, false))),
+        db
+          .select({
+            openingValue: stockItems.openingValue,
+          })
+          .from(stockItems)
+          .where(and(eq(stockItems.companyId, companyId), isNull(stockItems.deletedAt))),
+      ]);
 
-      const stockOnFloorValue = sumMoney(
-        inventoryItems.map((item) => toMoney(item.quantity).times(toMoney(item.averageRate)))
-      );
+      const stockOnFloorValue = toMoney(stockValue);
 
       // 12. Cost of Goods Sold (calculated from salesItems for non-optional, non-deleted sales vouchers)
       // This represents inventory that was sold and is now an expense
@@ -332,93 +263,58 @@ export function registerImportCycleBalanceRoutes(app: Express) {
         })
       );
 
-      // 13. Payroll Expenses (Expense accounts named salary / payroll / wage)
-      const payrollExpenseBalance = sumMoney(
-        companyAccounts
-          .filter((a) => a.accountType === "Expense" && /salary|payroll|wage/i.test(a.name || ""))
-          .map((a) => atLeastZero(nb(a)))
-      );
+      // 13. Payroll Expenses: plain expense accounts named salary / payroll / wage.
+      const isPayrollExpense = (acc: (typeof companyAccounts)[number]) =>
+        expenseCategory(acc.accountType, acc.subType) === "Expense" && /salary|payroll|wage/i.test(acc.name || "");
+      const payrollExpenseBalance = sumLedger(isPayrollExpense);
 
-      // 14. Salary Advances - outstanding advances given to employees (asset - recoverable)
+      // 14. Salary Advances (memo, not in the formula): the advances table's
+      // remaining balance. Posted advances are already in the employees'
+      // ledger balances (15), so adding the table again counted them twice.
       const salaryAdvancesBalance = sumMoney(advancesData.map((advance) => advance.remainingBalance));
 
-      // 15. Payroll Liabilities - wages owed to employees (from employees.currentBalance)
-      // Positive currentBalance means company owes the employee (liability)
-      // Only count positive balances (amounts owed to employees)
-      const payrollLiabilitiesBalance = sumMoney(
-        employeesData.map((emp) => toMoney(emp.currentBalance)).filter((balance) => balance.greaterThan(0))
-      );
+      // 15. Payroll Liabilities (Cr positive): the engine's employees of this
+      // company, netted (advances lower it). It was employees.current_balance,
+      // a cache outside the ledger, positive balances only.
+      const payrollLiabilitiesBalance = sumRows("employee").negated();
 
       // 16. Asset accounts (properties, guarantees, receivables — debit side)
-      const assetBalance = atLeastZero(sumNB(["Asset", "Current Asset"]));
+      // and fixed-asset masters.
+      const assetBalance = sumLedger(ofTypes("asset", "current asset", "fixed asset")).plus(sumRows("fixedAsset"));
 
-      // 17. General Expense (Purchases — excluded from formula to avoid double-counting stockOnFloor)
-      const generalExpenseBalance = atLeastZero(sumNB(["Expense"]));
+      // 17. General Expense (plain Expense: Purchases etc.), display only —
+      // excluded from the formula to avoid double-counting stockOnFloor.
+      const generalExpenseBalance = sumLedger(
+        (acc) => expenseCategory(acc.accountType, acc.subType) === "Expense",
+        false
+      );
 
       // 18. Government Taxes
-      const governmentTaxesBalance = atLeastZero(sumNB(["Government Taxes"]));
+      const governmentTaxesBalance = sumLedger(
+        (acc) => expenseCategory(acc.accountType, acc.subType) === "Government Taxes"
+      );
 
-      // 19. Liability accounts
-      const liabilityBalance = atLeastZero(sumNB(["Liability"]).negated());
+      // 19. Liability accounts (Cr positive)
+      const liabilityBalance = sumLedger(ofTypes("liability", "current liability")).negated();
 
-      // 20. Profit / Retained Earnings (credit balance = liability)
-      const profitBalance = atLeastZero(sumNB(["Profit"]).negated());
+      // 20. Profit / Retained Earnings (Cr positive)
+      const profitBalance = sumLedger(ofTypes("profit")).negated();
 
-      // 20a. Equity — transactions only (opening balances are already counted in openingBalanceEquity)
-      const equityTransactionBalance = (() => {
-        let total = ZERO;
-        for (const acc of companyAccounts) {
-          if (acc.accountType !== "Equity") continue;
-          const bal = accountBalances.get(acc.id);
-          if (bal) total = total.plus(bal.credit).minus(bal.debit);
-        }
-        return atLeastZero(total);
-      })();
+      // 20a. Equity and 20b. Accounts Payable (Cr positive). Their openings,
+      // like every counted opening, are offset by the opening-balance equity
+      // below, so each contributes its transactions as before.
+      const equityTransactionBalance = sumLedger(ofTypes("equity")).negated();
+      const apTransactionBalance = sumLedger(ofTypes("accounts payable")).negated();
 
-      // 20b. Accounts Payable — transactions only
-      const apTransactionBalance = (() => {
-        let total = ZERO;
-        for (const acc of companyAccounts) {
-          if (acc.accountType !== "Accounts Payable") continue;
-          const bal = accountBalances.get(acc.id);
-          if (bal) total = total.plus(bal.credit).minus(bal.debit);
-        }
-        return atLeastZero(total);
-      })();
-
-      // 21. Opening Balance Equity - automatically balance opening entries
-      // When opening balances are added without matching entries (e.g., cash opening balance without
-      // corresponding capital), this creates an imbalance. We calculate the net of all opening balances
-      // and treat the difference as implicit equity/capital that should be on the liability side.
-      // Calculate net opening balance equity using already-loaded companyAccounts
-      let totalDrOpenings = ZERO;
-      let totalCrOpenings = ZERO;
-
-      for (const account of companyAccounts) {
-        const openingBalanceRaw = toMoney(account.openingBalance);
-        if (openingBalanceRaw.isZero()) continue;
-
-        const openingSide = account.openingBalanceSide || "Dr";
-        if (openingSide === "Dr") {
-          totalDrOpenings = totalDrOpenings.plus(openingBalanceRaw);
-        } else {
-          totalCrOpenings = totalCrOpenings.plus(openingBalanceRaw);
-        }
-      }
-
-      // Include employee opening balances in the equity offset calculation
-      // Employee opening balances are liabilities (money owed to employees) - credit side
-      const totalEmployeeOpeningBalance = sumMoney(employeesData.map((emp) => emp.openingBalance));
-
-      // Add employee opening balances to the credit side (they're liabilities)
-      totalCrOpenings = totalCrOpenings.plus(totalEmployeeOpeningBalance);
-
-      // Opening Balance Equity = Credit side opening balances minus debit side
-      // This represents the net capital/equity that balances the opening entries
-      // When added to the liability side, it offsets the asset-side opening balances
-      let openingBalanceEquity = totalCrOpenings.minus(totalDrOpenings);
-      // Note: If openingBalanceEquity is negative, it means more assets than liabilities
-      // were brought forward - this is normal (represents owner's equity)
+      // 21. Opening Balance Equity (Cr positive): the implicit capital that
+      // offsets the openings of every master counted above (ledger accounts,
+      // banks, fixed assets, suppliers, employees), each with the engine's
+      // side, so the formula compares movements, not openings. Before, it
+      // summed every ledger opening with a sideless one taken as Dr, added
+      // employee openings as Cr whatever their side, and left out the bank
+      // and supplier openings the components counted.
+      let openingBalanceEquity = ZERO;
+      for (const row of countedRows) openingBalanceEquity = openingBalanceEquity.minus(row.masterOpening);
 
       // 22. Opening Stock Equity - stock items with opening values that weren't imported via PO
       // These are set via "Import Opening Balances" in Stock Items and need implicit equity offset
@@ -456,8 +352,8 @@ export function registerImportCycleBalanceRoutes(app: Express) {
         cashBalance, // Asset (debit) - cash on hand
         bankBalance, // Asset (debit) - bank balances
         stockOnFloorValue, // Asset - inventory at cost (includes ALL offload charges capitalized)
-        assetBalance, // Asset accounts (properties, guarantees, receivables)
-        salaryAdvancesBalance, // Salary Advances (asset) - recoverable from employees
+        assetBalance, // Asset accounts (properties, guarantees, receivables) and fixed assets
+        // salaryAdvancesBalance is memo only: posted advances are in payrollLiabilitiesBalance.
       ]);
       // directExpenseBalance is EXCLUDED - already capitalized into stockOnFloorValue
       const traceExpenseTotal = sumMoney([
@@ -483,23 +379,13 @@ export function registerImportCycleBalanceRoutes(app: Express) {
       const traceNetLiabilities = traceLiabilitiesRaw.minus(openingBalanceEquity);
       const netImportCycleBalance = traceAssetTotal.plus(traceExpenseTotal).minus(traceNetLiabilities);
 
-      // Auto-adjust: silently keep the import cycle balance at 0 by computing and storing
-      // the exact offset needed. This runs on every fetch so no manual action is needed.
-      const autoAdjustKey = `equity_adjustment_${companyId}`;
-      const storedEquityAdjustment = netImportCycleBalance.negated();
-      if (netImportCycleBalance.abs().greaterThan(0.01)) {
-        // Fire-and-forget — don't await so the response is not delayed
-        db.insert(systemSettings)
-          .values({ key: autoAdjustKey, value: storedEquityAdjustment.toFixed(2) })
-          .onConflictDoUpdate({
-            target: systemSettings.key,
-            set: { value: storedEquityAdjustment.toFixed(2), updatedAt: new Date() },
-          })
-          .catch(() => {});
-      }
-
-      // Adjusted balance is always 0 after auto-adjustment
-      const adjustedImportCycleBalance = netImportCycleBalance.plus(storedEquityAdjustment);
+      // The difference is reported, never plugged. This endpoint used to upsert
+      // system_settings.equity_adjustment_<companyId> = -net on every read and then
+      // report 0, which hid real ledger/sub-ledger differences (2026-10 accounting
+      // audit). A read must not write, and an unexplained difference must stay
+      // visible until it is investigated and corrected with a posted entry.
+      const storedEquityAdjustment = new MoneyDecimal(0);
+      const adjustedImportCycleBalance = netImportCycleBalance;
 
       // Round to the cent, halves toward +infinity as Math.round did.
       // T006: Threshold reduced from $5 to $0.01 — the $5 threshold was hiding real imbalances.
@@ -555,11 +441,9 @@ export function registerImportCycleBalanceRoutes(app: Express) {
         storedEquityAdjustment: storedEquityAdjustment.toNumber(),
         adjustedBalance: adjustedImportCycleBalance.toNumber(),
         finalRoundedBalance: roundedBalance,
-        discrepancyExplanation: !storedEquityAdjustment.isZero()
-          ? `An equity adjustment of ${storedEquityAdjustment.toFixed(2)} was applied to zero out the balance.`
-          : netImportCycleBalance.abs().lessThan(50) && !netImportCycleBalance.isZero()
-            ? `Small discrepancy of ${netImportCycleBalance.toFixed(2)} likely from accumulated rounding in weighted average cost calculations.`
-            : null,
+        discrepancyExplanation: netImportCycleBalance.abs().greaterThan(0.01)
+          ? `Unreconciled difference of ${netImportCycleBalance.toFixed(2)} between ledger and sub-ledger figures. It is not plugged; investigate it with the accounting integrity diagnostic.`
+          : null,
       };
 
       const _result = {
@@ -592,6 +476,10 @@ export function registerImportCycleBalanceRoutes(app: Express) {
           openingBalanceEquity: openingBalanceEquity.toNumber(),
           openingStockValue: openingStockValue.toNumber(),
         },
+        // Wave 17 A: where each component comes from. "ledger": the balance
+        // engine; "operational (memo)": an operational table, not a ledger
+        // balance; "memo, not in the formula": shown for information only.
+        componentBasis: IMPORT_CYCLE_COMPONENT_BASIS,
         precisionTrace,
       };
       _setCached(_cacheKey, _result);

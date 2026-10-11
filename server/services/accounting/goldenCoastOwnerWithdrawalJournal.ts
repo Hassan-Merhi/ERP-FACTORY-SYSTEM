@@ -60,6 +60,13 @@ async function ensureClearingAccount(companyId: number): Promise<{ id: number; n
 
   if (existing.length === 1) {
     const row = existing[0];
+    // Phase 22 (B): a deleted clearing account is not revived here (wave 18 B:
+    // account helpers never unhide a deleted account); restore it first.
+    if (row.deletedAt !== null) {
+      throw new Error(
+        `${GC_OWNER_WITHDRAWAL_CLEARING_CODE} is deleted; restore it from Deleted Items before posting the template`
+      );
+    }
     if (row.subType && row.subType !== GC_OWNER_WITHDRAWAL_CLEARING_SUBTYPE) {
       throw new Error(
         `${GC_OWNER_WITHDRAWAL_CLEARING_CODE} is already used by another ledger role; repair the chart of accounts first`
@@ -70,8 +77,7 @@ async function ensureClearingAccount(companyId: number): Promise<{ id: number; n
       row.subType !== GC_OWNER_WITHDRAWAL_CLEARING_SUBTYPE ||
       row.accountType !== "Equity" ||
       row.isHidden !== true ||
-      row.active !== true ||
-      row.deletedAt !== null
+      row.active !== true
     ) {
       const [repaired] = await db
         .update(ledgerAccounts)
@@ -81,7 +87,6 @@ async function ensureClearingAccount(companyId: number): Promise<{ id: number; n
           accountType: "Equity",
           isHidden: true,
           active: true,
-          deletedAt: null,
           openingBalance: "0",
           openingBalanceSide: "Cr",
         })
@@ -132,26 +137,36 @@ async function ensureClearingAccount(companyId: number): Promise<{ id: number; n
  * once:
  *
  *   visible intent:  Dr Hassan Dakik Equity / Cr GC Sales Cash
- *   ledger posting:  Dr Hassan Dakik Equity / Dr GC Sales Cash / Cr hidden clearing (2x)
+ *   template:        Dr Hassan Dakik Equity / Dr GC Sales Cash / Cr hidden clearing (2x)
  *
- * The hidden clearing is excluded from Golden Coast Net Position/equity display.
- * This preserves the user's two-line economic intent, reduces the actual GC Sales
- * Cash payable, leaves Fresh Start FZ Equity untouched, and keeps the voucher
- * double-entry balanced.
+ * Phase 22 (B), D6: the template is no longer applied silently. A journal that
+ * matches it is refused with GC_OWNER_WITHDRAWAL_TEMPLATE_CONFIRM and the
+ * template's lines; the user then posts it either as the template
+ * (`goldenCoastOwnerWithdrawalTemplate: true`) or exactly as entered (`false`).
  */
-export async function transformGoldenCoastOwnerWithdrawalJournal(input: {
+export interface GoldenCoastOwnerWithdrawalMatch {
+  amountUsd: string;
+  gcSalesCashAccountId: number;
+  hassanEquityAccountId: number;
+  gcEntry: ManualJournalEntryLike;
+  hassanEntry: ManualJournalEntryLike;
+}
+
+/** Read-only: whether the two entered lines are a Golden Coast owner withdrawal. */
+export async function matchGoldenCoastOwnerWithdrawalJournal(input: {
   companyId: number;
   entries: ManualJournalEntryLike[];
-}): Promise<GoldenCoastOwnerWithdrawalTransform> {
+}): Promise<GoldenCoastOwnerWithdrawalMatch | null> {
   const { companyId, entries } = input;
   if (!Number.isInteger(companyId) || companyId <= 0 || !Array.isArray(entries) || entries.length !== 2) {
-    return { entries, transformed: false };
+    return null;
   }
 
   const ledgerEntries = entries.filter(
-    (entry) => entry?.accountType === "ledger" && Number.isInteger(Number(entry.accountId)) && Number(entry.accountId) > 0
+    (entry) =>
+      entry?.accountType === "ledger" && Number.isInteger(Number(entry.accountId)) && Number(entry.accountId) > 0
   );
-  if (ledgerEntries.length !== 2) return { entries, transformed: false };
+  if (ledgerEntries.length !== 2) return null;
 
   const accountIds = ledgerEntries.map((entry) => Number(entry.accountId));
   const accounts = await db
@@ -170,60 +185,82 @@ export async function transformGoldenCoastOwnerWithdrawalJournal(input: {
         isNull(ledgerAccounts.deletedAt)
       )
     );
-
-  if (accounts.length !== 2) return { entries, transformed: false };
+  if (accounts.length !== 2) return null;
 
   const gcSalesCash = accounts.find(
     (account) => account.subType === "sp_payable" && account.name.trim().toLowerCase() === "gc sales cash"
   );
   const hassanEquity = accounts.find((account) => account.subType === "gc_owner_capital");
-  if (!gcSalesCash || !hassanEquity) return { entries, transformed: false };
+  if (!gcSalesCash || !hassanEquity) return null;
 
   const gcEntry = ledgerEntries.find((entry) => Number(entry.accountId) === Number(gcSalesCash.id));
   const hassanEntry = ledgerEntries.find((entry) => Number(entry.accountId) === Number(hassanEquity.id));
-  if (!gcEntry || !hassanEntry || gcEntry.type !== "CR" || hassanEntry.type !== "DR") {
-    return { entries, transformed: false };
-  }
+  if (!gcEntry || !hassanEntry || gcEntry.type !== "CR" || hassanEntry.type !== "DR") return null;
 
   const gcAmount = decimalAmount(gcEntry.amount);
   const hassanAmount = decimalAmount(hassanEntry.amount);
-  if (!gcAmount || !hassanAmount || !gcAmount.gt(0) || !gcAmount.eq(hassanAmount)) {
-    return { entries, transformed: false };
-  }
+  if (!gcAmount || !hassanAmount || !gcAmount.gt(0) || !gcAmount.eq(hassanAmount)) return null;
 
+  return {
+    amountUsd: money(gcAmount),
+    gcSalesCashAccountId: Number(gcSalesCash.id),
+    hassanEquityAccountId: Number(hassanEquity.id),
+    gcEntry,
+    hassanEntry,
+  };
+}
+
+/** The template's lines for a match, for the user to confirm (no account is created). */
+export function goldenCoastOwnerWithdrawalTemplatePreview(match: GoldenCoastOwnerWithdrawalMatch) {
+  const clearingAmount = money(new Decimal(match.amountUsd).times(2));
+  return [
+    { type: "DR" as const, accountId: match.hassanEquityAccountId, amount: match.amountUsd },
+    { type: "DR" as const, accountId: match.gcSalesCashAccountId, amount: match.amountUsd },
+    { type: "CR" as const, accountCode: GC_OWNER_WITHDRAWAL_CLEARING_CODE, amount: clearingAmount },
+  ];
+}
+
+/** The template's posting lines (the clearing account is provisioned here). */
+export async function applyGoldenCoastOwnerWithdrawalTemplate(
+  companyId: number,
+  match: GoldenCoastOwnerWithdrawalMatch
+): Promise<GoldenCoastOwnerWithdrawalTransform> {
+  const { gcEntry, hassanEntry } = match;
   const clearing = await ensureClearingAccount(companyId);
-  const amountUsd = money(gcAmount);
-  const clearingAmountUsd = money(gcAmount.times(2));
+  const amountUsd = match.amountUsd;
+  const clearingAmountUsd = money(new Decimal(amountUsd).times(2));
   const narration = gcEntry.narration || hassanEntry.narration || "Golden Coast owner withdrawal";
 
   return {
     transformed: true,
     amountUsd,
-    gcSalesCashAccountId: Number(gcSalesCash.id),
-    hassanEquityAccountId: Number(hassanEquity.id),
+    gcSalesCashAccountId: match.gcSalesCashAccountId,
+    hassanEquityAccountId: match.hassanEquityAccountId,
     clearingAccountId: clearing.id,
     entries: [
-      {
-        ...hassanEntry,
-        type: "DR",
-        accountId: Number(hassanEquity.id),
-        amount: amountUsd,
-      },
-      {
-        ...gcEntry,
-        type: "DR",
-        accountId: Number(gcSalesCash.id),
-        amount: amountUsd,
-        narration,
-      },
+      { ...hassanEntry, type: "DR", accountId: match.hassanEquityAccountId, amount: amountUsd },
+      { ...gcEntry, type: "DR", accountId: match.gcSalesCashAccountId, amount: amountUsd, narration },
       {
         type: "CR",
         accountType: "ledger",
         accountId: clearing.id,
         accountName: clearing.name,
         amount: clearingAmountUsd,
-        narration: `System balancing entry — ${narration}`,
+        narration: `Owner withdrawal template clearing — ${narration}`,
       },
     ],
   };
+}
+
+/**
+ * Applies the template when the lines match it (callers that already have the
+ * user's confirmation).
+ */
+export async function transformGoldenCoastOwnerWithdrawalJournal(input: {
+  companyId: number;
+  entries: ManualJournalEntryLike[];
+}): Promise<GoldenCoastOwnerWithdrawalTransform> {
+  const match = await matchGoldenCoastOwnerWithdrawalJournal(input);
+  if (!match) return { entries: input.entries, transformed: false };
+  return applyGoldenCoastOwnerWithdrawalTemplate(input.companyId, match);
 }

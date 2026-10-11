@@ -8,12 +8,13 @@
 import type { Express } from "express";
 import { registerContainerOffloadCreateRoutes } from "./create";
 import { registerContainerOffloadRecalcRoutes } from "./recalc";
-import { registerContainerOffloadUpdateRoutes } from "./update";
 import { registerContainerOffloadChargeRoutes } from "./charges";
 
 export function registerContainerOffloadRoutes(app: Express) {
   registerContainerOffloadCreateRoutes(app);
   registerContainerOffloadRecalcRoutes(app);
-  registerContainerOffloadUpdateRoutes(app);
+  // Phase 19 (A), I9: the legacy PATCH /api/containers/:id/offload (./update.ts) is
+  // deleted. registerCentralContainerOffloadRoute registers the same method and path
+  // with the same guards first and always answers, so the legacy handler never ran.
   registerContainerOffloadChargeRoutes(app);
 }

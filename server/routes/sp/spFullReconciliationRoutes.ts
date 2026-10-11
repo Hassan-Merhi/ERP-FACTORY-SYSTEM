@@ -150,7 +150,7 @@ async function buildFullReconciliation(companyId: number) {
     // ERP inventory for the stock items touched by SP.
     db.execute(sql`
         SELECT COALESCE(SUM(i.quantity::numeric), 0) qty,
-               COALESCE(SUM(i.quantity::numeric * i.average_rate::numeric), 0) value
+               COALESCE(SUM(i.total_value::numeric), 0) value
         FROM inventory i
         WHERE i.company_id = ${companyId}
           AND EXISTS (
@@ -448,7 +448,8 @@ async function buildFullReconciliation(companyId: number) {
       databaseValue: num(statementRow.balance),
       reportValue: num(statementCounterpartyRow.balance),
       pass: close(num(statementRow.balance), num(statementCounterpartyRow.balance)),
-      basis: "supplier-tagged voucher-entry net balance vs the non-supplier counterparty entries on those same vouchers",
+      basis:
+        "supplier-tagged voucher-entry net balance vs the non-supplier counterparty entries on those same vouchers",
     },
     {
       // Source-document check for SP sales specifically.
@@ -464,14 +465,16 @@ async function buildFullReconciliation(companyId: number) {
       databaseValue: num(payableRow.balance),
       reportValue: num(payableCounterpartyRow.balance),
       pass: close(num(payableRow.balance), num(payableCounterpartyRow.balance)),
-      basis: "complete sp_payable credit-normal balance vs net debit of all non-payable lines on every voucher that touches sp_payable",
+      basis:
+        "complete sp_payable credit-normal balance vs net debit of all non-payable lines on every voucher that touches sp_payable",
     },
     {
       key: "gross_profit",
       databaseValue: lineGrossProfit,
       reportValue: saleVoucherTotal - lineCost,
       pass: close(lineGrossProfit, saleVoucherTotal - lineCost),
-      basis: "sales_items revenue less cost vs each distinct Sales voucher header counted once less the same item costs",
+      basis:
+        "sales_items revenue less cost vs each distinct Sales voucher header counted once less the same item costs",
     },
     {
       key: "profit_split",
@@ -513,7 +516,8 @@ async function buildFullReconciliation(companyId: number) {
         close(prepaidUsed, prepaidPostedUsed) &&
         close(prepaidPaid - prepaidUsed, prepaidPostedPaid - prepaidPostedUsed) &&
         num(prepaidRow.invalid_count) === 0,
-      basis: "sp_prepaid_charges paid/used register vs debit entries on linked prepaid vouchers and credits on actual offload stock vouchers",
+      basis:
+        "sp_prepaid_charges paid/used register vs debit entries on linked prepaid vouchers and credits on actual offload stock vouchers",
       detail: `register paid/used ${prepaidPaid.toFixed(2)}/${prepaidUsed.toFixed(2)}; accounting paid/used ${prepaidPostedPaid.toFixed(2)}/${prepaidPostedUsed.toFixed(2)}`,
     },
     {

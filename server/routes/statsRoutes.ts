@@ -6,6 +6,7 @@ import { registerSalesReportBandwidthRoutes } from "./stats/salesReportBandwidth
 import { registerStatsDataRoutes } from "./stats/statsDataRoutes";
 import { registerStatsSalesRoutes } from "./stats/statsSalesRoutes";
 import { registerStatsReportsRoutes } from "./stats/statsReportsRoutes";
+import { registerAgingReportRoutes } from "./stats/agingReportRoutes";
 import { registerStatsCountryActivityRoutes } from "./stats/statsCountryActivityRoutes";
 import { registerStatsMultiCurrencyRoutes } from "./stats/statsMultiCurrencyRoutes";
 import { registerStockInSalesReportRoutes } from "./stats/stockInSalesReportRoutes";
@@ -34,5 +35,6 @@ export function registerStatsRoutes(app: Express) {
   registerStockInSalesReportRoutes(app);
   registerItemMarketAnalysisRoutes(app);
   registerStatsReportsRoutes(app);
+  registerAgingReportRoutes(app);
   registerStatsCountryActivityRoutes(app);
 }

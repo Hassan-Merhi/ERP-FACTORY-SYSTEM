@@ -4,15 +4,12 @@ import type { Express, Request, Response } from "express";
 import { db } from "../../db";
 import { requireAuth } from "../../auth";
 import { getOrCreateLedgerAccount } from "./_helpers";
-import {
-  factoryTransporters,
-  factoryTransporterTransactions,
-  ledgerAccounts,
-  vouchers,
-  voucherEntries,
-} from "@shared/schema";
+import { factoryTransporters, factoryTransporterTransactions, ledgerAccounts } from "@shared/schema";
 import { eq, and, asc, sql } from "drizzle-orm";
 import { z } from "zod";
+import { retireVouchersTx, sessionRetirementActor } from "../../services/accounting/voucherRetirement";
+import { parseMoneyInput, toMoney } from "../../lib/money";
+import { factorySessionActor, postFactoryVoucherTx } from "../../services/factory/factoryVoucherPosting";
 
 function getCompanyId(req: Request): number | null {
   const s = req.session;
@@ -215,48 +212,46 @@ export function registerFactoryTransporterRoutes(app: Express) {
       if (!transporter) return res.status(404).json({ message: "Transporter not found" });
 
       const narration = description || `Transport charge - ${transporter.name}`;
+      const postedAmount = (parseMoneyInput(amount) ?? toMoney(0)).toDecimalPlaces(2);
+      if (postedAmount.lessThanOrEqualTo(0))
+        return res.status(400).json({ message: "Amount must be a positive number" });
 
       const tx = await db.transaction(async (trx) => {
-        const [v] = await trx
-          .insert(vouchers)
-          .values({
-            companyId,
-            voucherNumber: `TRANS-CHG-${Date.now()}-${transporterId}`,
-            voucherType: "Payment",
-            voucherDate: txDate,
-            description: narration,
-            totalAmount: amount,
-            currency: "USD",
-            sourceModule: "ERP",
-          })
-          .returning();
-
-        await trx.insert(voucherEntries).values([
-          { voucherId: v.id, ledgerAccountId: expenseAccountId, debitAmount: amount, creditAmount: "0", narration },
-          {
-            voucherId: v.id,
-            ledgerAccountId: transporter.ledgerAccountId!,
-            debitAmount: "0",
-            creditAmount: amount,
-            narration,
-          },
-        ]);
-
+        // Phase 22 (C): the transaction row first, then its voucher through the
+        // engine (engine-numbered — was TRANS-CHG-{Date.now()}, which the
+        // container offload readers could mistake for a TRANS- offload voucher —
+        // with the row's posting identity), then the link.
         const [record] = await trx
           .insert(factoryTransporterTransactions)
           .values({
             companyId,
             transporterId,
             txType: "charge",
-            amount,
+            amount: postedAmount.toFixed(2),
             txDate: txDate,
             description: narration,
             expenseAccountId,
-            voucherId: v.id,
           })
           .returning();
-
-        return record;
+        const { voucher: v } = await postFactoryVoucherTx(trx, {
+          companyId,
+          voucherType: "Payment",
+          voucherDate: txDate,
+          description: narration,
+          sourceModule: "ERP",
+          source: { sourceType: "factory-transporter-charge", sourceId: record.id, phase: "voucher" },
+          actor: factorySessionActor(req),
+          lines: [
+            { ledgerAccountId: expenseAccountId, debit: postedAmount, narration },
+            { ledgerAccountId: transporter.ledgerAccountId!, credit: postedAmount, narration },
+          ],
+        });
+        const [linked] = await trx
+          .update(factoryTransporterTransactions)
+          .set({ voucherId: v.id })
+          .where(eq(factoryTransporterTransactions.id, record.id))
+          .returning();
+        return linked;
       });
 
       res.json(tx);
@@ -290,48 +285,46 @@ export function registerFactoryTransporterRoutes(app: Express) {
       if (!transporter) return res.status(404).json({ message: "Transporter not found" });
 
       const narration = description || `Payment to transporter - ${transporter.name}`;
+      const postedAmount = (parseMoneyInput(amount) ?? toMoney(0)).toDecimalPlaces(2);
+      if (postedAmount.lessThanOrEqualTo(0))
+        return res.status(400).json({ message: "Amount must be a positive number" });
 
       const tx = await db.transaction(async (trx) => {
-        const [v] = await trx
-          .insert(vouchers)
-          .values({
-            companyId,
-            voucherNumber: `TRANS-PAY-${Date.now()}-${transporterId}`,
-            voucherType: "Payment",
-            voucherDate: txDate,
-            description: narration,
-            totalAmount: amount,
-            currency: "USD",
-            sourceModule: "ERP",
-          })
-          .returning();
-
-        await trx.insert(voucherEntries).values([
-          {
-            voucherId: v.id,
-            ledgerAccountId: transporter.ledgerAccountId!,
-            debitAmount: amount,
-            creditAmount: "0",
-            narration,
-          },
-          { voucherId: v.id, ledgerAccountId: cashAccountId, debitAmount: "0", creditAmount: amount, narration },
-        ]);
-
+        // Phase 22 (C): the transaction row first, then its voucher through the
+        // engine (engine-numbered — was TRANS-PAY-{Date.now()}, which the
+        // container offload readers could mistake for a TRANS- offload voucher —
+        // with the row's posting identity), then the link.
         const [record] = await trx
           .insert(factoryTransporterTransactions)
           .values({
             companyId,
             transporterId,
             txType: "payment",
-            amount,
+            amount: postedAmount.toFixed(2),
             txDate: txDate,
             description: narration,
             cashAccountId,
-            voucherId: v.id,
           })
           .returning();
-
-        return record;
+        const { voucher: v } = await postFactoryVoucherTx(trx, {
+          companyId,
+          voucherType: "Payment",
+          voucherDate: txDate,
+          description: narration,
+          sourceModule: "ERP",
+          source: { sourceType: "factory-transporter-payment", sourceId: record.id, phase: "voucher" },
+          actor: factorySessionActor(req),
+          lines: [
+            { ledgerAccountId: transporter.ledgerAccountId!, debit: postedAmount, narration },
+            { ledgerAccountId: cashAccountId, credit: postedAmount, narration },
+          ],
+        });
+        const [linked] = await trx
+          .update(factoryTransporterTransactions)
+          .set({ voucherId: v.id })
+          .where(eq(factoryTransporterTransactions.id, record.id))
+          .returning();
+        return linked;
       });
 
       res.json(tx);
@@ -365,8 +358,13 @@ export function registerFactoryTransporterRoutes(app: Express) {
         // had a voucher, meaning all of them.
         await trx.delete(factoryTransporterTransactions).where(eq(factoryTransporterTransactions.id, txId));
         if (tx.voucherId) {
-          await trx.delete(voucherEntries).where(eq(voucherEntries.voucherId, tx.voucherId));
-          await trx.delete(vouchers).where(eq(vouchers.id, tx.voucherId));
+          // Wave 16 (A): retired (soft delete with lines, audited here), not hard-deleted.
+          await retireVouchersTx(trx, {
+            companyId,
+            voucherIds: [tx.voucherId],
+            reason: "factory-transporter-transaction-delete",
+            actor: sessionRetirementActor(req),
+          });
         }
       });
 

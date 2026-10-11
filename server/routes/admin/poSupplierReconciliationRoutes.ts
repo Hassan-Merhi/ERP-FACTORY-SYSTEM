@@ -18,6 +18,12 @@ import {
   expectedPoSupplierPayable,
   parentImportVoucherNumberPattern,
 } from "../../services/accounting/poSupplierReconciliation";
+import { retireVouchersWithClient, sessionRetirementActor } from "../../services/accounting/voucherRetirement";
+import {
+  VoucherCorrectionError,
+  editPostedVoucherWithClient,
+  sendVoucherCorrectionRefusal,
+} from "../../services/factory/factoryVoucherCorrection";
 
 /**
  * PO supplier-payable reconciliation and its rollback, split out of
@@ -273,27 +279,48 @@ export function registerPoSupplierReconciliationRoutes(app: Express) {
                     repairStatus = "manual_review";
                   } else {
                     const [kept, ...duplicates] = entryRows.rows;
-                    await client.query(
-                      `UPDATE voucher_entries
-                    SET debit_amount = '0',
-                        credit_amount = $1,
-                        transaction_currency = COALESCE(transaction_currency, 'USD'),
-                        transaction_debit_amount = '0',
-                        transaction_credit_amount = $1,
-                        base_debit_amount = '0',
-                        base_credit_amount = $1,
-                        historical_exchange_rate = COALESCE(historical_exchange_rate, 1),
-                        rate_convention = COALESCE(rate_convention, 'IDENTITY')
-                  WHERE id = $2`,
-                      [expected.toFixed(2), kept.id]
-                    );
-                    if (duplicates.length > 0) {
-                      await client.query(`DELETE FROM voucher_entries WHERE id = ANY($1::int[])`, [
-                        duplicates.map((row) => row.id),
-                      ]);
+                    // Phase 22 (C), G4: an audited open-period edit of the posted
+                    // voucher (header and lines before/after in this transaction);
+                    // a voucher in a closed period is left for manual review.
+                    try {
+                      await editPostedVoucherWithClient(
+                        client,
+                        {
+                          companyId: expectedCompanyId,
+                          voucherId: canonicalVoucherId!,
+                          reason: "po-supplier-reconciliation",
+                          actor: { userId: req.session.userId, username: req.session.username },
+                        },
+                        async () => {
+                          await client.query(
+                            `UPDATE voucher_entries
+                          SET debit_amount = '0',
+                              credit_amount = $1,
+                              transaction_currency = COALESCE(transaction_currency, 'USD'),
+                              transaction_debit_amount = '0',
+                              transaction_credit_amount = $1,
+                              base_debit_amount = '0',
+                              base_credit_amount = $1,
+                              historical_exchange_rate = COALESCE(historical_exchange_rate, 1),
+                              rate_convention = COALESCE(rate_convention, 'IDENTITY')
+                        WHERE id = $2`,
+                            [expected.toFixed(2), kept.id]
+                          );
+                          if (duplicates.length > 0) {
+                            await client.query(`DELETE FROM voucher_entries WHERE id = ANY($1::int[])`, [
+                              duplicates.map((row) => row.id),
+                            ]);
+                          }
+                        }
+                      );
+                    } catch (editError) {
+                      if (!(editError instanceof VoucherCorrectionError)) throw editError;
+                      repairStatus = "manual_review";
                     }
-                    repairStatus = "repaired";
-                    repaired += 1;
+                    if (repairStatus !== "manual_review") {
+                      repairStatus = "repaired";
+                      repaired += 1;
+                    }
                   }
                 }
 
@@ -535,21 +562,45 @@ export function registerPoSupplierReconciliationRoutes(app: Express) {
               }
 
               if (insertedEntryRows.rows.length > 0) {
-                const entryIds = insertedEntryRows.rows.map((row) => row.id);
-                const deleteInserted = await client.query("DELETE FROM voucher_entries WHERE id = ANY($1::int[])", [
-                  entryIds,
-                ]);
-                removedInsertedEntries = deleteInserted.rowCount ?? 0;
+                // Phase 22 (C), G4: each voucher's inserted lines go in an audited
+                // edit of that voucher (refused, 409, in a closed period).
+                const byVoucher = new Map<number, number[]>();
+                for (const row of insertedEntryRows.rows) {
+                  byVoucher.set(row.voucher_id, [...(byVoucher.get(row.voucher_id) ?? []), row.id]);
+                }
+                for (const [voucherId, entryIds] of byVoucher) {
+                  const owner = await client.query<{ company_id: number }>(
+                    "SELECT company_id FROM vouchers WHERE id = $1",
+                    [voucherId]
+                  );
+                  await editPostedVoucherWithClient(
+                    client,
+                    {
+                      companyId: Number(owner.rows[0]?.company_id ?? selectedCompanyId),
+                      voucherId,
+                      reason: "po-supplier-reconciliation-rollback",
+                      actor: { userId: req.session.userId, username: req.session.username },
+                    },
+                    async () => {
+                      const deleteInserted = await client.query(
+                        "DELETE FROM voucher_entries WHERE id = ANY($1::int[])",
+                        [entryIds]
+                      );
+                      removedInsertedEntries += deleteInserted.rowCount ?? 0;
+                    }
+                  );
+                }
               }
 
               if (generatedVoucherIds.length > 0) {
-                await client.query("DELETE FROM voucher_entries WHERE voucher_id = ANY($1::int[])", [
-                  generatedVoucherIds,
-                ]);
-                const deleteVouchers = await client.query("DELETE FROM vouchers WHERE id = ANY($1::int[])", [
-                  generatedVoucherIds,
-                ]);
-                removedGeneratedVouchers = deleteVouchers.rowCount ?? 0;
+                // Wave 16 (A): retired (soft delete with their lines, audited in
+                // this transaction, numbers released), not hard-deleted.
+                const retired = await retireVouchersWithClient(client, {
+                  voucherIds: generatedVoucherIds,
+                  reason: "po-supplier-reconciliation-rollback",
+                  actor: sessionRetirementActor(req),
+                });
+                removedGeneratedVouchers = retired.length;
               }
 
               await client.query(
@@ -564,6 +615,7 @@ export function registerPoSupplierReconciliationRoutes(app: Express) {
                   JSON.stringify({
                     generatedVouchers: generatedVoucherIds.length,
                     insertedEntries: insertedEntryRows.rows.length,
+                    removedInsertedEntries: insertedEntryRows.rows,
                     resetPoLinks,
                     reroutedCandidates: reroutedCandidates.rows.length,
                   }),
@@ -589,6 +641,7 @@ export function registerPoSupplierReconciliationRoutes(app: Express) {
             });
           } catch (error: unknown) {
             await client.query("ROLLBACK").catch(() => undefined);
+            if (sendVoucherCorrectionRefusal(res, error)) return;
             logger.error("PO supplier reconciliation rollback failed", { error });
             return res.status(500).json({ message: getErrorMessage(error) });
           } finally {

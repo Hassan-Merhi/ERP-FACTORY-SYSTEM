@@ -63,9 +63,14 @@ function requireSourceIdentity(source: PostingSourceIdentity): void {
 }
 
 function buildVoucherValues(voucher: VoucherInsertFields) {
+  const voucherNumber = String(voucher.voucherNumber ?? "").trim();
+  if (!voucherNumber) {
+    // postBalancedVoucherTx allocates the number before it inserts.
+    throw new Error("voucherNumber is required before a voucher can be inserted");
+  }
   return {
     companyId: voucher.companyId,
-    voucherNumber: voucher.voucherNumber,
+    voucherNumber,
     voucherType: voucher.voucherType,
     voucherDate: voucher.voucherDate,
     totalAmount: voucher.totalAmount,
@@ -76,6 +81,9 @@ function buildVoucherValues(voucher: VoucherInsertFields) {
     exchangeRate: voucher.exchangeRate ?? null,
     effectiveDate: voucher.effectiveDate ?? null,
     sourceModule: voucher.sourceModule ?? null,
+    // Phase 22 A: the balance guard checks engine vouchers exactly (tolerance 0).
+    postedByEngine: true,
+    reversalOfVoucherId: voucher.reversalOfVoucherId ?? null,
   };
 }
 

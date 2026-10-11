@@ -22,11 +22,7 @@ import type {
   OffloadPayload,
   OffloadSupplierOption,
 } from "./production-raw-stock/offloadDialogTypes";
-import {
-  StockAdjustmentDialog,
-  type StockAdjustmentPayload,
-  type UpdateCostPayload,
-} from "./production-raw-stock/StockAdjustmentDialog";
+import { StockAdjustmentDialog, type StockAdjustmentPayload } from "./production-raw-stock/StockAdjustmentDialog";
 import { DeductStockDialog, type DeductStockPayload } from "./production-raw-stock/DeductStockDialog";
 import { AddToBatchDialog, type AddToBatchSource } from "./production-raw-stock/AddToBatchDialog";
 import { CreateMixBatchDialog } from "@/components/CreateMixBatchDialog";
@@ -134,19 +130,6 @@ export default function ProductionRawStock() {
       queryClient.invalidateQueries({ queryKey: ["/api/factory/raw-stock"] });
       setDeductDialogOpen(false);
       toast({ title: "Deducted", description: "Stock deducted successfully." });
-    },
-  });
-
-  const updateCostMutation = useMutation({
-    mutationFn: async (payload: UpdateCostPayload) => {
-      const res = await modeApiRequest("POST", "/api/factory/raw-stock/update-cost", payload);
-      if (!res.ok) throw new Error((await res.json()).message || "Failed to update cost");
-      return res.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/raw-stock"] });
-      setAdjustDialogOpen(false);
-      toast({ title: "Cost Updated", description: "Cost updated successfully." });
     },
   });
 
@@ -356,7 +339,6 @@ export default function ProductionRawStock() {
         isNewMaterial={adjIsNewMaterial}
         factorySuppliers={factorySuppliers}
         createAdjustmentMutation={createAdjustmentMutation}
-        updateCostMutation={updateCostMutation}
         wrapAdminAction={wrapAdminAction}
       />
 

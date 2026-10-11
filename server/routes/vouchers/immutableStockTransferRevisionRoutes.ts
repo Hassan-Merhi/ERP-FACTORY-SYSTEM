@@ -4,6 +4,7 @@ import { requireAuth, requireNonPOS } from "../../auth";
 import { requireActionAccess } from "../../lib/permissionMiddleware";
 import { logger } from "../../lib/logger";
 import { logAudit } from "../_helpers";
+import type { DbTransaction } from "../../db";
 import {
   approveImmutableStockTransferRevision,
   createImmutableStockTransferRevision,
@@ -14,6 +15,7 @@ import {
 } from "../../services/immutableStockTransferRevisionLifecycle";
 import { sendRevisedTransferWhatsApp } from "../../helpers/sendRevisedTransferWhatsApp";
 import { getErrorMessage } from "../../lib/httpHandlers";
+import { sendBaleMirrorMovementRefusal } from "../../services/accounting/perpetualInventory/cutoverRefusal";
 
 const revisionSchema = z.object({
   note: z.string().optional().nullable(),
@@ -60,6 +62,8 @@ function statusForError(error: unknown): number {
 }
 
 function sendError(res: Response, error: unknown, context: string) {
+  // Wave 15: a factory bale-mirror item after the cut-over (409, translated).
+  if (sendBaleMirrorMovementRefusal(res, error)) return res;
   const status = statusForError(error);
   if (status === 500) logger.error(`[ImmutableStockTransferRevision ${context}]`, { error });
   const payload: Record<string, unknown> = {
@@ -133,18 +137,24 @@ async function auditRevision(
   revisionId: number,
   identifier: string,
   action: "create" | "update" | "approve",
-  changes: Record<string, { old?: unknown; new?: unknown }>
+  changes: Record<string, { old?: unknown; new?: unknown }>,
+  tx: DbTransaction
 ) {
-  await logAudit({
-    userId: userId(req) || "unknown",
-    username: req.session.username || req.user?.username || "unknown",
-    companyId,
-    action,
-    tableName: "stock_transfer_revisions",
-    recordId: revisionId,
-    recordIdentifier: identifier,
-    changes,
-  });
+  // Phase 21 (B): written on the revision's transaction, so a failed audit
+  // rolls the revision back.
+  await logAudit(
+    {
+      userId: userId(req) || "unknown",
+      username: req.session.username || req.user?.username || "unknown",
+      companyId,
+      action,
+      tableName: "stock_transfer_revisions",
+      recordId: revisionId,
+      recordIdentifier: identifier,
+      changes,
+    },
+    tx
+  );
 }
 
 /**
@@ -174,39 +184,42 @@ export function registerImmutableStockTransferRevisionRoutes(app: Express) {
         return res.status(403).json({ message: "POS user has no assigned source location" });
       }
 
-      const result = await createImmutableStockTransferRevision({
-        companyId,
-        transferId,
-        userId: actorId,
-        note: parsed.note,
-        pending: parsed.optional,
-        sourceLocationIdLimit: assignedLocationId,
-        items: parsed.items.map((item) => ({
-          stockItemId: item.stockItemId,
-          stockItemName: item.stockItemName,
-          sourceLocationId: item.sourceLocationId,
-          sourceLocationName: item.sourceLocationName,
-          originalQuantity: item.originalQuantity,
-          newQuantity: item.newQuantity,
-        })),
-      });
-
-      await auditRevision(
-        req,
-        companyId,
-        result.revisionId,
-        `transfer-${result.transferId}-revision-${result.revisionNumber}`,
-        "create",
+      const result = await createImmutableStockTransferRevision(
         {
-          revisionNumber: { new: result.revisionNumber },
-          status: { new: result.status },
-          note: { new: parsed.note?.trim() || null },
-          itemCount: { new: result.itemCount },
-          route: {
-            new: `${result.sourceLocationName} -> ${result.destinationLocationName}`,
-          },
-          items: { new: revisionItemsForAudit(result.items) },
-        }
+          companyId,
+          transferId,
+          userId: actorId,
+          note: parsed.note,
+          pending: parsed.optional,
+          sourceLocationIdLimit: assignedLocationId,
+          items: parsed.items.map((item) => ({
+            stockItemId: item.stockItemId,
+            stockItemName: item.stockItemName,
+            sourceLocationId: item.sourceLocationId,
+            sourceLocationName: item.sourceLocationName,
+            originalQuantity: item.originalQuantity,
+            newQuantity: item.newQuantity,
+          })),
+        },
+        (tx, written) =>
+          auditRevision(
+            req,
+            companyId,
+            written.revisionId,
+            `transfer-${written.transferId}-revision-${written.revisionNumber}`,
+            "create",
+            {
+              revisionNumber: { new: written.revisionNumber },
+              status: { new: written.status },
+              note: { new: parsed.note?.trim() || null },
+              itemCount: { new: written.itemCount },
+              route: {
+                new: `${written.sourceLocationName} -> ${written.destinationLocationName}`,
+              },
+              items: { new: revisionItemsForAudit(written.items) },
+            },
+            tx
+          )
       );
 
       queueRevisedTransferWhatsApp(result);
@@ -275,26 +288,28 @@ export function registerImmutableStockTransferRevisionRoutes(app: Express) {
         const actorId = userId(req);
         if (!actorId) return res.status(401).json({ message: "User session is required" });
 
-        const result = await approveImmutableStockTransferRevision(companyId, revisionId, actorId);
-        await auditRevision(
-          req,
-          companyId,
-          revisionId,
-          `transfer-${result.transferId}-revision-${result.revisionNumber}`,
-          "approve",
-          {
-            revisionNumber: { new: result.revisionNumber },
-            status:
-              result.transition === "no-op"
-                ? { old: "approved", new: "approved" }
-                : { old: "pending", new: "approved" },
-            changedItemCount: { new: result.changedItemCount },
-            appliedRevisionCount: {
-              new: result.transition === "no-op" ? 0 : result.appliedRevisionCount ?? 1,
+        const result = await approveImmutableStockTransferRevision(companyId, revisionId, actorId, (tx, written) =>
+          auditRevision(
+            req,
+            companyId,
+            revisionId,
+            `transfer-${written.transferId}-revision-${written.revisionNumber}`,
+            "approve",
+            {
+              revisionNumber: { new: written.revisionNumber },
+              status:
+                written.transition === "no-op"
+                  ? { old: "approved", new: "approved" }
+                  : { old: "pending", new: "approved" },
+              changedItemCount: { new: written.changedItemCount },
+              appliedRevisionCount: {
+                new: written.transition === "no-op" ? 0 : (written.appliedRevisionCount ?? 1),
+              },
+              totalAmount: { new: written.totalAmount },
+              items: { new: written.items },
             },
-            totalAmount: { new: result.totalAmount },
-            items: { new: result.items },
-          }
+            tx
+          )
         );
         return res.json({ success: true, ...result });
       } catch (error) {
@@ -320,22 +335,29 @@ export function registerImmutableStockTransferRevisionRoutes(app: Express) {
         if (!actorId) return res.status(401).json({ message: "User session is required" });
         const parsed = rejectionSchema.parse(req.body ?? {});
 
-        const result = await rejectImmutableStockTransferRevision(companyId, revisionId, actorId, parsed.reason);
-        await auditRevision(
-          req,
+        const result = await rejectImmutableStockTransferRevision(
           companyId,
           revisionId,
-          `transfer-${result.transferId}-revision-${result.revisionNumber}`,
-          "update",
-          {
-            revisionNumber: { new: result.revisionNumber },
-            status:
-              result.transition === "no-op"
-                ? { old: "rejected", new: "rejected" }
-                : { old: "pending", new: "rejected" },
-            reason: { new: result.transition === "no-op" ? null : parsed.reason || null },
-            items: { new: result.items },
-          }
+          actorId,
+          parsed.reason,
+          (tx, written) =>
+            auditRevision(
+              req,
+              companyId,
+              revisionId,
+              `transfer-${written.transferId}-revision-${written.revisionNumber}`,
+              "update",
+              {
+                revisionNumber: { new: written.revisionNumber },
+                status:
+                  written.transition === "no-op"
+                    ? { old: "rejected", new: "rejected" }
+                    : { old: "pending", new: "rejected" },
+                reason: { new: written.transition === "no-op" ? null : parsed.reason || null },
+                items: { new: written.items },
+              },
+              tx
+            )
         );
         return res.json({ success: true, ...result });
       } catch (error) {

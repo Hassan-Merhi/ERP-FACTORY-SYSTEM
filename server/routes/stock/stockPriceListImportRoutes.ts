@@ -645,95 +645,97 @@ export function registerStockPriceListImportRoutes(app: Express) {
           errors: [] as { row: number; reason: string }[],
         };
 
-        for (let i = 0; i < rows.length; i++) {
-          const rowNum = i + 2; // 1-indexed, row 1 is header
-          const row = rows[i];
-          summary.rowsProcessed++;
+        // Phase 21 (B): the rows and the import audit commit together.
+        await db.transaction(async (tx) => {
+          for (let i = 0; i < rows.length; i++) {
+            const rowNum = i + 2; // 1-indexed, row 1 is header
+            const row = rows[i];
+            summary.rowsProcessed++;
 
-          // Read Item Code (required)
-          const rawCode = String(row["Item Code"] ?? "").trim();
-          if (!rawCode) {
-            summary.skipped++;
-            summary.errors.push({ row: rowNum, reason: "Item Code is empty — row skipped" });
-            continue;
-          }
-
-          const stockItemId = itemByCode.get(rawCode.toLowerCase());
-          if (!stockItemId) {
-            summary.skipped++;
-            summary.errors.push({ row: rowNum, reason: `Item Code "${rawCode}" not found in this company` });
-            continue;
-          }
-
-          // Resolve grade
-          const rawGrade = String(row["Current Grade"] ?? "").trim();
-          let gradeId: number | null = null;
-          if (rawGrade) {
-            const gradeKey = rawGrade.toLowerCase();
-            let grade = gradeByName.get(gradeKey);
-            if (!grade) {
-              // Create new grade
-              const [created] = await db
-                .insert(stockGrades)
-                .values({ name: rawGrade, companyId, active: true })
-                .returning();
-              gradeByName.set(gradeKey, created);
-              summary.gradesCreated++;
-              grade = created;
-            } else if (!grade.active) {
-              // Reactivate inactive grade
-              await db.update(stockGrades).set({ active: true }).where(eq(stockGrades.id, grade.id));
-              grade.active = true;
+            // Read Item Code (required)
+            const rawCode = String(row["Item Code"] ?? "").trim();
+            if (!rawCode) {
+              summary.skipped++;
+              summary.errors.push({ row: rowNum, reason: "Item Code is empty — row skipped" });
+              continue;
             }
-            gradeId = grade.id;
-          }
 
-          // Resolve category
-          const rawCategory = String(row["Current Category"] ?? "").trim();
-          let categoryId: number | null = null;
-          if (rawCategory) {
-            const catKey = rawCategory.toLowerCase();
-            let category = categoryByName.get(catKey);
-            if (!category) {
-              const [created] = await db
-                .insert(stockCategories)
-                .values({ name: rawCategory, companyId, active: true })
-                .returning();
-              categoryByName.set(catKey, created);
-              summary.categoriesCreated++;
-              category = created;
-            } else if (!category.active) {
-              await db.update(stockCategories).set({ active: true }).where(eq(stockCategories.id, category.id));
-              category.active = true;
+            const stockItemId = itemByCode.get(rawCode.toLowerCase());
+            if (!stockItemId) {
+              summary.skipped++;
+              summary.errors.push({ row: rowNum, reason: `Item Code "${rawCode}" not found in this company` });
+              continue;
             }
-            categoryId = category.id;
+
+            // Resolve grade
+            const rawGrade = String(row["Current Grade"] ?? "").trim();
+            let gradeId: number | null = null;
+            if (rawGrade) {
+              const gradeKey = rawGrade.toLowerCase();
+              let grade = gradeByName.get(gradeKey);
+              if (!grade) {
+                // Create new grade
+                const [created] = await tx
+                  .insert(stockGrades)
+                  .values({ name: rawGrade, companyId, active: true })
+                  .returning();
+                gradeByName.set(gradeKey, created);
+                summary.gradesCreated++;
+                grade = created;
+              } else if (!grade.active) {
+                // Reactivate inactive grade
+                await tx.update(stockGrades).set({ active: true }).where(eq(stockGrades.id, grade.id));
+                grade.active = true;
+              }
+              gradeId = grade.id;
+            }
+
+            // Resolve category
+            const rawCategory = String(row["Current Category"] ?? "").trim();
+            let categoryId: number | null = null;
+            if (rawCategory) {
+              const catKey = rawCategory.toLowerCase();
+              let category = categoryByName.get(catKey);
+              if (!category) {
+                const [created] = await tx
+                  .insert(stockCategories)
+                  .values({ name: rawCategory, companyId, active: true })
+                  .returning();
+                categoryByName.set(catKey, created);
+                summary.categoriesCreated++;
+                category = created;
+              } else if (!category.active) {
+                await tx.update(stockCategories).set({ active: true }).where(eq(stockCategories.id, category.id));
+                category.active = true;
+              }
+              categoryId = category.id;
+            }
+
+            // Update stock item — only gradeId and categoryId
+            await tx.update(stockItems).set({ gradeId, categoryId }).where(eq(stockItems.id, stockItemId));
+
+            summary.itemsUpdated++;
           }
 
-          // Update stock item — only gradeId and categoryId
-          await db.update(stockItems).set({ gradeId, categoryId }).where(eq(stockItems.id, stockItemId));
-
-          summary.itemsUpdated++;
-        }
-
-        // Audit log
-        try {
-          await logAudit({
-            userId: req.session.userId!,
-            username: req.session.username || "unknown",
-            companyId,
-            action: "create",
-            tableName: "stock_items",
-            recordIdentifier: "bulk-grade-category-import",
-            changes: {
-              itemsUpdated: { old: null, new: summary.itemsUpdated },
-              gradesCreated: { old: null, new: summary.gradesCreated },
-              categoriesCreated: { old: null, new: summary.categoriesCreated },
-              skipped: { old: null, new: summary.skipped },
+          // Audit log
+          await logAudit(
+            {
+              userId: req.session.userId!,
+              username: req.session.username || "unknown",
+              companyId,
+              action: "create",
+              tableName: "stock_items",
+              recordIdentifier: "bulk-grade-category-import",
+              changes: {
+                itemsUpdated: { old: null, new: summary.itemsUpdated },
+                gradesCreated: { old: null, new: summary.gradesCreated },
+                categoriesCreated: { old: null, new: summary.categoriesCreated },
+                skipped: { old: null, new: summary.skipped },
+              },
             },
-          });
-        } catch {
-          /* non-fatal */
-        }
+            tx
+          );
+        });
 
         res.json({
           message: `Import complete: ${summary.itemsUpdated} updated, ${summary.gradesCreated} grades created, ${summary.categoriesCreated} categories created, ${summary.skipped} skipped`,

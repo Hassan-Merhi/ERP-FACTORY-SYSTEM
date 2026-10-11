@@ -40,18 +40,6 @@ export function useERPRunPayrollModel() {
   const [payAccountId, setPayAccountId] = useState("");
   const [deleteRunId, setDeleteRunId] = useState<number | null>(null);
   const [undoRunId, setUndoRunId] = useState<number | null>(null);
-  const [migrateConfirmOpen, setMigrateConfirmOpen] = useState(false);
-  const [migrateResult, setMigrateResult] = useState<{
-    migrated: number;
-    alreadyCorrect: number;
-    noGroups: number;
-    noVoucher: number;
-    total: number;
-    depositsMigrated: number;
-    depositsAlreadyCorrect: number;
-    bonusesMigrated: number;
-    bonusesAlreadyCorrect: number;
-  } | null>(null);
 
   // ── Queries ───────────────────────────────────────────────────────────────
   const { data: currentUser } = useQuery<{ role?: string }>({ queryKey: ["/api/auth/me"] });
@@ -342,38 +330,6 @@ export function useERPRunPayrollModel() {
     onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
 
-  const migrateGroupExpensesMutation = useMutation({
-    mutationFn: async () => {
-      const res = await apiRequest("POST", "/api/payroll/runs/migrate-group-expenses", {});
-      if (!res.ok) {
-        const d = await res.json();
-        throw new Error(d.message || "Migration failed");
-      }
-      return res.json() as Promise<{
-        migrated: number;
-        alreadyCorrect: number;
-        noGroups: number;
-        noVoucher: number;
-        total: number;
-        depositsMigrated: number;
-        depositsAlreadyCorrect: number;
-        bonusesMigrated: number;
-        bonusesAlreadyCorrect: number;
-      }>;
-    },
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/payroll/runs"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/vouchers"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/ledger-accounts"] });
-      setMigrateConfirmOpen(false);
-      setMigrateResult(data);
-    },
-    onError: (e: Error) => {
-      setMigrateConfirmOpen(false);
-      toast({ title: "Migration failed", description: e.message, variant: "destructive" });
-    },
-  });
-
   // ── Helpers for the worker-salaries template ──────────────────────────────
   function getRunDateHeaders(runDate: string): string[] {
     const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -441,7 +397,8 @@ export function useERPRunPayrollModel() {
           TD(fmt(parseFloat(it.baseSalary || "0"))),
         ];
         if (hasDed) cells.push(TD(ded > 0 ? `<span style="color:#b91c1c">-${fmt(ded)}</span>` : "—"));
-        if (hasPayrollDed) cells.push(TD(payrollDed > 0 ? `<span style="color:#c2410c">-${fmt(payrollDed)}</span>` : "—"));
+        if (hasPayrollDed)
+          cells.push(TD(payrollDed > 0 ? `<span style="color:#c2410c">-${fmt(payrollDed)}</span>` : "—"));
         cells.push(TD(`<strong>${fmt(parseFloat(it.netPay || "0"))}</strong>`));
         return `<tr>${cells.join("")}</tr>`;
       })
@@ -627,10 +584,6 @@ export function useERPRunPayrollModel() {
     setDeleteRunId,
     undoRunId,
     setUndoRunId,
-    migrateConfirmOpen,
-    setMigrateConfirmOpen,
-    migrateResult,
-    setMigrateResult,
     isDeveloper,
     payrollRuns,
     runsLoading,
@@ -650,7 +603,6 @@ export function useERPRunPayrollModel() {
     payRunMutation,
     deleteRunMutation,
     undoRunMutation,
-    migrateGroupExpensesMutation,
     getRunDateHeaders,
     getRunTemplateRows,
     printRun,

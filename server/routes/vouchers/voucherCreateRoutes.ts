@@ -14,13 +14,20 @@ import {
 } from "../_helpers";
 import { triggerIntercompanyNotifications } from "../intercompanyNotificationRoutes";
 import { autoReallocateLoansAccounts } from "../../lib/transporterAllocation";
-import { vouchers, voucherEntries, customers, type InsertVoucher } from "@shared/schema";
+import { customers, type InsertVoucher } from "@shared/schema";
 import { eq, and } from "drizzle-orm";
 
 import Decimal from "decimal.js";
 import { normalizeVoucherEntryAmounts } from "../../services/accounting/currencyAmounts";
 import { toMoney } from "../../lib/money";
 import { PostingValidationError } from "../../services/accounting/centralPostingEngine";
+import type { VoucherEntryInsertFields } from "../../services/accounting/accountingTypes";
+import {
+  erpRequestSourceId,
+  postManualVoucherTx,
+  sessionPostingActor,
+} from "../../services/accounting/erpVoucherPosting";
+import { stockVoucherTypeRefusal } from "../../services/accounting/stockVoucherTypes";
 import {
   validateManualVoucherEntryAmounts,
   type ValidatedManualVoucherTotals,
@@ -40,6 +47,9 @@ export function registerVoucherCreateRoutes(app: Express) {
       if (isPOS && voucherType !== "StockTransfer" && voucherType !== "Stock Transfer" && voucherType !== "Transfer") {
         return res.status(403).json({ message: "Access denied: This resource is not available for POS users" });
       }
+      // Wave 12: stock adjustment types come only from POST /api/stock-adjustments.
+      const stockTypeRefusal = stockVoucherTypeRefusal(voucherType);
+      if (stockTypeRefusal) return res.status(stockTypeRefusal.status).json(stockTypeRefusal.body);
       // vouchers.company_id, voucher_number, voucher_type, voucher_date and
       // total_amount are NOT NULL with no default, and none of them was
       // checked before the insert, so a body missing them failed the query as
@@ -136,6 +146,9 @@ export function registerVoucherCreateRoutes(app: Express) {
     });
     try {
       const { voucher, entries } = req.body;
+      // Wave 12: stock adjustment types come only from POST /api/stock-adjustments.
+      const stockTypeRefusal = stockVoucherTypeRefusal(voucher?.voucherType);
+      if (stockTypeRefusal) return res.status(stockTypeRefusal.status).json(stockTypeRefusal.body);
 
       if (!req.session.currentCompanyId) {
         return res.status(400).json({ message: "No company selected" });
@@ -158,6 +171,7 @@ export function registerVoucherCreateRoutes(app: Express) {
         throw validationError;
       }
 
+      const idempotencyHeader = String(req.get("X-Idempotency-Key") ?? "").trim();
       // Get current exchange rate before starting the transaction
       const exchangeRate = await getCurrentExchangeRate(req.session.currentCompanyId!);
 
@@ -174,25 +188,13 @@ export function registerVoucherCreateRoutes(app: Express) {
       // Create voucher + all entries atomically inside a single transaction.
       // Any thrown error automatically rolls back both the voucher row and
       // all entry rows — no manual cleanup required.
+      // Phase 22 (B): an active voucher posts through the central engine (number
+      // allocated there, identity = the X-Idempotency-Key header or the form's
+      // display number); an optional one (off-ledger, may be unbalanced) keeps
+      // the direct insert with an allocated number.
+      const isOptional = voucher.optional === true;
       const { createdVoucher, createdEntries } = await db.transaction(async (tx) => {
-        const [txVoucher] = await tx
-          .insert(vouchers)
-          .values({
-            companyId: req.session.currentCompanyId!,
-            locationId: voucher.locationId || null,
-            voucherNumber: voucher.voucherNumber,
-            voucherType: voucher.voucherType,
-            voucherDate: voucher.voucherDate,
-            description: voucher.description || null,
-            totalAmount: Decimal.max(validatedTotals.debitTotal, validatedTotals.creditTotal).toFixed(2),
-            optional: voucher.optional ?? false,
-            currency: voucherCurrency,
-            exchangeRate: voucherHistoricalRate,
-          })
-          .returning();
-
-        const txEntries: (typeof voucherEntries.$inferSelect)[] = [];
-
+        const builtEntries: VoucherEntryInsertFields[] = [];
         // Create voucher entries
         for (const entry of entries) {
           // Cross-field validation: when an entry references a customer/
@@ -276,56 +278,68 @@ export function registerVoucherCreateRoutes(app: Express) {
             };
           }
 
-          const [txEntry] = await tx
-            .insert(voucherEntries)
-            .values({
-              voucherId: txVoucher.id,
-              ledgerAccountId,
-              bankAccountId: entry.bankAccountId || null,
-              fixedAssetId: entry.fixedAssetId || null,
-              supplierId: entry.supplierId || null,
-              employeeId: entry.employeeId || null,
-              customerId: entry.customerId || null,
-              factorySupplierId: entry.factorySupplierId || null,
-              debitAmount: entry.debitAmount || "0",
-              creditAmount: entry.creditAmount || "0",
-              narration: entry.narration || null,
-              ...dualCurrencyFields,
-            })
-            .returning();
-          txEntries.push(txEntry);
+          builtEntries.push({
+            ledgerAccountId,
+            bankAccountId: entry.bankAccountId || null,
+            fixedAssetId: entry.fixedAssetId || null,
+            supplierId: entry.supplierId || null,
+            employeeId: entry.employeeId || null,
+            customerId: entry.customerId || null,
+            factorySupplierId: entry.factorySupplierId || null,
+            debitAmount: entry.debitAmount || "0",
+            creditAmount: entry.creditAmount || "0",
+            narration: entry.narration || null,
+            ...dualCurrencyFields,
+          });
         }
+
+        const posted = await postManualVoucherTx(tx, {
+          companyId: req.session.currentCompanyId!,
+          locationId: voucher.locationId || null,
+          voucherType: voucher.voucherType,
+          voucherDate: voucher.voucherDate,
+          description: voucher.description || null,
+          currency: voucherCurrency,
+          exchangeRate: voucherHistoricalRate,
+          optional: isOptional,
+          optionalTotalAmount: Decimal.max(validatedTotals.debitTotal, validatedTotals.creditTotal).toFixed(2),
+          entries: builtEntries,
+          source: {
+            type: "manual-voucher",
+            id: `${req.session.currentCompanyId}:${idempotencyHeader || String(voucher.voucherNumber ?? "") || erpRequestSourceId(req)}`,
+          },
+          actor: sessionPostingActor(req, "Voucher with entries"),
+        });
+        if (posted.replayed) return { createdVoucher: posted.voucher, createdEntries: posted.entries };
+        const txVoucher = posted.voucher;
+        const txEntries = posted.entries;
+
+        // Sync employee balances from voucher entries (only for non-optional
+        // vouchers), in this transaction (wave 12).
+        if (!txVoucher.optional) {
+          await syncEmployeeBalancesFromEntries(txEntries, req.session.currentCompanyId!, false, tx);
+        }
+
+        // Wave 16 (B): the creation is audited in this transaction.
+        const createEntriesSnap = await snapshotVoucherEntries(txEntries, tx);
+        await logAudit(
+          {
+            userId: req.session.userId!,
+            username: req.session.username || "unknown",
+            companyId: req.session.currentCompanyId!,
+            action: "create",
+            tableName: "vouchers",
+            recordId: txVoucher.id,
+            recordIdentifier: txVoucher.voucherNumber,
+            changes: buildVoucherChangesForCreate(txVoucher, createEntriesSnap),
+          },
+          tx
+        );
 
         return { createdVoucher: txVoucher, createdEntries: txEntries };
       });
 
-      // Sync employee balances from voucher entries (only for non-optional vouchers)
-      if (!createdVoucher.optional) {
-        await syncEmployeeBalancesFromEntries(
-          createdEntries.map((e) => ({
-            ledgerAccountId: e.ledgerAccountId,
-            employeeId: e.employeeId,
-            debitAmount: e.debitAmount,
-            creditAmount: e.creditAmount,
-          })),
-          req.session.currentCompanyId!
-        );
-      }
-
       const result = { voucher: createdVoucher, entries: createdEntries };
-
-      // Log the creation to audit log
-      const _createEntriesSnap = await snapshotVoucherEntries(createdEntries).catch(() => []);
-      await logAudit({
-        userId: req.session.userId!,
-        username: req.session.username || "unknown",
-        companyId: req.session.currentCompanyId!,
-        action: "create",
-        tableName: "vouchers",
-        recordId: createdVoucher.id,
-        recordIdentifier: createdVoucher.voucherNumber,
-        changes: buildVoucherChangesForCreate(createdVoucher, _createEntriesSnap),
-      });
 
       // Fire-and-forget intercompany notification check (Payment/Receipt only)
       triggerIntercompanyNotifications(

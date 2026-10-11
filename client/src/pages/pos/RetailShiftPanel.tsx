@@ -36,6 +36,17 @@ interface ShiftSummary {
   expectedCash: number;
 }
 
+interface CashReason {
+  reasonCode: string;
+  label: string | null;
+  direction: "cash_in" | "cash_out" | "either";
+  source: "mapping" | "default" | "none";
+}
+
+interface CashReasonList {
+  reasons: CashReason[];
+}
+
 async function json<T>(response: Response): Promise<T> {
   if (!response.ok) {
     const body = await response.json().catch(() => ({}));
@@ -56,6 +67,7 @@ export function RetailShiftPanel({
   const [closingCash, setClosingCash] = useState(0);
   const [movementAmount, setMovementAmount] = useState(0);
   const [movementReason, setMovementReason] = useState("");
+  const [movementReasonCode, setMovementReasonCode] = useState("");
 
   const currentQuery = useQuery<RetailShift | null>({
     queryKey: ["retail-current-shift", locationId],
@@ -65,6 +77,15 @@ export function RetailShiftPanel({
       ),
     enabled: Boolean(locationId),
     staleTime: 10_000,
+  });
+
+  // Wave 17 (D): each movement is journalled against the account its reason code maps to.
+  const reasonsQuery = useQuery<CashReasonList>({
+    queryKey: ["retail-cash-reasons"],
+    queryFn: async () =>
+      json<CashReasonList>(await fetch("/api/retail/financial/cash-reasons", { credentials: "include" })),
+    enabled: Boolean(locationId),
+    staleTime: 60_000,
   });
 
   const shift = currentQuery.data ?? null;
@@ -117,10 +138,16 @@ export function RetailShiftPanel({
     mutationFn: async (movementType: "cash_in" | "cash_out") => {
       if (!shift) throw new Error("Open a shift first");
       if (movementAmount <= 0 || !movementReason.trim()) throw new Error("Enter an amount and reason");
+      if (!movementReasonCode) throw new Error("Choose a cash movement reason");
+      const chosen = (reasonsQuery.data?.reasons ?? []).find((reason) => reason.reasonCode === movementReasonCode);
+      if (chosen && chosen.direction !== "either" && chosen.direction !== movementType) {
+        throw new Error("This reason cannot be used for this cash movement direction.");
+      }
       const response = await apiRequest("POST", `/api/pos/retail/shifts/${shift.id}/cash-movements`, {
         movementType,
         amount: movementAmount,
         reason: movementReason.trim(),
+        reasonCode: movementReasonCode,
         idempotencyKey: makeKey(`retail-${movementType}`),
       });
       return response.json();
@@ -128,6 +155,7 @@ export function RetailShiftPanel({
     onSuccess: async () => {
       setMovementAmount(0);
       setMovementReason("");
+      setMovementReasonCode("");
       await refresh();
       toast({ title: "Cash drawer movement recorded" });
     },
@@ -213,7 +241,7 @@ export function RetailShiftPanel({
               </div>
             ) : null}
 
-            <div className="grid gap-2 md:grid-cols-[120px_1fr_auto_auto]">
+            <div className="grid gap-2 md:grid-cols-[120px_180px_1fr_auto_auto]">
               <Input
                 type="number"
                 min="0"
@@ -222,6 +250,20 @@ export function RetailShiftPanel({
                 placeholder="Amount"
                 onChange={(event) => setMovementAmount(Number(event.target.value))}
               />
+              <select
+                aria-label="Cash movement reason"
+                className="h-10 rounded-md border bg-background px-2 text-sm"
+                value={movementReasonCode}
+                onChange={(event) => setMovementReasonCode(event.target.value)}
+              >
+                <option value="">Reason…</option>
+                {(reasonsQuery.data?.reasons ?? []).map((reason) => (
+                  <option key={reason.reasonCode} value={reason.reasonCode} disabled={reason.source === "none"}>
+                    {reason.label ?? reason.reasonCode}
+                    {reason.source === "none" ? " (no account mapped)" : ""}
+                  </option>
+                ))}
+              </select>
               <Input
                 value={movementReason}
                 placeholder="Cash in/out reason"

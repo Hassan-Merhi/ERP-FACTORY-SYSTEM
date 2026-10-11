@@ -97,11 +97,26 @@ const harness = vi.hoisted(() => {
     classifyNetPositionAccounts: vi.fn(),
     classifyEquityAccounts: vi.fn(),
     calculateHistoricalLocationInventory: vi.fn(),
+    companyStockValue: vi.fn(),
     logAudit: vi.fn(),
+    loadNetPositionParties: vi.fn(),
   };
 });
 
+// Wave 10: customers, suppliers and employees come from the balance engine.
+vi.mock("../server/services/accounting/balances/netPositionParties", () => ({
+  loadNetPositionParties: harness.loadNetPositionParties,
+}));
+
+// Before any perpetual-inventory cut-over: the computed stock and on-the-way values apply.
+vi.mock("../server/services/accounting/perpetualInventory/reportBasis", () => ({
+  ledgerCarriesStock: async () => false,
+}));
 vi.mock("../server/db", () => ({ db: harness.db, pool: harness.pool }));
+// Wave 11: the stock in hand is the one stock valuation (stockValuation.ts,
+// SUM(total_value), live or as of the date), no longer quantity × average_rate
+// over the inventory rows of the active locations.
+vi.mock("../server/services/inventory/stockValuation", () => ({ companyStockValue: harness.companyStockValue }));
 vi.mock("../server/storage", () => ({ storage: harness.storage }));
 vi.mock("../server/auth", () => ({
   requireAuth: (_req: any, _res: any, next: any) => next(),
@@ -218,23 +233,36 @@ describe("net position Excel behavior", () => {
     // Only supplier-partner exports fold equity into the position; this fixture is an ERP company,
     // so the stub stays empty and the totals below are unaffected by it.
     harness.classifyEquityAccounts.mockReturnValue({ total: 0, accounts: [] });
+    harness.loadNetPositionParties.mockResolvedValue({
+      forUs: [],
+      onUs: [{ name: "Supplier A", code: "SUP-A", value: 30, category: "Supplier", partyKind: "supplier", partyId: 7 }],
+      forUsTotal: 0,
+      onUsTotal: 30,
+      customerLedgerIds: new Set<number>(),
+      payrollSigned: 0,
+      notInLedger: {
+        label: "Not yet in the ledger",
+        total: 15,
+        lines: [
+          {
+            label: "Salary advances: advances-table remaining balance differs from the ledger",
+            code: "NOT_IN_LEDGER_SALARY_ADVANCES",
+            value: 15,
+            category: "Not yet in the ledger",
+            count: 1,
+          },
+        ],
+      },
+    });
   });
 
-  it("builds the consolidated net position from accounts, stock, worker advances, suppliers, and OTW stock", async () => {
-    harness.poolResults.push(
-      [{ ledger_account_id: "1", supplier_id: "7", debit_amount: "10", credit_amount: "40" }],
-      [{ ledger_account_id: "1", debit_amount: "120", credit_amount: "20" }]
-    );
-    harness.selectResults.push(
-      [{ id: 11 }],
-      [
-        { quantity: "5", averageRate: "4" },
-        { quantity: "2", averageRate: "10" },
-      ],
-      [{ total: "15" }],
-      [{ id: 7, legalName: "Supplier A", code: "SUP-A", openingBalance: "10" }],
-      [{ id: 90, grandTotal: "25", itemsTotal: "20", status: "OTW" }]
-    );
+  it("builds the consolidated net position from accounts, stock, engine parties and OTW stock", async () => {
+    // One ledger-account aggregate; suppliers, customers and employees come
+    // from the balance engine (mocked above). The factory_worker_advances table
+    // is no longer read by the ERP export.
+    harness.poolResults.push([{ ledger_account_id: "1", debit_amount: "120", credit_amount: "20" }]);
+    harness.companyStockValue.mockResolvedValue("40.00");
+    harness.selectResults.push([{ id: 90, grandTotal: "25", itemsTotal: "20", status: "OTW" }]);
 
     const res = responseHarness();
     await route()({ session: { currentCompanyId: 4, userId: "admin-1", username: "admin" }, query: {} }, res);
@@ -251,41 +279,34 @@ describe("net position Excel behavior", () => {
     expect(text).toContain("What We Have");
     expect(text).toContain("What We Owe");
     expect(text).toContain("Net Position");
+    // Amounts not yet in the ledger are listed apart, outside the totals.
+    expect(text).toContain("Not yet in the ledger (not included in the net position)");
+    expect(text).toContain("Salary advances: advances-table remaining balance differs from the ledger");
+    // What We Have: 100 (classifier total) + 40 stock + 25 OTW = 165; What We Owe: 50 + 30 supplier.
+    expect(text).toContain("$165.00");
+    expect(text).toContain("$80.00");
+    expect(harness.loadNetPositionParties).toHaveBeenCalledWith(4, expect.objectContaining({ customers: true }));
   });
 
-  it("uses historical inventory snapshots for an as-of export date", async () => {
-    harness.poolResults.push([], []);
-    harness.selectResults.push([{ id: 11 }], [{ total: "0" }], []);
-    harness.calculateHistoricalLocationInventory.mockResolvedValue([
-      { quantity: "3", averageRate: "7" },
-      { quantity: "1", averageRate: "9" },
-    ]);
+  it("uses the historical stock valuation for an as-of export date", async () => {
+    harness.poolResults.push([]);
+    harness.selectResults.push([]);
+    harness.companyStockValue.mockResolvedValue("30.00");
 
     const res = responseHarness();
     await route()({ session: { currentCompanyId: 4, userId: "admin-1" }, query: { toDate: "2026-07-31" } }, res);
 
-    expect(harness.calculateHistoricalLocationInventory).toHaveBeenCalledWith(11, 4, "2026-07-31");
+    expect(harness.companyStockValue).toHaveBeenCalledWith(harness.db, 4, "2026-07-31");
     expect(res.body).toEqual(Buffer.from("net-position-xlsx"));
   });
 
-  it("sums account and supplier balances exactly before classifying", async () => {
-    harness.poolResults.push(
-      [
-        { ledger_account_id: "1", supplier_id: "7", debit_amount: "0.1", credit_amount: "0" },
-        { ledger_account_id: "1", supplier_id: "7", debit_amount: "0.2", credit_amount: "0" },
-      ],
-      [
-        { ledger_account_id: "1", debit_amount: "0.1", credit_amount: "0" },
-        { ledger_account_id: "1", debit_amount: "0.2", credit_amount: "0" },
-      ]
-    );
-    harness.selectResults.push(
-      [{ id: 11 }],
-      [{ quantity: "1.3", averageRate: "0.35" }],
-      [{ total: "0" }],
-      [{ id: 7, legalName: "Supplier A", code: "SUP-A", openingBalance: "0" }],
-      []
-    );
+  it("sums account balances exactly before classifying", async () => {
+    harness.poolResults.push([
+      { ledger_account_id: "1", debit_amount: "0.1", credit_amount: "0" },
+      { ledger_account_id: "1", debit_amount: "0.2", credit_amount: "0" },
+    ]);
+    harness.companyStockValue.mockResolvedValue("0.46");
+    harness.selectResults.push([]);
 
     const res = responseHarness();
     await route()({ session: { currentCompanyId: 4, userId: "admin-1" }, query: {} }, res);
@@ -294,7 +315,7 @@ describe("net position Excel behavior", () => {
     expect(balances.get(1)).toEqual({ debit: 0.3, credit: 0 });
     const assets = harness.workbooks[0].sheets.find((sheet) => sheet.name.includes("Assets"));
     const values = assets?.rows.map((row) => row.getCell("value").value) ?? [];
-    expect(values).toContain(0.3);
+    // The stock valuation's figure (supplier sums are the balance engine's now).
     expect(values).toContain(0.46);
   });
 

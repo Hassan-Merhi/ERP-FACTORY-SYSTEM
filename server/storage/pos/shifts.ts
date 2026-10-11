@@ -2,6 +2,7 @@ import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { db } from "../../db";
 import * as schema from "@shared/schema";
 import { moneyString, parseMoneyInput, sumMoney, toMoney } from "../../lib/money";
+import { postRetailShiftOverShortTx } from "../../services/retail/retailCashJournal";
 
 export async function getCurrentShift(userId: string, locationId: number): Promise<schema.PosShift | undefined> {
   const [shift] = await db
@@ -38,7 +39,12 @@ export async function openShift(shift: schema.InsertPosShift): Promise<schema.Po
   return created;
 }
 
-export async function closeShift(id: number, closingCash: string, notes?: string): Promise<schema.PosShift> {
+export async function closeShift(
+  id: number,
+  closingCash: string,
+  notes?: string,
+  actor?: { userId: string; username?: string | null }
+): Promise<schema.PosShift> {
   // Lock the shift first: retail checkouts and cash movements hold a shared lock on
   // it, so the totals below include every write committed before the shift closes.
   return db.transaction(async (tx) => {
@@ -130,6 +136,16 @@ export async function closeShift(id: number, closingCash: string, notes?: string
       .where(and(eq(schema.posShifts.id, id), eq(schema.posShifts.status, "open")))
       .returning();
     if (!updated) throw new Error("Shift is already closed");
+    // Wave 17 (D): a Retail shift's counted-less-expected cash is journalled to
+    // Cash Over/Short in the close's transaction.
+    if (company?.companyType === "retail") {
+      await postRetailShiftOverShortTx(tx, {
+        companyId: shift.companyId,
+        shift: { id: shift.id, locationId: shift.locationId, cashAccountId: shift.cashAccountId ?? null },
+        variance,
+        actor: actor ?? { userId: shift.userId, username: shift.username },
+      });
+    }
     return updated;
   });
 }

@@ -66,8 +66,9 @@ beforeAll(async () => {
 }, 90000);
 
 afterAll(async () => {
-  await db.delete(schema.voucherEntries).where(eq(schema.voucherEntries.employeeId, employeeId));
-  await db.delete(schema.employees).where(eq(schema.employees.id, employeeId));
+  // cleanupTestData deletes every line of the company's vouchers together and
+  // only then the employees; deleting the employee's lines on their own would
+  // leave each voucher one-sided, which the voucher balance guard refuses.
   await cleanupTestData(TEST_PREFIX);
   closeTestServer();
 }, 60000);

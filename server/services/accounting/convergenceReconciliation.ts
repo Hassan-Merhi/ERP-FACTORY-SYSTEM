@@ -191,15 +191,18 @@ export async function reconcileConvergenceTx<
       // value, so only the actual ledger balance is invariant here.
       compare(discrepancies, "accounting", identity, "LEDGER_NOT_BALANCED", ledgerDebit, ledgerCredit);
     } else if (expectation === "single-sided") {
+      // Under perpetual inventory the voucher carries its inventory line too,
+      // so both sides posted is valid when they are equal.
       const debitPosted = !ledgerDebit.isZero();
       const creditPosted = !ledgerCredit.isZero();
-      if (debitPosted === creditPosted) {
+      const perpetualBalanced = debitPosted && creditPosted && ledgerDebit.eq(ledgerCredit);
+      if (debitPosted === creditPosted && !perpetualBalanced) {
         discrepancies.push({
           domain: "accounting",
           identity,
           code: "SINGLE_SIDED_LEDGER_INVALID",
-          expected: "exactly one posted ledger side",
-          actual: debitPosted ? "both sides posted" : "no side posted",
+          expected: "exactly one posted ledger side, or both equal",
+          actual: debitPosted ? "both sides posted and unequal" : "no side posted",
         });
       }
     } else if (expectation === "inventory-sided") {

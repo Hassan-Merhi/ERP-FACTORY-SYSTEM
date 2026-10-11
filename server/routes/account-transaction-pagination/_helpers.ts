@@ -1,6 +1,7 @@
 import type { Request, Response } from "express";
-import { getClientDate } from "../../lib/dateUtils";
+import { flagFutureDated, statementWindow } from "../helpers/statementWindow";
 import { summarizeAccountStatementCurrency } from "../../services/accounting/accountStatementCurrency";
+import type { NotInLedgerSection } from "../../services/accounting/balances/customerLedgerStatement";
 import { toMoney } from "../../lib/money";
 
 export const DEFAULT_PAGE_SIZE = 100;
@@ -11,8 +12,11 @@ export type AccountKind = "ledger" | "bank" | "fixed-asset" | "supplier" | "empl
 
 export type DateContext = {
   rawStart?: string;
-  effectiveEndDate: string;
+  /** The requested end date; undefined lists everything posted (wave 17 A, statementWindow.ts). */
+  effectiveEndDate: string | undefined;
   asOfDate: string;
+  /** The server's business date: lines dated after it are flagged `futureDated`. */
+  businessDate: string;
 };
 
 export interface Pagination {
@@ -48,15 +52,6 @@ export type CustomerCursor = {
   meta: ContinuousStatementMeta;
 };
 
-export type FactoryCustomerCursor = {
-  sortDate: string;
-  voucherNumber: string;
-  sourceRank: number;
-  sourceId: number;
-  net: number;
-  meta: ContinuousStatementMeta;
-};
-
 export type StatementSummary = {
   total?: unknown;
   debitTotal?: unknown;
@@ -83,11 +78,16 @@ export interface StatementPage {
   hasPreviousPage: boolean;
   asOfDate: string;
   startDate: string | null;
-  endDate: string;
+  /** Null when the statement lists everything posted (wave 17 A). */
+  endDate: string | null;
+  /** The server's business date; rows after it carry `futureDated: true`. */
+  businessDate: string;
   continuous?: boolean;
   chunkOpeningNet?: number;
   hasMore?: boolean;
   nextCursor?: string | null;
+  /** Customer statements: amounts not yet in the ledger, never part of the rows or totals. */
+  notInLedger?: NotInLedgerSection;
 }
 
 export function wantsContinuous(req: Request): boolean {
@@ -129,14 +129,15 @@ export function parseContinuousWindow(req: Request): ContinuousWindow | undefine
   };
 }
 
+/**
+ * One end-date rule with the balance engine (wave 17 A): an explicit endDate
+ * cuts the statement; without one it lists everything posted, like the
+ * balance, and future-dated lines are flagged. It used to stop at the
+ * client's today.
+ */
 export function dateContext(req: Request): DateContext {
-  const asOfDate = getClientDate(req);
-  const rawStart =
-    typeof req.query.startDate === "string" && ISO_DATE.test(req.query.startDate) ? req.query.startDate : undefined;
-  const rawEnd =
-    typeof req.query.endDate === "string" && ISO_DATE.test(req.query.endDate) ? req.query.endDate : undefined;
-  const effectiveEndDate = rawEnd && rawEnd < asOfDate ? rawEnd : asOfDate;
-  return { rawStart, effectiveEndDate, asOfDate };
+  const { rawStart, effectiveEndDate, asOfDate, businessDate } = statementWindow(req);
+  return { rawStart, effectiveEndDate, asOfDate, businessDate };
 }
 
 export function exposePaginationHeaders(res: Response, page: StatementPage): void {
@@ -206,7 +207,7 @@ export function buildPageResponse(
   const { total, periodDebitTotal, periodCreditTotal } = statementSummaryNumbers(summary);
   const totalPages = total === 0 ? 0 : Math.ceil(total / pagination.limit);
   return {
-    transactions: rows,
+    transactions: flagFutureDated(rows, dates.businessDate).rows,
     currencySummary: summarizeAccountStatementCurrency(rows),
     // This is the opening balance for the selected page. The frontend adds the
     // account master opening balance separately, exactly as it did before paging.
@@ -223,7 +224,8 @@ export function buildPageResponse(
     hasPreviousPage: pagination.page > 1 && totalPages > 0,
     asOfDate: dates.asOfDate,
     startDate: dates.rawStart ?? null,
-    endDate: dates.effectiveEndDate,
+    endDate: dates.effectiveEndDate ?? null,
+    businessDate: dates.businessDate,
   };
 }
 
@@ -243,7 +245,7 @@ export function buildContinuousResponse(options: {
   const totalPages = total === 0 ? 0 : Math.ceil(total / limit);
   const chunkOpeningNet = prePeriodNet + previousChunkNet;
   return {
-    transactions: rows,
+    transactions: flagFutureDated(rows, dates.businessDate).rows,
     currencySummary: summarizeAccountStatementCurrency(rows),
     preNetBalance: chunkOpeningNet,
     periodPreNetBalance: prePeriodNet,
@@ -258,7 +260,8 @@ export function buildContinuousResponse(options: {
     hasPreviousPage: hadCursor,
     asOfDate: dates.asOfDate,
     startDate: dates.rawStart ?? null,
-    endDate: dates.effectiveEndDate,
+    endDate: dates.effectiveEndDate ?? null,
+    businessDate: dates.businessDate,
     continuous: true,
     chunkOpeningNet,
     hasMore,
@@ -297,20 +300,6 @@ export function isCustomerCursor(value: unknown): value is CustomerCursor {
     typeof cursor.sortDate === "string" &&
     ISO_DATE.test(cursor.sortDate) &&
     Number.isInteger(cursor.sortId) &&
-    Number.isFinite(cursor.net) &&
-    isContinuousStatementMeta(cursor.meta)
-  );
-}
-
-export function isFactoryCustomerCursor(value: unknown): value is FactoryCustomerCursor {
-  if (!value || typeof value !== "object") return false;
-  const cursor = value as Partial<FactoryCustomerCursor>;
-  return (
-    typeof cursor.sortDate === "string" &&
-    ISO_DATE.test(cursor.sortDate) &&
-    typeof cursor.voucherNumber === "string" &&
-    Number.isInteger(cursor.sourceRank) &&
-    Number.isInteger(cursor.sourceId) &&
     Number.isFinite(cursor.net) &&
     isContinuousStatementMeta(cursor.meta)
   );

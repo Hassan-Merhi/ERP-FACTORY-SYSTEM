@@ -11,6 +11,8 @@ import { requireAuth } from "../../../auth";
 import { parseId } from "../../../lib/parseId";
 import { getClientDate } from "../../../lib/dateUtils";
 import { sql, eq, and } from "drizzle-orm";
+import type Decimal from "decimal.js";
+import { sumMoney, toMoney } from "../../../lib/money";
 import {
   customerDispatchBatches,
   customerDispatchTruckRides,
@@ -22,8 +24,10 @@ import {
 import { getCompanyId } from "./_helpers";
 import { acquireProformaCapacityTransactionLock } from "../customer-orders/proformaCapacityConcurrency";
 import { firstRow, resultRows } from "../../../lib/queryResult";
-import type Decimal from "decimal.js";
-import { sumMoney, toMoney } from "../../../lib/money";
+import {
+  FactoryInvoiceRateRefusalError,
+  syncFactoryInvoiceTx,
+} from "../../../services/accounting/perpetualInventory/factoryInvoice";
 
 type RawProformaLineRow = { article_code: string; quantity: number };
 
@@ -290,7 +294,9 @@ export function registerDispatchInvoiceRoutes(app: Express) {
         );
         const invoiceNumber = `INV-${String(invoiceNum).padStart(6, "0")}`;
 
-        // 6. Build grouped order lines by articleCode
+        // 6. Build grouped order lines by articleCode.
+        // Phase 22 (C), PE13: exact Decimal sums (were parseFloat sums, posted as
+        // the invoice total, the customer balance and the invoice journal).
         const lineMap = new Map<
           string,
           {
@@ -307,10 +313,11 @@ export function registerDispatchInvoiceRoutes(app: Express) {
           const existing = lineMap.get(key);
           const weight = toMoney(scan.weight_kg);
           const price = toMoney(scan.price_used);
+          const scanAmount = toMoney(scan.amount);
           if (existing) {
             existing.qty += 1;
             existing.totalWeight = existing.totalWeight.plus(weight);
-            existing.totalPrice = existing.totalPrice.plus(toMoney(scan.amount));
+            existing.totalPrice = existing.totalPrice.plus(scanAmount);
           } else {
             lineMap.set(key, {
               articleCode: key,
@@ -318,7 +325,7 @@ export function registerDispatchInvoiceRoutes(app: Express) {
               qty: 1,
               totalWeight: weight,
               pricePerBale: price,
-              totalPrice: toMoney(scan.amount),
+              totalPrice: scanAmount,
             });
           }
         }
@@ -349,7 +356,7 @@ export function registerDispatchInvoiceRoutes(app: Express) {
 
         // 8. Insert customerOrderLines (grouped by article)
         for (const line of lines) {
-          const avgWeight = line.totalWeight.dividedBy(line.qty);
+          const avgWeight = line.totalWeight.div(line.qty);
           await tx.execute(sql`
             INSERT INTO customer_order_lines (order_id, article_code, bale_name, qty, weight_per_bale, total_weight, price_per_bale, total_price)
             VALUES (${orderId}, ${line.articleCode}, ${line.baleName}, ${line.qty}, ${avgWeight.toFixed(3)}, ${line.totalWeight.toFixed(3)}, ${line.pricePerBale.toFixed(2)}, ${line.totalPrice.toFixed(2)})
@@ -385,6 +392,9 @@ export function registerDispatchInvoiceRoutes(app: Express) {
           INSERT INTO customer_balances (company_id, customer_id, transaction_date, transaction_type, reference_type, reference_id, debit_amount, credit_amount, balance, currency, description, created_at)
           VALUES (${companyId}, ${batch.customer_id}, ${orderDate}, 'SALE', 'INVOICE', ${orderId}, ${grandTotal.toFixed(2)}, '0', ${grandTotal.toFixed(2)}, ${batch.currency || "USD"}, ${"Invoice " + invoiceNumber}, now())
         `);
+
+        // Perpetual inventory (wave 8.4): the invoice journal follows the order.
+        await syncFactoryInvoiceTx(tx, companyId, Number(orderId));
 
         // 12. Update batch: INVOICED + finalOrderId
         await tx.execute(sql`
@@ -453,6 +463,8 @@ export function registerDispatchInvoiceRoutes(app: Express) {
 
       res.status(201).json({ ok: true, ...result });
     } catch (err: unknown) {
+      // Wave 17 B: a non-USD invoice with no confirmed factory rate on or before its date is refused.
+      if (err instanceof FactoryInvoiceRateRefusalError) return res.status(409).json(err.body);
       const msg = getErrorMessage(err) || "";
       const is400 =
         msg.includes("not found") ||

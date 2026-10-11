@@ -386,7 +386,7 @@ async function runPhase4Report(ctx: DataQueryContext): Promise<DataQueryResult> 
         WHERE v.company_id = ${companyId}
           AND v.deleted_at IS NULL
           AND v.voucher_type IN ('Receipt', 'Payment')
-          AND CAST(v.voucher_date AS text) BETWEEN ${dateFrom} AND ${dateTo}
+          AND CAST(COALESCE(v.effective_date, v.voucher_date) AS text) BETWEEN ${dateFrom} AND ${dateTo}
           ${custName ? sql`AND v.description ILIKE ${"%" + custName + "%"}` : sql``}
         ORDER BY v.voucher_date DESC
         LIMIT ${rowLimit}
@@ -441,7 +441,7 @@ async function runPhase4Report(ctx: DataQueryContext): Promise<DataQueryResult> 
         WHERE v.company_id = ${companyId}
           AND v.deleted_at IS NULL
           AND v.optional = false
-          AND CAST(v.voucher_date AS text) BETWEEN ${dateFrom} AND ${dateTo}
+          AND CAST(COALESCE(v.effective_date, v.voucher_date) AS text) BETWEEN ${dateFrom} AND ${dateTo}
         GROUP BY v.voucher_type
         ORDER BY count DESC
       `);

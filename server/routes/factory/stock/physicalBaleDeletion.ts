@@ -5,6 +5,7 @@
  * transaction; the physical bale, order links, scan reversals, canonical
  * movement and daybook must commit or fail as a single unit.
  */
+import { companyBusinessDate } from "../../../services/accounting/companyBusinessDate";
 import { and, eq, inArray, isNull, ne } from "drizzle-orm";
 
 import {
@@ -19,6 +20,8 @@ import {
   stockItems,
 } from "@shared/schema";
 import { adjustInventory } from "../../../inventoryHelper";
+import { toMoney } from "../../../lib/money";
+import { recordFactoryStockValueEventTx, valuedBalesCostTx } from "../../../services/factory/factoryStockValueEvents";
 import { createDatabaseStockMovementAdapter } from "../../../services/inventory/databaseStockMovementAdapter";
 import { postStockMovementTx } from "../../../services/inventory/stockMovementIntegrityService";
 import { writeDaybookEntry } from "../_helpers";
@@ -37,7 +40,6 @@ export interface PhysicalBaleDeletionArgs {
   actorId: string | null;
   actorName: string;
   reason: string;
-  businessDate: string;
 }
 export type DeletedPhysicalBale = typeof factoryBales.$inferSelect;
 
@@ -77,7 +79,7 @@ export async function deletePhysicalFactoryBalesTx(
   tx: PriorityScanTransaction,
   args: PhysicalBaleDeletionArgs
 ): Promise<DeletedPhysicalBale[]> {
-  const { companyId, baleIds, actorId, actorName, reason, businessDate } = args;
+  const { companyId, baleIds, actorId, actorName, reason } = args;
   if (
     !Array.isArray(baleIds) ||
     baleIds.length < 1 ||
@@ -99,6 +101,12 @@ export async function deletePhysicalFactoryBalesTx(
       404
     );
   }
+
+  // Perpetual inventory (wave 11, kept by the accounting audit merge): the cost
+  // of the valued bales removed is a write-off in the daily factory stock
+  // journal. Measured before any bale is marked deleted; recorded in this
+  // transaction, so a refused removal records nothing.
+  const writtenOffCost = await valuedBalesCostTx(tx, companyId, baleIds);
 
   // Acquire all proforma locks in ascending order BEFORE any order or bale
   // row locks, regardless of which bale the caller listed first.
@@ -225,8 +233,8 @@ export async function deletePhysicalFactoryBalesTx(
       // and imports may never have created a balance. Such a bale was never
       // counted, so deleting it has no ERP effect (recorded in the daybook).
       if (item && balance) {
-        const rawCost = Number(balance.averageRate || 0);
-        const unitCost = Number.isFinite(rawCost) ? Math.max(0, rawCost) : 0;
+        const rawCost = toMoney(balance.averageRate || 0);
+        const unitCost = rawCost.isNegative() ? "0" : rawCost.toString();
         // Post the canonical movement FIRST: a pre-existing key means this
         // physical bale was already removed from inventory once (legacy data),
         // so refuse rather than decrement the balance a second time.
@@ -237,7 +245,7 @@ export async function deletePhysicalFactoryBalesTx(
             stockItemId: item.id,
             kind: "adjustment",
             quantity: "1",
-            unitCost: String(unitCost),
+            unitCost,
             fromLocationId: locked.erpLocationId,
             occurredAt: new Date().toISOString(),
             source: {
@@ -294,6 +302,14 @@ export async function deletePhysicalFactoryBalesTx(
     removed.push(updated);
   }
 
+  await recordFactoryStockValueEventTx(tx, {
+    companyId,
+    kind: "WASTE",
+    amount: writtenOffCost.negated(),
+    sourceType: "factory-bale-removal",
+    sourceId: removed.map((bale) => bale.id).join(","),
+  });
+
   // All linked bales are now deleted. Reopen every affected auto-completed
   // loading together; old allocations on other orders are never retargeted.
   await reactivateAutoCompletedPriorityLoadingsLockedTx(tx, companyId, [...affectedOrderIds]);
@@ -311,9 +327,11 @@ export async function deletePhysicalFactoryBalesTx(
     actorName,
     reason,
   });
+  // Phase 21 (B): dated by the company's business date (its timezone), not the
+  // date the client sent, which was written unvalidated.
   await writeDaybookEntry(tx, {
     companyId,
-    txDate: businessDate,
+    txDate: await companyBusinessDate(companyId, tx),
     txType: "BALE_REMOVAL",
     description: `Removed ${removed.length} bale(s) from factory stock. Supervisor: ${actorName}. Reason: ${reason}`,
     metaJson,

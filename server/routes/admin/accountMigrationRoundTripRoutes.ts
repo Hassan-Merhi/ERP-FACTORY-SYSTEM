@@ -350,6 +350,16 @@ export function registerAccountMigrationRoundTripRoutes(app: Express) {
           const movedBackVoucherIds: number[] = [];
           const splitBackVoucherIds: number[] = [];
 
+          // The accounts return to the original company before any line is
+          // written that references them there: the ledger integrity guard
+          // checks each line against its account's company as it is written.
+          for (const savedAccount of saved.accounts) {
+            await tx
+              .update(ledgerAccounts)
+              .set({ companyId: srcCompanyId, code: savedAccount.originalCode, parentId: null })
+              .where(and(eq(ledgerAccounts.id, savedAccount.accountId), eq(ledgerAccounts.companyId, destCompanyId)));
+          }
+
           if (touchedVoucherIds.length > 0) {
             const [voucherRows, allEntries] = await Promise.all([
               tx.select().from(vouchers).where(inArray(vouchers.id, touchedVoucherIds)),
@@ -508,13 +518,6 @@ export function registerAccountMigrationRoundTripRoutes(app: Express) {
           }
 
           const temporaryControls = await detachAccountMigrationControlReferences(tx, destCompanyId, accountIds);
-
-          for (const savedAccount of saved.accounts) {
-            await tx
-              .update(ledgerAccounts)
-              .set({ companyId: srcCompanyId, code: savedAccount.originalCode, parentId: null })
-              .where(and(eq(ledgerAccounts.id, savedAccount.accountId), eq(ledgerAccounts.companyId, destCompanyId)));
-          }
 
           if (movedBackVoucherIds.length > 0) {
             await tx

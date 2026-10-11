@@ -24,7 +24,7 @@ async function voucherRows() {
     await pool.query<{ id: number; total_amount: string; currency: string }>(
       `SELECT id, total_amount, currency
        FROM vouchers
-       WHERE company_id = $1 AND voucher_number LIKE $2
+       WHERE company_id = $1 AND voucher_number LIKE $2 AND deleted_at IS NULL
        ORDER BY id`,
       [ctx.companyId, `FACTORY-OC-${containerId}-%`]
     )
@@ -194,8 +194,17 @@ describe("POST /api/factory/containers/:id/other-charges/sync", () => {
     // Replacement semantics: both old vouchers and their entries are gone,
     // leaving exactly one posting for the one remaining charge.
     for (const oldId of firstVoucherIds) {
-      expect((await pool.query(`SELECT id FROM vouchers WHERE id = $1`, [oldId])).rowCount).toBe(0);
-      expect((await pool.query(`SELECT id FROM voucher_entries WHERE voucher_id = $1`, [oldId])).rowCount).toBe(0);
+      expect((await pool.query(`SELECT id FROM vouchers WHERE id = $1 AND deleted_at IS NULL`, [oldId])).rowCount).toBe(
+        0
+      );
+      expect(
+        (
+          await pool.query(
+            `SELECT ve.id FROM voucher_entries ve JOIN vouchers v ON v.id = ve.voucher_id AND v.deleted_at IS NULL WHERE ve.voucher_id = $1`,
+            [oldId]
+          )
+        ).rowCount
+      ).toBe(0);
     }
     const replacementVouchers = await voucherRows();
     expect(replacementVouchers).toHaveLength(1);

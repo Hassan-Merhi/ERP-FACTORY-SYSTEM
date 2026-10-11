@@ -8,6 +8,7 @@ import {
   toInventoryDecimal,
 } from "../../lib/inventoryMath";
 import { db } from "../../db";
+import { companyStockValue } from "../../services/inventory/stockValuation";
 import { storage } from "../../storage";
 import { getAccessibleCompanyIds } from "../../security/companyAccessBoundary";
 import { requireAuth, requireNonPOS } from "../../auth";
@@ -75,7 +76,25 @@ export function registerStatsDataRoutes(app: Express) {
     try {
       const companyId = req.session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });
-      res.json(await getExpenseBreakdown(companyId));
+      // Optional period (wave 17 A), inclusive, YYYY-MM-DD.
+      const range: { startDate?: string; endDate?: string } = {};
+      for (const key of ["startDate", "endDate"] as const) {
+        const raw = req.query[key];
+        if (raw === undefined) continue;
+        if (typeof raw !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+          return res.status(400).json({
+            message:
+              key === "startDate"
+                ? "startDate must be a single YYYY-MM-DD value"
+                : "endDate must be a single YYYY-MM-DD value",
+          });
+        }
+        range[key] = raw;
+      }
+      if (range.startDate && range.endDate && range.startDate > range.endDate) {
+        return res.status(400).json({ message: "startDate must be on or before endDate" });
+      }
+      res.json(await getExpenseBreakdown(companyId, range));
     } catch (error: unknown) {
       res.status(500).json({ message: getErrorMessage(error) });
     }
@@ -192,14 +211,6 @@ export function registerStatsDataRoutes(app: Express) {
             AND v.deleted_at IS NULL
             AND UPPER(COALESCE(la.code, '')) = 'STOCK_ADJUSTMENT'
         ),
-        closing AS (
-          SELECT COALESCE(SUM(i.quantity::numeric * i.average_rate::numeric), 0) AS value
-          FROM inventory i
-          INNER JOIN locations l ON l.id = i.location_id
-          WHERE l.company_id = ${companyId}
-            AND l.active = true
-            AND l.deleted_at IS NULL
-        ),
         sales AS (
           SELECT
             COALESCE(SUM(si.total_sales::numeric), 0) AS total_sales,
@@ -215,11 +226,9 @@ export function registerStatsDataRoutes(app: Express) {
           offloads.value AS stock_received,
           notes.value AS note_inventory_net,
           adjustments.value AS stock_adjustment_net,
-          closing.value AS closing_stock,
           sales.total_sales,
-          sales.stored_cogs,
-          (opening.value + offloads.value + notes.value + adjustments.value - closing.value) AS reconciled_cogs
-        FROM opening, offloads, notes, adjustments, closing, sales
+          sales.stored_cogs
+        FROM opening, offloads, notes, adjustments, sales
       `);
 
       const row = result.rows[0] as Record<string, string | number | null> | undefined;
@@ -230,10 +239,16 @@ export function registerStatsDataRoutes(app: Express) {
       const stockReceived = dec(row?.stock_received);
       const noteInventoryNet = dec(row?.note_inventory_net);
       const stockAdjustmentNet = dec(row?.stock_adjustment_net);
-      const closingStock = dec(row?.closing_stock);
+      // Closing stock: the one stock valuation (stockValuation.ts, wave 11),
+      // SUM(total_value), not quantity × the rounded average rate.
+      const closingStock = dec(await companyStockValue(db, companyId));
       const totalSales = dec(row?.total_sales);
       const storedCogs = dec(row?.stored_cogs);
-      const reconciledCogs = dec(row?.reconciled_cogs);
+      const reconciledCogs = openingStock
+        .plus(stockReceived)
+        .plus(noteInventoryNet)
+        .plus(stockAdjustmentNet)
+        .minus(closingStock);
 
       res.json({
         openingStock: openingStock.toNumber(),

@@ -1,7 +1,4 @@
-import {
-  infrastructurePostingIdentity,
-  insertInfrastructureVoucherTx,
-} from "../accounting/infrastructureVoucherIdentity";
+import { randomUUID } from "node:crypto";
 /**
  * rentalPaymentPostingService.ts
  *
@@ -13,21 +10,18 @@ import {
 import { db, pool } from "../../db";
 import { getErrorMessage } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
-import {
-  propertyPayments,
-  propertyMonthlyLedger,
-  propertyContracts,
-  propertyUnits,
-  voucherEntries,
-} from "@shared/schema";
+import { isClosedPeriodError } from "../../lib/closedPeriodError";
+import { writeAuditEvent } from "../audit";
+import { propertyPayments, propertyMonthlyLedger, propertyContracts, propertyUnits } from "@shared/schema";
 import { eq, and, sql, inArray } from "drizzle-orm";
 import Decimal from "decimal.js";
 import { parseMoneyInput, sumMoney, toMoney } from "../../lib/money";
 import type { RentalModule } from "../../routes/rental/shared";
-import { normalizeVoucherEntryAmounts } from "../accounting/currencyAmounts";
+import { postErpVoucherTx, type ErpVoucherLine } from "../accounting/erpVoucherPosting";
 import { findOrCreateLedgerAccount, maybeRunAutoTransfer } from "../../routes/rental/shared";
 import { isRentalPeriodDue, getRentalBillingDay, getRentalPeriodDueDate } from "./rentalPeriodService";
 import { buildAllocationsForPayment, findEarliestOutstandingMonth } from "./rentalPaymentAllocationService";
+import { isRentalRateRequiredError, recordedRentalPaymentRate } from "./rentalPaymentRate";
 
 export { buildAllocationsForPayment, findEarliestOutstandingMonth } from "./rentalPaymentAllocationService";
 
@@ -50,6 +44,13 @@ export type RentalUnitRef = {
 /** A posting failure that carries the HTTP status the route should return. */
 type RentalPostingError = Error & { status?: number };
 
+export {
+  RENTAL_RATE_REQUIRED_CODE,
+  RENTAL_RATE_REQUIRED_MESSAGE,
+  isRentalRateRequiredError,
+  recordedRentalPaymentRate,
+} from "./rentalPaymentRate";
+
 export interface RentalPaymentGroupOptions {
   companyId: number;
   contractCompanyId: number;
@@ -67,6 +68,8 @@ export interface RentalPaymentGroupOptions {
   shopExpenseAccountName: string;
   incomeAccountName: string;
   isSharedPayment?: boolean;
+  /** Phase 19 (B): the request's actor, audited with the posting. */
+  audit?: { actor: { userId: string; username: string }; trigger: string };
 }
 
 /** Deterministic int64 advisory-lock key for a payment group ID. */
@@ -132,26 +135,45 @@ async function postGroupCore(
     groupId,
   } = opts;
 
-  /** Normalize an entry for this payment's currency and rate. */
-  function normEntry(debit: string | number, credit: string | number) {
-    const norm = normalizeVoucherEntryAmounts({
-      transactionCurrency: currency,
-      baseCurrency: "USD",
-      transactionDebitAmount: String(debit),
-      transactionCreditAmount: String(credit),
-      historicalRate: exchangeRate,
-    });
+  /**
+   * Phase 22 (B): one line in the payment's currency (native amount; a non-USD
+   * line carries its rate), posted through the central engine.
+   */
+  const foreign = String(currency || "USD").toUpperCase() !== "USD";
+  function line(
+    ledgerAccountId: number,
+    side: "debit" | "credit",
+    native: Decimal.Value,
+    text: string
+  ): ErpVoucherLine {
+    const amount = toMoney(native);
     return {
-      transactionCurrency: norm.transactionCurrency,
-      transactionDebitAmount: norm.transactionDebitAmount,
-      transactionCreditAmount: norm.transactionCreditAmount,
-      baseDebitAmount: norm.baseDebitAmount,
-      baseCreditAmount: norm.baseCreditAmount,
-      historicalExchangeRate: norm.historicalExchangeRate,
-      rateConvention: norm.rateConvention,
-      debitAmount: norm.debitAmount,
-      creditAmount: norm.creditAmount,
+      ledgerAccountId,
+      debit: side === "debit" ? amount : 0,
+      credit: side === "credit" ? amount : 0,
+      narration: text,
+      transaction: foreign ? { currency, amount, rate: exchangeRate } : null,
     };
+  }
+  async function post(input: {
+    voucherNumber: string;
+    voucherType: string;
+    description: string;
+    phase: string;
+    lines: ErpVoucherLine[];
+  }) {
+    const posted = await postErpVoucherTx(tx, {
+      companyId,
+      voucherNumber: input.voucherNumber,
+      voucherType: input.voucherType,
+      voucherDate: paymentDate,
+      description: input.description,
+      currency,
+      exchangeRate: foreign ? exchangeRate : null,
+      lines: input.lines,
+      source: { type: "rental-payment", id: `${companyId}:${groupId}`, revision: input.phase },
+    });
+    return posted.voucher;
   }
 
   if (!cashAccountId) return null;
@@ -203,27 +225,10 @@ async function postGroupCore(
       }
     }
 
+    // RENT- / ADV-REC- numbers are kept (deterministic, read by the payment
+    // deletion service to find the recognition journal).
     const voucherNum = `RENT-${paymentDate.replace(/-/g, "")}-${groupId.slice(-6)}`;
-    const { voucher: v } = await insertInfrastructureVoucherTx(
-      tx,
-      {
-        companyId,
-        voucherNumber: voucherNum,
-        voucherType: "Payment",
-        voucherDate: paymentDate,
-        description: narration,
-        totalAmount: totalAmountStr,
-        currency,
-        sourceModule: "ERP",
-      },
-      infrastructurePostingIdentity("rental-payment", String(companyId) + ":" + String(groupId), "payment"),
-      { allocs, totalAmountStr, cashAccountId, currency, exchangeRate }
-    );
-
-    const payEntries = [
-      { voucherId: v.id, ledgerAccountId: cashAccountId, ...normEntry("0", totalAmountStr), narration },
-    ];
-
+    const payLines: ErpVoucherLine[] = [line(cashAccountId, "credit", totalAmountStr, narration)];
     if (accrualAmt.gt(0.005)) {
       const accPayId = await findOrCreateLedgerAccount(
         tx,
@@ -232,60 +237,27 @@ async function postGroupCore(
         "Liability",
         "ACC-RENT-PAY"
       );
-      payEntries.push({
-        voucherId: v.id,
-        ledgerAccountId: accPayId,
-        ...normEntry(accrualAmt.toFixed(2), "0"),
-        narration,
-      });
+      payLines.push(line(accPayId, "debit", accrualAmt.toFixed(2), narration));
     }
-
     if (advanceAmt.gt(0.005)) {
       const advId = await findOrCreateLedgerAccount(tx, companyId, "Advance Rent Paid", "Asset", "ADV-RENT-PAID");
-      payEntries.push({
-        voucherId: v.id,
-        ledgerAccountId: advId,
-        ...normEntry(advanceAmt.toFixed(2), "0"),
-        narration,
-      });
+      payLines.push(line(advId, "debit", advanceAmt.toFixed(2), narration));
     }
-
     if (prepaidAmt.gt(0.005)) {
       const prepId = await findOrCreateLedgerAccount(tx, companyId, "Prepaid Rent", "Asset", "PREPAID-RENT");
-      payEntries.push({
-        voucherId: v.id,
-        ledgerAccountId: prepId,
-        ...normEntry(prepaidAmt.toFixed(2), "0"),
-        narration,
-      });
+      payLines.push(line(prepId, "debit", prepaidAmt.toFixed(2), narration));
     }
-
-    await tx.insert(voucherEntries).values(payEntries);
+    const v = await post({
+      voucherNumber: voucherNum,
+      voucherType: "Payment",
+      description: narration,
+      phase: "payment",
+      lines: payLines,
+    });
 
     let recognitionVoucherId: number | null = null;
     if (advanceAmt.gt(0.005)) {
       const recNarr = `Advance rent recognition - ${narration}`;
-      const { voucher: rv } = await insertInfrastructureVoucherTx(
-        tx,
-        {
-          companyId,
-          voucherNumber: `ADV-REC-${paymentDate.replace(/-/g, "")}-${groupId.slice(-6)}`,
-          voucherType: "Journal",
-          voucherDate: paymentDate,
-          description: recNarr,
-          totalAmount: advanceAmt.toFixed(2),
-          currency,
-          sourceModule: "ERP",
-        },
-        infrastructurePostingIdentity(
-          "rental-payment",
-          String(companyId) + ":" + String(groupId),
-          "advance-recognition"
-        ),
-        { allocs, totalAmountStr, cashAccountId, currency, exchangeRate }
-      );
-      recognitionVoucherId = rv.id;
-
       const expId = await findOrCreateLedgerAccount(
         tx,
         companyId,
@@ -294,20 +266,17 @@ async function postGroupCore(
         "SHOP-RENT-EXP"
       );
       const advId = await findOrCreateLedgerAccount(tx, companyId, "Advance Rent Paid", "Asset", "ADV-RENT-PAID");
-      await tx.insert(voucherEntries).values([
-        {
-          voucherId: rv.id,
-          ledgerAccountId: expId,
-          ...normEntry(advanceAmt.toFixed(2), "0"),
-          narration: recNarr,
-        },
-        {
-          voucherId: rv.id,
-          ledgerAccountId: advId,
-          ...normEntry("0", advanceAmt.toFixed(2)),
-          narration: recNarr,
-        },
-      ]);
+      const rv = await post({
+        voucherNumber: `ADV-REC-${paymentDate.replace(/-/g, "")}-${groupId.slice(-6)}`,
+        voucherType: "Journal",
+        description: recNarr,
+        phase: "advance-recognition",
+        lines: [
+          line(expId, "debit", advanceAmt.toFixed(2), recNarr),
+          line(advId, "credit", advanceAmt.toFixed(2), recNarr),
+        ],
+      });
+      recognitionVoucherId = rv.id;
     }
 
     if (advanceLedgerIds.length > 0) {
@@ -346,36 +315,16 @@ async function postGroupCore(
 
     if (mod === "PROPERTIES") {
       const voucherNum = `RENT-${paymentDate.replace(/-/g, "")}-${groupId.slice(-6)}`;
-      const { voucher: v } = await insertInfrastructureVoucherTx(
-        tx,
-        {
-          companyId,
-          voucherNumber: voucherNum,
-          voucherType: "Receipt",
-          voucherDate: paymentDate,
-          description: narration,
-          totalAmount: totalAmountStr,
-          currency,
-          sourceModule: "ERP",
-        },
-        infrastructurePostingIdentity("rental-payment", String(companyId) + ":" + String(groupId), "payment"),
-        { allocs, totalAmountStr, cashAccountId, currency, exchangeRate }
-      );
-
-      await tx.insert(voucherEntries).values([
-        {
-          voucherId: v.id,
-          ledgerAccountId: cashAccountId,
-          ...normEntry(totalAmountStr, "0"),
-          narration,
-        },
-        {
-          voucherId: v.id,
-          ledgerAccountId: incomeAccountId,
-          ...normEntry("0", totalAmountStr),
-          narration,
-        },
-      ]);
+      const v = await post({
+        voucherNumber: voucherNum,
+        voucherType: "Receipt",
+        description: narration,
+        phase: "payment",
+        lines: [
+          line(cashAccountId, "debit", totalAmountStr, narration),
+          line(incomeAccountId, "credit", totalAmountStr, narration),
+        ],
+      });
 
       const landlordLedgerIds = allocs.map((a) => a.ledgerRowId).filter(Boolean) as number[];
       if (landlordLedgerIds.length > 0) {
@@ -397,38 +346,8 @@ async function postGroupCore(
     const earnedChunk = toMoney(totalAmountStr).minus(deferredChunk);
 
     const voucherNum = `RENT-${paymentDate.replace(/-/g, "")}-${groupId.slice(-6)}`;
-    const { voucher: v } = await insertInfrastructureVoucherTx(
-      tx,
-      {
-        companyId,
-        voucherNumber: voucherNum,
-        voucherType: "Receipt",
-        voucherDate: paymentDate,
-        description: narration,
-        totalAmount: totalAmountStr,
-        currency,
-        sourceModule: "ERP",
-      },
-      infrastructurePostingIdentity("rental-payment", String(companyId) + ":" + String(groupId), "payment"),
-      { allocs, totalAmountStr, cashAccountId, currency, exchangeRate }
-    );
-
-    const lEntries = [
-      {
-        voucherId: v.id,
-        ledgerAccountId: cashAccountId,
-        ...normEntry(totalAmountStr, "0"),
-        narration,
-      },
-    ];
-    if (earnedChunk.gt("0.005")) {
-      lEntries.push({
-        voucherId: v.id,
-        ledgerAccountId: incomeAccountId,
-        ...normEntry("0", earnedChunk.toFixed(2)),
-        narration,
-      });
-    }
+    const lLines: ErpVoucherLine[] = [line(cashAccountId, "debit", totalAmountStr, narration)];
+    if (earnedChunk.gt("0.005")) lLines.push(line(incomeAccountId, "credit", earnedChunk.toFixed(2), narration));
     if (deferredChunk.gt("0.005")) {
       const deferredId = await findOrCreateLedgerAccount(
         tx,
@@ -437,12 +356,7 @@ async function postGroupCore(
         "Liability",
         "DEF-RENT-REV"
       );
-      lEntries.push({
-        voucherId: v.id,
-        ledgerAccountId: deferredId,
-        ...normEntry("0", deferredChunk.toFixed(2)),
-        narration,
-      });
+      lLines.push(line(deferredId, "credit", deferredChunk.toFixed(2), narration));
       const futureIds = futureAllocs.map((a) => a.ledgerRowId).filter(Boolean) as number[];
       if (futureIds.length > 0) {
         await tx
@@ -451,7 +365,13 @@ async function postGroupCore(
           .where(inArray(propertyMonthlyLedger.id, futureIds));
       }
     }
-    await tx.insert(voucherEntries).values(lEntries);
+    const v = await post({
+      voucherNumber: voucherNum,
+      voucherType: "Receipt",
+      description: narration,
+      phase: "payment",
+      lines: lLines,
+    });
 
     return v.id;
   }
@@ -484,6 +404,10 @@ export async function createRentalPaymentGroup(opts: RentalPaymentGroupOptions) 
     err.status = 400;
     throw err;
   }
+  // Phase 19 (B), PE2: the recorded dated rate, never the client's (it was
+  // defaulted to "1"); `exchangeRate` from the request is not used.
+  void exchangeRate;
+  const recordedRate = await recordedRentalPaymentRate(companyId, currency || "USD", paymentDate);
 
   const billingDay = getRentalBillingDay(contract.startDate as string);
   // A non-numeric amount allocates nothing (the caller refuses an empty allocation).
@@ -501,7 +425,7 @@ export async function createRentalPaymentGroup(opts: RentalPaymentGroupOptions) 
     paymentDate
   );
 
-  const paymentGroupId = `PG-${Date.now()}-${Math.random().toString(36).slice(2, 7)}-${contract.id}`;
+  const paymentGroupId = `PG-${Date.now()}-${randomUUID().replace(/-/g, "").slice(0, 10)}-${contract.id}`;
 
   const scheduledRows = await db.transaction(async (tx) => {
     for (const alloc of allocations) {
@@ -553,7 +477,7 @@ export async function createRentalPaymentGroup(opts: RentalPaymentGroupOptions) 
           forYear: alloc.year,
           forMonth: alloc.month,
           currency: currency || "USD",
-          exchangeRate: exchangeRate || "1",
+          exchangeRate: recordedRate,
           notes: allocations.length > 1 ? `${notes ? notes + " | " : ""}Split from ${amount} payment` : (notes ?? null),
           postingStatus: "SCHEDULED",
           paymentGroupId,
@@ -576,11 +500,12 @@ export async function createRentalPaymentGroup(opts: RentalPaymentGroupOptions) 
       clientDate,
       cashAccountId,
       currency,
-      exchangeRate || "1",
+      recordedRate,
       notes,
       shopExpenseAccountName,
       incomeAccountName,
-      isSharedPayment ?? false
+      isSharedPayment ?? false,
+      opts.audit
     );
 
     const posted = await db
@@ -596,6 +521,25 @@ export async function createRentalPaymentGroup(opts: RentalPaymentGroupOptions) 
   return { paymentGroupId, scheduled: true, payments: scheduledRows };
 }
 
+/** Who posts due scheduled payments, and the company's closed-books date (wave 18 A). */
+export interface DueScheduledPaymentOptions {
+  /** Groups dated on or before this date are skipped (PERIOD_CLOSED), never forced. */
+  closedThrough?: string | null;
+  actor?: { userId: string; username: string };
+  trigger?: "scheduler" | "manual" | "route";
+}
+
+export interface DueScheduledPaymentResult {
+  posted: number;
+  skipped: Array<{
+    paymentGroupId: string;
+    paymentDate: string;
+    reason: "PERIOD_CLOSED";
+    closedThrough: string | null;
+  }>;
+  failed: number;
+}
+
 export async function postDueScheduledRentalPayments(
   companyId: number,
   module: RentalModule,
@@ -603,6 +547,31 @@ export async function postDueScheduledRentalPayments(
   shopExpenseAccountName: string = "Rent Expense - Shops",
   incomeAccountName: string = "Rental Income"
 ): Promise<number> {
+  const result = await postDueScheduledRentalPaymentsDetailed(
+    companyId,
+    module,
+    asOfDate,
+    shopExpenseAccountName,
+    incomeAccountName,
+    { trigger: "route" }
+  );
+  return result.posted;
+}
+
+/**
+ * Posts every SCHEDULED payment group of the company/module dated on or before
+ * asOfDate. A group dated in a closed period is skipped and reported; a
+ * closed-period rejection from the database guard is reported the same way.
+ * Each posted group has an audit row in its posting transaction.
+ */
+export async function postDueScheduledRentalPaymentsDetailed(
+  companyId: number,
+  module: RentalModule,
+  asOfDate: string,
+  shopExpenseAccountName: string,
+  incomeAccountName: string,
+  options: DueScheduledPaymentOptions
+): Promise<DueScheduledPaymentResult> {
   const { rows } = await pool.query<{
     payment_group_id: string;
     payment_date: string;
@@ -610,9 +579,11 @@ export async function postDueScheduledRentalPayments(
     currency: string;
     exchange_rate: string | null;
   }>(
-    `SELECT DISTINCT payment_group_id, payment_date, cash_account_id,
+    // payment_date as text: node-postgres returns a DATE as a JS Date, which the
+    // posting code (voucher numbers, closed-period check) cannot use (wave 18 A).
+    `SELECT DISTINCT payment_group_id, payment_date::text AS payment_date, cash_account_id,
             COALESCE(currency, 'USD') AS currency,
-            COALESCE(exchange_rate::text, '1') AS exchange_rate
+            exchange_rate::text AS exchange_rate
      FROM property_payments
      WHERE company_id = $1
        AND module = $2
@@ -624,7 +595,15 @@ export async function postDueScheduledRentalPayments(
   );
 
   let posted = 0;
+  let failed = 0;
+  const skipped: DueScheduledPaymentResult["skipped"] = [];
+  const closedThrough = options.closedThrough ?? null;
   for (const row of rows) {
+    const paymentDate = String(row.payment_date).slice(0, 10);
+    if (closedThrough !== null && paymentDate <= closedThrough) {
+      skipped.push({ paymentGroupId: row.payment_group_id, paymentDate, reason: "PERIOD_CLOSED", closedThrough });
+      continue;
+    }
     try {
       const groupRows = await db
         .select()
@@ -653,21 +632,39 @@ export async function postDueScheduledRentalPayments(
         asOfDate,
         row.cash_account_id,
         row.currency,
-        String(firstRow?.exchangeRate || row.exchange_rate || "1"),
+        // Phase 19 (B), PE2: the recorded rate on or before the payment date
+        // (the stored row rate was the client's, defaulted to "1").
+        await recordedRentalPaymentRate(companyId, row.currency, paymentDate),
         firstRow.notes as string | null,
         shopExpenseAccountName,
         incomeAccountName,
-        isShared
+        isShared,
+        { actor: options.actor ?? SCHEDULED_PAYMENT_ACTOR, trigger: options.trigger ?? "route" }
       );
       if (didPost) posted++;
     } catch (err: unknown) {
+      if (isClosedPeriodError(err)) {
+        skipped.push({ paymentGroupId: row.payment_group_id, paymentDate, reason: "PERIOD_CLOSED", closedThrough });
+        continue;
+      }
+      if (isRentalRateRequiredError(err)) {
+        failed++;
+        logger.warn(`[rentalPostingService] Group ${row.payment_group_id} not posted: no recorded rate`, {
+          currency: err.currency,
+          paymentDate,
+        });
+        continue;
+      }
+      failed++;
       logger.error(`[rentalPostingService] Failed to post group ${row.payment_group_id}:`, {
         error: getErrorMessage(err).split("\n")[0],
       });
     }
   }
-  return posted;
+  return { posted, skipped, failed };
 }
+
+const SCHEDULED_PAYMENT_ACTOR = { userId: "system", username: "rental-scheduled-payments" } as const;
 
 async function postScheduledGroup(
   companyId: number,
@@ -684,7 +681,8 @@ async function postScheduledGroup(
   notes: string | null,
   shopExpenseAccountName: string,
   incomeAccountName: string,
-  isSharedPayment: boolean
+  isSharedPayment: boolean,
+  audit?: { actor: { userId: string; username: string }; trigger: string }
 ): Promise<boolean> {
   const lockKey = hashGroupId(groupId);
   let groupRows: (typeof propertyPayments.$inferSelect)[] = [];
@@ -715,7 +713,8 @@ async function postScheduledGroup(
         : `${String(allocs[0].forMonth).padStart(2, "0")}/${allocs[0].forYear}`;
     const narration = `Rent paid - ${unitLabel} - ${monthSpan}`;
 
-    const groupExchangeRate = String(groupRows[0]?.exchangeRate || exchangeRate || "1");
+    // Phase 19 (B), PE2: the caller resolved the recorded dated rate.
+    const groupExchangeRate = exchangeRate;
 
     const voucherId = await postGroupCore(tx, {
       companyId,
@@ -753,8 +752,33 @@ async function postScheduledGroup(
         postingStatus: "POSTED",
         postedAt: new Date(),
         voucherId: voucherId ?? null,
+        exchangeRate: groupExchangeRate,
       })
       .where(inArray(propertyPayments.id, rowIds));
+
+    if (audit) {
+      await writeAuditEvent(
+        {
+          userId: audit.actor.userId,
+          username: audit.actor.username,
+          companyId,
+          action: "update",
+          tableName: "property_payments",
+          recordId: voucherId ?? null,
+          recordIdentifier: `rental-scheduled-payment:${groupId}`,
+          changes: {
+            payments: {
+              old: groupRows.map((r) => ({ id: r.id, postingStatus: "SCHEDULED", voucherId: r.voucherId ?? null })),
+              new: groupRows.map((r) => ({ id: r.id, postingStatus: "POSTED", voucherId: voucherId ?? null })),
+            },
+            paymentDate: { new: paymentDate },
+            totalAmount: { new: totalAmountStr },
+            trigger: { new: audit.trigger },
+          },
+        },
+        tx
+      );
+    }
   });
 
   if (groupRows.length === 0) return false;

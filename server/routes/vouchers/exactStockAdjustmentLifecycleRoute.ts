@@ -2,7 +2,7 @@ import type { Express, NextFunction, Request, Response } from "express";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 
-import { stockAdjustmentVouchers, vouchers } from "@shared/schema";
+import { stockAdjustmentItems, stockAdjustmentVouchers, vouchers } from "@shared/schema";
 import { requireAuth, requireNonPOS, requireRole } from "../../auth";
 import { db } from "../../db";
 import { getErrorMessage, errorStatus } from "../../lib/httpHandlers";
@@ -88,6 +88,10 @@ export function registerExactStockAdjustmentLifecycleRoutes(app: Express): void 
             ? body.adjustmentType
             : adjustment.adjustmentType;
         const parsed = editSchema.parse({ ...body, adjustmentType: requestedAdjustmentType });
+        const oldItems = await db
+          .select()
+          .from(stockAdjustmentItems)
+          .where(eq(stockAdjustmentItems.adjustmentId, adjustment.id));
         const updated = await storage.updateStockAdjustment(
           adjustment.id,
           parsed.locationId,
@@ -101,6 +105,26 @@ export function registerExactStockAdjustmentLifecycleRoutes(app: Express): void 
           {
             voucherDate: parsed.voucherDate,
             description: parsed.description,
+          },
+          // Phase 21 (B): the edit was unaudited; its audit row (header and
+          // lines before/after) now commits with it.
+          async (tx, written) => {
+            await logAudit(
+              {
+                userId: req.session.userId!,
+                username: req.session.username || "unknown",
+                companyId,
+                action: "update",
+                tableName: "vouchers",
+                recordId: voucherId,
+                recordIdentifier: voucher.voucherNumber,
+                changes: {
+                  voucher: { old: voucher, new: written.voucher },
+                  items: { old: oldItems, new: written.items },
+                },
+              },
+              tx
+            );
           }
         );
 
@@ -140,25 +164,24 @@ export function registerExactStockAdjustmentLifecycleRoutes(app: Express): void 
       if (!adjustment && candidate.deletedAt && !isAdjustmentVoucherType(candidate.voucherType)) return next();
 
       try {
-        const result = await deleteStockAdjustmentVoucher({ companyId, voucherId });
-
-        if (!result.replayed) {
-          try {
-            const snapshot = await snapshotVoucherEntries(result.entries);
-            await logAudit({
+        // Phase 21 (B): the delete audit is written on the deletion's transaction.
+        const result = await deleteStockAdjustmentVoucher({ companyId, voucherId }, async (tx, deleted) => {
+          if (deleted.replayed) return;
+          const snapshot = await snapshotVoucherEntries(deleted.entries, tx);
+          await logAudit(
+            {
               userId: req.session.userId!,
               username: req.session.username || "unknown",
               companyId,
               action: "delete",
               tableName: "vouchers",
               recordId: voucherId,
-              recordIdentifier: result.voucher.voucherNumber,
-              changes: buildVoucherChangesForDelete(result.voucher, snapshot),
-            });
-          } catch {
-            // Audit is non-fatal, matching the other central voucher lifecycles.
-          }
-        }
+              recordIdentifier: deleted.voucher.voucherNumber,
+              changes: buildVoucherChangesForDelete(deleted.voucher, snapshot),
+            },
+            tx
+          );
+        });
 
         return res.json({
           message: "Voucher deleted successfully",
