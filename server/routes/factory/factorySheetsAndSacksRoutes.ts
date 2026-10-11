@@ -2,6 +2,7 @@ import type { Express, Request, Response } from "express";
 import { getErrorMessage, sendHttpError } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
 import { pool } from "../../db";
+import { MoneyDecimal, lineAmount, toMoney, type MoneyInput } from "../../lib/money";
 import { requireAuth } from "../../auth";
 
 function getFactoryCompanyId(req: import("express").Request): number | undefined {
@@ -36,7 +37,7 @@ const LOG_COLS = `
   notes, created_at AS "createdAt"
 `;
 
-async function insertLog(
+export async function insertLog(
   client: import("pg").PoolClient,
   companyId: number,
   itemId: number,
@@ -45,15 +46,17 @@ async function insertLog(
   action: "IN" | "OUT" | "ADJUST",
   pieces: number,
   packs: number | null,
-  unitPrice: number,
+  unitPrice: MoneyInput,
   notes: string | null
 ) {
-  const totalValue = pieces * unitPrice;
+  // Exact decimal strings: the column rounds once, not a float product that may sit below a half cent.
+  const price = toMoney(unitPrice);
+  const totalValue = lineAmount(pieces, price).toFixed();
   await client.query(
     `INSERT INTO factory_sheets_sacks_log
        (company_id, item_id, item_name, item_type, action, pieces, packs, unit_price, total_value, notes)
      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
-    [companyId, itemId, itemName, itemType, action, pieces, packs, unitPrice, totalValue, notes]
+    [companyId, itemId, itemName, itemType, action, pieces, packs, price.toFixed(), totalValue, notes]
   );
 }
 
@@ -168,7 +171,7 @@ export function registerFactorySheetsAndSacksRoutes(app: Express) {
             "IN",
             pcs,
             packQty != null ? parseInt(packQty) : null,
-            parseFloat(unitPrice) || 0,
+            unitPrice,
             "Initial stock"
           );
         }
@@ -289,10 +292,10 @@ export function registerFactorySheetsAndSacksRoutes(app: Express) {
           return res.status(404).json({ message: "Item not found" });
         }
 
-        const currentQty = parseFloat(existing[0].quantity || "0");
+        const currentQty = toMoney(existing[0].quantity);
         const currentPackQty = existing[0].pack_qty != null ? parseInt(existing[0].pack_qty) : null;
-        const unitPrice = parseFloat(existing[0].unit_price || "0");
-        const newQty = currentQty + pieces;
+        const unitPrice = toMoney(existing[0].unit_price);
+        const newQty = currentQty.plus(pieces).toFixed();
         const newPackQty = packs != null && currentPackQty != null ? currentPackQty + packs : currentPackQty;
 
         const { rows } = await client.query(
@@ -354,10 +357,10 @@ export function registerFactorySheetsAndSacksRoutes(app: Express) {
           return res.status(404).json({ message: "Item not found" });
         }
 
-        const currentQty = parseFloat(existing[0].quantity || "0");
+        const currentQty = toMoney(existing[0].quantity);
         const currentPackQty = existing[0].pack_qty != null ? parseInt(existing[0].pack_qty) : null;
-        const unitPrice = parseFloat(existing[0].unit_price || "0");
-        const newQty = Math.max(0, currentQty - pieces);
+        const unitPrice = toMoney(existing[0].unit_price);
+        const newQty = MoneyDecimal.max(0, currentQty.minus(pieces)).toFixed();
         const newPackQty =
           packs != null && currentPackQty != null ? Math.max(0, currentPackQty - packs) : currentPackQty;
 
