@@ -18,7 +18,7 @@ import {
   requireCompletedMigrationAction,
   ensureTargetStockItems,
 } from "./_helpers";
-import { toMoney } from "../../lib/money";
+import { parseMoneyInput, toMoney } from "../../lib/money";
 
 /** Account-mapping columns read from ledger_accounts during an SP migration run. */
 type SpLedgerAccountRow = { id: number; account_type: string; sub_type: string | null };
@@ -564,20 +564,21 @@ export function registerSpMigrationSalesRoutes(app: Express) {
           notes: profitNotes,
         } = req.body ?? {};
         const targetId = parseInt(String(targetCompanyId ?? ""), 10);
-        const profit = toMoney(accumulatedProfit).toNumber();
+        // Request values: parsed like parseFloat, and NaN (rejected below) when missing or malformed.
+        const profit = parseMoneyInput(accumulatedProfit)?.toNumber() ?? NaN;
         const ourPct =
           ourSplitPct !== undefined && ourSplitPct !== null && ourSplitPct !== ""
-            ? toMoney(ourSplitPct).toNumber()
+            ? (parseMoneyInput(ourSplitPct)?.toNumber() ?? NaN)
             : 50;
 
         // Manual split amounts take priority over the percentage when both are provided.
         const manualOurShare =
           ourShareAmountRaw !== undefined && ourShareAmountRaw !== null && ourShareAmountRaw !== ""
-            ? toMoney(ourShareAmountRaw).toNumber()
+            ? (parseMoneyInput(ourShareAmountRaw)?.toNumber() ?? NaN)
             : null;
         const manualSupplierShare =
           supplierShareAmountRaw !== undefined && supplierShareAmountRaw !== null && supplierShareAmountRaw !== ""
-            ? toMoney(supplierShareAmountRaw).toNumber()
+            ? (parseMoneyInput(supplierShareAmountRaw)?.toNumber() ?? NaN)
             : null;
         const usingManualSplit = manualOurShare !== null && manualSupplierShare !== null;
 
