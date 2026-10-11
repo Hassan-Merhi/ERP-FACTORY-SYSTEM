@@ -7,6 +7,7 @@ import { getErrorMessage } from "../../lib/httpHandlers";
 import { getAccessibleCompanyIds } from "../../security/companyAccessBoundary";
 import { summarizeAccountStatementCurrency } from "../../services/accounting/accountStatementCurrency";
 import { authorizeCompanyIdParam, isParentCompanyContext } from "../helpers/supplierBalanceHelpers";
+import { plusMoney, toMoney } from "../../lib/money";
 
 /**
  * A row on a supplier statement: either a real voucher entry, or one of the
@@ -115,7 +116,7 @@ export function registerHistoricalSupplierReferenceRoutes(app: Express) {
 
             const sourceEntries = entriesByVoucher.get(po.voucherId) ?? [];
             const referenceAmount = sourceEntries.reduce(
-              (sum, entry) => sum + parseFloat(entry.creditAmount || "0") - parseFloat(entry.debitAmount || "0"),
+              (sum, entry) => plusMoney(sum, toMoney(entry.creditAmount).minus(toMoney(entry.debitAmount))),
               0
             );
             if (referenceAmount <= 0) continue;
@@ -187,7 +188,7 @@ export function registerHistoricalSupplierReferenceRoutes(app: Express) {
              AND COALESCE(v.effective_date::date, v.voucher_date::date) < $2::date`,
           [supplierId, rawStart, filterCompanyId]
         );
-        preNetBalance = parseFloat(bfResult.rows[0]?.net ?? "0");
+        preNetBalance = toMoney(bfResult.rows[0]?.net).toNumber();
       }
 
       return res.json(

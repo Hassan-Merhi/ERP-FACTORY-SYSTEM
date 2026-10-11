@@ -11,6 +11,7 @@ import { db } from "../../../db";
 import { requireAuth } from "../../../auth";
 import { inventory, stockItems, vouchers, salesItems, locations } from "@shared/schema";
 import { eq, and, sql } from "drizzle-orm";
+import { toMoney } from "../../../lib/money";
 
 export function registerSalesInventoryFixRoutes(app: Express) {
   // Fix inventory for Sales vouchers that were edited with location changes
@@ -42,8 +43,8 @@ export function registerSalesInventoryFixRoutes(app: Express) {
         const items = await db.select().from(salesItems).where(eq(salesItems.voucherId, voucher.id));
 
         for (const item of items) {
-          const quantity = parseFloat(item.quantity);
-          const _costPrice = parseFloat(item.costPrice);
+          const quantity = toMoney(item.quantity).toNumber();
+          const _costPrice = toMoney(item.costPrice).toNumber();
 
           // Check if inventory at this location has this deduction
           const [inv] = await db
@@ -57,7 +58,7 @@ export function registerSalesInventoryFixRoutes(app: Express) {
             locationId: voucher.locationId,
             stockItemId: item.stockItemId,
             saleQuantity: quantity,
-            currentInventory: inv ? parseFloat(inv.quantity) : null,
+            currentInventory: inv ? toMoney(inv.quantity).toNumber() : null,
           });
         }
       }

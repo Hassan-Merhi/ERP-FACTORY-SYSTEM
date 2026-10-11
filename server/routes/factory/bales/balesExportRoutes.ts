@@ -13,6 +13,7 @@ import { requireAuth } from "../../../auth";
 import { getUserHideAllCosts } from "../_helpers";
 import { factoryBales, locations, factorySettings } from "@shared/schema";
 import { eq, and, sql, inArray, not } from "drizzle-orm";
+import { plusMoney, toMoney } from "../../../lib/money";
 
 export function registerBalesExportRoutes(app: Express) {
   // ───────────────────────────────────────────────
@@ -90,11 +91,11 @@ export function registerBalesExportRoutes(app: Express) {
           articleCode: bale.articleCode ?? "",
           productName: bale.productName ?? "",
           category: bale.category ?? "",
-          weightKg: parseFloat(bale.weightKg || "0"),
+          weightKg: toMoney(bale.weightKg).toNumber(),
         };
         if (showCostBale) {
-          baleRowData.costPerKg = parseFloat(bale.costPerKg || "0");
-          baleRowData.totalCost = parseFloat(bale.totalCost || "0");
+          baleRowData.costPerKg = toMoney(bale.costPerKg).toNumber();
+          baleRowData.totalCost = toMoney(bale.totalCost).toNumber();
         }
         baleRowData.locationCode = loc ? `${loc.code} - ${loc.name}` : "";
         baleRowData.locationId = bale.erpLocationId ?? "";
@@ -193,7 +194,7 @@ export function registerBalesExportRoutes(app: Express) {
           category: bale.category ?? "",
           baleCode: bale.baleCode ?? "",
           grade: bale.grade ?? "",
-          weightKg: parseFloat(bale.weightKg || "0"),
+          weightKg: toMoney(bale.weightKg).toNumber(),
           status: bale.status ?? "",
           stockEntryDate: bale.stockEntryDate ? new Date(bale.stockEntryDate).toLocaleDateString() : "",
           createdAt: bale.createdAt ? new Date(bale.createdAt).toLocaleString() : "",
@@ -236,7 +237,7 @@ export function registerBalesExportRoutes(app: Express) {
         const s = b.status ?? "UNKNOWN";
         const g = statusGroups.get(s) ?? { count: 0, weight: 0 };
         g.count++;
-        g.weight += parseFloat(b.weightKg || "0");
+        g.weight = plusMoney(g.weight, b.weightKg);
         statusGroups.set(s, g);
       }
       for (const [status, g] of statusGroups) {
@@ -250,7 +251,7 @@ export function registerBalesExportRoutes(app: Express) {
       const totalRow = summarySheet.addRow({
         status: "TOTAL",
         count: bales.length,
-        weight: bales.reduce((s, b) => s + parseFloat(b.weightKg || "0"), 0),
+        weight: bales.reduce((s, b) => plusMoney(s, b.weightKg), 0),
       });
       totalRow.eachCell((cell) => {
         cell.font = { bold: true };

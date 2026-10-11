@@ -9,6 +9,7 @@ import { getErrorMessage } from "../../../lib/httpHandlers";
 import { storage } from "../../../storage";
 import { requireAuth } from "../../../auth";
 import { logAudit } from "../../_helpers";
+import { parseMoneyInput } from "../../../lib/money";
 
 export function registerStockItemEditRoutes(app: Express) {
   // Update stock transfer item
@@ -25,13 +26,13 @@ export function registerStockItemEditRoutes(app: Express) {
 
       // Validate numeric fields if provided
       if (req.body.quantity !== undefined) {
-        const qty = parseFloat(req.body.quantity);
+        const qty = parseMoneyInput(req.body.quantity)?.toNumber() ?? NaN;
         if (isNaN(qty)) {
           return res.status(400).json({ message: "Quantity must be a valid number" });
         }
       }
       if (req.body.rate !== undefined) {
-        const rate = parseFloat(req.body.rate);
+        const rate = parseMoneyInput(req.body.rate)?.toNumber() ?? NaN;
         if (isNaN(rate) || rate < 0) {
           return res.status(400).json({ message: "Rate must be a valid non-negative number" });
         }
@@ -82,13 +83,13 @@ export function registerStockItemEditRoutes(app: Express) {
 
       // Validate numeric fields if provided
       if (req.body.quantity !== undefined) {
-        const qty = parseFloat(req.body.quantity);
+        const qty = parseMoneyInput(req.body.quantity)?.toNumber() ?? NaN;
         if (isNaN(qty)) {
           return res.status(400).json({ message: "Quantity must be a valid number" });
         }
       }
       if (req.body.rate !== undefined) {
-        const rate = parseFloat(req.body.rate);
+        const rate = parseMoneyInput(req.body.rate)?.toNumber() ?? NaN;
         if (isNaN(rate) || rate < 0) {
           return res.status(400).json({ message: "Rate must be a valid non-negative number" });
         }

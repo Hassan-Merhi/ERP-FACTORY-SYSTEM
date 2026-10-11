@@ -1,4 +1,5 @@
 import { searchAny } from "@shared/searchNormalization";
+import { parseMoneyInput, plusMoney, toMoney } from "../../lib/money";
 export interface VoucherListQuery {
   startDate?: string;
   endDate?: string;
@@ -19,10 +20,7 @@ export type ParsedVoucherListQuery = Omit<VoucherListQuery, "page" | "pageSize">
   paginated: boolean;
 };
 
-type VoucherFilterQuery = Pick<
-  VoucherListQuery,
-  "type" | "search" | "status" | "minAmount" | "maxAmount" | "sort"
->;
+type VoucherFilterQuery = Pick<VoucherListQuery, "type" | "search" | "status" | "minAmount" | "maxAmount" | "sort">;
 
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -32,9 +30,9 @@ function isStrictDate(value: string): boolean {
   return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
 }
 
-export function parseVoucherListQuery(raw: Record<string, unknown>):
-  | { ok: true; query: ParsedVoucherListQuery }
-  | { ok: false; message: string } {
+export function parseVoucherListQuery(
+  raw: Record<string, unknown>
+): { ok: true; query: ParsedVoucherListQuery } | { ok: false; message: string } {
   const startDate = raw.startDate == null ? undefined : String(raw.startDate);
   const endDate = raw.endDate == null ? undefined : String(raw.endDate);
   if (startDate && !isStrictDate(startDate)) return { ok: false, message: "Invalid startDate" };
@@ -68,15 +66,15 @@ export function parseVoucherListQuery(raw: Record<string, unknown>):
 
 export function filterAndSortVouchers<T extends Record<string, unknown>>(rows: T[], query: VoucherFilterQuery): T[] {
   const search = query.search?.trim() ?? "";
-  const minimum = query.minAmount ? Number.parseFloat(query.minAmount) : null;
-  const maximum = query.maxAmount ? Number.parseFloat(query.maxAmount) : null;
+  const minimum = query.minAmount ? (parseMoneyInput(query.minAmount)?.toNumber() ?? NaN) : null;
+  const maximum = query.maxAmount ? (parseMoneyInput(query.maxAmount)?.toNumber() ?? NaN) : null;
 
   return rows
     .filter((row) => {
       if (query.type && query.type !== "all" && row.voucherType !== query.type) return false;
       if (query.status === "active" && row.optional) return false;
       if (query.status === "optional" && !row.optional) return false;
-      const total = Number.parseFloat(String(row.totalAmount ?? "0")) || 0;
+      const total = toMoney(String(row.totalAmount ?? "")).toNumber();
       if (minimum !== null && Number.isFinite(minimum) && total < minimum) return false;
       if (maximum !== null && Number.isFinite(maximum) && total > maximum) return false;
       if (search && !searchAny(search, row.voucherNumber, row.description, row.locationName)) return false;
@@ -123,7 +121,7 @@ export function buildVoucherPage<T extends Record<string, unknown>>(rows: T[], p
       total,
       active: rows.filter((row) => !row.optional).length,
       optional: rows.filter((row) => row.optional).length,
-      totalAmount: rows.reduce((sum, row) => sum + (Number.parseFloat(String(row.totalAmount ?? "0")) || 0), 0),
+      totalAmount: rows.reduce((sum, row) => plusMoney(sum, String(row.totalAmount ?? "")), 0),
     },
   };
 }

@@ -16,6 +16,7 @@ import { customerOrders, customerBalances, customers, voucherEntries, companies,
 import { eq, and, sql, inArray } from "drizzle-orm";
 import path from "path";
 import fs from "fs";
+import { toMoney } from "../../../lib/money";
 
 type StatementVoucherRow = {
   transactionDate: string;
@@ -123,7 +124,7 @@ export function registerFactoryCustomerStatementExcelRoutes(app: Express) {
         }
       }
 
-      const openingBalance = parseFloat(customer.openingBalance || "0");
+      const openingBalance = toMoney(customer.openingBalance).toNumber();
       const openingSide = customer.openingBalanceSide || "Dr";
       let _runningBalance = openingSide === "Dr" ? openingBalance : -openingBalance;
 
@@ -134,8 +135,8 @@ export function registerFactoryCustomerStatementExcelRoutes(app: Express) {
 
       // First pass: enrich ALL rows with running balance (needed before filtering)
       const allEnrichedXlsx = allRowsXlsx.map((row) => {
-        const debit = parseFloat(row.debitAmount || "0");
-        const credit = parseFloat(row.creditAmount || "0");
+        const debit = toMoney(row.debitAmount).toNumber();
+        const credit = toMoney(row.creditAmount).toNumber();
         _runningBalance += debit - credit;
         const destination =
           row.referenceType === "INVOICE" && row.referenceId ? destinationMapXlsx.get(row.referenceId) || "" : "";

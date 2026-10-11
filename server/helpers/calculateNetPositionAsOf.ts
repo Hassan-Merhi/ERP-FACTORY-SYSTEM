@@ -17,6 +17,7 @@ import { toFiniteNumber, toPositiveInteger } from "@shared/typeGuards";
 import { companyScopedSuppliers } from "@shared/schema/supplierCompanyScope";
 import { computeEmployeeWorkerNetPosition } from "./employeeNetPosition";
 import { loadSalaryAdvanceNetPositionAdjustments } from "./salaryAdvanceNetPosition";
+import { plusMoney, toMoney } from "../lib/money";
 
 /**
  * The two grouped balance projections read below.
@@ -297,8 +298,8 @@ export async function calculateNetPositionAsOf(
     );
     for (const items of allHistorical) {
       for (const inv of items) {
-        const qty = parseFloat(inv.quantity || "0");
-        const rate = parseFloat(inv.averageRate || "0");
+        const qty = toMoney(inv.quantity).toNumber();
+        const rate = toMoney(inv.averageRate).toNumber();
         // Signed valuation must match the live inventory table. Negative stock
         // is a real position and must reduce Stock In Hand rather than disappear.
         if (qty !== 0) stockFloorTotal += qty * rate;
@@ -332,11 +333,7 @@ export async function calculateNetPositionAsOf(
   // must not erase an accounting position. Keep ERP Employees and Workers
   // separated exactly like the live dashboard.
   const managedSalaryAdvances = await loadSalaryAdvanceNetPositionAdjustments(companyId, toDate);
-  const payrollPosition = computeEmployeeWorkerNetPosition(
-    companyEmployees,
-    employeeBalances,
-    managedSalaryAdvances
-  );
+  const payrollPosition = computeEmployeeWorkerNetPosition(companyEmployees, employeeBalances, managedSalaryAdvances);
   const employeePosition = payrollPosition.employees;
   const payrollWorkerIds = new Set(
     companyEmployees.filter((employee) => employee.employeeType === "Worker").map((employee) => employee.id)
@@ -392,7 +389,7 @@ export async function calculateNetPositionAsOf(
     let supplierTotal = 0;
     for (const sup of allSuppliers) {
       const balance = supplierBalances.get(sup.id) || { debit: 0, credit: 0 };
-      const opening = parseFloat(sup.openingBalance || "0");
+      const opening = toMoney(sup.openingBalance).toNumber();
       const netBalance = opening + balance.credit - balance.debit;
       if (netBalance > 0) {
         onUsTotal += netBalance;
@@ -430,7 +427,7 @@ export async function calculateNetPositionAsOf(
 
     let otwTotal = 0;
     for (const c of otwContainers) {
-      otwTotal += parseFloat(c.grandTotal || c.itemsTotal || "0");
+      otwTotal = plusMoney(otwTotal, c.grandTotal || c.itemsTotal);
     }
     otwTotal = round2(otwTotal);
     if (otwTotal !== 0) {

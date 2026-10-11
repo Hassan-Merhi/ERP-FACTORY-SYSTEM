@@ -6,6 +6,7 @@ import { requireAuth } from "../../auth";
 import { resolveRequestCompanyId } from "../../services/security/requestCompanyScope";
 import { statusReportTemplates, statusMetrics, statusReportRuns, statusMetricValues } from "@shared/schema";
 import { eq, and, asc } from "drizzle-orm";
+import { toMoney } from "../../lib/money";
 
 // ─── Source data stubs ────────────────────────────────────────────────────────
 // Returns deterministic mock values per (sourceType, date).
@@ -331,8 +332,8 @@ export function registerFactoryStatusBuilderRoutes(app: Express) {
 
       for (const metric of metrics) {
         const existing = byMetricId.get(metric.id);
-        const manualAdj = parseFloat(existing?.manualAdjustment ?? "0") || 0;
-        const beforeVal = parseFloat(existing?.beforeValue ?? "0") || 0;
+        const manualAdj = toMoney(existing?.manualAdjustment).toNumber();
+        const beforeVal = toMoney(existing?.beforeValue).toNumber();
 
         const { value: linked, warnings } = await fetchLinkedValue(
           run.companyId,
@@ -421,7 +422,7 @@ export function registerFactoryStatusBuilderRoutes(app: Express) {
           .where(and(eq(statusMetricValues.runId, runId), eq(statusMetricValues.metricId, entry.metricId)))
           .limit(1);
 
-        const linkedVal = parseFloat(existing?.linkedValue ?? "0") || 0;
+        const linkedVal = toMoney(existing?.linkedValue).toNumber();
         const beforeVal = entry.beforeValue ?? 0;
         const manualAdj = entry.manualAdjustment ?? 0;
         const difference = linkedVal + manualAdj;

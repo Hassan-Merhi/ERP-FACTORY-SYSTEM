@@ -18,6 +18,7 @@ import {
 } from "@shared/schema";
 import { eq, and, desc, asc } from "drizzle-orm";
 import { sendRevisedTransferWhatsApp } from "../../helpers/sendRevisedTransferWhatsApp";
+import { toMoney } from "../../lib/money";
 
 export function registerStockTransferRevisionWriteRoutes(app: Express) {
   // Transfer Revisions - POST (create or update existing optional revision)
@@ -176,9 +177,9 @@ export function registerStockTransferRevisionWriteRoutes(app: Express) {
             const waItems = items.map((i) => ({
               stockItemId: Number(i.stockItemId),
               stockItemName: i.stockItemName ?? null,
-              originalQuantity: parseFloat(i.originalQuantity) || 0,
-              delta: parseFloat(i.delta) || 0,
-              newQuantity: parseFloat(i.newQuantity) || 0,
+              originalQuantity: toMoney(i.originalQuantity).toNumber(),
+              delta: toMoney(i.delta).toNumber(),
+              newQuantity: toMoney(i.newQuantity).toNumber(),
             }));
             if (waItems.length === 0) return;
 

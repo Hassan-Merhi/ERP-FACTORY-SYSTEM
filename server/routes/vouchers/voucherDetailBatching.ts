@@ -2,6 +2,7 @@ import { and, eq, inArray } from "drizzle-orm";
 import { db } from "../../db";
 import { storage } from "../../storage";
 import * as schema from "@shared/schema";
+import { toMoney } from "../../lib/money";
 
 const uniqueIds = (values: Array<number | null | undefined>) => [
   ...new Set(values.map((value) => Number(value)).filter((value) => Number.isFinite(value) && value > 0)),
@@ -71,9 +72,9 @@ async function loadSalesData(voucherId: number, locationId: number | null | unde
       item.configuredPrice && item.configuredPrice !== "0"
         ? item.configuredPrice
         : (priceMap.get(item.stockItemId) ?? "0");
-    const quantity = Number.parseFloat(item.quantity || "0") || 0;
-    const configuredPriceNumber = Number.parseFloat(configuredPrice || "0") || 0;
-    const actualPrice = Number.parseFloat(item.sellingPrice || "0") || 0;
+    const quantity = toMoney(item.quantity).toNumber();
+    const configuredPriceNumber = toMoney(configuredPrice).toNumber();
+    const actualPrice = toMoney(item.sellingPrice).toNumber();
     const hassansProfit = (actualPrice - configuredPriceNumber) * quantity;
     const hassansTotal = configuredPriceNumber * quantity;
     const hassansPercentage = hassansTotal > 0 ? (hassansProfit / hassansTotal) * 100 : 0;

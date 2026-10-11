@@ -19,6 +19,7 @@ import {
 import { getClientDate } from "../../lib/dateUtils";
 import { resultRows } from "../../lib/queryResult";
 import { requireSpCompany, getSpAccount, parseNum } from "./spHelpers";
+import { plusMoney, toMoney } from "../../lib/money";
 
 // ── Containers + Prepaid Charges ─────────────────────────────────────────────
 
@@ -245,9 +246,7 @@ export function registerSpContainerRoutes(app: Express) {
         }
 
         const totalUsd = parseNum(invoiceTotalUsd ?? lockedExisting.invoiceTotalUsd);
-        const supplierIdNum = supplierId
-          ? parseInt(String(supplierId))
-          : (lockedExisting.supplierId ?? null);
+        const supplierIdNum = supplierId ? parseInt(String(supplierId)) : (lockedExisting.supplierId ?? null);
         const newSupplierName = supplierName ?? lockedExisting.supplierName;
         const newInvoiceNumber = invoiceNumber ?? lockedExisting.invoiceNumber;
         const newInvoiceDate = invoiceDate ?? lockedExisting.invoiceDate;
@@ -445,13 +444,13 @@ export function registerSpContainerRoutes(app: Express) {
         });
       }
 
-      const discountFactor = 1 - parseFloat(container.discountPct || "0") / 100;
-      const totalQty = lines.reduce((s, l) => s + parseFloat(l.qty || "0"), 0);
+      const discountFactor = 1 - toMoney(container.discountPct).toNumber() / 100;
+      const totalQty = lines.reduce((s, l) => plusMoney(s, l.qty), 0);
 
       const enriched = lines.map((l) => {
         const alias = aliasMap.get(l.articleCode);
-        const qty = parseFloat(l.qty || "0");
-        const unitRate = parseFloat(l.unitRateUsd || "0");
+        const qty = toMoney(l.qty).toNumber();
+        const unitRate = toMoney(l.unitRateUsd).toNumber();
         const discountedBaseRate = unitRate * discountFactor;
         return {
           id: l.id,

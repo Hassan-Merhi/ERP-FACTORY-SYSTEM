@@ -12,6 +12,7 @@ import { db } from "../../../db";
 import { requireAuth } from "../../../auth";
 import { factoryMixBatches, factoryMixBatchSources, factoryDailyUsages } from "@shared/schema";
 import { eq, and, desc, sql } from "drizzle-orm";
+import { toMoney } from "../../../lib/money";
 
 export function registerFactoryMixBatchConsumeRoutes(app: Express) {
   app.post("/api/factory/mix-batches/consume", requireAuth, async (req: Request, res: Response) => {
@@ -52,8 +53,8 @@ export function registerFactoryMixBatchConsumeRoutes(app: Express) {
             .for("update");
           if (!batch) throw new Error(`Batch ${batchId} not found`);
 
-          const total = parseFloat(batch.totalWeightKg) || 0;
-          const alreadyUsed = parseFloat(batch.usedKg) || 0;
+          const total = toMoney(batch.totalWeightKg).toNumber();
+          const alreadyUsed = toMoney(batch.usedKg).toNumber();
           const remaining = total - alreadyUsed;
 
           if (kgUsed > remaining + 0.001) {
@@ -82,7 +83,7 @@ export function registerFactoryMixBatchConsumeRoutes(app: Express) {
             results.push({ batchId, action: "closed", carryForwardId: null });
           } else {
             const leftoverKg = remaining - kgUsed;
-            const costPerKg = parseFloat(batch.costPerKg) || 0;
+            const costPerKg = toMoney(batch.costPerKg).toNumber();
             const leftoverCost = leftoverKg * costPerKg;
 
             await tx

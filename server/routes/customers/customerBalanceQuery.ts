@@ -3,6 +3,7 @@ import { voucherEntries, vouchers } from "@shared/schema";
 
 import { db } from "../../db";
 import { storage } from "../../storage";
+import { toMoney } from "../../lib/money";
 
 type BalanceAggregate = {
   key: number | null;
@@ -19,8 +20,8 @@ function toBalanceMap(rows: BalanceAggregate[]): {
 
   for (const row of rows) {
     if (!row.key) continue;
-    net.set(row.key, Number.parseFloat(row.netAmount || "0"));
-    base.set(row.key, Number.parseFloat(row.baseNetAmount || "0"));
+    net.set(row.key, toMoney(row.netAmount).toNumber());
+    base.set(row.key, toMoney(row.baseNetAmount).toNumber());
   }
 
   return { net, base };
@@ -104,7 +105,7 @@ export async function getCustomersWithBalances(companyId: number) {
   const customerBalances = toBalanceMap(customerRows as BalanceAggregate[]);
 
   return customers.map((customer) => {
-    const openingBalance = Number.parseFloat(customer.openingBalance || "0");
+    const openingBalance = toMoney(customer.openingBalance).toNumber();
     const openingNet = (customer.openingBalanceSide || "Dr") === "Dr" ? openingBalance : -openingBalance;
     const transactionNet = customer.ledgerAccountId
       ? (ledgerBalances.net.get(customer.ledgerAccountId) ?? 0)

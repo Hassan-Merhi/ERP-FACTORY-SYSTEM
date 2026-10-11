@@ -13,6 +13,7 @@ import { requireAuth } from "../../../auth";
 import { writeDaybookEntry, getOrFetchFxRateToUsd } from "../_helpers";
 import { factorySuppliers, factoryContainers } from "@shared/schema";
 import { eq } from "drizzle-orm";
+import { parseMoneyInput, toMoney } from "../../../lib/money";
 
 export function registerFactoryContainerImportRoutes(app: Express) {
   // ───────────────────────────────────────────────
@@ -63,14 +64,14 @@ export function registerFactoryContainerImportRoutes(app: Express) {
             continue;
           }
 
-          const ratePerKg = parseFloat(row.ratePerKg || "0") || 0;
-          const totalKg = parseFloat(row.totalKg || "0") || 0;
+          const ratePerKg = toMoney(row.ratePerKg).toNumber();
+          const totalKg = toMoney(row.totalKg).toNumber();
 
-          if (row.totalKg && isNaN(parseFloat(row.totalKg))) {
+          if (row.totalKg && parseMoneyInput(row.totalKg) === null) {
             errors.push(`Row ${rowNum} (${row.containerNumber}): Invalid Total Kg value`);
             continue;
           }
-          if (row.ratePerKg && isNaN(parseFloat(row.ratePerKg))) {
+          if (row.ratePerKg && parseMoneyInput(row.ratePerKg) === null) {
             errors.push(`Row ${rowNum} (${row.containerNumber}): Invalid Rate/Kg value`);
             continue;
           }
@@ -81,7 +82,7 @@ export function registerFactoryContainerImportRoutes(app: Express) {
 
           let fxRate: number;
           if (fxSource === "manual" && row.fxRateToUsd) {
-            const parsedManualRate = parseFloat(row.fxRateToUsd);
+            const parsedManualRate = toMoney(row.fxRateToUsd).toNumber();
             if (currencyCode !== "USD" && !(parsedManualRate > 0)) {
               errors.push(`Row ${rowNum} (${row.containerNumber}): Invalid manual fxRateToUsd for ${currencyCode}`);
               continue;
@@ -92,7 +93,7 @@ export function registerFactoryContainerImportRoutes(app: Express) {
             continue;
           } else {
             try {
-              fxRate = parseFloat(await getOrFetchFxRateToUsd(companyId, currencyCode, importDate));
+              fxRate = toMoney(await getOrFetchFxRateToUsd(companyId, currencyCode, importDate)).toNumber();
             } catch (fxErr: unknown) {
               errors.push(`Row ${rowNum} (${row.containerNumber}): ${getErrorMessage(fxErr)}`);
               continue;
@@ -121,7 +122,7 @@ export function registerFactoryContainerImportRoutes(app: Express) {
 
             const ratePerKgUsd = currencyCode === "USD" ? ratePerKg : ratePerKg * fxRate;
 
-            const commAmt = row.commissionAmount ? String(parseFloat(row.commissionAmount) || 0) : "0";
+            const commAmt = row.commissionAmount ? String(toMoney(row.commissionAmount).toNumber()) : "0";
             const commCcy = (row.commissionCurrencyCode || "USD").toUpperCase();
 
             const [container] = await tx

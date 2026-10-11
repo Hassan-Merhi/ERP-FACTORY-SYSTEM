@@ -703,7 +703,7 @@ export const phase3RemainingTranslationsPart01: readonly Phase3SharedUiEntry[] =
     fr: "{{0}}les balles ajoutées à l'inventaire.",
   },
   {
-    en: "${transferKind}: ${fromSupplier.name} ${created.fromCurrencyCode} ${parseFloat(created.fromAmount).toFixed(2)} → ${toSupplier.name} USD ${parseFloat(created.toAmountUsd).toFixed(2)}",
+    en: "${transferKind}: ${fromSupplier.name} ${created.fromCurrencyCode} ${toMoney(created.fromAmount).toFixed(2)} → ${toSupplier.name} USD ${toMoney(created.toAmountUsd).toFixed(2)}",
     ar: "{{0}}: {{1}} {{2}} {{3}} → {{4}}USD{{5}}",
     fr: "{{0}}: {{1}} {{2}} {{3}} → {{4}}USD{{5}}",
   },

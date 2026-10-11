@@ -10,7 +10,7 @@ import path from "path";
 import fs from "fs";
 import { factoryDaybookEntries } from "@shared/schema";
 import type { DatabaseOrTransaction } from "../../db";
-import { daybookAmountUsd } from "../../lib/money";
+import { daybookAmountUsd, toMoney } from "../../lib/money";
 
 /**
  * Daybook writing plus the PDF and Excel generators for the supplier-usage
@@ -494,7 +494,7 @@ export async function generateExcel(
         ms.containerId,
         container ? container.containerNumber : `C-${ms.containerId}`,
         supplier ? supplier.name : "Unknown",
-        parseFloat(ms.weightKg || "0"),
+        toMoney(ms.weightKg).toNumber(),
       ]);
       row.getCell(5).numFmt = numberFmt;
     } else {
@@ -503,9 +503,9 @@ export async function generateExcel(
         ms.containerId,
         container ? container.containerNumber : `C-${ms.containerId}`,
         supplier ? supplier.name : "Unknown",
-        parseFloat(ms.weightKg || "0"),
-        parseFloat(ms.costPerKg || "0"),
-        parseFloat(ms.totalCost || "0"),
+        toMoney(ms.weightKg).toNumber(),
+        toMoney(ms.costPerKg).toNumber(),
+        toMoney(ms.totalCost).toNumber(),
       ]);
       row.getCell(5).numFmt = numberFmt;
       row.getCell(6).numFmt = moneyFmt;

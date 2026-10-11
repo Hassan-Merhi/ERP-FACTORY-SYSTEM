@@ -16,6 +16,7 @@ import {
   privilegedRequestBudget,
 } from "../../middleware/privilegedEndpointSecurity";
 import { stockItemCodeAliases } from "@shared/schema";
+import { parseMoneyInput, toMoney } from "../../lib/money";
 
 const locationImportBudget = privilegedRequestBudget({
   maxBodyBytes: 1024 * 1024,
@@ -215,9 +216,9 @@ export function registerLocationImportRoutes(app: Express) {
               } // end else (no name match → create new)
             }
 
-            const quantity = parseFloat(item.quantity || "0");
-            const rate = parseFloat(item.rate || "0");
-            const value = parseFloat(item.value || (quantity * rate).toString());
+            const quantity = toMoney(item.quantity).toNumber();
+            const rate = toMoney(item.rate).toNumber();
+            const value = parseMoneyInput(item.value || (quantity * rate).toString())?.toNumber() ?? NaN;
 
             // Check if inventory already exists for this item at this location
             const existingInventory = await storage.getLocationInventory(req.session.currentCompanyId!, locationId);
@@ -225,8 +226,8 @@ export function registerLocationImportRoutes(app: Express) {
 
             if (existing) {
               // Update existing inventory - add to existing quantities
-              const newQuantity = parseFloat(existing.quantity) + quantity;
-              const newTotalValue = parseFloat(existing.totalValue) + value;
+              const newQuantity = toMoney(existing.quantity).plus(quantity).toNumber();
+              const newTotalValue = toMoney(existing.totalValue).plus(value).toNumber();
               const newAverageRate = newQuantity > 0 ? newTotalValue / newQuantity : 0;
 
               await storage.updateInventory(

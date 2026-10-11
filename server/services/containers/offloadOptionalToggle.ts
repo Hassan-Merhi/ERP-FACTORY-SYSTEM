@@ -46,6 +46,7 @@ import { resultRows } from "../../lib/queryResult";
 import { adjustInventory, reverseInventoryByExactValue } from "../../inventoryHelper";
 import { createDatabaseStockMovementAdapter } from "../inventory/databaseStockMovementAdapter";
 import { postStockMovementTx } from "../inventory/stockMovementIntegrityService";
+import { toMoney } from "../../lib/money";
 
 /** The transaction handle drizzle passes to a `db.transaction` callback. */
 export type OffloadOptionalToggleTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
@@ -218,9 +219,9 @@ export async function applyOffloadOptionalToggleTx(
   const occurredAt = new Date().toISOString();
 
   for (const item of offloadItems) {
-    const qty = parseFloat(item.quantity);
-    const value = parseFloat(item.totalValue);
-    const rate = parseFloat(item.rate);
+    const qty = toMoney(item.quantity).toNumber();
+    const value = toMoney(item.totalValue).toNumber();
+    const rate = toMoney(item.rate).toNumber();
 
     if (targetOptional) {
       // Suspending: remove the stock that was added at offload.

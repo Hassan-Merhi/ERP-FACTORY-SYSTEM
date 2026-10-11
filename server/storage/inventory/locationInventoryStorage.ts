@@ -6,6 +6,7 @@ import * as schema from "@shared/schema";
 import { createDatabaseStockMovementAdapter } from "../../services/inventory/databaseStockMovementAdapter";
 import { postStockMovementTx } from "../../services/inventory/stockMovementIntegrityService";
 import { recordInventoryValuationOverride } from "../../services/inventory/recordInventoryValuationOverride";
+import { toMoney } from "../../lib/money";
 
 const canonicalStockMovementAdapter = createDatabaseStockMovementAdapter();
 
@@ -251,8 +252,8 @@ export async function updateInventory(
       .from(schema.inventory)
       .where(and(eq(schema.inventory.locationId, locationId), eq(schema.inventory.stockItemId, stockItemId)))
       .limit(1);
-    const previousQuantity = existing ? Number.parseFloat(existing.quantity || "0") : 0;
-    const nextQuantity = Number.parseFloat(quantity || "0");
+    const previousQuantity = existing ? toMoney(existing.quantity).toNumber() : 0;
+    const nextQuantity = toMoney(quantity).toNumber();
     const delta = nextQuantity - previousQuantity;
 
     await tx
@@ -309,7 +310,7 @@ export async function getTotalInventoryValue(companyId: number): Promise<number>
     .select({ total: sql<string>`COALESCE(SUM(CAST(${schema.inventory.totalValue} AS numeric)), 0)` })
     .from(schema.inventory)
     .where(eq(schema.inventory.companyId, companyId));
-  return result ? parseFloat(result.total) : 0;
+  return result ? toMoney(result.total).toNumber() : 0;
 }
 
 export async function getLowStockItems(companyId: number, threshold: number = 10) {

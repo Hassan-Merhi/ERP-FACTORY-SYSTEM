@@ -22,6 +22,7 @@ import { eq, and, sql, isNull, not } from "drizzle-orm";
 import { _wrDateOnly } from "./_helpers";
 import path from "path";
 import fs from "fs";
+import { plusMoney, toMoney } from "../../../lib/money";
 
 export function registerFactoryWeeklyReportExportRoutes(app: Express) {
   // ───────────────────────────────────────────────
@@ -111,7 +112,9 @@ export function registerFactoryWeeklyReportExportRoutes(app: Express) {
       for (const r of rawStockRows) {
         const ck = getCatKey(r.categoryId as number | null);
         const catName = getCatName(r.categoryId as number | null);
-        const remaining = (parseFloat(r.receivedKg as string) || 0) - (parseFloat(r.usedKg as string) || 0);
+        const remaining = toMoney(r.receivedKg as string)
+          .minus(toMoney(r.usedKg as string))
+          .toNumber();
         if (catBalMap.has(ck)) {
           catBalMap.get(ck)!.currentBalance += remaining;
         } else {
@@ -120,7 +123,7 @@ export function registerFactoryWeeklyReportExportRoutes(app: Express) {
         const dateStr = (r.offloadedAt as Date).toISOString().slice(0, 10);
         if (!stockInByDate.has(dateStr)) stockInByDate.set(dateStr, new Map());
         const dm = stockInByDate.get(dateStr)!;
-        dm.set(ck, (dm.get(ck) || 0) + (parseFloat(r.receivedKg as string) || 0));
+        dm.set(ck, plusMoney(dm.get(ck) || 0, r.receivedKg as string));
       }
 
       // 2b. Manual stock adjustments (ADD/REMOVE) — these live in factoryRawMaterialAdjustments,
@@ -144,7 +147,7 @@ export function registerFactoryWeeklyReportExportRoutes(app: Express) {
       for (const adj of manualAdjRows) {
         const ck = getCatKey(adj.catId as number | null);
         const catName = getCatName(adj.catId as number | null);
-        const kg = parseFloat(adj.kg as string) || 0;
+        const kg = toMoney(adj.kg as string).toNumber();
         if (kg <= 0) continue;
         const isAdd = adj.type === "ADD";
 
@@ -173,7 +176,7 @@ export function registerFactoryWeeklyReportExportRoutes(app: Express) {
       // This is the ground-truth for how much raw material was consumed from each container.
       const containerUsedKgMap = new Map<number, number>();
       for (const r of rawStockRows) {
-        containerUsedKgMap.set(r.containerId as number, parseFloat(r.usedKg as string) || 0);
+        containerUsedKgMap.set(r.containerId as number, toMoney(r.usedKg as string).toNumber());
       }
 
       // 3. Fetch mix batch sources (container-type only) with their batch dates.
@@ -205,7 +208,7 @@ export function registerFactoryWeeklyReportExportRoutes(app: Express) {
       const sourceSumByContainer = new Map<number, number>();
       for (const r of consumptionRows) {
         const cid = r.containerId as number;
-        sourceSumByContainer.set(cid, (sourceSumByContainer.get(cid) || 0) + (parseFloat(r.weightKg as string) || 0));
+        sourceSumByContainer.set(cid, plusMoney(sourceSumByContainer.get(cid) || 0, r.weightKg as string));
       }
 
       // 5. Consumption map: date → categoryKey → kgConsumed
@@ -213,7 +216,7 @@ export function registerFactoryWeeklyReportExportRoutes(app: Express) {
       //    is filled in step 5b so the total per container exactly equals factoryRawStock.usedKg.
       const consumptionByDate = new Map<string, Map<CatKey, number>>();
       for (const r of consumptionRows) {
-        const rawWeight = parseFloat(r.weightKg as string) || 0;
+        const rawWeight = toMoney(r.weightKg as string).toNumber();
         if (rawWeight <= 0) continue;
 
         let dateStr: string;
@@ -237,7 +240,7 @@ export function registerFactoryWeeklyReportExportRoutes(app: Express) {
       //     offloadedAt date so the opening-balance formula always collapses to exactly zero.
       for (const r of rawStockRows) {
         const cid = r.containerId as number;
-        const actualUsed = parseFloat(r.usedKg as string) || 0;
+        const actualUsed = toMoney(r.usedKg as string).toNumber();
         if (actualUsed <= 0) continue;
         const sourceTotal = sourceSumByContainer.get(cid) || 0;
         const gap = actualUsed - sourceTotal;

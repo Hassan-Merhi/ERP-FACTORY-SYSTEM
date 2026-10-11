@@ -47,6 +47,7 @@ import {
   resolveAuthorizedCompanyId,
   sendCompanyAccessError,
 } from "../../security/companyAccessBoundary";
+import { toMoney } from "../../lib/money";
 
 /**
  * After saving a journal voucher, if it has a customer entry + a ledger account entry,
@@ -171,8 +172,8 @@ export function registerVoucherQueryRoutes(app: Express) {
           voucherId: entry.voucherId,
           description: entry.narration || entry.voucherDescription || "",
           voucherType: entry.voucherType,
-          debit: parseFloat(entry.debitAmount || "0"),
-          credit: parseFloat(entry.creditAmount || "0"),
+          debit: toMoney(entry.debitAmount).toNumber(),
+          credit: toMoney(entry.creditAmount).toNumber(),
         });
       }
 
@@ -185,7 +186,7 @@ export function registerVoucherQueryRoutes(app: Express) {
 
       // Get supplier opening balance
       const supplier = await storage.getSupplierById(supplierId);
-      const globalOpeningBalance = parseFloat(supplier?.openingBalance || "0");
+      const globalOpeningBalance = toMoney(supplier?.openingBalance).toNumber();
 
       // Opening balance is a historical property belonging to the explicitly
       // configured parent company — never guessed via "lowest company ID".
@@ -335,9 +336,7 @@ export function registerVoucherQueryRoutes(app: Express) {
 
       let filtered = results;
       if (search) {
-        filtered = filtered.filter((r) =>
-          searchAny(search, r.voucherNumber, r.description, r.locationName)
-        );
+        filtered = filtered.filter((r) => searchAny(search, r.voucherNumber, r.description, r.locationName));
       }
 
       res.json(filtered);
@@ -394,7 +393,7 @@ export function registerVoucherQueryRoutes(app: Express) {
       // returns accountName, so we just find the debit entry and use its accountName.
       let customerName: string | null = null;
       if (voucher.isCreditSale) {
-        const debitEntry = entries.find((e) => parseFloat(e.debitAmount || "0") > 0);
+        const debitEntry = entries.find((e) => toMoney(e.debitAmount).toNumber() > 0);
         if (debitEntry?.accountName && debitEntry.accountName !== "Unknown Account") {
           customerName = debitEntry.accountName;
         }
