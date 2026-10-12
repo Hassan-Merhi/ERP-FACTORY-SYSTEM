@@ -348,12 +348,14 @@ export function classifyNetPositionAccounts(
       // a separate liability entry (which is confusing and typically indicates a timing
       // difference rather than a true liability).
       const isPrepaid = (acc.name || "").toLowerCase().includes("prepaid");
+      // An inventory credit balance is a contra-asset, not money owed.
+      const isInventoryContraAsset = category.trim().toLowerCase() === "inventory";
 
       if (netBalance > 0) {
         forUsTotal += netBalance;
         categoryTotals[`asset_${category}`] = (categoryTotals[`asset_${category}`] || 0) + netBalance;
         forUsAccounts.push({ id: acc.id, name: acc.name, code: acc.code || "", value: round2(netBalance), category });
-      } else if (isPrepaid) {
+      } else if (isPrepaid || isInventoryContraAsset) {
         // Credit-balance prepaid: add as a negative entry on the asset side so it
         // reduces the prepaid total without appearing on the liability side.
         forUsTotal += netBalance; // netBalance is negative, so this reduces forUsTotal
