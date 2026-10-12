@@ -382,7 +382,16 @@ export async function loadNetPositionParties(
         partyId: null,
       });
     }
-    const workers = round2(workersDr.toNumber());
+    // ERP Payroll's Advances tab is the authoritative current outstanding balance:
+    // only unpaid salary advances contribute their remaining balance. Do not use the
+    // worker subledger here, which can include unrelated worker transactions.
+    const workers = options.employees === "erp" && !asOf
+      ? round2(Number((await db.execute(sql`
+          SELECT COALESCE(SUM(remaining_balance::numeric), 0) AS outstanding
+          FROM salary_advances
+          WHERE company_id = ${companyId} AND fully_paid = false
+        `)).rows[0]?.outstanding ?? 0))
+      : round2(workersDr.toNumber());
     if (workers > 0) {
       forUs.push({
         name: "Worker Advances (Prepaid)",
