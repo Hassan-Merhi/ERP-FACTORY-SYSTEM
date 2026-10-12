@@ -12,6 +12,15 @@ import {fmt} from "../utils";
 export function SupplierRow({ acc, accentClass, index }: { acc: AccountItem; accentClass: string; index: number }) {
   const [open, setOpen] = useState(false);
   const hasBreakdown = acc.breakdown && acc.breakdown.length > 0;
+  const name = acc.name.toLowerCase();
+  const code = acc.code?.toUpperCase() ?? "";
+  const href =
+    code === "STOCK_OTW" || name.includes("stock otw") ? "/factory/stock-otw" :
+    code === "INVENTORY" || name.includes("stock in hand") ? "/factory/location-inventory" :
+    code === "PREPAID_RENT" || name.includes("prepaid rent") ? "/factory/rental/payments" :
+    name.includes("worker advance") ? "/factory/payroll-hub?section=workers&tab=advances" :
+    code === "SUPPLIER" || acc.category?.toLowerCase().includes("supplier") ? "/factory/parties?section=suppliers" :
+    acc.id ? `/factory/ledger-monthly/${acc.id}` : undefined;
 
   return (
     <div className="divide-y divide-border" data-testid={`row-account-${index}`}>
@@ -28,15 +37,15 @@ export function SupplierRow({ acc, accentClass, index }: { acc: AccountItem; acc
                 {open ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
               </button>
             )}
-            {acc.id ? (
-              <button
-                type="button"
-                onClick={() => window.open(`/factory/ledger-monthly/${acc.id}`, "_blank")}
+            {href ? (
+              <a
+                href={href}
                 className="font-medium text-foreground hover:underline text-left flex items-center gap-1 min-w-0"
+                data-testid={`link-net-position-${acc.code || acc.id || index}`}
               >
                 <span className="truncate">{acc.name}</span>
                 <ExternalLink className="h-3 w-3 text-muted-foreground shrink-0" />
-              </button>
+              </a>
             ) : (
               <p className="font-medium truncate">{acc.name}</p>
             )}
