@@ -173,7 +173,7 @@ export function registerFactoryAnalyticsRoutes(app: Express) {
         pageSize = "50",
       } = req.query as Record<string, string>;
 
-      if (!["LOADING", "VERIFIED", "FINALIZED", "all"].includes(status)) {
+      if (!["LOADING", "VERIFIED", "FINALIZED", "VERIFIED_FINALIZED", "all"].includes(status)) {
         return res.status(400).json({ message: "Invalid status filter" });
       }
       if (!["true", "false"].includes(includeCharges)) {
@@ -192,7 +192,11 @@ export function registerFactoryAnalyticsRoutes(app: Express) {
       const orderFilters = [
         sql`co.company_id = ${companyId}`,
         sql`co.deleted_at IS NULL`,
-        status === "all" ? sql`co.status IN ('LOADING', 'VERIFIED', 'FINALIZED')` : sql`co.status = ${status}`,
+        status === "all"
+          ? sql`co.status IN ('LOADING', 'VERIFIED', 'FINALIZED')`
+          : status === "VERIFIED_FINALIZED"
+            ? sql`co.status IN ('VERIFIED', 'FINALIZED')`
+            : sql`co.status = ${status}`,
       ];
       if (startDate) orderFilters.push(sql`co.order_date >= ${startDate}`);
       if (endDate) orderFilters.push(sql`co.order_date <= ${endDate}`);

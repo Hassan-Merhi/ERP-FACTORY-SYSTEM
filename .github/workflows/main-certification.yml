@@ -16,7 +16,7 @@ concurrency:
 jobs:
   certify:
     name: Application Certification
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     # The full sequential suite is the long pole: twelve backend shards plain,
     # then twelve under coverage, then the frontend passes and the remaining
     # gates. 120 left no margin once the shard budget stopped aborting the run
@@ -311,7 +311,7 @@ jobs:
     name: Publish authoritative certification status
     needs: certify
     if: always()
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 5
     steps:
       - name: Publish authoritative certification status
