@@ -340,14 +340,71 @@ export default function NetProfitDetails() {
     if (fromDate && value < fromDate) setFromDate(value);
   };
   const clearDates = () => { setFromDate(""); setToDate(""); };
-  const queryParam = toDate ? `?toDate=${toDate}` : "";
-
+  // A date range shows the CHANGE in balances over the selected period:
+  // closing snapshot at To minus opening snapshot immediately before From.
+  // A single To date remains an as-of balance sheet.
+  const previousDay = (iso: string) => {
+    const date = new Date(`${iso}T12:00:00Z`);
+    date.setUTCDate(date.getUTCDate() - 1);
+    return date.toISOString().slice(0, 10);
+  };
+  const differenceRows = (closing: AccountItem[], opening: AccountItem[]): AccountItem[] => {
+    const key = (a: AccountItem) => `${a.id ?? ""}|${a.code}|${a.name}|${a.category}`;
+    const old = new Map(opening.map((a) => [key(a), a.value]));
+    const seen = new Set<string>();
+    const rows = closing.map((a) => {
+      const k = key(a);
+      seen.add(k);
+      return { ...a, value: Math.round((a.value - (old.get(k) ?? 0)) * 100) / 100 };
+    });
+    for (const a of opening) if (!seen.has(key(a))) {
+      rows.push({ ...a, value: -a.value });
+    }
+    return rows.filter((a) => Math.abs(a.value) >= 0.005);
+  };
+  const differenceSection = (
+    closing: NetProfitData["forUs"], opening: NetProfitData["forUs"],
+  ) => ({
+    total: Math.round((closing.total - opening.total) * 100) / 100,
+    breakdown: closing.breakdown.map((b) => ({
+      ...b, value: Math.round((b.value - (opening.breakdown.find((old) => old.name === b.name)?.value ?? 0)) * 100) / 100,
+    })),
+    accounts: differenceRows(closing.accounts, opening.accounts),
+  });
+  const periodEnd = toDate || (fromDate ? todayStr() : "");
   const { data, isLoading, error, refetch } = useQuery<NetProfitData>({
-    queryKey: ["/api/stats/net-profit", toDate],
+    queryKey: ["/api/stats/net-profit", selectedCompany?.id, fromDate, periodEnd],
     queryFn: async () => {
-      const res = await apiRequest("GET", `/api/stats/net-profit${queryParam}`);
-      if (!res.ok) throw new Error(await res.text());
-      return res.json();
+      const fetchSnapshot = async (date: string) => {
+        const query = date ? `?toDate=${encodeURIComponent(date)}` : "";
+        const response = await apiRequest("GET", `/api/stats/net-profit${query}`);
+        if (!response.ok) throw new Error(await response.text());
+        return response.json() as Promise<NetProfitData>;
+      };
+      const closing = await fetchSnapshot(periodEnd);
+      if (!fromDate) return closing;
+      const opening = await fetchSnapshot(previousDay(fromDate));
+      const diff = (a: number, b: number) => Math.round((a - b) * 100) / 100;
+      return {
+        ...closing,
+        forUs: differenceSection(closing.forUs, opening.forUs),
+        onUs: differenceSection(closing.onUs, opening.onUs),
+        equity: closing.equity && opening.equity
+          ? differenceSection(closing.equity, opening.equity)
+          : closing.equity,
+        income: differenceSection(closing.income, opening.income),
+        expenses: differenceSection(closing.expenses, opening.expenses),
+        forUsTotal: diff(closing.forUsTotal, opening.forUsTotal),
+        onUsTotal: diff(closing.onUsTotal, opening.onUsTotal),
+        netPosition: diff(closing.netPosition, opening.netPosition),
+        totalIncome: diff(closing.totalIncome, opening.totalIncome),
+        totalExpenses: diff(closing.totalExpenses, opening.totalExpenses),
+        incomeTotal: diff(closing.incomeTotal, opening.incomeTotal),
+        expensesTotal: diff(closing.expensesTotal, opening.expensesTotal),
+        netProfit: diff(closing.netProfit, opening.netProfit),
+        spPosProfit: diff(closing.spPosProfit ?? 0, opening.spPosProfit ?? 0),
+        netPositionLabel: "Net Position Change (selected period)",
+      };
     },
   });
 
@@ -430,11 +487,11 @@ export default function NetProfitDetails() {
         meta={
           <span>
             {fromDate && toDate
-              ? `${fromDate} — ${toDate} (balances as of ${toDate})`
+              ? `${fromDate} — ${toDate} (change during period)`
               : toDate
                 ? `Balances as of ${toDate}`
                 : fromDate
-                  ? `From ${fromDate} — present`
+                  ? `From ${fromDate} — today (change during period)`
                   : "Current balances — all time"}
           </span>
         }
