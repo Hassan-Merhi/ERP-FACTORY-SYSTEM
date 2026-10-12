@@ -348,13 +348,21 @@ export async function loadNetPositionParties(
           payrollDr = payrollDr.plus(value);
         }
       } else {
-        payrollDr = payrollDr.plus(value);
+        const payrollBalance = round2(toMoney(types.get(party.id!)?.currentBalance).toNumber());
+        if (payrollBalance > 0) {
+          onUs.push({ name: party.name, code: "PAYROLL_EMPLOYEE", value: payrollBalance,
+            category: "Payroll", partyKind: "employee", partyId: party.id });
+        } else if (payrollBalance < 0) {
+          forUs.push({ name: party.name, code: "EMPLOYEE_RECEIVABLE", value: -payrollBalance,
+            category: "Employee Receivable", partyKind: "employee", partyId: party.id });
+        }
+        payrollDr = payrollDr.minus(payrollBalance);
       }
     }
     payrollSigned = round2(payrollDr.negated().toNumber());
     const payrollCode = codes === "factory" ? "EMPLOYEE_PAYROLL_PAYABLE" : "PAYROLL_PAYABLE";
     const payrollCategory = codes === "factory" ? "Liability" : "Payroll";
-    if (payrollSigned > 0 || codes === "factory") {
+    if (options.employees === "factory" && (payrollSigned > 0 || codes === "factory")) {
       onUs.push({
         name: "Payroll Payable",
         code: payrollCode,
@@ -364,7 +372,7 @@ export async function loadNetPositionParties(
         partyId: null,
       });
     }
-    if (payrollSigned < 0) {
+    if (options.employees === "factory" && payrollSigned < 0) {
       forUs.push({
         name: "Payroll Overpayment",
         code: payrollCode,
@@ -374,7 +382,16 @@ export async function loadNetPositionParties(
         partyId: null,
       });
     }
-    const workers = round2(workersDr.toNumber());
+    // ERP Payroll's Advances tab is the authoritative current outstanding balance:
+    // only unpaid salary advances contribute their remaining balance. Do not use the
+    // worker subledger here, which can include unrelated worker transactions.
+    const workers = options.employees === "erp" && !asOf
+      ? round2(Number((await db.execute(sql`
+          SELECT COALESCE(SUM(remaining_balance::numeric), 0) AS outstanding
+          FROM salary_advances
+          WHERE company_id = ${companyId} AND fully_paid = false
+        `)).rows[0]?.outstanding ?? 0))
+      : round2(workersDr.toNumber());
     if (workers > 0) {
       forUs.push({
         name: "Worker Advances (Prepaid)",

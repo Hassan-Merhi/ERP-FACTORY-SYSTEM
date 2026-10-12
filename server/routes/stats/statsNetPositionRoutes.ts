@@ -106,7 +106,7 @@ export function registerStatsNetPositionRoutes(app: Express) {
         codes: "erp",
         payrollCurrentBalanceMemo: true,
         banks: true,
-        missingAccounts: true,
+        missingAccounts: false,
       });
       const accountsForClassify = (
         isSupplierPartner

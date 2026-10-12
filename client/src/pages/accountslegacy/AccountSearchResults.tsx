@@ -41,6 +41,8 @@ export function AccountSearchResults({ model }: { model: AccountsLegacyModel }) 
             >
               <div className="flex-1 min-w-0 flex items-center gap-2.5">
                 <span className="text-sm font-medium truncate">{acc.name}</span>
+                {acc.type === "employee" && <span className="text-[11px] text-muted-foreground">Payroll</span>}
+                {acc.type === "ledger" && <span className="text-[11px] text-muted-foreground">Ledger</span>}
                 {acc.accountId && (
                   <span className="text-[11px] text-muted-foreground font-mono shrink-0">#{acc.accountId}</span>
                 )}

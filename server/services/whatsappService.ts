@@ -1,4 +1,3 @@
-import { toArrayBuffer } from "../lib/bufferCompatibility";
 /**
  * Green API (free tier) WhatsApp service.
  * Supports individual numbers and group chats.
@@ -9,6 +8,7 @@ import { toArrayBuffer } from "../lib/bufferCompatibility";
  */
 
 import { pool } from "../db";
+import { request as httpsRequest } from "node:https";
 import { getErrorMessage } from "../lib/httpHandlers";
 import { logger } from "../lib/logger";
 import FormDataLib from "form-data";
@@ -116,6 +116,54 @@ async function fetchGreenApiWithAuthFallback(
     });
   }
   return fallback;
+}
+
+/**
+ * Uploads can encounter Undici's default 10-second TCP connect timeout on Render.
+ * Use Node HTTPS for multipart uploads, with an explicit 30-second timeout and
+ * IPv4 resolution. Never retry an ambiguous upload: it may already be delivered.
+ */
+async function requestGreenApiUpload(
+  credentials: GreenApiCredentials,
+  body: Buffer,
+  headers: Record<string, string | number>
+): Promise<Response> {
+  const endpoint = new URL(baseUrl(credentials.instanceId, credentials.apiToken, "sendFileByUpload"));
+  return new Promise<Response>((resolve, reject) => {
+    const req = httpsRequest(endpoint, {
+      method: "POST",
+      family: 4,
+      timeout: GREEN_API_REQUEST_TIMEOUT_MS,
+      headers: { ...headers, "Content-Length": body.length },
+    }, (res) => {
+      const chunks: Buffer[] = [];
+      res.on("data", (chunk: Buffer) => chunks.push(chunk));
+      res.on("error", reject);
+      res.on("end", () => {
+        const responseBody = Buffer.concat(chunks);
+        resolve(new Response(responseBody, { status: res.statusCode || 502 }));
+      });
+    });
+    req.on("timeout", () => req.destroy(new Error("Green API upload connection timed out after 30 seconds")));
+    req.on("error", reject);
+    req.end(body);
+  });
+}
+
+async function uploadGreenApiWithAuthFallback(
+  credentials: GreenApiCredentials,
+  body: Buffer,
+  headers: Record<string, string | number>
+): Promise<Response> {
+  const primary = await requestGreenApiUpload(credentials, body, headers);
+  if (primary.status !== 401) return primary;
+  const alternate = await getGreenApiAuthFallback(credentials);
+  if (!alternate) return primary;
+  logger.warn("[WhatsApp] Green API upload credentials rejected; attempting configured backup instance", {
+    instanceId: cleanGreenApiCredential(credentials.instanceId),
+    fallbackInstanceId: cleanGreenApiCredential(alternate.instanceId),
+  });
+  return requestGreenApiUpload(alternate, body, headers);
 }
 
 /** Normalise a plain phone number to chatId format (243XXXXXXXX → 243XXXXXXXX@c.us) */
@@ -252,11 +300,7 @@ async function sendGreenApiFileUpload({
     const multipartBody = form.getBuffer();
     let response: Response;
     try {
-      response = await fetchGreenApiWithAuthFallback(settings, "sendFileByUpload", {
-        method: "POST",
-        body: toArrayBuffer(multipartBody),
-        headers: form.getHeaders(),
-      });
+      response = await uploadGreenApiWithAuthFallback(settings, multipartBody, form.getHeaders());
     } catch (error) {
       const message = getErrorMessage(error) || "Green API request outcome is uncertain";
       logger.error("[WA upload] Green API request outcome uncertain", {

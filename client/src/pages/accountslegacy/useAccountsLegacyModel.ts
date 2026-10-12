@@ -124,7 +124,7 @@ export function useAccountsLegacyModel() {
     if (urlStartDate || urlEndDate) {
       return { fromDate: urlStartDate, toDate: urlEndDate, preset: "custom" as const };
     }
-    return getDefaultPeriodValue("this_month");
+    return getDefaultPeriodValue("all_time");
   });
 
   const [accountToEdit, setAccountToEdit] = useState<LedgerAccount | null>(null);
