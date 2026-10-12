@@ -16,6 +16,7 @@ import {
 import { inventory, vouchers, voucherEntries, salesItems, locations } from "@shared/schema";
 import { eq, and, or, inArray, sql, isNull, isNotNull } from "drizzle-orm";
 import { retireVouchersTx, sessionRetirementActor } from "../../../services/accounting/voucherRetirement";
+import { plusMoney } from "../../../lib/money";
 
 export function registerAdminOrphanedPosRoutes(app: Express) {
   // Fix orphaned POS data that might be causing Import Cycle imbalance
@@ -75,7 +76,7 @@ export function registerAdminOrphanedPosRoutes(app: Express) {
           count: allOrphanedSalesItems.length,
           companyScoped: orphanedSalesItemsForCompany.length,
           trulyOrphaned: trulyOrphanedSalesItems.length,
-          totalCost: allOrphanedSalesItems.reduce((sum, item) => sum + parseFloat(item.totalCost || "0"), 0),
+          totalCost: allOrphanedSalesItems.reduce((sum, item) => plusMoney(sum, item.totalCost), 0),
           details: allOrphanedSalesItems.slice(0, 10),
         });
 
@@ -120,8 +121,8 @@ export function registerAdminOrphanedPosRoutes(app: Express) {
       const allOrphanedEntries = [...orphanedEntriesForCompany, ...trulyOrphanedEntries];
 
       if (allOrphanedEntries.length > 0) {
-        const totalDebits = allOrphanedEntries.reduce((sum, e) => sum + parseFloat(e.debitAmount || "0"), 0);
-        const totalCredits = allOrphanedEntries.reduce((sum, e) => sum + parseFloat(e.creditAmount || "0"), 0);
+        const totalDebits = allOrphanedEntries.reduce((sum, e) => plusMoney(sum, e.debitAmount), 0);
+        const totalCredits = allOrphanedEntries.reduce((sum, e) => plusMoney(sum, e.creditAmount), 0);
 
         results.push({
           type: "orphaned_voucher_entries",
@@ -209,8 +210,8 @@ export function registerAdminOrphanedPosRoutes(app: Express) {
             .from(voucherEntries)
             .where(eq(voucherEntries.voucherId, v.id));
 
-          const totalDebit = entries.reduce((sum, e) => sum + parseFloat(e.debitAmount || "0"), 0);
-          const totalCredit = entries.reduce((sum, e) => sum + parseFloat(e.creditAmount || "0"), 0);
+          const totalDebit = entries.reduce((sum, e) => plusMoney(sum, e.debitAmount), 0);
+          const totalCredit = entries.reduce((sum, e) => plusMoney(sum, e.creditAmount), 0);
 
           // Check if it has sales items
           const saleItems = await db
@@ -223,7 +224,7 @@ export function registerAdminOrphanedPosRoutes(app: Express) {
             totalDebit,
             totalCredit,
             salesItemCount: saleItems.length,
-            salesItemsTotalCost: saleItems.reduce((sum, s) => sum + parseFloat(s.totalCost || "0"), 0),
+            salesItemsTotalCost: saleItems.reduce((sum, s) => plusMoney(sum, s.totalCost), 0),
           };
         })
       );

@@ -1,5 +1,6 @@
 import { searchAny } from "@shared/searchNormalization";
 import type { EnrichedContainer } from "../../lib/gitHelpers";
+import { toMoney } from "../../lib/money";
 
 export interface GitListingQuery extends Record<string, string | string[] | undefined> {
   page?: string;
@@ -57,7 +58,7 @@ export interface GitListingFacets {
 }
 
 const csv = (value: string | string[] | undefined): string[] => {
-  const raw = Array.isArray(value) ? value.join(",") : value ?? "";
+  const raw = Array.isArray(value) ? value.join(",") : (value ?? "");
   return raw
     .split(",")
     .map((part) => part.trim())
@@ -68,7 +69,7 @@ const includesOrSentinel = (
   selected: string[],
   value: string | null | undefined,
   emptySentinel?: string,
-  presentSentinel?: string,
+  presentSentinel?: string
 ): boolean => {
   if (selected.length === 0) return true;
   const normalized = (value ?? "").trim();
@@ -119,7 +120,7 @@ export function applyGitTableFilters(rows: EnrichedContainer[], query: GitListin
     if (query.delayedState === "OVERDUE" && !row.isOverdue) return false;
     if (query.delayedState === "NO" && !!(row.daysDelayed && row.daysDelayed > 0)) return false;
 
-    const freight = Number.parseFloat(row.poFreight ?? "0") || 0;
+    const freight = toMoney(row.poFreight).toNumber();
     if (query.freight === "HAS_FREIGHT" && freight <= 0) return false;
     if (query.freight === "NO_FREIGHT" && freight > 0) return false;
 
@@ -145,8 +146,16 @@ export function applyGitTableFilters(rows: EnrichedContainer[], query: GitListin
 export function sortGitRows(rows: EnrichedContainer[], sort: string | undefined): EnrichedContainer[] {
   return [...rows].sort((a, b) => {
     if (sort === "ETA_ASC" || sort === "ETA_DESC") {
-      const aMs = a.eta ? new Date(a.eta).getTime() : sort === "ETA_ASC" ? Number.POSITIVE_INFINITY : Number.NEGATIVE_INFINITY;
-      const bMs = b.eta ? new Date(b.eta).getTime() : sort === "ETA_ASC" ? Number.POSITIVE_INFINITY : Number.NEGATIVE_INFINITY;
+      const aMs = a.eta
+        ? new Date(a.eta).getTime()
+        : sort === "ETA_ASC"
+          ? Number.POSITIVE_INFINITY
+          : Number.NEGATIVE_INFINITY;
+      const bMs = b.eta
+        ? new Date(b.eta).getTime()
+        : sort === "ETA_ASC"
+          ? Number.POSITIVE_INFINITY
+          : Number.NEGATIVE_INFINITY;
       if (aMs !== bMs) return sort === "ETA_ASC" ? aMs - bMs : bMs - aMs;
     }
     const companyOrder = a.companyName.localeCompare(b.companyName, undefined, { sensitivity: "base" });
@@ -162,7 +171,7 @@ export function sortGitRows(rows: EnrichedContainer[], sort: string | undefined)
 
 const unique = (values: Array<string | null | undefined>) =>
   [...new Set(values.map((value) => (value ?? "").trim()).filter(Boolean))].sort((a, b) =>
-    a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" }),
+    a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" })
   );
 
 export function buildGitFacets(rows: EnrichedContainer[]): GitListingFacets {
@@ -179,7 +188,7 @@ export function buildGitFacets(rows: EnrichedContainer[]): GitListingFacets {
   };
 }
 
-const amount = (value: string | null | undefined) => Number.parseFloat(value ?? "0") || 0;
+const amount = (value: string | null | undefined) => toMoney(value).toNumber();
 
 export function buildGitTableSummary(rows: EnrichedContainer[]): GitListingSummary {
   return {

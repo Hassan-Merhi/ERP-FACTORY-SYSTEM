@@ -16,6 +16,7 @@ import {
 } from "../../../services/accounting/perpetualInventory/cutoverRefusal";
 import {} from "@shared/schema";
 import { sql } from "drizzle-orm";
+import { toMoney } from "../../../lib/money";
 
 type CorruptedInventoryRow = {
   id: number;
@@ -60,9 +61,9 @@ export function registerAdminInventoryValueRepairRoutes(app: Express) {
 
       const previewRows = [];
       for (const row of corruptedRows) {
-        const qty = parseFloat(row.quantity || "0");
-        const oldRate = parseFloat(row.average_rate || "0");
-        const oldValue = parseFloat(row.total_value || "0");
+        const qty = toMoney(row.quantity).toNumber();
+        const oldRate = toMoney(row.average_rate).toNumber();
+        const oldValue = toMoney(row.total_value).toNumber();
 
         let newValue = oldValue;
         let newRate = oldRate;
@@ -134,9 +135,9 @@ export function registerAdminInventoryValueRepairRoutes(app: Express) {
 
       const correctedRows = [];
       for (const row of corruptedRows) {
-        const qty = parseFloat(row.quantity || "0");
-        const oldRate = parseFloat(row.average_rate || "0");
-        const oldValue = parseFloat(row.total_value || "0");
+        const qty = toMoney(row.quantity).toNumber();
+        const oldRate = toMoney(row.average_rate).toNumber();
+        const oldValue = toMoney(row.total_value).toNumber();
 
         let newValue = oldValue;
         let newRate = oldRate;

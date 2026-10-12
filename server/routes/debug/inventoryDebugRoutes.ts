@@ -53,7 +53,7 @@ export function registerInventoryDebugRoutes(app: Express) {
         let activeQty = 0;
         let activeValue = 0;
         for (const rec of inventoryRecords) {
-          const qty = parseFloat(rec.quantity);
+          const qty = toMoney(rec.quantity).toNumber();
           // The stored value (wave 11), not quantity × the rounded average rate.
           const val = toMoney(rec.totalValue).toNumber();
           totalQty += qty;
@@ -88,8 +88,8 @@ export function registerInventoryDebugRoutes(app: Express) {
               displayName = `[INACTIVE] ${record.locationName}`;
             }
 
-            const qty = parseFloat(record.quantity);
-            const rate = parseFloat(record.averageRate);
+            const qty = toMoney(record.quantity).toNumber();
+            const rate = toMoney(record.averageRate).toNumber();
             return {
               id: record.id,
               locationId: record.locationId,

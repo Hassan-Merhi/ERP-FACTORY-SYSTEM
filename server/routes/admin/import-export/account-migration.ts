@@ -17,6 +17,7 @@ import {
   CompanyAccessError,
   getCompanyAccessContext,
 } from "../../../security/companyAccessBoundary";
+import { plusMoney } from "../../../lib/money";
 
 class AccountMigrationPreviewNotFound extends Error {}
 
@@ -109,8 +110,8 @@ export function registerAccountMigrationRoutes(app: Express) {
               .from(voucherEntries)
               .where(eq(voucherEntries.ledgerAccountId, accountId));
 
-            const totalDebit = entryRows.reduce((s, r) => s + parseFloat(r.debit || "0"), 0);
-            const totalCredit = entryRows.reduce((s, r) => s + parseFloat(r.credit || "0"), 0);
+            const totalDebit = entryRows.reduce((s, r) => plusMoney(s, r.debit), 0);
+            const totalCredit = entryRows.reduce((s, r) => plusMoney(s, r.credit), 0);
             grandTotalDebit += totalDebit;
             grandTotalCredit += totalCredit;
             grandTotalEntries += entryRows.length;
@@ -134,9 +135,7 @@ export function registerAccountMigrationRoutes(app: Express) {
                 .where(eq(voucherEntries.voucherId, vid));
               const isShared = allEntries.some(
                 (e) =>
-                  e.supplierId !== null ||
-                  e.employeeId !== null ||
-                  (e.la !== null && !batchSet.has(e.la as number))
+                  e.supplierId !== null || e.employeeId !== null || (e.la !== null && !batchSet.has(e.la as number))
               );
               if (!isShared) exclusiveVoucherCount++;
               else sharedVoucherCount++;
@@ -203,7 +202,25 @@ export function registerAccountMigrationRoutes(app: Express) {
 
         // Build per-account plan (code conflict resolution + entry counts)
         const accountPlans: Array<{
-          account: { id: number; companyId: number; code: string; name: string; accountType: string; subType: string | null; parentId: number | null; openingBalance: string | null; openingBalanceSide: string | null; openingBalanceNativeAmount: string | null; openingBalanceCurrency: string | null; openingBalanceHistoricalRate: string | null; openingBalanceBaseAmount: string | null; active: boolean; isHidden: boolean; deletedAt: Date | null; createdAt: Date; };
+          account: {
+            id: number;
+            companyId: number;
+            code: string;
+            name: string;
+            accountType: string;
+            subType: string | null;
+            parentId: number | null;
+            openingBalance: string | null;
+            openingBalanceSide: string | null;
+            openingBalanceNativeAmount: string | null;
+            openingBalanceCurrency: string | null;
+            openingBalanceHistoricalRate: string | null;
+            openingBalanceBaseAmount: string | null;
+            active: boolean;
+            isHidden: boolean;
+            deletedAt: Date | null;
+            createdAt: Date;
+          };
           originalCode: string;
           finalCode: string;
           entryCount: number;

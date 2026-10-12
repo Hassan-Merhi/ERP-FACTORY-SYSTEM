@@ -1,22 +1,5 @@
 {
   "description": "Per-file count of parseFloat( calls in server/ and shared/ source (tests excluded). parseFloat turns numeric(...) money strings into binary floats, and sums of those drift by fractions of a cent; new code uses server/lib/money.ts instead. tests/float-money-ratchet.test.ts fails when a file's count rises or a new file starts using parseFloat, and when a count falls without this baseline being lowered to match, so the total can only go down.",
-  "total": 61,
-  "files": {
-    "server/routes/admin/import-export/account-migration.ts": 2,
-    "server/routes/admin/repair/inventory-values.ts": 6,
-    "server/routes/admin/repair/misc.ts": 2,
-    "server/routes/admin/repair/orphaned-pos.ts": 6,
-    "server/routes/debug/importCycleDiagnosticAnalysis.ts": 6,
-    "server/routes/debug/inventoryDebugRoutes.ts": 3,
-    "server/routes/debug/orphanedChargeVoucherRoutes.ts": 2,
-    "server/routes/git/_helpers.ts": 7,
-    "server/routes/git/gitAgentRoutes.ts": 9,
-    "server/routes/git/gitImportRoutes.ts": 2,
-    "server/routes/git/gitListingProfiles.ts": 2,
-    "server/routes/sp-migration/_helpers.ts": 1,
-    "server/routes/sp-migration/spMigrationSalesRoutes.ts": 5,
-    "server/routes/sp-migration/spMigrationSetupRoutes.ts": 2,
-    "server/routes/sp/spMigrationPhase2Common.ts": 1,
-    "server/routes/sp/spMigrationPhase4Policy.ts": 5
-  }
+  "total": 0,
+  "files": {}
 }

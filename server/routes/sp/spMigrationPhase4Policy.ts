@@ -1,3 +1,4 @@
+import { parseMoneyInput } from "../../lib/money";
 export type VerificationSeverity = "PASS" | "WARN" | "FAIL";
 
 export type VerificationIssue = {
@@ -31,23 +32,19 @@ export function exactCutoverConfirmation(
   return null;
 }
 
-export function exactInventoryValue(
-  quantity: unknown,
-  averageRate: unknown,
-  storedTotalValue: unknown
-): number {
-  const parsedStored = Number.parseFloat(String(storedTotalValue ?? ""));
+export function exactInventoryValue(quantity: unknown, averageRate: unknown, storedTotalValue: unknown): number {
+  const parsedStored = parseMoneyInput(String(storedTotalValue ?? ""))?.toNumber() ?? NaN;
   if (Number.isFinite(parsedStored)) return parsedStored;
-  const parsedQuantity = Number.parseFloat(String(quantity ?? "0"));
-  const parsedRate = Number.parseFloat(String(averageRate ?? "0"));
+  const parsedQuantity = parseMoneyInput(String(quantity ?? "0"))?.toNumber() ?? NaN;
+  const parsedRate = parseMoneyInput(String(averageRate ?? "0"))?.toNumber() ?? NaN;
   const safeQuantity = Number.isFinite(parsedQuantity) ? parsedQuantity : 0;
   const safeRate = Number.isFinite(parsedRate) ? parsedRate : 0;
   return Math.round(safeQuantity * safeRate * 10000) / 10000;
 }
 
 export function numbersDiffer(left: unknown, right: unknown, tolerance: number): boolean {
-  const a = Number.parseFloat(String(left ?? "0"));
-  const b = Number.parseFloat(String(right ?? "0"));
+  const a = parseMoneyInput(String(left ?? "0"))?.toNumber() ?? NaN;
+  const b = parseMoneyInput(String(right ?? "0"))?.toNumber() ?? NaN;
   const safeA = Number.isFinite(a) ? a : 0;
   const safeB = Number.isFinite(b) ? b : 0;
   return Math.abs(safeA - safeB) > tolerance;

@@ -21,6 +21,7 @@ import {
   ensureGcProfitAccounts,
   buildGcMigrationPreview,
 } from "./_helpers";
+import { parseMoneyInput, toMoney } from "../../lib/money";
 
 export function registerSpMigrationSetupRoutes(app: Express) {
   // ── POST /api/sp/migration/create-sp-company ─────────────────────────────
@@ -262,7 +263,7 @@ export function registerSpMigrationSetupRoutes(app: Express) {
         if (!targetId) return res.status(400).json({ message: "targetCompanyId is required" });
         if (!cashId)
           return res.status(400).json({ message: "cashAccountId is required — select a cash or bank account" });
-        if (!amount || isNaN(parseFloat(amount))) return res.status(400).json({ message: "amount is required" });
+        if (!amount || parseMoneyInput(amount) === null) return res.status(400).json({ message: "amount is required" });
         if (!date) return res.status(400).json({ message: "date is required" });
 
         const targetComp = await getCompanyRow(targetId);
@@ -301,7 +302,7 @@ export function registerSpMigrationSetupRoutes(app: Express) {
         }
         const opnBalId = pn(opnBalRows[0].id);
 
-        const amtStr = parseFloat(amount).toFixed(2);
+        const amtStr = toMoney(amount).toFixed(2);
         const voucherNumber = `OB-${targetId}-${Date.now()}`;
 
         const voucherId = await db.transaction(async (tx) => {

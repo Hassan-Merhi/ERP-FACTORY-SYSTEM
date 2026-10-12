@@ -1,9 +1,10 @@
 import { sql } from "drizzle-orm";
 import { db } from "../../db";
 import { resultRows, firstRow } from "../../lib/queryResult";
+import { parseMoneyInput } from "../../lib/money";
 
 export const pn = (value: unknown): number => {
-  const parsed = Number.parseFloat(String(value ?? "0"));
+  const parsed = parseMoneyInput(String(value ?? "0"))?.toNumber() ?? NaN;
   return Number.isFinite(parsed) ? parsed : 0;
 };
 

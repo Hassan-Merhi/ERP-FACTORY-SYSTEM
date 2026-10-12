@@ -18,6 +18,7 @@ import {
   requireCompletedMigrationAction,
   ensureTargetStockItems,
 } from "./_helpers";
+import { parseMoneyInput, toMoney } from "../../lib/money";
 
 /** Account-mapping columns read from ledger_accounts during an SP migration run. */
 type SpLedgerAccountRow = { id: number; account_type: string; sub_type: string | null };
@@ -413,7 +414,7 @@ export function registerSpMigrationSalesRoutes(app: Express) {
           // by the stock-opening step. Post a Dr Goods-OTW / Cr OTW Clearing voucher so the
           // asset shows up on the SP books, matching the container's invoice total.
           if (status === "open") {
-            const otwAmount = parseFloat(String(c.items_total ?? c.grand_total ?? "0")) || 0;
+            const otwAmount = toMoney(String(c.items_total ?? c.grand_total ?? "")).toNumber();
             if (!otwAssetAcctId || !otwClearingAcctId) {
               chargeWarnings.push(
                 `Container ${c.container_number}: is OTW but Goods-OTW/OTW-Clearing accounts are missing in target — no accounting voucher posted. Run account creation first.`
@@ -574,18 +575,21 @@ export function registerSpMigrationSalesRoutes(app: Express) {
           notes: profitNotes,
         } = req.body ?? {};
         const targetId = parseInt(String(targetCompanyId ?? ""), 10);
-        const profit = parseFloat(accumulatedProfit);
+        // Request values: parsed like parseFloat, and NaN (rejected below) when missing or malformed.
+        const profit = parseMoneyInput(accumulatedProfit)?.toNumber() ?? NaN;
         const ourPct =
-          ourSplitPct !== undefined && ourSplitPct !== null && ourSplitPct !== "" ? parseFloat(ourSplitPct) : 50;
+          ourSplitPct !== undefined && ourSplitPct !== null && ourSplitPct !== ""
+            ? (parseMoneyInput(ourSplitPct)?.toNumber() ?? NaN)
+            : 50;
 
         // Manual split amounts take priority over the percentage when both are provided.
         const manualOurShare =
           ourShareAmountRaw !== undefined && ourShareAmountRaw !== null && ourShareAmountRaw !== ""
-            ? parseFloat(ourShareAmountRaw)
+            ? (parseMoneyInput(ourShareAmountRaw)?.toNumber() ?? NaN)
             : null;
         const manualSupplierShare =
           supplierShareAmountRaw !== undefined && supplierShareAmountRaw !== null && supplierShareAmountRaw !== ""
-            ? parseFloat(supplierShareAmountRaw)
+            ? (parseMoneyInput(supplierShareAmountRaw)?.toNumber() ?? NaN)
             : null;
         const usingManualSplit = manualOurShare !== null && manualSupplierShare !== null;
 

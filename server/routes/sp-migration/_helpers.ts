@@ -26,9 +26,10 @@ import { sqlArray } from "../../lib/sqlArray";
 import { ledgerAccounts } from "@shared/schema";
 import { eq, and, isNull } from "drizzle-orm";
 import { firstRow } from "../../lib/queryResult";
+import { parseMoneyInput } from "../../lib/money";
 
 export const pn = (v: unknown) => {
-  const n = parseFloat(String(v ?? "0"));
+  const n = parseMoneyInput(String(v ?? "0"))?.toNumber() ?? NaN;
   return isNaN(n) ? 0 : n;
 };
 

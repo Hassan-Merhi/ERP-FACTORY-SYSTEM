@@ -15,6 +15,7 @@ import { requireAuth, requireRole } from "../../auth";
 import { containers } from "../../../shared/schema";
 import { and, eq, sql } from "drizzle-orm";
 import { importUndoStore, pruneImportUndoStore, gitUpload } from "./_helpers";
+import { parseMoneyInput } from "../../lib/money";
 
 export function registerGitImportRoutes(app: Express) {
   // ─── ETA-only template — 2 columns: Container # + New ETA ───────────────
@@ -538,11 +539,11 @@ export function registerGitImportRoutes(app: Express) {
 
           // ── Numeric money fields: 0 is a valid value ─────────────────────────
           if (rawMap.dutyFee !== undefined && rawMap.dutyFee !== "") {
-            const n = parseFloat(String(rawMap.dutyFee));
+            const n = parseMoneyInput(String(rawMap.dutyFee))?.toNumber() ?? NaN;
             if (!isNaN(n)) updateData.dutyFee = n.toString();
           }
           if (rawMap.transportFee !== undefined && rawMap.transportFee !== "") {
-            const n = parseFloat(String(rawMap.transportFee));
+            const n = parseMoneyInput(String(rawMap.transportFee))?.toNumber() ?? NaN;
             if (!isNaN(n)) updateData.transportFee = n.toString();
           }
 

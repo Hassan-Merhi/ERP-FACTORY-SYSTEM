@@ -9,6 +9,7 @@ import type {
   ContainerAuditEntry,
   ImportCycleBalanceSnapshot,
 } from "./importCycleDiagnosticTypes";
+import { plusMoney, toMoney } from "../../lib/money";
 
 export async function buildImportCycleDiagnostics(companyId: number, snapshot: ImportCycleBalanceSnapshot) {
   const {
@@ -46,9 +47,7 @@ export async function buildImportCycleDiagnostics(companyId: number, snapshot: I
       code: ledgerAccounts.code,
       parentType: sql<string>`${ledgerAccounts.accountType}`.as("parentType"),
       currentBalance: sql<string>`COALESCE(${ledgerAccounts.openingBalance}, '0')`.as("currentBalance"),
-      currentBalanceSide: sql<string>`COALESCE(${ledgerAccounts.openingBalanceSide}, 'Dr')`.as(
-        "currentBalanceSide"
-      ),
+      currentBalanceSide: sql<string>`COALESCE(${ledgerAccounts.openingBalanceSide}, 'Dr')`.as("currentBalanceSide"),
     })
     .from(ledgerAccounts)
     .where(and(eq(ledgerAccounts.companyId, companyId), isNull(ledgerAccounts.deletedAt)));
@@ -72,7 +71,7 @@ export async function buildImportCycleDiagnostics(companyId: number, snapshot: I
   };
 
   for (const account of allAccountsForRecon) {
-    const balanceRaw = parseFloat(account.currentBalance || "0");
+    const balanceRaw = toMoney(account.currentBalance).toNumber();
     if (Math.abs(balanceRaw) < 0.01) continue;
 
     const parentType = account.parentType || "UNKNOWN";
@@ -163,9 +162,7 @@ export async function buildImportCycleDiagnostics(companyId: number, snapshot: I
 
   for (const variance of variances) {
     variance.variance = round2(variance.computed - variance.fromAccounts);
-    variance.accountsInBucket = accountContributions.filter(
-      (account) => account.bucket === variance.bucket
-    ).length;
+    variance.accountsInBucket = accountContributions.filter((account) => account.bucket === variance.bucket).length;
   }
 
   const significantVariances = variances.filter((variance) => Math.abs(variance.variance) > 1);
@@ -443,8 +440,8 @@ export async function buildImportCycleDiagnostics(companyId: number, snapshot: I
     let totalDebits = 0;
     let totalCredits = 0;
     for (const entry of relatedEntries) {
-      totalDebits += parseFloat(entry.debitAmount || "0");
-      totalCredits += parseFloat(entry.creditAmount || "0");
+      totalDebits = plusMoney(totalDebits, entry.debitAmount);
+      totalCredits = plusMoney(totalCredits, entry.creditAmount);
     }
     const difference = round2(totalDebits - totalCredits);
     containerAudit.push({
@@ -452,9 +449,9 @@ export async function buildImportCycleDiagnostics(companyId: number, snapshot: I
       containerNumber: container.containerNumber,
       status: container.status,
       supplierName,
-      itemsTotal: parseFloat(container.itemsTotal || "0"),
-      chargesTotal: parseFloat(container.chargesTotal || "0"),
-      grandTotal: parseFloat(container.grandTotal || "0"),
+      itemsTotal: toMoney(container.itemsTotal).toNumber(),
+      chargesTotal: toMoney(container.chargesTotal).toNumber(),
+      grandTotal: toMoney(container.grandTotal).toNumber(),
       voucherDebits: round2(totalDebits),
       voucherCredits: round2(totalCredits),
       difference,

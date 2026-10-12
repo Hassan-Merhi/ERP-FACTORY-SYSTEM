@@ -6,6 +6,7 @@ import { logger } from "../../lib/logger";
 import { containerOffloads, containers, voucherEntries, vouchers } from "@shared/schema";
 import { and, eq, isNull, or, sql } from "drizzle-orm";
 import { retireVouchersTx, sessionRetirementActor } from "../../services/accounting/voucherRetirement";
+import { plusMoney } from "../../lib/money";
 
 async function findReversedOtwContainers(companyId: number) {
   return db
@@ -78,8 +79,8 @@ export function registerOrphanedChargeVoucherRoutes(app: Express) {
               .from(voucherEntries)
               .where(eq(voucherEntries.voucherId, voucher.id));
 
-            const totalDebit = entries.reduce((sum, entry) => sum + parseFloat(entry.debitAmount || "0"), 0);
-            const totalCredit = entries.reduce((sum, entry) => sum + parseFloat(entry.creditAmount || "0"), 0);
+            const totalDebit = entries.reduce((sum, entry) => plusMoney(sum, entry.debitAmount), 0);
+            const totalCredit = entries.reduce((sum, entry) => plusMoney(sum, entry.creditAmount), 0);
 
             orphanedVouchers.push({
               voucherId: voucher.id,
