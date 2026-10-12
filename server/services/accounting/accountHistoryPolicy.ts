@@ -202,8 +202,10 @@ export function assertAccountChangeAllowed(check: AccountChangeCheck): {
       // An unknown type is never guessed to be in the same category as another one.
       const sameType =
         (before.accountType ?? "").trim().toLowerCase() === (after.accountType ?? "").trim().toLowerCase();
-      if ((beforeClass !== afterClass || (beforeClass === "unknown" && !sameType)) &&
-          !ACCOUNT_HISTORY_EDIT_ROLES.has(String(check.role ?? ""))) {
+      if (
+        (beforeClass !== afterClass || (beforeClass === "unknown" && !sameType)) &&
+        !ACCOUNT_HISTORY_EDIT_ROLES.has(String(check.role ?? ""))
+      ) {
         throw new AccountHistoryError(ACCOUNT_TYPE_CATEGORY_CHANGE_MESSAGE, 409, ACCOUNT_TYPE_CATEGORY_CHANGE_CODE);
       }
     }

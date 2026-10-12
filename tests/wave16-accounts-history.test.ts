@@ -232,14 +232,20 @@ describe("account change rules (policy)", () => {
       after: { accountType: after, subType: null },
     });
     for (const role of ["Admin", "Owner", "Developer"]) {
-      expect(code(() => assertAccountChangeAllowed({ role, lines: lines(1), type: type("Expense", "Asset") }))).toBeNull();
-      expect(code(() => assertAccountChangeAllowed({ role, lines: lines(1), type: type("Income", "Liability") }))).toBeNull();
+      expect(
+        code(() => assertAccountChangeAllowed({ role, lines: lines(1), type: type("Expense", "Asset") }))
+      ).toBeNull();
+      expect(
+        code(() => assertAccountChangeAllowed({ role, lines: lines(1), type: type("Income", "Liability") }))
+      ).toBeNull();
     }
     expect(
       code(() => assertAccountChangeAllowed({ role: "Manager", lines: lines(1), type: type("Expense", "Asset") }))
     ).toBe(ACCOUNT_TYPE_CATEGORY_CHANGE_CODE);
     expect(
-      code(() => assertAccountChangeAllowed({ role: "Manager", lines: lines(1), type: type("Expense", "Direct Expense") }))
+      code(() =>
+        assertAccountChangeAllowed({ role: "Manager", lines: lines(1), type: type("Expense", "Direct Expense") })
+      )
     ).toBeNull();
     expect(
       code(() => assertAccountChangeAllowed({ role: "Manager", lines: lines(0, 2), type: type("Expense", "Asset") }))

@@ -117,8 +117,10 @@ export default function ItemMarketAnalysis() {
   const comparableToSalesReport =
     selectedCompanyIds.length === 1 &&
     selectedCompanyIds[0] === selectedCompany?.id &&
-    !period.fromDate && !period.toDate &&
-    !debouncedSearch && selectedStockGroupNames.length === 0 &&
+    !period.fromDate &&
+    !period.toDate &&
+    !debouncedSearch &&
+    selectedStockGroupNames.length === 0 &&
     profitDirection === "all";
   const { data: salesReportReconciliation } = useQuery<{
     totalSales: number;
@@ -340,21 +342,37 @@ export default function ItemMarketAnalysis() {
 
       {comparableToSalesReport && salesReportReconciliation && (
         <div className="grid gap-3 sm:grid-cols-2">
-          <MetricCard label="Sales Report Revenue (all sales, including credit)" value={formatAmount(salesReportReconciliation.totalSales)} />
-          <MetricCard label="Sales Report Cost Profit (reconciled COGS)" value={formatAmount(salesReportReconciliation.adjustedCostProfit)} />
+          <MetricCard
+            label="Sales Report Revenue (all sales, including credit)"
+            value={formatAmount(salesReportReconciliation.totalSales)}
+          />
+          <MetricCard
+            label="Sales Report Cost Profit (reconciled COGS)"
+            value={formatAmount(salesReportReconciliation.adjustedCostProfit)}
+          />
         </div>
       )}
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
         <MetricCard label="Items" value={formatNumber(summary.itemCount)} />
         <MetricCard label="Imported Qty" value={formatNumber(summary.importedQty)} />
-        <MetricCard label="Sold Qty (Sales Report)" value={formatNumber(data?.salesReportTotals?.soldQty ?? summary.soldQty)} />
-        <MetricCard label="Total Sales (Sales Report)" value={formatAmount(data?.salesReportTotals?.revenue ?? summary.revenue)} />
+        <MetricCard
+          label="Sold Qty (Sales Report)"
+          value={formatNumber(data?.salesReportTotals?.soldQty ?? summary.soldQty)}
+        />
+        <MetricCard
+          label="Total Sales (Sales Report)"
+          value={formatAmount(data?.salesReportTotals?.revenue ?? summary.revenue)}
+        />
         <div className="rounded-xl border bg-card p-4">
           <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
             Cost Profit (Sales Report)
           </div>
-          <div className={`mt-1 text-xl font-semibold tabular-nums ${profitClass}`}>{data?.salesReportTotals ? formatAmount(reportedProfit) : "—"}</div>
-          <div className="text-xs text-muted-foreground">{reportedRevenue ? ((reportedProfit / reportedRevenue) * 100).toFixed(1) : "0.0"}% margin</div>
+          <div className={`mt-1 text-xl font-semibold tabular-nums ${profitClass}`}>
+            {data?.salesReportTotals ? formatAmount(reportedProfit) : "—"}
+          </div>
+          <div className="text-xs text-muted-foreground">
+            {reportedRevenue ? ((reportedProfit / reportedRevenue) * 100).toFixed(1) : "0.0"}% margin
+          </div>
         </div>
       </div>
 
