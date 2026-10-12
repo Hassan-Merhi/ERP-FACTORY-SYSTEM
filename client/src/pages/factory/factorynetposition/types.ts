@@ -13,6 +13,7 @@ export interface BrokerBreakdownLine {
 
 export interface AccountItem {
   id?: number;
+  supplierId?: number;
   name: string;
   code: string;
   value: number;
