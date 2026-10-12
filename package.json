@@ -189,7 +189,7 @@
     "xlsx-js-style": "^1.2.0",
     "zod": "^4.6.5",
     "zod-validation-error": "^5.0.0",
-    "react-is": "17.0.2"
+    "react-is": "19.3.0"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
