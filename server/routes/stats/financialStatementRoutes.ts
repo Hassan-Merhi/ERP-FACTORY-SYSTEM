@@ -185,7 +185,7 @@ export function registerFinancialStatementRoutes(app: Express) {
         "Content-Disposition",
         `attachment; filename="${exportFileStem(table.title, date)}.${rendered.extension}"`
       );
-      res.send(rendered.buffer);
+      res.end(rendered.buffer);
     } catch (error: unknown) {
       sendError(res, error);
     }
