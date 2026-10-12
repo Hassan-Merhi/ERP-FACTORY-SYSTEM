@@ -274,7 +274,7 @@ export async function serveAccountListForCompany(req: Request, res: Response, co
         // Employees are credit-normal (Cr positive); the engine's opening side
         // rule applies (a sideless employee opening is Cr).
         const { closing, opening } = engineFigures("employee", employee.id);
-        const netBalance = closing.negated();
+        const netBalance = balStartDate || balEndDate ? closing.negated() : toMoney(employee.currentBalance);
         const openingCr = opening.negated();
         const storedSide = employeeOpeningSides.get(employee.id) ?? "Cr";
         return {
