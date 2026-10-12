@@ -301,7 +301,10 @@ export default function ItemMarketAnalysis() {
     );
   }
 
-  const profitClass = summary.profit < 0 ? "text-red-600 dark:text-red-400" : "text-emerald-600 dark:text-emerald-400";
+  // The main KPI must match Sales Report's posted Cost Profit, not a revalued purchase-cost scenario.
+  const reportedProfit = data?.salesReportTotals?.profit ?? 0;
+  const reportedRevenue = data?.salesReportTotals?.revenue ?? 0;
+  const profitClass = reportedProfit < 0 ? "text-red-600 dark:text-red-400" : "text-emerald-600 dark:text-emerald-400";
 
   return (
     <div className="container mx-auto space-y-5 p-0 sm:p-6">
@@ -348,17 +351,17 @@ export default function ItemMarketAnalysis() {
         <MetricCard label="Total Sales (Sales Report)" value={formatAmount(data?.salesReportTotals?.revenue ?? summary.revenue)} />
         <div className="rounded-xl border bg-card p-4">
           <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            Modeled Item Profit ({includeOffloadingCost ? "Cost + Offloading" : "Cost Only"})
+            Cost Profit (Sales Report)
           </div>
-          <div className={`mt-1 text-xl font-semibold tabular-nums ${profitClass}`}>{formatAmount(summary.profit)}</div>
-          <div className="text-xs text-muted-foreground">{summary.marginPct.toFixed(1)}% margin</div>
+          <div className={`mt-1 text-xl font-semibold tabular-nums ${profitClass}`}>{data?.salesReportTotals ? formatAmount(reportedProfit) : "—"}</div>
+          <div className="text-xs text-muted-foreground">{reportedRevenue ? ((reportedProfit / reportedRevenue) * 100).toFixed(1) : "0.0"}% margin</div>
         </div>
       </div>
 
       {data?.salesReportTotals && (
         <div className="rounded-xl border bg-card p-3 text-sm">
           <div className="font-medium">Sales Report Cost Profit (posted sales): {formatAmount(data.salesReportTotals.profit)}</div>
-          <div className="text-xs text-muted-foreground">Net item revenue after credit notes: {formatAmount(summary.revenue)} · Net item sold quantity after returns: {formatNumber(summary.soldQty)}. The modeled purchase + offloading profit above remains a separate valuation scenario. Figures match Sales Report when the same companies, dates and stock groups are selected.</div>
+          <div className="text-xs text-muted-foreground">Net item revenue after credit notes: {formatAmount(summary.revenue)} · Net item sold quantity after returns: {formatNumber(summary.soldQty)}. Modeled item profit at the selected purchase-cost method: ${formatAmount(summary.profit)} (shown in the item breakdown). The top Cost Profit uses Sales Report's posted sales and matching filters.</div>
         </div>
       )}
       {comparableToSalesReport && salesReportReconciliation && (
