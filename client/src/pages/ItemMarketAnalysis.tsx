@@ -112,6 +112,24 @@ export default function ItemMarketAnalysis() {
     setExpandedSalePriceKey(null);
   }, [queryUrl, profitDirection, multiCompany, includeOffloadingCost]);
 
+  // Sales Report's all-time KPI uses a company-wide stock/COGS reconciliation,
+  // not the modeled per-item purchase cost. Only compare unfiltered views.
+  const comparableToSalesReport =
+    selectedCompanyIds.length === 1 &&
+    selectedCompanyIds[0] === selectedCompany?.id &&
+    !period.fromDate && !period.toDate &&
+    !debouncedSearch && selectedStockGroupNames.length === 0 &&
+    profitDirection === "all";
+  const { data: salesReportReconciliation } = useQuery<{
+    totalSales: number;
+    adjustedCostProfit: number;
+  }>({
+    queryKey: ["/api/sales-report/cogs-reconciliation", selectedCompany?.id],
+    enabled: comparableToSalesReport,
+    staleTime: 30_000,
+    refetchOnWindowFocus: false,
+  });
+
   const rawRows = useMemo(() => data?.rows ?? [], [data?.rows]);
   const stockGroups = data?.stockGroups ?? [];
 
@@ -317,19 +335,31 @@ export default function ItemMarketAnalysis() {
         </Button>
       </PageHeader>
 
+      {comparableToSalesReport && salesReportReconciliation && (
+        <div className="grid gap-3 sm:grid-cols-2">
+          <MetricCard label="Sales Report Revenue (all sales, including credit)" value={formatAmount(salesReportReconciliation.totalSales)} />
+          <MetricCard label="Sales Report Cost Profit (reconciled COGS)" value={formatAmount(salesReportReconciliation.adjustedCostProfit)} />
+        </div>
+      )}
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
         <MetricCard label="Items" value={formatNumber(summary.itemCount)} />
         <MetricCard label="Imported Qty" value={formatNumber(summary.importedQty)} />
         <MetricCard label="Sold Qty" value={formatNumber(summary.soldQty)} />
-        <MetricCard label="Revenue" value={formatAmount(summary.revenue)} />
+        <MetricCard label="Net Item Revenue (after credit notes)" value={formatAmount(summary.revenue)} />
         <div className="rounded-xl border bg-card p-4">
           <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            Profit ({includeOffloadingCost ? "Cost + Offloading" : "Cost Only"})
+            Modeled Item Profit ({includeOffloadingCost ? "Cost + Offloading" : "Cost Only"})
           </div>
           <div className={`mt-1 text-xl font-semibold tabular-nums ${profitClass}`}>{formatAmount(summary.profit)}</div>
           <div className="text-xs text-muted-foreground">{summary.marginPct.toFixed(1)}% margin</div>
         </div>
       </div>
+
+      {comparableToSalesReport && salesReportReconciliation && (
+        <p className="text-xs text-muted-foreground">
+          The Sales Report figures above include credit sales and archived-item history. Net Item Revenue also deducts credit notes, while modeled item profit uses selected purchase costs. The reconciled company-wide COGS adjustment is not allocated to individual items.
+        </p>
+      )}
 
       <div className="flex flex-wrap items-center gap-2 rounded-xl border bg-card p-3">
         <PeriodFilter value={period} onChange={setPeriod} data-testid="period-filter-item-market-analysis" />
