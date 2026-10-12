@@ -326,7 +326,7 @@ interface HeldCommissionRow {
 /** Commission held on raw-stock rows or commission records that no journal carries (wave 14). */
 function heldCommissionRows(executor: Executor, query: MemoQuery) {
   const { companyId, ids, asOf } = query;
-  const day = sql`COALESCE(fc.arrival_date, fc.created_at::date)`;
+  const day = sql`COALESCE(NULLIF(BTRIM(fc.arrival_date::text), '')::date, fc.created_at::date)`;
   return rowsOf<HeldCommissionRow>(
     executor,
     sql`
@@ -366,7 +366,7 @@ function heldCommissionRows(executor: Executor, query: MemoQuery) {
 
 async function factorySupplierMemoLines(executor: Executor, query: MemoQuery) {
   const { companyId, ids, asOf } = query;
-  const day = sql`COALESCE(fc.arrival_date, fc.created_at::date)`;
+  const day = sql`COALESCE(NULLIF(BTRIM(fc.arrival_date::text), '')::date, fc.created_at::date)`;
   const containers = await rowsOf<ContainerMemoRow>(
     executor,
     sql`
