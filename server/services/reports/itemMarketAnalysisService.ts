@@ -143,6 +143,35 @@ export async function getItemMarketAnalysis(filters: ItemMarketAnalysisFilters) 
     )
   `;
 
+  // Use the identical transaction population and stored profit as Sales Report.
+  // Do not subtract credit notes or reprice historical sales for these KPIs.
+  const salesReportResult = await pool.query(
+    `SELECT COALESCE(SUM(s.quantity::numeric),0) AS sold_qty,
+            COALESCE(SUM(s.total_sales::numeric),0) AS revenue,
+            COALESCE(SUM(s.profit::numeric),0) AS profit
+       FROM sales_items s
+       JOIN vouchers v ON v.id = s.voucher_id
+      WHERE v.company_id = $1 AND v.deleted_at IS NULL AND v.optional = false
+        AND v.location_id = ANY($2::int[])
+        AND ($3::date IS NULL OR v.voucher_date >= $3::date)
+        AND ($4::date IS NULL OR v.voucher_date <= $4::date)
+        AND ($5::text IS NULL OR EXISTS (
+          SELECT 1 FROM stock_items si WHERE si.id = s.stock_item_id
+          AND (si.code ILIKE '%' || $5 || '%' OR si.name ILIKE '%' || $5 || '%')))
+        AND ($6::int IS NULL OR EXISTS (
+          SELECT 1 FROM stock_items si WHERE si.id = s.stock_item_id AND si.stock_group_id = $6))
+        AND ($7::text[] IS NULL OR EXISTS (
+          SELECT 1 FROM stock_items si LEFT JOIN stock_groups sg ON sg.id = si.stock_group_id
+          WHERE si.id = s.stock_item_id AND BTRIM(sg.name) = ANY($7::text[])))`,
+    params
+  );
+  const salesReportRaw = salesReportResult.rows[0] ?? {};
+  const salesReportTotals = {
+    soldQty: numberValue(salesReportRaw.sold_qty),
+    revenue: numberValue(salesReportRaw.revenue),
+    profit: numberValue(salesReportRaw.profit),
+  };
+
   const itemResult = await pool.query(
     `${commonCtes}
     SELECT e.id AS stock_item_id, e.code, e.name, e.stock_group_id, e.stock_group_name,
@@ -215,6 +244,7 @@ export async function getItemMarketAnalysis(filters: ItemMarketAnalysisFilters) 
   return {
     generatedAt: new Date().toISOString(),
     rows,
+    salesReportTotals,
     summary: {
       itemCount: rows.length,
       ...totals,
