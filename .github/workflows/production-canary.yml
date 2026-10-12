@@ -15,7 +15,7 @@ concurrency:
 jobs:
   canary:
     name: Verify production health
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 5
     env:
       PRODUCTION_HEALTH_URL: ${{ secrets.PRODUCTION_HEALTH_URL }}
