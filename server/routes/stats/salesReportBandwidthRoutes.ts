@@ -6,6 +6,7 @@ import { getErrorMessage } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
 import { getAccessibleCompanyIds } from "../../security/companyAccessBoundary";
 import { storage } from "../../storage";
+import { createTenantDatabaseScope, runWithDatabaseScopeRuntimeContext } from "../../services/security/databaseScopeRuntimeContext";
 
 type Grouping = "daily" | "monthly" | "yearly";
 type ProfitFilter = "all" | "positive" | "negative";
@@ -338,10 +339,18 @@ export function registerSalesReportBandwidthRoutes(app: Express): void {
       if (!userId) return res.status(401).json({ message: "Not authenticated" });
       const accessibleCompanies = await getAccessibleCompanies(userId);
       const selectedCompanies = filterCompaniesByCodes(accessibleCompanies, req.query.companyFilter);
-      const groups = await buildSalesSummary(
-        selectedCompanies.map((company) => company.id),
-        readSummaryParams(req)
-      );
+      // The pooled database connection defaults to the active company under FORCE RLS.
+      // Explicitly scope this aggregate read to the membership-verified companies so
+      // selecting a different company never silently returns an empty sales report.
+      const authorizedIds = accessibleCompanies.map((company) => company.id);
+      const activeCompanyId = Number(req.session.currentCompanyId);
+      const primaryCompanyId = authorizedIds.includes(activeCompanyId) ? activeCompanyId : authorizedIds[0];
+      const groups = primaryCompanyId
+        ? await runWithDatabaseScopeRuntimeContext(
+            createTenantDatabaseScope(primaryCompanyId, authorizedIds, "authorized-companies"),
+            () => buildSalesSummary(selectedCompanies.map((company) => company.id), readSummaryParams(req))
+          )
+        : [];
       return res.json({
         groups,
         totals: buildSummaryTotals(groups),
@@ -359,7 +368,16 @@ export function registerSalesReportBandwidthRoutes(app: Express): void {
       if (!userId) return res.status(401).json({ message: "Not authenticated" });
       const accessibleCompanies = await getAccessibleCompanies(userId);
       const selectedCompanies = filterCompaniesByCodes(accessibleCompanies, req.query.companyFilter);
-      return res.json(await buildComparisonRows(selectedCompanies, req));
+      const authorizedIds = accessibleCompanies.map((company) => company.id);
+      const activeCompanyId = Number(req.session.currentCompanyId);
+      const primaryCompanyId = authorizedIds.includes(activeCompanyId) ? activeCompanyId : authorizedIds[0];
+      const rows = primaryCompanyId
+        ? await runWithDatabaseScopeRuntimeContext(
+            createTenantDatabaseScope(primaryCompanyId, authorizedIds, "authorized-companies"),
+            () => buildComparisonRows(selectedCompanies, req)
+          )
+        : [];
+      return res.json(rows);
     } catch (error: unknown) {
       logger.error("Sales report comparison summary error:", { error });
       return res.status(500).json({ message: getErrorMessage(error) });
