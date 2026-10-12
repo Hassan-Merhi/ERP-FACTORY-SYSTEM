@@ -40,6 +40,16 @@ function isIsoDate(value: unknown): value is string {
   return Number.isFinite(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
 }
 
+/**
+ * A query parameter given at most once, as a string: `null` when absent or
+ * empty, `undefined` when it arrived as an array (repeated) or an object
+ * (`a[b]=`), which the caller refuses with a 400 rather than coercing.
+ */
+function singleQueryString(value: unknown): string | null | undefined {
+  if (value === undefined || value === "") return null;
+  return typeof value === "string" ? value : undefined;
+}
+
 function reclassOptions(
   source: Record<string, unknown> | undefined
 ): { owner: CrossCompanyLineOwner; accountMap: Record<string, number> } | string {
@@ -97,14 +107,21 @@ export function registerMultiCompanyRoutes(app: Express): void {
     async (req: Request, res: Response) => {
       try {
         const companyId = resolveRequestCompanyId(req);
-        const requested = req.query.parentCompanyId ? Number(req.query.parentCompanyId) : null;
+        // Each parameter must be one string: a repeated or nested one is refused, never coerced.
+        const requestedParam = singleQueryString(req.query.parentCompanyId);
+        const asOfParam = singleQueryString(req.query.asOf);
+        const fromParam = singleQueryString(req.query.from);
+        if (requestedParam === undefined || asOfParam === undefined || fromParam === undefined) {
+          return res.status(400).json({ message: "Each query parameter must be given once, as a single value" });
+        }
+        const requested = requestedParam !== null ? Number(requestedParam) : null;
         if (requested !== null && (!Number.isSafeInteger(requested) || requested <= 0)) {
           return res.status(400).json({ message: "Invalid parentCompanyId" });
         }
         const parentCompanyId = requested ?? (await storage.getParentCompanyId(companyId)) ?? companyId;
-        const asOf = req.query.asOf ? req.query.asOf : await companyBusinessDate(companyId);
+        const asOf: string = asOfParam ?? (await companyBusinessDate(companyId));
         if (!isIsoDate(asOf)) return res.status(400).json({ message: "Invalid date" });
-        const from = req.query.from ?? null;
+        const from: string | null = fromParam;
         if (from !== null && (!isIsoDate(from) || from > asOf))
           return res.status(400).json({ message: "Invalid date" });
         const allowedCompanyIds = await getAccessibleCompanyIds(String(req.session.userId ?? ""));

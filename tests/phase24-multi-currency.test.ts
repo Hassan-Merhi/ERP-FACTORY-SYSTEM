@@ -487,6 +487,78 @@ describe("M6 — realized FX on an allocation", () => {
     ]);
   });
 
+  it("review finding: a customer's lines on its linked ledger account are its items (engine ownership rule)", async () => {
+    // The open-item engine (allocations/openItems.ts) and the balance engine attribute a line on a
+    // customer's linked ledger to the customer even without customer_id; realized FX must too.
+    const stamp = Date.now().toString().slice(-6);
+    const ledger = await pool.query<{ id: number }>(
+      `INSERT INTO ledger_accounts
+         (company_id, code, name, account_type, sub_type, opening_balance, opening_balance_side, active)
+       VALUES ($1, $2, $3, 'Asset', 'receivable', '0', 'Dr', true) RETURNING id`,
+      [ctx.companyId, `P24LNK${stamp}`, `${PREFIX} linked receivable`]
+    );
+    const linked = await pool.query<{ id: number }>(
+      `INSERT INTO customers (company_id, code, legal_name, active, ledger_account_id)
+       VALUES ($1, $2, $3, true, $4) RETURNING id`,
+      [ctx.companyId, `${PREFIX}-LNK${stamp}`, `${PREFIX} linked customer`, ledger.rows[0].id]
+    );
+    const linkedLedgerId = ledger.rows[0].id;
+    const post = (id: string, date: string, rate: string, side: "invoice" | "receipt") =>
+      inScope(() =>
+        db.transaction((tx) =>
+          postErpVoucherTx(tx, {
+            companyId: ctx.companyId,
+            voucherType: side === "invoice" ? "Sales" : "Receipt",
+            voucherDate: date,
+            currency: "EUR",
+            exchangeRate: rate,
+            lines: [
+              {
+                ledgerAccountId: side === "invoice" ? linkedLedgerId : ctx.cashAccountId,
+                debit: "1",
+                transaction: { currency: "EUR", amount: "100", rate },
+              },
+              {
+                ledgerAccountId: side === "invoice" ? ctx.salesAccountId : linkedLedgerId,
+                credit: "1",
+                transaction: { currency: "EUR", amount: "100", rate },
+              },
+            ],
+            source: { type: `${PREFIX}-linked-${side}`, id },
+          })
+        )
+      );
+    const invoice = await post(`li-${stamp}`, "2026-04-04", "0.8", "invoice"); // EUR 100 = USD 125
+    const receipt = await post(`lr-${stamp}`, "2026-04-22", "1", "receipt"); // EUR 100 = USD 100
+    const { rows } = await pool.query<{ id: number }>(
+      `INSERT INTO party_open_item_allocations
+         (company_id, party_kind, party_id, invoice_voucher_id, payment_voucher_id, amount, currency, method)
+       VALUES ($1, 'customer', $2, $3, $4, 100.00, 'USD', 'auto_fifo') RETURNING id`,
+      [ctx.companyId, linked.rows[0].id, invoice.voucher.id, receipt.voucher.id]
+    );
+    const result = await inScope(() =>
+      db.transaction((tx) =>
+        postRealizedFxForAllocationTx(tx, {
+          companyId: ctx.companyId,
+          allocationId: rows[0].id,
+          partyKind: "customer",
+          partyId: linked.rows[0].id,
+          invoiceVoucherId: invoice.voucher.id,
+          paymentVoucherId: receipt.voucher.id,
+          amount: "100.00",
+        })
+      )
+    );
+    expect(result).toMatchObject({ posted: true, difference: "-25.00", currency: "EUR" });
+    const fxAccount = await accountIdByCode("FX_GAIN_LOSS");
+    const lines = await voucherLines(result.voucherId!);
+    // The correction sits on the linked ledger, which is the customer's balance.
+    expect(lines.map((line) => [line.ledger_account_id, line.debit, line.credit])).toEqual([
+      [linkedLedgerId, "0.00", "25.00"],
+      [fxAccount, "25.00", "0.00"],
+    ]);
+  });
+
   it("skips an opening item and a settlement in another currency", async () => {
     const skip = await inScope(() =>
       db.transaction((tx) =>

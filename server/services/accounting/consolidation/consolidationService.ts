@@ -228,12 +228,19 @@ function addNested(map: Map<number, Map<number, Map<number, Decimal>>>, a: numbe
   map.set(a, level1);
 }
 
-/** Income and expense lines of a company's vouchers that also post to an intercompany account with a group company. */
+/**
+ * Income and expense lines of a company's vouchers that also post to an
+ * intercompany account with a group company, translated to the presentation
+ * currency by the company's `factor` (the same factor as its trial-balance
+ * rows, so the elimination is in the rows' currency), per counterparty and
+ * account.
+ */
 async function loadIcPnlLines(
   companyId: number,
   icAccounts: readonly IntercompanyAccount[],
   accountClassById: ReadonlyMap<number, ConsolidationClass>,
   window: { from: string; to: string },
+  factor: Decimal,
   pnl: IcPnl
 ): Promise<void> {
   const counterpartyByAccount = new Map<number, number>();
@@ -275,14 +282,24 @@ async function loadIcPnlLines(
     })
     .from(voucherEntries)
     .where(inArray(voucherEntries.voucherId, [...counterpartyByVoucher.keys()]));
+  // Book-currency amounts first, translated once per counterparty and account.
+  const native: IcPnl = { income: new Map(), expense: new Map() };
   for (const line of lines) {
     const accountId = Number(line.ledgerAccountId);
     if (!accountId) continue;
     const counterparty = counterpartyByVoucher.get(line.voucherId)!;
     const net = toMoney(line.debit).minus(toMoney(line.credit));
     const accountClass = accountClassById.get(accountId);
-    if (accountClass === "income") addNested(pnl.income, companyId, counterparty, accountId, net.negated());
-    if (accountClass === "expense") addNested(pnl.expense, companyId, counterparty, accountId, net);
+    if (accountClass === "income") addNested(native.income, companyId, counterparty, accountId, net.negated());
+    if (accountClass === "expense") addNested(native.expense, companyId, counterparty, accountId, net);
+  }
+  for (const side of ["income", "expense"] as const) {
+    for (const [counterparty, byAccount] of native[side].get(companyId) ?? new Map<number, Map<number, Decimal>>()) {
+      for (const [accountId, amount] of byAccount) {
+        const translated = amount.times(factor).toDecimalPlaces(2, Decimal.ROUND_HALF_UP);
+        addNested(pnl[side], companyId, counterparty, accountId, translated);
+      }
+    }
   }
 }
 
@@ -412,7 +429,7 @@ export async function buildConsolidation(input: {
           : "0.00",
       }));
       icByCompany.set(company.id, icAccounts);
-      if (factor) await loadIcPnlLines(company.id, icAccounts, classes, window, pnl);
+      if (factor) await loadIcPnlLines(company.id, icAccounts, classes, window, factor, pnl);
     });
   }
 

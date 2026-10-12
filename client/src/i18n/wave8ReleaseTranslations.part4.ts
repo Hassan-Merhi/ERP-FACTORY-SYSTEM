@@ -666,6 +666,22 @@ export const wave8ReleaseTranslationsPart4: readonly Phase3SharedUiEntry[] = [
     ar: "يجب أن تكون جميع بنود استيراد أمر الشراء بالعملة نفسها.",
     fr: "Tous les articles d’une importation de bon de commande doivent être dans la même devise.",
   },
+  {
+    en: "Container charges cannot be imported for a container whose purchase orders are in different currencies. Import the charges separately.",
+    ar: "لا يمكن استيراد مصاريف الحاوية لحاوية أوامر الشراء فيها بعملات مختلفة. استورد المصاريف بشكل منفصل.",
+    fr: "Les frais de conteneur ne peuvent pas être importés pour un conteneur dont les bons de commande sont dans des devises différentes. Importez les frais séparément.",
+  },
+  {
+    en: "One exchange rate was sent for purchase orders in several foreign currencies. Send no rate to use the recorded rates.",
+    ar: "أُرسل سعر صرف واحد لأوامر شراء بعدة عملات أجنبية. لا ترسل أي سعر لاستخدام الأسعار المسجلة.",
+    fr: "Un seul taux de change a été envoyé pour des bons de commande en plusieurs devises étrangères. N’envoyez aucun taux pour utiliser les taux enregistrés.",
+  },
+  // Consolidation query parameters (routes/accounting-integrity/multiCompanyRoutes.ts).
+  {
+    en: "Each query parameter must be given once, as a single value",
+    ar: "يجب تمرير كل معامل استعلام مرة واحدة فقط، كقيمة واحدة",
+    fr: "Chaque paramètre de requête doit être fourni une seule fois, avec une seule valeur",
+  },
   // Month-end revaluation (services/accounting/fx/monthEndRevaluation.ts).
   {
     en: "The revaluation date must be the last day of a month (YYYY-MM-DD).",

@@ -38,7 +38,7 @@ import {
   poUsd,
   poVoucherTotal,
 } from "../../services/accounting/fx/purchaseOrderCurrency";
-import { resolvePoImportCurrency, resolvePoImportLines } from "./poImportCurrency";
+import { poImportContainerUsd, resolvePoImportGroupCurrencies, resolvePoImportLines } from "./poImportCurrency";
 import { ensureParentCreditAccount, resolveSubsidiaryReceivableAccount } from "./poImportParentAccounts";
 
 export function registerPoImportRoutes(app: Express) {
@@ -224,19 +224,72 @@ export function registerPoImportRoutes(app: Express) {
         return res.status(400).json({ message: "This file has already been imported" });
       }
 
+      // Group items by PO
+      const poGroups = containerPreview.items.reduce<Record<string, PoImportPreviewItem[]>>((acc, item) => {
+        if (!acc[item.poNumber]) {
+          acc[item.poNumber] = [];
+        }
+        acc[item.poNumber].push(item);
+        return acc;
+      }, {});
+
+      // Auto-generate a PO number if the Excel PO Number column was blank
+      if (poGroups[""]) {
+        const year = new Date().getFullYear();
+        const prefix = `PO-${year}-`;
+        const companyId = req.session.currentCompanyId!;
+        const existingPoRows = await db
+          .select({ poNumber: purchaseOrders.poNumber })
+          .from(purchaseOrders)
+          .where(and(eq(purchaseOrders.companyId, companyId), like(purchaseOrders.poNumber, `${prefix}%`)));
+        let maxSeq = 0;
+        for (const { poNumber: pn } of existingPoRows) {
+          const n = parseInt(pn.slice(prefix.length), 10);
+          if (!isNaN(n) && n > maxSeq) maxSeq = n;
+        }
+        const generatedPoNumber = `${prefix}${String(maxSeq + 1).padStart(3, "0")}`;
+        poGroups[generatedPoNumber] = poGroups[""];
+        delete poGroups[""];
+      }
+      const poEntries = Object.entries(poGroups);
+
+      // Container-level charges
+      const charges = containerPreview.charges;
+      const containerCharges = {
+        freight: charges.freight || 0,
+        surcharge: charges.surcharge || 0,
+        fumigation: charges.fumigation || 0,
+        documentCharges: charges.documentCharges || 0,
+        discount: charges.discount || 0,
+        otherCharges: charges.otherCharges || 0,
+      };
+      const hasAnyCharges = Object.values(containerCharges).some((amount) => amount > 0);
+
       // Phase 24 (M5): a non-USD PO posts at the rate recorded on or before the
       // import date (a client rate within 0.5% of it); its USD amounts are
-      // stored on the PO with the native ones alongside. Checked before any write.
-      const resolvedCurrency = await resolvePoImportCurrency({
+      // stored on the PO with the native ones alongside. Resolved per PO (a
+      // container may hold POs in different currencies). Checked before any write.
+      const resolvedCurrencies = await resolvePoImportGroupCurrencies({
         companyId: currentCompanyId,
-        items: containerPreview.items,
+        groups: poEntries.map(([, items]) => items),
         importDate: String(importDate),
         clientRate: req.body.exchangeRate,
+        hasContainerCharges: hasAnyCharges,
       });
-      if ("refusal" in resolvedCurrency) {
-        return res.status(resolvedCurrency.refusal.status).json(resolvedCurrency.refusal.body);
+      if ("refusal" in resolvedCurrencies) {
+        return res.status(resolvedCurrencies.refusal.status).json(resolvedCurrencies.refusal.body);
       }
-      const poCurrency = resolvedCurrency.currency;
+      const poCurrencies = resolvedCurrencies.currencies;
+
+      // Split each container charge across the POs by item value, exact to the cent.
+      const chargeSplits = allocatePoCharges(
+        poEntries.map(([, items]) => items.map((item) => item.lineTotal)),
+        containerCharges,
+        resolvedFreightPaidBy === "parent"
+      );
+      // The container's totals and charge records are USD, like its POs' money
+      // columns (review finding): a foreign PO's figures at its rate.
+      const containerUsd = poImportContainerUsd(containerPreview, poEntries, chargeSplits, poCurrencies);
 
       // A container number that already exists is only a hard block if it already has
       // real financial data attached (PO, charges, or a sale) or belongs to another
@@ -270,9 +323,7 @@ export function registerPoImportRoutes(app: Express) {
           supplierId,
           status: "OTW",
           importDate,
-          itemsTotal: containerPreview.itemsTotal.toString(),
-          chargesTotal: containerPreview.chargesTotal.toString(),
-          grandTotal: containerPreview.grandTotal.toString(),
+          ...containerUsd.totals,
         });
       } else {
         container = await storage.createContainer({
@@ -281,38 +332,8 @@ export function registerPoImportRoutes(app: Express) {
           supplierId,
           status: "OTW",
           importDate,
-          itemsTotal: containerPreview.itemsTotal.toString(),
-          chargesTotal: containerPreview.chargesTotal.toString(),
-          grandTotal: containerPreview.grandTotal.toString(),
+          ...containerUsd.totals,
         });
-      }
-
-      // Group items by PO
-      const poGroups = containerPreview.items.reduce<Record<string, PoImportPreviewItem[]>>((acc, item) => {
-        if (!acc[item.poNumber]) {
-          acc[item.poNumber] = [];
-        }
-        acc[item.poNumber].push(item);
-        return acc;
-      }, {});
-
-      // Auto-generate a PO number if the Excel PO Number column was blank
-      if (poGroups[""]) {
-        const year = new Date().getFullYear();
-        const prefix = `PO-${year}-`;
-        const companyId = req.session.currentCompanyId!;
-        const existingPoRows = await db
-          .select({ poNumber: purchaseOrders.poNumber })
-          .from(purchaseOrders)
-          .where(and(eq(purchaseOrders.companyId, companyId), like(purchaseOrders.poNumber, `${prefix}%`)));
-        let maxSeq = 0;
-        for (const { poNumber: pn } of existingPoRows) {
-          const n = parseInt(pn.slice(prefix.length), 10);
-          if (!isNaN(n) && n > maxSeq) maxSeq = n;
-        }
-        const generatedPoNumber = `${prefix}${String(maxSeq + 1).padStart(3, "0")}`;
-        poGroups[generatedPoNumber] = poGroups[""];
-        delete poGroups[""];
       }
 
       // Get fresh stock items data for barcode lookup during import
@@ -347,43 +368,11 @@ export function registerPoImportRoutes(app: Express) {
         });
       }
 
-      // Get charges for this container
-      const charges = containerPreview.charges;
-
-      // Container-level charges
-      const containerFreight = charges.freight || 0;
-      const containerSurcharge = charges.surcharge || 0;
-      const containerFumigation = charges.fumigation || 0;
-      const containerDocumentCharges = charges.documentCharges || 0;
-      const containerDiscount = charges.discount || 0;
-      const containerOtherCharges = charges.otherCharges || 0;
-      const hasAnyCharges =
-        containerFreight > 0 ||
-        containerSurcharge > 0 ||
-        containerFumigation > 0 ||
-        containerDocumentCharges > 0 ||
-        containerDiscount > 0 ||
-        containerOtherCharges > 0;
-
-      // Split each container charge across the POs by item value, exact to the cent.
-      const poEntries = Object.entries(poGroups);
-      const chargeSplits = allocatePoCharges(
-        poEntries.map(([, items]) => items.map((item) => item.lineTotal)),
-        {
-          freight: containerFreight,
-          surcharge: containerSurcharge,
-          fumigation: containerFumigation,
-          documentCharges: containerDocumentCharges,
-          discount: containerDiscount,
-          otherCharges: containerOtherCharges,
-        },
-        resolvedFreightPaidBy === "parent"
-      );
-
       // Create POs and line items
       for (let poIndex = 0; poIndex < poEntries.length; poIndex++) {
         const [poNumber, items] = poEntries[poIndex];
         const poItems = items;
+        const poCurrency = poCurrencies[poIndex];
         const {
           itemsTotal: poItemsTotal,
           freight: poFreight,
@@ -790,27 +779,14 @@ export function registerPoImportRoutes(app: Express) {
 
       // Create container charges records (for display in Container Extra Charges section)
       // Note: Charges are now consolidated into the main PO voucher, no separate vouchers needed
-      const chargeTypesForContainer = [
-        { type: "Freight", amount: charges.freight, isNegative: false },
-        { type: "Surcharge", amount: charges.surcharge, isNegative: false },
-        { type: "Fumigation", amount: charges.fumigation, isNegative: false },
-        { type: "Discount", amount: charges.discount, isNegative: true },
-        { type: "Document Charges", amount: charges.documentCharges, isNegative: false },
-        { type: "Other Charges", amount: charges.otherCharges, isNegative: false },
-      ];
-
-      for (const charge of chargeTypesForContainer) {
-        const chargeAmount = charge.amount ?? 0;
-        if (chargeAmount > 0) {
-          const actualAmount = charge.isNegative ? -chargeAmount : chargeAmount;
-
-          // Create container charge record (for display only - charges are in PO voucher)
-          await storage.createContainerCharge({
-            containerId: container.id,
-            chargeType: charge.type,
-            amount: actualAmount.toString(),
-          });
-        }
+      // (USD, the same figures as the container's charges total.)
+      for (const charge of containerUsd.charges) {
+        // Create container charge record (for display only - charges are in PO voucher)
+        await storage.createContainerCharge({
+          containerId: container.id,
+          chargeType: charge.type,
+          amount: charge.amount,
+        });
       }
 
       // Create import log

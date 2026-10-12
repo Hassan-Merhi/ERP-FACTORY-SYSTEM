@@ -46,7 +46,7 @@
  * plugs this module in (registered once at route registration).
  */
 import type Decimal from "decimal.js";
-import { and, eq, isNull, sql } from "drizzle-orm";
+import { and, eq, isNull, sql, type SQL } from "drizzle-orm";
 import { voucherEntries, vouchers } from "@shared/schema";
 
 import type { DbTransaction } from "../../../db";
@@ -55,6 +55,7 @@ import { logger } from "../../../lib/logger";
 import { MONEY_DECIMAL_PLACES, MoneyDecimal, toMoney } from "../../../lib/money";
 import type { AllocationEvent, AllocationPartyKind } from "../allocations/allocationEvents";
 import { registerAllocationListener } from "../allocations/allocationEvents";
+import { customerOwnedLineSql, partyOwnedLineSql } from "../balances/partyLineRules";
 import { createDatabasePostingDependencies } from "../databasePostingDependencies";
 import { postErpVoucherTx, type ErpVoucherLine } from "../erpVoucherPosting";
 import { realizedFxAutoPostingAllowedTx } from "../allocations/allocationEnablement";
@@ -116,16 +117,23 @@ interface PartyItem {
   target: Pick<ErpVoucherLine, "ledgerAccountId" | "customerId" | "supplierId" | "employeeId" | "factorySupplierId">;
 }
 
-function partyColumn(kind: AllocationPartyKind) {
+/**
+ * The party's lines on a voucher, on the balance engine's ownership rule
+ * (partyLineRules.ts) — the same lines the open-item engine nets into the
+ * allocated items: a customer owns its linked ledger's lines and the lines
+ * tagged with it that name no other target; another party owns the lines
+ * tagged with it that name no higher-priority target.
+ */
+function partyOwnedLine(companyId: number, kind: AllocationPartyKind, partyId: number): SQL {
   switch (kind) {
     case "customer":
-      return voucherEntries.customerId;
+      return customerOwnedLineSql(companyId, partyId);
     case "supplier":
-      return voucherEntries.supplierId;
+      return and(eq(voucherEntries.supplierId, partyId), partyOwnedLineSql("supplier_id")) as SQL;
     case "employee":
-      return voucherEntries.employeeId;
+      return and(eq(voucherEntries.employeeId, partyId), partyOwnedLineSql("employee_id")) as SQL;
     case "factorySupplier":
-      return voucherEntries.factorySupplierId;
+      return and(eq(voucherEntries.factorySupplierId, partyId), partyOwnedLineSql("factory_supplier_id")) as SQL;
   }
 }
 
@@ -165,7 +173,7 @@ async function loadPartyItemTx(
         eq(voucherEntries.voucherId, voucherId),
         eq(vouchers.companyId, companyId),
         isNull(vouchers.deletedAt),
-        eq(partyColumn(kind), partyId)
+        partyOwnedLine(companyId, kind, partyId)
       )
     )
     .orderBy(voucherEntries.id);
