@@ -112,7 +112,7 @@ export function registerStatsNetProfitRoutes(app: Express) {
         codes: "erp",
         payrollCurrentBalanceMemo: true,
         banks: true,
-        missingAccounts: true,
+        missingAccounts: false,
       });
       // Ledger accounts a customer owns are left out: the engine rolls them
       // into the customer line added below.
