@@ -122,7 +122,7 @@ export async function calculateNetPositionAsOf(
       employees: "erp",
       codes: "erp",
       banks: true,
-      missingAccounts: true,
+      missingAccounts: false,
     }),
   ]);
 
