@@ -521,8 +521,18 @@ export function registerItemMarketAnalysisRoutes(app: Express) {
         ...analysis.summary,
       }));
 
+      const salesReportTotals = sections.reduce(
+        (acc, { analysis }) => ({
+          soldQty: acc.soldQty + analysis.salesReportTotals.soldQty,
+          revenue: acc.revenue + analysis.salesReportTotals.revenue,
+          profit: acc.profit + analysis.salesReportTotals.profit,
+        }),
+        { soldQty: 0, revenue: 0, profit: 0 }
+      );
+
       res.setHeader("Cache-Control", "private, no-store");
       return res.json({
+        salesReportTotals,
         generatedAt: new Date().toISOString(),
         rows,
         stockGroups,
