@@ -52,8 +52,6 @@ export default function Dashboard() {
     importCycleData,
     importCycleIsError,
     importCycleIsLoading,
-    importCycleBalance,
-    isImportCycleBalanced,
   } = dashboard;
 
   return (
@@ -216,7 +214,13 @@ export default function Dashboard() {
         <DashboardKPICard
           title="Import Cycle Balance"
           value={importCycleIsError ? "Unavailable" : importCycleIsLoading ? "Loading..." : formatAmount(0)}
-          change={importCycleIsError ? "Could not load cycle data" : importCycleIsLoading ? "" : "Balanced (temporary display — click to see actual balance)"}
+          change={
+            importCycleIsError
+              ? "Could not load cycle data"
+              : importCycleIsLoading
+                ? ""
+                : "Balanced (temporary display — click to see actual balance)"
+          }
           changeType={importCycleIsError ? "neutral" : "positive"}
           icon={importCycleIsError ? Truck : CheckCircle2}
           stripeClass="bg-linear-to-r from-chart-2 via-chart-2/60 to-chart-2/20"
