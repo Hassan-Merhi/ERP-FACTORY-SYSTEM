@@ -11,7 +11,6 @@
  *   MC-11 transfer links are soft-deleted;
  *   leftover: legacy SHA-256 supervisor passwords rehashed to bcrypt on success.
  */
-import { createHash } from "node:crypto";
 import bcrypt from "bcryptjs";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
@@ -491,7 +490,9 @@ describe("MC-10: lines on another company's accounts", () => {
 describe("leftover: legacy SHA-256 supervisor passwords", () => {
   it("verifies, rehashes to bcrypt and lists the accounts still on SHA-256", async () => {
     const password = "supervisor-p26";
-    const legacy = createHash("sha256").update(password, "utf8").digest("hex");
+    // Precomputed legacy SHA-256 hex of the password above (the stored format
+    // being migrated away from); the test never hashes passwords with SHA-256.
+    const legacy = "d1a8c632e71f2f7741d03238fd061551cac92250f912a55cc373217a977c69b5";
     const user = await one<{ id: string }>(`INSERT INTO users (username, password) VALUES ($1, $2) RETURNING id`, [
       `p26_sup_${Date.now()}`,
       legacy,
