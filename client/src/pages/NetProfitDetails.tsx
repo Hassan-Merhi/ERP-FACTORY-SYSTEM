@@ -7,7 +7,8 @@ import { PageHeader } from "@/components/PageHeader";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Calendar as CalendarPicker } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -317,25 +318,28 @@ export default function NetProfitDetails() {
   const { formatHistoricalBaseAmount: formatAmount } = useCurrencyContext();
   const { selectedCompany } = useCompany();
   const { toast } = useToast();
-  const [fromInput, setFromInput] = useState<string>("");
-  const [toInput, setToInput] = useState<string>("");
   const [fromDate, setFromDate] = useState<string>("");
   const [toDate, setToDate] = useState<string>("");
 
-  const isValidDate = (v: string) => /^\d{4}-\d{2}-\d{2}$/.test(v);
-  const commitFrom = (v: string) => {
-    if (v === "" || isValidDate(v)) setFromDate(v);
+  const toIsoDate = (date: Date) => [date.getFullYear(), String(date.getMonth() + 1).padStart(2, "0"), String(date.getDate()).padStart(2, "0")].join("-");
+  const parseLocalDate = (value: string) => {
+    if (!value) return undefined;
+    const [year, month, day] = value.split("-").map(Number);
+    return new Date(year, month - 1, day);
   };
-  const commitTo = (v: string) => {
-    if (v === "" || isValidDate(v)) setToDate(v);
+  const selectFrom = (date: Date | undefined) => {
+    if (!date) return;
+    const value = toIsoDate(date);
+    setFromDate(value);
+    if (toDate && value > toDate) setToDate(value);
   };
-  const clearDates = () => {
-    setFromInput("");
-    setToInput("");
-    setFromDate("");
-    setToDate("");
+  const selectTo = (date: Date | undefined) => {
+    if (!date) return;
+    const value = toIsoDate(date);
+    setToDate(value);
+    if (fromDate && value < fromDate) setFromDate(value);
   };
-
+  const clearDates = () => { setFromDate(""); setToDate(""); };
   const queryParam = toDate ? `?toDate=${toDate}` : "";
 
   const { data, isLoading, error, refetch } = useQuery<NetProfitData>({
@@ -354,13 +358,13 @@ export default function NetProfitDetails() {
       const today = new Date().toLocaleDateString("en-CA");
       const start =
         fromDate ||
-        fromInput ||
+        
         (() => {
           const d = new Date();
           d.setFullYear(d.getFullYear() - 1);
           return d.toLocaleDateString("en-CA");
         })();
-      const end = toDate || toInput || today;
+      const end = toDate ||  today;
       return apiRequest("POST", "/api/whatsapp/send-net-position", { startDate: start, endDate: end });
     },
     onSuccess: async (res) => {
@@ -460,13 +464,13 @@ export default function NetProfitDetails() {
                 const today = new Date().toLocaleDateString("en-CA");
                 const start =
                   fromDate ||
-                  fromInput ||
+                  
                   (() => {
                     const d = new Date();
                     d.setFullYear(d.getFullYear() - 1);
                     return d.toLocaleDateString("en-CA");
                   })();
-                const end = toDate || toInput || today;
+                const end = toDate ||  today;
                 window.open(`/api/reports/net-position-monthly-excel?startDate=${start}&endDate=${end}`, "_blank");
               }}
             >
@@ -493,31 +497,32 @@ export default function NetProfitDetails() {
 
       <div className="flex items-center gap-2 flex-wrap">
         <Calendar className="h-4 w-4 text-muted-foreground shrink-0" />
-        <div className="flex items-center gap-1.5">
-          <Label className="text-sm text-muted-foreground whitespace-nowrap">From:</Label>
-          <Input
-            type="date"
-            value={fromInput}
-            max={toInput || todayStr()}
-            onChange={(e) => setFromInput(e.target.value)}
-            onBlur={(e) => commitFrom(e.target.value)}
-            className="w-36 text-sm"
-            data-testid="input-from-date"
-          />
-        </div>
-        <div className="flex items-center gap-1.5">
-          <Label className="text-sm text-muted-foreground whitespace-nowrap">To:</Label>
-          <Input
-            type="date"
-            value={toInput}
-            min={fromInput || undefined}
-            max={todayStr()}
-            onChange={(e) => setToInput(e.target.value)}
-            onBlur={(e) => commitTo(e.target.value)}
-            className="w-36 text-sm"
-            data-testid="input-to-date"
-          />
-        </div>
+        <Label className="text-sm text-muted-foreground">From:</Label>
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button variant="outline" className="w-40 justify-between font-normal" data-testid="input-from-date">
+              {fromDate ? parseLocalDate(fromDate)!.toLocaleDateString("en-US") : "Select date"}
+              <Calendar className="h-4 w-4 opacity-70" />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent align="start" className="w-auto p-0">
+            <CalendarPicker mode="single" selected={parseLocalDate(fromDate)} onSelect={selectFrom}
+              disabled={(date) => date > new Date()} initialFocus />
+          </PopoverContent>
+        </Popover>
+        <Label className="text-sm text-muted-foreground">To:</Label>
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button variant="outline" className="w-40 justify-between font-normal" data-testid="input-to-date">
+              {toDate ? parseLocalDate(toDate)!.toLocaleDateString("en-US") : "Select date"}
+              <Calendar className="h-4 w-4 opacity-70" />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent align="start" className="w-auto p-0">
+            <CalendarPicker mode="single" selected={parseLocalDate(toDate)} onSelect={selectTo}
+              disabled={(date) => date > new Date()} initialFocus />
+          </PopoverContent>
+        </Popover>
         {isFiltered && (
           <Button
             variant="ghost"
