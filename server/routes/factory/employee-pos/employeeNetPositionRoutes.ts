@@ -550,7 +550,7 @@ export function registerEmployeeNetPositionRoutes(app: Express) {
         ...bankForUs.map(({ partyKind: _kind, partyId: _id, ...line }) => line),
         ...customerDrItems.map(({ partyKind: _kind, partyId: _id, ...line }) => line),
         // Overpaid suppliers: they owe us the excess back — show as an asset
-        ...supplierForUs.map(({ partyKind: _kind, partyId: _id, ...line }) => line),
+        ...supplierForUs.map(({ partyKind: _kind, partyId, ...line }) => ({ ...line, supplierId: partyId })),
         ...(prepaidRent > 0
           ? [{ name: "Prepaid Rent", code: "PREPAID_RENT", value: prepaidRent, category: "Prepaid Rent" }]
           : []),
@@ -570,8 +570,9 @@ export function registerEmployeeNetPositionRoutes(app: Express) {
         value: number;
         category: string;
         breakdown?: { label: string; native: string; usd: number }[];
+        supplierId?: number;
       }[] = [
-        ...supplierOnUs.map(({ partyKind: _kind, partyId: _id, ...line }) => line),
+        ...supplierOnUs.map(({ partyKind: _kind, partyId, ...line }) => ({ ...line, supplierId: partyId })),
         ...ledgerOnUs.sort((a, b) => b.value - a.value).map((a) => ({ ...a, value: round2(a.value) })),
         ...bankOnUs.map(({ partyKind: _kind, partyId: _id, ...line }) => line),
         {
