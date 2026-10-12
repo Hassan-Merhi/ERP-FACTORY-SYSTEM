@@ -49,7 +49,13 @@ export function registerPosPrintRoutes(app: Express): void {
       // when no item has a configured price.  Do NOT gate on hideSalesProfitCost here —
       // the only valid reason to suppress the columns is "no configured price set".
       const hideProfitCols = erpVis.hideSelling || erpVis.hideCost;
-      const pdfBuffer = await generateInvoicePdf(voucherId, companyId, req.user?.username, { hideProfitCols });
+      // Match the compact layout used by the WhatsApp POS invoice. The standard
+      // A4 layout spreads large sales over far more printed pages.
+      const pdfBuffer = await generateInvoicePdf(voucherId, companyId, req.user?.username, {
+        hideProfitCols,
+        compactMode: true,
+        whatsappMode: true,
+      });
 
       // Build a friendly filename
       let customerName: string | null = null;

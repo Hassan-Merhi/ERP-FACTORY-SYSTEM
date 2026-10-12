@@ -53,6 +53,7 @@ interface PosHandlersParams {
   // Refs
   inputRefs: React.MutableRefObject<{ [key: string]: HTMLInputElement }>;
   printRef: React.MutableRefObject<HTMLDivElement | null>;
+  savedSale: InvoiceSale | null | undefined;
   stockPrintRef: React.RefObject<HTMLDivElement | null>;
   clientSaleIdRef: React.MutableRefObject<string>;
   // Query results
@@ -155,7 +156,7 @@ export function usePosHandlers(params: PosHandlersParams) {
   const { handlePrint, handleStockPrint, handleExportInventory, handleSummaryExport, handleDetailedExport } =
     usePosInvoiceActions({
       rows: params.rows,
-      printRef: params.printRef,
+      savedSale: params.savedSale,
       stockPrintRef: params.stockPrintRef,
       activeLocation: params.activeLocation,
       apiInventory: params.apiInventory,
