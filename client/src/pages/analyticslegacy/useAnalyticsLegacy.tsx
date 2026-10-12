@@ -389,7 +389,7 @@ export function useAnalyticsLegacy() {
 
   // ── Factory Analytics Queries ───────────────────────────────────────────
   const [factoryOrderPage, setFactoryOrderPage] = useState(1);
-  const [factoryOrderStatus, setFactoryOrderStatus] = useState("all");
+  const [factoryOrderStatus, setFactoryOrderStatus] = useState("VERIFIED_FINALIZED");
   const [factoryOrderIncludeCharges, setFactoryOrderIncludeCharges] = useState(false);
 
   // The page-level PeriodFilter is the single date control for factory sales analytics.

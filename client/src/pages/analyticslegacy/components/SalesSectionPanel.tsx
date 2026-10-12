@@ -90,6 +90,7 @@ export function SalesSectionPanel({ analytics }: { analytics: AnalyticsLegacySta
                         <SelectItem value="all">All</SelectItem>
                         <SelectItem value="LOADING">Loading</SelectItem>
                         <SelectItem value="VERIFIED">Verified</SelectItem>
+                        <SelectItem value="VERIFIED_FINALIZED">Verified + Finalized</SelectItem>
                         <SelectItem value="FINALIZED">Finalized</SelectItem>
                       </SelectContent>
                     </Select>
