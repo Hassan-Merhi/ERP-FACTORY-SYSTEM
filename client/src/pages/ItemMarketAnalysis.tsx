@@ -358,18 +358,6 @@ export default function ItemMarketAnalysis() {
         </div>
       </div>
 
-      {data?.salesReportTotals && (
-        <div className="rounded-xl border bg-card p-3 text-sm">
-          <div className="font-medium">Sales Report Cost Profit (posted sales): {formatAmount(data.salesReportTotals.profit)}</div>
-          <div className="text-xs text-muted-foreground">Net item revenue after credit notes: {formatAmount(summary.revenue)} · Net item sold quantity after returns: {formatNumber(summary.soldQty)}. Modeled item profit at the selected purchase-cost method: ${formatAmount(summary.profit)} (shown in the item breakdown). The top Cost Profit uses Sales Report's posted sales and matching filters.</div>
-        </div>
-      )}
-      {comparableToSalesReport && salesReportReconciliation && (
-        <p className="text-xs text-muted-foreground">
-          The Sales Report figures above include credit sales and archived-item history. Net Item Revenue also deducts credit notes, while modeled item profit uses selected purchase costs. The reconciled company-wide COGS adjustment is not allocated to individual items.
-        </p>
-      )}
-
       <div className="flex flex-wrap items-center gap-2 rounded-xl border bg-card p-3">
         <PeriodFilter value={period} onChange={setPeriod} data-testid="period-filter-item-market-analysis" />
         <div className="relative min-w-[220px] flex-1 sm:max-w-sm">
