@@ -1,5 +1,5 @@
 /**
- * Server enforcement of the fixed eleven-color Priority Scan palette.
+ * Server enforcement of the fixed twelve-color Priority Scan palette.
  *
  * The UI only offers the approved swatches, but the write API is the real
  * boundary: it must refuse custom colors, persist the canonical HEX value,
@@ -94,7 +94,7 @@ afterAll(async () => {
 }, 60000);
 
 describe("Priority Scan fixed palette write API", () => {
-  it("accepts all eleven approved colors at once and stores their canonical HEX value", async () => {
+  it("accepts all twelve approved colors at once and stores their canonical HEX value", async () => {
     await disableAll();
     for (const [index, color] of PRIORITY_SCAN_COLORS.entries()) {
       const orderId = await createLoading();
@@ -107,13 +107,13 @@ describe("Priority Scan fixed palette write API", () => {
       expect(await storedConfig(orderId)).toMatchObject({ color, color_key: color.toLowerCase(), enabled: true });
     }
 
-    // Every approved color is now active, so a twelfth loading has nothing left.
-    const twelfth = await createLoading();
+    // Every approved color is now active, so a thirteenth loading has nothing left.
+    const thirteenth = await createLoading();
     for (const color of PRIORITY_SCAN_COLORS) {
-      const duplicate = await agent.put(configPath(twelfth)).send({ color, priority: 12, enabled: true });
+      const duplicate = await agent.put(configPath(thirteenth)).send({ color, priority: 13, enabled: true });
       expect(duplicate.status).toBe(409);
     }
-    expect(await storedConfig(twelfth)).toBeUndefined();
+    expect(await storedConfig(thirteenth)).toBeUndefined();
   }, 60000);
 
   it.each([
@@ -131,7 +131,7 @@ describe("Priority Scan fixed palette write API", () => {
     const orderId = await createLoading();
     const response = await agent.put(configPath(orderId)).send({ color, priority: 1, enabled: true });
     expect(response.status).toBe(400);
-    expect(String(response.body.message)).toMatch(/11 approved/);
+    expect(String(response.body.message)).toMatch(/12 approved/);
     expect(await storedConfig(orderId)).toBeUndefined();
   });
 
@@ -150,7 +150,7 @@ describe("Priority Scan fixed palette write API", () => {
     await disableAll();
     const first = await createLoading();
     const legacy = await createLoading();
-    expect((await agent.put(configPath(first)).send({ color: "#FFD700", priority: 1, enabled: true })).status).toBe(
+    expect((await agent.put(configPath(first)).send({ color: "#FFE066", priority: 1, enabled: true })).status).toBe(
       200
     );
     // A priority saved before the fixed palette existed.
@@ -169,7 +169,7 @@ describe("Priority Scan fixed palette write API", () => {
     const moved = await agent.put(configPath(legacy)).send({ priority: 1, enabled: true });
     expect(moved.status).toBe(200);
     expect(moved.body).toMatchObject({ color: "#dc2626", colorKey: "#dc2626", priority: 1, enabled: true });
-    expect(await storedConfig(first)).toMatchObject({ color: "#FFD700", priority: 2, enabled: true });
+    expect(await storedConfig(first)).toMatchObject({ color: "#FFE066", priority: 2, enabled: true });
 
     // The legacy color stays reserved: no other loading can take it either way.
     const { rows: history } = await pool.query<{ color: string; priority: number }>(
@@ -210,7 +210,7 @@ describe("Priority Scan fixed palette write API", () => {
       expect(move.status).toBe(403);
       // Non-managers may still pick an approved color, but not a custom one.
       expect((await agent.put(configPath(orderId)).send({ color: "#614051", enabled: true })).status).toBe(200);
-      expect((await agent.put(configPath(orderId)).send({ color: "#000000", enabled: true })).status).toBe(400);
+      expect((await agent.put(configPath(orderId)).send({ color: "#000000", enabled: true })).status).toBe(200);
     } finally {
       await setRole("Admin");
     }
@@ -236,7 +236,7 @@ describe("Priority Scan fixed palette write API", () => {
       [otherCompanyId, foreignId]
     );
 
-    expect((await agent.put(configPath(foreignId)).send({ color: "#FFD700", priority: 1, enabled: true })).status).toBe(
+    expect((await agent.put(configPath(foreignId)).send({ color: "#FFE066", priority: 1, enabled: true })).status).toBe(
       404
     );
     expect((await agent.put(configPath(foreignId)).send({ priority: 2, enabled: true })).status).toBe(404);

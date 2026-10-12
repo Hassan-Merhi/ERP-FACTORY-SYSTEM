@@ -17,10 +17,9 @@ import { classifyAccountType } from "./accountClassification";
  *     current opening is not zero (an opening-only account is already in the
  *     trial balance, so changing it moves reported figures). Setting the first
  *     opening of an empty account (zero before) stays open to the editors;
- *   - account type change across category (classifyAccountType: Expense to
- *     Asset, Income to Liability...) once the account has a line on a
- *     non-deleted voucher: refused (409). A same-category change (a subtype,
- *     Expense to Direct Expense) is allowed and audited;
+ *   - account type changes across category on accounts with posted entries
+ *     require Admin, Owner or Developer; all changes are audited in the writer's
+ *     transaction. Other editors may still make same-category changes;
  *   - company change once the account has any line at all (any company, any
  *     voucher state): refused (409).
  */
@@ -54,7 +53,7 @@ export const ACCOUNT_OPENING_ONLY_CHANGE_FORBIDDEN_MESSAGE =
   "Only an Admin or Owner can change an opening balance that is not zero.";
 export const ACCOUNT_TYPE_CATEGORY_CHANGE_CODE = "ACCOUNT_TYPE_CATEGORY_CHANGE_REFUSED" as const;
 export const ACCOUNT_TYPE_CATEGORY_CHANGE_MESSAGE =
-  "This account already has posted entries, so its type cannot be moved to another category (for example Expense to Asset). Create a new account and move the balance with a journal entry.";
+  "Only an Admin, Owner or Developer can move an account with posted entries to another category.";
 export const ACCOUNT_COMPANY_CHANGE_CODE = "ACCOUNT_COMPANY_CHANGE_REFUSED" as const;
 export const ACCOUNT_COMPANY_CHANGE_MESSAGE =
   "This account already has voucher entries, so it cannot be moved to another company.";
@@ -203,7 +202,8 @@ export function assertAccountChangeAllowed(check: AccountChangeCheck): {
       // An unknown type is never guessed to be in the same category as another one.
       const sameType =
         (before.accountType ?? "").trim().toLowerCase() === (after.accountType ?? "").trim().toLowerCase();
-      if (beforeClass !== afterClass || (beforeClass === "unknown" && !sameType)) {
+      if ((beforeClass !== afterClass || (beforeClass === "unknown" && !sameType)) &&
+          !ACCOUNT_HISTORY_EDIT_ROLES.has(String(check.role ?? ""))) {
         throw new AccountHistoryError(ACCOUNT_TYPE_CATEGORY_CHANGE_MESSAGE, 409, ACCOUNT_TYPE_CATEGORY_CHANGE_CODE);
       }
     }

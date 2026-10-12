@@ -3,8 +3,8 @@
  * target (docs/accounting-audit-2026-10.md, wave log).
  *
  *   - Account rules: an account with posted lines changes its opening only by
- *     an Admin or Owner (audited in the transaction), never changes type
- *     category, never moves company (ledger accounts, banks, factory suppliers).
+ *     an Admin or Owner (audited in the transaction), permits category edits
+ *     by privileged roles, never moves company (ledger accounts, banks, factory suppliers).
  *   - Factory suppliers and fixed assets are under the opening-balance lock.
  *   - transfer-account is Admin/Owner, one transaction, audited in it.
  *   - Central voucher handlers write their audit in the posting transaction:
@@ -226,25 +226,23 @@ describe("account change rules (policy)", () => {
     ).toBe(ACCOUNT_OPENING_CHANGE_FORBIDDEN_CODE);
   });
 
-  it("refuses a type change across category once a live line exists, allows a same-category change", () => {
+  it("allows Admin, Owner and Developer category changes with history; restricts other roles", () => {
     const type = (before: string, after: string) => ({
       before: { accountType: before, subType: null },
       after: { accountType: after, subType: null },
     });
+    for (const role of ["Admin", "Owner", "Developer"]) {
+      expect(code(() => assertAccountChangeAllowed({ role, lines: lines(1), type: type("Expense", "Asset") }))).toBeNull();
+      expect(code(() => assertAccountChangeAllowed({ role, lines: lines(1), type: type("Income", "Liability") }))).toBeNull();
+    }
     expect(
-      code(() => assertAccountChangeAllowed({ role: "Admin", lines: lines(1), type: type("Expense", "Asset") }))
+      code(() => assertAccountChangeAllowed({ role: "Manager", lines: lines(1), type: type("Expense", "Asset") }))
     ).toBe(ACCOUNT_TYPE_CATEGORY_CHANGE_CODE);
     expect(
-      code(() => assertAccountChangeAllowed({ role: "Admin", lines: lines(1), type: type("Income", "Liability") }))
-    ).toBe(ACCOUNT_TYPE_CATEGORY_CHANGE_CODE);
-    expect(
-      code(() =>
-        assertAccountChangeAllowed({ role: "Admin", lines: lines(1), type: type("Expense", "Direct Expense") })
-      )
+      code(() => assertAccountChangeAllowed({ role: "Manager", lines: lines(1), type: type("Expense", "Direct Expense") }))
     ).toBeNull();
-    // Only deleted-voucher lines: not live history for the type rule.
     expect(
-      code(() => assertAccountChangeAllowed({ role: "Admin", lines: lines(0, 2), type: type("Expense", "Asset") }))
+      code(() => assertAccountChangeAllowed({ role: "Manager", lines: lines(0, 2), type: type("Expense", "Asset") }))
     ).toBeNull();
   });
 
@@ -283,14 +281,16 @@ describe("ledger account edits", () => {
     expect(audit?.changes.openingBalance).toEqual({ old: "50.00", new: "60.00" });
   });
 
-  it("refuses Expense to Asset, allows Expense to Direct Expense with an audit row", async () => {
+  it("allows and audits privileged Expense to Asset category updates", async () => {
+    await setRole("Manager");
     const refused = await agent.put(`/api/ledger-accounts/${expenseId}`).send({ accountType: "Asset" });
     expect(refused.status).toBe(409);
     expect(refused.body.code).toBe(ACCOUNT_TYPE_CATEGORY_CHANGE_CODE);
-    const accepted = await agent.put(`/api/ledger-accounts/${expenseId}`).send({ accountType: "Direct Expense" });
+    await setRole("Admin");
+    const accepted = await agent.put(`/api/ledger-accounts/${expenseId}`).send({ accountType: "Asset" });
     expect(accepted.status).toBe(200);
     const audit = (await auditRows("ledger_accounts", expenseId)).at(-1);
-    expect(audit?.changes.accountType).toEqual({ old: "Expense", new: "Direct Expense" });
+    expect(audit?.changes.accountType).toEqual({ old: "Expense", new: "Asset" });
   });
 
   it("refuses a move to another company", async () => {

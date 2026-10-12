@@ -81,9 +81,9 @@ const priorityScanTranslations = {
   unnamedProduct: { en: "Unnamed product", ar: "منتج بدون اسم", fr: "Produit sans nom" },
   priorityColor: { en: "Priority color {color}", ar: "لون الأولوية {color}", fr: "Couleur de priorité {color}" },
   legacyPriorityColorNotice: {
-    en: "Existing priority color {color} is preserved until you select and save one of the 11 approved colors.",
-    ar: "سيتم الاحتفاظ بلون الأولوية الحالي {color} حتى تختار أحد الألوان الأحد عشر المعتمدة وتحفظه.",
-    fr: "La couleur de priorité existante {color} est conservée jusqu'à ce que vous sélectionniez et enregistriez l'une des 11 couleurs approuvées.",
+    en: "Existing priority color {color} is preserved until you select and save one of the 12 approved colors.",
+    ar: "سيتم الاحتفاظ بلون الأولوية الحالي {color} حتى تختار أحد الألوان الاثني عشر المعتمدة وتحفظه.",
+    fr: "La couleur de priorité existante {color} est conservée jusqu'à ce que vous sélectionniez et enregistriez l'une des 12 couleurs approuvées.",
   },
   noActivePriority: {
     en: "No active Priority Scan loading is configured.",

@@ -449,7 +449,7 @@ export function registerPriorityScanConfigRoutes(app: Express) {
       const moveOnly = req.body?.color === undefined && req.body?.enabled === true;
       const normalizedRequestedColor = moveOnly ? null : normalizeColor(req.body?.color);
       if (!moveOnly && !normalizedRequestedColor) {
-        return res.status(400).json({ message: "Priority color must be one of the 11 approved HEX colors." });
+        return res.status(400).json({ message: "Priority color must be one of the 12 approved HEX colors." });
       }
 
       const canManagePriority = canManagePriorityPosition(req);

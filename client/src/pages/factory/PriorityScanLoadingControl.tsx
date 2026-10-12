@@ -101,7 +101,7 @@ export function PriorityScanLoadingControl({ load }: PriorityScanLoadingControlP
   const saveMutation = useMutation({
     mutationFn: async ({ color, priority }: { color?: string; priority?: number }) => {
       if (color !== undefined && !isApprovedPriorityScanColor(color)) {
-        throw new Error("Select one of the eleven approved Priority Scan colors.");
+        throw new Error("Select one of the twelve approved Priority Scan colors.");
       }
 
       // Omitting color asks the server to keep the saved (legacy) color.

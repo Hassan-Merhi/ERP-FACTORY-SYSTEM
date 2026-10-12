@@ -59,6 +59,7 @@ export interface MarketCompanySummary {
 }
 
 export interface MarketResponse {
+  salesReportTotals: { soldQty: number; revenue: number; profit: number };
   generatedAt: string;
   rows: MarketRow[];
   stockGroups: string[];

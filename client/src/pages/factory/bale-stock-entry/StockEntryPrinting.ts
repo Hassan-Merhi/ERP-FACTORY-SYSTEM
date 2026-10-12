@@ -46,16 +46,14 @@ export const openBrowserPrint = (
   // are ready by the time the print window tries to render them.
   prefetchBannersForPrint();
   const paperFormat = getPaperFormat();
-  const hasPerLabelColors = labels.some((l) => l.designColor);
-  const hasPerLabelLogos = labels.some((l) => l.customerLogoUrl);
-  const labelsForA4 = designColor ? labels : labels.filter((l) => l.designColor || l.customerLogoUrl);
+  // All received bales need their full-size label, even when using the
+  // ordinary HMD banner rather than a custom design or customer logo.
+  const labelsForA4 = labels;
 
   const preOpened = preOpenedWindowsRef.current;
   preOpenedWindowsRef.current = null;
 
-  if (paperFormat === "A4" && !designColor && !hasPerLabelColors && !hasPerLabelLogos) {
-    if (preOpened?.a4 && !preOpened.a4.closed) preOpened.a4.close();
-  } else if (labelsForA4.length > 0) {
+  if (labelsForA4.length > 0) {
     const labelHtml =
       paperFormat === "A5" ? generateA5LabelsHtml(labelsForA4) : generateCombinedLabelsHtml(labelsForA4, designColor);
     const a4Window = preOpened?.a4 && !preOpened.a4.closed ? preOpened.a4 : window.open("", "_blank");

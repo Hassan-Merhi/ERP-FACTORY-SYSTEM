@@ -112,6 +112,24 @@ export default function ItemMarketAnalysis() {
     setExpandedSalePriceKey(null);
   }, [queryUrl, profitDirection, multiCompany, includeOffloadingCost]);
 
+  // Sales Report's all-time KPI uses a company-wide stock/COGS reconciliation,
+  // not the modeled per-item purchase cost. Only compare unfiltered views.
+  const comparableToSalesReport =
+    selectedCompanyIds.length === 1 &&
+    selectedCompanyIds[0] === selectedCompany?.id &&
+    !period.fromDate && !period.toDate &&
+    !debouncedSearch && selectedStockGroupNames.length === 0 &&
+    profitDirection === "all";
+  const { data: salesReportReconciliation } = useQuery<{
+    totalSales: number;
+    adjustedCostProfit: number;
+  }>({
+    queryKey: ["/api/sales-report/cogs-reconciliation", selectedCompany?.id],
+    enabled: comparableToSalesReport,
+    staleTime: 30_000,
+    refetchOnWindowFocus: false,
+  });
+
   const rawRows = useMemo(() => data?.rows ?? [], [data?.rows]);
   const stockGroups = data?.stockGroups ?? [];
 
@@ -283,7 +301,10 @@ export default function ItemMarketAnalysis() {
     );
   }
 
-  const profitClass = summary.profit < 0 ? "text-red-600 dark:text-red-400" : "text-emerald-600 dark:text-emerald-400";
+  // The main KPI must match Sales Report's posted Cost Profit, not a revalued purchase-cost scenario.
+  const reportedProfit = data?.salesReportTotals?.profit ?? 0;
+  const reportedRevenue = data?.salesReportTotals?.revenue ?? 0;
+  const profitClass = reportedProfit < 0 ? "text-red-600 dark:text-red-400" : "text-emerald-600 dark:text-emerald-400";
 
   return (
     <div className="container mx-auto space-y-5 p-0 sm:p-6">
@@ -317,17 +338,23 @@ export default function ItemMarketAnalysis() {
         </Button>
       </PageHeader>
 
+      {comparableToSalesReport && salesReportReconciliation && (
+        <div className="grid gap-3 sm:grid-cols-2">
+          <MetricCard label="Sales Report Revenue (all sales, including credit)" value={formatAmount(salesReportReconciliation.totalSales)} />
+          <MetricCard label="Sales Report Cost Profit (reconciled COGS)" value={formatAmount(salesReportReconciliation.adjustedCostProfit)} />
+        </div>
+      )}
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
         <MetricCard label="Items" value={formatNumber(summary.itemCount)} />
         <MetricCard label="Imported Qty" value={formatNumber(summary.importedQty)} />
-        <MetricCard label="Sold Qty" value={formatNumber(summary.soldQty)} />
-        <MetricCard label="Revenue" value={formatAmount(summary.revenue)} />
+        <MetricCard label="Sold Qty (Sales Report)" value={formatNumber(data?.salesReportTotals?.soldQty ?? summary.soldQty)} />
+        <MetricCard label="Total Sales (Sales Report)" value={formatAmount(data?.salesReportTotals?.revenue ?? summary.revenue)} />
         <div className="rounded-xl border bg-card p-4">
           <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            Profit ({includeOffloadingCost ? "Cost + Offloading" : "Cost Only"})
+            Cost Profit (Sales Report)
           </div>
-          <div className={`mt-1 text-xl font-semibold tabular-nums ${profitClass}`}>{formatAmount(summary.profit)}</div>
-          <div className="text-xs text-muted-foreground">{summary.marginPct.toFixed(1)}% margin</div>
+          <div className={`mt-1 text-xl font-semibold tabular-nums ${profitClass}`}>{data?.salesReportTotals ? formatAmount(reportedProfit) : "—"}</div>
+          <div className="text-xs text-muted-foreground">{reportedRevenue ? ((reportedProfit / reportedRevenue) * 100).toFixed(1) : "0.0"}% margin</div>
         </div>
       </div>
 
