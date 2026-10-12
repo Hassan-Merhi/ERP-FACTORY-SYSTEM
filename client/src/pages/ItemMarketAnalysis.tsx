@@ -344,8 +344,8 @@ export default function ItemMarketAnalysis() {
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
         <MetricCard label="Items" value={formatNumber(summary.itemCount)} />
         <MetricCard label="Imported Qty" value={formatNumber(summary.importedQty)} />
-        <MetricCard label="Sold Qty" value={formatNumber(summary.soldQty)} />
-        <MetricCard label="Net Item Revenue (after credit notes)" value={formatAmount(summary.revenue)} />
+        <MetricCard label="Sold Qty (Sales Report)" value={formatNumber(data?.salesReportTotals?.soldQty ?? summary.soldQty)} />
+        <MetricCard label="Total Sales (Sales Report)" value={formatAmount(data?.salesReportTotals?.revenue ?? summary.revenue)} />
         <div className="rounded-xl border bg-card p-4">
           <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
             Modeled Item Profit ({includeOffloadingCost ? "Cost + Offloading" : "Cost Only"})
@@ -355,6 +355,12 @@ export default function ItemMarketAnalysis() {
         </div>
       </div>
 
+      {data?.salesReportTotals && (
+        <div className="rounded-xl border bg-card p-3 text-sm">
+          <div className="font-medium">Sales Report Cost Profit (posted sales): {formatAmount(data.salesReportTotals.profit)}</div>
+          <div className="text-xs text-muted-foreground">Net item revenue after credit notes: {formatAmount(summary.revenue)} · Net item sold quantity after returns: {formatNumber(summary.soldQty)}. The modeled purchase + offloading profit above remains a separate valuation scenario. Figures match Sales Report when the same companies, dates and stock groups are selected.</div>
+        </div>
+      )}
       {comparableToSalesReport && salesReportReconciliation && (
         <p className="text-xs text-muted-foreground">
           The Sales Report figures above include credit sales and archived-item history. Net Item Revenue also deducts credit notes, while modeled item profit uses selected purchase costs. The reconciled company-wide COGS adjustment is not allocated to individual items.
