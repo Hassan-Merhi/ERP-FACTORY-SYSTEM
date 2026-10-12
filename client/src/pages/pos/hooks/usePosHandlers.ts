@@ -156,7 +156,6 @@ export function usePosHandlers(params: PosHandlersParams) {
   const { handlePrint, handleStockPrint, handleExportInventory, handleSummaryExport, handleDetailedExport } =
     usePosInvoiceActions({
       rows: params.rows,
-      printRef: params.printRef,
       savedSale: params.savedSale,
       stockPrintRef: params.stockPrintRef,
       activeLocation: params.activeLocation,
