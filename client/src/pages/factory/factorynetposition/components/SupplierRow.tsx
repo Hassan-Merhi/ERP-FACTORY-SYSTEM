@@ -19,7 +19,7 @@ export function SupplierRow({ acc, accentClass, index }: { acc: AccountItem; acc
     code === "INVENTORY" || name.includes("stock in hand") ? "/factory/location-inventory" :
     code === "PREPAID_RENT" || name.includes("prepaid rent") ? "/factory/rental/payments" :
     name.includes("worker advance") ? "/factory/payroll-hub?section=workers&tab=advances" :
-    code === "SUPPLIER" || acc.category?.toLowerCase().includes("supplier") ? "/factory/parties?section=suppliers" :
+    code === "SUPPLIER" || acc.category?.toLowerCase().includes("supplier") ? `/factory/parties?section=suppliers${acc.supplierId ? `&supplierId=${acc.supplierId}` : ""}` :
     acc.id ? `/factory/ledger-monthly/${acc.id}` : undefined;
 
   return (
