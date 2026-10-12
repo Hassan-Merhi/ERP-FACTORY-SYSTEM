@@ -44,7 +44,7 @@ export async function getItemMarketAnalysis(filters: ItemMarketAnalysisFilters) 
       FROM stock_items si
       LEFT JOIN stock_groups sg ON sg.id = si.stock_group_id
       WHERE si.company_id = $1
-        AND si.deleted_at IS NULL
+        -- Preserve historical sales for archived items, as Sales Report does.
         AND ($5::text IS NULL OR si.code ILIKE '%' || $5 || '%' OR si.name ILIKE '%' || $5 || '%')
         AND ($6::int IS NULL OR si.stock_group_id = $6)
         AND ($7::text[] IS NULL OR BTRIM(sg.name) = ANY($7::text[]))
