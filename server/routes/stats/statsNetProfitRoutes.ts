@@ -32,7 +32,7 @@ import {
 } from "../../services/accounting/accountClassification";
 import { minusMoney, plusMoney, roundCents, sumMoney, toMoney } from "../../lib/money";
 import { reconcileNetPositionToBalanceSheet } from "../../services/accounting/reporting/netPositionReconciliation";
-import { companyBusinessDate } from "../../services/accounting/companyBusinessDate";
+import { getClientDate } from "../../lib/dateUtils";
 
 export function registerStatsNetProfitRoutes(app: Express) {
   app.get("/api/stats/net-profit", requireAuth, requireNonPOS, async (req, res) => {
@@ -46,13 +46,16 @@ export function registerStatsNetProfitRoutes(app: Express) {
       // fromDate is accepted but intentionally ignored for balance-sheet accounts;
       // the balance sheet is always a point-in-time snapshot (as of toDate), not a period.
       const toDate = req.query.toDate ? String(req.query.toDate) : null;
+      // The reconciliation below needs a date even without toDate: the request's
+      // date, as the other report handlers default to (never the server clock).
+      const reconciliationAsOf = toDate ?? getClientDate(req);
 
       // Rounding helper — defined early so it is available throughout the handler
       const round2 = roundCents;
 
       // Fetch company to know its base currency (CFA vs USD)
       // Check the 30-second TTL cache before touching the DB
-      const _cacheKey = `net-profit:${companyId}:${toDate || ""}`;
+      const _cacheKey = `net-profit:${companyId}:${toDate || ""}:${reconciliationAsOf}`;
       const _cached = _getCached(_cacheKey);
       if (_cached) return res.json(_cached);
 
@@ -578,7 +581,7 @@ export function registerStatsNetProfitRoutes(app: Express) {
       // the live view's current-rate cash/bank translation is applied later.
       const balanceSheetReconciliation = await reconcileNetPositionToBalanceSheet(
         companyId,
-        toDate ?? (await companyBusinessDate(companyId)),
+        reconciliationAsOf,
         netPosition,
         forUsAccounts,
         onUsAccounts,
