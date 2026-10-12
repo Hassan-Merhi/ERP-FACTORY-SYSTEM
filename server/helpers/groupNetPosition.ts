@@ -29,6 +29,7 @@ interface NetProfitRequest {
   path: string;
   session: { currentCompanyId: number };
   query: Record<string, string>;
+  headers: Record<string, string>;
 }
 
 interface NetProfitResponse {
@@ -303,6 +304,8 @@ async function calculateErpNetPosition(
     path: "/api/stats/net-profit",
     session: { currentCompanyId: companyId },
     query: useCurrentSnapshot ? {} : { toDate: asOfDate },
+    // The group's date, so the handler's reconciliation is dated by it too.
+    headers: { "x-client-date": asOfDate },
   };
   const response: NetProfitResponse = {
     status(code: number) {

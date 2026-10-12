@@ -6,7 +6,7 @@ import type { Request } from "express";
  * system timezone). Falls back to UTC today if the header is absent.
  */
 export function getClientDate(req: Request): string {
-  const header = req.headers["x-client-date"];
+  const header = req.headers?.["x-client-date"];
   if (typeof header === "string" && /^\d{4}-\d{2}-\d{2}$/.test(header)) {
     return header;
   }
