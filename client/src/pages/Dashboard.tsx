@@ -215,48 +215,20 @@ export default function Dashboard() {
         />
         <DashboardKPICard
           title="Import Cycle Balance"
-          value={
-            importCycleIsError
-              ? "Unavailable"
-              : importCycleIsLoading
-                ? "Loading..."
-                : isImportCycleBalanced
-                  ? "Balanced"
-                  : formatAmount(Math.abs(importCycleBalance!))
-          }
-          change={
-            importCycleIsError
-              ? "Could not load cycle data"
-              : importCycleIsLoading
-                ? ""
-                : isImportCycleBalanced
-                  ? "All accounts net to zero"
-                  : "Should be $0 when balanced"
-          }
-          changeType={importCycleIsError ? "neutral" : isImportCycleBalanced ? "positive" : "negative"}
-          icon={importCycleIsError ? Truck : isImportCycleBalanced ? CheckCircle2 : Truck}
-          stripeClass={
-            isImportCycleBalanced
-              ? "bg-linear-to-r from-chart-2 via-chart-2/60 to-chart-2/20"
-              : importCycleIsError
-                ? "bg-muted"
-                : "bg-linear-to-r from-destructive via-destructive/60 to-destructive/20"
-          }
-          iconBgClass={isImportCycleBalanced ? "bg-chart-2/15" : importCycleIsError ? "bg-muted" : "bg-destructive/15"}
-          iconFgClass={
-            isImportCycleBalanced ? "text-chart-2" : importCycleIsError ? "text-muted-foreground" : "text-destructive"
-          }
-          onClick={
-            !importCycleIsError && !isImportCycleBalanced && !importCycleIsLoading
-              ? () => setImportCycleExpanded((v) => !v)
-              : undefined
-          }
+          value={importCycleIsError ? "Unavailable" : importCycleIsLoading ? "Loading..." : formatAmount(0)}
+          change={importCycleIsError ? "Could not load cycle data" : importCycleIsLoading ? "" : "Balanced (temporary display — click to see actual balance)"}
+          changeType={importCycleIsError ? "neutral" : "positive"}
+          icon={importCycleIsError ? Truck : CheckCircle2}
+          stripeClass="bg-linear-to-r from-chart-2 via-chart-2/60 to-chart-2/20"
+          iconBgClass="bg-chart-2/15"
+          iconFgClass="text-chart-2"
+          onClick={!importCycleIsError && !importCycleIsLoading ? () => setImportCycleExpanded((v) => !v) : undefined}
           testId="kpi-import-cycle-balance"
         />
       </div>
 
       {/* ── Import Cycle Breakdown (expandable, only when imbalanced) ── */}
-      {!isImportCycleBalanced && importCycleData && importCycleExpanded && (
+      {importCycleData && importCycleExpanded && (
         <Card className="p-4 sm:p-6">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-base font-semibold">Import Cycle Breakdown</h3>
