@@ -26,6 +26,15 @@ import {
   type PriorityScanTransaction,
 } from "./priorityScanQueue";
 
+export async function isNonBalePriorityProductTx(tx: PriorityScanTransaction, companyId: number, productId: number | null | undefined): Promise<boolean> {
+  if (!productId) return false;
+  const result = firstRow(await tx.execute(sql`
+    SELECT 1 FROM factory_settings WHERE company_id = ${companyId}
+      AND COALESCE(extra_settings->'nonBalePriorityProductIds','[]'::jsonb) @> jsonb_build_array(${productId})
+    LIMIT 1`));
+  return Boolean(result);
+}
+
 export interface AutomaticPriorityAllocation {
   baleId: number;
   referenceNumber: string;
@@ -63,6 +72,7 @@ export async function allocateAutomaticPriorityBaleTx(
     .where(and(eq(factoryBales.id, baleId), eq(factoryBales.companyId, companyId), isNull(factoryBales.deletedAt)))
     .limit(1);
   if (!bale) return null;
+  if (await isNonBalePriorityProductTx(tx, companyId, bale.productId)) return null;
 
   // An active snapshot has a company/bale uniqueness boundary. Reprinting an existing
   // allocation uses its original priority/color even after the queue changes.
