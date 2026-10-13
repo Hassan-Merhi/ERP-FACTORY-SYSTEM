@@ -72,7 +72,6 @@ export async function allocateAutomaticPriorityBaleTx(
     .where(and(eq(factoryBales.id, baleId), eq(factoryBales.companyId, companyId), isNull(factoryBales.deletedAt)))
     .limit(1);
   if (!bale) return null;
-  if (await isNonBalePriorityProductTx(tx, companyId, bale.productId)) return null;
 
   // An active snapshot has a company/bale uniqueness boundary. Reprinting an existing
   // allocation uses its original priority/color even after the queue changes.
@@ -158,6 +157,8 @@ export async function allocateAutomaticPriorityBaleTx(
         }
       : null;
   }
+
+  if (await isNonBalePriorityProductTx(tx, companyId, bale.productId)) return null;
 
   // OFF prevents NEW automatic allocation, but must never erase the original
   // label destination/color for a bale that was assigned while ON.
