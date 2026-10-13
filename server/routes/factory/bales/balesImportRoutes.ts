@@ -294,7 +294,7 @@ export function registerBalesImportRoutes(app: Express) {
             .select({ maxRef: sql<number>`MAX(CAST(SUBSTRING(reference_number FROM 4) AS INTEGER))` })
             .from(factoryBales)
             .where(eq(factoryBales.companyId, companyId));
-          let nextRef = Math.max(Number(maxRef[0]?.maxRef ?? 0) + 1, 200000);
+          let nextRef = Math.max(Number(maxRef[0]?.maxRef ?? 0) + 1, 300000);
 
           let imported = 0;
           let totalWeightKg = 0;
