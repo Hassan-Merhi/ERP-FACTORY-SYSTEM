@@ -19,7 +19,7 @@ export function registerFactoryDailyScanRoutes(app: Express) {
       if (!date) return res.status(400).json({ message: "date query param required (YYYY-MM-DD)" });
       const pagination = parseListPagination(req.query, { defaultPageSize: 500, maxPageSize: 1000, force: true });
       const params: unknown[] = [companyId, date];
-      const clauses = ["fb.company_id = $1", "fb.stock_entry_date = $2"];
+      const clauses = ["fb.company_id = $1", "fb.stock_entry_date = $2", "NOT EXISTS (SELECT 1 FROM factory_settings fs WHERE fs.company_id = fb.company_id AND COALESCE(fs.extra_settings->'nonBalePriorityProductIds','[]'::jsonb) @> jsonb_build_array(fb.product_id))"];
       if (req.query.status) {
         params.push(String(req.query.status));
         clauses.push(`fb.status = $${params.length}`);
@@ -139,6 +139,7 @@ export function registerFactoryDailyScanRoutes(app: Express) {
             AND ds.reference_number = fb.reference_number
            WHERE fb.company_id = $1
              AND fb.stock_entry_date = $2
+             AND NOT EXISTS (SELECT 1 FROM factory_settings fs WHERE fs.company_id = fb.company_id AND COALESCE(fs.extra_settings->'nonBalePriorityProductIds','[]'::jsonb) @> jsonb_build_array(fb.product_id))
            ORDER BY fb.id ASC`,
           [companyId, date]
         );
@@ -209,6 +210,7 @@ export function registerFactoryDailyScanRoutes(app: Express) {
            AND ($2::date IS NULL OR fb.stock_entry_date = $2::date)
            AND fb.reference_number = $3
            AND fb.deleted_at IS NULL
+           AND NOT EXISTS (SELECT 1 FROM factory_settings fs WHERE fs.company_id = fb.company_id AND COALESCE(fs.extra_settings->'nonBalePriorityProductIds','[]'::jsonb) @> jsonb_build_array(fb.product_id))
          ON CONFLICT (company_id, scan_date, reference_number) DO NOTHING
          RETURNING id, scan_date::text AS scan_date, reference_number, scanned_at`,
         [String(companyId), requestedScanDate, reference, userId == null ? null : String(userId), companyId]
