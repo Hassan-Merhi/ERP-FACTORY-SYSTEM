@@ -258,7 +258,6 @@ export function registerEmployeeNetPositionRoutes(app: Express) {
       // From the cut-over the ledger's factory stock accounts replace the computed
       // values (the selling-price view keeps its bale value, in place of the
       // ledger's finished goods at cost).
-      const sellingView = valuationMode === "selling";
       const inventorySellValue = computedInventorySellValue;
       const rawMaterialStockValue = computedRawMaterialStockValue;
       const balanceOnTableValue = computedBalanceOnTableValue;
@@ -322,11 +321,6 @@ export function registerEmployeeNetPositionRoutes(app: Express) {
       // reality because advance repayments/deductions aren't always posted back to it.
       // factory_worker_advances.remaining_balance (used by the Payroll & Benefits "Advances"
       // KPI) is the authoritative source; we recompute it fresh below instead.
-      const keepsLedgerStock = (a: { code?: string | null }) => {
-        const code = (a.code || "").trim().toUpperCase();
-        // Stock is valued from its operational source, so never also count its ledger mirror.
-        return false;
-      };
       const cleanLedgerForUs = ledgerForUs.filter(
         (a) =>
           (!PERPETUAL_STOCK_ACCOUNT_CODES.has((a.code || "").trim().toUpperCase()) &&
