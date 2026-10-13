@@ -583,7 +583,13 @@ export function StockEntryTab({ showHistory = false, onOpenHistory }: StockEntry
       discardCartDraft();
     },
     onError: (error: Error) => {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      // Printing windows were opened before the asynchronous Stock Entry request.
+      // Close them on failure instead of leaving two permanent about:blank tabs.
+      const preOpened = preOpenedWindowsRef.current;
+      preOpenedWindowsRef.current = null;
+      if (preOpened?.a4 && !preOpened.a4.closed) preOpened.a4.close();
+      if (preOpened?.sticker && !preOpened.sticker.closed) preOpened.sticker.close();
+      toast({ title: "Stock Entry failed — labels not printed", description: error.message, variant: "destructive" });
     },
   });
 
