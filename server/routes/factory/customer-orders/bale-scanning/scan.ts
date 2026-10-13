@@ -37,7 +37,6 @@ import {
 import { eq, and, or, sql } from "drizzle-orm";
 import { firstRow } from "../../../../lib/queryResult";
 import { isFactorySessionLocation } from "../../../helpers/companyOwnership";
-import { isNonBalePriorityProductTx } from "../priorityAutoAllocation";
 import { toMoney } from "../../../../lib/money";
 
 export function registerOrderBaleScanRoutes(app: Express) {
@@ -322,9 +321,10 @@ export function registerOrderBaleScanRoutes(app: Express) {
           };
         }
 
-        if (isPriorityScan && await isNonBalePriorityProductTx(tx, companyId, bale.productId)) {
-          return { ok: false, httpStatus: 422, body: { code: "NON_BALE_PRIORITY_EXCLUDED", message: "Non-bale items print normally but are excluded from Priority Scan" } };
-        }
+        // Non-bale priority exclusions apply to automatic allocation and background
+        // Daily/Ground Scan only. An operator may still manually scan an exact
+        // reference here into an eligible priority loading, with the normal
+        // proforma capacity, duplicate, company and stock-location protections.
         const effectiveArticleCode: string = (bale.articleCode || bale.productArticleCode || "").trim();
         const normalizedEffectiveArticleCode = normalizeLoadingArticleCode(effectiveArticleCode);
         let priorityScanSnapshot: { priority: number; color: string } | null = null;
