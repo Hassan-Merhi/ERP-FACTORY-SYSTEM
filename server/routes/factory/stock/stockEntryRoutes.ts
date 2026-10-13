@@ -113,7 +113,7 @@ export function registerFactoryStockEntryRoutes(app: Express) {
           })
           .from(factoryBales)
           .where(and(eq(factoryBales.companyId, companyId), sql`reference_number ~ '^REF[0-9]+'`));
-        const dbMax = Math.max((Number(maxRow?.m) || 199999) + 1, 200000);
+        const dbMax = Math.max((Number(maxRow?.m) || 199999) + 1, 300000);
 
         let nextNumber: number;
         if (seqRecord) {
