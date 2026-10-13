@@ -827,6 +827,18 @@ export function registerContainerFreightWriteRoutes(app: Express) {
       });
       res.json(updatedPO);
     } catch (error: unknown) {
+      // Identify the exact retired voucher linked to a failed PO edit without
+      // exposing accounting details to the API client.
+      if (error instanceof Error) {
+        const correction = error as Error & { code?: string; details?: { voucherId?: number } };
+        logger.warn("[PO-PATCH refusal]", {
+          poId: req.params.id,
+          companyId: req.session.currentCompanyId,
+          code: correction.code ?? "UNKNOWN",
+          voucherId: correction.details?.voucherId ?? null,
+          message: error.message,
+        });
+      }
       if (sendVoucherCorrectionRefusal(res, error)) return;
       sendHttpError(res, error);
     }
