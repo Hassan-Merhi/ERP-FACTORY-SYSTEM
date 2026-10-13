@@ -95,7 +95,7 @@ export async function allocateAutomaticPriorityBaleTx(
       await tx.execute(sql`
       SELECT cob.id FROM customer_order_bales cob
         JOIN customer_orders co ON co.id = cob.order_id
-       WHERE cob.bale_id = ${baleId} AND cob.order_id = ${existing.orderId}
+       WHERE (cob.bale_id = ${baleId} OR (cob.bale_reference = ${bale.referenceNumber} AND cob.bale_id IS NULL)) AND cob.order_id = ${existing.orderId}
          AND co.company_id = ${companyId} AND co.status <> 'CANCELLED' AND co.deleted_at IS NULL
        LIMIT 1
     `)
@@ -130,7 +130,7 @@ export async function allocateAutomaticPriorityBaleTx(
     await tx.execute(sql`
     SELECT cob.order_id AS "orderId", co.status
       FROM customer_order_bales cob JOIN customer_orders co ON co.id = cob.order_id
-     WHERE cob.bale_id = ${baleId} AND co.company_id = ${companyId}
+     WHERE (cob.bale_id = ${baleId} OR (cob.bale_reference = ${bale.referenceNumber} AND cob.bale_id IS NULL)) AND co.company_id = ${companyId}
        AND co.status <> 'CANCELLED' AND co.deleted_at IS NULL
      LIMIT 1
   `)
@@ -238,7 +238,7 @@ export async function allocateAutomaticPriorityBaleTx(
     await tx.execute(sql`
     SELECT cob.id FROM customer_order_bales cob
       JOIN customer_orders co ON co.id = cob.order_id
-     WHERE cob.bale_id = ${baleId} AND co.company_id = ${companyId}
+     WHERE (cob.bale_id = ${baleId} OR (cob.bale_reference = ${bale.referenceNumber} AND cob.bale_id IS NULL)) AND co.company_id = ${companyId}
        AND co.status <> 'CANCELLED' AND co.deleted_at IS NULL LIMIT 1
   `)
   );
