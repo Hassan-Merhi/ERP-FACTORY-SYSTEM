@@ -145,10 +145,18 @@ export async function allocateAutomaticPriorityBaleTx(
     `)
     ) as { priority: number; color: string } | undefined;
     if (!prior) {
-      // A linked bale must never silently fall back to a colorless label.
-      // Don't invent a color from today's priority queue: its color may have
-      // changed after the bale was loaded. Require reconciliation of history.
-      throw new Error(`Bale ${bale.referenceNumber} is on loading ${linked.orderId} but has no active saved priority color. Restore its priority scan history before reprinting.`);
+      // Ordinary container-linked bales may have no priority history. Only
+      // block a colorless print when this loading is configured for Priority Scan.
+      const priorityConfigured = firstRow(await tx.execute(sql`
+        SELECT 1 FROM customer_order_priority_scan_configs
+         WHERE company_id = ${companyId} AND order_id = ${linked.orderId}
+         LIMIT 1
+      `));
+      if (priorityConfigured) {
+        // The live queue color is not a historical source of truth.
+        throw new Error(`Bale ${bale.referenceNumber} is on priority loading ${linked.orderId} but has no saved priority scan color. Reconcile its original color before printing.`);
+      }
+      return null;
     }
     return {
       baleId,
