@@ -16,6 +16,7 @@ import { sumMoney, toMoney } from "./money";
 import { getCustomerByLedgerId } from "./factoryCustomerLedger";
 import { getPartyBalance } from "../services/accounting/balances/ledgerBalanceEngine";
 import { loadCustomerLedgerLines } from "../services/accounting/balances/customerLedgerStatement";
+import { loadPartyMemoLines, memoTotal } from "../services/accounting/balances/unpostedMemo";
 
 /** The account is not a master of this company (wave 18 C): the route answers 404. */
 export class StatementAccountNotFoundError extends Error {
@@ -255,7 +256,15 @@ export async function generateAccountStatementPdf(opts: StatementPdfOptions): Pr
     from: startDate ?? null,
   });
   const engineOpening = toMoney(party?.opening);
-  const openingBalanceExact: Decimal = isSupplier ? engineOpening.negated() : engineOpening;
+  // Use the same combined receivable as Factory Parties: historic invoices
+  // remain operational statement rows, not duplicate GL vouchers.
+  const historicalMemo = customerOwnerId !== null
+    ? (await loadPartyMemoLines(db, {
+        companyId, kind: "customer", ids: [customerOwnerId], asOf: endDate ?? null,
+      })).get(customerOwnerId) ?? []
+    : [];
+  const openingMemo = startDate ? memoTotal(historicalMemo, startDate) : toMoney(0);
+  const openingBalanceExact: Decimal = (isSupplier ? engineOpening.negated() : engineOpening).plus(openingMemo);
 
   const openingBalance = openingBalanceExact.toNumber();
 
@@ -294,6 +303,23 @@ export async function generateAccountStatementPdf(opts: StatementPdfOptions): Pr
         totalCredit: c,
       });
     }
+  }
+  // Only USD-valued memo entries can contribute to the combined USD balance.
+  // Negative IDs identify display-only rows and cannot be opened as vouchers.
+  for (const [index, memo] of historicalMemo.entries()) {
+    if ((startDate && memo.date < startDate) || memo.amount === null) continue;
+    const effect = toMoney(memo.amount);
+    const id = -1000000 - index;
+    voucherMap.set(id, {
+      voucherId: id,
+      voucherNumber: memo.reference ?? "",
+      voucherType: "Historical Factory Invoice",
+      voucherDate: memo.date,
+      description: memo.label,
+      narration: memo.label,
+      totalDebit: effect.isPositive() ? effect : toMoney(0),
+      totalCredit: effect.isNegative() ? effect.abs() : toMoney(0),
+    });
   }
   const rows = Array.from(voucherMap.values()).sort((a, b) => {
     const dc = new Date(a.voucherDate).getTime() - new Date(b.voucherDate).getTime();
