@@ -30,7 +30,7 @@ export async function isNonBalePriorityProductTx(tx: PriorityScanTransaction, co
   if (!productId) return false;
   const result = firstRow(await tx.execute(sql`
     SELECT 1 FROM factory_settings WHERE company_id = ${companyId}
-      AND COALESCE(extra_settings->'nonBalePriorityProductIds','[]'::jsonb) @> jsonb_build_array(${productId})
+      AND COALESCE(extra_settings->'nonBalePriorityProductIds','[]'::jsonb) @> jsonb_build_array(${productId}::integer)
     LIMIT 1`));
   return Boolean(result);
 }
