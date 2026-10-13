@@ -53,6 +53,7 @@ export function registerOrderCrudRoutes(app: Express) {
         const [target] = await tx.select({ id: customers.id }).from(customers)
           .where(and(eq(customers.id, customerId), eq(customers.companyId, companyId)));
         if (!target) throw new HttpError(404, "Target customer not found in this company");
+        await tx.execute(sql`DELETE FROM customer_order_expected_lines WHERE company_id = ${companyId} AND order_id = ${orderId}`);
         const [written] = await tx.update(customerOrders).set({
           customerId, proformaIdUsed: null, updatedAt: new Date(),
         }).where(and(eq(customerOrders.id, orderId), eq(customerOrders.companyId, companyId))).returning();
