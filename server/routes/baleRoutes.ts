@@ -301,7 +301,7 @@ export function registerBaleRoutes(app: Express) {
     const [baleSeq] = await tx.select().from(factoryBaleSequences).where(eq(factoryBaleSequences.companyId, companyId));
 
     const seqMax = Math.max(refSeq?.nextNumber ?? 0, baleSeq?.nextNumber ?? 0);
-    const safeNext = Math.max(dbMax + 1, seqMax);
+    const safeNext = Math.max(dbMax + 1, seqMax, 300000);
     const referenceNumber = `REF${String(safeNext).padStart(6, "0")}`;
 
     // Update (or insert) referenceSequences so next call gets safeNext+1
