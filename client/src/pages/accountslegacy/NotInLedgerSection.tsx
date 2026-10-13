@@ -15,6 +15,7 @@ export interface NotInLedgerRow {
   debitAmount: string;
   creditAmount: string;
   currency?: string | null;
+  amountUsd?: string | null;
 }
 
 export interface NotInLedgerData {
