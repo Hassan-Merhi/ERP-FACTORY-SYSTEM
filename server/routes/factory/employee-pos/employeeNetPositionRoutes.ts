@@ -26,6 +26,7 @@ import {
   propertyUnits,
 } from "@shared/schema";
 import { eq, and, desc, sql, inArray, isNull, lte } from "drizzle-orm";
+import { getCustomerLedgerAndMemo } from "../customers-core/customerLedgerSplit";
 import { computeNetPositionInventory } from "./netPositionInventory";
 import { computeNetPositionSupplierBalances } from "./netPositionSupplierBalances";
 import { resultRows } from "../../../lib/queryResult";
@@ -221,124 +222,16 @@ export function registerEmployeeNetPositionRoutes(app: Express) {
       const customerItems: { name: string; balanceUsd: number; ledgerAccountId?: number }[] = [];
 
       if (allCustomersForNP.length > 0) {
-        const cIds = allCustomersForNP.map((c) => c.id);
-        const custLedgerIds = [...customerLedgerIds];
-
-        // ── Customer balance formula — mirrors GET /api/factory/customers exactly ──
-        // 1. Net of ALL customerBalances rows (includes INVOICE type as stored).
-        const cCbNetRows = await db
-          .select({
-            customerId: customerBalances.customerId,
-            net: sql<string>`COALESCE(SUM(CAST(${customerBalances.debitAmount} AS numeric) - CAST(${customerBalances.creditAmount} AS numeric)), 0)`,
-          })
-          .from(customerBalances)
-          .where(
-            and(
-              inArray(customerBalances.customerId, cIds),
-              eq(customerBalances.companyId, companyId),
-              lte(customerBalances.transactionDate, asOf)
-            )
-          )
-          .groupBy(customerBalances.customerId);
-
-        const cCbNetMap = new Map(cCbNetRows.map((r) => [r.customerId, toMoney(r.net)]));
-
-        // 2. Correction for INVOICE rows: replace stored debitAmount with live grandTotal
-        //    of FINALIZED orders — identical to the statement correction on the Customers page.
-        const cInvCorrRows = await db
-          .select({
-            customerId: customerBalances.customerId,
-            correction: sql<string>`COALESCE(SUM(CAST(${customerOrders.grandTotal} AS numeric) - CAST(${customerBalances.debitAmount} AS numeric)), 0)`,
-          })
-          .from(customerBalances)
-          .innerJoin(
-            customerOrders,
-            and(
-              eq(customerOrders.id, customerBalances.referenceId),
-              eq(customerOrders.companyId, companyId),
-              eq(customerOrders.status, "FINALIZED"),
-              lte(customerOrders.orderDate, asOf)
-            )
-          )
-          .where(
-            and(
-              inArray(customerBalances.customerId, cIds),
-              eq(customerBalances.companyId, companyId),
-              sql`${customerBalances.referenceType} = 'INVOICE'`,
-              lte(customerBalances.transactionDate, asOf)
-            )
-          )
-          .groupBy(customerBalances.customerId);
-
-        const cInvCorrMap = new Map(cInvCorrRows.map((r) => [r.customerId, toMoney(r.correction)]));
-
-        // 3. Voucher entries via ledgerAccountId — EXCLUDE CHARGE-* AND INV-* (matches Customers page).
-        const cLedgerVoucherRows =
-          custLedgerIds.length > 0
-            ? await db
-                .select({
-                  ledgerAccountId: voucherEntries.ledgerAccountId,
-                  net: sql<string>`COALESCE(SUM(CAST(${voucherEntries.debitAmount} AS numeric) - CAST(${voucherEntries.creditAmount} AS numeric)), 0)`,
-                })
-                .from(voucherEntries)
-                .innerJoin(
-                  vouchers,
-                  and(
-                    eq(voucherEntries.voucherId, vouchers.id),
-                    eq(vouchers.companyId, companyId),
-                    eq(vouchers.optional, false),
-                    isNull(vouchers.deletedAt),
-                    sql`${vouchers.voucherNumber} NOT LIKE 'CHARGE-%'`,
-                    sql`${vouchers.voucherNumber} NOT LIKE 'INV-%'`,
-                    sql`COALESCE(${vouchers.effectiveDate}, ${vouchers.voucherDate}) <= ${asOf}`
-                  )
-                )
-                .where(inArray(voucherEntries.ledgerAccountId, custLedgerIds))
-                .groupBy(voucherEntries.ledgerAccountId)
-            : [];
-        const cLedgerVoucherMap = new Map(cLedgerVoucherRows.map((r) => [r.ledgerAccountId, toMoney(r.net)]));
-
-        // 4. Voucher entries directly linked via customerId — EXCLUDE CHARGE-* AND INV-* (matches Customers page).
-        //    Only lines with no ledger: a customer-tagged line on a ledger account is
-        //    already in that account's balance in the ledger classification above.
-        const cVoucherRows = await db
-          .select({
-            customerId: voucherEntries.customerId,
-            net: sql<string>`COALESCE(SUM(CAST(${voucherEntries.debitAmount} AS numeric) - CAST(${voucherEntries.creditAmount} AS numeric)), 0)`,
-          })
-          .from(voucherEntries)
-          .innerJoin(
-            vouchers,
-            and(
-              eq(voucherEntries.voucherId, vouchers.id),
-              eq(vouchers.companyId, companyId),
-              eq(vouchers.optional, false),
-              isNull(vouchers.deletedAt),
-              sql`${vouchers.voucherNumber} NOT LIKE 'CHARGE-%'`,
-              sql`${vouchers.voucherNumber} NOT LIKE 'INV-%'`,
-              sql`COALESCE(${vouchers.effectiveDate}, ${vouchers.voucherDate}) <= ${asOf}`
-            )
-          )
-          .where(and(inArray(voucherEntries.customerId, cIds), isNull(voucherEntries.ledgerAccountId)))
-          .groupBy(voucherEntries.customerId);
-
-        const cVoucherMap = new Map(cVoucherRows.map((r) => [r.customerId, toMoney(r.net)]));
-
+        // Match the Parties page's combined ledger + operational balance exactly.
+        const figures = await getCustomerLedgerAndMemo(companyId, allCustomersForNP.map(c => c.id), asOf);
         for (const c of allCustomersForNP) {
-          const ledgerVoucherNet = c.ledgerAccountId ? cLedgerVoucherMap.get(c.ledgerAccountId) : undefined;
-          const opening = toMoney(c.openingBalance);
-          const totalBalance = ((c.openingBalanceSide || "Dr") === "Dr" ? opening : opening.negated())
-            .plus(cCbNetMap.get(c.id) ?? 0)
-            .plus(cInvCorrMap.get(c.id) ?? 0)
-            .plus(ledgerVoucherNet ?? 0)
-            .plus(cVoucherMap.get(c.id) ?? 0);
-          if (totalBalance.abs().greaterThan(0.01)) {
-            customerItems.push({
-              name: c.legalName || `Customer #${c.id}`,
-              balanceUsd: round2(totalBalance.toNumber()),
-              ledgerAccountId: c.ledgerAccountId || undefined,
-            });
-          }
+          const f = figures.get(c.id);
+          const balance = (f?.ledger ?? new MoneyDecimal(0)).plus(f?.memoTotal ?? 0);
+          if (balance.abs().gte(0.01)) customerItems.push({
+            name: c.legalName || `Customer #${c.id}`,
+            balanceUsd: round2(balance.toNumber()),
+            ledgerAccountId: c.ledgerAccountId || undefined,
+          });
         }
       }
 
