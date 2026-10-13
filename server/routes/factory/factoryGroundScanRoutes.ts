@@ -54,6 +54,8 @@ export function registerFactoryGroundScanRoutes(app: Express) {
       const { locationId, referenceNumber, articleCode, productName, weightKg, status, isInLoadingOrder } = req.body;
       if (!referenceNumber) return res.status(400).json({ message: "referenceNumber required" });
       const ref = String(referenceNumber).trim().toUpperCase();
+      const excluded = await pool.query("SELECT 1 FROM factory_bales fb JOIN factory_settings fs ON fs.company_id=fb.company_id WHERE fb.company_id=$1 AND fb.reference_number=$2 AND COALESCE(fs.extra_settings->'nonBalePriorityProductIds','[]'::jsonb) @> jsonb_build_array(fb.product_id) LIMIT 1",[companyId,ref]);
+      if(excluded.rowCount)return res.status(422).json({message:"Non-bale products are excluded from Ground Scan"});
       const locVal = locationId && locationId !== "all" ? parseInt(locationId, 10) : null;
 
       const check = await pool.query(
@@ -110,6 +112,8 @@ export function registerFactoryGroundScanRoutes(app: Express) {
           continue;
         }
         try {
+          const excluded = await pool.query("SELECT 1 FROM factory_bales fb JOIN factory_settings fs ON fs.company_id=fb.company_id WHERE fb.company_id=$1 AND fb.reference_number=$2 AND COALESCE(fs.extra_settings->'nonBalePriorityProductIds','[]'::jsonb) @> jsonb_build_array(fb.product_id) LIMIT 1",[companyId,ref]);
+          if(excluded.rowCount){skipped++;continue;}
           await pool.query(
             `INSERT INTO factory_ground_scan_items
                (company_id, location_id, reference_number, article_code, product_name,
