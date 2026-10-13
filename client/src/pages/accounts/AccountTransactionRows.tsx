@@ -5,6 +5,7 @@ import { useBoundedTableRows } from "@/hooks/useBoundedTableRows";
 import type { Account, Transaction } from "./accountTypes";
 
 const HISTORICAL_REFERENCE_TYPE = "Historical PO Reference";
+const HISTORICAL_FACTORY_INVOICE_TYPE = "Historical Factory Invoice";
 const ACCOUNT_ROW_HEIGHT = 56;
 
 export interface AccountStatementRow extends Transaction {
@@ -54,13 +55,13 @@ export function AccountTransactionRows({
     for (const voucher of vouchersWithBalance) {
       debit += voucher.totalDebit || 0;
       credit += voucher.totalCredit || 0;
-      if (voucher.voucherType !== HISTORICAL_REFERENCE_TYPE) selectable.push(voucher);
+      if (voucher.voucherType !== HISTORICAL_REFERENCE_TYPE && voucher.voucherType !== HISTORICAL_FACTORY_INVOICE_TYPE) selectable.push(voucher);
     }
 
     return { totalDebit: debit, totalCredit: credit, selectableRows: selectable };
   }, [vouchersWithBalance]);
   const isSupplier = selectedAccount.type === "supplier";
-  const isReferenceRow = (v: AccountStatementRow) => v.voucherType === HISTORICAL_REFERENCE_TYPE;
+  const isReferenceRow = (v: AccountStatementRow) => v.voucherType === HISTORICAL_REFERENCE_TYPE || v.voucherType === HISTORICAL_FACTORY_INVOICE_TYPE;
   const allSelectableSelected = useMemo(
     () => selectableRows.length > 0 && selectableRows.every((v) => selectedVoucherIds.has(v.voucherId)),
     [selectableRows, selectedVoucherIds]
@@ -219,7 +220,7 @@ export function AccountTransactionRows({
                     )}
                   </div>
                   <div className="text-[11px] text-muted-foreground mt-0.5 truncate">
-                    {isReference ? "Historical PO reference · reference only · balance unchanged" : v.voucherType}
+                    {isReference ? v.voucherType === HISTORICAL_FACTORY_INVOICE_TYPE ? "Historical factory invoice · included in customer balance" : "Historical PO reference · reference only · balance unchanged" : v.voucherType}
                   </div>
                 </TableCell>
                 {appMode === "factory" && (
