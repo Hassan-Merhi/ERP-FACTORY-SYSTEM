@@ -3,7 +3,7 @@ import type { Request, Response, NextFunction } from "express";
 import { db } from "../../db";
 import { storage } from "../../storage";
 import { vouchers, voucherEntries, intercompanyPosConfigs } from "@shared/schema";
-import { eq, and, or, sql, like } from "drizzle-orm";
+import { eq, and, or, sql, like, isNull } from "drizzle-orm";
 import type { DatabaseOrTransaction, DbTransaction } from "../../db";
 import { postFactoryVoucherTx, usdLineAmounts } from "../../services/factory/factoryVoucherPosting";
 import { VoucherCorrectionError, editPostedFactoryVoucherTx } from "../../services/factory/factoryVoucherCorrection";
@@ -166,6 +166,7 @@ async function syncIntercoParentVoucherOn(
         .where(
           and(
             eq(vouchers.companyId, parentCompanyId),
+            isNull(vouchers.deletedAt),
             patternClause,
             like(vouchers.description, `%${containerNumber}%`)
           )
@@ -182,6 +183,7 @@ async function syncIntercoParentVoucherOn(
           .where(
             and(
               eq(vouchers.companyId, parentCompanyId),
+            isNull(vouchers.deletedAt),
               patternClause,
               like(voucherEntries.narration, `%${containerNumber}%`)
             )
@@ -193,7 +195,8 @@ async function syncIntercoParentVoucherOn(
       const [byPo] = await dbOrTx
         .select({ id: vouchers.id, totalAmount: vouchers.totalAmount })
         .from(vouchers)
-        .where(and(eq(vouchers.companyId, parentCompanyId), patternClause))
+        .where(and(eq(vouchers.companyId, parentCompanyId),
+            isNull(vouchers.deletedAt), patternClause))
         .limit(1);
       parentVoucher = byPo;
     }
@@ -226,7 +229,8 @@ async function syncIntercoParentVoucherOn(
           const [existingFallback] = await dbOrTx
             .select({ id: vouchers.id })
             .from(vouchers)
-            .where(and(eq(vouchers.companyId, parentCompanyId), eq(vouchers.voucherNumber, fallbackVoucherNum)))
+            .where(and(eq(vouchers.companyId, parentCompanyId),
+            isNull(vouchers.deletedAt), eq(vouchers.voucherNumber, fallbackVoucherNum)))
             .limit(1);
 
           if (existingFallback) {
