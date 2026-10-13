@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
+import { NonBalePriorityManager } from "./NonBalePriorityManager";
 
 const URL = "/api/factory/automatic-priority-mode";
 
@@ -77,6 +78,7 @@ export function AutomaticPriorityPrintingCard() {
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
+        <NonBalePriorityManager />
         <div className="flex items-center justify-between gap-4">
           <Label htmlFor="automatic-priority-mode" className="cursor-pointer">
             Automatic loading on printing
