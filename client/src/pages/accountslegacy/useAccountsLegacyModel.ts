@@ -519,7 +519,27 @@ export function useAccountsLegacyModel() {
   const transactions: Transaction[] = useMemo(() => {
     if (!rawTransactionData) return [];
     if (Array.isArray(rawTransactionData)) return rawTransactionData;
-    return rawTransactionData.transactions ?? [];
+    const posted: Transaction[] = rawTransactionData.transactions ?? [];
+    // Historical factory invoices already affect Parties balances. Present their
+    // operational amounts as dated statement rows, never as new GL postings.
+    const memo = readNotInLedger(rawTransactionData);
+    if (!memo) return posted;
+    const historical: Transaction[] = memo.rows
+      .filter((row) => row.amountUsd !== null && row.amountUsd !== undefined)
+      .map((row, index) => ({
+        entryId: -1000000 - index,
+        voucherId: -1000000 - index,
+        voucherNumber: row.voucherNumber,
+        voucherType: "Historical Factory Invoice",
+        voucherDate: row.voucherDate,
+        voucherDescription: row.voucherDescription,
+        narration: row.voucherDescription,
+        debitAmount: row.debitAmount,
+        creditAmount: row.creditAmount,
+      }));
+    return [...posted, ...historical].sort((a, b) =>
+      a.voucherDate.localeCompare(b.voucherDate) || a.entryId - b.entryId
+    );
   }, [rawTransactionData]);
 
   // broughtForwardBalance = stored account opening balance + net of all entries before the period start.
@@ -530,7 +550,8 @@ export function useAccountsLegacyModel() {
     const obSide = selectedAccount?.openingBalanceSide || "Dr";
     const storedOB = obSide === "Cr" ? -rawOB : rawOB;
     if (!rawTransactionData || Array.isArray(rawTransactionData)) return storedOB;
-    return storedOB + (rawTransactionData.preNetBalance ?? 0);
+    const memoPrePeriod = Number(rawTransactionData.notInLedger?.prePeriodTotal ?? 0);
+    return storedOB + (rawTransactionData.preNetBalance ?? 0) + (Number.isFinite(memoPrePeriod) ? memoPrePeriod : 0);
   }, [rawTransactionData, selectedAccount]);
 
   // Derived state
