@@ -72,10 +72,6 @@ export async function allocateAutomaticPriorityBaleTx(
     .where(and(eq(factoryBales.id, baleId), eq(factoryBales.companyId, companyId), isNull(factoryBales.deletedAt)))
     .limit(1);
   if (!bale) return null;
-  // Print-only non-bale catalog items never receive priority color or a loading link,
-  // including on reprints. Keep existing allocation/history records untouched.
-  if (await isNonBalePriorityProductTx(tx, companyId, bale.productId)) return null;
-
   // An active snapshot has a company/bale uniqueness boundary. Reprinting an existing
   // allocation uses its original priority/color even after the queue changes.
   const existing = firstRow(
@@ -148,20 +144,28 @@ export async function allocateAutomaticPriorityBaleTx(
        ORDER BY id ASC LIMIT 1
     `)
     ) as { priority: number; color: string } | undefined;
-    return prior
-      ? {
-          baleId,
-          referenceNumber: bale.referenceNumber,
-          orderId: Number(linked.orderId),
-          priority: Number(prior.priority),
-          color: prior.color,
-          source: "manual",
-          existing: true,
-        }
-      : null;
+    if (!prior) {
+      // A linked bale must never silently fall back to a colorless label.
+      // Don't invent a color from today's priority queue: its color may have
+      // changed after the bale was loaded. Require reconciliation of history.
+      throw new Error(`Bale ${bale.referenceNumber} is on loading ${linked.orderId} but has no active saved priority color. Restore its priority scan history before reprinting.`);
+    }
+    return {
+      baleId,
+      referenceNumber: bale.referenceNumber,
+      orderId: Number(linked.orderId),
+      priority: Number(prior.priority),
+      color: prior.color,
+      source: "manual",
+      existing: true,
+    };
   }
 
 
+
+  // Exclusions apply only to future allocation; never strip a color from a
+  // bale that is already physically linked to a loading with saved priority history.
+  if (await isNonBalePriorityProductTx(tx, companyId, bale.productId)) return null;
 
   // OFF prevents NEW automatic allocation, but must never erase the original
   // label destination/color for a bale that was assigned while ON.
