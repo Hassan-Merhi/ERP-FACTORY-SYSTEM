@@ -134,7 +134,9 @@ export function AccountStatementView({
   // same React Query response, so financial totals no longer depend on the global pagination snapshot.
   const displayClosingBalance =
     !isGoldenCoastFreshStart && hasServerClosing
-      ? signedStoredOpening + Number(statementMetadata?.closingNetBalance)
+      ? signedStoredOpening + Number(statementMetadata?.closingNetBalance) +
+        (Number((statementMetadata as AccountStatementPageMetadata & { notInLedger?: { total?: string; prePeriodTotal?: string } })?.notInLedger?.total ?? 0) || 0) +
+        (Number((statementMetadata as AccountStatementPageMetadata & { notInLedger?: { total?: string; prePeriodTotal?: string } })?.notInLedger?.prePeriodTotal ?? 0) || 0)
       : closingBalance;
 
   const pdfTypeMap: Record<string, string> = {
