@@ -43,39 +43,6 @@ export function LedgerBalancePanel({ view, operationalTotal, formatNum }: Ledger
       {view.ledgerFxUnresolved && (
         <p className="text-xs text-amber-600">Some ledger lines hold a foreign amount without a USD conversion</p>
       )}
-      {(Math.abs(notInLedger) > 0.005 || view.notInLedger.lines.length > 0) && (
-        <div className="border-t pt-2" data-testid="section-supplier-not-in-ledger">
-          <div className="text-xs font-medium">Not yet in the ledger (memo)</div>
-          <div className="text-sm tabular-nums">{amountText(notInLedger, "$", formatNum)}</div>
-          {view.notInLedger.unresolved && (
-            <p className="text-xs text-amber-600">
-              Lines without a confirmed exchange rate are listed but not totalled
-            </p>
-          )}
-          <ul className="mt-1 space-y-0.5">
-            {view.notInLedger.lines.map((line) => (
-              <li
-                key={`${line.source}-${line.sourceId}`}
-                className="text-xs text-muted-foreground flex justify-between gap-2"
-              >
-                <span>
-                  {line.reference ?? ""} — {line.sourceLabel}
-                </span>
-                <span className="tabular-nums">
-                  {line.amount === null
-                    ? amountText(-Number(line.nativeAmount), `${line.currency} `, formatNum)
-                    : amountText(-Number(line.amount), "$", formatNum)}
-                </span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-      {operational !== null && Math.abs(operational - ledger) > 0.005 && (
-        <div className="border-t pt-2 text-xs text-muted-foreground" data-testid="text-supplier-operational-memo">
-          <span>Operational container figure (memo)</span> {amountText(operational, "$", formatNum)}
-        </div>
-      )}
     </div>
   );
 }
