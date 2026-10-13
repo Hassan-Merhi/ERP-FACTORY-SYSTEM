@@ -190,6 +190,8 @@ export function PosWhatsAppSection() {
   const {
     data: waChats = [],
     isLoading: chatsLoading,
+    isError: chatsError,
+    error: chatsErrorDetail,
     refetch: refetchChats,
   } = useQuery<WaChat[]>({
     queryKey: ["/api/whatsapp/chats/pos"],
@@ -569,7 +571,12 @@ export function PosWhatsAppSection() {
                   No group (disabled)
                   {!selectedChatId && <Check className="h-4 w-4 ml-auto text-green-600 dark:text-green-400" />}
                 </button>
-                {filteredChats.length === 0 && (
+                {chatsError && (
+                  <p className="text-center text-destructive text-sm py-3 px-3">
+                    Could not load WhatsApp groups: {chatsErrorDetail instanceof Error ? chatsErrorDetail.message : "Connection failed"}. Please refresh.
+                  </p>
+                )}
+                {!chatsError && filteredChats.length === 0 && (
                   <p className="text-center text-muted-foreground text-sm py-4 px-3">
                     {waChats.filter((c) => c.type === "group").length === 0
                       ? "No WhatsApp groups found. Make sure the POS API instance is connected and has groups."
