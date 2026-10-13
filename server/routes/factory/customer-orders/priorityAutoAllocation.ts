@@ -145,18 +145,28 @@ export async function allocateAutomaticPriorityBaleTx(
     `)
     ) as { priority: number; color: string } | undefined;
     if (!prior) {
-      // Ordinary container-linked bales may have no priority history. Only
-      // block a colorless print when this loading is configured for Priority Scan.
-      const priorityConfigured = firstRow(await tx.execute(sql`
-        SELECT 1 FROM customer_order_priority_scan_configs
+      // A bale can already be attached to a configured priority loading
+      // without a scan history record (for example, an older/manual loading).
+      // Use ONLY this exact container's configured color, never a different
+      // currently active priority queue target. Do not create or rewrite history.
+      const configured = firstRow(await tx.execute(sql`
+        SELECT priority, color FROM customer_order_priority_scan_configs
          WHERE company_id = ${companyId} AND order_id = ${linked.orderId}
-         LIMIT 1
-      `));
-      if (priorityConfigured) {
-        // The live queue color is not a historical source of truth.
-        throw new Error(`Bale ${bale.referenceNumber} is on priority loading ${linked.orderId} but has no saved priority scan color. Reconcile its original color before printing.`);
+         ORDER BY id DESC LIMIT 1
+      `)) as { priority: number; color: string } | undefined;
+      if (!configured) return null; // Ordinary non-priority container.
+      if (!configured.color || !/^#[0-9a-fA-F]{6}$/.test(configured.color.trim())) {
+        throw new Error(`Bale ${bale.referenceNumber} is on priority loading ${linked.orderId} but its configured color is invalid.`);
       }
-      return null;
+      return {
+        baleId,
+        referenceNumber: bale.referenceNumber,
+        orderId: Number(linked.orderId),
+        priority: Number(configured.priority),
+        color: configured.color,
+        source: "manual",
+        existing: true,
+      };
     }
     return {
       baleId,
