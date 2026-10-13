@@ -77,54 +77,30 @@ function drawDown(stock: { recv: Decimal; used: Decimal; remValUsd: Decimal; rem
 }
 
 export async function computeNetPositionInventory(ctx: NetPositionInventoryContext): Promise<NetPositionInventory> {
-  // ── 3. Inventory (Stock In Hand) — bales at cost (wave 11) ─────────────────
-  // Each bale at its recorded cost, factory_bales.total_cost: USD material cost
-  // (services/factory/baleCostBasis.ts). It used to be SUM(production_price)
-  // of the products, one catalogue price per bale. The selling view keeps the
-  // catalogue selling price per bale.
-  //
-  // Stock is the bales the factory still holds:
-  //   - IN_STOCK, RESERVED_FOR_ORDER and RESERVED_FOR_DISPATCH bales, and bales
-  //     already marked SOLD on an unfinalized order (pending verification,
-  //     verified, loading). Owner decision (wave 11): bales reserved for
-  //     unfinalized orders are stock at cost; those orders are listed under
-  //     `notInLedger` for information only, with no amount added anywhere;
-  //   - never a "stale" IN_STOCK bale whose order was FINALIZED / DISPATCHED /
-  //     SOLD (its status never got updated): its invoice took it.
+  // Match the Location Inventory page: only available IN_STOCK bales and
+  // catalogue production/selling prices, aggregated across all company locations.
   const invResult = await db.execute(sql`
-  SELECT
-    COALESCE(SUM(b.total_cost::numeric), 0) AS total_cost,
-    COALESCE(SUM(p.selling_price::numeric), 0) AS total_selling,
-    COALESCE(SUM(b.total_cost::numeric) FILTER (WHERE r.reserved), 0) AS reserved_cost,
-    COUNT(*) FILTER (WHERE r.reserved) AS reserved_count
-  FROM   factory_bales   b
-  LEFT   JOIN factory_bale_products p ON p.id = b.product_id AND p.company_id = ${ctx.companyId}
-  CROSS  JOIN LATERAL (
-    SELECT EXISTS (
-      SELECT 1 FROM customer_order_bales cob
-      INNER JOIN customer_orders co ON co.id = cob.order_id
-      WHERE cob.bale_id = b.id
-        AND co.status IN ('LOADING', 'PENDING_VERIFICATION', 'VERIFIED')
-        AND co.company_id = ${ctx.companyId}
-        AND co.deleted_at IS NULL
-    ) AS reserved
-  ) r
-  WHERE  b.company_id = ${ctx.companyId}
-    AND  b.deleted_at IS NULL
-    AND  (b.status IN ('IN_STOCK', 'RESERVED_FOR_ORDER', 'RESERVED_FOR_DISPATCH') OR (b.status = 'SOLD' AND r.reserved))
-    AND  NOT EXISTS (
-      SELECT 1 FROM customer_order_bales cob
-      INNER JOIN customer_orders co ON co.id = cob.order_id
-      WHERE cob.bale_id = b.id
-        AND co.status IN ('FINALIZED', 'DISPATCHED', 'SOLD')
-        AND co.company_id = ${ctx.companyId}
-    )
-`);
+    SELECT COALESCE(SUM(p.production_price::numeric), 0) AS total_cost,
+           COALESCE(SUM(p.selling_price::numeric), 0) AS total_selling,
+           0::numeric AS reserved_cost, 0::integer AS reserved_count
+    FROM factory_bales b
+    LEFT JOIN factory_bale_products p ON p.id = b.product_id AND p.company_id = ${ctx.companyId}
+    WHERE b.company_id = ${ctx.companyId}
+      AND b.status = 'IN_STOCK'
+      AND b.deleted_at IS NULL
+      AND NOT EXISTS (
+        SELECT 1 FROM customer_order_bales cob
+        INNER JOIN customer_orders co ON co.id = cob.order_id
+        WHERE cob.bale_id = b.id
+          AND co.company_id = ${ctx.companyId}
+          AND co.status IN ('LOADING','PENDING_VERIFICATION','VERIFIED','FINALIZED','DISPATCHED','SOLD')
+      )
+  `);
   const invRow = resultRows(invResult)[0] ?? {};
-  const inventorySellValue = cents(col(invRow?.total_cost));
-  const inventorySellingValue = cents(col(invRow?.total_selling));
-  const reservedBaleCost = cents(col(invRow?.reserved_cost));
-  const reservedBaleCount = Number(invRow?.reserved_count ?? 0);
+  const inventorySellValue = cents(col(invRow.total_cost));
+  const inventorySellingValue = cents(col(invRow.total_selling));
+  const reservedBaleCost = 0;
+  const reservedBaleCount = 0;
 
   // ── 3b. Raw material stock value — direct SQL, mirrors /api/factory/raw-stock
   //
