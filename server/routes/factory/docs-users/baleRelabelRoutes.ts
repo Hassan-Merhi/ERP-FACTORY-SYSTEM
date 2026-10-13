@@ -137,8 +137,8 @@ export function registerFactoryBaleRelabelRoutes(app: Express) {
         );
         const dbMaxRow = Array.isArray(dbMaxResult) ? dbMaxResult[0] : (dbMaxResult?.rows?.[0] ?? {});
         const dbMax = Number(dbMaxRow?.maxnum ?? 199999);
-        const storedNext = seqRow?.nextNumber ?? 200000;
-        const nextNumber = Math.max(storedNext, dbMax + 1, 200000);
+        const storedNext = seqRow?.nextNumber ?? 300000;
+        const nextNumber = Math.max(storedNext, dbMax + 1, 300000);
 
         const newRefs: string[] = [];
         for (let i = 0; i < count; i++) {
