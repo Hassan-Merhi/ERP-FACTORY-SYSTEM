@@ -66,7 +66,7 @@ function cleanGreenApiCredential(value: unknown): string {
 function baseUrl(instanceId: string, apiToken: string, method: string): string {
   const cleanInstanceId = cleanGreenApiCredential(instanceId);
   const cleanApiToken = cleanGreenApiCredential(apiToken);
-  return `https://api.green-api.com/waInstance${cleanInstanceId}/${method}/${cleanApiToken}`;
+  return `https://api.greenapi.com/waInstance${cleanInstanceId}/${method}/${cleanApiToken}`;
 }
 
 async function getGreenApiAuthFallback(current: GreenApiCredentials): Promise<GreenApiCredentials | null> {
