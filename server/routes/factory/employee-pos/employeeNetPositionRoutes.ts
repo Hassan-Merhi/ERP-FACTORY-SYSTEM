@@ -197,6 +197,8 @@ export function registerEmployeeNetPositionRoutes(app: Express) {
       // Any ledger account named/coded as "Payroll Payable" duplicates that and
       // must be excluded here — the single correct figure is injected below.
       const ledgerOnUs = ledgerOnUsRaw.filter((a) => {
+        // Stock credit balances are inventory contra-assets, not separate supplier debts.
+        if (PERPETUAL_STOCK_ACCOUNT_CODES.has((a.code || "").trim().toUpperCase())) return false;
         const nameLower = (a.name || "").toLowerCase();
         const code = (a.code || "").toUpperCase();
         const isPayrollPayable =
