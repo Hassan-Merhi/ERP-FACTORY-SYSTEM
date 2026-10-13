@@ -7,7 +7,6 @@
  * under ./accountslegacy. The account table, statement view and the existing
  * AccountDialogs bundle are unchanged.
  */
-import { NotInLedgerSection } from "./accountslegacy/NotInLedgerSection";
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Layers, Plus, Search, X } from "lucide-react";
@@ -284,13 +283,6 @@ export default function Accounts() {
                     factoryStatementLoading={false}
                     brokerStatementLoading={false}
                   />
-                  {model.notInLedger && (
-                    <NotInLedgerSection
-                      data={model.notInLedger}
-                      formatAmount={(amt) => model.formatAmountForAccount(amt, selectedAccount?.type)}
-                      formatDisplayDate={model.formatDisplayDate}
-                    />
-                  )}
                 </>
               )}
             </TabsContent>
