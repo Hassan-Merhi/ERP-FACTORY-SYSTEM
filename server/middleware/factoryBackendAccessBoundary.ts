@@ -375,7 +375,7 @@ export function resolveFactoryBackendAccessRequirement(req: Request): FactoryApi
   // Automatic Priority Printing & Loading. The company switch is a Factory
   // Settings control; the print preflight is shared by every page that prints
   // or reprints physical factory bale labels.
-  if (path === "/automatic-priority-mode") {
+  if (path === "/automatic-priority-mode" || path === "/non-bale-priority-items") {
     return requirement("factory/settings");
   }
   if (
