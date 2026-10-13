@@ -146,6 +146,7 @@ export function PeriodFilter({
   const { formatDisplayDate } = useDateFormat();
   const isMobile = useIsMobile();
   const [calendarOpen, setCalendarOpen] = useState(false);
+  const [draftFromDate, setDraftFromDate] = useState<Date | undefined>(undefined);
 
   // Never pass an Invalid Date into react-day-picker/date-fns. Old session
   // storage or manually edited state may contain malformed/impossible dates,
@@ -158,10 +159,9 @@ export function PeriodFilter({
 
   const handlePresetChange = (preset: PeriodPreset) => {
     if (preset === "custom") {
-      // Open the modal Dialog after the DropdownMenu has closed.
-      // Using a Dialog (modal) instead of a Popover eliminates the race condition
-      // where Radix's DismissableLayer cleanup events would immediately dismiss
-      // the calendar — a modal is fully immune to those pointer events.
+      // Always start a fresh two-click selection, even when an old range exists.
+      setDraftFromDate(undefined);
+      // Open after the DropdownMenu has closed to avoid DismissableLayer races.
       setTimeout(() => setCalendarOpen(true), 0);
     } else {
       const dates = getPresetDates(preset);
@@ -169,15 +169,22 @@ export function PeriodFilter({
     }
   };
 
-  const handleRangeSelect = (range: DateRange | undefined) => {
-    if (!range) return;
-    const formatDate = (d: Date) => format(d, "yyyy-MM-dd");
-    const fromDate = range.from ? formatDate(range.from) : value.fromDate;
-    const toDate = range.to ? formatDate(range.to) : "";
-    onChange({ fromDate, toDate, preset: "custom" });
-    if (range.from && range.to) {
-      setCalendarOpen(false);
+  const handleDayClick = (day: Date) => {
+    if (!draftFromDate) {
+      // First click selects From only; never close the dialog here.
+      setDraftFromDate(day);
+      return;
     }
+
+    // Second click completes the new range, regardless of the previous filter.
+    const [from, to] = day < draftFromDate ? [day, draftFromDate] : [draftFromDate, day];
+    onChange({
+      fromDate: format(from, "yyyy-MM-dd"),
+      toDate: format(to, "yyyy-MM-dd"),
+      preset: "custom",
+    });
+    setDraftFromDate(undefined);
+    setCalendarOpen(false);
   };
 
   function buildLabel(): string {
@@ -268,13 +275,13 @@ export function PeriodFilter({
             <DialogBody className="px-2 sm:px-3">
               <Calendar
                 mode="range"
-                selected={calendarRange}
-                onSelect={handleRangeSelect}
+                selected={draftFromDate ? { from: draftFromDate, to: undefined } : calendarRange}
+                onDayClick={handleDayClick}
                 numberOfMonths={isMobile ? 1 : 2}
                 defaultMonth={fromDateObj ?? toDateObj ?? new Date()}
               />
             </DialogBody>
-            {calendarRange?.from && !calendarRange?.to && (
+            {draftFromDate && (
               <div className="px-4 text-center text-xs text-muted-foreground">Now click an end date</div>
             )}
             <div className="flex justify-end px-4 pb-4">
