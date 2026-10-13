@@ -17,6 +17,7 @@ import {
   FileText,
   GripVertical,
   RotateCcw,
+  UserRoundCog,
   Trash2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -62,6 +63,7 @@ export interface InvoiceOrderRowContext {
   unfinalizePending: boolean;
   onRevertOrder: (orderId: number) => void;
   onDeleteOrder: (orderId: number) => void;
+  onChangeCustomer: (orderId: number) => void;
 }
 
 interface InvoiceOrderRowProps extends InvoiceOrderRowContext {
@@ -96,6 +98,7 @@ export function InvoiceOrderRow({
   unfinalizePending,
   onRevertOrder,
   onDeleteOrder,
+  onChangeCustomer,
 }: InvoiceOrderRowProps) {
   const remaining = getRemainingBales(order);
   const expected = parseFloat(order.proformaExpectedBales || "0");
@@ -307,6 +310,17 @@ export function InvoiceOrderRow({
           >
             <Eye className="h-4 w-4" />
           </Button>
+          {isAdmin && order.status === "LOADING" && (
+            <Button
+              variant="ghost"
+              size="icon"
+              title="Change loading customer"
+              data-testid={`button-change-loading-customer-${order.id}`}
+              onClick={() => onChangeCustomer(order.id)}
+            >
+              <UserRoundCog className="h-4 w-4" />
+            </Button>
+          )}
           {order.status === "FINALIZED" && (
             <AlertDialog>
               <AlertDialogTrigger asChild>
