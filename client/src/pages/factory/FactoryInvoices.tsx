@@ -2,6 +2,7 @@ import type { ClientErrorLike } from "@/lib/clientError";
 import { getErrorDetails } from "@shared/errorUtils";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useState, useCallback, useRef } from "react";
 import { useAppMode } from "@/contexts/AppModeContext";
@@ -39,6 +40,8 @@ export default function FactoryInvoices() {
   const modeApiRequest = getApiRequest(appMode);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("LOADING");
   const [customerFilter, setCustomerFilter] = useState<string>("all");
+  const [changingCustomerOrderId, setChangingCustomerOrderId] = useState<number | null>(null);
+  const [newCustomerId, setNewCustomerId] = useState<string>("");
   const [expandedCustomers, setExpandedCustomers] = useState<Set<number>>(new Set());
   const [showHidden, setShowHidden] = useState(false);
 
@@ -128,6 +131,26 @@ export default function FactoryInvoices() {
     isError,
   } = useQuery<CustomerOrder[]>({
     queryKey: [`/api/factory/customer-orders${queryString ? `?${queryString}` : ""}`, customerFilter, showHidden],
+  });
+
+  const changeCustomerMutation = useMutation({
+    mutationFn: async ({ orderId, customerId }: { orderId: number; customerId: number }) => {
+      const response = await modeApiRequest("PATCH", `/api/factory/customer-orders/${orderId}/change-customer`, { customerId });
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}));
+        throw new Error(error.message || "Could not change loading customer");
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      toast({ title: "Customer changed", description: "Loading and bales preserved. Old customer proforma unlinked." });
+      setChangingCustomerOrderId(null);
+      setNewCustomerId("");
+      setCustomerFilter("all");
+      queryClient.invalidateQueries({ predicate: keyStartsWith("/api/factory/customer-orders") });
+      invalidateCustomerBalances();
+    },
+    onError: (error: Error) => toast({ title: "Cannot change customer", description: error.message, variant: "destructive" }),
   });
 
   const hideMutation = useMutation({
@@ -286,10 +309,37 @@ export default function FactoryInvoices() {
     unfinalizePending: unfinalizeMutation.isPending,
     onRevertOrder: (orderId: number) => unfinalizeMutation.mutate(orderId),
     onDeleteOrder: (orderId: number) => deleteMutation.mutate(orderId),
+    onChangeCustomer: (orderId: number) => { setChangingCustomerOrderId(orderId); setNewCustomerId(""); },
   };
 
   return (
     <div className="flex flex-col h-full p-5 gap-4">
+      <Dialog open={changingCustomerOrderId !== null} onOpenChange={(open) => { if (!open) setChangingCustomerOrderId(null); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Change loading customer</DialogTitle>
+            <DialogDescription>
+              Keep all existing loaded bales and container information. The current customer's proforma will be unlinked; select a new proforma afterward if needed.
+            </DialogDescription>
+          </DialogHeader>
+          <Select value={newCustomerId} onValueChange={setNewCustomerId}>
+            <SelectTrigger data-testid="select-new-loading-customer"><SelectValue placeholder="Choose new customer" /></SelectTrigger>
+            <SelectContent>
+              {customers.map((customer) => (
+                <SelectItem key={customer.id} value={String(customer.id)}>{customer.legalName}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setChangingCustomerOrderId(null)}>Cancel</Button>
+            <Button disabled={!newCustomerId || changeCustomerMutation.isPending} onClick={() => {
+              if (changingCustomerOrderId !== null && newCustomerId) {
+                changeCustomerMutation.mutate({ orderId: changingCustomerOrderId, customerId: Number(newCustomerId) });
+              }
+            }}>Save customer</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       {isError && (
         <div
           className="rounded-md border border-destructive/50 bg-destructive/10 px-4 py-3 text-sm text-destructive"
