@@ -268,7 +268,7 @@ export async function applyPostOffloadChargeMutation(
 
     // The journal is mandatory and part of the charge/cost transaction.
     // A posting failure rolls the charge and all costing changes back.
-    let voucherId: number | null = null;
+    let voucherId: number;
     {
       const { voucherCompanyId, chargesPayableAcctId } = accountingCtx;
       // Phase 22 (C): through the engine with the charge's posting identity; the
