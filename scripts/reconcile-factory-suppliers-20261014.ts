@@ -140,7 +140,7 @@ async function run(apply: boolean): Promise<void> {
   await verifyOpeningBalance();
 
   const importIds = [...GOODS_IDS].filter((id) => id !== OPENING_CONTAINER_ID);
-  const native = new Map<string, MoneyDecimal>();
+  const native = new Map<string, ReturnType<typeof toMoney>>();
   for (const id of importIds) {
     const row = byId.get(id)!;
     if (!row.supplier_id || !goodsAmount(row).greaterThan(0)) throw new Error(`Invalid goods #${id}`);
