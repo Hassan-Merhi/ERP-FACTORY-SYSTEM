@@ -184,53 +184,6 @@ export function FactorySuppliersDirectory({ model }: { model: SuppliersModel }) 
                         {usdEquivalent < 0 ? "-$" : "$"}{model.formatNum(Math.abs(usdEquivalent).toFixed(2))}
                       </div>
                     )}
-                    {/* Show the distinct broker pool/foreign sections without merging linked suppliers. */}
-                    {supplier.brokerStatementBalances ? (
-                    supplier.brokerStatementBalances.length > 0 ? (
-                      supplier.brokerStatementBalances.map((pool) => {
-                        const value = Number(pool.balance);
-                        const settled = Math.abs(value) <= 0.005;
-                        const status = pool.isBrokerPool
-                          ? value > 0.005
-                            ? "Received"
-                            : value < -0.005
-                              ? "Owed"
-                              : "Settled"
-                          : value > 0.005
-                            ? "Payable to suppliers"
-                            : value < -0.005
-                              ? "Overpaid"
-                              : "Settled";
-                        return (
-                          <div
-                            key={pool.currencyCode}
-                            data-testid={`supplier-broker-pool-${supplier.id}-${pool.currencyCode}`}
-                          >
-                            <div className="text-xs text-muted-foreground">
-                              {pool.isBrokerPool ? "Pool Balance" : "Net Balance"} ({pool.currencyCode})
-                            </div>
-                            <div
-                              className={`font-semibold text-sm tabular-nums ${
-                                settled
-                                  ? "text-muted-foreground"
-                                  : (pool.isBrokerPool ? value > 0 : value < 0)
-                                    ? "text-green-600 dark:text-green-400"
-                                    : "text-red-600 dark:text-red-400"
-                              }`}
-                            >
-                              {pool.currencyCode === "USD" ? "$" : `${pool.currencyCode} `}
-                              {model.formatNum(Math.abs(value).toFixed(2))}
-                            </div>
-                            <div className="text-[11px] text-muted-foreground">{status}</div>
-                          </div>
-                        );
-                      })
-                    ) : (
-                      <div className="text-xs text-muted-foreground">No open pool balance</div>
-                    )
-                  ) : (
-                    <div className="text-xs text-amber-600">Broker balance unavailable</div>
-                  )}
                   </>
                 ) : (
                   <>
