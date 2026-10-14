@@ -21,7 +21,7 @@ import {
 } from "../server/services/security/databaseScopeRuntimeContext";
 
 const COMPANY = 12;
-const APPLY = process.argv.includes("--apply");
+const AUDITED_ORDER_IDS = new Set([14,31,32,35,45,46,51,61,63,65,69,71,74,81,83,89,92,96,97,99,100,102,105,106,110,111,112,116,118,120,122,124,126,127,129,130,132,135,137,139,140,143,144,145,147,148,149,150,152,153,155,164,165,166,168,169,171,177,179,181,185,186,188]);
 
 interface Candidate {
   id: number;
@@ -94,7 +94,7 @@ async function assertCandidateBeforePosting(
   return true;
 }
 
-async function run() {
+async function run(APPLY: boolean) {
   const pending = await candidates();
   console.log(`Company=${COMPANY}, mode=${APPLY ? "APPLY" : "DRY RUN"}, missing=${pending.length}`);
   const gross = pending.reduce((s, r) => s.plus(toMoney(r.gross)), new MoneyDecimal(0));
@@ -106,7 +106,9 @@ async function run() {
       (!gross.eq("1896442.70") || !posted.eq("333722.35") || !expected.eq("1562720.35"))) {
     throw new Error("Production preflight changed: historical totals differ from the verified snapshot");
   }
-  if (pending.length > 63) throw new Error("More missing invoices than the audited 63: stop and re-audit");
+  if (pending.length > 63 || pending.some((row) => !AUDITED_ORDER_IDS.has(row.id))) {
+    throw new Error("Unaudited invoice is present: refusing to post outside the 63 verified order IDs");
+  }
 
   const blocked: Candidate[] = [];
   const ready: Candidate[] = [];
@@ -216,7 +218,15 @@ async function run() {
   }
   console.log(`DONE: ${postedCount} invoices posted, total receivable and revenue ${postedAmount.toFixed(2)}, ${blocked.length} exceptions not posted.`);
 }
-void runWithDatabaseScopeRuntimeContext(
-  createTenantDatabaseScope(COMPANY), run
-).catch((err) => { console.error(err); process.exitCode = 1; })
-.finally(() => pool.end());
+/** Called only from the explicitly enabled one-time startup path or the CLI. */
+export function reconcileFactoryInvoices20261014(apply: boolean): Promise<void> {
+  return runWithDatabaseScopeRuntimeContext(
+    createTenantDatabaseScope(COMPANY), () => run(apply)
+  );
+}
+
+if (process.argv[1]?.includes("reconcile-factory-invoices-20261014")) {
+  void reconcileFactoryInvoices20261014(process.argv.includes("--apply"))
+    .catch((err) => { console.error(err); process.exitCode = 1; })
+    .finally(() => pool.end());
+}
