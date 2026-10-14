@@ -22,6 +22,7 @@ import { eq, and, desc, inArray } from "drizzle-orm";
 import { isPayableContainer } from "./_helpers";
 import type Decimal from "decimal.js";
 import { MoneyDecimal, parseMoneyInput, toMoney } from "../../../../lib/money";
+import { postSupplierFxTransferJournalTx } from "../../../../services/factory/supplierFxTransferJournal";
 
 const ZERO = new MoneyDecimal(0);
 const TOLERANCE = new MoneyDecimal("0.001");
@@ -302,6 +303,9 @@ export function registerSupplierBulkFxSettlementRoutes(app: Express) {
               sourceType: "supplier",
             })
             .returning();
+          // Bulk settlement uses the same atomic source→voucher path as a
+          // single transfer: partial failure rolls back ALL created transfers.
+          await postSupplierFxTransferJournalTx(tx, fxTransfer);
 
           // Container-level allocations (oldest-first within each supplier)
           const sortedCont = [...alloc.containers].sort((a, b) =>
