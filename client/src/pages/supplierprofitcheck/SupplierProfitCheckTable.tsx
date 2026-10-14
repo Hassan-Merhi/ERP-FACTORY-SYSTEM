@@ -243,7 +243,9 @@ function CommittedPriceInput({
       step="0.01"
       placeholder={placeholder}
       value={draft}
-      onFocus={() => { isEditing.current = true; }}
+      onFocus={() => {
+        isEditing.current = true;
+      }}
       onChange={(event) => setDraft(event.target.value)}
       onBlur={() => {
         isEditing.current = false;
