@@ -67,6 +67,25 @@ export function runPostStartupJobs(): void {
     unrefTimer(paymentLinkTimer);
   }
 
+  // One-time, audited 56-record FX settlement reconciliation for company 12.
+  // Disabled by default. Each voucher posts in its own guarded transaction.
+  if (process.env.ERP_RECONCILE_SUPPLIER_FX_20261014 === "company-12-audited-56") {
+    const supplierFxTimer = setTimeout(async () => {
+      try {
+        const { reconcileFactorySupplierFx20261014 } = await import(
+          "../../scripts/reconcile-factory-supplier-fx-20261014"
+        );
+        await reconcileFactorySupplierFx20261014(true);
+        logger.info("[SupplierFxRepair] Historical supplier FX reconciliation finished");
+      } catch (error: unknown) {
+        logger.error("[SupplierFxRepair] Historical supplier FX reconciliation halted", {
+          error: getErrorMessage(error),
+        });
+      }
+    }, 12000);
+    unrefTimer(supplierFxTimer);
+  }
+
   // Live vessel/AIS tracking is intentionally disabled. Container movement is
   // maintained manually or through Excel imports.
 
