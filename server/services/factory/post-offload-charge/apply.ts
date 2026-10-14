@@ -175,7 +175,9 @@ export async function applyPostOffloadChargeMutation(
       accountingCtx.chargesPayableAcctId <= 0 ||
       Number(Boolean(chargeData.ledgerAccountId)) + Number(Boolean(chargeData.supplierId)) !== 1
     ) {
-      throw new Error("Post-offload charge requires exactly one company-owned expense account or supplier and a valid payable account.");
+      throw new Error(
+        "Post-offload charge requires exactly one company-owned expense account or supplier and a valid payable account."
+      );
     }
 
     // Compute OLD canonical cost
@@ -359,7 +361,9 @@ export async function applyPostOffloadChargeMutation(
       accountingCtx.chargesPayableAcctId <= 0 ||
       Number(Boolean(chargeData.ledgerAccountId)) + Number(Boolean(chargeData.supplierId)) !== 1
     ) {
-      throw new Error("Charge editing requires a valid same-company ledger destination; no unposted charge changes are permitted.");
+      throw new Error(
+        "Charge editing requires a valid same-company ledger destination; no unposted charge changes are permitted."
+      );
     }
 
     // Lock the charge row FOR UPDATE
