@@ -145,8 +145,11 @@ export async function syncFactoryInvoiceTx(
     `
   );
   if (!order || order.status !== "FINALIZED" || order.deleted_at !== null || !order.invoice_number) return null;
-  if (!order.invoice_date || !(await isPerpetualInventoryActive(tx, companyId, order.invoice_date))) return null;
+  if (!order.invoice_date) return null;
   if (await isSupplierPartnerCompany(tx, companyId)) return null;
+  // Customer receivables and sales revenue must always reach the ledger.
+  // The inventory cut-over gates COGS/finished-goods only, not the invoice itself.
+  const postInventoryCost = await isPerpetualInventoryActive(tx, companyId, order.invoice_date);
 
   // Charges with their own CHARGE- voucher already debit the customer.
   const [vouchered] = await rows<{ amount: string }>(
@@ -178,7 +181,7 @@ export async function syncFactoryInvoiceTx(
   const receivable = toMoney(order.grand_total ?? 0)
     .minus(toMoney(vouchered?.amount ?? 0))
     .toDecimalPlaces(2);
-  const [cost] = await rows<{ cost: string }>(
+  const [cost] = postInventoryCost ? await rows<{ cost: string }>(
     tx,
     sql`
       SELECT COALESCE(SUM(b.total_cost), 0)::text AS cost
@@ -186,15 +189,17 @@ export async function syncFactoryInvoiceTx(
         JOIN factory_bales b ON b.id = cob.bale_id AND b.company_id = ${companyId}
        WHERE cob.order_id = ${orderId}
     `
-  );
-  const cogs = toMoney(cost?.cost ?? 0).toDecimalPlaces(2);
+  ) : [{ cost: "0" }];
+  const cogs = postInventoryCost ? toMoney(cost?.cost ?? 0).toDecimalPlaces(2) : ZERO;
   if (receivable.isZero() && cogs.isZero()) return null;
   const currency = normalizeFactoryCurrency(order.currency);
   const rate = await findFactoryFxRateOnOrBefore(tx, companyId, currency, order.invoice_date);
   if (!rate) throw new FactoryInvoiceRateRefusalError(currency, order.invoice_date);
 
   const zero = new MoneyDecimal(0);
-  const accounts = await systemAccountIdsTx(tx, companyId, ["COGS", "FACTORY_FINISHED_GOODS"]);
+  const accounts = postInventoryCost
+    ? await systemAccountIdsTx(tx, companyId, ["COGS", "FACTORY_FINISHED_GOODS"])
+    : new Map<string, number>();
   const revenueAccountId = await ledgerAccountByCodeTx(
     tx,
     companyId,
@@ -222,7 +227,7 @@ export async function syncFactoryInvoiceTx(
       narration: ["Factory bale sales", invoice].join(" - "),
     },
   ];
-  const costLines: LinkedJournalLine[] = [
+  const costLines: LinkedJournalLine[] = postInventoryCost ? [
     {
       ledgerAccountId: accounts.get("COGS")!,
       debit: cogs,
@@ -235,7 +240,7 @@ export async function syncFactoryInvoiceTx(
       credit: cogs,
       narration: ["Bales invoiced", invoice].join(" - "),
     },
-  ];
+  ] : [];
   const description = ["Factory invoice", invoice].join(" - ");
   const identity = { sourceType: FACTORY_INVOICE_SOURCE, sourceId: orderId };
   if (currency === "USD") {
