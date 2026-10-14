@@ -59,7 +59,9 @@ export function runPostStartupJobs(): void {
         const changed = await repairSupplierPaymentDaybookLinks20261014();
         logger.info("[SupplierPaymentLinks] Historical daybook references reconciled", { count: changed });
       } catch (error: unknown) {
-        logger.error("[SupplierPaymentLinks] Daybook link repair refused", { error: getErrorMessage(error) });
+        logger.error("[SupplierPaymentLinks] Daybook link repair refused", {
+          error: getErrorMessage(error),
+        });
       }
     }, 12000);
     unrefTimer(paymentLinkTimer);
