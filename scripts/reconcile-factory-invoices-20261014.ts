@@ -10,7 +10,7 @@
  * has not been enabled for company 12.
  */
 import { sql } from "drizzle-orm";
-import { db, pool } from "../server/db";
+import { db, pool, type DbTransaction } from "../server/db";
 import { MoneyDecimal, toMoney } from "../server/lib/money";
 import { getPartyBalance } from "../server/services/accounting/balances/ledgerBalanceEngine";
 import { syncFactoryInvoiceTx } from "../server/services/accounting/perpetualInventory/factoryInvoice";
@@ -73,7 +73,7 @@ async function candidates(): Promise<Candidate[]> {
 }
 
 async function assertCandidateBeforePosting(
-  tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
+  tx: DbTransaction,
   candidate: Candidate
 ) {
   const lock = await tx.execute(sql`
