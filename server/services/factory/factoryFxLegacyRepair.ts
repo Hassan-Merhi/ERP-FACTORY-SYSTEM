@@ -57,7 +57,24 @@ type Executor = typeof db | DbTransaction;
 export type LegacyLineKind = "native" | "usd";
 
 /** Where a line's rate comes from: its voucher, or the factory rate on or before the voucher date. */
-export type LegacyRateSource = "line" | "dated-manual" | "dated-auto";
+export type LegacyRateSource = "line" | "dated-manual" | "dated-auto" | "approved-fixed";
+
+/**
+ * User-approved fixed USD rates for the historical EUR/AUD ledger cleanup.
+ * These are NOT current exchange rates or a replacement for a normalized
+ * transaction's immutable historical FX. Use only in the explicit repair mode.
+ */
+export const FACTORY_APPROVED_HISTORICAL_RATES = Object.freeze({
+  EUR: "1.18",
+  AUD: "0.75",
+} as const);
+
+function approvedHistoricalRate(currency: string, enabled: boolean): Decimal | null {
+  if (!enabled) return null;
+  const code = currency.toUpperCase();
+  const value = FACTORY_APPROVED_HISTORICAL_RATES[code as keyof typeof FACTORY_APPROVED_HISTORICAL_RATES];
+  return value ? toMoney(value).toDecimalPlaces(10) : null;
+}
 
 export type LegacySkipReason =
   "RATE_NOT_SET" | "PERIOD_CLOSED" | "AMOUNT_NOT_RECOGNISED" | "AMOUNT_AMBIGUOUS" | "OTHER_LINE_NOT_REPAIRABLE";
@@ -99,6 +116,9 @@ export interface LegacyRepairPlan {
   usdChangeByTarget: Record<string, string>;
   /** Lines converted at a dated factory rate (their voucher had no rate of its own). */
   datedRateLines: number;
+  /** Only EUR/AUD legacy lines use these rates when explicitly approved. */
+  fixedRatesUsed: Record<string, string> | null;
+  fixedRateLines: number;
   /** sha256 of what the apply would change; the apply refuses a different plan when given it. */
   planHash: string;
   lines: LegacyLinePlan[];
@@ -158,6 +178,9 @@ async function loadLegacyRows(executor: Executor, companyId: number, lock: boole
       JOIN vouchers v ON v.id = ve.voucher_id
      WHERE v.company_id = ${companyId}
        AND v.source_module = 'FACTORY'
+       AND v.deleted_at IS NULL
+       AND v.optional = false
+       AND ve.company_id = ${companyId}
        AND UPPER(COALESCE(v.currency, 'USD')) <> 'USD'
        AND ve.transaction_currency IS NULL
      ORDER BY v.id, ve.id
@@ -188,14 +211,22 @@ function ownRate(row: LegacyRow): Decimal | null {
   return rate.gt(0) && !rate.eq(1) ? rate : null;
 }
 
-function classify(row: LegacyRow, dated: FactoryFxRateOnDate | null): LegacyLinePlan {
+function classify(
+  row: LegacyRow,
+  dated: FactoryFxRateOnDate | null,
+  useFixedHistoricalRates: boolean
+): LegacyLinePlan {
   const debit = toMoney(row.debit_amount ?? 0);
   const credit = toMoney(row.credit_amount ?? 0);
   const side: "debit" | "credit" = debit.gt(0) ? "debit" : "credit";
   const amount = side === "debit" ? debit : credit;
   const own = ownRate(row);
-  const datedRate = !own && dated && toMoney(dated.rate).gt(0) ? toMoney(dated.rate).toDecimalPlaces(10) : null;
-  const rate = own ?? datedRate ?? toMoney(row.exchange_rate ?? 0).toDecimalPlaces(10);
+  const fixedRate = approvedHistoricalRate(row.currency, useFixedHistoricalRates);
+  const datedRate =
+    !fixedRate && !own && dated && toMoney(dated.rate).gt(0)
+      ? toMoney(dated.rate).toDecimalPlaces(10)
+      : null;
+  const rate = fixedRate ?? own ?? datedRate ?? toMoney(row.exchange_rate ?? 0).toDecimalPlaces(10);
   const total = toMoney(row.total_amount ?? 0);
   const plan: LegacyLinePlan = {
     entryId: row.id,
@@ -204,7 +235,15 @@ function classify(row: LegacyRow, dated: FactoryFxRateOnDate | null): LegacyLine
     voucherDate: row.voucher_date,
     currency: row.currency,
     rate: rate.toFixed(10),
-    rateSource: own ? "line" : datedRate ? (dated!.source === "manual" ? "dated-manual" : "dated-auto") : null,
+    rateSource: fixedRate
+      ? "approved-fixed"
+      : own
+        ? "line"
+        : datedRate
+          ? dated!.source === "manual"
+            ? "dated-manual"
+            : "dated-auto"
+          : null,
     rateEffectiveDate: datedRate ? dated!.effectiveDate : null,
     target: targetOf(row),
     side,
@@ -216,14 +255,17 @@ function classify(row: LegacyRow, dated: FactoryFxRateOnDate | null): LegacyLine
     newStoredAmount: null,
     usdChange: null,
   };
-  if (!own && !datedRate) return { ...plan, skipReason: "RATE_NOT_SET" };
+  if (!fixedRate && !own && !datedRate) return { ...plan, skipReason: "RATE_NOT_SET" };
   if (row.period_closed) return { ...plan, skipReason: "PERIOD_CLOSED" };
 
   const isNative = amount.eq(total);
   // With no rate of its own, a writer stored the native amount on every leg
   // (an own-account leg's "USD" was native × 1), so only the native shape is
   // recognised at a dated rate.
-  const isUsd = own ? amount.eq(cents(total.times(rate))) : false;
+  // Recognition uses the original recorded voucher rate, even if the
+  // approved historical repair substitutes a different USD conversion rate.
+  // This avoids double converting lines that were already stored in USD.
+  const isUsd = own ? amount.eq(cents(total.times(own))) : false;
   if (isNative && isUsd) return { ...plan, skipReason: "AMOUNT_AMBIGUOUS" };
   if (!isNative && !isUsd) return { ...plan, skipReason: "AMOUNT_NOT_RECOGNISED" };
 
@@ -270,11 +312,12 @@ async function repairRateFor(
 async function datedRatesFor(
   executor: Executor,
   companyId: number,
-  rows: LegacyRow[]
+  rows: LegacyRow[],
+  useFixedHistoricalRates: boolean
 ): Promise<Map<string, FactoryFxRateOnDate | null>> {
   const rates = new Map<string, FactoryFxRateOnDate | null>();
   for (const row of rows) {
-    if (ownRate(row)) continue;
+    if (ownRate(row) || approvedHistoricalRate(row.currency, useFixedHistoricalRates)) continue;
     const key = `${row.currency}|${row.voucher_date}`;
     if (rates.has(key)) continue;
     rates.set(key, await repairRateFor(executor, companyId, row.currency, row.voucher_date));
@@ -282,19 +325,24 @@ async function datedRatesFor(
   return rates;
 }
 
-function planHashOf(lines: LegacyLinePlan[]): string {
+function planHashOf(lines: LegacyLinePlan[], useFixedHistoricalRates: boolean): string {
   const changes = lines
     .filter((line) => !line.skipReason)
     .map((line) => [line.entryId, line.side, line.rate, line.rateSource, line.transactionAmount, line.baseAmount]);
-  return createHash("sha256").update(JSON.stringify(changes)).digest("hex");
+  return createHash("sha256")
+    .update(JSON.stringify({ useFixedHistoricalRates, changes }))
+    .digest("hex");
 }
 
 function buildPlan(
   companyId: number,
   rows: LegacyRow[],
-  datedRates: Map<string, FactoryFxRateOnDate | null>
+  datedRates: Map<string, FactoryFxRateOnDate | null>,
+  useFixedHistoricalRates: boolean
 ): LegacyRepairPlan {
-  const classified = rows.map((row) => classify(row, datedRates.get(`${row.currency}|${row.voucher_date}`) ?? null));
+  const classified = rows.map((row) =>
+    classify(row, datedRates.get(`${row.currency}|${row.voucher_date}`) ?? null, useFixedHistoricalRates)
+  );
   // A voucher is repaired whole or not at all.
   const blockedVouchers = new Set(classified.filter((line) => line.skipReason).map((line) => line.voucherId));
   const lines = classified.map((line): LegacyLinePlan =>
@@ -330,20 +378,36 @@ function buildPlan(
     usdChangeByTarget: Object.fromEntries(
       [...usdChange.entries()].filter(([, value]) => !value.isZero()).map(([key, value]) => [key, value.toFixed(2)])
     ),
-    datedRateLines: repairable.filter((line) => line.rateSource !== "line").length,
-    planHash: planHashOf(lines),
+    datedRateLines: repairable.filter((line) => line.rateSource === "dated-manual" || line.rateSource === "dated-auto").length,
+    fixedRatesUsed: useFixedHistoricalRates ? { ...FACTORY_APPROVED_HISTORICAL_RATES } : null,
+    fixedRateLines: repairable.filter((line) => line.rateSource === "approved-fixed").length,
+    planHash: planHashOf(lines, useFixedHistoricalRates),
     lines,
   };
 }
 
-async function derivePlan(executor: Executor, companyId: number, lock: boolean): Promise<LegacyRepairPlan> {
+async function derivePlan(
+  executor: Executor,
+  companyId: number,
+  lock: boolean,
+  useFixedHistoricalRates = false
+): Promise<LegacyRepairPlan> {
   const rows = await loadLegacyRows(executor, companyId, lock);
-  return buildPlan(companyId, rows, await datedRatesFor(executor, companyId, rows));
+  return buildPlan(
+    companyId,
+    rows,
+    await datedRatesFor(executor, companyId, rows, useFixedHistoricalRates),
+    useFixedHistoricalRates
+  );
 }
 
 /** Read-only: what the repair would do for one company. */
-export async function planFactoryFxLegacyRepair(companyId: number, executor: Executor = db): Promise<LegacyRepairPlan> {
-  return derivePlan(executor, companyId, false);
+export async function planFactoryFxLegacyRepair(
+  companyId: number,
+  executor: Executor = db,
+  useFixedHistoricalRates = false
+): Promise<LegacyRepairPlan> {
+  return derivePlan(executor, companyId, false, useFixedHistoricalRates);
 }
 
 export interface ApplyFactoryFxRepairOptions {
@@ -351,6 +415,8 @@ export interface ApplyFactoryFxRepairOptions {
   actor?: AuditActor & { userId: string | number };
   /** The reviewed plan's hash (required): the apply refuses a plan that no longer matches it. */
   expectedPlanHash: string;
+  /** Explicit operator approval to apply EUR 1.18 / AUD 0.75 to unresolved history. */
+  useFixedHistoricalRates?: boolean;
 }
 
 /**
@@ -363,7 +429,7 @@ export async function applyFactoryFxLegacyRepair(
 ): Promise<LegacyRepairPlan> {
   if (!options?.expectedPlanHash) throw new FactoryFxRepairPlanHashRequiredError();
   return db.transaction(async (tx) => {
-    const plan = await derivePlan(tx, companyId, true);
+    const plan = await derivePlan(tx, companyId, true, options.useFixedHistoricalRates === true);
     if (options.expectedPlanHash !== plan.planHash) {
       throw new FactoryFxRepairPlanChangedError();
     }
@@ -407,6 +473,7 @@ export async function applyFactoryFxLegacyRepair(
             },
             // writeAuditEvent keeps `metadata` only without `changes`, so these are change fields.
             planHash: { new: plan.planHash },
+            fixedRatesUsed: { new: plan.fixedRatesUsed },
             usdChangeByTarget: { new: plan.usdChangeByTarget },
           },
         },
