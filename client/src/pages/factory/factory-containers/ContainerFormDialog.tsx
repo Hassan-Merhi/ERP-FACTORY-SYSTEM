@@ -142,7 +142,7 @@ export function ContainerFormDialog({
       freightAccountId: unknown;
     } & { freightAccountId: Parameters<typeof String>[0] } & { freightPaidBy: "supplier" | "own" } & {
       freightOwnAccountId: unknown;
-    } & { freightOwnAccountId: Parameters<typeof String>[0] } & { otherCharges: string | number | null | undefined } & {
+    } & { freightOwnAccountId: Parameters<typeof String>[0] } & { freightSupplierId: number | string | null | undefined } & { otherCharges: string | number | null | undefined } & {
       otherChargesAccountId: unknown;
     } & { otherChargesAccountId: Parameters<typeof String>[0] } & { currencyCode: React.SetStateAction<string> } & {
       fxRateToUsd: string | number | null | undefined;
