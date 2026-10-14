@@ -507,7 +507,9 @@ export function registerSupplierWithBalancesRoutes(app: Express) {
       // Pre-compute broker statements for each broker parent so the list card
       // balance matches the detail page exactly (same data source).
       const brokerParentIds = new Set<number>(
-        suppliersList.filter((s) => suppliersList.some((c) => c.parentId === s.id)).map((s) => s.id as number)
+        suppliersList
+          .filter((s) => s.isBroker || suppliersList.some((c) => c.parentId === s.id))
+          .map((s) => s.id)
       );
       const brokerStmtMap: Record<number, NonNullable<Awaited<ReturnType<typeof buildBrokerStatement>>>> = {};
       for (const s of suppliersList) {
@@ -522,8 +524,9 @@ export function registerSupplierWithBalancesRoutes(app: Express) {
         const own = statsById[s.id];
         const children = suppliersList.filter((c) => c.parentId === s.id);
 
-        if (children.length === 0) {
-          // Leaf supplier — use own stats
+        if (!brokerParentIds.has(s.id)) {
+          // Ordinary supplier — use the same ledger view as its own settlement statement.
+          // Even standalone brokers with no linked children take the broker path below.
           return {
             ...s,
             totalContainers: own.totalContainers,
@@ -654,6 +657,20 @@ export function registerSupplierWithBalancesRoutes(app: Express) {
         );
 
         const brokerLedger = ledgerFields(s.id);
+        // Exactly the data used by BrokerOverviewPanel's KPI cards. These
+        // balances are broker pool/settlement balances, NOT the broker's GL
+        // ledger balance or the combined liabilities of linked suppliers.
+        // Return each currency separately: EUR overpaid must never silently
+        // be folded into a positive USD pool.
+        const brokerStatementBalances = stmt
+          ? stmt.currencyLedgers
+              .map((section) => ({
+                currencyCode: section.currencyCode,
+                balance: toMoney(section.netBalance).toFixed(2),
+                isBrokerPool: section.isBrokerPool,
+              }))
+              .filter((section) => toMoney(section.balance).abs().gt(0.001))
+          : null;
         return {
           ...s,
           totalContainers: aggContainers,
@@ -661,7 +678,10 @@ export function registerSupplierWithBalancesRoutes(app: Express) {
           // The broker's own ledger balance (true broker model: linked suppliers
           // are not merged in; they are listed in linkedSupplierExposure).
           ...brokerLedger,
-          brokerPoolUsd: brokerLedger.ledgerBalance,
+          // Keep the posted GL figure in ledgerBalance, but do not present it
+          // as the USD broker pool, which is independently computed.
+          brokerPoolUsd: stmt ? brokerPoolUsd.toFixed(2) : null,
+          brokerStatementBalances,
           totalPaid: own.totalPaid.toFixed(2),
           totalCommissionUsd: own.commissionValue.toFixed(2),
           approxFxRate: own.approxFxRate.gt(0) ? own.approxFxRate.toFixed(4) : null,
