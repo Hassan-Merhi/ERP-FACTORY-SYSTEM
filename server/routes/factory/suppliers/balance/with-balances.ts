@@ -507,9 +507,7 @@ export function registerSupplierWithBalancesRoutes(app: Express) {
       // Pre-compute broker statements for each broker parent so the list card
       // balance matches the detail page exactly (same data source).
       const brokerParentIds = new Set<number>(
-        suppliersList
-          .filter((s) => s.isBroker || suppliersList.some((c) => c.parentId === s.id))
-          .map((s) => s.id)
+        suppliersList.filter((s) => s.isBroker || suppliersList.some((c) => c.parentId === s.id)).map((s) => s.id)
       );
       const brokerStmtMap: Record<number, NonNullable<Awaited<ReturnType<typeof buildBrokerStatement>>>> = {};
       for (const s of suppliersList) {

@@ -172,18 +172,33 @@ export function FactorySuppliersDirectory({ model }: { model: SuppliersModel }) 
                         const value = Number(pool.balance);
                         const settled = Math.abs(value) <= 0.005;
                         const status = pool.isBrokerPool
-                          ? value > 0.005 ? "Received" : value < -0.005 ? "Owed" : "Settled"
-                          : value > 0.005 ? "Payable to suppliers" : value < -0.005 ? "Overpaid" : "Settled";
+                          ? value > 0.005
+                            ? "Received"
+                            : value < -0.005
+                              ? "Owed"
+                              : "Settled"
+                          : value > 0.005
+                            ? "Payable to suppliers"
+                            : value < -0.005
+                              ? "Overpaid"
+                              : "Settled";
                         return (
-                          <div key={pool.currencyCode} data-testid={`supplier-broker-pool-${supplier.id}-${pool.currencyCode}`}>
+                          <div
+                            key={pool.currencyCode}
+                            data-testid={`supplier-broker-pool-${supplier.id}-${pool.currencyCode}`}
+                          >
                             <div className="text-xs text-muted-foreground">
                               {pool.isBrokerPool ? "Pool Balance" : "Net Balance"} ({pool.currencyCode})
                             </div>
-                            <div className={`font-semibold text-sm tabular-nums ${
-                              settled ? "text-muted-foreground" :
-                              (pool.isBrokerPool ? value > 0 : value < 0)
-                                ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"
-                            }`}>
+                            <div
+                              className={`font-semibold text-sm tabular-nums ${
+                                settled
+                                  ? "text-muted-foreground"
+                                  : (pool.isBrokerPool ? value > 0 : value < 0)
+                                    ? "text-green-600 dark:text-green-400"
+                                    : "text-red-600 dark:text-red-400"
+                              }`}
+                            >
                               {pool.currencyCode === "USD" ? "$" : `${pool.currencyCode} `}
                               {model.formatNum(Math.abs(value).toFixed(2))}
                             </div>
@@ -200,16 +215,25 @@ export function FactorySuppliersDirectory({ model }: { model: SuppliersModel }) 
                 ) : (
                   <>
                     <div className="text-xs text-muted-foreground">Ledger balance (USD)</div>
-                    <div className={`font-semibold text-sm tabular-nums ${
-                      balanceValue < -0.005 ? "text-red-600 dark:text-red-400" :
-                      balanceValue > 0.005 ? "text-green-600 dark:text-green-400" : "text-muted-foreground"
-                    }`} data-testid={`text-directory-ledger-balance-${supplier.id}`}>
+                    <div
+                      className={`font-semibold text-sm tabular-nums ${
+                        balanceValue < -0.005
+                          ? "text-red-600 dark:text-red-400"
+                          : balanceValue > 0.005
+                            ? "text-green-600 dark:text-green-400"
+                            : "text-muted-foreground"
+                      }`}
+                      data-testid={`text-directory-ledger-balance-${supplier.id}`}
+                    >
                       {Math.abs(balanceValue) <= 0.005
                         ? "$—"
                         : `$${model.formatNum(Math.abs(balanceValue).toFixed(2))}${balanceValue < 0 ? " DR" : " CR"}`}
                     </div>
                     {Math.abs(notInLedgerValue) > 0.005 && (
-                      <div className="text-[11px] text-muted-foreground" data-testid={`text-not-in-ledger-${supplier.id}`}>
+                      <div
+                        className="text-[11px] text-muted-foreground"
+                        data-testid={`text-not-in-ledger-${supplier.id}`}
+                      >
                         Not yet in the ledger (memo){" "}
                         {`$${model.formatNum(Math.abs(notInLedgerValue).toFixed(2))}${notInLedgerValue < 0 ? " DR" : " CR"}`}
                       </div>
@@ -219,14 +243,19 @@ export function FactorySuppliersDirectory({ model }: { model: SuppliersModel }) 
                     )}
                     {nonUsdBalances.map((balance) => (
                       <div key={balance.currencyCode} className="flex items-center justify-end gap-1">
-                        <span className={`text-xs tabular-nums ${
-                          balance.balance < 0 ? "text-red-600 dark:text-red-400" : "text-muted-foreground"
-                        }`}>
+                        <span
+                          className={`text-xs tabular-nums ${
+                            balance.balance < 0 ? "text-red-600 dark:text-red-400" : "text-muted-foreground"
+                          }`}
+                        >
                           {balance.currencyCode} {model.formatNum(Math.abs(balance.balance).toFixed(2))}
                           {balance.balance < 0 ? " DR" : " CR"}
                         </span>
                         {balance.balance > 0.005 && (
-                          <Button variant="ghost" size="icon" className="h-5 w-5 text-muted-foreground hover:text-foreground"
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-5 w-5 text-muted-foreground hover:text-foreground"
                             title={`Settle ${balance.currencyCode} → USD`}
                             onClick={(event) => {
                               event.stopPropagation();
