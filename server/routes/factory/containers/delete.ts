@@ -194,16 +194,74 @@ export function registerFactoryContainerDeleteRoutes(app: Express) {
     }
   });
 
-  // ── Backfill: create missing goods-import credits for existing containers ────
-  app.post("/api/factory/containers/backfill-import-credits", requireAuth, async (req: Request, res: Response) => {
+  // Read-only, company-scoped preview for the historical import-credit repair.
+  // Historic records must never be posted merely because someone loads a page.
+  app.get("/api/factory/containers/backfill-import-credits", requireAuth, async (req: Request, res: Response) => {
     try {
+      if (!checkFactoryAdmin(req, res)) return;
       const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });
+      const active = await db.select().from(factoryContainers)
+        .where(and(eq(factoryContainers.companyId, companyId), isNull(factoryContainers.deletedAt)));
+      const missing = [];
+      for (const container of active) {
+        if (!container.supplierId) continue;
+        const goods = toMoney(container.totalKg).times(toMoney(container.ratePerKg));
+        if (!goods.greaterThan(0)) continue;
+        const posted = await db.select({ id: vouchers.id }).from(vouchers).where(
+          and(eq(vouchers.companyId, companyId), ilike(vouchers.voucherNumber, `FACTORY-IMPORT-${container.id}-%`))
+        ).limit(1);
+        if (posted.length) continue; // includes retired entries — never re-post an intentionally reversed document
+        let repairable = true;
+        try {
+          resolveStoredFxRateOrThrow(container.currencyCode, container.fxRateToUsd, container.fxRateConfirmed);
+        } catch {
+          repairable = false;
+        }
+        missing.push({
+          containerId: container.id,
+          containerNumber: container.containerNumber,
+          supplierId: container.supplierId,
+          currency: container.currencyCode || "USD",
+          nativeGoods: goods.toFixed(2),
+          historicalRate: container.fxRateToUsd,
+          repairable,
+        });
+      }
+      res.json({ companyId, writePerformed: false, count: missing.length, missing });
+    } catch (error: unknown) {
+      logger.error("Factory import-credit preview failed", { error });
+      res.status(500).json({ message: getErrorMessage(error) });
+    }
+  });
 
+  // Backfill: explicit Admin/Owner approved source IDs only. The posting service
+  // creates a balanced journal and its immutable source identity per transaction.
+  app.post("/api/factory/containers/backfill-import-credits", requireAuth, async (req: Request, res: Response) => {
+    try {
+      if (!checkFactoryAdmin(req, res)) return;
+      const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
+      if (!companyId) return res.status(400).json({ message: "No company selected" });
+      const { confirm, containerIds } = req.body || {};
+      if (confirm !== true || !Array.isArray(containerIds) || !containerIds.length
+          || containerIds.length > 250
+          || containerIds.some((id: unknown) => !Number.isSafeInteger(id) || Number(id) <= 0)
+          || new Set(containerIds).size !== containerIds.length) {
+        return res.status(400).json({
+          message: "Preview first, then explicitly confirm 1-250 unique numeric containerIds to backfill.",
+        });
+      }
       const allContainers = await db
         .select()
         .from(factoryContainers)
-        .where(and(eq(factoryContainers.companyId, companyId)));
+        .where(and(
+          eq(factoryContainers.companyId, companyId),
+          isNull(factoryContainers.deletedAt),
+          inArray(factoryContainers.id, containerIds)
+        ));
+      if (allContainers.length !== containerIds.length) {
+        return res.status(409).json({ message: "Container selection has changed or includes deleted/other-company IDs. Preview again." });
+      }
 
       let created = 0;
       let skipped = 0;
@@ -253,7 +311,9 @@ export function registerFactoryContainerDeleteRoutes(app: Express) {
           continue;
         }
 
-        const today = getClientDate(req);
+        const creationDate = container.createdAt
+          ? new Date(container.createdAt).toISOString().slice(0, 10)
+          : getClientDate(req);
         const importCostAccId = await getOrCreateLedgerAccount(companyId, "FACTORY_IMPORT_COST", "Factory Import Cost");
         // Phase 22 (C): through the engine with the container's goods identity
         // (the create route's) and its FACTORY-IMPORT-{container}- family number.
@@ -261,7 +321,7 @@ export function registerFactoryContainerDeleteRoutes(app: Express) {
           postFactoryVoucherTx(tx, {
             companyId,
             voucherNumber: (generation) => `FACTORY-IMPORT-${container.id}-${generation}`,
-            voucherDate: container.arrivalDate || today,
+            voucherDate: container.arrivalDate || creationDate,
             description: `Goods import - container ${container.containerNumber}`,
             currency: container.currencyCode || "USD",
             fxRateToUsd: String(backfillFxRate),
