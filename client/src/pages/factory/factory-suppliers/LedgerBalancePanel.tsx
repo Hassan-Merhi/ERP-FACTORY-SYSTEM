@@ -5,6 +5,9 @@ interface LedgerBalancePanelProps {
   /** The operational container figure, shown only as a labelled memo. */
   operationalTotal?: string;
   formatNum: (val: string) => string;
+  /** Same current-rate USD equivalent as the outside supplier card. */
+  usdEquivalentBalance?: string | null;
+  usdEquivalentMissingRates?: string[];
 }
 
 const amountText = (value: number, prefix: string, formatNum: (val: string) => string) =>
@@ -15,14 +18,33 @@ const amountText = (value: number, prefix: string, formatNum: (val: string) => s
  * ledger balance first, the native balance per currency beside it, then the
  * amounts not yet in the ledger and the operational figure as labelled memos.
  */
-export function LedgerBalancePanel({ view, formatNum }: LedgerBalancePanelProps) {
+export function LedgerBalancePanel({
+  view,
+  formatNum,
+  usdEquivalentBalance,
+  usdEquivalentMissingRates = [],
+}: LedgerBalancePanelProps) {
   const ledger = Number(view.ledgerBalanceUsd);
   const natives = view.nativeBalances.filter((bucket) => Math.abs(Number(bucket.balance)) > 0.005);
   return (
     <div className="rounded-xl border p-4 space-y-3" data-testid="panel-supplier-ledger-balance">
+      {usdEquivalentBalance !== undefined && (
+        <div>
+          <div className="text-xs text-muted-foreground">Total balance (USD equivalent at Factory Settings rates)</div>
+          {usdEquivalentBalance === null ? (
+            <div className="text-sm text-amber-600" role="alert">
+              FX rate missing: {usdEquivalentMissingRates.join(", ") || "please check Factory Settings"}
+            </div>
+          ) : (
+            <div className="text-xl font-bold tabular-nums" data-testid="text-supplier-usd-equivalent">
+              {amountText(Number(usdEquivalentBalance), "$", formatNum)}
+            </div>
+          )}
+        </div>
+      )}
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <div>
-          <div className="text-xs text-muted-foreground">Ledger balance (USD)</div>
+          <div className="text-xs text-muted-foreground">Posted ledger (historical USD)</div>
           <div className="text-xl font-bold" data-testid="text-supplier-ledger-balance">
             {amountText(ledger, "$", formatNum)}
           </div>
