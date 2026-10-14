@@ -2,7 +2,14 @@ import { useState } from "react";
 import { Download, FileSpreadsheet, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { parsePosTransferImportFile } from "./posTransferExcelImport";
 import type { StockTransferFormModel } from "./useStockTransferFormModel";
 
@@ -76,8 +83,8 @@ export function PosStockTransferImportDialog({ model }: { model: StockTransferFo
             <Upload className="h-5 w-5" /> Import Stock Transfer
           </DialogTitle>
           <DialogDescription>
-            Import Excel or CSV rows using Item Code (or Barcode) and Quantity.
-            All rows use your selected From location. Nothing is transferred until you review the items and save.
+            Import Excel or CSV rows using Item Code (or Barcode) and Quantity. All rows use your selected From
+            location. Nothing is transferred until you review the items and save.
           </DialogDescription>
         </DialogHeader>
 
@@ -100,8 +107,13 @@ export function PosStockTransferImportDialog({ model }: { model: StockTransferFo
               data-testid="input-pos-transfer-import-file"
             />
           </div>
-          <Button type="button" variant="outline" size="sm" onClick={downloadTemplate}
-            data-testid="button-pos-transfer-import-template">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={downloadTemplate}
+            data-testid="button-pos-transfer-import-template"
+          >
             <Download className="h-4 w-4 mr-2" /> Download Template
           </Button>
           {model.transferEntries.some((entry) => entry.stockItemId > 0) && (
@@ -110,17 +122,29 @@ export function PosStockTransferImportDialog({ model }: { model: StockTransferFo
             </p>
           )}
           {errors.length > 0 && (
-            <div role="alert" className="max-h-48 overflow-y-auto text-sm text-destructive space-y-1" data-testid="pos-transfer-import-errors">
-              {errors.map((error, index) => <p key={index}>{error}</p>)}
+            <div
+              role="alert"
+              className="max-h-48 overflow-y-auto text-sm text-destructive space-y-1"
+              data-testid="pos-transfer-import-errors"
+            >
+              {errors.map((error, index) => (
+                <p key={index}>{error}</p>
+              ))}
               <p>Correct the spreadsheet and upload it again. No rows were changed.</p>
             </div>
           )}
         </div>
 
         <DialogFooter>
-          <Button type="button" variant="outline" onClick={() => setOpen(false)} disabled={loading}>Cancel</Button>
-          <Button type="button" onClick={loadRows} disabled={!file || !source || loading}
-            data-testid="button-pos-transfer-load-items">
+          <Button type="button" variant="outline" onClick={() => setOpen(false)} disabled={loading}>
+            Cancel
+          </Button>
+          <Button
+            type="button"
+            onClick={loadRows}
+            disabled={!file || !source || loading}
+            data-testid="button-pos-transfer-load-items"
+          >
             <FileSpreadsheet className="h-4 w-4 mr-2" />
             {loading ? "Reading..." : "Load Items into Transfer"}
           </Button>

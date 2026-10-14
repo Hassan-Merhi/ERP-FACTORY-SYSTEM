@@ -222,31 +222,35 @@ export function StockTransferFooterAndDialogs({ model }: { model: StockTransferF
         transferRevisions={transferRevisions}
       />
 
-      {isPOS ? <PosStockTransferImportDialog model={model} /> : <ImportTransferExcelDialog
-        downloadImportTemplate={downloadImportTemplate}
-        handleImportFileChange={handleImportFileChange}
-        handleImportParse={handleImportParse}
-        handleImportSubmit={handleImportSubmit}
-        handleImportValidate={handleImportValidate}
-        importDate={importDate}
-        importDestLocation={importDestLocation}
-        importDialogOpen={importDialogOpen}
-        importFile={importFile}
-        importHasErrors={importHasErrors}
-        importIsValidated={importIsValidated}
-        importMutation={importMutation}
-        importNotes={importNotes}
-        importParseMutation={importParseMutation}
-        importPreview={importPreview}
-        importValidItemsCount={importValidItemsCount}
-        importValidateMutation={importValidateMutation}
-        importValidationResult={importValidationResult}
-        locations={locations}
-        setImportDate={setImportDate}
-        setImportDestLocation={setImportDestLocation}
-        setImportDialogOpen={setImportDialogOpen}
-        setImportNotes={setImportNotes}
-      /> }
+      {isPOS ? (
+        <PosStockTransferImportDialog model={model} />
+      ) : (
+        <ImportTransferExcelDialog
+          downloadImportTemplate={downloadImportTemplate}
+          handleImportFileChange={handleImportFileChange}
+          handleImportParse={handleImportParse}
+          handleImportSubmit={handleImportSubmit}
+          handleImportValidate={handleImportValidate}
+          importDate={importDate}
+          importDestLocation={importDestLocation}
+          importDialogOpen={importDialogOpen}
+          importFile={importFile}
+          importHasErrors={importHasErrors}
+          importIsValidated={importIsValidated}
+          importMutation={importMutation}
+          importNotes={importNotes}
+          importParseMutation={importParseMutation}
+          importPreview={importPreview}
+          importValidItemsCount={importValidItemsCount}
+          importValidateMutation={importValidateMutation}
+          importValidationResult={importValidationResult}
+          locations={locations}
+          setImportDate={setImportDate}
+          setImportDestLocation={setImportDestLocation}
+          setImportDialogOpen={setImportDialogOpen}
+          setImportNotes={setImportNotes}
+        />
+      )}
 
       <AlertDialog open={importConfirmDialogOpen} onOpenChange={setImportConfirmDialogOpen}>
         <AlertDialogContent>

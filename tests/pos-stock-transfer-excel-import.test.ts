@@ -17,31 +17,41 @@ describe("POS stock transfer spreadsheet form import", () => {
         { Barcode: " HMD11001 ", Quantity: "2" },
         { Code: "HMD16001", Quantity: 1 },
       ],
-      stockItems, sourceInventory, 7, "MALI"
+      stockItems,
+      sourceInventory,
+      7,
+      "MALI"
     );
     expect(result.errors).toEqual([]);
     expect(result.entries).toEqual([
       {
-        sourceLocationId: 7, sourceLocationName: "MALI",
-        stockItemId: 11, stockItemCode: "HMD11001", stockItemName: "Adult Jogger",
-        quantity: "5", rate: "3.50",
+        sourceLocationId: 7,
+        sourceLocationName: "MALI",
+        stockItemId: 11,
+        stockItemCode: "HMD11001",
+        stockItemName: "Adult Jogger",
+        quantity: "5",
+        rate: "3.50",
       },
       {
-        sourceLocationId: 7, sourceLocationName: "MALI",
-        stockItemId: 12, stockItemCode: "HMD16001", stockItemName: "T-Jacket",
-        quantity: "1", rate: "",
+        sourceLocationId: 7,
+        sourceLocationName: "MALI",
+        stockItemId: 12,
+        stockItemCode: "HMD16001",
+        stockItemName: "T-Jacket",
+        quantity: "1",
+        rate: "",
       },
     ]);
   });
 
   it("reports bad or missing data by row so the UI cannot partially replace the form", () => {
     const result = buildPosTransferImportEntries(
-      [
-        { Barcode: "UNKNOWN", Quantity: 3 },
-        { Barcode: "HMD11001", Quantity: -2 },
-        { Quantity: 4 },
-      ],
-      stockItems, sourceInventory, 7, "MALI"
+      [{ Barcode: "UNKNOWN", Quantity: 3 }, { Barcode: "HMD11001", Quantity: -2 }, { Quantity: 4 }],
+      stockItems,
+      sourceInventory,
+      7,
+      "MALI"
     );
     expect(result.entries).toEqual([]);
     expect(result.errors).toHaveLength(3);

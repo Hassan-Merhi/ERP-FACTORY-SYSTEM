@@ -9,7 +9,9 @@ export type PosTransferImportResult = {
 };
 
 function cleanCode(value: unknown): string {
-  return String(value ?? "").trim().toUpperCase();
+  return String(value ?? "")
+    .trim()
+    .toUpperCase();
 }
 
 function valueFor(row: Record<string, unknown>, keys: readonly string[]): unknown {
@@ -52,9 +54,14 @@ export function buildPosTransferImportEntries(
     const quantityValue = valueFor(row, ["quantity", "qty"]);
     if (!code && (quantityValue === undefined || String(quantityValue).trim() === "")) continue;
 
-    const qty = typeof quantityValue === "number"
-      ? quantityValue
-      : Number(String(quantityValue ?? "").trim().replace(/,/g, ""));
+    const qty =
+      typeof quantityValue === "number"
+        ? quantityValue
+        : Number(
+            String(quantityValue ?? "")
+              .trim()
+              .replace(/,/g, "")
+          );
     if (!code) {
       errors.push(`Row ${index + 2}: Item Code/Barcode is required.`);
       continue;
@@ -64,8 +71,7 @@ export function buildPosTransferImportEntries(
       continue;
     }
     const stockItem = itemsByCode.get(code);
-    const inventoryItem = inventoryByCode.get(code) ??
-      (stockItem ? inventoryById.get(stockItem.id) : undefined);
+    const inventoryItem = inventoryByCode.get(code) ?? (stockItem ? inventoryById.get(stockItem.id) : undefined);
     const itemId = stockItem?.id ?? inventoryItem?.stockItemId;
     if (!itemId) {
       errors.push(`Row ${index + 2}: ${code} was not found in this company's stock items.`);

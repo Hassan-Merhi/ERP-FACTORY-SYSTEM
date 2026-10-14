@@ -144,15 +144,15 @@ export function StockTransferHeader({ model }: { model: StockTransferFormModel }
         </Button>
       )}
       <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={() => (isPOS ? setPosImportDialogOpen(true) : setImportDialogOpen(true))}
-          data-testid="button-open-import-dialog"
-        >
-          <Upload className="h-4 w-4 mr-2" />
-          Import
-        </Button>
+        type="button"
+        variant="outline"
+        size="sm"
+        onClick={() => (isPOS ? setPosImportDialogOpen(true) : setImportDialogOpen(true))}
+        data-testid="button-open-import-dialog"
+      >
+        <Upload className="h-4 w-4 mr-2" />
+        Import
+      </Button>
     </div>
   );
 }

@@ -483,4 +483,25 @@ export const phase3RemainingTranslationsPart28: readonly Phase3SharedUiEntry[] =
     ar: "يمكن أن يكون الشحن مستحقًا لمورد مختلف عن مورد شراء البضائع.",
     fr: "Le fret peut être dû à un fournisseur différent de celui de l'achat des marchandises.",
   },
+  { en: "Import Stock Transfer", ar: "استيراد تحويل المخزون", fr: "Importer un transfert de stock" },
+  {
+    en: "Correct the spreadsheet and upload it again. No rows were changed.",
+    ar: "صحّح جدول البيانات ثم ارفعه مرة أخرى. لم يتم تغيير أي صفوف.",
+    fr: "Corrigez la feuille de calcul et téléversez-la à nouveau. Aucune ligne n'a été modifiée.",
+  },
+  {
+    en: "Loading the spreadsheet will replace the item rows currently on this form.",
+    ar: "سيؤدي تحميل جدول البيانات إلى استبدال صفوف الأصناف الموجودة حاليًا في هذا النموذج.",
+    fr: "Le chargement de la feuille de calcul remplacera les lignes d'articles actuellement dans ce formulaire.",
+  },
+  {
+    en: "${result.entries.length} stock item(s) loaded from Excel. Review quantities and press Save Transfer.",
+    ar: "تم تحميل {{0}} صنف (أصناف) مخزون من Excel. راجع الكميات ثم اضغط حفظ التحويل.",
+    fr: "{{0}} article(s) de stock chargé(s) depuis Excel. Vérifiez les quantités puis appuyez sur Enregistrer le transfert.",
+  },
+  {
+    en: "Could not read this spreadsheet.",
+    ar: "تعذّرت قراءة جدول البيانات هذا.",
+    fr: "Impossible de lire cette feuille de calcul.",
+  },
 ];
