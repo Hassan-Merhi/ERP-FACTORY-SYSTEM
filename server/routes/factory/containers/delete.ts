@@ -22,6 +22,7 @@ import {
 } from "@shared/schema";
 import { eq, and, or, inArray, ilike, isNull } from "drizzle-orm";
 import { postFactoryVoucherTx } from "../../../services/factory/factoryVoucherPosting";
+import { FACTORY_APPROVED_HISTORICAL_RATES } from "../../../services/factory/factoryFxLegacyRepair";
 import { toMoney } from "../../../lib/money";
 import { removeContainerCommissionJournalTx } from "../../../services/factory/containerCommissionJournal";
 import { retireVouchersTx, sessionRetirementActor } from "../../../services/accounting/voucherRetirement";
@@ -201,6 +202,7 @@ export function registerFactoryContainerDeleteRoutes(app: Express) {
       if (!checkFactoryAdmin(req, res)) return;
       const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });
+      const useFixedHistoricalRates = req.query.fixedRates === "1";
       const active = await db.select().from(factoryContainers)
         .where(and(eq(factoryContainers.companyId, companyId), isNull(factoryContainers.deletedAt)));
       const missing = [];
@@ -212,23 +214,47 @@ export function registerFactoryContainerDeleteRoutes(app: Express) {
           and(eq(vouchers.companyId, companyId), ilike(vouchers.voucherNumber, `FACTORY-IMPORT-${container.id}-%`))
         ).limit(1);
         if (posted.length) continue; // includes retired entries — never re-post an intentionally reversed document
+        const code = (container.currencyCode || "USD").toUpperCase();
+        const approvedRate = useFixedHistoricalRates
+          ? FACTORY_APPROVED_HISTORICAL_RATES[code as keyof typeof FACTORY_APPROVED_HISTORICAL_RATES]
+          : undefined;
+        let rate = approvedRate ?? null;
         let repairable = true;
-        try {
-          resolveStoredFxRateOrThrow(container.currencyCode, container.fxRateToUsd, container.fxRateConfirmed);
-        } catch {
-          repairable = false;
+        if (!rate) {
+          try {
+            rate = String(
+              resolveStoredFxRateOrThrow(
+                container.currencyCode,
+                container.fxRateToUsd,
+                container.fxRateConfirmed
+              )
+            );
+          } catch {
+            repairable = false;
+          }
         }
         missing.push({
           containerId: container.id,
           containerNumber: container.containerNumber,
           supplierId: container.supplierId,
-          currency: container.currencyCode || "USD",
+          currency: code,
           nativeGoods: goods.toFixed(2),
-          historicalRate: container.fxRateToUsd,
+          historicalRate: rate,
+          rateSource: approvedRate ? "approved-fixed" : "container",
+          expectedUsd: rate ? goods.times(toMoney(rate)).toFixed(2) : null,
+          postingDate: container.createdAt
+            ? new Date(container.createdAt).toISOString().slice(0, 10)
+            : null,
           repairable,
         });
       }
-      res.json({ companyId, writePerformed: false, count: missing.length, missing });
+      res.json({
+        companyId,
+        writePerformed: false,
+        fixedRatesUsed: useFixedHistoricalRates ? FACTORY_APPROVED_HISTORICAL_RATES : null,
+        count: missing.length,
+        missing,
+      });
     } catch (error: unknown) {
       logger.error("Factory import-credit preview failed", { error });
       res.status(500).json({ message: getErrorMessage(error) });
@@ -243,6 +269,7 @@ export function registerFactoryContainerDeleteRoutes(app: Express) {
       const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });
       const { confirm, containerIds } = req.body || {};
+      const useFixedHistoricalRates = req.body?.fixedRates === true;
       if (confirm !== true || !Array.isArray(containerIds) || !containerIds.length
           || containerIds.length > 250
           || containerIds.some((id: unknown) => !Number.isSafeInteger(id) || Number(id) <= 0)
@@ -295,15 +322,21 @@ export function registerFactoryContainerDeleteRoutes(app: Express) {
           continue;
         }
 
-        // Unresolved non-USD rate: skip this one container (report it) rather than
-        // aborting the whole bulk backfill or silently posting a mispriced voucher.
+        // Fixed-rate historical repair is explicitly approved separately from
+        // ordinary posting. It only overrides missing EUR/AUD goods journals.
+        const code = (container.currencyCode || "USD").toUpperCase();
+        const approvedRate = useFixedHistoricalRates
+          ? FACTORY_APPROVED_HISTORICAL_RATES[code as keyof typeof FACTORY_APPROVED_HISTORICAL_RATES]
+          : undefined;
         let backfillFxRate: number;
         try {
-          backfillFxRate = resolveStoredFxRateOrThrow(
-            container.currencyCode,
-            container.fxRateToUsd,
-            container.fxRateConfirmed
-          );
+          backfillFxRate = approvedRate
+            ? Number(approvedRate)
+            : resolveStoredFxRateOrThrow(
+                container.currencyCode,
+                container.fxRateToUsd,
+                container.fxRateConfirmed
+              );
         } catch {
           skipped++;
           fxUnresolvedSkipped.push(container.containerNumber);
@@ -320,7 +353,9 @@ export function registerFactoryContainerDeleteRoutes(app: Express) {
           postFactoryVoucherTx(tx, {
             companyId,
             voucherNumber: (generation) => `FACTORY-IMPORT-${container.id}-${generation}`,
-            voucherDate: container.arrivalDate || creationDate,
+            // Arrival date is an ETA, sometimes in the future. Goods liability
+            // originated on the historical container creation date.
+            voucherDate: creationDate,
             description: `Goods import - container ${container.containerNumber}`,
             currency: container.currencyCode || "USD",
             fxRateToUsd: String(backfillFxRate),
@@ -342,7 +377,13 @@ export function registerFactoryContainerDeleteRoutes(app: Express) {
         created++;
       }
 
-      res.json({ created, skipped, total: allContainers.length, fxUnresolvedSkipped });
+      res.json({
+        created,
+        skipped,
+        total: allContainers.length,
+        fxUnresolvedSkipped,
+        fixedRatesUsed: useFixedHistoricalRates ? FACTORY_APPROVED_HISTORICAL_RATES : null,
+      });
     } catch (error: unknown) {
       logger.error("Error backfilling import credits:", { error: error });
       res.status(500).json({ message: getErrorMessage(error) });
