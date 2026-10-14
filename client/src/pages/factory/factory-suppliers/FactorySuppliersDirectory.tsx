@@ -97,8 +97,13 @@ export function FactorySuppliersDirectory({ model }: { model: SuppliersModel }) 
 
       <div className="rounded-xl border divide-y">
         {model.filteredTopLevel.map((supplier) => {
-          // Ledger balance (wave 13); the amounts not yet in the ledger are a separate memo.
-          const balanceValue = parseFloat(supplier.totalValue || "0");
+          // Outside total is the current-rate translation of signed native balances.
+          // The posted historical USD ledger stays separate and unchanged.
+          const usdEquivalent = supplier.usdEquivalentBalance === null
+            ? null
+            : Number(supplier.usdEquivalentBalance ?? supplier.totalValue ?? "0");
+          const balanceValue = usdEquivalent ?? 0;
+          const missingRates = supplier.usdEquivalentMissingRates || [];
           const notInLedgerValue = parseFloat(supplier.notInLedgerTotal || "0");
           const isBroker = !!model.subAccountsByParent[supplier.id]?.length || !!supplier.isBroker;
           const otwCount = supplier.otwByCurrency
@@ -163,10 +168,19 @@ export function FactorySuppliersDirectory({ model }: { model: SuppliersModel }) 
 
               <div className="text-right shrink-0 space-y-1" data-testid={`supplier-directory-balance-${supplier.id}`}>
                 {isBroker ? (
-                  // A broker is not a regular supplier: the detail overview shows
-                  // independently signed USD pool and foreign-currency net balances.
-                  // Render those exact same values, not the broker's unrelated GL total.
-                  supplier.brokerStatementBalances ? (
+                  <>
+                    <div className="text-xs text-muted-foreground">Net broker pools (USD equivalent)</div>
+                    {usdEquivalent === null ? (
+                      <div className="text-xs text-amber-600" role="alert">
+                        FX rate missing: {missingRates.join(", ") || "broker statement unavailable"}
+                      </div>
+                    ) : (
+                      <div className="font-semibold text-sm tabular-nums" data-testid={`text-directory-usd-equivalent-${supplier.id}`}>
+                        ${usdEquivalent < 0 ? "-" : ""}${model.formatNum(Math.abs(usdEquivalent).toFixed(2))}
+                      </div>
+                    )}
+                    {/* Show the distinct broker pool/foreign sections without merging linked suppliers. */}
+                    {supplier.brokerStatementBalances ? (
                     supplier.brokerStatementBalances.length > 0 ? (
                       supplier.brokerStatementBalances.map((pool) => {
                         const value = Number(pool.balance);
@@ -211,10 +225,11 @@ export function FactorySuppliersDirectory({ model }: { model: SuppliersModel }) 
                     )
                   ) : (
                     <div className="text-xs text-amber-600">Broker balance unavailable</div>
-                  )
+                  )}
+                  </>
                 ) : (
                   <>
-                    <div className="text-xs text-muted-foreground">Ledger balance (USD)</div>
+                    <div className="text-xs text-muted-foreground">Total balance (USD equivalent)</div>
                     <div
                       className={`font-semibold text-sm tabular-nums ${
                         balanceValue < -0.005
@@ -225,10 +240,17 @@ export function FactorySuppliersDirectory({ model }: { model: SuppliersModel }) 
                       }`}
                       data-testid={`text-directory-ledger-balance-${supplier.id}`}
                     >
-                      {Math.abs(balanceValue) <= 0.005
-                        ? "$—"
-                        : `$${model.formatNum(Math.abs(balanceValue).toFixed(2))}${balanceValue < 0 ? " DR" : " CR"}`}
+                      {usdEquivalent === null
+                        ? "FX rate missing"
+                        : Math.abs(balanceValue) <= 0.005
+                          ? "$—"
+                          : `${model.formatNum(Math.abs(balanceValue).toFixed(2))}${balanceValue < 0 ? " DR" : " CR"}`}
                     </div>
+                    {usdEquivalent === null && (
+                      <div className="text-[11px] text-amber-600" role="alert">
+                        Set FX rate for {missingRates.join(", ") || "the outstanding currency"} in Factory Settings
+                      </div>
+                    )}
                     {Math.abs(notInLedgerValue) > 0.005 && (
                       <div
                         className="text-[11px] text-muted-foreground"
