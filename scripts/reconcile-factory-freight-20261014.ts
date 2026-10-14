@@ -134,6 +134,8 @@ async function run(apply: boolean) {
           { factorySupplierId: 31, debit: "2702.20", narration: "Reversal of duplicate freight payable, source voucher 8708" },
           { ledgerAccountId: 805, credit: "2702.20", narration: "Reduce duplicated freight expense, original voucher 8708" },
         ],
+        currency: "USD",
+        rate: "1",
       },
       {
         sourceId: "83:charge64-legacy-extra",
@@ -143,15 +145,30 @@ async function run(apply: boolean) {
           { ledgerAccountId: 793, debit: "1692.96", narration: "Reverse obsolete WALID payable from voucher 9309" },
           { ledgerAccountId: 812, credit: "1692.96", narration: "Reverse obsolete charge 64 posting; retain corrected 1692 voucher" },
         ],
+        currency: "USD",
+        rate: "1",
       },
       {
-        sourceId: "122:freight-eur-fx-shortfall",
-        number: "FACTORY-CORRECTION-20261014-122",
-        description: "Original MSMU4364711 freight EUR1750 at confirmed 1.18 = USD2065; USD1750 posted, balance USD315",
+        sourceId: "122:retire-legacy-usd-economics",
+        number: "FACTORY-CORRECTION-20261014-122-USD",
+        description: "Reverse wrong-currency USD1750 freight economics of original voucher 9022, retained for audit",
         lines: [
-          { ledgerAccountId: 805, debit: "315.00", narration: "Historical EUR freight conversion shortfall, voucher 9022" },
-          { factorySupplierId: 37, credit: "315.00", narration: "MODA ZAKARIA DIRECT payable freight EUR1750 at 1.18" },
+          { factorySupplierId: 37, debit: "1750.00", narration: "Reverse original USD payable for EUR freight, source 9022" },
+          { ledgerAccountId: 805, credit: "1750.00", narration: "Reverse legacy USD freight expense, source 9022" },
         ],
+        currency: "USD",
+        rate: "1",
+      },
+      {
+        sourceId: "122:correct-eur-freight-1p18",
+        number: "FACTORY-CORRECTION-20261014-122-EUR",
+        description: "Record MSMU4364711 supplier freight EUR1750 at historical 1.18 as EUR liability, USD2065 base",
+        lines: [
+          { ledgerAccountId: 805, debit: "1750.00", narration: "Freight expense EUR1750 at USD/EUR 1.18" },
+          { factorySupplierId: 37, credit: "1750.00", narration: "MODA ZAKARIA DIRECT freight EUR1750, USD2065 base" },
+        ],
+        currency: "EUR",
+        rate: "1.18",
       },
     ];
     for (const item of vouchers) {
@@ -161,14 +178,14 @@ async function run(apply: boolean) {
         voucherNumber:item.number,
         voucherDate:CORRECTION_DATE,
         description:item.description,
-        currency:"USD",
-        fxRateToUsd:"1",
+        currency:item.currency,
+        fxRateToUsd:item.rate,
         source:{ sourceType:"factory-historical-freight-review-20261014", sourceId:item.sourceId, phase:"correction" },
         lines:item.lines,
       });
       console.log(`[FactoryFreightCorrection] ${item.number} voucher=${response.voucher.id} replay=${response.replayed}`);
     }
-    console.log("[FactoryFreightCorrection] DONE: 3 compensating journals; historical vouchers unchanged.");
+    console.log("[FactoryFreightCorrection] DONE: 4 compensating journals; original USD freight reversed and proper EUR liability recorded; historical vouchers unchanged.");
   });
 }
 
