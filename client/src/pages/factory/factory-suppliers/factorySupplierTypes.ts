@@ -66,7 +66,14 @@ export interface SupplierWithBalance extends FactorySupplier {
   balanceBasis?: "ledger";
   notInLedgerTotal?: string;
   operationalMemo?: { label: string; totalValue: string; currencyBalances?: CurrencyBalance[]; fxUnresolved?: boolean };
-  brokerPoolUsd?: string;
+  /** Exact broker overview KPI balances (currency-ledger netBalance, signed). */
+  brokerStatementBalances?: Array<{
+    currencyCode: string;
+    balance: string;
+    isBrokerPool: boolean;
+  }> | null;
+  /** USD broker pool, not the supplier general-ledger balance. */
+  brokerPoolUsd?: string | null;
   pendingContainers: number;
   receivedContainers: number;
   lastContainerDate: string | null;
