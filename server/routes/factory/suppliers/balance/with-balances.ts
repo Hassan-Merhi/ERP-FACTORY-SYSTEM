@@ -24,6 +24,7 @@ import {
 } from "@shared/schema";
 import { eq, and, sql, inArray, isNull } from "drizzle-orm";
 import { buildBrokerStatement, isPayableContainer, isSupplierPaidFreight, resolveDisplayFx } from "./_helpers";
+import { supplierUsdEquivalent } from "./supplierUsdEquivalent";
 import {
   emptyFactorySupplierLedgerView,
   FACTORY_SUPPLIER_OPERATIONAL_MEMO_LABEL,
@@ -186,6 +187,9 @@ export function registerSupplierWithBalancesRoutes(app: Express) {
         const view = ledgerViews.get(supplierId) ?? emptyFactorySupplierLedgerView(supplierId);
         return {
           totalValue: view.ledgerBalanceUsd,
+          // Reporting-only current-rate value of the signed native ledger buckets,
+          // including the opening USD balance exactly once. Do not revalue the GL.
+          ...supplierUsdEquivalent(view.nativeBalances, configuredFxRates, view.openingBalanceUsd),
           balanceBasis: view.balanceBasis,
           ledgerBalance: view.ledgerBalanceUsd,
           ledgerBalanceSide: view.ledgerBalanceSide,
@@ -630,27 +634,18 @@ export function registerSupplierWithBalancesRoutes(app: Express) {
         let finalExposureCurrencyBalances = exposureCurrencyBalances;
 
         if (stmt) {
-          const eurLedger = stmt.currencyLedgers.find((l) => l.currencyCode === "EUR");
-          const audLedger = stmt.currencyLedgers.find((l) => l.currencyCode === "AUD");
           const usdLedger = stmt.currencyLedgers.find((l) => l.currencyCode === "USD");
-
-          const eurBal = toMoney(eurLedger?.netBalance);
-          const audBal = toMoney(audLedger?.netBalance);
-          brokerPoolUsd = usdLedger ? toMoney(usdLedger.netBalance) : own.balance;
-
-          // No silent default to 1 for an unconfigured company-level rate — leave unresolved (0)
-          // so the exposure total below excludes it rather than guessing.
-          const eurRate = configuredFxRates["EUR"] ?? 0;
-          const audRate = configuredFxRates["AUD"] ?? 0;
-
-          finalExposureCurrencyBalances = [
-            ...(eurBal.abs().gt(0.001)
-              ? [{ currencyCode: "EUR", balance: eurBal, fxRateToUsd: toMoney(eurRate) }]
-              : []),
-            ...(audBal.abs().gt(0.001)
-              ? [{ currencyCode: "AUD", balance: audBal, fxRateToUsd: toMoney(audRate) }]
-              : []),
-          ];
+          // A broker's pool is independent from linked-supplier exposure.
+          // Use every currency from the same broker statement, not EUR/AUD only.
+          brokerPoolUsd = usdLedger ? toMoney(usdLedger.netBalance) : ZERO;
+          finalExposureCurrencyBalances = stmt.currencyLedgers
+            .filter((section) => section.currencyCode !== "USD")
+            .filter((section) => toMoney(section.netBalance).abs().gt(0.001))
+            .map((section) => ({
+              currencyCode: section.currencyCode,
+              balance: toMoney(section.netBalance),
+              fxRateToUsd: toMoney(configuredFxRates[section.currencyCode] ?? 0),
+            }));
         }
 
         const grandTotal = finalExposureCurrencyBalances.reduce(
@@ -659,6 +654,17 @@ export function registerSupplierWithBalancesRoutes(app: Express) {
         );
 
         const brokerLedger = ledgerFields(s.id);
+        // The broker is a different model: its statement's signed currency pools
+        // are authoritative; linked suppliers are NOT added a second time.
+        const brokerDisplay = stmt
+          ? supplierUsdEquivalent(
+              stmt.currencyLedgers.map((section) => ({
+                currencyCode: section.currencyCode,
+                balance: section.netBalance,
+              })),
+              configuredFxRates
+            )
+          : { usdEquivalentBalance: null, usdEquivalentMissingRates: [] as string[] };
         // Exactly the data used by BrokerOverviewPanel's KPI cards. These
         // balances are broker pool/settlement balances, NOT the broker's GL
         // ledger balance or the combined liabilities of linked suppliers.
@@ -680,6 +686,7 @@ export function registerSupplierWithBalancesRoutes(app: Express) {
           // The broker's own ledger balance (true broker model: linked suppliers
           // are not merged in; they are listed in linkedSupplierExposure).
           ...brokerLedger,
+          ...brokerDisplay,
           // Keep the posted GL figure in ledgerBalance, but do not present it
           // as the USD broker pool, which is independently computed.
           brokerPoolUsd: stmt ? brokerPoolUsd.toFixed(2) : null,
