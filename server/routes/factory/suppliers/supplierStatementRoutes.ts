@@ -307,7 +307,7 @@ export function registerSupplierStatementRoutes(app: Express) {
         // vouchers.exchangeRate has no fxRateConfirmed column yet — legacy heuristic stopgap.
         const { fxRate: fx, looksSet } = resolveStoredFxRate(currency, p.exchangeRate);
         if (!looksSet) return sum; // exclude from the total rather than guess at 1
-        return sum.plus(amt.dividedBy(fx));
+        return sum.plus(amt.times(fx));
       }, ZERO);
 
       const totalPayments = sumMoney(payments.map((p) => p.amountUsd)).plus(voucherPaymentsTotal);
