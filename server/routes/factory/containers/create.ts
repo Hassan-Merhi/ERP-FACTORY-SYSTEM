@@ -14,7 +14,7 @@ import { resolveStoredFxRateOrThrow } from "../../../services/factory/currencyCo
 import { writeDaybookEntry, getOrCreateLedgerAccount } from "../_helpers";
 import { FactoryFxRateRequiredError, factoryDocumentRate } from "../../../services/factory/factoryDocumentFxRate";
 import { factorySuppliers, factoryContainers, insertFactoryContainerSchema } from "@shared/schema";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { postFactoryVoucherTx, type FactoryVoucherLine } from "../../../services/factory/factoryVoucherPosting";
 import { closedPeriodErrorResponse } from "../../../lib/closedPeriodError";
 import { containerFreightFxRateToUsd } from "../../../services/factory/factoryVoucherEntryAmounts";
@@ -149,7 +149,7 @@ export function registerFactoryContainerCreateRoutes(app: Express) {
       // Canonicalize freight payer fields on create.
       // Rule A — No freight (amount <= 0): clear both payer fields unconditionally.
       // Rule B — Own Account: require freightOwnAccountId, clear supplier link.
-      // Rule C — By Supplier: require a purchase supplier, clear own account, auto-fill freightSupplierId.
+      // Rule C — By Supplier: require the explicitly selected freight supplier, never infer goods supplier.
       const freightPaidByOnCreate = values.freightPaidBy || "supplier";
       if (toMoney(values.freight).lessThanOrEqualTo(0)) {
         // Rule A: no freight → clear both
@@ -163,15 +163,18 @@ export function registerFactoryContainerCreateRoutes(app: Express) {
         values.freightSupplierId = null;
       } else {
         // Rule C: supplier-paid (default)
-        if (!values.supplierId && !values.freightSupplierId) {
-          return res
-            .status(400)
-            .json({ message: "A purchase supplier is required when freightPaidBy is 'supplier' and freight > 0" });
+        if (!values.freightSupplierId) {
+          return res.status(400).json({ message: "Select the freight supplier before saving supplier-paid freight." });
+        }
+        const [freightPayee] = await db
+          .select({ id: factorySuppliers.id })
+          .from(factorySuppliers)
+          .where(and(eq(factorySuppliers.id, values.freightSupplierId), eq(factorySuppliers.companyId, companyId)))
+          .limit(1);
+        if (!freightPayee) {
+          return res.status(400).json({ message: "The selected freight supplier must belong to this company." });
         }
         values.freightOwnAccountId = null;
-        if (!values.freightSupplierId && values.supplierId) {
-          values.freightSupplierId = values.supplierId;
-        }
       }
 
       // Ledger accounts the journals below may need are looked up (or created)
@@ -276,10 +279,10 @@ export function registerFactoryContainerCreateRoutes(app: Express) {
               credit: freightAmt,
               narration: `Freight paid via own account - container ${container.containerNumber}`,
             };
-          } else if (freightPaidBy === "supplier" && container.supplierId) {
+          } else if (freightPaidBy === "supplier" && container.freightSupplierId) {
             // Cr Supplier Payable
             creditLine = {
-              factorySupplierId: container.supplierId,
+              factorySupplierId: container.freightSupplierId,
               credit: freightAmt,
               narration: `Freight payable to supplier - container ${container.containerNumber}`,
             };
