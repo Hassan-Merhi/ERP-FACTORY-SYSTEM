@@ -57,14 +57,19 @@ export function FactorySuppliersDirectory({ model }: { model: SuppliersModel }) 
         <Metric label="Standalone Suppliers" value={model.standaloneCount} />
         <Metric label="Total Containers" value={model.totalContainers} />
         <div className="rounded-xl border p-4">
-          <div className="text-xs text-muted-foreground">Posted ledger balances (USD)</div>
+          <div className="text-xs text-muted-foreground">Supplier balances (USD equivalent)</div>
           <div className="text-sm font-semibold mt-1">
-            <span className="text-muted-foreground">We owe </span>${model.formatNum(String(model.totalUsdOwed))}
+            <span className="text-muted-foreground">Positive </span>${model.formatNum(String(model.totalUsdOwed))}
           </div>
           <div className="text-sm">
-            <span className="text-muted-foreground">Overpaid </span>
+            <span className="text-muted-foreground">Negative </span>
             <span className="text-green-600">${model.formatNum(String(model.totalUsdOverpaid))}</span>
           </div>
+          {model.unpricedSupplierCount > 0 && (
+            <p className="text-[11px] text-amber-600" role="alert">
+              {model.unpricedSupplierCount} supplier(s) excluded: missing FX rates or broker statement
+            </p>
+          )}
         </div>
       </div>
 
