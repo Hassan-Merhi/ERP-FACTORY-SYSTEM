@@ -14,7 +14,8 @@ beforeAll(async () => {
   await pool.query("UPDATE companies SET company_type = 'factory' WHERE id = $1", [ctx.companyId]);
   agent = request.agent(ctx.app);
   const login = await agent.post("/api/auth/login").send({
-    username: PREFIX + "_testuser", password: "testpassword123",
+    username: PREFIX + "_testuser",
+    password: "testpassword123",
   });
   if (login.status !== 200) throw new Error("Login failed");
   await agent.post("/api/auth/set-company").send({ companyId: ctx.companyId });
@@ -42,9 +43,14 @@ afterAll(async () => {
 describe("supplier FX transfer creation and reversible accounting /api/factory/supplier-fx-transfers/:id", () => {
   it("posts balanced source and destination entries and retires the voucher on reversal", async () => {
     const response = await agent.post("/api/factory/supplier-fx-transfers").send({
-      fromSupplierId: sourceSupplier, toSupplierId: destinationSupplier,
-      fromCurrencyCode: "EUR", fromAmount: "100", fxRateToUsd: "1.18",
-      toAmountUsd: "118", date: "2026-09-01", sourceType: "supplier",
+      fromSupplierId: sourceSupplier,
+      toSupplierId: destinationSupplier,
+      fromCurrencyCode: "EUR",
+      fromAmount: "100",
+      fxRateToUsd: "1.18",
+      toAmountUsd: "118",
+      date: "2026-09-01",
+      sourceType: "supplier",
     });
     expect(response.status).toBeLessThan(300);
     const transferId = Number(response.body.id);
@@ -54,6 +60,7 @@ describe("supplier FX transfer creation and reversible accounting /api/factory/s
     );
     expect(voucher.rows).toHaveLength(1);
     expect(voucher.rows[0].dr).toBe(voucher.rows[0].cr);
+
     const reversal = await agent.delete("/api/factory/supplier-fx-transfers/" + transferId);
     expect(reversal.status).toBeLessThan(300);
     const active = await pool.query<{ count: string }>(
