@@ -225,7 +225,8 @@ export function registerFactoryContainerUpdateRoutes(app: Express) {
         typeof updateData.freightPaidBy === "string" ? updateData.freightPaidBy : existing.freightPaidBy || "supplier";
       const effectiveFreightOwnAccountId =
         updateData.freightOwnAccountId !== undefined ? updateData.freightOwnAccountId : existing.freightOwnAccountId;
-      const effectiveSupplierId = updateData.supplierId !== undefined ? updateData.supplierId : existing.supplierId;
+      const effectiveFreightSupplierId =
+        updateData.freightSupplierId !== undefined ? updateData.freightSupplierId : existing.freightSupplierId;
 
       // Auto-create freight ledger account if effective freight > 0 and no account selected
       if (!updateData.freightAccountId && toMoney(effectiveFreight).greaterThan(0)) {
@@ -253,16 +254,22 @@ export function registerFactoryContainerUpdateRoutes(app: Express) {
           }
           updateData.freightSupplierId = null;
         } else {
-          // Rule C: supplier-paid freight → require a purchase supplier, clear own account
-          if (!effectiveSupplierId) {
+          // Freight is owed to its own chosen payee, never to the goods supplier by fallback.
+          if (!effectiveFreightSupplierId) {
             return res.status(400).json({
-              message: "A purchase supplier (supplierId) is required when freightPaidBy is 'supplier'",
+              message: "Select the freight supplier before saving supplier-paid freight.",
             });
           }
-          updateData.freightOwnAccountId = null;
-          if (!updateData.freightSupplierId) {
-            updateData.freightSupplierId = effectiveSupplierId;
+          const [freightPayee] = await db
+            .select({ id: factorySuppliers.id })
+            .from(factorySuppliers)
+            .where(and(eq(factorySuppliers.id, effectiveFreightSupplierId), eq(factorySuppliers.companyId, companyId)))
+            .limit(1);
+          if (!freightPayee) {
+            return res.status(400).json({ message: "The selected freight supplier must belong to this company." });
           }
+          updateData.freightOwnAccountId = null;
+          updateData.freightSupplierId = effectiveFreightSupplierId;
         }
       }
 
@@ -430,7 +437,7 @@ export function registerFactoryContainerUpdateRoutes(app: Express) {
                     .update(voucherEntries)
                     .set({
                       ...normalizedCr,
-                      factorySupplierId: updated.supplierId,
+                      factorySupplierId: updated.freightSupplierId,
                       ledgerAccountId: null,
                     })
                     .where(eq(voucherEntries.id, creditLines[0].id));
@@ -512,12 +519,12 @@ export function registerFactoryContainerUpdateRoutes(app: Express) {
                           ...normFreightCr,
                         })
                         .where(eq(voucherEntries.id, fe.id));
-                    } else if (newFreightPaidBy === "supplier" && updated.supplierId) {
+                    } else if (newFreightPaidBy === "supplier" && updated.freightSupplierId) {
                       // Cr Supplier
                       await tx
                         .update(voucherEntries)
                         .set({
-                          factorySupplierId: updated.supplierId,
+                          factorySupplierId: updated.freightSupplierId,
                           ledgerAccountId: null,
                           ...normFreightCr,
                         })
@@ -567,9 +574,9 @@ export function registerFactoryContainerUpdateRoutes(app: Express) {
                 credit: newFreightAmt,
                 narration: `Freight paid via own account - container ${updated.containerNumber}`,
               });
-            } else if (newFreightPaidBy === "supplier" && updated.supplierId) {
+            } else if (newFreightPaidBy === "supplier" && updated.freightSupplierId) {
               lines.push({
-                factorySupplierId: updated.supplierId,
+                factorySupplierId: updated.freightSupplierId,
                 credit: newFreightAmt,
                 narration: `Freight payable to supplier - container ${updated.containerNumber}`,
               });
