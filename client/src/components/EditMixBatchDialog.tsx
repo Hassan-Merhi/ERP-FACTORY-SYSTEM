@@ -44,9 +44,27 @@ interface EditMixBatchDialogProps {
   batch: FactoryMixBatch | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** The Production Overview should display recorded sources without permitting edits. */
+  readOnly?: boolean;
+  hideCosts?: boolean;
+  errorMessage?: string | null;
 }
 
-export function EditMixBatchDialog({ batch, open, onOpenChange }: EditMixBatchDialogProps) {
+interface StoredMixBatchSource {
+  id: number;
+  sourceBatchId: number | null;
+  sourceBatchCode: string | null;
+  supplierId: number | null;
+  supplierName: string | null;
+  containerNumber: string | null;
+  weightKg: string;
+  costPerKg: string;
+  totalCost: string;
+}
+
+export function EditMixBatchDialog({
+  batch, open, onOpenChange, readOnly = false, hideCosts = false, errorMessage,
+}: EditMixBatchDialogProps) {
   const { toast } = useToast();
   const [selectedSources, setSelectedSources] = useState<SourceSelection[]>([]);
   const [addSourceType, setAddSourceType] = useState<SourceType>("supplier");
@@ -59,25 +77,28 @@ export function EditMixBatchDialog({ batch, open, onOpenChange }: EditMixBatchDi
 
   const { data: supplierStock } = useQuery<SupplierRawStock[]>({
     queryKey: ["/api/factory/raw-stock"],
-    enabled: open,
+    enabled: open && !readOnly,
   });
 
   const { data: existingBatches } = useQuery<FactoryMixBatch[]>({
     queryKey: ["/api/factory/mix-batches"],
-    enabled: open,
+    enabled: open && !readOnly,
   });
 
   // Fetch current sources for this batch
-  const { data: currentSources, isLoading: sourcesLoading } = useQuery({
+  const { data: currentSources, isLoading: sourcesLoading, isError: sourcesError } = useQuery<StoredMixBatchSource[]>({
     queryKey: ["/api/factory/mix-batches", batch?.id, "sources"],
-    queryFn: () =>
-      fetch(`/api/factory/mix-batches/${batch!.id}/sources`, { credentials: "include" }).then((r) => r.json()),
+    queryFn: async () => {
+      const response = await fetch(`/api/factory/mix-batches/${batch!.id}/sources`, { credentials: "include" });
+      if (!response.ok) throw new Error("Unable to load mix batch sources");
+      return response.json();
+    },
     enabled: open && !!batch,
   });
 
   // Pre-load fields when batch + sources are ready
   useEffect(() => {
-    if (!open || !batch || !currentSources || !supplierStock || initialized) return;
+    if (readOnly || !open || !batch || !currentSources || !supplierStock || initialized) return;
 
     setBatchName(batch.name || "");
     setNotes(batch.notes || "");
@@ -146,7 +167,7 @@ export function EditMixBatchDialog({ batch, open, onOpenChange }: EditMixBatchDi
 
     setSelectedSources([...supplierSources, ...batchSourceList]);
     setInitialized(true);
-  }, [open, batch, currentSources, supplierStock, existingBatches, initialized]);
+  }, [open, batch, currentSources, supplierStock, existingBatches, initialized, readOnly]);
 
   // Reset when dialog closes
   useEffect(() => {
@@ -344,6 +365,131 @@ export function EditMixBatchDialog({ batch, open, onOpenChange }: EditMixBatchDi
   const currentUsedKg = batch ? parseFloat(batch.usedKg || "0") : 0;
   // Warn if clearly below used (>1 kg gap). Backend enforces the strict check.
   const belowUsed = totalWeight < currentUsedKg - 1;
+
+  // Reuse the Raw Materials mix-batch dialog as a safe historical viewer in
+  // Production Overview. Display saved source rows, not today's supplier rates:
+  // supplier cost/kg can legitimately change after the original mix.
+  if (readOnly) {
+    return (
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto" data-testid="mix-batch-details-dialog">
+          <DialogHeader>
+            <DialogTitle>Mix Batch Details — {batch?.batchCode || "Loading…"}</DialogTitle>
+            <DialogDescription>Raw materials and existing batches recorded in this mix.</DialogDescription>
+          </DialogHeader>
+          {!batch && !errorMessage ? (
+            <div className="space-y-3 py-4">
+              <Skeleton className="h-8 w-full" />
+              <Skeleton className="h-24 w-full" />
+            </div>
+          ) : errorMessage || sourcesError ? (
+            <p role="alert" className="py-4 text-sm text-destructive">
+              {errorMessage || "Unable to load the recorded sources for this mix batch."}
+            </p>
+          ) : (
+            <div className="space-y-5">
+              <div className="flex flex-wrap items-center gap-3 text-sm">
+                <Badge variant="outline">View only</Badge>
+                <span className="font-medium">{batch?.name || "Unnamed batch"}</span>
+                <span className="text-muted-foreground">{batch?.batchDate || "No batch date"}</span>
+              </div>
+              {sourcesLoading ? (
+                <div className="space-y-3 py-4">
+                  <Skeleton className="h-8 w-full" />
+                  <Skeleton className="h-24 w-full" />
+                </div>
+              ) : !currentSources?.length ? (
+                <p className="py-4 text-sm text-muted-foreground">No recorded source materials found for this batch.</p>
+              ) : (
+                <div className="overflow-x-auto rounded-md border">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Type</TableHead>
+                        <TableHead>Source / Container</TableHead>
+                        <TableHead className="text-right">Weight (kg)</TableHead>
+                        {!hideCosts && <TableHead className="text-right">Cost/kg</TableHead>}
+                        {!hideCosts && <TableHead className="text-right">Total Cost</TableHead>}
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {currentSources.map((source) => (
+                        <TableRow key={source.id} data-testid={`mix-batch-source-${source.id}`}>
+                          <TableCell>
+                            <Badge variant={source.sourceBatchId ? "secondary" : "outline"}>
+                              {source.sourceBatchId ? "Batch" : "Supplier"}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            <div className="font-medium">
+                              {source.sourceBatchId
+                                ? source.sourceBatchCode || `Batch #${source.sourceBatchId}`
+                                : source.supplierName || (source.supplierId ? `Supplier #${source.supplierId}` : "Raw material")}
+                            </div>
+                            {source.containerNumber && (
+                              <div className="text-xs text-muted-foreground">
+                                Container: {source.containerNumber}
+                              </div>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-right font-mono text-sm">
+                            {formatNumber(parseFloat(source.weightKg) || 0, 3)}
+                          </TableCell>
+                          {!hideCosts && (
+                            <TableCell className="text-right font-mono text-sm">
+                              ${formatNumber(parseFloat(source.costPerKg) || 0, 4)}
+                            </TableCell>
+                          )}
+                          {!hideCosts && (
+                            <TableCell className="text-right font-mono text-sm">
+                              ${formatNumber(parseFloat(source.totalCost) || 0, 4)}
+                            </TableCell>
+                          )}
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+              <div className={`grid gap-3 rounded-md bg-muted p-4 ${hideCosts ? "grid-cols-1" : "grid-cols-1 sm:grid-cols-3"}`}>
+                <div>
+                  <p className="text-sm text-muted-foreground">Total Weight</p>
+                  <p className="text-lg font-semibold font-mono">
+                    {formatNumber(parseFloat(batch?.totalWeightKg || "0"), 3)} kg
+                  </p>
+                </div>
+                {!hideCosts && (
+                  <>
+                    <div>
+                      <p className="text-sm text-muted-foreground">Total Cost</p>
+                      <p className="text-lg font-semibold font-mono">
+                        ${formatNumber(parseFloat(batch?.totalCost || "0"), 4)}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground">Blended Cost/kg</p>
+                      <p className="text-lg font-semibold font-mono">
+                        ${formatNumber(parseFloat(batch?.costPerKg || "0"), 4)}
+                      </p>
+                    </div>
+                  </>
+                )}
+              </div>
+              {batch?.notes && (
+                <div className="space-y-1">
+                  <Label>Notes</Label>
+                  <p className="whitespace-pre-wrap text-sm text-muted-foreground">{batch.notes}</p>
+                </div>
+              )}
+              <div className="flex justify-end">
+                <Button variant="outline" onClick={() => onOpenChange(false)}>Close</Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+    );
+  }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
