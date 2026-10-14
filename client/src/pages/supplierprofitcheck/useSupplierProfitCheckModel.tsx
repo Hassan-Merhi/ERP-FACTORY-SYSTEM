@@ -73,8 +73,6 @@ export function useSupplierProfitCheckModel() {
   const [selectedLocationId, setSelectedLocationId] = useState("");
   const [manualPoPrices, setManualPoPrices] = useState<Record<number, string>>({});
   const [manualAvgPrices, setManualAvgPrices] = useState<Record<number, string>>({});
-  const debounceTimers = useRef<Record<number, ReturnType<typeof setTimeout>>>({});
-  const debounceAvgTimers = useRef<Record<number, ReturnType<typeof setTimeout>>>({});
   const [freight, setFreight] = useState("");
   const [duties, setDuties] = useState("");
   const [otherCharges, setOtherCharges] = useState("");
@@ -237,6 +235,12 @@ export function useSupplierProfitCheckModel() {
       const response = await apiRequest("PUT", "/api/supplier-profit-check/po-overrides", payload);
       return response.json();
     },
+    onError: (error: unknown) =>
+      toast({
+        title: "Price not saved",
+        description: errorMessage(error, "Failed to save price"),
+        variant: "destructive",
+      }),
   });
 
   const handleExcelFile = useCallback(
@@ -388,16 +392,15 @@ export function useSupplierProfitCheckModel() {
       }),
   });
 
+  // These handlers are called only after the full price is committed by the
+  // input (blur, Enter or Arrow navigation). Save immediately, not 800ms after
+  // the first keystroke, so keyboard navigation persists each completed row.
   const handleManualPoChange = useCallback(
     (stockItemId: number, value: string) => {
       setManualPoPrices((previous) => ({ ...previous, [stockItemId]: value }));
-      clearTimeout(debounceTimers.current[stockItemId]);
-      const number = parseFloat(value);
-      if (!Number.isNaN(number) && number > 0 && supplierId)
-        debounceTimers.current[stockItemId] = setTimeout(
-          () => saveOverrideMutation.mutate({ supplierId: Number(supplierId), stockItemId, poPrice: number }),
-          800
-        );
+      const number = Number(value);
+      if (value.trim() && Number.isFinite(number) && number > 0 && supplierId)
+        saveOverrideMutation.mutate({ supplierId: Number(supplierId), stockItemId, poPrice: number });
     },
     [supplierId, saveOverrideMutation]
   );
@@ -405,13 +408,9 @@ export function useSupplierProfitCheckModel() {
   const handleManualAvgChange = useCallback(
     (stockItemId: number, value: string) => {
       setManualAvgPrices((previous) => ({ ...previous, [stockItemId]: value }));
-      clearTimeout(debounceAvgTimers.current[stockItemId]);
-      const number = parseFloat(value);
-      if (!Number.isNaN(number) && number > 0 && supplierId)
-        debounceAvgTimers.current[stockItemId] = setTimeout(
-          () => saveOverrideMutation.mutate({ supplierId: Number(supplierId), stockItemId, avgPrice: number }),
-          800
-        );
+      const number = Number(value);
+      if (value.trim() && Number.isFinite(number) && number > 0 && supplierId)
+        saveOverrideMutation.mutate({ supplierId: Number(supplierId), stockItemId, avgPrice: number });
     },
     [supplierId, saveOverrideMutation]
   );
@@ -425,6 +424,9 @@ export function useSupplierProfitCheckModel() {
     if (target) {
       target.focus();
       target.select();
+    } else {
+      // Even at the last/first row, Arrow navigation must commit the edit.
+      event.currentTarget.blur();
     }
   }, []);
 
