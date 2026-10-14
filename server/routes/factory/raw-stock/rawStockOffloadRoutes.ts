@@ -173,16 +173,16 @@ export function registerRawStockOffloadRoutes(app: Express) {
       // Every positive offload charge must have a real double-entry
       // counterparty. Never save costs/daybook only while silently omitting the
       // ledger journal. For duties the chosen account is the credit account.
-      if (freightVal > 0 && !reqFreightAccountId && !effectiveFreightSupplierId) {
+      if (!isSubsequentReceipt && freightVal > 0 && !reqFreightAccountId && !effectiveFreightSupplierId) {
         return res.status(400).json({ message: "Select the freight supplier or paying account before offloading." });
       }
-      if (otherChargesVal > 0 && !reqOtherChargesAccountId && !reqOtherChargesSupplierId) {
+      if (!isSubsequentReceipt && otherChargesVal > 0 && !reqOtherChargesAccountId && !reqOtherChargesSupplierId) {
         return res.status(400).json({ message: "Select the other-charges supplier or paying account before offloading." });
       }
-      if (dutyVal > 0 && !reqDutyAccountId) {
+      if (!isSubsequentReceipt && dutyVal > 0 && !reqDutyAccountId) {
         return res.status(400).json({ message: "Select the duty payment account before confirming duties and offloading." });
       }
-      for (const extra of additionalChargesArr) {
+      for (const extra of isSubsequentReceipt ? [] : additionalChargesArr) {
         const amount = parseMoneyInput(extra?.amount);
         if (amount?.greaterThan(0) && Number(Boolean(extra.ledgerAccountId)) + Number(Boolean(extra.supplierId)) !== 1) {
           return res.status(400).json({
