@@ -50,10 +50,7 @@ export function ProductionTabPanel({ report }: { report: DailyProductionReportSt
     setValuationMode,
   } = report;
   const [selectedMixBatchId, setSelectedMixBatchId] = useState<number | null>(null);
-  const {
-    data: selectedMixBatch,
-    isError: selectedMixBatchError,
-  } = useQuery<FactoryMixBatch>({
+  const { data: selectedMixBatch, isError: selectedMixBatchError } = useQuery<FactoryMixBatch>({
     queryKey: ["/api/factory/mix-batches", selectedMixBatchId],
     queryFn: async () => {
       const res = await fetch(`/api/factory/mix-batches/${selectedMixBatchId}`, { credentials: "include" });

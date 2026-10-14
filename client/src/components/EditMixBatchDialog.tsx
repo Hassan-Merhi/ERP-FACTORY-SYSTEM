@@ -63,7 +63,12 @@ interface StoredMixBatchSource {
 }
 
 export function EditMixBatchDialog({
-  batch, open, onOpenChange, readOnly = false, hideCosts = false, errorMessage,
+  batch,
+  open,
+  onOpenChange,
+  readOnly = false,
+  hideCosts = false,
+  errorMessage,
 }: EditMixBatchDialogProps) {
   const { toast } = useToast();
   const [selectedSources, setSelectedSources] = useState<SourceSelection[]>([]);
@@ -86,7 +91,11 @@ export function EditMixBatchDialog({
   });
 
   // Fetch current sources for this batch
-  const { data: currentSources, isLoading: sourcesLoading, isError: sourcesError } = useQuery<StoredMixBatchSource[]>({
+  const {
+    data: currentSources,
+    isLoading: sourcesLoading,
+    isError: sourcesError,
+  } = useQuery<StoredMixBatchSource[]>({
     queryKey: ["/api/factory/mix-batches", batch?.id, "sources"],
     queryFn: async () => {
       const response = await fetch(`/api/factory/mix-batches/${batch!.id}/sources`, { credentials: "include" });
@@ -424,12 +433,11 @@ export function EditMixBatchDialog({
                             <div className="font-medium">
                               {source.sourceBatchId
                                 ? source.sourceBatchCode || `Batch #${source.sourceBatchId}`
-                                : source.supplierName || (source.supplierId ? `Supplier #${source.supplierId}` : "Raw material")}
+                                : source.supplierName ||
+                                  (source.supplierId ? `Supplier #${source.supplierId}` : "Raw material")}
                             </div>
                             {source.containerNumber && (
-                              <div className="text-xs text-muted-foreground">
-                                Container: {source.containerNumber}
-                              </div>
+                              <div className="text-xs text-muted-foreground">Container: {source.containerNumber}</div>
                             )}
                           </TableCell>
                           <TableCell className="text-right font-mono text-sm">
@@ -451,7 +459,9 @@ export function EditMixBatchDialog({
                   </Table>
                 </div>
               )}
-              <div className={`grid gap-3 rounded-md bg-muted p-4 ${hideCosts ? "grid-cols-1" : "grid-cols-1 sm:grid-cols-3"}`}>
+              <div
+                className={`grid gap-3 rounded-md bg-muted p-4 ${hideCosts ? "grid-cols-1" : "grid-cols-1 sm:grid-cols-3"}`}
+              >
                 <div>
                   <p className="text-sm text-muted-foreground">Total Weight</p>
                   <p className="text-lg font-semibold font-mono">
@@ -482,7 +492,9 @@ export function EditMixBatchDialog({
                 </div>
               )}
               <div className="flex justify-end">
-                <Button variant="outline" onClick={() => onOpenChange(false)}>Close</Button>
+                <Button variant="outline" onClick={() => onOpenChange(false)}>
+                  Close
+                </Button>
               </div>
             </div>
           )}
