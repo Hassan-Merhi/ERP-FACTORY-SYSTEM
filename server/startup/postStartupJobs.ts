@@ -70,8 +70,10 @@ export function runPostStartupJobs(): void {
   // One-time, audited 56-record FX settlement reconciliation for company 12.
   // Disabled by default. Each voucher posts in its own guarded transaction.
   const supplierFxReconciliationMode = process.env.ERP_RECONCILE_SUPPLIER_FX_20261014;
-  if (supplierFxReconciliationMode === "company-12-audited-56" ||
-      supplierFxReconciliationMode === "company-12-dry-run") {
+  if (
+    supplierFxReconciliationMode === "company-12-audited-56" ||
+    supplierFxReconciliationMode === "company-12-dry-run"
+  ) {
     const supplierFxTimer = setTimeout(async () => {
       try {
         const fxRepair = await import("../../scripts/reconcile-factory-supplier-fx-20261014");
