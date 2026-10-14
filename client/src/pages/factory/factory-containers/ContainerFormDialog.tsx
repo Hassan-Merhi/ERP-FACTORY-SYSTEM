@@ -58,6 +58,7 @@ type FormData = {
   freightCurrencyCode: string;
   freightAccountId: string;
   freightPaidBy: "supplier" | "own";
+  freightSupplierId: string;
   freightOwnAccountId: string;
   otherCharges: string;
   otherChargesAccountId: string;
@@ -83,6 +84,7 @@ const BLANK_FORM: FormData = {
   freightCurrencyCode: "USD",
   freightAccountId: "",
   freightPaidBy: "supplier",
+  freightSupplierId: "",
   freightOwnAccountId: "",
   otherCharges: "",
   otherChargesAccountId: "",
@@ -163,6 +165,7 @@ export function ContainerFormDialog({
       freightCurrencyCode: c.freightCurrencyCode || "USD",
       freightAccountId: c.freightAccountId ? String(c.freightAccountId) : "",
       freightPaidBy: (c.freightPaidBy as "supplier" | "own") || "supplier",
+      freightSupplierId: c.freightSupplierId ? String(c.freightSupplierId) : "",
       freightOwnAccountId: c.freightOwnAccountId ? String(c.freightOwnAccountId) : "",
       otherCharges: stripTrailingZeros(c.otherCharges),
       otherChargesAccountId: c.otherChargesAccountId ? String(c.otherChargesAccountId) : "",
@@ -274,7 +277,9 @@ export function ContainerFormDialog({
             ? parseInt(data.freightOwnAccountId)
             : null,
         freightSupplierId:
-          freightAmt > 0 && freightPaidBy === "supplier" && data.supplierId ? parseInt(data.supplierId) : null,
+          freightAmt > 0 && freightPaidBy === "supplier" && data.freightSupplierId
+            ? parseInt(data.freightSupplierId)
+            : null,
         otherCharges: "0",
         otherChargesAccountId: null,
       };
@@ -339,7 +344,9 @@ export function ContainerFormDialog({
             ? parseInt(data.freightOwnAccountId)
             : null,
         freightSupplierId:
-          freightAmt > 0 && freightPaidBy === "supplier" && data.supplierId ? parseInt(data.supplierId) : null,
+          freightAmt > 0 && freightPaidBy === "supplier" && data.freightSupplierId
+            ? parseInt(data.freightSupplierId)
+            : null,
         // Sync all legacy single-row other-charge columns from the first valid
         // charge line so the offload dialog pre-fills amount, account, and currency
         // correctly.  When there are multiple lines the offload dialog still shows
