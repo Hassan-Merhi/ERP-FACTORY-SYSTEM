@@ -177,4 +177,79 @@ export const backendMessagesPhase7TranslationsPart13: readonly Phase7BackendMess
     ar: "البالة {0} موجودة بالفعل في {1} ({2}).",
     fr: "La balle {0} se trouve déjà dans {1} ({2}).",
   },
+  {
+    en: "Post-offload charge requires exactly one company-owned expense account or supplier and a valid payable account.",
+    ar: "تتطلب الرسوم بعد التفريغ حساب مصروف أو مورّدًا واحدًا تابعًا للشركة، وحساب مستحقات صالحًا.",
+    fr: "Les frais après déchargement nécessitent un compte de charges ou un fournisseur de la société, ainsi qu'un compte de dettes valide.",
+  },
+  {
+    en: "Charge editing requires a valid same-company ledger destination; no unposted charge changes are permitted.",
+    ar: "يتطلب تعديل الرسوم حسابًا محاسبيًا صالحًا تابعًا للشركة نفسها. لا يُسمح بتعديلات غير مُرحّلة.",
+    fr: "La modification des frais exige un compte comptable valide de la même société. Aucune modification non comptabilisée n'est autorisée.",
+  },
+  {
+    en: "Charge #${chargeRow.id} has missing historical voucher/daybook links. Reconcile the original records before editing or undoing it.",
+    ar: "تفتقد الرسوم رقم {0} إلى روابط السند أو دفتر اليومية التاريخية. يجب تسوية السجلات الأصلية قبل تعديلها أو إلغائها.",
+    fr: "Les frais n° {0} n'ont pas de liens historiques vers la pièce ou le journal. Rapprochez les écritures originales avant modification ou annulation.",
+  },
+  {
+    en: "Cannot reverse offload while ${activePostOffloadCharges.length} post-offload charge(s) remain active. Undo those charges first so their vouchers and supplier costing are reversed safely.",
+    ar: "لا يمكن عكس التفريغ مع وجود {0} رسوم نشطة بعد التفريغ. ألغِ هذه الرسوم أولاً لضمان عكس القيود وتكاليف المورد بأمان.",
+    fr: "Impossible d'annuler le déchargement tant que {0} frais restent actifs. Annulez-les d'abord pour rétablir correctement les écritures et le coût fournisseur.",
+  },
+  {
+    en: "Each post-offload charge needs exactly one ledger account or supplier before it can be saved.",
+    ar: "يجب تحديد حساب محاسبي واحد أو مورّد واحد لكل رسم بعد التفريغ قبل الحفظ.",
+    fr: "Chaque frais après déchargement exige exactement un compte comptable ou un fournisseur avant l'enregistrement.",
+  },
+  {
+    en: "Charge ledger account must belong to the selected company.",
+    ar: "يجب أن ينتمي الحساب المحاسبي للرسوم إلى الشركة المحددة.",
+    fr: "Le compte comptable des frais doit appartenir à la société sélectionnée.",
+  },
+  {
+    en: "A post-offload charge edit requires exactly one ledger account or supplier.",
+    ar: "يتطلب تعديل رسم بعد التفريغ حسابًا محاسبيًا واحدًا أو مورّدًا واحدًا.",
+    fr: "La modification des frais après déchargement exige exactement un compte comptable ou un fournisseur.",
+  },
+  {
+    en: "Select the freight supplier or paying account before offloading.",
+    ar: "اختر مورّد الشحن أو حساب الدفع قبل التفريغ.",
+    fr: "Sélectionnez le fournisseur de fret ou le compte de paiement avant le déchargement.",
+  },
+  {
+    en: "Select the other-charges supplier or paying account before offloading.",
+    ar: "اختر مورّد الرسوم الأخرى أو حساب الدفع قبل التفريغ.",
+    fr: "Sélectionnez le fournisseur des autres frais ou le compte de paiement avant le déchargement.",
+  },
+  {
+    en: "Select the duty payment account before confirming duties and offloading.",
+    ar: "اختر حساب سداد الرسوم الجمركية قبل تأكيدها والتفريغ.",
+    fr: "Sélectionnez le compte de règlement des droits de douane avant leur confirmation et le déchargement.",
+  },
+  {
+    en: "Each positive additional charge needs exactly one paying account or supplier.",
+    ar: "تتطلب كل رسوم إضافية موجبة حساب دفع واحدًا أو مورّدًا واحدًا.",
+    fr: "Chaque frais supplémentaire positif exige exactement un compte de paiement ou un fournisseur.",
+  },
+  {
+    en: "Duty on container ${container.containerNumber}",
+    ar: "رسوم جمركية على الحاوية {0}",
+    fr: "Droits de douane du conteneur {0}",
+  },
+  {
+    en: "Duty incurred - container ${container.containerNumber}",
+    ar: "رسوم جمركية مستحقة - الحاوية {0}",
+    fr: "Droits engagés - conteneur {0}",
+  },
+  {
+    en: "Duty paid or payable through account - container ${container.containerNumber}",
+    ar: "رسوم جمركية مدفوعة أو مستحقة عبر الحساب - الحاوية {0}",
+    fr: "Droits payés ou dus via le compte - conteneur {0}",
+  },
+  {
+    en: "Cannot reverse offload while post-offload charges remain active.",
+    ar: "لا يمكن عكس التفريغ مع وجود رسوم نشطة بعد التفريغ.",
+    fr: "Impossible d'annuler le déchargement tant que des frais restent actifs.",
+  },
 ];
