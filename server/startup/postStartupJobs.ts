@@ -122,6 +122,24 @@ export function runPostStartupJobs(): void {
     unrefTimer(fxDaybookTimer);
   }
 
+  // Company 12 historical post-offload charge voucher/daybook LINKS ONLY.
+  // No voucher posting or inventory cost rewrite. Disabled normally.
+  const chargeLinkRepairMode = process.env.ERP_REPAIR_POST_OFFLOAD_LINKS_20261014;
+  if (chargeLinkRepairMode === "company-12-preview" || chargeLinkRepairMode === "company-12-apply") {
+    const linkRepairTimer = setTimeout(async () => {
+      try {
+        const repair = await import("../../scripts/repair-post-offload-charge-links-20261014");
+        await repair.reconcileContainerChargeLinks20261014(chargeLinkRepairMode === "company-12-apply");
+        logger.info("[ContainerChargeLinks] Historical accounting-link repair completed");
+      } catch (error: unknown) {
+        logger.error("[ContainerChargeLinks] Historical accounting-link repair refused", {
+          error: getErrorMessage(error),
+        });
+      }
+    }, 12000);
+    unrefTimer(linkRepairTimer);
+  }
+
   // Live vessel/AIS tracking is intentionally disabled. Container movement is
   // maintained manually or through Excel imports.
 
