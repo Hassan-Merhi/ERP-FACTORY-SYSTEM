@@ -63,6 +63,9 @@ export interface SupplierWithBalance extends FactorySupplier {
   totalKg: string;
   /** Ledger balance (USD base, Cr positive) since wave 13; the operational figure is in operationalMemo. */
   totalValue: string;
+  /** Read-only current-settings FX translation of signed native balances. Null if any rate is missing. */
+  usdEquivalentBalance?: string | null;
+  usdEquivalentMissingRates?: string[];
   balanceBasis?: "ledger";
   notInLedgerTotal?: string;
   operationalMemo?: { label: string; totalValue: string; currencyBalances?: CurrencyBalance[]; fxUnresolved?: boolean };
