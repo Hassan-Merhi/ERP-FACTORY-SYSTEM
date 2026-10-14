@@ -289,10 +289,10 @@ export function registerSupplierStatementRoutes(app: Express) {
             eq(voucherEntries.factorySupplierId, supplierId),
             sql`${voucherEntries.debitAmount}::numeric > 0`,
             sql`${vouchers.voucherNumber} NOT LIKE 'FACTORY-PAY-%'`,
-              // Financial supplier FX journals are already represented by the source
-              // FX-transfer rows. Counting their supplier debit as a second payment
-              // subtracts the same transfer twice from operational balances.
-              sql`${vouchers.voucherNumber} NOT LIKE 'FACTORY-SFX-%'`,
+            // Financial supplier FX journals are already represented by the source
+            // FX-transfer rows. Counting their supplier debit as a second payment
+            // subtracts the same transfer twice from operational balances.
+            sql`${vouchers.voucherNumber} NOT LIKE 'FACTORY-SFX-%'`,
             eq(vouchers.companyId, companyId),
             isNull(vouchers.deletedAt)
           )
