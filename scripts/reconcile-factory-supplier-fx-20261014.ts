@@ -106,10 +106,7 @@ async function run(apply: boolean): Promise<void> {
   }
 
   console.log(`[SupplierFxRepair] ${apply ? "APPLY" : "DRY RUN"}: ${supplierDocs.length} supplier transfers, 5 existing commission allocations, USD ${total.toFixed(4)}`);
-  if (!apply) return;
 
-  let posted = 0;
-  let replayed = 0;
   for (const original of docs.filter((d) => COMMISSION_IDS.has(d.id))) {
     await db.transaction(async (tx) => {
       const row = await lockAndValidate(tx, original);
@@ -117,7 +114,13 @@ async function run(apply: boolean): Promise<void> {
       console.log(`[SupplierFxRepair] Commission allocation #${row.id} backed by existing NASRA commission vouchers; no second posting`);
     });
   }
+  if (!apply) {
+    console.log("[SupplierFxRepair] DRY RUN verified all 56 source records and direct NASRA commission coverage; no database changes");
+    return;
+  }
 
+  let posted = 0;
+  let replayed = 0;
   for (const original of supplierDocs) {
     await db.transaction(async (tx) => {
       const row = await lockAndValidate(tx, original);
