@@ -252,4 +252,14 @@ export const backendMessagesPhase7TranslationsPart13: readonly Phase7BackendMess
     ar: "لا يمكن عكس التفريغ مع وجود رسوم نشطة بعد التفريغ.",
     fr: "Impossible d'annuler le déchargement tant que des frais restent actifs.",
   },
+  {
+    en: "Select the freight supplier before saving supplier-paid freight.",
+    ar: "اختر مورّد الشحن قبل حفظ رسوم الشحن المستحقة على المورّد.",
+    fr: "Sélectionnez le fournisseur de fret avant d'enregistrer des frais de fret à sa charge.",
+  },
+  {
+    en: "The selected freight supplier must belong to this company.",
+    ar: "يجب أن ينتمي مورّد الشحن المحدد إلى هذه الشركة.",
+    fr: "Le fournisseur de fret sélectionné doit appartenir à cette société.",
+  },
 ];
