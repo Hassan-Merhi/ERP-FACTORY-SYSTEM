@@ -311,6 +311,11 @@ export function registerRawStockContainerRoutes(app: Express) {
           return res.status(400).json({ message: getErrorMessage(e) });
         }
 
+        if (Number(Boolean(charge.ledgerAccountId)) + Number(Boolean(charge.supplierId)) !== 1) {
+          return res.status(400).json({
+            message: "Each post-offload charge needs exactly one ledger account or supplier before it can be saved.",
+          });
+        }
         let acctCtx: AccountingContext = { voucherCompanyId: companyId, chargesPayableAcctId: 0 };
         if (charge.ledgerAccountId) {
           const lid = parseInt(charge.ledgerAccountId);
@@ -318,7 +323,10 @@ export function registerRawStockContainerRoutes(app: Express) {
             .select({ companyId: ledgerAccounts.companyId })
             .from(ledgerAccounts)
             .where(eq(ledgerAccounts.id, lid));
-          const voucherCompanyId = acctRow?.companyId ?? companyId;
+          if (acctRow?.companyId !== companyId) {
+            return res.status(400).json({ message: "Charge ledger account must belong to the selected company." });
+          }
+          const voucherCompanyId = companyId;
           const cpAcctId = await getOrCreateLedgerAccount(
             voucherCompanyId,
             "FACTORY_CHARGES_PAYABLE",
@@ -521,6 +529,11 @@ export function registerRawStockContainerRoutes(app: Express) {
           return res.status(400).json({ message: getErrorMessage(e) });
         }
 
+        if (Number(Boolean(ledgerAccountId)) + Number(Boolean(supplierId)) !== 1) {
+          return res.status(400).json({
+            message: "A post-offload charge edit requires exactly one ledger account or supplier.",
+          });
+        }
         let acctCtx: AccountingContext = { voucherCompanyId: companyId, chargesPayableAcctId: 0 };
         if (ledgerAccountId) {
           const lid = parseInt(ledgerAccountId);
