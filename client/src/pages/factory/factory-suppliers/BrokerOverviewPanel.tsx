@@ -168,6 +168,19 @@ export function BrokerOverviewPanel({
             <div className="text-xs text-muted-foreground">Linked Suppliers</div>
             <div className="text-2xl font-bold mt-1">{children.length}</div>
           </div>
+          <div className="rounded-xl border p-4">
+            <div className="text-xs text-muted-foreground">Net broker pools (USD equivalent)</div>
+            {parentSup.usdEquivalentBalance === null ? (
+              <div className="text-sm text-amber-600 mt-1" role="alert">
+                FX rate missing: {parentSup.usdEquivalentMissingRates?.join(", ") || "broker statement unavailable"}
+              </div>
+            ) : (
+              <div className="text-2xl font-bold mt-1 tabular-nums" data-testid="text-broker-usd-equivalent">
+                {Number(parentSup.usdEquivalentBalance ?? 0) < 0 ? "-" : ""}$
+                {formatNum(Math.abs(Number(parentSup.usdEquivalentBalance ?? 0)).toFixed(2))}
+              </div>
+            )}
+          </div>
           {/* Direct containers KPI (broker-owned, not yet assigned to a child) */}
           {!directContainersLoading && directContainers.length > 0 && (
             <div className="rounded-xl border border-amber-200 dark:border-amber-800 p-4">
