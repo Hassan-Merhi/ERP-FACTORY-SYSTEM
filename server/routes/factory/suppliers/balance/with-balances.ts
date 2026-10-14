@@ -133,7 +133,7 @@ export function registerSupplierWithBalancesRoutes(app: Express) {
               voucherFxUnresolvedSuppliers.add(suppId);
               continue; // exclude from the total rather than guess at 1
             }
-            usdAmt = amt.dividedBy(fx);
+            usdAmt = amt.times(fx);
           }
           addTo((voucherPaidBySupplierCurrency[suppId] ??= {}), curr, amt);
           addTo((voucherPaidBySupplierCurrencyUsd[suppId] ??= {}), curr, usdAmt);
