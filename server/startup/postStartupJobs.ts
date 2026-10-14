@@ -158,6 +158,24 @@ export function runPostStartupJobs(): void {
     unrefTimer(freightReviewTimer);
   }
 
+  // Company 12: recover 36 verified historical freight suppliers from
+  // existing balanced vouchers; no money or inventory mutation.
+  const payeeLinkMode = process.env.ERP_REPAIR_FREIGHT_PAYEES_20261014;
+  if (payeeLinkMode === "company-12-preview" || payeeLinkMode === "company-12-apply") {
+    const payeeLinkTimer = setTimeout(async () => {
+      try {
+        const repair = await import("../../scripts/reconcile-legacy-freight-payee-links-20261014");
+        await repair.reconcileLegacyFreightPayeeLinks20261014(payeeLinkMode === "company-12-apply");
+        logger.info("[LegacyFreightPayees] Audited freight supplier metadata repair completed");
+      } catch (error: unknown) {
+        logger.error("[LegacyFreightPayees] Audited freight supplier metadata repair refused", {
+          error: getErrorMessage(error),
+        });
+      }
+    }, 12000);
+    unrefTimer(payeeLinkTimer);
+  }
+
   // Live vessel/AIS tracking is intentionally disabled. Container movement is
   // maintained manually or through Excel imports.
 
