@@ -151,9 +151,13 @@ export function useFactorySuppliersModel() {
     containerRef: "",
   });
   const [moveTargetSupplierId, setMoveTargetSupplierId] = useState("");
-  const [supplierIncludeOtw, setSupplierIncludeOtw] = useState(false);
+  // All directory and detail views share one OTW inclusion setting so the
+  // visible amounts never differ solely because each view held a stale toggle.
+  const supplierIncludeOtw = listIncludeOtw;
+  const setSupplierIncludeOtw = setListIncludeOtw;
   const [collapsedStmtSections, setCollapsedStmtSections] = useState<Set<string>>(new Set(["currencyPools"]));
-  const [brokerIncludeOtw, setBrokerIncludeOtw] = useState(false);
+  const brokerIncludeOtw = listIncludeOtw;
+  const setBrokerIncludeOtw = setListIncludeOtw;
   const [assignTarget, setAssignTarget] = useState<{ id: number; name: string } | null>(null);
   const [paymentDialogSupplier, setPaymentDialogSupplier] = useState<SupplierWithBalance | null>(null);
   const [paymentForm, setPaymentForm] = useState<PaymentForm>({
@@ -503,25 +507,43 @@ export function useFactorySuppliersModel() {
     return accumulator;
   }, {});
   const displayedTopLevel = (showInactive ? allSuppliers : activeSuppliers).filter((supplier) => !supplier.parentId);
-  const brokerCount = displayedTopLevel.filter((supplier) => subAccountsByParent[supplier.id]?.length).length;
+  const isDirectoryBroker = (supplier: SupplierWithBalance) =>
+    !!supplier.isBroker || !!subAccountsByParent[supplier.id]?.length;
+  const brokerCount = displayedTopLevel.filter(isDirectoryBroker).length;
   const standaloneCount = displayedTopLevel.length - brokerCount;
   // Broker rows already roll up linked-supplier containers and exposure into their top-level totals.
   // Summing all suppliers would count linked suppliers twice in the summary cards.
   const summarySuppliers = displayedTopLevel;
   const totalContainers = summarySuppliers.reduce((sum, supplier) => sum + (supplier.totalContainers || 0), 0);
+  // Directory USD totals must sum the same kind of value actually displayed
+  // for each row: the USD broker pool for brokers, posted USD ledger for others.
+  // Foreign pools are not silently mixed into the USD-only totals.
+  const displayedUsdBalance = (supplier: SupplierWithBalance): number => {
+    if (!isDirectoryBroker(supplier)) return Number(supplier.totalValue || "0");
+    return Number(
+      supplier.brokerStatementBalances?.find((pool) => pool.currencyCode === "USD")?.balance || "0"
+    );
+  };
   const totalUsdOwed = summarySuppliers.reduce((sum, supplier) => {
-    const value = parseFloat(supplier.totalValue || "0");
+    const value = displayedUsdBalance(supplier);
     return value > 0 ? sum + value : sum;
   }, 0);
   const totalUsdOverpaid = summarySuppliers.reduce((sum, supplier) => {
-    const value = parseFloat(supplier.totalValue || "0");
+    const value = displayedUsdBalance(supplier);
     return value < 0 ? sum + Math.abs(value) : sum;
   }, 0);
   const filteredTopLevel = displayedTopLevel.filter((supplier) => {
-    if (activeFilter === "brokers") return !!subAccountsByParent[supplier.id]?.length || !!supplier.isBroker;
-    if (activeFilter === "standalone") return !subAccountsByParent[supplier.id]?.length;
-    if (activeFilter === "with-balance") return parseFloat(supplier.totalValue || "0") > 0;
-    if (activeFilter === "zero-balance") return parseFloat(supplier.totalValue || "0") === 0;
+    if (activeFilter === "brokers") return isDirectoryBroker(supplier);
+    if (activeFilter === "standalone") return !isDirectoryBroker(supplier);
+    if (activeFilter === "with-balance")
+      return isDirectoryBroker(supplier)
+        ? (supplier.brokerStatementBalances || []).some((pool) => Math.abs(Number(pool.balance)) > 0.005)
+        : Math.abs(Number(supplier.totalValue || "0")) > 0.005;
+    if (activeFilter === "zero-balance")
+      return isDirectoryBroker(supplier)
+        ? supplier.brokerStatementBalances != null &&
+            supplier.brokerStatementBalances.every((pool) => Math.abs(Number(pool.balance)) <= 0.005)
+        : Math.abs(Number(supplier.totalValue || "0")) <= 0.005;
     if (activeFilter === "has-foreign")
       return (supplier.currencyBalances || []).some((balance) => balance.currencyCode !== "USD");
     return true;
