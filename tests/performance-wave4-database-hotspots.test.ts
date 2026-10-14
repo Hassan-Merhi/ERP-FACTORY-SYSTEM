@@ -7,6 +7,10 @@ const route = readFileSync(
   resolve(process.cwd(), "server/routes/factory/bale-exports/production-value-report.ts"),
   "utf8"
 );
+const productionBalanceOnTable = readFileSync(
+  resolve(process.cwd(), "server/services/factory/productionBalanceOnTable.ts"),
+  "utf8"
+);
 const baleLedger = readFileSync(
   resolve(process.cwd(), "server/routes/performance/bandwidthPhase3FactoryReads.ts"),
   "utf8"
@@ -57,7 +61,8 @@ describe("Performance Wave 4 database hotspot guards", () => {
     expect(route).toContain(
       "const [baleRows, mixBatchRows] = await Promise.all([baleRowsPromise, mixBatchRowsPromise])"
     );
-    expect(route).toContain("const [mixAsOfResult, baleAsOfResult] = await Promise.all([");
+    expect(route).toContain("getFactoryBalanceOnTableSnapshot(companyId, to)");
+    expect(productionBalanceOnTable).toContain("const [mixResult, baleResult] = await Promise.all([");
   });
 
   it("aggregates bale order-state once instead of repeating correlated EXISTS probes", () => {
