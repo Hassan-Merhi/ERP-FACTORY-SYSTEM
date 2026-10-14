@@ -18,7 +18,7 @@ describe("historical net-position correction", () => {
     rows.push(
       { total_cost: "10.005", total_selling: "20.00" },
       { total_mix_kg: "10.000", total_mix_cost: "3.50" },
-      { total_bale_kg: "3.300" },
+      { total_kg: "3.300" },
       { value_after: "0.1" },
       { value_after: "0.2" },
       { value_after: "0" }
