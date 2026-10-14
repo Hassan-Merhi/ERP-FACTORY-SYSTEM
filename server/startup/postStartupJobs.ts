@@ -140,6 +140,24 @@ export function runPostStartupJobs(): void {
     unrefTimer(linkRepairTimer);
   }
 
+  // Audited company 12 historical freight corrections, dated 14 Oct 2026.
+  // Explicit preview/apply switch. Keeps original vouchers intact.
+  const freightReviewMode = process.env.ERP_RECONCILE_FREIGHT_HISTORY_20261014;
+  if (freightReviewMode === "company-12-preview" || freightReviewMode === "company-12-apply") {
+    const freightReviewTimer = setTimeout(async () => {
+      try {
+        const review = await import("../../scripts/reconcile-factory-freight-20261014");
+        await review.reconcileFactoryFreight20261014(freightReviewMode === "company-12-apply");
+        logger.info("[FactoryFreightCorrection] Historical freight review completed");
+      } catch (error: unknown) {
+        logger.error("[FactoryFreightCorrection] Historical freight review stopped", {
+          error: getErrorMessage(error),
+        });
+      }
+    }, 12000);
+    unrefTimer(freightReviewTimer);
+  }
+
   // Live vessel/AIS tracking is intentionally disabled. Container movement is
   // maintained manually or through Excel imports.
 
