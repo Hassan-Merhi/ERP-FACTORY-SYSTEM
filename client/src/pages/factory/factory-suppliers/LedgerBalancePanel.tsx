@@ -8,7 +8,7 @@ interface LedgerBalancePanelProps {
 }
 
 const amountText = (value: number, prefix: string, formatNum: (val: string) => string) =>
-  `${prefix}${formatNum(Math.abs(value).toFixed(2))}${value < 0 ? " CR" : ""}`;
+  `${prefix}${formatNum(Math.abs(value).toFixed(2))}${value < 0 ? " DR" : value > 0 ? " CR" : ""}`;
 
 /**
  * Factory supplier balance on the ledger (accounting audit wave 13): the USD
@@ -39,7 +39,24 @@ export function LedgerBalancePanel({ view, formatNum }: LedgerBalancePanelProps)
         )}
       </div>
       {view.ledgerFxUnresolved && (
-        <p className="text-xs text-amber-600">Some ledger lines hold a foreign amount without a USD conversion</p>
+        <p className="text-xs text-amber-600" role="alert">
+          USD total needs historical FX repair: {view.nativeBalances.reduce((count, bucket) => count + bucket.legacyUnconvertedLines, 0)} ledger lines have no validated USD conversion. Do not use this total as a settled balance.
+        </p>
+      )}
+      {view.notInLedger.lines.length > 0 && (
+        <div className="border-t pt-3 space-y-2" role="status">
+          <p className="text-xs font-semibold text-amber-600">
+            {view.notInLedger.lines.length} source amount(s) still missing from the ledger — not included in the posted balance.
+          </p>
+          <div className="text-xs space-y-1">
+            {view.notInLedger.lines.map((line) => (
+              <div key={`${line.source}-${line.sourceId}`} className="flex flex-wrap justify-between gap-2">
+                <span>{line.sourceLabel} · {line.reference ?? line.sourceId}</span>
+                <span>{line.currency} {formatNum(line.nativeAmount.replace("-", ""))}</span>
+              </div>
+            ))}
+          </div>
+        </div>
       )}
     </div>
   );
