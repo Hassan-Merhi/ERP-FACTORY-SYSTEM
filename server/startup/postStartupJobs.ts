@@ -33,6 +33,19 @@ export function runPostStartupJobs(): void {
     unrefTimer(accountingReconciliationTimer);
   }
 
+  if (process.env.ERP_RECONCILE_SUPPLIERS_20261014 === "company-12-approved-87") {
+    const supplierTimer = setTimeout(async () => {
+      try {
+        const { reconcileFactorySuppliers20261014 } = await import("../../scripts/reconcile-factory-suppliers-20261014");
+        await reconcileFactorySuppliers20261014(true);
+        logger.info("[SupplierRepair] Historical factory supplier journals completed");
+      } catch (error: unknown) {
+        logger.error("[SupplierRepair] Historical supplier reconciliation halted", { error: getErrorMessage(error) });
+      }
+    }, 12000);
+    unrefTimer(supplierTimer);
+  }
+
   // Live vessel/AIS tracking is intentionally disabled. Container movement is
   // maintained manually or through Excel imports.
 
