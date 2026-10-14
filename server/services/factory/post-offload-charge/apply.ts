@@ -383,6 +383,14 @@ export async function applyPostOffloadChargeMutation(
 
     // Resolve legacy accounting links if needed
     const chargeRow = await resolveLegacyPostOffloadAccountingLinks(tx, companyId, containerId, rawCharge);
+    // Never edit/undo a historical charge if its accounting identity cannot be
+    // resolved. Otherwise the charge/cost changes while the original payable
+    // voucher survives and cannot be retired or updated.
+    if (!chargeRow.voucherId || !chargeRow.daybookEntryId) {
+      throw new Error(
+        `Charge #${chargeRow.id} has missing historical voucher/daybook links. Reconcile the original records before editing or undoing it.`
+      );
+    }
 
     // Compute OLD canonical cost (all active charges, including old version of this one)
     const activeCharges = await loadActiveCharges(tx, companyId, containerId);
@@ -733,6 +741,14 @@ export async function applyPostOffloadChargeMutation(
 
     // Resolve legacy accounting links if needed
     const chargeRow = await resolveLegacyPostOffloadAccountingLinks(tx, companyId, containerId, rawCharge);
+    // Never edit/undo a historical charge if its accounting identity cannot be
+    // resolved. Otherwise the charge/cost changes while the original payable
+    // voucher survives and cannot be retired or updated.
+    if (!chargeRow.voucherId || !chargeRow.daybookEntryId) {
+      throw new Error(
+        `Charge #${chargeRow.id} has missing historical voucher/daybook links. Reconcile the original records before editing or undoing it.`
+      );
+    }
 
     // Compute OLD canonical cost (with this charge included)
     const activeCharges = await loadActiveCharges(tx, companyId, containerId);
