@@ -15,7 +15,7 @@ import path from "node:path";
 
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-import { pool } from "../server/db";
+import { db, pool } from "../server/db";
 import { normFactoryEntry } from "../server/services/factory/factoryVoucherEntryAmounts";
 import { runWithDatabaseMaintenanceScope } from "../server/services/security/databaseScopeRuntimeContext";
 import {
@@ -240,6 +240,30 @@ describe("legacy factory foreign-currency repair", () => {
       [`ledger:${expenseId}`]: "10.00",
       [`factorySupplier:${supplierId}`]: "-10.00",
     });
+  });
+
+  it("previews approved fixed EUR 1.18 / AUD 0.75 without guessing dated rates", async () => {
+    const defaultPlan = await asMaintenance(() => planFactoryFxLegacyRepair(companyId));
+    const fixedPlan = await asMaintenance(() => planFactoryFxLegacyRepair(companyId, db, true));
+    const linesFor = (key: string) => fixedPlan.lines.filter((line) => line.voucherId === voucherIds[key]);
+
+    expect(fixedPlan.fixedRatesUsed).toEqual({ EUR: "1.18", AUD: "0.75" });
+    expect(fixedPlan.planHash).not.toBe(defaultPlan.planHash);
+    expect(linesFor("native").map((line) => [line.rateSource, line.newStoredAmount])).toEqual([
+      ["approved-fixed", "118.00"],
+      ["approved-fixed", "118.00"],
+    ]);
+    expect(linesFor("usd").map((line) => [line.kind, line.newStoredAmount])).toEqual([
+      ["usd", "118.00"],
+      ["usd", "118.00"],
+    ]);
+    expect(linesFor("unset").map((line) => [line.rateSource, line.newStoredAmount])).toEqual([
+      ["approved-fixed", "30.00"],
+      ["approved-fixed", "30.00"],
+    ]);
+    expect(linesFor("mixed").every((line) => line.skipReason !== null)).toBe(true);
+    expect(linesFor("closed").every((line) => line.skipReason === "PERIOD_CLOSED")).toBe(true);
+    expect(fixedPlan.repairableVouchers).toBe(3);
   });
 
   it("applies only the repairable lines, through the production trigger, and is idempotent", async () => {
