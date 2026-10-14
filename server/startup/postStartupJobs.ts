@@ -21,16 +21,14 @@ export function runPostStartupJobs(): void {
   // This is OFF by default and uses the centralized posting engine with
   // per-invoice transaction rollback if the customer combined balance shifts.
   if (process.env.ERP_RECONCILE_INVOICES_20261014 === "company-12-approved-63") {
-    const accountingReconciliationTimer = setTimeout(() => {
-      void import("../../scripts/reconcile-factory-invoices-20261014")
-        .then(({ reconcileFactoryInvoices20261014 }) => reconcileFactoryInvoices20261014(true))
-        .then(() => logger.info("[AccountingRepair] Historical invoice reconciliation finished"))
-        .catch((error: unknown) =>
-          logger.error(
-            "[AccountingRepair] Historical invoice reconciliation stopped; inspect voucher counts before retrying",
-            { error: getErrorMessage(error) }
-          )
-        );
+    const accountingReconciliationTimer = setTimeout(async () => {
+      try {
+        const { reconcileFactoryInvoices20261014 } = await import("../../scripts/reconcile-factory-invoices-20261014");
+        await reconcileFactoryInvoices20261014(true);
+        logger.info("[AccountingRepair] Historical invoice reconciliation finished");
+      } catch (error: unknown) {
+        logger.error("[AccountingRepair] Invoice reconciliation stopped", { error: getErrorMessage(error) });
+      }
     }, 12000);
     unrefTimer(accountingReconciliationTimer);
   }
