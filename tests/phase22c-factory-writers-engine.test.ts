@@ -163,6 +163,10 @@ beforeAll(async () => {
     `INSERT INTO factory_suppliers (company_id, name, is_active) VALUES ($1, $2, true) RETURNING id`,
     [ctx.companyId, `${PREFIX} supplier`]
   );
+  ids.FREIGHT_SUPPLIER = await insertId(
+    `INSERT INTO factory_suppliers (company_id, name, is_active) VALUES ($1, $2, true) RETURNING id`,
+    [ctx.companyId, `${PREFIX} freight supplier`]
+  );
   ids.FREIGHT = await insertId(
     `INSERT INTO ledger_accounts (company_id, code, name, account_type, opening_balance, opening_balance_side)
      VALUES ($1, $2, $3, 'Expense', 0, 'Dr') RETURNING id`,
@@ -290,6 +294,7 @@ describe("factory container create and update", () => {
       freightCurrencyCode: "EUR",
       freightAccountId: ids.FREIGHT,
       freightPaidBy: "supplier",
+      freightSupplierId: ids.FREIGHT_SUPPLIER,
     });
     expect(response.status, JSON.stringify(response.body)).toBe(200);
     containerId = response.body.id;
@@ -312,7 +317,25 @@ describe("factory container create and update", () => {
     expect(freight?.posted_by_engine).toBe(true);
     const freightLines = await expectBalanced(freight!.id);
     expect(freightLines[0].base_debit_amount).toBe("110.000000");
+    expect(freightLines[1].factory_supplier_id).toBe(ids.FREIGHT_SUPPLIER);
     expect((await identityOf(freight!.id))[0].source_type).toBe("factory-container-freight");
+  });
+
+  it("refuses supplier-paid freight without a selected freight payee", async () => {
+    const response = await agent.post("/api/factory/containers").send({
+      containerNumber: `${PREFIX}-NO-FREIGHT-PAYEE-${ctx.companyId}`,
+      supplierId: ids.SUPPLIER,
+      totalKg: "1000",
+      ratePerKg: "0.35",
+      currencyCode: "EUR",
+      arrivalDate: "2026-03-01",
+      freight: "100",
+      freightCurrencyCode: "EUR",
+      freightAccountId: ids.FREIGHT,
+      freightPaidBy: "supplier",
+    });
+    expect(response.status).toBe(400);
+    expect(response.body.message).toContain("freight supplier");
   });
 
   it("audits an in-place freight edit in an open period", async () => {
@@ -321,6 +344,7 @@ describe("factory container create and update", () => {
     const freight = await liveVoucher(`FACTORY-FREIGHT-${containerId}`);
     const freightLines = await expectBalanced(freight!.id);
     expect(freightLines.map((line) => line.base_debit_amount)).toContain("132.000000");
+    expect(freightLines[1].factory_supplier_id).toBe(ids.FREIGHT_SUPPLIER);
     expect(freight?.total_amount).toBe("120.00");
     expect(await auditEdits(freight!.id)).toBe(1);
   });
