@@ -33,6 +33,7 @@ const stockGroups = [{ id: 5, name: "Group A" }];
 const proformas = [{ id: 31, reference: "PF-31" }];
 const locationGroups = [{ id: 11, name: "Retail" }];
 const analysisRows = [analysisRow];
+let activeAnalysisRows: Record<string, unknown>[] = analysisRows;
 const noRows: never[] = [];
 
 vi.mock("@tanstack/react-query", () => ({
@@ -49,7 +50,7 @@ vi.mock("@tanstack/react-query", () => ({
     }
     if (root === "/api/supplier-profit-check/location-groups") return { data: locationGroups };
     if (root === "/api/supplier-profit-check/otw-containers") return { data: noRows, isLoading: false };
-    if (root === "/api/supplier-profit-check/analyze") return { data: analysisRows, isLoading: false };
+    if (root === "/api/supplier-profit-check/analyze") return { data: activeAnalysisRows, isLoading: false };
     if (root === "/api/supplier-profit-check/po-overrides") return { data: noRows };
     return { data: noRows };
   },
@@ -97,6 +98,7 @@ vi.mock("@/pages/supplierprofitcheck/utils", () => ({
     { value: "gaining", label: "Gaining", dot: "green" },
     { value: "losing", label: "Losing", dot: "red" },
     { value: "missing_po", label: "Missing PO", dot: "orange" },
+    { value: "no_sales_data", label: "No Data", dot: "orange" },
   ],
   ALL_COLUMNS: [
     { key: "code", label: "Code" },
@@ -191,6 +193,7 @@ import SupplierProfitCheck from "@/pages/SupplierProfitCheck";
 describe("supplier profit check page behavior", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    activeAnalysisRows = analysisRows;
     harness.apiRequest.mockImplementation(async (method: string, path: string) => {
       if (method === "POST" && path === "/api/supplier-profit-check/save-proforma") {
         return { ok: true, json: async () => ({ id: 88, reference: "PF-NEW" }) };
@@ -238,6 +241,70 @@ describe("supplier profit check page behavior", () => {
     expect(screen.getByText("No items match your filters")).toBeInTheDocument();
     fireEvent.change(search, { target: { value: "SH-1" } });
     expect(screen.getByTestId("row-item-7")).toBeInTheDocument();
+  });
+
+  it("keeps a complete Dubai price editable under No Data filtering and saves on ArrowDown", async () => {
+    activeAnalysisRows = [
+      { ...analysisRow, stockItemId: 71, code: "NODATA-1", name: "No data one", poPrice: null, poPriceSource: "missing", proformaQty: 0 },
+      { ...analysisRow, stockItemId: 72, code: "NODATA-2", name: "No data two", poPrice: null, poPriceSource: "missing", proformaQty: 0 },
+    ];
+    render(<SupplierProfitCheck />);
+    fireEvent.click(screen.getByRole("button", { name: "Supplier A" }));
+    fireEvent.click(within(screen.getByTestId("status-filter-no_sales_data")).getByRole("checkbox"));
+
+    const priceInput = screen.getByTestId("input-manual-po-price-71") as HTMLInputElement;
+    const nextInput = screen.getByTestId("input-manual-po-price-72") as HTMLInputElement;
+    priceInput.focus();
+    fireEvent.change(priceInput, { target: { value: "1" } });
+    fireEvent.change(priceInput, { target: { value: "19" } });
+    fireEvent.change(priceInput, { target: { value: "190" } });
+
+    expect(screen.getByTestId("row-item-71")).toBeInTheDocument();
+    expect(priceInput).toHaveValue(190);
+    expect(harness.apiRequest).not.toHaveBeenCalledWith(
+      "PUT",
+      "/api/supplier-profit-check/po-overrides",
+      expect.anything()
+    );
+
+    fireEvent.keyDown(priceInput, { key: "ArrowDown" });
+
+    await waitFor(() =>
+      expect(harness.apiRequest).toHaveBeenCalledWith("PUT", "/api/supplier-profit-check/po-overrides", {
+        supplierId: 2,
+        stockItemId: 71,
+        poPrice: 190,
+      })
+    );
+    expect(document.activeElement).toBe(nextInput);
+    expect(screen.queryByTestId("row-item-71")).not.toBeInTheDocument();
+    expect(screen.getByTestId("row-item-72")).toBeInTheDocument();
+  });
+
+  it("commits the completed Avg Sell price when ArrowDown has no next row", async () => {
+    activeAnalysisRows = [
+      { ...analysisRow, stockItemId: 81, code: "NOSELL", name: "No selling price", avgSellingPrice: null, proformaQty: 0 },
+    ];
+    render(<SupplierProfitCheck />);
+    fireEvent.click(screen.getByRole("button", { name: "Supplier A" }));
+    fireEvent.click(within(screen.getByTestId("status-filter-no_sales_data")).getByRole("checkbox"));
+
+    const sellInput = screen.getByTestId("input-manual-avg-price-81") as HTMLInputElement;
+    sellInput.focus();
+    fireEvent.change(sellInput, { target: { value: "1" } });
+    fireEvent.change(sellInput, { target: { value: "190" } });
+    expect(screen.getByTestId("row-item-81")).toBeInTheDocument();
+
+    fireEvent.keyDown(sellInput, { key: "ArrowDown" });
+
+    await waitFor(() =>
+      expect(harness.apiRequest).toHaveBeenCalledWith("PUT", "/api/supplier-profit-check/po-overrides", {
+        supplierId: 2,
+        stockItemId: 81,
+        avgPrice: 190,
+      })
+    );
+    expect(screen.queryByTestId("row-item-81")).not.toBeInTheDocument();
   });
 
   it("creates a proforma using the computed order quantities", async () => {
