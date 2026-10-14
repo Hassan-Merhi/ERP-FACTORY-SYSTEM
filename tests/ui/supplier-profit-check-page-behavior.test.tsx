@@ -245,8 +245,24 @@ describe("supplier profit check page behavior", () => {
 
   it("keeps a complete Dubai price editable under No Data filtering and saves on ArrowDown", async () => {
     activeAnalysisRows = [
-      { ...analysisRow, stockItemId: 71, code: "NODATA-1", name: "No data one", poPrice: null, poPriceSource: "missing", proformaQty: 0 },
-      { ...analysisRow, stockItemId: 72, code: "NODATA-2", name: "No data two", poPrice: null, poPriceSource: "missing", proformaQty: 0 },
+      {
+        ...analysisRow,
+        stockItemId: 71,
+        code: "NODATA-1",
+        name: "No data one",
+        poPrice: null,
+        poPriceSource: "missing",
+        proformaQty: 0,
+      },
+      {
+        ...analysisRow,
+        stockItemId: 72,
+        code: "NODATA-2",
+        name: "No data two",
+        poPrice: null,
+        poPriceSource: "missing",
+        proformaQty: 0,
+      },
     ];
     render(<SupplierProfitCheck />);
     fireEvent.click(screen.getByRole("button", { name: "Supplier A" }));
@@ -283,7 +299,14 @@ describe("supplier profit check page behavior", () => {
 
   it("commits the completed Avg Sell price when ArrowDown has no next row", async () => {
     activeAnalysisRows = [
-      { ...analysisRow, stockItemId: 81, code: "NOSELL", name: "No selling price", avgSellingPrice: null, proformaQty: 0 },
+      {
+        ...analysisRow,
+        stockItemId: 81,
+        code: "NOSELL",
+        name: "No selling price",
+        avgSellingPrice: null,
+        proformaQty: 0,
+      },
     ];
     render(<SupplierProfitCheck />);
     fireEvent.click(screen.getByRole("button", { name: "Supplier A" }));
