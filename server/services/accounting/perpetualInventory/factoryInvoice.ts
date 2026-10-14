@@ -181,15 +181,17 @@ export async function syncFactoryInvoiceTx(
   const receivable = toMoney(order.grand_total ?? 0)
     .minus(toMoney(vouchered?.amount ?? 0))
     .toDecimalPlaces(2);
-  const [cost] = postInventoryCost ? await rows<{ cost: string }>(
-    tx,
-    sql`
+  const [cost] = postInventoryCost
+    ? await rows<{ cost: string }>(
+        tx,
+        sql`
       SELECT COALESCE(SUM(b.total_cost), 0)::text AS cost
         FROM customer_order_bales cob
         JOIN factory_bales b ON b.id = cob.bale_id AND b.company_id = ${companyId}
        WHERE cob.order_id = ${orderId}
     `
-  ) : [{ cost: "0" }];
+      )
+    : [{ cost: "0" }];
   const cogs = postInventoryCost ? toMoney(cost?.cost ?? 0).toDecimalPlaces(2) : new MoneyDecimal(0);
   if (receivable.isZero() && cogs.isZero()) return null;
   const currency = normalizeFactoryCurrency(order.currency);
@@ -227,20 +229,22 @@ export async function syncFactoryInvoiceTx(
       narration: ["Factory bale sales", invoice].join(" - "),
     },
   ];
-  const costLines: LinkedJournalLine[] = postInventoryCost ? [
-    {
-      ledgerAccountId: accounts.get("COGS")!,
-      debit: cogs,
-      credit: zero,
-      narration: ["Cost of bales sold", invoice].join(" - "),
-    },
-    {
-      ledgerAccountId: accounts.get("FACTORY_FINISHED_GOODS")!,
-      debit: zero,
-      credit: cogs,
-      narration: ["Bales invoiced", invoice].join(" - "),
-    },
-  ] : [];
+  const costLines: LinkedJournalLine[] = postInventoryCost
+    ? [
+        {
+          ledgerAccountId: accounts.get("COGS")!,
+          debit: cogs,
+          credit: zero,
+          narration: ["Cost of bales sold", invoice].join(" - "),
+        },
+        {
+          ledgerAccountId: accounts.get("FACTORY_FINISHED_GOODS")!,
+          debit: zero,
+          credit: cogs,
+          narration: ["Bales invoiced", invoice].join(" - "),
+        },
+      ]
+    : [];
   const description = ["Factory invoice", invoice].join(" - ");
   const identity = { sourceType: FACTORY_INVOICE_SOURCE, sourceId: orderId };
   if (currency === "USD") {
