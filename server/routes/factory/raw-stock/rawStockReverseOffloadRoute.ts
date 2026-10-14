@@ -174,6 +174,28 @@ export function registerRawStockReverseOffloadRoute(app: Express) {
           throw new ReverseOffloadError(consumingMixBatchMessage(blockedBy), 400);
         }
 
+        // A post-offload charge has independent cost adjustments and its own
+        // FACTORY-POC voucher. Deleting the charge during reversal would orphan
+        // that voucher and lose its cost history. Require an audited UNDO of
+        // each charge first (in its own financial transaction).
+        const activePostOffloadCharges = await tx
+          .select({ id: factoryOffloadAdditionalCharges.id })
+          .from(factoryOffloadAdditionalCharges)
+          .where(
+            and(
+              eq(factoryOffloadAdditionalCharges.companyId, companyId),
+              eq(factoryOffloadAdditionalCharges.containerId, containerId),
+              isNull(factoryOffloadAdditionalCharges.deletedAt)
+            )
+          )
+          .for("update");
+        if (activePostOffloadCharges.length > 0) {
+          throw new ReverseOffloadError(
+            `Cannot reverse offload while ${activePostOffloadCharges.length} post-offload charge(s) remain active. Undo those charges first so their vouchers and supplier costing are reversed safely.`,
+            400
+          );
+        }
+
         const container = lockedContainer;
         // 1. Find the raw stock entry for this container (fetch full cost fields
         //    so we can compute the supplier locked-rate correction below).
