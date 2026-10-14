@@ -203,16 +203,22 @@ export function registerFactoryContainerDeleteRoutes(app: Express) {
       const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });
       const useFixedHistoricalRates = req.query.fixedRates === "1";
-      const active = await db.select().from(factoryContainers)
+      const active = await db
+        .select()
+        .from(factoryContainers)
         .where(and(eq(factoryContainers.companyId, companyId), isNull(factoryContainers.deletedAt)));
       const missing = [];
       for (const container of active) {
         if (!container.supplierId) continue;
         const goods = toMoney(container.totalKg).times(toMoney(container.ratePerKg));
         if (!goods.greaterThan(0)) continue;
-        const posted = await db.select({ id: vouchers.id }).from(vouchers).where(
-          and(eq(vouchers.companyId, companyId), ilike(vouchers.voucherNumber, `FACTORY-IMPORT-${container.id}-%`))
-        ).limit(1);
+        const posted = await db
+          .select({ id: vouchers.id })
+          .from(vouchers)
+          .where(
+            and(eq(vouchers.companyId, companyId), ilike(vouchers.voucherNumber, `FACTORY-IMPORT-${container.id}-%`))
+          )
+          .limit(1);
         if (posted.length) continue; // includes retired entries — never re-post an intentionally reversed document
         const code = (container.currencyCode || "USD").toUpperCase();
         const approvedRate = useFixedHistoricalRates
@@ -223,11 +229,7 @@ export function registerFactoryContainerDeleteRoutes(app: Express) {
         if (!rate) {
           try {
             rate = String(
-              resolveStoredFxRateOrThrow(
-                container.currencyCode,
-                container.fxRateToUsd,
-                container.fxRateConfirmed
-              )
+              resolveStoredFxRateOrThrow(container.currencyCode, container.fxRateToUsd, container.fxRateConfirmed)
             );
           } catch {
             repairable = false;
@@ -242,9 +244,7 @@ export function registerFactoryContainerDeleteRoutes(app: Express) {
           historicalRate: rate,
           rateSource: approvedRate ? "approved-fixed" : "container",
           expectedUsd: rate ? goods.times(toMoney(rate)).toFixed(2) : null,
-          postingDate: container.createdAt
-            ? new Date(container.createdAt).toISOString().slice(0, 10)
-            : null,
+          postingDate: container.createdAt ? new Date(container.createdAt).toISOString().slice(0, 10) : null,
           repairable,
         });
       }
@@ -270,10 +270,14 @@ export function registerFactoryContainerDeleteRoutes(app: Express) {
       if (!companyId) return res.status(400).json({ message: "No company selected" });
       const { confirm, containerIds } = req.body || {};
       const useFixedHistoricalRates = req.body?.fixedRates === true;
-      if (confirm !== true || !Array.isArray(containerIds) || !containerIds.length
-          || containerIds.length > 250
-          || containerIds.some((id: unknown) => !Number.isSafeInteger(id) || Number(id) <= 0)
-          || new Set(containerIds).size !== containerIds.length) {
+      if (
+        confirm !== true ||
+        !Array.isArray(containerIds) ||
+        !containerIds.length ||
+        containerIds.length > 250 ||
+        containerIds.some((id: unknown) => !Number.isSafeInteger(id) || Number(id) <= 0) ||
+        new Set(containerIds).size !== containerIds.length
+      ) {
         return res.status(400).json({
           message: "Preview first, then explicitly confirm 1-250 unique numeric containerIds to backfill.",
         });
@@ -281,13 +285,17 @@ export function registerFactoryContainerDeleteRoutes(app: Express) {
       const allContainers = await db
         .select()
         .from(factoryContainers)
-        .where(and(
-          eq(factoryContainers.companyId, companyId),
-          isNull(factoryContainers.deletedAt),
-          inArray(factoryContainers.id, containerIds)
-        ));
+        .where(
+          and(
+            eq(factoryContainers.companyId, companyId),
+            isNull(factoryContainers.deletedAt),
+            inArray(factoryContainers.id, containerIds)
+          )
+        );
       if (allContainers.length !== containerIds.length) {
-        return res.status(409).json({ message: "Container selection has changed or includes deleted/other-company IDs. Preview again." });
+        return res
+          .status(409)
+          .json({ message: "Container selection has changed or includes deleted/other-company IDs. Preview again." });
       }
 
       let created = 0;
@@ -311,10 +319,7 @@ export function registerFactoryContainerDeleteRoutes(app: Express) {
           .select({ id: vouchers.id })
           .from(vouchers)
           .where(
-            and(
-              eq(vouchers.companyId, companyId),
-              ilike(vouchers.voucherNumber, `FACTORY-IMPORT-${container.id}-%`)
-            )
+            and(eq(vouchers.companyId, companyId), ilike(vouchers.voucherNumber, `FACTORY-IMPORT-${container.id}-%`))
           )
           .limit(1);
         if (existing.length > 0) {
@@ -332,11 +337,7 @@ export function registerFactoryContainerDeleteRoutes(app: Express) {
         try {
           backfillFxRate = approvedRate
             ? Number(approvedRate)
-            : resolveStoredFxRateOrThrow(
-                container.currencyCode,
-                container.fxRateToUsd,
-                container.fxRateConfirmed
-              );
+            : resolveStoredFxRateOrThrow(container.currencyCode, container.fxRateToUsd, container.fxRateConfirmed);
         } catch {
           skipped++;
           fxUnresolvedSkipped.push(container.containerNumber);

@@ -211,11 +211,7 @@ function ownRate(row: LegacyRow): Decimal | null {
   return rate.gt(0) && !rate.eq(1) ? rate : null;
 }
 
-function classify(
-  row: LegacyRow,
-  dated: FactoryFxRateOnDate | null,
-  useFixedHistoricalRates: boolean
-): LegacyLinePlan {
+function classify(row: LegacyRow, dated: FactoryFxRateOnDate | null, useFixedHistoricalRates: boolean): LegacyLinePlan {
   const debit = toMoney(row.debit_amount ?? 0);
   const credit = toMoney(row.credit_amount ?? 0);
   const side: "debit" | "credit" = debit.gt(0) ? "debit" : "credit";
@@ -223,9 +219,7 @@ function classify(
   const own = ownRate(row);
   const fixedRate = approvedHistoricalRate(row.currency, useFixedHistoricalRates);
   const datedRate =
-    !fixedRate && !own && dated && toMoney(dated.rate).gt(0)
-      ? toMoney(dated.rate).toDecimalPlaces(10)
-      : null;
+    !fixedRate && !own && dated && toMoney(dated.rate).gt(0) ? toMoney(dated.rate).toDecimalPlaces(10) : null;
   const rate = fixedRate ?? own ?? datedRate ?? toMoney(row.exchange_rate ?? 0).toDecimalPlaces(10);
   const total = toMoney(row.total_amount ?? 0);
   const plan: LegacyLinePlan = {
@@ -329,9 +323,7 @@ function planHashOf(lines: LegacyLinePlan[], useFixedHistoricalRates: boolean): 
   const changes = lines
     .filter((line) => !line.skipReason)
     .map((line) => [line.entryId, line.side, line.rate, line.rateSource, line.transactionAmount, line.baseAmount]);
-  return createHash("sha256")
-    .update(JSON.stringify({ useFixedHistoricalRates, changes }))
-    .digest("hex");
+  return createHash("sha256").update(JSON.stringify({ useFixedHistoricalRates, changes })).digest("hex");
 }
 
 function buildPlan(
@@ -378,7 +370,8 @@ function buildPlan(
     usdChangeByTarget: Object.fromEntries(
       [...usdChange.entries()].filter(([, value]) => !value.isZero()).map(([key, value]) => [key, value.toFixed(2)])
     ),
-    datedRateLines: repairable.filter((line) => line.rateSource === "dated-manual" || line.rateSource === "dated-auto").length,
+    datedRateLines: repairable.filter((line) => line.rateSource === "dated-manual" || line.rateSource === "dated-auto")
+      .length,
     fixedRatesUsed: useFixedHistoricalRates ? { ...FACTORY_APPROVED_HISTORICAL_RATES } : null,
     fixedRateLines: repairable.filter((line) => line.rateSource === "approved-fixed").length,
     planHash: planHashOf(lines, useFixedHistoricalRates),

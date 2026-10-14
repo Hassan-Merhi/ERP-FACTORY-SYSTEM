@@ -11,7 +11,11 @@ import { getClientDate } from "../../../lib/dateUtils";
 import { logger } from "../../../lib/logger";
 import { db } from "../../../db";
 import { requireAuth } from "../../../auth";
-import { resolveStoredFxRate, resolveStoredFxRateOrThrow, UnresolvedExchangeRateError } from "../../../services/factory/currencyConversion";
+import {
+  resolveStoredFxRate,
+  resolveStoredFxRateOrThrow,
+  UnresolvedExchangeRateError,
+} from "../../../services/factory/currencyConversion";
 import { getOrCreateLedgerAccount } from "../_helpers";
 import { FactoryFxRateRequiredError, factoryDocumentRate } from "../../../services/factory/factoryDocumentFxRate";
 import { factorySuppliers, factoryContainers, voucherEntries, factoryDaybookEntries, vouchers } from "@shared/schema";
@@ -286,23 +290,27 @@ export function registerFactoryContainerUpdateRoutes(app: Express) {
       // A container's goods payable MUST follow changes to the supplier, goods value,
       // currency and historical rate. Previously only the descriptive daybook row
       // followed those edits, which left the supplier's actual ledger incorrect.
-      const goodsNeedsSync = [
-        "supplierId", "totalKg", "ratePerKg", "currencyCode",
-        "fxRateToUsd", "fxRateSource",
-      ].some((f) => f in b);
+      const goodsNeedsSync = ["supplierId", "totalKg", "ratePerKg", "currencyCode", "fxRateToUsd", "fxRateSource"].some(
+        (f) => f in b
+      );
       const existingImports = goodsNeedsSync
-        ? await db.select().from(vouchers).where(
-            and(
-              eq(vouchers.companyId, companyId),
-              isNull(vouchers.deletedAt),
-              ilike(vouchers.voucherNumber, `FACTORY-IMPORT-${id}-%`)
+        ? await db
+            .select()
+            .from(vouchers)
+            .where(
+              and(
+                eq(vouchers.companyId, companyId),
+                isNull(vouchers.deletedAt),
+                ilike(vouchers.voucherNumber, `FACTORY-IMPORT-${id}-%`)
+              )
             )
-          ).limit(2)
+            .limit(2)
         : [];
       if (goodsNeedsSync && existingImports.length > 1) {
         return res.status(409).json({
           code: "FACTORY_IMPORT_DUPLICATE_JOURNALS",
-          message: "Multiple live import journals exist for this container. Reconcile them before changing supplier or goods value.",
+          message:
+            "Multiple live import journals exist for this container. Reconcile them before changing supplier or goods value.",
         });
       }
 
@@ -326,7 +334,8 @@ export function registerFactoryContainerUpdateRoutes(app: Express) {
       if (freightNeedsSync && existingFreightVouchers.length > 1) {
         return res.status(409).json({
           code: "FACTORY_FREIGHT_DUPLICATE_JOURNALS",
-          message: "Multiple live freight journals exist for this container. Reconcile them before changing freight or its supplier.",
+          message:
+            "Multiple live freight journals exist for this container. Reconcile them before changing freight or its supplier.",
         });
       }
       const existingFV = existingFreightVouchers[0];
@@ -360,7 +369,9 @@ export function registerFactoryContainerUpdateRoutes(app: Express) {
           const goodsValue = toMoney(updated.totalKg).times(toMoney(updated.ratePerKg));
           if (goodsValue.lessThanOrEqualTo(0) || !updated.supplierId) {
             if (existingImports.length > 0) {
-              throw new Error("A posted goods-import journal cannot lose its purchase supplier or goods amount. Use an audited reversal.");
+              throw new Error(
+                "A posted goods-import journal cannot lose its purchase supplier or goods amount. Use an audited reversal."
+              );
             }
           } else {
             const goodsCcy = updated.currencyCode || "USD";
@@ -373,17 +384,27 @@ export function registerFactoryContainerUpdateRoutes(app: Express) {
                 .where(eq(voucherEntries.voucherId, importVoucher.id));
               const debitLines = importEntries.filter((line) => toMoney(line.debitAmount).greaterThan(0));
               const creditLines = importEntries.filter((line) => toMoney(line.creditAmount).greaterThan(0));
-              if (importEntries.length !== 2 || debitLines.length !== 1 || creditLines.length !== 1
-                  || !debitLines[0].ledgerAccountId || !creditLines[0].factorySupplierId) {
+              if (
+                importEntries.length !== 2 ||
+                debitLines.length !== 1 ||
+                creditLines.length !== 1 ||
+                !debitLines[0].ledgerAccountId ||
+                !creditLines[0].factorySupplierId
+              ) {
                 throw new Error("Import journal has an unexpected entry shape. Review its postings before editing.");
               }
               // A non-USD legacy voucher lacks the historical native/base record.
               // Do not rewrite such history with today's or the container's
               // currently displayed rate; it requires the reviewed FX repair.
-              if (goodsCcy !== "USD" && importEntries.some((line) =>
-                !line.transactionCurrency || line.baseDebitAmount == null || line.baseCreditAmount == null
-              )) {
-                throw new Error("This import journal has unconverted historical FX entries. Review and repair its original rate before changing the goods posting.");
+              if (
+                goodsCcy !== "USD" &&
+                importEntries.some(
+                  (line) => !line.transactionCurrency || line.baseDebitAmount == null || line.baseCreditAmount == null
+                )
+              ) {
+                throw new Error(
+                  "This import journal has unconverted historical FX entries. Review and repair its original rate before changing the goods posting."
+                );
               }
               const normalizedDr = normFactoryEntry(goodsCcy, goodsValue.toFixed(), "0", goodsFx);
               const normalizedCr = normFactoryEntry(goodsCcy, "0", goodsValue.toFixed(), goodsFx);
@@ -396,26 +417,32 @@ export function registerFactoryContainerUpdateRoutes(app: Express) {
                   actor: { userId: req.session.userId, username: req.session.username },
                 },
                 async () => {
-                  await tx.update(vouchers).set({
-                    totalAmount: goodsValue.toFixed(2),
-                    currency: goodsCcy,
-                    exchangeRate: String(goodsFx),
-                  }).where(eq(vouchers.id, importVoucher.id));
-                  await tx.update(voucherEntries).set(normalizedDr)
-                    .where(eq(voucherEntries.id, debitLines[0].id));
-                  await tx.update(voucherEntries).set({
-                    ...normalizedCr,
-                    factorySupplierId: updated.supplierId,
-                    ledgerAccountId: null,
-                  }).where(eq(voucherEntries.id, creditLines[0].id));
+                  await tx
+                    .update(vouchers)
+                    .set({
+                      totalAmount: goodsValue.toFixed(2),
+                      currency: goodsCcy,
+                      exchangeRate: String(goodsFx),
+                    })
+                    .where(eq(vouchers.id, importVoucher.id));
+                  await tx.update(voucherEntries).set(normalizedDr).where(eq(voucherEntries.id, debitLines[0].id));
+                  await tx
+                    .update(voucherEntries)
+                    .set({
+                      ...normalizedCr,
+                      factorySupplierId: updated.supplierId,
+                      ledgerAccountId: null,
+                    })
+                    .where(eq(voucherEntries.id, creditLines[0].id));
                 }
               );
             } else {
               // Historical documents must not acquire a new liability merely
               // because a user edits a container. Require the audited,
               // explicitly-selected backfill workflow instead.
-              throw new Error("This container has no goods-import journal. Review it in the import-credit backfill preview and post the missing journal explicitly before editing its goods or supplier.");
-
+              throw new Error(
+                "This container has no goods-import journal. Review it in the import-credit backfill preview and post the missing journal explicitly before editing its goods or supplier."
+              );
             }
           }
         }

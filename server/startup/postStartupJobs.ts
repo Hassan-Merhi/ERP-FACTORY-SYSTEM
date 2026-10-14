@@ -36,9 +36,8 @@ export function runPostStartupJobs(): void {
   if (process.env.ERP_RECONCILE_SUPPLIERS_20261014 === "company-12-approved-87") {
     const supplierTimer = setTimeout(async () => {
       try {
-        const { reconcileFactorySuppliers20261014 } = await import(
-          "../../scripts/reconcile-factory-suppliers-20261014"
-        );
+        const { reconcileFactorySuppliers20261014 } =
+          await import("../../scripts/reconcile-factory-suppliers-20261014");
         await reconcileFactorySuppliers20261014(true);
         logger.info("[SupplierRepair] Historical factory supplier journals completed");
       } catch (error: unknown) {
@@ -54,9 +53,8 @@ export function runPostStartupJobs(): void {
   if (process.env.ERP_RECONCILE_FACTORY_HISTORICAL_FX_20261014 === "company-12-eur-118-aud-075") {
     const fixedFxRepairTimer = setTimeout(async () => {
       try {
-        const { reconcileFixedFactoryHistoricalFx20261014 } = await import(
-          "../../scripts/reconcile-fixed-factory-historical-fx-20261014"
-        );
+        const { reconcileFixedFactoryHistoricalFx20261014 } =
+          await import("../../scripts/reconcile-fixed-factory-historical-fx-20261014");
         const result = await reconcileFixedFactoryHistoricalFx20261014();
         logger.info("[FactoryFxRepair] Fixed EUR/AUD historical reconciliation finished", result);
       } catch (error: unknown) {
@@ -73,9 +71,8 @@ export function runPostStartupJobs(): void {
   if (process.env.ERP_REPAIR_SUPPLIER_PAYMENTS_20261014 === "company-12-confirmed-links") {
     const paymentLinkTimer = setTimeout(async () => {
       try {
-        const { repairSupplierPaymentDaybookLinks20261014 } = await import(
-          "../../scripts/repair-supplier-payment-daybook-links-20261014"
-        );
+        const { repairSupplierPaymentDaybookLinks20261014 } =
+          await import("../../scripts/repair-supplier-payment-daybook-links-20261014");
         const changed = await repairSupplierPaymentDaybookLinks20261014();
         logger.info("[SupplierPaymentLinks] Historical daybook references reconciled", { count: changed });
       } catch (error: unknown) {
@@ -121,16 +118,25 @@ export function runPostStartupJobs(): void {
         pool.query(`SELECT COUNT(*) AS n FROM user_company_roles WHERE role = 'POS'`),
         pool.query(`SELECT COUNT(*) AS n FROM user_company_roles WHERE role = 'POS' AND pos_station IS NOT NULL`),
         pool.query(`SELECT COUNT(*) AS n FROM user_company_roles WHERE role = 'Normal User'`),
-        pool.query(`SELECT COUNT(*) AS n FROM user_company_roles WHERE role IN ('POS1','POS2','POS3','POS4','POS5','POS6','User')`),
-        pool.query(`SELECT COUNT(*) AS n FROM information_schema.columns WHERE table_name = 'user_company_roles' AND column_name = 'can_delete_records'`),
+        pool.query(
+          `SELECT COUNT(*) AS n FROM user_company_roles WHERE role IN ('POS1','POS2','POS3','POS4','POS5','POS6','User')`
+        ),
+        pool.query(
+          `SELECT COUNT(*) AS n FROM information_schema.columns WHERE table_name = 'user_company_roles' AND column_name = 'can_delete_records'`
+        ),
       ]);
       const posCount = parseInt(posRows.rows[0]?.n ?? "0", 10);
       const posWithStn = parseInt(posWithStation.rows[0]?.n ?? "0", 10);
       const normalCount = parseInt(normalUserRows.rows[0]?.n ?? "0", 10);
       const oldRoleCount = parseInt(oldRoleRows.rows[0]?.n ?? "0", 10);
       const canDeleteOk = parseInt(canDeleteCol.rows[0]?.n ?? "0", 10) > 0;
-      logger.info(`[MigrationDiag] POS roles: ${posCount} (${posWithStn} with pos_station set) | Normal User roles: ${normalCount} | Old roles remaining: ${oldRoleCount} | can_delete_records column: ${canDeleteOk ? "✓ present" : "✗ MISSING"}`);
-      if (oldRoleCount > 0) logger.warn(`[MigrationDiag] ⚠️  ${oldRoleCount} row(s) still have old roles (POS1–POS6 or User) — check /api/admin/deployment-diagnostics`);
+      logger.info(
+        `[MigrationDiag] POS roles: ${posCount} (${posWithStn} with pos_station set) | Normal User roles: ${normalCount} | Old roles remaining: ${oldRoleCount} | can_delete_records column: ${canDeleteOk ? "✓ present" : "✗ MISSING"}`
+      );
+      if (oldRoleCount > 0)
+        logger.warn(
+          `[MigrationDiag] ⚠️  ${oldRoleCount} row(s) still have old roles (POS1–POS6 or User) — check /api/admin/deployment-diagnostics`
+        );
     } catch (e: unknown) {
       logger.warn("[MigrationDiag] Could not run startup diagnostic:", { error: getErrorMessage(e) });
     }
