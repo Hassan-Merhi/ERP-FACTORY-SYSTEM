@@ -170,6 +170,26 @@ export function registerRawStockOffloadRoutes(app: Express) {
       const additionalChargesArr = Array.isArray(reqAdditionalCharges) ? reqAdditionalCharges : [];
       const dutyVal = reqDutyStatus === "CONFIRMED" ? requestNumber(reqDutyAmount || "0") : 0;
       const dutyStatus = reqDutyStatus || "NONE";
+      // Every positive offload charge must have a real double-entry
+      // counterparty. Never save costs/daybook only while silently omitting the
+      // ledger journal. For duties the chosen account is the credit account.
+      if (freightVal > 0 && !reqFreightAccountId && !effectiveFreightSupplierId) {
+        return res.status(400).json({ message: "Select the freight supplier or paying account before offloading." });
+      }
+      if (otherChargesVal > 0 && !reqOtherChargesAccountId && !reqOtherChargesSupplierId) {
+        return res.status(400).json({ message: "Select the other-charges supplier or paying account before offloading." });
+      }
+      if (dutyVal > 0 && !reqDutyAccountId) {
+        return res.status(400).json({ message: "Select the duty payment account before confirming duties and offloading." });
+      }
+      for (const extra of additionalChargesArr) {
+        const amount = parseMoneyInput(extra?.amount);
+        if (amount?.greaterThan(0) && Number(Boolean(extra.ledgerAccountId)) + Number(Boolean(extra.supplierId)) !== 1) {
+          return res.status(400).json({
+            message: "Each positive additional charge needs exactly one paying account or supplier.",
+          });
+        }
+      }
 
       // ── Commission computation (DB insert deferred into the transaction) ──────
       let commissionRecord: typeof factoryContainerCommissions.$inferSelect | null = null;
@@ -691,6 +711,38 @@ export function registerRawStockOffloadRoutes(app: Express) {
                     credit: otherChargesAmount,
                     narration: `Other charges paid via own account - container ${container.containerNumber}`,
                   },
+            ],
+          });
+        }
+
+        // 9b. Duty is a real accounting event, not merely a daybook cost.
+        // The duty amount is recorded in the container currency and historical
+        // offload FX rate. The selected duty account is the credit counterparty.
+        // This remains atomic with offload cost, stock and any other journals.
+        if (dutyVal > 0) {
+          await postFactoryVoucherTx(tx, {
+            companyId,
+            voucherNumber: `FACTORY-DUTY-${containerId}-${receiptId}`,
+            voucherDate: offloadDate,
+            description: `Duty on container ${container.containerNumber}`,
+            currency: currencyCode,
+            fxRateToUsd: fxRateText,
+            source: {
+              sourceType: "factory-offload-duty",
+              sourceId: `${containerId}:${receiptId}`,
+              phase: "duty",
+            },
+            lines: [
+              {
+                ledgerAccountId: chargesPayableAcctId,
+                debit: String(dutyVal),
+                narration: `Duty incurred - container ${container.containerNumber}`,
+              },
+              {
+                ledgerAccountId: parseInt(reqDutyAccountId),
+                credit: String(dutyVal),
+                narration: `Duty paid or payable through account - container ${container.containerNumber}`,
+              },
             ],
           });
         }
