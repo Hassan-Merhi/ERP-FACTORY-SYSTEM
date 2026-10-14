@@ -218,7 +218,7 @@ export function registerFactoryContainerDeleteRoutes(app: Express) {
         const approvedRate = useFixedHistoricalRates
           ? FACTORY_APPROVED_HISTORICAL_RATES[code as keyof typeof FACTORY_APPROVED_HISTORICAL_RATES]
           : undefined;
-        let rate = approvedRate ?? null;
+        let rate: string | null = approvedRate ?? null;
         let repairable = true;
         if (!rate) {
           try {
