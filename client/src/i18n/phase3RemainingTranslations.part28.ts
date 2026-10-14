@@ -525,4 +525,14 @@ export const phase3RemainingTranslationsPart28: readonly Phase3SharedUiEntry[] =
     ar: "تعذّر تحميل تفاصيل دفعة الخلط",
     fr: "Impossible de charger les détails du lot de mélange",
   },
+  {
+    en: "Unable to load the recorded sources for this mix batch.",
+    ar: "تعذّر تحميل المصادر المسجّلة لدفعة الخلط هذه.",
+    fr: "Impossible de charger les sources enregistrées de ce lot de mélange.",
+  },
+  {
+    en: "Unable to load this mix batch's details. Please try again.",
+    ar: "تعذّر تحميل تفاصيل دفعة الخلط هذه. يُرجى المحاولة مرة أخرى.",
+    fr: "Impossible de charger les détails de ce lot de mélange. Veuillez réessayer.",
+  },
 ];
