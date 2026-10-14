@@ -1,4 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import type { FactoryMixBatch } from "@shared/schema";
+import { EditMixBatchDialog } from "@/components/EditMixBatchDialog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -46,6 +50,20 @@ export function ProductionTabPanel({ report }: { report: DailyProductionReportSt
     valuationMode,
     setValuationMode,
   } = report;
+  const [selectedMixBatchId, setSelectedMixBatchId] = useState<number | null>(null);
+  const {
+    data: selectedMixBatch,
+    isError: selectedMixBatchError,
+  } = useQuery<FactoryMixBatch>({
+    queryKey: ["/api/factory/mix-batches", selectedMixBatchId],
+    queryFn: async () => {
+      const res = await fetch(`/api/factory/mix-batches/${selectedMixBatchId}`, { credentials: "include" });
+      if (!res.ok) throw new Error("Unable to load mix batch details");
+      return res.json();
+    },
+    enabled: selectedMixBatchId !== null,
+    staleTime: 30_000,
+  });
   const { data: currentUser } = useQuery<AuthMe>({ queryKey: ["/api/auth/me"] });
   const effectiveRole = currentUser?.currentRole ?? currentUser?.role ?? "";
   const isOwner = effectiveRole === "Owner";
@@ -659,8 +677,22 @@ export function ProductionTabPanel({ report }: { report: DailyProductionReportSt
                 </TableHeader>
                 <TableBody>
                   {data.rawMaterial.batches.map((b) => (
-                    <TableRow key={b.id} data-testid={`row-batch-${b.id}`}>
-                      <TableCell className="font-mono text-sm">{b.batchCode}</TableCell>
+                    <TableRow
+                      key={b.id}
+                      data-testid={`row-batch-${b.id}`}
+                      className="cursor-pointer hover:bg-muted/50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+                      role="button"
+                      tabIndex={0}
+                      aria-label={`View mix batch ${b.batchCode} details`}
+                      onClick={() => setSelectedMixBatchId(b.id)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          setSelectedMixBatchId(b.id);
+                        }
+                      }}
+                    >
+                      <TableCell className="font-mono text-sm text-primary hover:underline">{b.batchCode}</TableCell>
                       <TableCell className="text-sm text-muted-foreground">{b.name || "—"}</TableCell>
                       <TableCell className="text-sm text-muted-foreground">
                         {b.batchDate || b.createdAt?.slice(0, 10) || "—"}
@@ -702,6 +734,16 @@ export function ProductionTabPanel({ report }: { report: DailyProductionReportSt
           )}
         </ExpandableCard>
       </TabsContent>
+      <EditMixBatchDialog
+        batch={selectedMixBatch ?? null}
+        open={selectedMixBatchId !== null}
+        onOpenChange={(open) => {
+          if (!open) setSelectedMixBatchId(null);
+        }}
+        readOnly
+        hideCosts={costsHidden || (isOwner && valuationMode !== "cost")}
+        errorMessage={selectedMixBatchError ? "Unable to load this mix batch's details. Please try again." : null}
+      />
     </>
   );
 }
