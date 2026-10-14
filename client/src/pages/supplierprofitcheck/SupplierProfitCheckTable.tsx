@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from "react";
 import { Package } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -205,6 +206,64 @@ function ProfitRow({ row, index, model }: { row: ComputedRow; index: number; mod
   );
 }
 
+/**
+ * Keep the typed price local until editing finishes. Profit Check filters on
+ * calculated status, so applying the first digit immediately can remove the
+ * entire row from the "No Data" view before the user finishes typing.
+ * Blur (including Arrow navigation and Enter) commits the complete value.
+ */
+function CommittedPriceInput({
+  value,
+  onCommit,
+  model,
+  navigationAttr,
+  placeholder,
+  className,
+  testId,
+}: {
+  value: string;
+  onCommit: (value: string) => void;
+  model: ProfitModel;
+  navigationAttr: "data-avg-input" | "data-po-input";
+  placeholder: string;
+  className: string;
+  testId: string;
+}) {
+  const [draft, setDraft] = useState(value);
+  const isEditing = useRef(false);
+
+  useEffect(() => {
+    if (!isEditing.current) setDraft(value);
+  }, [value]);
+
+  return (
+    <Input
+      type="number"
+      min="0"
+      step="0.01"
+      placeholder={placeholder}
+      value={draft}
+      onFocus={() => { isEditing.current = true; }}
+      onChange={(event) => setDraft(event.target.value)}
+      onBlur={() => {
+        isEditing.current = false;
+        if (draft !== value) onCommit(draft);
+      }}
+      onKeyDown={(event) => {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          event.currentTarget.blur();
+        } else {
+          model.handleArrowNav(event, navigationAttr);
+        }
+      }}
+      className={className}
+      data-testid={testId}
+      {...{ [navigationAttr]: "true" }}
+    />
+  );
+}
+
 function AverageSellCell({ row, model }: { row: ComputedRow; model: ProfitModel }) {
   return (
     <TableCell className="text-right text-sm font-medium py-2.5">
@@ -231,17 +290,14 @@ function AverageSellValue({ row, model }: { row: ComputedRow; model: ProfitModel
   }
   return (
     <div className="flex flex-col items-end gap-0.5">
-      <Input
-        type="number"
-        min="0"
-        step="0.01"
-        placeholder={row.avgSellingPrice != null ? fmt(row.avgSellingPrice) : "—"}
+      <CommittedPriceInput
         value={model.manualAvgPrices[row.stockItemId] ?? ""}
-        onChange={(event) => model.handleManualAvgChange(row.stockItemId, event.target.value)}
-        onKeyDown={(event) => model.handleArrowNav(event, "data-avg-input")}
+        onCommit={(value) => model.handleManualAvgChange(row.stockItemId, value)}
+        model={model}
+        navigationAttr="data-avg-input"
+        placeholder={row.avgSellingPrice != null ? fmt(row.avgSellingPrice) : "—"}
         className="h-7 w-20 text-right text-xs px-1.5 font-mono [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-        data-testid={`input-manual-avg-price-${row.stockItemId}`}
-        data-avg-input="true"
+        testId={`input-manual-avg-price-${row.stockItemId}`}
       />
       {model.manualAvgPrices[row.stockItemId] && row.avgSellingPrice != null && (
         <span className="text-[11px] text-muted-foreground leading-tight">auto ${fmt(row.avgSellingPrice)}</span>
@@ -274,17 +330,14 @@ function DubaiPriceValue({ row, model }: { row: ComputedRow; model: ProfitModel 
     <div className="flex flex-col items-end gap-0.5">
       <div className="flex items-center justify-end gap-1">
         <span className="text-muted-foreground text-xs">$</span>
-        <Input
-          type="number"
-          min="0"
-          step="0.01"
-          placeholder={row.poPrice != null ? fmt(row.poPrice) : "—"}
+        <CommittedPriceInput
           value={model.manualPoPrices[row.stockItemId] ?? ""}
-          onChange={(event) => model.handleManualPoChange(row.stockItemId, event.target.value)}
-          onKeyDown={(event) => model.handleArrowNav(event, "data-po-input")}
+          onCommit={(value) => model.handleManualPoChange(row.stockItemId, value)}
+          model={model}
+          navigationAttr="data-po-input"
+          placeholder={row.poPrice != null ? fmt(row.poPrice) : "—"}
           className="h-7 w-20 text-right text-xs px-1.5 font-mono border-amber-300 dark:border-amber-700 focus-visible:ring-amber-400 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-          data-testid={`input-manual-po-price-${row.stockItemId}`}
-          data-po-input="true"
+          testId={`input-manual-po-price-${row.stockItemId}`}
         />
       </div>
       {model.manualPoPrices[row.stockItemId] && row.poPrice != null && (
