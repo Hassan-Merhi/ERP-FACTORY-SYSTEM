@@ -273,7 +273,8 @@ export function registerRawStockReverseOffloadRoute(app: Express) {
               or(
                 ilike(vouchers.voucherNumber, `FACTORY-COMM-${containerId}-%`),
                 ilike(vouchers.voucherNumber, `FACTORY-FREIGHT-${containerId}-%`),
-                ilike(vouchers.voucherNumber, `FACTORY-OC-${containerId}-%`)
+                ilike(vouchers.voucherNumber, `FACTORY-OC-${containerId}-%`),
+                ilike(vouchers.voucherNumber, `FACTORY-DUTY-${containerId}-%`)
               )
             )
           );
