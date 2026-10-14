@@ -6,6 +6,7 @@ import { factoryContainers } from "@shared/schema";
 import type Decimal from "decimal.js";
 import { MoneyDecimal, toMoney } from "../../../lib/money";
 import { getFactoryBalanceOnTableSnapshot } from "../../../services/factory/productionBalanceOnTable";
+import { getLockedSupplierRatesReadOnlyBulk } from "../../../services/factory/rawStockLockedRateBulk";
 
 const ZERO = new MoneyDecimal(0);
 /** A numeric column from a raw query row, exactly (missing or unparsable is zero). */
@@ -275,12 +276,24 @@ export async function computeNetPositionInventory(ctx: NetPositionInventoryConte
   // AFTER rounding freeKg to three decimals. The Raw Materials page sums those
   // displayed row values; rounding one grand total can differ by $0.01+.
   // Mirror the source row boundaries instead of re-rounding the sum.
+  const missingSupplierRateIds = [...supMap.keys()]
+    .filter((key) => key.startsWith("s"))
+    .map((key) => Number(key.slice(1)))
+    .filter((id) => Number.isInteger(id) && !ctx.supplierLockedRateMapNp.has(id));
+  // The Raw Materials page also resolves legacy NULL locked rates instead of
+  // falling back to a different receipt-derived net-position valuation.
+  const legacyRates = missingSupplierRateIds.length
+    ? await getLockedSupplierRatesReadOnlyBulk(db, ctx.companyId, missingSupplierRateIds)
+    : new Map<number, number>();
+
   let rawTotal: Decimal = ZERO;
   for (const [key, stock] of supMap.entries()) {
-    const supplierId = key.startsWith("s") ? parseInt(key.slice(1)) : null;
-    const lockedRate = supplierId !== null ? ctx.supplierLockedRateMapNp.get(supplierId) : undefined;
-    const rowValue = lockedRate !== undefined
-      ? toMoney(stock.recv.minus(stock.used).toFixed(3)).times(toMoney(lockedRate))
+    const supplierId = key.startsWith("s") ? Number(key.slice(1)) : null;
+    const lockedRate = supplierId !== null
+      ? toMoney(ctx.supplierLockedRateMapNp.get(supplierId) ?? legacyRates.get(supplierId) ?? 0)
+      : null;
+    const rowValue = lockedRate !== null
+      ? toMoney(stock.recv.minus(stock.used).toFixed(3)).times(lockedRate)
       : stock.remValUsd;
     rawTotal = rawTotal.plus(rowValue.toDecimalPlaces(2, MoneyDecimal.ROUND_HALF_UP));
   }
