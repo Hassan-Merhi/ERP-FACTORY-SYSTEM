@@ -116,6 +116,7 @@ export function useStockTransferFormModel({ voucherIdToEdit, isPOS, posUser }: S
   const {
     fields: transferFields,
     append: appendTransfer,
+    replace: replaceTransfer,
     remove: removeTransfer,
   } = useFieldArray({
     control: stockTransferForm.control,
@@ -154,6 +155,7 @@ export function useStockTransferFormModel({ voucherIdToEdit, isPOS, posUser }: S
   const [transferQtyDraft, setTransferQtyDraft] = useState<Record<number | string, string>>({});
 
   const [importDialogOpen, setImportDialogOpen] = useState(false);
+  const [posImportDialogOpen, setPosImportDialogOpen] = useState(false);
   const [importFile, setImportFile] = useState<File | null>(null);
   const [importPreview, setImportPreview] = useState<{
     items: { rowNum: number; barcode: string; quantity: number; sourceLocation?: string }[];
@@ -789,6 +791,7 @@ export function useStockTransferFormModel({ voucherIdToEdit, isPOS, posUser }: S
     stockTransferForm,
     transferFields,
     appendTransfer,
+    replaceTransfer,
     removeTransfer,
     transferEntries,
     transferTotal,
@@ -828,6 +831,8 @@ export function useStockTransferFormModel({ voucherIdToEdit, isPOS, posUser }: S
     approveRevisionMutation,
     importDialogOpen,
     setImportDialogOpen,
+    posImportDialogOpen,
+    setPosImportDialogOpen,
     importFile,
     importPreview,
     importValidationResult,
