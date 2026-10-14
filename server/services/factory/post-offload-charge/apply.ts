@@ -166,6 +166,17 @@ export async function applyPostOffloadChargeMutation(
   if (action === "CREATE") {
     const { chargeData, accountingCtx } = params;
     if (!chargeData) throw new Error("chargeData is required for CREATE");
+    // Fail closed before any inventory costing or charge is saved. A charge
+    // without both sides of its ledger posting would otherwise become a
+    // permanent unposted financial operation.
+    if (
+      !accountingCtx ||
+      accountingCtx.voucherCompanyId !== companyId ||
+      accountingCtx.chargesPayableAcctId <= 0 ||
+      Number(Boolean(chargeData.ledgerAccountId)) + Number(Boolean(chargeData.supplierId)) !== 1
+    ) {
+      throw new Error("Post-offload charge requires exactly one company-owned expense account or supplier and a valid payable account.");
+    }
 
     // Compute OLD canonical cost
     const activeCharges = await loadActiveCharges(tx, companyId, containerId);
@@ -253,9 +264,10 @@ export async function applyPostOffloadChargeMutation(
       }),
     });
 
-    // Write voucher if accounting context is provided
+    // The journal is mandatory and part of the charge/cost transaction.
+    // A posting failure rolls the charge and all costing changes back.
     let voucherId: number | null = null;
-    if (accountingCtx && accountingCtx.chargesPayableAcctId > 0) {
+    {
       const { voucherCompanyId, chargesPayableAcctId } = accountingCtx;
       // Phase 22 (C): through the engine with the charge's posting identity; the
       // FACTORY-POC-{container}-{charge}- family number is read by
@@ -341,6 +353,14 @@ export async function applyPostOffloadChargeMutation(
     const { chargeId, chargeData, accountingCtx, expectedVersion } = params;
     if (!chargeId) throw new Error("chargeId is required for EDIT");
     if (!chargeData) throw new Error("chargeData is required for EDIT");
+    if (
+      !accountingCtx ||
+      accountingCtx.voucherCompanyId !== companyId ||
+      accountingCtx.chargesPayableAcctId <= 0 ||
+      Number(Boolean(chargeData.ledgerAccountId)) + Number(Boolean(chargeData.supplierId)) !== 1
+    ) {
+      throw new Error("Charge editing requires a valid same-company ledger destination; no unposted charge changes are permitted.");
+    }
 
     // Lock the charge row FOR UPDATE
     const [rawCharge] = await tx
