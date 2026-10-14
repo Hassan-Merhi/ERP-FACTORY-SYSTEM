@@ -191,8 +191,24 @@ async function customerMemoRows(executor: Executor, query: MemoQuery): Promise<C
              ${invoiceDate}::text AS date,
              (COALESCE(co.grand_total, 0) - COALESCE((
                 SELECT SUM(ch.amount) FROM customer_order_charges ch
-                  JOIN vouchers cv ON cv.id = ch.voucher_id AND cv.company_id = co.company_id
+                  JOIN vouchers cv ON cv.company_id = co.company_id
                                   AND cv.deleted_at IS NULL AND cv.optional = false${bookedBy("cv", asOf)}
+                                  AND (
+                                    cv.id = ch.voucher_id
+                                    OR (
+                                      ch.voucher_id IS NULL
+                                      AND (
+                                        cv.voucher_number = 'CHARGE-PRE-' || co.id::text || '-' || ch.id::text
+                                        OR cv.voucher_number LIKE 'CHARGE-' || co.invoice_number || '-' || ch.id::text || '-%'
+                                      )
+                                      AND EXISTS (
+                                        SELECT 1 FROM voucher_entries ve
+                                         WHERE ve.voucher_id = cv.id
+                                           AND ve.customer_id = co.customer_id
+                                           AND ABS(COALESCE(ve.debit_amount, 0) - COALESCE(ve.credit_amount, 0) - ch.amount) < 0.005
+                                      )
+                                    )
+                                  )
                  WHERE ch.order_id = co.id
              ), 0))::text AS native,
              UPPER(COALESCE(b.currency, 'USD')) AS currency,
