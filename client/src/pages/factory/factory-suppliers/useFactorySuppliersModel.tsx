@@ -515,14 +515,17 @@ export function useFactorySuppliersModel() {
   // Summing all suppliers would count linked suppliers twice in the summary cards.
   const summarySuppliers = displayedTopLevel;
   const totalContainers = summarySuppliers.reduce((sum, supplier) => sum + (supplier.totalContainers || 0), 0);
-  // Overall USD total is explicitly a *posted ledger* aggregate; don't mix
-  // the broker's USD received pool with ordinary supplier USD payables.
-  const totalUsdOwed = summarySuppliers.reduce((sum, supplier) => {
-    const value = Number(supplier.totalValue || "0");
+  // Directory KPI aggregates the same current-rate equivalent displayed on each
+  // card. Missing FX rates make those suppliers unpriced, never zero or partial.
+  // Broker-pool signs are not equivalent to ordinary payable account signs.
+  const pricedSuppliers = summarySuppliers.filter((s) => s.usdEquivalentBalance != null);
+  const unpricedSupplierCount = summarySuppliers.length - pricedSuppliers.length;
+  const totalUsdOwed = pricedSuppliers.reduce((sum, supplier) => {
+    const value = Number(supplier.usdEquivalentBalance);
     return value > 0 ? sum + value : sum;
   }, 0);
-  const totalUsdOverpaid = summarySuppliers.reduce((sum, supplier) => {
-    const value = Number(supplier.totalValue || "0");
+  const totalUsdOverpaid = pricedSuppliers.reduce((sum, supplier) => {
+    const value = Number(supplier.usdEquivalentBalance);
     return value < 0 ? sum + Math.abs(value) : sum;
   }, 0);
   const filteredTopLevel = displayedTopLevel.filter((supplier) => {
@@ -531,12 +534,15 @@ export function useFactorySuppliersModel() {
     if (activeFilter === "with-balance")
       return isDirectoryBroker(supplier)
         ? (supplier.brokerStatementBalances || []).some((pool) => Math.abs(Number(pool.balance)) > 0.005)
-        : Math.abs(Number(supplier.totalValue || "0")) > 0.005;
+        : supplier.usdEquivalentBalance === null
+          ? (supplier.currencyBalances || []).some((b) => Math.abs(b.balance) > 0.005)
+          : Math.abs(Number(supplier.usdEquivalentBalance ?? supplier.totalValue ?? "0")) > 0.005;
     if (activeFilter === "zero-balance")
       return isDirectoryBroker(supplier)
         ? supplier.brokerStatementBalances != null &&
             supplier.brokerStatementBalances.every((pool) => Math.abs(Number(pool.balance)) <= 0.005)
-        : Math.abs(Number(supplier.totalValue || "0")) <= 0.005;
+        : supplier.usdEquivalentBalance !== null &&
+            Math.abs(Number(supplier.usdEquivalentBalance ?? supplier.totalValue ?? "0")) <= 0.005;
     if (activeFilter === "has-foreign")
       return (supplier.currencyBalances || []).some((balance) => balance.currencyCode !== "USD");
     return true;
@@ -655,6 +661,7 @@ export function useFactorySuppliersModel() {
     totalContainers,
     totalUsdOwed,
     totalUsdOverpaid,
+    unpricedSupplierCount,
     filteredTopLevel,
     isBrokerStatement,
     bulkFxPreviewMutation,
