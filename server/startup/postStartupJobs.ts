@@ -48,6 +48,23 @@ export function runPostStartupJobs(): void {
     unrefTimer(supplierTimer);
   }
 
+  // Explicitly enabled once: repair only the source references of two legacy
+  // supplier-payment daybook rows. No vouchers, payments, or balances change.
+  if (process.env.ERP_REPAIR_SUPPLIER_PAYMENTS_20261014 === "company-12-confirmed-links") {
+    const paymentLinkTimer = setTimeout(async () => {
+      try {
+        const { repairSupplierPaymentDaybookLinks20261014 } = await import(
+          "../../scripts/repair-supplier-payment-daybook-links-20261014"
+        );
+        const changed = await repairSupplierPaymentDaybookLinks20261014();
+        logger.info("[SupplierPaymentLinks] Historical daybook references reconciled", { count: changed });
+      } catch (error: unknown) {
+        logger.error("[SupplierPaymentLinks] Daybook link repair refused", { error: getErrorMessage(error) });
+      }
+    }, 12000);
+    unrefTimer(paymentLinkTimer);
+  }
+
   // Live vessel/AIS tracking is intentionally disabled. Container movement is
   // maintained manually or through Excel imports.
 
