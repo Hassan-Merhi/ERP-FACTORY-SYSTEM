@@ -17,8 +17,8 @@ jobs:
   certify:
     name: Application Certification
     runs-on: ubuntu-26.04
-    # The full sequential suite is the long pole: sixteen backend shards plain,
-    # then sixteen under coverage, then the frontend passes and the remaining
+    # The full sequential suite is the long pole: twelve backend shards plain,
+    # then twelve under coverage, then the frontend passes and the remaining
     # gates. 120 left no margin once the shard budget stopped aborting the run
     # at six minutes and the whole suite actually ran.
     timeout-minutes: 180
