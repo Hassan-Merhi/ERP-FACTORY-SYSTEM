@@ -27,6 +27,7 @@ export function StockTransferHeader({ model }: { model: StockTransferFormModel }
     transferInventorySource,
     setLocation,
     setImportDialogOpen,
+    setPosImportDialogOpen,
   } = model;
 
   return (
@@ -142,18 +143,16 @@ export function StockTransferHeader({ model }: { model: StockTransferFormModel }
           Order View
         </Button>
       )}
-      {!isPOS && (
-        <Button
+      <Button
           type="button"
           variant="outline"
           size="sm"
-          onClick={() => setImportDialogOpen(true)}
+          onClick={() => (isPOS ? setPosImportDialogOpen(true) : setImportDialogOpen(true))}
           data-testid="button-open-import-dialog"
         >
           <Upload className="h-4 w-4 mr-2" />
           Import
         </Button>
-      )}
     </div>
   );
 }
