@@ -116,6 +116,9 @@ export async function computeNetPositionInventory(ctx: NetPositionInventoryConte
   const rawResult = await db.execute(sql`
   SELECT
     fc.supplier_id,
+    -- Unassigned receipt rows appear separately per container in Raw Materials.
+    -- Preserve that row boundary so their cent rounding also matches.
+    CASE WHEN fc.supplier_id IS NULL THEN fc.id ELSE NULL END AS unattached_container_id,
     SUM(frs.received_kg::numeric)                                            AS total_recv,
     SUM(frs.used_kg::numeric)                                                AS total_used,
     -- Local cost per kg (the currency on the container, e.g. AUD, EUR) — a
@@ -140,7 +143,7 @@ export async function computeNetPositionInventory(ctx: NetPositionInventoryConte
     AND  fc.status     != 'DELETED'
     AND  frs.deleted_at IS NULL
     AND  fc.deleted_at IS NULL
-  GROUP  BY fc.supplier_id
+  GROUP  BY fc.supplier_id, CASE WHEN fc.supplier_id IS NULL THEN fc.id ELSE NULL END
 `);
   const rawRows = resultRows(rawResult);
 
@@ -169,7 +172,7 @@ export async function computeNetPositionInventory(ctx: NetPositionInventoryConte
   };
   const supMap = new Map<string, SupMap>();
   for (const r of rawRows) {
-    const key = r.supplier_id ? `s${r.supplier_id}` : `u`;
+    const key = r.supplier_id ? `s${r.supplier_id}` : `u-${r.unattached_container_id}`;
     const recv = col(r.total_recv);
     const used = col(r.total_used);
     const cpkLocal = col(r.avg_cpk_local);
