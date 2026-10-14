@@ -206,7 +206,8 @@ export function registerAccountingIntegrityRoutes(app: Express) {
     try {
       const companyId = req.session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });
-      res.json(await planFactoryFxLegacyRepair(companyId));
+      const useFixedHistoricalRates = req.query.fixedRates === "1";
+      res.json(await planFactoryFxLegacyRepair(companyId, db, useFixedHistoricalRates));
     } catch (error: unknown) {
       res.status(500).json({ message: getErrorMessage(error) });
     }
@@ -228,9 +229,13 @@ export function registerAccountingIntegrityRoutes(app: Express) {
           code: "FACTORY_FX_REPAIR_PLAN_HASH_REQUIRED",
         });
       }
+      // The fixed rates are an explicit, auditable choice, never a default
+      // applied to unrelated companies or current ordinary accounting.
+      const useFixedHistoricalRates = req.body?.fixedRates === true;
       const plan = await applyFactoryFxLegacyRepair(companyId, {
         actor: { userId: req.session.userId!, username: req.session.username || "unknown" },
         expectedPlanHash,
+        useFixedHistoricalRates,
       });
       res.json(plan);
     } catch (error: unknown) {
