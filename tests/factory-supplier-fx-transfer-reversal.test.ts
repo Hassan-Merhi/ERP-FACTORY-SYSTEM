@@ -39,7 +39,7 @@ afterAll(async () => {
   closeTestServer();
 }, 60000);
 
-describe("supplier FX transfer creation and reversible accounting", () => {
+describe("supplier FX transfer creation and reversible accounting /api/factory/supplier-fx-transfers/:id", () => {
   it("posts balanced source and destination entries and retires the voucher on reversal", async () => {
     const response = await agent.post("/api/factory/supplier-fx-transfers").send({
       fromSupplierId: sourceSupplier, toSupplierId: destinationSupplier,
