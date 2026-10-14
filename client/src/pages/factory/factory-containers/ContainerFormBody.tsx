@@ -26,6 +26,7 @@ type FormData = {
   freightCurrencyCode: string;
   freightAccountId: string;
   freightPaidBy: "supplier" | "own";
+  freightSupplierId: string;
   freightOwnAccountId: string;
   otherCharges: string;
   otherChargesAccountId: string;
@@ -482,6 +483,35 @@ export function ContainerFormBody({
                 Own Account
               </Button>
             </div>
+            {formData.freightPaidBy === "supplier" && (
+              <div>
+                <Label>Freight Supplier (required)</Label>
+                <Select
+                  value={formData.freightSupplierId || "__none__"}
+                  onValueChange={(value) =>
+                    setFormData((current) => ({
+                      ...current,
+                      freightSupplierId: value === "__none__" ? "" : value,
+                    }))
+                  }
+                >
+                  <SelectTrigger data-testid="select-container-freight-supplier">
+                    <SelectValue placeholder="Select freight supplier..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">Select freight supplier...</SelectItem>
+                    {activeSuppliers.map((supplier) => (
+                      <SelectItem key={supplier.id} value={String(supplier.id)}>
+                        {supplier.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Freight can be payable to a different supplier than the goods purchase.
+                </p>
+              </div>
+            )}
             {formData.freightPaidBy === "own" && (
               <div>
                 <Label>
