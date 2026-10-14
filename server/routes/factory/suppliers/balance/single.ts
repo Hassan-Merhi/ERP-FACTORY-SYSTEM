@@ -109,7 +109,7 @@ export function registerSupplierBalanceSingleRoutes(app: Express) {
             balanceFxUnresolved.add(sid);
             continue; // exclude this voucher payment from the total rather than guess at 1
           }
-          usdAmt = amt.dividedBy(fx);
+          usdAmt = amt.times(fx);
         }
         voucherPaidBySupplier[sid] = (voucherPaidBySupplier[sid] ?? new MoneyDecimal(0)).plus(usdAmt);
       }
