@@ -190,7 +190,7 @@ export async function syncFactoryInvoiceTx(
        WHERE cob.order_id = ${orderId}
     `
   ) : [{ cost: "0" }];
-  const cogs = postInventoryCost ? toMoney(cost?.cost ?? 0).toDecimalPlaces(2) : ZERO;
+  const cogs = postInventoryCost ? toMoney(cost?.cost ?? 0).toDecimalPlaces(2) : new MoneyDecimal(0);
   if (receivable.isZero() && cogs.isZero()) return null;
   const currency = normalizeFactoryCurrency(order.currency);
   const rate = await findFactoryFxRateOnOrBefore(tx, companyId, currency, order.invoice_date);
