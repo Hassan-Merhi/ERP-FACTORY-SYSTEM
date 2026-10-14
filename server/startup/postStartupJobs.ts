@@ -72,10 +72,8 @@ export function runPostStartupJobs(): void {
   if (process.env.ERP_RECONCILE_SUPPLIER_FX_20261014 === "company-12-audited-56") {
     const supplierFxTimer = setTimeout(async () => {
       try {
-        const { reconcileFactorySupplierFx20261014 } = await import(
-          "../../scripts/reconcile-factory-supplier-fx-20261014"
-        );
-        await reconcileFactorySupplierFx20261014(true);
+        const fxRepair = await import("../../scripts/reconcile-factory-supplier-fx-20261014");
+        await fxRepair.reconcileFactorySupplierFx20261014(true);
         logger.info("[SupplierFxRepair] Historical supplier FX reconciliation finished");
       } catch (error: unknown) {
         logger.error("[SupplierFxRepair] Historical supplier FX reconciliation halted", {
