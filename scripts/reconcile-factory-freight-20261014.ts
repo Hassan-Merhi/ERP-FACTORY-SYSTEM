@@ -129,13 +129,13 @@ async function run(apply: boolean) {
       {
         sourceId: "89:duplicate-freight",
         number: "FACTORY-CORRECTION-20261014-89",
-        description: "Audit reversal of duplicated freight payable: CMAU8538717, original voucher 8708, retained 10015",
+        description: "Reverse duplicated EUR2290 freight payable at original 1.18: CMAU8538717, voucher 8708; retain 10015",
         lines: [
-          { factorySupplierId: 31, debit: "2702.20", narration: "Reversal of duplicate freight payable, source voucher 8708" },
-          { ledgerAccountId: 805, credit: "2702.20", narration: "Reduce duplicated freight expense, original voucher 8708" },
+          { factorySupplierId: 31, debit: "2290.00", narration: "Reverse duplicate freight payable EUR2290, USD2702.20; source 8708" },
+          { ledgerAccountId: 805, credit: "2290.00", narration: "Reverse duplicate freight expense EUR2290 at 1.18" },
         ],
-        currency: "USD",
-        rate: "1",
+        currency: "EUR",
+        rate: "1.18",
       },
       {
         sourceId: "83:charge64-legacy-extra",
