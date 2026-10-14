@@ -107,6 +107,7 @@ export function SupplierStatement({
   setFxConversionOpen,
   setFxConversionForm,
   setFxSourceType,
+  allSuppliers,
   subAccountsByParent,
   wrapAdminAction,
   deleteFxTransferMutation,
@@ -292,6 +293,8 @@ export function SupplierStatement({
           view={statementData.ledgerView}
           operationalTotal={statementData.summary.operationalNetPayable}
           formatNum={formatNum}
+          usdEquivalentBalance={allSuppliers.find((supplier) => supplier.id === statementSupplierId)?.usdEquivalentBalance}
+          usdEquivalentMissingRates={allSuppliers.find((supplier) => supplier.id === statementSupplierId)?.usdEquivalentMissingRates}
         />
       )}
 
