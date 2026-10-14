@@ -181,7 +181,7 @@ export function FactorySuppliersDirectory({ model }: { model: SuppliersModel }) 
                       </div>
                     ) : (
                       <div className="font-semibold text-sm tabular-nums" data-testid={`text-directory-usd-equivalent-${supplier.id}`}>
-                        ${usdEquivalent < 0 ? "-" : ""}${model.formatNum(Math.abs(usdEquivalent).toFixed(2))}
+                        {usdEquivalent < 0 ? "-$" : "$"}{model.formatNum(Math.abs(usdEquivalent).toFixed(2))}
                       </div>
                     )}
                     {/* Show the distinct broker pool/foreign sections without merging linked suppliers. */}
@@ -249,7 +249,7 @@ export function FactorySuppliersDirectory({ model }: { model: SuppliersModel }) 
                         ? "FX rate missing"
                         : Math.abs(balanceValue) <= 0.005
                           ? "$—"
-                          : `${model.formatNum(Math.abs(balanceValue).toFixed(2))}${balanceValue < 0 ? " DR" : " CR"}`}
+                          : `$${model.formatNum(Math.abs(balanceValue).toFixed(2))}${balanceValue < 0 ? " DR" : " CR"}`}
                     </div>
                     {usdEquivalent === null && (
                       <div className="text-[11px] text-amber-600" role="alert">
