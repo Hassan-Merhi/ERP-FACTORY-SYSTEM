@@ -196,7 +196,7 @@ export function registerFactoryContainerDeleteRoutes(app: Express) {
 
   // Read-only, company-scoped preview for the historical import-credit repair.
   // Historic records must never be posted merely because someone loads a page.
-  app.get("/api/factory/containers/backfill-import-credits", requireAuth, async (req: Request, res: Response) => {
+  app.get("/api/factory/container-import-credit-preview", requireAuth, async (req: Request, res: Response) => {
     try {
       if (!checkFactoryAdmin(req, res)) return;
       const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
