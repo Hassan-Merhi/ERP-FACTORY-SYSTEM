@@ -13,7 +13,8 @@ import { sql } from "drizzle-orm";
 import { db, pool, type DbTransaction } from "../server/db";
 import { MoneyDecimal, toMoney } from "../server/lib/money";
 import { getPartyBalance } from "../server/services/accounting/balances/ledgerBalanceEngine";
-import { syncFactoryInvoiceTx } from "../server/services/accounting/perpetualInventory/factoryInvoice";
+import { customerLedgerAccountTx, syncFactoryInvoiceTx } from "../server/services/accounting/perpetualInventory/factoryInvoice";
+import { finalizedChargeVoucherNumber, postOrderChargeVoucherTx } from "../server/routes/factory/customer-orders/orderChargeLedger";
 import {
   createTenantDatabaseScope,
   runWithDatabaseScopeRuntimeContext,
@@ -114,7 +115,12 @@ async function run() {
     if (invoice.currency_code !== "USD") reasons.push("non-USD: verify historical FX");
     if (!Number.isInteger(Number(invoice.cache_count)) || Number(invoice.cache_count) !== 1 ||
       !toMoney(invoice.cache_total).eq(toMoney(invoice.gross))) reasons.push("invoice cache mismatch");
-    if (toMoney(invoice.unlinked_positive_charges).greaterThan(0))
+    const gatePassException =
+      invoice.id === 99 && invoice.customer_id === 36 &&
+      invoice.invoice_number === "INV-011883" &&
+      invoice.unlinked_charge_ids === "75" &&
+      toMoney(invoice.unlinked_positive_charges).eq("533.50");
+    if (toMoney(invoice.unlinked_positive_charges).greaterThan(0) && !gatePassException)
       reasons.push(`unposted charge(s) #${invoice.unlinked_charge_ids}`);
     if (toMoney(invoice.already_posted_charges).greaterThan(toMoney(invoice.gross)))
       reasons.push("posted charges exceed invoice");
@@ -146,6 +152,45 @@ async function run() {
       });
       if (!before) throw new Error(`Missing customer ${invoice.customer_id}`);
       const beforeTotal = toMoney(before.closing).plus(toMoney(before.memoTotal));
+      let newlyPostedCharge = new MoneyDecimal(0);
+      if (invoice.id === 99) {
+        // Gate Pass #75 is deliberately linked to SURCHARGE account #872.
+        // Reuse the recorded account (as other surcharge charges do), but do
+        // not let this amount become factory-bale sales revenue.
+        const chargeRow = await tx.execute(sql`
+          SELECT ch.id, ch.order_id, ch.amount, ch.voucher_id, ch.ledger_account_id,
+                 la.company_id AS account_company_id, la.deleted_at AS account_deleted_at
+            FROM customer_order_charges ch
+            JOIN ledger_accounts la ON la.id = ch.ledger_account_id
+           WHERE ch.id = 75 AND ch.order_id = 99
+           FOR UPDATE OF ch
+        `);
+        const charge = chargeRow.rows[0];
+        if (!charge || chargeRow.rows.length !== 1 || charge.voucher_id !== null ||
+            charge.ledger_account_id !== 872 || charge.account_company_id !== COMPANY ||
+            charge.account_deleted_at !== null || !toMoney(charge.amount as string).eq("533.50")) {
+          throw new Error("Ibrahim Basma gate-pass charge #75 changed: stop for re-audit");
+        }
+        const number = finalizedChargeVoucherNumber(invoice.invoice_number, 75);
+        const found = await tx.execute(sql`
+          SELECT id FROM vouchers WHERE company_id = ${COMPANY} AND voucher_number = ${number}
+            AND deleted_at IS NULL LIMIT 1
+        `);
+        if (found.rows.length) throw new Error("Gate Pass voucher exists without link; manual review required");
+        const customerAccountId = await customerLedgerAccountTx(tx, COMPANY, invoice.customer_id);
+        await postOrderChargeVoucherTx(tx, {
+          companyId: COMPANY,
+          chargeId: 75,
+          voucherNumber: number,
+          voucherDate: invoice.invoice_date,
+          description: "GATE PASS - INV-011883 (historical reconciliation)",
+          customerId: invoice.customer_id,
+          customerLedgerAccountId: customerAccountId,
+          chargeLedgerAccountId: 872,
+          amount: "533.50",
+        });
+        newlyPostedCharge = new MoneyDecimal("533.50");
+      }
       const voucherId = await syncFactoryInvoiceTx(tx, COMPANY, invoice.id);
       if (!voucherId) throw new Error(`No invoice voucher posted for ${invoice.invoice_number}`);
       const after = await getPartyBalance(tx, {
@@ -166,7 +211,7 @@ async function run() {
         throw new Error(`Unbalanced voucher for ${invoice.invoice_number}`);
       console.log(`POSTED ${invoice.invoice_number} voucher=${voucherId} customer=${invoice.customer_name} unchanged=${afterTotal.toFixed(2)}`);
       postedCount += 1;
-      postedAmount = postedAmount.plus(toMoney(invoice.gross).minus(toMoney(invoice.already_posted_charges)));
+      postedAmount = postedAmount.plus(toMoney(invoice.gross).minus(toMoney(invoice.already_posted_charges)).minus(newlyPostedCharge));
     });
   }
   console.log(`DONE: ${postedCount} invoices posted, total receivable and revenue ${postedAmount.toFixed(2)}, ${blocked.length} exceptions not posted.`);
