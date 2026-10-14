@@ -7,6 +7,7 @@ import { getClientDate } from "../../../lib/dateUtils";
 import { resultRows } from "../../../lib/queryResult";
 import { logger } from "../../../lib/logger";
 import { MoneyDecimal, toMoney } from "../../../lib/money";
+import { getFactoryBalanceOnTableSnapshot } from "../../../services/factory/productionBalanceOnTable";
 
 type NetPositionAccount = {
   name: string;
@@ -85,34 +86,9 @@ export async function computeHistoricalOperationalValues(
   const inventorySellingValue = cents(toMoney(stockRow.total_selling as string));
   const inventoryValue = valuationMode === "selling" ? inventorySellingValue : inventoryCostValue;
 
-  const mixResult = await db.execute(sql`
-    SELECT
-      COALESCE(SUM(total_weight_kg::numeric), 0) AS total_mix_kg,
-      COALESCE(SUM(total_cost::numeric), 0) AS total_mix_cost
-    FROM factory_mix_batches
-    WHERE company_id = ${companyId}
-      AND carry_forward_from_id IS NULL
-      AND (deleted_at IS NULL OR deleted_at::date > ${asOf}::date)
-      AND COALESCE(batch_date, created_at::date) <= ${asOf}::date
-  `);
-  const mixRow = resultRows(mixResult)[0] ?? {};
-  const totalMixKg = toMoney(mixRow.total_mix_kg as string);
-  const totalMixCost = toMoney(mixRow.total_mix_cost as string);
-  const blendedCpk = totalMixKg.greaterThan(0) ? totalMixCost.dividedBy(totalMixKg) : new MoneyDecimal(0);
-
-  const baleResult = await db.execute(sql`
-    SELECT COALESCE(SUM(b.weight_kg::numeric), 0) AS total_bale_kg
-    FROM factory_bales b
-    WHERE b.company_id = ${companyId}
-      AND COALESCE(b.stock_entry_date, b.pressed_at::date, b.created_at::date) <= ${asOf}::date
-      AND (b.deleted_at IS NULL OR b.deleted_at::date > ${asOf}::date)
-      AND b.status <> 'PENDING_PRESSING'
-  `);
-  const baleRow = resultRows(baleResult)[0] ?? {};
-  const totalBaleKg = toMoney(baleRow.total_bale_kg as string);
-  const botWeightKg = MoneyDecimal.max(totalMixKg.minus(totalBaleKg), 0);
-  // Balance on Table always uses the original blended raw-material cost basis.
-  const balanceOnTableValue = cents(botWeightKg.times(blendedCpk));
+  // Historical Net Position uses the exact same as-of snapshot as Production
+  // Overview with its end-date set to asOf (including bale status exclusions).
+  const balanceOnTableValue = (await getFactoryBalanceOnTableSnapshot(companyId, asOf)).value;
 
   const consumedAfterResult = await db.execute(sql`
     SELECT COALESCE(SUM(fms.total_cost::numeric), 0) AS value_after
