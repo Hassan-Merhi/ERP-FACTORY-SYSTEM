@@ -19,14 +19,16 @@ import {
   factorySupplierFxTransfers,
   insertFactorySupplierFxTransferSchema,
   factoryFxAllocations,
+  vouchers,
 } from "@shared/schema";
-import { eq, and, desc, inArray } from "drizzle-orm";
+import { eq, and, desc, inArray, like, isNull } from "drizzle-orm";
 import type Decimal from "decimal.js";
 import { MoneyDecimal, toMoney } from "../../../../lib/money";
-import { assertCommissionAllocationCoveredTx, postSupplierFxTransferJournalTx } from "../../../../services/factory/supplierFxTransferJournal";
+import {
+  assertCommissionAllocationCoveredTx,
+  postSupplierFxTransferJournalTx,
+} from "../../../../services/factory/supplierFxTransferJournal";
 import { retireVouchersTx, sessionRetirementActor } from "../../../../services/accounting/voucherRetirement";
-import { vouchers } from "@shared/schema";
-import { like, isNull } from "drizzle-orm";
 
 export function registerSupplierFxTransferRoutes(app: Express) {
   app.get("/api/factory/supplier-fx-transfers", requireAuth, async (req: Request, res: Response) => {
@@ -85,7 +87,6 @@ export function registerSupplierFxTransferRoutes(app: Express) {
         } else {
           await postSupplierFxTransferJournalTx(tx, created);
         }
-
 
         // ── Phase 1: Oldest-first allocation persistence ──────────────────────────
         // Allocate this FX transfer against containers ordered by creation date
@@ -192,11 +193,16 @@ export function registerSupplierFxTransferRoutes(app: Express) {
       await db.transaction(async (tx) => {
         // Retire the exact financial posting before retiring its source.
         // A failed retirement rolls back the entire transfer deletion.
-        const linked = await tx.select({ id: vouchers.id }).from(vouchers).where(
-          and(eq(vouchers.companyId, companyId),
-            isNull(vouchers.deletedAt),
-            like(vouchers.voucherNumber, `FACTORY-SFX-${id}-%`))
-        );
+        const linked = await tx
+          .select({ id: vouchers.id })
+          .from(vouchers)
+          .where(
+            and(
+              eq(vouchers.companyId, companyId),
+              isNull(vouchers.deletedAt),
+              like(vouchers.voucherNumber, `FACTORY-SFX-${id}-%`)
+            )
+          );
         if (linked.length > 0) {
           await retireVouchersTx(tx, {
             companyId,
