@@ -235,12 +235,6 @@ export function useSupplierProfitCheckModel() {
       const response = await apiRequest("PUT", "/api/supplier-profit-check/po-overrides", payload);
       return response.json();
     },
-    onError: (error: unknown) =>
-      toast({
-        title: "Price not saved",
-        description: errorMessage(error, "Failed to save price"),
-        variant: "destructive",
-      }),
   });
 
   const handleExcelFile = useCallback(
