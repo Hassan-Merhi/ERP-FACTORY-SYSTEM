@@ -535,7 +535,7 @@ export async function applyPostOffloadChargeMutation(
     }
 
     // ── Update voucher in-place ─────────────────────────────────────────────
-    let newVoucherId = chargeRow.voucherId;
+    let newVoucherId: number | null = chargeRow.voucherId;
     const needsAccounting = !!(chargeData.ledgerAccountId || chargeData.supplierId);
     if (chargeRow.voucherId) {
       if (!needsAccounting) {
