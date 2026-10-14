@@ -377,6 +377,14 @@ export function registerFactoryContainerUpdateRoutes(app: Express) {
                   || !debitLines[0].ledgerAccountId || !creditLines[0].factorySupplierId) {
                 throw new Error("Import journal has an unexpected entry shape. Review its postings before editing.");
               }
+              // A non-USD legacy voucher lacks the historical native/base record.
+              // Do not rewrite such history with today's or the container's
+              // currently displayed rate; it requires the reviewed FX repair.
+              if (goodsCcy !== "USD" && importEntries.some((line) =>
+                !line.transactionCurrency || line.baseDebitAmount == null || line.baseCreditAmount == null
+              )) {
+                throw new Error("This import journal has unconverted historical FX entries. Review and repair its original rate before changing the goods posting.");
+              }
               const normalizedDr = normFactoryEntry(goodsCcy, goodsValue.toFixed(), "0", goodsFx);
               const normalizedCr = normFactoryEntry(goodsCcy, "0", goodsValue.toFixed(), goodsFx);
               await editPostedFactoryVoucherTx(
@@ -403,33 +411,11 @@ export function registerFactoryContainerUpdateRoutes(app: Express) {
                 }
               );
             } else {
-              const importCostAccId = await getOrCreateLedgerAccount(
-                companyId, "FACTORY_IMPORT_COST", "Factory Import Cost"
-              );
-              const creationDate = updated.createdAt
-                ? new Date(updated.createdAt).toISOString().slice(0, 10)
-                : getClientDate(req);
-              await postFactoryVoucherTx(tx, {
-                companyId,
-                voucherNumber: (generation) => `FACTORY-IMPORT-${id}-${generation}`,
-                voucherDate: updated.arrivalDate || creationDate,
-                description: `Goods import - container ${updated.containerNumber}`,
-                currency: goodsCcy,
-                fxRateToUsd: String(goodsFx),
-                source: { sourceType: "factory-container-import", sourceId: id, phase: "goods" },
-                lines: [
-                  {
-                    ledgerAccountId: importCostAccId,
-                    debit: goodsValue,
-                    narration: `Goods import cost - container ${updated.containerNumber}`,
-                  },
-                  {
-                    factorySupplierId: updated.supplierId,
-                    credit: goodsValue,
-                    narration: `Goods payable to supplier - container ${updated.containerNumber}`,
-                  },
-                ],
-              });
+              // Historical documents must not acquire a new liability merely
+              // because a user edits a container. Require the audited,
+              // explicitly-selected backfill workflow instead.
+              throw new Error("This container has no goods-import journal. Review it in the import-credit backfill preview and post the missing journal explicitly before editing its goods or supplier.");
+
             }
           }
         }
