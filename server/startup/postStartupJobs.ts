@@ -105,6 +105,23 @@ export function runPostStartupJobs(): void {
     unrefTimer(supplierFxTimer);
   }
 
+  // Company 12 FX source-reference reconciliation; does not modify vouchers.
+  const fxDaybookRepairMode = process.env.ERP_RECONCILE_FX_DAYBOOK_20261014;
+  if (fxDaybookRepairMode === "company-12-preview" || fxDaybookRepairMode === "company-12-apply") {
+    const fxDaybookTimer = setTimeout(async () => {
+      try {
+        const repair = await import("../../scripts/reconcile-factory-fx-daybook-20261014");
+        await repair.reconcileSupplierFxDaybook20261014(fxDaybookRepairMode === "company-12-apply");
+        logger.info("[SupplierFxDaybook] Company 12 reconciliation finished");
+      } catch (error: unknown) {
+        logger.error("[SupplierFxDaybook] Company 12 reconciliation halted", {
+          error: getErrorMessage(error),
+        });
+      }
+    }, 12000);
+    unrefTimer(fxDaybookTimer);
+  }
+
   // Live vessel/AIS tracking is intentionally disabled. Container movement is
   // maintained manually or through Excel imports.
 
