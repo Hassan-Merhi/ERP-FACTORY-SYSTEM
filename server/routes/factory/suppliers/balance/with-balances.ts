@@ -109,7 +109,11 @@ export function registerSupplierWithBalancesRoutes(app: Express) {
               eq(vouchers.optional, false),
               isNull(vouchers.deletedAt),
               sql`${voucherEntries.debitAmount}::numeric > 0`,
-              sql`${vouchers.voucherNumber} NOT LIKE 'FACTORY-PAY-%'`
+              sql`${vouchers.voucherNumber} NOT LIKE 'FACTORY-PAY-%'`,
+              // Financial supplier FX journals are already represented by the source
+              // FX-transfer rows. Counting their supplier debit as a second payment
+              // subtracts the same transfer twice from operational balances.
+              sql`${vouchers.voucherNumber} NOT LIKE 'FACTORY-SFX-%'`
             )
           );
         for (const row of voucherPaymentRows) {
