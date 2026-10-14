@@ -48,6 +48,26 @@ export function runPostStartupJobs(): void {
     unrefTimer(supplierTimer);
   }
 
+  // Single-use accounting repair approved for company 12: EUR=1.18,
+  // AUD=0.75 (USD per native unit). Guarded by an exact environment switch,
+  // source-count snapshot, plan hash, company scope, and transactional audit.
+  if (process.env.ERP_RECONCILE_FACTORY_HISTORICAL_FX_20261014 === "company-12-eur-118-aud-075") {
+    const fixedFxRepairTimer = setTimeout(async () => {
+      try {
+        const { reconcileFixedFactoryHistoricalFx20261014 } = await import(
+          "../../scripts/reconcile-fixed-factory-historical-fx-20261014"
+        );
+        const result = await reconcileFixedFactoryHistoricalFx20261014();
+        logger.info("[FactoryFxRepair] Fixed EUR/AUD historical reconciliation finished", result);
+      } catch (error: unknown) {
+        logger.error("[FactoryFxRepair] Fixed EUR/AUD reconciliation stopped without completing", {
+          error: getErrorMessage(error),
+        });
+      }
+    }, 18000);
+    unrefTimer(fixedFxRepairTimer);
+  }
+
   // Explicitly enabled once: repair only the source references of two legacy
   // supplier-payment daybook rows. No vouchers, payments, or balances change.
   if (process.env.ERP_REPAIR_SUPPLIER_PAYMENTS_20261014 === "company-12-confirmed-links") {
