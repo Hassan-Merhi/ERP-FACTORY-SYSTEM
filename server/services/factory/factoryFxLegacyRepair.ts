@@ -179,7 +179,7 @@ async function loadLegacyRows(executor: Executor, companyId: number, lock: boole
      WHERE v.company_id = ${companyId}
        AND v.source_module = 'FACTORY'
        AND v.deleted_at IS NULL
-       AND v.optional = false
+       AND COALESCE(v.optional, false) = false
        AND ve.company_id = ${companyId}
        AND UPPER(COALESCE(v.currency, 'USD')) <> 'USD'
        AND ve.transaction_currency IS NULL
