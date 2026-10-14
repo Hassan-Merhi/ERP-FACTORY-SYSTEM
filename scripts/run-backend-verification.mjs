@@ -13,8 +13,11 @@ const coverage = process.argv.includes("--coverage");
 // Phase 33 coverage waves, at which point a 1/8 shard no longer fit the 210s
 // plain budget and certification aborted before the later shards ever ran.
 // Twelve shards restore the per-shard headroom the budget is meant to police;
-// a workflow that pins its own matrix can still set BACKEND_TEST_SHARDS.
-const SHARD_COUNT = Number(process.env.BACKEND_TEST_SHARDS ?? 12);
+// a workflow that pins its own matrix can still set BACKEND_TEST_SHARDS. At
+// 1029 files (2026-10-14) a 1/12 shard of ~86 files no longer fit the 210s
+// plain budget either, so sixteen shards return each to ~64 files, the same
+// load per shard that twelve gave at 745.
+const SHARD_COUNT = Number(process.env.BACKEND_TEST_SHARDS ?? 16);
 // The budget belongs to the pass being run, not to the command line. --complete
 // runs a plain pass and then a coverage pass, and coverage instrumentation is
 // measurably slower: in one certification run the same shard took 127.5s plain
