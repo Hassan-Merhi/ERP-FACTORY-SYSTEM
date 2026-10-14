@@ -515,21 +515,14 @@ export function useFactorySuppliersModel() {
   // Summing all suppliers would count linked suppliers twice in the summary cards.
   const summarySuppliers = displayedTopLevel;
   const totalContainers = summarySuppliers.reduce((sum, supplier) => sum + (supplier.totalContainers || 0), 0);
-  // Directory USD totals must sum the same kind of value actually displayed
-  // for each row: the USD broker pool for brokers, posted USD ledger for others.
-  // Foreign pools are not silently mixed into the USD-only totals.
-  const displayedUsdBalance = (supplier: SupplierWithBalance): number => {
-    if (!isDirectoryBroker(supplier)) return Number(supplier.totalValue || "0");
-    return Number(
-      supplier.brokerStatementBalances?.find((pool) => pool.currencyCode === "USD")?.balance || "0"
-    );
-  };
+  // Overall USD total is explicitly a *posted ledger* aggregate; don't mix
+  // the broker's USD received pool with ordinary supplier USD payables.
   const totalUsdOwed = summarySuppliers.reduce((sum, supplier) => {
-    const value = displayedUsdBalance(supplier);
+    const value = Number(supplier.totalValue || "0");
     return value > 0 ? sum + value : sum;
   }, 0);
   const totalUsdOverpaid = summarySuppliers.reduce((sum, supplier) => {
-    const value = displayedUsdBalance(supplier);
+    const value = Number(supplier.totalValue || "0");
     return value < 0 ? sum + Math.abs(value) : sum;
   }, 0);
   const filteredTopLevel = displayedTopLevel.filter((supplier) => {
