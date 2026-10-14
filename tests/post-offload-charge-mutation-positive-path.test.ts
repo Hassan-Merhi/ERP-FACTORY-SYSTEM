@@ -194,6 +194,38 @@ describe("post-offload charge mutation positive paths", () => {
     );
   });
 
+  it("fails closed before changing costing when no ledger destination exists", async () => {
+    harness.selectResults.push([container]);
+    await expect(
+      applyPostOffloadChargeMutation(harness.tx, {
+        action: "CREATE",
+        companyId: 4,
+        containerId: 9,
+        txDate: "2026-08-11",
+        chargeData: { ...chargeData, ledgerAccountId: null, supplierId: null },
+        accountingCtx: { voucherCompanyId: 4, chargesPayableAcctId: 0 },
+      } as never)
+    ).rejects.toThrow(/requires exactly one/);
+    expect(harness.insertedValues).toHaveLength(0);
+    expect(harness.updatedValues).toHaveLength(0);
+    expect(harness.postFactoryVoucherTx).not.toHaveBeenCalled();
+  });
+
+  it("rejects cross-company ledger posting before writing a charge", async () => {
+    harness.selectResults.push([container]);
+    await expect(
+      applyPostOffloadChargeMutation(harness.tx, {
+        action: "CREATE",
+        companyId: 4,
+        containerId: 9,
+        txDate: "2026-08-11",
+        chargeData,
+        accountingCtx: { voucherCompanyId: 12, chargesPayableAcctId: 88 },
+      } as never)
+    ).rejects.toThrow(/requires exactly one/);
+    expect(harness.insertedValues).toHaveLength(0);
+  });
+
   it("creates a charge, cascades its exact remaining-stock value, and links balanced accounting/daybook evidence", async () => {
     harness.selectResults.push([container], [{ rate: "5.24000000" }]);
     harness.loadActiveCharges.mockResolvedValue([]);
