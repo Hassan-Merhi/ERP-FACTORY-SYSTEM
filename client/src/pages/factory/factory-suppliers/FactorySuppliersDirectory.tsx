@@ -57,7 +57,7 @@ export function FactorySuppliersDirectory({ model }: { model: SuppliersModel }) 
         <Metric label="Standalone Suppliers" value={model.standaloneCount} />
         <Metric label="Total Containers" value={model.totalContainers} />
         <div className="rounded-xl border p-4">
-          <div className="text-xs text-muted-foreground">Total USD</div>
+          <div className="text-xs text-muted-foreground">Posted ledger balances (USD)</div>
           <div className="text-sm font-semibold mt-1">
             <span className="text-muted-foreground">We owe </span>${model.formatNum(String(model.totalUsdOwed))}
           </div>
