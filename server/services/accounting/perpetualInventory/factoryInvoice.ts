@@ -154,8 +154,24 @@ export async function syncFactoryInvoiceTx(
     sql`
       SELECT COALESCE(SUM(c.amount), 0)::text AS amount
         FROM customer_order_charges c
-        JOIN vouchers v ON v.id = c.voucher_id AND v.company_id = ${companyId} AND v.deleted_at IS NULL
+        JOIN vouchers v ON v.company_id = ${companyId} AND v.deleted_at IS NULL
                        AND COALESCE(v.optional, false) = false
+                       AND (
+                         v.id = c.voucher_id
+                         OR (
+                           c.voucher_id IS NULL
+                           AND (
+                             v.voucher_number = 'CHARGE-PRE-' || ${orderId}::text || '-' || c.id::text
+                             OR v.voucher_number LIKE 'CHARGE-' || ${order.invoice_number} || '-' || c.id::text || '-%'
+                           )
+                           AND EXISTS (
+                             SELECT 1 FROM voucher_entries ve
+                              WHERE ve.voucher_id = v.id
+                                AND ve.customer_id = ${order.customer_id}
+                                AND ABS(COALESCE(ve.debit_amount, 0) - COALESCE(ve.credit_amount, 0) - c.amount) < 0.005
+                           )
+                         )
+                       )
        WHERE c.order_id = ${orderId}
     `
   );
