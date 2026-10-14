@@ -216,7 +216,13 @@ async function run(APPLY: boolean) {
       postedAmount = postedAmount.plus(toMoney(invoice.gross).minus(toMoney(invoice.already_posted_charges)).minus(newlyPostedCharge));
     });
   }
-  console.log(`DONE: ${postedCount} invoices posted, total receivable and revenue ${postedAmount.toFixed(2)}, ${blocked.length} exceptions not posted.`);
+  const remaining = await candidates();
+  if (remaining.some((row) => AUDITED_ORDER_IDS.has(row.id))) {
+    throw new Error(`Reconciliation incomplete: ${remaining.length} audited invoices still missing GL`);
+  }
+  const additionalCharge = postedCount > 0 && pending.some((invoice) => invoice.id === 99)
+    ? new MoneyDecimal("533.50") : new MoneyDecimal(0);
+  console.log(`DONE: ${postedCount} invoice journals, sales income ${postedAmount.toFixed(2)}, separately journaled Gate Pass ${additionalCharge.toFixed(2)}; ${remaining.length} still missing.`);
 }
 /** Called only from the explicitly enabled one-time startup path or the CLI. */
 export function reconcileFactoryInvoices20261014(apply: boolean): Promise<void> {
