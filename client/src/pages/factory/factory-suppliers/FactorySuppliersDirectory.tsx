@@ -161,52 +161,87 @@ export function FactorySuppliersDirectory({ model }: { model: SuppliersModel }) 
                 </div>
               </div>
 
-              <div className="text-right shrink-0 space-y-0.5">
-                {(Math.abs(balanceValue) > 0.005 || nonUsdBalances.length > 0) && (
-                  <div className="text-xs text-muted-foreground mb-0.5">Ledger balance</div>
-                )}
-                <div
-                  className={`font-semibold text-sm ${balanceValue < 0 ? "text-green-600" : balanceValue > 0 ? "" : "text-muted-foreground"}`}
-                >
-                  {balanceValue === 0 && nonUsdBalances.length === 0 ? (
-                    <span className="text-muted-foreground text-xs">$-</span>
+              <div className="text-right shrink-0 space-y-1" data-testid={`supplier-directory-balance-${supplier.id}`}>
+                {isBroker ? (
+                  // A broker is not a regular supplier: the detail overview shows
+                  // independently signed USD pool and foreign-currency net balances.
+                  // Render those exact same values, not the broker's unrelated GL total.
+                  supplier.brokerStatementBalances ? (
+                    supplier.brokerStatementBalances.length > 0 ? (
+                      supplier.brokerStatementBalances.map((pool) => {
+                        const value = Number(pool.balance);
+                        const settled = Math.abs(value) <= 0.005;
+                        const status = pool.isBrokerPool
+                          ? value > 0.005 ? "Received" : value < -0.005 ? "Owed" : "Settled"
+                          : value > 0.005 ? "Payable to suppliers" : value < -0.005 ? "Overpaid" : "Settled";
+                        return (
+                          <div key={pool.currencyCode} data-testid={`supplier-broker-pool-${supplier.id}-${pool.currencyCode}`}>
+                            <div className="text-xs text-muted-foreground">
+                              {pool.isBrokerPool ? "Pool Balance" : "Net Balance"} ({pool.currencyCode})
+                            </div>
+                            <div className={`font-semibold text-sm tabular-nums ${
+                              settled ? "text-muted-foreground" :
+                              (pool.isBrokerPool ? value > 0 : value < 0)
+                                ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"
+                            }`}>
+                              {pool.currencyCode === "USD" ? "$" : `${pool.currencyCode} `}
+                              {model.formatNum(Math.abs(value).toFixed(2))}
+                            </div>
+                            <div className="text-[11px] text-muted-foreground">{status}</div>
+                          </div>
+                        );
+                      })
+                    ) : (
+                      <div className="text-xs text-muted-foreground">No open pool balance</div>
+                    )
                   ) : (
-                    `$${model.formatNum(String(Math.abs(balanceValue)))}${balanceValue < 0 ? " CR" : ""}`
-                  )}
-                </div>
-                {Math.abs(notInLedgerValue) > 0.005 && (
-                  <div className="text-[11px] text-muted-foreground" data-testid={`text-not-in-ledger-${supplier.id}`}>
-                    <span>Not yet in the ledger (memo)</span>{" "}
-                    {`$${model.formatNum(String(Math.abs(notInLedgerValue).toFixed(2)))}${notInLedgerValue < 0 ? " CR" : ""}`}
-                  </div>
-                )}
-                {nonUsdBalances.map((balance) => (
-                  <div key={balance.currencyCode} className="flex items-center justify-end gap-1">
-                    <span
-                      className={`text-xs tabular-nums ${balance.balance < 0 ? "text-green-600 dark:text-green-400" : "text-muted-foreground"}`}
-                    >
-                      {balance.currencyCode} {model.formatNum(String(Math.abs(balance.balance).toFixed(2)))}
-                      {balance.balance < 0 ? " CR" : ""}
-                    </span>
-                    {balance.balance > 0.005 && (
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-5 w-5 text-muted-foreground hover:text-foreground"
-                        title={`Settle ${balance.currencyCode} → USD`}
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          openFx(balance.currencyCode, balance.balance);
-                        }}
-                        data-testid={`btn-fx-settle-${supplier.id}-${balance.currencyCode}`}
-                      >
-                        <ArrowRightLeft className="h-3 w-3" />
-                      </Button>
+                    <div className="text-xs text-amber-600">Broker balance unavailable</div>
+                  )
+                ) : (
+                  <>
+                    <div className="text-xs text-muted-foreground">Ledger balance (USD)</div>
+                    <div className={`font-semibold text-sm tabular-nums ${
+                      balanceValue < -0.005 ? "text-red-600 dark:text-red-400" :
+                      balanceValue > 0.005 ? "text-green-600 dark:text-green-400" : "text-muted-foreground"
+                    }`} data-testid={`text-directory-ledger-balance-${supplier.id}`}>
+                      {Math.abs(balanceValue) <= 0.005
+                        ? "$—"
+                        : `$${model.formatNum(Math.abs(balanceValue).toFixed(2))}${balanceValue < 0 ? " DR" : " CR"}`}
+                    </div>
+                    {Math.abs(notInLedgerValue) > 0.005 && (
+                      <div className="text-[11px] text-muted-foreground" data-testid={`text-not-in-ledger-${supplier.id}`}>
+                        Not yet in the ledger (memo){" "}
+                        {`$${model.formatNum(Math.abs(notInLedgerValue).toFixed(2))}${notInLedgerValue < 0 ? " DR" : " CR"}`}
+                      </div>
                     )}
-                  </div>
-                ))}
+                    {nonUsdBalances.length > 0 && (
+                      <div className="text-[11px] text-muted-foreground">Ledger balance by currency</div>
+                    )}
+                    {nonUsdBalances.map((balance) => (
+                      <div key={balance.currencyCode} className="flex items-center justify-end gap-1">
+                        <span className={`text-xs tabular-nums ${
+                          balance.balance < 0 ? "text-red-600 dark:text-red-400" : "text-muted-foreground"
+                        }`}>
+                          {balance.currencyCode} {model.formatNum(Math.abs(balance.balance).toFixed(2))}
+                          {balance.balance < 0 ? " DR" : " CR"}
+                        </span>
+                        {balance.balance > 0.005 && (
+                          <Button variant="ghost" size="icon" className="h-5 w-5 text-muted-foreground hover:text-foreground"
+                            title={`Settle ${balance.currencyCode} → USD`}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              openFx(balance.currencyCode, balance.balance);
+                            }}
+                            data-testid={`btn-fx-settle-${supplier.id}-${balance.currencyCode}`}
+                          >
+                            <ArrowRightLeft className="h-3 w-3" />
+                          </Button>
+                        )}
+                      </div>
+                    ))}
+                  </>
+                )}
               </div>
-
               <div className="flex items-center gap-1 shrink-0">
                 <Button
                   variant="ghost"
