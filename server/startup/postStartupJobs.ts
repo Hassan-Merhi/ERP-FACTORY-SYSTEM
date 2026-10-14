@@ -25,10 +25,12 @@ export function runPostStartupJobs(): void {
       void import("../../scripts/reconcile-factory-invoices-20261014")
         .then(({ reconcileFactoryInvoices20261014 }) => reconcileFactoryInvoices20261014(true))
         .then(() => logger.info("[AccountingRepair] Historical invoice reconciliation finished"))
-        .catch((error: unknown) => logger.error(
-          "[AccountingRepair] Historical invoice reconciliation stopped; inspect voucher counts before retrying",
-          { error: getErrorMessage(error) }
-        ));
+        .catch((error: unknown) =>
+          logger.error(
+            "[AccountingRepair] Historical invoice reconciliation stopped; inspect voucher counts before retrying",
+            { error: getErrorMessage(error) }
+          )
+        );
     }, 12000);
     unrefTimer(accountingReconciliationTimer);
   }
