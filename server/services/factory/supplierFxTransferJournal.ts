@@ -57,7 +57,7 @@ export function describeSupplierFxConversion(document: SupplierFxJournalDocument
   // effective USD-per-native unit rate at 10dp reproduces the USD settlement.
   // The original rate and its multiply/divide convention remain on the source.
   const postingUsdPerUnit = usd.div(from).toDecimalPlaces(10);
-  const convertedDebit = from.toDecimalPlaces(6).times(postingUsd).toDecimalPlaces(6);
+  const convertedDebit = from.toDecimalPlaces(6).times(postingUsdPerUnit).toDecimalPlaces(6);
   const residual = usd.minus(convertedDebit).toDecimalPlaces(6);
   if (residual.abs().gt("0.005")) throw new Error(`Transfer #${document.id} rounding exceeds 0.005 USD`);
   return { convention, currency, from, usd, entered, postingUsdPerUnit, residual };
