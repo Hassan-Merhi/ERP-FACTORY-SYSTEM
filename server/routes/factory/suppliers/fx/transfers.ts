@@ -23,6 +23,10 @@ import {
 import { eq, and, desc, inArray } from "drizzle-orm";
 import type Decimal from "decimal.js";
 import { MoneyDecimal, toMoney } from "../../../../lib/money";
+import { assertCommissionAllocationCoveredTx, postSupplierFxTransferJournalTx } from "../../../../services/factory/supplierFxTransferJournal";
+import { retireVouchersTx, sessionRetirementActor } from "../../../../services/accounting/voucherRetirement";
+import { vouchers } from "@shared/schema";
+import { like, isNull } from "drizzle-orm";
 
 export function registerSupplierFxTransferRoutes(app: Express) {
   app.get("/api/factory/supplier-fx-transfers", requireAuth, async (req: Request, res: Response) => {
@@ -73,6 +77,15 @@ export function registerSupplierFxTransferRoutes(app: Express) {
       // a transfer that statements counted but no container allocation for it.
       const created = await db.transaction(async (tx) => {
         const [created] = await tx.insert(factorySupplierFxTransfers).values(parsed).returning();
+        // A source transfer and its financially balanced voucher must be
+        // atomic. Commission allocations are already credited directly to the
+        // broker by FACTORY-COMM vouchers: prove coverage, don't credit twice.
+        if (created.sourceType === "commission") {
+          await assertCommissionAllocationCoveredTx(tx, companyId, created);
+        } else {
+          await postSupplierFxTransferJournalTx(tx, created);
+        }
+
 
         // ── Phase 1: Oldest-first allocation persistence ──────────────────────────
         // Allocate this FX transfer against containers ordered by creation date
@@ -177,6 +190,21 @@ export function registerSupplierFxTransferRoutes(app: Express) {
       if (!transfer) return res.status(404).json({ message: "Transfer not found" });
 
       await db.transaction(async (tx) => {
+        // Retire the exact financial posting before retiring its source.
+        // A failed retirement rolls back the entire transfer deletion.
+        const linked = await tx.select({ id: vouchers.id }).from(vouchers).where(
+          and(eq(vouchers.companyId, companyId),
+            isNull(vouchers.deletedAt),
+            like(vouchers.voucherNumber, `FACTORY-SFX-${id}-%`))
+        );
+        if (linked.length > 0) {
+          await retireVouchersTx(tx, {
+            companyId,
+            voucherIds: linked.map((v) => v.id),
+            reason: "factory-supplier-fx-transfer-delete",
+            actor: sessionRetirementActor(req),
+          });
+        }
         // Cascade-delete allocation rows before removing the transfer
         await tx
           .delete(factoryFxAllocations)
