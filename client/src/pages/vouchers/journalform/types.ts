@@ -88,12 +88,6 @@ export interface JournalVoucherToEdit {
   effectiveDate?: string | null;
 }
 
-export interface CreatedLedgerAccount {
-  id: number;
-  name: string;
-  code?: string | null;
-}
-
 export type JournalFormData = z.infer<typeof journalFormSchema>;
 
 export interface JournalFormProps {

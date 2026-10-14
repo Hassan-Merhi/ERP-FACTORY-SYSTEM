@@ -1,7 +1,6 @@
 import { and, desc, eq, sql } from "drizzle-orm";
 import { db } from "../../db";
 import * as schema from "@shared/schema";
-import type { PgUpdateSetSource } from "drizzle-orm/pg-core";
 import { moneyString, toMoney } from "../../lib/money";
 
 export async function getProductionBalesByLocation(
@@ -34,26 +33,6 @@ export async function getMixBatchById(id: number, companyId: number): Promise<sc
     .from(schema.mixBatches)
     .where(and(eq(schema.mixBatches.id, id), eq(schema.mixBatches.companyId, companyId)));
   return batch;
-}
-
-export async function createMixBatch(batch: schema.InsertMixBatch): Promise<schema.MixBatch> {
-  const [created] = await db
-    .insert(schema.mixBatches)
-    .values({
-      ...batch,
-      batchCode: batch.batchCode || `MB-${Date.now()}`,
-    })
-    .returning();
-  return created;
-}
-
-export async function updateMixBatch(id: number, updates: Partial<schema.InsertMixBatch>): Promise<schema.MixBatch> {
-  const [updated] = await db
-    .update(schema.mixBatches)
-    .set({ ...updates, updatedAt: sql`now()` })
-    .where(eq(schema.mixBatches.id, id))
-    .returning();
-  return updated;
 }
 
 export async function getMixBatchSources(mixBatchId: number, companyId: number): Promise<schema.MixBatchSource[]> {
@@ -108,11 +87,6 @@ export async function getAllProductionBales(
     .orderBy(desc(schema.productionBales.createdAt));
 }
 
-export async function getProductionBaleById(id: number): Promise<schema.ProductionBale | undefined> {
-  const [bale] = await db.select().from(schema.productionBales).where(eq(schema.productionBales.id, id));
-  return bale;
-}
-
 export async function getProductionBaleByBarcode(
   barcodeValue: string,
   companyId: number
@@ -139,24 +113,6 @@ function toProductionBaleInsert(bale: schema.InsertProductionBale): ProductionBa
 export async function createProductionBale(bale: schema.InsertProductionBale): Promise<schema.ProductionBale> {
   const [created] = await db.insert(schema.productionBales).values(toProductionBaleInsert(bale)).returning();
   return created;
-}
-
-export async function updateProductionBale(
-  id: number,
-  updates: Partial<schema.InsertProductionBale>
-): Promise<schema.ProductionBale> {
-  const { pressedAt, ...rest } = updates;
-  const updateData: PgUpdateSetSource<typeof schema.productionBales> = {
-    ...rest,
-    ...(pressedAt ? { pressedAt: new Date(pressedAt) } : {}),
-    updatedAt: sql`now()`,
-  };
-  const [updated] = await db
-    .update(schema.productionBales)
-    .set(updateData)
-    .where(eq(schema.productionBales.id, id))
-    .returning();
-  return updated;
 }
 
 export async function deleteProductionBale(id: number, companyId: number): Promise<void> {

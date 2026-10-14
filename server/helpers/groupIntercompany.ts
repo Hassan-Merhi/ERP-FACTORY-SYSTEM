@@ -128,8 +128,3 @@ export async function loadCompanyIntercompanyAccounts(
     };
   });
 }
-
-/** Ids of ledger accounts in a group (used to drop them from the company lines). */
-export function intercompanyAccountIds(accounts: readonly IntercompanyAccount[]): Set<number> {
-  return new Set(accounts.map((account) => account.accountId));
-}

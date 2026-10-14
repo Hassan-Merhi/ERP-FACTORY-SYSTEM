@@ -226,9 +226,6 @@ export function registerRawStockRecalcPreviewRoutes(app: Express) {
         }
 
         // Persist undo snapshot (non-fatal if it fails — apply already committed)
-        const _appliedContainerNumbers = snapshot.containers.map((c) =>
-          String(c.finalPayableAmount !== undefined ? c.id : c.id)
-        );
         const containerNumbersForDescription = results.filter((r) => r.applied).map((r) => r.containerNumber);
         try {
           await pool.query(

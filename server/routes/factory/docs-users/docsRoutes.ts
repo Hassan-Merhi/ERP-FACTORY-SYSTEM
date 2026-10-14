@@ -129,34 +129,7 @@ export function registerFactoryDocsRoutes(app: Express) {
 
   // ─────── CONTAINER DOCUMENTS (upload / list / delete) ───────
 
-  app.get("/api/factory/containers/:containerId/documents", requireAuth, async (req: Request, res: Response) => {
-    try {
-      const containerId = Number(req.params.containerId);
-      const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
-      if (!companyId || !(await verifyContainerOwnership(containerId, companyId))) {
-        return res.status(403).json({ message: "Access denied" });
-      }
-      const rawDocs = await db.select().from(containerDocuments).where(eq(containerDocuments.containerId, containerId));
-      const docTypes = await db.select().from(containerDocumentTypes).orderBy(containerDocumentTypes.label);
-      const requiredTypes = docTypes.filter((dt) => dt.isRequired);
-      const uploadedTypeIds = new Set(rawDocs.map((d) => d.docTypeId));
-      const completeness = {
-        total: requiredTypes.length,
-        uploaded: requiredTypes.filter((rt) => uploadedTypeIds.has(rt.id)).length,
-        complete: requiredTypes.every((rt) => uploadedTypeIds.has(rt.id)),
-      };
-      // Mark ghost docs (no storage key AND no file data) so the client
-      // can show a delete-only state instead of a broken download button.
-      const docs = rawDocs.map((d) => ({
-        ...d,
-        fileData: undefined, // strip large blob from listing response
-        isGhost: !d.storageKey && !d.fileData,
-      }));
-      res.json({ documents: docs, docTypes, completeness });
-    } catch (error: unknown) {
-      res.status(500).json({ message: getErrorMessage(error) });
-    }
-  });
+  // This GET endpoint is owned by an earlier canonical route registrar.
 
   app.post("/api/factory/containers/:containerId/documents", requireAuth, async (req: Request, res: Response) => {
     try {

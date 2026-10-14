@@ -60,6 +60,8 @@ export default function SalesReport() {
   const [isMultiCompanyMode, setIsMultiCompanyMode] = useState(false);
   const [selectedCompanies, setSelectedCompanies] = useState<string[]>([]);
   const [selectedRowDate, setSelectedRowDate] = useState<string | null>(null);
+  // build/viteSalesReportBandwidthPlugin.ts rewrites this exact line to `const { toast } = useToast();`
+  // eslint-disable-next-line unused-imports/no-unused-vars -- used after the build transform
   const { toast: _toast } = useToast();
   const { formatDisplayDate } = useDateFormat();
   const { formatAmount } = useCurrencyContext();

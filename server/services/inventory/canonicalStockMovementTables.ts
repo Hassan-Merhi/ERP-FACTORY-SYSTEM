@@ -84,7 +84,3 @@ export const canonicalStockMovementAudit = pgTable(
     ),
   })
 );
-
-export type CanonicalStockMovement = typeof canonicalStockMovements.$inferSelect;
-export type CanonicalStockMovementRequest = typeof canonicalStockMovementRequests.$inferSelect;
-export type CanonicalStockMovementAudit = typeof canonicalStockMovementAudit.$inferSelect;

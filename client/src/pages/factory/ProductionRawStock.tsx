@@ -57,7 +57,7 @@ export default function ProductionRawStock() {
 
   const mixBatchPrintRef = useRef<HTMLDivElement>(null);
 
-  const { data: rawStock, isLoading: _rawStockLoading } = useQuery<RawStockRow[]>({
+  const { data: rawStock } = useQuery<RawStockRow[]>({
     queryKey: ["/api/factory/raw-stock"],
   });
 

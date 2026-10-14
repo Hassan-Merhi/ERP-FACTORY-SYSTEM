@@ -67,6 +67,8 @@ failure, so a correct document cannot quietly become undiscoverable.
 | [testing.md](testing.md) | Test tiers and how to run them |
 | [backend-verification.md](backend-verification.md) | CI-sized backend shards, timing, and merged coverage |
 | [development-checklist.md](development-checklist.md) | Run before every push |
+| [dead-code-prevention.md](dead-code-prevention.md) | Route, export, retirement and dependency rules that keep dead code out, and `npm run report:dead-code` |
+| [dead-code-cleanup-final-report.md](dead-code-cleanup-final-report.md) | 2026-10 dead-code cleanup: results, retained code, open decisions and required validation |
 | [ci/branch-protection.md](ci/branch-protection.md) | Required checks on `main` |
 | [mobile-tablet-web-regression.md](mobile-tablet-web-regression.md) | Browser regression checklist |
 | [erp-mobile-program.md](erp-mobile-program.md) | ERP phone contracts, route certification and phase status |

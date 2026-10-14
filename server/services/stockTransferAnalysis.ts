@@ -405,8 +405,6 @@ export async function buildStockTransferSuggestionContext(
   if (!sourceLoc[0]) throw new Error("Source location not found for this company");
   if (!destLoc[0]) throw new Error("Destination location not found for this company");
 
-  const _startOfDay = `${dateFrom} 00:00:00`;
-  const _endOfDay = `${dateTo} 23:59:59`;
   const days = Math.max(
     1,
     Math.round((new Date(dateTo).getTime() - new Date(dateFrom).getTime()) / (1000 * 60 * 60 * 24)) + 1

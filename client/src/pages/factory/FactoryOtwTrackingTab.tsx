@@ -99,7 +99,6 @@ export default function FactoryOtwTrackingTab({ onEdit }: OtwTrackingTabProps = 
     return sa.localeCompare(sb);
   });
   // Summary stats
-  const _pending = otwContainers.filter((c) => c.status === "PENDING").length;
   const inTransit = otwContainers.filter((c) => c.status === "IN_TRANSIT").length;
   const arrived = otwContainers.filter((c) => c.status === "ARRIVED").length;
   const delayed = otwContainers.filter((c) => calcDelayDays(c) > 0).length;
@@ -155,14 +154,6 @@ export default function FactoryOtwTrackingTab({ onEdit }: OtwTrackingTabProps = 
   }
   const docsReceived = filtered.filter((c) => !!c.otwDocsReceived).length;
   const totalWeight = filtered.reduce((sum, c) => sum + num(c.totalKg), 0);
-  const _hasActiveFilters =
-    search ||
-    supplierFilter !== "all" ||
-    freightFilter !== "all" ||
-    weightFilter !== "all" ||
-    docsFilter !== "all" ||
-    delayedFilter !== "all" ||
-    sortOrder !== "DEFAULT";
   /** Immediately patch the in-memory cache entry so the UI reflects the new
    *  value without waiting for the background refetch to complete. */
   function patchCacheContainer(id: number, patch: Partial<ContainerWithSupplier>) {

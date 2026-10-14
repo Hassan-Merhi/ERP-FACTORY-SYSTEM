@@ -82,14 +82,6 @@ export async function saveVesselMapping(containerId: number, input: VesselMappin
   return row ?? null;
 }
 
-/** Mark a mapping stale without deleting its history/state. */
-export async function markVesselMappingStale(containerId: number): Promise<void> {
-  await db
-    .update(factoryContainerVesselTracking)
-    .set({ mappingConfidence: "stale", updatedAt: new Date() })
-    .where(eq(factoryContainerVesselTracking.containerId, containerId));
-}
-
 /**
  * Conservative extraction from carrier payloads. Only explicit vessel fields are
  * accepted; fuzzy vessel-name matching is intentionally forbidden.

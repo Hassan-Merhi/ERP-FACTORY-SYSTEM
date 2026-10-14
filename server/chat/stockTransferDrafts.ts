@@ -480,7 +480,7 @@ If intent is unclear or this is not a stock transfer request, respond with exact
             "I wasn't able to build a stock transfer draft from that — please tell me the exact source location, destination location, and which item(s)/quantities (or a total target quantity) to move.";
         }
       }
-    } catch (_) {
+    } catch {
       // Extraction failed silently
       if (
         !stockTransferResponseOverride &&

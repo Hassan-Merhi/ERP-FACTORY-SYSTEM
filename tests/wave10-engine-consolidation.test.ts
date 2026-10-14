@@ -43,7 +43,6 @@ import { loadOverdueCustomerBalances } from "../server/services/scheduler/overdu
 import { runCustomerBalanceStatement } from "../server/routes/account-transaction-pagination/customerBalanceStatement";
 import { registerAccountTransactionRoutes } from "../server/routes/accountTransactionRoutes";
 import { registerAccountStatementRoutes } from "../server/routes/accountStatementRoutes";
-import { registerAccountLedgerBalanceRoutes } from "../server/routes/accounts/ledger-balance";
 import { serveAccountListForCompany } from "../server/routes/accounts/all";
 import { registerFactoryCustomerCrudRoutes } from "../server/routes/factory/customers-core/crud";
 import { registerFactoryCustomerStatementRoutes } from "../server/routes/factory/customers-core/statement";
@@ -366,7 +365,6 @@ beforeAll(async () => {
 
   registerAccountTransactionRoutes(fakeApp);
   registerAccountStatementRoutes(fakeApp);
-  registerAccountLedgerBalanceRoutes(fakeApp);
   registerFactoryCustomerCrudRoutes(fakeApp);
   registerFactoryCustomerStatementRoutes(fakeApp);
 }, 120_000);
@@ -577,13 +575,6 @@ describe("amounts not yet in the ledger", () => {
     expect(posted).toMatchObject({ _fromVoucher: true, notInLedger: false, debitAmount: "300.00" });
     expect(typeof posted?.id).toBe("number");
     expect(rows.at(-1)).toMatchObject({ runningBalance: 850, ledgerRunningBalance: 240 });
-
-    const ledgerBalance = await call("GET /api/accounts/ledger/:id/balance", {
-      session: { currentCompanyId: factory },
-      params: { id: String(fCustLedger) },
-    });
-    // Wave 17 A: the response carries the as-of date (null: everything posted).
-    expect(ledgerBalance.body).toEqual({ balance: 240, customerId: fCustomer, notInLedgerTotal: 610, asOf: null });
 
     let accounts: { accounts: Array<Record<string, unknown>> } = { accounts: [] };
     const res = {

@@ -1,3 +1,5 @@
+import { isRecord } from "./typeGuards";
+
 export const REALTIME_INVALIDATION_TOPICS = [
   "inventory",
   "pos",
@@ -27,10 +29,6 @@ export interface RealtimeWriteInvalidation {
 }
 
 const TOPIC_SET = new Set<string>(REALTIME_INVALIDATION_TOPICS);
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
 
 function positiveInteger(value: unknown): number | null {
   const parsed = typeof value === "number" ? value : typeof value === "string" && value.trim() ? Number(value) : NaN;

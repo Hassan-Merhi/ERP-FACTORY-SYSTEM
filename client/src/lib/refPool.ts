@@ -14,19 +14,6 @@ export async function getAvailableCount(): Promise<number> {
   }
 }
 
-export async function consumeRef(): Promise<string | null> {
-  try {
-    return await db.transaction("rw", db.refPool, async () => {
-      const item = await db.refPool.where("status").equals("available").first();
-      if (!item?.id) return null;
-      await db.refPool.update(item.id, { status: "used", usedAt: Date.now() });
-      return item.referenceNumber;
-    });
-  } catch {
-    return null;
-  }
-}
-
 export async function replenishPool(count = POOL_FETCH_SIZE): Promise<void> {
   if (_replenishing) return;
   _replenishing = true;
@@ -57,19 +44,6 @@ export async function ensurePoolReady(): Promise<void> {
     if (available < POOL_MIN_SIZE) {
       await replenishPool(POOL_FETCH_SIZE);
     }
-  } catch {
-    // Non-critical
-  }
-}
-
-export async function pruneUsedRefs(keepDays = 7): Promise<void> {
-  try {
-    const cutoff = Date.now() - keepDays * 86_400_000;
-    await db.refPool
-      .where("status")
-      .equals("used")
-      .and((item) => (item.usedAt ?? 0) < cutoff)
-      .delete();
   } catch {
     // Non-critical
   }

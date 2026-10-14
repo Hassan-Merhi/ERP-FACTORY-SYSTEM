@@ -13,7 +13,6 @@ async function read(relativePath) {
 const [
   routes,
   statsRegistry,
-  statsFolderBarrel,
   applicationRoutes,
   client,
   bandwidthPlugin,
@@ -26,7 +25,6 @@ const [
 ] = await Promise.all([
   read("server/routes/stats/salesReportBandwidthRoutes.ts"),
   read("server/routes/statsRoutes.ts"),
-  read("server/routes/stats/index.ts"),
   read("server/routes/applicationRoutes.ts"),
   read("client/src/lib/salesReportBandwidthClient.ts"),
   read("build/viteSalesReportBandwidthPlugin.ts"),
@@ -81,10 +79,13 @@ assert.ok(
     statsRegistry.indexOf("registerStatsDataRoutes(app)"),
   "compact Sales Report routes must register before legacy raw routes"
 );
-assert.doesNotMatch(
-  statsFolderBarrel,
-  /export function registerStatsRoutes/,
-  "server/routes/stats/index.ts must not keep a second registration list that can drift from the mounted one"
+assert.equal(
+  await fs.access(path.join(ROOT, "server/routes/stats/index.ts")).then(
+    () => true,
+    () => false
+  ),
+  false,
+  "server/routes/stats/index.ts must not return as a second registration list that can drift from the mounted one"
 );
 
 assert.match(client, /fetchSalesReportSummary/, "compact summary client is required");

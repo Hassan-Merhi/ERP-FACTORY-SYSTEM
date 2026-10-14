@@ -10,32 +10,9 @@ import multer from "multer";
 import path from "path";
 import fs from "fs";
 import { factoryWorkerAdvances, ledgerAccounts } from "@shared/schema";
-import { normalizeVoucherEntryAmounts } from "../../../services/accounting/currencyAmounts";
 import type { AttendanceStatusRow } from "../../../services/payroll/factoryPayrollGenerationPolicy";
 import { MoneyDecimal, toMoney } from "../../../lib/money";
 import { exactMonthlyPay, exactMonthlyPayFromAttendance } from "./workerPayAmounts";
-
-/** Normalize a USD voucher entry (IDENTITY convention). Returns dual-currency fields spread-ready. */
-export function normUsd(debit: string | number, credit: string | number) {
-  const norm = normalizeVoucherEntryAmounts({
-    transactionCurrency: "USD",
-    baseCurrency: "USD",
-    transactionDebitAmount: String(debit),
-    transactionCreditAmount: String(credit),
-    historicalRate: "1",
-  });
-  return {
-    transactionCurrency: norm.transactionCurrency,
-    transactionDebitAmount: norm.transactionDebitAmount,
-    transactionCreditAmount: norm.transactionCreditAmount,
-    baseDebitAmount: norm.baseDebitAmount,
-    baseCreditAmount: norm.baseCreditAmount,
-    historicalExchangeRate: norm.historicalExchangeRate,
-    rateConvention: norm.rateConvention,
-    debitAmount: norm.debitAmount,
-    creditAmount: norm.creditAmount,
-  };
-}
 
 /** Prefer the factory-pinned company ID so cross-tab ERP company switches don't corrupt factory writes. */
 export function getFactoryCompanyId(req: import("express").Request): number | undefined {

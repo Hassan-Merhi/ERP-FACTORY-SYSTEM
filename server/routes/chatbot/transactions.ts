@@ -41,8 +41,6 @@ export function registerChatbotTransactionRoutes(app: Express) {
         destinationLocationId,
         notes,
         items,
-        sessionId: _sessionId,
-        prompt: _prompt,
         optional,
         analysisSummary,
         analysisDateRange,

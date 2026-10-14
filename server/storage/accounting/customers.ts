@@ -45,10 +45,6 @@ export async function updateCustomer(id: number, updates: Partial<schema.InsertC
   return customer;
 }
 
-export async function deleteCustomer(id: number): Promise<void> {
-  await db.update(schema.customers).set({ deletedAt: new Date(), active: false }).where(eq(schema.customers.id, id));
-}
-
 // ---------------------------------------------------------------------------
 // Inter-Company Transfers
 // ---------------------------------------------------------------------------

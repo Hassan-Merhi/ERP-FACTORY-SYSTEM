@@ -344,22 +344,3 @@ export async function appendSyncLog(type: SyncLog["type"], message: string, meta
     // Logs are best-effort; never throw
   }
 }
-
-export async function getRecentSyncLogs(limit = 50): Promise<SyncLog[]> {
-  const logs = await db.syncLogs.orderBy("timestamp").reverse().limit(limit).toArray();
-  return logs;
-}
-
-export async function clearSyncLogs(): Promise<void> {
-  await db.syncLogs.clear();
-}
-
-export async function clearAllOfflineData(): Promise<void> {
-  await Promise.all([
-    db.syncQueue.clear(),
-    db.syncLogs.clear(),
-    db.conflicts.clear(),
-    db.localDrafts.clear(),
-    db.offlinePackages.clear(),
-  ]);
-}

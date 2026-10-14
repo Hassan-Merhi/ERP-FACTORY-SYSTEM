@@ -89,7 +89,7 @@ test.describe("remote support canary measurement", () => {
         const button = document.createElement("button");
         button.id = "remote-support-e2e-click-target";
         button.type = "button";
-        button.setAttribute("data-remote-control-action", "view");
+        button.setAttribute("data-remote-control-action", "view-details");
         button.textContent = "Remote support E2E 0";
         Object.assign(button.style, {
           position: "fixed",

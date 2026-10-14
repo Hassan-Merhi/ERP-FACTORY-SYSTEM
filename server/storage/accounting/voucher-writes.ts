@@ -5,25 +5,6 @@ import * as schema from "@shared/schema";
 import { MoneyDecimal, toMoney } from "../../lib/money";
 import { reverseVoucherStockTx } from "../../services/inventory/voucherStockReversal";
 import { retireVouchersTx, type VoucherRetirementActor } from "../../services/accounting/voucherRetirement";
-import type { VoucherEntry, InsertVoucherEntry } from "@shared/schema";
-
-export async function createVoucherEntry(entry: InsertVoucherEntry): Promise<VoucherEntry> {
-  const [created] = await db.insert(schema.voucherEntries).values(entry).returning();
-  return created;
-}
-
-export async function updateVoucherEntry(id: number, updates: Partial<InsertVoucherEntry>): Promise<VoucherEntry> {
-  const [updated] = await db
-    .update(schema.voucherEntries)
-    .set(updates)
-    .where(eq(schema.voucherEntries.id, id))
-    .returning();
-  return updated;
-}
-
-export async function deleteVoucherEntry(id: number): Promise<void> {
-  await db.delete(schema.voucherEntries).where(eq(schema.voucherEntries.id, id));
-}
 
 /**
  * Deletes a voucher the storage way: its stock moves back, its linked POs and

@@ -6,7 +6,7 @@ interface UsersPermissionsHubProps {
   appMode?: string;
 }
 
-export function UsersPermissionsHub({ userRole: _userRole, appMode }: UsersPermissionsHubProps) {
+export function UsersPermissionsHub({ appMode }: UsersPermissionsHubProps) {
   return (
     <div className="space-y-4">
       <div>

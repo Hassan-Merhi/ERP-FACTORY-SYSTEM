@@ -49,8 +49,6 @@ const importFeedbackSchema = z.object({
   feedbackSessionId: z.string().max(120).optional().nullable(),
 });
 
-export type SmartTransferPreviewRequest = z.infer<typeof smartTransferPreviewSchema>;
-
 export function registerSmartTransferPreviewRoutes(app: Express) {
   /**
    * Read-only preview endpoint. It does not create a voucher, reserve stock,

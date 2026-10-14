@@ -11,7 +11,6 @@ import { useToast } from "@/hooks/use-toast";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { RefreshCw, TrendingUp, Clock } from "lucide-react";
-import { useCompany } from "@/contexts/CompanyContext";
 import { format } from "date-fns";
 import { authenticatedUserQueryOptions } from "@/contracts/sessionQueryContracts";
 import { canEditExchangeRates } from "@/lib/exchangeRateEditors";
@@ -77,7 +76,6 @@ function markDoneToday(companyId: number, date: string): void {
 
 export function DailyRateModal({ companyId }: DailyRateModalProps) {
   const { toast } = useToast();
-  const { selectedCompany: _selectedCompany } = useCompany();
   const [isOpen, setIsOpen] = useState(false);
   // Only a user who may save a rate (Admin/Owner/Developer, wave 14) is prompted for it.
   const { data: currentUser } = useQuery(authenticatedUserQueryOptions());

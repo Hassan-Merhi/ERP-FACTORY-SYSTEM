@@ -8,6 +8,7 @@ import { companies, locations, stockAdjustmentVouchers, vouchers } from "@shared
 import { DuplicateStockAdjustmentError } from "../storage/stock-ops/transfers-create";
 import { infrastructurePostingIdentity } from "../services/accounting/infrastructureVoucherIdentity";
 import { getCurrentExchangeRate } from "./_helpers";
+import { isRecord } from "@shared/typeGuards";
 
 type AdjustmentType = "Production" | "Consumption" | "Mixed";
 
@@ -47,10 +48,6 @@ function normalizeAdjustmentItems(items: IncomingAdjustmentItem[]) {
       rate: rawRate.toString(),
     };
   });
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;

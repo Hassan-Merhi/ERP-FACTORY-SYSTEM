@@ -5,8 +5,6 @@ import { db } from "../../db";
 import { persistSecurityEvent } from "./securityAuditRuntime";
 import { isPinnedCompanyRoute, resolvePermissionCompanyId } from "./activeCompanyPermissionPolicy";
 
-export type CompanyAssertionSource = "body" | "query" | "params";
-
 export interface CompanyContextOptions {
   assertionFields?: string[];
   includeLegacyFactorySessionAssertion?: boolean;

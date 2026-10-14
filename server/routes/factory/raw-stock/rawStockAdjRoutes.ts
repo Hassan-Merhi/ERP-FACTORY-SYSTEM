@@ -17,7 +17,7 @@ import {
   factoryRawMaterialAdjustments,
   vouchers,
 } from "@shared/schema";
-import { eq, and, desc, sql, inArray, ilike, isNull } from "drizzle-orm";
+import { eq, and, desc, sql, ilike, isNull } from "drizzle-orm";
 import type Decimal from "decimal.js";
 import { MoneyDecimal, moneyString, parseMoneyInput, toMoney } from "../../../lib/money";
 import { postFactoryVoucherTx } from "../../../services/factory/factoryVoucherPosting";
@@ -718,78 +718,6 @@ export function registerRawStockAdjRoutes(app: Express) {
       res.json(enriched);
     } catch (error: unknown) {
       logger.error("Error fetching factory raw stock by container:", { error: error });
-      res.status(500).json({ message: getErrorMessage(error) });
-    }
-  });
-
-  app.get("/api/factory/raw-stock/available-containers", requireAuth, async (req: Request, res: Response) => {
-    try {
-      const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
-
-      // Include containers in statuses that can accept a first offload:
-      // PENDING: created/ordered (user may offload directly from this state).
-      // ARRIVED/RECEIVED: awaiting first offload.
-      // PARTIALLY_RECEIVED is fetched here for the locked-cost lookup below but
-      // is excluded from the response — continuation offloads are handled separately.
-      // Exclude IN_TRANSIT, CLOSED, COMPLETED, OFFLOADED, DELETED, OPENING_BALANCE.
-      const rawResults = await db
-        .select()
-        .from(factoryContainers)
-        .where(
-          and(
-            eq(factoryContainers.companyId, companyId),
-            sql`${factoryContainers.status} IN ('PENDING', 'ARRIVED', 'RECEIVED', 'PARTIALLY_RECEIVED')`,
-            isNull(factoryContainers.deletedAt)
-          )
-        );
-
-      // Strip out PARTIALLY_RECEIVED from the final response — those containers
-      // already had their first receipt and should not appear in the first-offload
-      // dropdown. Also guard against edge-case fully-received partials.
-      const validContainers = rawResults.filter((c) => {
-        if (c.status === "PARTIALLY_RECEIVED") return false;
-        return true;
-      });
-
-      // For PARTIALLY_RECEIVED containers, surface the fixed landed cost/kg from
-      // raw stock so the offload dialog can display the established rate without
-      // requiring the user to re-enter it.
-      const partialIds = validContainers.filter((c) => c.status === "PARTIALLY_RECEIVED").map((c) => c.id);
-      const rawStockByContainer = new Map<number, { costPerKg: string | null; costPerKgUsd: string | null }>();
-
-      if (partialIds.length > 0) {
-        const rawStockRows = await db
-          .select({
-            containerId: factoryRawStock.containerId,
-            costPerKg: factoryRawStock.costPerKg,
-            costPerKgUsd: factoryRawStock.costPerKgUsd,
-          })
-          .from(factoryRawStock)
-          .where(
-            and(
-              eq(factoryRawStock.companyId, companyId),
-              inArray(factoryRawStock.containerId, partialIds),
-              isNull(factoryRawStock.deletedAt)
-            )
-          );
-        for (const row of rawStockRows) {
-          rawStockByContainer.set(row.containerId, {
-            costPerKg: row.costPerKg,
-            costPerKgUsd: row.costPerKgUsd,
-          });
-        }
-      }
-
-      const response = validContainers.map((c) => {
-        if (c.status !== "PARTIALLY_RECEIVED") return c;
-        const rs = rawStockByContainer.get(c.id);
-        return { ...c, fixedCostPerKg: rs?.costPerKg || null, fixedCostPerKgUsd: rs?.costPerKgUsd || null };
-      });
-
-      res.json(response);
-    } catch (error: unknown) {
-      logger.error("Error fetching available containers:", { error: error });
       res.status(500).json({ message: getErrorMessage(error) });
     }
   });

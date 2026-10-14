@@ -1,5 +1,5 @@
 /**
- * The GIT report tabs (Detail, Truck/Location, Port, Summary, WhatsApp) render
+ * The GIT report tabs (Detail, Truck/Location) render
  * fleet-wide counts and totals. /api/git/containers paginates at 50 rows, so a
  * request without all=true silently truncated those views — 58 containers on
  * the road showed up as 50.
@@ -10,7 +10,7 @@ import path from "path";
 import { gitContainersUrl } from "@/pages/git-mockup/helpers";
 import { parseGitPagination } from "../../server/routes/git/gitListingProfiles";
 
-const REPORT_TABS = ["TabDetail", "TabTruckLocation", "TabPortReport", "TabSummary", "TabWhatsApp"];
+const REPORT_TABS = ["TabDetail", "TabTruckLocation"];
 
 describe("git report listing URLs", () => {
   it("always requests the full listing", () => {

@@ -70,12 +70,6 @@ interface PosShift {
   notes: string | null;
 }
 
-interface _TodaySales {
-  count: number;
-  total: string;
-  average: string;
-}
-
 interface PosTodayVoucher {
   voucherType?: string | null;
   totalAmount?: string | number | null;

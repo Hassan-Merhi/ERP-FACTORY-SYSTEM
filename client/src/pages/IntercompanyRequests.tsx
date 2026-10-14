@@ -1,7 +1,6 @@
 import type { ClientErrorLike } from "@/lib/clientError";
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useLocation } from "wouter";
 import { apiRequest } from "@/lib/queryClient";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
@@ -50,7 +49,6 @@ function StatusBadge({ status }: { status: string }) {
 }
 
 export default function IntercompanyRequests() {
-  const [, _navigate] = useLocation();
   const { toast } = useToast();
   const queryClient = useQueryClient();
 

@@ -80,7 +80,7 @@ export default function Settings() {
   const [userToDelete, setUserToDelete] = useState<SettingsUserToDelete | null>(null);
   const { prefs, updatePref, isPending: prefsPending } = useUserPreferences();
 
-  const { data: companies = [], isLoading: _isLoadingCompanies } = useQuery<Company[]>({
+  const { data: companies = [] } = useQuery<Company[]>({
     queryKey: ["/api/companies"],
   });
 

@@ -63,7 +63,6 @@ interface ContainerImportRow {
 export default function FactoryContainers() {
   const { selectedCompany } = useCompany();
   const [viewMode, setViewMode] = useState<"list" | "summary">("summary");
-  const [_trackingNowId, _setTrackingNowId] = useState<number | null>(null);
   const [openOtwGroups, setOpenOtwGroups] = useState<Set<string>>(new Set());
   const [createOpen, setCreateOpen] = useState(false);
   const [editingContainer, setEditingContainer] = useState<ContainerWithSupplier | null>(null);

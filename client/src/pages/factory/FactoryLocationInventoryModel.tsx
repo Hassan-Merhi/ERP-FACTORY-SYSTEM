@@ -37,7 +37,7 @@ export function useFactoryLocationInventory() {
   const [productSearch, setProductSearch] = useState("");
   const [prodSortField, setProdSortField] = useState<SortField>("name");
   const [prodSortDir, setProdSortDir] = useState<SortDir>("asc");
-  const [_loc, navigate] = useLocation();
+  const [, navigate] = useLocation();
   const printRef = useRef<HTMLDivElement>(null);
   const { formatAmount } = useCurrencyContext();
   const { toast } = useToast();

@@ -14,8 +14,6 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { formatNumber } from "@/lib/formatNumber";
 import type { AuthMe, ApiListRow } from "@shared/apiTypes";
 
-const _CURRENCIES = ["USD", "EUR", "GBP", "AUD", "LBP", "XOF", "XAF"];
-
 // ─── Row-total helpers ───────────────────────────────────────────────────────
 
 /**

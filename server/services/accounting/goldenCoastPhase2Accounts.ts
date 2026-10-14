@@ -179,14 +179,6 @@ export const GOLDEN_COAST_PHASE2_ACCOUNT_DEFS: readonly GoldenCoastAccountDefini
   },
 ] as const;
 
-export const GOLDEN_COAST_PHASE2_SUBTYPES: readonly string[] = GOLDEN_COAST_PHASE2_ACCOUNT_DEFS.map(
-  (definition) => definition.subType
-);
-
-export const GOLDEN_COAST_PHASE2_ROLES: readonly GoldenCoastAccountRole[] = GOLDEN_COAST_PHASE2_ACCOUNT_DEFS.map(
-  (definition) => definition.role
-);
-
 /** Every sub type Phase 2 looks at, canonical plus adoptable legacy aliases. */
 export const GOLDEN_COAST_PHASE2_LOOKUP_SUBTYPES: readonly string[] = [
   ...new Set(

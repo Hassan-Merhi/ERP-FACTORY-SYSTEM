@@ -139,16 +139,7 @@ export interface FileDiffCardProps {
   pushResult: PushResult | null;
 }
 
-export function FileDiffCard({
-  draft,
-  onApply: _onApply,
-  onCancel: _onCancel,
-  isApplying: _isApplying,
-  isApplied: _isApplied,
-  onGitPush: _onGitPush,
-  isPushing: _isPushing,
-  pushResult: _pushResult,
-}: FileDiffCardProps) {
+export function FileDiffCard({ draft }: FileDiffCardProps) {
   const [showFullDiff, setShowFullDiff] = useState(false);
 
   const diffLines = computeLineDiff(draft.originalContent, draft.newContent);

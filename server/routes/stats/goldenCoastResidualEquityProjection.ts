@@ -69,11 +69,6 @@ export function goldenCoastPartnerClaim(account: LedgerRow, balances: Map<number
   return round2(openingClaim + movement.credit - movement.debit);
 }
 
-/** Backward-compatible export retained for existing focused tests/imports. */
-export function goldenCoastHassanClaim(account: LedgerRow, balances: Map<number, AccountBalance>): number {
-  return goldenCoastPartnerClaim(account, balances);
-}
-
 function currentCreditNormalPayable(account: LedgerRow | null, balances: Map<number, AccountBalance>): number {
   if (!account) return 0;
   return round2(Math.max(0, -getAccountNetBalance(account, balances)));

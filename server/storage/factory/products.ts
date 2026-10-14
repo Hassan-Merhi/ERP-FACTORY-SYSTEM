@@ -63,14 +63,6 @@ export async function getBaleProductById(id: number): Promise<schema.BaleProduct
   return product;
 }
 
-export async function getBaleProductByCode(code: string, companyId: number): Promise<schema.BaleProduct | undefined> {
-  const [product] = await db
-    .select()
-    .from(schema.baleProducts)
-    .where(and(eq(schema.baleProducts.code, code), eq(schema.baleProducts.companyId, companyId)));
-  return product;
-}
-
 export async function getBaleProductByArticleCode(
   articleCode: string,
   companyId: number
@@ -110,33 +102,6 @@ export async function updateBaleProduct(
 
 export async function deleteBaleProduct(id: number): Promise<void> {
   await db.delete(schema.baleProducts).where(eq(schema.baleProducts.id, id));
-}
-
-export async function bulkCreateBaleProducts(products: schema.InsertBaleProduct[]): Promise<schema.BaleProduct[]> {
-  if (products.length === 0) return [];
-
-  const companyIds = new Set(products.map((p) => p.companyId));
-  if (companyIds.size > 1) {
-    throw new Error("All products must belong to the same company");
-  }
-
-  const withCodes = products.map((p) => ({
-    ...p,
-    code: p.code || p.articleCode || `AUTO-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-  }));
-
-  const codes = withCodes.map((p) => p.code);
-  const duplicates = codes.filter((code, index) => codes.indexOf(code) !== index);
-  if (duplicates.length > 0) {
-    throw new Error(`Duplicate product codes in import: ${duplicates.join(", ")}`);
-  }
-
-  return await db.insert(schema.baleProducts).values(withCodes).returning();
-}
-
-export async function createBaleLabelPrint(data: schema.InsertBaleLabelPrint): Promise<schema.BaleLabelPrint> {
-  const [created] = await db.insert(schema.baleLabelPrints).values(data).returning();
-  return created;
 }
 
 export async function getBaleLabelPrintByReference(

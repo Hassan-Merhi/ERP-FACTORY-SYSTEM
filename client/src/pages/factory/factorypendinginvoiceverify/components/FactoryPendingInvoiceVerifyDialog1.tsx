@@ -7,14 +7,7 @@ import type { useFactoryPendingInvoiceVerifyModel } from "../useFactoryPendingIn
 type Model = ReturnType<typeof useFactoryPendingInvoiceVerifyModel>;
 
 export function FactoryPendingInvoiceVerifyDialog1({ model }: { model: Model }) {
-  const {
-    showApproveDialog,
-    setShowApproveDialog,
-    approveNotes,
-    setApproveNotes,
-    verifyMutation,
-    isPending: _isPending,
-  } = model;
+  const { showApproveDialog, setShowApproveDialog, approveNotes, setApproveNotes, verifyMutation } = model;
   return (
     <Dialog open={showApproveDialog} onOpenChange={setShowApproveDialog}>
       <DialogContent className="max-w-md">

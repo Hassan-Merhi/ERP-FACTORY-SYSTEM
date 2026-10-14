@@ -63,7 +63,7 @@ interface StockItemSummary {
 export default function StockItemHistory() {
   const params = useParams();
   const stockItemId = parseInt(params.id || "0");
-  const [_location, navigate] = useLocation();
+  const [, navigate] = useLocation();
   const handleBack = useBackToParent();
   const { formatAmount } = useCurrencyContext();
 

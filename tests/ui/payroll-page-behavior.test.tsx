@@ -135,7 +135,6 @@ vi.mock("@/pages/payroll/WorkersTab", () => ({
     </div>
   ),
 }));
-vi.mock("@/pages/payroll/GroupsTab", () => ({ GroupsTab: () => <div>Groups area</div> }));
 vi.mock("@/pages/payroll/AdvancesTab", () => ({
   AdvancesTab: ({ cashAccounts }: any) => <div>Advances cash {cashAccounts.length}</div>,
 }));

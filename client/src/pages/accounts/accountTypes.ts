@@ -41,21 +41,6 @@ export interface Transaction {
   currency?: string;
 }
 
-export interface GroupedVoucher {
-  voucherId: number;
-  voucherNumber: string;
-  voucherType: string;
-  voucherDate: string;
-  effectiveDate?: string | null;
-  voucherDescription: string;
-  narration: string;
-  totalDebit: number;
-  totalCredit: number;
-  runningBalance?: number;
-  runningBalanceCurrency?: string;
-  currency?: string;
-}
-
 export interface WaRule {
   id?: number;
   enabled: boolean;
@@ -114,56 +99,3 @@ export interface AccountDialogsProps {
   saveWaRuleMutation: SaveWaRuleMutation;
   waChatsLoading: boolean;
 }
-
-export const exportLabels: Record<
-  string,
-  {
-    ledger: string;
-    type: string;
-    debit: string;
-    credit: string;
-    runningBalance: string;
-    date: string;
-    notes: string;
-    openingBalance: string;
-    accountStatement: string;
-    language: string;
-  }
-> = {
-  en: {
-    ledger: "Ledger",
-    type: "Type",
-    debit: "Debit",
-    credit: "Credit",
-    runningBalance: "Running Balance",
-    date: "Date",
-    notes: "Notes",
-    openingBalance: "Opening Balance",
-    accountStatement: "Account Statement",
-    language: "English",
-  },
-  fr: {
-    ledger: "Compte",
-    type: "Type",
-    debit: "Débit",
-    credit: "Crédit",
-    runningBalance: "Solde courant",
-    date: "Date",
-    notes: "Notes",
-    openingBalance: "Solde d'ouverture",
-    accountStatement: "Relevé de compte",
-    language: "Français",
-  },
-  ar: {
-    ledger: "الحساب",
-    type: "النوع",
-    debit: "مدين",
-    credit: "دائن",
-    runningBalance: "الرصيد",
-    date: "التاريخ",
-    notes: "ملاحظات",
-    openingBalance: "الرصيد الافتتاحي",
-    accountStatement: "كشف حساب",
-    language: "عربي",
-  },
-};

@@ -203,6 +203,7 @@ export function registerFactorySupplierPaymentRoutes(app: Express) {
         .select()
         .from(factorySupplierPayments)
         .where(and(eq(factorySupplierPayments.id, id), eq(factorySupplierPayments.companyId, companyId)));
+      if (!payment) return res.status(404).json({ message: "Supplier payment not found" });
       const [spDelSupplier] = payment
         ? await db
             .select({ name: factorySuppliers.name })
@@ -238,16 +239,13 @@ export function registerFactorySupplierPaymentRoutes(app: Express) {
         await tx
           .delete(factorySupplierPayments)
           .where(and(eq(factorySupplierPayments.id, id), eq(factorySupplierPayments.companyId, companyId)));
-      });
-
-      if (payment) {
-        await writeDaybookEntry(db, {
+        await writeDaybookEntry(tx, {
           companyId,
           txDate: getClientDate(req),
           txType: "SUPPLIER_PAYMENT_DELETE",
           description: `Supplier payment deleted: ${spDelSupplier?.name || "Unknown"} – ${toMoney(payment.amount).toFixed(2)} ${payment.currencyCode} (dated ${payment.date})`,
         });
-      }
+      });
       res.json({ message: "Payment deleted" });
     } catch (error: unknown) {
       logger.error("Error deleting supplier payment:", { error: error });

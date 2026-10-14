@@ -3,8 +3,6 @@
  *
  * Extracted from DataToolsTab.tsx during the Phase 4 god-file split.
  */
-import {z} from "zod";
-import {companyFormSchema, roleAssignmentSchema, userFormSchema} from "./utils";
 
 export interface SilentImportRow {
   rawCode: string;
@@ -17,12 +15,6 @@ export interface SilentImportRow {
   rate: number;
   status: "ok" | "not_found" | "to_zero";
 }
-
-export type UserFormData = z.infer<typeof userFormSchema>;
-
-export type CompanyFormData = z.infer<typeof companyFormSchema>;
-
-export type RoleAssignmentData = z.infer<typeof roleAssignmentSchema>;
 
 export interface MergePreviewResult {
   keptItem: { id: number; code: string; name: string; uom: string };

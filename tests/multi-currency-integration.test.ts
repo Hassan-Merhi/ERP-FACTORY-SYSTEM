@@ -267,8 +267,12 @@ describe("legacy history safety", () => {
 
   it("exposes dual-currency fields from every voucher account storage query", () => {
     const source = read("server/storage/accounting/vouchers.ts");
-    expect((source.match(/transaction_debit_amount/g) || []).length).toBeGreaterThanOrEqual(6);
-    expect((source.match(/historical_exchange_rate/g) || []).length).toBeGreaterThanOrEqual(6);
+    // One pair per voucher-entry query (getVoucherEntriesByCustomer, which had the sixth, was
+    // never called and was removed by the dead-code cleanup).
+    const entryQueries = (source.match(/FROM voucher_entries/g) || []).length;
+    expect(entryQueries).toBeGreaterThanOrEqual(5);
+    expect((source.match(/transaction_debit_amount/g) || []).length).toBeGreaterThanOrEqual(entryQueries);
+    expect((source.match(/historical_exchange_rate/g) || []).length).toBeGreaterThanOrEqual(entryQueries);
   });
 
   it("blocks protected financial reports instead of guessing unresolved base values", () => {

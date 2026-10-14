@@ -21,21 +21,6 @@ export async function getAllInterCompanyTransfers(companyId?: number): Promise<s
     .orderBy(sql`${schema.interCompanyTransfers.transferDate} DESC`);
 }
 
-export async function getInterCompanyTransferById(id: number): Promise<schema.InterCompanyTransfer | undefined> {
-  const [transfer] = await db
-    .select()
-    .from(schema.interCompanyTransfers)
-    .where(eq(schema.interCompanyTransfers.id, id));
-  return transfer;
-}
-
-export async function createInterCompanyTransfer(
-  transfer: schema.InsertInterCompanyTransfer
-): Promise<schema.InterCompanyTransfer> {
-  const [newTransfer] = await db.insert(schema.interCompanyTransfers).values(transfer).returning();
-  return newTransfer;
-}
-
 // ---------------------------------------------------------------------------
 // Company Settings
 // ---------------------------------------------------------------------------

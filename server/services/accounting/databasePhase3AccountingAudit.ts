@@ -3,12 +3,10 @@ import type { db } from "../../db";
 import { resultRows } from "../../lib/queryResult";
 import { classifyVoucherLedgerExpectation } from "./voucherLedgerExpectation";
 import {
-  auditPhase3Accounting,
   Phase3AccountingAuditError,
   type DuplicateEntryGroup,
   type PaymentAuditSnapshot,
   type Phase3AccountingAuditInput,
-  type Phase3AccountingAuditReport,
   type PayrollAuditSnapshot,
   type SaleAuditSnapshot,
   type StockAccountingAuditSnapshot,
@@ -451,11 +449,4 @@ export async function loadDatabasePhase3AccountingAudit(input: {
   }));
 
   return { companyId, payments, vouchers, sales, payrolls, stock, duplicateEntries };
-}
-
-export async function runDatabasePhase3AccountingAudit(input: {
-  tx: DrizzleTransaction;
-  companyId: number;
-}): Promise<Phase3AccountingAuditReport> {
-  return auditPhase3Accounting(await loadDatabasePhase3AccountingAudit(input));
 }

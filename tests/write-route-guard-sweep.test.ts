@@ -127,7 +127,6 @@ const SENSITIVE_WRITE_ROUTES = [
   "DELETE /api/payroll/workers/:workerId/deductions/:id",
   "DELETE /api/purchase-orders/:id",
   "DELETE /api/salary-advances/:id",
-  "DELETE /api/sp/migration/cutover",
   "DELETE /api/vouchers/:id",
   "PATCH /api/bales/:id",
   "PATCH /api/containers/:id/number",
@@ -142,6 +141,7 @@ const SENSITIVE_WRITE_ROUTES = [
   "PATCH /api/factory/bales/bulk-date",
   "PATCH /api/factory/bales/bulk-status",
   "PATCH /api/factory/containers/:id",
+  "PATCH /api/factory/customer-orders/:id/change-customer",
   "PATCH /api/factory/customer-orders/:id/charges/:chargeId",
   "PATCH /api/factory/customer-orders/:id/date",
   "PATCH /api/factory/customer-orders/:id/hidden",
@@ -164,7 +164,6 @@ const SENSITIVE_WRITE_ROUTES = [
   "PATCH /api/payroll/runs/:id",
   "PATCH /api/purchase-orders/:id",
   "PATCH /api/sp/containers/:id",
-  "PATCH /api/sp/migration/cutover",
   "PATCH /api/stock-transfers/:id",
   "PATCH /api/voucher-entries/:id",
   "PATCH /api/vouchers/:id",
@@ -371,23 +370,14 @@ const SENSITIVE_WRITE_ROUTES = [
   "POST /api/sp/containers",
   "POST /api/sp/containers/:id/cancel",
   "POST /api/sp/migration/create-sp-company",
-  "POST /api/sp/migration/cutover",
-  "POST /api/sp/migration/cutover/cancel",
-  "POST /api/sp/migration/cutover/finalize",
-  "POST /api/sp/migration/cutover/prepare",
-  "POST /api/sp/migration/cutover/rollback",
   "POST /api/sp/migration/gc-container-charge-review/:chargeId/map",
-  "POST /api/sp/migration/gc-containers",
   "POST /api/sp/migration/gc-create-accounts",
   "POST /api/sp/migration/gc-profit-opening",
   "POST /api/sp/migration/gc-rehearsal",
-  "POST /api/sp/migration/gc-sales-readonly",
   "POST /api/sp/migration/gc-stock-master",
   "POST /api/sp/migration/gc-stock-opening",
   "POST /api/sp/migration/gc-suspense-review/:targetEntryId/map",
   "POST /api/sp/migration/opening-balance",
-  "POST /api/sp/migration/rehearsal",
-  "POST /api/sp/migration/rollback",
   "POST /api/sp/offload",
   "POST /api/sp/offloads/:id/reverse",
   "POST /api/sp/opening-stock",
@@ -407,7 +397,6 @@ const SENSITIVE_WRITE_ROUTES = [
   "POST /api/stock-transfer-import/validate",
   "POST /api/stock-transfer-import/validate-multi-source",
   "POST /api/stock-transfers",
-  "POST /api/stock-transfers/:transferId/revisions",
   "POST /api/system/parent-company",
   "POST /api/voucher-entries",
   "POST /api/voucher-entries/transfer-account",
@@ -421,7 +410,6 @@ const SENSITIVE_WRITE_ROUTES = [
   "PUT /api/factory/pos/sales/:id",
   "PUT /api/intercompany-links/:id",
   "PUT /api/ledger-accounts/:id",
-  "PUT /api/sp/migration/cutover",
   "PUT /api/stock-transfers/:id",
   "PUT /api/vouchers/:id/with-entries",
 ] as const;
@@ -474,6 +462,12 @@ afterAll(() => {
  * Printing & Loading: every physical bale deletion now goes through
  * server/routes/factory/stock/physicalBaleDeletion.ts, so the route files no
  * longer name the inventory table themselves, but the routes still move stock.
+ *
+ * The SP migration cutover/rehearsal/rollback/GC routes and POST
+ * /api/stock-transfers/:transferId/revisions joined them in the dead-code
+ * cleanup: the shadowed copies that wrote inline were removed, and the
+ * registrations that always served these paths hand their writes to the
+ * migration services and the immutable revision lifecycle.
  */
 const DELEGATED_WRITE_ROUTES = [
   "DELETE /api/factory/v3/loads/:id/bales/:baleId",
@@ -494,6 +488,19 @@ const DELEGATED_WRITE_ROUTES = [
   "POST /api/stock-adjustments",
   "POST /api/waste-dispatches",
   "PUT /api/stock-adjustments/:id",
+  "DELETE /api/sp/migration/cutover",
+  "PATCH /api/sp/migration/cutover",
+  "POST /api/sp/migration/cutover",
+  "POST /api/sp/migration/cutover/cancel",
+  "POST /api/sp/migration/cutover/finalize",
+  "POST /api/sp/migration/cutover/prepare",
+  "POST /api/sp/migration/cutover/rollback",
+  "POST /api/sp/migration/gc-containers",
+  "POST /api/sp/migration/gc-sales-readonly",
+  "POST /api/sp/migration/rehearsal",
+  "POST /api/sp/migration/rollback",
+  "POST /api/stock-transfers/:transferId/revisions",
+  "PUT /api/sp/migration/cutover",
 ];
 
 describe("sensitive write-route guard sweep", () => {

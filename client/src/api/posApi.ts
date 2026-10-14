@@ -1,4 +1,4 @@
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { queryClient } from "@/lib/queryClient";
 
 export function posDraftsUrl(locationId: number): string {
   return `/api/pos/drafts?locationId=${locationId}`;
@@ -76,22 +76,3 @@ export function removePosDraftSummary(locationId: number | null | undefined, dra
     Array.isArray(current) ? current.filter((row) => row.id !== draftId) : []
   );
 }
-
-export const posApi = {
-  openShift: (data: { locationId: number; openingCash?: number; [key: string]: unknown }) =>
-    apiRequest("POST", "/api/pos/shifts/open", data),
-
-  closeShift: (
-    shiftId: number,
-    data: {
-      closingCash?: number;
-      notes?: string;
-      [key: string]: unknown;
-    }
-  ) => apiRequest("POST", `/api/pos/shifts/${shiftId}/close`, data),
-
-  createSale: (data: { locationId: number; items: unknown[]; [key: string]: unknown }) =>
-    apiRequest("POST", "/api/pos/sales", data),
-
-  saveDraft: (data: Record<string, unknown>) => apiRequest("POST", "/api/pos/drafts", data),
-};

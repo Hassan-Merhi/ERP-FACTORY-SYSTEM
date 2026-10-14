@@ -33,7 +33,6 @@ export default function CreateProformaV5Drawer({ open, onClose, articleRows, onS
     isActive,
     setIsActive,
     quantities,
-    setQuantities: _setQuantities,
     sellingPrices,
     setSellingPrices,
     sendToLoading,

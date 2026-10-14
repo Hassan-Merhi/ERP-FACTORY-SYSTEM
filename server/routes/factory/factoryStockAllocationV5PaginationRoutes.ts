@@ -3,15 +3,11 @@ import type { Express, NextFunction, Request, Response } from "express";
 import { getErrorMessage } from "../../lib/httpHandlers";
 import { requireAuth } from "../../auth";
 import { pool } from "../../db";
+import { parsePositiveInt } from "../../lib/listPagination";
 
 const DEFAULT_PAGE_SIZE = 50;
 const MAX_PAGE_SIZE = 250;
 const ACTIVE_ORDER_STATUSES = ["DRAFT", "LOADING", "PENDING_VERIFICATION", "VERIFIED", "FINALIZED"];
-
-function parsePositiveInt(value: unknown, fallback: number): number {
-  const parsed = Number.parseInt(String(value ?? ""), 10);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
-}
 
 function wantsPagination(req: Request): boolean {
   return (

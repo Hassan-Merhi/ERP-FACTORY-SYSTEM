@@ -14,8 +14,6 @@ export const KNOWN_SECURITY_PERMISSIONS = Object.freeze([
   "inventory.cost.view",
 ] as const);
 
-export type KnownSecurityPermission = (typeof KNOWN_SECURITY_PERMISSIONS)[number];
-
 export class SecuritySchemaUnavailableError extends Error {
   readonly status = 503;
   readonly statusCode = 503;

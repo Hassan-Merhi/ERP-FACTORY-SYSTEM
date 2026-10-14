@@ -91,6 +91,7 @@ import {
   LedgerMonthlySummary,
   LedgerVouchers,
   MergeBaleProducts,
+  FactoryCatalogTranslations,
   MySettings,
   OrphanedRecords,
   Payroll,
@@ -237,6 +238,7 @@ export function FactoryRoutes({ user, myAccess, factoryDefaultPage }: FactoryRou
       <Route path="/factory/import" component={FactoryImport} />
       <Route path="/factory/bale-relabeling" component={FactoryBaleRelabeling} />
       <Route path="/factory/merge-bale-products" component={MergeBaleProducts} />
+      <Route path="/factory/catalog-translations" component={FactoryCatalogTranslations} />
       <Route path="/factory/bale-product-images" component={BaleProductImages} />
       <Route path="/factory/customer-logos" component={CustomerLogosSettings} />
       <Route path="/factory/label-banners" component={LabelBannersSettings} />

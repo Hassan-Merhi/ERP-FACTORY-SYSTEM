@@ -107,9 +107,6 @@ export function FileStorageTab() {
     return searchAny(search, visibleName(f));
   });
 
-  const _fileCountForFolder = (id: number | null) =>
-    allFiles.filter((f) => (id === null ? f.folderId == null : f.folderId === id)).length;
-
   const onRenameFolder = (id: number, name: string) => {
     setRenameFolderId(id);
     setRenameFolderName(name);

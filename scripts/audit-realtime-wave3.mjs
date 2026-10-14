@@ -6,10 +6,6 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), ".."
 
 const phase5Targets = [
   {
-    path: "client/src/components/erpworkerdetail/useERPWorkerDetailModel.tsx",
-    requiredFreshness: [/staleTime:\s*15000/],
-  },
-  {
     path: "client/src/pages/PurchaseOrderEdit.tsx",
     requiredFreshness: [/staleTime:\s*15000/],
   },

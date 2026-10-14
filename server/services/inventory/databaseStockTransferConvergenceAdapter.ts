@@ -202,21 +202,3 @@ export function mergeStockTransferConvergenceEvidence(input: {
     };
   });
 }
-
-export function createDatabaseStockTransferSnapshotLoader(loadMovementEvidence: StockTransferMovementEvidenceLoader) {
-  return async (input: { tx: DrizzleTransaction; companyId: number }): Promise<StockConvergenceSnapshot[]> => {
-    const documents = await loadDatabaseStockTransferDocuments(input);
-    const evidence = await loadMovementEvidence({ ...input, documents });
-    if (!Array.isArray(evidence)) {
-      throw new ConvergenceReconciliationError(
-        "CONVERGENCE_ADAPTER_INVALID",
-        "Stock transfer movement evidence loader must return an array"
-      );
-    }
-    return mergeStockTransferConvergenceEvidence({
-      companyId: input.companyId,
-      documents,
-      evidence,
-    });
-  };
-}

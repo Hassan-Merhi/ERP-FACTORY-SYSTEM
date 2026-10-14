@@ -168,5 +168,3 @@ export function translateAccountingDocumentText(value: string, language: Applica
   const entry = lookup.get(value.trim());
   return entry ? `${leading}${entry[language]}${trailing}` : null;
 }
-
-export const accountingDocumentTranslationEntries = entries;

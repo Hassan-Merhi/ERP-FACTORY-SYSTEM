@@ -35,11 +35,6 @@ interface BatchBaleRow {
   location?: { name?: string };
 }
 
-interface FactorySupplierOption {
-  id: number;
-  name: string;
-}
-
 interface BatchDetailProps {
   batchId: number;
   onBack: () => void;
@@ -91,12 +86,6 @@ export default function BatchDetail({ batchId, onBack, onDeleted }: BatchDetailP
       return res.json();
     },
   });
-
-  const { data: suppliers } = useQuery<FactorySupplierOption[]>({
-    queryKey: ["/api/factory/suppliers"],
-  });
-
-  const _supplierMap = Object.fromEntries((suppliers || []).map((s) => [s.id, s.name]));
 
   const editMutation = useMutation({
     mutationFn: async () => {

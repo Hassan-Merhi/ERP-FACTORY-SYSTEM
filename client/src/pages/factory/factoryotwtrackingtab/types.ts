@@ -14,20 +14,3 @@ export interface OtwTrackingTabProps {
   onEdit?: (container: ContainerWithSupplier) => void;
 }
 
-export // ── Event Timeline Sheet ─────────────────────────────────────────────────────
-interface TrackingEvent {
-  id: number;
-  eventTime: string | null;
-  description: string | null;
-  location: string | null;
-  status: string | null;
-  provider: string | null;
-}
-
-export // ── Track-now progress log ────────────────────────────────────────────────────
-interface ProgressStep {
-  provider: string;
-  status: "running" | "success" | "fail" | "skip" | "blocked";
-  detail?: string;
-  ts: number;
-}

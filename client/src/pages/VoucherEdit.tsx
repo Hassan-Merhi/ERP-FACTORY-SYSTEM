@@ -36,7 +36,7 @@ type GoldenCoastEditReadiness = {
 export default function VoucherEdit() {
   const { formatDisplayDate } = useDateFormat();
   const { id } = useParams<{ id: string }>();
-  const [_location, navigate] = useLocation();
+  const [, navigate] = useLocation();
   const handleBack = useBackToParent();
   const { selectedCompany } = useCompany();
   const { selectedCurrency, formatAmount, exchangeRate } = useCurrencyContext();

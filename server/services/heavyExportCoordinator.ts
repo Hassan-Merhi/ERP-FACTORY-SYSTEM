@@ -87,15 +87,6 @@ function dispatch(): void {
   }
 }
 
-export function getHeavyExportState() {
-  return {
-    active: state.active,
-    queued: state.queue.length,
-    maxConcurrent: maxConcurrent(),
-    maxQueue: maxQueue(),
-  };
-}
-
 export function isHeavyExportSlotActive(): boolean {
   return slotContext.getStore()?.active === true;
 }

@@ -69,14 +69,6 @@ function localDateStr(d: Date) {
 function todayStr() {
   return localDateStr(new Date());
 }
-function _currentMonthStart() {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
-}
-function _currentMonthEnd() {
-  const d = new Date();
-  return localDateStr(new Date(d.getFullYear(), d.getMonth() + 1, 0));
-}
 function generateDateRange(start: string, end: string): string[] {
   const dates: string[] = [];
   const cur = new Date(start + "T00:00:00");

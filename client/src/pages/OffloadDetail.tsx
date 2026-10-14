@@ -207,10 +207,6 @@ export default function OffloadDetail() {
       : displayDuties + displayOfficeCharges + displayTransportFees + displayTransferCharges + displayAddlCharges) +
     storedAdditionalCharges;
 
-  const _displayCostPerBale = live?.hasVouchers
-    ? live.additionalCostPerBale
-    : Number(offload?.additionalCostPerBale || 0);
-
   // Stored original values for comparison badges
   const storedDuties = Number(offload?.duties || 0);
   const storedOfficeCharges = Number(offload?.officeCharges || 0);

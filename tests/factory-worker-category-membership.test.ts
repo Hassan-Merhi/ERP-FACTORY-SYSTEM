@@ -29,11 +29,8 @@ describe("factory worker category membership", () => {
 
   it("lets a stale inactive assignment be manually unchecked without allowing a new inactive assignment", () => {
     const dialog = read("client/src/pages/factory/factoryworkers/FactoryWorkersDialogs.tsx");
-    const stockEntryGroups = read("client/src/pages/factory/bale-stock-entry/WorkerCategoriesTab.tsx");
 
     expect(dialog).toContain("disabled={!w.active && !catWorkerIds.includes(w.id)}");
     expect(dialog).toContain("if (w.active || catWorkerIds.includes(w.id)) toggleCatWorker(w.id)");
-    expect(stockEntryGroups).toContain(".filter((w) => w.active !== false || catWorkerIds.includes(w.id))");
-    expect(stockEntryGroups).toContain("if (!inactive || selected) toggleCatWorker(w.id)");
   });
 });

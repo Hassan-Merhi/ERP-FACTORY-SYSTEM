@@ -7,7 +7,8 @@ import { auditRealtimeWave3 } from "../scripts/audit-realtime-wave3.mjs";
 describe("Realtime Refresh Wave 3 certification", () => {
   it("keeps Phase 5 query surfaces off staleTime zero", () => {
     const result = auditRealtimeWave3();
-    expect(result.phase5Targets).toHaveLength(10);
+    // Nine: the ERPWorkerDetail model (never mounted) was removed by the dead-code cleanup.
+    expect(result.phase5Targets).toHaveLength(9);
     expect(result.errors.filter((error: string) => error.includes("staleTime: 0"))).toEqual([]);
   });
 

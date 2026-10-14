@@ -84,8 +84,8 @@ describe("Phase 5 post-offload reconciliation", () => {
     expect(client).toContain("await invalidatePostOffloadReconciliationQueries(method, url, response)");
   });
 
-  it("registers reconciliation outside historical replay in both route aggregators", () => {
-    for (const path of ["server/routes/factory/factoryRawStockRoutes.ts", "server/routes/factory/raw-stock/index.ts"]) {
+  it("registers reconciliation outside historical replay in the active route aggregator", () => {
+    for (const path of ["server/routes/factory/factoryRawStockRoutes.ts"]) {
       const routes = read(path);
       const reconciliation = routes.indexOf('app.use("/api/factory/containers", postOffloadReconciliationMiddleware)');
       const historical = routes.indexOf('app.use("/api/factory/containers", postOffloadHistoricalReplayMiddleware)');

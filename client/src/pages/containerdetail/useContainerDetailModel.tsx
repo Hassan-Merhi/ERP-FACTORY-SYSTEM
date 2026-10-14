@@ -50,14 +50,13 @@ export function useContainerDetailModel({ id: idProp, forceErp }: { id?: string;
   const [showSellDialog, setShowSellDialog] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<(() => void) | null>(null);
   const { toast } = useToast();
-  const [_location, setLocation] = useLocation();
+  const [, setLocation] = useLocation();
   useEscapeToParent();
   const { selectedCompany } = useCompany();
   const { formatAmount } = useCurrencyContext();
   const companyId = selectedCompany?.id;
   // forceErp: when an SP company opens an ERP-sourced container, treat it as a regular ERP container
   const isSupplierPartner = forceErp ? false : selectedCompany?.companyType === "supplier_partner";
-  const _printRef = useRef<HTMLDivElement>(null);
 
   // Check for auto-print query parameter
   useEffect(() => {
@@ -113,7 +112,7 @@ export function useContainerDetailModel({ id: idProp, forceErp }: { id?: string;
 
   const containerSale = containerSales.find((sale: ContainerSale) => sale.containerId === parseInt(containerId!));
 
-  const { data: docsData, isLoading: _docsLoading } = useQuery<{
+  const { data: docsData } = useQuery<{
     documents: (typeof containerDocumentsTable.$inferSelect & { isGhost: boolean })[];
     docTypes: (typeof containerDocumentTypesTable.$inferSelect)[];
     completeness: { total: number; uploaded: number; complete: boolean };
@@ -127,7 +126,7 @@ export function useContainerDetailModel({ id: idProp, forceErp }: { id?: string;
     enabled: !!containerId,
   });
 
-  const { data: _freightData = [], isLoading: _freightLoading } = useQuery<
+  useQuery<
     (typeof containerFreightTable.$inferSelect & {
       payments?: unknown[];
       totalPaid?: number;
@@ -291,46 +290,6 @@ export function useContainerDetailModel({ id: idProp, forceErp }: { id?: string;
     onError: (e: ClientErrorLike) => toast({ title: "Upload failed", description: e.message, variant: "destructive" }),
   });
 
-  const _deleteDocMutation = useMutation({
-    mutationFn: async (docId: number) => {
-      await apiRequest("DELETE", `/api/factory/containers/${containerId}/documents/${docId}`);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/containers", containerId, "documents"] });
-      queryClient.invalidateQueries({ queryKey: [`/api/containers/${containerId}`] });
-      toast({ title: "Document deleted" });
-    },
-    onError: (e: ClientErrorLike) => {
-      if (e?._handledGlobally) return;
-      toast({ title: "Delete failed", description: e.message, variant: "destructive" });
-    },
-  });
-
-  async function _handleViewDoc(storageKey: string) {
-    try {
-      const resp = await fetch(`/api/factory/uploads/${storageKey}`, { credentials: "include" });
-      if (!resp.ok) {
-        const isJson = resp.headers.get("content-type")?.includes("application/json");
-        const msg = isJson ? (await resp.json()).message : await resp.text();
-        toast({
-          title: resp.status === 404 ? "File no longer available" : "File unavailable",
-          description:
-            resp.status === 404
-              ? "This file was uploaded before database storage was enabled and cannot be retrieved. Please delete it and re-upload."
-              : msg || `Server returned ${resp.status}`,
-          variant: "destructive",
-        });
-        return;
-      }
-      const blob = await resp.blob();
-      const url = URL.createObjectURL(blob);
-      window.open(url, "_blank");
-      setTimeout(() => URL.revokeObjectURL(url), 60_000);
-    } catch {
-      toast({ title: "Could not open file", description: "Network error", variant: "destructive" });
-    }
-  }
-
   type FreightFormValues = {
     vendorName: string;
     freightAmount: string;
@@ -361,20 +320,6 @@ export function useContainerDetailModel({ id: idProp, forceErp }: { id?: string;
     },
   });
 
-  const _deleteFreightMutation = useMutation({
-    mutationFn: async (freightId: number) => {
-      await apiRequest("DELETE", `/api/factory/containers/${containerId}/freight/${freightId}`);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/containers", containerId, "freight"] });
-      toast({ title: "Freight charge removed" });
-    },
-    onError: (e: ClientErrorLike) => {
-      if (e?._handledGlobally) return;
-      toast({ title: "Failed", description: e.message, variant: "destructive" });
-    },
-  });
-
   const paymentForm = useForm<PaymentFormValues>({
     defaultValues: { paymentDate: new Date().toLocaleDateString("en-CA"), amount: "", method: "", reference: "" },
   });
@@ -389,20 +334,6 @@ export function useContainerDetailModel({ id: idProp, forceErp }: { id?: string;
       setShowPaymentDialog(null);
       paymentForm.reset({ paymentDate: new Date().toLocaleDateString("en-CA"), amount: "", method: "", reference: "" });
       toast({ title: "Payment recorded" });
-    },
-    onError: (e: ClientErrorLike) => {
-      if (e?._handledGlobally) return;
-      toast({ title: "Failed", description: e.message, variant: "destructive" });
-    },
-  });
-
-  const _deletePaymentMutation = useMutation({
-    mutationFn: async ({ freightId, paymentId }: { freightId: number; paymentId: number }) => {
-      await apiRequest("DELETE", `/api/factory/freight/${freightId}/payments/${paymentId}`);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/containers", containerId, "freight"] });
-      toast({ title: "Payment deleted" });
     },
     onError: (e: ClientErrorLike) => {
       if (e?._handledGlobally) return;

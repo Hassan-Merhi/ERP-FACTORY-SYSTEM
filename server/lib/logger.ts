@@ -377,22 +377,6 @@ export const logger = {
   error: (message: string, ctx?: LogContext) => emit("error", message, ctx),
 };
 
-export function createScopedLogger(module: string, defaults: LogContext = {}) {
-  const contextFor = (action: string, ctx?: LogContext): LogContext => ({
-    ...defaults,
-    ...ctx,
-    module,
-    action,
-    event: ctx?.event || `${module}.${action}`,
-  });
-  return {
-    debug: (action: string, message: string, ctx?: LogContext) => logger.debug(message, contextFor(action, ctx)),
-    info: (action: string, message: string, ctx?: LogContext) => logger.info(message, contextFor(action, ctx)),
-    warn: (action: string, message: string, ctx?: LogContext) => logger.warn(message, contextFor(action, ctx)),
-    error: (action: string, message: string, ctx?: LogContext) => logger.error(message, contextFor(action, ctx)),
-  };
-}
-
 export function getLoggerConfiguration() {
   return { level: minimumLevel, format: outputFormat, redactionEnabled, renderDetected: isRender };
 }

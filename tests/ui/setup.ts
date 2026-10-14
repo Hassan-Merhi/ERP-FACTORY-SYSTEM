@@ -1,4 +1,5 @@
 import "@testing-library/jest-dom";
+import { beforeEach } from "vitest";
 
 // jsdom does not implement ResizeObserver — stub it so components using it don't crash
 global.ResizeObserver = class ResizeObserver {
@@ -46,4 +47,15 @@ if (typeof window !== "undefined" && typeof Node !== "undefined") {
     },
     { capture: true }
   );
+}
+
+// A modal Radix dialog or menu sets `pointer-events: none` on <body> while it is
+// open and clears it when it closes. Testing Library's cleanup unmounts a test's
+// tree with the modal still open, and Radix does not clear the lock on that path,
+// so it leaked into the next test and user-event refused to click anything there.
+// Each test starts with the body as a page load leaves it.
+if (typeof document !== "undefined") {
+  beforeEach(() => {
+    document.body.style.removeProperty("pointer-events");
+  });
 }

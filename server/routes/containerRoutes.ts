@@ -26,8 +26,8 @@ export function registerContainerRoutes(app: Express) {
   // charge vouchers, replacement offload, and SP journals through one transaction.
   registerContainerOffloadLifecycleGuard(app);
   registerCentralContainerOffloadRoute(app);
-  // Legacy reverse-offload and compatibility routes remain available; the central
-  // POST/PATCH handlers above own all active offload creation and edit requests.
+  // Keep reverse-offload and charge readers; the central POST/PATCH handlers above
+  // exclusively own active offload creation and edit requests.
   registerContainerOffloadRoutes(app);
   registerContainerDocumentsRoutes(app);
   registerContainerCostingRoutes(app);

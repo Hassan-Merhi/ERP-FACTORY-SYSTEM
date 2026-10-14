@@ -3,6 +3,7 @@ import type { Notification, PoolClient } from "pg";
 import { REALTIME_INVALIDATION_TOPICS, type RealtimeInvalidationTopic } from "../../../shared/realtimeInvalidation";
 import { pool } from "../../db";
 import { logger } from "../../lib/logger";
+import { isRecord } from "@shared/typeGuards";
 
 const INVALIDATION_CHANNEL = "erp_read_microcache_invalidate";
 const RECONNECT_DELAY_MS = 5_000;
@@ -23,10 +24,6 @@ interface ReadMicrocacheNotification {
 export interface ReadMicrocacheCoordinator {
   isReady: () => boolean;
   publishInvalidation: (invalidation: ReadMicrocacheInvalidation) => Promise<void>;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function positiveInteger(value: unknown): number | null {

@@ -1,7 +1,5 @@
 import { createHash } from "node:crypto";
 
-export type FinancialPeriodStatus = "OPEN" | "CLOSED" | "REOPENED";
-
 export interface FinancialAuditEventInput {
   companyId: number;
   actorUserId?: number | null;

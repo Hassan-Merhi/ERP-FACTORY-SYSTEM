@@ -89,7 +89,7 @@ export default function LocationVouchers({ posUser }: { posUser?: unknown } = {}
   const stockItemId = parseInt(params.stockItemId || "0");
   const year = parseInt(params.year || "0");
   const month = parseInt(params.month || "0");
-  const [_location, navigate] = useLocation();
+  const [, navigate] = useLocation();
   const [selectedRowIndex, setSelectedRowIndex] = useState<number>(-1);
   const tableScrollContainer = useRef<HTMLDivElement>(null);
   const [periodFilter, setPeriodFilter] = useState<PeriodFilterValue>(() => getDefaultPeriodValue("this_month"));
@@ -132,7 +132,6 @@ export default function LocationVouchers({ posUser }: { posUser?: unknown } = {}
 
   const isLoading = showAllMonths ? rangeLoading : monthLoading;
   const data = showAllMonths ? rangeData : monthData;
-  const _totals = data?.totals;
 
   const formatNumber = (num: number | null | undefined, decimals = 2) => {
     if (num == null || isNaN(num) || num === 0) return "";

@@ -48,6 +48,7 @@ export const FACTORY_TAB_ROUTE_RESTRICTIONS: readonly FactoryTabRouteRestriction
   { prefix: "/factory/bale-product-history", hiddenKeys: ["hide_tab_bales_history"], fallback: "/factory/bales-hub" },
   { prefix: "/factory/barcode-lookup", hiddenKeys: ["hide_tab_bales_barcode"], fallback: "/factory/bales-hub" },
   { prefix: "/factory/bale-products", hiddenKeys: ["hide_tab_bales_products"], fallback: "/factory/bales-hub" },
+  { prefix: "/factory/catalog-translations", hiddenKeys: ["hide_tab_bales_products"], fallback: "/factory/bales-hub" },
 
   { prefix: "/factory/sales/proformas", hiddenKeys: ["hide_invoicing_proformas_tab"], fallback: "/factory/invoicing" },
   { prefix: "/factory/sales/new", hiddenKeys: ["hide_invoicing_invoices_tab"], fallback: "/factory/invoicing" },

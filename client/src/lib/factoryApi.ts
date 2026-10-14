@@ -363,12 +363,6 @@ export function factoryApiRequest(method: string, url: string, data?: unknown): 
   return requestWithPreparedReplayState(factoryApiRequestBase, method, url, data);
 }
 
-export const factoryQueryClient = queryClient;
-
-export function resolveApiPath(erpPath: string, factoryPath: string, mode: AppMode): string {
-  return mode === "factory" ? factoryPath : erpPath;
-}
-
 export function getApiRequest(mode: AppMode): RequestDelegate {
   if (mode === "factory") return factoryApiRequest;
   return (method, url, data) => requestWithPreparedReplayState(apiRequest, method, url, data);

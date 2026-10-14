@@ -4,7 +4,7 @@ import { lazyRetry as lazy } from "@/lib/lazyRetry";
 import * as XLSX from "@/lib/excelHelper";
 import { useDateFormat } from "@/contexts/DateFormatContext";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Plus, Package, CheckCircle, PlayCircle, Link2, AlertTriangle, Pencil, Trash2, BarChart2 } from "lucide-react";
+import { Plus, Package, Link2, AlertTriangle, Pencil, Trash2, BarChart2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -134,28 +134,6 @@ export default function MixBatches() {
       const remaining = parseFloat(b.totalWeightKg || "0") - parseFloat(b.usedKg || "0");
       return remaining > 0.001;
     }) ?? [];
-
-  const _getStatusIcon = (status: string) => {
-    switch (status) {
-      case "ACTIVE":
-        return <PlayCircle className="h-4 w-4" />;
-      case "COMPLETED":
-        return <CheckCircle className="h-4 w-4" />;
-      default:
-        return <Package className="h-4 w-4" />;
-    }
-  };
-
-  const _getStatusVariant = (status: string) => {
-    switch (status) {
-      case "ACTIVE":
-        return "default";
-      case "COMPLETED":
-        return "secondary";
-      default:
-        return "outline";
-    }
-  };
 
   const handleExportReport = async () => {
     if (!batches || batches.length === 0) {

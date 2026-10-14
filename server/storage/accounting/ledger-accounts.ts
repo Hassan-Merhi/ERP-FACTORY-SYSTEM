@@ -155,13 +155,6 @@ export async function getOrCreateLedgerAccount(account: InsertLedgerAccount): Pr
   }
 }
 
-export async function deleteLedgerAccount(id: number): Promise<void> {
-  await db
-    .update(schema.ledgerAccounts)
-    .set({ deletedAt: new Date(), active: false })
-    .where(eq(schema.ledgerAccounts.id, id));
-}
-
 export async function getLedgerAccountById(id: number): Promise<LedgerAccount | undefined> {
   const [account] = await db.select().from(schema.ledgerAccounts).where(eq(schema.ledgerAccounts.id, id));
   return account;

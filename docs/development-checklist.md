@@ -136,3 +136,11 @@ lanes (`static-build`, `postgres-regression`, `backend-core-regression`,
 `frontend-regression`, and `security-readiness`), Release Verification, and the
 exact-main certification status. A green PR is necessary but not sufficient:
 after merging, verify the checks again on the exact merged `main` SHA.
+
+## Dead Code
+
+- [ ] Code you stopped using is deleted, not renamed with a `_` prefix
+- [ ] No second registration of an existing method + path unless the earlier handler calls `next()`
+- [ ] Retired pages lose their lazy export, `offlinePrep` entry and page-mount test cases
+- [ ] New exports are imported somewhere; new dependencies are imported somewhere
+- [ ] See [dead-code-prevention.md](dead-code-prevention.md); `npm run report:dead-code` lists leads

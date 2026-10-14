@@ -5,14 +5,10 @@ import { db } from "../db";
 import { getErrorMessage } from "../lib/httpHandlers";
 import { ledgerAccounts } from "@shared/schema";
 import { punctuationInsensitiveSearch } from "../lib/searchNormalization";
+import { parsePositiveInt } from "../lib/listPagination";
 
 const DEFAULT_PAGE_SIZE = 100;
 const MAX_PAGE_SIZE = 250;
-
-function parsePositiveInt(value: unknown, fallback: number): number {
-  const parsed = Number.parseInt(String(value ?? ""), 10);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
-}
 
 function wantsStructuredPagination(req: Request): boolean {
   return (

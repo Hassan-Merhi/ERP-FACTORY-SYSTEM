@@ -77,12 +77,3 @@ export function isOverdue(c: ContainerWithSupplier): boolean {
 
 // ── Summary Card (mirrors ERP SummaryCard) ───────────────────────────────────
 
-export // ── Status badge ─────────────────────────────────────────────────────────────
-const CONTAINER_STATUS_LABELS: Record<string, string> = {
-  PENDING: "Pending",
-  IN_TRANSIT: "In Transit",
-  ARRIVED: "Arrived",
-  OFFLOADED: "Offloaded",
-  PARTIALLY_RECEIVED: "Partial",
-  RECEIVED: "Received",
-};

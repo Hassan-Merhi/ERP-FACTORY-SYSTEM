@@ -7,12 +7,6 @@ export const depositSchema = z.object({
   notes: z.string().optional(),
 });
 
-export const bonusSchema = z.object({
-  amount: z.string().min(1, "Amount is required"),
-  date: z.string().min(1, "Date is required"),
-  notes: z.string().optional(),
-});
-
 export const withdrawalSchema = z.object({
   amount: z.string().min(1, "Amount is required"),
   paymentAccountType: z.enum(["bank", "cash"]),
@@ -65,7 +59,6 @@ export const deductionSchema = z.object({
 });
 
 export type DepositFormData = z.infer<typeof depositSchema>;
-export type BonusFormData = z.infer<typeof bonusSchema>;
 export type WithdrawalFormData = z.infer<typeof withdrawalSchema>;
 export type BulkPaymentFormData = z.infer<typeof bulkPaymentSchema>;
 export type SalaryAdvanceFormData = z.infer<typeof salaryAdvanceSchema>;
@@ -98,13 +91,6 @@ export const employeeFormSchema = insertEmployeeSchema.omit({ companyId: true, e
 });
 
 export type EmployeeFormData = z.infer<typeof employeeFormSchema>;
-
-export interface WorkerPayment {
-  workerId: number;
-  amount: string;
-  selected: boolean;
-  manuallyEdited?: boolean;
-}
 
 export interface SalaryAdvance {
   id: number;

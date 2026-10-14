@@ -6,7 +6,7 @@ import type { useFactoryPendingInvoiceVerifyModel } from "../useFactoryPendingIn
 type Model = ReturnType<typeof useFactoryPendingInvoiceVerifyModel>;
 
 export function FactoryPendingInvoiceVerifyDialog2({ model }: { model: Model }) {
-  const { showReturnDialog, setShowReturnDialog, returnToLoadingMutation, isPending: _isPending } = model;
+  const { showReturnDialog, setShowReturnDialog, returnToLoadingMutation } = model;
   return (
     <Dialog open={showReturnDialog} onOpenChange={setShowReturnDialog}>
       <DialogContent className="max-w-md">

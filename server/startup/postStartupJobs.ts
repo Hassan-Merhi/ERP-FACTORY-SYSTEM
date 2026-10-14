@@ -33,6 +33,40 @@ export function runPostStartupJobs(): void {
     unrefTimer(accountingReconciliationTimer);
   }
 
+  if (process.env.ERP_RECONCILE_SUPPLIERS_20261014 === "company-12-approved-87") {
+    const supplierTimer = setTimeout(async () => {
+      try {
+        const { reconcileFactorySuppliers20261014 } = await import(
+          "../../scripts/reconcile-factory-suppliers-20261014"
+        );
+        await reconcileFactorySuppliers20261014(true);
+        logger.info("[SupplierRepair] Historical factory supplier journals completed");
+      } catch (error: unknown) {
+        logger.error("[SupplierRepair] Historical supplier reconciliation halted", { error: getErrorMessage(error) });
+      }
+    }, 12000);
+    unrefTimer(supplierTimer);
+  }
+
+  // Explicitly enabled once: repair only the source references of two legacy
+  // supplier-payment daybook rows. No vouchers, payments, or balances change.
+  if (process.env.ERP_REPAIR_SUPPLIER_PAYMENTS_20261014 === "company-12-confirmed-links") {
+    const paymentLinkTimer = setTimeout(async () => {
+      try {
+        const { repairSupplierPaymentDaybookLinks20261014 } = await import(
+          "../../scripts/repair-supplier-payment-daybook-links-20261014"
+        );
+        const changed = await repairSupplierPaymentDaybookLinks20261014();
+        logger.info("[SupplierPaymentLinks] Historical daybook references reconciled", { count: changed });
+      } catch (error: unknown) {
+        logger.error("[SupplierPaymentLinks] Daybook link repair refused", {
+          error: getErrorMessage(error),
+        });
+      }
+    }, 12000);
+    unrefTimer(paymentLinkTimer);
+  }
+
   // Live vessel/AIS tracking is intentionally disabled. Container movement is
   // maintained manually or through Excel imports.
 

@@ -125,7 +125,6 @@ async function postGroupCore(
     allocs,
     totalAmountStr,
     paymentDate,
-    asOfDate: _asOfDate,
     currency,
     exchangeRate,
     narration,

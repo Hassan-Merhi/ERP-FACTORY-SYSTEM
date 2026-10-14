@@ -1,8 +1,6 @@
 import { searchAny } from "@shared/searchNormalization";
 import { useState, useMemo, Fragment } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { useAppMode } from "@/contexts/AppModeContext";
-import { getApiRequest } from "@/lib/factoryApi";
 import { isBlockingQueryError } from "@/lib/abortError";
 import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
@@ -34,8 +32,6 @@ import {
 
 function StockOTWContent({ showCombined, onToggleCombined }: { showCombined: boolean; onToggleCombined: () => void }) {
   const { formatAmount } = useCurrencyContext();
-  const appMode = useAppMode();
-  const _modeApiRequest = getApiRequest(appMode);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedGrade, setSelectedGrade] = useState<string>("all");
   const [selectedCategory, setSelectedCategory] = useState<string[]>([]);

@@ -12,7 +12,6 @@ import { Plus, Building2, Pencil, Users, Wallet, TrendingUp, TrendingDown, EyeOf
 import { format } from "date-fns";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useLocation } from "wouter";
 import { useState, useEffect } from "react";
 import { PageHeader } from "@/components/PageHeader";
 import { DataTableToolbar } from "@/components/DataTableToolbar";
@@ -52,7 +51,6 @@ export default function Customers() {
   const { toast } = useToast();
   const { selectedCompany } = useCompany();
   const { formatHistoricalBaseAmount } = useCurrencyContext();
-  const [, _navigate] = useLocation();
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);

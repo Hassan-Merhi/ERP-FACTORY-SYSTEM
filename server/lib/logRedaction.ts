@@ -69,5 +69,3 @@ export function redactLogValue(value: unknown, key = ""): unknown {
   if (typeof value === "string") return redactLogString(value, key);
   return value;
 }
-
-export const __logRedactionTesting = { redactUrl };

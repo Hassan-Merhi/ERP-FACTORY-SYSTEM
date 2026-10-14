@@ -95,12 +95,6 @@ export function accountTypeNamesOf(...classes: Exclude<AccountClass, "unknown">[
   return classes.flatMap((accountClass) => ACCOUNT_TYPES_BY_CLASS[accountClass]);
 }
 
-/** True for income-statement accounts (income or expense). */
-export function isProfitAndLossAccount(accountType: string | null | undefined, subType?: string | null): boolean {
-  const accountClass = classifyAccountType(accountType, subType);
-  return accountClass === "income" || accountClass === "expense";
-}
-
 /** Income stored either as type "Indirect Income" or as "Income" + subType "Indirect Income". */
 export function isIndirectIncome(accountType: string | null | undefined, subType?: string | null): boolean {
   if (classifyAccountType(accountType, subType) !== "income") return false;

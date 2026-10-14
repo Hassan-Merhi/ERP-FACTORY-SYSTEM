@@ -67,8 +67,8 @@ const fmt = (n: number) => {
 
 export default function FactoryStockItemDetail() {
   const { formatDisplayDate } = useDateFormat();
-  const [_factoryMatch, factoryParams] = useRoute("/factory/stock-query/:id");
-  const [_location, navigate] = useLocation();
+  const [, factoryParams] = useRoute("/factory/stock-query/:id");
+  const [, navigate] = useLocation();
 
   const productId = factoryParams?.id ? parseInt(factoryParams.id) : null;
 

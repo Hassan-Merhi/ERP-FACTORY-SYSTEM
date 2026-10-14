@@ -19,6 +19,12 @@ export type TransferRevision = {
   revisionNumber?: number;
   revisionDate?: string | Date | null;
   optional?: boolean;
+  /** Immutable review state; older rows without it read `optional` (pending) or approved. */
+  status?: "pending" | "approved" | "rejected" | "cancelled" | "superseded";
+  reviewedAt?: string | Date | null;
+  rejectionReason?: string | null;
+  sourceLocationName?: string;
+  destinationLocationName?: string;
   note?: string | null;
   items?: TransferRevisionItem[];
   _mergedCount?: number;

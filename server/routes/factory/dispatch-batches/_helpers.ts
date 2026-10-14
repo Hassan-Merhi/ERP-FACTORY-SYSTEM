@@ -5,8 +5,7 @@
  */
 import { db } from "../../../db";
 import type { Request } from "express";
-import { sql, eq, and } from "drizzle-orm";
-import { customerDispatchBatches } from "@shared/schema";
+import { sql } from "drizzle-orm";
 import { firstRow } from "../../../lib/queryResult";
 
 // ── helpers ──────────────────────────────────────────────────────────────────
@@ -38,16 +37,5 @@ export async function isAdmin(req: Request, companyId: number): Promise<boolean>
 
 // Recalculate and update the batch totals — not needed for batches themselves
 // but we do need to update batch status to LOADING when first ride is created
-export async function ensureBatchStatus(
-  tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
-  batchId: number,
-  companyId: number,
-  status: string
-) {
-  await tx
-    .update(customerDispatchBatches)
-    .set({ status, updatedAt: new Date() })
-    .where(and(eq(customerDispatchBatches.id, batchId), eq(customerDispatchBatches.companyId, companyId)));
-}
 
 // ── route registration ────────────────────────────────────────────────────────

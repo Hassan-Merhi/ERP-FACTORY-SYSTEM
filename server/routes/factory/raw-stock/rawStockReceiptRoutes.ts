@@ -540,29 +540,6 @@ export function registerRawStockReceiptRoutes(app: Express) {
         )
         .orderBy(desc(factoryRawStock.offloadedAt));
 
-      // Free kg from actual rows
-      const totalFreeFromRows = sumMoney(
-        rows.map((r) => MoneyDecimal.max(0, toMoney(r.receivedKg).minus(toMoney(r.usedKg))))
-      );
-
-      // Free kg from ADD/REMOVE adjustments for this supplier
-      const adjRows = await db
-        .select({ type: factoryRawMaterialAdjustments.type, kg: factoryRawMaterialAdjustments.kg })
-        .from(factoryRawMaterialAdjustments)
-        .where(
-          and(
-            eq(factoryRawMaterialAdjustments.companyId, companyId),
-            eq(factoryRawMaterialAdjustments.supplierId, Number(supplierId))
-          )
-        );
-      const adjFree = adjRows.reduce((sum: Decimal, a) => {
-        if (a.type === "DEDUCT") return sum; // DEDUCT is history-only; receivedKg on rows already reduced
-        const k = amountOrZero(a.kg);
-        return a.type === "ADD" ? sum.plus(k) : sum.minus(k);
-      }, ZERO);
-
-      const _totalFree = totalFreeFromRows.plus(MoneyDecimal.max(0, adjFree));
-
       // Allow over-use: no guard here — deduction can drive remaining stock negative
 
       // Deduct from rows newest-first; allow received to go below used (negative stock)
@@ -631,9 +608,8 @@ export function registerRawStockReceiptRoutes(app: Express) {
             }
 
             // 2. REMOVE adjustment for any overflow (from adjustment-sourced free)
-            let _insertedAdj = null;
             if (adjDeductKg.gt(0)) {
-              [_insertedAdj] = await tx
+              await tx
                 .insert(factoryRawMaterialAdjustments)
                 .values({
                   companyId,

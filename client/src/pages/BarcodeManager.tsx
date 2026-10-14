@@ -123,7 +123,7 @@ export default function BarcodeManager() {
         } else {
           toast({ title: "No barcodes found in file", variant: "destructive" });
         }
-      } catch (_error) {
+      } catch {
         toast({ title: "Error reading file", variant: "destructive" });
       }
     };

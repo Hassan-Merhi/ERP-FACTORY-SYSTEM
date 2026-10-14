@@ -1,6 +1,5 @@
 import { visibleTabInterval } from "@/lib/queryPolicies";
 import { useState } from "react";
-import { z } from "zod";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 
@@ -9,27 +8,7 @@ import { Badge } from "@/components/ui/badge";
 
 import { useQuery } from "@tanstack/react-query";
 import { Building2, Loader2, Eye } from "lucide-react";
-import { insertUserSchema, insertCompanySchema, insertUserCompanyRoleSchema, userPresence } from "@shared/schema";
-
-const _userFormSchema = insertUserSchema;
-const _companyFormSchema = insertCompanySchema;
-const _roleAssignmentSchema = insertUserCompanyRoleSchema.refine(
-  (data) => {
-    // If role is POS, assignedLocationId must be present
-    if (data.role === "POS" && !data.assignedLocationId) {
-      return false;
-    }
-    return true;
-  },
-  {
-    message: "POS roles require an assigned location",
-    path: ["assignedLocationId"],
-  }
-);
-
-type _UserFormData = z.infer<typeof _userFormSchema>;
-type _CompanyFormData = z.infer<typeof _companyFormSchema>;
-type _RoleAssignmentData = z.infer<typeof _roleAssignmentSchema>;
+import { userPresence } from "@shared/schema";
 
 import { getPageLabel } from "./WatchUserDialog";
 import { RemoteSupportWatchDialog } from "./RemoteSupportWatchDialog";

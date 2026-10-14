@@ -101,18 +101,6 @@ export interface OffloadListItem {
   itemsTotal: string;
 }
 
-export interface OffloadDetail extends OffloadListItem {
-  items: Array<{
-    id: number;
-    stockItemId: number;
-    stockItemName: string | null;
-    stockItemCode: string | null;
-    quantity: string;
-    rate: string;
-    totalValue: string;
-  }>;
-}
-
 export type DaybookRow = { _type: "voucher"; data: Voucher } | { _type: "offload"; data: OffloadListItem };
 
 export interface VoucherEntry {

@@ -80,8 +80,6 @@
         "express",
         "express-session",
         "connect-pg-simple",
-        "passport",
-        "passport-local",
         "@simplewebauthn/browser",
         "@simplewebauthn/server",
         "bcryptjs",

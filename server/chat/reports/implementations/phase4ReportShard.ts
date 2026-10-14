@@ -52,10 +52,8 @@ async function runPhase4Report(ctx: DataQueryContext): Promise<DataQueryResult> 
           AND CAST(tx_date AS text) BETWEEN ${dateFrom} AND ${dateTo}
       `);
       const t4 = totalsRow.rows[0];
-      let _grandRev = 0;
       const tableRows4 = rows.rows.map((r) => {
         const rev = toMoney(r.total_revenue).toNumber();
-        _grandRev += rev;
         return [
           r.product_name,
           r.article_code || "—",
@@ -254,11 +252,9 @@ async function runPhase4Report(ctx: DataQueryContext): Promise<DataQueryResult> 
         ORDER BY total_items DESC
         LIMIT ${rowLimit}
       `);
-      let _grandItems = 0;
       const tableRows4 = rows.rows.map((r) => {
         const items = toMoney(r.total_items).toNumber();
         const charges = toMoney(r.total_charges).toNumber();
-        _grandItems += items;
         return [r.supplier, String(r.po_count), fmt(items), fmt(charges), fmt(items + charges), r.currency];
       });
       dataQueryResult = {

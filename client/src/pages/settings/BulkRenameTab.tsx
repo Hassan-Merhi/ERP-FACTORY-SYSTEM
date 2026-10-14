@@ -1,6 +1,5 @@
 import { getErrorDetails } from "@shared/errorUtils";
 import { useState } from "react";
-import { z } from "zod";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -25,34 +24,6 @@ import { queryClient } from "@/lib/queryClient";
 import { useAppMode } from "@/contexts/AppModeContext";
 import { getApiRequest } from "@/lib/factoryApi";
 import { RefreshCw, Loader2 } from "lucide-react";
-import {
-  insertUserSchema,
-  insertCompanySchema,
-  insertUserCompanyRoleSchema,
-  FEATURE_KEYS,
-  FEATURE_PAGE_INFO,
-} from "@shared/schema";
-import { FACTORY_SETTINGS_PAGES } from "@/app/factoryAccessRegistry";
-
-const _userFormSchema = insertUserSchema;
-const _companyFormSchema = insertCompanySchema;
-const _roleAssignmentSchema = insertUserCompanyRoleSchema.refine(
-  (data) => {
-    // If role is POS, assignedLocationId must be present
-    if (data.role === "POS" && !data.assignedLocationId) {
-      return false;
-    }
-    return true;
-  },
-  {
-    message: "POS roles require an assigned location",
-    path: ["assignedLocationId"],
-  }
-);
-
-type _UserFormData = z.infer<typeof _userFormSchema>;
-type _CompanyFormData = z.infer<typeof _companyFormSchema>;
-type _RoleAssignmentData = z.infer<typeof _roleAssignmentSchema>;
 
 export function BulkRenameTab() {
   const { toast } = useToast();
@@ -105,12 +76,6 @@ export function BulkRenameTab() {
     } finally {
       setIsSearching(false);
     }
-  };
-
-  const _getPreviewName = (name: string) => {
-    const regex = buildRegex();
-    if (!regex) return name;
-    return name.replace(regex, replaceWith);
   };
 
   const renderPreviewName = (name: string) => {
@@ -328,50 +293,5 @@ export function BulkRenameTab() {
 }
 
 // Single source of truth: derived from FactorySidebar nav — new pages appear automatically
-const ALL_FACTORY_PAGES_SETTINGS = FACTORY_SETTINGS_PAGES;
-const _FACTORY_PAGE_GROUPS_SETTINGS = Array.from(new Set(ALL_FACTORY_PAGES_SETTINGS.map((p) => p.group)));
 
 // Single source of truth: derived from FEATURE_KEYS + FEATURE_PAGE_INFO in shared/schema
-const ALL_ERP_PAGES: { key: string; label: string; group: string }[] = FEATURE_KEYS.map((key) => ({
-  key,
-  label: FEATURE_PAGE_INFO[key].label,
-  group: FEATURE_PAGE_INFO[key].group,
-}));
-
-const _ERP_PAGE_GROUPS = Array.from(new Set(ALL_ERP_PAGES.map((p) => p.group)));
-
-const ERP_COST_FIELDS = [
-  { key: "daybook_amounts", label: "Transaction Amounts" },
-  { key: "accounts_balances", label: "Account Balances" },
-  { key: "container_costs", label: "Cost & Fee Columns" },
-  { key: "stock_rates", label: "Rate / Price Columns" },
-  { key: "analytics_financials", label: "Revenue & Profit" },
-  { key: "voucher_amounts", label: "Amount Columns" },
-];
-
-const FACTORY_COST_FIELDS = [
-  { key: "inventory_avg_rate", label: "Avg Rate Column" },
-  { key: "inventory_total_value", label: "Total Value Column" },
-  { key: "inventory_sell_price", label: "Sell Price Column" },
-  { key: "inventory_sell_value", label: "Sell Value Column" },
-  { key: "bale_history_cost_per_kg", label: "Cost/KG Column" },
-  { key: "bale_history_total_cost", label: "Total Cost Column" },
-  { key: "bales_list_cost_per_kg", label: "Cost/kg Column" },
-];
-
-const _PAGE_COST_FIELD_MAP: Record<string, { key: string; label: string }[]> = {
-  daybook: [ERP_COST_FIELDS[0]],
-  accounts: [ERP_COST_FIELDS[1]],
-  containers: [ERP_COST_FIELDS[2]],
-  stock_items: [ERP_COST_FIELDS[3]],
-  analytics: [ERP_COST_FIELDS[4]],
-  vouchers: [ERP_COST_FIELDS[5]],
-  "factory/location-inventory": [
-    FACTORY_COST_FIELDS[0],
-    FACTORY_COST_FIELDS[1],
-    FACTORY_COST_FIELDS[2],
-    FACTORY_COST_FIELDS[3],
-  ],
-  "factory/bales-history": [FACTORY_COST_FIELDS[4], FACTORY_COST_FIELDS[5]],
-  "factory/stock-entry": [FACTORY_COST_FIELDS[6]],
-};

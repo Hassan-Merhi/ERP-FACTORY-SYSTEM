@@ -144,11 +144,3 @@ export const factoryProductComparisonCopy = {
 export function getFactoryProductComparisonCopy(language: ApplicationLanguage) {
   return factoryProductComparisonCopy[language];
 }
-
-export function formatFactoryProductComparisonOptionLabel(
-  parts: Array<string | null | undefined>,
-  categoryName?: string
-) {
-  const productLabel = parts.filter((part): part is string => Boolean(part)).join(" — ");
-  return categoryName ? `${productLabel} · ${categoryName}` : productLabel;
-}

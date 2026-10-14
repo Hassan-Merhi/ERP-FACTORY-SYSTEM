@@ -6,7 +6,7 @@ import type { useContainerDetailModel } from "../useContainerDetailModel";
 
 type Model = ReturnType<typeof useContainerDetailModel>;
 export function ContainerDetailDialog1({ model }: { model: Model }) {
-  const { showPaymentDialog, setShowPaymentDialog, paymentForm, addPaymentMutation, form: _form } = model;
+  const { showPaymentDialog, setShowPaymentDialog, paymentForm, addPaymentMutation } = model;
   return (
     <Dialog
       open={showPaymentDialog !== null}

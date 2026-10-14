@@ -1,5 +1,4 @@
 import {
-  resolveFactoryCategoryName,
   resolveFactoryProductDescription,
   resolveFactoryProductName,
   type FactoryCatalogLanguage,
@@ -12,59 +11,6 @@ export interface FactoryCatalogProductPresentationSource {
   description?: string | null;
   descriptionAr?: string | null;
   [key: string]: unknown;
-}
-
-export interface FactoryCatalogCategoryPresentationSource {
-  name?: string | null;
-  nameAr?: string | null;
-  [key: string]: unknown;
-}
-
-export function normalizeFactoryCatalogSearch(value: unknown): string {
-  return typeof value === "string" ? value.trim().toLocaleLowerCase() : "";
-}
-
-export function matchesFactoryCatalogProductSearch(
-  product: FactoryCatalogProductPresentationSource,
-  search: unknown
-): boolean {
-  const normalized = normalizeFactoryCatalogSearch(search);
-  if (!normalized) return true;
-
-  return [
-    product.articleCode,
-    product.name,
-    product.nameAr,
-    product.description,
-    product.descriptionAr,
-  ].some((value) => typeof value === "string" && value.toLocaleLowerCase().includes(normalized));
-}
-
-export function presentFactoryCatalogProducts<T extends FactoryCatalogProductPresentationSource>(
-  products: T[],
-  language: FactoryCatalogLanguage,
-  search?: unknown
-): Array<T & { nameEn: string | null; descriptionEn: string | null }> {
-  return products
-    .filter((product) => matchesFactoryCatalogProductSearch(product, search))
-    .map((product) => ({
-      ...product,
-      nameEn: product.name ?? null,
-      descriptionEn: product.description ?? null,
-      name: resolveFactoryProductName(product, language),
-      description: resolveFactoryProductDescription(product, language),
-    }));
-}
-
-export function presentFactoryCatalogCategories<T extends FactoryCatalogCategoryPresentationSource>(
-  categories: T[],
-  language: FactoryCatalogLanguage
-): Array<T & { nameEn: string | null }> {
-  return categories.map((category) => ({
-    ...category,
-    nameEn: category.name ?? null,
-    name: resolveFactoryCategoryName(category, language),
-  }));
 }
 
 export interface FactoryLegacyLocalizedEdit {
@@ -147,14 +93,3 @@ export function suppressUnchangedFactoryArabicFallbacks(
   return safe;
 }
 
-export function mapFactoryLegacyCategoryEdit(
-  input: Record<string, unknown>,
-  language: FactoryCatalogLanguage
-): Record<string, unknown> {
-  const body = { ...input };
-  if (language === "ar" && Object.prototype.hasOwnProperty.call(body, "name")) {
-    body.nameAr = optionalText(body.name);
-    delete body.name;
-  }
-  return body;
-}

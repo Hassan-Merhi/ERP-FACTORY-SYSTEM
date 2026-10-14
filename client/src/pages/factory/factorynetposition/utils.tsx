@@ -43,8 +43,6 @@ export function saveCustomViewHidden(keys: Set<string>) {
   localStorage.setItem(NP_CUSTOM_VIEW_HIDDEN_KEY, JSON.stringify(Array.from(keys)));
 }
 
-export const r2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
-
 export function todayStr() {
   return new Date().toISOString().slice(0, 10);
 }

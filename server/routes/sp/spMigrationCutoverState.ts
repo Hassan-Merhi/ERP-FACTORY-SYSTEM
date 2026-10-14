@@ -4,8 +4,6 @@ import { db } from "../../db";
 import { logger } from "../../lib/logger";
 import { resultRows, firstRow } from "../../lib/queryResult";
 
-export type CutoverStatus = "prepared" | "active" | "rolled_back" | "cancelled" | "failed";
-
 export type ActiveCutoverLock = {
   id: number;
   sourceCompanyId: number;

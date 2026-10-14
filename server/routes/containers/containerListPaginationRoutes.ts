@@ -4,6 +4,7 @@ import { requireAuth, requireNonPOS } from "../../auth";
 import { db } from "../../db";
 import { getErrorMessage } from "../../lib/httpHandlers";
 import { containerSales, containers, customers } from "@shared/schema";
+import { parsePositiveInt } from "../../lib/listPagination";
 
 const DEFAULT_PAGE_SIZE = 250;
 const MAX_PAGE_SIZE = 250;
@@ -16,11 +17,6 @@ function wantsPagination(req: Request): boolean {
     req.query.pageSize !== undefined ||
     req.query.offset !== undefined
   );
-}
-
-function parsePositiveInt(value: unknown, fallback: number): number {
-  const parsed = Number.parseInt(String(value ?? ""), 10);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
 
 function parsePagination(req: Request): {

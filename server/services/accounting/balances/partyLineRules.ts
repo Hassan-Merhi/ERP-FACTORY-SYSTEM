@@ -100,11 +100,6 @@ export function liveVoucherPredicate(alias: string, company: SqlValueExpr): stri
   return `${alias}.company_id = ${c} AND ${alias}.optional = false AND ${alias}.deleted_at IS NULL`;
 }
 
-/** The date a voucher counts from (owner rule 2), for a voucher alias. */
-export function voucherBookedOnText(alias: string): string {
-  return `COALESCE(${alias}.effective_date, ${alias}.voucher_date)`;
-}
-
 // ── drizzle forms, on the un-aliased voucher_entries / vouchers tables ──────
 
 const v = schema.vouchers;
@@ -139,9 +134,4 @@ export function higherPriorityTargetsAbsent(alias: string, column: PartyTargetCo
   const higher = NON_CUSTOMER_TARGET_COLUMNS.slice(0, NON_CUSTOMER_TARGET_COLUMNS.indexOf(column));
   if (higher.length === 0) return "TRUE";
   return higher.map((target) => `${alias}.${target} IS NULL`).join(" AND ");
-}
-
-/** drizzle form on the un-aliased voucher_entries table. */
-export function partyOwnedLineSql(column: PartyTargetColumn): SQL {
-  return sql.raw(higherPriorityTargetsAbsent(`"voucher_entries"`, column));
 }

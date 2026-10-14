@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import ts from "typescript";
 import { describe, expect, it } from "vitest";
@@ -197,9 +197,8 @@ describe("compact sales-report routes are mounted by the live registry", () => {
 
   it("keeps a single registration list for the stats folder", () => {
     // A second `registerStatsRoutes` in server/routes/stats/ is what allowed the
-    // compact routes to be "registered" in a file nothing imports.
-    const barrel = read("server/routes/stats/index.ts");
-    expect(barrel).not.toMatch(/export function registerStatsRoutes/);
-    expect(barrel).not.toMatch(/register\w+Routes?\(app\)/);
+    // compact routes to be "registered" in a file nothing imports. The folder
+    // barrel that once held that copy was removed in the dead-code cleanup.
+    expect(existsSync(path.join(repoRoot, "server/routes/stats/index.ts"))).toBe(false);
   });
 });

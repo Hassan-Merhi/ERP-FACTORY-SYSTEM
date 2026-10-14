@@ -41,25 +41,3 @@ export function resolveMixSourcePricingBasis(source: MixSourceLike): MixSourcePr
   return "MANUAL_REVIEW";
 }
 
-/**
- * Determines the correct sourceType string to persist when inserting a new
- * mix-batch source row.
- *
- *   sourceBatchId → "BATCH"
- *   supplierId + containerId → "SUPPLIER_FIFO"   (FIFO per-container allocation)
- *   supplierId only          → "SUPPLIER"
- *   containerId only         → "CONTAINER_DIRECT"
- *   none                     → "UNKNOWN"
- *
- * Historical sourceType values in the DB are NOT trustworthy (many old rows
- * were written with "CONTAINER" when supplierId was also present).  The
- * historical replay must use resolveMixSourcePricingBasis (based on column
- * values), not sourceType alone.
- */
-export function resolveSourceType(source: MixSourceLike): string {
-  if (source.sourceBatchId != null) return "BATCH";
-  if (source.supplierId != null && source.containerId != null) return "SUPPLIER_FIFO";
-  if (source.supplierId != null) return "SUPPLIER";
-  if (source.containerId != null) return "CONTAINER_DIRECT";
-  return "UNKNOWN";
-}

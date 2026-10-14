@@ -3,6 +3,7 @@ import { flagFutureDated, statementWindow } from "../helpers/statementWindow";
 import { summarizeAccountStatementCurrency } from "../../services/accounting/accountStatementCurrency";
 import type { NotInLedgerSection } from "../../services/accounting/balances/customerLedgerStatement";
 import { toMoney } from "../../lib/money";
+import { parsePositiveInt } from "../../lib/listPagination";
 
 export const DEFAULT_PAGE_SIZE = 100;
 export const MAX_PAGE_SIZE = 250;
@@ -103,11 +104,6 @@ export function wantsPagination(req: Request): boolean {
     req.query.pageSize !== undefined ||
     req.query.offset !== undefined
   );
-}
-
-export function parsePositiveInt(value: unknown, fallback: number): number {
-  const parsed = Number.parseInt(String(value ?? ""), 10);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
 
 export function parsePagination(req: Request): Pagination {

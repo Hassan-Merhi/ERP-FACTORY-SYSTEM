@@ -15,7 +15,7 @@ import { hashPassword, logAudit, verifyPassword } from "../_helpers";
 async function invalidateUserSessions(userId: string) {
   try {
     await db.execute(sql`DELETE FROM session WHERE sess::jsonb ->> 'userId' = ${userId}`);
-  } catch (_error) {
+  } catch {
     // Failure here is non-fatal and the surrounding flow continues deliberately.
   }
 }

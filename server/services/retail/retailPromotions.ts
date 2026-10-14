@@ -6,7 +6,7 @@
  * folds it into the line discount snapshot; the sale line keeps the promotion id.
  * There are no coupons, stacking rules or conditions yet.
  */
-import { and, eq, inArray, or, sql } from "drizzle-orm";
+import { and, eq, or, sql } from "drizzle-orm";
 import { retailPromotions } from "@shared/schema";
 import type { RetailPromotionMatch } from "./retailPricing";
 import { db } from "../../db";
@@ -266,14 +266,4 @@ export async function deactivateRetailPromotion(companyId: number, promotionId: 
     .where(and(eq(retailPromotions.companyId, companyId), eq(retailPromotions.id, promotionId)))
     .returning({ id: retailPromotions.id });
   return rows.length > 0;
-}
-
-/** Test helper: promotion ids that exist for a company (used by scope validation routes). */
-export async function retailPromotionIdsExist(companyId: number, ids: number[]): Promise<boolean> {
-  if (!ids.length) return true;
-  const rows = await db
-    .select({ id: retailPromotions.id })
-    .from(retailPromotions)
-    .where(and(eq(retailPromotions.companyId, companyId), inArray(retailPromotions.id, ids)));
-  return rows.length === ids.length;
 }

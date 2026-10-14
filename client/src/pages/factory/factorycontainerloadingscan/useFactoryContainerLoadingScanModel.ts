@@ -44,8 +44,6 @@ import { BALE_IMPORT_EMPTY_HINT, baleImportRowCount, parseBaleImportWorkbook } f
 
 export type { BaleGroup } from "./loadedBales";
 
-export type ProformaLineStatus = "fulfilled" | "overloaded" | "short" | "none";
-
 const PENDING_LOADINGS_SUMMARY_QUERY = "/api/factory/customer-orders?status=LOADING&profile=summary&pageSize=250";
 const PRIORITY_SCAN_CONFIGS_QUERY = "/api/factory/customer-orders/loading-list/priority-scan-configs";
 

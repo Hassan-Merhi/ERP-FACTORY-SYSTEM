@@ -43,30 +43,6 @@ export interface FactoryResolvedProductLanguage {
   description: string;
 }
 
-export interface FactoryBilingualCategoryApiExtension {
-  nameEn: string;
-  nameAr: string | null;
-  nameFr: string | null;
-  displayName: string;
-  language: FactoryCatalogLanguage;
-}
-
-export interface FactoryBilingualProductApiExtension {
-  nameEn: string;
-  nameAr: string | null;
-  nameFr: string | null;
-  descriptionEn: string | null;
-  descriptionAr: string | null;
-  descriptionFr: string | null;
-  categoryName: string | null;
-  categoryNameAr: string | null;
-  categoryNameFr: string | null;
-  displayName: string;
-  displayDescription: string;
-  displayCategoryName: string;
-  language: FactoryCatalogLanguage;
-}
-
 export interface FactoryBilingualProductSnapshot {
   articleCode: string;
   productNameEn: string | null;

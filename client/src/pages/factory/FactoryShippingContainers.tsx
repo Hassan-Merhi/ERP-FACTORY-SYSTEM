@@ -216,15 +216,6 @@ export default function FactoryShippingContainers() {
     },
   });
 
-  const _deleteShippingInvoiceMutation = useMutation({
-    mutationFn: (id: number) => apiRequest("DELETE", `${LIST_KEY}/${id}/shipping-invoice`),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [LIST_KEY] });
-      toast({ title: "Shipping invoice removed" });
-    },
-    onError: (e: ClientErrorLike) => toast({ title: "Remove failed", description: e.message, variant: "destructive" }),
-  });
-
   function handleShippingInvoiceFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file || shippingInvoiceUploadingId === null) return;

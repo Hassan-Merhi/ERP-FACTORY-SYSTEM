@@ -506,18 +506,3 @@ export function LocationDialogs({
     </>
   );
 }
-
-function _fmtQ(n: number) {
-  return n === 0 ? (
-    <span className="opacity-30">—</span>
-  ) : (
-    <>{n.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</>
-  );
-}
-function _fmtR(n: number) {
-  return n === 0 ? (
-    <span className="opacity-30">—</span>
-  ) : (
-    <>{n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</>
-  );
-}

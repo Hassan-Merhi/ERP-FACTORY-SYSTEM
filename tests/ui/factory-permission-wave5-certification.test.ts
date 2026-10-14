@@ -81,8 +81,12 @@ describe("Wave 5 Factory permission registry certification", () => {
     );
     const settingsKeys = new Set<string>(FACTORY_TAB_REGISTRY.map((tab) => tab.key));
 
+    // Tab keys that only the backend boundary enforces (/repair-orphaned-vouchers); the next
+    // test checks that the boundary's keys stay aligned with the registries.
+    const backendOnly = new Set(["hide_tab_payroll_records"]);
+
     const missingFromSettings = [...usedKeys].filter((key) => !settingsKeys.has(key));
-    const unusedInUi = [...settingsKeys].filter((key) => !usedKeys.has(key));
+    const unusedInUi = [...settingsKeys].filter((key) => !usedKeys.has(key) && !backendOnly.has(key));
 
     expect(missingFromSettings).toEqual([]);
     expect(unusedInUi).toEqual([]);

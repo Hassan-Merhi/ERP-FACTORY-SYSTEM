@@ -20,7 +20,6 @@ export function OffloadDialog({
   ledgerAccounts,
   offloadMutation,
   wrapAdminAction,
-  mixBatches: _mixBatches,
 }: OffloadDialogProps) {
   const {
     idempotencyKeyRef,

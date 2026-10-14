@@ -1,41 +1,8 @@
-import { eq, and, desc, sql } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm";
 import { db } from "../../db";
 import * as schema from "@shared/schema";
 import { getPartyBalance } from "../../services/accounting/balances/ledgerBalanceEngine";
 import { toMoney } from "../../lib/money";
-
-export async function addCustomerBalanceEntry(entry: schema.InsertCustomerBalance): Promise<schema.CustomerBalance> {
-  const debitAmount = entry.debitAmount || "0";
-  const creditAmount = entry.creditAmount || "0";
-  if (isNaN(Number(debitAmount)) || isNaN(Number(creditAmount))) {
-    throw new Error("Invalid debit or credit amount");
-  }
-
-  const [latestBalance] = await db
-    .select({ balance: schema.customerBalances.balance })
-    .from(schema.customerBalances)
-    .where(
-      and(
-        eq(schema.customerBalances.customerId, entry.customerId),
-        eq(schema.customerBalances.companyId, entry.companyId)
-      )
-    )
-    .orderBy(desc(schema.customerBalances.id))
-    .limit(1);
-
-  const currentBalance = latestBalance?.balance || "0";
-
-  const [created] = await db
-    .insert(schema.customerBalances)
-    .values({
-      ...entry,
-      debitAmount,
-      creditAmount,
-      balance: sql`(${currentBalance}::decimal + ${debitAmount}::decimal - ${creditAmount}::decimal)`,
-    })
-    .returning();
-  return created;
-}
 
 /**
  * Signed (Dr positive) balance of a customer: the one balance engine's

@@ -56,11 +56,6 @@ export interface ProductionGroup {
   rows: ProductionRow[];
 }
 
-export interface ImportedProductionTarget {
-  category: string;
-  targetBales: number | null;
-}
-
 export function localDateStr(date: Date): string {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
@@ -234,16 +229,6 @@ export function statusTranslationKey(status: TrackingStatus): FactoryStaffTracki
   if (status === FACTORY_TRACKING_STATUSES.absent) return "absent";
   if (status === FACTORY_TRACKING_STATUSES.new) return "new";
   return "present";
-}
-
-export function normalizeExcelHeader(value: string): string {
-  return value.trim().toLowerCase().replace(/[_-]+/g, " ").replace(/\s+/g, " ");
-}
-
-export function normalizeWorkerCode(value: unknown): string {
-  return String(value ?? "")
-    .trim()
-    .toLocaleLowerCase();
 }
 
 export function groupProductionRows(sourceRows: ProductionRow[]): ProductionGroup[] {

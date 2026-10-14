@@ -11,7 +11,7 @@ recommended fix for each, not an applied change.
 | # | Severity | File | Line(s) | Kind |
 |---|----------|------|---------|------|
 | 1 | **Runtime bug (NaN)** | `client/src/components/stock-transfer/SmartTransferGeneratorDialog.tsx` | 428, 480 | Undefined variable → `NaN` |
-| 2 | Type-only (runtime-safe) | `server/services/stockTransferRevisionLifecycle.ts` | 205, 232, 350, 499, 524 | `QueryResult` indexed by `[0]` |
+| 2 | Resolved (file removed) | `server/services/stockTransferRevisionLifecycle.ts` | — | The superseded pending-revision lifecycle was deleted in the 2026-10 dead-code cleanup; the immutable lifecycle is the only implementation. |
 
 ---
 
@@ -83,6 +83,8 @@ heavier path.
 ---
 
 ## Issue 2 — `QueryResult` indexed by `[0]` (type-only, runtime-safe)
+
+> **Resolved:** the file was deleted in the 2026-10 dead-code cleanup (its only route was unreachable). The notes below are kept as history.
 
 ### What TypeScript reports (5 occurrences)
 ```

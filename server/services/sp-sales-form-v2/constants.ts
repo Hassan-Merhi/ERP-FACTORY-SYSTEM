@@ -31,7 +31,6 @@ export const NUM = "#,##0.00";            // kept for Costing / Summary sheets
 export const NUM4 = "#,##0.0000";         // kept for Costing / Summary sheets
 export const QTY_FMT   = "#,##0";        // ENTRY — quantities, whole units only
 export const MONEY_FMT  = '"$"#,##0';    // ENTRY — monetary values, whole dollars (no .00)
-export const MONEY4_FMT = '"$"#,##0.0000'; // NOT used in ENTRY; reserved for hidden sheets
 
 export function fill(argb: string): ExcelJS.Fill {
   return { type: "pattern", pattern: "solid", fgColor: { argb } };

@@ -24,12 +24,3 @@ export async function getStockItemCodeAliasById(aliasId: number): Promise<schema
     .where(eq(schema.stockItemCodeAliases.id, aliasId));
   return alias;
 }
-
-export async function createCodeAlias(alias: schema.InsertStockItemCodeAlias): Promise<schema.StockItemCodeAlias> {
-  const [created] = await db.insert(schema.stockItemCodeAliases).values(alias).returning();
-  return created;
-}
-
-export async function deleteCodeAlias(id: number): Promise<void> {
-  await db.delete(schema.stockItemCodeAliases).where(eq(schema.stockItemCodeAliases.id, id));
-}

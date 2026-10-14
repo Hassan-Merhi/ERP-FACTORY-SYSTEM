@@ -46,7 +46,6 @@ interface ContainerListViewProps {
 export function ContainerListView({
   containers,
   filteredContainers,
-  suppliers: _suppliers,
   searchQuery,
   setSearchQuery,
   statusFilter,
@@ -71,80 +70,6 @@ export function ContainerListView({
       else next.add(key);
       return next;
     });
-  };
-
-  const _renderCharges = (
-    c: ContainerWithSupplier & { additionalChargesSum?: string | null; preRegisteredChargesByCurrency?: unknown }
-  ) => {
-    const ccy = c.currencyCode || "USD";
-    const freightAmt = parseFloat(c.freight || "0");
-    const freightCcy = c.freightCurrencyCode || ccy;
-    const freightSameCcy = freightCcy === ccy;
-    const legacyOtherAmt = parseFloat(c.otherCharges || "0");
-    const additionalAmt = parseFloat(c.additionalChargesSum || "0");
-    let chargesByCcy: { currencyCode: string; amount: number }[] = [];
-    try {
-      const raw =
-        typeof c.preRegisteredChargesByCurrency === "string"
-          ? JSON.parse(c.preRegisteredChargesByCurrency)
-          : c.preRegisteredChargesByCurrency || [];
-      chargesByCcy = Array.isArray(raw)
-        ? raw.map((x) => ({ currencyCode: x.currencyCode || "USD", amount: parseFloat(x.amount || "0") }))
-        : [];
-    } catch {
-      // Malformed or absent payload — fall through to the default rather than surface a parse error.
-    }
-    const hasCharges =
-      freightAmt > 0 || legacyOtherAmt > 0 || chargesByCcy.some((x) => x.amount > 0) || additionalAmt > 0;
-    if (!hasCharges) return <span className="text-muted-foreground">—</span>;
-    const ccyTotals = new Map<string, number>();
-    if (freightSameCcy && freightAmt > 0) ccyTotals.set(freightCcy, (ccyTotals.get(freightCcy) || 0) + freightAmt);
-    if (legacyOtherAmt > 0) ccyTotals.set(ccy, (ccyTotals.get(ccy) || 0) + legacyOtherAmt);
-    for (const ch of chargesByCcy) {
-      if (ch.amount > 0) ccyTotals.set(ch.currencyCode, (ccyTotals.get(ch.currencyCode) || 0) + ch.amount);
-    }
-    if (additionalAmt > 0) ccyTotals.set(ccy, (ccyTotals.get(ccy) || 0) + additionalAmt);
-    return (
-      <div className="space-y-0.5">
-        <div className="font-mono text-sm">
-          {Array.from(ccyTotals.entries()).map(([cc, amt]) => (
-            <div key={cc}>
-              {cc} {formatNumber(amt)}
-            </div>
-          ))}
-          {!freightSameCcy && freightAmt > 0 && (
-            <div>
-              {freightCcy} {formatNumber(freightAmt)}
-            </div>
-          )}
-        </div>
-        <div className="text-xs text-muted-foreground space-y-0">
-          {freightAmt > 0 && (
-            <div>
-              Freight: {freightCcy} {formatNumber(freightAmt)}
-            </div>
-          )}
-          {(legacyOtherAmt > 0 || chargesByCcy.some((x) => x.amount > 0)) && (
-            <div>
-              Other:{" "}
-              {(() => {
-                const parts: string[] = [];
-                if (legacyOtherAmt > 0) parts.push(`${ccy} ${formatNumber(legacyOtherAmt)}`);
-                for (const ch of chargesByCcy) {
-                  if (ch.amount > 0) parts.push(`${ch.currencyCode} ${formatNumber(ch.amount)}`);
-                }
-                return parts.join(" + ");
-              })()}
-            </div>
-          )}
-          {additionalAmt > 0 && (
-            <div>
-              Additional: {ccy} {formatNumber(additionalAmt)}
-            </div>
-          )}
-        </div>
-      </div>
-    );
   };
 
   // Group containers by supplier

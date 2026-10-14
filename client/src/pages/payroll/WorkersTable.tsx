@@ -49,7 +49,6 @@ export function WorkersTable({
   handleUpdateAmount,
   handleDeleteWorker,
   setStatementEmployee,
-  setWorkerOverrides: _setWorkerOverrides,
   formatAmount,
   addWorkerToWorkerGroupMutation,
   groupId,

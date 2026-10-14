@@ -86,11 +86,15 @@ describe("Exchange rate is a shared company-wide record, not per-user", () => {
   });
 
   it("User A sets today's rate to 592 CFA", async () => {
+    // Read today first: Supertest 7.3 closes an agent's shared server once its last pending
+    // request settles, so a request awaited inside another request's arguments closes the
+    // server under the outer one.
+    const today = (await agentA.get(`/api/exchange-rates/check-today?companyId=${ctx.companyId}`)).body.today;
     const res = await agentA.post("/api/exchange-rates").send({
       fromCurrency: "USD",
       toCurrency: "CFA",
       rate: "592",
-      effectiveDate: (await agentA.get(`/api/exchange-rates/check-today?companyId=${ctx.companyId}`)).body.today,
+      effectiveDate: today,
     });
     expect(res.status).toBe(200);
     expect(parseFloat(res.body.rate)).toBeCloseTo(592, 4);

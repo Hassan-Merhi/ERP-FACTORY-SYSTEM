@@ -13,7 +13,8 @@ type PaginationOptions = {
   force?: boolean;
 };
 
-function readPositiveInt(value: unknown, fallback: number): number {
+/** A positive integer parsed from a query value, or `fallback`. */
+export function parsePositiveInt(value: unknown, fallback: number): number {
   const parsed = Number.parseInt(String(value ?? ""), 10);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
@@ -28,10 +29,10 @@ export function parseListPagination(query: Record<string, unknown>, options: Pag
     query.limit !== undefined ||
     query.pageSize !== undefined ||
     query.offset !== undefined;
-  const pageSize = Math.min(readPositiveInt(query.pageSize ?? query.limit, defaultPageSize), maxPageSize);
+  const pageSize = Math.min(parsePositiveInt(query.pageSize ?? query.limit, defaultPageSize), maxPageSize);
   const explicitOffset =
     query.offset === undefined ? null : Math.max(0, Number.parseInt(String(query.offset), 10) || 0);
-  const page = explicitOffset === null ? readPositiveInt(query.page, 1) : Math.floor(explicitOffset / pageSize) + 1;
+  const page = explicitOffset === null ? parsePositiveInt(query.page, 1) : Math.floor(explicitOffset / pageSize) + 1;
   return {
     requested,
     page,

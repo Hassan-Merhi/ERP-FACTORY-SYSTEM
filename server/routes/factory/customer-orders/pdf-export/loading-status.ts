@@ -11,7 +11,6 @@ import { getErrorMessage } from "../../../../lib/httpHandlers";
 import { logger } from "../../../../lib/logger";
 import { contentDisposition } from "../../../../lib/contentDisposition";
 import { parseId } from "../../../../lib/parseId";
-import { getClientDate } from "../../../../lib/dateUtils";
 import { db } from "../../../../db";
 import { requireAuth } from "../../../../auth";
 import {
@@ -407,7 +406,6 @@ export function registerOrderLoadingStatusExportRoutes(app: Express) {
           });
         });
 
-        const _fileDateStr = getClientDate(req);
         const xlsBuffer = Buffer.from(await workbook.xlsx.writeBuffer());
         res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
         res.setHeader(

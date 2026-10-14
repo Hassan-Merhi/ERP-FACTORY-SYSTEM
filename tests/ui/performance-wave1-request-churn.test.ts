@@ -11,7 +11,6 @@ const pollingCases = [
   ["client/src/pages/pos/hooks/usePosQueries.ts", "visibleTabInterval(60_000)", "refetchInterval: 60_000,"],
   ["client/src/pages/ConflictCenter.tsx", "visibleTabInterval(60_000)", "refetchInterval: 15_000,"],
   ["client/src/pages/settings/ExportCenter.tsx", "visibleTabInterval(60_000)", "refetchInterval: 60000,"],
-  ["client/src/pages/settings/DailyExportSection.tsx", "visibleTabInterval(60_000)", "refetchInterval: 60000,"],
   ["client/src/pages/settings/ActiveUsersSection.tsx", "visibleTabInterval(30_000)", "refetchInterval: 30000,"],
   ["client/src/pages/settings/WatchUserDialog.tsx", "visibleTabInterval(30_000)", "refetchInterval: 30000,"],
   ["client/src/pages/settings/RemoteSupportWatchDialog.tsx", "visibleTabInterval(4_000)", "refetchInterval: 4000,"],

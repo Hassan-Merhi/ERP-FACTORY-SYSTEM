@@ -1,67 +1,20 @@
 import type { ClientErrorLike } from "@/lib/clientError";
 import { useState, useEffect, useRef } from "react";
-import { z } from "zod";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 
 import { useToast } from "@/hooks/use-toast";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Loader2, ArrowLeftRight } from "lucide-react";
-import {
-  insertUserSchema,
-  insertCompanySchema,
-  insertUserCompanyRoleSchema,
-  type Company,
-  type LedgerAccount,
-} from "@shared/schema";
+import { type Company, type LedgerAccount } from "@shared/schema";
 import type { SettingsIntercompanyPosConfig } from "./settingsTypes";
 import { useCompany } from "@/contexts/CompanyContext";
-
-const _userFormSchema = insertUserSchema;
-const _companyFormSchema = insertCompanySchema;
-const _roleAssignmentSchema = insertUserCompanyRoleSchema.refine(
-  (data) => {
-    // If role is POS, assignedLocationId must be present
-    if (data.role === "POS" && !data.assignedLocationId) {
-      return false;
-    }
-    return true;
-  },
-  {
-    message: "POS roles require an assigned location",
-    path: ["assignedLocationId"],
-  }
-);
-
-type _UserFormData = z.infer<typeof _userFormSchema>;
-type _CompanyFormData = z.infer<typeof _companyFormSchema>;
-type _RoleAssignmentData = z.infer<typeof _roleAssignmentSchema>;
-
-export function POSReceiptSettings() {
-  return (
-    <div className="space-y-4">
-      <div className="flex items-center gap-3 p-3 rounded-md border border-border bg-muted/30">
-        <div className="flex-1">
-          <div className="font-medium text-sm">Profit/Loss Comparison on POS Receipts</div>
-          <div className="text-xs text-muted-foreground mt-1">
-            All POS invoices automatically include P/L Bale and Total P/L columns showing profit or loss vs. configured
-            price per item.
-          </div>
-        </div>
-        <Badge variant="secondary" className="shrink-0">
-          Always On
-        </Badge>
-      </div>
-    </div>
-  );
-}
 
 export function IntercompanyPosTab() {
   const { toast } = useToast();

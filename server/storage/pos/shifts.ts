@@ -149,7 +149,3 @@ export async function closeShift(
     return updated;
   });
 }
-
-export async function updateShiftStats(id: number, salesCount: number, salesTotal: string): Promise<void> {
-  await db.update(schema.posShifts).set({ salesCount, salesTotal }).where(eq(schema.posShifts.id, id));
-}

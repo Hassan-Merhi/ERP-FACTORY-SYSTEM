@@ -38,11 +38,3 @@ export function saveDaybookState(state: DaybookUIState | Partial<DaybookUIState>
     // sessionStorage may be unavailable in some contexts
   }
 }
-
-export function focusDaybookEditById(id: string) {
-  const el = document.querySelector<HTMLElement>(`[data-testid="${id}"]`);
-  if (el) {
-    el.focus();
-    el.scrollIntoView({ block: "nearest" });
-  }
-}

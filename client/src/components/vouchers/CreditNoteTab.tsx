@@ -8,7 +8,6 @@ import { zodResolver } from "@/lib/form-resolver";
 import { z } from "zod";
 import { format } from "date-fns";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { useDateFormat } from "@/contexts/DateFormatContext";
 import { formatNumber } from "@/lib/formatNumber";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -107,7 +106,6 @@ export function CreditNoteTab({ allAccounts, editVoucherId }: CreditNoteTabProps
   const { toast } = useToast();
   // Same predicate as the phone save bar, so exactly one save action shows (phone landscape too).
   const isPhoneLayout = useErpPhoneLayout();
-  const { formatDisplayDate: _formatDisplayDate } = useDateFormat();
   const [items, setItems] = useState<CreditNoteItem[]>([]);
   const [selectedLocationId, setSelectedLocationId] = useState<number>(0);
   const [searchTerm, setSearchTerm] = useState("");

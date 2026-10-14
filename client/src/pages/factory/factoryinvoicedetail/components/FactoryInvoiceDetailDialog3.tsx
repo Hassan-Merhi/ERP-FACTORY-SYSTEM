@@ -12,7 +12,6 @@ export function FactoryInvoiceDetailDialog3({ model }: { model: Model }) {
     setShowProformaDialog,
     selectedProformaId,
     setSelectedProformaId,
-    order: _order,
     proformas,
     selectedProforma,
     applyProformaMutation,

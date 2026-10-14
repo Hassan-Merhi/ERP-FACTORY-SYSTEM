@@ -5,15 +5,7 @@
  * control. The verifier keeps the registry exact: unregistered usages and stale
  * forward-registered values both fail CI so coverage cannot silently drift.
  */
-export const REMOTE_CONTROL_ALLOWED_ACTIONS = [
-  "navigation",
-  "toggle-view",
-  "view",
-  "view-container",
-  "view-details",
-  "view-invoice",
-  "view-profitability",
-] as const;
+export const REMOTE_CONTROL_ALLOWED_ACTIONS = ["navigation", "toggle-view", "view-container", "view-details"] as const;
 
 export type RemoteControlAction = (typeof REMOTE_CONTROL_ALLOWED_ACTIONS)[number];
 

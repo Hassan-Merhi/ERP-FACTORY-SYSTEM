@@ -1,4 +1,3 @@
-import { useLocation } from "@/contexts/LocationContext";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
 import { useLocation as useRoute } from "wouter";
@@ -26,8 +25,7 @@ import type { InventoryLocation as Location } from "./location-inventory/locatio
 import type { AuthMe } from "@shared/apiTypes";
 
 export default function LocationInventory({ posUser }: { posUser?: AuthMe } = {}) {
-  const { setSelectedLocation: _setSelectedLocation } = useLocation();
-  const [_route, navigate] = useRoute();
+  const [, navigate] = useRoute();
   const { toast } = useToast();
   const { formatAmount } = useCurrencyContext();
   const { selectedCompany } = useCompany();

@@ -9,8 +9,7 @@
  * which extra sources of assets/liabilities) differs between modes.
  */
 
-import type Decimal from "decimal.js";
-import { toMoney, type MoneyInput } from "./lib/money";
+import { toMoney } from "./lib/money";
 import { isAccountMigrationClearingAccount } from "./lib/systemOnlyLedgerAccounts";
 import {
   canonicalAccountType,
@@ -174,20 +173,6 @@ export function getAccountNetBalance(acc: AccountLike, balanceMap: Map<number, A
   const signedOpening = opening * openingSide;
   const balance = balanceMap.get(acc.id) || { debit: 0, credit: 0 };
   return signedOpening + balance.debit - balance.credit;
-}
-
-/** getAccountNetBalance in exact decimals, for balances kept as decimal strings or Decimals. */
-export function getAccountNetBalanceExact(
-  acc: AccountLike,
-  balanceMap: Map<number, { debit: MoneyInput; credit: MoneyInput }>
-): Decimal {
-  const opening = toMoney(acc.openingBalance);
-  const defaultSide = defaultOpeningSideSign(acc);
-  const openingSide = acc.openingBalanceSide === "Dr" ? 1 : acc.openingBalanceSide === "Cr" ? -1 : defaultSide;
-  const balance = balanceMap.get(acc.id);
-  return (openingSide === 1 ? opening : opening.negated())
-    .plus(toMoney(balance?.debit))
-    .minus(toMoney(balance?.credit));
 }
 
 /** Classifies equity accounts for display without including them in Assets/Liabilities totals. */
@@ -382,33 +367,4 @@ export function classifyNetPositionAccounts(
     onUsAccounts: onUsAccounts.sort((a, b) => b.value - a.value),
     categoryTotals,
   };
-}
-
-/** Builds sorted breakdown arrays from a categoryTotals map. */
-export function buildBreakdowns(categoryTotals: Record<string, number>): {
-  forUsBreakdown: { name: string; value: number }[];
-  onUsBreakdown: { name: string; value: number }[];
-  expensesBreakdown: { name: string; value: number }[];
-  incomeBreakdown: { name: string; value: number }[];
-} {
-  const forUsBreakdown: { name: string; value: number }[] = [];
-  const onUsBreakdown: { name: string; value: number }[] = [];
-  const expensesBreakdown: { name: string; value: number }[] = [];
-  const incomeBreakdown: { name: string; value: number }[] = [];
-
-  for (const [key, value] of Object.entries(categoryTotals)) {
-    if (value === 0) continue;
-    const v = round2(value);
-    if (key.startsWith("asset_")) forUsBreakdown.push({ name: key.replace("asset_", ""), value: v });
-    else if (key.startsWith("liability_")) onUsBreakdown.push({ name: key.replace("liability_", ""), value: v });
-    else if (key.startsWith("exp_")) expensesBreakdown.push({ name: key.replace("exp_", ""), value: v });
-    else if (key.startsWith("income_")) incomeBreakdown.push({ name: key.replace("income_", ""), value: v });
-  }
-
-  forUsBreakdown.sort((a, b) => b.value - a.value);
-  onUsBreakdown.sort((a, b) => b.value - a.value);
-  expensesBreakdown.sort((a, b) => b.value - a.value);
-  incomeBreakdown.sort((a, b) => b.value - a.value);
-
-  return { forUsBreakdown, onUsBreakdown, expensesBreakdown, incomeBreakdown };
 }

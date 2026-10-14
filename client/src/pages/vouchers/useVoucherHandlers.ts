@@ -36,8 +36,6 @@ export function useVoucherHandlers({
   toast,
   setSelectedAccountId,
   setSelectedAccountType,
-  setSidebarSearchValue: _setSidebarSearchValue,
-  setSidebarHighlightedIndex: _setSidebarHighlightedIndex,
 }: UseVoucherHandlersProps) {
   const handleSidebarAccountSelect = async (account: Account) => {
     const currentEntries = form.getValues("entries");

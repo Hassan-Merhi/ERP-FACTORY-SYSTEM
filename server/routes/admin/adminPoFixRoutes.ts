@@ -358,9 +358,6 @@ export function registerAdminPoFixRoutes(app: Express) {
         // Calculate PO total
         const poTotal = calcPoAmountsExact(po).grossTotal;
 
-        const _poSupplier = po.supplierId
-          ? await db.query.suppliers.findFirst({ where: eq(suppliers.id, po.supplierId) })
-          : null;
         if (poTotal.lessThanOrEqualTo(0)) {
           skipped++;
           continue;

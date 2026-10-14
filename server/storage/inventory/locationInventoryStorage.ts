@@ -244,21 +244,6 @@ export async function getCompanyInventory(companyId: number) {
 // Stock Queries
 // ---------------------------------------------------------------------------
 
-export async function getInventoryByStockItem(stockItemId: number, companyId: number) {
-  return await db
-    .select({
-      locationId: schema.inventory.locationId,
-      quantity: schema.inventory.quantity,
-      averageRate: schema.inventory.averageRate,
-      totalValue: schema.inventory.totalValue,
-      lastUpdated: schema.inventory.lastUpdated,
-      locationName: schema.locations.name,
-    })
-    .from(schema.inventory)
-    .leftJoin(schema.locations, eq(schema.inventory.locationId, schema.locations.id))
-    .where(and(eq(schema.inventory.stockItemId, stockItemId), eq(schema.inventory.companyId, companyId)));
-}
-
 export async function updateInventory(
   locationId: number,
   stockItemId: number,
@@ -367,14 +352,6 @@ export async function updateInventoryTx(
   }
 }
 
-export async function getTotalInventoryValue(companyId: number): Promise<number> {
-  const [result] = await db
-    .select({ total: sql<string>`COALESCE(SUM(CAST(${schema.inventory.totalValue} AS numeric)), 0)` })
-    .from(schema.inventory)
-    .where(eq(schema.inventory.companyId, companyId));
-  return result ? toMoney(result.total).toNumber() : 0;
-}
-
 export async function getLowStockItems(companyId: number, threshold: number = 10) {
   return await db
     .select({
@@ -391,50 +368,4 @@ export async function getLowStockItems(companyId: number, threshold: number = 10
     .where(
       and(eq(schema.inventory.companyId, companyId), sql`CAST(${schema.inventory.quantity} AS numeric) < ${threshold}`)
     );
-}
-
-export async function getInventorySummary(companyId: number) {
-  return await db
-    .select({
-      stockItemId: schema.inventory.stockItemId,
-      stockItemName: schema.stockItems.name,
-      stockItemCode: schema.stockItems.code,
-      totalQuantity: sql<string>`SUM(CAST(${schema.inventory.quantity} AS numeric))`,
-      totalValue: sql<string>`SUM(CAST(${schema.inventory.totalValue} AS numeric))`,
-      averageRate: sql<string>`CASE WHEN SUM(CAST(${schema.inventory.quantity} AS numeric)) > 0 THEN SUM(CAST(${schema.inventory.totalValue} AS numeric)) / SUM(CAST(${schema.inventory.quantity} AS numeric)) ELSE 0 END`,
-    })
-    .from(schema.inventory)
-    .leftJoin(schema.stockItems, eq(schema.inventory.stockItemId, schema.stockItems.id))
-    .where(eq(schema.inventory.companyId, companyId))
-    .groupBy(schema.inventory.stockItemId, schema.stockItems.name, schema.stockItems.code);
-}
-
-export async function getStockItemsWithInventory(companyId: number, locationId?: number) {
-  const conditions = [eq(schema.inventory.companyId, companyId)];
-  if (locationId) conditions.push(eq(schema.inventory.locationId, locationId));
-  return await db
-    .select({
-      stockItemId: schema.inventory.stockItemId,
-      stockItemName: schema.stockItems.name,
-      stockItemCode: schema.stockItems.code,
-      stockItemUnit: schema.stockItems.uom,
-      barcode: sql<string | null>`NULL::text`,
-      quantity: schema.inventory.quantity,
-      averageRate: schema.inventory.averageRate,
-      totalValue: schema.inventory.totalValue,
-      locationId: schema.inventory.locationId,
-      locationName: schema.locations.name,
-      sellingPrice: schema.stockItemLocationPrices.sellingPrice,
-    })
-    .from(schema.inventory)
-    .leftJoin(schema.stockItems, eq(schema.inventory.stockItemId, schema.stockItems.id))
-    .leftJoin(schema.locations, eq(schema.inventory.locationId, schema.locations.id))
-    .leftJoin(
-      schema.stockItemLocationPrices,
-      and(
-        eq(schema.stockItemLocationPrices.stockItemId, schema.inventory.stockItemId),
-        eq(schema.stockItemLocationPrices.locationId, schema.inventory.locationId)
-      )
-    )
-    .where(and(...conditions, isNull(schema.stockItems.deletedAt)));
 }

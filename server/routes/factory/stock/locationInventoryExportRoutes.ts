@@ -114,7 +114,6 @@ export function registerFactoryLocationInventoryExportRoutes(app: Express) {
       const ROW_ALT = "FFF5F8FF";
       const ROW_WG_ALT = "FFFAF5FF";
       const TOTAL_BG = "FFE8F0FE";
-      const _LOC_SEP = "FFDCE6F1"; // light blue for location separator rows
       const NUM_FMT = "#,##0.00";
       const INT_FMT = "#,##0";
 

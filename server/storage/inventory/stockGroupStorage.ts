@@ -32,10 +32,6 @@ export async function updateStockGroup(
   return updated;
 }
 
-export async function deleteStockGroup(id: number): Promise<void> {
-  await db.delete(schema.stockGroups).where(eq(schema.stockGroups.id, id));
-}
-
 export async function getStockGroupByCode(code: string, companyId: number): Promise<schema.StockGroup | undefined> {
   const [group] = await db
     .select()

@@ -56,8 +56,6 @@ export function registerPayrollBulkAdjustmentRoutes(app: Express) {
         if (!bonusEmpGroupMap.has(row.employeeId)) bonusEmpGroupMap.set(row.employeeId, row.groupName);
       }
 
-      const _allAccounts = await storage.getAllLedgerAccounts(req.session.currentCompanyId);
-
       // Calculate total amount
       const totalAmount = sumMoney(validBonuses.map((b) => b.amount)).toNumber();
 

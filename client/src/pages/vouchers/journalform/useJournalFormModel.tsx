@@ -431,8 +431,6 @@ export function useJournalFormModel({ voucherIdToEdit, isPOS }: JournalFormProps
         accountName = customers.find((customer) => customer.id === accountId)?.legalName || "";
       }
       const debit = parseFloat(String(entry.debitAmount || "0"));
-      // eslint-disable-next-line unused-imports/no-unused-vars -- God Files extraction preserves pre-split behavior.
-      const credit = parseFloat(String(entry.creditAmount || "0"));
       return {
         type: debit > 0 ? "DR" : "CR",
         accountType,

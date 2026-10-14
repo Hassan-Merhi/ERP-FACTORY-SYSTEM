@@ -16,9 +16,6 @@ import { FileText, TrendingUp, CreditCard, DollarSign } from "lucide-react";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-const _DISPLAY_CURRENCIES = ["EUR", "AUD", "USD"] as const;
-type _DisplayCcy = (typeof _DISPLAY_CURRENCIES)[number];
-
 interface BrokerSupplier {
   id: number;
   name: string;

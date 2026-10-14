@@ -108,10 +108,6 @@ export interface ProviderResolution {
   tryDirect: Array<() => Promise<CarrierTrackResult>>;
 }
 
-export function anyDirectProviderPossible(): boolean {
-  return false;
-}
-
 export function resolveProvider(containerNumber: string): ProviderResolution {
   const detectedCarrier = detectCarrier(containerNumber);
   logger.info(

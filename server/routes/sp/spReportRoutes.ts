@@ -63,16 +63,6 @@ export function registerSpReportRoutes(app: Express) {
       // Revenue = credits to the profit account (grandTotal per sale).
       // COGS    = credits to the payable account (supplier cost per sale).
       // Net profit = Revenue − COGS  (e.g. $775 − $482.60 = $292.40).
-      const settingsRows = await db.execute(sql`
-        SELECT sp_pos_payable_account_id, sp_pos_profit_account_id
-        FROM company_settings
-        WHERE company_id = ${companyId}
-        LIMIT 1
-      `);
-      const settingsRow = resultRows(settingsRows)[0];
-      const _spPosProfitAccountId = settingsRow?.sp_pos_profit_account_id ?? null;
-      const _spPosPayableAccountId = settingsRow?.sp_pos_payable_account_id ?? null;
-
       let totalRevenue = 0;
       let totalCogs = 0;
       let saleCount = 0;

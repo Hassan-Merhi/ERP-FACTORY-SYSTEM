@@ -7,24 +7,19 @@
 import type { Express, Request, Response } from "express";
 import { logger } from "../../lib/logger";
 import { db } from "../../db";
-import { inventoryCutoverRefusal } from "../../services/accounting/perpetualInventory/cutoverRefusal";
 import { requireAuth, requireRole } from "../../auth";
 import {
   privilegedConcurrencyLimit,
-  privilegedDestructiveRateLimit,
   privilegedMutationRateLimit,
   privilegedReadRateLimit,
-  privilegedRequestBudget,
 } from "../../middleware/privilegedEndpointSecurity";
 import { sql } from "drizzle-orm";
-import { pn, buildGcMigrationPreview } from "./_helpers";
+import { buildGcMigrationPreview } from "./_helpers";
 
 const spMigrationReadConcurrency = privilegedConcurrencyLimit({
   scope: "sp-migration-read",
   maxConcurrent: 2,
 });
-const spMigrationRollbackConcurrency = privilegedConcurrencyLimit({ scope: "sp-migration-rollback" });
-const spMigrationRollbackBudget = privilegedRequestBudget({ maxBodyBytes: 64 * 1024, maxCollectionItems: 100 });
 
 export function registerSpMigrationRunRoutes(app: Express) {
   // ── GET /api/sp/migration/preview ────────────────────────────────────────
@@ -79,7 +74,7 @@ export function registerSpMigrationRunRoutes(app: Express) {
       `)
         ).rows;
         return res.json({ runs });
-      } catch (_err: unknown) {
+      } catch {
         return res.status(500).json({ message: "Internal server error" });
       }
     }
@@ -103,236 +98,5 @@ export function registerSpMigrationRunRoutes(app: Express) {
     }
   );
 
-  // ── POST /api/sp/migration/rollback ─────────────────────────────────────
-  // Removes ONLY rows created by a specific rehearsal run.
-  // Never touches source (ERP) company.
-  app.post(
-    "/api/sp/migration/rollback",
-    requireAuth,
-    requireRole("Developer"),
-    privilegedDestructiveRateLimit,
-    spMigrationRollbackBudget,
-    spMigrationRollbackConcurrency,
-    async (req: Request, res: Response) => {
-      const { runId } = req.body ?? {};
-      if (!runId) return res.status(400).json({ message: "runId is required" });
-
-      try {
-        // Fetch run metadata
-        const runRow = (
-          await db.execute(sql`
-        SELECT id, source_company_id, target_company_id, status
-        FROM sp_migration_rehearsal_runs WHERE id = ${runId} LIMIT 1
-      `)
-        ).rows[0];
-
-        if (!runRow) return res.status(404).json({ message: "Run not found" });
-        if (runRow.status === "rolled_back") {
-          return res.status(400).json({ message: "This run has already been rolled back" });
-        }
-        if (runRow.status === "rollback") {
-          return res.status(400).json({ message: "Rollback already in progress" });
-        }
-
-        const targetId = pn(runRow.target_company_id);
-        const sourceId = pn(runRow.source_company_id);
-        // Wave 11: deleting the run's stock rows is refused after the target's cut-over.
-        const inventoryRefusal = await inventoryCutoverRefusal(db, targetId, "sp-migration-rollback");
-        if (inventoryRefusal) return res.status(inventoryRefusal.status).json(inventoryRefusal.body);
-
-        // Safety: never touch source company
-        if (!targetId || targetId === sourceId) {
-          return res.status(400).json({ message: "Rollback safety check failed: invalid target/source" });
-        }
-
-        // Fetch tracked rows
-        const trackedRows = (
-          await db.execute<{ table_name: string; row_id: number }>(sql`
-        SELECT table_name, row_id FROM sp_migration_run_rows WHERE run_id = ${runId}
-        ORDER BY id DESC
-      `)
-        ).rows;
-
-        let deleted = 0;
-        const byTable: Record<string, number[]> = {};
-        for (const r of trackedRows) {
-          if (!byTable[r.table_name]) byTable[r.table_name] = [];
-          byTable[r.table_name].push(pn(r.row_id));
-        }
-
-        // Delete in safe order — children before parents, entries before vouchers before accounts
-        const tableOrder = [
-          "voucher_entries",
-          "vouchers",
-          "sp_container_lines",
-          "sp_containers",
-          "ledger_accounts",
-          "inventory",
-          "sp_stock_movements",
-          "stock_item_code_aliases",
-          "stock_items",
-          "stock_groups",
-          "stock_grades",
-          "stock_categories",
-          "locations",
-        ];
-        // All tracked deletions commit together so no voucher is left with a partial set of entries.
-        await db.transaction(async (tx) => {
-          for (const tbl of tableOrder) {
-            const ids = byTable[tbl];
-            if (!ids?.length) continue;
-            for (const id of ids) {
-              // Extra safety: verify the row belongs to target company before deleting
-              let verified = false;
-              if (tbl === "sp_stock_movements") {
-                const [chk] = (
-                  await tx.execute<{ company_id: number }>(
-                    sql`SELECT company_id FROM sp_stock_movements WHERE id = ${id} LIMIT 1`
-                  )
-                ).rows;
-                verified = !!chk && pn(chk.company_id) === targetId;
-              } else if (tbl === "stock_item_code_aliases") {
-                const [chk] = (
-                  await tx.execute<{ company_id: number }>(
-                    sql`SELECT company_id FROM stock_item_code_aliases WHERE id = ${id} LIMIT 1`
-                  )
-                ).rows;
-                verified = !!chk && pn(chk.company_id) === targetId;
-              } else if (tbl === "locations") {
-                const [chk] = (
-                  await tx.execute<{ company_id: number }>(
-                    sql`SELECT company_id FROM locations WHERE id = ${id} LIMIT 1`
-                  )
-                ).rows;
-                verified = !!chk && pn(chk.company_id) === targetId;
-              } else if (tbl === "vouchers") {
-                const [chk] = (
-                  await tx.execute<{ company_id: number }>(
-                    sql`SELECT company_id FROM vouchers WHERE id = ${id} LIMIT 1`
-                  )
-                ).rows;
-                verified = !!chk && pn(chk.company_id) === targetId;
-              } else if (tbl === "voucher_entries") {
-                // voucher_entries has no company_id — verify via parent voucher
-                const [chk] = (
-                  await tx.execute<{ company_id: number }>(sql`
-              SELECT v.company_id FROM voucher_entries ve
-              JOIN vouchers v ON v.id = ve.voucher_id
-              WHERE ve.id = ${id} LIMIT 1
-            `)
-                ).rows;
-                verified = !!chk && pn(chk.company_id) === targetId;
-              } else if (tbl === "ledger_accounts") {
-                const [chk] = (
-                  await tx.execute<{ company_id: number }>(
-                    sql`SELECT company_id FROM ledger_accounts WHERE id = ${id} LIMIT 1`
-                  )
-                ).rows;
-                verified = !!chk && pn(chk.company_id) === targetId;
-              } else if (tbl === "inventory") {
-                const [chk] = (
-                  await tx.execute<{ company_id: number }>(
-                    sql`SELECT company_id FROM inventory WHERE id = ${id} LIMIT 1`
-                  )
-                ).rows;
-                verified = !!chk && pn(chk.company_id) === targetId;
-              } else if (tbl === "stock_items") {
-                const [chk] = (
-                  await tx.execute<{ company_id: number }>(
-                    sql`SELECT company_id FROM stock_items WHERE id = ${id} LIMIT 1`
-                  )
-                ).rows;
-                verified = !!chk && pn(chk.company_id) === targetId;
-              } else if (tbl === "stock_groups") {
-                const [chk] = (
-                  await tx.execute<{ company_id: number }>(
-                    sql`SELECT company_id FROM stock_groups WHERE id = ${id} LIMIT 1`
-                  )
-                ).rows;
-                verified = !!chk && pn(chk.company_id) === targetId;
-              } else if (tbl === "stock_grades") {
-                const [chk] = (
-                  await tx.execute<{ company_id: number }>(
-                    sql`SELECT company_id FROM stock_grades WHERE id = ${id} LIMIT 1`
-                  )
-                ).rows;
-                verified = !!chk && pn(chk.company_id) === targetId;
-              } else if (tbl === "stock_categories") {
-                const [chk] = (
-                  await tx.execute<{ company_id: number }>(
-                    sql`SELECT company_id FROM stock_categories WHERE id = ${id} LIMIT 1`
-                  )
-                ).rows;
-                verified = !!chk && pn(chk.company_id) === targetId;
-              } else if (tbl === "sp_containers") {
-                const [chk] = (
-                  await tx.execute<{ company_id: number }>(
-                    sql`SELECT company_id FROM sp_containers WHERE id = ${id} LIMIT 1`
-                  )
-                ).rows;
-                verified = !!chk && pn(chk.company_id) === targetId;
-              } else if (tbl === "sp_container_lines") {
-                const [chk] = (
-                  await tx.execute<{ company_id: number }>(
-                    sql`SELECT company_id FROM sp_container_lines WHERE id = ${id} LIMIT 1`
-                  )
-                ).rows;
-                verified = !!chk && pn(chk.company_id) === targetId;
-              }
-
-              if (!verified) {
-                logger.warn(`[SP Rollback] Skipped ${tbl} id=${id} — company_id mismatch or row not found`);
-                continue;
-              }
-
-              if (tbl === "inventory") {
-                await tx.execute(sql`DELETE FROM inventory WHERE id = ${id}`);
-              } else if (tbl === "sp_stock_movements") {
-                await tx.execute(sql`DELETE FROM sp_stock_movements WHERE id = ${id}`);
-              } else if (tbl === "stock_item_code_aliases") {
-                await tx.execute(sql`DELETE FROM stock_item_code_aliases WHERE id = ${id}`);
-              } else if (tbl === "locations") {
-                await tx.execute(sql`DELETE FROM locations WHERE id = ${id}`);
-              } else if (tbl === "voucher_entries") {
-                await tx.execute(sql`DELETE FROM voucher_entries WHERE id = ${id}`);
-              } else if (tbl === "vouchers") {
-                await tx.execute(sql`DELETE FROM vouchers WHERE id = ${id}`);
-              } else if (tbl === "ledger_accounts") {
-                await tx.execute(sql`DELETE FROM ledger_accounts WHERE id = ${id}`);
-              } else if (tbl === "stock_items") {
-                await tx.execute(sql`DELETE FROM stock_items WHERE id = ${id}`);
-              } else if (tbl === "stock_groups") {
-                await tx.execute(sql`DELETE FROM stock_groups WHERE id = ${id}`);
-              } else if (tbl === "stock_grades") {
-                await tx.execute(sql`DELETE FROM stock_grades WHERE id = ${id}`);
-              } else if (tbl === "stock_categories") {
-                await tx.execute(sql`DELETE FROM stock_categories WHERE id = ${id}`);
-              } else if (tbl === "sp_container_lines") {
-                await tx.execute(sql`DELETE FROM sp_container_lines WHERE id = ${id}`);
-              } else if (tbl === "sp_containers") {
-                await tx.execute(sql`DELETE FROM sp_containers WHERE id = ${id}`);
-              }
-              deleted++;
-            }
-          }
-        });
-
-        // Clean up provenance links written by this run (source-side rows are never touched)
-        await db.execute(sql`DELETE FROM sp_migration_source_links WHERE run_id = ${runId}`);
-
-        // Mark run as rolled_back
-        await db.execute(sql`
-        UPDATE sp_migration_rehearsal_runs
-        SET status = 'rolled_back', completed_at = now(),
-            notes = COALESCE(notes, '') || ' | ROLLED BACK'
-        WHERE id = ${runId}
-      `);
-
-        return res.json({ success: true, runId, rowsDeleted: deleted });
-      } catch (err: unknown) {
-        logger.error("[SP Migration] rollback error:", { error: err });
-        return res.status(500).json({ message: "Internal server error" });
-      }
-    }
-  );
+  // Rehearsal rollback is owned by the Phase 2 migration router registered earlier.
 }

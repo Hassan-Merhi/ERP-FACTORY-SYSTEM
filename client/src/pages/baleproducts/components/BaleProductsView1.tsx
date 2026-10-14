@@ -40,7 +40,6 @@ export function BaleProductsView1({ model }: { model: Model }) {
     isAdmin,
     hideAvgRate,
     hideSellingPriceBP,
-    products: _products,
     isLoading,
     categories,
     categoryMap,

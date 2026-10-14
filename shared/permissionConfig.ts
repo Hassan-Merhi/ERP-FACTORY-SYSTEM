@@ -288,9 +288,6 @@ export const PERMISSION_BY_KEY: Record<string, PermissionEntry> = Object.fromEnt
   PERMISSION_CATALOG.map((e) => [e.key, e])
 );
 
-/** All distinct type values */
-export const PERMISSION_TYPES = ["module", "page", "tab", "action", "sensitive", "export", "pos"] as const;
-
 /** Human-readable section labels for each type */
 export const PERMISSION_TYPE_LABELS: Record<PermissionType, string> = {
   module: "Module Access",
@@ -301,20 +298,6 @@ export const PERMISSION_TYPE_LABELS: Record<PermissionType, string> = {
   export: "Export & Print",
   pos: "POS Settings",
 };
-
-/**
- * Returns all catalog entries grouped by type, then by group within each type.
- * Structure: { type → { groupName → PermissionEntry[] } }
- */
-export function getCatalogByTypeAndGroup(): Record<string, Record<string, PermissionEntry[]>> {
-  const result: Record<string, Record<string, PermissionEntry[]>> = {};
-  for (const entry of PERMISSION_CATALOG) {
-    if (!result[entry.type]) result[entry.type] = {};
-    if (!result[entry.type][entry.group]) result[entry.type][entry.group] = [];
-    result[entry.type][entry.group].push(entry);
-  }
-  return result;
-}
 
 /**
  * Auto-detected / Unconfigured placeholder structure.

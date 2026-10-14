@@ -39,13 +39,11 @@ const reviewedSpMounts: string[] = [];
 // remains reachable while legacy WhatsApp writes pass through the new permission/group-validation
 // boundary.
 //
-// It is not all benign. POST /api/stock-transfer-revisions/:id/approve has three separate terminal
-// handlers - vouchers/immutableStockTransferRevisionRoutes.ts, vouchers/stockTransferRevisionLifecycleRoutes.ts
-// and fiscal-transfers/revisions-write.ts - and Express resolves first-match, so two are dead code.
-// The same pattern covers POST /api/stock-transfers/:transferId/revisions. Deciding which
-// implementation is authoritative changes stock-transfer approval behavior, so it is deliberately
-// left for the audit phase that targets duplicate route registrations rather than folded into a
-// CI-unblocking change. Tracked as a confirmed finding, not an accepted one.
+// The dead-code cleanup (Phase 3) resolved the stock-transfer revision finding recorded here:
+// vouchers/immutableStockTransferRevisionRoutes.ts is registered first and is terminal on every
+// path, so the later revision handlers in vouchers/stockTransferRevisionLifecycleRoutes.ts and
+// fiscal-transfers/revisions-write.ts / revisions-read.ts could never run and were removed. The
+// immutable implementation was already the one serving every request, so behavior is unchanged.
 // Golden Coast's Fresh Start payment boundary adds one reviewed layered registration.
 // #1206 adds a second: goldenCoastPosSettlementDeleteRoute is mounted ahead of the generic
 // DELETE /api/vouchers/:id so a Golden Coast POS cash settlement deletes its cascade before
@@ -73,7 +71,12 @@ const reviewedSpMounts: string[] = [];
 // the deleted-items, admin repair and PO-supplier fix routes a second time,
 // ahead of adminRoutes, which also put the first deleted-items permanent
 // handler in front of the dependent-row handler meant to run before it.
-const MAX_SHADOWED_REGISTRATIONS = 143;
+// Lowered from 143 to 77 by the dead-code cleanup (Phase 3): 56 shadowed registrations were
+// removed first, then 8 more (the stock-transfer revision copies, the voucher-entry PATCH copy,
+// the import-export account-migration execute copy and the cross-company supplier purchase-order
+// reader). Every remaining overlap is a reviewed guard, fallback or conditional dispatch listed in
+// docs/archive/engineering/dead-code/phase-3-route-disposition.json.
+const MAX_SHADOWED_REGISTRATIONS = 77;
 let actual: SerializedRouteManifest;
 
 async function buildManifest(): Promise<SerializedRouteManifest> {

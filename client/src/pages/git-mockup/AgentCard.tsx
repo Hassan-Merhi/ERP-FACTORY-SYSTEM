@@ -69,7 +69,7 @@ export function AgentCard({
     newAmount: number;
     newContainerId: number;
   } | null>(null);
-  const [_replaceConfirmDiff, setReplaceConfirmDiff] = useState(false);
+  const [, setReplaceConfirmDiff] = useState(false);
   const [pendingGraduationIds, setPendingGraduationIds] = useState<number[]>([]);
 
   // ── Custom order (localStorage) ───────────────────────────────────────────
@@ -215,7 +215,6 @@ export function AgentCard({
     ledgerBalance,
     offloadedDutyTotal,
     clearedByPayments,
-    openBalance: _openBalance,
     warnings,
     clearedRows,
     partialRows,

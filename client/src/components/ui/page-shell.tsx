@@ -43,21 +43,4 @@ export function PageActions({ layout = "compact", className, ...props }: PageAct
   return <div className={cn(PAGE_ACTION_CLASSES[layout], className)} {...props} />;
 }
 
-interface FinancialReportHeaderProps {
-  title: React.ReactNode;
-  children?: React.ReactNode;
-  className?: string;
-}
-
-export function FinancialReportHeader({ title, children, className }: FinancialReportHeaderProps) {
-  return (
-    <div className={cn("bg-primary text-primary-foreground", className)}>
-      <div className="flex min-h-11 items-center justify-between gap-3 px-3 py-2 text-sm font-semibold">
-        <span>{title}</span>
-        {children}
-      </div>
-    </div>
-  );
-}
-
 export const financialNumberClassName = "text-right font-mono tabular-nums";

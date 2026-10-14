@@ -49,7 +49,7 @@ export default function Suppliers() {
   // while production uses the historical-base formatter.
   const formatAmount = formatHistoricalBaseAmount ?? legacyFormatAmount;
   const { toast } = useToast();
-  const [_location, navigate] = useLocation();
+  const [, navigate] = useLocation();
   const {
     filters: { companyFilter, hideZeroBalance, searchTerm, dateFilter, hidePayments },
     setFilter,

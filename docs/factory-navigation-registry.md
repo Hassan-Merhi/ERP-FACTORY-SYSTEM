@@ -53,6 +53,7 @@ This document is the authoritative inventory for Factory Mode navigation. It rec
 | Current route | Canonical parent | Intended exact return | Escape status | Audit result |
 |---|---|---|---|---|
 | `/factory/containers/new` | Containers | `/factory/containers-hub?section=containers` | mapped | correct |
+| `/factory/catalog-translations` | Bale Explorer | `/factory/bales-hub` | mapped (alias of `factory/bales-hub` access) | correct basic parent |
 | `/factory/raw-stock/opening-balance/:id/edit` | Raw Materials | `/factory/raw-materials?section=opening-balances` | partially mapped | parent exists but section is not preserved |
 | `/factory/raw-stock/recalculate` | Raw Materials | `/factory/raw-materials?section=recalculation` | unmapped centrally | fix in later phase |
 | `/factory/raw-stock` | Raw Materials | `/factory/raw-materials?section=stock` | unmapped centrally | fix in later phase |

@@ -345,37 +345,6 @@ export async function claimRetryableScheduledWhatsAppOccurrence(input: {
   }
 }
 
-export async function hasRetryableScheduledWhatsAppOccurrence(jobType: string): Promise<boolean> {
-  const result = await pool.query(
-    `SELECT 1
-       FROM scheduled_whatsapp_occurrences o
-      WHERE o.job_type = $1
-        AND o.created_at >= now() - interval '${RETRY_LOOKBACK_HOURS} hours'
-        AND (
-          (
-            o.status IN ('partial', 'failed')
-            AND (o.claim_token IS NULL OR o.claim_expires_at < now())
-          )
-          OR (
-            o.status = 'claimed'
-            AND o.delivery_started_at IS NULL
-            AND o.claim_expires_at < now()
-          )
-          OR (
-            o.status = 'delivering'
-            AND o.claim_expires_at < now()
-          )
-        )
-        AND NOT EXISTS (
-          SELECT 1 FROM scheduled_whatsapp_attachments a
-           WHERE a.occurrence_id = o.id AND a.status = 'sending'
-        )
-      LIMIT 1`,
-    [jobType]
-  );
-  return Boolean(result.rowCount);
-}
-
 export async function recordScheduledWhatsAppAttachmentPreparationFailure(input: {
   claim: ScheduledWhatsAppClaim;
   attachmentKey: string;

@@ -221,11 +221,6 @@ export function registerContainerFreightWriteRoutes(app: Express) {
       const newHasOwnFreight = newFreightPaidBy === "own" && newFreight.gt(0) && !!newFreightOwnAccountId;
       const newHasParentFreight = newFreightPaidBy === "parent" && newFreight.gt(0) && !!newFreightParentAccountId;
       const newHasEmbeddedFreight = newHasOwnFreight || newHasParentFreight;
-      const _newFreightAccountId = newHasParentFreight
-        ? newFreightParentAccountId
-        : newHasOwnFreight
-          ? newFreightOwnAccountId
-          : null;
       // Local voucher total = grossTotal when freight is parent-paid (child always owes
       // the parent the full amount including freight, regardless of whether the freight
       // account has been configured yet) or when freight is own-embedded.

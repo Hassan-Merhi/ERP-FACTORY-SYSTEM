@@ -71,7 +71,7 @@ shared/   → Types and schema shared by both sides
 | `checkPOSLocation` | Verifies POS user is assigned to the requested location |
 | `canModifyDate` | Admin/Developer bypass; POS = today only; Manager/Owner = within `daybookEditDays` window |
 
-**Storage layer** — `server/storage/index.ts` re-exports a unified `storage` object composed from domain modules:
+**Storage layer** — `server/storage.ts` re-exports a unified `storage` object composed from domain modules:
 
 | Module | Covers |
 |---|---|
@@ -94,7 +94,6 @@ shared/   → Types and schema shared by both sides
 | `server/lib/permissionHelpers.ts` | Advanced restriction lookup |
 | `server/lib/permissionMiddleware.ts` | `requireModuleAccess`, `requireActionAccess`, `requireExportAccess` |
 | `server/lib/dateUtils.ts` | Fiscal date helpers |
-| `server/lib/serverLog.ts` | Production-safe logging wrapper |
 
 **Services** (`server/services/`): container tracking scheduler, export job manager, email service, WhatsApp service, scheduler service.
 

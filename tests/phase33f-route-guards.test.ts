@@ -20,7 +20,7 @@ vi.mock("multer", () => {
 
 import { registerFactoryCompanyImportRoutes } from "../server/routes/factory/docs-users/companyImportRoutes";
 import { registerGitImportRoutes } from "../server/routes/git/gitImportRoutes";
-import { registerStockPriceListImportRoutes } from "../server/routes/stock/stockPriceListImportRoutes";
+import { registerStockItemImportRoutes } from "../server/routes/stock/transfer-adj/imports";
 import { registerOrderPdfRoutes } from "../server/routes/factory/customer-orders/pdf-export/order-pdf";
 import { registerOrderBaleBulkImportRoutes } from "../server/routes/factory/customer-orders/bale-scanning/bulk-import";
 import { registerLocationWhatsappScheduleRoutes } from "../server/routes/location/locationWhatsappScheduleRoutes";
@@ -144,7 +144,7 @@ describe("Phase 33F auth, import, export and integration route guards", () => {
   });
 
   it("guards stock imports and grade/category workbook uploads", async () => {
-    registerStockPriceListImportRoutes(fakeApp());
+    registerStockItemImportRoutes(fakeApp());
 
     let res = await invoke("POST", "/api/stock-items/import", { session: {}, body: { items: [] } });
     expect(res.statusCode).toBe(400);

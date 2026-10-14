@@ -277,56 +277,6 @@ describe("bank and fixed-asset route behavior", () => {
     );
   });
 
-  it("revalues mixed USD/CFA native balances at the latest CFA/USD rate without rewriting historical base", async () => {
-    harness.selectResults.push(
-      [
-        {
-          id: 1,
-          name: "Cash",
-          code: "CASH",
-          accountType: "Cash",
-          openingBalance: "100",
-          openingBalanceSide: "Dr",
-          openingBalanceCurrency: "CFA",
-          openingBalanceHistoricalRate: "500",
-          openingBalanceBaseAmount: "0.2",
-        },
-      ],
-      [{ rate: "500" }]
-    );
-    harness.pool.query.mockResolvedValue({
-      rows: [
-        {
-          ledger_account_id: "1",
-          entry_currency: "USD",
-          native_debit: "10",
-          native_credit: "0",
-          hist_base_debit: "10",
-          hist_base_credit: "0",
-        },
-        {
-          ledger_account_id: "1",
-          entry_currency: "CFA",
-          native_debit: "500",
-          native_credit: "0",
-          hist_base_debit: "2",
-          hist_base_credit: "0",
-        },
-      ],
-    });
-    const res = resHarness();
-    await routes.get("GET /api/bank-accounts/revaluation")!(req(), res);
-
-    expect(res.body.currentCfaPerUsd).toBe("500.0000000000");
-    expect(res.body.accounts[0]).toMatchObject({
-      nativeBalancesByCurrency: { CFA: "600.000000", USD: "10.000000" },
-      historicalBaseBalance: "12.200000",
-      currentTranslatedBaseBalance: "11.200000",
-      translationDifference: "-1.000000",
-      openingBalanceCurrencyUnresolved: false,
-    });
-  });
-
   it("adds historical fixed-asset debit/credit totals to the asset API shape", async () => {
     harness.storage.getAllFixedAssets.mockResolvedValue([{ id: 3, code: "CAR", name: "Vehicle" }]);
     harness.pool.query.mockResolvedValue({ rows: [{ fixed_asset_id: "3", hist_debit: "1000", hist_credit: "250" }] });

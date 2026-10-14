@@ -2,7 +2,6 @@ import { useVoucherEditCancel } from "@/pages/vouchers/VoucherPhoneActionBar";
 import { useState, useMemo } from "react";
 import { UseFormReturn, UseFieldArrayReturn, type SubmitHandler } from "react-hook-form";
 import { format } from "date-fns";
-import { useDateFormat } from "@/contexts/DateFormatContext";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
@@ -125,7 +124,6 @@ export function PaymentReceiptTab({
 }: PaymentReceiptTabProps) {
   const { formatAmount } = useCurrencyContext();
   const cancelEdit = useVoucherEditCancel(!!isEditMode);
-  const { formatDisplayDate: _formatDisplayDate } = useDateFormat();
 
   // Notes collapse state — auto-open if there is already a notes value
   const [notesOpen, setNotesOpen] = useState<boolean>(() => {
@@ -159,7 +157,6 @@ export function PaymentReceiptTab({
 
   // Tab-specific styling / labels
   const Icon = isPayment ? ArrowUpCircle : ArrowDownCircle;
-  const _iconColor = isPayment ? "text-amber-600 dark:text-amber-400" : "text-emerald-600 dark:text-emerald-400";
   const accentColor = isPayment ? "#f59e0b" : "#10b981";
   const title = isPayment ? "Payment Voucher" : "Receipt Voucher";
   const accountLabel = isPayment ? "Pay From" : "Receive Into";

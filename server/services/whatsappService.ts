@@ -410,34 +410,6 @@ export async function sendWhatsAppTextToChatId(
   return { success: true };
 }
 
-/** Send a file by URL via the POS instance (id=2 with fallback to id=1).
- *  Uses Green API's sendFileByUrl — more reliable than multipart upload. */
-export async function sendWhatsAppFileByUrlToChatIdPos(
-  chatId: string,
-  fileUrl: string,
-  fileName: string,
-  caption: string
-): Promise<{ success: boolean; error?: string }> {
-  const settings = await getPosWaSettings();
-  if (!settings?.instanceId || !settings?.apiToken) {
-    return { success: false, error: "WhatsApp credentials not configured" };
-  }
-  if (!settings.enabled) {
-    return { success: false, error: "WhatsApp sending is disabled" };
-  }
-
-  const response = await fetchGreenApiWithAuthFallback(settings, "sendFileByUrl", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ chatId, urlFile: fileUrl, fileName, caption }),
-  });
-  if (!response.ok) {
-    const body = await response.text();
-    return { success: false, error: `Green API ${response.status}: ${body}` };
-  }
-  return { success: true };
-}
-
 /**
  * Send a file directly to a WhatsApp chat via Green API's sendFileByUpload.
  * POS instance (id=2 with fallback to id=1).
@@ -625,20 +597,6 @@ export async function markContainersWaSent(): Promise<void> {
 
 // ─── Agent Duty WhatsApp Settings ────────────────────────────────────────────
 
-export async function getAgentDutyWaGroups(): Promise<Record<string, string>> {
-  const res = await pool.query(
-    `SELECT instance_id, api_token, enabled, agent_duty_wa_groups FROM whatsapp_settings WHERE id = 1`
-  );
-  if (!res.rows?.length) return {};
-  const r = res.rows[0];
-  return {
-    groups: r.agent_duty_wa_groups ?? {},
-    instanceId: r.instance_id ?? "",
-    apiToken: r.api_token ?? "",
-    enabled: r.enabled ?? false,
-  };
-}
-
 export async function getAgentDutyWaCredentials(): Promise<{
   groups: Record<string, string>;
   instanceId: string;
@@ -663,11 +621,6 @@ export async function updateAgentDutyWaGroups(groups: Record<string, string>): P
 }
 
 // ── Stock Transfer WhatsApp Settings (per-company) ──────────────────────────
-
-export async function getCompanyTransferWaGroupChatId(companyId: number): Promise<string> {
-  const res = await pool.query(`SELECT transfer_wa_group_chat_id FROM companies WHERE id = $1`, [companyId]);
-  return res.rows[0]?.transfer_wa_group_chat_id ?? "";
-}
 
 export async function setCompanyTransferWaGroupChatId(companyId: number, groupChatId: string): Promise<void> {
   await pool.query(`UPDATE companies SET transfer_wa_group_chat_id = $1 WHERE id = $2`, [

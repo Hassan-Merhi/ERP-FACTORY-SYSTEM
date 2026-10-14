@@ -63,7 +63,7 @@ export function useBalesHistoryModel() {
   const { colors: designColors } = useLabelDesignColors();
 
   const [searchTerm, setSearchTerm] = useState("");
-  const [batchFilter, _setBatchFilter] = useState("all");
+  const [batchFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
   const [dateFilter, setDateFilter] = useState(() => new Date().toLocaleDateString("en-CA"));
   const [currentPage, setCurrentPage] = useState(1);
@@ -135,7 +135,6 @@ export function useBalesHistoryModel() {
   const { data: myAccess } = useQuery<{ fullAccess: boolean; pageKeys: string[]; hiddenCostFields: string[] }>({
     queryKey: ["/api/factory/my-access"],
   });
-  const _hiddenCost = myAccess?.hiddenCostFields ?? [];
 
   const { data: balesResponse, isLoading } = useQuery<BalesPage>({
     queryKey: [

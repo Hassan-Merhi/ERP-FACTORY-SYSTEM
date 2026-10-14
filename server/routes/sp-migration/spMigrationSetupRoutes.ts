@@ -241,7 +241,7 @@ export function registerSpMigrationSetupRoutes(app: Express) {
       `)
         ).rows;
         return res.json({ accounts: rows });
-      } catch (_err: unknown) {
+      } catch {
         return res.status(500).json({ message: "Internal server error" });
       }
     }

@@ -47,7 +47,6 @@ const today = () => new Date().toLocaleDateString("en-CA");
 export default function FactoryEmployeeWithdrawalsTab() {
   const { wrapAdminAction, AdminDialog } = useAdminOverride();
   const { toast } = useToast();
-  const [_mode, _setMode] = useState<"single" | "bulk">("single");
   const [singleOpen, setSingleOpen] = useState(false);
   const [bulkOpen, setBulkOpen] = useState(false);
 

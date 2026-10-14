@@ -1,0 +1,1055 @@
+{
+  "version": 1,
+  "phase": 3,
+  "status": "complete",
+  "date": "2026-10-12",
+  "repository": "Hassan-Merhi/ERP-FACTORY-SYSTEM",
+  "branch": "refactor/erp-dead-code-cleanup",
+  "baselineCommit": "3a210f315ddba5aaf0bbe6dee21b5d5e3417b97f",
+  "executionPolicy": {
+    "ci": false,
+    "tests": false,
+    "build": false,
+    "typecheck": false,
+    "deploy": false
+  },
+  "metrics": {
+    "registeredBefore": 2132,
+    "registeredAfter": 2076,
+    "middlewareMountsBefore": 130,
+    "middlewareMountsAfter": 130,
+    "duplicateSignaturesBefore": 123,
+    "duplicateSignaturesAfter": 70,
+    "additionalRegistrationsBefore": 141,
+    "additionalRegistrationsAfter": 85,
+    "removedRegistrations": 56,
+    "removedSourceFiles": [
+      "server/routes/containers/offload/create.ts",
+      "server/routes/stock/stockItemManageRoutes.ts",
+      "server/routes/stock/stockPriceListImportRoutes.ts"
+    ],
+    "continuation": {
+      "routeRegistrationsAfter": 2068,
+      "repeatedSignaturesAfter": 65,
+      "extraRegistrationsAfter": 77,
+      "additionalRegistrationsRemoved": 8,
+      "ambiguousRemaining": 0
+    }
+  },
+  "removals": [
+    {
+      "signature": "GET /api/sp/migration/cutover",
+      "initialCount": 3,
+      "remainingCount": 2,
+      "removedCount": 1,
+      "category": "shadowed_sp_cutover",
+      "reason": "Phase 4 SP cutover handlers register before the superseded legacy cutover suite; preserve legacy schema setup, write guard and unique review mapping routes."
+    },
+    {
+      "signature": "POST /api/containers/:id/offload",
+      "initialCount": 3,
+      "remainingCount": 2,
+      "removedCount": 1,
+      "category": "shadowed_offload_handler",
+      "reason": "Central POST /api/containers/:id/offload handles the request after the lifecycle guard; the legacy POST was registered later and never receives it."
+    },
+    {
+      "signature": "POST /api/sp/migration/cutover",
+      "initialCount": 3,
+      "remainingCount": 2,
+      "removedCount": 1,
+      "category": "shadowed_sp_cutover",
+      "reason": "Phase 4 SP cutover handlers register before the superseded legacy cutover suite; preserve legacy schema setup, write guard and unique review mapping routes."
+    },
+    {
+      "signature": "DELETE /api/factory/production-planner/:date",
+      "initialCount": 2,
+      "remainingCount": 1,
+      "removedCount": 1,
+      "category": "duplicate_factory_registrar",
+      "reason": "FactoryRoutes registered the same handler suite before ApplicationRoutes called it a second time; the second set had no reachable business handler."
+    },
+    {
+      "signature": "DELETE /api/factory/transporters/:id/transactions/:txId",
+      "initialCount": 2,
+      "remainingCount": 1,
+      "removedCount": 1,
+      "category": "duplicate_factory_registrar",
+      "reason": "FactoryRoutes registered the same handler suite before ApplicationRoutes called it a second time; the second set had no reachable business handler."
+    },
+    {
+      "signature": "GET /api/bank-accounts/revaluation",
+      "initialCount": 2,
+      "remainingCount": 1,
+      "removedCount": 1,
+      "category": "shadowed_bank_fx",
+      "reason": "LedgerRoutes registers canonical accountCurrencyRoutes bank FX revaluation before legacy bankAssetRoutes implementation; fixed-asset routes retained."
+    },
+    {
+      "signature": "GET /api/factory/containers/:containerId/documents",
+      "initialCount": 2,
+      "remainingCount": 1,
+      "removedCount": 1,
+      "category": "shadowed_factory_document",
+      "reason": "FactoryContainerReadAccessRoutes owns and responds to documents/freight GETs before legacy docs-users modules. Mutating documents/freight routes retained."
+    },
+    {
+      "signature": "GET /api/factory/containers/:containerId/freight",
+      "initialCount": 2,
+      "remainingCount": 1,
+      "removedCount": 1,
+      "category": "shadowed_factory_document",
+      "reason": "FactoryContainerReadAccessRoutes owns and responds to documents/freight GETs before legacy docs-users modules. Mutating documents/freight routes retained."
+    },
+    {
+      "signature": "GET /api/factory/production-planner/:date",
+      "initialCount": 2,
+      "remainingCount": 1,
+      "removedCount": 1,
+      "category": "duplicate_factory_registrar",
+      "reason": "FactoryRoutes registered the same handler suite before ApplicationRoutes called it a second time; the second set had no reachable business handler."
+    },
+    {
+      "signature": "GET /api/factory/production-planner/:date/copy-previous",
+      "initialCount": 2,
+      "remainingCount": 1,
+      "removedCount": 1,
+      "category": "duplicate_factory_registrar",
+      "reason": "FactoryRoutes registered the same handler suite before ApplicationRoutes called it a second time; the second set had no reachable business handler."
+    },
+    {
+      "signature": "GET /api/factory/production-planner/:date/worker-targets",
+      "initialCount": 2,
+      "remainingCount": 1,
+      "removedCount": 1,
+      "category": "duplicate_factory_registrar",
+      "reason": "FactoryRoutes registered the same handler suite before ApplicationRoutes called it a second time; the second set had no reachable business handler."
+    },
+    {
+      "signature": "GET /api/factory/raw-stock/available-containers",
+      "initialCount": 2,
+      "remainingCount": 1,
+      "removedCount": 1,
+      "category": "shadowed_raw_stock_reader",
+      "reason": "Corrected available-container reader is explicitly registered before legacy rawStockAdjRoutes GET; both respond without next()."
+    },
+    {
+      "signature": "GET /api/factory/stock-entry/production-session",
+      "initialCount": 2,
+      "remainingCount": 1,
+      "removedCount": 1,
+      "category": "duplicate_factory_registrar",
+      "reason": "FactoryRoutes registered the same handler suite before ApplicationRoutes called it a second time; the second set had no reachable business handler."
+    },
+    {
+      "signature": "GET /api/factory/transporter-accounts",
+      "initialCount": 2,
+      "remainingCount": 1,
+      "removedCount": 1,
+      "category": "duplicate_factory_registrar",
+      "reason": "FactoryRoutes registered the same handler suite before ApplicationRoutes called it a second time; the second set had no reachable business handler."
+    },
+    {
+      "signature": "GET /api/factory/transporters",
+      "initialCount": 2,
+      "remainingCount": 1,
+      "removedCount": 1,
+      "category": "duplicate_factory_registrar",
+      "reason": "FactoryRoutes registered the same handler suite before ApplicationRoutes called it a second time; the second set had no reachable business handler."
+    },
+    {
+      "signature": "GET /api/factory/transporters/:id",
+      "initialCount": 2,
+      "remainingCount": 1,
+      "removedCount": 1,
+      "category": "duplicate_factory_registrar",
+      "reason": "FactoryRoutes registered the same handler suite before ApplicationRoutes called it a second time; the second set had no reachable business handler."
+    },
+    {
+      "signature": "GET /api/global/transactions",
+      "initialCount": 2,
+      "remainingCount": 1,
+      "removedCount": 1,
+      "category": "shadowed_global_transaction",
+      "reason": "The central factory-composed global transactions GET handlers register before legacy GET list/type handlers; unique voucher detail/entry views retained."
+    },
+    {
+      "signature": "GET /api/global/transactions/voucher-types",
+      "initialCount": 2,
+      "remainingCount": 1,
+      "removedCount": 1,
+      "category": "shadowed_global_transaction",
+      "reason": "The central factory-composed global transactions GET handlers register before legacy GET list/type handlers; unique voucher detail/entry views retained."
+    },
+    {
+      "signature": "GET /api/sp/migration/cutover/status",
+      "initialCount": 2,
+      "remainingCount": 1,
+      "removedCount": 1,
+      "category": "shadowed_sp_cutover",
+      "reason": "Phase 4 SP cutover handlers register before the superseded legacy cutover suite; preserve legacy schema setup, write guard and unique review mapping routes."
+    },
+    {
+      "signature": "GET /api/sp/migration/final-verification",
+      "initialCount": 2,
+      "remainingCount": 1,
+      "removedCount": 1,
+      "category": "shadowed_sp_final_verification",
+      "reason": "Phase4 final verification is registered first; previous verification route registration removed while pure helpers and direct test consumers retained."
+    },
+    {
+      "signature": "PATCH /api/factory/transporters/:id",
+      "initialCount": 2,
+      "remainingCount": 1,
+      "removedCount": 1,
+      "category": "duplicate_factory_registrar",
+      "reason": "FactoryRoutes registered the same handler suite before ApplicationRoutes called it a second time; the second set had no reachable business handler."
+    },
+    {
+      "signature": "POST /api/factory/bales/send-worker-pdf-whatsapp",
+      "initialCount": 2,
+      "remainingCount": 1,
+      "removedCount": 1,
+      "category": "duplicate_factory_registrar",
+      "reason": "FactoryRoutes registered the same handler suite before ApplicationRoutes called it a second time; the second set had no reachable business handler."
+    },
+    {
+      "signature": "POST /api/factory/production-planner/:date",
+      "initialCount": 2,
+      "remainingCount": 1,
+      "removedCount": 1,
+      "category": "duplicate_factory_registrar",
+      "reason": "FactoryRoutes registered the same handler suite before ApplicationRoutes called it a second time; the second set had no reachable business handler."
+    },
+    {
+      "signature": "POST /api/factory/stock-entry/end-production",
+      "initialCount": 2,
+      "remainingCount": 1,
+      "removedCount": 1,
+      "category": "duplicate_factory_registrar",
+      "reason": "FactoryRoutes registered the same handler suite before ApplicationRoutes called it a second time; the second set had no reachable business handler."
+    },
+    {
+      "signature": "POST /api/factory/transporters",
+      "initialCount": 2,
+      "remainingCount": 1,
+      "removedCount": 1,
+      "category": "duplicate_factory_registrar",
+      "reason": "FactoryRoutes registered the same handler suite before ApplicationRoutes called it a second time; the second set had no reachable business handler."
+    },
+    {
+      "signature": "POST /api/factory/transporters/:id/charges",
+      "initialCount": 2,
+      "remainingCount": 1,
+      "removedCount": 1,
+      "category": "duplicate_factory_registrar",
+      "reason": "FactoryRoutes registered the same handler suite before ApplicationRoutes called it a second time; the second set had no reachable business handler."
+    },
+    {
+      "signature": "POST /api/factory/transporters/:id/payments",
+      "initialCount": 2,
+      "remainingCount": 1,
+      "removedCount": 1,
+      "category": "duplicate_factory_registrar",
+      "reason": "FactoryRoutes registered the same handler suite before ApplicationRoutes called it a second time; the second set had no reachable business handler."
+    },
+    {
+      "signature": "POST /api/sp/migration/cutover/cancel",
+      "initialCount": 2,
+      "remainingCount": 1,
+      "removedCount": 1,
+      "category": "shadowed_sp_cutover",
+      "reason": "Phase 4 SP cutover handlers register before the superseded legacy cutover suite; preserve legacy schema setup, write guard and unique review mapping routes."
+    },
+    {
+      "signature": "POST /api/sp/migration/cutover/finalize",
+      "initialCount": 2,
+      "remainingCount": 1,
+      "removedCount": 1,
+      "category": "shadowed_sp_cutover",
+      "reason": "Phase 4 SP cutover handlers register before the superseded legacy cutover suite; preserve legacy schema setup, write guard and unique review mapping routes."
+    },
+    {
+      "signature": "POST /api/sp/migration/cutover/prepare",
+      "initialCount": 2,
+      "remainingCount": 1,
+      "removedCount": 1,
+      "category": "shadowed_sp_cutover",
+      "reason": "Phase 4 SP cutover handlers register before the superseded legacy cutover suite; preserve legacy schema setup, write guard and unique review mapping routes."
+    },
+    {
+      "signature": "POST /api/sp/migration/cutover/rollback",
+      "initialCount": 2,
+      "remainingCount": 1,
+      "removedCount": 1,
+      "category": "shadowed_sp_cutover",
+      "reason": "Phase 4 SP cutover handlers register before the superseded legacy cutover suite; preserve legacy schema setup, write guard and unique review mapping routes."
+    },
+    {
+      "signature": "POST /api/sp/migration/gc-containers",
+      "initialCount": 2,
+      "remainingCount": 1,
+      "removedCount": 1,
+      "category": "shadowed_sp_migration_copy",
+      "reason": "Phase 2 migration read-only-sales and container-copy endpoints register before old SP migration implementation. Unique profit-opening remains."
+    },
+    {
+      "signature": "POST /api/sp/migration/gc-sales-readonly",
+      "initialCount": 2,
+      "remainingCount": 1,
+      "removedCount": 1,
+      "category": "shadowed_sp_migration_copy",
+      "reason": "Phase 2 migration read-only-sales and container-copy endpoints register before old SP migration implementation. Unique profit-opening remains."
+    },
+    {
+      "signature": "DELETE /api/erp/rental/payments/:id",
+      "initialCount": 2,
+      "remainingCount": 1,
+      "removedCount": 1,
+      "category": "rental_atomic_canonical",
+      "reason": "Earlier canonical route owns this path; later duplicate registrar removed."
+    },
+    {
+      "signature": "DELETE /api/factory/rental/payments/:id",
+      "initialCount": 2,
+      "remainingCount": 1,
+      "removedCount": 1,
+      "category": "rental_atomic_canonical",
+      "reason": "Earlier canonical route owns this path; later duplicate registrar removed."
+    },
+    {
+      "signature": "DELETE /api/properties/rental/payments/:id",
+      "initialCount": 2,
+      "remainingCount": 1,
+      "removedCount": 1,
+      "category": "rental_atomic_canonical",
+      "reason": "Earlier canonical route owns this path; later duplicate registrar removed."
+    },
+    {
+      "signature": "DELETE /api/stock-item-code-aliases/:id",
+      "initialCount": 2,
+      "remainingCount": 1,
+      "removedCount": 1,
+      "category": "stock_management_canonical",
+      "reason": "Earlier canonical route owns this path; later duplicate registrar removed."
+    },
+    {
+      "signature": "DELETE /api/stock-items/:id",
+      "initialCount": 2,
+      "remainingCount": 1,
+      "removedCount": 1,
+      "category": "stock_management_canonical",
+      "reason": "Earlier canonical route owns this path; later duplicate registrar removed."
+    },
+    {
+      "signature": "GET /api/accounts/ledger/:id/balance",
+      "initialCount": 2,
+      "remainingCount": 1,
+      "removedCount": 1,
+      "category": "ledger_currency_canonical",
+      "reason": "Earlier canonical route owns this path; later duplicate registrar removed."
+    },
+    {
+      "signature": "GET /api/accounts/ledger/:id/currency-balances",
+      "initialCount": 2,
+      "remainingCount": 1,
+      "removedCount": 1,
+      "category": "ledger_currency_canonical",
+      "reason": "Earlier canonical route owns this path; later duplicate registrar removed."
+    },
+    {
+      "signature": "GET /api/location-price-groups",
+      "initialCount": 2,
+      "remainingCount": 1,
+      "removedCount": 1,
+      "category": "stock_import_canonical",
+      "reason": "Earlier canonical route owns this path; later duplicate registrar removed."
+    },
+    {
+      "signature": "GET /api/pos/price-list",
+      "initialCount": 2,
+      "remainingCount": 1,
+      "removedCount": 1,
+      "category": "stock_import_canonical",
+      "reason": "Earlier canonical route owns this path; later duplicate registrar removed."
+    },
+    {
+      "signature": "GET /api/pos/price-list-by-masters",
+      "initialCount": 2,
+      "remainingCount": 1,
+      "removedCount": 1,
+      "category": "stock_import_canonical",
+      "reason": "Earlier canonical route owns this path; later duplicate registrar removed."
+    },
+    {
+      "signature": "GET /api/stock-items/:id/code-aliases",
+      "initialCount": 2,
+      "remainingCount": 1,
+      "removedCount": 1,
+      "category": "stock_management_canonical",
+      "reason": "Earlier canonical route owns this path; later duplicate registrar removed."
+    },
+    {
+      "signature": "GET /api/stock-items/:id/details",
+      "initialCount": 2,
+      "remainingCount": 1,
+      "removedCount": 1,
+      "category": "stock_management_canonical",
+      "reason": "Earlier canonical route owns this path; later duplicate registrar removed."
+    },
+    {
+      "signature": "GET /api/stock-items/:id/transactions",
+      "initialCount": 2,
+      "remainingCount": 1,
+      "removedCount": 1,
+      "category": "stock_management_canonical",
+      "reason": "Earlier canonical route owns this path; later duplicate registrar removed."
+    },
+    {
+      "signature": "GET /api/stock-items/:id/voucher-history",
+      "initialCount": 2,
+      "remainingCount": 1,
+      "removedCount": 1,
+      "category": "stock_management_canonical",
+      "reason": "Earlier canonical route owns this path; later duplicate registrar removed."
+    },
+    {
+      "signature": "PATCH /api/stock-items/:id",
+      "initialCount": 2,
+      "remainingCount": 1,
+      "removedCount": 1,
+      "category": "stock_management_canonical",
+      "reason": "Earlier canonical route owns this path; later duplicate registrar removed."
+    },
+    {
+      "signature": "PATCH /api/stock-transfer-items/:id",
+      "initialCount": 2,
+      "remainingCount": 1,
+      "removedCount": 1,
+      "category": "stock_management_canonical",
+      "reason": "Earlier canonical route owns this path; later duplicate registrar removed."
+    },
+    {
+      "signature": "POST /api/sp/migration/rollback",
+      "initialCount": 2,
+      "remainingCount": 1,
+      "removedCount": 1,
+      "category": "sp_migration_canonical",
+      "reason": "Earlier canonical route owns this path; later duplicate registrar removed."
+    },
+    {
+      "signature": "POST /api/stock-items/:id/code-aliases",
+      "initialCount": 2,
+      "remainingCount": 1,
+      "removedCount": 1,
+      "category": "stock_management_canonical",
+      "reason": "Earlier canonical route owns this path; later duplicate registrar removed."
+    },
+    {
+      "signature": "POST /api/stock-items/import",
+      "initialCount": 2,
+      "remainingCount": 1,
+      "removedCount": 1,
+      "category": "stock_import_canonical",
+      "reason": "Earlier canonical route owns this path; later duplicate registrar removed."
+    },
+    {
+      "signature": "POST /api/stock-items/import-barcodes",
+      "initialCount": 2,
+      "remainingCount": 1,
+      "removedCount": 1,
+      "category": "stock_import_canonical",
+      "reason": "Earlier canonical route owns this path; later duplicate registrar removed."
+    },
+    {
+      "signature": "POST /api/stock-items/import-grade-category-template",
+      "initialCount": 2,
+      "remainingCount": 1,
+      "removedCount": 1,
+      "category": "stock_import_canonical",
+      "reason": "Earlier canonical route owns this path; later duplicate registrar removed."
+    },
+    {
+      "signature": "POST /api/stock-items/update-categories",
+      "initialCount": 2,
+      "remainingCount": 1,
+      "removedCount": 1,
+      "category": "stock_import_canonical",
+      "reason": "Earlier canonical route owns this path; later duplicate registrar removed."
+    },
+    {
+      "signature": "PUT /api/location-price-groups",
+      "initialCount": 2,
+      "remainingCount": 1,
+      "removedCount": 1,
+      "category": "stock_import_canonical",
+      "reason": "Earlier canonical route owns this path; later duplicate registrar removed."
+    },
+    {
+      "signature": "POST /api/stock-transfers/:transferId/revisions",
+      "initialCount": 4,
+      "remainingCount": 2,
+      "removedCount": 2,
+      "category": "shadowed_by_terminal_immutable_revision_route",
+      "reason": "vouchers/immutableStockTransferRevisionRoutes.ts registers first and never calls next(); the later stockTransferRevisionLifecycleRoutes.ts and fiscal-transfers/revisions-write.ts copies were unreachable. adminPostUpdateStockTransferRevisionRoute.ts (next('route') pass-through) is retained ahead of it.",
+      "session": "phase-3-continuation"
+    },
+    {
+      "signature": "POST /api/stock-transfer-revisions/:id/approve",
+      "initialCount": 3,
+      "remainingCount": 2,
+      "removedCount": 1,
+      "category": "shadowed_by_terminal_immutable_revision_route",
+      "reason": "The immutable approve handler is terminal; the later stockTransferRevisionLifecycleRoutes.ts approve was unreachable. The permissionBoundaryRoutes gate is retained.",
+      "session": "phase-3-continuation"
+    },
+    {
+      "signature": "GET /api/stock-transfers/:transferId/revisions",
+      "initialCount": 2,
+      "remainingCount": 1,
+      "removedCount": 1,
+      "category": "shadowed_by_terminal_immutable_revision_route",
+      "reason": "Immutable reader is terminal; fiscal-transfers/revisions-read.ts reader removed (its PATCH /api/stock-transfers/:id notes update is retained).",
+      "session": "phase-3-continuation"
+    },
+    {
+      "signature": "GET /api/stock-transfers/by-voucher/:voucherId/revisions",
+      "initialCount": 2,
+      "remainingCount": 1,
+      "removedCount": 1,
+      "category": "shadowed_by_terminal_immutable_revision_route",
+      "reason": "Immutable reader is terminal; fiscal-transfers/revisions-read.ts copy removed.",
+      "session": "phase-3-continuation"
+    },
+    {
+      "signature": "PATCH /api/voucher-entries/:id",
+      "initialCount": 2,
+      "remainingCount": 1,
+      "removedCount": 1,
+      "category": "shadowed_by_terminal_currency_edit_route",
+      "reason": "voucherEntryCurrencyEditRoutes.ts (registered by ledgerRoutes.ts before registerVoucherEntryRoutes) is terminal on every path; the voucher-entries/write.ts PATCH was unreachable. POST /api/voucher-entries in the same file is retained.",
+      "session": "phase-3-continuation"
+    },
+    {
+      "signature": "POST /api/admin/account-migration/execute",
+      "initialCount": 2,
+      "remainingCount": 1,
+      "removedCount": 1,
+      "category": "shadowed_by_terminal_safe_migration_route",
+      "reason": "accountMigrationSafeRoutes.ts execute is registered first (adminRoutes.ts) and never calls next(); the import-export/account-migration.ts execute was unreachable. The undo chain is retained because the round-trip and safe undo handlers call next() when no matching saved migration exists.",
+      "session": "phase-3-continuation"
+    },
+    {
+      "signature": "GET /api/suppliers/:supplierId/purchase-orders",
+      "initialCount": 2,
+      "remainingCount": 1,
+      "removedCount": 1,
+      "category": "shadowed_by_terminal_pagination_route",
+      "reason": "supplierPurchaseOrderPaginationRoutes.ts is registered first and answers both paged and unpaged requests; the cross-company copy in voucherQueryRoutes.ts was unreachable.",
+      "session": "phase-3-continuation"
+    }
+  ],
+  "remaining": [
+    {
+      "signature": "DELETE /api/deleted-items/:type/:id/permanent",
+      "registered": 2,
+      "category": "conditional_specialized_delete",
+      "reason": "Specialized deleted-item route delegates some item types; retain fallback.",
+      "removalAuthorized": false
+    },
+    {
+      "signature": "DELETE /api/vouchers/:id",
+      "registered": 6,
+      "category": "conditional_lifecycle_dispatch",
+      "reason": "Five type-specific lifecycle handlers (stock adjustment, Golden Coast POS settlement, payment/receipt, journal, stock transfer) each call next() for vouchers they do not own; voucher-entries/delete.ts is the generic terminal handler.",
+      "removalAuthorized": false
+    },
+    {
+      "signature": "GET /api/accounts/bank/:id/transactions",
+      "registered": 2,
+      "category": "pagination_or_legacy_shape_fallback",
+      "reason": "Native paginated path and legacy/unpaginated compatibility route both retained.",
+      "removalAuthorized": false
+    },
+    {
+      "signature": "GET /api/accounts/customer/:id/transactions",
+      "registered": 2,
+      "category": "pagination_or_legacy_shape_fallback",
+      "reason": "Native paginated path and legacy/unpaginated compatibility route both retained.",
+      "removalAuthorized": false
+    },
+    {
+      "signature": "GET /api/accounts/employee/:id/transactions",
+      "registered": 2,
+      "category": "pagination_or_legacy_shape_fallback",
+      "reason": "Native paginated path and legacy/unpaginated compatibility route both retained.",
+      "removalAuthorized": false
+    },
+    {
+      "signature": "GET /api/accounts/fixed-asset/:id/transactions",
+      "registered": 2,
+      "category": "pagination_or_legacy_shape_fallback",
+      "reason": "Native paginated path and legacy/unpaginated compatibility route both retained.",
+      "removalAuthorized": false
+    },
+    {
+      "signature": "GET /api/accounts/ledger/:id/transactions",
+      "registered": 2,
+      "category": "pagination_or_legacy_shape_fallback",
+      "reason": "Native paginated path and legacy/unpaginated compatibility route both retained.",
+      "removalAuthorized": false
+    },
+    {
+      "signature": "GET /api/accounts/supplier/:id/transactions",
+      "registered": 3,
+      "category": "pagination_or_legacy_shape_fallback",
+      "reason": "Native paginated path and legacy/unpaginated compatibility route both retained.",
+      "removalAuthorized": false
+    },
+    {
+      "signature": "GET /api/containers",
+      "registered": 2,
+      "category": "pagination_or_legacy_shape_fallback",
+      "reason": "Native paginated path and legacy/unpaginated compatibility route both retained.",
+      "removalAuthorized": false
+    },
+    {
+      "signature": "GET /api/containers/active",
+      "registered": 2,
+      "category": "pagination_or_legacy_shape_fallback",
+      "reason": "Native paginated path and legacy/unpaginated compatibility route both retained.",
+      "removalAuthorized": false
+    },
+    {
+      "signature": "GET /api/containers/sold",
+      "registered": 2,
+      "category": "pagination_or_legacy_shape_fallback",
+      "reason": "Native paginated path and legacy/unpaginated compatibility route both retained.",
+      "removalAuthorized": false
+    },
+    {
+      "signature": "GET /api/factory/bale-products",
+      "registered": 2,
+      "category": "conditional_language_dispatch",
+      "reason": "French-language read path conditionally passes to core category/product handler.",
+      "removalAuthorized": false
+    },
+    {
+      "signature": "GET /api/factory/bale-products/:id",
+      "registered": 2,
+      "category": "conditional_language_dispatch",
+      "reason": "French-language read path conditionally passes to core category/product handler.",
+      "removalAuthorized": false
+    },
+    {
+      "signature": "GET /api/factory/bales/stock-entry-history",
+      "registered": 2,
+      "category": "pagination_or_legacy_shape_fallback",
+      "reason": "Native paginated path and legacy/unpaginated compatibility route both retained.",
+      "removalAuthorized": false
+    },
+    {
+      "signature": "GET /api/factory/categories",
+      "registered": 2,
+      "category": "conditional_language_dispatch",
+      "reason": "French-language read path conditionally passes to core category/product handler.",
+      "removalAuthorized": false
+    },
+    {
+      "signature": "GET /api/factory/customer-orders/:id/export-excel",
+      "registered": 2,
+      "category": "conditional_export_dispatch",
+      "reason": "Bilingual document helpers use fallthrough to legacy format-specific exports.",
+      "removalAuthorized": false
+    },
+    {
+      "signature": "GET /api/factory/customer-orders/:id/export-pdf",
+      "registered": 2,
+      "category": "conditional_export_dispatch",
+      "reason": "Bilingual document helpers use fallthrough to legacy format-specific exports.",
+      "removalAuthorized": false
+    },
+    {
+      "signature": "GET /api/factory/customer-orders/:id/export/excel",
+      "registered": 2,
+      "category": "conditional_export_dispatch",
+      "reason": "Bilingual document helpers use fallthrough to legacy format-specific exports.",
+      "removalAuthorized": false
+    },
+    {
+      "signature": "GET /api/factory/customer-orders/:id/pending-export",
+      "registered": 2,
+      "category": "conditional_export_dispatch",
+      "reason": "Bilingual document helpers use fallthrough to legacy format-specific exports.",
+      "removalAuthorized": false
+    },
+    {
+      "signature": "GET /api/factory/daybook",
+      "registered": 2,
+      "category": "pagination_or_legacy_shape_fallback",
+      "reason": "Native paginated path and legacy/unpaginated compatibility route both retained.",
+      "removalAuthorized": false
+    },
+    {
+      "signature": "GET /api/factory/net-position",
+      "registered": 2,
+      "category": "confirmed_response_wrapper",
+      "reason": "Historical correction wrapper decorates response and passes to the normal reader.",
+      "removalAuthorized": false
+    },
+    {
+      "signature": "GET /api/factory/raw-stock/recalc/historical-replay",
+      "registered": 2,
+      "category": "risk_sensitive_guard_or_fallback",
+      "reason": "Historical repair replay/readiness endpoints have layered safety; preserve without stronger reachability evidence.",
+      "removalAuthorized": false
+    },
+    {
+      "signature": "GET /api/factory/uploads/:folder/:filename",
+      "registered": 2,
+      "category": "confirmed_conditional_fallthrough",
+      "reason": "Protected container-doc handler calls next() for other upload folders, which use the later reader.",
+      "removalAuthorized": false
+    },
+    {
+      "signature": "GET /api/factory/v5/stock-allocation",
+      "registered": 2,
+      "category": "pagination_or_legacy_shape_fallback",
+      "reason": "Native paginated path and legacy/unpaginated compatibility route both retained.",
+      "removalAuthorized": false
+    },
+    {
+      "signature": "GET /api/inventory",
+      "registered": 2,
+      "category": "pagination_or_legacy_shape_fallback",
+      "reason": "Native paginated path and legacy/unpaginated compatibility route both retained.",
+      "removalAuthorized": false
+    },
+    {
+      "signature": "GET /api/ledger-accounts",
+      "registered": 2,
+      "category": "pagination_or_legacy_shape_fallback",
+      "reason": "Native paginated path and legacy/unpaginated compatibility route both retained.",
+      "removalAuthorized": false
+    },
+    {
+      "signature": "GET /api/sp/migration/cutover",
+      "registered": 2,
+      "category": "intentional_unsupported_method_catch_all",
+      "reason": "Earlier Phase 4 handles supported methods; later app.all route still rejects unsupported verbs.",
+      "removalAuthorized": false
+    },
+    {
+      "signature": "GET /api/stock-items",
+      "registered": 2,
+      "category": "pagination_or_legacy_shape_fallback",
+      "reason": "Native paginated path and legacy/unpaginated compatibility route both retained.",
+      "removalAuthorized": false
+    },
+    {
+      "signature": "GET /api/vouchers",
+      "registered": 2,
+      "category": "pagination_or_legacy_shape_fallback",
+      "reason": "Native paginated path and legacy/unpaginated compatibility route both retained.",
+      "removalAuthorized": false
+    },
+    {
+      "signature": "GET /api/vouchers/:id",
+      "registered": 2,
+      "category": "confirmed_response_wrapper",
+      "reason": "registerVoucherDetailCompatibility wraps res.json to add `transfer` and calls next().",
+      "removalAuthorized": false
+    },
+    {
+      "signature": "PATCH /api/containers/:id/offload",
+      "registered": 2,
+      "category": "confirmed_guard_chain",
+      "reason": "containerOffloadLifecycleGuard.ts calls next() into the central offload handler.",
+      "removalAuthorized": false
+    },
+    {
+      "signature": "PATCH /api/factory/customer-orders/:id/charges/:chargeId",
+      "registered": 2,
+      "category": "confirmed_ledger_prerequisite",
+      "reason": "Customer-ledger prerequisite middleware calls next() into the charge mutation endpoint.",
+      "removalAuthorized": false
+    },
+    {
+      "signature": "PATCH /api/locations/:locationId",
+      "registered": 2,
+      "category": "confirmed_conditional_fallthrough",
+      "reason": "WhatsApp legacy compatibility handler calls next('route') for normal location edits.",
+      "removalAuthorized": false
+    },
+    {
+      "signature": "PATCH /api/vouchers/:id",
+      "registered": 2,
+      "category": "conditional_lifecycle_dispatch",
+      "reason": "stockTransferLifecycleRoutes.ts calls next() unless the request changes a stock transfer's optional state.",
+      "removalAuthorized": false
+    },
+    {
+      "signature": "PATCH /api/vouchers/:id/adjustment",
+      "registered": 2,
+      "category": "conditional_lifecycle_dispatch",
+      "reason": "exactStockAdjustmentLifecycleRoute.ts calls next() when the voucher or adjustment row is missing.",
+      "removalAuthorized": false
+    },
+    {
+      "signature": "PATCH /api/vouchers/:id/journal",
+      "registered": 2,
+      "category": "conditional_lifecycle_dispatch",
+      "reason": "centralJournalLifecycleRoute.ts calls next() for vouchers it does not own.",
+      "removalAuthorized": false
+    },
+    {
+      "signature": "PATCH /api/vouchers/:id/payment-receipt",
+      "registered": 2,
+      "category": "conditional_lifecycle_dispatch",
+      "reason": "centralPaymentReceiptLifecycleRoute.ts calls next() for vouchers it does not own.",
+      "removalAuthorized": false
+    },
+    {
+      "signature": "PATCH /api/vouchers/:id/sales",
+      "registered": 2,
+      "category": "action_permission_gate_plus_implementation",
+      "reason": "Early action permission gate and later business handlers; any additional handler copies require separate per-route proof.",
+      "removalAuthorized": false
+    },
+    {
+      "signature": "PATCH /api/vouchers/:id/transfer",
+      "registered": 3,
+      "category": "conditional_lifecycle_dispatch",
+      "reason": "exactStockTransferEditRoute.ts and stockTransferLifecycleRoutes.ts call next() for drafts / non-transfer vouchers; transfer/transfer.ts is the terminal fallback.",
+      "removalAuthorized": false
+    },
+    {
+      "signature": "POST /api/admin/account-migration/undo",
+      "registered": 3,
+      "category": "conditional_lifecycle_dispatch",
+      "reason": "Round-trip and safe undo handlers call next() when no matching saved migration exists; the import-export undo is the terminal fallback.",
+      "removalAuthorized": false
+    },
+    {
+      "signature": "POST /api/bales/import",
+      "registered": 2,
+      "category": "action_permission_gate_plus_implementation",
+      "reason": "Early action permission gate and later business handlers; any additional handler copies require separate per-route proof.",
+      "removalAuthorized": false
+    },
+    {
+      "signature": "POST /api/containers/:id/offload",
+      "registered": 2,
+      "category": "confirmed_guard_chain",
+      "reason": "containerOffloadLifecycleGuard.ts calls next() into the central offload handler.",
+      "removalAuthorized": false
+    },
+    {
+      "signature": "POST /api/containers/tracking/import",
+      "registered": 2,
+      "category": "action_permission_gate_plus_implementation",
+      "reason": "Early action permission gate and later business handlers; any additional handler copies require separate per-route proof.",
+      "removalAuthorized": false
+    },
+    {
+      "signature": "POST /api/factory/customer-orders/:id/charges",
+      "registered": 2,
+      "category": "confirmed_ledger_prerequisite",
+      "reason": "Customer-ledger prerequisite middleware calls next() into the charge mutation endpoint.",
+      "removalAuthorized": false
+    },
+    {
+      "signature": "POST /api/factory/raw-stock/recalc/historical-replay/apply",
+      "registered": 4,
+      "category": "risk_sensitive_guard_or_fallback",
+      "reason": "Historical repair replay/readiness endpoints have layered safety; preserve without stronger reachability evidence.",
+      "removalAuthorized": false
+    },
+    {
+      "signature": "POST /api/factory/raw-stock/recalc/undo",
+      "registered": 2,
+      "category": "risk_sensitive_guard_or_fallback",
+      "reason": "Historical repair replay/readiness endpoints have layered safety; preserve without stronger reachability evidence.",
+      "removalAuthorized": false
+    },
+    {
+      "signature": "POST /api/factory/workers/import-excel",
+      "registered": 2,
+      "category": "action_permission_gate_plus_implementation",
+      "reason": "Early action permission gate and later business handlers; any additional handler copies require separate per-route proof.",
+      "removalAuthorized": false
+    },
+    {
+      "signature": "POST /api/inventory/quick-adjust",
+      "registered": 2,
+      "category": "action_permission_gate_plus_implementation",
+      "reason": "Early action permission gate and later business handlers; any additional handler copies require separate per-route proof.",
+      "removalAuthorized": false
+    },
+    {
+      "signature": "POST /api/sp/migration/cutover",
+      "registered": 2,
+      "category": "intentional_unsupported_method_catch_all",
+      "reason": "Earlier Phase 4 handles supported methods; later app.all route still rejects unsupported verbs.",
+      "removalAuthorized": false
+    },
+    {
+      "signature": "POST /api/sp/offload",
+      "registered": 4,
+      "category": "confirmed_guard_chain",
+      "reason": "Multiple request guards and canonical offload executor are intentionally registered in order.",
+      "removalAuthorized": false
+    },
+    {
+      "signature": "POST /api/sp/profit-splits",
+      "registered": 2,
+      "category": "conditional_company_compatibility",
+      "reason": "Golden Coast legacy profit-split retire handler and report endpoint distinguish company context.",
+      "removalAuthorized": false
+    },
+    {
+      "signature": "POST /api/stock-items/bulk-delete",
+      "registered": 2,
+      "category": "action_permission_gate_plus_implementation",
+      "reason": "Early action permission gate and later business handlers; any additional handler copies require separate per-route proof.",
+      "removalAuthorized": false
+    },
+    {
+      "signature": "POST /api/stock-items/bulk-rename",
+      "registered": 2,
+      "category": "action_permission_gate_plus_implementation",
+      "reason": "Early action permission gate and later business handlers; any additional handler copies require separate per-route proof.",
+      "removalAuthorized": false
+    },
+    {
+      "signature": "POST /api/stock-items/bulk-update-prices",
+      "registered": 2,
+      "category": "action_permission_gate_plus_implementation",
+      "reason": "Early action permission gate and later business handlers; any additional handler copies require separate per-route proof.",
+      "removalAuthorized": false
+    },
+    {
+      "signature": "POST /api/stock-items/bulk-update-uom",
+      "registered": 2,
+      "category": "action_permission_gate_plus_implementation",
+      "reason": "Early action permission gate and later business handlers; any additional handler copies require separate per-route proof.",
+      "removalAuthorized": false
+    },
+    {
+      "signature": "POST /api/stock-items/import-opening-balances",
+      "registered": 2,
+      "category": "action_permission_gate_plus_implementation",
+      "reason": "Early action permission gate and later business handlers; any additional handler copies require separate per-route proof.",
+      "removalAuthorized": false
+    },
+    {
+      "signature": "POST /api/stock-transfer-revisions/:id/approve",
+      "registered": 2,
+      "category": "action_permission_gate_plus_implementation",
+      "reason": "Early action permission gate and later business handlers; any additional handler copies require separate per-route proof.",
+      "removalAuthorized": false
+    },
+    {
+      "signature": "POST /api/stock-transfers/:transferId/revisions",
+      "registered": 2,
+      "category": "confirmed_conditional_fallthrough",
+      "reason": "adminPostUpdateStockTransferRevisionRoute.ts calls next('route')/next() for optional or untouched revisions; the immutable handler is terminal.",
+      "removalAuthorized": false
+    },
+    {
+      "signature": "POST /api/vouchers",
+      "registered": 2,
+      "category": "action_permission_gate_plus_implementation",
+      "reason": "Early action permission gate and later business handlers; any additional handler copies require separate per-route proof.",
+      "removalAuthorized": false
+    },
+    {
+      "signature": "POST /api/vouchers/:id/finalize",
+      "registered": 2,
+      "category": "action_permission_gate_plus_implementation",
+      "reason": "Early action permission gate and later business handlers; any additional handler copies require separate per-route proof.",
+      "removalAuthorized": false
+    },
+    {
+      "signature": "POST /api/vouchers/bulk-delete",
+      "registered": 3,
+      "category": "action_permission_gate_plus_implementation",
+      "reason": "Early action permission gate and later business handlers; any additional handler copies require separate per-route proof.",
+      "removalAuthorized": false
+    },
+    {
+      "signature": "POST /api/vouchers/journal",
+      "registered": 2,
+      "category": "action_permission_gate_plus_implementation",
+      "reason": "Early action permission gate and later business handlers; any additional handler copies require separate per-route proof.",
+      "removalAuthorized": false
+    },
+    {
+      "signature": "POST /api/vouchers/payment-receipt",
+      "registered": 2,
+      "category": "action_permission_gate_plus_implementation",
+      "reason": "Early action permission gate and later business handlers; any additional handler copies require separate per-route proof.",
+      "removalAuthorized": false
+    },
+    {
+      "signature": "POST /api/vouchers/with-entries",
+      "registered": 2,
+      "category": "action_permission_gate_plus_implementation",
+      "reason": "Early action permission gate and later business handlers; any additional handler copies require separate per-route proof.",
+      "removalAuthorized": false
+    },
+    {
+      "signature": "PUT /api/vouchers/:id/with-entries",
+      "registered": 2,
+      "category": "action_permission_gate_plus_implementation",
+      "reason": "Early action permission gate and later business handlers; any additional handler copies require separate per-route proof.",
+      "removalAuthorized": false
+    }
+  ],
+  "remainingCategories": {
+    "conditional_specialized_delete": 1,
+    "conditional_lifecycle_dispatch": 7,
+    "pagination_or_legacy_shape_fallback": 16,
+    "conditional_language_dispatch": 3,
+    "conditional_export_dispatch": 4,
+    "confirmed_response_wrapper": 2,
+    "risk_sensitive_guard_or_fallback": 3,
+    "confirmed_conditional_fallthrough": 3,
+    "intentional_unsupported_method_catch_all": 2,
+    "confirmed_guard_chain": 3,
+    "confirmed_ledger_prerequisite": 2,
+    "action_permission_gate_plus_implementation": 18,
+    "conditional_company_compatibility": 1
+  },
+  "guardrails": [
+    "Do not remove repeated signatures without reading relevant handler/middleware and next() semantics.",
+    "Retained overlap does not establish duplicate work or dead code.",
+    "The ordered manifest was manually updated from source deletions; no route-registration runtime snapshot was generated because tests/build were intentionally skipped.",
+    "Older SP cutover helper implementations remaining in a module are candidates for later dead-symbol/service cleanup; cutover guards and unique review-mapping endpoints remain active.",
+    "Test-imported legacy ledger balance implementation remains as source-only fixture; its runtime registrar call has been removed."
+  ],
+  "sourceChanges": [
+    "server/routes/applicationRoutes.ts",
+    "server/routes/containers/offload/index.ts",
+    "server/routes/containerRoutes.ts",
+    "server/routes/containers/offload/create.ts (deleted)",
+    "server/routes/factory/raw-stock/rawStockAdjRoutes.ts",
+    "server/routes/factory/raw-stock/rawStockCrudRoutes.ts",
+    "server/routes/sp/spMigrationCutoverRoutes.ts",
+    "server/routes/globalTransactionRoutes.ts",
+    "server/routes/sp-migration/spMigrationSalesRoutes.ts",
+    "server/routes/factory/docs-users/docsRoutes.ts",
+    "server/routes/factory/docs-users/freightRoutes.ts",
+    "server/routes/bankAssetRoutes.ts",
+    "server/routes/sp/spMigrationFinalVerification.ts",
+    "server/routes/sp/index.ts",
+    "config/route-manifest.json",
+    "server/routes/stockRoutes.ts",
+    "server/routes/stock/stockItemManageRoutes.ts (deleted)",
+    "server/routes/stock/stockPriceListImportRoutes.ts (deleted)",
+    "tests/phase33f-route-guards.test.ts",
+    "server/routes/rental/rentalPaymentsAccrualRoutes.ts",
+    "server/routes/sp-migration/spMigrationRunRoutes.ts",
+    "server/routes/accounts/index.ts"
+  ]
+}

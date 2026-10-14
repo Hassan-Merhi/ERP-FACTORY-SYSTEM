@@ -166,47 +166,6 @@ export function registerVoucherQueryRoutes(app: Express) {
     }
   });
 
-  // Get purchase orders for a specific supplier filtered by company
-  app.get("/api/suppliers/:supplierId/purchase-orders", requireAuth, async (req, res) => {
-    try {
-      const access = await assertActiveCompanyAccess(req);
-      const supplierId = parseInt(req.params.supplierId);
-
-      if (isNaN(supplierId)) {
-        return res.status(400).json({ message: "Invalid supplier ID" });
-      }
-
-      const { companyId } = req.query;
-      const companyIds = companyId
-        ? [await resolveAuthorizedCompanyId(req, companyId)]
-        : isPrivilegedRole(access.role)
-          ? [...(await getAccessibleCompanyIds(access.userId))].sort((left, right) => left - right)
-          : [access.activeCompanyId];
-
-      const companyRows = await Promise.all(
-        companyIds.map((allowedCompanyId) => storage.getCompanyById(allowedCompanyId))
-      );
-      const companyNameMap = new Map(
-        companyRows.filter(Boolean).map((company) => [company!.id, company!.name] as const)
-      );
-      const purchaseOrderGroups = await Promise.all(
-        companyIds.map(async (allowedCompanyId) => {
-          const purchaseOrders = await storage.getPurchaseOrdersBySupplier(supplierId, allowedCompanyId);
-          return purchaseOrders.map((purchaseOrder) => ({
-            ...purchaseOrder,
-            companyName: companyNameMap.get(allowedCompanyId) ?? `Company ${allowedCompanyId}`,
-          }));
-        })
-      );
-
-      return res.json(purchaseOrderGroups.flat());
-    } catch (error: unknown) {
-      return sendCompanyAccessError(res, error);
-    }
-  });
-
-  // Create a new voucher
-
   app.get("/api/vouchers/optional", requireAuth, requireNonPOS, async (req, res) => {
     try {
       const access = await assertActiveCompanyAccess(req);

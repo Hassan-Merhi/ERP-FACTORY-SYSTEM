@@ -43,12 +43,6 @@ const PAGES: PageCase[] = [
     landmark: "input-permission-search",
   },
   {
-    name: "GradesCategoriesManager",
-    load: () => import("@/components/GradesCategoriesManager"),
-    landmark: "button-export-grade-category",
-    showsRows: true,
-  },
-  {
     name: "NotificationsCenter",
     load: () => import("@/components/NotificationsCenter"),
     landmark: "button-notifications-bell",
@@ -73,7 +67,6 @@ const PAGES: PageCase[] = [
     landmark: "select-translation-status",
     showsRows: true,
   },
-  { name: "Bales", load: () => import("@/pages/Bales"), landmark: "button-add-bale" },
   { name: "BarcodeManager", load: () => import("@/pages/BarcodeManager"), landmark: "button-upload" },
   { name: "Chat", load: () => import("@/pages/Chat"), landmark: "chat-page" },
   { name: "ChatbotSettings", load: () => import("@/pages/ChatbotSettings"), landmark: "tab-users" },
@@ -118,7 +111,6 @@ const PAGES: PageCase[] = [
     load: () => import("@/pages/POSItemReplacement"),
     landmark: "select-pos-replacement-location",
   },
-  { name: "PressingBales", load: () => import("@/pages/PressingBales"), landmark: "text-pressing-badge" },
   { name: "SalesReportComparison", load: () => import("@/pages/SalesReportComparison"), landmark: "input-start-date" },
   {
     name: "StockInSalesReportComparison",
@@ -128,13 +120,11 @@ const PAGES: PageCase[] = [
   { name: "StockItemVouchers", load: () => import("@/pages/StockItemVouchers"), landmark: "period-filter" },
   { name: "StockTransfers", load: () => import("@/pages/StockTransfers"), landmark: "period-filter-dropdown" },
   { name: "TransporterStatement", load: () => import("@/pages/TransporterStatement"), landmark: "trigger-transporter" },
-  { name: "TabSummary", load: () => import("@/pages/git-mockup/TabSummary"), landmark: "summary-mode-selector" },
   {
     name: "TabTruckLocation",
     load: () => import("@/pages/git-mockup/TabTruckLocation"),
     landmark: "btn-truck-mode-session",
   },
-  { name: "TabWhatsApp", load: () => import("@/pages/git-mockup/TabWhatsApp"), landmark: "btn-wa-mode-session" },
   {
     name: "UpdateCategoriesTab",
     load: () => import("@/pages/import-stock-items/UpdateCategoriesTab"),
@@ -240,12 +230,6 @@ const PAGES: PageCase[] = [
     factory: true,
   },
   {
-    name: "FactoryNetProfitAnalytics",
-    load: () => import("@/pages/factory/FactoryNetProfitAnalytics"),
-    landmark: "select-period",
-    factory: true,
-  },
-  {
     name: "FactoryPendingInvoices",
     load: () => import("@/pages/factory/FactoryPendingInvoices"),
     landmark: "filter-tabs",
@@ -269,12 +253,6 @@ const PAGES: PageCase[] = [
     name: "FactoryStockAllocationV3",
     load: () => import("@/pages/factory/FactoryStockAllocationV3"),
     landmark: "button-v3-tab-overview",
-    factory: true,
-  },
-  {
-    name: "FactoryStockOTW",
-    load: () => import("@/pages/factory/FactoryStockOTW"),
-    landmark: "badge-total-count",
     factory: true,
   },
   {
@@ -322,12 +300,6 @@ const PAGES: PageCase[] = [
     showsRows: true,
   },
   {
-    name: "ProductionPlannerDialog",
-    load: () => import("@/pages/factory/ProductionPlannerDialog"),
-    landmark: "button-production-planner",
-    factory: true,
-  },
-  {
     name: "ProductionRawStock",
     load: () => import("@/pages/factory/ProductionRawStock"),
     landmark: "production-raw-stock-page",
@@ -352,20 +324,6 @@ const PAGES: PageCase[] = [
     load: () => import("@/pages/factory/bale-product-history/FactoryBaleProductMonthDetail"),
     landmark: "text-bale-count",
     factory: true,
-  },
-  {
-    name: "ProductionPositionsTab",
-    load: () => import("@/pages/factory/bale-stock-entry/ProductionPositionsTab"),
-    landmark: "button-new-production-position",
-    factory: true,
-    showsRows: true,
-  },
-  {
-    name: "WorkerCategoriesTab",
-    load: () => import("@/pages/factory/bale-stock-entry/WorkerCategoriesTab"),
-    landmark: "button-new-category",
-    factory: true,
-    showsRows: true,
   },
   {
     name: "ContainerListView",
@@ -452,12 +410,6 @@ const PAGES: PageCase[] = [
     load: () => import("@/pages/settings/AgentDutyWhatsAppSection"),
     landmark: "button-toggle-agent-duty-wa",
   },
-  { name: "ApprovalsPage", load: () => import("@/pages/settings/ApprovalsPage"), landmark: "tab-approvals-mine" },
-  {
-    name: "BusinessAlertsPage",
-    load: () => import("@/pages/settings/BusinessAlertsPage"),
-    landmark: "select-alert-status-filter",
-  },
   {
     name: "CompaniesTab",
     load: () => import("@/pages/settings/CompaniesTab"),
@@ -476,11 +428,6 @@ const PAGES: PageCase[] = [
     showsRows: true,
   },
   {
-    name: "NetPositionExportSection",
-    load: () => import("@/pages/settings/NetPositionExportSection"),
-    landmark: "section-np-export",
-  },
-  {
     name: "PosWhatsAppSection",
     load: () => import("@/pages/settings/PosWhatsAppSection"),
     landmark: "badge-pos-api-status",
@@ -491,11 +438,6 @@ const PAGES: PageCase[] = [
     name: "RemoteSupportWatchDialog",
     load: () => import("@/pages/settings/RemoteSupportWatchDialog"),
     landmark: "dialog-watch-user",
-  },
-  {
-    name: "SettingsHubPage",
-    load: () => import("@/pages/settings/SettingsHubPage"),
-    landmark: "input-settings-search",
   },
   {
     name: "TransferWhatsAppSection",
@@ -690,7 +632,6 @@ const PAGES: PageCase[] = [
   },
   { name: "SupplierProformas", load: () => import("@/pages/SupplierProformas"), landmark: "button-create-proforma" },
   { name: "DataToolsTab", load: () => import("@/pages/settings/DataToolsTab"), landmark: "button-open-stock-import" },
-  { name: "ProductionBales", load: () => import("@/pages/ProductionBales"), landmark: "badge-finalize-mode" },
   { name: "CombinedInventory", load: () => import("@/pages/CombinedInventory"), landmark: "button-refresh-inventory" },
   { name: "Agents", load: () => import("@/pages/Agents"), landmark: "button-add-agent", showsRows: true },
   {

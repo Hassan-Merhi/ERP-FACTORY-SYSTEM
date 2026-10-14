@@ -45,7 +45,6 @@ function getRoleBadgeClass(role: string): string {
 export function RoleSummaryRow({ role, companyName, locationNames, isEditing, onEdit, onDelete }: RoleSummaryRowProps) {
   const [restrictionsOpen, setRestrictionsOpen] = useState(false);
   const isPOS = role.role === "POS";
-  const _isPrivileged = ["Admin", "Owner", "Developer"].includes(role.role);
   const canShowRestrictions = !NON_RESTRICTABLE_ROLES.includes(role.role) && !!role.companyId;
 
   const { data: allPermissions = [] } = useQuery({

@@ -1,5 +1,4 @@
 import type { Response } from "express";
-import type { VoucherEntry } from "@shared/schema";
 
 export type SpLifecycleCode =
   | "SP_LIFECYCLE_REASON_REQUIRED"
@@ -117,29 +116,6 @@ export function restoredSpLotQuantity(params: {
     );
   }
   return restored;
-}
-
-export function buildSpReversalEntries(entries: VoucherEntry[], reversalVoucherId: number, label: string) {
-  return entries.map((entry) => ({
-    voucherId: reversalVoucherId,
-    ledgerAccountId: entry.ledgerAccountId,
-    bankAccountId: entry.bankAccountId,
-    fixedAssetId: entry.fixedAssetId,
-    supplierId: entry.supplierId,
-    employeeId: entry.employeeId,
-    customerId: entry.customerId,
-    factorySupplierId: entry.factorySupplierId,
-    debitAmount: String(Number(entry.creditAmount ?? 0)),
-    creditAmount: String(Number(entry.debitAmount ?? 0)),
-    narration: `${label}: ${entry.narration || "original entry"}`,
-    transactionCurrency: entry.transactionCurrency,
-    transactionDebitAmount: entry.transactionCreditAmount,
-    transactionCreditAmount: entry.transactionDebitAmount,
-    baseDebitAmount: entry.baseCreditAmount,
-    baseCreditAmount: entry.baseDebitAmount,
-    historicalExchangeRate: entry.historicalExchangeRate,
-    rateConvention: entry.rateConvention,
-  }));
 }
 
 export function appendSpLifecycleNote(params: {

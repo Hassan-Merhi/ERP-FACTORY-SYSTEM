@@ -1,3 +1,5 @@
+import { isRecord } from "@shared/typeGuards";
+
 type ErpHistoryMeta = {
   version: 1;
   mode: "erp";
@@ -16,10 +18,6 @@ let originalReplaceState: History["replaceState"] | null = null;
 let pendingScrollRestore: number | null = null;
 let popstateHandler: ((event: PopStateEvent) => void) | null = null;
 let legacyBackClickHandler: ((event: MouseEvent) => void) | null = null;
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
 
 function currentRelativeUrl(): string {
   return `${window.location.pathname}${window.location.search}${window.location.hash}`;

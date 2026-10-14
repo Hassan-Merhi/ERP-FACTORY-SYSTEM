@@ -7,10 +7,9 @@ function source(path: string): string {
 
 describe("container offload historical cost immutability", () => {
   it("does not reprice posted sales after an offload", () => {
-    const routes = [
-      source("server/routes/containers/centralContainerOffloadRoute.ts"),
-      source("server/routes/containers/offload/create.ts"),
-    ];
+    // centralContainerOffloadRoute.ts is the only offload create/replace handler; the shadowed
+    // copy in offload/create.ts was removed by the dead-code cleanup (Phase 3).
+    const routes = [source("server/routes/containers/centralContainerOffloadRoute.ts")];
 
     for (const route of routes) {
       expect(route).not.toContain("syncSalesItemCostsForStockItems");

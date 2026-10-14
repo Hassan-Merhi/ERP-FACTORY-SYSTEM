@@ -1,31 +1,13 @@
 import { db } from "../../db";
-import { getErrorMessage } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
 import { factoryContainers, factoryContainerTrackingChecks } from "../../../shared/schema";
 import { and, eq, gte } from "drizzle-orm";
 import { setSchedulerMeta } from "./persistence";
-import { activeStatusFilter, anyProviderConfigured, isInactiveStatus, isValidContainerNumber } from "./progress-quota";
+import { isInactiveStatus } from "./progress-quota";
 import { trackOneContainer } from "./track-one";
 
 const MAX_CONCURRENT_TRACK_JOBS = 5;
-const DEFAULT_FACTORY_TRACKING_MAX_PER_RUN = 30;
 let _activeTrackJobs = 0;
-
-function factoryTrackingMaxPerRun(): number {
-  const configured = Number(process.env.FACTORY_TRACKING_MAX_PER_RUN);
-  if (!Number.isFinite(configured)) return DEFAULT_FACTORY_TRACKING_MAX_PER_RUN;
-  return Math.max(1, Math.min(100, Math.trunc(configured)));
-}
-
-/** True when the server already has the maximum number of tracking jobs running. */
-export function isFactoryTrackingAtCapacity(): boolean {
-  return _activeTrackJobs >= MAX_CONCURRENT_TRACK_JOBS;
-}
-
-/** Number of factory tracking jobs currently in flight. */
-export function factoryTrackingInFlightCount(): number {
-  return _activeTrackJobs;
-}
 
 // ── Public API ────────────────────────────────────────────────────────────────
 
@@ -124,111 +106,4 @@ export async function trackOneFactoryContainerById(containerId: number): Promise
   } finally {
     _activeTrackJobs--;
   }
-}
-
-export async function trackDueFactoryContainers(): Promise<void> {
-  logger.info("[FactoryTracking] Starting auto-tracking run...");
-
-  if (!anyProviderConfigured()) {
-    logger.info("[FactoryTracking] No tracking providers configured — skipping.");
-    return;
-  }
-
-  let rows: Array<{
-    id: number;
-    containerNumber: string;
-    status: string;
-    trackingAutoUpdate: boolean;
-    trackingLastCheckedAt: Date | null;
-    trackingNextCheckAt: Date | null;
-    destination: string | null;
-    trackingCarrierHint: string | null;
-  }>;
-
-  try {
-    rows = await db
-      .select({
-        id: factoryContainers.id,
-        containerNumber: factoryContainers.containerNumber,
-        status: factoryContainers.status,
-        trackingAutoUpdate: factoryContainers.trackingAutoUpdate,
-        trackingLastCheckedAt: factoryContainers.trackingLastCheckedAt,
-        trackingNextCheckAt: factoryContainers.trackingNextCheckAt,
-        destination: factoryContainers.destination,
-        trackingCarrierHint: factoryContainers.trackingCarrierHint,
-      })
-      .from(factoryContainers)
-      .where(and(eq(factoryContainers.trackingEnabled, true), activeStatusFilter));
-  } catch (err: unknown) {
-    logger.error("[FactoryTracking] Failed to fetch containers", { error: getErrorMessage(err) });
-    return;
-  }
-
-  if (rows.length === 0) {
-    logger.info("[FactoryTracking] No active tracking-enabled factory containers.");
-    return;
-  }
-
-  const now = Date.now();
-  const MIN_INTERVAL_MS = 6 * 60 * 60 * 1000;
-
-  const eligible = rows.filter((r) => {
-    if (!r.trackingAutoUpdate) return false;
-    if (!isValidContainerNumber(r.containerNumber)) return false;
-    if (r.trackingNextCheckAt && r.trackingNextCheckAt.getTime() > now) return false;
-    if (r.trackingLastCheckedAt && now - r.trackingLastCheckedAt.getTime() < MIN_INTERVAL_MS) return false;
-    return true;
-  });
-
-  // Bound each six-hour run so a large backlog does not turn into a long burst
-  // of carrier requests. Oldest/never-checked rows go first, so deferred rows
-  // naturally rotate into the next run without being marked as checked.
-  eligible.sort((a, b) => {
-    const aChecked = a.trackingLastCheckedAt?.getTime() ?? 0;
-    const bChecked = b.trackingLastCheckedAt?.getTime() ?? 0;
-    if (aChecked !== bChecked) return aChecked - bChecked;
-    return a.id - b.id;
-  });
-
-  const maxPerRun = factoryTrackingMaxPerRun();
-  const toTrack = eligible.slice(0, maxPerRun);
-  const deferred = eligible.length - toTrack.length;
-
-  logger.info(
-    `[FactoryTracking] ${eligible.length} of ${rows.length} factory containers eligible; ` +
-      `tracking ${toTrack.length} this run, deferring ${deferred}.`
-  );
-
-  for (const row of toTrack) {
-    try {
-      const destCountry = row.destination || "Congo";
-      const carrierHint = row.trackingCarrierHint ?? null;
-      await trackOneContainer(row.id, row.containerNumber, destCountry, carrierHint);
-      await new Promise((resolve) => setTimeout(resolve, 2000));
-    } catch (err: unknown) {
-      logger.error(`[FactoryTracking] Error tracking ${row.containerNumber}`, {
-        containerId: row.id,
-        error: getErrorMessage(err),
-      });
-    }
-  }
-
-  logger.info("[FactoryTracking] Auto-tracking run complete.", {
-    eligible: eligible.length,
-    tracked: toTrack.length,
-    deferred,
-    maxPerRun,
-  });
-}
-
-export async function updateFactoryContainerTrackingSettings(
-  containerId: number,
-  settings: { trackingEnabled?: boolean; trackingAutoUpdate?: boolean; trackingCarrierHint?: string | null }
-): Promise<void> {
-  const updatePayload: Record<string, unknown> = {};
-  if (settings.trackingEnabled !== undefined) updatePayload.trackingEnabled = settings.trackingEnabled;
-  if (settings.trackingAutoUpdate !== undefined) updatePayload.trackingAutoUpdate = settings.trackingAutoUpdate;
-  if ("trackingCarrierHint" in settings) updatePayload.trackingCarrierHint = settings.trackingCarrierHint;
-  if (Object.keys(updatePayload).length === 0) return;
-  await db.update(factoryContainers).set(updatePayload).where(eq(factoryContainers.id, containerId));
 }

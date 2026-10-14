@@ -101,7 +101,6 @@ describe("Wave 2 frontend speed contracts", () => {
     expect(source("client/src/components/StatCard.tsx")).toContain("memo(StatCardComponent)");
     expect(source("client/src/components/KPICard.tsx")).toContain("memo(KPICardComponent)");
     expect(source("client/src/components/FactoryKpiCard.tsx")).toContain("memo(FactoryKpiCardComponent)");
-    expect(source("client/src/components/FinancialSummaryCard.tsx")).toContain("memo(FinancialSummaryCardComponent)");
 
     expect(source("client/src/pages/accounts/AccountTransactionRows.tsx")).toContain("useMemo(() =>");
     expect(source("client/src/pages/git-containers/ContainerTable.tsx")).toContain("React.useMemo(");

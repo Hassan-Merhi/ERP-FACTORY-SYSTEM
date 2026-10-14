@@ -12,7 +12,7 @@ import { buildSafeFilename, contentDisposition } from "../../../lib/contentDispo
 import { getClientDate } from "../../../lib/dateUtils";
 import { db } from "../../../db";
 import { requireAuth } from "../../../auth";
-import { customerOrders, customers, companies } from "@shared/schema";
+import { customerOrders, customers } from "@shared/schema";
 import { eq, and, inArray } from "drizzle-orm";
 import { MoneyDecimal } from "../../../lib/money";
 import { buildFactoryCustomerStatement } from "./statementRows";
@@ -33,8 +33,6 @@ export function registerFactoryCustomerStatementExcelRoutes(app: Express) {
         .from(customers)
         .where(and(eq(customers.id, customerId), eq(customers.companyId, companyId)));
       if (!customer) return res.status(404).json({ message: "Customer not found" });
-
-      const [_company] = await db.select().from(companies).where(eq(companies.id, companyId));
 
       // Ledger rows from the balance engine plus the amounts not yet in the
       // ledger, flagged (statementRows.ts). Debit/credit are each row's effect

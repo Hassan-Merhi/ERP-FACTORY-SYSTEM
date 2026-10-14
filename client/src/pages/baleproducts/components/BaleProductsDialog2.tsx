@@ -12,7 +12,6 @@ export function BaleProductsDialog2({ model }: { model: Model }) {
     setImportPreview,
     importError,
     setImportFile,
-    products: _products,
     importMutation,
     handleConfirmImport,
   } = model;

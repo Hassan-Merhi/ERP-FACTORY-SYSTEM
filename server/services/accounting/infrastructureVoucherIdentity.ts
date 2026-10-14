@@ -255,10 +255,3 @@ export async function deleteInfrastructurePostingIdentityForVoucherTx(
 ): Promise<void> {
   await tx.delete(accountingPostingRequests).where(eq(accountingPostingRequests.voucherId, voucherId));
 }
-
-export async function deleteInfrastructurePostingIdentityForVoucher(
-  database: DatabaseLike,
-  voucherId: number
-): Promise<void> {
-  await database.transaction((tx) => deleteInfrastructurePostingIdentityForVoucherTx(tx, voucherId));
-}

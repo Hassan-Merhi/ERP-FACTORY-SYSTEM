@@ -1,6 +1,5 @@
-import { useRef } from "react";
 import { useMutation } from "@tanstack/react-query";
-import { AlertTriangle, FileSpreadsheet, RotateCcw } from "lucide-react";
+import { AlertTriangle, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -17,52 +16,6 @@ import { useAdminOverride } from "@/hooks/use-admin-override";
 import type { ContainerWithSupplier } from "./otwHelpers";
 
 // ── Import Dialog ─────────────────────────────────────────────────────────────
-
-interface ImportDialogProps {
-  open: boolean;
-  onClose: () => void;
-}
-
-export function ImportDialog({ open, onClose }: ImportDialogProps) {
-  const { toast: _toast } = useToast();
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const [_importPreview, setImportPreview] = [([]), (_v: unknown[]) => {}];
-
-  const handleClose = () => {
-    setImportPreview([]);
-    if (fileInputRef.current) fileInputRef.current.value = "";
-    onClose();
-  };
-
-  return (
-    <Dialog
-      open={open}
-      onOpenChange={(v) => {
-        if (!v) handleClose();
-      }}
-    >
-      <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <FileSpreadsheet className="h-5 w-5" />
-            Import Containers from Excel
-          </DialogTitle>
-          <DialogDescription>
-            Upload an Excel file (.xlsx) to bulk-import containers. New suppliers will be created automatically.
-          </DialogDescription>
-        </DialogHeader>
-        <div className="py-4 text-muted-foreground text-sm">
-          Use the Import Excel button in the toolbar to upload containers.
-        </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={handleClose}>
-            Close
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
 
 // ── Bulk Delete Dialog ────────────────────────────────────────────────────────
 
@@ -328,59 +281,6 @@ export function ReverseOffloadDialog({ container, onClose }: ReverseOffloadDialo
 
 // ── Excel Import/Export Utilities ─────────────────────────────────────────────
 
-export async function exportContainers(rows: ContainerWithSupplier[], suppliersData?: Array<{ id: number; name: string }>) {
-  const XLSX = await import("@/lib/excelHelper");
-  const headers = [
-    "Container Number",
-    "Supplier",
-    "Broker / Commission To",
-    "Origin",
-    "Total Kg",
-    "Rate/Kg",
-    "Currency",
-    "FX Rate",
-    "FX Source",
-    "Arrival Date",
-    "Status",
-    "Notes",
-    "Commission Amount",
-    "Commission Currency",
-    "Commission Notes",
-    "Freight Amount",
-    "Freight Currency",
-    "Other Charges (legacy)",
-  ];
-  const dataRows = rows.map((c) => {
-    const brokerSupId = c.commissionSupplierId;
-    const brokerName = brokerSupId ? (suppliersData?.find((s) => s.id === brokerSupId)?.name ?? "") : "";
-    return [
-      c.containerNumber,
-      c.supplierName || "",
-      brokerName,
-      c.origin || "",
-      c.totalKg || "",
-      c.ratePerKg || "",
-      c.currencyCode || "USD",
-      c.fxRateToUsd || "1",
-      c.fxRateSource || "auto",
-      c.arrivalDate || "",
-      c.status,
-      c.notes || "",
-      c.commissionAmount || "",
-      c.commissionCurrencyCode || "USD",
-      c.commissionNotes || "",
-      c.freight || "",
-      c.freightCurrencyCode || "USD",
-      c.otherCharges || "",
-    ];
-  });
-  const ws = XLSX.utils.aoa_to_sheet([headers, ...dataRows]);
-  ws["!cols"] = [20, 20, 20, 12, 10, 10, 8, 8, 8, 12, 12, 30, 12, 10, 30, 12, 10, 12].map((w) => ({ wch: w }));
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, "Containers");
-  await XLSX.writeFile(wb, `factory_containers_export_${new Date().toLocaleDateString("en-CA")}.xlsx`);
-}
-
 export async function downloadContainerTemplate() {
   const XLSX = await import("@/lib/excelHelper");
   const headers = [
@@ -459,55 +359,5 @@ export async function downloadContainerTemplate() {
   await XLSX.writeFile(wb, "factory_containers_template.xlsx");
 }
 
-export async function parseContainerImportFile(file: File): Promise<Record<string, string>[]> {
-  const XLSX = await import("@/lib/excelHelper");
-  const data = await file.arrayBuffer();
-  const wb = await XLSX.read(data, { type: "array" });
-  const ws = wb.Sheets[wb.SheetNames[0]];
-  const jsonRows = XLSX.utils.sheet_to_json(ws, { defval: "" });
-  return jsonRows
-    .map((row) => {
-      const get = (keys: string[]) => {
-        for (const k of keys) {
-          const val = row[k] ?? row[k.toLowerCase()] ?? row[k.toUpperCase()];
-          if (val !== undefined && val !== "") return String(val).trim();
-        }
-        return "";
-      };
-      return {
-        containerNumber: get(["Container Number", "Container #", "ContainerNumber", "container_number", "Container"]),
-        supplierName: get(["Supplier", "Supplier Name", "SupplierName", "supplier_name"]),
-        origin: get(["Origin", "Country", "origin"]),
-        totalKg: get(["Total Kg", "TotalKg", "Weight", "total_kg", "KG", "Kg"]),
-        ratePerKg: get(["Rate/Kg", "Rate Per Kg", "RatePerKg", "rate_per_kg", "Rate", "Price"]),
-        currencyCode: get(["Currency", "CurrencyCode", "currency_code"]) || "USD",
-        fxRateToUsd: get(["FX Rate", "FxRate", "fx_rate_to_usd", "Exchange Rate"]) || "",
-        fxSource: get(["FX Source", "FxSource", "fx_source"]) || "",
-        arrivalDate: get(["Arrival Date", "ArrivalDate", "arrival_date", "Date"]),
-        notes: get(["Notes", "notes", "Remarks"]),
-        status: get(["Status", "status"]) || "PENDING",
-        commissionAmount: get(["Commission Amount", "CommissionAmount", "commission_amount", "Commission"]) || "",
-        commissionCurrencyCode:
-          get(["Commission Currency", "CommissionCurrency", "commission_currency_code", "Comm Currency"]) || "USD",
-      };
-    })
-    .filter((r) => r.containerNumber);
-}
-
 // ── Full Import Dialog (stateful) ─────────────────────────────────────────────
 
-interface FullImportDialogProps {
-  open: boolean;
-  onClose: () => void;
-}
-
-export function FullImportDialog({ open: _open, onClose: _onClose }: FullImportDialogProps) {
-  const { toast: _toast } = useToast();
-  const _fileInputRef = useRef<HTMLInputElement>(null);
-  const [_importPreview, _setImportPreview] = [([]), (_v: unknown[]) => {}];
-  const [_importResult, _setImportResult] = [null, (_v: unknown) => {}];
-
-  // This component is intentionally kept simple since the import state
-  // lives in the parent (FactoryContainers) for now.
-  return null;
-}

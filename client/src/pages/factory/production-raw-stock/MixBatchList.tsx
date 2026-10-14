@@ -74,7 +74,6 @@ export function MixBatchList({
   mixBatchDate,
   setMixBatchDate,
   mixBatchesByDate,
-  mixBatchesByDateLoading: _mixBatchesByDateLoading,
   mixBatchPrintRef,
   formatDisplayDate,
 }: MixBatchListProps) {

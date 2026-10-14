@@ -5,7 +5,6 @@ import { useDateFormat } from "@/contexts/DateFormatContext";
 import { useToast } from "@/hooks/use-toast";
 import { useAppMode } from "@/contexts/AppModeContext";
 import { getApiRequest } from "@/lib/factoryApi";
-import { useCompany } from "@/contexts/CompanyContext";
 import { Badge } from "@/components/ui/badge";
 import { useLocation, useRoute } from "wouter";
 import { useEscapeToParent } from "@/hooks/use-escape-to-parent";
@@ -16,7 +15,6 @@ import type { OrderDetail } from "./types";
 export function useFactoryInvoiceDetailModel() {
   const { formatDisplayDate } = useDateFormat();
   const { toast } = useToast();
-  const { selectedCompany: _selectedCompany } = useCompany();
   const [, navigate] = useLocation();
   const [editingArticleCode, setEditingArticleCode] = useState<string | null>(null);
   const [editingChargeLedger, setEditingChargeLedger] = useState<number | null>(null);

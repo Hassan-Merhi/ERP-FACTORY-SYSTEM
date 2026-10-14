@@ -47,6 +47,11 @@ vi.mock("../server/lib/factoryCustomerLedger", () => ({
 vi.mock("../server/services/accounting/balances/customerLedgerStatement", () => ({
   loadCustomerLedgerLines: vi.fn(async () => harness.customerStatement),
 }));
+// Historic invoices not yet in the ledger (#2224); none for these fixtures. memoTotal stays real.
+vi.mock("../server/services/accounting/balances/unpostedMemo", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../server/services/accounting/balances/unpostedMemo")>()),
+  loadPartyMemoLines: vi.fn(async () => new Map()),
+}));
 vi.mock("../server/services/accounting/balances/ledgerBalanceEngine", () => ({
   getPartyBalance: vi.fn(async () => ({ opening: "200.00" })),
 }));

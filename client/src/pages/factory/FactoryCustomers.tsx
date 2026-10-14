@@ -57,7 +57,7 @@ export default function FactoryCustomers() {
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
   const [deletingCustomer, setDeletingCustomer] = useState<Customer | null>(null);
-  const [showDeleted, _setShowDeleted] = useState(false);
+  const [showDeleted] = useState(false);
   const [showZeroBalance, setShowZeroBalance] = useState(false);
   const [formData, setFormData] = useState({
     legalName: "",

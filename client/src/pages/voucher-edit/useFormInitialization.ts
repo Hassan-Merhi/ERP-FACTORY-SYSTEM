@@ -39,10 +39,8 @@ export const useFormInitialization = (
     const isStockTransfer = voucherType === "Stock Transfer";
 
     if (isPaymentOrReceipt) {
-      const isReceipt = voucherType === "Receipt";
       const mainEntry = voucher.entries[0];
       const contraEntries = voucher.entries.slice(1);
-      const mainIsLiability = mainEntry.supplierId || mainEntry.factorySupplierId || mainEntry.employeeId;
       const accountType = mainEntry.ledgerAccountId
         ? "ledger"
         : mainEntry.bankAccountId
@@ -97,13 +95,6 @@ export const useFormInitialization = (
             const fsAccount = allAccountsData.find((a) => a.type === "factorySupplier" && Number(a.id) === eAccountId);
             eAccountName = fsAccount?.name || `Factory Supplier ${eAccountId}`;
           }
-          const _amount = isReceipt
-            ? mainIsLiability
-              ? e.creditAmount
-              : e.creditAmount
-            : mainIsLiability
-              ? e.debitAmount
-              : e.debitAmount;
           return {
             accountType: eAccountType,
             accountId: eAccountId,

@@ -1,11 +1,8 @@
-import type { ClientErrorLike } from "@/lib/clientError";
 import { useEffect, useState } from "react";
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { ScanLine, CalendarDays, Factory, Target } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { FactoryMobileHeader, FactoryMobileHeaderActions, FactoryMobilePage } from "@/components/ui/factory-mobile";
-import { useToast } from "@/hooks/use-toast";
-import { apiRequest } from "@/lib/queryClient";
 import { LabelPrintSettings } from "@/components/LabelPrintSettings";
 
 import StockEntryHistory from "../StockEntryHistory";
@@ -23,8 +20,7 @@ import { canUseFactorySurface } from "@/lib/factoryClientAccess";
 
 export default function BaleStockEntry() {
   const todayStr = new Date().toLocaleDateString("en-CA");
-  const [summaryDate, _setSummaryDate] = useState<string>(todayStr);
-  const { toast } = useToast();
+  const [summaryDate] = useState<string>(todayStr);
   const { language } = useApplicationLanguage();
   const tr = (key: Parameters<typeof translateFactoryStaffTrackingText>[0]) =>
     translateFactoryStaffTrackingText(key, language);
@@ -81,7 +77,9 @@ export default function BaleStockEntry() {
     setMountedTabs((prev) => (prev.has(defaultTab) ? prev : new Set([...prev, defaultTab])));
   }, [activeTabVisible, defaultTab]);
 
-  const { data: _productionSession, refetch: refetchSession } = useQuery({
+  // The page still loads today's production session for permitted users
+  // (tests/ui/factory-permission-query-gating.test.tsx pins this request).
+  useQuery({
     queryKey: ["/api/factory/stock-entry/production-session", todayStr],
     queryFn: async () => {
       const r = await fetch(`/api/factory/stock-entry/production-session?date=${todayStr}`);
@@ -89,24 +87,6 @@ export default function BaleStockEntry() {
     },
     staleTime: 30000,
     enabled: canReadProductionSession,
-  });
-
-  const _endProductionMutation = useMutation({
-    mutationFn: async () => {
-      const res = await apiRequest("POST", "/api/factory/stock-entry/end-production", { date: todayStr });
-      if (!res.ok) {
-        const e = await res.json();
-        throw new Error(e.message || "Failed to end production");
-      }
-      return res.json();
-    },
-    onSuccess: () => {
-      toast({ title: "Production ended", description: "Worker Matrix PDF sent to WhatsApp group." });
-      refetchSession();
-    },
-    onError: (err: ClientErrorLike) => {
-      toast({ title: "End Production failed", description: err.message, variant: "destructive" });
-    },
   });
 
   return (

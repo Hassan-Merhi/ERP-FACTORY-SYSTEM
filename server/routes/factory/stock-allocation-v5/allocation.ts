@@ -215,7 +215,7 @@ export function registerV5StockAllocationRoutes(app: Express) {
                   )
                 ON CONFLICT (order_id, article_code) DO NOTHING`
           );
-        } catch (_backfillErr) {
+        } catch {
           // Non-fatal: backfill failure must never block the GET response
         }
       }

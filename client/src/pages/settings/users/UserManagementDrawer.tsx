@@ -45,9 +45,9 @@ export function UserManagementDrawer({ user, open, onClose, companies, onUserDel
   const [hiddenErpCostFields, setHiddenErpCostFields] = useState<string[]>([]);
 
   const [newPassword, setNewPassword] = useState("");
-  const [_showPasswordReset, setShowPasswordReset] = useState(false);
+  const [, setShowPasswordReset] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const [_advancedOpen, setAdvancedOpen] = useState(false);
+  const [, setAdvancedOpen] = useState(false);
   const [openTabGroups, setOpenTabGroups] = useState<Set<string>>(new Set());
 
   useEffect(() => {
@@ -120,54 +120,6 @@ export function UserManagementDrawer({ user, open, onClose, companies, onUserDel
     },
   });
 
-  const _handleSaveAccount = () => {
-    updateMutation.mutate({
-      username: username !== user.username ? username : undefined,
-      displayName,
-      password: newPassword || undefined,
-    });
-  };
-
-  const _handleSaveAccess = () => {
-    updateMutation.mutate({
-      hasErpAccess: isPrivileged ? true : hasErpAccess,
-      hasFactoryAccess: isPrivileged ? true : hasFactoryAccess,
-    });
-  };
-
-  const _handleSaveRestrictions = () => {
-    updateMutation.mutate({
-      pageAccess: Array.from(pageAccess),
-      hiddenCostFields: isPrivileged ? [] : hiddenCostFields,
-    });
-  };
-
-  const _togglePage = (key: string) => {
-    setPageAccess((prev) => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      return next;
-    });
-  };
-
-  const _toggleGroup = (group: string, pages: { key: string }[]) => {
-    const allSelected = pages.every((p) => pageAccess.has(p.key));
-    setPageAccess((prev) => {
-      const next = new Set(prev);
-      pages.forEach((p) => (allSelected ? next.delete(p.key) : next.add(p.key)));
-      return next;
-    });
-  };
-
-  const _toggleCostField = (key: string) => {
-    setHiddenCostFields((prev) => (prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]));
-  };
-
-  const _toggleErpCostField = (key: string) => {
-    setHiddenErpCostFields((prev) => (prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]));
-  };
-
   const saveErpRestrictionsMutation = useMutation({
     mutationFn: async () => {
       const res = await apiRequest("PUT", `/api/erp-user-hidden-costs/${user.id}`, {
@@ -187,8 +139,6 @@ export function UserManagementDrawer({ user, open, onClose, companies, onUserDel
       toast({ title: "Error", description: err.message, variant: "destructive" });
     },
   });
-
-  const _handleSaveErpRestrictions = () => saveErpRestrictionsMutation.mutate();
 
   const toggleTabGroup = (group: string) => {
     setOpenTabGroups((prev) => {
@@ -286,11 +236,6 @@ export function UserManagementDrawer({ user, open, onClose, companies, onUserDel
         : isPrivileged || hasFactoryAccess
           ? "Factory only"
           : "No access";
-
-  const _restrictionCount =
-    (isPrivileged ? 0 : pageAccess.size) +
-    (isPrivileged ? 0 : hiddenCostFields.length) +
-    (isPrivileged ? 0 : hiddenErpCostFields.length);
 
   return (
     <>

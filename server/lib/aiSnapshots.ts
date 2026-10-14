@@ -268,17 +268,3 @@ export async function getOrBuildAISnapshot<T extends AISnapshotType>(
 
   return data as AISnapshotData<T>;
 }
-
-/**
- * Expire one or more snapshot types for a company so the next chatbot request
- * rebuilds fresh data. Pass no types to expire all snapshots for the company.
- */
-export async function invalidateAISnapshots(companyId: number, types?: string[]): Promise<void> {
-  const past = new Date(0); // Unix epoch → always expired
-  const where =
-    types && types.length > 0
-      ? and(eq(aiCompanySnapshots.companyId, companyId), inArray(aiCompanySnapshots.snapshotType, types))
-      : eq(aiCompanySnapshots.companyId, companyId);
-
-  await db.update(aiCompanySnapshots).set({ expiresAt: past }).where(where);
-}

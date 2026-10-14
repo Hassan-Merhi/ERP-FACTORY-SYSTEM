@@ -87,10 +87,6 @@
       "reason": "Shipping-container rows are reached through the factory company boundary and parent ownership."
     },
     {
-      "path": "server/routes/fiscal-transfers/revisions-write.ts",
-      "reason": "Revision writes are protected by the migrated-voucher company guard."
-    },
-    {
       "path": "server/routes/git/gitAgentRoutes.ts",
       "reason": "Git reporting loads only resources selected by the active company context."
     },
@@ -135,10 +131,6 @@
       "reason": "Bulk stock operations validate the active company before loading item rows."
     },
     {
-      "path": "server/routes/stock/stockItemManageRoutes.ts",
-      "reason": "Stock-item management validates item ownership in the active company."
-    },
-    {
       "path": "server/routes/stock/transfer-adj/item-write.ts",
       "reason": "Transfer and adjustment writes run inside the active company inventory transaction."
     },
@@ -157,14 +149,6 @@
     {
       "path": "server/services/container-tracking/persistence.ts",
       "reason": "Tracking persistence receives company-authorized container IDs from its service caller."
-    },
-    {
-      "path": "server/services/container-tracking/track-due.ts",
-      "reason": "Scheduled tracking selects containers through the company-scoped scheduler context."
-    },
-    {
-      "path": "server/services/container-tracking/track-now.ts",
-      "reason": "Immediate tracking receives company-authorized container IDs from its caller."
     },
     {
       "path": "server/services/container-tracking/track-one.ts",

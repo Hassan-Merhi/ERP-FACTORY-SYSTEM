@@ -1,10 +1,9 @@
-import { type ReplayQueryExecutor, type ReplayScopeInternal, type ReplaySummary, type ReplayWriteScope } from "./types";
+import { type ReplayQueryExecutor, type ReplayScopeInternal, type ReplaySummary } from "./types";
 import { buildBatchConsumptionEvents, loadContainerUniverse } from "./read-model";
 import { computeCanonicalCostsV6 } from "./canonicalCostsV6";
 import { previewHistoricalCostReplayWithExecutor } from "./securePreview";
 import { buildSelectedSupplierCorrectionPlan } from "./closure";
 import { classifyReplayBalesForBatches } from "./baleClassification";
-import { normalizeReplayWriteScope } from "./selectedScope";
 import { toMoney } from "../../../lib/money";
 
 function sortNumbers(values: number[]): number[] {
@@ -59,17 +58,6 @@ function emptyScope(): ReplayScopeInternal {
       batchRows: [],
     },
   };
-}
-
-export async function buildExactHistoricalReplayScopeV6(params: {
-  companyId: number;
-  selectedSupplierIds: Set<number>;
-  includeCompletedBatches: boolean;
-  includeFinalizedBales: boolean;
-  executor: ReplayQueryExecutor;
-}): Promise<ReplayWriteScope> {
-  const internal = await buildExactHistoricalReplayScopeInternalV6({ ...params, lockRows: false });
-  return normalizeReplayWriteScope(internal);
 }
 
 /**

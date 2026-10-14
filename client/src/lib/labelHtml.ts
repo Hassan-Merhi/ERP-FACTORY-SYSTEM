@@ -22,67 +22,10 @@ export type LabelData = {
   priorityNumber?: number | null;
 };
 
-function _blobToBase64(blob: Blob): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onloadend = () => resolve(reader.result as string);
-    reader.onerror = reject;
-    reader.readAsDataURL(blob);
-  });
-}
-
 // Session-level barcode cache: referenceNumber → base64 data URL.
 // Barcodes are immutable so we never need to invalidate this.
-const _barcodeBase64Cache = new Map<string, string>();
 
 // Session-level logo cache: logoId → base64 data URL.
-const _logoBase64Cache = new Map<number, string>();
-
-export async function prefetchLogoDataUrl(logoId: number): Promise<string | null> {
-  if (_logoBase64Cache.has(logoId)) return _logoBase64Cache.get(logoId)!;
-  try {
-    const r = await fetch(`/api/factory/customer-logos/${logoId}/image`, { credentials: "include" });
-    if (!r.ok) return null;
-    const blob = await r.blob();
-    const dataUrl = await _blobToBase64(blob);
-    _logoBase64Cache.set(logoId, dataUrl);
-    return dataUrl;
-  } catch {
-    return null;
-  }
-}
-
-export function prefetchLogoEager(logoId: number): void {
-  if (_logoBase64Cache.has(logoId)) return;
-  prefetchLogoDataUrl(logoId).catch(() => {});
-}
-
-export async function prefetchBarcodeDataUrls(labels: LabelData[]): Promise<LabelData[]> {
-  const refs = Array.from(new Set(labels.map((l) => l.referenceNumber)));
-  const uncached = refs.filter((r) => !_barcodeBase64Cache.has(r));
-  if (uncached.length > 0) {
-    const results = await Promise.all(
-      uncached.map(async (ref) => {
-        try {
-          const r = await fetch(`/api/barcode/${encodeURIComponent(ref)}`, { credentials: "include" });
-          if (!r.ok) return [ref, null] as [string, string | null];
-          const blob = await r.blob();
-          const dataUrl = await _blobToBase64(blob);
-          return [ref, dataUrl] as [string, string];
-        } catch {
-          return [ref, null] as [string, string | null];
-        }
-      })
-    );
-    for (const [ref, dataUrl] of results) {
-      if (dataUrl) _barcodeBase64Cache.set(ref, dataUrl);
-    }
-  }
-  return labels.map((l) => ({
-    ...l,
-    barcodeDataUrl: _barcodeBase64Cache.get(l.referenceNumber) ?? l.barcodeDataUrl,
-  }));
-}
 
 function getHeaderImage(code: string): string {
   if (!code) return HMD_LOGO_BASE64;

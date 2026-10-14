@@ -245,9 +245,6 @@ export function registerSpMigrationReconciliationRoutes(app: Express) {
         // target, but later steps (historical sales / containers) already ran. Surface a clear
         // recovery instruction instead of silently letting the user proceed further.
         const stockMasterArea = areas.find((a) => a.area === "Stock master");
-        const _stockInHandArea = areas.find((a) => a.area === "Stock in hand");
-        const _salesArea = areas.find((a) => a.area === "Historical sales");
-        const _containersArea = areas.find((a) => a.area === "Containers");
         const targetHasNoStock = pn(tgtStock.q) === 0 && pn(srcStock.q) > 0;
         const laterStepsRan = pn(tgtSales.cnt) > 0 || pn(tgtContainers.cnt) > 0;
         let partialMigrationWarning: string | null = null;

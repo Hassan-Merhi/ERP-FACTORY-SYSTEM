@@ -14,7 +14,7 @@ const checks = [
   [routes.includes("requireNonPOS") && routes.includes("requireActionAccess(\"act_transfer_stock\")"), "review actions require authorization"],
   [routes.includes("/api/stock-transfer-revisions/:id/reject"), "rejection route exists"],
   [routes.includes("Revision history is immutable and cannot be deleted"), "revision deletion is blocked"],
-  [registry.indexOf("registerImmutableStockTransferRevisionRoutes(app)") < registry.indexOf("registerStockTransferRevisionLifecycleRoutes(app)"), "immutable routes precede legacy handlers"],
+  [registry.includes("registerImmutableStockTransferRevisionRoutes(app)") && !registry.includes("registerStockTransferRevisionLifecycleRoutes(app)"), "immutable routes own every revision endpoint (shadowed legacy handlers stay retired)"],
 ];
 
 const failures = checks.filter(([ok]) => !ok).map(([, label]) => label);

@@ -224,34 +224,6 @@ export function InlineRoleEditor({ userId, companies, editingRole, onClose, onSa
     },
   });
 
-  const _toggleLocation = (locId: number) => {
-    setSelectedLocationIds((prev) => {
-      const isRemoving = prev.includes(locId);
-      const next = isRemoving ? prev.filter((id) => id !== locId) : [...prev, locId];
-      if (next.length > 0) setAssignedLocationId(next[0]);
-      if (isRemoving) {
-        setLocationCashAccounts((c) => {
-          const copy = { ...c };
-          delete copy[locId];
-          return copy;
-        });
-      }
-      return next;
-    });
-  };
-
-  const _selectAllLocations = () => {
-    const all = locations.map((l) => l.id);
-    setSelectedLocationIds(all);
-    if (all.length > 0) setAssignedLocationId(all[0]);
-  };
-
-  const _clearLocations = () => {
-    setSelectedLocationIds([]);
-    setAssignedLocationId(undefined);
-    setLocationCashAccounts({});
-  };
-
   return (
     <div className="rounded-md border border-primary/30 bg-accent/20 p-4 space-y-4" data-testid="inline-role-editor">
       <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">

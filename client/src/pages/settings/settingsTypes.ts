@@ -1,27 +1,3 @@
-import type { Company, LedgerAccount, Location, UserCompanyRole } from "@shared/schema";
-
-/**
- * Shared contracts for the settings surface (`client/src/pages/settings`).
- *
- * These describe the JSON wire shapes the settings tabs consume so the
- * per-file `: any` annotations they replaced cannot refill. They are
- * intentionally `type` aliases rather than interfaces: several settings
- * components (audit dialog, role tables) accept `Record<string, unknown>`
- * rows, and only object-literal types carry an implicit index signature.
- */
-
-/** Company row as returned by `/api/companies`. */
-export type SettingsCompanyRow = Company;
-
-/** Ledger account row as returned by `/api/ledger-accounts`. */
-export type SettingsLedgerAccountRow = LedgerAccount;
-
-/** Location row as returned by `/api/locations`. */
-export type SettingsLocationRow = Location;
-
-/** Company role assignment as returned by `/api/users/:id/company-roles`. */
-export type SettingsUserRoleRow = UserCompanyRole;
-
 /**
  * Enriched user row as returned by `/api/users`. The base `users` table has
  * no role/display/access columns; the API projects them from the user's

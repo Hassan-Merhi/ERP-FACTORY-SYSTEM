@@ -1,4 +1,4 @@
-import { FACTORY_ACCESS_REGISTRY, FACTORY_SETTINGS_PAGES, resolveFactoryPage } from "./factoryAccessRegistry";
+import { FACTORY_SETTINGS_PAGES, resolveFactoryPage } from "./factoryAccessRegistry";
 
 export interface FactoryTabDefinition {
   key: string;
@@ -118,11 +118,9 @@ export const FACTORY_TAB_REGISTRY: readonly FactoryTabDefinition[] = [
   { key: "hide_tab_kpis_worker_performance", label: "Worker Performance", group: "KPIs" },
   { key: "hide_tab_kpis_mix_efficiency", label: "Mix Efficiency", group: "KPIs" },
 
+  // No screen reads this key any more (the old payroll view was never routed);
+  // the backend still gates /repair-orphaned-vouchers on it, so it stays.
   { key: "hide_tab_payroll_records", label: "Payroll Records", group: "Payroll" },
-  { key: "hide_tab_payroll_worker_master", label: "Worker Master", group: "Payroll" },
-
-  { key: "hide_tab_profitability_bales", label: "Bale Costs", group: "Profitability" },
-  { key: "hide_tab_profitability_containers", label: "Container Profitability", group: "Profitability" },
 
   { key: "hide_tab_workers_list", label: "Workers", group: "Workers List" },
   { key: "hide_tab_workers_categories", label: "Categories", group: "Workers List" },
@@ -246,5 +244,3 @@ export function normalizeFactoryHiddenFields(value: unknown): string[] {
   }
   return [...out];
 }
-
-export const FACTORY_CANONICAL_PAGE_KEYS = new Set(FACTORY_ACCESS_REGISTRY.map((page) => page.key));

@@ -6,15 +6,11 @@ import { db } from "../../db";
 import { getErrorMessage } from "../../lib/httpHandlers";
 import { userLocations, vouchers } from "@shared/schema";
 import { parseMoneyInput } from "../../lib/money";
+import { parsePositiveInt } from "../../lib/listPagination";
 
 const DEFAULT_PAGE_SIZE = 100;
 const MAX_PAGE_SIZE = 250;
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
-
-function parsePositiveInt(value: unknown, fallback: number): number {
-  const parsed = Number.parseInt(String(value ?? ""), 10);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
-}
 
 function wantsStructuredPagination(req: Request): boolean {
   return (

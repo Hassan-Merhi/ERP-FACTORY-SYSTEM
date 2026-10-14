@@ -51,16 +51,7 @@ export function useAccountRenderers(deps: {
   totalExpenses: number;
   totalIncome: number;
 }) {
-  const {
-    accountsLoading,
-    appMode: _appMode,
-    expandedAccounts,
-    navigate: _navigate,
-    goToStatement,
-    toggleAccount,
-    totalExpenses: _totalExpenses,
-    totalIncome: _totalIncome,
-  } = deps;
+  const { accountsLoading, expandedAccounts, goToStatement, toggleAccount } = deps;
   const renderNetProfitAccountsList = (accts: NetProfitAccount[]) => {
     const payrollParentIds = new Set(accts.filter((a) => keepsZeroBalanceChildren(a.name)).map((a) => a.id));
     const activityAccounts = accts.filter((a) => Number(a.debit) !== 0 || Number(a.credit) !== 0);

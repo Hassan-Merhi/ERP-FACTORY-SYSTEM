@@ -115,11 +115,6 @@ export function decideSessionSecurity(input: SessionSecurityInput): SessionSecur
   return { valid: true, code: "SESSION_VALID" };
 }
 
-export function assertSessionSecurity(input: SessionSecurityInput): void {
-  const decision = decideSessionSecurity(input);
-  if (!decision.valid) throw new SessionSecurityError(decision.code);
-}
-
 export function nextCredentialVersion(currentVersion: number): number {
   if (!Number.isInteger(currentVersion) || currentVersion < 0 || currentVersion >= Number.MAX_SAFE_INTEGER) {
     throw new SessionSecurityError("SESSION_CREDENTIALS_REVOKED");

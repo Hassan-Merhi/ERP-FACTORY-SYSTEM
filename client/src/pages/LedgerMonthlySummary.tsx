@@ -4,7 +4,6 @@ import { useBackToParent } from "@/hooks/use-back-to-parent";
 import { useEscapeToParent } from "@/hooks/use-escape-to-parent";
 import { useQuery } from "@tanstack/react-query";
 import { useAppMode, getModePrefix } from "@/contexts/AppModeContext";
-import { getApiRequest } from "@/lib/factoryApi";
 import { formatNumber, drCrClass } from "@/lib/formatNumber";
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
 import { useDateFormat } from "@/contexts/DateFormatContext";
@@ -56,19 +55,10 @@ function formatSmartNumber(value: number): string {
   return formatNumber(value);
 }
 
-function _formatFullNumber(value: number): string {
-  const isWhole = Math.abs(value) % 1 === 0;
-  return new Intl.NumberFormat("en-US", {
-    minimumFractionDigits: isWhole ? 0 : 2,
-    maximumFractionDigits: 2,
-  }).format(value);
-}
-
 export default function LedgerMonthlySummary() {
   const { formatAmountRaw: formatAmount } = useCurrencyContext();
   const { formatShortDate } = useDateFormat();
   const appMode = useAppMode();
-  const _modeApiRequest = getApiRequest(appMode);
   const [, navigate] = useLocation();
   const handleBack = useBackToParent();
   const [, params] = useRoute("/ledger-monthly/:accountId");

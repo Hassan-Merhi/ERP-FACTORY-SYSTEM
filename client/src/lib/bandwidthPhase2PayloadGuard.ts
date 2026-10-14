@@ -1,22 +1,8 @@
 import type { QueryClient } from "@tanstack/react-query";
 import { queryClient } from "./queryClient";
+import { resolveFetchUrl as resolveRequestUrl, fetchRequestMethod as requestMethod } from "./fetchRequestUtils";
 
 const resolvedQueryClient: QueryClient = queryClient;
-
-function resolveUrl(input: RequestInfo | URL): URL | null {
-  try {
-    if (typeof input === "string") return new URL(input, window.location.origin);
-    if (input instanceof URL) return new URL(input.toString(), window.location.origin);
-    if (input instanceof Request) return new URL(input.url, window.location.origin);
-  } catch {
-    return null;
-  }
-  return null;
-}
-
-function requestMethod(input: RequestInfo | URL, init?: RequestInit): string {
-  return (init?.method || (input instanceof Request ? input.method : "GET")).toUpperCase();
-}
 
 function isInventoryOtwUrl(url: URL): boolean {
   return url.pathname === "/inventory" && url.searchParams.get("tab") === "on-the-way";
@@ -116,7 +102,7 @@ export function installBandwidthPhase2PayloadGuard(): void {
       return originalFetch(input, init);
     }
 
-    const url = resolveUrl(input);
+    const url = resolveRequestUrl(input);
     if (!url || !url.pathname.startsWith("/api/")) return originalFetch(input, init);
 
     const profile = profileFor(url);

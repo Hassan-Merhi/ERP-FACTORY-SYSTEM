@@ -847,8 +847,6 @@ export function useStockTransferFormModel({ voucherIdToEdit, isPOS, posUser }: S
     importValidateMutation,
     importMutation,
     stockTransferMutation,
-    modeApiRequest,
-    lastKnownTransferIdRef,
     computeTransferRevisionItems,
     handleTransferSaveAsRevision,
     confirmTransferSaveAsRevision,

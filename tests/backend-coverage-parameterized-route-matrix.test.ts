@@ -8,6 +8,7 @@
  * sensitive accounting/inventory state unchanged.
  */
 import fs from "node:fs";
+import http from "node:http";
 import path from "node:path";
 
 import request from "supertest";
@@ -50,6 +51,7 @@ const EXCLUDED_PATTERNS: RegExp[] = [
 
 let ctx: TestContext;
 let agent: request.SuperAgentTest;
+let sweepServer: http.Server;
 let parentCompanyId: number;
 let companySequence = 0;
 let companies: Record<CompanyMode, number>;
@@ -222,7 +224,13 @@ async function assertAllVouchersBalanced(companyId: number): Promise<void> {
 
 beforeAll(async () => {
   ctx = await seedTestData(TEST_PREFIX);
-  agent = request.agent(ctx.app);
+  // Listen once, up front. Supertest 7.3 closes a server it started itself as soon as its last
+  // pending request settles; the SSE route below times out by design, and the request after it
+  // then raced that close and saw a server with no address. A server that is already listening
+  // is the caller's, so Supertest leaves it open for the whole sweep.
+  sweepServer = http.createServer(ctx.app);
+  await new Promise<void>((resolve) => sweepServer.listen(0, "127.0.0.1", resolve));
+  agent = request.agent(sweepServer);
   await pool.query(
     `UPDATE user_company_roles SET role = 'Developer', can_delete_records = true, can_sell_negative_stock = true
       WHERE user_id = $1 AND company_id = $2`,
@@ -258,6 +266,8 @@ beforeAll(async () => {
 }, 120000);
 
 afterAll(async () => {
+  sweepServer?.closeAllConnections();
+  await new Promise<void>((resolve) => (sweepServer ? sweepServer.close(() => resolve()) : resolve()));
   await cleanupTestData(TEST_PREFIX);
   closeTestServer();
 }, 120000);

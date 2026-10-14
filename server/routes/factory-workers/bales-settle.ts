@@ -141,10 +141,6 @@ export function registerFactoryWorkerBaleSettleRoutes(app: Express, requireAuth:
         }
         return count;
       };
-      const _daysInMonth = (dateStr: string) => {
-        const d = new Date(dateStr);
-        return new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
-      };
 
       const days = daysInPeriod(effectiveStart, endDate);
       const weekdays = countWeekdays(effectiveStart, endDate);

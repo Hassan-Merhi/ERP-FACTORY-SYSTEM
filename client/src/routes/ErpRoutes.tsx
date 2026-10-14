@@ -12,6 +12,7 @@ import {
   AccountTransfer,
   AccountingCreate,
   Accounts,
+  HistoricalOpenings,
   Agents,
   AiValidationPage,
   Analytics,
@@ -230,6 +231,7 @@ export function ErpRoutes({ user }: ErpRoutesProps) {
       <Route path="/agents" component={Agents} />
       {R("/analytics", !isOwner && canAccess("analytics"), Analytics)}
 
+      {R("/accounts/historical-openings", isAdminOwnerOrDev && canAccess("accounts"), HistoricalOpenings)}
       {G("/accounts", "accounts", Accounts)}
       {canAccess("accounts") ? (
         <Route path="/ledger-monthly/:accountId" component={LedgerMonthlySummary} />

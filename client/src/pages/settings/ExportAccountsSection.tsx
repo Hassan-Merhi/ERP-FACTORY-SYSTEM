@@ -1,7 +1,6 @@
 import { searchAny } from "@shared/searchNormalization";
 import { getErrorDetails } from "@shared/errorUtils";
 import { useState } from "react";
-import { z } from "zod";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,28 +14,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Loader2, Download } from "lucide-react";
 import { ExcelJS } from "@/lib/excelHelper";
 import { selectAccountsArray, type AccountsAllPayload } from "@/lib/accountsAllPayload";
-import { insertUserSchema, insertCompanySchema, insertUserCompanyRoleSchema } from "@shared/schema";
 import { useCompany } from "@/contexts/CompanyContext";
-
-const _userFormSchema = insertUserSchema;
-const _companyFormSchema = insertCompanySchema;
-const _roleAssignmentSchema = insertUserCompanyRoleSchema.refine(
-  (data) => {
-    // If role is POS, assignedLocationId must be present
-    if (data.role === "POS" && !data.assignedLocationId) {
-      return false;
-    }
-    return true;
-  },
-  {
-    message: "POS roles require an assigned location",
-    path: ["assignedLocationId"],
-  }
-);
-
-type _UserFormData = z.infer<typeof _userFormSchema>;
-type _CompanyFormData = z.infer<typeof _companyFormSchema>;
-type _RoleAssignmentData = z.infer<typeof _roleAssignmentSchema>;
 
 interface ExportAccount {
   accountId: number;

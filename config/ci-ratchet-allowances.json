@@ -21,7 +21,6 @@
       "tests/retail-wave2-contract.test.ts",
       "tests/retail-wave3-reporting-audit.test.ts",
       "tests/reusable-proforma-new-loading-lifecycle.test.ts",
-      "tests/sales-report-compact-routes.test.ts",
       "tests/ui/factory-account-groups-route.test.ts",
       "tests/ui/mobile-responsive-phase1-critical-flows.test.tsx",
       "tests/ui/mobile-responsive-wave2-factory-floor.test.ts",

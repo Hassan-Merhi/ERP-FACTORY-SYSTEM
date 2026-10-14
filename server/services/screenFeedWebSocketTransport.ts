@@ -316,11 +316,5 @@ export function cleanupExpiredScreenFeedWebSocketFrames(now = Date.now()): void 
   }
 }
 
-export function resetScreenFeedWebSocketTransportForTests(): void {
-  producers.clear();
-  viewers.clear();
-  latestFrames.clear();
-}
-
 const cleanupTimer = setInterval(() => cleanupExpiredScreenFeedWebSocketFrames(), 60_000);
 (cleanupTimer as unknown as { unref?: () => void }).unref?.();

@@ -11,7 +11,6 @@ import { registerAccountListRoutes } from "./all";
 import { registerAccountPayableRoutes } from "./payables";
 import { registerAccountLedgerListRoutes } from "./all-ledger";
 import { registerAccountVoucherSidebarRoutes } from "./voucher-sidebar";
-import { registerAccountLedgerBalanceRoutes } from "./ledger-balance";
 import { registerAccountSubModules } from "./sub-modules";
 import { registerAccountWhatsappRoutes } from "./whatsapp";
 
@@ -21,7 +20,6 @@ export function registerAccountRoutes(app: Express) {
   registerAccountPayableRoutes(app);
   registerAccountLedgerListRoutes(app);
   registerAccountVoucherSidebarRoutes(app);
-  registerAccountLedgerBalanceRoutes(app);
   registerAccountSubModules(app);
   registerAccountWhatsappRoutes(app);
 }

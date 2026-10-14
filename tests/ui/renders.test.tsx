@@ -207,15 +207,6 @@ describe("FactoryCustomers page", () => {
   });
 });
 
-// ── 11. BaleTransfers ─────────────────────────────────────────────────────────
-describe("BaleTransfers page", () => {
-  it("renders the page title heading", async () => {
-    const { default: BaleTransfers } = await import("@/pages/BaleTransfers");
-    renderWithProviders(<BaleTransfers />);
-    expect(await screen.findByTestId("text-page-title")).toBeInTheDocument();
-  });
-});
-
 // ── 12. FactoryDaybook ────────────────────────────────────────────────────────
 // Added before the Phase 4 split of FactoryDaybook.tsx: there is no route
 // manifest for React, so a page that mounts is the only cheap proof that an

@@ -50,7 +50,6 @@ export function registerSalesInventoryFixRoutes(app: Express) {
 
         for (const item of items) {
           const quantity = toMoney(item.quantity).toNumber();
-          const _costPrice = toMoney(item.costPrice).toNumber();
 
           // Check if inventory at this location has this deduction
           const [inv] = await db

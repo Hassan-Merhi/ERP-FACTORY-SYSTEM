@@ -1,5 +1,5 @@
 import { searchAny } from "@shared/searchNormalization";
-import { useState, useMemo, useEffect, useRef, useCallback } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { AuditLog } from "@/pages/settings/AuditLog";
 import { hasAnyOpenDialog } from "@/hooks/use-escape-back";
@@ -165,7 +165,6 @@ export default function Daybook({ user }: { user?: DaybookUser | null } = {}) {
   const DAYBOOK_PAGE_SIZE = 200;
   const VOUCHER_PAGE_SIZE = 100;
   const [daybookRowLimit, setDaybookRowLimit] = useState(DAYBOOK_PAGE_SIZE);
-  const _scrollYRef = useRef(0);
   const [viewMode, setViewMode] = useState<"detailed" | "condensed">(() => loadDaybookState()?.viewMode ?? "detailed");
   const [expandedVoucherId, setExpandedVoucherId] = useState<number | null>(null);
   const [expandedCondensedGroups, setExpandedCondensedGroups] = useState<Set<string>>(new Set());
@@ -469,7 +468,7 @@ export default function Daybook({ user }: { user?: DaybookUser | null } = {}) {
       }),
     [periodFilter.fromDate, periodFilter.toDate]
   );
-  const { data: offloads = [], isLoading: _offloadsLoading } = useQuery<OffloadListItem[]>({
+  const { data: offloads = [] } = useQuery<OffloadListItem[]>({
     queryKey: companyDataKey(offloadsUrl, selectedCompany?.id, "daybook-offloads"),
     queryFn: async ({ signal }) => {
       const response = await fetch(offloadsUrl, { credentials: "include", signal });

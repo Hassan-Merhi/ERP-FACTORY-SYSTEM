@@ -16,7 +16,6 @@ export function FactoryPendingInvoiceVerifyDialog5({ model }: { model: Model }) 
     proformas,
     selectedProforma,
     applyProformaMutation,
-    isPending: _isPending,
   } = model;
   return (
     <Dialog open={showProformaDialog} onOpenChange={setShowProformaDialog}>

@@ -121,8 +121,8 @@ const formatSmartNumber = (value: string | number) => {
 export default function StockItemDetail() {
   const { formatDisplayDate } = useDateFormat();
   const { formatAmount } = useCurrencyContext();
-  const [_match, params] = useRoute("/stock-query/:id");
-  const [_location, navigate] = useLocation();
+  const [, params] = useRoute("/stock-query/:id");
+  const [, navigate] = useLocation();
   const itemId = params?.id ? parseInt(params.id) : null;
 
   const [preset, setPreset] = useState<DatePreset>("this-month");

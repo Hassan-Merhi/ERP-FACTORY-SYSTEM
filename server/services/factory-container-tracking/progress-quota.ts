@@ -59,25 +59,6 @@ export function ep(containerId: number, provider: string, status: ProgressStep["
 
 // ── Quota helpers (shared with ERP — reads from ERP's checks table for quota) ─
 
-async function _checkParcelsAppQuota(): Promise<boolean> {
-  const limit = Math.max(1, parseInt(process.env.PARCELSAPP_MONTHLY_LIMIT ?? "500") || 500);
-  try {
-    const now = new Date();
-    const startOfMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
-    const { containerTrackingChecks } = await import("../../../shared/schema");
-    const result = await db
-      .select({ count: sql<number>`COUNT(*)::int` })
-      .from(containerTrackingChecks)
-      .where(
-        and(eq(containerTrackingChecks.provider, "parcelsapp"), gte(containerTrackingChecks.checkedAt, startOfMonth))
-      );
-    const used = result[0]?.count ?? 0;
-    return used < limit;
-  } catch {
-    return true;
-  }
-}
-
 export async function check17trackQuota(): Promise<boolean> {
   const limit = seventeenTrack.getMonthlyLimit();
   try {

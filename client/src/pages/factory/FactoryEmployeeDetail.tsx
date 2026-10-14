@@ -140,15 +140,6 @@ export default function FactoryEmployeeDetail() {
   const [withdrawNotes, setWithdrawNotes] = useState("");
   const [withdrawCashAccountId, setWithdrawCashAccountId] = useState("");
 
-  // Payroll (bulk) state
-  const [payrollDate, _setPayrollDate] = useState(new Date().toLocaleDateString("en-CA"));
-  const [payrollNotes, setPayrollNotes] = useState("");
-  const [payrollEffectiveDate, _setPayrollEffectiveDate] = useState("");
-
-  // All employees for payroll tab
-  const [selectedEmployees, setSelectedEmployees] = useState<Set<number>>(new Set());
-  const [payrollAmounts, setPayrollAmounts] = useState<Record<number, string>>({});
-
   // Queries
   const {
     data: employee,
@@ -172,15 +163,6 @@ export default function FactoryEmployeeDetail() {
       return res.json();
     },
     enabled: !!employeeId,
-  });
-
-  const { data: allEmployees = [] } = useQuery<Employee[]>({
-    queryKey: ["/api/factory/employees"],
-    queryFn: async () => {
-      const res = await factoryApiRequest("GET", "/api/factory/employees");
-      if (!res.ok) throw new Error("Failed to fetch employees");
-      return res.json();
-    },
   });
 
   const { data: cashAccounts = [] } = useQuery<LedgerAccount[]>({
@@ -299,42 +281,6 @@ export default function FactoryEmployeeDetail() {
     },
   });
 
-  const _bulkPayrollMutation = useMutation({
-    mutationFn: async () => {
-      const deposits = Array.from(selectedEmployees)
-        .map((empId) => ({
-          employeeId: empId,
-          amount: payrollAmounts[empId] || allEmployees.find((e) => e.id === empId)?.monthlySalary || "0",
-        }))
-        .filter((d) => parseFloat(d.amount) > 0);
-
-      const res = await factoryApiRequest("POST", "/api/factory/employees/bulk-payroll", {
-        deposits,
-        date: payrollDate,
-        notes: payrollNotes,
-        effectiveDate: payrollEffectiveDate || null,
-      });
-      if (!res.ok) {
-        const e = await res.json();
-        throw new Error(e.message);
-      }
-      return res.json();
-    },
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/employees"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/employees", employeeId] });
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/employees", employeeId, "statement"] });
-      toast({ title: "Payroll deposited", description: `${data.results?.length || 0} employees processed` });
-      setSelectedEmployees(new Set());
-      setPayrollAmounts({});
-      setPayrollNotes("");
-    },
-    onError: (e: ClientErrorLike) => {
-      if (e?._handledGlobally) return;
-      toast({ variant: "destructive", title: e.message });
-    },
-  });
-
   if (!employeeId) return <div className="p-8 text-muted-foreground">Invalid employee ID</div>;
 
   if (empLoading) {
@@ -364,16 +310,7 @@ export default function FactoryEmployeeDetail() {
   const avatarColor = getAvatarColor(fullName);
   const balance = parseFloat(employee.currentBalance || "0");
 
-  const _infoRow = (label: string, value: string | number | null | undefined) => (
-    <div className="flex justify-between py-1.5 border-b last:border-0 text-sm">
-      <span className="text-muted-foreground shrink-0 mr-3">{label}</span>
-      <span className="font-medium text-right">{value || "—"}</span>
-    </div>
-  );
-
   // Deposits and withdrawals from statement
-  const _depositRows = (statement?.rows || []).filter((r) => r.credit > 0);
-  const _withdrawRows = (statement?.rows || []).filter((r) => r.debit > 0);
 
   return (
     <div className="space-y-4">

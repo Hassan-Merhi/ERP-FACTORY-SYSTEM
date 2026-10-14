@@ -65,14 +65,6 @@ export interface ParcelsAppShipment {
   error?: string;
 }
 
-export interface ParcelsAppResult {
-  done: boolean;
-  uuid: string;
-  fromCache: boolean;
-  shipments: ParcelsAppShipment[];
-  rawResponse: unknown;
-}
-
 export interface ParcelsAppTrackResult {
   success: boolean;
   shipment: ParcelsAppShipment | null;
@@ -508,45 +500,4 @@ export function deriveEstimatedDeliveryDate(shipment: ParcelsAppShipment): strin
 
   // No ETA found — return null so the caller preserves whatever is in the DB.
   return null;
-}
-
-/**
- * Tests the API key by calling the account endpoint.
- * Returns { ok, plan, limit, current } or { ok: false, error }.
- */
-export async function testConnection(): Promise<{
-  ok: boolean;
-  plan?: string;
-  limit?: number;
-  current?: number;
-  resetDate?: string;
-  error?: string;
-}> {
-  const apiKey = getApiKey();
-  if (!apiKey) return { ok: false, error: "PARCELSAPP_API_KEY is not configured" };
-
-  try {
-    const res = await fetch(`${BASE_URL}/account?apiKey=${encodeURIComponent(apiKey)}`, {
-      headers: { Accept: "application/json" },
-      signal: AbortSignal.timeout(10_000),
-    });
-    if (!res.ok) {
-      return { ok: false, error: `HTTP ${res.status}` };
-    }
-    const data = (await res.json()) as {
-      plan?: string;
-      limit?: number;
-      current?: number;
-      resetDate?: string;
-    };
-    return {
-      ok: true,
-      plan: data.plan,
-      limit: data.limit,
-      current: data.current,
-      resetDate: data.resetDate,
-    };
-  } catch (err: unknown) {
-    return { ok: false, error: getErrorMessage(err) ?? "Unknown error" };
-  }
 }

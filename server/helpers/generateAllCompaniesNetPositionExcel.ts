@@ -113,8 +113,6 @@ export async function generateAllCompaniesNetPositionExcel(
   wb.creator = "ERP System";
   wb.created = new Date();
 
-  const _year = new Date(endDate).getUTCFullYear();
-
   // ════════════════════════════════════════════════════════════
   //  SHEET 1: Net Position (balance-sheet snapshot)
   // ════════════════════════════════════════════════════════════

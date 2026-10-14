@@ -19,10 +19,6 @@ export function setAdminOverrideCache() {
   adminOverrideGrantedUntil = Date.now() + 5 * 60 * 1000;
 }
 
-export function clearAdminOverrideCache() {
-  adminOverrideGrantedUntil = 0;
-}
-
 interface UseAdminOverrideReturn {
   wrapAdminAction: (fn: () => void, label?: string) => void;
   AdminDialog: React.ReactNode;

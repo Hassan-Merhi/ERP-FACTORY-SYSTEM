@@ -1,3 +1,5 @@
+import { resolveFetchUrl as resolveRequestUrl, fetchRequestMethod as requestMethod } from "./fetchRequestUtils";
+
 const REQUEST_HEADER = "x-erp-compact-response";
 const RESPONSE_HEADER = "x-erp-compact-response";
 const PROFILE_HEADER = "x-erp-response-profile";
@@ -12,21 +14,6 @@ type CompactEnvelope = {
 };
 
 type PatchedWindow = Window & { __operationalPhase4BandwidthFetchInstalled?: boolean };
-
-function resolveUrl(input: RequestInfo | URL): URL | null {
-  try {
-    if (typeof input === "string") return new URL(input, window.location.origin);
-    if (input instanceof URL) return new URL(input.toString(), window.location.origin);
-    if (input instanceof Request) return new URL(input.url, window.location.origin);
-  } catch {
-    return null;
-  }
-  return null;
-}
-
-function requestMethod(input: RequestInfo | URL, init?: RequestInit): string {
-  return (init?.method || (input instanceof Request ? input.method : "GET")).toUpperCase();
-}
 
 function requestHeaders(input: RequestInfo | URL, init?: RequestInit): Headers {
   return new Headers(init?.headers || (input instanceof Request ? input.headers : undefined));
@@ -165,7 +152,7 @@ export function installOperationalPhase4BandwidthFetch(): void {
 
   const originalFetch = window.fetch.bind(window);
   window.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
-    const url = resolveUrl(input);
+    const url = resolveRequestUrl(input);
     if (
       !url ||
       url.origin !== window.location.origin ||

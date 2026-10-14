@@ -90,7 +90,6 @@ export function registerInvoiceLoadingSessionRoutes(app: Express) {
 
       const activeSessions = activeSessionRows.filter(async () => true); // all sessions
       if (activeSessions.length > 0) {
-        const _activeIds = activeSessions.map((s) => s.id);
         const [loadedCount] = await db
           .select({ count: sql<number>`COUNT(DISTINCT ${factoryInvoiceLoadingBales.baleId})` })
           .from(factoryInvoiceLoadingBales)

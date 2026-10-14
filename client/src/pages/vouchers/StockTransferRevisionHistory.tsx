@@ -5,32 +5,9 @@ import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { History, ChevronDown, ChevronUp } from "lucide-react";
 import { cn } from "@/lib/utils";
+import type { TransferRevision } from "./stock-transfer-form/transferFormTypes";
 
-type RevisionStatus = "pending" | "approved" | "rejected" | "cancelled" | "superseded";
-
-/** One changed line inside a stock transfer revision. */
-interface TransferRevisionItem {
-  stockItemName?: string | null;
-  sourceLocationName?: string | null;
-  originalQuantity?: string | number | null;
-  newQuantity?: string | number | null;
-  delta: string | number;
-}
-
-/** A revision of a stock transfer, as returned by the revisions API. */
-interface TransferRevision {
-  id: number;
-  revisionNumber?: number | null;
-  status?: RevisionStatus;
-  optional?: boolean;
-  revisionDate?: string | null;
-  reviewedAt?: string | null;
-  note?: string | null;
-  rejectionReason?: string | null;
-  sourceLocationName?: string | null;
-  destinationLocationName?: string | null;
-  items?: TransferRevisionItem[];
-}
+type RevisionStatus = NonNullable<TransferRevision["status"]>;
 
 function revisionStatus(revision: TransferRevision): RevisionStatus {
   return revision.status ?? (revision.optional ? "pending" : "approved");
@@ -62,12 +39,14 @@ interface StockTransferRevisionHistoryProps {
   transferRevisionsExpanded: boolean;
   setTransferRevisionsExpanded: (val: boolean | ((v: boolean) => boolean)) => void;
   setApproveRevisionTarget: (rev: TransferRevision) => void;
-  modeApiRequest: unknown;
-  queryClient: unknown;
-  lastKnownTransferIdRef: unknown;
   formatNumber: (num: number, decimals?: number) => string;
 }
 
+/**
+ * The stock transfer form's revision history. Revisions are immutable: a pending
+ * one is approved (or rejected) through ApproveRevisionDialog; there is no
+ * reference-only toggle any more (the server answers 409 to it).
+ */
 export function StockTransferRevisionHistory({
   voucherIdToEdit,
   stableTransferId,
@@ -75,9 +54,6 @@ export function StockTransferRevisionHistory({
   transferRevisionsExpanded,
   setTransferRevisionsExpanded,
   setApproveRevisionTarget,
-  modeApiRequest: _modeApiRequest,
-  queryClient: _queryClient,
-  lastKnownTransferIdRef: _lastKnownTransferIdRef,
   formatNumber,
 }: StockTransferRevisionHistoryProps) {
   if (!voucherIdToEdit || !stableTransferId) return null;
@@ -168,17 +144,17 @@ export function StockTransferRevisionHistory({
                       </thead>
                       <tbody>
                         {rev.items
-                          .filter((item) => parseFloat(String(item.delta)) !== 0)
+                          .filter((item) => parseFloat(item.delta ?? "0") !== 0)
                           .map((item, idx: number) => {
-                            const delta = parseFloat(String(item.delta));
+                            const delta = parseFloat(item.delta ?? "0");
                             return (
                               <tr key={idx} className="border-t">
                                 <td className="p-2 font-medium">{item.stockItemName}</td>
                                 <td className="p-2 hidden sm:table-cell text-muted-foreground">
-                                  {item.sourceLocationName}
+                                  {item.sourceLocationName || "—"}
                                 </td>
                                 <td className="p-2 text-right font-mono text-muted-foreground">
-                                  {formatNumber(parseFloat(String(item.originalQuantity)), 0)}
+                                  {formatNumber(parseFloat(item.originalQuantity ?? "0"), 0)}
                                 </td>
                                 <td
                                   className={cn(
@@ -190,7 +166,7 @@ export function StockTransferRevisionHistory({
                                   {formatNumber(delta, 0)}
                                 </td>
                                 <td className="p-2 text-right font-mono font-semibold">
-                                  {formatNumber(parseFloat(String(item.newQuantity)), 0)}
+                                  {formatNumber(parseFloat(item.newQuantity ?? "0"), 0)}
                                 </td>
                               </tr>
                             );

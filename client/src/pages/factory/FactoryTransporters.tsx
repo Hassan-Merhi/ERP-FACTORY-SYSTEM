@@ -578,7 +578,7 @@ function AddTransporterDialog({ open, onClose }: { open: boolean; onClose: () =>
 // MAIN PAGE — list
 // ─────────────────────────────────────────────────────────────
 export default function FactoryTransporters() {
-  const { wrapAdminAction: _wrapAdminAction, AdminDialog } = useAdminOverride();
+  const { AdminDialog } = useAdminOverride();
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [addOpen, setAddOpen] = useState(false);
 

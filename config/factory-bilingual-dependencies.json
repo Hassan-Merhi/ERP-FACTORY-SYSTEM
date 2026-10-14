@@ -38,8 +38,7 @@
       "files": [
         "client/src/pages/factory/factoryimport/components/BaleImport.tsx",
         "client/src/pages/factory/factoryimport/types.ts",
-        "client/src/pages/factory/factoryimport/utils.ts",
-        "client/src/pages/factory/FactoryBaleImportHistory.tsx"
+        "client/src/pages/factory/factoryimport/utils.ts"
       ]
     },
     {
@@ -80,9 +79,7 @@
         "client/src/pages/factory/FactoryBaleTracking.tsx",
         "client/src/pages/factory/DailyProductionReport.tsx",
         "client/src/pages/factory/ProductionComparison.tsx",
-        "client/src/pages/factory/WipersReEntry.tsx",
-        "client/src/pages/PressingBales.tsx",
-        "client/src/pages/ProductionBales.tsx"
+        "client/src/pages/factory/WipersReEntry.tsx"
       ]
     },
     {
@@ -160,7 +157,6 @@
       "targetPhase": 8,
       "files": [
         "server/routes/baleTransferRoutes.ts",
-        "client/src/pages/BaleTransfers.tsx",
         "client/src/pages/BaleLedger.tsx"
       ]
     },

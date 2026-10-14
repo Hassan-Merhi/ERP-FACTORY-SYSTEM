@@ -1,15 +1,11 @@
 import type { ClientErrorLike } from "@/lib/clientError";
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Check, ChevronsUpDown, SlidersHorizontal, Trash2, X, Tag, Plus, Folder, Pencil } from "lucide-react";
+import { Check, ChevronsUpDown, Trash2, X, Tag, Plus, Folder, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
-import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
@@ -24,7 +20,6 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/queryClient";
-import { useDateFormat } from "@/contexts/DateFormatContext";
 import { useAdminOverride } from "@/hooks/use-admin-override";
 import { cn } from "@/lib/utils";
 
@@ -130,123 +125,6 @@ export function AccountCombobox({
         </Command>
       </PopoverContent>
     </Popover>
-  );
-}
-
-export function AdjustmentsHistoryCard({ onDeleteRequest }: { onDeleteRequest: (id: number) => void }) {
-  const { formatDisplayDate } = useDateFormat();
-  const [open, setOpen] = useState(false);
-  interface RawStockAdjustmentRow {
-    id: number;
-    date: string;
-    type: string;
-    kg: string;
-    costPerKg: string | null;
-    currencyCode: string | null;
-    supplierId: number | null;
-    supplierName: string | null;
-    materialLabel: string | null;
-    notes: string | null;
-  }
-  const { data: adjustments, isLoading } = useQuery<RawStockAdjustmentRow[]>({
-    queryKey: ["/api/factory/raw-stock/adjustments"],
-    enabled: open,
-  });
-
-  if (!open) {
-    return (
-      <Button
-        variant="ghost"
-        size="sm"
-        className="w-full text-muted-foreground"
-        onClick={() => setOpen(true)}
-        data-testid="button-show-adjustments-history"
-      >
-        <SlidersHorizontal className="h-3.5 w-3.5 mr-1.5" />
-        Show Manual Stock Adjustments History
-      </Button>
-    );
-  }
-
-  return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between gap-2 pb-3">
-        <CardTitle className="flex items-center gap-2 text-base">
-          <SlidersHorizontal className="h-4 w-4" />
-          Manual Stock Adjustments
-        </CardTitle>
-        <Button variant="ghost" size="sm" onClick={() => setOpen(false)} data-testid="button-hide-adjustments-history">
-          <X className="h-3.5 w-3.5 mr-1" />
-          Hide
-        </Button>
-      </CardHeader>
-      <CardContent>
-        {isLoading ? (
-          <div className="space-y-2">
-            <Skeleton className="h-10 w-full" />
-            <Skeleton className="h-10 w-full" />
-          </div>
-        ) : adjustments && adjustments.length > 0 ? (
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Type</TableHead>
-                  <TableHead>Material / Supplier</TableHead>
-                  <TableHead className="text-right">Qty (kg)</TableHead>
-                  <TableHead className="text-right">Cost/kg</TableHead>
-                  <TableHead>Notes</TableHead>
-                  <TableHead></TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {adjustments.map((adj) => (
-                  <TableRow key={adj.id} data-testid={`row-adjustment-${adj.id}`}>
-                    <TableCell className="text-sm text-muted-foreground">{formatDisplayDate(adj.date)}</TableCell>
-                    <TableCell>
-                      <Badge
-                        variant={adj.type === "ADD" ? "default" : adj.type === "DEDUCT" ? "destructive" : "secondary"}
-                        data-testid={`badge-adj-type-${adj.id}`}
-                      >
-                        {adj.type === "DEDUCT" ? "DEDUCT" : adj.type}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="font-medium">
-                      {adj.materialLabel || adj.supplierName || `Supplier #${adj.supplierId}`}
-                    </TableCell>
-                    <TableCell className="text-right font-mono">
-                      {adj.type === "DEDUCT" ? "-" : ""}
-                      {parseFloat(adj.kg).toFixed(3)}
-                    </TableCell>
-                    <TableCell className="text-right font-mono text-muted-foreground">
-                      {(adj.type === "ADD" || adj.type === "DEDUCT") && parseFloat(adj.costPerKg || "0") > 0
-                        ? `${adj.currencyCode} ${parseFloat(adj.costPerKg || "0").toFixed(4)}`
-                        : "—"}
-                    </TableCell>
-                    <TableCell className="text-sm text-muted-foreground max-w-[200px] truncate">
-                      {adj.notes || "—"}
-                    </TableCell>
-                    <TableCell>
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        onClick={() => onDeleteRequest(adj.id)}
-                        data-testid={`button-delete-adjustment-${adj.id}`}
-                      >
-                        <Trash2 className="h-3.5 w-3.5 text-destructive" />
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-        ) : (
-          <p className="text-center text-muted-foreground py-6 text-sm">No manual adjustments recorded yet.</p>
-        )}
-      </CardContent>
-    </Card>
   );
 }
 

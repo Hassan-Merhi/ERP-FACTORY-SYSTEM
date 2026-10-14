@@ -1,6 +1,5 @@
 import type { ClientErrorLike } from "@/lib/clientError";
 import { useState } from "react";
-import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
@@ -12,33 +11,7 @@ import { queryClient } from "@/lib/queryClient";
 import { useAppMode } from "@/contexts/AppModeContext";
 import { getApiRequest } from "@/lib/factoryApi";
 import { Plus, Trash2, Loader2 } from "lucide-react";
-import {
-  insertUserSchema,
-  insertCompanySchema,
-  insertUserCompanyRoleSchema,
-  type Company,
-  type LedgerAccount,
-} from "@shared/schema";
-
-const _userFormSchema = insertUserSchema;
-const _companyFormSchema = insertCompanySchema;
-const _roleAssignmentSchema = insertUserCompanyRoleSchema.refine(
-  (data) => {
-    // If role is POS, assignedLocationId must be present
-    if (data.role === "POS" && !data.assignedLocationId) {
-      return false;
-    }
-    return true;
-  },
-  {
-    message: "POS roles require an assigned location",
-    path: ["assignedLocationId"],
-  }
-);
-
-type _UserFormData = z.infer<typeof _userFormSchema>;
-type _CompanyFormData = z.infer<typeof _companyFormSchema>;
-type _RoleAssignmentData = z.infer<typeof _roleAssignmentSchema>;
+import { type Company, type LedgerAccount } from "@shared/schema";
 
 export function ParentCreditAccountSelect({ company }: { company: Pick<Company, "id"> }) {
   const { toast } = useToast();

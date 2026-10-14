@@ -24,7 +24,6 @@ export const ACTIVE_ORDER_STATUSES = ["DRAFT", "LOADING", "PENDING_VERIFICATION"
 
 // totalLoaded     — bales that have been physically committed to a container
 //                   (all statuses where bales were actually scanned in)
-export const TOTAL_LOADED_STATUSES = ["LOADING", "PENDING_VERIFICATION", "VERIFIED", "FINALIZED"];
 
 // V5 formula (Phase B — corrected):
 //   stockAvailable  = IN_STOCK bales

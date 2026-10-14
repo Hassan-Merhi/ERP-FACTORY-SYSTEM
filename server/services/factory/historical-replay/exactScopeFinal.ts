@@ -1,27 +1,12 @@
 import Decimal from "decimal.js";
-import type { BatchCorrection, ReplayQueryExecutor, ReplayScopeInternal, ReplayWriteScope } from "./types";
+import type { BatchCorrection, ReplayQueryExecutor, ReplayScopeInternal } from "./types";
 import { buildExactHistoricalReplayScopeInternalV6 } from "./exactScopeV6";
 import { classifyReplayBalesForBatches } from "./baleClassification";
-import { normalizeReplayWriteScope } from "./selectedScope";
 import { lockSelectedReplayAuthoritativeInputs } from "./authoritativeLocks";
 import { toMoney } from "../../../lib/money";
 
 function sortNumbers(values: number[]): number[] {
   return [...new Set(values)].sort((left, right) => left - right);
-}
-
-export async function buildExactHistoricalReplayScopeFinal(params: {
-  companyId: number;
-  selectedSupplierIds: Set<number>;
-  includeCompletedBatches: boolean;
-  includeFinalizedBales: boolean;
-  executor: ReplayQueryExecutor;
-}): Promise<ReplayWriteScope> {
-  const internal = await buildExactHistoricalReplayScopeInternalFinal({
-    ...params,
-    lockRows: false,
-  });
-  return normalizeReplayWriteScope(internal);
 }
 
 /**

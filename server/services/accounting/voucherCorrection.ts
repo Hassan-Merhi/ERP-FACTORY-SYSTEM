@@ -23,7 +23,7 @@
  * a code the UI can act on.
  */
 import Decimal from "decimal.js";
-import { and, eq, isNull, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import type { Response } from "express";
 
 import { vouchers, type Voucher } from "@shared/schema";
@@ -451,16 +451,4 @@ export async function reverseVoucherTx(
   );
 
   return { original, reversal: posted.voucher, entries: posted.entries };
-}
-
-/** Whether a live voucher reverses `voucherId` (for read models and the UI). */
-export async function isVoucherReversedTx(tx: DbTransaction, companyId: number, voucherId: number): Promise<boolean> {
-  const [row] = await tx
-    .select({ id: vouchers.id })
-    .from(vouchers)
-    .where(
-      and(eq(vouchers.companyId, companyId), eq(vouchers.reversalOfVoucherId, voucherId), isNull(vouchers.deletedAt))
-    )
-    .limit(1);
-  return Boolean(row);
 }

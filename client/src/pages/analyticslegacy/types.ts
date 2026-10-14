@@ -159,18 +159,6 @@ export interface StockMovementData {
   };
 }
 
-export interface Container {
-  id: number;
-  containerNumber: string;
-  supplierName: string;
-  status: string;
-  importDate: string;
-  offloadDate: string | null;
-  itemsTotal: string;
-  chargesTotal: string;
-  grandTotal: string;
-}
-
 export interface ReportContainer {
   id: number;
   containerNumber: string;

@@ -84,12 +84,3 @@ export function installRemoteSupportAuditRetention(): void {
   timer = setInterval(() => void runSweep(), SWEEP_INTERVAL_MS);
   (timer as unknown as { unref?: () => void }).unref?.();
 }
-
-export function resetRemoteSupportAuditRetentionForTests(): void {
-  if (initialTimer) clearTimeout(initialTimer);
-  if (timer) clearInterval(timer);
-  initialTimer = null;
-  timer = null;
-  sweepInFlight = false;
-  installed = false;
-}

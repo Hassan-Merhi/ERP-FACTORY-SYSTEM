@@ -186,10 +186,6 @@ export const PrintTemplate = ({
   );
 };
 
-interface _VouchersProps {
-  posUser?: unknown;
-}
-
 export function parseDateLocal(dateStr: string | null | undefined): Date {
   if (typeof dateStr !== "string" || dateStr.trim().length === 0) {
     return new Date();

@@ -36,12 +36,3 @@ export interface VoucherWithItems extends Voucher {
   isCreditSale?: boolean;
   customerName?: string | null;
 }
-
-export interface InventoryItem {
-  stockItemId: number;
-  stockItemCode: string;
-  stockItemName: string;
-  quantity: string;
-  averageRate: string;
-  lastSellingPrice: string | null;
-}

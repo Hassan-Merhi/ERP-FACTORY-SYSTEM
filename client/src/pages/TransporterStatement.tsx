@@ -324,9 +324,6 @@ export default function TransporterStatement({ embedded }: { embedded?: boolean 
   });
 
   // Print handler
-  function _handlePrint() {
-    window.print();
-  }
 
   const closingBal = statement ? parseFloat(statement.closingBalance) : 0;
 

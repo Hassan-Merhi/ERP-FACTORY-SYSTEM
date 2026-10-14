@@ -67,34 +67,6 @@ export interface GitContainersAll {
 
 export type GitContainersResponse = GitContainersSingle | GitContainersAll;
 
-export type PortBucket = {
-  key: string;
-  label: string;
-  statuses: string[];
-  headerBg: string;
-  headerText: string;
-};
-
-export const PORT_BUCKETS: PortBucket[] = [
-  {
-    key: "otw-sea",
-    label: "OTW / AT SEA",
-    statuses: ["OTW", "Sea"],
-    headerBg: "bg-blue-600",
-    headerText: "text-white",
-  },
-  { key: "at-port", label: "AT PORT", statuses: ["At Port"], headerBg: "bg-amber-500", headerText: "text-white" },
-  { key: "left-dar", label: "LEFT DAR", statuses: ["Left Dar"], headerBg: "bg-violet-600", headerText: "text-white" },
-  {
-    key: "in-transit",
-    label: "AT BORDER / IN TRANSIT",
-    statuses: ["At Border", "In Transit"],
-    headerBg: "bg-emerald-600",
-    headerText: "text-white",
-  },
-  { key: "arrived", label: "ARRIVED", statuses: ["Arrived"], headerBg: "bg-slate-500", headerText: "text-white" },
-];
-
 export type WarningCode =
   | "no_open_balance"
   | "ledger_exceeds_containers"

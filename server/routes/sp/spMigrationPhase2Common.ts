@@ -67,15 +67,6 @@ export type MigrationCompanyRow = {
   company_type: string | null;
 };
 
-/** A ledger account row loaded for target-account mapping. */
-export type MigrationLedgerAccountRow = {
-  id: number;
-  code: string;
-  name: string;
-  account_type: string;
-  sub_type: string | null;
-};
-
 async function getCompany(companyId: number): Promise<MigrationCompanyRow | null> {
   const result = await db.execute(sql`
     SELECT id, code, name, company_type

@@ -40,8 +40,6 @@ export function setPrinterName(name: string) {
   localStorage.setItem(PRINTER_NAME_KEY, name);
 }
 
-let _qzInstance: QzTray | null = null;
-
 async function loadQzTray(): Promise<QzTray> {
   const existingQz = (window as WindowWithQz).qz;
   if (existingQz) return existingQz;
@@ -78,7 +76,6 @@ async function getConnection(): Promise<QzTray> {
       );
     }
   }
-  _qzInstance = qz;
   return qz;
 }
 

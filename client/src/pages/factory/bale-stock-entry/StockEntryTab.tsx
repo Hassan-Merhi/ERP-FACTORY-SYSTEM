@@ -120,10 +120,10 @@ export function StockEntryTab({ showHistory = false, onOpenHistory }: StockEntry
     scheduleCartSave,
   ]);
 
-  const { data: baleProducts, isLoading: _productsLoading } = useQuery<FactoryBaleProduct[]>({
+  const { data: baleProducts } = useQuery<FactoryBaleProduct[]>({
     queryKey: ["/api/factory/bale-products?profile=picker"],
   });
-  const { data: _currentUser } = useQuery({ queryKey: ["/api/auth/me"] });
+  useQuery({ queryKey: ["/api/auth/me"] });
   const { data: locations } = useQuery<Location[]>({ queryKey: ["/api/locations"] });
   const { data: categories } = useQuery<FactoryCategory[]>({ queryKey: ["/api/factory/categories"] });
 

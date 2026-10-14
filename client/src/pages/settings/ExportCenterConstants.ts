@@ -34,5 +34,3 @@ export function formatHour(h: number): string {
   if (h === 12) return "12:00 PM";
   return `${h - 12}:00 PM`;
 }
-
-export const HOURS = Array.from({ length: 24 }, (_, i) => ({ value: String(i), label: formatHour(i) }));

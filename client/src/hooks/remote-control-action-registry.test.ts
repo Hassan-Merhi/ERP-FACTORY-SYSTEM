@@ -11,15 +11,7 @@ import { isAllowedRemoteClickElement, isRemoteMouseBlockedElement } from "./remo
 describe("remote-control-action registry", () => {
   it("contains the exact actively covered vetted actions", () => {
     expect([...REMOTE_CONTROL_ALLOWED_ACTIONS].sort()).toEqual(
-      [
-        "navigation",
-        "toggle-view",
-        "view",
-        "view-container",
-        "view-details",
-        "view-invoice",
-        "view-profitability",
-      ].sort()
+      ["navigation", "toggle-view", "view-container", "view-details"].sort()
     );
     for (const action of REMOTE_CONTROL_ALLOWED_ACTIONS) {
       expect(REMOTE_CONTROL_ACTION_SET.has(action)).toBe(true);
@@ -27,9 +19,13 @@ describe("remote-control-action registry", () => {
   });
 
   it("recognizes registered actions", () => {
-    expect(isRegisteredRemoteControlAction("view")).toBe(true);
+    expect(isRegisteredRemoteControlAction("view-details")).toBe(true);
     expect(isRegisteredRemoteControlAction("toggle-view")).toBe(true);
-    expect(isRegisteredRemoteControlAction("view-invoice")).toBe(true);
+    expect(isRegisteredRemoteControlAction("view-container")).toBe(true);
+    // Pruned when their last annotated controls went away; an unused allowlist entry is
+    // surface a remote supporter could reach without a reviewed control behind it.
+    expect(isRegisteredRemoteControlAction("view")).toBe(false);
+    expect(isRegisteredRemoteControlAction("view-invoice")).toBe(false);
     expect(isRegisteredRemoteControlAction("navigation")).toBe(true);
     expect(isRegisteredRemoteControlAction("not-registered")).toBe(false);
     expect(isRegisteredRemoteControlAction("")).toBe(false);
@@ -38,8 +34,8 @@ describe("remote-control-action registry", () => {
 
   it("reads data-remote-control-action from elements", () => {
     const element = document.createElement("button");
-    element.setAttribute("data-remote-control-action", "view");
-    expect(getRemoteControlAction(element)).toBe("view");
+    element.setAttribute("data-remote-control-action", "view-details");
+    expect(getRemoteControlAction(element)).toBe("view-details");
     element.setAttribute("data-remote-control-action", "  toggle-view  ");
     expect(getRemoteControlAction(element)).toBe("toggle-view");
     element.removeAttribute("data-remote-control-action");
@@ -49,7 +45,7 @@ describe("remote-control-action registry", () => {
   it("allows vetted registry actions and rejects unknown or dangerous actions", () => {
     const registered = document.createElement("button");
     registered.textContent = "View";
-    registered.setAttribute("data-remote-control-action", "view");
+    registered.setAttribute("data-remote-control-action", "view-details");
     document.body.appendChild(registered);
     expect(isAllowedRemoteClickElement(registered)).toBe(true);
 
@@ -72,7 +68,7 @@ describe("remote-control-action registry", () => {
 
     const dangerous = document.createElement("button");
     dangerous.textContent = "Delete voucher";
-    dangerous.setAttribute("data-remote-control-action", "view");
+    dangerous.setAttribute("data-remote-control-action", "view-details");
     document.body.appendChild(dangerous);
     expect(isAllowedRemoteClickElement(dangerous)).toBe(false);
   });
@@ -83,7 +79,7 @@ describe("remote-control-action registry", () => {
     const safe = document.createElement("button");
     safe.type = "button";
     safe.textContent = "View details";
-    safe.setAttribute("data-remote-control-action", "view");
+    safe.setAttribute("data-remote-control-action", "view-details");
     form.appendChild(safe);
 
     const unannotated = document.createElement("button");
@@ -94,7 +90,7 @@ describe("remote-control-action registry", () => {
     const destructive = document.createElement("button");
     destructive.type = "button";
     destructive.textContent = "Delete voucher";
-    destructive.setAttribute("data-remote-control-action", "view");
+    destructive.setAttribute("data-remote-control-action", "view-details");
     form.appendChild(destructive);
     document.body.appendChild(form);
 

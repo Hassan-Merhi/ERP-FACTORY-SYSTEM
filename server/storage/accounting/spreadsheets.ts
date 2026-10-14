@@ -73,17 +73,6 @@ export async function getLiveSpreadsheets(companyId: number, activeOnly = true):
     .orderBy(schema.liveSpreadsheets.name);
 }
 
-export async function getLiveSpreadsheetById(
-  id: number,
-  companyId: number
-): Promise<schema.LiveSpreadsheet | undefined> {
-  const [row] = await db
-    .select()
-    .from(schema.liveSpreadsheets)
-    .where(and(eq(schema.liveSpreadsheets.id, id), eq(schema.liveSpreadsheets.companyId, companyId)));
-  return row;
-}
-
 export async function createLiveSpreadsheet(data: schema.InsertLiveSpreadsheet): Promise<schema.LiveSpreadsheet> {
   const [row] = await db.insert(schema.liveSpreadsheets).values(data).returning();
   return row;

@@ -72,7 +72,6 @@ export const AUDIT_TRAIL_TRIGGERS: ReadonlyArray<readonly [table: string, trigge
 ];
 
 export const AUDIT_CHAIN_GENESIS = "genesis";
-export const ROW_AUDIT_ACTIONS = ["row_insert", "row_update", "row_delete"] as const;
 
 const INSTALL_LOCK_KEY = 2026_10_210;
 const LOCK_TIMEOUT = "10s";

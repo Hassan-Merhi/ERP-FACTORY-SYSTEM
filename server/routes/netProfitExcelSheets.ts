@@ -185,7 +185,6 @@ export function writeSheet(
 ) {
   const {
     salesTotal,
-    directIncTotal: _directIncTotal,
     directIncDetails,
     totalIncome,
     indirectIncTotal,
@@ -469,7 +468,6 @@ export function writeSummarySheet(
 
   // Helper: write a data row
   const numFmt = "$#,##0";
-  const _pctFmt = "0.00%";
 
   const writeRow = (
     label: string,

@@ -92,15 +92,3 @@ export function installPresenceMaintenance(): void {
   (presenceTimer as unknown as { unref?: () => void }).unref?.();
   (activityTimer as unknown as { unref?: () => void }).unref?.();
 }
-
-export function resetPresenceMaintenanceForTests(): void {
-  if (initialTimer) clearTimeout(initialTimer);
-  if (presenceTimer) clearInterval(presenceTimer);
-  if (activityTimer) clearInterval(activityTimer);
-  initialTimer = null;
-  presenceTimer = null;
-  activityTimer = null;
-  presenceSweepInFlight = false;
-  activitySweepInFlight = false;
-  installed = false;
-}

@@ -13,7 +13,6 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { useAppMode } from "@/contexts/AppModeContext";
-import { getApiRequest } from "@/lib/factoryApi";
 
 interface VoucherItem {
   id: number;
@@ -132,7 +131,6 @@ export default function VoucherDetail() {
   const [, params] = useRoute(`${modePrefix}/voucher-detail/:voucherId`);
   const { formatAmount } = useCurrencyContext();
   const { formatShortDate } = useDateFormat();
-  const _modeApiRequest = getApiRequest(appMode);
 
   const voucherId = params?.voucherId ? parseInt(params.voucherId) : null;
   const fromDaybook = new URLSearchParams(window.location.search).get("from") === "daybook";

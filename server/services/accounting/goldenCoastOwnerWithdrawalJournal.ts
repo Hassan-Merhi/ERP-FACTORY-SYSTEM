@@ -251,16 +251,3 @@ export async function applyGoldenCoastOwnerWithdrawalTemplate(
     ],
   };
 }
-
-/**
- * Applies the template when the lines match it (callers that already have the
- * user's confirmation).
- */
-export async function transformGoldenCoastOwnerWithdrawalJournal(input: {
-  companyId: number;
-  entries: ManualJournalEntryLike[];
-}): Promise<GoldenCoastOwnerWithdrawalTransform> {
-  const match = await matchGoldenCoastOwnerWithdrawalJournal(input);
-  if (!match) return { entries: input.entries, transformed: false };
-  return applyGoldenCoastOwnerWithdrawalTemplate(input.companyId, match);
-}

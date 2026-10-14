@@ -294,6 +294,7 @@ interface ContainerMemoRow {
   fx_rate_confirmed: boolean | null;
   goods: string | null;
   goods_posted: boolean;
+  opening_already_in_supplier_master: boolean;
   freight: string | null;
   freight_currency_code: string | null;
   freight_fx_rate_to_usd: string | null;
@@ -392,6 +393,22 @@ async function factorySupplierMemoLines(executor: Executor, query: MemoQuery) {
              fc.currency_code, fc.fx_rate_to_usd::text AS fx_rate_to_usd, fc.fx_rate_confirmed,
              (COALESCE(fc.total_kg, 0) * COALESCE(fc.rate_per_kg, 0))::text AS goods,
              ${liveVoucherExists(sql`mv.voucher_number LIKE 'FACTORY-IMPORT-' || fc.id::text || '-%'`, sql`fc.company_id`, asOf)} AS goods_posted,
+             (
+               UPPER(COALESCE(fc.status, '')) = 'OPENING_BALANCE'
+               AND UPPER(COALESCE(fc.currency_code, 'USD')) = 'USD'
+               AND EXISTS (
+                 SELECT 1 FROM factory_suppliers fs
+                  WHERE fs.company_id = fc.company_id AND fs.id = fc.supplier_id
+                    AND fs.opening_balance < 0
+                    AND ABS(ABS(fs.opening_balance) -
+                      COALESCE(fc.total_kg, 0) * COALESCE(fc.rate_per_kg, 0)) < 0.005
+                    AND (
+                      SELECT COUNT(*) FROM factory_containers opening
+                       WHERE opening.company_id = fc.company_id AND opening.supplier_id = fc.supplier_id
+                         AND opening.deleted_at IS NULL AND opening.status = 'OPENING_BALANCE'
+                    ) = 1
+               )
+             ) AS opening_already_in_supplier_master,
              fc.freight::text AS freight, fc.freight_currency_code, fc.freight_fx_rate_to_usd::text AS freight_fx_rate_to_usd,
              fc.freight_fx_rate_confirmed, fc.freight_paid_by, fc.freight_supplier_id,
              ${liveVoucherExists(
@@ -475,7 +492,8 @@ async function factorySupplierMemoLines(executor: Executor, query: MemoQuery) {
   for (const row of containers) {
     const ccy = (row.currency_code || "USD").toUpperCase();
     const containerRate = confirmedRate(ccy, row.fx_rate_to_usd, row.fx_rate_confirmed);
-    if (!row.goods_posted) push(row, "factoryContainerGoods", toMoney(row.goods), ccy, containerRate);
+    if (!row.goods_posted && !row.opening_already_in_supplier_master)
+      push(row, "factoryContainerGoods", toMoney(row.goods), ccy, containerRate);
     if (!row.freight_posted && supplierPaidFreight(row)) {
       const fccy = (row.freight_currency_code || ccy).toUpperCase();
       const rate =

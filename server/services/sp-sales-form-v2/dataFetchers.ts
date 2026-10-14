@@ -147,52 +147,6 @@ export async function fetchSalesData(
 // directly), we do not guess a date; the item's full closing qty is placed in
 // the 121+ bucket, which is called out explicitly via the "Ageing Basis"
 // column so a reviewer knows it is undetermined rather than confirmed-old.
-export async function fetchAgeingData(
-  companyId: number,
-  locationId: number | undefined,
-  toDate: string
-): Promise<Map<number, string>> {
-  const offloadLocFilter = locationId ? sql` AND co.location_id = ${locationId}` : sql``;
-  const transferLocFilter = locationId ? sql` AND stv.destination_location_id = ${locationId}` : sql``;
-  const res = await db.execute(sql`
-    WITH offload_dates AS (
-      -- Only non-optional (posted/real) offloads count as a genuine stock-in movement.
-      SELECT coi.stock_item_id AS stock_item_id, co.offloaded_at::date AS movement_date
-      FROM   container_offload_items coi
-      JOIN   container_offloads      co ON co.id = coi.offload_id
-      JOIN   containers               c ON c.id = co.container_id
-      WHERE  c.company_id  = ${companyId}
-        AND  co.optional   = false
-        ${offloadLocFilter}
-    ),
-    transfer_dates AS (
-      -- Only transfers actually applied to inventory, on a non-deleted voucher, count.
-      SELECT sti.stock_item_id AS stock_item_id, stv.created_at::date AS movement_date
-      FROM   stock_transfer_items    sti
-      JOIN   stock_transfer_vouchers stv ON stv.id = sti.transfer_id
-      JOIN   vouchers                 v  ON v.id = stv.voucher_id
-      JOIN   locations                l  ON l.id = stv.destination_location_id
-      WHERE  l.company_id        = ${companyId}
-        AND  stv.inventory_applied = true
-        AND  v.deleted_at         IS NULL
-        ${transferLocFilter}
-    ),
-    combined AS (
-      SELECT * FROM offload_dates
-      UNION ALL
-      SELECT * FROM transfer_dates
-    )
-    SELECT stock_item_id, MAX(movement_date)::text AS last_movement_date
-    FROM   combined
-    WHERE  movement_date <= ${toDate}::date
-    GROUP BY stock_item_id
-  `);
-  const map = new Map<number, string>();
-  for (const r of queryRows(res)) {
-    map.set(Number(r.stock_item_id), String(r.last_movement_date));
-  }
-  return map;
-}
 
 // ── Cash account opening balance ─────────────────────────────────────────────
 export async function fetchCashAccountBalance(accountId: number, companyId: number, asOfDate: string): Promise<number> {

@@ -296,7 +296,7 @@ export function registerStockItemBulkMergeRoutes(app: Express) {
               mergedByUserId: String(userId),
               notes: `Bulk merge via Excel`,
             });
-          } catch (_auditErr) {
+          } catch {
             /* non-fatal */
           }
 

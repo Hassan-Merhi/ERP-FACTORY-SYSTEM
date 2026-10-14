@@ -69,12 +69,6 @@ export async function releaseManagedExportAttachment(source: ExportAttachmentSou
   });
 }
 
-export function isFileExportAttachment(
-  source: ExportAttachmentSource,
-): source is { filePath: string; sizeBytes: number } {
-  return !Buffer.isBuffer(source);
-}
-
 export function getExportAttachmentSize(source: ExportAttachmentSource): number {
   const file = getFileAttachment(source);
   return file ? file.sizeBytes : requireBufferSource(source).length;

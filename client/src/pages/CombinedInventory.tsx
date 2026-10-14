@@ -1,8 +1,6 @@
 import { searchAny } from "@shared/searchNormalization";
 import { useState, useMemo, type ReactNode } from "react";
 import { useQuery, useQueries } from "@tanstack/react-query";
-import { useAppMode } from "@/contexts/AppModeContext";
-import { getApiRequest } from "@/lib/factoryApi";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
 import { Input } from "@/components/ui/input";
@@ -92,8 +90,6 @@ export default function CombinedInventory({ headerActions }: CombinedInventoryPr
   const [selectedGroupId, setSelectedGroupId] = useState<number | null | undefined>(undefined);
   const [includeZero, setIncludeZero] = useState(false);
   const { formatAmount } = useCurrencyContext();
-  const appMode = useAppMode();
-  const _modeApiRequest = getApiRequest(appMode);
   const { selectedCompany } = useCompany();
 
   const { data: containers = [], isLoading: loadingContainers } = useQuery<Container[]>({
@@ -554,7 +550,6 @@ function GroupsView({
   groups,
   onSelectGroup,
   formatAmount,
-  isLoadingOtw: _isLoadingOtw,
 }: {
   groups: StockGroupSummary[];
   onSelectGroup: (id: number | null) => void;

@@ -40,10 +40,6 @@ import {
   stockItemHistorySqlText,
 } from "../server/services/inventory/stockItemHistory";
 import { STOCK_DOCUMENT_NOT_RESTORABLE } from "../server/services/inventory/voucherStockReversal";
-import {
-  approvePendingStockTransferRevision,
-  savePendingStockTransferRevision,
-} from "../server/services/stockTransferRevisionLifecycle";
 import { STOCK_TRANSFER_IMPORT_SOURCE_MISSING } from "../server/routes/stockTransferImportPosting";
 import { createStockTransfer } from "../server/storage/stock-ops/transfers-create";
 import { cleanupTestData, closeTestServer, seedTestData, type TestContext } from "./setup";
@@ -249,41 +245,6 @@ afterAll(async () => {
 }, 120_000);
 
 describe("H1: transfer revision approvals conserve value", () => {
-  it("pending lifecycle: an increase moves what the source relieves, a decrease its exact share back", async () => {
-    const item = await newItem();
-    await setStock(ctx.locationId, item.id, "90", "10", "900.00");
-    await setStock(ctx.location2Id, item.id, "10", "10", "100.00");
-    const { transferId } = await transferFixture(item.id, "10", "100.00");
-    const revise = async (userId: string, from: number, to: number) => {
-      const pending = await savePendingStockTransferRevision({
-        companyId: ctx.companyId,
-        transferId,
-        userId,
-        items: [
-          {
-            stockItemId: item.id,
-            stockItemName: item.code,
-            sourceLocationId: ctx.locationId,
-            originalQuantity: from,
-            newQuantity: to,
-          },
-        ],
-      });
-      return approvePendingStockTransferRevision(ctx.companyId, pending.revisionId);
-    };
-
-    expect((await revise(`${TEST_PREFIX}-u1`, 10, 15)).transition).toBe("approved");
-    expect(await stockRow(ctx.locationId, item.id)).toEqual({ q: "85.000", v: "850.00" });
-    expect(await stockRow(ctx.location2Id, item.id)).toEqual({ q: "15.000", v: "150.00" });
-    expect(await lineValueMoved(transferId)).toEqual({ q: "15.000", v: "150.00" });
-
-    // 15 -> 6 returns 9/15 of the 150.00 the line moved.
-    await revise(`${TEST_PREFIX}-u2`, 15, 6);
-    expect(await stockRow(ctx.locationId, item.id)).toEqual({ q: "94.000", v: "940.00" });
-    expect(await stockRow(ctx.location2Id, item.id)).toEqual({ q: "6.000", v: "60.00" });
-    expect(await lineValueMoved(transferId)).toEqual({ q: "6.000", v: "60.00" });
-  }, 60_000);
-
   it("immutable lifecycle: the destination receives exactly what the source relieved", async () => {
     const item = await newItem();
     // 6 units worth 6.67 left at the source (average 1.1116667, not the line's 1.11).

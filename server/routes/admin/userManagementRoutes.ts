@@ -537,7 +537,7 @@ export function registerUserManagementRoutes(app: Express) {
         for (const u of affectedUsers) {
           await db.execute(sql`DELETE FROM session WHERE sess::jsonb ->> 'userId' = ${u.userId}`);
         }
-      } catch (_err) {
+      } catch {
         // Non-fatal — session table may not exist in all environments
       }
 

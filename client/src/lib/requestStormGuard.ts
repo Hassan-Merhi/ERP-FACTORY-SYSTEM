@@ -9,6 +9,7 @@ import {
   type BandwidthInvalidationMessage,
   type BandwidthInvalidationScope,
 } from "./bandwidthInvalidationPolicy";
+import { resolveFetchUrl as resolveRequestUrl, fetchRequestMethod as requestMethod } from "./fetchRequestUtils";
 
 type CacheRule = {
   pattern: RegExp;
@@ -115,27 +116,12 @@ const HEAVY_HIDDEN_TAB_PATHS = [
   /^\/api\/factory\/bale-stock-count$/,
 ];
 
-function requestMethod(input: RequestInfo | URL, init?: RequestInit): string {
-  return (init?.method || (input instanceof Request ? input.method : "GET")).toUpperCase();
-}
-
 function requestSignal(input: RequestInfo | URL, init?: RequestInit): AbortSignal | null | undefined {
   return init?.signal || (input instanceof Request ? input.signal : undefined);
 }
 
 function requestHeaders(input: RequestInfo | URL, init?: RequestInit): Headers {
   return new Headers(init?.headers || (input instanceof Request ? input.headers : undefined));
-}
-
-function resolveRequestUrl(input: RequestInfo | URL): URL | null {
-  try {
-    if (typeof input === "string") return new URL(input, window.location.origin);
-    if (input instanceof URL) return new URL(input.toString(), window.location.origin);
-    if (input instanceof Request) return new URL(input.url, window.location.origin);
-  } catch {
-    return null;
-  }
-  return null;
 }
 
 function cacheRuleFor(pathname: string): CacheRule | undefined {

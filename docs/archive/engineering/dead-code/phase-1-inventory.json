@@ -1,0 +1,2493 @@
+{
+  "version": 1,
+  "scope": {
+    "repository": "Hassan-Merhi/ERP-FACTORY-SYSTEM",
+    "baseRef": "main",
+    "baseCommit": "3a210f315ddba5aaf0bbe6dee21b5d5e3417b97f",
+    "workingBranch": "refactor/erp-dead-code-cleanup",
+    "snapshotDate": "2026-10-12",
+    "mode": "read_only_static_repository_inspection",
+    "ciBuildTestsExecuted": false
+  },
+  "tree": {
+    "trackedFiles": 5765,
+    "source": {
+      "frontend": 1849,
+      "backend": 1888,
+      "shared": 91,
+      "scripts": 177
+    },
+    "emptyTrackedFiles": 0,
+    "identicalSourceBlobs": 0
+  },
+  "routes": {
+    "source": "config/route-manifest.json",
+    "registered": 2132,
+    "middlewareMounts": 130,
+    "distinctSignatures": 1991,
+    "overlapSignatures": 123,
+    "additionalRegistrations": 141,
+    "overlaps": [
+      {
+        "signature": "DELETE /api/vouchers/:id",
+        "count": 6,
+        "registrations": [
+          {
+            "registrationOrdinal": 1422,
+            "guardChain": "DELETE /api/vouchers/:id [requireAuth > <anonymous> > <anonymous>]"
+          },
+          {
+            "registrationOrdinal": 1452,
+            "guardChain": "DELETE /api/vouchers/:id [requireAuth > <anonymous> > <anonymous>]"
+          },
+          {
+            "registrationOrdinal": 1453,
+            "guardChain": "DELETE /api/vouchers/:id [requireAuth > <anonymous> > <anonymous>]"
+          },
+          {
+            "registrationOrdinal": 1458,
+            "guardChain": "DELETE /api/vouchers/:id [requireAuth > <anonymous> > <anonymous>]"
+          },
+          {
+            "registrationOrdinal": 1467,
+            "guardChain": "DELETE /api/vouchers/:id [requireAuth > <anonymous> > <anonymous>]"
+          },
+          {
+            "registrationOrdinal": 1485,
+            "guardChain": "DELETE /api/vouchers/:id [requireAuth > <anonymous> > <anonymous>]"
+          }
+        ],
+        "classification": "requires_handler_order_review",
+        "deletionApproved": false
+      },
+      {
+        "signature": "POST /api/factory/raw-stock/recalc/historical-replay/apply",
+        "count": 4,
+        "registrations": [
+          {
+            "registrationOrdinal": 182,
+            "guardChain": "POST /api/factory/raw-stock/recalc/historical-replay/apply [requireAuth > <anonymous>]"
+          },
+          {
+            "registrationOrdinal": 184,
+            "guardChain": "POST /api/factory/raw-stock/recalc/historical-replay/apply [requireAuth > <anonymous> > <anonymous>]"
+          },
+          {
+            "registrationOrdinal": 187,
+            "guardChain": "POST /api/factory/raw-stock/recalc/historical-replay/apply [requireAuth > <anonymous> > <anonymous>]"
+          },
+          {
+            "registrationOrdinal": 190,
+            "guardChain": "POST /api/factory/raw-stock/recalc/historical-replay/apply [requireAuth > <anonymous> > <anonymous>]"
+          }
+        ],
+        "classification": "requires_handler_order_review",
+        "deletionApproved": false
+      },
+      {
+        "signature": "POST /api/sp/offload",
+        "count": 4,
+        "registrations": [
+          {
+            "registrationOrdinal": 1993,
+            "guardChain": "POST /api/sp/offload [requireAuth > <anonymous>]"
+          },
+          {
+            "registrationOrdinal": 1994,
+            "guardChain": "POST /api/sp/offload [requireAuth > <anonymous>]"
+          },
+          {
+            "registrationOrdinal": 1995,
+            "guardChain": "POST /api/sp/offload [requireAuth > <anonymous>]"
+          },
+          {
+            "registrationOrdinal": 1997,
+            "guardChain": "POST /api/sp/offload [requireAuth > <anonymous>]"
+          }
+        ],
+        "classification": "requires_handler_order_review",
+        "deletionApproved": false
+      },
+      {
+        "signature": "POST /api/stock-transfers/:transferId/revisions",
+        "count": 4,
+        "registrations": [
+          {
+            "registrationOrdinal": 1429,
+            "guardChain": "POST /api/stock-transfers/:transferId/revisions [requireAuth > bypassAdminCompatibilityForPendingRevision > requireNonPOS > <anonymous>]"
+          },
+          {
+            "registrationOrdinal": 1430,
+            "guardChain": "POST /api/stock-transfers/:transferId/revisions [requireAuth > <anonymous>]"
+          },
+          {
+            "registrationOrdinal": 1437,
+            "guardChain": "POST /api/stock-transfers/:transferId/revisions [requireAuth > <anonymous>]"
+          },
+          {
+            "registrationOrdinal": 1502,
+            "guardChain": "POST /api/stock-transfers/:transferId/revisions [requireAuth > <anonymous>]"
+          }
+        ],
+        "classification": "requires_handler_order_review",
+        "deletionApproved": false
+      },
+      {
+        "signature": "GET /api/accounts/supplier/:id/transactions",
+        "count": 3,
+        "registrations": [
+          {
+            "registrationOrdinal": 1102,
+            "guardChain": "GET /api/accounts/supplier/:id/transactions [requireAuth > <anonymous>]"
+          },
+          {
+            "registrationOrdinal": 1400,
+            "guardChain": "GET /api/accounts/supplier/:id/transactions [requireAuth > <anonymous>]"
+          },
+          {
+            "registrationOrdinal": 1407,
+            "guardChain": "GET /api/accounts/supplier/:id/transactions [requireAuth > <anonymous>]"
+          }
+        ],
+        "classification": "requires_handler_order_review",
+        "deletionApproved": false
+      },
+      {
+        "signature": "GET /api/sp/migration/cutover",
+        "count": 3,
+        "registrations": [
+          {
+            "registrationOrdinal": 1932,
+            "guardChain": "GET /api/sp/migration/cutover [requireAuth > <anonymous> > statusCutover]"
+          },
+          {
+            "registrationOrdinal": 1940,
+            "guardChain": "GET /api/sp/migration/cutover [requireAuth > <anonymous> > statusCutover]"
+          },
+          {
+            "registrationOrdinal": 2049,
+            "guardChain": "GET /api/sp/migration/cutover [requireAuth > <anonymous>]"
+          }
+        ],
+        "classification": "requires_handler_order_review",
+        "deletionApproved": false
+      },
+      {
+        "signature": "PATCH /api/vouchers/:id/transfer",
+        "count": 3,
+        "registrations": [
+          {
+            "registrationOrdinal": 1423,
+            "guardChain": "PATCH /api/vouchers/:id/transfer [requireAuth > requireNonPOS > <anonymous>]"
+          },
+          {
+            "registrationOrdinal": 1426,
+            "guardChain": "PATCH /api/vouchers/:id/transfer [requireAuth > requireNonPOS > <anonymous>]"
+          },
+          {
+            "registrationOrdinal": 1474,
+            "guardChain": "PATCH /api/vouchers/:id/transfer [requireAuth > requireNonPOS > <anonymous>]"
+          }
+        ],
+        "classification": "requires_handler_order_review",
+        "deletionApproved": false
+      },
+      {
+        "signature": "POST /api/admin/account-migration/undo",
+        "count": 3,
+        "registrations": [
+          {
+            "registrationOrdinal": 1742,
+            "guardChain": "POST /api/admin/account-migration/undo [requireAuth > <anonymous> > <anonymous>]"
+          },
+          {
+            "registrationOrdinal": 1744,
+            "guardChain": "POST /api/admin/account-migration/undo [requireAuth > <anonymous> > <anonymous>]"
+          },
+          {
+            "registrationOrdinal": 1780,
+            "guardChain": "POST /api/admin/account-migration/undo [requireAuth > <anonymous> > <anonymous>]"
+          }
+        ],
+        "classification": "requires_handler_order_review",
+        "deletionApproved": false
+      },
+      {
+        "signature": "POST /api/containers/:id/offload",
+        "count": 3,
+        "registrations": [
+          {
+            "registrationOrdinal": 1358,
+            "guardChain": "POST /api/containers/:id/offload [requireAuth > requireNonPOS > <anonymous>]"
+          },
+          {
+            "registrationOrdinal": 1360,
+            "guardChain": "POST /api/containers/:id/offload [requireAuth > requireNonPOS > <anonymous>]"
+          },
+          {
+            "registrationOrdinal": 1362,
+            "guardChain": "POST /api/containers/:id/offload [requireAuth > requireNonPOS > <anonymous>]"
+          }
+        ],
+        "classification": "requires_handler_order_review",
+        "deletionApproved": false
+      },
+      {
+        "signature": "POST /api/sp/migration/cutover",
+        "count": 3,
+        "registrations": [
+          {
+            "registrationOrdinal": 1939,
+            "guardChain": "POST /api/sp/migration/cutover [requireAuth > <anonymous> > <anonymous>]"
+          },
+          {
+            "registrationOrdinal": 1946,
+            "guardChain": "POST /api/sp/migration/cutover [requireAuth > <anonymous> > <anonymous>]"
+          },
+          {
+            "registrationOrdinal": 2062,
+            "guardChain": "POST /api/sp/migration/cutover [requireAuth > <anonymous>]"
+          }
+        ],
+        "classification": "requires_handler_order_review",
+        "deletionApproved": false
+      },
+      {
+        "signature": "POST /api/stock-transfer-revisions/:id/approve",
+        "count": 3,
+        "registrations": [
+          {
+            "registrationOrdinal": 6,
+            "guardChain": "POST /api/stock-transfer-revisions/:id/approve [<anonymous>]"
+          },
+          {
+            "registrationOrdinal": 1433,
+            "guardChain": "POST /api/stock-transfer-revisions/:id/approve [requireAuth > requireNonPOS > <anonymous> > <anonymous>]"
+          },
+          {
+            "registrationOrdinal": 1438,
+            "guardChain": "POST /api/stock-transfer-revisions/:id/approve [requireAuth > requireNonPOS > <anonymous> > <anonymous>]"
+          }
+        ],
+        "classification": "requires_handler_order_review",
+        "deletionApproved": false
+      },
+      {
+        "signature": "POST /api/vouchers/bulk-delete",
+        "count": 3,
+        "registrations": [
+          {
+            "registrationOrdinal": 15,
+            "guardChain": "POST /api/vouchers/bulk-delete [<anonymous>]"
+          },
+          {
+            "registrationOrdinal": 1468,
+            "guardChain": "POST /api/vouchers/bulk-delete [requireAuth > <anonymous> > <anonymous>]"
+          },
+          {
+            "registrationOrdinal": 1486,
+            "guardChain": "POST /api/vouchers/bulk-delete [requireAuth > <anonymous> > <anonymous>]"
+          }
+        ],
+        "classification": "requires_handler_order_review",
+        "deletionApproved": false
+      },
+      {
+        "signature": "DELETE /api/deleted-items/:type/:id/permanent",
+        "count": 2,
+        "registrations": [
+          {
+            "registrationOrdinal": 1804,
+            "guardChain": "DELETE /api/deleted-items/:type/:id/permanent [<anonymous> > requireAuth > requireNonPOS > <anonymous>]"
+          },
+          {
+            "registrationOrdinal": 1812,
+            "guardChain": "DELETE /api/deleted-items/:type/:id/permanent [requireAuth > requireNonPOS > <anonymous>]"
+          }
+        ],
+        "classification": "requires_handler_order_review",
+        "deletionApproved": false
+      },
+      {
+        "signature": "DELETE /api/erp/rental/payments/:id",
+        "count": 2,
+        "registrations": [
+          {
+            "registrationOrdinal": 791,
+            "guardChain": "DELETE /api/erp/rental/payments/:id [requireAuth > <anonymous>]"
+          },
+          {
+            "registrationOrdinal": 794,
+            "guardChain": "DELETE /api/erp/rental/payments/:id [requireAuth > <anonymous>]"
+          }
+        ],
+        "classification": "requires_handler_order_review",
+        "deletionApproved": false
+      },
+      {
+        "signature": "DELETE /api/factory/production-planner/:date",
+        "count": 2,
+        "registrations": [
+          {
+            "registrationOrdinal": 572,
+            "guardChain": "DELETE /api/factory/production-planner/:date [requireAuth > <anonymous>]"
+          },
+          {
+            "registrationOrdinal": 850,
+            "guardChain": "DELETE /api/factory/production-planner/:date [requireAuth > <anonymous>]"
+          }
+        ],
+        "classification": "requires_handler_order_review",
+        "deletionApproved": false
+      },
+      {
+        "signature": "DELETE /api/factory/rental/payments/:id",
+        "count": 2,
+        "registrations": [
+          {
+            "registrationOrdinal": 828,
+            "guardChain": "DELETE /api/factory/rental/payments/:id [requireAuth > <anonymous>]"
+          },
+          {
+            "registrationOrdinal": 831,
+            "guardChain": "DELETE /api/factory/rental/payments/:id [requireAuth > <anonymous>]"
+          }
+        ],
+        "classification": "requires_handler_order_review",
+        "deletionApproved": false
+      },
+      {
+        "signature": "DELETE /api/factory/transporters/:id/transactions/:txId",
+        "count": 2,
+        "registrations": [
+          {
+            "registrationOrdinal": 489,
+            "guardChain": "DELETE /api/factory/transporters/:id/transactions/:txId [requireAuth > <anonymous>]"
+          },
+          {
+            "registrationOrdinal": 932,
+            "guardChain": "DELETE /api/factory/transporters/:id/transactions/:txId [requireAuth > <anonymous>]"
+          }
+        ],
+        "classification": "requires_handler_order_review",
+        "deletionApproved": false
+      },
+      {
+        "signature": "DELETE /api/properties/rental/payments/:id",
+        "count": 2,
+        "registrations": [
+          {
+            "registrationOrdinal": 754,
+            "guardChain": "DELETE /api/properties/rental/payments/:id [requireAuth > <anonymous>]"
+          },
+          {
+            "registrationOrdinal": 757,
+            "guardChain": "DELETE /api/properties/rental/payments/:id [requireAuth > <anonymous>]"
+          }
+        ],
+        "classification": "requires_handler_order_review",
+        "deletionApproved": false
+      },
+      {
+        "signature": "DELETE /api/stock-item-code-aliases/:id",
+        "count": 2,
+        "registrations": [
+          {
+            "registrationOrdinal": 1245,
+            "guardChain": "DELETE /api/stock-item-code-aliases/:id [requireAuth > <anonymous>]"
+          },
+          {
+            "registrationOrdinal": 1269,
+            "guardChain": "DELETE /api/stock-item-code-aliases/:id [requireAuth > <anonymous>]"
+          }
+        ],
+        "classification": "requires_handler_order_review",
+        "deletionApproved": false
+      },
+      {
+        "signature": "DELETE /api/stock-items/:id",
+        "count": 2,
+        "registrations": [
+          {
+            "registrationOrdinal": 1239,
+            "guardChain": "DELETE /api/stock-items/:id [requireAuth > requireNonPOS > <anonymous>]"
+          },
+          {
+            "registrationOrdinal": 1263,
+            "guardChain": "DELETE /api/stock-items/:id [requireAuth > requireNonPOS > <anonymous>]"
+          }
+        ],
+        "classification": "requires_handler_order_review",
+        "deletionApproved": false
+      },
+      {
+        "signature": "GET /api/accounts/bank/:id/transactions",
+        "count": 2,
+        "registrations": [
+          {
+            "registrationOrdinal": 1100,
+            "guardChain": "GET /api/accounts/bank/:id/transactions [requireAuth > <anonymous>]"
+          },
+          {
+            "registrationOrdinal": 1403,
+            "guardChain": "GET /api/accounts/bank/:id/transactions [requireAuth > <anonymous>]"
+          }
+        ],
+        "classification": "requires_handler_order_review",
+        "deletionApproved": false
+      },
+      {
+        "signature": "GET /api/accounts/customer/:id/transactions",
+        "count": 2,
+        "registrations": [
+          {
+            "registrationOrdinal": 1104,
+            "guardChain": "GET /api/accounts/customer/:id/transactions [requireAuth > <anonymous>]"
+          },
+          {
+            "registrationOrdinal": 1410,
+            "guardChain": "GET /api/accounts/customer/:id/transactions [requireAuth > <anonymous>]"
+          }
+        ],
+        "classification": "requires_handler_order_review",
+        "deletionApproved": false
+      },
+      {
+        "signature": "GET /api/accounts/employee/:id/transactions",
+        "count": 2,
+        "registrations": [
+          {
+            "registrationOrdinal": 1103,
+            "guardChain": "GET /api/accounts/employee/:id/transactions [requireAuth > <anonymous>]"
+          },
+          {
+            "registrationOrdinal": 1408,
+            "guardChain": "GET /api/accounts/employee/:id/transactions [requireAuth > readAgentEmployeeTransactions]"
+          }
+        ],
+        "classification": "requires_handler_order_review",
+        "deletionApproved": false
+      },
+      {
+        "signature": "GET /api/accounts/fixed-asset/:id/transactions",
+        "count": 2,
+        "registrations": [
+          {
+            "registrationOrdinal": 1101,
+            "guardChain": "GET /api/accounts/fixed-asset/:id/transactions [requireAuth > <anonymous>]"
+          },
+          {
+            "registrationOrdinal": 1405,
+            "guardChain": "GET /api/accounts/fixed-asset/:id/transactions [requireAuth > <anonymous>]"
+          }
+        ],
+        "classification": "requires_handler_order_review",
+        "deletionApproved": false
+      },
+      {
+        "signature": "GET /api/accounts/ledger/:id/balance",
+        "count": 2,
+        "registrations": [
+          {
+            "registrationOrdinal": 1093,
+            "guardChain": "GET /api/accounts/ledger/:id/balance [requireAuth > <anonymous>]"
+          },
+          {
+            "registrationOrdinal": 1398,
+            "guardChain": "GET /api/accounts/ledger/:id/balance [requireAuth > <anonymous>]"
+          }
+        ],
+        "classification": "requires_handler_order_review",
+        "deletionApproved": false
+      },
+      {
+        "signature": "GET /api/accounts/ledger/:id/currency-balances",
+        "count": 2,
+        "registrations": [
+          {
+            "registrationOrdinal": 1094,
+            "guardChain": "GET /api/accounts/ledger/:id/currency-balances [requireAuth > <anonymous>]"
+          },
+          {
+            "registrationOrdinal": 1399,
+            "guardChain": "GET /api/accounts/ledger/:id/currency-balances [requireAuth > <anonymous>]"
+          }
+        ],
+        "classification": "requires_handler_order_review",
+        "deletionApproved": false
+      },
+      {
+        "signature": "GET /api/accounts/ledger/:id/transactions",
+        "count": 2,
+        "registrations": [
+          {
+            "registrationOrdinal": 1099,
+            "guardChain": "GET /api/accounts/ledger/:id/transactions [requireAuth > <anonymous>]"
+          },
+          {
+            "registrationOrdinal": 1401,
+            "guardChain": "GET /api/accounts/ledger/:id/transactions [requireAuth > <anonymous>]"
+          }
+        ],
+        "classification": "requires_handler_order_review",
+        "deletionApproved": false
+      },
+      {
+        "signature": "GET /api/bank-accounts/revaluation",
+        "count": 2,
+        "registrations": [
+          {
+            "registrationOrdinal": 1092,
+            "guardChain": "GET /api/bank-accounts/revaluation [requireAuth > requireNonPOS > <anonymous>]"
+          },
+          {
+            "registrationOrdinal": 1323,
+            "guardChain": "GET /api/bank-accounts/revaluation [requireAuth > requireNonPOS > <anonymous>]"
+          }
+        ],
+        "classification": "requires_handler_order_review",
+        "deletionApproved": false
+      },
+      {
+        "signature": "GET /api/containers",
+        "count": 2,
+        "registrations": [
+          {
+            "registrationOrdinal": 1339,
+            "guardChain": "GET /api/containers [requireAuth > requireNonPOS > <anonymous>]"
+          },
+          {
+            "registrationOrdinal": 1340,
+            "guardChain": "GET /api/containers [requireAuth > requireNonPOS > <anonymous>]"
+          }
+        ],
+        "classification": "requires_handler_order_review",
+        "deletionApproved": false
+      },
+      {
+        "signature": "GET /api/containers/active",
+        "count": 2,
+        "registrations": [
+          {
+            "registrationOrdinal": 1337,
+            "guardChain": "GET /api/containers/active [requireAuth > requireNonPOS > <anonymous>]"
+          },
+          {
+            "registrationOrdinal": 1341,
+            "guardChain": "GET /api/containers/active [requireAuth > requireNonPOS > <anonymous>]"
+          }
+        ],
+        "classification": "requires_handler_order_review",
+        "deletionApproved": false
+      },
+      {
+        "signature": "GET /api/containers/sold",
+        "count": 2,
+        "registrations": [
+          {
+            "registrationOrdinal": 1338,
+            "guardChain": "GET /api/containers/sold [requireAuth > requireNonPOS > <anonymous>]"
+          },
+          {
+            "registrationOrdinal": 1342,
+            "guardChain": "GET /api/containers/sold [requireAuth > requireNonPOS > <anonymous>]"
+          }
+        ],
+        "classification": "requires_handler_order_review",
+        "deletionApproved": false
+      },
+      {
+        "signature": "GET /api/factory/bale-products",
+        "count": 2,
+        "registrations": [
+          {
+            "registrationOrdinal": 79,
+            "guardChain": "GET /api/factory/bale-products [requireAuth > <anonymous>]"
+          },
+          {
+            "registrationOrdinal": 101,
+            "guardChain": "GET /api/factory/bale-products [requireAuth > <anonymous>]"
+          }
+        ],
+        "classification": "requires_handler_order_review",
+        "deletionApproved": false
+      },
+      {
+        "signature": "GET /api/factory/bale-products/:id",
+        "count": 2,
+        "registrations": [
+          {
+            "registrationOrdinal": 80,
+            "guardChain": "GET /api/factory/bale-products/:id [requireAuth > <anonymous>]"
+          },
+          {
+            "registrationOrdinal": 104,
+            "guardChain": "GET /api/factory/bale-products/:id [requireAuth > <anonymous>]"
+          }
+        ],
+        "classification": "requires_handler_order_review",
+        "deletionApproved": false
+      },
+      {
+        "signature": "GET /api/factory/bales/stock-entry-history",
+        "count": 2,
+        "registrations": [
+          {
+            "registrationOrdinal": 29,
+            "guardChain": "GET /api/factory/bales/stock-entry-history [requireAuth > <anonymous>]"
+          },
+          {
+            "registrationOrdinal": 261,
+            "guardChain": "GET /api/factory/bales/stock-entry-history [requireAuth > <anonymous>]"
+          }
+        ],
+        "classification": "requires_handler_order_review",
+        "deletionApproved": false
+      },
+      {
+        "signature": "GET /api/factory/categories",
+        "count": 2,
+        "registrations": [
+          {
+            "registrationOrdinal": 78,
+            "guardChain": "GET /api/factory/categories [requireAuth > <anonymous>]"
+          },
+          {
+            "registrationOrdinal": 95,
+            "guardChain": "GET /api/factory/categories [requireAuth > <anonymous>]"
+          }
+        ],
+        "classification": "requires_handler_order_review",
+        "deletionApproved": false
+      },
+      {
+        "signature": "GET /api/factory/containers/:containerId/documents",
+        "count": 2,
+        "registrations": [
+          {
+            "registrationOrdinal": 376,
+            "guardChain": "GET /api/factory/containers/:containerId/documents [requireAuth > <anonymous>]"
+          },
+          {
+            "registrationOrdinal": 381,
+            "guardChain": "GET /api/factory/containers/:containerId/documents [requireAuth > <anonymous>]"
+          }
+        ],
+        "classification": "requires_handler_order_review",
+        "deletionApproved": false
+      },
+      {
+        "signature": "GET /api/factory/containers/:containerId/freight",
+        "count": 2,
+        "registrations": [
+          {
+            "registrationOrdinal": 377,
+            "guardChain": "GET /api/factory/containers/:containerId/freight [requireAuth > <anonymous>]"
+          },
+          {
+            "registrationOrdinal": 385,
+            "guardChain": "GET /api/factory/containers/:containerId/freight [requireAuth > <anonymous>]"
+          }
+        ],
+        "classification": "requires_handler_order_review",
+        "deletionApproved": false
+      },
+      {
+        "signature": "GET /api/factory/customer-orders/:id/export-excel",
+        "count": 2,
+        "registrations": [
+          {
+            "registrationOrdinal": 75,
+            "guardChain": "GET /api/factory/customer-orders/:id/export-excel [requireAuth > <anonymous>]"
+          },
+          {
+            "registrationOrdinal": 370,
+            "guardChain": "GET /api/factory/customer-orders/:id/export-excel [requireAuth > exportInvoiceExcel]"
+          }
+        ],
+        "classification": "requires_handler_order_review",
+        "deletionApproved": false
+      },
+      {
+        "signature": "GET /api/factory/customer-orders/:id/export-pdf",
+        "count": 2,
+        "registrations": [
+          {
+            "registrationOrdinal": 73,
+            "guardChain": "GET /api/factory/customer-orders/:id/export-pdf [requireAuth > <anonymous>]"
+          },
+          {
+            "registrationOrdinal": 372,
+            "guardChain": "GET /api/factory/customer-orders/:id/export-pdf [requireAuth > <anonymous>]"
+          }
+        ],
+        "classification": "requires_handler_order_review",
+        "deletionApproved": false
+      },
+      {
+        "signature": "GET /api/factory/customer-orders/:id/export/excel",
+        "count": 2,
+        "registrations": [
+          {
+            "registrationOrdinal": 74,
+            "guardChain": "GET /api/factory/customer-orders/:id/export/excel [requireAuth > <anonymous>]"
+          },
+          {
+            "registrationOrdinal": 369,
+            "guardChain": "GET /api/factory/customer-orders/:id/export/excel [requireAuth > exportInvoiceExcel]"
+          }
+        ],
+        "classification": "requires_handler_order_review",
+        "deletionApproved": false
+      },
+      {
+        "signature": "GET /api/factory/customer-orders/:id/pending-export",
+        "count": 2,
+        "registrations": [
+          {
+            "registrationOrdinal": 76,
+            "guardChain": "GET /api/factory/customer-orders/:id/pending-export [requireAuth > loadingHandler]"
+          },
+          {
+            "registrationOrdinal": 371,
+            "guardChain": "GET /api/factory/customer-orders/:id/pending-export [requireAuth > <anonymous>]"
+          }
+        ],
+        "classification": "requires_handler_order_review",
+        "deletionApproved": false
+      },
+      {
+        "signature": "GET /api/factory/daybook",
+        "count": 2,
+        "registrations": [
+          {
+            "registrationOrdinal": 28,
+            "guardChain": "GET /api/factory/daybook [requireAuth > <anonymous>]"
+          },
+          {
+            "registrationOrdinal": 276,
+            "guardChain": "GET /api/factory/daybook [requireAuth > <anonymous>]"
+          }
+        ],
+        "classification": "requires_handler_order_review",
+        "deletionApproved": false
+      },
+      {
+        "signature": "GET /api/factory/net-position",
+        "count": 2,
+        "registrations": [
+          {
+            "registrationOrdinal": 478,
+            "guardChain": "GET /api/factory/net-position [requireAuth > <anonymous>]"
+          },
+          {
+            "registrationOrdinal": 479,
+            "guardChain": "GET /api/factory/net-position [requireAuth > <anonymous>]"
+          }
+        ],
+        "classification": "requires_handler_order_review",
+        "deletionApproved": false
+      },
+      {
+        "signature": "GET /api/factory/production-planner/:date",
+        "count": 2,
+        "registrations": [
+          {
+            "registrationOrdinal": 568,
+            "guardChain": "GET /api/factory/production-planner/:date [requireAuth > <anonymous>]"
+          },
+          {
+            "registrationOrdinal": 846,
+            "guardChain": "GET /api/factory/production-planner/:date [requireAuth > <anonymous>]"
+          }
+        ],
+        "classification": "requires_handler_order_review",
+        "deletionApproved": false
+      },
+      {
+        "signature": "GET /api/factory/production-planner/:date/copy-previous",
+        "count": 2,
+        "registrations": [
+          {
+            "registrationOrdinal": 570,
+            "guardChain": "GET /api/factory/production-planner/:date/copy-previous [requireAuth > <anonymous>]"
+          },
+          {
+            "registrationOrdinal": 848,
+            "guardChain": "GET /api/factory/production-planner/:date/copy-previous [requireAuth > <anonymous>]"
+          }
+        ],
+        "classification": "requires_handler_order_review",
+        "deletionApproved": false
+      },
+      {
+        "signature": "GET /api/factory/production-planner/:date/worker-targets",
+        "count": 2,
+        "registrations": [
+          {
+            "registrationOrdinal": 571,
+            "guardChain": "GET /api/factory/production-planner/:date/worker-targets [requireAuth > <anonymous>]"
+          },
+          {
+            "registrationOrdinal": 849,
+            "guardChain": "GET /api/factory/production-planner/:date/worker-targets [requireAuth > <anonymous>]"
+          }
+        ],
+        "classification": "requires_handler_order_review",
+        "deletionApproved": false
+      },
+      {
+        "signature": "GET /api/factory/raw-stock/available-containers",
+        "count": 2,
+        "registrations": [
+          {
+            "registrationOrdinal": 150,
+            "guardChain": "GET /api/factory/raw-stock/available-containers [requireAuth > <anonymous>]"
+          },
+          {
+            "registrationOrdinal": 159,
+            "guardChain": "GET /api/factory/raw-stock/available-containers [requireAuth > <anonymous>]"
+          }
+        ],
+        "classification": "requires_handler_order_review",
+        "deletionApproved": false
+      },
+      {
+        "signature": "GET /api/factory/raw-stock/recalc/historical-replay",
+        "count": 2,
+        "registrations": [
+          {
+            "registrationOrdinal": 185,
+            "guardChain": "GET /api/factory/raw-stock/recalc/historical-replay [requireAuth > <anonymous> > <anonymous>]"
+          },
+          {
+            "registrationOrdinal": 189,
+            "guardChain": "GET /api/factory/raw-stock/recalc/historical-replay [requireAuth > <anonymous> > <anonymous>]"
+          }
+        ],
+        "classification": "requires_handler_order_review",
+        "deletionApproved": false
+      },
+      {
+        "signature": "GET /api/factory/stock-entry/production-session",
+        "count": 2,
+        "registrations": [
+          {
+            "registrationOrdinal": 565,
+            "guardChain": "GET /api/factory/stock-entry/production-session [requireAuth > <anonymous>]"
+          },
+          {
+            "registrationOrdinal": 882,
+            "guardChain": "GET /api/factory/stock-entry/production-session [requireAuth > <anonymous>]"
+          }
+        ],
+        "classification": "requires_handler_order_review",
+        "deletionApproved": false
+      },
+      {
+        "signature": "GET /api/factory/transporter-accounts",
+        "count": 2,
+        "registrations": [
+          {
+            "registrationOrdinal": 490,
+            "guardChain": "GET /api/factory/transporter-accounts [requireAuth > <anonymous>]"
+          },
+          {
+            "registrationOrdinal": 933,
+            "guardChain": "GET /api/factory/transporter-accounts [requireAuth > <anonymous>]"
+          }
+        ],
+        "classification": "requires_handler_order_review",
+        "deletionApproved": false
+      },
+      {
+        "signature": "GET /api/factory/transporters",
+        "count": 2,
+        "registrations": [
+          {
+            "registrationOrdinal": 483,
+            "guardChain": "GET /api/factory/transporters [requireAuth > <anonymous>]"
+          },
+          {
+            "registrationOrdinal": 926,
+            "guardChain": "GET /api/factory/transporters [requireAuth > <anonymous>]"
+          }
+        ],
+        "classification": "requires_handler_order_review",
+        "deletionApproved": false
+      },
+      {
+        "signature": "GET /api/factory/transporters/:id",
+        "count": 2,
+        "registrations": [
+          {
+            "registrationOrdinal": 484,
+            "guardChain": "GET /api/factory/transporters/:id [requireAuth > <anonymous>]"
+          },
+          {
+            "registrationOrdinal": 927,
+            "guardChain": "GET /api/factory/transporters/:id [requireAuth > <anonymous>]"
+          }
+        ],
+        "classification": "requires_handler_order_review",
+        "deletionApproved": false
+      },
+      {
+        "signature": "GET /api/factory/uploads/:folder/:filename",
+        "count": 2,
+        "registrations": [
+          {
+            "registrationOrdinal": 27,
+            "guardChain": "GET /api/factory/uploads/:folder/:filename [requireAuth > <anonymous>]"
+          },
+          {
+            "registrationOrdinal": 384,
+            "guardChain": "GET /api/factory/uploads/:folder/:filename [requireAuth > <anonymous>]"
+          }
+        ],
+        "classification": "requires_handler_order_review",
+        "deletionApproved": false
+      },
+      {
+        "signature": "GET /api/factory/v5/stock-allocation",
+        "count": 2,
+        "registrations": [
+          {
+            "registrationOrdinal": 30,
+            "guardChain": "GET /api/factory/v5/stock-allocation [requireAuth > <anonymous>]"
+          },
+          {
+            "registrationOrdinal": 493,
+            "guardChain": "GET /api/factory/v5/stock-allocation [requireAuth > <anonymous>]"
+          }
+        ],
+        "classification": "requires_handler_order_review",
+        "deletionApproved": false
+      },
+      {
+        "signature": "GET /api/global/transactions",
+        "count": 2,
+        "registrations": [
+          {
+            "registrationOrdinal": 25,
+            "guardChain": "GET /api/global/transactions [requireAuth > requireNonPOS > <anonymous>]"
+          },
+          {
+            "registrationOrdinal": 727,
+            "guardChain": "GET /api/global/transactions [requireAuth > requireNonPOS > <anonymous>]"
+          }
+        ],
+        "classification": "requires_handler_order_review",
+        "deletionApproved": false
+      },
+      {
+        "signature": "GET /api/global/transactions/voucher-types",
+        "count": 2,
+        "registrations": [
+          {
+            "registrationOrdinal": 26,
+            "guardChain": "GET /api/global/transactions/voucher-types [requireAuth > requireNonPOS > <anonymous>]"
+          },
+          {
+            "registrationOrdinal": 728,
+            "guardChain": "GET /api/global/transactions/voucher-types [requireAuth > requireNonPOS > <anonymous>]"
+          }
+        ],
+        "classification": "requires_handler_order_review",
+        "deletionApproved": false
+      },
+      {
+        "signature": "GET /api/inventory",
+        "count": 2,
+        "registrations": [
+          {
+            "registrationOrdinal": 1058,
+            "guardChain": "GET /api/inventory [requireAuth > <anonymous>]"
+          },
+          {
+            "registrationOrdinal": 1080,
+            "guardChain": "GET /api/inventory [requireAuth > <anonymous>]"
+          }
+        ],
+        "classification": "requires_handler_order_review",
+        "deletionApproved": false
+      },
+      {
+        "signature": "GET /api/ledger-accounts",
+        "count": 2,
+        "registrations": [
+          {
+            "registrationOrdinal": 1105,
+            "guardChain": "GET /api/ledger-accounts [requireAuth > <anonymous>]"
+          },
+          {
+            "registrationOrdinal": 1106,
+            "guardChain": "GET /api/ledger-accounts [requireAuth > <anonymous>]"
+          }
+        ],
+        "classification": "requires_handler_order_review",
+        "deletionApproved": false
+      },
+      {
+        "signature": "GET /api/location-price-groups",
+        "count": 2,
+        "registrations": [
+          {
+            "registrationOrdinal": 1230,
+            "guardChain": "GET /api/location-price-groups [requireAuth > requireNonPOS > <anonymous>]"
+          },
+          {
+            "registrationOrdinal": 1271,
+            "guardChain": "GET /api/location-price-groups [requireAuth > requireNonPOS > <anonymous>]"
+          }
+        ],
+        "classification": "requires_handler_order_review",
+        "deletionApproved": false
+      },
+      {
+        "signature": "GET /api/pos/price-list",
+        "count": 2,
+        "registrations": [
+          {
+            "registrationOrdinal": 1232,
+            "guardChain": "GET /api/pos/price-list [requireAuth > <anonymous>]"
+          },
+          {
+            "registrationOrdinal": 1273,
+            "guardChain": "GET /api/pos/price-list [requireAuth > <anonymous>]"
+          }
+        ],
+        "classification": "requires_handler_order_review",
+        "deletionApproved": false
+      },
+      {
+        "signature": "GET /api/pos/price-list-by-masters",
+        "count": 2,
+        "registrations": [
+          {
+            "registrationOrdinal": 1233,
+            "guardChain": "GET /api/pos/price-list-by-masters [requireAuth > requireNonPOS > <anonymous>]"
+          },
+          {
+            "registrationOrdinal": 1274,
+            "guardChain": "GET /api/pos/price-list-by-masters [requireAuth > requireNonPOS > <anonymous>]"
+          }
+        ],
+        "classification": "requires_handler_order_review",
+        "deletionApproved": false
+      },
+      {
+        "signature": "GET /api/sp/migration/cutover/status",
+        "count": 2,
+        "registrations": [
+          {
+            "registrationOrdinal": 1933,
+            "guardChain": "GET /api/sp/migration/cutover/status [requireAuth > <anonymous> > statusCutover]"
+          },
+          {
+            "registrationOrdinal": 1941,
+            "guardChain": "GET /api/sp/migration/cutover/status [requireAuth > <anonymous> > statusCutover]"
+          }
+        ],
+        "classification": "requires_handler_order_review",
+        "deletionApproved": false
+      },
+      {
+        "signature": "GET /api/sp/migration/final-verification",
+        "count": 2,
+        "registrations": [
+          {
+            "registrationOrdinal": 1931,
+            "guardChain": "GET /api/sp/migration/final-verification [requireAuth > <anonymous> > finalVerification]"
+          },
+          {
+            "registrationOrdinal": 1954,
+            "guardChain": "GET /api/sp/migration/final-verification [requireAuth > <anonymous> > <anonymous>]"
+          }
+        ],
+        "classification": "requires_handler_order_review",
+        "deletionApproved": false
+      },
+      {
+        "signature": "GET /api/stock-items",
+        "count": 2,
+        "registrations": [
+          {
+            "registrationOrdinal": 1057,
+            "guardChain": "GET /api/stock-items [requireAuth > <anonymous>]"
+          },
+          {
+            "registrationOrdinal": 1211,
+            "guardChain": "GET /api/stock-items [requireAuth > <anonymous>]"
+          }
+        ],
+        "classification": "requires_handler_order_review",
+        "deletionApproved": false
+      },
+      {
+        "signature": "GET /api/stock-items/:id/code-aliases",
+        "count": 2,
+        "registrations": [
+          {
+            "registrationOrdinal": 1243,
+            "guardChain": "GET /api/stock-items/:id/code-aliases [requireAuth > <anonymous>]"
+          },
+          {
+            "registrationOrdinal": 1267,
+            "guardChain": "GET /api/stock-items/:id/code-aliases [requireAuth > <anonymous>]"
+          }
+        ],
+        "classification": "requires_handler_order_review",
+        "deletionApproved": false
+      },
+      {
+        "signature": "GET /api/stock-items/:id/details",
+        "count": 2,
+        "registrations": [
+          {
+            "registrationOrdinal": 1241,
+            "guardChain": "GET /api/stock-items/:id/details [requireAuth > <anonymous>]"
+          },
+          {
+            "registrationOrdinal": 1265,
+            "guardChain": "GET /api/stock-items/:id/details [requireAuth > <anonymous>]"
+          }
+        ],
+        "classification": "requires_handler_order_review",
+        "deletionApproved": false
+      },
+      {
+        "signature": "GET /api/stock-items/:id/transactions",
+        "count": 2,
+        "registrations": [
+          {
+            "registrationOrdinal": 1240,
+            "guardChain": "GET /api/stock-items/:id/transactions [requireAuth > <anonymous>]"
+          },
+          {
+            "registrationOrdinal": 1264,
+            "guardChain": "GET /api/stock-items/:id/transactions [requireAuth > <anonymous>]"
+          }
+        ],
+        "classification": "requires_handler_order_review",
+        "deletionApproved": false
+      },
+      {
+        "signature": "GET /api/stock-items/:id/voucher-history",
+        "count": 2,
+        "registrations": [
+          {
+            "registrationOrdinal": 1242,
+            "guardChain": "GET /api/stock-items/:id/voucher-history [requireAuth > <anonymous>]"
+          },
+          {
+            "registrationOrdinal": 1266,
+            "guardChain": "GET /api/stock-items/:id/voucher-history [requireAuth > <anonymous>]"
+          }
+        ],
+        "classification": "requires_handler_order_review",
+        "deletionApproved": false
+      },
+      {
+        "signature": "GET /api/stock-transfers/:transferId/revisions",
+        "count": 2,
+        "registrations": [
+          {
+            "registrationOrdinal": 1432,
+            "guardChain": "GET /api/stock-transfers/:transferId/revisions [requireAuth > <anonymous>]"
+          },
+          {
+            "registrationOrdinal": 1500,
+            "guardChain": "GET /api/stock-transfers/:transferId/revisions [requireAuth > <anonymous>]"
+          }
+        ],
+        "classification": "requires_handler_order_review",
+        "deletionApproved": false
+      },
+      {
+        "signature": "GET /api/stock-transfers/by-voucher/:voucherId/revisions",
+        "count": 2,
+        "registrations": [
+          {
+            "registrationOrdinal": 1431,
+            "guardChain": "GET /api/stock-transfers/by-voucher/:voucherId/revisions [requireAuth > <anonymous>]"
+          },
+          {
+            "registrationOrdinal": 1499,
+            "guardChain": "GET /api/stock-transfers/by-voucher/:voucherId/revisions [requireAuth > <anonymous>]"
+          }
+        ],
+        "classification": "requires_handler_order_review",
+        "deletionApproved": false
+      },
+      {
+        "signature": "GET /api/suppliers/:supplierId/purchase-orders",
+        "count": 2,
+        "registrations": [
+          {
+            "registrationOrdinal": 1419,
+            "guardChain": "GET /api/suppliers/:supplierId/purchase-orders [requireAuth > <anonymous>]"
+          },
+          {
+            "registrationOrdinal": 1442,
+            "guardChain": "GET /api/suppliers/:supplierId/purchase-orders [requireAuth > <anonymous>]"
+          }
+        ],
+        "classification": "requires_handler_order_review",
+        "deletionApproved": false
+      },
+      {
+        "signature": "GET /api/vouchers",
+        "count": 2,
+        "registrations": [
+          {
+            "registrationOrdinal": 1420,
+            "guardChain": "GET /api/vouchers [requireAuth > <anonymous>]"
+          },
+          {
+            "registrationOrdinal": 1440,
+            "guardChain": "GET /api/vouchers [requireAuth > <anonymous>]"
+          }
+        ],
+        "classification": "requires_handler_order_review",
+        "deletionApproved": false
+      },
+      {
+        "signature": "GET /api/vouchers/:id",
+        "count": 2,
+        "registrations": [
+          {
+            "registrationOrdinal": 1439,
+            "guardChain": "GET /api/vouchers/:id [<anonymous>]"
+          },
+          {
+            "registrationOrdinal": 1444,
+            "guardChain": "GET /api/vouchers/:id [requireAuth > <anonymous>]"
+          }
+        ],
+        "classification": "requires_handler_order_review",
+        "deletionApproved": false
+      },
+      {
+        "signature": "PATCH /api/containers/:id/offload",
+        "count": 2,
+        "registrations": [
+          {
+            "registrationOrdinal": 1359,
+            "guardChain": "PATCH /api/containers/:id/offload [requireAuth > <anonymous> > <anonymous>]"
+          },
+          {
+            "registrationOrdinal": 1361,
+            "guardChain": "PATCH /api/containers/:id/offload [requireAuth > <anonymous> > <anonymous>]"
+          }
+        ],
+        "classification": "requires_handler_order_review",
+        "deletionApproved": false
+      },
+      {
+        "signature": "PATCH /api/factory/customer-orders/:id/charges/:chargeId",
+        "count": 2,
+        "registrations": [
+          {
+            "registrationOrdinal": 346,
+            "guardChain": "PATCH /api/factory/customer-orders/:id/charges/:chargeId [requireAuth > ensureCustomerLedgerForChargeWrite]"
+          },
+          {
+            "registrationOrdinal": 349,
+            "guardChain": "PATCH /api/factory/customer-orders/:id/charges/:chargeId [requireAuth > <anonymous>]"
+          }
+        ],
+        "classification": "requires_handler_order_review",
+        "deletionApproved": false
+      },
+      {
+        "signature": "PATCH /api/factory/transporters/:id",
+        "count": 2,
+        "registrations": [
+          {
+            "registrationOrdinal": 486,
+            "guardChain": "PATCH /api/factory/transporters/:id [requireAuth > <anonymous>]"
+          },
+          {
+            "registrationOrdinal": 929,
+            "guardChain": "PATCH /api/factory/transporters/:id [requireAuth > <anonymous>]"
+          }
+        ],
+        "classification": "requires_handler_order_review",
+        "deletionApproved": false
+      },
+      {
+        "signature": "PATCH /api/locations/:locationId",
+        "count": 2,
+        "registrations": [
+          {
+            "registrationOrdinal": 1059,
+            "guardChain": "PATCH /api/locations/:locationId [<anonymous> > requireAuth > <anonymous> > <anonymous>]"
+          },
+          {
+            "registrationOrdinal": 1066,
+            "guardChain": "PATCH /api/locations/:locationId [requireAuth > <anonymous>]"
+          }
+        ],
+        "classification": "requires_handler_order_review",
+        "deletionApproved": false
+      },
+      {
+        "signature": "PATCH /api/stock-items/:id",
+        "count": 2,
+        "registrations": [
+          {
+            "registrationOrdinal": 1238,
+            "guardChain": "PATCH /api/stock-items/:id [requireAuth > requireNonPOS > <anonymous>]"
+          },
+          {
+            "registrationOrdinal": 1262,
+            "guardChain": "PATCH /api/stock-items/:id [requireAuth > requireNonPOS > <anonymous>]"
+          }
+        ],
+        "classification": "requires_handler_order_review",
+        "deletionApproved": false
+      },
+      {
+        "signature": "PATCH /api/stock-transfer-items/:id",
+        "count": 2,
+        "registrations": [
+          {
+            "registrationOrdinal": 1246,
+            "guardChain": "PATCH /api/stock-transfer-items/:id [requireAuth > <anonymous>]"
+          },
+          {
+            "registrationOrdinal": 1270,
+            "guardChain": "PATCH /api/stock-transfer-items/:id [requireAuth > <anonymous>]"
+          }
+        ],
+        "classification": "requires_handler_order_review",
+        "deletionApproved": false
+      },
+      {
+        "signature": "PATCH /api/voucher-entries/:id",
+        "count": 2,
+        "registrations": [
+          {
+            "registrationOrdinal": 1097,
+            "guardChain": "PATCH /api/voucher-entries/:id [requireAuth > <anonymous>]"
+          },
+          {
+            "registrationOrdinal": 1484,
+            "guardChain": "PATCH /api/voucher-entries/:id [requireAuth > <anonymous>]"
+          }
+        ],
+        "classification": "requires_handler_order_review",
+        "deletionApproved": false
+      },
+      {
+        "signature": "PATCH /api/vouchers/:id",
+        "count": 2,
+        "registrations": [
+          {
+            "registrationOrdinal": 1424,
+            "guardChain": "PATCH /api/vouchers/:id [requireAuth > <anonymous>]"
+          },
+          {
+            "registrationOrdinal": 1469,
+            "guardChain": "PATCH /api/vouchers/:id [requireAuth > <anonymous>]"
+          }
+        ],
+        "classification": "requires_handler_order_review",
+        "deletionApproved": false
+      },
+      {
+        "signature": "PATCH /api/vouchers/:id/adjustment",
+        "count": 2,
+        "registrations": [
+          {
+            "registrationOrdinal": 1421,
+            "guardChain": "PATCH /api/vouchers/:id/adjustment [requireAuth > requireNonPOS > <anonymous>]"
+          },
+          {
+            "registrationOrdinal": 1473,
+            "guardChain": "PATCH /api/vouchers/:id/adjustment [requireAuth > requireNonPOS > <anonymous>]"
+          }
+        ],
+        "classification": "requires_handler_order_review",
+        "deletionApproved": false
+      },
+      {
+        "signature": "PATCH /api/vouchers/:id/journal",
+        "count": 2,
+        "registrations": [
+          {
+            "registrationOrdinal": 1457,
+            "guardChain": "PATCH /api/vouchers/:id/journal [requireAuth > requireNonPOS > <anonymous>]"
+          },
+          {
+            "registrationOrdinal": 1466,
+            "guardChain": "PATCH /api/vouchers/:id/journal [requireAuth > requireNonPOS > <anonymous>]"
+          }
+        ],
+        "classification": "requires_handler_order_review",
+        "deletionApproved": false
+      },
+      {
+        "signature": "PATCH /api/vouchers/:id/payment-receipt",
+        "count": 2,
+        "registrations": [
+          {
+            "registrationOrdinal": 1451,
+            "guardChain": "PATCH /api/vouchers/:id/payment-receipt [requireAuth > requireNonPOS > <anonymous>]"
+          },
+          {
+            "registrationOrdinal": 1455,
+            "guardChain": "PATCH /api/vouchers/:id/payment-receipt [requireAuth > requireNonPOS > <anonymous>]"
+          }
+        ],
+        "classification": "requires_handler_order_review",
+        "deletionApproved": false
+      },
+      {
+        "signature": "PATCH /api/vouchers/:id/sales",
+        "count": 2,
+        "registrations": [
+          {
+            "registrationOrdinal": 4,
+            "guardChain": "PATCH /api/vouchers/:id/sales [<anonymous>]"
+          },
+          {
+            "registrationOrdinal": 1471,
+            "guardChain": "PATCH /api/vouchers/:id/sales [requireAuth > <anonymous>]"
+          }
+        ],
+        "classification": "requires_handler_order_review",
+        "deletionApproved": false
+      },
+      {
+        "signature": "POST /api/admin/account-migration/execute",
+        "count": 2,
+        "registrations": [
+          {
+            "registrationOrdinal": 1743,
+            "guardChain": "POST /api/admin/account-migration/execute [requireAuth > <anonymous> > <anonymous>]"
+          },
+          {
+            "registrationOrdinal": 1779,
+            "guardChain": "POST /api/admin/account-migration/execute [requireAuth > <anonymous> > <anonymous>]"
+          }
+        ],
+        "classification": "requires_handler_order_review",
+        "deletionApproved": false
+      },
+      {
+        "signature": "POST /api/bales/import",
+        "count": 2,
+        "registrations": [
+          {
+            "registrationOrdinal": 8,
+            "guardChain": "POST /api/bales/import [<anonymous>]"
+          },
+          {
+            "registrationOrdinal": 1658,
+            "guardChain": "POST /api/bales/import [requireAuth > <anonymous>]"
+          }
+        ],
+        "classification": "requires_handler_order_review",
+        "deletionApproved": false
+      },
+      {
+        "signature": "POST /api/containers/tracking/import",
+        "count": 2,
+        "registrations": [
+          {
+            "registrationOrdinal": 10,
+            "guardChain": "POST /api/containers/tracking/import [<anonymous>]"
+          },
+          {
+            "registrationOrdinal": 1332,
+            "guardChain": "POST /api/containers/tracking/import [requireAuth > requireNonPOS > <anonymous>]"
+          }
+        ],
+        "classification": "requires_handler_order_review",
+        "deletionApproved": false
+      },
+      {
+        "signature": "POST /api/factory/bales/send-worker-pdf-whatsapp",
+        "count": 2,
+        "registrations": [
+          {
+            "registrationOrdinal": 567,
+            "guardChain": "POST /api/factory/bales/send-worker-pdf-whatsapp [requireAuth > <anonymous>]"
+          },
+          {
+            "registrationOrdinal": 884,
+            "guardChain": "POST /api/factory/bales/send-worker-pdf-whatsapp [requireAuth > <anonymous>]"
+          }
+        ],
+        "classification": "requires_handler_order_review",
+        "deletionApproved": false
+      },
+      {
+        "signature": "POST /api/factory/customer-orders/:id/charges",
+        "count": 2,
+        "registrations": [
+          {
+            "registrationOrdinal": 345,
+            "guardChain": "POST /api/factory/customer-orders/:id/charges [requireAuth > ensureCustomerLedgerForChargeWrite]"
+          },
+          {
+            "registrationOrdinal": 347,
+            "guardChain": "POST /api/factory/customer-orders/:id/charges [requireAuth > <anonymous>]"
+          }
+        ],
+        "classification": "requires_handler_order_review",
+        "deletionApproved": false
+      },
+      {
+        "signature": "POST /api/factory/production-planner/:date",
+        "count": 2,
+        "registrations": [
+          {
+            "registrationOrdinal": 569,
+            "guardChain": "POST /api/factory/production-planner/:date [requireAuth > <anonymous>]"
+          },
+          {
+            "registrationOrdinal": 847,
+            "guardChain": "POST /api/factory/production-planner/:date [requireAuth > <anonymous>]"
+          }
+        ],
+        "classification": "requires_handler_order_review",
+        "deletionApproved": false
+      },
+      {
+        "signature": "POST /api/factory/raw-stock/recalc/undo",
+        "count": 2,
+        "registrations": [
+          {
+            "registrationOrdinal": 188,
+            "guardChain": "POST /api/factory/raw-stock/recalc/undo [requireAuth > <anonymous> > <anonymous>]"
+          },
+          {
+            "registrationOrdinal": 205,
+            "guardChain": "POST /api/factory/raw-stock/recalc/undo [requireAuth > <anonymous> > <anonymous>]"
+          }
+        ],
+        "classification": "requires_handler_order_review",
+        "deletionApproved": false
+      },
+      {
+        "signature": "POST /api/factory/stock-entry/end-production",
+        "count": 2,
+        "registrations": [
+          {
+            "registrationOrdinal": 566,
+            "guardChain": "POST /api/factory/stock-entry/end-production [requireAuth > <anonymous>]"
+          },
+          {
+            "registrationOrdinal": 883,
+            "guardChain": "POST /api/factory/stock-entry/end-production [requireAuth > <anonymous>]"
+          }
+        ],
+        "classification": "requires_handler_order_review",
+        "deletionApproved": false
+      },
+      {
+        "signature": "POST /api/factory/transporters",
+        "count": 2,
+        "registrations": [
+          {
+            "registrationOrdinal": 485,
+            "guardChain": "POST /api/factory/transporters [requireAuth > <anonymous>]"
+          },
+          {
+            "registrationOrdinal": 928,
+            "guardChain": "POST /api/factory/transporters [requireAuth > <anonymous>]"
+          }
+        ],
+        "classification": "requires_handler_order_review",
+        "deletionApproved": false
+      },
+      {
+        "signature": "POST /api/factory/transporters/:id/charges",
+        "count": 2,
+        "registrations": [
+          {
+            "registrationOrdinal": 487,
+            "guardChain": "POST /api/factory/transporters/:id/charges [requireAuth > <anonymous>]"
+          },
+          {
+            "registrationOrdinal": 930,
+            "guardChain": "POST /api/factory/transporters/:id/charges [requireAuth > <anonymous>]"
+          }
+        ],
+        "classification": "requires_handler_order_review",
+        "deletionApproved": false
+      },
+      {
+        "signature": "POST /api/factory/transporters/:id/payments",
+        "count": 2,
+        "registrations": [
+          {
+            "registrationOrdinal": 488,
+            "guardChain": "POST /api/factory/transporters/:id/payments [requireAuth > <anonymous>]"
+          },
+          {
+            "registrationOrdinal": 931,
+            "guardChain": "POST /api/factory/transporters/:id/payments [requireAuth > <anonymous>]"
+          }
+        ],
+        "classification": "requires_handler_order_review",
+        "deletionApproved": false
+      },
+      {
+        "signature": "POST /api/factory/workers/import-excel",
+        "count": 2,
+        "registrations": [
+          {
+            "registrationOrdinal": 9,
+            "guardChain": "POST /api/factory/workers/import-excel [<anonymous>]"
+          },
+          {
+            "registrationOrdinal": 592,
+            "guardChain": "POST /api/factory/workers/import-excel [requireAuth > multerMiddleware > <anonymous>]"
+          }
+        ],
+        "classification": "requires_handler_order_review",
+        "deletionApproved": false
+      },
+      {
+        "signature": "POST /api/inventory/quick-adjust",
+        "count": 2,
+        "registrations": [
+          {
+            "registrationOrdinal": 5,
+            "guardChain": "POST /api/inventory/quick-adjust [<anonymous>]"
+          },
+          {
+            "registrationOrdinal": 1081,
+            "guardChain": "POST /api/inventory/quick-adjust [requireAuth > <anonymous>]"
+          }
+        ],
+        "classification": "requires_handler_order_review",
+        "deletionApproved": false
+      },
+      {
+        "signature": "POST /api/sp/migration/cutover/cancel",
+        "count": 2,
+        "registrations": [
+          {
+            "registrationOrdinal": 1937,
+            "guardChain": "POST /api/sp/migration/cutover/cancel [requireAuth > <anonymous> > cancelPreparedCutover]"
+          },
+          {
+            "registrationOrdinal": 1945,
+            "guardChain": "POST /api/sp/migration/cutover/cancel [requireAuth > <anonymous> > cancelPreparedCutover]"
+          }
+        ],
+        "classification": "requires_handler_order_review",
+        "deletionApproved": false
+      },
+      {
+        "signature": "POST /api/sp/migration/cutover/finalize",
+        "count": 2,
+        "registrations": [
+          {
+            "registrationOrdinal": 1935,
+            "guardChain": "POST /api/sp/migration/cutover/finalize [requireAuth > <anonymous> > finalizeCutover]"
+          },
+          {
+            "registrationOrdinal": 1943,
+            "guardChain": "POST /api/sp/migration/cutover/finalize [requireAuth > <anonymous> > finalizeCutover]"
+          }
+        ],
+        "classification": "requires_handler_order_review",
+        "deletionApproved": false
+      },
+      {
+        "signature": "POST /api/sp/migration/cutover/prepare",
+        "count": 2,
+        "registrations": [
+          {
+            "registrationOrdinal": 1934,
+            "guardChain": "POST /api/sp/migration/cutover/prepare [requireAuth > <anonymous> > prepareCutover]"
+          },
+          {
+            "registrationOrdinal": 1942,
+            "guardChain": "POST /api/sp/migration/cutover/prepare [requireAuth > <anonymous> > prepareCutover]"
+          }
+        ],
+        "classification": "requires_handler_order_review",
+        "deletionApproved": false
+      },
+      {
+        "signature": "POST /api/sp/migration/cutover/rollback",
+        "count": 2,
+        "registrations": [
+          {
+            "registrationOrdinal": 1936,
+            "guardChain": "POST /api/sp/migration/cutover/rollback [requireAuth > <anonymous> > rollbackCutover]"
+          },
+          {
+            "registrationOrdinal": 1944,
+            "guardChain": "POST /api/sp/migration/cutover/rollback [requireAuth > <anonymous> > rollbackCutover]"
+          }
+        ],
+        "classification": "requires_handler_order_review",
+        "deletionApproved": false
+      },
+      {
+        "signature": "POST /api/sp/migration/gc-containers",
+        "count": 2,
+        "registrations": [
+          {
+            "registrationOrdinal": 1950,
+            "guardChain": "POST /api/sp/migration/gc-containers [requireAuth > <anonymous> > importContainers]"
+          },
+          {
+            "registrationOrdinal": 2040,
+            "guardChain": "POST /api/sp/migration/gc-containers [requireAuth > <anonymous> > <anonymous>]"
+          }
+        ],
+        "classification": "requires_handler_order_review",
+        "deletionApproved": false
+      },
+      {
+        "signature": "POST /api/sp/migration/gc-sales-readonly",
+        "count": 2,
+        "registrations": [
+          {
+            "registrationOrdinal": 1949,
+            "guardChain": "POST /api/sp/migration/gc-sales-readonly [requireAuth > <anonymous> > importHistoricalSales]"
+          },
+          {
+            "registrationOrdinal": 2039,
+            "guardChain": "POST /api/sp/migration/gc-sales-readonly [requireAuth > <anonymous> > <anonymous>]"
+          }
+        ],
+        "classification": "requires_handler_order_review",
+        "deletionApproved": false
+      },
+      {
+        "signature": "POST /api/sp/migration/rollback",
+        "count": 2,
+        "registrations": [
+          {
+            "registrationOrdinal": 1951,
+            "guardChain": "POST /api/sp/migration/rollback [requireAuth > <anonymous> > rollbackMigrationRun]"
+          },
+          {
+            "registrationOrdinal": 2028,
+            "guardChain": "POST /api/sp/migration/rollback [requireAuth > <anonymous> > <anonymous> > <anonymous> > <anonymous> > <anonymous>]"
+          }
+        ],
+        "classification": "requires_handler_order_review",
+        "deletionApproved": false
+      },
+      {
+        "signature": "POST /api/sp/profit-splits",
+        "count": 2,
+        "registrations": [
+          {
+            "registrationOrdinal": 1985,
+            "guardChain": "POST /api/sp/profit-splits [<anonymous> > <anonymous> > requireAuth > retireLegacyGoldenCoastProfitSplit]"
+          },
+          {
+            "registrationOrdinal": 2022,
+            "guardChain": "POST /api/sp/profit-splits [requireAuth > <anonymous>]"
+          }
+        ],
+        "classification": "requires_handler_order_review",
+        "deletionApproved": false
+      },
+      {
+        "signature": "POST /api/stock-items/:id/code-aliases",
+        "count": 2,
+        "registrations": [
+          {
+            "registrationOrdinal": 1244,
+            "guardChain": "POST /api/stock-items/:id/code-aliases [requireAuth > requireNonPOS > <anonymous>]"
+          },
+          {
+            "registrationOrdinal": 1268,
+            "guardChain": "POST /api/stock-items/:id/code-aliases [requireAuth > requireNonPOS > <anonymous>]"
+          }
+        ],
+        "classification": "requires_handler_order_review",
+        "deletionApproved": false
+      },
+      {
+        "signature": "POST /api/stock-items/bulk-delete",
+        "count": 2,
+        "registrations": [
+          {
+            "registrationOrdinal": 11,
+            "guardChain": "POST /api/stock-items/bulk-delete [<anonymous>]"
+          },
+          {
+            "registrationOrdinal": 1214,
+            "guardChain": "POST /api/stock-items/bulk-delete [requireAuth > requireNonPOS > <anonymous>]"
+          }
+        ],
+        "classification": "requires_handler_order_review",
+        "deletionApproved": false
+      },
+      {
+        "signature": "POST /api/stock-items/bulk-rename",
+        "count": 2,
+        "registrations": [
+          {
+            "registrationOrdinal": 14,
+            "guardChain": "POST /api/stock-items/bulk-rename [<anonymous>]"
+          },
+          {
+            "registrationOrdinal": 1219,
+            "guardChain": "POST /api/stock-items/bulk-rename [requireAuth > requireNonPOS > <anonymous>]"
+          }
+        ],
+        "classification": "requires_handler_order_review",
+        "deletionApproved": false
+      },
+      {
+        "signature": "POST /api/stock-items/bulk-update-prices",
+        "count": 2,
+        "registrations": [
+          {
+            "registrationOrdinal": 12,
+            "guardChain": "POST /api/stock-items/bulk-update-prices [<anonymous>]"
+          },
+          {
+            "registrationOrdinal": 1216,
+            "guardChain": "POST /api/stock-items/bulk-update-prices [requireAuth > requireNonPOS > <anonymous>]"
+          }
+        ],
+        "classification": "requires_handler_order_review",
+        "deletionApproved": false
+      },
+      {
+        "signature": "POST /api/stock-items/bulk-update-uom",
+        "count": 2,
+        "registrations": [
+          {
+            "registrationOrdinal": 13,
+            "guardChain": "POST /api/stock-items/bulk-update-uom [<anonymous>]"
+          },
+          {
+            "registrationOrdinal": 1218,
+            "guardChain": "POST /api/stock-items/bulk-update-uom [requireAuth > requireNonPOS > <anonymous>]"
+          }
+        ],
+        "classification": "requires_handler_order_review",
+        "deletionApproved": false
+      },
+      {
+        "signature": "POST /api/stock-items/import",
+        "count": 2,
+        "registrations": [
+          {
+            "registrationOrdinal": 1234,
+            "guardChain": "POST /api/stock-items/import [requireAuth > requireNonPOS > <anonymous>]"
+          },
+          {
+            "registrationOrdinal": 1275,
+            "guardChain": "POST /api/stock-items/import [requireAuth > requireNonPOS > <anonymous>]"
+          }
+        ],
+        "classification": "requires_handler_order_review",
+        "deletionApproved": false
+      },
+      {
+        "signature": "POST /api/stock-items/import-barcodes",
+        "count": 2,
+        "registrations": [
+          {
+            "registrationOrdinal": 1235,
+            "guardChain": "POST /api/stock-items/import-barcodes [requireAuth > requireNonPOS > <anonymous>]"
+          },
+          {
+            "registrationOrdinal": 1276,
+            "guardChain": "POST /api/stock-items/import-barcodes [requireAuth > requireNonPOS > <anonymous>]"
+          }
+        ],
+        "classification": "requires_handler_order_review",
+        "deletionApproved": false
+      },
+      {
+        "signature": "POST /api/stock-items/import-grade-category-template",
+        "count": 2,
+        "registrations": [
+          {
+            "registrationOrdinal": 1237,
+            "guardChain": "POST /api/stock-items/import-grade-category-template [requireAuth > requireNonPOS > multerMiddleware > <anonymous>]"
+          },
+          {
+            "registrationOrdinal": 1278,
+            "guardChain": "POST /api/stock-items/import-grade-category-template [requireAuth > requireNonPOS > multerMiddleware > <anonymous>]"
+          }
+        ],
+        "classification": "requires_handler_order_review",
+        "deletionApproved": false
+      },
+      {
+        "signature": "POST /api/stock-items/import-opening-balances",
+        "count": 2,
+        "registrations": [
+          {
+            "registrationOrdinal": 7,
+            "guardChain": "POST /api/stock-items/import-opening-balances [<anonymous>]"
+          },
+          {
+            "registrationOrdinal": 1217,
+            "guardChain": "POST /api/stock-items/import-opening-balances [requireAuth > requireNonPOS > <anonymous>]"
+          }
+        ],
+        "classification": "requires_handler_order_review",
+        "deletionApproved": false
+      },
+      {
+        "signature": "POST /api/stock-items/update-categories",
+        "count": 2,
+        "registrations": [
+          {
+            "registrationOrdinal": 1236,
+            "guardChain": "POST /api/stock-items/update-categories [requireAuth > requireNonPOS > <anonymous>]"
+          },
+          {
+            "registrationOrdinal": 1277,
+            "guardChain": "POST /api/stock-items/update-categories [requireAuth > requireNonPOS > <anonymous>]"
+          }
+        ],
+        "classification": "requires_handler_order_review",
+        "deletionApproved": false
+      },
+      {
+        "signature": "POST /api/vouchers",
+        "count": 2,
+        "registrations": [
+          {
+            "registrationOrdinal": 2,
+            "guardChain": "POST /api/vouchers [<anonymous>]"
+          },
+          {
+            "registrationOrdinal": 1446,
+            "guardChain": "POST /api/vouchers [requireAuth > <anonymous>]"
+          }
+        ],
+        "classification": "requires_handler_order_review",
+        "deletionApproved": false
+      },
+      {
+        "signature": "POST /api/vouchers/:id/finalize",
+        "count": 2,
+        "registrations": [
+          {
+            "registrationOrdinal": 1427,
+            "guardChain": "POST /api/vouchers/:id/finalize [requireAuth > requireNonPOS > <anonymous>]"
+          },
+          {
+            "registrationOrdinal": 1792,
+            "guardChain": "POST /api/vouchers/:id/finalize [requireAuth > requireNonPOS > <anonymous> > <anonymous>]"
+          }
+        ],
+        "classification": "requires_handler_order_review",
+        "deletionApproved": false
+      },
+      {
+        "signature": "POST /api/vouchers/journal",
+        "count": 2,
+        "registrations": [
+          {
+            "registrationOrdinal": 1456,
+            "guardChain": "POST /api/vouchers/journal [requireAuth > requireNonPOS > <anonymous>]"
+          },
+          {
+            "registrationOrdinal": 1465,
+            "guardChain": "POST /api/vouchers/journal [requireAuth > requireNonPOS > <anonymous>]"
+          }
+        ],
+        "classification": "requires_handler_order_review",
+        "deletionApproved": false
+      },
+      {
+        "signature": "POST /api/vouchers/payment-receipt",
+        "count": 2,
+        "registrations": [
+          {
+            "registrationOrdinal": 1448,
+            "guardChain": "POST /api/vouchers/payment-receipt [requireAuth > requireNonPOS > <anonymous>]"
+          },
+          {
+            "registrationOrdinal": 1454,
+            "guardChain": "POST /api/vouchers/payment-receipt [requireAuth > requireNonPOS > <anonymous>]"
+          }
+        ],
+        "classification": "requires_handler_order_review",
+        "deletionApproved": false
+      },
+      {
+        "signature": "POST /api/vouchers/with-entries",
+        "count": 2,
+        "registrations": [
+          {
+            "registrationOrdinal": 1445,
+            "guardChain": "POST /api/vouchers/with-entries [requireAuth > requireNonPOS > <anonymous>]"
+          },
+          {
+            "registrationOrdinal": 1447,
+            "guardChain": "POST /api/vouchers/with-entries [requireAuth > requireNonPOS > <anonymous>]"
+          }
+        ],
+        "classification": "requires_handler_order_review",
+        "deletionApproved": false
+      },
+      {
+        "signature": "PUT /api/location-price-groups",
+        "count": 2,
+        "registrations": [
+          {
+            "registrationOrdinal": 1231,
+            "guardChain": "PUT /api/location-price-groups [requireAuth > requireNonPOS > <anonymous>]"
+          },
+          {
+            "registrationOrdinal": 1272,
+            "guardChain": "PUT /api/location-price-groups [requireAuth > requireNonPOS > <anonymous>]"
+          }
+        ],
+        "classification": "requires_handler_order_review",
+        "deletionApproved": false
+      },
+      {
+        "signature": "PUT /api/vouchers/:id/with-entries",
+        "count": 2,
+        "registrations": [
+          {
+            "registrationOrdinal": 3,
+            "guardChain": "PUT /api/vouchers/:id/with-entries [<anonymous>]"
+          },
+          {
+            "registrationOrdinal": 1475,
+            "guardChain": "PUT /api/vouchers/:id/with-entries [requireAuth > <anonymous>]"
+          }
+        ],
+        "classification": "requires_handler_order_review",
+        "deletionApproved": false
+      }
+    ]
+  },
+  "frontend": {
+    "lazyPageExports": 212,
+    "notMentionedInPrimaryRouterSources": 48,
+    "primaryRouterSources": [
+      "client/src/routes/ErpRoutes.tsx",
+      "client/src/routes/PosRoutes.tsx",
+      "client/src/routes/AppRoutes.tsx",
+      "client/src/components/FactoryRoutes.tsx",
+      "client/src/app/AuthenticatedApp.tsx"
+    ],
+    "nonPrimaryRouterExports": [
+      {
+        "export": "StockItems",
+        "target": "@/pages/StockItems",
+        "classification": "unreferenced_in_primary_routers_only",
+        "deletionApproved": false
+      },
+      {
+        "export": "Containers",
+        "target": "@/pages/Containers",
+        "classification": "unreferenced_in_primary_routers_only",
+        "deletionApproved": false
+      },
+      {
+        "export": "Suppliers",
+        "target": "@/pages/Suppliers",
+        "classification": "unreferenced_in_primary_routers_only",
+        "deletionApproved": false
+      },
+      {
+        "export": "ContainerDetail",
+        "target": "@/pages/ContainerDetail",
+        "classification": "unreferenced_in_primary_routers_only",
+        "deletionApproved": false
+      },
+      {
+        "export": "OffloadItemSearch",
+        "target": "@/pages/OffloadItemSearch",
+        "classification": "unreferenced_in_primary_routers_only",
+        "deletionApproved": false
+      },
+      {
+        "export": "StockOTW",
+        "target": "@/pages/StockOTW",
+        "classification": "unreferenced_in_primary_routers_only",
+        "deletionApproved": false
+      },
+      {
+        "export": "Customers",
+        "target": "@/pages/Customers",
+        "classification": "unreferenced_in_primary_routers_only",
+        "deletionApproved": false
+      },
+      {
+        "export": "SoldContainers",
+        "target": "@/pages/SoldContainers",
+        "classification": "unreferenced_in_primary_routers_only",
+        "deletionApproved": false
+      },
+      {
+        "export": "Bales",
+        "target": "@/pages/Bales",
+        "classification": "unreferenced_in_primary_routers_only",
+        "deletionApproved": false
+      },
+      {
+        "export": "ProductionBales",
+        "target": "@/pages/ProductionBales",
+        "classification": "unreferenced_in_primary_routers_only",
+        "deletionApproved": false
+      },
+      {
+        "export": "PressingBales",
+        "target": "@/pages/PressingBales",
+        "classification": "unreferenced_in_primary_routers_only",
+        "deletionApproved": false
+      },
+      {
+        "export": "StockTransfers",
+        "target": "@/pages/StockTransfers",
+        "classification": "unreferenced_in_primary_routers_only",
+        "deletionApproved": false
+      },
+      {
+        "export": "FactoryProduction",
+        "target": "@/pages/factory/FactoryProduction",
+        "classification": "unreferenced_in_primary_routers_only",
+        "deletionApproved": false
+      },
+      {
+        "export": "ProductionSummary",
+        "target": "@/pages/factory/ProductionSummary",
+        "classification": "unreferenced_in_primary_routers_only",
+        "deletionApproved": false
+      },
+      {
+        "export": "FactorySuppliers",
+        "target": "@/pages/factory/FactorySuppliers",
+        "classification": "unreferenced_in_primary_routers_only",
+        "deletionApproved": false
+      },
+      {
+        "export": "FactoryContainers",
+        "target": "@/pages/factory/FactoryContainers",
+        "classification": "unreferenced_in_primary_routers_only",
+        "deletionApproved": false
+      },
+      {
+        "export": "FactoryNetProfitAnalytics",
+        "target": "@/pages/factory/FactoryNetProfitAnalytics",
+        "classification": "unreferenced_in_primary_routers_only",
+        "deletionApproved": false
+      },
+      {
+        "export": "FactoryNetPosition",
+        "target": "@/pages/factory/FactoryNetPosition",
+        "classification": "unreferenced_in_primary_routers_only",
+        "deletionApproved": false
+      },
+      {
+        "export": "FactoryUsers",
+        "target": "@/pages/factory/FactoryUsers",
+        "classification": "unreferenced_in_primary_routers_only",
+        "deletionApproved": false
+      },
+      {
+        "export": "FactoryWorkersHub",
+        "target": "@/pages/factory/FactoryWorkersHub",
+        "classification": "unreferenced_in_primary_routers_only",
+        "deletionApproved": false
+      },
+      {
+        "export": "FactoryEmployeesHub",
+        "target": "@/pages/factory/FactoryEmployeesHub",
+        "classification": "unreferenced_in_primary_routers_only",
+        "deletionApproved": false
+      },
+      {
+        "export": "FactoryInsurance",
+        "target": "@/pages/factory/FactoryInsurance",
+        "classification": "unreferenced_in_primary_routers_only",
+        "deletionApproved": false
+      },
+      {
+        "export": "FactorySupplierReport",
+        "target": "@/pages/factory/FactorySupplierReport",
+        "classification": "unreferenced_in_primary_routers_only",
+        "deletionApproved": false
+      },
+      {
+        "export": "FactorySupplierStatement",
+        "target": "@/pages/factory/FactorySupplierStatement",
+        "classification": "unreferenced_in_primary_routers_only",
+        "deletionApproved": false
+      },
+      {
+        "export": "FactoryCustomers",
+        "target": "@/pages/factory/FactoryCustomers",
+        "classification": "unreferenced_in_primary_routers_only",
+        "deletionApproved": false
+      },
+      {
+        "export": "FactoryInvoices",
+        "target": "@/pages/factory/FactoryInvoices",
+        "classification": "unreferenced_in_primary_routers_only",
+        "deletionApproved": false
+      },
+      {
+        "export": "FactoryInvoiceDetail",
+        "target": "@/pages/factory/FactoryInvoiceDetail",
+        "classification": "unreferenced_in_primary_routers_only",
+        "deletionApproved": false
+      },
+      {
+        "export": "FactoryProformas",
+        "target": "@/pages/factory/FactoryProformas",
+        "classification": "unreferenced_in_primary_routers_only",
+        "deletionApproved": false
+      },
+      {
+        "export": "FactoryPendingLoadings",
+        "target": "@/pages/factory/FactoryPendingLoadings",
+        "classification": "unreferenced_in_primary_routers_only",
+        "deletionApproved": false
+      },
+      {
+        "export": "FactoryProfitability",
+        "target": "@/pages/factory/FactoryProfitability",
+        "classification": "unreferenced_in_primary_routers_only",
+        "deletionApproved": false
+      },
+      {
+        "export": "FactorySupplierScoreboard",
+        "target": "@/pages/factory/FactorySupplierScoreboard",
+        "classification": "unreferenced_in_primary_routers_only",
+        "deletionApproved": false
+      },
+      {
+        "export": "FactoryMixOptimizer",
+        "target": "@/pages/factory/FactoryMixOptimizer",
+        "classification": "unreferenced_in_primary_routers_only",
+        "deletionApproved": false
+      },
+      {
+        "export": "FactoryCashflow",
+        "target": "@/pages/factory/FactoryCashflow",
+        "classification": "unreferenced_in_primary_routers_only",
+        "deletionApproved": false
+      },
+      {
+        "export": "FactoryWaste",
+        "target": "@/pages/factory/FactoryWaste",
+        "classification": "unreferenced_in_primary_routers_only",
+        "deletionApproved": false
+      },
+      {
+        "export": "PropertiesDashboard",
+        "target": "@/pages/properties/PropertiesDashboard",
+        "classification": "unreferenced_in_primary_routers_only",
+        "deletionApproved": false
+      },
+      {
+        "export": "PropertiesAccounts",
+        "target": "@/pages/properties/PropertiesAccounts",
+        "classification": "unreferenced_in_primary_routers_only",
+        "deletionApproved": false
+      },
+      {
+        "export": "PropertiesVouchers",
+        "target": "@/pages/properties/PropertiesVouchers",
+        "classification": "unreferenced_in_primary_routers_only",
+        "deletionApproved": false
+      },
+      {
+        "export": "PropertiesVoucherEdit",
+        "target": "@/pages/properties/PropertiesVoucherEdit",
+        "classification": "unreferenced_in_primary_routers_only",
+        "deletionApproved": false
+      },
+      {
+        "export": "PropertiesVoucherDetail",
+        "target": "@/pages/properties/PropertiesVoucherDetail",
+        "classification": "unreferenced_in_primary_routers_only",
+        "deletionApproved": false
+      },
+      {
+        "export": "PropertiesCreate",
+        "target": "@/pages/properties/PropertiesCreate",
+        "classification": "unreferenced_in_primary_routers_only",
+        "deletionApproved": false
+      },
+      {
+        "export": "PropertiesAnalytics",
+        "target": "@/pages/properties/PropertiesAnalytics",
+        "classification": "unreferenced_in_primary_routers_only",
+        "deletionApproved": false
+      },
+      {
+        "export": "PropertiesDaybook",
+        "target": "@/pages/properties/PropertiesDaybook",
+        "classification": "unreferenced_in_primary_routers_only",
+        "deletionApproved": false
+      },
+      {
+        "export": "PropertiesLedgerMonthly",
+        "target": "@/pages/properties/PropertiesLedgerMonthly",
+        "classification": "unreferenced_in_primary_routers_only",
+        "deletionApproved": false
+      },
+      {
+        "export": "PropertiesLedgerVouchers",
+        "target": "@/pages/properties/PropertiesLedgerVouchers",
+        "classification": "unreferenced_in_primary_routers_only",
+        "deletionApproved": false
+      },
+      {
+        "export": "PropertiesSettings",
+        "target": "@/pages/properties/PropertiesSettings",
+        "classification": "unreferenced_in_primary_routers_only",
+        "deletionApproved": false
+      },
+      {
+        "export": "PropertiesRentalWarehouses",
+        "target": "@/pages/properties/PropertiesRentalWarehouses",
+        "classification": "unreferenced_in_primary_routers_only",
+        "deletionApproved": false
+      },
+      {
+        "export": "PropertiesRentalShops",
+        "target": "@/pages/properties/PropertiesRentalShops",
+        "classification": "unreferenced_in_primary_routers_only",
+        "deletionApproved": false
+      },
+      {
+        "export": "PropertiesRentalPayments",
+        "target": "@/pages/properties/PropertiesRentalPayments",
+        "classification": "unreferenced_in_primary_routers_only",
+        "deletionApproved": false
+      }
+    ]
+  },
+  "candidates": [
+    {
+      "path": "server/routes/containers/offload/create.ts",
+      "kind": "unreachable_api_handler",
+      "confidence": "high",
+      "classification": "shadowed",
+      "reason": "containerRoutes registers lifecycle guard then central create handler before offload/index; central POST handles request without next(); legacy POST in offload/create runs later",
+      "phase": 3,
+      "followUp": "Remove obsolete registrar/import only, preserve offload recalc/charges"
+    },
+    {
+      "path": "scripts/audit-legacy-route-boundaries.d.mts",
+      "kind": "orphaned_type_declaration",
+      "confidence": "high",
+      "classification": "orphaned",
+      "reason": "Matching audit .mjs retired according to phase9 archive; unique exported auditLegacyRouteBoundaries symbol found only in this declaration",
+      "phase": 2,
+      "followUp": "Confirm no non-indexed external TypeScript consumers"
+    },
+    {
+      "path": "client/src/pages/SoldContainers.tsx",
+      "kind": "unrouted_page",
+      "confidence": "high",
+      "classification": "not_reachable_from_current_routing",
+      "reason": "ERP /sold-containers redirects to /containers; page import occurs in lazyPages and direct UI test, no primary router consumer; Containers has separate SoldContainersTable",
+      "phase": 2,
+      "followUp": "Delete page and lazy export only after checking secondary/offline references; review direct test"
+    },
+    {
+      "path": "client/src/pages/factory/FactoryProduction.tsx",
+      "kind": "unrouted_page",
+      "confidence": "high",
+      "classification": "not_reachable_from_current_routing",
+      "reason": "No consumer in primary ERP/POS/factory routing; lazyPages and direct UI test reference import; production features routed separately",
+      "phase": 2,
+      "followUp": "Check offline prep, deep links and direct test"
+    },
+    {
+      "path": "scripts/pr1559-self-fix.mjs",
+      "kind": "historical_mutating_script",
+      "confidence": "medium",
+      "classification": "review_obsolete_one_off",
+      "reason": "Historical PR #1559 hard-coded source replacement script; docs/ci/branch-protection.md mentions historical one-shot workflow; no active package wiring verified",
+      "phase": 9,
+      "followUp": "Confirm workflow and maintainer usage"
+    },
+    {
+      "path": "scripts/phase3-preflight-patch.mjs",
+      "kind": "historical_mutating_script",
+      "confidence": "medium",
+      "classification": "review_obsolete_one_off",
+      "reason": "Patch assumes obsolete source markers and runs git show origin/main for a test fixture; no search references",
+      "phase": 9,
+      "followUp": "Review manual invocation and retention policy"
+    },
+    {
+      "path": "scripts/phase3-wire-capacity-locks.mjs",
+      "kind": "historical_mutating_script",
+      "confidence": "medium",
+      "classification": "review_obsolete_one_off",
+      "reason": "Source-editing rollout script whose only name search occurrence is historical preflight patch",
+      "phase": 9,
+      "followUp": "Check workflow references and ensure changes were committed before deletion"
+    },
+    {
+      "path": "scripts/phase3-finalize-creation-locks.mjs",
+      "kind": "historical_mutating_script",
+      "confidence": "medium",
+      "classification": "review_obsolete_one_off",
+      "reason": "Phase-specific source-editing script; filename search did not find references",
+      "phase": 9,
+      "followUp": "Inspect full file and workflow/manual usage"
+    },
+    {
+      "path": "scripts/phase4-remaining-type-safety.mjs",
+      "kind": "historical_mutating_script",
+      "confidence": "medium",
+      "classification": "review_obsolete_one_off",
+      "reason": "Phase-specific script; filename search did not find references",
+      "phase": 9,
+      "followUp": "Inspect full file and workflow/manual usage"
+    },
+    {
+      "path": "scripts/apply-phase3-heavy-read-indexes.mjs",
+      "kind": "historical_mutating_script",
+      "confidence": "medium",
+      "classification": "review_obsolete_one_off",
+      "reason": "Phase-specific script with self-only filename search result",
+      "phase": 9,
+      "followUp": "Check planned database migration and recovery use"
+    },
+    {
+      "path": "scripts/apply-phase9-batch-a-streaming.mjs",
+      "kind": "historical_mutating_script",
+      "confidence": "medium",
+      "classification": "review_obsolete_one_off",
+      "reason": "Phase-specific script; filename search did not find references",
+      "phase": 9,
+      "followUp": "Inspect full file and workflow/manual usage"
+    }
+  ],
+  "knownLiveDoNotDelete": [
+    "client/src/pages/AccountsLegacy.tsx",
+    "client/src/pages/AnalyticsLegacy.tsx",
+    "client/src/pages/SalesReportLegacy.tsx",
+    "server/routes/factory/factoryFrenchCatalogReadRoutes.ts",
+    "server/routes/factory/employee-pos/netPositionHistoricalCorrection.ts",
+    "server/services/factory/postOffloadPhase6Safety.ts",
+    "server/lib/databaseSsl.d.mts",
+    "client/src/pages/factory/FactoryLocationInventoryMockup.tsx",
+    "client/src/pages/containers/SoldContainersTable.tsx"
+  ],
+  "limits": [
+    "Route manifest overlap does not imply handler is dead; Express next()/fallthrough/guards/order must be read",
+    "Only names absent from primary routers, not a full module import graph; hubs and offline prep may use pages",
+    "GitHub code-search absence is not proof of no dynamic or external references",
+    "No tests, builds, typecheck, CI, or runtime behavior checks were run",
+    "Dependency package usage, all symbol references and reachability across 5,765 file bodies were not exhaustively analyzed"
+  ]
+}

@@ -54,7 +54,6 @@ Tracking is automatic for supported shipping lines:
 
 The tracking scheduler (`schedulerService.ts`) runs every 6 hours (00:00, 06:00, 12:00, 18:00 EST) and calls the appropriate provider based on the container's carrier. Provider resolution is in `server/lib/trackingProviders/providerResolver.ts`.
 
-Priority logic (`server/lib/trackingPriority.ts`) determines which provider to use when multiple are available.
 
 ---
 

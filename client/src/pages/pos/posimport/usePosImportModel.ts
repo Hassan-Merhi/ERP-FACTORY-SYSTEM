@@ -33,7 +33,7 @@ function createImportIdentity(scope: string): string {
 }
 
 export function usePosImportModel() {
-  const [_location, navigate] = useLocation();
+  const [, navigate] = useLocation();
   const { toast } = useToast();
   const { displayCurrency, exchangeRate, isLoadingCompany } = useCurrencyContext();
   const { selectedCompany } = useCompany();

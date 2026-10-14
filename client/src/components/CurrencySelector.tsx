@@ -46,20 +46,3 @@ export function CurrencySelector({ value, onChange, className }: CurrencySelecto
     </div>
   );
 }
-
-interface CurrencyLabelProps {
-  amount: number | string;
-  currency?: Currency;
-  className?: string;
-}
-
-export function CurrencyLabel({ amount, currency, className }: CurrencyLabelProps) {
-  const { formatAmount, selectedCurrency } = useCurrencyContext();
-  const curr = currency || selectedCurrency;
-
-  return (
-    <span className={className} data-testid="currency-label">
-      {formatAmount(amount, curr)}
-    </span>
-  );
-}

@@ -10,10 +10,6 @@ import {
 
 const SECURITY_ACTION_PREFIX = "SECURITY:";
 
-export interface SecurityAuditWriter {
-  insert(record: typeof auditLog.$inferInsert): Promise<unknown>;
-}
-
 export function toAuditLogInsert(input: SecurityEventInput, username: string) {
   const record = buildSecurityAuditRecord(input);
   const numericTargetId = record.targetId && /^\d+$/.test(record.targetId) ? Number(record.targetId) : null;

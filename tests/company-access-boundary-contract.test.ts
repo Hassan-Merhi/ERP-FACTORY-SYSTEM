@@ -107,11 +107,17 @@ describe("Phase 7 company access boundary", () => {
   });
 
   it("protects All Daybook list, type, and detail reads with the same company boundary", () => {
+    // List and voucher-type reads are served by centralGlobalTransactionRoutes.ts (registered
+    // first); the copies in globalTransactionRoutes.ts were unreachable and were removed.
+    const centralGlobalTransactions = source("server/routes/global/centralGlobalTransactionRoutes.ts");
     const globalTransactions = source("server/routes/globalTransactionRoutes.ts");
 
+    expect(centralGlobalTransactions).toContain("resolveAllowedGlobalCompanyIds(userId, role)");
+    expect(centralGlobalTransactions).toContain(
+      "requested.filter((companyId) => allowedCompanyIds.includes(companyId))"
+    );
     expect(globalTransactions).toContain("resolveGlobalCompanyScope");
     expect(globalTransactions).toContain("getAccessibleCompanyIds");
-    expect(globalTransactions).toContain("assertCompaniesAccess(userId, requested)");
     expect(globalTransactions).toContain("assertCompanyAccess(userId, voucher.companyId)");
     expect(globalTransactions).toContain("sendCompanyAccessError(res, err)");
     expect(globalTransactions).not.toContain("userCompanyRoles");

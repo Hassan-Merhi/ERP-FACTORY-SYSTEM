@@ -123,11 +123,7 @@ export default function ChatbotSettings() {
     enabled: activeTab === "history" && !!chatStatus?.isAdminOrOwner && viewAllChats,
   });
 
-  const {
-    data: mySessions = [],
-    isLoading: mySessionsLoading,
-    refetch: _refetchMySessions,
-  } = useQuery<MySession[]>({
+  const { data: mySessions = [], isLoading: mySessionsLoading } = useQuery<MySession[]>({
     queryKey: ["/api/chatbot/my-sessions"],
     enabled: activeTab === "history",
   });

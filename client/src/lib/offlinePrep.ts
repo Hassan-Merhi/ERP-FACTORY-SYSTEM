@@ -442,7 +442,6 @@ export async function runOfflinePrep(companyId: number, onProgress: (p: PrepProg
         const items = dataset.extractItems(raw, companyId);
 
         if (dataset.tableKey && db[dataset.tableKey]) {
-          const _table = db[dataset.tableKey] as ReturnType<typeof db.users.toCollection>["db"]["table"];
           // Clear existing data for this company, then bulk-insert
           await (
             db as unknown as {
@@ -544,7 +543,6 @@ export async function runOfflinePrep(companyId: number, onProgress: (p: PrepProg
     { label: "Employees", loader: () => import("@/pages/factory/FactoryEmployees") },
     // ── Intelligence ─────────────────────────────────────────────────────
     { label: "KPIs", loader: () => import("@/pages/factory/FactoryKpis") },
-    { label: "Cashflow", loader: () => import("@/pages/factory/FactoryCashflow") },
     { label: "Alerts", loader: () => import("@/pages/factory/FactoryAlerts") },
     { label: "Waste Intelligence", loader: () => import("@/pages/factory/FactoryWaste") },
     { label: "Production Summary", loader: () => import("@/pages/factory/ProductionSummary") },

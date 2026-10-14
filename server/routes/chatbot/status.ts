@@ -23,7 +23,7 @@ export function registerChatbotStatusRoutes(app: Express) {
       }
 
       // Run both DB queries in parallel — they are independent.
-      const [userRows, providerRows] = await Promise.all([
+      const [, providerRows] = await Promise.all([
         db.select({ chatbotEnabled: users.chatbotEnabled }).from(users).where(eq(users.id, userId)),
         db
           .select({ value: systemSettings.value })
@@ -31,7 +31,6 @@ export function registerChatbotStatusRoutes(app: Express) {
           .where(eq(systemSettings.key, "ai_provider"))
           .limit(1),
       ]);
-      const [_user] = userRows;
 
       // Get selected AI provider and check if its API key is configured
       const providerSetting = providerRows;

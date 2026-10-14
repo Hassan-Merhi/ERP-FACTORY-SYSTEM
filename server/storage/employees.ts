@@ -140,11 +140,6 @@ export async function getEmployeeByCode(code: string): Promise<Employee | undefi
   return employee;
 }
 
-export async function getEmployeeById(id: number): Promise<Employee | undefined> {
-  const [employee] = await db.select().from(schema.employees).where(eq(schema.employees.id, id));
-  return employee;
-}
-
 /**
  * `code` is optional on the Zod insert schema — the route derives one from the
  * employee's name when the client omits it — but the column is NOT NULL and
@@ -433,31 +428,6 @@ export async function getSalaryAdvancesByEmployee(
     .orderBy(sql`${schema.salaryAdvances.advanceDate} DESC`);
 }
 
-export async function getUnpaidSalaryAdvancesByEmployee(employeeId: number): Promise<schema.SalaryAdvance[]> {
-  return await db
-    .select()
-    .from(schema.salaryAdvances)
-    .where(and(eq(schema.salaryAdvances.employeeId, employeeId), eq(schema.salaryAdvances.fullyPaid, false)))
-    .orderBy(sql`${schema.salaryAdvances.advanceDate}`);
-}
-
-export async function createSalaryAdvance(advance: schema.InsertSalaryAdvance): Promise<schema.SalaryAdvance> {
-  const [newAdvance] = await db.insert(schema.salaryAdvances).values(advance).returning();
-  return newAdvance;
-}
-
-export async function updateSalaryAdvance(
-  id: number,
-  updates: Partial<schema.InsertSalaryAdvance>
-): Promise<schema.SalaryAdvance> {
-  const [advance] = await db
-    .update(schema.salaryAdvances)
-    .set(updates)
-    .where(eq(schema.salaryAdvances.id, id))
-    .returning();
-  return advance;
-}
-
 export async function deleteSalaryAdvance(id: number): Promise<void> {
   await db.transaction(async (tx) => {
     const [advance] = await tx
@@ -494,21 +464,6 @@ export async function deleteSalaryAdvance(id: number): Promise<void> {
 }
 
 // Salary Advance Deductions
-
-export async function getSalaryAdvanceDeductions(salaryAdvanceId: number): Promise<schema.SalaryAdvanceDeduction[]> {
-  return await db
-    .select()
-    .from(schema.salaryAdvanceDeductions)
-    .where(eq(schema.salaryAdvanceDeductions.salaryAdvanceId, salaryAdvanceId))
-    .orderBy(schema.salaryAdvanceDeductions.payrollMonth);
-}
-
-export async function createSalaryAdvanceDeduction(
-  deduction: schema.InsertSalaryAdvanceDeduction
-): Promise<schema.SalaryAdvanceDeduction> {
-  const [newDeduction] = await db.insert(schema.salaryAdvanceDeductions).values(deduction).returning();
-  return newDeduction;
-}
 
 // Employee Bale Rates
 

@@ -38,5 +38,3 @@ export function resolveSchedulerMetricName(expression: string, callback: unknown
   const callbackName = getSchedulerCallbackName(callback);
   return callbackName ? `cron:${callbackName}` : `cron-expression:${String(expression).slice(0, 80)}`;
 }
-
-export const __schedulerObservabilityTesting = { normalizeJobName };

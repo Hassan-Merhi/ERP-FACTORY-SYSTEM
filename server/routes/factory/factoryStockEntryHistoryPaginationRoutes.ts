@@ -4,15 +4,11 @@ import { getErrorMessage } from "../../lib/httpHandlers";
 import { requireAuth } from "../../auth";
 import { pool } from "../../db";
 import { getClientDate } from "../../lib/dateUtils";
+import { parsePositiveInt } from "../../lib/listPagination";
 
 const DEFAULT_PAGE_SIZE = 100;
 const MAX_PAGE_SIZE = 250;
 const SCREEN_FULL_LOAD_LIMIT = 9999;
-
-function parsePositiveInt(value: unknown, fallback: number): number {
-  const parsed = Number.parseInt(String(value ?? ""), 10);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
-}
 
 function wantsPagination(req: Request): boolean {
   return (

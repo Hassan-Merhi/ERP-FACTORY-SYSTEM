@@ -275,16 +275,6 @@ export async function applyOffloadMovingAverage(
   return { oldRemainingKg, oldLockedRate, newLockedRate: newLockedRate.toNumber() };
 }
 
-/** Quantity-only manual ADDs require an already-established locked rate. */
-export async function requireExistingLockedRate(
-  tx: DatabaseOrTransaction,
-  companyId: number,
-  supplierId: number
-): Promise<number | null> {
-  const rate = await getLockedSupplierRate(tx, companyId, supplierId, { forUpdate: true });
-  return rate > 0 ? rate : null;
-}
-
 /**
  * Production startup migration hook. server/index.ts already executes this exact
  * constant before opening the HTTP port. The leading comment intentionally prevents

@@ -1,14 +1,11 @@
 import type { DirectMessage } from "./schema";
+import { isRecord } from "./typeGuards";
 
 export type RealtimeChatEvent =
   | { type: "message:new"; message: DirectMessage }
   | { type: "typing:update"; senderId: string; receiverId: string; isTyping: boolean; until: number | null }
   | { type: "message:read"; readerId: string; senderId: string }
   | { type: "conversation:cleared"; userIds: [string, string] };
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
 
 function nonEmptyString(value: unknown): string | null {
   if (typeof value !== "string") return null;

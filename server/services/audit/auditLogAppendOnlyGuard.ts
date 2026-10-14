@@ -86,9 +86,6 @@ export const AUDIT_LOG_APPEND_ONLY_VERSION = "2026-10-audit-log-append-only-v3";
 
 const INSTALL_LOCK_KEY = 2026_10_120;
 
-/** Trigger names the accounting integrity diagnostic checks for. */
-export const AUDIT_LOG_GUARD_TRIGGERS = ["audit_log_append_only", "audit_log_no_truncate"] as const;
-
 async function installedVersion(client: { query: Pool["query"] }): Promise<string | null> {
   const result = await client.query<{ version: string | null }>(
     `SELECT obj_description(to_regprocedure('erp_audit_log_append_only()'), 'pg_proc') AS version

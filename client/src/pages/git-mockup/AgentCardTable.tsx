@@ -41,21 +41,17 @@ interface AgentCardTableProps {
 
 export function AgentCardTable(props: AgentCardTableProps) {
   const {
-    agentName: _agentName,
     prepaidTransitRows,
     visibleOpenPartial,
     openAndPartial,
     isReconciled,
     showCleared,
-    setShowCleared: _setShowCleared,
-    isDbOverride: _isDbOverride,
     effectivePrepaidIds,
     setAllPrepaidMutate,
     remainingTransitRows,
     setReplaceTarget,
     setReplaceAmountWarning,
     setReplaceConfirmDiff,
-    isCustomOrder: _isCustomOrder,
     moveRow,
     moveToTop,
     ledgerBalance,

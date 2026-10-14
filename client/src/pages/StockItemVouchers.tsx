@@ -63,7 +63,7 @@ export default function StockItemVouchers() {
   const stockItemId = parseInt(params.id || "0");
   const year = parseInt(params.year || "0");
   const month = parseInt(params.month || "0");
-  const [_location, navigate] = useLocation();
+  const [, navigate] = useLocation();
   useEscapeToParent();
 
   const [periodFilter, setPeriodFilter] = useState<PeriodFilterValue>(() => getDefaultPeriodValue("this_month"));

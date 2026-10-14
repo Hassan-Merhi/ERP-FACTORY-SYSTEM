@@ -107,7 +107,6 @@ export function registerOrphanedVoucherRepairRoutes(app: Express) {
         // ── REPAY-SAL-{repaymentId}-{ts} and RECEIPT-REPAY-{repaymentId}-{ts} ──
         // Orphaned when the repayment record was deleted (e.g. via Reverse Advance)
         // but the voucher was not removed. Clean them up now.
-        let _deletedRepayVouchers = 0;
         const repayVouchers = await tx
           .select({ id: vouchers.id, voucherNumber: vouchers.voucherNumber })
           .from(vouchers)
@@ -143,7 +142,6 @@ export function registerOrphanedVoucherRepairRoutes(app: Express) {
             reason: "worker-statement-orphan-repair",
             actor: sessionRetirementActor(req),
           });
-          _deletedRepayVouchers = orphanedRepayVoucherIds.length;
         }
 
         // ── PAYROLL-GEN-{ts} ────────────────────────────────────────────────
@@ -182,7 +180,6 @@ export function registerOrphanedVoucherRepairRoutes(app: Express) {
           }
         }
 
-        let _deletedGenVouchers = 0;
         if (orphanedGenVoucherIds.length > 0) {
           // Wave 16 (A): retired (soft delete with lines, audited here), not hard-deleted.
           await retireVouchersTx(tx, {
@@ -191,7 +188,6 @@ export function registerOrphanedVoucherRepairRoutes(app: Express) {
             reason: "worker-statement-orphan-repair",
             actor: sessionRetirementActor(req),
           });
-          _deletedGenVouchers = orphanedGenVoucherIds.length;
         }
       });
 

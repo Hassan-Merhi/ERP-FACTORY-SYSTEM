@@ -17,7 +17,6 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Loader2 } from "lucide-react";
 import { insertSupplierSchema } from "@shared/schema";
-import { useCurrencyContext } from "@/contexts/CurrencyContext";
 import { useCompany } from "@/contexts/CompanyContext";
 import type { ApiListRow } from "@shared/apiTypes";
 
@@ -36,10 +35,9 @@ type SupplierFormValues = {
 
 export default function EditSupplier() {
   const params = useParams();
-  const [_location, navigate] = useLocation();
+  const [, navigate] = useLocation();
   const handleBack = useBackToParent();
   const { toast } = useToast();
-  const { formatAmount: _formatAmount } = useCurrencyContext();
   const { selectedCompany } = useCompany();
   const supplierId = params.id ? parseInt(params.id) : null;
   useEscapeToParent("/suppliers");

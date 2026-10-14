@@ -224,7 +224,7 @@ async function runItemCodeCheck(
         // Check close matches
         const close = allDbCodes
           .map((dbCode) => ({ dbCode, dist: levenshtein(lower, dbCode) }))
-          .filter(({ dbCode: _dbCode, dist }) => dist > 0 && dist <= closeMatchThreshold(lower))
+          .filter(({ dist }) => dist > 0 && dist <= closeMatchThreshold(lower))
           .sort((a, b) => a.dist - b.dist)
           .slice(0, 3);
 
@@ -425,7 +425,6 @@ export function registerAiValidationRoutes(app: Express) {
 
       const files = req.files as Record<string, Express.Multer.File[]> | undefined;
       const f1 = files?.file1?.[0];
-      const _f2 = files?.file2?.[0];
 
       const REQUIRES_FILE: Record<string, boolean> = {
         item_code_check: true,

@@ -12,6 +12,7 @@ import {
 import { getErrorMessage } from "../lib/httpHandlers";
 import { userLocations } from "@shared/schema";
 import { parseMoneyInput } from "../lib/money";
+import { parsePositiveInt } from "../lib/listPagination";
 
 const DEFAULT_PAGE_SIZE = 100;
 const MAX_PAGE_SIZE = 250;
@@ -26,11 +27,6 @@ type DaybookSortCursor = {
 type DaybookCursor = DaybookSortCursor & {
   total: number;
 };
-
-function parsePositiveInt(value: unknown, fallback: number): number {
-  const parsed = Number.parseInt(String(value ?? ""), 10);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
-}
 
 function parsePagination(req: Request): {
   page: number;

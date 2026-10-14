@@ -7,14 +7,10 @@ import { db, pool } from "../../db";
 import { buildPaginationIntegrityConditions } from "../../services/factory/daybookSourceIntegrity";
 import { factoryBaleProducts, factoryBales, factoryUserProfiles } from "@shared/schema";
 import { parseMoneyInput, toMoney } from "../../lib/money";
+import { parsePositiveInt } from "../../lib/listPagination";
 
 const MAX_PAGE_SIZE = 250;
 const DEFAULT_PAGE_SIZE = 100;
-
-function parsePositiveInt(value: unknown, fallback: number): number {
-  const parsed = Number.parseInt(String(value ?? ""), 10);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
-}
 
 function wantsPagination(req: Request): boolean {
   return (

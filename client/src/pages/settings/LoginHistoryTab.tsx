@@ -1,34 +1,12 @@
 import { useState } from "react";
-import { z } from "zod";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 
 import { useQuery } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
 import { useDateFormat } from "@/contexts/DateFormatContext";
-import { insertUserSchema, insertCompanySchema, insertUserCompanyRoleSchema } from "@shared/schema";
 import type { SettingsLoginHistoryRow } from "./settingsTypes";
 import { useMobileCardTable } from "@/components/ui/mobile-card-table";
-
-const _userFormSchema = insertUserSchema;
-const _companyFormSchema = insertCompanySchema;
-const _roleAssignmentSchema = insertUserCompanyRoleSchema.refine(
-  (data) => {
-    // If role is POS, assignedLocationId must be present
-    if (data.role === "POS" && !data.assignedLocationId) {
-      return false;
-    }
-    return true;
-  },
-  {
-    message: "POS roles require an assigned location",
-    path: ["assignedLocationId"],
-  }
-);
-
-type _UserFormData = z.infer<typeof _userFormSchema>;
-type _CompanyFormData = z.infer<typeof _companyFormSchema>;
-type _RoleAssignmentData = z.infer<typeof _roleAssignmentSchema>;
 
 export function LoginHistoryTab() {
   const { tableProps } = useMobileCardTable();

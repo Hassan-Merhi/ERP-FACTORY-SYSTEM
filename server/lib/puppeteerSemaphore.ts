@@ -74,11 +74,3 @@ export function acquirePuppeteerSlot(): Promise<() => void> {
     tryGrab();
   });
 }
-
-export function puppeteerSlotsBusy(): number {
-  return running;
-}
-
-export function puppeteerQueueDepth(): number {
-  return queue.length;
-}

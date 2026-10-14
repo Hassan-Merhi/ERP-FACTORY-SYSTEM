@@ -31,7 +31,7 @@ export function useStockItemDetailsDialog({
   stockItemName,
 }: StockItemDetailsDialogProps) {
   const { toast } = useToast();
-  const [_location, navigate] = useLocation();
+  const [, navigate] = useLocation();
   const [isEditingDetails, setIsEditingDetails] = useState(false);
   const [editedCode, setEditedCode] = useState("");
   const [editedName, setEditedName] = useState("");

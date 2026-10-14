@@ -23,8 +23,9 @@ import { parseListPagination, setListPaginationHeaders } from "../../../lib/list
 import { resultRows } from "../../../lib/queryResult";
 import { getProformaCapacitySnapshot } from "./proformaCapacity";
 import { allocateRemainingProformaLines } from "./proformaCapacityEnforcement";
-import { guardExistingOrderProformaLink, guardProformaOrderCreation } from "./proformaCapacityWriteGuards";
+import { guardProformaOrderCreation } from "./proformaCapacityWriteGuards";
 import { acquireProformaCapacityTransactionLock } from "./proformaCapacityConcurrency";
+import { linkOrderProformaAtomically, LinkOrderProformaError } from "./linkProformaAtomic";
 import { canViewBookingInfo, isValidBookingInfo } from "./bookingInfo";
 import { toMoney } from "../../../lib/money";
 
@@ -500,79 +501,14 @@ export function registerOrderCrudRoutes(app: Express) {
       if (!isUnlink && (proformaIdInt === null || isNaN(proformaIdInt!)))
         return res.status(400).json({ message: "Invalid proformaId" });
 
-      // Confirm order exists for this company
-      const [order] = await db
-        .select()
-        .from(customerOrders)
-        .where(and(eq(customerOrders.id, orderId), eq(customerOrders.companyId, companyId)));
-      if (!order) return res.status(404).json({ message: "Order not found" });
-
-      // Must be a LOADING order
-      if (order.status !== "LOADING")
-        return res.status(400).json({ message: "Can only link a proforma to a LOADING order" });
-
-      // Always wipe existing expected lines so we start fresh
-      await db.execute(sql`DELETE FROM customer_order_expected_lines WHERE order_id = ${orderId}`);
-
-      if (isUnlink) {
-        // Unlink: clear proformaIdUsed and expected lines (already deleted above)
-        await db.update(customerOrders).set({ proformaIdUsed: null }).where(eq(customerOrders.id, orderId));
-        return res.json({ success: true, linked: { orderId, proformaId: null, linesBackfilled: 0 } });
-      }
-
-      // Confirm proforma exists for this company
-      const [proforma] = await db
-        .select()
-        .from(customerProformas)
-        .where(and(eq(customerProformas.id, proformaIdInt!), eq(customerProformas.companyId, companyId)));
-      if (!proforma || proforma.deletedAt) return res.status(404).json({ message: "Proforma not found" });
-
-      // Proforma must be active
-      if (!proforma.isActive) return res.status(400).json({ message: "Proforma is not active" });
-
-      // Customer match check — reject if both sides have a customerId and they differ
-      if (order.customerId && proforma.customerId && order.customerId !== proforma.customerId)
-        return res.status(400).json({
-          message: `Customer mismatch: order belongs to customer #${order.customerId} but proforma belongs to customer #${proforma.customerId}. Cannot link.`,
-        });
-
-      if (order.proformaIdUsed !== proformaIdInt) {
-        const guard = await guardExistingOrderProformaLink(db, {
-          companyId,
-          proformaId: proformaIdInt!,
-          orderId,
-          customerId: order.customerId,
-        });
-        if (!guard.allowed) return res.status(guard.status).json(guard.body);
-      }
-
-      // Fetch proforma lines for expected-lines backfill
-      const proformaLines = await db
-        .select()
-        .from(customerProformaLines)
-        .where(eq(customerProformaLines.proformaId, proformaIdInt!));
-
-      // Link the order → proforma (re-link allowed: replaces any previous proforma)
-      await db.update(customerOrders).set({ proformaIdUsed: proformaIdInt }).where(eq(customerOrders.id, orderId));
-
-      // Insert expected lines from the new proforma
-      if (proformaLines.length > 0) {
-        await db.execute(
-          sql`INSERT INTO customer_order_expected_lines
-                (company_id, order_id, proforma_id, proforma_line_id, article_code, product_name, expected_qty)
-              SELECT ${companyId}, ${orderId}, cpl.proforma_id, cpl.id,
-                     cpl.article_code, cpl.product_name, cpl.quantity
-              FROM customer_proforma_lines cpl
-              WHERE cpl.proforma_id = ${proformaIdInt}
-              ON CONFLICT (order_id, article_code) DO NOTHING`
-        );
-      }
-
-      res.json({
-        success: true,
-        linked: { orderId, proformaId: proformaIdInt, linesBackfilled: proformaLines.length },
-      });
+      // Lock, checks and write run in one transaction (see linkProformaAtomic.ts):
+      // a link made during loading is reference-only and re-linking the same
+      // proforma keeps the order's expected plan.
+      res.json(await linkOrderProformaAtomically({ companyId, orderId, proformaId: proformaIdInt }));
     } catch (error: unknown) {
+      if (error instanceof LinkOrderProformaError) {
+        return res.status(error.status).json(error.details ?? { message: error.message });
+      }
       logger.error("Error linking proforma to loading:", { error: error });
       res.status(500).json({ message: getErrorMessage(error) });
     }

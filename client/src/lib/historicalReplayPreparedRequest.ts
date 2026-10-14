@@ -5,16 +5,6 @@ export interface FrozenHistoricalReplayOptions {
   includeFinalizedBales: boolean;
 }
 
-export interface PreparedHistoricalReplayResponse {
-  confirmationToken: string;
-  safeSupplierIds: number[];
-  frozenOptions: FrozenHistoricalReplayOptions;
-  algorithmVersion: string;
-  fingerprint?: string;
-  applyAuthorizationToken?: string;
-  productionReleaseId?: string;
-}
-
 interface FrozenHistoricalReplayRequestState {
   supplierIds: number[];
   options: FrozenHistoricalReplayOptions;

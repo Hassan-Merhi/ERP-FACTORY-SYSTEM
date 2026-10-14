@@ -13,10 +13,6 @@ export function markRemoteSupportAuthLost(): void {
   }
 }
 
-export function resetRemoteSupportAuthLifecycle(): void {
-  authLost = false;
-}
-
 export function subscribeRemoteSupportAuthLost(listener: () => void): () => void {
   if (typeof window === "undefined") return () => undefined;
   window.addEventListener(AUTH_LOST_EVENT, listener);

@@ -198,7 +198,6 @@ export function registerRawStockReverseOffloadRoute(app: Express) {
             )
           );
         const commissionIds = commissionRows.map((r) => r.id);
-        const _hadOffloadCommission = commissionRows.length > 0;
 
         // 3. Delete daybook entries tied to this offload:
         //    - OFFLOAD_RAW_STOCK referencing the raw stock row id

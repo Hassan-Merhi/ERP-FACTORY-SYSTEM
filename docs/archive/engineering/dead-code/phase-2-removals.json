@@ -1,0 +1,80 @@
+{
+  "version": 1,
+  "phase": 2,
+  "status": "complete",
+  "repository": "Hassan-Merhi/ERP-FACTORY-SYSTEM",
+  "branch": "refactor/erp-dead-code-cleanup",
+  "baseCommit": "3a210f315ddba5aaf0bbe6dee21b5d5e3417b97f",
+  "snapshotDate": "2026-10-12",
+  "execution": {
+    "ci": false,
+    "tests": false,
+    "build": false,
+    "typecheck": false,
+    "deploy": false
+  },
+  "removedFiles": [
+    {
+      "path": "scripts/audit-legacy-route-boundaries.d.mts",
+      "bytes": 873,
+      "commit": "d2de0088d5d39a02f83cea5794f9a8adc784cdd5",
+      "reason": "retired orphan TypeScript declaration"
+    },
+    {
+      "path": "client/src/pages/SoldContainers.tsx",
+      "bytes": 5976,
+      "commit": "4dd54862ff898f9828de91dd771d9715d0037297",
+      "reason": "unrouted standalone page replaced by active Containers sold table"
+    },
+    {
+      "path": "client/src/pages/factory/FactoryProduction.tsx",
+      "bytes": 5876,
+      "commit": "ad0b78d4874659eeb44e9a7c3ef38df9021f8e85",
+      "reason": "unrouted old production hub; other production pages retained"
+    }
+  ],
+  "edits": [
+    {
+      "path": "client/src/lazyPages.ts",
+      "deletedExports": [
+        "SoldContainers",
+        "FactoryProduction"
+      ],
+      "commit": "c9d7e94ab1789eb7c881280cea0fc3056f568d57"
+    },
+    {
+      "path": "tests/ui/wave4-remaining-pages.test.tsx",
+      "deletedCases": [
+        "SoldContainers",
+        "FactoryProduction"
+      ],
+      "deletedUnused": [
+        "seededRecord import",
+        "PageCase.seedRoutes",
+        "custom override arguments"
+      ],
+      "commits": [
+        "283d260a17d20409d94df38f67dc4e4b00020c78",
+        "ceb5e4ce939a8dedbf86f7ca2dfd19ab9fe2aa71"
+      ]
+    }
+  ],
+  "removedSourceFileBytes": 12725,
+  "leaveForLater": {
+    "phase3": [
+      "server/routes/containers/offload/create.ts",
+      "other repeated route handlers"
+    ],
+    "phase4": [
+      "non-primary-router lazy exports"
+    ],
+    "phase9": [
+      "historical one-off scripts and recovery utilities"
+    ]
+  },
+  "limits": [
+    "No tests or runtime verification",
+    "GitHub code-search indexes main, not branch",
+    "Only high-confidence Phase 2 file-removal candidates, not whole-repository exhaustive module reachability"
+  ]
+}

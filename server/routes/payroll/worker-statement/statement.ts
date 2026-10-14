@@ -14,7 +14,7 @@ import { requireAuth } from "../../../auth";
 import { eq, and, sql } from "drizzle-orm";
 import path from "path";
 import fs from "fs";
-import { factoryWorkers, factoryPayrolls, factoryWorkerAdvances, companies, companySettings } from "@shared/schema";
+import { factoryWorkers, factoryPayrolls, factoryWorkerAdvances, companies } from "@shared/schema";
 
 import { getFactoryCompanyId } from "./_helpers";
 import { MoneyDecimal, toMoney } from "../../../lib/money";
@@ -203,13 +203,6 @@ export function registerWorkerStatementReadRoutes(app: Express) {
 
       // Company info
       const [co] = await db.select().from(companies).where(eq(companies.id, companyId));
-      const [sett] = await db
-        .select()
-        .from(companySettings)
-        .where(eq(companySettings.companyId, companyId))
-        .catch(() => [null]);
-      const _companyName = co?.name ?? "Company";
-      const _logoUrl: string | null = sett?.logoUrl ?? null;
       const baseCurrency = co?.baseCurrency ?? "USD";
       const currMap: Record<string, string> = { USD: "$ ", GBP: "£", EUR: "€", CFA: "CFA ", AED: "AED " };
       const sym = currMap[baseCurrency.toUpperCase()] ?? baseCurrency + " ";

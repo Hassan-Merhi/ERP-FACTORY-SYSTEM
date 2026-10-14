@@ -44,7 +44,6 @@ interface RecipientsTabProps {
 
 export function RecipientsTab({
   emailRecipients,
-  waGroups: _waGroups,
   waRecipients,
   dailyWaGroup,
   npWaGroup,

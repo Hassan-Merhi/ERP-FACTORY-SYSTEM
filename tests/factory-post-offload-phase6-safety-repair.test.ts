@@ -118,8 +118,8 @@ describe("Phase 6 post-offload safety and repair", () => {
     expect(service).not.toContain("includeFinalizedBales: true");
   });
 
-  it("registers the Phase 6 routes in both active and compatibility aggregators", () => {
-    for (const path of ["server/routes/factory/factoryRawStockRoutes.ts", "server/routes/factory/raw-stock/index.ts"]) {
+  it("registers the Phase 6 routes in the active raw-stock aggregator", () => {
+    for (const path of ["server/routes/factory/factoryRawStockRoutes.ts"]) {
       const routes = read(path);
       expect(routes).toContain("registerPostOffloadPhase6SafetyRoutes");
       expect(routes).toContain("registerPostOffloadPhase6SafetyRoutes(app)");

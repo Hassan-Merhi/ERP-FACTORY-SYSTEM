@@ -143,7 +143,3 @@ export const stockAdjustmentFormSchema = z.object({
   notes: z.string().optional(),
   optional: z.boolean().default(false),
 });
-
-export type JournalFormData = z.infer<typeof journalFormSchema>;
-export type StockTransferFormData = z.infer<typeof stockTransferFormSchema>;
-export type StockAdjustmentFormData = z.infer<typeof stockAdjustmentFormSchema>;

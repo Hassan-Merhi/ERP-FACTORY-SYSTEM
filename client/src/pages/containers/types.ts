@@ -39,13 +39,6 @@ export interface ContainerDetailData {
   offloadId?: number | null;
 }
 
-/** Pending tracking edits keyed by container id: field → next raw value. */
-export type TrackingFieldEdits = Partial<Record<keyof Container, unknown>>;
-
-export interface TrackingEdit {
-  [key: number]: TrackingFieldEdits;
-}
-
 // ─── Supplier Partner container API shapes ────────────────────────────────────
 //
 // Modelled from server/routes/sp/spContainerRoutes.ts and spLifecycleRoutes.ts.
@@ -67,13 +60,6 @@ export interface SpContainerDetail extends SpContainer {
  * does not check res.ok), so a `{ message }` error body is a valid result.
  */
 export type SpContainerDetailResponse = SpContainerDetail | { message: string };
-
-/** Response of POST /api/sp/containers/:id/cancel. */
-export interface SpContainerCancelResponse {
-  container: SpContainer;
-  cancellationVoucherId: number | null;
-  detachedPrepaidChargeCount: number;
-}
 
 /** Response of POST /api/containers/sync-all-vouchers. */
 export interface ContainerSyncAllResponse {

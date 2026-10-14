@@ -61,14 +61,8 @@ export function registerStatsNetProfitRoutes(app: Express) {
         loadNetProfitData(companyId, toDate),
         storage.getCompanySettings(companyId),
       ]);
-      const {
-        companyRecord,
-        companyAccounts,
-        hasMigratedEntries: _hasMigratedEntries,
-        companyBaseCurrency,
-        accountBalances,
-        profitAndLossBalances,
-      } = reportData;
+      const { companyRecord, companyAccounts, companyBaseCurrency, accountBalances, profitAndLossBalances } =
+        reportData;
 
       // ============ NET POSITION CALCULATION ============
       // Uses shared helper (netPositionHelper.ts) – single source of truth for

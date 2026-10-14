@@ -109,7 +109,7 @@ export default function LocationMonthlySummary({ posUser }: { posUser?: AuthMe }
   const params = useParams();
   const locationId = parseInt(params.locationId || "0");
   const stockItemId = parseInt(params.stockItemId || "0");
-  const [_location, navigate] = useLocation();
+  const [, navigate] = useLocation();
   const handleBack = useBackToParent();
 
   const isAllLocationsMode = locationId === 0;

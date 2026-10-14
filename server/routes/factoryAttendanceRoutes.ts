@@ -18,7 +18,7 @@ export function registerFactoryAttendanceRoutes(app: Express, requireAuth: Reque
       const companyId = getFactoryCompanyId(req);
       if (!companyId) return res.status(400).json({ message: "No company" });
 
-      const { date, shift: _shift } = req.query as { date?: string; shift?: string };
+      const { date } = req.query as { date?: string; shift?: string };
       if (!date) return res.status(400).json({ message: "date is required" });
 
       // Return ALL workers (active + inactive) with the active flag so the

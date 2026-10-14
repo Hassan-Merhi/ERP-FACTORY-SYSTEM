@@ -146,44 +146,6 @@ export function resolveFactoryDocumentProductName(
   );
 }
 
-export function translateFactoryDocumentStatus(status: unknown, language: FactoryDocumentLanguage): string {
-  const raw = typeof status === "string" ? status : "";
-  const normalized = raw.toUpperCase();
-  if (language === "ar") {
-    const map: Record<string, string> = {
-      DRAFT: "مسودة",
-      PENDING: "قيد الانتظار",
-      PENDING_LOADING: "بانتظار التحميل",
-      LOADING: "قيد التحميل",
-      LOADED: "تم التحميل",
-      VERIFIED: "تم التحقق",
-      FINALIZED: "نهائي",
-      COMPLETED: "مكتمل",
-      INVOICED: "تمت الفوترة",
-      CANCELLED: "ملغى",
-      DISPATCHED: "تم الإرسال",
-    };
-    return map[normalized] ?? raw.replaceAll("_", " ");
-  }
-  if (language === "fr") {
-    const map: Record<string, string> = {
-      DRAFT: "Brouillon",
-      PENDING: "En attente",
-      PENDING_LOADING: "En attente de chargement",
-      LOADING: "Chargement",
-      LOADED: "Chargé",
-      VERIFIED: "Vérifié",
-      FINALIZED: "Finalisé",
-      COMPLETED: "Terminé",
-      INVOICED: "Facturé",
-      CANCELLED: "Annulé",
-      DISPATCHED: "Expédié",
-    };
-    return map[normalized] ?? raw.replaceAll("_", " ");
-  }
-  return raw.replaceAll("_", " ");
-}
-
 export function configureFactoryArabicWorksheet(sheet: ExcelJS.Worksheet, language: FactoryDocumentLanguage): void {
   if (language !== "ar") return;
   sheet.views = [{ rightToLeft: true, showGridLines: false }];

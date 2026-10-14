@@ -71,11 +71,6 @@ export async function getStockItemByCodeOrAlias(
   return aliasMatch?.stockItem;
 }
 
-export async function getStockItemByBarcode(barcode: string, companyId: number): Promise<schema.StockItem | undefined> {
-  // Barcodes are persisted in stock_item_code_aliases by the barcode import flow.
-  return getStockItemByCodeOrAlias(barcode, companyId);
-}
-
 // Phase 21 (B): writers take an optional executor so a route can audit in the same transaction.
 export async function createStockItem(
   item: schema.InsertStockItem,

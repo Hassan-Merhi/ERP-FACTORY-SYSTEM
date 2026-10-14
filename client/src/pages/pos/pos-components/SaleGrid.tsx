@@ -31,7 +31,6 @@ export interface SaleGridProps {
 export function SaleGrid({
   rows,
   columns,
-  selectedCell: _selectedCell,
   setSelectedCell,
   updateRow,
   handleDeleteRow,

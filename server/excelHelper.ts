@@ -1,7 +1,6 @@
 import { toArrayBuffer } from "./lib/bufferCompatibility";
 import ExcelJS from "exceljs";
 import type { ServerResponse } from "http";
-import type { Writable } from "stream";
 import { withHeavyExportSlot } from "./services/heavyExportCoordinator";
 
 export interface ExcelWorkbook {
@@ -86,17 +85,6 @@ export async function writeWorkbook(workbook: ExcelJS.Workbook): Promise<Buffer>
   return withHeavyExportSlot("excel-buffered", async () => {
     const buffer = await workbook.xlsx.writeBuffer();
     return Buffer.from(buffer);
-  });
-}
-
-export async function writeWorkbookToStream(workbook: ExcelJS.Workbook, stream: Writable): Promise<void> {
-  // NOTE: ExcelJS 3.x wb.xlsx.write(stream) is broken — it throws "ea.results is not a Promise".
-  // Buffer the workbook and pipe it manually instead.
-  await withHeavyExportSlot("excel-stream", async () => {
-    const buf = Buffer.from(await workbook.xlsx.writeBuffer());
-    await new Promise<void>((resolve, reject) => {
-      stream.write(buf, (err) => (err ? reject(err) : resolve()));
-    });
   });
 }
 

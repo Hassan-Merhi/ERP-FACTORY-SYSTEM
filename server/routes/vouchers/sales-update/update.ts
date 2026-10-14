@@ -259,11 +259,4 @@ export function registerVoucherUpdateRoutes(app: Express) {
       res.status(errorStatus(error)).json({ message: getErrorMessage(error) });
     }
   });
-
-  class _ValidationError extends Error {
-    constructor(message: string) {
-      super(message);
-      this.name = "ValidationError";
-    }
-  }
 }

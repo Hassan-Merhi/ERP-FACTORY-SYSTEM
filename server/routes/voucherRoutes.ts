@@ -24,7 +24,6 @@ import { registerVoucherTransferRoutes } from "./vouchers/transfer";
 import { registerExactStockTransferEditRoute } from "./vouchers/exactStockTransferEditRoute";
 import { registerSmartTransferPreviewRoutes } from "./vouchers/smartTransferPreviewRoutes";
 import { registerStockTransferLifecycleRoutes } from "./vouchers/stockTransferLifecycleRoutes";
-import { registerStockTransferRevisionLifecycleRoutes } from "./vouchers/stockTransferRevisionLifecycleRoutes";
 import { registerImmutableStockTransferRevisionRoutes } from "./vouchers/immutableStockTransferRevisionRoutes";
 import { registerAdminPostUpdateStockTransferRevisionRoute } from "./vouchers/adminPostUpdateStockTransferRevisionRoute";
 import { registerRecurringJournalRoutes } from "./vouchers/recurringJournalRoutes";
@@ -70,8 +69,9 @@ export function registerVoucherRoutes(app: Express) {
   // The ERP Daybook uses one SQL-paged chronological union of vouchers and offloads.
   registerDaybookPaginationRoutes(app);
 
-  // Supplier purchase-order reads follow the company-owned supplier model and
-  // shadow the historical cross-company compatibility route below.
+  // Supplier purchase-order reads follow the company-owned supplier model. This
+  // is the only handler for the path (the shadowed cross-company copy in
+  // voucherQueryRoutes.ts was removed in the dead-code cleanup).
   registerSupplierPurchaseOrderPaginationRoutes(app);
 
   // Native SQL pagination shadows the legacy array reader while preserving its
@@ -91,9 +91,9 @@ export function registerVoucherRoutes(app: Express) {
   // The current admin editor writes the transfer first and then posts the
   // immutable revision snapshot. Accept that already-applied baseline before
   // the canonical stale guard; untouched and POS revisions still fall through.
+  // The immutable routes are terminal and own every revision endpoint.
   registerAdminPostUpdateStockTransferRevisionRoute(app);
   registerImmutableStockTransferRevisionRoutes(app);
-  registerStockTransferRevisionLifecycleRoutes(app);
 
   // The daybook detail dialog reads `transfer`, while the canonical voucher
   // endpoint currently returns `transferData`. Preserve both keys so source and

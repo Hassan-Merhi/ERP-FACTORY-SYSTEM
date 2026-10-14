@@ -4,10 +4,11 @@ const files = {
   service: "server/services/rental/rentalPaymentPostingService.ts",
   deletionService: "server/services/rental/rentalPaymentDeletionService.ts",
   deletionRoute: "server/routes/rental/centralRentalPaymentDeletionRoute.ts",
-  registry: "server/routes/rental/index.ts",
+  registry: "server/routes/rentalRouteFactory.ts",
   routes: "server/routes/rental/rentalPaymentsAccrualRoutes.ts",
   deleteRoute: "server/routes/vouchers/centralPaymentReceiptDeleteRoute.ts",
   doc: "docs/archive/program-2-phase-8-rentals.md",
+  erpPosting: "server/services/accounting/erpVoucherPosting.ts",
 };
 
 const read = (path) => fs.readFileSync(path, "utf8");
@@ -26,14 +27,18 @@ const registry = read(files.registry);
 const routes = read(files.routes);
 const deletion = read(files.deleteRoute);
 const doc = read(files.doc);
+const erpPosting = read(files.erpPosting);
 
 assertHas(service, "pg_advisory_xact_lock", "scheduled-posting advisory lock");
 assertHas(service, "${propertyPayments.postingStatus} = 'POSTED'", "posted-payment authority");
-assertHas(service, "normalizeVoucherEntryAmounts", "historical currency normalization");
-assertHas(service, "...normEntry(accrualAmt.toFixed(2), \"0\")", "accrued-rent debit");
-assertHas(service, "...normEntry(advanceAmt.toFixed(2), \"0\")", "advance-rent debit");
-assertHas(service, "...normEntry(prepaidAmt.toFixed(2), \"0\")", "prepaid-rent debit");
-assertHas(service, "...normEntry(\"0\", totalAmountStr)", "cash credit");
+// Phase 22 (one posting engine): rental vouchers post through postErpVoucherTx, which
+// normalizes every line's historical currency amounts itself.
+assertHas(service, "postErpVoucherTx(tx,", "posting through the ERP voucher engine");
+assertHas(erpPosting, "normalizeVoucherEntryAmounts", "historical currency normalization in the posting engine");
+assertHas(service, 'line(accPayId, "debit", accrualAmt.toFixed(2)', "accrued-rent debit");
+assertHas(service, 'line(advId, "debit", advanceAmt.toFixed(2)', "advance-rent debit");
+assertHas(service, 'line(prepId, "debit", prepaidAmt.toFixed(2)', "prepaid-rent debit");
+assertHas(service, 'line(cashAccountId, "credit", totalAmountStr', "cash credit");
 assertHas(service, "usedAdvanceAccount", "advance-account state");
 assertHas(service, "usedPrepaidAccount", "prepaid-account state");
 

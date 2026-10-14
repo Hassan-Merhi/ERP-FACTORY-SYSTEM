@@ -1,6 +1,6 @@
 import type { PostingSourceIdentity } from "../../services/accounting/centralPostingEngine";
 import { insertInfrastructureVoucher } from "../../services/accounting/infrastructureVoucherIdentity";
-import { eq, and, isNull, asc, sql } from "drizzle-orm";
+import { eq, and, isNull, sql } from "drizzle-orm";
 import { db, pool } from "../../db";
 import * as schema from "@shared/schema";
 import type { Voucher, InsertVoucher } from "@shared/schema";
@@ -44,22 +44,6 @@ type StatementQueryParams = (string | number)[];
 const BANK_OWNED_LINE = higherPriorityTargetsAbsent("ve", "bank_account_id");
 const FIXED_ASSET_OWNED_LINE = higherPriorityTargetsAbsent("ve", "fixed_asset_id");
 const EMPLOYEE_OWNED_LINE = higherPriorityTargetsAbsent("ve", "employee_id");
-
-export async function getAllVouchers(companyId: number): Promise<Voucher[]> {
-  return await db
-    .select()
-    .from(schema.vouchers)
-    .where(
-      and(
-        eq(schema.vouchers.companyId, companyId),
-        isNull(schema.vouchers.deletedAt),
-        sql`${schema.vouchers.voucherNumber} NOT LIKE 'SP-OTW-REV-%'`,
-        sql`${schema.vouchers.voucherNumber} NOT LIKE 'SP-STOCK-%'`,
-        sql`${schema.vouchers.voucherNumber} NOT LIKE 'SP-OPNSTK-%'`
-      )
-    )
-    .orderBy(asc(schema.vouchers.voucherNumber));
-}
 
 export async function getVoucherById(id: number): Promise<Voucher | undefined> {
   const [voucher] = await db.select().from(schema.vouchers).where(eq(schema.vouchers.id, id));
@@ -151,60 +135,6 @@ export async function getVoucherEntriesByLedger(
     params
   );
 
-  return result.rows;
-}
-
-export async function getVoucherEntriesByCustomer(
-  customerId: number,
-  startDate?: string,
-  endDate?: string,
-  companyId?: number
-): Promise<AccountStatementEntryRow[]> {
-  const params: StatementQueryParams = [customerId];
-  let dateFilters = "";
-  let companyFilter = "";
-  if (startDate) {
-    params.push(startDate);
-    dateFilters += " AND COALESCE(v.effective_date::date, v.voucher_date::date) >= $" + params.length + "::date";
-  }
-  if (endDate) {
-    params.push(endDate);
-    dateFilters += " AND COALESCE(v.effective_date::date, v.voucher_date::date) <= $" + params.length + "::date";
-  }
-  if (companyId) {
-    params.push(companyId);
-    companyFilter = " AND v.company_id = $" + params.length;
-  }
-  const result = await pool.query<AccountStatementEntryRow>(
-    `SELECT
-       ve.id                                                        AS "entryId",
-       ve.voucher_id                                                AS "voucherId",
-       ve.debit_amount                                              AS "debitAmount",
-       ve.credit_amount                                             AS "creditAmount",
-       ve.transaction_currency                                      AS "transactionCurrency",
-       ve.transaction_debit_amount                                  AS "transactionDebitAmount",
-       ve.transaction_credit_amount                                 AS "transactionCreditAmount",
-       ve.base_debit_amount                                         AS "baseDebitAmount",
-       ve.base_credit_amount                                        AS "baseCreditAmount",
-       ve.historical_exchange_rate                                  AS "historicalExchangeRate",
-       ve.rate_convention                                           AS "rateConvention",
-       ve.narration,
-       v.voucher_number                                             AS "voucherNumber",
-       v.voucher_type                                               AS "voucherType",
-       COALESCE(v.effective_date::date, v.voucher_date::date)       AS "voucherDate",
-       v.description                                                AS "voucherDescription",
-       v.currency,
-       v.company_id                                                 AS "companyId"
-     FROM voucher_entries ve
-     JOIN vouchers v ON ve.voucher_id = v.id
-     WHERE ve.customer_id = $1
-       AND v.optional = false
-       AND v.deleted_at IS NULL
-       ${companyFilter}
-       ${dateFilters}
-     ORDER BY COALESCE(v.effective_date::date, v.voucher_date::date), v.id`,
-    params
-  );
   return result.rows;
 }
 
@@ -448,11 +378,6 @@ export async function createVoucher(
   const { postingSource, ...voucherFields } = voucher;
   const { voucher: created } = await insertInfrastructureVoucher(db, voucherFields, postingSource, voucherFields);
   return created;
-}
-
-export async function updateVoucher(id: number, updates: Partial<InsertVoucher>): Promise<Voucher> {
-  const [updated] = await db.update(schema.vouchers).set(updates).where(eq(schema.vouchers.id, id)).returning();
-  return updated;
 }
 
 export async function getVoucherEntriesByVoucher(voucherId: number) {

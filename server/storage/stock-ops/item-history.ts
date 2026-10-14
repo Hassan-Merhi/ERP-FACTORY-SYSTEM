@@ -1,64 +1,6 @@
 import { eq, and, sql } from "drizzle-orm";
-import { db, pool, type RawQueryRow } from "../../db";
+import { db, type RawQueryRow } from "../../db";
 import * as schema from "@shared/schema";
-
-export async function getLastPurchaseOrderForItem(stockItemId: number, companyId: number) {
-  const result = await db
-    .select({
-      poNumber: schema.purchaseOrders.poNumber,
-      poDate: schema.purchaseOrders.createdAt,
-      supplierName: schema.suppliers.legalName,
-      quantity: schema.poLineItems.quantity,
-      rate: schema.poLineItems.rate,
-      amount: schema.poLineItems.lineTotal,
-    })
-    .from(schema.poLineItems)
-    .innerJoin(schema.purchaseOrders, eq(schema.poLineItems.poId, schema.purchaseOrders.id))
-    .innerJoin(schema.suppliers, eq(schema.purchaseOrders.supplierId, schema.suppliers.id))
-    .where(and(eq(schema.poLineItems.stockItemId, stockItemId), eq(schema.purchaseOrders.companyId, companyId)))
-    .orderBy(sql`${schema.purchaseOrders.createdAt} DESC`)
-    .limit(1);
-  return result.length > 0 ? result[0] : null;
-}
-
-export async function getLastSaleForItem(stockItemId: number, companyId: number) {
-  const result = await db
-    .select({
-      voucherNumber: schema.vouchers.voucherNumber,
-      saleDate: schema.vouchers.voucherDate,
-      locationName: schema.locations.name,
-      quantity: schema.salesItems.quantity,
-      sellingPrice: schema.salesItems.sellingPrice,
-      totalSales: schema.salesItems.totalSales,
-    })
-    .from(schema.salesItems)
-    .innerJoin(schema.vouchers, eq(schema.salesItems.voucherId, schema.vouchers.id))
-    .leftJoin(schema.locations, eq(schema.vouchers.locationId, schema.locations.id))
-    .where(and(eq(schema.salesItems.stockItemId, stockItemId), eq(schema.vouchers.companyId, companyId)))
-    .orderBy(sql`${schema.vouchers.voucherDate} DESC`)
-    .limit(1);
-  return result.length > 0 ? result[0] : null;
-}
-
-export async function getLastSoldPrices(companyId: number): Promise<Record<number, string>> {
-  const result = await pool.query(
-    `
-    SELECT DISTINCT ON (si.stock_item_id)
-      si.stock_item_id,
-      si.selling_price
-    FROM sales_items si
-    INNER JOIN vouchers v ON si.voucher_id = v.id
-    WHERE v.company_id = $1
-    ORDER BY si.stock_item_id, v.voucher_date DESC, si.created_at DESC
-  `,
-    [companyId]
-  );
-  const priceMap: Record<number, string> = {};
-  for (const row of result.rows) {
-    priceMap[row.stock_item_id] = row.selling_price;
-  }
-  return priceMap;
-}
 
 export async function getAllPurchasesForItem(
   stockItemId: number,

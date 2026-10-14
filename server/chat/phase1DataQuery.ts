@@ -63,7 +63,7 @@ export async function runPhase1DataQuery(request: Phase1DataQueryRequest): Promi
         });
       }
     }
-  } catch (_p1err) {
+  } catch {
     // Phase 1 query failed silently — chat text response still returned
   }
 

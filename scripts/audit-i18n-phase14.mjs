@@ -46,6 +46,7 @@ const compatibilityTranslationFiles = [
   "client/src/i18n/phase3RemainingTranslations.part25.ts",
   "client/src/i18n/phase3RemainingTranslations.part26.ts",
   "client/src/i18n/phase3RemainingTranslations.part27.ts",
+  "client/src/i18n/phase3RemainingTranslations.part28.ts",
   "client/src/i18n/supplierPartnerPhase4Translations.part1.ts",
   "client/src/i18n/supplierPartnerPhase4Translations.part2.ts",
   "client/src/i18n/supplierPartnerPhase4Translations.part3.ts",
@@ -79,7 +80,6 @@ const compatibilityTranslationFiles = [
   "client/src/i18n/factoryInsuranceTranslations.ts",
   "client/src/i18n/automaticPriorityPrintingTranslations.ts",
   "client/src/i18n/posItemReplacement.applicationTranslations.ts",
-  "client/src/i18n/supplierProfitCheckTranslations.ts",
   "client/src/i18n/retailWave1Translations.ts",
   "client/src/i18n/retailWave2Translations.ts",
   "client/src/i18n/retailWave3Translations.ts",
@@ -132,6 +132,17 @@ const reviewedTechnicalValues = new Set([
   "AIS update handler failed",
   // Detector false positive: a tie-tolerance comparison in ItemMarketAnalysis, not copy.
   "Math.abs(entry.profit - topProfit)",
+  // Scheduler timeout errors: caught by the scheduler and written only to server logs.
+  "${label} import timed out after ${SCHEDULER_IMPORT_TIMEOUT_MS}ms",
+  "${label} timed out after ${SCHEDULER_PREFLIGHT_TIMEOUT_MS}ms",
+  // Green API read-transport socket errors: caught by fetchGreenApiReadOnly, which logs only
+  // their code and throws its own (translated) connection message.
+  "Request aborted",
+  "Connection timed out",
+  // Startup schema error code, not copy.
+  "SCHEDULED_WHATSAPP_DELIVERY_TRACKING_SCHEMA_UNAVAILABLE",
+  // Detector fragment: the scanner cut a voucher-narration template at its ternary.
+  "Continuation receipt — container ${container.containerNumber}${supplierName?.trim() ?",
 ]);
 
 function argumentValue(name) {

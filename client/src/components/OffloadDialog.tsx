@@ -193,7 +193,7 @@ function LocationCombobox({
 }
 
 export function OffloadDialog({ open, onOpenChange, containerId, containerNumber, totalBales }: OffloadDialogProps) {
-  const [_location, setLocation] = useLocation();
+  const [, setLocation] = useLocation();
   const { toast } = useToast();
   const { selectedCompany } = useCompany();
   const isSpCompany = selectedCompany?.companyType === "supplier_partner";

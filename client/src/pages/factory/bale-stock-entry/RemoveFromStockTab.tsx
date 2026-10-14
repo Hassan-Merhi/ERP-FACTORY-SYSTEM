@@ -63,14 +63,12 @@ export function RemoveFromStockTab() {
   const [removalReason, setRemovalReason] = useState("");
   const [authError, setAuthError] = useState("");
   const [viewMode, setViewMode] = useState<"condensed" | "detailed">("condensed");
-  const [_designPickerOpen, _setDesignPickerOpen] = useState(false);
-  const [_pendingPrintLabels, _setPendingPrintLabels] = useState<LabelData[] | null>(null);
   const [printWorkerBale, setPrintWorkerBale] = useState<InStockBale | null>(null);
   const [printWorkerIdSelected, setPrintWorkerIdSelected] = useState<string>("");
   const [assigningWorker, setAssigningWorker] = useState(false);
-  const { colors: _designColors } = useLabelDesignColors();
-  const [_importingNames, setImportingNames] = useState(false);
-  const [_reimporting, setReimporting] = useState(false);
+  useLabelDesignColors();
+  const [, setImportingNames] = useState(false);
+  const [, setReimporting] = useState(false);
   const namesFileRef = useRef<HTMLInputElement>(null);
   const reimportFileRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
@@ -257,7 +255,7 @@ export function RemoveFromStockTab() {
         try {
           await printRawZpl(buildZplBatch(labels, true));
           toast({ title: "Label sent to Zebra printer" });
-        } catch (_err) {
+        } catch {
           if (assignedColor) openBrowserPrint(labels, assignedColor);
           else printDirectNoDesign(labels);
         }

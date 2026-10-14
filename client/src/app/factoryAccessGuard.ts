@@ -7,7 +7,6 @@
 
 import {
   FACTORY_LANDING_PAGES,
-  FACTORY_SUBPAGE_PARENT,
   factoryPageAllowsRole,
   hasFactoryPageKey,
   resolveFactoryPage,
@@ -27,7 +26,6 @@ export interface MyAccess {
 
 // Compatibility export for existing callers/tests. The data is now generated
 // from the canonical page registry instead of maintained independently.
-export const SUBPAGE_PARENT: [prefix: string, parentKey: string][] = [...FACTORY_SUBPAGE_PARENT];
 
 /**
  * Compute the first usable Factory landing page.

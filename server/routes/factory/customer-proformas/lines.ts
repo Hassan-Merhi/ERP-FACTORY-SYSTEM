@@ -223,7 +223,7 @@ export function registerFactoryCustomerProformaLineRoutes(app: Express) {
               }
             }
           }
-        } catch (_e) {
+        } catch {
           /* non-blocking */
         }
       }

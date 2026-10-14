@@ -19,7 +19,6 @@ import {
   customerProformaLines,
   customers,
   companies,
-  companySettings,
 } from "@shared/schema";
 import { eq, and, inArray } from "drizzle-orm";
 import path from "path";
@@ -45,11 +44,6 @@ export function registerFactoryCustomerProformaExportRoutes(app: Express) {
 
       const [customer] = await db.select().from(customers).where(eq(customers.id, proforma.customerId));
       const [company] = await db.select().from(companies).where(eq(companies.id, companyId));
-      const [_settings] = await db
-        .select()
-        .from(companySettings)
-        .where(eq(companySettings.companyId, companyId))
-        .catch(() => [null]);
 
       // Fetch weight per bale + canonical name from factoryBaleProducts by articleCode
       const articleCodes = [...new Set(rawLines.map((l) => l.articleCode).filter(Boolean))];
@@ -247,11 +241,6 @@ export function registerFactoryCustomerProformaExportRoutes(app: Express) {
 
       const [customer] = await db.select().from(customers).where(eq(customers.id, proforma.customerId));
       const [company] = await db.select().from(companies).where(eq(companies.id, companyId));
-      const [_settings] = await db
-        .select()
-        .from(companySettings)
-        .where(eq(companySettings.companyId, companyId))
-        .catch(() => [null]);
 
       // Fetch weight per bale + canonical name from factoryBaleProducts by articleCode
       const articleCodes = [...new Set(rawLines.map((l) => l.articleCode).filter(Boolean))];

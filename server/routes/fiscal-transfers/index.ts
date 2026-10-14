@@ -10,7 +10,6 @@ import { registerStockTransferReadRoutes } from "./reads";
 import { registerStockTransferCreateRoutes } from "./create";
 import { registerStockTransferRevisionReadRoutes } from "./revisions-read";
 import { registerPosTransferDetailRoutes } from "./pos-detail";
-import { registerStockTransferRevisionWriteRoutes } from "./revisions-write";
 import { registerStockTransferUpdateRoutes } from "./update";
 
 export function registerFiscalTransferRoutes(app: Express) {
@@ -18,6 +17,5 @@ export function registerFiscalTransferRoutes(app: Express) {
   registerStockTransferCreateRoutes(app);
   registerStockTransferRevisionReadRoutes(app);
   registerPosTransferDetailRoutes(app);
-  registerStockTransferRevisionWriteRoutes(app);
   registerStockTransferUpdateRoutes(app);
 }

@@ -17,31 +17,7 @@ import { getFreightContainerId, verifyContainerOwnership } from "./_helpers";
 export function registerFactoryFreightRoutes(app: Express) {
   // ─────── CONTAINER FREIGHT ───────
 
-  app.get("/api/factory/containers/:containerId/freight", requireAuth, async (req: Request, res: Response) => {
-    try {
-      const containerId = Number(req.params.containerId);
-      const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
-      if (!companyId || !(await verifyContainerOwnership(containerId, companyId))) {
-        return res.status(403).json({ message: "Access denied" });
-      }
-      const freightRows = await db.select().from(containerFreight).where(eq(containerFreight.containerId, containerId));
-      const freightWithPayments = await Promise.all(
-        freightRows.map(async (fr) => {
-          const payments = await db
-            .select()
-            .from(containerFreightPayments)
-            .where(eq(containerFreightPayments.containerFreightId, fr.id));
-          const totalPaid = payments.reduce((sum: number, p) => sum + Number(p.amount), 0);
-          const freightAmount = Number(fr.freightAmount);
-          const computedStatus = totalPaid >= freightAmount ? "PAID" : totalPaid > 0 ? "PARTIAL" : "UNPAID";
-          return { ...fr, payments, totalPaid, computedStatus };
-        })
-      );
-      res.json(freightWithPayments);
-    } catch (error: unknown) {
-      res.status(500).json({ message: getErrorMessage(error) });
-    }
-  });
+  // This GET endpoint is owned by an earlier canonical route registrar.
 
   app.post("/api/factory/containers/:containerId/freight", requireAuth, async (req: Request, res: Response) => {
     try {

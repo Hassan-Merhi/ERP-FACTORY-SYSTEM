@@ -221,7 +221,6 @@ const PAGES: Array<{ name: string; load: () => Promise<any>; landmark: string }>
   { name: "FileStorageTab", load: () => import("@/pages/settings/FileStorageTab"), landmark: "button-upload-file" },
 
   // ERP listings and dashboards.
-  { name: "ProductionBales", load: () => import("@/pages/ProductionBales"), landmark: "badge-finalize-mode" },
   { name: "CombinedInventory", load: () => import("@/pages/CombinedInventory"), landmark: "button-refresh-inventory" },
   { name: "Agents", load: () => import("@/pages/Agents"), landmark: "button-add-agent" },
   { name: "Suppliers", load: () => import("@/pages/Suppliers"), landmark: "text-active-suppliers" },

@@ -49,8 +49,6 @@ interface CustomerOption {
 
 export function StockEntryCart({
   cart,
-  workers: _workers,
-  workerCategoryFilter: _workerCategoryFilter,
   onUpdateQty,
   onSetQty,
   onUpdateWeight,

@@ -17,8 +17,6 @@ export interface AttendanceStatusRow {
 /** The attendance statuses the payroll calculators recognize. */
 export const ATTENDANCE_STATUSES = ["Present", "Late", "Leave", "Half Day", "Absent"] as const;
 
-export type AttendanceStatus = (typeof ATTENDANCE_STATUSES)[number];
-
 export interface FactoryPayrollCalculationInput {
   salaryType: string | null;
   baseSalary: number;

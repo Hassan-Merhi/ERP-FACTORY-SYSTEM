@@ -53,7 +53,6 @@ function SheetFormDialog({
   open,
   onClose,
   existing,
-  isAdmin: _isAdmin,
 }: {
   open: boolean;
   onClose: () => void;

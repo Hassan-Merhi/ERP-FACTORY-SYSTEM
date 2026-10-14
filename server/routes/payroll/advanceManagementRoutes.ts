@@ -10,16 +10,13 @@ import { getClientDate } from "../../lib/dateUtils";
 import type { Express, Request, Response } from "express";
 import { db } from "../../db";
 import { requireAuth } from "../../auth";
-import { eq, and, sql, isNull, inArray } from "drizzle-orm";
+import { eq, and, sql, inArray } from "drizzle-orm";
 import { postErpVoucherTx } from "../../services/accounting/erpVoucherPosting";
 import {
   assertVoucherEditableTx,
   recordVoucherEditAuditTx,
   sendVoucherCorrectionRefusal,
 } from "../../services/accounting/voucherCorrection";
-import multer from "multer";
-import path from "path";
-import fs from "fs";
 import {
   factoryWorkers,
   factoryDaybookEntries,
@@ -34,64 +31,6 @@ import { MoneyDecimal, toMoney } from "../../lib/money";
 import type Decimal from "decimal.js";
 import { getFactoryCompanyId, writeDaybookEntry } from "./advanceRouteHelpers";
 import { registerUnvoucheredAdvancesRoute, registerWorkerAdvanceBalanceRoute } from "./advanceReadRoutes";
-
-/** Find or create a ledger account by name for a company. Returns the account row.
- *  Skips soft-deleted accounts and handles race-condition unique-constraint failures. */
-async function _findOrCreateLedger(companyId: number, name: string, accountType: string): Promise<{ id: number }> {
-  const [existing] = await db
-    .select({ id: ledgerAccounts.id })
-    .from(ledgerAccounts)
-    .where(
-      and(eq(ledgerAccounts.companyId, companyId), eq(ledgerAccounts.name, name), isNull(ledgerAccounts.deletedAt))
-    );
-  if (existing) return existing;
-
-  for (let attempt = 0; attempt < 5; attempt++) {
-    const [maxCodeRow] = await db
-      .select({ maxCode: sql<number | null>`MAX(CAST(code AS INTEGER))` })
-      .from(ledgerAccounts)
-      .where(and(eq(ledgerAccounts.companyId, companyId), sql`code ~ '^\\d+$'`));
-    const nextCode = String((maxCodeRow?.maxCode ?? 0) + 1 + attempt);
-    try {
-      const [created] = await db
-        .insert(ledgerAccounts)
-        .values({ companyId, code: nextCode, name, accountType, active: true, isHidden: false })
-        .returning({ id: ledgerAccounts.id });
-      return created;
-    } catch (err: unknown) {
-      if ((err as { code?: string }).code === "23505" || getErrorMessage(err)?.includes("unique")) {
-        const [nowFound] = await db
-          .select({ id: ledgerAccounts.id })
-          .from(ledgerAccounts)
-          .where(
-            and(
-              eq(ledgerAccounts.companyId, companyId),
-              eq(ledgerAccounts.name, name),
-              isNull(ledgerAccounts.deletedAt)
-            )
-          );
-        if (nowFound) return nowFound;
-        continue;
-      }
-      throw err;
-    }
-  }
-  throw new Error(`Unable to create ledger account "${name}" after multiple attempts`);
-}
-
-const _workerUpload = multer({
-  storage: multer.diskStorage({
-    destination: (req, file, cb) => {
-      const dir = path.join(process.cwd(), "uploads", "workers");
-      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-      cb(null, dir);
-    },
-    filename: (req, file, cb) => {
-      const ext = path.extname(file.originalname);
-      cb(null, `${Date.now()}-${Math.random().toString(36).slice(2)}${ext}`);
-    },
-  }),
-});
 
 export function registerAdvanceManagementRoutes(app: Express) {
   app.post("/api/factory/advances/reconcile", requireAuth, async (req: Request, res: Response) => {

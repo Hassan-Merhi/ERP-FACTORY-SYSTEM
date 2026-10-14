@@ -169,14 +169,6 @@ export const accessQueryPolicy = {
   refetchOnReconnect: false,
 } as const;
 
-export const liveTransactionalQueryPolicy = {
-  staleTime: QUERY_STALE_TIMES.live,
-  gcTime: QUERY_GC_TIMES.live,
-  refetchOnMount: true,
-  refetchOnWindowFocus: false,
-  refetchOnReconnect: true,
-} as const;
-
 export function liveCountQueryPolicy(intervalMs = 60_000) {
   return {
     staleTime: QUERY_STALE_TIMES.liveCount,

@@ -90,12 +90,6 @@ export function pctChange(a: number, b: number): number | null {
   return ((a - b) / b) * 100;
 }
 
-export function fmtPct(p: number | null) {
-  if (p === null) return "N/A";
-  const sign = p > 0 ? "+" : "";
-  return `${sign}${p.toFixed(1)}%`;
-}
-
 /**
  * One row per article across both periods: Period A quantities, weights and mix
  * batches beside Period B's, plus every worker who pressed it in either period,

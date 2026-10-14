@@ -7,13 +7,13 @@ const routeSource = readFileSync(
   "utf8",
 );
 const indexSource = readFileSync(
-  resolve(process.cwd(), "server/routes/stock/index.ts"),
+  resolve(process.cwd(), "server/routes/stockRoutes.ts"),
   "utf8",
 );
 
 describe("Program 6C lightweight stock-item route", () => {
   it("registers the lightweight endpoint before the full stock routes", () => {
-    expect(indexSource).toContain('import { registerStockLightRoutes } from "./stockLightRoutes"');
+    expect(indexSource).toContain('import { registerStockLightRoutes } from "./stock/stockLightRoutes"');
     expect(indexSource.indexOf("registerStockLightRoutes(app)")).toBeGreaterThan(-1);
     expect(indexSource.indexOf("registerStockLightRoutes(app)")).toBeLessThan(
       indexSource.indexOf("registerStockGroupsItemsRoutes(app)"),

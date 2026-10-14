@@ -11,7 +11,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useAppMode } from "@/contexts/AppModeContext";
-import { getApiRequest } from "@/lib/factoryApi";
 import { MapPin, BookOpen, Users, Truck, FolderTree, Package } from "lucide-react";
 import {} from "@shared/schema";
 
@@ -20,7 +19,6 @@ import { entityConfig } from "./accountingcreate/utils";
 import { EntityFormWrapper } from "./accountingcreate/components/EntityFormWrapper";
 export default function AccountingCreate() {
   const appMode = useAppMode();
-  const _modeApiRequest = getApiRequest(appMode);
   const [, navigate] = useLocation();
   const [selectedEntity, setSelectedEntity] = useState<EntityType>("location");
   const isFactory = appMode === "factory";

@@ -16,7 +16,6 @@ export function FactoryPendingInvoiceVerifyDialog7({ model }: { model: Model }) 
     setRecoverTab,
     recoverBalesMutation,
     autoRecoverMutation,
-    isPending: _isPending,
   } = model;
   return (
     <Dialog

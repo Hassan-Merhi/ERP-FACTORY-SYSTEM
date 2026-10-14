@@ -86,8 +86,11 @@ export default tseslint.config(
         "warn",
         {
           args: "after-used",
+          // Unused parameters and caught errors may be marked with a leading
+          // underscore. Local variables may not: a `_` prefix used to hide dead
+          // code instead of deleting it (see docs/dead-code-prevention.md).
+          // Keys omitted from a rest object stay allowed via ignoreRestSiblings.
           argsIgnorePattern: "^_",
-          varsIgnorePattern: "^_",
           caughtErrorsIgnorePattern: "^_",
           ignoreRestSiblings: true,
         },

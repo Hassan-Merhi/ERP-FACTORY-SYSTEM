@@ -2,8 +2,6 @@ import { useState, useEffect } from "react";
 import { useLocation, useRoute } from "wouter";
 import { useEscapeToParent } from "@/hooks/use-escape-to-parent";
 import { useQuery } from "@tanstack/react-query";
-import { useAppMode } from "@/contexts/AppModeContext";
-import { getApiRequest } from "@/lib/factoryApi";
 import { useDateFormat } from "@/contexts/DateFormatContext";
 import { format, startOfMonth, endOfMonth } from "date-fns";
 import { PageHeader } from "@/components/PageHeader";
@@ -72,8 +70,6 @@ export default function LedgerVouchers() {
   const [, params] = useRoute("/ledger-vouchers/:accountId/:year/:month");
   const { formatAmountRaw: formatAmount } = useCurrencyContext();
   const { formatShortDate } = useDateFormat();
-  const appMode = useAppMode();
-  const _modeApiRequest = getApiRequest(appMode);
 
   const accountId = params?.accountId ? parseInt(params.accountId) : null;
   const year = params?.year ? parseInt(params.year) : null;

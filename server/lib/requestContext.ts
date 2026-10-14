@@ -21,14 +21,6 @@ export function getSessionRole(request: Request): string {
   return request.session.currentRole ?? "";
 }
 
-export function requireSessionRole(request: Request, allowedRoles: readonly string[], message = "Access denied"): string {
-  const role = getSessionRole(request);
-  if (!allowedRoles.includes(role)) {
-    throw new HttpError(403, message);
-  }
-  return role;
-}
-
 export function getSessionUsername(request: Request): string | undefined {
   const session = request.session as typeof request.session & { username?: string };
   return session.username;

@@ -54,11 +54,6 @@ function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
 }
 
-function _dateKey(value: Date | string): string {
-  if (value instanceof Date) return value.toISOString().slice(0, 10);
-  return String(value).slice(0, 10);
-}
-
 function normalizeLines(lines: unknown): CompactFeedbackLine[] {
   if (!Array.isArray(lines)) return [];
   const merged = new Map<string, CompactFeedbackLine>();

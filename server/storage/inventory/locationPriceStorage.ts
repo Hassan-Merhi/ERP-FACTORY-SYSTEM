@@ -6,16 +6,6 @@ import * as schema from "@shared/schema";
 // Location Prices
 // ---------------------------------------------------------------------------
 
-export async function getLocationPrices(
-  companyId: number,
-  locationId: number
-): Promise<schema.StockItemLocationPrice[]> {
-  return await db
-    .select()
-    .from(schema.stockItemLocationPrices)
-    .where(eq(schema.stockItemLocationPrices.locationId, locationId));
-}
-
 export async function getAllLocationPrices(companyId: number): Promise<schema.StockItemLocationPrice[]> {
   return await db
     .select({

@@ -2,7 +2,7 @@ import type { ClientErrorLike } from "@/lib/clientError";
 import { getErrorDetails } from "@shared/errorUtils";
 import { useState, useRef, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { useParams, useLocation, useSearch } from "wouter";
+import { useParams, useSearch } from "wouter";
 import { useBackToParent } from "@/hooks/use-back-to-parent";
 import { useEscapeToParent } from "@/hooks/use-escape-to-parent";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -53,7 +53,6 @@ const calculateLineTotal = (qty: number | string, pricePerBale: number | string)
 
 export default function SupplierProformas() {
   const { toast } = useToast();
-  const [, _navigate] = useLocation();
   const handleBack = useBackToParent();
   const params = useParams<{ supplierId: string }>();
   const supplierId = parseInt(params.supplierId);

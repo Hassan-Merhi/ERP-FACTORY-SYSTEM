@@ -16,7 +16,6 @@ export function FactoryPendingInvoiceVerifyDialog4({ model }: { model: Model }) 
     invoiceDate,
     setInvoiceDate,
     finalizeMutation,
-    isPending: _isPending,
   } = model;
   return (
     <Dialog open={showFinalizePreview} onOpenChange={setShowFinalizePreview}>

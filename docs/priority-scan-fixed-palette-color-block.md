@@ -50,6 +50,10 @@ Final focused frontend run: **97 passed, 0 failed, 0 skipped**, 6 files, exit 0:
 npm run test:frontend -- client/src/lib/labelHtml.test.ts client/src/lib/priorityPrintPreflight.test.ts tests/ui/priority-scan-palette.test.tsx tests/ui/priority-specialist-print.test.tsx client/src/i18n/automaticPriorityPrintingTranslations.test.ts tests/ui/priority-scan-history-poll.test.ts
 ```
 
+> `tests/ui/priority-specialist-print.test.tsx` was removed in the 2026-10 dead-code cleanup
+> together with the retired Production Bales and Pressing Bales pages it rendered (both routes
+> redirect to Stock Entry). The runs above are the historical record.
+
 | File | Passing tests |
 | --- | ---: |
 | client/src/lib/labelHtml.test.ts | 33 |

@@ -22,9 +22,6 @@
  * values are used with no rounding at all, so an untouched retail checkout keeps
  * the pre-Wave-2 numbers byte for byte.
  */
-import { RETAIL_DEFAULT_DISCOUNT_LIMIT_PERCENT } from "@shared/schema";
-
-export const RETAIL_MONEY_EPSILON = 0.000001;
 
 export type RetailLineDiscountInputType = "none" | "percent" | "fixed";
 export type RetailPromotionDiscountType = "percent" | "fixed";
@@ -439,8 +436,4 @@ export function hasManualAdjustment(
   );
   const hasOrder = (orderDiscount?.type ?? "none") !== "none" && Number(orderDiscount?.value ?? 0) > 0;
   return { hasLine, hasOrder, any: hasLine || hasOrder };
-}
-
-export function defaultDiscountLimitPercent(): number {
-  return RETAIL_DEFAULT_DISCOUNT_LIMIT_PERCENT;
 }

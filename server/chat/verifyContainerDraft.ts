@@ -84,7 +84,7 @@ export async function buildVerifyContainerDraft(
         };
       }
     }
-  } catch (_) {
+  } catch {
     // Failed silently — the chat response is still returned.
   }
 

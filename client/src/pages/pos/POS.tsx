@@ -33,7 +33,7 @@ import { GoldenCoastPosReadinessAlert } from "./pos-components/GoldenCoastPosRea
 export default function POS({ posUser, editVoucherId }: { posUser?: AuthMe; editVoucherId?: string } = {}) {
   const { selectedLocation, setSelectedLocation } = useLocationContext();
   const { selectedCompany } = useCompany();
-  const [_location, navigate] = useLocation();
+  const [, navigate] = useLocation();
   const { toast } = useToast();
   const { selectedCurrency, exchangeRate: dailyExchangeRate, displayCurrency } = useCurrencyContext();
 
@@ -136,9 +136,7 @@ export default function POS({ posUser, editVoucherId }: { posUser?: AuthMe; edit
     goldenCoastReadinessLoading,
     goldenCoastReadiness,
     lastSoldPrices,
-    posCustomers: _posCustomers,
     editVoucher,
-    editVoucherLoading: _editVoucherLoading,
     editVoucherViewEntries,
     stockInventory,
     stockInventoryLoading,

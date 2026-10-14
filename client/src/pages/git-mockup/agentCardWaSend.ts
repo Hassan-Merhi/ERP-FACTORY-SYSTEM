@@ -8,11 +8,6 @@ interface AdjEntry {
   amount: number;
   type: string;
 }
-interface _ReplaceTarget {
-  id: number;
-  containerNumber: string;
-  dutyFee: number;
-}
 
 export interface SendAgentDutyWaParams {
   agent: AgentDutySummary;
@@ -38,7 +33,6 @@ export async function sendAgentCardToWhatsApp(params: SendAgentDutyWaParams): Pr
 
     const agentName = agent.agentName;
     const ledgerBalance = agent.ledgerBalance;
-    const _openBalance = agent.openBalance;
     const hasBalance = ledgerBalance !== null;
     const activePreviewRows = agent.activePreviewRows.filter((r) => !!(r.numberPlate ?? "").trim());
     const cbClearedRows = agent.clearedRows as ApiAllocatedRow[];
@@ -84,7 +78,6 @@ export async function sendAgentCardToWhatsApp(params: SendAgentDutyWaParams): Pr
     const displayBal = ledgerBalance ?? waOpenSum;
     const adjustedBal = displayBal;
     const adjIsDebit = adjustedBal >= 0;
-    const _waMismatch = hasAdj && Math.abs(adjustedBal - waOpenSum) > 0.01;
     const isReconciledWa = hasAdj && hasBalance && Math.abs(adjustedBal) <= 0.01;
 
     const waPrepaidSet = new Set<number>(dbPrepaidIds);

@@ -70,7 +70,6 @@ export function DaybookTable({
   handleDelete,
   canEdit,
   canDelete,
-  daybookRowLimit: _daybookRowLimit,
   setDaybookRowLimit,
   DAYBOOK_PAGE_SIZE,
   navigate,
@@ -78,10 +77,6 @@ export function DaybookTable({
   errorMessage = null,
   onRetry,
 }: DaybookTableProps) {
-  const _rowId = (row: DaybookRow): string => {
-    return row._type === "voucher" ? `voucher-${(row.data as Voucher).id}` : `offload-${row.data.id}`;
-  };
-
   // Loading, failure and empty are three different situations. Rendering a bare
   // header for all three makes a failed request look like a day with no
   // transactions, so each one gets its own visible state.

@@ -1,4 +1,4 @@
-import type { NextFunction, Request, RequestHandler, Response } from "express";
+import type { Request, Response } from "express";
 import { closedPeriodErrorResponse } from "./closedPeriodError";
 import { HttpError } from "./httpError";
 
@@ -117,12 +117,4 @@ export function sendHttpError(response: Response, error: unknown): void {
   }
 
   response.status(500).json({ message: getErrorMessage(error) });
-}
-
-export function asyncRoute(
-  handler: (request: Request, response: Response, next: NextFunction) => Promise<unknown>
-): RequestHandler {
-  return (request, response, next) => {
-    Promise.resolve(handler(request, response, next)).catch(next);
-  };
 }

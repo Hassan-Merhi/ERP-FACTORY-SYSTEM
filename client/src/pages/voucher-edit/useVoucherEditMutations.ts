@@ -40,7 +40,7 @@ export function useVoucherEditMutations({
   goldenCoastParentCompanyId,
 }: UseVoucherEditMutationsOptions) {
   const { toast } = useToast();
-  const [_location, navigate] = useLocation();
+  const [, navigate] = useLocation();
 
   const updateMutation = useMutation({
     mutationFn: async (data: { voucherUpdates: unknown; entries: unknown[] }) => {

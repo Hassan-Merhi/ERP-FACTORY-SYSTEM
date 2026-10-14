@@ -21,7 +21,7 @@ import { sql } from "drizzle-orm";
 import type Decimal from "decimal.js";
 
 import type { DatabaseOrTransaction } from "../../../../db";
-import { MoneyDecimal, toMoney } from "../../../../lib/money";
+import { toMoney } from "../../../../lib/money";
 import {
   getPartyBalances,
   type PartyBalanceMemoLine,
@@ -82,8 +82,6 @@ interface NativeRow {
   usd_net: string;
   legacy: string;
 }
-
-const ZERO = new MoneyDecimal(0);
 
 /** Native per-currency sums of the supplier's owned lines (same lines as the engine). */
 async function loadNativeBalances(
@@ -193,11 +191,6 @@ export async function loadFactorySupplierLedgerViews(
     });
   }
   return views;
-}
-
-/** The Cr-positive ledger balance of a view as a Decimal (zero when absent). */
-export function ledgerOwed(view: FactorySupplierLedgerView | undefined): Decimal {
-  return view ? toMoney(view.ledgerBalanceUsd) : ZERO;
 }
 
 /** An empty view for a supplier the engine did not return (no master in the company). */

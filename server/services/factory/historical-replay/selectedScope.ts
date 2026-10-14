@@ -451,34 +451,3 @@ export async function computeReplayWriteScope(
       scope.availableBaleIdsToUpdate.length + (opts.includeFinalizedBales ? scope.finalizedBaleIdsToUpdate.length : 0),
   };
 }
-
-export async function classifyBalesByFinalization(
-  baleIds: number[],
-  includeFinalizedBales: boolean,
-  executor: ReplayQueryExecutor
-): Promise<{ availableIds: number[]; finalizedIds: number[] }> {
-  if (baleIds.length === 0) return { availableIds: [], finalizedIds: [] };
-  const finalizedIn = FINALIZED_BALE_STATUSES.map((status) => `'${status}'`).join(",");
-  const result = await executor.query<{ id: number; is_finalized: boolean }>(
-    `SELECT fb.id,
-            (fb.status IN (${finalizedIn})
-              OR fb.dispatch_batch_id IS NOT NULL
-              OR EXISTS (SELECT 1 FROM customer_order_bales cob WHERE cob.bale_id = fb.id)
-              OR EXISTS (SELECT 1 FROM factory_invoice_loading_bales filb WHERE filb.bale_id = fb.id)
-            ) AS is_finalized
-     FROM factory_bales fb
-     WHERE fb.id = ANY($1)`,
-    [baleIds]
-  );
-  const availableIds: number[] = [];
-  const finalizedIds: number[] = [];
-  for (const row of result.rows) {
-    if (row.is_finalized) {
-      finalizedIds.push(row.id);
-      if (includeFinalizedBales) availableIds.push(row.id);
-    } else {
-      availableIds.push(row.id);
-    }
-  }
-  return { availableIds, finalizedIds };
-}

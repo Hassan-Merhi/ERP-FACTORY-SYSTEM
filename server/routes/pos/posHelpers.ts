@@ -1,7 +1,4 @@
-import { randomUUID } from "crypto";
-
 // ── Temporary file store for WhatsApp sendFileByUrl ──────────────────────────
-const TEMP_FILE_TTL_MS = 10 * 60 * 1000;
 const TEMP_FILE_SWEEP_MS = 60 * 1000;
 const DEFAULT_MAX_TEMP_FILES = 256;
 const DEFAULT_MAX_TEMP_FILE_BYTES = 128 * 1024 * 1024;
@@ -42,13 +39,4 @@ function pruneTempFiles(now = Date.now()): void {
 const tempFileSweepTimer = setInterval(() => pruneTempFiles(), TEMP_FILE_SWEEP_MS);
 tempFileSweepTimer.unref?.();
 
-export function storeTempFile(buffer: Buffer, contentType?: string, filename?: string): string {
-  pruneTempFiles();
-  const id = randomUUID();
-  tempPdfStore.set(id, { buffer, expiresAt: Date.now() + TEMP_FILE_TTL_MS, contentType, filename });
-  pruneTempFiles();
-  return id;
-}
-
 // keep old name as alias
-export const storeTempPdf = storeTempFile;

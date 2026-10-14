@@ -103,6 +103,7 @@ export const FACTORY_ACCESS_REGISTRY: readonly FactoryPageDefinition[] = [
     route: "/factory/bales-hub",
     aliases: [
       "/factory/bale-products",
+      "/factory/catalog-translations",
       "/factory/bale-product-history",
       "/factory/reprint-labels",
       "/factory/bales-history",
@@ -526,10 +527,6 @@ export const FACTORY_SIDEBAR_PAGES = FACTORY_ACCESS_REGISTRY.filter((page) => pa
 export const FACTORY_PINNED_PAGES = FACTORY_ACCESS_REGISTRY.filter((page) => page.pinned === true);
 export const FACTORY_LANDING_PAGES = FACTORY_ACCESS_REGISTRY.filter(
   (page) => page.landing === true && page.settingsVisible !== false
-);
-
-export const FACTORY_SUBPAGE_PARENT: [prefix: string, parentKey: string][] = FACTORY_ACCESS_REGISTRY.flatMap((page) =>
-  (page.aliases ?? []).map((alias) => [alias, page.key] as [string, string])
 );
 
 export function normalizeFactoryAccessPath(path: string): string {
