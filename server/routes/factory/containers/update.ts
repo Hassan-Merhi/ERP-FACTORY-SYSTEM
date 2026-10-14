@@ -11,7 +11,7 @@ import { getClientDate } from "../../../lib/dateUtils";
 import { logger } from "../../../lib/logger";
 import { db } from "../../../db";
 import { requireAuth } from "../../../auth";
-import { resolveStoredFxRate, UnresolvedExchangeRateError } from "../../../services/factory/currencyConversion";
+import { resolveStoredFxRate, resolveStoredFxRateOrThrow, UnresolvedExchangeRateError } from "../../../services/factory/currencyConversion";
 import { getOrCreateLedgerAccount } from "../_helpers";
 import { FactoryFxRateRequiredError, factoryDocumentRate } from "../../../services/factory/factoryDocumentFxRate";
 import { factorySuppliers, factoryContainers, voucherEntries, factoryDaybookEntries, vouchers } from "@shared/schema";
@@ -276,14 +276,38 @@ export function registerFactoryContainerUpdateRoutes(app: Express) {
         "freightSupplierId",
         "freightPaidBy",
         "freightOwnAccountId",
+        "supplierId",
         "currencyCode",
         "ratePerKg",
         "fxRateToUsd",
         "fxRateSource",
       ].some((f) => f in b);
 
+      // A container's goods payable MUST follow changes to the supplier, goods value,
+      // currency and historical rate. Previously only the descriptive daybook row
+      // followed those edits, which left the supplier's actual ledger incorrect.
+      const goodsNeedsSync = [
+        "supplierId", "totalKg", "ratePerKg", "currencyCode",
+        "fxRateToUsd", "fxRateSource",
+      ].some((f) => f in b);
+      const existingImports = goodsNeedsSync
+        ? await db.select().from(vouchers).where(
+            and(
+              eq(vouchers.companyId, companyId),
+              isNull(vouchers.deletedAt),
+              ilike(vouchers.voucherNumber, `FACTORY-IMPORT-${id}-%`)
+            )
+          ).limit(2)
+        : [];
+      if (goodsNeedsSync && existingImports.length > 1) {
+        return res.status(409).json({
+          code: "FACTORY_IMPORT_DUPLICATE_JOURNALS",
+          message: "Multiple live import journals exist for this container. Reconcile them before changing supplier or goods value.",
+        });
+      }
+
       // Find any existing freight voucher for this container (stable or timestamped number)
-      const [existingFV] = await db
+      const existingFreightVouchers = await db
         .select()
         .from(vouchers)
         .where(
@@ -296,7 +320,16 @@ export function registerFactoryContainerUpdateRoutes(app: Express) {
             )
           )
         )
-        .limit(1);
+        .limit(2);
+      // Never edit only the first of multiple live freight journals. That would
+      // leave the other journal posting the same amount, or the wrong payable.
+      if (freightNeedsSync && existingFreightVouchers.length > 1) {
+        return res.status(409).json({
+          code: "FACTORY_FREIGHT_DUPLICATE_JOURNALS",
+          message: "Multiple live freight journals exist for this container. Reconcile them before changing freight or its supplier.",
+        });
+      }
+      const existingFV = existingFreightVouchers[0];
 
       // Wave 8.4 continuation: the commission journal FACTORY-COMM-{container}
       // follows every change to the commission or what it is posted at.
@@ -322,6 +355,84 @@ export function registerFactoryContainerUpdateRoutes(app: Express) {
           .where(and(eq(factoryContainers.id, id), eq(factoryContainers.companyId, companyId)))
           .returning();
         if (!updated) return null;
+
+        if (goodsNeedsSync) {
+          const goodsValue = toMoney(updated.totalKg).times(toMoney(updated.ratePerKg));
+          if (goodsValue.lessThanOrEqualTo(0) || !updated.supplierId) {
+            if (existingImports.length > 0) {
+              throw new Error("A posted goods-import journal cannot lose its purchase supplier or goods amount. Use an audited reversal.");
+            }
+          } else {
+            const goodsCcy = updated.currencyCode || "USD";
+            const goodsFx = resolveStoredFxRateOrThrow(goodsCcy, updated.fxRateToUsd, updated.fxRateConfirmed);
+            const importVoucher = existingImports[0];
+            if (importVoucher) {
+              const importEntries = await tx
+                .select()
+                .from(voucherEntries)
+                .where(eq(voucherEntries.voucherId, importVoucher.id));
+              const debitLines = importEntries.filter((line) => toMoney(line.debitAmount).greaterThan(0));
+              const creditLines = importEntries.filter((line) => toMoney(line.creditAmount).greaterThan(0));
+              if (importEntries.length !== 2 || debitLines.length !== 1 || creditLines.length !== 1
+                  || !debitLines[0].ledgerAccountId || !creditLines[0].factorySupplierId) {
+                throw new Error("Import journal has an unexpected entry shape. Review its postings before editing.");
+              }
+              const normalizedDr = normFactoryEntry(goodsCcy, goodsValue.toFixed(), "0", goodsFx);
+              const normalizedCr = normFactoryEntry(goodsCcy, "0", goodsValue.toFixed(), goodsFx);
+              await editPostedFactoryVoucherTx(
+                tx,
+                {
+                  companyId,
+                  voucherIds: [importVoucher.id],
+                  reason: "factory-container-goods-resync",
+                  actor: { userId: req.session.userId, username: req.session.username },
+                },
+                async () => {
+                  await tx.update(vouchers).set({
+                    totalAmount: goodsValue.toFixed(2),
+                    currency: goodsCcy,
+                    exchangeRate: String(goodsFx),
+                  }).where(eq(vouchers.id, importVoucher.id));
+                  await tx.update(voucherEntries).set(normalizedDr)
+                    .where(eq(voucherEntries.id, debitLines[0].id));
+                  await tx.update(voucherEntries).set({
+                    ...normalizedCr,
+                    factorySupplierId: updated.supplierId,
+                    ledgerAccountId: null,
+                  }).where(eq(voucherEntries.id, creditLines[0].id));
+                }
+              );
+            } else {
+              const importCostAccId = await getOrCreateLedgerAccount(
+                companyId, "FACTORY_IMPORT_COST", "Factory Import Cost"
+              );
+              const creationDate = updated.createdAt
+                ? new Date(updated.createdAt).toISOString().slice(0, 10)
+                : getClientDate(req);
+              await postFactoryVoucherTx(tx, {
+                companyId,
+                voucherNumber: (generation) => `FACTORY-IMPORT-${id}-${generation}`,
+                voucherDate: updated.arrivalDate || creationDate,
+                description: `Goods import - container ${updated.containerNumber}`,
+                currency: goodsCcy,
+                fxRateToUsd: String(goodsFx),
+                source: { sourceType: "factory-container-import", sourceId: id, phase: "goods" },
+                lines: [
+                  {
+                    ledgerAccountId: importCostAccId,
+                    debit: goodsValue,
+                    narration: `Goods import cost - container ${updated.containerNumber}`,
+                  },
+                  {
+                    factorySupplierId: updated.supplierId,
+                    credit: goodsValue,
+                    narration: `Goods payable to supplier - container ${updated.containerNumber}`,
+                  },
+                ],
+              });
+            }
+          }
+        }
 
         const newFreightAmt = toMoney(updated.freight);
         const newFreightAcctId = updated.freightAccountId ?? null;
