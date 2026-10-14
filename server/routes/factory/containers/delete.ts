@@ -286,7 +286,6 @@ export function registerFactoryContainerDeleteRoutes(app: Express) {
           .where(
             and(
               eq(vouchers.companyId, companyId),
-              eq(vouchers.sourceModule, "FACTORY"),
               ilike(vouchers.voucherNumber, `FACTORY-IMPORT-${container.id}-%`)
             )
           )
