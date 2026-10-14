@@ -17,6 +17,22 @@ export function runPostStartupJobs(): void {
   if (installed) return;
   installed = true;
 
+  // One-time, explicitly gated historical GL backfill for the audited 63 invoices.
+  // This is OFF by default and uses the centralized posting engine with
+  // per-invoice transaction rollback if the customer combined balance shifts.
+  if (process.env.ERP_RECONCILE_INVOICES_20261014 === "company-12-approved-63") {
+    const accountingReconciliationTimer = setTimeout(() => {
+      void import("../../scripts/reconcile-factory-invoices-20261014")
+        .then(({ reconcileFactoryInvoices20261014 }) => reconcileFactoryInvoices20261014(true))
+        .then(() => logger.info("[AccountingRepair] Historical invoice reconciliation finished"))
+        .catch((error: unknown) => logger.error(
+          "[AccountingRepair] Historical invoice reconciliation stopped; inspect voucher counts before retrying",
+          { error: getErrorMessage(error) }
+        ));
+    }, 12000);
+    unrefTimer(accountingReconciliationTimer);
+  }
+
   // Live vessel/AIS tracking is intentionally disabled. Container movement is
   // maintained manually or through Excel imports.
 
