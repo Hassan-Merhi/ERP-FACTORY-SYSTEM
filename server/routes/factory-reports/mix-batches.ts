@@ -98,6 +98,8 @@ export function registerFactoryMixBatchesByDateRoutes(app: Express, requireAuth:
               containerNumber: s.container_number,
               categoryId: s.category_id ?? null,
               categoryName: s.category_name ?? null,
+              supplierId: s.supplier_id ?? null,
+              sourceBatchId: s.source_batch_id ?? null,
               weightKg: toMoney(s.weight_kg).toNumber(),
               costPerKg: toMoney(s.cost_per_kg).toNumber(),
               totalCost: toMoney(s.total_cost).toNumber(),
