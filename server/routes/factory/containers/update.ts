@@ -331,7 +331,7 @@ export function registerFactoryContainerUpdateRoutes(app: Express) {
           if (goodsActuallyChanged) {
             return res.status(409).json({
               code: "FACTORY_IMPORT_RECLASS_REVIEW_REQUIRED",
-              message: "This historical goods journal has a posted supplier reclassification. Reverse and repost the reviewed correction before changing its goods supplier, value or currency.",
+              message: "FPR_LOCKED",
               correctionVoucherId: reviewedReclassification.id,
             });
           }
