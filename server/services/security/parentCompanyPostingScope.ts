@@ -2,6 +2,7 @@ import { and, eq } from "drizzle-orm";
 import { companies } from "@shared/schema";
 
 import { db } from "../../db";
+import { HttpError } from "../../lib/httpHandlers";
 import { assertCompanyAccess, CompanyAccessError } from "../../security/companyAccessBoundary";
 import { getCompanyRequestRuntimeContext, runWithCompanyRequestRuntimeContext } from "./companyRequestRuntimeContext";
 import {
@@ -10,12 +11,12 @@ import {
   runWithDatabaseScopeRuntimeContext,
 } from "./databaseScopeRuntimeContext";
 
-export class ParentCompanyPostingScopeError extends Error {
+export class ParentCompanyPostingScopeError extends HttpError {
   readonly code = "PARENT_COMPANY_POSTING_SCOPE_INVALID";
   readonly status: number;
 
   constructor(message: string, status = 403) {
-    super(message);
+    super(status, message);
     this.name = "ParentCompanyPostingScopeError";
     this.status = status;
   }
