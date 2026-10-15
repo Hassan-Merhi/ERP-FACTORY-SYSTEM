@@ -6,6 +6,10 @@
  * same exact totals to syncIntercoParentVoucher.
  */
 import { describe, expect, it, vi } from "vitest";
+vi.mock("../server/services/security/parentCompanyPostingScope", () => ({
+  runWithVerifiedPoParentScope: async (_id: number, run: (parent: number | null) => Promise<unknown>) => run(h.parentCompanyId),
+}));
+
 
 const h = vi.hoisted(() => ({
   writes: [] as Array<[string, string, Record<string, unknown>]>,
