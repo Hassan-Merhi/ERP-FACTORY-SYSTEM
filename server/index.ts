@@ -57,6 +57,7 @@ import { ensureFactoryBaleOrderIntegrity } from "./startup/ensureFactoryBaleOrde
 import { runApprovedLegacyBaleUnitCostRepair } from "./startup/runApprovedLegacyBaleUnitCostRepair";
 import { runApprovedCustomerLoadingDateRepair } from "./startup/runApprovedCustomerLoadingDateRepair";
 import { runApprovedReturnedLoadingDateRepair } from "./startup/runApprovedReturnedLoadingDateRepair";
+import { runApprovedFactoryPayableReclassification } from "./startup/runApprovedFactoryPayableReclassification";
 import { ensureFactorySheetsSacksSchema } from "./startup/factorySheetsSacksSchema";
 import { ensureRecurringJournalSchema } from "./services/accounting/ensureRecurringJournalSchema";
 import { bootstrapRecurringJournalFromEnvironment } from "./services/accounting/recurringJournalBootstrap";
@@ -332,6 +333,9 @@ let migrationsDone = false;
       await runApprovedCustomerLoadingDateRepair(pool);
       // Restore the original date for a historically confirmed order returned to LOADING.
       await runApprovedReturnedLoadingDateRepair(pool);
+      // Owner-approved, idempotent reclassification of 18 original factory import payables.
+      // No-op unless explicitly enabled on the verified production Render service.
+      await runApprovedFactoryPayableReclassification();
       if (migrationsEnabled) {
         try {
           await runMigrations();
