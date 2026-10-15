@@ -5,6 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Layers, Pencil, Trash2, MessageCircle, Loader2 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
+import { MixBatchWhatsAppPreview } from "./MixBatchWhatsAppPreview";
+import type { MixBatchSupplierCategory, MixBatchSupplierCategoryLink } from "./mixBatchCategoryTargets";
 
 export interface MixBatchRow {
   id: number;
@@ -29,8 +31,10 @@ export interface MixBatchSourceRow {
   id: number;
   sourceName: string;
   containerNumber: string | null;
+  categoryId?: number | null;
+  categoryName?: string | null;
   weightKg: number;
-  costPerKg: string;
+  costPerKg: string | number;
   totalCost: number;
 }
 
@@ -60,6 +64,10 @@ interface MixBatchListProps {
   mixBatchesByDate: MixBatchPrintRow[];
   mixBatchesByDateLoading: boolean;
   mixBatchPrintRef: React.RefObject<HTMLDivElement | null>;
+  reportCategories: MixBatchSupplierCategory[];
+  reportSuppliers: MixBatchSupplierCategoryLink[];
+  reportAllocations: Record<string, number> | null;
+  reportLoading: boolean;
   formatDisplayDate: (date: string) => string;
 }
 
@@ -75,6 +83,10 @@ export function MixBatchList({
   setMixBatchDate,
   mixBatchesByDate,
   mixBatchPrintRef,
+  reportCategories,
+  reportSuppliers,
+  reportAllocations,
+  reportLoading,
   formatDisplayDate,
 }: MixBatchListProps) {
   const [showAllMixBatches, setShowAllMixBatches] = useState(false);
@@ -118,7 +130,7 @@ export function MixBatchList({
             variant="outline"
             size="sm"
             onClick={onSendWhatsApp}
-            disabled={isSendingWhatsApp || mixBatchesByDate.length === 0}
+            disabled={isSendingWhatsApp || reportLoading || reportAllocations === null || mixBatchesByDate.length === 0}
             data-testid="button-send-mix-batch-whatsapp"
             className="h-11 w-full gap-2 sm:h-8 sm:w-auto"
           >
@@ -131,148 +143,14 @@ export function MixBatchList({
           </Button>
         </div>
 
-        {/* Hidden printable card — screenshotted by html2canvas */}
-        <div
-          ref={mixBatchPrintRef as React.RefObject<HTMLDivElement>}
-          style={{
-            position: "fixed",
-            top: "-9999px",
-            left: "-9999px",
-            width: "680px",
-            backgroundColor: "#111827",
-            color: "#f9fafb",
-            padding: "24px",
-            fontFamily: "Inter, system-ui, sans-serif",
-            borderRadius: "12px",
-            zIndex: -1,
-          }}
-        >
-          <div style={{ marginBottom: "16px", borderBottom: "1px solid #374151", paddingBottom: "12px" }}>
-            <div style={{ fontSize: "11px", color: "#9ca3af", marginBottom: "4px" }}>
-              {new Date(mixBatchDate + "T00:00:00").toLocaleDateString("en-US", {
-                month: "2-digit",
-                day: "2-digit",
-                year: "numeric",
-              })}
-            </div>
-            <div style={{ fontSize: "18px", fontWeight: 700, color: "#f9fafb" }}>Mix Batch Details</div>
-          </div>
-
-          {mixBatchesByDate.map((batch) => (
-            <div key={batch.id} style={{ marginBottom: "20px" }}>
-              <div
-                style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "12px" }}
-              >
-                <div>
-                  <div style={{ fontSize: "15px", fontWeight: 700, fontFamily: "monospace", color: "#f9fafb" }}>
-                    {batch.batchCode}
-                  </div>
-                  {batch.name && (
-                    <div style={{ fontSize: "12px", color: "#9ca3af", marginTop: "2px" }}>{batch.name}</div>
-                  )}
-                </div>
-                <span
-                  style={{
-                    fontSize: "11px",
-                    fontWeight: 600,
-                    padding: "3px 10px",
-                    borderRadius: "999px",
-                    backgroundColor: batch.status === "COMPLETED" ? "#166534" : "#374151",
-                    color: batch.status === "COMPLETED" ? "#bbf7d0" : "#d1d5db",
-                    border: "1px solid " + (batch.status === "COMPLETED" ? "#16a34a" : "#4b5563"),
-                  }}
-                >
-                  {batch.status}
-                </span>
-              </div>
-
-              <div style={{ display: "flex", gap: "16px", marginBottom: "14px" }}>
-                {[
-                  { label: "Total Weight", value: formatNumber(batch.totalWeightKg) + " kg" },
-                  { label: "Total Cost", value: "$" + formatNumber(batch.displayTotalCost ?? batch.totalCost) },
-                  {
-                    label: "Cost/kg",
-                    value: "$" + (parseFloat(batch.displayCostPerKg ?? batch.costPerKg) || 0).toFixed(2),
-                  },
-                ].map((stat) => (
-                  <div
-                    key={stat.label}
-                    style={{ flex: 1, backgroundColor: "#1f2937", borderRadius: "8px", padding: "10px 14px" }}
-                  >
-                    <div style={{ fontSize: "10px", color: "#6b7280", marginBottom: "4px" }}>{stat.label}</div>
-                    <div style={{ fontSize: "14px", fontWeight: 700, fontFamily: "monospace", color: "#f9fafb" }}>
-                      {stat.value}
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              {(batch.sources?.length ?? 0) > 0 && (
-                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px" }}>
-                  <thead>
-                    <tr style={{ backgroundColor: "#1f2937" }}>
-                      {["SOURCE", "CONTAINER", "WEIGHT", "$/KG", "TOTAL"].map((h, i) => (
-                        <th
-                          key={h}
-                          style={{
-                            padding: "8px 10px",
-                            textAlign: i > 1 ? "right" : "left",
-                            color: "#6b7280",
-                            fontWeight: 600,
-                            fontSize: "10px",
-                            borderBottom: "1px solid #374151",
-                          }}
-                        >
-                          {h}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {batch.sources?.map((src, idx: number) => (
-                      <tr key={src.id} style={{ backgroundColor: idx % 2 === 0 ? "transparent" : "#1a2332" }}>
-                        <td style={{ padding: "7px 10px", color: "#f9fafb", fontWeight: 500 }}>{src.sourceName}</td>
-                        <td
-                          style={{ padding: "7px 10px", color: "#9ca3af", fontFamily: "monospace", fontSize: "11px" }}
-                        >
-                          {src.containerNumber || "—"}
-                        </td>
-                        <td
-                          style={{ padding: "7px 10px", color: "#f9fafb", textAlign: "right", fontFamily: "monospace" }}
-                        >
-                          {formatNumber(src.weightKg)} kg
-                        </td>
-                        <td
-                          style={{ padding: "7px 10px", color: "#f9fafb", textAlign: "right", fontFamily: "monospace" }}
-                        >
-                          ${(parseFloat(src.costPerKg) || 0).toFixed(2)}
-                        </td>
-                        <td
-                          style={{ padding: "7px 10px", color: "#f9fafb", textAlign: "right", fontFamily: "monospace" }}
-                        >
-                          ${formatNumber(src.totalCost)}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-            </div>
-          ))}
-
-          <div
-            style={{
-              marginTop: "16px",
-              borderTop: "1px solid #374151",
-              paddingTop: "10px",
-              fontSize: "10px",
-              color: "#6b7280",
-              textAlign: "right",
-            }}
-          >
-            Generated {new Date().toLocaleString()}
-          </div>
-        </div>
+        <MixBatchWhatsAppPreview
+          reportRef={mixBatchPrintRef}
+          date={mixBatchDate}
+          batches={mixBatchesByDate}
+          categories={reportCategories}
+          suppliers={reportSuppliers}
+          allocations={reportAllocations}
+        />
       </CardHeader>
 
       <CardContent className="min-w-0">
