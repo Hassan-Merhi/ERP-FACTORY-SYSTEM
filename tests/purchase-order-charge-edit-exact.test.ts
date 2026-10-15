@@ -6,6 +6,11 @@
  * which is "1.00", leaving the PO and its ledger a cent apart.
  */
 import { describe, expect, it, vi } from "vitest";
+vi.mock("../server/services/security/parentCompanyPostingScope", () => ({
+  runWithVerifiedPoParentScope: async (_companyId: number, run: (parentCompanyId: number | null) => Promise<unknown>) =>
+    run(null),
+}));
+
 
 const harness = vi.hoisted(() => ({ writes: [] as [string, string, Record<string, unknown>][] }));
 
