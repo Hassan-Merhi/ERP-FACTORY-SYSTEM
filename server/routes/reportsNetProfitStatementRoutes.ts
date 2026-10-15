@@ -127,10 +127,20 @@ export async function loadNetProfitDrillDown(
  * strings ("Income" + subType "Direct Income", "Direct Expense", ...), so
  * mis-cased types, plain "Expense" and Government Taxes were in none.
  */
-function drillDownHandler(cacheName: string, section: NetProfitSection, normal: "debit" | "credit") {
+function drillDownHandler(
+  cacheName: string,
+  section: NetProfitSection,
+  normal: "debit" | "credit",
+  context: "erp" | "factory" = "erp"
+) {
   return async (req: Request, res: Response) => {
     try {
-      const companyId = req.session.currentCompanyId;
+      // Factory Analytics must stay on its pinned factory company even when
+      // another tab changes the shared ERP currentCompanyId.
+      const companyId =
+        context === "factory"
+          ? req.session.factoryCompanyId || req.session.currentCompanyId
+          : req.session.currentCompanyId;
       if (!companyId) {
         return res.status(400).json({ message: "No company selected" });
       }
@@ -180,5 +190,19 @@ export function registerReportsNetProfitStatementRoutes(app: Express) {
     requireAuth,
     requireNonPOS,
     drillDownHandler("indirect-expenses", "indirectExpense", "debit")
+  );
+  // The Analytics date filter needs period movements, not cumulative
+  // /api/accounts/all closing balances. Keep factory company context pinned.
+  app.get(
+    "/api/factory/analytics/direct-expenses",
+    requireAuth,
+    requireNonPOS,
+    drillDownHandler("direct-expenses", "directExpense", "debit", "factory")
+  );
+  app.get(
+    "/api/factory/analytics/indirect-expenses",
+    requireAuth,
+    requireNonPOS,
+    drillDownHandler("indirect-expenses", "indirectExpense", "debit", "factory")
   );
 }
