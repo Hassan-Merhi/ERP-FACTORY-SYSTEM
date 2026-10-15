@@ -8,6 +8,8 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/queryClient";
 import { useAppMode } from "@/contexts/AppModeContext";
+import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
+import { translateFixedProductionPlanner } from "@/i18n/fixedProductionPlannerTranslations";
 import { getApiRequest } from "@/lib/factoryApi";
 import type { FactoryMixBatch } from "@shared/schema";
 
@@ -40,6 +42,7 @@ export default function ProductionRawStock() {
   const { formatDisplayDate } = useDateFormat();
   const { toast } = useToast();
   const appMode = useAppMode();
+  const { language } = useApplicationLanguage();
   const modeApiRequest = getApiRequest(appMode);
 
   const [offloadDialogOpen, setOffloadDialogOpen] = useState(false);
@@ -237,7 +240,7 @@ export default function ProductionRawStock() {
             className="h-11 gap-2 rounded-lg border-blue-500/40 px-3 text-xs font-semibold sm:h-9"
             data-testid="button-fixed-production-planner"
           >
-            <Calculator className="h-4 w-4" /> Fixed Production Planner
+            <Calculator className="h-4 w-4" /> {translateFixedProductionPlanner("title", language)}
           </Button>
           <Button
             onClick={() => setCreateMixBatchOpen(true)}
