@@ -131,6 +131,67 @@ describe("Phase 33B voucher entry finance reads", () => {
     expect(viewResponse.status).toBe(404);
   });
 
+  it("resolves Hassan prices from the master location for follower-location sales without resaving prices", async () => {
+    const inheritedItemId = ctx.stockItemIds[1];
+    const staleFollowerItemId = ctx.stockItemIds[2];
+
+    await db.insert(schema.locationPriceGroups).values({
+      companyId: ctx.companyId,
+      masterLocationId: ctx.locationId,
+      followerLocationId: ctx.location2Id,
+    });
+    await db.insert(schema.stockItemLocationPrices).values([
+      { stockItemId: inheritedItemId, locationId: ctx.locationId, sellingPrice: "180.00" },
+      { stockItemId: staleFollowerItemId, locationId: ctx.locationId, sellingPrice: "220.00" },
+      // An older follower-specific price must not override the master, exactly
+      // as the live Price List endpoint already behaves.
+      { stockItemId: staleFollowerItemId, locationId: ctx.location2Id, sellingPrice: "170.00" },
+    ]);
+
+    const voucher = await makeVoucher("Sales", { locationId: ctx.location2Id, totalAmount: "689.77" });
+    await db.insert(schema.salesItems).values([
+      {
+        voucherId: voucher.id,
+        stockItemId: inheritedItemId,
+        quantity: "1.000",
+        sellingPrice: "189.770000",
+        costPrice: "153.740000",
+        totalSales: "189.77",
+        totalCost: "153.74",
+        profit: "36.03",
+      },
+      {
+        voucherId: voucher.id,
+        stockItemId: staleFollowerItemId,
+        quantity: "2.000",
+        sellingPrice: "250.000000",
+        costPrice: "200.000000",
+        totalSales: "500.00",
+        totalCost: "400.00",
+        profit: "100.00",
+      },
+    ]);
+
+    const response = await agent.get(`/api/vouchers/${voucher.id}/view-entries`);
+    expect(response.status).toBe(200);
+    const items = response.body.filter((row: Record<string, unknown>) => row.isStockItem === true);
+
+    const inherited = items.find((row: Record<string, unknown>) => row.stockItemId === inheritedItemId);
+    expect(inherited).toMatchObject({
+      hassansPrice: "180.00",
+      hassansProfit: "9.77",
+      hassansPercentage: "5.4",
+      sellingPrice: "189.770000",
+    });
+
+    const masterWins = items.find((row: Record<string, unknown>) => row.stockItemId === staleFollowerItemId);
+    expect(masterWins).toMatchObject({
+      hassansPrice: "220.00",
+      hassansProfit: "60.00",
+      hassansPercentage: "13.6",
+    });
+  });
+
   it("returns Sales item detail for finance users and hides cost/profit when ERP field policy requires it", async () => {
     const voucher = await makeVoucher("Sales", {
       locationId: ctx.locationId,
