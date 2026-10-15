@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   calculateFixedProductionRows,
   sumFixedProductionRows,
+  visibleFixedProductionRows,
 } from "../client/src/pages/factory/production-raw-stock/fixedProductionPlannerCalculations";
 
 describe("Fixed Production Planner — original 05 Oct 2026 workbook formulas", () => {
@@ -67,6 +68,45 @@ describe("Fixed Production Planner — original 05 Oct 2026 workbook formulas", 
     expect(totals.allocation15).toBe(15000);
     expect(totals.allocation175).toBe(17500);
     expect(totals.containersToOrder).toBeCloseTo(22.75, 10);
+  });
+
+  it("hides suppliers with no In Hand or OTW even if they have a saved production allocation", () => {
+    const suppliers = [
+      { id: 11, name: "ABO JABER" },
+      { id: 12, name: "CYPRUS MODA" },
+      { id: 13, name: "Australia Ahmad" },
+      { id: 14, name: "Only Empty" },
+    ];
+    const stock = [
+      { supplierId: 11, remainingKg: "0", freeKg: "0" },
+      { supplierId: 12, remainingKg: "0", freeKg: "0" },
+      { supplierId: 13, remainingKg: "190140", freeKg: "190140" },
+    ];
+    const containers = [
+      { supplierId: 12, totalKg: "38770", status: "PENDING" },
+      { supplierId: 14, totalKg: "10000", status: "OFFLOADED" },
+    ];
+    const allocations = { "11": 1000, "12": 700, "13": 300, "14": 1500 };
+    const allRows = calculateFixedProductionRows(suppliers, stock, containers, allocations);
+    const visible = visibleFixedProductionRows(allRows);
+    expect(visible.map(row => row.name)).toEqual(["Australia Ahmad", "CYPRUS MODA"]);
+    expect(visible.find(row => row.name === "CYPRUS MODA")?.otw).toBe(38770);
+    expect(visible.find(row => row.name === "CYPRUS MODA")?.inHand).toBe(0);
+    expect(visible.find(row => row.name === "CYPRUS MODA")?.withOtwDays).toBeGreaterThan(0);
+    expect(sumFixedProductionRows(visible).allocation20).toBe(1000);
+    // Filtering the view must never erase past saved allocations.
+    expect(allocations["11"]).toBe(1000);
+  });
+
+  it("filters using combined stock in kilograms without rounding nonzero amounts to zero", () => {
+    const rows = calculateFixedProductionRows(
+      [{ id: 1, name: "Zero" }, { id: 2, name: "Tiny balance" }, { id: 3, name: "Negative balance" }],
+      [{ supplierId: 2, freeKg: "0.0004", remainingKg: "0.0004" },
+       { supplierId: 3, freeKg: "-5", remainingKg: "-5" }],
+      [],
+      { "1": 100, "2": 150, "3": 200 },
+    );
+    expect(visibleFixedProductionRows(rows).map(r => r.name)).toEqual(["Negative balance"]);
   });
 
   it("does not restrict summed allocations to 20,000 kg", () => {
