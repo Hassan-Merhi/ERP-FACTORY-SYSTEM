@@ -59,6 +59,7 @@ import { runApprovedCustomerLoadingDateRepair } from "./startup/runApprovedCusto
 import { runApprovedReturnedLoadingDateRepair } from "./startup/runApprovedReturnedLoadingDateRepair";
 import { runApprovedFactoryPayableReclassification } from "./startup/runApprovedFactoryPayableReclassification";
 import { runApprovedFactoryPayableUndo } from "./startup/runApprovedFactoryPayableUndo";
+import { runApprovedAboSobhiGoods82 } from "./startup/runApprovedAboSobhiGoods82";
 import { ensureFactorySheetsSacksSchema } from "./startup/factorySheetsSacksSchema";
 import { ensureRecurringJournalSchema } from "./services/accounting/ensureRecurringJournalSchema";
 import { bootstrapRecurringJournalFromEnvironment } from "./services/accounting/recurringJournalBootstrap";
@@ -338,6 +339,8 @@ let migrationsDone = false;
       // No-op unless explicitly enabled on the verified production Render service.
       await runApprovedFactoryPayableReclassification();
       await runApprovedFactoryPayableUndo();
+      // One-time exact goods payable catch-up for ABO SOBHI container TCLU8160430.
+      await runApprovedAboSobhiGoods82();
       if (migrationsEnabled) {
         try {
           await runMigrations();
