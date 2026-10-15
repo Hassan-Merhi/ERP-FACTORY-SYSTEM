@@ -3,7 +3,7 @@ import type { Request, Response, NextFunction } from "express";
 import { db } from "../../db";
 import { storage } from "../../storage";
 import { vouchers, voucherEntries, ledgerAccounts, companies, intercompanyPosConfigs } from "@shared/schema";
-import { eq, and, or, sql, like, isNull } from "drizzle-orm";
+import { eq, and, or, sql, like, ilike, isNull } from "drizzle-orm";
 import type { DatabaseOrTransaction, DbTransaction } from "../../db";
 import { postFactoryVoucherTx, usdLineAmounts } from "../../services/factory/factoryVoucherPosting";
 import { VoucherCorrectionError, editPostedFactoryVoucherTx } from "../../services/factory/factoryVoucherCorrection";
@@ -247,7 +247,7 @@ async function syncIntercoParentVoucherOn(
               like(vouchers.voucherNumber, "JOURNAL-%"),
               like(vouchers.description, `%${containerNumber}%`),
               eq(ledgerAccounts.companyId, parentCompanyId),
-              eq(ledgerAccounts.name, parentCreditName),
+              ilike(ledgerAccounts.name, parentCreditName),
               sql`${voucherEntries.debitAmount} > 0`
             )
           )
