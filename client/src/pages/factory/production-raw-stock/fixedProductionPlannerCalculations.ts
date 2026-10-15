@@ -9,9 +9,17 @@ export const PLANNER_OTW_STATUSES = new Set(["PENDING", "IN_TRANSIT", "ARRIVED"]
 export interface FixedPlanSupplier {
   id: number;
   name: string;
+  supplierCategoryId?: number | null;
+}
+
+export interface FixedPlanCategory {
+  id: number;
+  name: string;
 }
 export interface FixedPlanRawStock {
   supplierId: number | null;
+  categoryId?: number | null;
+  categoryName?: string | null;
   freeKg?: string;
   remainingKg: string;
 }
@@ -84,6 +92,73 @@ export function calculateFixedProductionRows(
       withoutOtwDays: allocation175 > 0 ? stockKg / allocation175 : 0,
       // Fractional count is intentional; Excel did not round up to whole containers.
       containersToOrder: (allocation175 * PLANNER_WORKING_DAYS) / PLANNER_CONTAINER_CAPACITY_KG,
+    };
+  });
+}
+
+/**
+ * The planner operates on exactly the same supplier-category IDs that Raw
+ * Materials uses for its accordion. Supplier IDs remain the source of stock
+ * and incoming container kg, but allocations are saved with a category
+ * namespace: "cat:<categoryId>".
+ *
+ * The original supplier-level values are retained in the stored JSONB so a
+ * first category-level view can default to their sum without rewriting
+ * history. Once a category allocation is saved, it takes precedence.
+ */
+export function calculateFixedProductionCategoryRows(
+  categories: FixedPlanCategory[],
+  suppliers: FixedPlanSupplier[],
+  stock: FixedPlanRawStock[],
+  containers: FixedPlanContainer[],
+  allocations20t: Record<string, number | string>,
+): FixedProductionPlanRow[] {
+  const supplierCategory = new Map(suppliers.map(s => [s.id, s.supplierCategoryId ?? null]));
+  const inHand = new Map<string, number>();
+  for (const row of stock) {
+    const catId = row.categoryId ?? (row.supplierId != null ? supplierCategory.get(row.supplierId) : null);
+    const key = catId == null ? "cat:uncategorized" : `cat:${catId}`;
+    inHand.set(key, (inHand.get(key) ?? 0) + numberOrZero(row.freeKg ?? row.remainingKg));
+  }
+  const otw = new Map<string, number>();
+  for (const container of containers) {
+    if (container.supplierId == null || !PLANNER_OTW_STATUSES.has(container.status)) continue;
+    const catId = supplierCategory.get(container.supplierId);
+    const key = catId == null ? "cat:uncategorized" : `cat:${catId}`;
+    otw.set(key, (otw.get(key) ?? 0) + numberOrZero(container.totalKg));
+  }
+
+  // Include Uncategorized only if there is actually stock/OTW in that bucket;
+  // all named categories are filtered by visibleFixedProductionRows below.
+  const hasUncategorized = inHand.has("cat:uncategorized") || otw.has("cat:uncategorized");
+  const categoryRows = [
+    ...categories.map(category => ({ id: `cat:${category.id}`, name: category.name, categoryId: category.id })),
+    ...(hasUncategorized ? [{ id: "cat:uncategorized", name: "Uncategorized", categoryId: null }] : []),
+  ];
+  return categoryRows.sort((a, b) => a.name.localeCompare(b.name)).map(category => {
+    const stockKg = inHand.get(category.id) ?? 0;
+    const otwKg = otw.get(category.id) ?? 0;
+    const totalKg = stockKg + otwKg;
+    const legacyTotal = suppliers
+      .filter(s => (s.supplierCategoryId ?? null) === category.categoryId)
+      .reduce((sum, s) => sum + numberOrZero(allocations20t[String(s.id)]), 0);
+    const allocation20 = Object.prototype.hasOwnProperty.call(allocations20t, category.id)
+      ? numberOrZero(allocations20t[category.id])
+      : legacyTotal;
+    const allocation15 = allocation20 * 15 / 20;
+    const allocation175 = allocation20 * 17.5 / 20;
+    return {
+      id: category.id,
+      name: category.name,
+      inHand: stockKg,
+      otw: otwKg,
+      total: totalKg,
+      allocation15,
+      allocation175,
+      allocation20,
+      withOtwDays: allocation175 > 0 ? totalKg / allocation175 : 0,
+      withoutOtwDays: allocation175 > 0 ? stockKg / allocation175 : 0,
+      containersToOrder: allocation175 * PLANNER_WORKING_DAYS / PLANNER_CONTAINER_CAPACITY_KG,
     };
   });
 }
