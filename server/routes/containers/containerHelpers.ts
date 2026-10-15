@@ -2,7 +2,7 @@ import { logger } from "../../lib/logger";
 import type { Request, Response, NextFunction } from "express";
 import { db } from "../../db";
 import { storage } from "../../storage";
-import { vouchers, voucherEntries, intercompanyPosConfigs } from "@shared/schema";
+import { vouchers, voucherEntries, ledgerAccounts, companies, intercompanyPosConfigs } from "@shared/schema";
 import { eq, and, or, sql, like, isNull } from "drizzle-orm";
 import type { DatabaseOrTransaction, DbTransaction } from "../../db";
 import { postFactoryVoucherTx, usdLineAmounts } from "../../services/factory/factoryVoucherPosting";
@@ -100,15 +100,16 @@ export async function syncIntercoParentVoucher(
   grossTotal: MoneyInput,
   containerNumber?: string,
   freightOpts?: IntercoFreightOpts,
-  verifiedParentCompanyId?: number
+  verifiedParentCompanyId?: number,
+  verifiedSubsidiaryCompanyId?: number
 ): Promise<SyncIntercoResult> {
   // A voucher's entry rewrites must commit together (balanced-voucher check runs at COMMIT).
   if ("rollback" in dbOrTx) {
-    return syncIntercoParentVoucherOn(dbOrTx, poNumbers, grossTotal, containerNumber, freightOpts, verifiedParentCompanyId);
+    return syncIntercoParentVoucherOn(dbOrTx, poNumbers, grossTotal, containerNumber, freightOpts, verifiedParentCompanyId, verifiedSubsidiaryCompanyId);
   }
   try {
     return await dbOrTx.transaction((tx) =>
-      syncIntercoParentVoucherOn(tx, poNumbers, grossTotal, containerNumber, freightOpts, verifiedParentCompanyId)
+      syncIntercoParentVoucherOn(tx, poNumbers, grossTotal, containerNumber, freightOpts, verifiedParentCompanyId, verifiedSubsidiaryCompanyId)
     );
   } catch (err) {
     if (err instanceof VoucherCorrectionError) throw err;
@@ -123,7 +124,8 @@ async function syncIntercoParentVoucherOn(
   grossTotal: MoneyInput,
   containerNumber?: string,
   freightOpts?: IntercoFreightOpts,
-  verifiedParentCompanyId?: number
+  verifiedParentCompanyId?: number,
+  verifiedSubsidiaryCompanyId?: number
 ): Promise<SyncIntercoResult> {
   // Amounts stay exact: numeric(20, 2) totals above about 10^15 have no cents left as numbers.
   const gross = toMoney(grossTotal);
@@ -204,6 +206,41 @@ async function syncIntercoParentVoucherOn(
             isNull(vouchers.deletedAt), patternClause))
         .limit(1);
       parentVoucher = byPo;
+    }
+
+
+    // Some older PO imports used a generic JOURNAL-{timestamp} number.
+    // Only accept those when BOTH the exact container and this subsidiary's
+    // named parent receivable debit are present. A generic journal must never
+    // be treated as intercompany based on its amount or date alone.
+    if (!parentVoucher && verifiedParentCompanyId && verifiedSubsidiaryCompanyId && containerNumber) {
+      const [subsidiary] = await dbOrTx
+        .select({ name: companies.name })
+        .from(companies)
+        .where(eq(companies.id, verifiedSubsidiaryCompanyId))
+        .limit(1);
+      if (subsidiary) {
+        const parentCreditName = `${subsidiary.name} Credit`;
+        const matchingLegacy = await dbOrTx
+          .select({ id: vouchers.id, totalAmount: vouchers.totalAmount })
+          .from(vouchers)
+          .innerJoin(voucherEntries, eq(voucherEntries.voucherId, vouchers.id))
+          .innerJoin(ledgerAccounts, eq(voucherEntries.ledgerAccountId, ledgerAccounts.id))
+          .where(and(
+            eq(vouchers.companyId, parentCompanyId),
+            isNull(vouchers.deletedAt),
+            like(vouchers.voucherNumber, "JOURNAL-%"),
+            like(vouchers.description, `%${containerNumber}%`),
+            eq(ledgerAccounts.companyId, parentCompanyId),
+            eq(ledgerAccounts.name, parentCreditName),
+            sql`${voucherEntries.debitAmount} > 0`
+          ))
+          .limit(2);
+        if (matchingLegacy.length > 1) {
+          throw new Error(`Multiple legacy parent journals match container ${containerNumber}; reconcile them before editing.`);
+        }
+        parentVoucher = matchingLegacy[0];
+      }
     }
 
     if (!parentVoucher) {
