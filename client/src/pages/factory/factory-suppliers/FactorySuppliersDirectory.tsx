@@ -120,7 +120,16 @@ export function FactorySuppliersDirectory({ model }: { model: SuppliersModel }) 
             supplier.id === 40 &&
             supplier.name.trim().toUpperCase() === "TALAL ANAKYKLOS CYPRUS" &&
             supplier.displayBalanceBasis === "operational-statement";
-          const isOperationalSettlement = isPortugalSaadSettlement || isTalalSettlement;
+          const isOperationalSettlement =
+            isPortugalSaadSettlement || isTalalSettlement;
+          const currencySymbol = isOperationalSettlement ? "$" : "";
+          const balanceDigits = isPortugalSaadSettlement ? 3 : 2;
+          const signedSuffix = balanceValue < 0 && !isTalalSettlement ? " DR" : " CR";
+          const directoryBalanceText = [
+            currencySymbol,
+            model.formatNum(Math.abs(balanceValue).toFixed(balanceDigits)),
+            signedSuffix,
+          ].join("");
           const aboEuroBalance = (supplier.currencyBalances || []).find((bucket) => bucket.currencyCode === "EUR");
           const otwCount = supplier.otwByCurrency
             ? Object.values(supplier.otwByCurrency).reduce((left, right) => left + right, 0)
@@ -252,7 +261,7 @@ export function FactorySuppliersDirectory({ model }: { model: SuppliersModel }) 
                         ? "FX rate missing"
                         : Math.abs(balanceValue) <= 0.005
                           ? "$—"
-                          : `${isOperationalSettlement ? "$" : ""}${model.formatNum(Math.abs(balanceValue).toFixed(isPortugalSaadSettlement ? 3 : 2))}${balanceValue < 0 ? (isTalalSettlement ? " CR" : " DR") : " CR"}`}
+                          : directoryBalanceText}
                     </div>
                     {usdEquivalent === null && (
                       <div className="text-[11px] text-amber-600" role="alert">
@@ -287,7 +296,7 @@ export function FactorySuppliersDirectory({ model }: { model: SuppliersModel }) 
                           }`}
                         >
                           {balance.currencyCode} {model.formatNum(Math.abs(balance.balance).toFixed(2))}
-                          {balance.balance < 0 ? (isTalalSettlement ? " CR" : " DR") : " CR"}
+                          {balance.balance < 0 && !isTalalSettlement ? " DR" : " CR"}
                         </span>
                         {balance.balance > 0.005 && (
                           <Button
