@@ -1,4 +1,4 @@
-import type { RefObject } from "react";
+import type { CSSProperties, RefObject } from "react";
 import type {
   FixedProductionPlanRow,
   FixedProductionPlanTotals,
@@ -12,7 +12,7 @@ interface PlannerImageProps {
 }
 
 const border = "1px solid #3d4349";
-const numericCell: React.CSSProperties = {
+const numericCell: CSSProperties = {
   border,
   textAlign: "right",
   padding: "11px 14px",
@@ -21,7 +21,7 @@ const numericCell: React.CSSProperties = {
   fontVariantNumeric: "tabular-nums",
   color: "#17202c",
 };
-const headerCell: React.CSSProperties = {
+const headerCell: CSSProperties = {
   ...numericCell,
   fontWeight: 800,
   fontSize: "15px",
