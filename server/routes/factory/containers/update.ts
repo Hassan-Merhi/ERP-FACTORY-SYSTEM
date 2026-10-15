@@ -318,7 +318,23 @@ export function registerFactoryContainerUpdateRoutes(app: Express) {
             )
           )
           .limit(1);
-        if (reviewedReclassification) {
+        // After the owner's audited compensating journal is posted, the
+        // original supplier credit is authoritative again. Only keep this
+        // special lock while the Oct-15 reclassification is uncompensated.
+        const [undoJournal] = reviewedReclassification
+          ? await db
+              .select({ id: vouchers.id })
+              .from(vouchers)
+              .where(
+                and(
+                  eq(vouchers.companyId, companyId),
+                  eq(vouchers.voucherNumber, `FACTORY-PAYABLE-RECLASS-REV-20261015-${id}`),
+                  isNull(vouchers.deletedAt)
+                )
+              )
+              .limit(1)
+          : [];
+        if (reviewedReclassification && !undoJournal) {
           const goodsActuallyChanged =
             (b.supplierId !== undefined && int(b.supplierId) !== existing.supplierId) ||
             (b.totalKg !== undefined && !toMoney(dec(b.totalKg)).eq(toMoney(existing.totalKg))) ||
