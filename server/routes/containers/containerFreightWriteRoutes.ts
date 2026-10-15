@@ -775,12 +775,11 @@ export function registerContainerFreightWriteRoutes(app: Express) {
                     freightParentAccountId: newFreightParentAccountId,
                     subsidiaryCompanyId: existingPO.companyId,
                   }
-                : undefined
+                : undefined,
+              _b2ParentId
             );
             if (!_b2Sync.found) {
-              logger.warn(
-                `[PO-PATCH charges] No INTERCO-PARENT voucher for PO(s): ${Array.isArray(_b2PoNums) ? _b2PoNums.join(", ") : _b2PoNums}`
-              );
+              throw new HttpError(409, "Parent intercompany journal missing for this container; purchase-order edit was not saved.");
             }
           }
         }
