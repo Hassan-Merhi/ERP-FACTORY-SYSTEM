@@ -1,5 +1,4 @@
 import type { CSSProperties, RefObject } from "react";
-import type { RefObject } from "react";
 import { formatNumber } from "@/lib/formatNumber";
 import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
 import { mixBatchTargetTranslation } from "@/i18n/mixBatchCategoryTargetTranslations";
@@ -117,7 +116,7 @@ export function MixBatchWhatsAppPreview({
               <tbody>
                 {rows.map((row, idx) => (
                   <tr key={row.id} style={{ backgroundColor: idx % 2 === 0 ? "#111827" : "#1c2939" }}>
-                    <td style={{ ...cell, fontWeight: 700 }}>{row.id === "unmapped" ? tr("unknownSource") : row.name}</td>
+                    <td style={{ ...cell, fontWeight: 700 }}>{row.id === "unmapped" ? tr("unknownSource") : row.id === "cat:uncategorized" ? tr("uncategorized") : row.name}</td>
                     <td style={{ ...cell, textAlign: "right" }}>{formatWeight(row.weightKg)}</td>
                     <td style={{ ...cell, textAlign: "right" }}>{formatRate(row.averageCostPerKg)}</td>
                     <td style={{ ...cell, textAlign: "right" }}>{formatMoney(row.totalCost)}</td>
