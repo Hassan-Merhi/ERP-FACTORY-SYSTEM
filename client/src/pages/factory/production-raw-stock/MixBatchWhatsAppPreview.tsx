@@ -1,6 +1,8 @@
 import type { CSSProperties, RefObject } from "react";
 import type { RefObject } from "react";
 import { formatNumber } from "@/lib/formatNumber";
+import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
+import { mixBatchTargetTranslation } from "@/i18n/mixBatchCategoryTargetTranslations";
 import {
   buildMixBatchCategoryReport,
   selectMixBatchTarget,
@@ -31,6 +33,8 @@ const cell: CSSProperties = { padding: "8px 6px", borderBottom: "1px solid #3341
 export function MixBatchWhatsAppPreview({
   reportRef, date, batches, categories, suppliers, allocations,
 }: MixBatchWhatsAppPreviewProps) {
+  const { language } = useApplicationLanguage();
+  const tr = (key: Parameters<typeof mixBatchTargetTranslation>[0], values?: Record<string, string | number>) => mixBatchTargetTranslation(key, language, values);
   return (
     <div
       ref={reportRef}
@@ -51,7 +55,7 @@ export function MixBatchWhatsAppPreview({
     >
       <div style={{ marginBottom: "18px", paddingBottom: "12px", borderBottom: "1px solid #334155" }}>
         <div style={{ fontSize: "13px", color: "#9ca3af" }}>{date}</div>
-        <div style={{ marginTop: "4px", fontSize: "24px", fontWeight: 800 }}>Mix Batch Details — Category Production Targets</div>
+        <div style={{ marginTop: "4px", fontSize: "24px", fontWeight: 800 }}>{tr("reportTitle")}</div>
       </div>
       {batches.map(batch => {
         const tier = selectMixBatchTarget(Number(batch.totalWeightKg));
@@ -69,14 +73,14 @@ export function MixBatchWhatsAppPreview({
                 {batch.name && <div style={{ fontSize: "13px", color: "#94a3b8" }}>{batch.name}</div>}
               </div>
               <span style={{ padding: "6px 13px", borderRadius: "9px", backgroundColor: "#1d4ed8", color: "#ffffff", fontWeight: 800 }}>
-                AUTO TARGET: {tier} TONS
+                {tr("autoTarget", { ton: tier })}
               </span>
             </div>
             <div style={{ display: "flex", gap: "12px", marginBottom: "15px" }}>
               {[
-                { label: "TOTAL WEIGHT", value: formatWeight(Number(batch.totalWeightKg)) + " kg" },
-                { label: "RECORDED TOTAL COST", value: formatMoney(Number(batch.displayTotalCost ?? batch.totalCost)) },
-                { label: "BLENDED COST/KG", value: formatMoney(Number(batch.totalWeightKg) > 0 ? Number(batch.displayTotalCost ?? batch.totalCost) / Number(batch.totalWeightKg) : 0) },
+                { label: tr("totalWeight"), value: formatWeight(Number(batch.totalWeightKg)) + " kg" },
+                { label: tr("recordedCost"), value: formatMoney(Number(batch.displayTotalCost ?? batch.totalCost)) },
+                { label: tr("blendedCost"), value: formatMoney(Number(batch.totalWeightKg) > 0 ? Number(batch.displayTotalCost ?? batch.totalCost) / Number(batch.totalWeightKg) : 0) },
               ].map(stat => (
                 <div key={stat.label} style={{ flex: 1, borderRadius: "7px", padding: "10px 13px", backgroundColor: "#1f2937" }}>
                   <div style={{ fontSize: "11px", color: "#94a3b8" }}>{stat.label}</div>
@@ -95,15 +99,15 @@ export function MixBatchWhatsAppPreview({
               </colgroup>
               <thead>
                 <tr style={{ backgroundColor: "#253246" }}>
-                  {["CATEGORY", "ACTUAL KG", "AVG $/KG", "TOTAL COST", "TARGET TODAY", "+/- KG"].map((name, idx) => (
-                    <th key={name} style={{ ...cell, textAlign: idx === 0 ? "left" : "right", fontSize: "12px", color: "#cbd5e1" }}>{name}</th>
+                  {(["category", "actual", "average", "totalCost", "targetToday", "difference"] as const).map((key, idx) => (
+                    <th key={key} style={{ ...cell, textAlign: idx === 0 ? "left" : "right", fontSize: "12px", color: "#cbd5e1" }}>{tr(key)}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {rows.map((row, idx) => (
                   <tr key={row.id} style={{ backgroundColor: idx % 2 === 0 ? "#111827" : "#1c2939" }}>
-                    <td style={{ ...cell, fontWeight: 700 }}>{row.name}</td>
+                    <td style={{ ...cell, fontWeight: 700 }}>{row.id === "unmapped" ? tr("unknownSource") : row.name}</td>
                     <td style={{ ...cell, textAlign: "right" }}>{formatWeight(row.weightKg)}</td>
                     <td style={{ ...cell, textAlign: "right" }}>{formatMoney(row.averageCostPerKg)}</td>
                     <td style={{ ...cell, textAlign: "right" }}>{formatMoney(row.totalCost)}</td>
@@ -119,7 +123,7 @@ export function MixBatchWhatsAppPreview({
               </tbody>
               <tfoot>
                 <tr style={{ backgroundColor: "#293548", fontWeight: 800 }}>
-                  <td style={cell}>TOTAL</td>
+                  <td style={cell}>{tr("total")}</td>
                   <td style={{ ...cell, textAlign: "right" }}>{formatWeight(actualTotal)}</td>
                   <td style={{ ...cell, textAlign: "right" }}>{formatMoney(actualTotal > 0 ? historicalTotal / actualTotal : 0)}</td>
                   <td style={{ ...cell, textAlign: "right" }}>{formatMoney(historicalTotal)}</td>
@@ -134,9 +138,8 @@ export function MixBatchWhatsAppPreview({
         );
       })}
       <div style={{ borderTop: "1px solid #334155", marginTop: "12px", paddingTop: "12px", fontSize: "12px", color: "#9ca3af" }}>
-        Targets use the saved Fixed Production Planner values at report generation time. Actual weight and cost use recorded batch sources.
-        Uncategorized / Existing Batch is shown without a target rather than assigned to a supplier category.
-        {!allocations && " No saved production plan is available."}
+        {tr("foot")}
+        {!allocations && " " + tr("planMissing")}
       </div>
     </div>
   );
