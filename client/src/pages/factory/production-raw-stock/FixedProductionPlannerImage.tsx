@@ -1,4 +1,6 @@
 import type { CSSProperties, RefObject } from "react";
+import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
+import { translateFixedProductionPlanner } from "@/i18n/fixedProductionPlannerTranslations";
 import type {
   FixedProductionPlanRow,
   FixedProductionPlanTotals,
@@ -35,6 +37,8 @@ const fmtCoverage = (n: number) => n.toLocaleString("en-US", {
 });
 
 export function FixedProductionPlannerImage({ reportRef, rows, totals, dateLabel }: PlannerImageProps) {
+  const { language } = useApplicationLanguage();
+  const tr = (key: Parameters<typeof translateFixedProductionPlanner>[0]) => translateFixedProductionPlanner(key, language);
   return (
     // Must remain rendered, not display:none, so html2canvas can capture it.
     <div
@@ -55,7 +59,7 @@ export function FixedProductionPlannerImage({ reportRef, rows, totals, dateLabel
       }}
     >
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: "18px" }}>
-        <div style={{ fontWeight: 800, fontSize: "25px" }}>FIXED PRODUCTION PLAN</div>
+        <div style={{ fontWeight: 800, fontSize: "25px" }}>{tr("reportTitle")}</div>
         <div style={{ color: "#505b66", fontSize: "16px", fontWeight: 600 }}>{dateLabel}</div>
       </div>
       <table style={{ width: "100%", borderCollapse: "collapse", tableLayout: "fixed" }}>
@@ -70,13 +74,13 @@ export function FixedProductionPlannerImage({ reportRef, rows, totals, dateLabel
         </colgroup>
         <thead>
           <tr>
-            <th style={{ ...headerCell, textAlign: "left", backgroundColor: "#f7ded4", paddingLeft: "14px" }}>ORIGIN</th>
-            <th style={{ ...headerCell, backgroundColor: "#b5ddeb" }}>15 TONS</th>
-            <th style={{ ...headerCell, backgroundColor: "#94bcdf" }}>17.5 TONS</th>
-            <th style={{ ...headerCell, backgroundColor: "#cee0f1" }}>20 TONS</th>
-            <th style={{ ...headerCell, backgroundColor: "#bbebbf" }}>WITH OTW STOCK (17.5 Ton)</th>
-            <th style={{ ...headerCell, backgroundColor: "#d8d8d8" }}>WITHOUT OTW (17.5 Ton)</th>
-            <th style={{ ...headerCell, backgroundColor: "#eff6ea" }}># OF CONTAINER TO ORDER</th>
+            <th style={{ ...headerCell, textAlign: "left", backgroundColor: "#f7ded4", paddingLeft: "14px" }}>{tr("reportOrigin")}</th>
+            <th style={{ ...headerCell, backgroundColor: "#b5ddeb" }}>{tr("reportFifteenTons")}</th>
+            <th style={{ ...headerCell, backgroundColor: "#94bcdf" }}>{tr("reportSeventeenTons")}</th>
+            <th style={{ ...headerCell, backgroundColor: "#cee0f1" }}>{tr("reportTwentyTons")}</th>
+            <th style={{ ...headerCell, backgroundColor: "#bbebbf" }}>{tr("reportWithOtw")}</th>
+            <th style={{ ...headerCell, backgroundColor: "#d8d8d8" }}>{tr("reportWithoutOtw")}</th>
+            <th style={{ ...headerCell, backgroundColor: "#eff6ea" }}>{tr("reportContainers")}</th>
           </tr>
         </thead>
         <tbody>
@@ -94,7 +98,7 @@ export function FixedProductionPlannerImage({ reportRef, rows, totals, dateLabel
         </tbody>
         <tfoot>
           <tr>
-            <td style={{ ...numericCell, backgroundColor: "#f7ded4", textAlign: "left", fontWeight: 800 }}>PLAN FOR</td>
+            <td style={{ ...numericCell, backgroundColor: "#f7ded4", textAlign: "left", fontWeight: 800 }}>{tr("planFor")}</td>
             <td style={{ ...numericCell, backgroundColor: "#b5ddeb", fontWeight: 800 }}>{fmtQty(totals.allocation15)}</td>
             <td style={{ ...numericCell, backgroundColor: "#94bcdf", fontWeight: 800 }}>{fmtQty(totals.allocation175)}</td>
             <td style={{ ...numericCell, backgroundColor: "#cee0f1", fontWeight: 800 }}>{fmtQty(totals.allocation20)}</td>
@@ -105,7 +109,7 @@ export function FixedProductionPlannerImage({ reportRef, rows, totals, dateLabel
         </tfoot>
       </table>
       <div style={{ marginTop: "12px", fontSize: "13px", color: "#505b66" }}>
-        In Hand and OTW reflect live inventory at the time the report was generated. Working days: 26. Container size: 20,000 kg.
+        {tr("reportFoot")}
       </div>
     </div>
   );
