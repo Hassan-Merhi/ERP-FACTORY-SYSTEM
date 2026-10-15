@@ -24,7 +24,8 @@ const copy = {
   targetToday: { en: "TARGET TODAY", fr: "OBJECTIF DU JOUR", ar: "هدف اليوم" },
   difference: { en: "+/- KG", fr: "ÉCART KG", ar: "الفارق كغ" },
   total: { en: "TOTAL", fr: "TOTAL", ar: "الإجمالي" },
-  unknownSource: { en: "Uncategorized / Existing Batch", fr: "Sans catégorie / lot existant", ar: "بدون فئة / دفعة سابقة" },
+  unknownSource: { en: "Existing Batch / Unmapped", fr: "Lot existant / non attribué", ar: "دفعة سابقة / غير مُصنّف" },
+  uncategorized: { en: "Uncategorized", fr: "Sans catégorie", ar: "غير مُصنّف" },
   foot: {
     en: "Targets use the saved Fixed Production Planner values when this report is generated. Actual weight and cost use recorded batch sources. Unassigned batch sources have no invented category target.",
     fr: "Les objectifs proviennent du plan fixe enregistré lors de la création de ce rapport. Poids et coûts proviennent des sources enregistrées. Aucun objectif n'est inventé pour les sources non attribuées.",
