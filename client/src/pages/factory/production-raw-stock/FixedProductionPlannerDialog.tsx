@@ -212,6 +212,7 @@ export function FixedProductionPlannerDialog({
           <div className="flex flex-wrap items-center gap-2">
             <Button variant="outline" size="sm" onClick={() => {
               setHasEdits(false);
+              void queryClient.invalidateQueries({ queryKey: ["/api/factory/raw-stock"] });
               void Promise.all([planQuery.refetch(), otwQuery.refetch()]);
             }} disabled={pending} className="gap-1.5">
               <RefreshCw className="h-3.5 w-3.5" /> Refresh
