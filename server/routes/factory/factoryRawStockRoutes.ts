@@ -4,6 +4,7 @@ import { requireLegacyPrivilegedWrite } from "../../services/security/legacyPriv
 import { requirePostOffloadLedgerOwnership } from "../../services/security/postOffloadLedgerOwnershipGuard";
 import { requireRawStockSensitiveInput } from "../../services/security/rawStockSensitiveInputGuard";
 import { registerRawStockCrudRoutes } from "./raw-stock/rawStockCrudRoutes";
+import { registerFixedProductionPlannerRoutes } from "./raw-stock/fixedProductionPlannerRoutes";
 import { registerRawStockOffloadRoutes } from "./raw-stock/rawStockOffloadRoutes";
 import { registerRawStockContainerRoutes } from "./raw-stock/rawStockContainerRoutes";
 import { registerRawStockBalanceRoutes } from "./raw-stock/rawStockBalanceRoutes";
@@ -95,6 +96,7 @@ export function registerFactoryRawStockRoutes(app: Express) {
     })
   );
 
+  registerFixedProductionPlannerRoutes(app);
   registerRawStockCrudRoutes(app);
   registerRawStockOffloadRoutes(app);
   registerPostOffloadImpactPreviewRoutes(app);
