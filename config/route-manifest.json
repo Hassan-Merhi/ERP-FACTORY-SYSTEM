@@ -1,7 +1,7 @@
 {
   "formatVersion": 1,
   "description": "Ordered snapshot of every registered Express route (method, path, guard chain) and middleware mount. Regenerate with UPDATE_ROUTE_MANIFEST=1 only when a route change is intended; during a file split the manifest must not change at all.",
-  "routeCount": 2071,
+  "routeCount": 2076,
   "middlewareMountCount": 130,
   "routes": [
     "GET /api/admin/operational-monitoring [requireAuth > <anonymous> > <anonymous>]",
@@ -151,6 +151,9 @@
     "POST /api/factory/admin/fix-other-charges-currency [requireAuth > <anonymous> > <anonymous>]",
     "POST /api/factory/containers/import-excel [requireAuth > <anonymous>]",
     "POST /api/factory/containers/:id/move-supplier [requireAuth > <anonymous>]",
+    "GET /api/factory/raw-stock/fixed-production-planner [requireAuth > <anonymous>]",
+    "POST /api/factory/raw-stock/fixed-production-planner/save [requireAuth > <anonymous> > <anonymous>]",
+    "POST /api/factory/raw-stock/fixed-production-planner/unlock [requireAuth > <anonymous> > <anonymous>]",
     "GET /api/factory/raw-stock [requireAuth > <anonymous>]",
     "POST /api/factory/raw-stock/update-cost [requireAuth > <anonymous>]",
     "POST /api/factory/raw-stock/deduct-received [requireAuth > <anonymous>]",
@@ -1588,6 +1591,8 @@
     "GET /api/reports/net-profit-statement/direct-incomes [requireAuth > requireNonPOS > <anonymous>]",
     "GET /api/reports/net-profit-statement/direct-expenses [requireAuth > requireNonPOS > <anonymous>]",
     "GET /api/reports/net-profit-statement/indirect-expenses [requireAuth > requireNonPOS > <anonymous>]",
+    "GET /api/factory/analytics/direct-expenses [requireAuth > requireNonPOS > <anonymous>]",
+    "GET /api/factory/analytics/indirect-expenses [requireAuth > requireNonPOS > <anonymous>]",
     "GET /api/reports/closing-stock-summary [requireAuth > <anonymous>]",
     "POST /api/reports/transfer-closing-stock [requireAuth > <anonymous> > <anonymous>]",
     "POST /api/reports/carryforward-closing-stock [requireAuth > <anonymous> > <anonymous>]",
