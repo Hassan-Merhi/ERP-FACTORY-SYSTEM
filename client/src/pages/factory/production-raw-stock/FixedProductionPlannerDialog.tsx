@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
-import { translateFixedProductionPlanner, type FixedProductionPlannerTranslationKey } from "@/i18n/fixedProductionPlannerTranslations";
+import { translateFixedProductionPlanner, translateFixedPlannerApiMessage, type FixedProductionPlannerTranslationKey } from "@/i18n/fixedProductionPlannerTranslations";
 import { formatNumber } from "@/lib/formatNumber";
 import { getApiRequest } from "@/lib/factoryApi";
 import { queryClient } from "@/lib/queryClient";
@@ -104,7 +104,7 @@ export function FixedProductionPlannerDialog({
       await queryClient.invalidateQueries({ queryKey: [...PLAN_KEY] });
       toast({ title: tr("savedTitle"), description: tr("savedInfo") });
     },
-    onError: (err: Error) => toast({ title: tr("saveError"), description: err.message, variant: "destructive" }),
+    onError: (err: Error) => toast({ title: tr("saveError"), description: translateFixedPlannerApiMessage(err.message, language), variant: "destructive" }),
   });
 
   const unlockMutation = useMutation({
@@ -119,7 +119,7 @@ export function FixedProductionPlannerDialog({
       await queryClient.invalidateQueries({ queryKey: [...PLAN_KEY] });
       toast({ title: tr("unlockedTitle"), description: tr("unlockedInfo") });
     },
-    onError: (err: Error) => toast({ title: tr("unlockError"), description: err.message, variant: "destructive" }),
+    onError: (err: Error) => toast({ title: tr("unlockError"), description: translateFixedPlannerApiMessage(err.message, language), variant: "destructive" }),
   });
 
   const rows = useMemo(
@@ -170,7 +170,7 @@ export function FixedProductionPlannerDialog({
       return res.json();
     },
     onSuccess: () => toast({ title: tr("sendSuccess") }),
-    onError: (error: Error) => toast({ title: tr("sendError"), description: error.message, variant: "destructive" }),
+    onError: (error: Error) => toast({ title: tr("sendError"), description: translateFixedPlannerApiMessage(error.message, language), variant: "destructive" }),
   });
 
   const downloadImage = async () => {
