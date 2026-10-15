@@ -9,9 +9,9 @@
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("../server/services/security/parentCompanyPostingScope", () => ({
-  runWithVerifiedPoParentScope: async (_id: number, run: (parentCompanyId: number | null) => Promise<unknown>) => run(null),
+  runWithVerifiedPoParentScope: async (_id: number, run: (parentCompanyId: number | null) => Promise<unknown>) =>
+    run(null),
 }));
-
 
 const h = vi.hoisted(() => ({ writes: [] as Array<[string, string, Record<string, unknown>]> }));
 // Perpetual inventory journals are covered by their own suite; this harness has no SQL executor.
