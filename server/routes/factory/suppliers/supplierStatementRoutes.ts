@@ -293,6 +293,8 @@ export function registerSupplierStatementRoutes(app: Express) {
             // FX-transfer rows. Counting their supplier debit as a second payment
             // subtracts the same transfer twice from operational balances.
             sql`${vouchers.voucherNumber} NOT LIKE 'FACTORY-SFX-%'`,
+              // Ledger-only compensating journals are not supplier payments.
+              sql`${vouchers.voucherNumber} NOT LIKE 'FACTORY-PAYABLE-RECLASS-%'`,
             eq(vouchers.companyId, companyId),
             isNull(vouchers.deletedAt)
           )
