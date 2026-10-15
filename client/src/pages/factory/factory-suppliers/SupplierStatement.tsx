@@ -291,6 +291,7 @@ export function SupplierStatement({
       {statementData.ledgerView && (
         <LedgerBalancePanel
           view={statementData.ledgerView}
+          simple={statementSupplierId === 41 && statementData.supplier.name.trim().toUpperCase() === "ABO SOBHI DIRECT"}
           operationalTotal={statementData.summary.operationalNetPayable}
           formatNum={formatNum}
           usdEquivalentBalance={allSuppliers.find((supplier) => supplier.id === statementSupplierId)?.usdEquivalentBalance}
