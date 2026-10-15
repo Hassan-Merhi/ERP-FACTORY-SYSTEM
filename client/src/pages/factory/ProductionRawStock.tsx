@@ -59,7 +59,7 @@ export default function ProductionRawStock() {
 
   const mixBatchPrintRef = useRef<HTMLDivElement>(null);
 
-  const { data: rawStock } = useQuery<RawStockRow[]>({
+  const { data: rawStock, isFetching: rawStockLoading, isError: rawStockError } = useQuery<RawStockRow[]>({
     queryKey: ["/api/factory/raw-stock"],
   });
 
@@ -321,6 +321,8 @@ export default function ProductionRawStock() {
         open={fixedPlannerOpen}
         onOpenChange={setFixedPlannerOpen}
         rawStock={rawStock || []}
+        rawStockLoading={rawStockLoading}
+        rawStockError={rawStockError}
         suppliers={factorySuppliers}
       />
 
