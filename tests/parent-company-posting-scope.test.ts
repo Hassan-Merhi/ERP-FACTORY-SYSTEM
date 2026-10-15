@@ -22,7 +22,7 @@ const { runWithCompanyRequestRuntimeContext } =
 const { createTenantDatabaseScope, runWithDatabaseScopeRuntimeContext, getDatabaseScopeRuntimeContext } =
   await import("../server/services/security/databaseScopeRuntimeContext");
 const { CompanyAccessError } = await import("../server/security/companyAccessBoundary");
-const { runWithVerifiedParentCompanyScope, ParentCompanyPostingScopeError } =
+const { runWithVerifiedParentCompanyScope, runWithVerifiedPoParentScope, ParentCompanyPostingScopeError } =
   await import("../server/services/security/parentCompanyPostingScope");
 
 const ACTIVE_COMPANY_ID = 41;
@@ -41,7 +41,7 @@ function requestContext(companyId = ACTIVE_COMPANY_ID) {
 }
 
 /** `db.select().from().where().limit()` resolving to the given rows. */
-function parentLinkRows(rows: Array<{ id: number }>) {
+function parentLinkRows(rows: Array<{ id?: number; parentCompanyId?: number | null }>) {
   harness.select.mockReturnValue({
     from: () => ({ where: () => ({ limit: () => Promise.resolve(rows) }) }),
   });
@@ -118,4 +118,46 @@ describe("parent company posting scope", () => {
     expect(error).toBeInstanceOf(ParentCompanyPostingScopeError);
     expect(run).not.toHaveBeenCalled();
   });
+  it("opens the verified child and parent in one authorized transaction scope", async () => {
+    parentLinkRows([{ parentCompanyId: PARENT_COMPANY_ID }]);
+    harness.assertCompanyAccess.mockResolvedValue(undefined);
+    const value = await runInRequest(() =>
+      runWithVerifiedPoParentScope(ACTIVE_COMPANY_ID, async (parentCompanyId) => ({
+        parentCompanyId,
+        scope: getDatabaseScopeRuntimeContext(),
+      }))
+    );
+    expect(value.parentCompanyId).toBe(PARENT_COMPANY_ID);
+    expect(value.scope).toMatchObject({
+      kind: "tenant",
+      companyId: ACTIVE_COMPANY_ID,
+      scopeMode: "authorized-companies",
+    });
+    expect(value.scope?.kind === "tenant" && value.scope.authorizedCompanyIds).toContain(PARENT_COMPANY_ID);
+    expect(harness.assertCompanyAccess).toHaveBeenCalledWith("parent-posting-user", PARENT_COMPANY_ID);
+  });
+
+  it("leaves standalone companies in their original tenant scope", async () => {
+    parentLinkRows([{ parentCompanyId: null }]);
+    const value = await runInRequest(() =>
+      runWithVerifiedPoParentScope(ACTIVE_COMPANY_ID, async (parentCompanyId) => ({
+        parentCompanyId,
+        scope: getDatabaseScopeRuntimeContext(),
+      }))
+    );
+    expect(value.parentCompanyId).toBeNull();
+    expect(value.scope).toMatchObject({ companyId: ACTIVE_COMPANY_ID, scopeMode: "active-company" });
+  });
+
+  it("rejects parent-side edits when the child user lacks parent membership", async () => {
+    parentLinkRows([{ parentCompanyId: PARENT_COMPANY_ID }]);
+    harness.assertCompanyAccess.mockRejectedValue(
+      new CompanyAccessError(403, "No access", "COMPANY_ACCESS_DENIED")
+    );
+    const performEdit = vi.fn();
+    await expect(runInRequest(() => runWithVerifiedPoParentScope(ACTIVE_COMPANY_ID, performEdit)))
+      .rejects.toMatchObject({ status: 403 });
+    expect(performEdit).not.toHaveBeenCalled();
+  });
+
 });
