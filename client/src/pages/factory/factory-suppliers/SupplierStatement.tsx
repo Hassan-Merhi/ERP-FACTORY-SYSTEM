@@ -106,7 +106,6 @@ export function SupplierStatement({
   setFxConversionOpen,
   setFxConversionForm,
   setFxSourceType,
-  allSuppliers,
   subAccountsByParent,
   wrapAdminAction,
   deleteFxTransferMutation,

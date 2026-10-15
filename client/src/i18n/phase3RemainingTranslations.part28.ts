@@ -535,4 +535,94 @@ export const phase3RemainingTranslationsPart28: readonly Phase3SharedUiEntry[] =
     ar: "تعذّر تحميل تفاصيل دفعة الخلط هذه. يُرجى المحاولة مرة أخرى.",
     fr: "Impossible de charger les détails de ce lot de mélange. Veuillez réessayer.",
   },
+  {
+    en: "Automatically selected production target",
+    ar: "هدف الإنتاج المحدد تلقائيًا",
+    fr: "Objectif de production sélectionné automatiquement",
+  },
+  {
+    en: "Save a Fixed Production Plan before sending a target comparison.",
+    ar: "احفظ خطة إنتاج ثابتة قبل إرسال مقارنة الأهداف.",
+    fr: "Enregistrez un plan de production fixe avant d'envoyer une comparaison des objectifs.",
+  },
+  {
+    en: "You owe",
+    ar: "مستحق عليك",
+    fr: "Vous devez",
+  },
+  {
+    en: "Owed to you",
+    ar: "مستحق لك",
+    fr: "Dû à vous",
+  },
+  {
+    en: "USD equivalent at current Factory Settings exchange rates",
+    ar: "المعادل بالدولار الأمريكي وفق أسعار الصرف الحالية في إعدادات المصنع",
+    fr: "Équivalent USD aux taux de change actuels des paramètres de l'usine",
+  },
+  {
+    en: "Historical FX conversion needs review.",
+    ar: "تحويل العملات التاريخي يحتاج إلى مراجعة.",
+    fr: "La conversion de change historique doit être vérifiée.",
+  },
+  {
+    en: "Invalid 20-ton quantity for supplier ${key}",
+    ar: "كمية 20 طنًا غير صالحة للمورد {{0}}",
+    fr: "Quantité de 20 tonnes invalide pour le fournisseur {{0}}",
+  },
+  {
+    en: "Historical loading date repair refused: incomplete/foreign existing audit",
+    ar: "تم رفض إصلاح تاريخ التحميل التاريخي: سجل التدقيق الحالي غير مكتمل أو غير مطابق",
+    fr: "Réparation de la date de chargement historique refusée : audit existant incomplet ou étranger",
+  },
+  {
+    en: "Historical loading date repair refused: audit exists but saved dates were altered",
+    ar: "تم رفض إصلاح تاريخ التحميل التاريخي: سجل التدقيق موجود لكن التواريخ المحفوظة تم تعديلها",
+    fr: "Réparation de la date de chargement historique refusée : l'audit existe mais les dates enregistrées ont été modifiées",
+  },
+  {
+    en: "Historical loading date repair refused: preflight matched ${locked.rowCount}/${PLAN.length} orders",
+    ar: "تم رفض إصلاح تاريخ التحميل التاريخي: التحقق المسبق طابق {{0}}/{{1}} من الطلبات",
+    fr: "Réparation de la date de chargement historique refusée : la vérification préalable a trouvé {{0}}/{{1}} commandes",
+  },
+  {
+    en: "Historical loading date repair refused: incomplete before-image",
+    ar: "تم رفض إصلاح تاريخ التحميل التاريخي: النسخة السابقة غير مكتملة",
+    fr: "Réparation de la date de chargement historique refusée : image avant modification incomplète",
+  },
+  {
+    en: "Historical loading date repair refused: incomplete update",
+    ar: "تم رفض إصلاح تاريخ التحميل التاريخي: التحديث غير مكتمل",
+    fr: "Réparation de la date de chargement historique refusée : mise à jour incomplète",
+  },
+  {
+    en: "Historical loading date repair refused: verification failed",
+    ar: "تم رفض إصلاح تاريخ التحميل التاريخي: فشل التحقق",
+    fr: "Réparation de la date de chargement historique refusée : échec de la vérification",
+  },
+  {
+    en: "Order 207 date repair audit exists, but the saved date no longer matches",
+    ar: "سجل تدقيق إصلاح تاريخ الطلب 207 موجود، لكن التاريخ المحفوظ لم يعد مطابقًا",
+    fr: "L'audit de réparation de la date de la commande 207 existe, mais la date enregistrée ne correspond plus",
+  },
+  {
+    en: "Returned loading date repair refused: order 207 or its original event changed",
+    ar: "تم رفض إصلاح تاريخ تحميل المرتجع: الطلب 207 أو حدثه الأصلي قد تغيّر",
+    fr: "Réparation de la date de chargement du retour refusée : la commande 207 ou son événement d'origine a changé",
+  },
+  {
+    en: "Returned loading date repair backup failed",
+    ar: "فشل النسخ الاحتياطي لإصلاح تاريخ تحميل المرتجع",
+    fr: "Échec de la sauvegarde de la réparation de la date de chargement du retour",
+  },
+  {
+    en: "Returned loading date repair update failed",
+    ar: "فشل تحديث إصلاح تاريخ تحميل المرتجع",
+    fr: "Échec de la mise à jour de la réparation de la date de chargement du retour",
+  },
+  {
+    en: "Returned loading date repair verification failed",
+    ar: "فشل التحقق من إصلاح تاريخ تحميل المرتجع",
+    fr: "Échec de la vérification de la réparation de la date de chargement du retour",
+  },
 ];
