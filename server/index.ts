@@ -56,6 +56,7 @@ import { ensurePriorityScanSchema } from "./startup/priorityScanSchema";
 import { ensureFactoryBaleOrderIntegrity } from "./startup/ensureFactoryBaleOrderIntegrity";
 import { runApprovedLegacyBaleUnitCostRepair } from "./startup/runApprovedLegacyBaleUnitCostRepair";
 import { runApprovedCustomerLoadingDateRepair } from "./startup/runApprovedCustomerLoadingDateRepair";
+import { runApprovedReturnedLoadingDateRepair } from "./startup/runApprovedReturnedLoadingDateRepair";
 import { ensureFactorySheetsSacksSchema } from "./startup/factorySheetsSacksSchema";
 import { ensureRecurringJournalSchema } from "./services/accounting/ensureRecurringJournalSchema";
 import { bootstrapRecurringJournalFromEnvironment } from "./services/accounting/recurringJournalBootstrap";
@@ -329,6 +330,8 @@ let migrationsDone = false;
       // One-time owner-authorized, company-12 historical loading-date reconciliation.
       // Atomic before-image audit and exact first-submission evidence are required.
       await runApprovedCustomerLoadingDateRepair(pool);
+      // Restore the original date for a historically confirmed order returned to LOADING.
+      await runApprovedReturnedLoadingDateRepair(pool);
       if (migrationsEnabled) {
         try {
           await runMigrations();
