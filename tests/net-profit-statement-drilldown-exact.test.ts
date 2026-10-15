@@ -60,3 +60,46 @@ describe("net profit purchase-accounts drill-down", () => {
     expect(response.body.total).toBe(0.3);
   });
 });
+
+describe("Analytics expense period filters", () => {
+  it("uses only the selected period's indirect expenses, including the factory endpoint", async () => {
+    const account = await pool.query<{ id: number }>(
+      `INSERT INTO ledger_accounts (company_id, code, name, account_type, sub_type, opening_balance, opening_balance_side)
+       VALUES ($1, 'INDIRECT-NPSDRILL', 'Period expense test', 'Expense', 'Indirect Expense', '0', 'Dr') RETURNING id`,
+      [ctx.companyId]
+    );
+    const expenseAccountId = account.rows[0].id;
+
+    for (const [index, date, amount] of [
+      [0, "2026-09-30", "10.00"],
+      [1, "2026-10-08", "20.00"],
+    ] as const) {
+      const voucher = await pool.query<{ id: number }>(
+        `INSERT INTO vouchers (company_id, voucher_number, voucher_type, voucher_date, total_amount, optional)
+         VALUES ($1, $2, 'Journal', $3, $4, false) RETURNING id`,
+        [ctx.companyId, `${TEST_PREFIX}-expense-${index}`, date, amount]
+      );
+      await pool.query(
+        `INSERT INTO voucher_entries (voucher_id, ledger_account_id, debit_amount, credit_amount)
+         VALUES ($1, $2, $4, '0'), ($1, $3, '0', $4)`,
+        [voucher.rows[0].id, expenseAccountId, ctx.cashAccountId, amount]
+      );
+    }
+
+    for (const path of [
+      "/api/reports/net-profit-statement/indirect-expenses",
+      "/api/factory/analytics/indirect-expenses",
+    ]) {
+      const october = await agent.get(path).query({ startDate: "2026-10-01", endDate: "2026-10-15" });
+      expect(october.status).toBe(200);
+      expect(october.body.accounts.find((a: { id: number }) => a.id === expenseAccountId)).toMatchObject({
+        debit: 20,
+        credit: 0,
+        balance: 20,
+      });
+      const allTime = await agent.get(path);
+      expect(allTime.status).toBe(200);
+      expect(allTime.body.accounts.find((a: { id: number }) => a.id === expenseAccountId)?.balance).toBe(30);
+    }
+  });
+});
