@@ -151,13 +151,11 @@ describe("parent company posting scope", () => {
 
   it("rejects parent-side edits when the child user lacks parent membership", async () => {
     parentLinkRows([{ parentCompanyId: PARENT_COMPANY_ID }]);
-    harness.assertCompanyAccess.mockRejectedValue(
-      new CompanyAccessError(403, "No access", "COMPANY_ACCESS_DENIED")
-    );
+    harness.assertCompanyAccess.mockRejectedValue(new CompanyAccessError(403, "No access", "COMPANY_ACCESS_DENIED"));
     const performEdit = vi.fn();
-    await expect(runInRequest(() => runWithVerifiedPoParentScope(ACTIVE_COMPANY_ID, performEdit)))
-      .rejects.toMatchObject({ status: 403 });
+    await expect(
+      runInRequest(() => runWithVerifiedPoParentScope(ACTIVE_COMPANY_ID, performEdit))
+    ).rejects.toMatchObject({ status: 403 });
     expect(performEdit).not.toHaveBeenCalled();
   });
-
 });
