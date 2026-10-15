@@ -18,7 +18,7 @@ describe("Wave 2 purchase-order/offload transaction boundary", () => {
   });
 
   it("rechecks and locks the container inside the same transaction that rewrites PO items", () => {
-    const transactionStart = itemsUpdate.indexOf("await db.transaction(async (tx) => {");
+    const transactionStart = itemsUpdate.indexOf("db.transaction(async (tx) => {");
     expect(transactionStart).toBeGreaterThan(-1);
 
     const transactionBody = itemsUpdate.slice(transactionStart);
