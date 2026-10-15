@@ -75,12 +75,12 @@ export function SalesReportItemsView({
               <TableHead>Item / Location</TableHead>
               {col("qty") && <TableHead className="text-right">Qty</TableHead>}
               {col("costPrice") && <TableHead className="text-right">Cost Price</TableHead>}
-              {col("hassanPrice") && <TableHead className="text-right">Hassan's Price</TableHead>}
               {col("pricePerBale") && <TableHead className="text-right">Price / Bale</TableHead>}
               {col("costProfitBale") && <TableHead className="text-right">Cost Profit / Bale</TableHead>}
+              {col("hassanPrice") && <TableHead className="text-right">Hassan's Price</TableHead>}
               {col("hassanProfitBale") && <TableHead className="text-right">Hassan's Profit / Bale</TableHead>}
-              {col("costProfitTotal") && <TableHead className="text-right">Cost Profit</TableHead>}
               {col("hassanProfitTotal") && <TableHead className="text-right">Hassan's Profit</TableHead>}
+              {col("costProfitTotal") && <TableHead className="text-right">Cost Profit</TableHead>}
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -136,11 +136,6 @@ export function SalesReportItemsView({
                         {group.totalQty > 0 ? formatAmount(group.totalCost / group.totalQty) : "—"}
                       </TableCell>
                     )}
-                    {col("hassanPrice") && (
-                      <TableCell className="text-right font-mono py-2 text-muted-foreground">
-                        {group.totalQty > 0 ? formatAmount(group.totalConfiguredCost / group.totalQty) : "—"}
-                      </TableCell>
-                    )}
                     {col("pricePerBale") && (
                       <TableCell className="text-right font-mono py-2">
                         {group.totalQty > 0 ? formatAmount(group.totalSales / group.totalQty) : "—"}
@@ -151,19 +146,24 @@ export function SalesReportItemsView({
                         {group.totalQty > 0 ? formatAmount(Math.abs(group.costProfit) / group.totalQty) : "—"}
                       </TableCell>
                     )}
+                    {col("hassanPrice") && (
+                      <TableCell className="text-right font-mono py-2 text-muted-foreground">
+                        {group.totalQty > 0 ? formatAmount(group.totalConfiguredCost / group.totalQty) : "—"}
+                      </TableCell>
+                    )}
                     {col("hassanProfitBale") && (
                       <TableCell className={`text-right font-mono py-2 ${profitColor(group.configuredProfit)}`}>
                         {group.totalQty > 0 ? formatAmount(Math.abs(group.configuredProfit) / group.totalQty) : "—"}
                       </TableCell>
                     )}
-                    {col("costProfitTotal") && (
-                      <TableCell className={`text-right font-mono py-2 ${profitColor(group.costProfit)}`}>
-                        {formatAmount(Math.abs(group.costProfit))}
-                      </TableCell>
-                    )}
                     {col("hassanProfitTotal") && (
                       <TableCell className={`text-right font-mono py-2 ${profitColor(group.configuredProfit)}`}>
                         {formatAmount(Math.abs(group.configuredProfit))}
+                      </TableCell>
+                    )}
+                    {col("costProfitTotal") && (
+                      <TableCell className={`text-right font-mono py-2 ${profitColor(group.costProfit)}`}>
+                        {formatAmount(Math.abs(group.costProfit))}
                       </TableCell>
                     )}
                   </TableRow>
@@ -230,11 +230,6 @@ export function SalesReportItemsView({
                                 {loc.totalQty > 0 ? formatAmount(loc.totalCost / loc.totalQty) : "—"}
                               </TableCell>
                             )}
-                            {col("hassanPrice") && (
-                              <TableCell className="text-right font-mono py-1.5 text-muted-foreground">
-                                {loc.totalQty > 0 ? formatAmount(loc.totalConfiguredCost / loc.totalQty) : "—"}
-                              </TableCell>
-                            )}
                             {col("pricePerBale") && (
                               <TableCell className="text-right font-mono py-1.5">
                                 {loc.totalQty > 0 ? formatAmount(loc.totalSales / loc.totalQty) : "—"}
@@ -245,19 +240,24 @@ export function SalesReportItemsView({
                                 {loc.totalQty > 0 ? formatAmount(Math.abs(loc.costProfit) / loc.totalQty) : "—"}
                               </TableCell>
                             )}
+                            {col("hassanPrice") && (
+                              <TableCell className="text-right font-mono py-1.5 text-muted-foreground">
+                                {loc.totalQty > 0 ? formatAmount(loc.totalConfiguredCost / loc.totalQty) : "—"}
+                              </TableCell>
+                            )}
                             {col("hassanProfitBale") && (
                               <TableCell className={`text-right font-mono py-1.5 ${profitColor(loc.configuredProfit)}`}>
                                 {loc.totalQty > 0 ? formatAmount(Math.abs(loc.configuredProfit) / loc.totalQty) : "—"}
                               </TableCell>
                             )}
-                            {col("costProfitTotal") && (
-                              <TableCell className={`text-right font-mono py-1.5 ${profitColor(loc.costProfit)}`}>
-                                {formatAmount(Math.abs(loc.costProfit))}
-                              </TableCell>
-                            )}
                             {col("hassanProfitTotal") && (
                               <TableCell className={`text-right font-mono py-1.5 ${profitColor(loc.configuredProfit)}`}>
                                 {formatAmount(Math.abs(loc.configuredProfit))}
+                              </TableCell>
+                            )}
+                            {col("costProfitTotal") && (
+                              <TableCell className={`text-right font-mono py-1.5 ${profitColor(loc.costProfit)}`}>
+                                {formatAmount(Math.abs(loc.costProfit))}
                               </TableCell>
                             )}
                           </TableRow>
@@ -290,11 +290,6 @@ export function SalesReportItemsView({
                                       {formatAmount(item.costPrice)}
                                     </TableCell>
                                   )}
-                                  {col("hassanPrice") && (
-                                    <TableCell className="text-right font-mono py-1">
-                                      {formatAmount(item.configuredSellingPrice)}
-                                    </TableCell>
-                                  )}
                                   {col("pricePerBale") && (
                                     <TableCell className="text-right font-mono py-1">
                                       {formatAmount(item.actualSellingPrice)}
@@ -305,6 +300,11 @@ export function SalesReportItemsView({
                                       {qty > 0 ? formatAmount(Math.abs(itemCostProfit) / qty) : "—"}
                                     </TableCell>
                                   )}
+                                  {col("hassanPrice") && (
+                                    <TableCell className="text-right font-mono py-1">
+                                      {formatAmount(item.configuredSellingPrice)}
+                                    </TableCell>
+                                  )}
                                   {col("hassanProfitBale") && (
                                     <TableCell
                                       className={`text-right font-mono py-1 ${profitColor(item.configuredProfit)}`}
@@ -312,16 +312,16 @@ export function SalesReportItemsView({
                                       {qty > 0 ? formatAmount(Math.abs(item.configuredProfit) / qty) : "—"}
                                     </TableCell>
                                   )}
-                                  {col("costProfitTotal") && (
-                                    <TableCell className={`text-right font-mono py-1 ${profitColor(itemCostProfit)}`}>
-                                      {formatAmount(Math.abs(itemCostProfit))}
-                                    </TableCell>
-                                  )}
                                   {col("hassanProfitTotal") && (
                                     <TableCell
                                       className={`text-right font-mono py-1 ${profitColor(item.configuredProfit)}`}
                                     >
                                       {formatAmount(Math.abs(item.configuredProfit))}
+                                    </TableCell>
+                                  )}
+                                  {col("costProfitTotal") && (
+                                    <TableCell className={`text-right font-mono py-1 ${profitColor(itemCostProfit)}`}>
+                                      {formatAmount(Math.abs(itemCostProfit))}
                                     </TableCell>
                                   )}
                                 </TableRow>
@@ -347,11 +347,6 @@ export function SalesReportItemsView({
                   {totalQty > 0 ? formatAmount(totalCost / totalQty) : "—"}
                 </TableCell>
               )}
-              {col("hassanPrice") && (
-                <TableCell className="text-right font-mono text-muted-foreground">
-                  {totalQty > 0 ? formatAmount(totalConfiguredCost / totalQty) : "—"}
-                </TableCell>
-              )}
               {col("pricePerBale") && (
                 <TableCell className="text-right font-mono">
                   {totalQty > 0 ? formatAmount(totalSales / totalQty) : "—"}
@@ -362,19 +357,24 @@ export function SalesReportItemsView({
                   {totalQty > 0 ? formatAmount(Math.abs(costProfit) / totalQty) : "—"}
                 </TableCell>
               )}
+              {col("hassanPrice") && (
+                <TableCell className="text-right font-mono text-muted-foreground">
+                  {totalQty > 0 ? formatAmount(totalConfiguredCost / totalQty) : "—"}
+                </TableCell>
+              )}
               {col("hassanProfitBale") && (
                 <TableCell className={`text-right font-mono ${profitColor(configuredProfit)}`}>
                   {totalQty > 0 ? formatAmount(Math.abs(configuredProfit) / totalQty) : "—"}
                 </TableCell>
               )}
-              {col("costProfitTotal") && (
-                <TableCell className={`text-right font-mono ${profitColor(costProfit)}`}>
-                  {formatAmount(Math.abs(costProfit))}
-                </TableCell>
-              )}
               {col("hassanProfitTotal") && (
                 <TableCell className={`text-right font-mono ${profitColor(configuredProfit)}`}>
                   {formatAmount(Math.abs(configuredProfit))}
+                </TableCell>
+              )}
+              {col("costProfitTotal") && (
+                <TableCell className={`text-right font-mono ${profitColor(costProfit)}`}>
+                  {formatAmount(Math.abs(costProfit))}
                 </TableCell>
               )}
             </TableRow>
