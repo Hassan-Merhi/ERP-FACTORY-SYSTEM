@@ -295,7 +295,9 @@ export function registerOrderLoadingRoutes(app: Express) {
             // The later invoice-finalization step must preserve this value so a
             // revert returns here instead of incorrectly returning to VERIFIED.
             previousStatus: "LOADING",
-            loadingFinalizedAt: effectiveFinalizedAt,
+            // A reopened loading keeps its first confirmed loading date. Re-verification
+            // may happen days later and must not silently replace that date.
+            loadingFinalizedAt: order.loadingFinalizedAt ?? effectiveFinalizedAt,
             verifiedAt: effectiveFinalizedAt,
             updatedAt: now,
           })
