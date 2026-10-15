@@ -234,5 +234,9 @@ export const applicationArabicTranslations = {
   "pos.customerSearchResults": "نتائج البحث عن العملاء",
   "pos.customerSearchFailed": "فشل البحث عن العملاء.",
   "pos.paymentTotals": "إجماليات الدفع",
+  "analytics.expenses.periodActivity": "القيود المُرحّلة خلال نطاق التاريخ المحدد",
+  "analytics.expenses.netExpense": "صافي المصروف",
+  "analytics.expenses.loadFailed": "تعذر تحميل المصروفات لهذه الفترة. يُرجى إعادة محاولة تحديد التاريخ.",
+  "analytics.expenses.loadFailedShort": "تعذر تحميل مصروفات الفترة المحددة",
   "supplierPartner.postOpeningStock": "ترحيل المخزون الافتتاحي",
 } as const satisfies ApplicationTranslationCatalog;
