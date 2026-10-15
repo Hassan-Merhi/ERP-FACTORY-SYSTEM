@@ -537,8 +537,31 @@ export function registerSupplierWithBalancesRoutes(app: Express) {
         const children = suppliersList.filter((c) => c.parentId === s.id);
 
         if (!brokerParentIds.has(s.id)) {
-          // Ordinary supplier — use the same ledger view as its own settlement statement.
-          // Even standalone brokers with no linked children take the broker path below.
+          // A narrowly scoped PORTUGAL SAAD display reconciliation. The supplier
+          // settlement statement uses today's container goods value (including
+          // supplier-paid freight) minus source-recorded FX transfers. Its native
+          // EUR payable differs from the historical voucher view because five
+          // old import journals no longer match their saved container values.
+          // Keep all vouchers/posted ledger fields unchanged; use the same
+          // operational calculation for the *directory display* only.
+          // Do not apply this treatment to NASRA or any other supplier.
+          const usePortugalSettlementDisplay =
+            companyId === 12 && s.id === 39 && s.name.trim().toUpperCase() === "PORTUGAL SAAD";
+          const portugalSettlementDisplay = usePortugalSettlementDisplay
+            ? {
+                displayBalanceBasis: "operational-statement" as const,
+                // Three USD decimals intentionally preserve the exact
+                // EUR 106065.40 × Factory Settings EUR 1.18 = USD 125157.172.
+                // If any currency cannot be converted, don't show a partial total.
+                usdEquivalentBalance: own.fxUnresolved ? null : own.balance.toFixed(3),
+                usdEquivalentMissingRates: own.fxUnresolved
+                  ? own.currencyBalances
+                      .filter((b) => b.currencyCode !== "USD" && !configuredFxRates[b.currencyCode])
+                      .map((b) => b.currencyCode)
+                  : [],
+                currencyBalances: own.currencyBalances,
+              }
+            : {};
           return {
             ...s,
             totalContainers: own.totalContainers,
@@ -554,6 +577,7 @@ export function registerSupplierWithBalancesRoutes(app: Express) {
             dueContainersCount: own.dueContainers.length,
             autoSettledFreightUsd: own.autoSettledFreightUsd.toFixed(2),
             ...ledgerFields(s.id),
+            ...portugalSettlementDisplay,
             operationalMemo: {
               label: FACTORY_SUPPLIER_OPERATIONAL_MEMO_LABEL,
               totalValue: own.balance.toFixed(2),
