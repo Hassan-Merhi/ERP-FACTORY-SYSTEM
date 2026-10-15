@@ -30,6 +30,7 @@ import { storedCents, syncContainerCharges } from "./containerChargeSync";
 import { registerPurchaseOrderDeleteRoute } from "./purchaseOrderDeleteRoute";
 import { registerPoImportBackfillRoute } from "./poImportBackfillRoute";
 import { syncPurchaseOrderGitTx } from "../../services/accounting/perpetualInventory/stockReceipts";
+import { runWithVerifiedPoParentScope } from "../../services/security/parentCompanyPostingScope";
 
 export function registerContainerFreightWriteRoutes(app: Express) {
   app.patch("/api/purchase-orders/:id", requireAuth, async (req, res) => {
@@ -241,7 +242,7 @@ export function registerContainerFreightWriteRoutes(app: Express) {
       // counterpart and the audit row commit together or not at all (they used
       // to be separate autocommit writes, so a failure part-way left the PO and
       // its ledger disagreeing).
-      const updatedPO = await db.transaction(async (tx) => {
+      const updatedPO = await runWithVerifiedPoParentScope(existingPO.companyId, (linkedParentCompanyId) => db.transaction(async (tx) => {
         // Serialize with other edits and the offload lifecycle on this PO, in the
         // offload lifecycle's lock order: container, then purchase order.
         if (existingPO.containerId != null) {
@@ -285,7 +286,7 @@ export function registerContainerFreightWriteRoutes(app: Express) {
 
         // Determine whether the PO is on the parent company (or no interco at all).
         // Used inside the transaction to pick the right voucher structure.
-        const _pfParentId = await storage.getParentCompanyId();
+        const _pfParentId = linkedParentCompanyId;
         const _isSameCompanyOrNoInterco = !_pfParentId || existingPO.companyId === _pfParentId;
         const _poContainerNum = existingPO.containerId
           ? ((
@@ -749,7 +750,7 @@ export function registerContainerFreightWriteRoutes(app: Express) {
         // Pass grossTotal (not supplierTotal) so the DR subsidiary entry is correct,
         // and include freight opts so the parent CR is split between supplier + freight account.
         {
-          const _b2ParentId = await storage.getParentCompanyId();
+          const _b2ParentId = linkedParentCompanyId;
           if (_b2ParentId && existingPO.companyId !== _b2ParentId) {
             const _b2NewPoNum =
               req.body.poNumber && req.body.poNumber !== existingPO.poNumber ? (req.body.poNumber as string) : null;
@@ -819,7 +820,7 @@ export function registerContainerFreightWriteRoutes(app: Express) {
           );
         }
         return updated;
-      });
+      }));
       res.json(updatedPO);
     } catch (error: unknown) {
       // Identify the exact retired voucher linked to a failed PO edit without
