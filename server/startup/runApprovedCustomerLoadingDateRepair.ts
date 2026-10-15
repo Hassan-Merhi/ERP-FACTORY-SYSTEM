@@ -96,15 +96,17 @@ export async function runApprovedCustomerLoadingDateRepair(pool: Pool): Promise<
       expected_old_date DATE NOT NULL,
       selected_date DATE NOT NULL
     ) ON COMMIT DROP`);
-    const placeholders = PLAN.map(
-      (_, index) =>
-        `(${index * 4 + 1}::integer, ${index * 4 + 2}::integer, ${index * 4 + 3}::date, ${index * 4 + 4}::date)`
-    ).join(", ");
-    stage = "insert-fifteen-plan-rows";
+    // One JSON parameter avoids Postgres binding/cast ambiguity in a 60-parameter
+    // VALUES list. Each field is converted explicitly from JSON text.
     await client.query(
       `INSERT INTO customer_loading_date_plan (order_id, daybook_entry_id, expected_old_date, selected_date)
-       VALUES ${placeholders}`,
-      PLAN.flatMap((row) => [...row])
+       SELECT
+         (entry->>0)::integer,
+         (entry->>1)::integer,
+         (entry->>2)::date,
+         (entry->>3)::date
+       FROM jsonb_array_elements($1::jsonb) AS payload(entry)`,
+      [JSON.stringify(PLAN)]
     );
 
     // Lock all orders, then verify company, status, unchanged previous value,
