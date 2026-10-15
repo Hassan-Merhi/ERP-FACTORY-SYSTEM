@@ -1,3 +1,4 @@
+import type { CSSProperties, RefObject } from "react";
 import type { RefObject } from "react";
 import { formatNumber } from "@/lib/formatNumber";
 import {
@@ -19,7 +20,7 @@ interface MixBatchWhatsAppPreviewProps {
 
 const formatMoney = (n: number): string => "$" + n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const formatWeight = (n: number): string => formatNumber(n, 3);
-const cell: React.CSSProperties = { padding: "8px 6px", borderBottom: "1px solid #334155" };
+const cell: CSSProperties = { padding: "8px 6px", borderBottom: "1px solid #334155" };
 
 /**
  * Shareable report only; does not modify a batch.
@@ -59,7 +60,7 @@ export function MixBatchWhatsAppPreview({
         const historicalTotal = rows.reduce((sum, row) => sum + row.totalCost, 0);
         const targetTotal = rows.reduce((sum, row) => sum + (row.targetKg ?? 0), 0);
         const hasTargets = allocations !== null;
-        const delta = hasTargets ? actualTotal - targetTotal : null;
+        const delta = hasTargets ? rows.reduce((sum, row) => sum + (row.differenceKg ?? 0), 0) : null;
         return (
           <section key={batch.id} style={{ marginBottom: "28px" }}>
             <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "14px", alignItems: "center" }}>
