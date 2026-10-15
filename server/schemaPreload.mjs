@@ -16,3 +16,5 @@ await import("./factoryTrilingualSchemaBridge.mjs");
 await import("./companyScopeRlsBridge.mjs");
 // Company-scoped supplier tables (needs the RLS helpers above).
 await import("./supplierCompanyScopeBridge.mjs");
+// Persisted, company-scoped allocations for the Raw Materials production planner.
+await import("./fixedProductionPlannerSchemaBridge.mjs");
