@@ -15,6 +15,7 @@ import { ToastAction } from "@/components/ui/toast";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/queryClient";
 import type { FactoryMixBatch } from "@shared/schema";
+import { MIX_BATCH_TARGET_OPTIONS, selectMixBatchTarget } from "@/pages/factory/production-raw-stock/mixBatchCategoryTargets";
 
 interface SupplierRawStock {
   supplierName: string;
@@ -349,6 +350,7 @@ export function CreateMixBatchDialog({ open, onOpenChange, onCreated }: CreateMi
   const totalWeight = selectedSources.reduce((sum, s) => sum + s.weightKg, 0);
   const totalCost = selectedSources.reduce((sum, s) => sum + s.totalCost, 0);
   const blendedCostPerKg = totalWeight > 0 ? totalCost / totalWeight : 0;
+  const automaticTargetTons = selectMixBatchTarget(totalWeight);
   const hasAnySources = selectedSources.length > 0;
   const isPending = createMutation.isPending || topUpMutation.isPending;
 
@@ -389,6 +391,38 @@ export function CreateMixBatchDialog({ open, onOpenChange, onCreated }: CreateMi
               Add to Existing Batch
             </Button>
           </div>
+
+          {mode === "new" && (
+            <div className="space-y-2" data-testid="mix-batch-production-target-selector">
+              <div className="flex flex-wrap items-center gap-2">
+                <Label>Production Target (automatic)</Label>
+                <span role="status" className="text-xs text-muted-foreground" data-testid="mix-batch-production-target-status">
+                  {totalWeight > 0
+                    ? `${formatNumber(totalWeight)} kg → ${automaticTargetTons} Tons`
+                    : "Select sources to calculate the target"}
+                </span>
+              </div>
+              <div className="inline-flex max-w-full rounded-md border border-border bg-muted/40 p-1 gap-1" role="group" aria-label="Automatically selected production target">
+                {MIX_BATCH_TARGET_OPTIONS.map((tons) => (
+                  <Button
+                    key={tons}
+                    type="button"
+                    variant={automaticTargetTons === tons ? "default" : "ghost"}
+                    size="sm"
+                    className="min-w-20"
+                    aria-pressed={automaticTargetTons === tons}
+                    aria-label={`${tons} ton production target`}
+                    data-testid={`mix-batch-target-${tons}`}
+                    // Read-only selector: automatically determined from source weights.
+                    disabled={false}
+                  >
+                    {tons} Tons
+                  </Button>
+                ))}
+              </div>
+              <p className="text-xs text-muted-foreground">Automatically advances from 15 → 17.5 → 20 tons as total batch weight increases.</p>
+            </div>
+          )}
 
           {/* Top-up: pick target batch */}
           {mode === "topup" && (
