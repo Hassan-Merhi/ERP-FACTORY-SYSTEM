@@ -186,7 +186,9 @@ export async function reclassifyFactoryImportPayables20261015(apply: boolean) {
           ],
         });
         if (!post.voucher.id) throw new Error("Missing posted reclassification #" + row.container);
-        await existingAdjustment(tx, row);
+        if (!(await existingAdjustment(tx, row))) {
+          throw new Error("Posted journal missing or does not match reviewed source #" + row.container);
+        }
         console.log("[FactoryPartyReclass] container=" + row.container +
           " original=" + row.originalSupplier + " new=" + row.currentSupplier +
           " EUR=" + row.eur + " voucher=" + post.voucher.id);
