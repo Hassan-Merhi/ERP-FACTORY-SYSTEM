@@ -3,7 +3,7 @@ import { useState, useMemo, useRef } from "react";
 import { useAdminOverride } from "@/hooks/use-admin-override";
 import { useDateFormat } from "@/contexts/DateFormatContext";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { FlaskConical, ArrowDown, Tag, Layers } from "lucide-react";
+import { FlaskConical, ArrowDown, Tag, Layers, Calculator } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/queryClient";
@@ -16,6 +16,7 @@ import { RawStockTable, type RawStockRow } from "./production-raw-stock/RawStock
 import { MixBatchList, type MixBatchPrintRow, type MixBatchRow } from "./production-raw-stock/MixBatchList";
 import { KpiCards } from "./production-raw-stock/KpiCards";
 import { OffloadDialog } from "./production-raw-stock/OffloadDialog";
+import { FixedProductionPlannerDialog } from "./production-raw-stock/FixedProductionPlannerDialog";
 import type {
   OffloadContainer,
   OffloadLedgerAccount,
@@ -42,6 +43,7 @@ export default function ProductionRawStock() {
   const modeApiRequest = getApiRequest(appMode);
 
   const [offloadDialogOpen, setOffloadDialogOpen] = useState(false);
+  const [fixedPlannerOpen, setFixedPlannerOpen] = useState(false);
   const [categoriesDialogOpen, setCategoriesDialogOpen] = useState(false);
   const [adjustDialogOpen, setAdjustDialogOpen] = useState(false);
   const [deductDialogOpen, setDeductDialogOpen] = useState(false);
@@ -227,6 +229,14 @@ export default function ProductionRawStock() {
         </div>
         <div className="grid w-full grid-cols-1 gap-2 min-[360px]:grid-cols-2 sm:flex sm:w-auto sm:flex-wrap sm:items-center sm:justify-end">
           <Button
+            variant="outline"
+            onClick={() => setFixedPlannerOpen(true)}
+            className="h-11 gap-2 rounded-lg border-blue-500/40 px-3 text-xs font-semibold sm:h-9"
+            data-testid="button-fixed-production-planner"
+          >
+            <Calculator className="h-4 w-4" /> Fixed Production Planner
+          </Button>
+          <Button
             onClick={() => setCreateMixBatchOpen(true)}
             className="h-11 gap-2 rounded-lg bg-blue-600 px-3 text-xs font-semibold text-white shadow-xs transition-all hover:-translate-y-0.5 hover:bg-blue-700 hover:shadow-md dark:bg-blue-500 dark:hover:bg-blue-400 sm:h-9"
             data-testid="button-create-mix-batch"
@@ -303,6 +313,13 @@ export default function ProductionRawStock() {
           />
         </section>
       </div>
+
+      <FixedProductionPlannerDialog
+        open={fixedPlannerOpen}
+        onOpenChange={setFixedPlannerOpen}
+        rawStock={rawStock || []}
+        suppliers={factorySuppliers}
+      />
 
       <CreateMixBatchDialog
         open={createMixBatchOpen}
