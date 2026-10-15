@@ -13,6 +13,7 @@ import { calculateHassanPriceMetrics } from "./hassan-price";
 import {
   stockItems,
   stockItemLocationPrices,
+  locationPriceGroups,
   stockTransferVouchers,
   stockTransferItems,
   stockAdjustmentVouchers,
@@ -149,8 +150,26 @@ export function registerVoucherEntryReadRoutes(app: Express) {
           .leftJoin(stockItems, eq(salesItems.stockItemId, stockItems.id))
           .where(eq(salesItems.voucherId, id));
 
+        // Use the same effective price location as /api/pos/price-list.
+        // A follower location inherits its master's price even when it has no
+        // direct stock_item_location_prices row (e.g. MALI -> Mali Depot).
+        // Never write or backfill prices while viewing a historical voucher.
+        const [priceGroup] = voucher.locationId
+          ? await db
+              .select({ masterLocationId: locationPriceGroups.masterLocationId })
+              .from(locationPriceGroups)
+              .where(
+                and(
+                  eq(locationPriceGroups.companyId, voucher.companyId),
+                  eq(locationPriceGroups.followerLocationId, voucher.locationId)
+                )
+              )
+              .limit(1)
+          : [];
+        const effectivePriceLocationId = priceGroup?.masterLocationId ?? voucher.locationId;
+
         const locationPriceRows =
-          voucher.locationId && salesItemsList.length > 0
+          effectivePriceLocationId && salesItemsList.length > 0
             ? await db
                 .select({
                   stockItemId: stockItemLocationPrices.stockItemId,
@@ -159,7 +178,7 @@ export function registerVoucherEntryReadRoutes(app: Express) {
                 .from(stockItemLocationPrices)
                 .where(
                   and(
-                    eq(stockItemLocationPrices.locationId, voucher.locationId),
+                    eq(stockItemLocationPrices.locationId, effectivePriceLocationId),
                     inArray(
                       stockItemLocationPrices.stockItemId,
                       salesItemsList.map((item) => item.stockItemId)
