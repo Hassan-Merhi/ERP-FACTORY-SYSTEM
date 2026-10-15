@@ -352,7 +352,8 @@ export async function applyPurchaseOrderItemsUpdate(
                 subsidiaryCompanyId: existingPO.companyId,
               }
             : undefined,
-          _b1ParentId
+          _b1ParentId,
+          existingPO.companyId
         );
         if (!_b1Sync.found) {
           throw new HttpError(
