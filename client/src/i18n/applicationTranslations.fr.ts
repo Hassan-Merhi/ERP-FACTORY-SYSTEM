@@ -238,5 +238,9 @@ export const applicationFrenchTranslations = {
   "pos.customerSearchResults": "Résultats de la recherche de clients",
   "pos.customerSearchFailed": "La recherche de clients a échoué.",
   "pos.paymentTotals": "Totaux des paiements",
+  "analytics.expenses.periodActivity": "Écritures comptabilisées pour la période sélectionnée",
+  "analytics.expenses.netExpense": "Dépense nette",
+  "analytics.expenses.loadFailed": "Impossible de charger les dépenses pour cette période. Veuillez réessayer le filtre de dates.",
+  "analytics.expenses.loadFailedShort": "Impossible de charger les dépenses pour la période sélectionnée",
   "supplierPartner.postOpeningStock": "Enregistrer le stock d'ouverture",
 } as const satisfies ApplicationTranslationCatalog;
