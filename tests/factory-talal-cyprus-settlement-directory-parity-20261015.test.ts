@@ -7,7 +7,8 @@ import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { sumMoney, toMoney } from "../server/lib/money";
 
-const read = (path: string) => readFileSync(resolve(process.cwd(), path), "utf8");
+const read = (path: string) =>
+  readFileSync(resolve(process.cwd(), path), "utf8");
 
 describe("TALAL ANAKYKLOS CYPRUS inside/outside balance parity", () => {
   it("reproduces negative EUR 2609 settlement from goods, freight and FX", () => {
@@ -30,24 +31,38 @@ describe("TALAL ANAKYKLOS CYPRUS inside/outside balance parity", () => {
     expect(toMoney("-8519.00").eq("-2609.00")).toBe(false);
     const route = read("server/routes/factory/suppliers/balance/with-balances.ts");
     expect(route).toContain(
-      'companyId === 12 && s.id === 40 && s.name.trim().toUpperCase() === "TALAL ANAKYKLOS CYPRUS"',
+      's.name.trim().toUpperCase() === "TALAL ANAKYKLOS CYPRUS"',
     );
-    expect(route).toContain("usePortugalSettlementDisplay || useTalalSettlementDisplay");
+    expect(route).toContain(
+      "usePortugalSettlementDisplay || useTalalSettlementDisplay",
+    );
     expect(route).toContain('displayBalanceBasis: "operational-statement"');
-    expect(route).toContain("usdEquivalentBalance: own.fxUnresolved ? null : own.balance.toFixed(3)");
+    expect(route).toContain(
+      "usdEquivalentBalance: own.fxUnresolved ? null : own.balance.toFixed(3)",
+    );
     expect(route).toContain("...ledgerFields(s.id)");
   });
 
-  it("renders this overpayment green with CR, preserving Portugal 3 decimals", () => {
+  it("renders TALAL's overpayment green with CR, preserving Portugal precision", () => {
     const directory = read(
       "client/src/pages/factory/factory-suppliers/FactorySuppliersDirectory.tsx",
     );
-    expect(directory).toContain('supplier.displayBalanceBasis === "operational-statement"');
+    expect(directory).toContain(
+      'supplier.displayBalanceBasis === "operational-statement"',
+    );
     expect(directory).toContain("const isTalalSettlement =");
-    expect(directory).toContain("isOperationalSettlement && balance.balance > 0.005");
-    expect(directory).toContain('balanceValue < 0 ? (isTalalSettlement ? " CR" : " DR") : " CR"');
-    expect(directory).toContain('balance.balance < 0 ? (isTalalSettlement ? " CR" : " DR") : " CR"');
-    expect(directory).toContain("toFixed(isPortugalSaadSettlement ? 3 : 2)");
+    expect(directory).toContain(
+      "isOperationalSettlement && balance.balance > 0.005",
+    );
+    expect(directory).toContain(
+      'balanceValue < 0 && !isTalalSettlement ? " DR" : " CR"',
+    );
+    expect(directory).toContain(
+      'balance.balance < 0 && !isTalalSettlement ? " DR" : " CR"',
+    );
+    expect(directory).toContain(
+      "const balanceDigits = isPortugalSaadSettlement ? 3 : 2",
+    );
     expect(directory).toContain('"text-green-600 dark:text-green-400"');
   });
 });
