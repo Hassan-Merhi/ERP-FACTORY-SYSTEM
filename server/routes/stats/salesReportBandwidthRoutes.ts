@@ -149,7 +149,8 @@ async function buildSalesSummary(companyIds: number[], params: SummaryParams): P
           SUM(
             (
               CASE
-                WHEN COALESCE(price.selling_price, 0)::numeric > 0 THEN price.selling_price::numeric
+                WHEN COALESCE(price.selling_price, si.selling_price, 0)::numeric > 0
+                  THEN COALESCE(price.selling_price, si.selling_price)::numeric
                 ELSE COALESCE(sales.selling_price, 0)::numeric
               END
             ) * COALESCE(sales.quantity, 0)::numeric
@@ -161,7 +162,8 @@ async function buildSalesSummary(companyIds: number[], params: SummaryParams): P
             (
               COALESCE(sales.selling_price, 0)::numeric -
               CASE
-                WHEN COALESCE(price.selling_price, 0)::numeric > 0 THEN price.selling_price::numeric
+                WHEN COALESCE(price.selling_price, si.selling_price, 0)::numeric > 0
+                  THEN COALESCE(price.selling_price, si.selling_price)::numeric
                 ELSE COALESCE(sales.selling_price, 0)::numeric
               END
             ) * COALESCE(sales.quantity, 0)::numeric
@@ -178,9 +180,22 @@ async function buildSalesSummary(companyIds: number[], params: SummaryParams): P
       INNER JOIN stock_items si ON sales.stock_item_id = si.id
       LEFT JOIN stock_groups sg ON si.stock_group_id = sg.id
       LEFT JOIN locations l ON v.location_id = l.id
+      -- The Price List inherits the master location's price for follower
+      -- locations. Resolve it here too so summary totals match detail rows.
+      -- A scalar subquery avoids duplicate sales rows from legacy mappings.
       LEFT JOIN stock_item_location_prices price
         ON price.stock_item_id = sales.stock_item_id
-        AND price.location_id = v.location_id
+        AND price.location_id = COALESCE(
+          (
+            SELECT lpg.master_location_id
+            FROM location_price_groups lpg
+            WHERE lpg.company_id = v.company_id
+              AND lpg.follower_location_id = v.location_id
+            ORDER BY lpg.id
+            LIMIT 1
+          ),
+          v.location_id
+        )
       WHERE ${conditions.join(" AND ")}
       GROUP BY ${dateKey}${creditGroupBy}
     )
