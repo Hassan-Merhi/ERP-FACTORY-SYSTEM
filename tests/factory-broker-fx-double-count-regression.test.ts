@@ -21,6 +21,7 @@ describe("NASRA / broker FX source is counted exactly once", () => {
       expect(source).toContain("factorySupplierFxTransfers");
       expect(source).toContain("NOT LIKE 'FACTORY-PAY-%'");
       expect(source).toContain("NOT LIKE 'FACTORY-SFX-%'");
+      expect(source).toContain("NOT LIKE 'FACTORY-PAYABLE-RECLASS-%'");
     });
   }
 
@@ -30,6 +31,7 @@ describe("NASRA / broker FX source is counted exactly once", () => {
       "utf8"
     );
     expect(ledger).not.toContain("NOT LIKE 'FACTORY-SFX-%'");
+    expect(ledger).not.toContain("NOT LIKE 'FACTORY-PAYABLE-RECLASS-%'");
   });
 
   it("reconciles supplier-native goods and freight against each transfer once", () => {
@@ -40,6 +42,19 @@ describe("NASRA / broker FX source is counted exactly once", () => {
     expect(aud.toFixed(2)).toBe("0.00");
     expect(eur.toFixed(2)).toBe("-196.69");
     expect(eur.minus("290517.60").toFixed(2)).toBe("-290714.29");
+  });
+
+  it("does not double-subtract balanced Oct 15 corrections from broker settlement pools", () => {
+    // Real production evidence on 2026-10-15: two sets of individually
+    // balanced, EUR-denominated supplier-reclassification journals. The
+    // financial net is zero, but a debit-only payment query falsely removes
+    // both debit legs from the broker's operational pool.
+    const modaFakeEurPayments = sumMoney(["35277.20", "35277.20"]);
+    const nasraFakeEurPayments = sumMoney(["7898.40", "7898.40"]);
+    expect(modaFakeEurPayments.toFixed(2)).toBe("70554.40");
+    expect(nasraFakeEurPayments.toFixed(2)).toBe("15796.80");
+    expect(toMoney("41627.10").minus("41627.10").toFixed(2)).toBe("0.00");
+    expect(toMoney("9320.11").minus("9320.11").toFixed(2)).toBe("0.00");
   });
 
   it("leaves NASRA USD pool unaltered while its separate 97-cent discrepancy is audited", () => {
