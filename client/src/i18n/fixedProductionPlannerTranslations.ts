@@ -35,7 +35,7 @@ const messages = {
   withoutOtw: { en: "Without OTW (17.5 Ton)", ar: "دون المخزون القادم (17.5 طن)", fr: "Sans stock en route (17,5 t)" },
   containersToOrder: { en: "# of Container to Order", ar: "عدد الحاويات المطلوب طلبها", fr: "Nombre de conteneurs à commander" },
   planFor: { en: "PLAN FOR", ar: "إجمالي الخطة", fr: "TOTAL DU PLAN" },
-  noSuppliers: { en: "No suppliers found for this company.", ar: "لا يوجد موردون لهذه الشركة.", fr: "Aucun fournisseur pour cette société." },
+  noSuppliers: { en: "No suppliers with stock in hand or on the way.", ar: "لا يوجد موردون لديهم مخزون متاح أو قادم.", fr: "Aucun fournisseur avec stock disponible ou en route." },
   allocationLabel: { en: "20-ton allocation for {name}", ar: "حصة 20 طن للمورد {name}", fr: "Répartition 20 tonnes pour {name}" },
   footerFormula: {
     en: "Coverage = stock ÷ daily 17.5t allocation; containers = daily 17.5t × 26 ÷ 20,000. Any 20t total may be saved.",
