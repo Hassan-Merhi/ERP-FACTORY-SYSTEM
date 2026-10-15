@@ -37,6 +37,7 @@ export interface OffloadContainer {
 export interface OffloadSupplierOption {
   id: number;
   name: string;
+  supplierCategoryId?: number | null;
 }
 
 export interface OffloadLedgerAccount {
