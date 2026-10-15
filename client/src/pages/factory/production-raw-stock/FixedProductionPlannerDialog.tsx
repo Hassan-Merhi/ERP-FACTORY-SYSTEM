@@ -22,6 +22,8 @@ interface FixedProductionPlannerDialogProps {
   rawStockLoading: boolean;
   rawStockError: boolean;
   suppliers: OffloadSupplierOption[];
+  suppliersLoading: boolean;
+  suppliersError: boolean;
 }
 
 interface PlannerRecord {
@@ -48,7 +50,7 @@ function displayKg(value: number): string {
 }
 
 export function FixedProductionPlannerDialog({
-  open, onOpenChange, rawStock, rawStockLoading, rawStockError, suppliers,
+  open, onOpenChange, rawStock, rawStockLoading, rawStockError, suppliers, suppliersLoading, suppliersError,
 }: FixedProductionPlannerDialogProps) {
   const { toast } = useToast();
   const { language } = useApplicationLanguage();
@@ -186,11 +188,11 @@ export function FixedProductionPlannerDialog({
   };
 
   const locked = planQuery.data?.locked ?? false;
-  const ready = !!planQuery.data && !!otwQuery.data && !planQuery.isFetching && !otwQuery.isFetching && !rawStockLoading && !rawStockError;
+  const ready = !!planQuery.data && !!otwQuery.data && !planQuery.isFetching && !otwQuery.isFetching && !rawStockLoading && !rawStockError && !suppliersLoading && !suppliersError;
   const pending = saveMutation.isPending || unlockMutation.isPending || whatsappMutation.isPending;
 
   const saveAndLock = () => {
-    if (locked || pending) return;
+    if (locked || pending || !ready) return;
     const allocations: Record<string, number> = {};
     for (const row of rows) {
       const raw = inputs[row.id]?.trim() ?? "";
@@ -247,6 +249,7 @@ export function FixedProductionPlannerDialog({
             <Button variant="outline" size="sm" onClick={() => {
               setHasEdits(false);
               void queryClient.invalidateQueries({ queryKey: ["/api/factory/raw-stock"] });
+              void queryClient.invalidateQueries({ queryKey: ["/api/factory/suppliers"] });
               void Promise.all([planQuery.refetch(), otwQuery.refetch()]);
             }} disabled={pending} className="gap-1.5">
               <RefreshCw className="h-3.5 w-3.5" /> {tr("refresh")}
@@ -265,12 +268,12 @@ export function FixedProductionPlannerDialog({
           </div>
         </div>
 
-        {planQuery.isError || otwQuery.isError || rawStockError ? (
+        {planQuery.isError || otwQuery.isError || rawStockError || suppliersError ? (
           <div role="alert" className="rounded-md border border-destructive p-3 text-sm text-destructive">
             {tr("loadError")}
           </div>
         ) : null}
-        {!ready && !planQuery.isError && !otwQuery.isError && !rawStockError ? (
+        {!ready && !planQuery.isError && !otwQuery.isError && !rawStockError && !suppliersError ? (
           <p className="py-6 text-center text-sm text-muted-foreground">{tr("loading")}</p>
         ) : (
           <div className="min-h-0 overflow-auto rounded-lg border">
