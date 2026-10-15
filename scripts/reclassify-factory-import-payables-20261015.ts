@@ -17,7 +17,7 @@
  * Rerunning after success verifies the already-posted adjustment and skips it.
  */
 import { sql } from "drizzle-orm";
-import { db, pool } from "../server/db";
+import { db, pool, type DbTransaction } from "../server/db";
 import { MoneyDecimal, toMoney } from "../server/lib/money";
 import { postFactoryVoucherTx } from "../server/services/factory/factoryVoucherPosting";
 import {
@@ -64,7 +64,7 @@ export const REVIEWED_IMPORT_PAYABLES: readonly VerifiedSource[] = [
   { container: 161, originalSupplier: 42, currentSupplier: 47, originalVoucher: 10011, originalCreditLine: 34424, eur: "4662.50", usd: "5501.75" },
 ];
 
-type QueryTx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+type QueryTx = DbTransaction;
 
 async function verifyOriginal(tx: QueryTx, source: VerifiedSource): Promise<void> {
   const container = await tx.execute(sql`
