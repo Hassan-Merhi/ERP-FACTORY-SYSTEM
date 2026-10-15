@@ -31,11 +31,6 @@ const headerCell: CSSProperties = {
   height: "72px",
 };
 const fmtQty = (n: number) => n.toLocaleString("en-US", { maximumFractionDigits: 3 });
-const fmtCoverage = (n: number) => n.toLocaleString("en-US", {
-  minimumFractionDigits: 2,
-  maximumFractionDigits: 2,
-});
-
 export function FixedProductionPlannerImage({ reportRef, rows, totals, dateLabel }: PlannerImageProps) {
   const { language } = useApplicationLanguage();
   const tr = (key: Parameters<typeof translateFixedProductionPlanner>[0]) => translateFixedProductionPlanner(key, language);
@@ -51,7 +46,7 @@ export function FixedProductionPlannerImage({ reportRef, rows, totals, dateLabel
         top: "0px",
         zIndex: -1,
         pointerEvents: "none",
-        width: "1320px",
+        width: "960px",
         backgroundColor: "#ffffff",
         color: "#17202c",
         padding: "24px",
@@ -64,13 +59,10 @@ export function FixedProductionPlannerImage({ reportRef, rows, totals, dateLabel
       </div>
       <table style={{ width: "100%", borderCollapse: "collapse", tableLayout: "fixed" }}>
         <colgroup>
-          <col style={{ width: "20%" }} />
-          <col style={{ width: "11%" }} />
-          <col style={{ width: "11%" }} />
-          <col style={{ width: "11%" }} />
-          <col style={{ width: "17%" }} />
-          <col style={{ width: "17%" }} />
-          <col style={{ width: "13%" }} />
+          <col style={{ width: "34%" }} />
+          <col style={{ width: "22%" }} />
+          <col style={{ width: "22%" }} />
+          <col style={{ width: "22%" }} />
         </colgroup>
         <thead>
           <tr>
@@ -78,9 +70,6 @@ export function FixedProductionPlannerImage({ reportRef, rows, totals, dateLabel
             <th style={{ ...headerCell, backgroundColor: "#b5ddeb" }}>{tr("reportFifteenTons")}</th>
             <th style={{ ...headerCell, backgroundColor: "#94bcdf" }}>{tr("reportSeventeenTons")}</th>
             <th style={{ ...headerCell, backgroundColor: "#cee0f1" }}>{tr("reportTwentyTons")}</th>
-            <th style={{ ...headerCell, backgroundColor: "#bbebbf" }}>{tr("reportWithOtw")}</th>
-            <th style={{ ...headerCell, backgroundColor: "#d8d8d8" }}>{tr("reportWithoutOtw")}</th>
-            <th style={{ ...headerCell, backgroundColor: "#eff6ea" }}>{tr("reportContainers")}</th>
           </tr>
         </thead>
         <tbody>
@@ -90,9 +79,6 @@ export function FixedProductionPlannerImage({ reportRef, rows, totals, dateLabel
               <td style={{ ...numericCell, backgroundColor: "#b5ddeb" }}>{fmtQty(row.allocation15)}</td>
               <td style={{ ...numericCell, backgroundColor: "#94bcdf" }}>{fmtQty(row.allocation175)}</td>
               <td style={{ ...numericCell, backgroundColor: "#cee0f1" }}>{fmtQty(row.allocation20)}</td>
-              <td style={{ ...numericCell, backgroundColor: "#bbebbf" }}>{fmtCoverage(row.withOtwDays)}</td>
-              <td style={{ ...numericCell, backgroundColor: "#d8d8d8" }}>{fmtCoverage(row.withoutOtwDays)}</td>
-              <td style={{ ...numericCell, backgroundColor: "#eff6ea" }}>{fmtCoverage(row.containersToOrder)}</td>
             </tr>
           ))}
         </tbody>
@@ -102,15 +88,9 @@ export function FixedProductionPlannerImage({ reportRef, rows, totals, dateLabel
             <td style={{ ...numericCell, backgroundColor: "#b5ddeb", fontWeight: 800 }}>{fmtQty(totals.allocation15)}</td>
             <td style={{ ...numericCell, backgroundColor: "#94bcdf", fontWeight: 800 }}>{fmtQty(totals.allocation175)}</td>
             <td style={{ ...numericCell, backgroundColor: "#cee0f1", fontWeight: 800 }}>{fmtQty(totals.allocation20)}</td>
-            <td style={{ ...numericCell, backgroundColor: "#bbebbf", fontWeight: 800 }}>{fmtCoverage(totals.withOtwDays)}</td>
-            <td style={{ ...numericCell, backgroundColor: "#d8d8d8", fontWeight: 800 }}>{fmtCoverage(totals.withoutOtwDays)}</td>
-            <td style={{ ...numericCell, backgroundColor: "#eff6ea", fontWeight: 800 }}>{fmtCoverage(totals.containersToOrder)}</td>
           </tr>
         </tfoot>
       </table>
-      <div style={{ marginTop: "12px", fontSize: "13px", color: "#505b66" }}>
-        {tr("reportFoot")}
-      </div>
     </div>
   );
 }
