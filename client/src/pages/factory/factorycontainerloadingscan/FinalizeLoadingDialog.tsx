@@ -182,6 +182,7 @@ export function FinalizeLoadingDialog({ model }: { model: FactoryContainerLoadin
               type="date"
               value={model.finalizeDate}
               onChange={(e) => model.setFinalizeDate(e.target.value)}
+              disabled={!!model.orderDetail?.loadingFinalizedAt}
               className="flex h-10 w-full rounded-xl border border-input bg-background px-3 py-1 text-sm shadow-xs transition-colors focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring"
               data-testid="input-finalize-date"
             />
