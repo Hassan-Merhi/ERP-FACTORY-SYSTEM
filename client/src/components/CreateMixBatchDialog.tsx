@@ -16,6 +16,8 @@ import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/queryClient";
 import type { FactoryMixBatch } from "@shared/schema";
 import { MIX_BATCH_TARGET_OPTIONS, selectMixBatchTarget } from "@/pages/factory/production-raw-stock/mixBatchCategoryTargets";
+import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
+import { mixBatchTargetTranslation } from "@/i18n/mixBatchCategoryTargetTranslations";
 
 interface SupplierRawStock {
   supplierName: string;
@@ -64,6 +66,8 @@ interface CreateMixBatchDialogProps {
 
 export function CreateMixBatchDialog({ open, onOpenChange, onCreated }: CreateMixBatchDialogProps) {
   const { toast } = useToast();
+  const { language } = useApplicationLanguage();
+  const tierText = (key: Parameters<typeof mixBatchTargetTranslation>[0], values?: Record<string, string | number>) => mixBatchTargetTranslation(key, language, values);
   const [mode, setMode] = useState<DialogMode>("new");
   const [targetBatchId, setTargetBatchId] = useState<string>("");
   const [selectedSources, setSelectedSources] = useState<SourceSelection[]>([]);
@@ -395,11 +399,11 @@ export function CreateMixBatchDialog({ open, onOpenChange, onCreated }: CreateMi
           {mode === "new" && (
             <div className="space-y-2" data-testid="mix-batch-production-target-selector">
               <div className="flex flex-wrap items-center gap-2">
-                <Label>Production Target (automatic)</Label>
+                <Label>{tierText("productionTarget")}</Label>
                 <span role="status" className="text-xs text-muted-foreground" data-testid="mix-batch-production-target-status">
                   {totalWeight > 0
-                    ? `${formatNumber(totalWeight)} kg → ${automaticTargetTons} Tons`
-                    : "Select sources to calculate the target"}
+                    ? tierText("tierLabel", { kg: formatNumber(totalWeight), ton: automaticTargetTons })
+                    : tierText("selectSources")}
                 </span>
               </div>
               <div className="inline-flex max-w-full rounded-md border border-border bg-muted/40 p-1 gap-1" role="group" aria-label="Automatically selected production target">
@@ -412,11 +416,11 @@ export function CreateMixBatchDialog({ open, onOpenChange, onCreated }: CreateMi
                       : "flex min-h-9 min-w-20 items-center justify-center rounded-md px-3 text-sm font-semibold text-muted-foreground"}
                     data-testid={`mix-batch-target-${tons}`}
                   >
-                    {tons} Tons
+                    {tierText("tons", { ton: tons })}
                   </span>
                 ))}
               </div>
-              <p className="text-xs text-muted-foreground">Automatically advances from 15 → 17.5 → 20 tons as total batch weight increases.</p>
+              <p className="text-xs text-muted-foreground">{tierText("advances")}</p>
             </div>
           )}
 
