@@ -111,6 +111,8 @@ export function FactorySuppliersDirectory({ model }: { model: SuppliersModel }) 
           const missingRates = supplier.usdEquivalentMissingRates || [];
           const notInLedgerValue = parseFloat(supplier.notInLedgerTotal || "0");
           const isBroker = !!model.subAccountsByParent[supplier.id]?.length || !!supplier.isBroker;
+          const isAboSobhi = supplier.id === 41 && supplier.name.trim().toUpperCase() === "ABO SOBHI DIRECT";
+          const aboEuroBalance = (supplier.currencyBalances || []).find((bucket) => bucket.currencyCode === "EUR");
           const otwCount = supplier.otwByCurrency
             ? Object.values(supplier.otwByCurrency).reduce((left, right) => left + right, 0)
             : supplier.pendingContainers || 0;
@@ -185,15 +187,50 @@ export function FactorySuppliersDirectory({ model }: { model: SuppliersModel }) 
                       </div>
                     )}
                   </>
+                ) : isAboSobhi ? (
+                  <>
+                    <div className="text-xs text-muted-foreground">
+                      {aboEuroBalance && aboEuroBalance.balance > 0.005
+                        ? "You owe this supplier"
+                        : aboEuroBalance && aboEuroBalance.balance < -0.005
+                          ? "This supplier owes you"
+                          : "Supplier balance"}
+                    </div>
+                    <div
+                      className={`font-semibold text-sm tabular-nums ${(aboEuroBalance?.balance ?? 0) > 0.005
+                        ? "text-red-600 dark:text-red-400"
+                        : (aboEuroBalance?.balance ?? 0) < -0.005
+                          ? "text-green-600 dark:text-green-400"
+                          : "text-muted-foreground"}`}
+                      data-testid={`text-directory-native-balance-${supplier.id}`}
+                    >
+                      {aboEuroBalance
+                        ? `EUR ${model.formatNum(Math.abs(aboEuroBalance.balance).toFixed(2))}${aboEuroBalance.balance < -0.005 ? " DR" : aboEuroBalance.balance > 0.005 ? " CR" : ""}`
+                        : "EUR balance unavailable"}
+                    </div>
+                    <div className="text-[11px] text-muted-foreground">USD equivalent at Factory Settings rates</div>
+                    <div
+                      className={`font-medium text-sm tabular-nums ${balanceValue > 0.005
+                        ? "text-red-600 dark:text-red-400"
+                        : balanceValue < -0.005
+                          ? "text-green-600 dark:text-green-400"
+                          : "text-muted-foreground"}`}
+                      data-testid={`text-directory-usd-equivalent-${supplier.id}`}
+                    >
+                      {usdEquivalent === null
+                        ? `FX rate missing: ${missingRates.join(", ")}`
+                        : `${model.formatNum(Math.abs(balanceValue).toFixed(2))}${balanceValue < -0.005 ? " DR" : balanceValue > 0.005 ? " CR" : ""}`}
+                    </div>
+                  </>
                 ) : (
                   <>
                     <div className="text-xs text-muted-foreground">Total balance (USD equivalent)</div>
                     <div
                       className={`font-semibold text-sm tabular-nums ${
                         balanceValue < -0.005
-                          ? "text-red-600 dark:text-red-400"
+                          ? "text-green-600 dark:text-green-400"
                           : balanceValue > 0.005
-                            ? "text-green-600 dark:text-green-400"
+                            ? "text-red-600 dark:text-red-400"
                             : "text-muted-foreground"
                       }`}
                       data-testid={`text-directory-ledger-balance-${supplier.id}`}
