@@ -20,11 +20,11 @@ export async function runApprovedFactoryPayableReclassification(): Promise<void>
   // Fail closed: neither the development DB nor the historical reference copy
   // is an eligible repair destination.
   if (process.env.RENDER_SERVICE_ID !== PRODUCTION_SERVICE_ID) {
-    throw new Error("[FactoryPayableReclass] Refusing: incorrect Render service");
+    throw new Error("FPR_BAD_SVC");
   }
   const target = await pool.query<{ name: string }>("SELECT current_database() AS name");
   if (target.rows[0]?.name !== PRODUCTION_DATABASE_NAME) {
-    throw new Error("[FactoryPayableReclass] Refusing: database is not the verified live production database");
+    throw new Error("FPR_BAD_DB");
   }
 
   const { reclassifyFactoryImportPayables20261015 } = await import(
@@ -34,7 +34,7 @@ export async function runApprovedFactoryPayableReclassification(): Promise<void>
   if (result.inspected !== 18 || result.pending !== 0) {
     throw new Error("[FactoryPayableReclass] Missing verified journal repairs");
   }
-  logger.info("[FactoryPayableReclass] Repair applied or verified idempotently", {
+  logger.info("FPR_APPLIED", {
     inspected: result.inspected,
     postedNow: result.posted,
   });
