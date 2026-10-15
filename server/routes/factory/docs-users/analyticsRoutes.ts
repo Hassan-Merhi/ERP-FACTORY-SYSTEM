@@ -198,52 +198,36 @@ export function registerFactoryAnalyticsRoutes(app: Express) {
             ? sql`co.status IN ('VERIFIED', 'FINALIZED')`
             : sql`co.status = ${status}`,
       ];
-      if (startDate) orderFilters.push(sql`(CASE
-              WHEN co.status = 'FINALIZED' THEN COALESCE((
-              SELECT fde.tx_date::date
-              FROM factory_daybook_entries fde
-              WHERE fde.company_id = co.company_id
-                AND fde.reference_table = 'customer_orders'
-                AND fde.reference_id = co.id
-                AND fde.tx_type = 'ORDER_VERIFIED'
-              ORDER BY fde.created_at DESC
-              LIMIT 1
-            ), co.loading_finalized_at::date, co.finalized_at::date, co.verified_at::date, co.order_date)
-              WHEN co.status = 'VERIFIED' THEN COALESCE((
-              SELECT fde.tx_date::date
-              FROM factory_daybook_entries fde
-              WHERE fde.company_id = co.company_id
-                AND fde.reference_table = 'customer_orders'
-                AND fde.reference_id = co.id
-                AND fde.tx_type = 'ORDER_VERIFIED'
-              ORDER BY fde.created_at DESC
-              LIMIT 1
-            ), co.loading_finalized_at::date, co.verified_at::date, co.order_date)
-              ELSE co.order_date
-            END) >= ${startDate}`);
-      if (endDate) orderFilters.push(sql`(CASE
-              WHEN co.status = 'FINALIZED' THEN COALESCE((
-              SELECT fde.tx_date::date
-              FROM factory_daybook_entries fde
-              WHERE fde.company_id = co.company_id
-                AND fde.reference_table = 'customer_orders'
-                AND fde.reference_id = co.id
-                AND fde.tx_type = 'ORDER_VERIFIED'
-              ORDER BY fde.created_at DESC
-              LIMIT 1
-            ), co.loading_finalized_at::date, co.finalized_at::date, co.verified_at::date, co.order_date)
-              WHEN co.status = 'VERIFIED' THEN COALESCE((
-              SELECT fde.tx_date::date
-              FROM factory_daybook_entries fde
-              WHERE fde.company_id = co.company_id
-                AND fde.reference_table = 'customer_orders'
-                AND fde.reference_id = co.id
-                AND fde.tx_type = 'ORDER_VERIFIED'
-              ORDER BY fde.created_at DESC
-              LIMIT 1
-            ), co.loading_finalized_at::date, co.verified_at::date, co.order_date)
-              ELSE co.order_date
-            END) <= ${endDate}`);
+      // The date selected at Validate Loading is the authoritative completion date.
+      // Status changes and later accounting/verification entries must not move
+      // this order into a different analytics period. Preserve the legacy
+      // fallback for direct (non-loading) invoices without a loading date.
+      const officialOrderDate = sql`CASE
+        WHEN co.loading_finalized_at IS NOT NULL THEN co.loading_finalized_at::date
+        WHEN co.status = 'FINALIZED' THEN COALESCE((
+          SELECT fde.tx_date::date
+          FROM factory_daybook_entries fde
+          WHERE fde.company_id = co.company_id
+            AND fde.reference_table = 'customer_orders'
+            AND fde.reference_id = co.id
+            AND fde.tx_type = 'ORDER_VERIFIED'
+          ORDER BY fde.created_at DESC
+          LIMIT 1
+        ), co.finalized_at::date, co.verified_at::date, co.order_date)
+        WHEN co.status = 'VERIFIED' THEN COALESCE((
+          SELECT fde.tx_date::date
+          FROM factory_daybook_entries fde
+          WHERE fde.company_id = co.company_id
+            AND fde.reference_table = 'customer_orders'
+            AND fde.reference_id = co.id
+            AND fde.tx_type = 'ORDER_VERIFIED'
+          ORDER BY fde.created_at DESC
+          LIMIT 1
+        ), co.verified_at::date, co.order_date)
+        ELSE co.order_date
+      END`;
+      if (startDate) orderFilters.push(sql`${officialOrderDate} >= ${startDate}`);
+      if (endDate) orderFilters.push(sql`${officialOrderDate} <= ${endDate}`);
       if (customer?.trim()) {
         orderFilters.push(
           sql`lower(COALESCE(c.legal_name, '')) LIKE ${`%${customer.trim().toLowerCase().slice(0, 100)}%`}`
@@ -282,29 +266,7 @@ export function registerFactoryAnalyticsRoutes(app: Express) {
         WITH filtered_orders AS MATERIALIZED (
           SELECT
             co.id AS order_id,
-            CASE
-              WHEN co.status = 'FINALIZED' THEN COALESCE((
-              SELECT fde.tx_date::date
-              FROM factory_daybook_entries fde
-              WHERE fde.company_id = co.company_id
-                AND fde.reference_table = 'customer_orders'
-                AND fde.reference_id = co.id
-                AND fde.tx_type = 'ORDER_VERIFIED'
-              ORDER BY fde.created_at DESC
-              LIMIT 1
-            ), co.loading_finalized_at::date, co.finalized_at::date, co.verified_at::date, co.order_date)
-              WHEN co.status = 'VERIFIED' THEN COALESCE((
-              SELECT fde.tx_date::date
-              FROM factory_daybook_entries fde
-              WHERE fde.company_id = co.company_id
-                AND fde.reference_table = 'customer_orders'
-                AND fde.reference_id = co.id
-                AND fde.tx_type = 'ORDER_VERIFIED'
-              ORDER BY fde.created_at DESC
-              LIMIT 1
-            ), co.loading_finalized_at::date, co.verified_at::date, co.order_date)
-              ELSE co.order_date
-            END AS order_date,
+            ${officialOrderDate} AS order_date,
             co.customer_id,
             COALESCE(c.legal_name, 'Unknown customer') AS customer_name,
             co.invoice_number,
