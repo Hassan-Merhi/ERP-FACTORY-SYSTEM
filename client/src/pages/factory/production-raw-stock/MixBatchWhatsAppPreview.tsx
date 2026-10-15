@@ -22,6 +22,7 @@ interface MixBatchWhatsAppPreviewProps {
 
 const formatMoney = (n: number): string => "$" + n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const formatWeight = (n: number): string => formatNumber(n, 3);
+const formatRate = (n: number): string => "$" + n.toLocaleString("en-US", { minimumFractionDigits: 4, maximumFractionDigits: 4 });
 const cell: CSSProperties = { padding: "8px 6px", borderBottom: "1px solid #334155" };
 
 /**
@@ -109,7 +110,7 @@ export function MixBatchWhatsAppPreview({
                   <tr key={row.id} style={{ backgroundColor: idx % 2 === 0 ? "#111827" : "#1c2939" }}>
                     <td style={{ ...cell, fontWeight: 700 }}>{row.id === "unmapped" ? tr("unknownSource") : row.name}</td>
                     <td style={{ ...cell, textAlign: "right" }}>{formatWeight(row.weightKg)}</td>
-                    <td style={{ ...cell, textAlign: "right" }}>{formatMoney(row.averageCostPerKg)}</td>
+                    <td style={{ ...cell, textAlign: "right" }}>{formatRate(row.averageCostPerKg)}</td>
                     <td style={{ ...cell, textAlign: "right" }}>{formatMoney(row.totalCost)}</td>
                     <td style={{ ...cell, textAlign: "right" }}>{row.targetKg === null ? "—" : formatWeight(row.targetKg)}</td>
                     <td style={{
@@ -125,7 +126,7 @@ export function MixBatchWhatsAppPreview({
                 <tr style={{ backgroundColor: "#293548", fontWeight: 800 }}>
                   <td style={cell}>{tr("total")}</td>
                   <td style={{ ...cell, textAlign: "right" }}>{formatWeight(actualTotal)}</td>
-                  <td style={{ ...cell, textAlign: "right" }}>{formatMoney(actualTotal > 0 ? historicalTotal / actualTotal : 0)}</td>
+                  <td style={{ ...cell, textAlign: "right" }}>{formatRate(actualTotal > 0 ? historicalTotal / actualTotal : 0)}</td>
                   <td style={{ ...cell, textAlign: "right" }}>{formatMoney(historicalTotal)}</td>
                   <td style={{ ...cell, textAlign: "right" }}>{hasTargets ? formatWeight(targetTotal) : "—"}</td>
                   <td style={{ ...cell, textAlign: "right", fontWeight: 800, color: delta === null ? "#94a3b8" : delta < -0.0005 ? "#f87171" : delta > 0.0005 ? "#4ade80" : "#f9fafb" }}>
