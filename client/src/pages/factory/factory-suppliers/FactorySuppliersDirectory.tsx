@@ -111,7 +111,8 @@ export function FactorySuppliersDirectory({ model }: { model: SuppliersModel }) 
           const missingRates = supplier.usdEquivalentMissingRates || [];
           const notInLedgerValue = parseFloat(supplier.notInLedgerTotal || "0");
           const isBroker = !!model.subAccountsByParent[supplier.id]?.length || !!supplier.isBroker;
-          const isModaZakaria = isBroker &&
+          const isModaZakaria =
+            isBroker &&
             supplier.id === 37 &&
             supplier.name.trim().toUpperCase() === "MODA ZAKARIA DIRECT";
           const modaEuroPool = isModaZakaria
@@ -119,6 +120,7 @@ export function FactorySuppliersDirectory({ model }: { model: SuppliersModel }) 
                 (pool) => pool.currencyCode === "EUR" && !pool.isBrokerPool,
               )
             : undefined;
+          const modaEuroBalance = modaEuroPool ? Number(modaEuroPool.balance) : null;
           const isAboSobhi = supplier.id === 41 && supplier.name.trim().toUpperCase() === "ABO SOBHI DIRECT";
           const isPortugalSaadSettlement =
             supplier.id === 39 &&
@@ -221,19 +223,19 @@ export function FactorySuppliersDirectory({ model }: { model: SuppliersModel }) 
                         {usdEquivalent < 0 ? "-$" : "$"}{model.formatNum(Math.abs(usdEquivalent).toFixed(2))}
                       </div>
                     )}
-                    {modaEuroPool && Math.abs(Number(modaEuroPool.balance)) > 0.005 && (
+                    {modaEuroBalance !== null && Math.abs(modaEuroBalance) > 0.005 && (
                       <div className="text-[11px] text-muted-foreground">
                         Net EUR balance{" "}
                         <span
                           className={
-                            Number(modaEuroPool.balance) > 0
+                            modaEuroBalance > 0
                               ? "text-red-600 dark:text-red-400"
                               : "text-green-600 dark:text-green-400"
                           }
                           data-testid="text-moda-eur-net-balance"
                         >
-                          EUR {model.formatNum(Math.abs(Number(modaEuroPool.balance)).toFixed(2))}
-                          {Number(modaEuroPool.balance) > 0 ? " payable" : " overpaid"}
+                          EUR {model.formatNum(Math.abs(modaEuroBalance).toFixed(2))}
+                          {modaEuroBalance > 0 ? " payable" : " overpaid"}
                         </span>
                       </div>
                     )}
