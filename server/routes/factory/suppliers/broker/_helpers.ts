@@ -118,7 +118,9 @@ export async function buildBrokerStatement(brokerId: number, companyId: number, 
               // Audited supplier reclassification and its compensating reversal
               // are balanced GL transfers, NOT payments. Counting only their
               // debit legs creates fake payments and corrupts broker pools.
-              sql`${vouchers.voucherNumber} NOT LIKE 'FACTORY-PAYABLE-RECLASS-%'`
+              sql`${vouchers.voucherNumber} NOT LIKE 'FACTORY-PAYABLE-RECLASS-%'`,
+              // Posted freight/FX repair journals are non-payment ledger corrections.
+              sql`${vouchers.voucherNumber} NOT LIKE 'FACTORY-CORRECTION-%'`
             )
           )
           .orderBy(vouchers.voucherDate)
