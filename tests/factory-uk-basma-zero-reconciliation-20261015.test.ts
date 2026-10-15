@@ -39,9 +39,7 @@ describe("UK BASMA source-backed posted vs operational reconciliation (company 1
     for(const {entries} of [goods,freight]){
       expect(entries).toHaveLength(2);
       expect(entries[1].factorySupplierId).toBe(38);
-      expect(toMoney(entries[0].debitAmount).minus(entries[1].creditAmount)).toSatisfy(
-        (value:ReturnType<typeof toMoney>)=>value.isZero()
-      );
+      expect(toMoney(entries[0].debitAmount).minus(entries[1].creditAmount).isZero()).toBe(true);
     }
   });
   it("no other supplier is changed, only 2 exact-source vouchers, preview before apply",()=>{
