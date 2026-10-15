@@ -165,7 +165,8 @@ export function registerOrderVerifyRoutes(app: Express) {
         .update(customerOrders)
         .set({
           status: "LOADING",
-          loadingFinalizedAt: null,
+          // Preserve the business loading date even when an order is reopened.
+          // Only the status/verification timestamp is being reset here.
           verifiedAt: null,
           updatedAt: new Date(),
         })
