@@ -70,7 +70,7 @@ export default function ProductionRawStock() {
     queryKey: ["/api/factory/mix-batches"],
   });
 
-  const { data: factorySuppliers = [] } = useQuery<OffloadSupplierOption[]>({
+  const { data: factorySuppliers = [], isFetching: suppliersLoading, isError: suppliersError } = useQuery<OffloadSupplierOption[]>({
     queryKey: ["/api/factory/suppliers"],
   });
 
@@ -235,6 +235,7 @@ export default function ProductionRawStock() {
             variant="outline"
             onClick={() => {
               void queryClient.invalidateQueries({ queryKey: ["/api/factory/raw-stock"] });
+              void queryClient.invalidateQueries({ queryKey: ["/api/factory/suppliers"] });
               setFixedPlannerOpen(true);
             }}
             className="h-11 gap-2 rounded-lg border-blue-500/40 px-3 text-xs font-semibold sm:h-9"
@@ -327,6 +328,8 @@ export default function ProductionRawStock() {
         rawStockLoading={rawStockLoading}
         rawStockError={rawStockError}
         suppliers={factorySuppliers}
+        suppliersLoading={suppliersLoading}
+        suppliersError={suppliersError}
       />
 
       <CreateMixBatchDialog
