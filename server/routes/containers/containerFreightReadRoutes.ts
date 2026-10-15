@@ -232,7 +232,8 @@ export function registerContainerFreightReadRoutes(app: Express) {
               subsidiaryCompanyId: po.companyId,
             }
           : undefined,
-        verifiedParentId
+        verifiedParentId,
+        po.companyId
         );
       });
 
