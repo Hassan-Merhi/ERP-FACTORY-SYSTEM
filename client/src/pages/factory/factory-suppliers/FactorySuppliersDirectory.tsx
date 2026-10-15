@@ -112,7 +112,8 @@ export function FactorySuppliersDirectory({ model }: { model: SuppliersModel }) 
           const notInLedgerValue = parseFloat(supplier.notInLedgerTotal || "0");
           const isBroker = !!model.subAccountsByParent[supplier.id]?.length || !!supplier.isBroker;
           const isAboSobhi = supplier.id === 41 && supplier.name.trim().toUpperCase() === "ABO SOBHI DIRECT";
-          const isPortugalSaadSettlement = supplier.id === 39 &&
+          const isPortugalSaadSettlement =
+            supplier.id === 39 &&
             supplier.name.trim().toUpperCase() === "PORTUGAL SAAD" &&
             supplier.displayBalanceBasis === "operational-statement";
           const aboEuroBalance = (supplier.currencyBalances || []).find((bucket) => bucket.currencyCode === "EUR");
@@ -246,7 +247,7 @@ export function FactorySuppliersDirectory({ model }: { model: SuppliersModel }) 
                         ? "FX rate missing"
                         : Math.abs(balanceValue) <= 0.005
                           ? "$—"
-                          : `${model.formatNum(Math.abs(balanceValue).toFixed(isPortugalSaadSettlement ? 3 : 2))}${balanceValue < 0 ? " DR" : " CR"}`}
+                          : `${isPortugalSaadSettlement ? "$" : ""}${model.formatNum(Math.abs(balanceValue).toFixed(isPortugalSaadSettlement ? 3 : 2))}${balanceValue < 0 ? " DR" : " CR"}`}
                     </div>
                     {usdEquivalent === null && (
                       <div className="text-[11px] text-amber-600" role="alert">
@@ -264,7 +265,9 @@ export function FactorySuppliersDirectory({ model }: { model: SuppliersModel }) 
                     )}
                     {nonUsdBalances.length > 0 && (
                       <div className="text-[11px] text-muted-foreground">
-                        {isPortugalSaadSettlement ? "Settlement balance by currency" : "Ledger balance by currency"}
+                        {isPortugalSaadSettlement
+                          ? "Settlement balance by currency"
+                          : "Ledger balance by currency"}
                       </div>
                     )}
                     {nonUsdBalances.map((balance) => (
