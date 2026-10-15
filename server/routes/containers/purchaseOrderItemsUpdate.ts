@@ -14,6 +14,7 @@ import { MoneyDecimal, parseMoneyInput, sumMoney, toMoney } from "../../lib/mone
 import { syncPurchaseOrderGitTx } from "../../services/accounting/perpetualInventory/stockReceipts";
 import { usdLineAmounts } from "../../services/factory/factoryVoucherPosting";
 import { editPostedFactoryVoucherTx } from "../../services/factory/factoryVoucherCorrection";
+import { runWithVerifiedPoParentScope } from "../../services/security/parentCompanyPostingScope";
 
 type PurchaseOrderRecord = NonNullable<Awaited<ReturnType<typeof storage.getPurchaseOrderById>>>;
 
@@ -121,7 +122,7 @@ export async function applyPurchaseOrderItemsUpdate(
   // Lock order intentionally matches the offload lifecycle: container -> purchase order.
   // This prevents an offload from materializing inventory between the route pre-check
   // and the line-item rewrite.
-  await db.transaction(async (tx) => {
+  await runWithVerifiedPoParentScope(existingPO.companyId, (linkedParentCompanyId) => db.transaction(async (tx) => {
     // FOR UPDATE is the serialization boundary shared with executeContainerOffloadLifecycle.
     // A purchase order without a container has no offload to race with, so only
     // the PO row is locked for it.
@@ -317,7 +318,7 @@ export async function applyPurchaseOrderItemsUpdate(
     // ── Inter-company sync: only for true subsidiary POs (not same-company).
     // Freight for same-company POs is embedded directly in the PO voucher above.
     {
-      const _b1ParentId = await storage.getParentCompanyId();
+      const _b1ParentId = linkedParentCompanyId;
       if (!hasRetiredPurchaseVoucher && _b1ParentId && existingPO.companyId !== _b1ParentId) {
         const _b1FreightParentAccountId: number | null =
           req.body.freightParentAccountId !== undefined
@@ -350,11 +351,13 @@ export async function applyPurchaseOrderItemsUpdate(
                 freightParentAccountId: _b1FreightParentAccountId!,
                 subsidiaryCompanyId: existingPO.companyId,
               }
-            : undefined
+            : undefined,
+          _b1ParentId
         );
         if (!_b1Sync.found) {
-          logger.warn(
-            `[PO-PATCH items] No INTERCO-PARENT voucher for PO(s): ${Array.isArray(_b1PoNums) ? _b1PoNums.join(", ") : _b1PoNums}`
+          throw new HttpError(
+            409,
+            `Intercompany credit not synchronized for container ${_b1ContainerRow?.containerNumber ?? "unknown"} (PO ${existingPO.poNumber}). Parent journal missing; no changes saved.`
           );
         }
       }
@@ -457,7 +460,7 @@ export async function applyPurchaseOrderItemsUpdate(
       },
       tx
     );
-  });
+  }));
 
   // Get updated PO with items
   const updatedPO = await storage.getPurchaseOrderByIdForCompany(id, existingPO.companyId);
