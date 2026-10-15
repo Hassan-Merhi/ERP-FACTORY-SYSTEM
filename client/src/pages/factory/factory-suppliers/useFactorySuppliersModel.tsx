@@ -506,7 +506,13 @@ export function useFactorySuppliersModel() {
     if (supplier.parentId) (accumulator[supplier.parentId] ||= []).push(supplier);
     return accumulator;
   }, {});
-  const displayedTopLevel = (showInactive ? allSuppliers : activeSuppliers).filter((supplier) => !supplier.parentId);
+  // UI-only: company 12's BANIN is supplier #34. Keep its records and ledger
+  // intact, but never include it in this directory (even with Show Inactive).
+  // Directory KPIs also use this visible set; other financial reports do not.
+  const hiddenDirectorySupplierIds = new Set([34]);
+  const displayedTopLevel = (showInactive ? allSuppliers : activeSuppliers).filter(
+    (supplier) => !supplier.parentId && !hiddenDirectorySupplierIds.has(supplier.id)
+  );
   const isDirectoryBroker = (supplier: SupplierWithBalance) =>
     !!supplier.isBroker || !!subAccountsByParent[supplier.id]?.length;
   const brokerCount = displayedTopLevel.filter(isDirectoryBroker).length;
