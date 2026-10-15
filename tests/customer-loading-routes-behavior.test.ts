@@ -486,6 +486,38 @@ describe("customer loading intelligence route", () => {
       expect(noProformaResponse.body).not.toHaveProperty("carriedOverProforma");
     });
 
+    it("saves the selected business date at first confirmation", async () => {
+      setup();
+      const response = resHarness();
+      await routes.get("POST /api/factory/customer-orders/:id/finalize-loading")!(
+        req({ body: { txDate: "2026-10-15" }, params: { id: "10" } }),
+        response
+      );
+
+      expect(response.statusCode).toBe(200);
+      const savedFields = harness.db.update.mock.results
+        .flatMap((result: any) => result.value.set.mock.calls.map(([fields]: any[]) => fields))
+        .find((fields: any) => "loadingFinalizedAt" in fields);
+      expect(savedFields.loadingFinalizedAt.toISOString()).toBe("2026-10-15T12:00:00.000Z");
+    });
+
+    it("preserves the first loading date after return to loading and resubmission", async () => {
+      const firstCompletedAt = new Date("2026-10-10T12:00:00.000Z");
+      setup({ order: { ...order, loadingFinalizedAt: firstCompletedAt } });
+      const response = resHarness();
+      await routes.get("POST /api/factory/customer-orders/:id/finalize-loading")!(
+        req({ body: { txDate: "2026-10-15" }, params: { id: "10" } }),
+        response
+      );
+
+      expect(response.statusCode).toBe(200);
+      const savedFields = harness.db.update.mock.results
+        .flatMap((result: any) => result.value.set.mock.calls.map(([fields]: any[]) => fields))
+        .find((fields: any) => "loadingFinalizedAt" in fields);
+      expect(savedFields.loadingFinalizedAt).toBe(firstCompletedAt);
+      expect(savedFields.verifiedAt.toISOString()).toBe("2026-10-15T12:00:00.000Z");
+    });
+
     it("does not leave a finalized order or carried-over proforma after a transaction error", async () => {
       setup();
       harness.db.transaction.mockRejectedValueOnce(new Error("daybook write failed"));
