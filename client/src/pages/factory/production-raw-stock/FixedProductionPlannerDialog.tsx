@@ -17,6 +17,8 @@ interface FixedProductionPlannerDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   rawStock: RawStockRow[];
+  rawStockLoading: boolean;
+  rawStockError: boolean;
   suppliers: OffloadSupplierOption[];
 }
 
@@ -44,7 +46,7 @@ function displayKg(value: number): string {
 }
 
 export function FixedProductionPlannerDialog({
-  open, onOpenChange, rawStock, suppliers,
+  open, onOpenChange, rawStock, rawStockLoading, rawStockError, suppliers,
 }: FixedProductionPlannerDialogProps) {
   const { toast } = useToast();
   const [inputs, setInputs] = useState<Record<string, string>>({});
@@ -180,7 +182,7 @@ export function FixedProductionPlannerDialog({
   };
 
   const locked = planQuery.data?.locked ?? false;
-  const ready = !!planQuery.data && !!otwQuery.data && !planQuery.isFetching && !otwQuery.isFetching;
+  const ready = !!planQuery.data && !!otwQuery.data && !planQuery.isFetching && !otwQuery.isFetching && !rawStockLoading && !rawStockError;
   const pending = saveMutation.isPending || unlockMutation.isPending || whatsappMutation.isPending;
 
   const saveAndLock = () => {
@@ -204,6 +206,7 @@ export function FixedProductionPlannerDialog({
   };
 
   return (
+    <>
     <Dialog open={open} onOpenChange={(next) => { if (!pending) onOpenChange(next); }}>
       <DialogContent className="flex max-h-[92vh] w-[98vw] max-w-[1680px] flex-col gap-3 overflow-hidden p-4 sm:p-6">
         <DialogHeader>
@@ -259,12 +262,12 @@ export function FixedProductionPlannerDialog({
           </div>
         </div>
 
-        {planQuery.isError || otwQuery.isError ? (
+        {planQuery.isError || otwQuery.isError || rawStockError ? (
           <div role="alert" className="rounded-md border border-destructive p-3 text-sm text-destructive">
-            Unable to load the saved plan or incoming containers. Use Refresh to retry.
+            Unable to load the saved plan, Raw Materials stock, or incoming containers. Use Refresh to retry.
           </div>
         ) : null}
-        {!ready && !planQuery.isError && !otwQuery.isError ? (
+        {!ready && !planQuery.isError && !otwQuery.isError && !rawStockError ? (
           <p className="py-6 text-center text-sm text-muted-foreground">Loading live supplier stock and plan...</p>
         ) : (
           <div className="min-h-0 overflow-auto rounded-lg border">
@@ -339,8 +342,10 @@ export function FixedProductionPlannerDialog({
           <span>Coverage = stock ÷ daily 17.5t allocation; containers = daily 17.5t × 26 ÷ 20,000. Any 20t total may be saved.</span>
           <span className="font-semibold">20t allocation total: {displayKg(totals.allocation20)} kg</span>
         </div>
-        <FixedProductionPlannerImage reportRef={reportRef} rows={reportRows} totals={reportTotals} dateLabel={reportDateLabel} />
       </DialogContent>
     </Dialog>
+    {/* Capture outside DialogContent: its overflow-hidden/transform would clip the image. */}
+    {open && <FixedProductionPlannerImage reportRef={reportRef} rows={reportRows} totals={reportTotals} dateLabel={reportDateLabel} />}
+    </>
   );
 }
