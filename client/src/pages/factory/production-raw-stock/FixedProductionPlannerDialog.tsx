@@ -181,7 +181,7 @@ export function FixedProductionPlannerDialog({
 
   const locked = planQuery.data?.locked ?? false;
   const ready = !!planQuery.data && !!otwQuery.data && !planQuery.isFetching && !otwQuery.isFetching;
-  const pending = saveMutation.isPending || unlockMutation.isPending;
+  const pending = saveMutation.isPending || unlockMutation.isPending || whatsappMutation.isPending;
 
   const saveAndLock = () => {
     if (locked || pending) return;
@@ -189,7 +189,7 @@ export function FixedProductionPlannerDialog({
     for (const row of rows) {
       const raw = inputs[row.id]?.trim() ?? "";
       const quantity = raw === "" ? 0 : Number(raw);
-      if (!Number.isFinite(quantity) || quantity < 0 || quantity > EXPECTED_TARGET_KG ||
+      if (!Number.isFinite(quantity) || quantity < 0 || !Number.isSafeInteger(Math.trunc(quantity)) ||
           !/^\d+(?:\.\d{1,3})?$/.test(raw || "0")) {
         toast({
           title: "Invalid 20-ton quantity",
@@ -205,14 +205,14 @@ export function FixedProductionPlannerDialog({
 
   return (
     <Dialog open={open} onOpenChange={(next) => { if (!pending) onOpenChange(next); }}>
-      <DialogContent className="flex max-h-[92vh] w-[97vw] max-w-6xl flex-col gap-3 overflow-hidden p-4 sm:p-6">
+      <DialogContent className="flex max-h-[92vh] w-[98vw] max-w-[1680px] flex-col gap-3 overflow-hidden p-4 sm:p-6">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-lg">
             <Calculator className="h-5 w-5 text-amber-500" /> Fixed Production Planner
           </DialogTitle>
           <DialogDescription>
             In Hand comes from Raw Materials; OTW is the live Pending / In Transit / Arrived stock from Factory Containers.
-            Edit only the 20-ton column. The 15-ton and 17.5-ton quantities are calculated automatically.
+            Edit only the 20-ton column; the 15-ton, 17.5-ton, coverage, and container-order figures are calculated automatically.
           </DialogDescription>
         </DialogHeader>
 
@@ -225,6 +225,19 @@ export function FixedProductionPlannerDialog({
             )}
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            <Button variant="outline" size="sm" className="gap-1.5"
+              disabled={!ready || !locked || reportRows.length === 0 || pending}
+              onClick={() => { void downloadImage(); }}
+              data-testid="button-fixed-production-download-image">
+              <Download className="h-3.5 w-3.5" /> Download PNG
+            </Button>
+            <Button variant="outline" size="sm" className="gap-1.5"
+              disabled={!ready || !locked || reportRows.length === 0 || pending}
+              onClick={() => whatsappMutation.mutate()}
+              data-testid="button-fixed-production-send-whatsapp">
+              {whatsappMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <MessageCircle className="h-3.5 w-3.5" />}
+              {whatsappMutation.isPending ? "Sending..." : "Send WhatsApp"}
+            </Button>
             <Button variant="outline" size="sm" onClick={() => {
               setHasEdits(false);
               void queryClient.invalidateQueries({ queryKey: ["/api/factory/raw-stock"] });
@@ -255,7 +268,7 @@ export function FixedProductionPlannerDialog({
           <p className="py-6 text-center text-sm text-muted-foreground">Loading live supplier stock and plan...</p>
         ) : (
           <div className="min-h-0 overflow-auto rounded-lg border">
-            <table className="w-full min-w-[940px] border-collapse text-sm tabular-nums">
+            <table className="w-full min-w-[1470px] border-collapse text-sm tabular-nums">
               <thead className="sticky top-0 z-10 bg-muted text-xs uppercase">
                 <tr>
                   <th className="border-b p-3 text-left">Origin / Supplier</th>
@@ -265,6 +278,9 @@ export function FixedProductionPlannerDialog({
                   <th className="border-b bg-sky-500/10 p-3 text-right">15 Tons (kg)</th>
                   <th className="border-b bg-blue-500/10 p-3 text-right">17.5 Tons (kg)</th>
                   <th className="border-b bg-amber-500/10 p-3 text-right">20 Tons (kg)</th>
+                  <th className="border-b bg-emerald-500/10 p-3 text-right">With OTW Stock (17.5 Ton)</th>
+                  <th className="border-b bg-slate-500/10 p-3 text-right">Without OTW (17.5 Ton)</th>
+                  <th className="border-b bg-lime-500/10 p-3 text-right"># of Container to Order</th>
                 </tr>
               </thead>
               <tbody>
@@ -280,7 +296,7 @@ export function FixedProductionPlannerDialog({
                       {locked ? (
                         <span className="font-semibold">{displayKg(row.allocation20)}</span>
                       ) : (
-                        <Input type="number" inputMode="decimal" min="0" max="20000" step="0.001"
+                        <Input type="number" inputMode="decimal" min="0" step="0.001"
                           aria-label={`20-ton allocation for ${row.name}`}
                           data-testid={`fixed-production-20t-${row.id}`}
                           className="ml-auto h-8 w-32 text-right font-mono"
@@ -293,10 +309,13 @@ export function FixedProductionPlannerDialog({
                           disabled={pending} />
                       )}
                     </td>
+                    <td className="bg-emerald-500/5 px-3 py-2 text-right">{row.withOtwDays.toFixed(2)}</td>
+                    <td className="bg-slate-500/5 px-3 py-2 text-right">{row.withoutOtwDays.toFixed(2)}</td>
+                    <td className="bg-lime-500/5 px-3 py-2 text-right">{row.containersToOrder.toFixed(2)}</td>
                   </tr>
                 ))}
                 {rows.length === 0 ? (
-                  <tr><td colSpan={7} className="p-6 text-center text-muted-foreground">No suppliers found for this company.</td></tr>
+                  <tr><td colSpan={10} className="p-6 text-center text-muted-foreground">No suppliers found for this company.</td></tr>
                 ) : null}
               </tbody>
               <tfoot className="sticky bottom-0 bg-muted font-bold">
@@ -308,18 +327,19 @@ export function FixedProductionPlannerDialog({
                   <td className="bg-sky-500/10 px-3 py-3 text-right">{displayKg(totals.allocation15)}</td>
                   <td className="bg-blue-500/10 px-3 py-3 text-right">{displayKg(totals.allocation175)}</td>
                   <td className="bg-amber-500/10 px-3 py-3 text-right">{displayKg(totals.allocation20)}</td>
+                  <td className="bg-emerald-500/10 px-3 py-3 text-right">{totals.withOtwDays.toFixed(2)}</td>
+                  <td className="bg-slate-500/10 px-3 py-3 text-right">{totals.withoutOtwDays.toFixed(2)}</td>
+                  <td className="bg-lime-500/10 px-3 py-3 text-right">{totals.containersToOrder.toFixed(2)}</td>
                 </tr>
               </tfoot>
             </table>
           </div>
         )}
         <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
-          <span>15 Tons = 20 Tons × 0.75. 17.5 Tons = 20 Tons × 0.875. Stock numbers update from live data.</span>
-          <span className={Math.abs(totals.allocation20 - EXPECTED_TARGET_KG) < 0.001
-            ? "font-semibold text-emerald-600" : "font-semibold text-amber-600"}>
-            20t allocation: {displayKg(totals.allocation20)} / 20,000 kg
-          </span>
+          <span>Coverage = stock ÷ daily 17.5t allocation; containers = daily 17.5t × 26 ÷ 20,000. Any 20t total may be saved.</span>
+          <span className="font-semibold">20t allocation total: {displayKg(totals.allocation20)} kg</span>
         </div>
+        <FixedProductionPlannerImage reportRef={reportRef} rows={reportRows} totals={reportTotals} dateLabel={reportDateLabel} />
       </DialogContent>
     </Dialog>
   );
