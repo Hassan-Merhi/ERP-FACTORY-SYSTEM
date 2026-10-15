@@ -1,4 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+vi.mock("../server/services/security/parentCompanyPostingScope", () => ({
+  runWithVerifiedPoParentScope: async (_id: number, run: (parentCompanyId: number | null) => Promise<unknown>) => run(null),
+}));
+
 
 const harness = vi.hoisted(() => {
   const state = {
