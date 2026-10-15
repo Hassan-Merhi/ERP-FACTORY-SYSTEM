@@ -165,6 +165,8 @@ export function registerSupplierBrokerVisualStatementRoutes(app: Express) {
               sql`${vouchers.voucherNumber} NOT LIKE 'FACTORY-SFX-%'`,
               // Ledger-only compensating journals are not supplier payments.
               sql`${vouchers.voucherNumber} NOT LIKE 'FACTORY-PAYABLE-RECLASS-%'`,
+              // Posted freight/FX repair journals are non-payment ledger corrections.
+              sql`${vouchers.voucherNumber} NOT LIKE 'FACTORY-CORRECTION-%'`,
               eq(vouchers.companyId, companyId),
               eq(vouchers.optional, false),
               isNull(vouchers.deletedAt)
