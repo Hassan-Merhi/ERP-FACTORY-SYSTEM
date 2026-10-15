@@ -44,6 +44,8 @@ describe("one-time historical loading date repair", () => {
     expect(log).toContain("SELECT set_config('app.current_company_id', '12', true)");
     expect(log).toContain("older.created_at, older.id");
     expect(log).toContain("fde.tx_date = p.selected_date");
+    expect(log).toContain("jsonb_array_elements($1::jsonb)");
+    expect(log).toContain("(entry->>2)::date");
     expect(log).toContain("old_loading_finalized_at");
     expect(log).toContain("SET loading_finalized_at = a.new_loading_finalized_at");
     expect(log).not.toContain("SET verified_at");
