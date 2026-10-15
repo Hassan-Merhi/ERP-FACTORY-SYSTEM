@@ -16,6 +16,7 @@ import type { FactoryMixBatch } from "@shared/schema";
 import { SupplierCategoriesDialog } from "./production-raw-stock/ProductionRawStockHelpers";
 import { RawStockTable, type RawStockRow } from "./production-raw-stock/RawStockTable";
 import { MixBatchList, type MixBatchPrintRow, type MixBatchRow } from "./production-raw-stock/MixBatchList";
+import type { MixBatchSupplierCategory } from "./production-raw-stock/mixBatchCategoryTargets";
 import { KpiCards } from "./production-raw-stock/KpiCards";
 import { OffloadDialog } from "./production-raw-stock/OffloadDialog";
 import { FixedProductionPlannerDialog } from "./production-raw-stock/FixedProductionPlannerDialog";
@@ -89,6 +90,27 @@ export default function ProductionRawStock() {
     queryKey: [`/api/factory/mix-batches-by-date?date=${encodeURIComponent(mixBatchDate)}`],
     enabled: !!mixBatchDate,
   });
+
+  const { data: reportCategories = [], isLoading: reportCategoriesLoading, isError: reportCategoriesError } =
+    useQuery<MixBatchSupplierCategory[]>({
+      queryKey: ["/api/factory/supplier-categories"],
+      staleTime: 60_000,
+      refetchOnWindowFocus: false,
+    });
+
+  const {
+    data: fixedProductionPlan,
+    isLoading: fixedProductionPlanLoading,
+    isError: fixedProductionPlanError,
+  } = useQuery<{ allocations20t: Record<string, number>; revision: number; locked: boolean }>({
+    queryKey: ["/api/factory/raw-stock/fixed-production-planner"],
+    staleTime: 60_000,
+    refetchOnWindowFocus: false,
+  });
+  const reportAllocations = fixedProductionPlan && fixedProductionPlan.revision > 0
+    ? fixedProductionPlan.allocations20t : null;
+  const reportLoading = mixBatchesByDateLoading || reportCategoriesLoading || suppliersLoading ||
+    fixedProductionPlanLoading || reportCategoriesError || suppliersError || fixedProductionPlanError;
 
   const offloadMutation = useMutation({
     mutationFn: async (data: OffloadPayload) => {
@@ -173,6 +195,7 @@ export default function ProductionRawStock() {
   const sendWhatsAppMutation = useMutation({
     mutationFn: async () => {
       if (!mixBatchPrintRef.current) throw new Error("Nothing to capture");
+      if (!reportAllocations || reportLoading) throw new Error("Save a Fixed Production Plan before sending a target comparison.");
       const html2canvas = (await import("html2canvas")).default;
       const canvas = await html2canvas(mixBatchPrintRef.current, { backgroundColor: "#111827", scale: 2 });
       const imageBase64 = canvas.toDataURL("image/png");
@@ -312,6 +335,10 @@ export default function ProductionRawStock() {
             mixBatchesByDate={mixBatchesByDate}
             mixBatchesByDateLoading={mixBatchesByDateLoading}
             mixBatchPrintRef={mixBatchPrintRef}
+            reportCategories={reportCategories}
+            reportSuppliers={factorySuppliers}
+            reportAllocations={reportAllocations}
+            reportLoading={reportLoading}
             formatDisplayDate={formatDisplayDate}
           />
         </section>
