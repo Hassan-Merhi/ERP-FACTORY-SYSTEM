@@ -139,6 +139,21 @@ describe("Sales Report inherits the Price List master price", () => {
     verifyHassanPrices(response.body);
   });
 
+  it("uses the same inherited prices in single and all-company summary KPI totals", async () => {
+    const urls = [
+      "/api/sales-report/summary?startDate=2026-10-15&endDate=2026-10-15",
+      `/api/dashboard/sales-report-all/summary?startDate=2026-10-15&endDate=2026-10-15&companyFilter=${encodeURIComponent(companyCode)}`,
+    ];
+    for (const url of urls) {
+      const response = await agent.get(url);
+      expect(response.status).toBe(200);
+      expect(Number(response.body.totals.totalSales)).toBeCloseTo(1601.59);
+      expect(Number(response.body.totals.totalConfiguredCost)).toBeCloseTo(1510);
+      expect(Number(response.body.totals.configuredProfit)).toBeCloseTo(91.59);
+      expect(Number(response.body.totals.costProfit)).toBeCloseTo(630.37);
+    }
+  });
+
   it("does not overwrite historical sales or create follower price rows while reading reports", async () => {
     const [sale] = await db.select().from(schema.salesItems).where(
       eq(schema.salesItems.voucherId, testVoucherId)
