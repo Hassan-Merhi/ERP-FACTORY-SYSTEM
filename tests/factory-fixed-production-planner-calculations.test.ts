@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   calculateFixedProductionRows,
+  calculateFixedProductionCategoryRows,
   sumFixedProductionRows,
   visibleFixedProductionRows,
 } from "../client/src/pages/factory/production-raw-stock/fixedProductionPlannerCalculations";
@@ -107,6 +108,66 @@ describe("Fixed Production Planner — original 05 Oct 2026 workbook formulas", 
       { "1": 100, "2": 150, "3": 200 },
     );
     expect(visibleFixedProductionRows(rows).map(r => r.name)).toEqual(["Negative balance"]);
+  });
+
+  it("groups suppliers by Raw Materials category and sums in-hand and incoming kg", () => {
+    const categories = [
+      { id: 5, name: "Australia" }, { id: 1, name: "Cyprus" }, { id: 7, name: "UK" },
+    ];
+    const suppliers = [
+      { id: 26, name: "Australia Ahmad", supplierCategoryId: 5 },
+      { id: 60, name: "ABO SOBHI", supplierCategoryId: 1 },
+      { id: 38, name: "UK Basma", supplierCategoryId: 7 },
+      { id: 39, name: "UK Ziad", supplierCategoryId: 7 },
+    ];
+    const stock = [
+      { supplierId: 26, categoryId: 5, freeKg: "190140", remainingKg: "190140" },
+      { supplierId: 60, categoryId: 1, freeKg: "253228", remainingKg: "253228" },
+      { supplierId: 38, categoryId: 7, freeKg: "22251", remainingKg: "22251" },
+      { supplierId: 39, categoryId: 7, freeKg: "24020", remainingKg: "24020" },
+    ];
+    const containers = [
+      { supplierId: 60, totalKg: "42530", status: "ARRIVED" },
+      { supplierId: 38, totalKg: "10500", status: "IN_TRANSIT" },
+      { supplierId: 60, totalKg: "99999", status: "OFFLOADED" },
+    ];
+    const rows = calculateFixedProductionCategoryRows(categories, suppliers, stock, containers, {
+      "26": 3675, "38": 1000, "39": 500, "60": 10000,
+    });
+    expect(rows.map(r => r.name)).toEqual(["Australia", "Cyprus", "UK"]);
+    expect(rows.find(r => r.id === "cat:1")).toMatchObject({
+      inHand: 253228, otw: 42530, total: 295758, allocation20: 10000,
+    });
+    expect(rows.find(r => r.id === "cat:7")).toMatchObject({
+      inHand: 46271, otw: 10500, total: 56771, allocation20: 1500,
+      allocation15: 1125, allocation175: 1312.5,
+    });
+    expect(sumFixedProductionRows(rows).allocation20).toBe(15175);
+  });
+
+  it("uses saved category allocation in preference to legacy supplier values", () => {
+    const rows = calculateFixedProductionCategoryRows(
+      [{ id: 7, name: "UK" }],
+      [{ id: 38, name: "UK Basma", supplierCategoryId: 7 }, { id: 39, name: "UK Ziad", supplierCategoryId: 7 }],
+      [{ supplierId: 38, freeKg: "100", remainingKg: "100" }],
+      [],
+      { "38": 1000, "39": 500, "cat:7": 2500 },
+    );
+    expect(rows[0].allocation20).toBe(2500);
+    expect(rows[0].allocation175).toBe(2187.5);
+  });
+
+  it("shows an OTW-only category and hides zero combined-balance categories", () => {
+    const rows = calculateFixedProductionCategoryRows(
+      [{ id: 1, name: "Cyprus" }, { id: 7, name: "UK" }],
+      [{ id: 60, name: "CYP MODA", supplierCategoryId: 1 }, { id: 38, name: "UK Ziad", supplierCategoryId: 7 }],
+      [{ supplierId: 60, freeKg: "0", remainingKg: "0" }],
+      [{ supplierId: 60, totalKg: "38000", status: "PENDING" }],
+      { "cat:1": 1000, "cat:7": 500 },
+    );
+    const visible = visibleFixedProductionRows(rows);
+    expect(visible).toHaveLength(1);
+    expect(visible[0]).toMatchObject({ name: "Cyprus", inHand: 0, otw: 38000, allocation20: 1000 });
   });
 
   it("does not restrict summed allocations to 20,000 kg", () => {
