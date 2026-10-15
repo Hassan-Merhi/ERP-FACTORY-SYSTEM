@@ -199,6 +199,13 @@ export function useFactoryContainerLoadingScanModel() {
     staleTime: 15_000,
   });
 
+  // Reopened orders retain the original confirmed loading date. Show that
+  // same date when re-opening Validate Loading instead of displaying today.
+  useEffect(() => {
+    if (!showFinalizeDialog) return;
+    setFinalizeDate(orderDetail?.loadingFinalizedAt?.slice(0, 10) ?? new Date().toLocaleDateString("en-CA"));
+  }, [showFinalizeDialog, orderDetail?.loadingFinalizedAt]);
+
   const selectedCapacityProformaId =
     selectedProformaId && selectedProformaId !== "none" ? Number(selectedProformaId) : null;
   const capacityProformaId = orderDetail?.proformaIdUsed ?? selectedCapacityProformaId;
