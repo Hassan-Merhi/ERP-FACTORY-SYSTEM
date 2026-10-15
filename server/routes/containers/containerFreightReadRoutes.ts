@@ -21,6 +21,7 @@ import {
 import { eq, and, asc, inArray, like } from "drizzle-orm";
 import { calcPoAmountsExact, isCreditOnlyEntry, isDebitOnlyEntry, syncIntercoParentVoucher } from "./containerHelpers";
 import { toMoney } from "../../lib/money";
+import { runWithVerifiedPoParentScope } from "../../services/security/parentCompanyPostingScope";
 import { usdLineAmounts } from "../../services/factory/factoryVoucherPosting";
 import {
   editPostedFactoryVoucherTx,
@@ -217,7 +218,9 @@ export function registerContainerFreightReadRoutes(app: Express) {
         });
       }
 
-      const result = await syncIntercoParentVoucher(
+      const result = await runWithVerifiedPoParentScope(po.companyId, async (verifiedParentId) => {
+        if (!verifiedParentId) throw new Error("This company has no verified parent company for intercompany credit.");
+        return syncIntercoParentVoucher(
         db,
         po.poNumber,
         poGrossTotal,
@@ -228,8 +231,10 @@ export function registerContainerFreightReadRoutes(app: Express) {
               freightParentAccountId: poFreightParentAcctId!,
               subsidiaryCompanyId: po.companyId,
             }
-          : undefined
-      );
+          : undefined,
+        verifiedParentId
+        );
+      });
 
       if (result.found) {
         return res.json({
@@ -241,98 +246,11 @@ export function registerContainerFreightReadRoutes(app: Express) {
         });
       }
 
-      // No INTERCO-PARENT voucher found. If this PO has parent freight configured
-      // with a local voucher, apply the freight split directly to the local purchase
-      // voucher: CR Supplier = items-only (grossTotal − freight), CR FreightAccount = freight.
-      if (poHasParentFreight && po.voucherId) {
-        const existingEntries = await db
-          .select()
-          .from(voucherEntries)
-          .where(eq(voucherEntries.voucherId, po.voucherId!));
-        let purchasesEntryId: number | null = null;
-        let freightCrEntryId: number | null = null;
-        let mainCrEntryId: number | null = null;
-        const toDeleteIds: number[] = [];
-        const freightCrCandidates2: number[] = [];
-        for (const entry of existingEntries) {
-          const acctId = entry.ledgerAccountId as number | null;
-          const isDebit = isDebitOnlyEntry(entry);
-          const isCredit = isCreditOnlyEntry(entry);
-          if (isCredit && acctId === poFreightParentAcctId) {
-            freightCrCandidates2.push(entry.id);
-          } else if (isDebit && purchasesEntryId === null) {
-            purchasesEntryId = entry.id;
-          } else if (isCredit && mainCrEntryId === null) {
-            mainCrEntryId = entry.id;
-          } else {
-            toDeleteIds.push(entry.id);
-          }
-        }
-        freightCrEntryId = freightCrCandidates2[0] ?? null;
-        toDeleteIds.push(...freightCrCandidates2.slice(1));
-        const _freightNarration = `Freight - ${po.poNumber}${poContainerRow?.containerNumber ? ` (${poContainerRow.containerNumber})` : ""}`;
-        await db.transaction((tx) =>
-          editPostedFactoryVoucherTx(
-            tx,
-            {
-              companyId: po.companyId,
-              voucherIds: [po.voucherId!],
-              reason: "purchase-order-sync-parent-voucher",
-              actor: { userId: req.session.userId, username: req.session.username },
-            },
-            async () => {
-              if (toDeleteIds.length > 0)
-                await tx.delete(voucherEntries).where(inArray(voucherEntries.id, toDeleteIds));
-              if (purchasesEntryId !== null)
-                await tx
-                  .update(voucherEntries)
-                  .set(usdLineAmounts(poGrossTotal.toFixed(2), 0))
-                  .where(eq(voucherEntries.id, purchasesEntryId));
-              if (mainCrEntryId !== null)
-                await tx
-                  .update(voucherEntries)
-                  .set(usdLineAmounts(0, poSupplierTotal.toFixed(2)))
-                  .where(eq(voucherEntries.id, mainCrEntryId));
-              if (freightCrEntryId !== null) {
-                await tx
-                  .update(voucherEntries)
-                  .set({
-                    ...usdLineAmounts(0, poFreightAmt.toFixed(2)),
-                    ledgerAccountId: poFreightParentAcctId!,
-                    narration: _freightNarration,
-                  })
-                  .where(eq(voucherEntries.id, freightCrEntryId));
-              } else {
-                await tx.insert(voucherEntries).values({
-                  voucherId: po.voucherId!,
-                  ledgerAccountId: poFreightParentAcctId!,
-                  ...usdLineAmounts(0, poFreightAmt.toFixed(2)),
-                  narration: _freightNarration,
-                });
-              }
-              await tx
-                .update(vouchers)
-                .set({ totalAmount: poGrossTotal.toFixed(2) })
-                .where(eq(vouchers.id, po.voucherId!));
-            }
-          )
-        );
-        return res.json({
-          message: `Freight split applied — supplier credited ${poSupplierTotal.toFixed(2)}, freight account credited ${poFreightAmt.toFixed(2)}`,
-          found: true,
-          updated: true,
-          amount: poGrossTotal.toFixed(2),
-          poNumber: po.poNumber,
-          updatedVouchers: 1,
-        });
-      }
-
-      res.json({
-        message: `No INTERCO-PARENT voucher found for PO ${po.poNumber}`,
-        ...result,
+      return res.status(409).json({
+        message: `No matching parent intercompany journal for container ${poContainerRow?.containerNumber ?? "unknown"}; nothing was changed.`,
+        found: false,
+        updated: false,
         poNumber: po.poNumber,
-        intercoTotal: result.amount,
-        updatedVouchers: 0,
       });
     } catch (error: unknown) {
       if (sendVoucherCorrectionRefusal(res, error)) return;
