@@ -235,6 +235,10 @@ export const applicationEnglishTranslations = {
   "pos.customerSearchResults": "Customer search results",
   "pos.customerSearchFailed": "Customer search failed.",
   "pos.paymentTotals": "Payment totals",
+  "analytics.expenses.periodActivity": "Posted activity for the selected date range",
+  "analytics.expenses.netExpense": "Net Expense",
+  "analytics.expenses.loadFailed": "Could not load expenses for this period. Please retry the date filter.",
+  "analytics.expenses.loadFailedShort": "Could not load expenses for the selected period",
   "supplierPartner.postOpeningStock": "Post Opening Stock",
 } as const;
 
