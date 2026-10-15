@@ -5,6 +5,8 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
+import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
+import { translateFixedProductionPlanner, type FixedProductionPlannerTranslationKey } from "@/i18n/fixedProductionPlannerTranslations";
 import { formatNumber } from "@/lib/formatNumber";
 import { getApiRequest } from "@/lib/factoryApi";
 import { queryClient } from "@/lib/queryClient";
@@ -49,6 +51,8 @@ export function FixedProductionPlannerDialog({
   open, onOpenChange, rawStock, rawStockLoading, rawStockError, suppliers,
 }: FixedProductionPlannerDialogProps) {
   const { toast } = useToast();
+  const { language } = useApplicationLanguage();
+  const tr = (key: FixedProductionPlannerTranslationKey, params?: Record<string, string | number>) => translateFixedProductionPlanner(key, language, params);
   const [inputs, setInputs] = useState<Record<string, string>>({});
   const [hasEdits, setHasEdits] = useState(false);
   const reportRef = useRef<HTMLDivElement>(null);
@@ -98,9 +102,9 @@ export function FixedProductionPlannerDialog({
       setInputs(Object.fromEntries(Object.entries(saved.allocations20t).map(([id, v]) => [id, String(v)])));
       setHasEdits(false);
       await queryClient.invalidateQueries({ queryKey: [...PLAN_KEY] });
-      toast({ title: "Production plan saved and locked", description: "Unlock the plan before editing the 20-ton allocation again." });
+      toast({ title: tr("savedTitle"), description: tr("savedInfo") });
     },
-    onError: (err: Error) => toast({ title: "Could not save plan", description: err.message, variant: "destructive" }),
+    onError: (err: Error) => toast({ title: tr("saveError"), description: err.message, variant: "destructive" }),
   });
 
   const unlockMutation = useMutation({
@@ -113,9 +117,9 @@ export function FixedProductionPlannerDialog({
     onSuccess: async () => {
       setHasEdits(false);
       await queryClient.invalidateQueries({ queryKey: [...PLAN_KEY] });
-      toast({ title: "Production plan unlocked", description: "You may now edit the 20-ton allocations. Save to lock the plan again." });
+      toast({ title: tr("unlockedTitle"), description: tr("unlockedInfo") });
     },
-    onError: (err: Error) => toast({ title: "Could not unlock plan", description: err.message, variant: "destructive" }),
+    onError: (err: Error) => toast({ title: tr("unlockError"), description: err.message, variant: "destructive" }),
   });
 
   const rows = useMemo(
@@ -138,7 +142,7 @@ export function FixedProductionPlannerDialog({
   const reportDateLabel = reportDate.split("-").reverse().join("/");
 
   const captureImage = async (): Promise<string> => {
-    if (!reportRef.current) throw new Error("Production planner image is not ready");
+    if (!reportRef.current) throw new Error(tr("imageNotReady"));
     const html2canvas = (await import("html2canvas")).default;
     const canvas = await html2canvas(reportRef.current, {
       backgroundColor: "#ffffff",
@@ -156,17 +160,17 @@ export function FixedProductionPlannerDialog({
         imageBase64,
         date: reportDate,
         fileName: `FixedProductionPlan_${reportDate}.png`,
-        caption: `Fixed Production Plan — ${reportDateLabel}`,
-        reportLabel: "Fixed Production Planner",
+        caption: tr("reportCaption", { date: reportDateLabel }),
+        reportLabel: tr("title"),
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
-        throw new Error(body.message || "Could not send Fixed Production Planner image");
+        throw new Error(body.message || tr("sendErrorInfo"));
       }
       return res.json();
     },
-    onSuccess: () => toast({ title: "Fixed Production Plan sent to WhatsApp group" }),
-    onError: (error: Error) => toast({ title: "WhatsApp send failed", description: error.message, variant: "destructive" }),
+    onSuccess: () => toast({ title: tr("sendSuccess") }),
+    onError: (error: Error) => toast({ title: tr("sendError"), description: error.message, variant: "destructive" }),
   });
 
   const downloadImage = async () => {
@@ -177,7 +181,7 @@ export function FixedProductionPlannerDialog({
       link.download = `FixedProductionPlan_${reportDate}.png`;
       link.click();
     } catch (error) {
-      toast({ title: "Could not generate image", description: error instanceof Error ? error.message : "Unknown error", variant: "destructive" });
+      toast({ title: tr("downloadError"), description: error instanceof Error ? error.message : tr("unknownError"), variant: "destructive" });
     }
   };
 
@@ -194,8 +198,8 @@ export function FixedProductionPlannerDialog({
       if (!Number.isFinite(quantity) || quantity < 0 || !Number.isSafeInteger(Math.trunc(quantity)) ||
           !/^\d+(?:\.\d{1,3})?$/.test(raw || "0")) {
         toast({
-          title: "Invalid 20-ton quantity",
-          description: `Enter a nonnegative kg value (up to three decimals) for ${row.name}.`,
+          title: tr("invalidQuantity"),
+          description: tr("invalidQuantityInfo", { name: row.name }),
           variant: "destructive",
         });
         return;
@@ -211,20 +215,19 @@ export function FixedProductionPlannerDialog({
       <DialogContent className="flex max-h-[92vh] w-[98vw] max-w-[1680px] flex-col gap-3 overflow-hidden p-4 sm:p-6">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-lg">
-            <Calculator className="h-5 w-5 text-amber-500" /> Fixed Production Planner
+            <Calculator className="h-5 w-5 text-amber-500" /> {tr("title")}
           </DialogTitle>
           <DialogDescription>
-            In Hand comes from Raw Materials; OTW is the live Pending / In Transit / Arrived stock from Factory Containers.
-            Edit only the 20-ton column; the 15-ton, 17.5-ton, coverage, and container-order figures are calculated automatically.
+            {tr("description")}
           </DialogDescription>
         </DialogHeader>
 
         <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border bg-muted/30 px-3 py-2">
           <div className="flex flex-wrap items-center gap-2 text-xs">
             {locked ? <Lock className="h-4 w-4 text-amber-500" /> : <LockOpen className="h-4 w-4 text-emerald-500" />}
-            <span className="font-semibold">{locked ? "Saved and locked" : "Unlocked for editing"}</span>
+            <span className="font-semibold">{locked ? tr("savedAndLocked") : tr("unlockedForEditing")}</span>
             {planQuery.data?.updatedAt && (
-              <span className="text-muted-foreground">Last saved: {new Date(planQuery.data.updatedAt).toLocaleString()}</span>
+              <span className="text-muted-foreground">{tr("lastSaved", { date: new Date(planQuery.data.updatedAt).toLocaleString() })}</span>
             )}
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -232,31 +235,31 @@ export function FixedProductionPlannerDialog({
               disabled={!ready || !locked || reportRows.length === 0 || pending}
               onClick={() => { void downloadImage(); }}
               data-testid="button-fixed-production-download-image">
-              <Download className="h-3.5 w-3.5" /> Download PNG
+              <Download className="h-3.5 w-3.5" /> {tr("downloadPng")}
             </Button>
             <Button variant="outline" size="sm" className="gap-1.5"
               disabled={!ready || !locked || reportRows.length === 0 || pending}
               onClick={() => whatsappMutation.mutate()}
               data-testid="button-fixed-production-send-whatsapp">
               {whatsappMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <MessageCircle className="h-3.5 w-3.5" />}
-              {whatsappMutation.isPending ? "Sending..." : "Send WhatsApp"}
+              {whatsappMutation.isPending ? tr("sending") : tr("sendWhatsapp")}
             </Button>
             <Button variant="outline" size="sm" onClick={() => {
               setHasEdits(false);
               void queryClient.invalidateQueries({ queryKey: ["/api/factory/raw-stock"] });
               void Promise.all([planQuery.refetch(), otwQuery.refetch()]);
             }} disabled={pending} className="gap-1.5">
-              <RefreshCw className="h-3.5 w-3.5" /> Refresh
+              <RefreshCw className="h-3.5 w-3.5" /> {tr("refresh")}
             </Button>
             {locked ? (
               <Button size="sm" variant="outline" className="gap-1.5" disabled={!ready || pending}
                 onClick={() => unlockMutation.mutate()}>
-                <LockOpen className="h-3.5 w-3.5" /> {unlockMutation.isPending ? "Unlocking..." : "Unlock to Edit"}
+                <LockOpen className="h-3.5 w-3.5" /> {unlockMutation.isPending ? tr("unlocking") : tr("unlockToEdit")}
               </Button>
             ) : (
               <Button size="sm" className="gap-1.5" disabled={!ready || pending}
                 onClick={saveAndLock}>
-                <Save className="h-3.5 w-3.5" /> {saveMutation.isPending ? "Saving..." : "Save & Lock"}
+                <Save className="h-3.5 w-3.5" /> {saveMutation.isPending ? tr("saving") : tr("saveAndLock")}
               </Button>
             )}
           </div>
@@ -264,26 +267,26 @@ export function FixedProductionPlannerDialog({
 
         {planQuery.isError || otwQuery.isError || rawStockError ? (
           <div role="alert" className="rounded-md border border-destructive p-3 text-sm text-destructive">
-            Unable to load the saved plan, Raw Materials stock, or incoming containers. Use Refresh to retry.
+            {tr("loadError")}
           </div>
         ) : null}
         {!ready && !planQuery.isError && !otwQuery.isError && !rawStockError ? (
-          <p className="py-6 text-center text-sm text-muted-foreground">Loading live supplier stock and plan...</p>
+          <p className="py-6 text-center text-sm text-muted-foreground">{tr("loading")}</p>
         ) : (
           <div className="min-h-0 overflow-auto rounded-lg border">
             <table className="w-full min-w-[1470px] border-collapse text-sm tabular-nums">
               <thead className="sticky top-0 z-10 bg-muted text-xs uppercase">
                 <tr>
-                  <th className="border-b p-3 text-left">Origin / Supplier</th>
-                  <th className="border-b p-3 text-right">In Hand (kg)</th>
-                  <th className="border-b p-3 text-right">OTW (kg)</th>
-                  <th className="border-b p-3 text-right">Total (kg)</th>
-                  <th className="border-b bg-sky-500/10 p-3 text-right">15 Tons (kg)</th>
-                  <th className="border-b bg-blue-500/10 p-3 text-right">17.5 Tons (kg)</th>
-                  <th className="border-b bg-amber-500/10 p-3 text-right">20 Tons (kg)</th>
-                  <th className="border-b bg-emerald-500/10 p-3 text-right">With OTW Stock (17.5 Ton)</th>
-                  <th className="border-b bg-slate-500/10 p-3 text-right">Without OTW (17.5 Ton)</th>
-                  <th className="border-b bg-lime-500/10 p-3 text-right"># of Container to Order</th>
+                  <th className="border-b p-3 text-left">{tr("origin")}</th>
+                  <th className="border-b p-3 text-right">{tr("inHand")}</th>
+                  <th className="border-b p-3 text-right">{tr("otw")}</th>
+                  <th className="border-b p-3 text-right">{tr("total")}</th>
+                  <th className="border-b bg-sky-500/10 p-3 text-right">{tr("fifteenTons")}</th>
+                  <th className="border-b bg-blue-500/10 p-3 text-right">{tr("seventeenTons")}</th>
+                  <th className="border-b bg-amber-500/10 p-3 text-right">{tr("twentyTons")}</th>
+                  <th className="border-b bg-emerald-500/10 p-3 text-right">{tr("withOtw")}</th>
+                  <th className="border-b bg-slate-500/10 p-3 text-right">{tr("withoutOtw")}</th>
+                  <th className="border-b bg-lime-500/10 p-3 text-right">{tr("containersToOrder")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -300,7 +303,7 @@ export function FixedProductionPlannerDialog({
                         <span className="font-semibold">{displayKg(row.allocation20)}</span>
                       ) : (
                         <Input type="number" inputMode="decimal" min="0" step="0.001"
-                          aria-label={`20-ton allocation for ${row.name}`}
+                          aria-label={tr("allocationLabel", { name: row.name })}
                           data-testid={`fixed-production-20t-${row.id}`}
                           className="ml-auto h-8 w-32 text-right font-mono"
                           value={inputs[row.id] ?? ""}
@@ -318,12 +321,12 @@ export function FixedProductionPlannerDialog({
                   </tr>
                 ))}
                 {rows.length === 0 ? (
-                  <tr><td colSpan={10} className="p-6 text-center text-muted-foreground">No suppliers found for this company.</td></tr>
+                  <tr><td colSpan={10} className="p-6 text-center text-muted-foreground">{tr("noSuppliers")}</td></tr>
                 ) : null}
               </tbody>
               <tfoot className="sticky bottom-0 bg-muted font-bold">
                 <tr>
-                  <td className="px-3 py-3">PLAN FOR</td>
+                  <td className="px-3 py-3">{tr("planFor")}</td>
                   <td className="px-3 py-3 text-right">{displayKg(totals.inHand)}</td>
                   <td className="px-3 py-3 text-right">{displayKg(totals.otw)}</td>
                   <td className="px-3 py-3 text-right">{displayKg(totals.total)}</td>
@@ -339,8 +342,8 @@ export function FixedProductionPlannerDialog({
           </div>
         )}
         <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
-          <span>Coverage = stock ÷ daily 17.5t allocation; containers = daily 17.5t × 26 ÷ 20,000. Any 20t total may be saved.</span>
-          <span className="font-semibold">20t allocation total: {displayKg(totals.allocation20)} kg</span>
+          <span>{tr("footerFormula")}</span>
+          <span className="font-semibold">{tr("allocationTotal", { kg: displayKg(totals.allocation20) })}</span>
         </div>
       </DialogContent>
     </Dialog>
