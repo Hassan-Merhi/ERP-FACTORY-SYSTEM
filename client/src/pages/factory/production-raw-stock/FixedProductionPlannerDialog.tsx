@@ -13,7 +13,7 @@ import { queryClient } from "@/lib/queryClient";
 import type { RawStockRow } from "./RawStockTable";
 import type { OffloadSupplierOption } from "./offloadDialogTypes";
 import { FixedProductionPlannerImage } from "./FixedProductionPlannerImage";
-import { calculateFixedProductionRows, sumFixedProductionRows, visibleFixedProductionRows } from "./fixedProductionPlannerCalculations";
+import { calculateFixedProductionCategoryRows, sumFixedProductionRows, visibleFixedProductionRows, type FixedPlanCategory } from "./fixedProductionPlannerCalculations";
 
 interface FixedProductionPlannerDialogProps {
   open: boolean;
@@ -43,6 +43,7 @@ interface OtwContainer {
 
 const PLAN_KEY = ["/api/factory/raw-stock/fixed-production-planner"] as const;
 const OTW_KEY = ["/api/factory/containers?activeOnly=true"] as const;
+const CATEGORIES_KEY = ["/api/factory/supplier-categories"] as const;
 const apiRequest = getApiRequest("factory");
 
 function displayKg(value: number): string {
@@ -58,6 +59,9 @@ export function FixedProductionPlannerDialog({
   const [inputs, setInputs] = useState<Record<string, string>>({});
   const [hasEdits, setHasEdits] = useState(false);
   const reportRef = useRef<HTMLDivElement>(null);
+  // Freeze displayed stock while the popup is open; only Refresh replaces it.
+  const [stockSnapshot, setStockSnapshot] = useState<RawStockRow[] | null>(null);
+  const [supplierSnapshot, setSupplierSnapshot] = useState<OffloadSupplierOption[] | null>(null);
 
   const planQuery = useQuery<PlannerRecord>({
     queryKey: [...PLAN_KEY],
@@ -67,7 +71,9 @@ export function FixedProductionPlannerDialog({
       return res.json();
     },
     refetchOnWindowFocus: false,
-    staleTime: 0,
+    refetchOnReconnect: false,
+    refetchOnMount: false,
+    staleTime: Infinity,
   });
   const otwQuery = useQuery<OtwContainer[]>({
     queryKey: [...OTW_KEY],
@@ -77,19 +83,51 @@ export function FixedProductionPlannerDialog({
       return res.json();
     },
     refetchOnWindowFocus: false,
-    staleTime: 0,
+    refetchOnReconnect: false,
+    refetchOnMount: false,
+    staleTime: Infinity,
+  });
+  const categoryQuery = useQuery<FixedPlanCategory[]>({
+    queryKey: [...CATEGORIES_KEY],
+    enabled: open,
+    queryFn: async () => {
+      const res = await apiRequest("GET", CATEGORIES_KEY[0]);
+      return res.json();
+    },
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+    refetchOnMount: false,
+    staleTime: Infinity,
   });
 
   useEffect(() => {
-    if (!open || !planQuery.data || hasEdits) return;
-    setInputs(Object.fromEntries(
-      Object.entries(planQuery.data.allocations20t || {}).map(([id, qty]) => [id, String(qty)])
-    ));
-  }, [open, planQuery.data, hasEdits]);
+    if (!open || rawStockLoading || suppliersLoading || rawStockError || suppliersError || stockSnapshot !== null) return;
+    setStockSnapshot(rawStock);
+    setSupplierSnapshot(suppliers);
+  }, [open, rawStock, suppliers, rawStockLoading, suppliersLoading, rawStockError, suppliersError, stockSnapshot]);
+
+  const planCategories = categoryQuery.data ?? [];
+  const currentStock = stockSnapshot ?? [];
+  const currentSuppliers = supplierSnapshot ?? [];
+  const initialRows = useMemo(
+    () => calculateFixedProductionCategoryRows(
+      planCategories, currentSuppliers, currentStock, otwQuery.data ?? [], planQuery.data?.allocations20t ?? {}
+    ),
+    [planCategories, currentSuppliers, currentStock, otwQuery.data, planQuery.data?.allocations20t],
+  );
+
+  useEffect(() => {
+    if (!open || !planQuery.data || !categoryQuery.data || !stockSnapshot || hasEdits) return;
+    setInputs(Object.fromEntries(initialRows.map(row => [row.id, String(row.allocation20)])));
+  }, [open, planQuery.data, categoryQuery.data, stockSnapshot, initialRows, hasEdits]);
 
   // Discard unsaved changes when closing: reopening loads the last saved plan.
   useEffect(() => {
-    if (!open) setHasEdits(false);
+    if (!open) {
+      setHasEdits(false);
+      setStockSnapshot(null);
+      setSupplierSnapshot(null);
+    }
   }, [open]);
 
   const saveMutation = useMutation({
@@ -101,7 +139,8 @@ export function FixedProductionPlannerDialog({
       return res.json() as Promise<PlannerRecord>;
     },
     onSuccess: async (saved) => {
-      setInputs(Object.fromEntries(Object.entries(saved.allocations20t).map(([id, v]) => [id, String(v)])));
+      // The saved response contains legacy supplier IDs as well as category keys.
+      // The effect above rehydrates category inputs after updating the query cache.
       setHasEdits(false);
       await queryClient.invalidateQueries({ queryKey: [...PLAN_KEY] });
       toast({ title: tr("savedTitle"), description: tr("savedInfo") });
@@ -125,15 +164,19 @@ export function FixedProductionPlannerDialog({
   });
 
   const rows = useMemo(
-    () => visibleFixedProductionRows(calculateFixedProductionRows(suppliers, rawStock, otwQuery.data ?? [], inputs)),
-    [suppliers, rawStock, otwQuery.data, inputs],
+    () => visibleFixedProductionRows(calculateFixedProductionCategoryRows(
+      planCategories, currentSuppliers, currentStock, otwQuery.data ?? [], inputs
+    )),
+    [planCategories, currentSuppliers, currentStock, otwQuery.data, inputs],
   );
   const totals = useMemo(() => sumFixedProductionRows(rows), [rows]);
 
   // WhatsApp images always use saved allocations, never unsaved edits.
   const reportRows = useMemo(
-    () => visibleFixedProductionRows(calculateFixedProductionRows(suppliers, rawStock, otwQuery.data ?? [], planQuery.data?.allocations20t ?? {})),
-    [suppliers, rawStock, otwQuery.data, planQuery.data?.allocations20t],
+    () => visibleFixedProductionRows(calculateFixedProductionCategoryRows(
+      planCategories, currentSuppliers, currentStock, otwQuery.data ?? [], planQuery.data?.allocations20t ?? {}
+    )),
+    [planCategories, currentSuppliers, currentStock, otwQuery.data, planQuery.data?.allocations20t],
   );
   const reportTotals = useMemo(() => sumFixedProductionRows(reportRows), [reportRows]);
 
@@ -188,7 +231,7 @@ export function FixedProductionPlannerDialog({
   };
 
   const locked = planQuery.data?.locked ?? false;
-  const ready = !!planQuery.data && !!otwQuery.data && !planQuery.isFetching && !otwQuery.isFetching && !rawStockLoading && !rawStockError && !suppliersLoading && !suppliersError;
+  const ready = !!planQuery.data && !!otwQuery.data && !!categoryQuery.data && stockSnapshot !== null && supplierSnapshot !== null && !planQuery.isFetching && !otwQuery.isFetching && !categoryQuery.isFetching && !rawStockError && !suppliersError;
   const pending = saveMutation.isPending || unlockMutation.isPending || whatsappMutation.isPending;
 
   const saveAndLock = () => {
@@ -196,10 +239,12 @@ export function FixedProductionPlannerDialog({
     // Keep saved allocations for currently hidden zero-balance suppliers.
     // When their stock returns the saved setting reappears; don't send IDs
     // belonging to removed suppliers to the backend.
-    const supplierIds = new Set(suppliers.map((supplier) => String(supplier.id)));
+    const supplierIds = new Set(currentSuppliers.map((supplier) => String(supplier.id)));
+    const categoryIds = new Set(planCategories.map((category) => `cat:${category.id}`));
+    categoryIds.add("cat:uncategorized");
     const allocations: Record<string, number> = Object.fromEntries(
       Object.entries(planQuery.data?.allocations20t ?? {})
-        .filter(([id]) => supplierIds.has(id))
+        .filter(([key]) => supplierIds.has(key) || categoryIds.has(key))
     );
     for (const row of rows) {
       const raw = inputs[row.id]?.trim() ?? "";
@@ -254,10 +299,20 @@ export function FixedProductionPlannerDialog({
               {whatsappMutation.isPending ? tr("sending") : tr("sendWhatsapp")}
             </Button>
             <Button variant="outline" size="sm" onClick={() => {
-              setHasEdits(false);
-              void queryClient.invalidateQueries({ queryKey: ["/api/factory/raw-stock"] });
-              void queryClient.invalidateQueries({ queryKey: ["/api/factory/suppliers"] });
-              void Promise.all([planQuery.refetch(), otwQuery.refetch()]);
+              if (hasEdits) setHasEdits(false);
+              void (async () => {
+                await Promise.all([
+                  queryClient.refetchQueries({ queryKey: ["/api/factory/raw-stock"] }),
+                  queryClient.refetchQueries({ queryKey: ["/api/factory/suppliers"] }),
+                  planQuery.refetch(),
+                  otwQuery.refetch(),
+                  categoryQuery.refetch(),
+                ]);
+                const latestStock = queryClient.getQueryData<RawStockRow[]>(["/api/factory/raw-stock"]);
+                const latestSuppliers = queryClient.getQueryData<OffloadSupplierOption[]>(["/api/factory/suppliers"]);
+                if (latestStock) setStockSnapshot(latestStock);
+                if (latestSuppliers) setSupplierSnapshot(latestSuppliers);
+              })();
             }} disabled={pending} className="gap-1.5">
               <RefreshCw className="h-3.5 w-3.5" /> {tr("refresh")}
             </Button>
@@ -275,12 +330,12 @@ export function FixedProductionPlannerDialog({
           </div>
         </div>
 
-        {planQuery.isError || otwQuery.isError || rawStockError || suppliersError ? (
+        {planQuery.isError || otwQuery.isError || categoryQuery.isError || rawStockError || suppliersError ? (
           <div role="alert" className="rounded-md border border-destructive p-3 text-sm text-destructive">
             {tr("loadError")}
           </div>
         ) : null}
-        {!ready && !planQuery.isError && !otwQuery.isError && !rawStockError && !suppliersError ? (
+        {!ready && !planQuery.isError && !otwQuery.isError && !categoryQuery.isError && !rawStockError && !suppliersError ? (
           <p className="py-6 text-center text-sm text-muted-foreground">{tr("loading")}</p>
         ) : (
           <div className="min-h-0 overflow-auto rounded-lg border">
