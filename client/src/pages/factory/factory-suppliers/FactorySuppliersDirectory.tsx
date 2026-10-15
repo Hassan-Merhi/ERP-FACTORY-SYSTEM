@@ -116,6 +116,11 @@ export function FactorySuppliersDirectory({ model }: { model: SuppliersModel }) 
             supplier.id === 39 &&
             supplier.name.trim().toUpperCase() === "PORTUGAL SAAD" &&
             supplier.displayBalanceBasis === "operational-statement";
+          const isTalalSettlement =
+            supplier.id === 40 &&
+            supplier.name.trim().toUpperCase() === "TALAL ANAKYKLOS CYPRUS" &&
+            supplier.displayBalanceBasis === "operational-statement";
+          const isOperationalSettlement = isPortugalSaadSettlement || isTalalSettlement;
           const aboEuroBalance = (supplier.currencyBalances || []).find((bucket) => bucket.currencyCode === "EUR");
           const otwCount = supplier.otwByCurrency
             ? Object.values(supplier.otwByCurrency).reduce((left, right) => left + right, 0)
@@ -229,7 +234,7 @@ export function FactorySuppliersDirectory({ model }: { model: SuppliersModel }) 
                 ) : (
                   <>
                     <div className="text-xs text-muted-foreground">
-                      {isPortugalSaadSettlement
+                      {isOperationalSettlement
                         ? "Total settlement balance (USD equivalent at Factory Settings rates)"
                         : "Total balance (USD equivalent)"}
                     </div>
@@ -247,7 +252,7 @@ export function FactorySuppliersDirectory({ model }: { model: SuppliersModel }) 
                         ? "FX rate missing"
                         : Math.abs(balanceValue) <= 0.005
                           ? "$—"
-                          : `${isPortugalSaadSettlement ? "$" : ""}${model.formatNum(Math.abs(balanceValue).toFixed(isPortugalSaadSettlement ? 3 : 2))}${balanceValue < 0 ? " DR" : " CR"}`}
+                          : `${isOperationalSettlement ? "$" : ""}${model.formatNum(Math.abs(balanceValue).toFixed(isPortugalSaadSettlement ? 3 : 2))}${balanceValue < 0 ? (isTalalSettlement ? " CR" : " DR") : " CR"}`}
                     </div>
                     {usdEquivalent === null && (
                       <div className="text-[11px] text-amber-600" role="alert">
@@ -265,7 +270,7 @@ export function FactorySuppliersDirectory({ model }: { model: SuppliersModel }) 
                     )}
                     {nonUsdBalances.length > 0 && (
                       <div className="text-[11px] text-muted-foreground">
-                        {isPortugalSaadSettlement
+                        {isOperationalSettlement
                           ? "Settlement balance by currency"
                           : "Ledger balance by currency"}
                       </div>
@@ -274,7 +279,7 @@ export function FactorySuppliersDirectory({ model }: { model: SuppliersModel }) 
                       <div key={balance.currencyCode} className="flex items-center justify-end gap-1">
                         <span
                           className={`text-xs tabular-nums ${
-                            isPortugalSaadSettlement && balance.balance > 0.005
+                            isOperationalSettlement && balance.balance > 0.005
                               ? "text-red-600 dark:text-red-400"
                               : balance.balance < -0.005
                                 ? "text-green-600 dark:text-green-400"
@@ -282,7 +287,7 @@ export function FactorySuppliersDirectory({ model }: { model: SuppliersModel }) 
                           }`}
                         >
                           {balance.currencyCode} {model.formatNum(Math.abs(balance.balance).toFixed(2))}
-                          {balance.balance < 0 ? " DR" : " CR"}
+                          {balance.balance < 0 ? (isTalalSettlement ? " CR" : " DR") : " CR"}
                         </span>
                         {balance.balance > 0.005 && (
                           <Button
