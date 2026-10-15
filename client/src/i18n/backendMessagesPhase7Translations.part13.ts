@@ -273,12 +273,12 @@ export const backendMessagesPhase7TranslationsPart13: readonly Phase7BackendMess
     fr: "Le journal intersociétés de la société mère est introuvable pour ce conteneur ; la modification du bon de commande n'a pas été enregistrée.",
   },
   {
-    en: "No matching parent intercompany journal for container ${poContainerRow?.containerNumber ?? \"unknown\"}; nothing was changed.",
+    en: 'No matching parent intercompany journal for container ${poContainerRow?.containerNumber ?? "unknown"}; nothing was changed.',
     ar: "لا يوجد قيد مطابق لدى الشركة الأم للحاوية {0}؛ لم يتم إجراء أي تعديل.",
     fr: "Aucun journal intersociétés correspondant pour le conteneur {0} ; aucune modification effectuée.",
   },
   {
-    en: "Intercompany credit not synchronized for container ${_b1ContainerRow?.containerNumber ?? \"unknown\"} (PO ${existingPO.poNumber}). Parent journal missing; no changes saved.",
+    en: 'Intercompany credit not synchronized for container ${_b1ContainerRow?.containerNumber ?? "unknown"} (PO ${existingPO.poNumber}). Parent journal missing; no changes saved.',
     ar: "لم تتم مزامنة الرصيد بين الشركات للحاوية {0} (أمر الشراء {1}). قيد الشركة الأم مفقود؛ لم تُحفظ التعديلات.",
     fr: "Le crédit intersociétés du conteneur {0} (BC {1}) n’a pas été synchronisé. Journal de la société mère introuvable ; modifications non enregistrées.",
   },
