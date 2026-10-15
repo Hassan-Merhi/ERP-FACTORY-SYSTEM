@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { Calculator, Lock, LockOpen, RefreshCw, Save } from "lucide-react";
+import { Calculator, Download, Loader2, Lock, LockOpen, MessageCircle, RefreshCw, Save } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,6 +10,8 @@ import { getApiRequest } from "@/lib/factoryApi";
 import { queryClient } from "@/lib/queryClient";
 import type { RawStockRow } from "./RawStockTable";
 import type { OffloadSupplierOption } from "./offloadDialogTypes";
+import { FixedProductionPlannerImage } from "./FixedProductionPlannerImage";
+import { calculateFixedProductionRows, sumFixedProductionRows } from "./fixedProductionPlannerCalculations";
 
 interface FixedProductionPlannerDialogProps {
   open: boolean;
@@ -35,13 +37,7 @@ interface OtwContainer {
 
 const PLAN_KEY = ["/api/factory/raw-stock/fixed-production-planner"] as const;
 const OTW_KEY = ["/api/factory/containers?activeOnly=true"] as const;
-const EXPECTED_TARGET_KG = 20000;
 const apiRequest = getApiRequest("factory");
-
-function asKg(value: string | number | null | undefined): number {
-  const parsed = Number(value ?? 0);
-  return Number.isFinite(parsed) ? parsed : 0;
-}
 
 function displayKg(value: number): string {
   return formatNumber(value, 3);
@@ -53,6 +49,7 @@ export function FixedProductionPlannerDialog({
   const { toast } = useToast();
   const [inputs, setInputs] = useState<Record<string, string>>({});
   const [hasEdits, setHasEdits] = useState(false);
+  const reportRef = useRef<HTMLDivElement>(null);
 
   const planQuery = useQuery<PlannerRecord>({
     queryKey: [...PLAN_KEY],
@@ -119,50 +116,68 @@ export function FixedProductionPlannerDialog({
     onError: (err: Error) => toast({ title: "Could not unlock plan", description: err.message, variant: "destructive" }),
   });
 
-  const stockBySupplier = useMemo(() => {
-    const amounts = new Map<number, number>();
-    for (const row of rawStock) {
-      if (row.supplierId == null) continue;
-      amounts.set(row.supplierId, (amounts.get(row.supplierId) ?? 0) + asKg(row.freeKg ?? row.remainingKg));
-    }
-    return amounts;
-  }, [rawStock]);
+  const rows = useMemo(
+    () => calculateFixedProductionRows(suppliers, rawStock, otwQuery.data ?? [], inputs),
+    [suppliers, rawStock, otwQuery.data, inputs],
+  );
+  const totals = useMemo(() => sumFixedProductionRows(rows), [rows]);
 
-  const otwBySupplier = useMemo(() => {
-    const amounts = new Map<number, number>();
-    // Match Factory Containers' OTW Summary status and total-weight rules exactly.
-    const statuses = new Set(["PENDING", "IN_TRANSIT", "ARRIVED"]);
-    for (const container of otwQuery.data ?? []) {
-      if (container.supplierId == null || !statuses.has(container.status)) continue;
-      amounts.set(container.supplierId,
-        (amounts.get(container.supplierId) ?? 0) + asKg(container.totalKg));
-    }
-    return amounts;
-  }, [otwQuery.data]);
+  // WhatsApp images always use saved allocations, never unsaved edits.
+  const reportRows = useMemo(
+    () => calculateFixedProductionRows(suppliers, rawStock, otwQuery.data ?? [], planQuery.data?.allocations20t ?? {}),
+    [suppliers, rawStock, otwQuery.data, planQuery.data?.allocations20t],
+  );
+  const reportTotals = useMemo(() => sumFixedProductionRows(reportRows), [reportRows]);
 
-  const rows = useMemo(() => {
-    return [...suppliers].sort((a, b) => a.name.localeCompare(b.name)).map((supplier) => {
-      const id = String(supplier.id);
-      const inHand = stockBySupplier.get(supplier.id) ?? 0;
-      const otw = otwBySupplier.get(supplier.id) ?? 0;
-      const allocation20 = asKg(inputs[id]);
-      return {
-        id, name: supplier.name, inHand, otw, total: inHand + otw,
-        allocation20, allocation15: allocation20 * 15 / 20,
-        allocation175: allocation20 * 17.5 / 20,
-      };
+  const reportDate = (() => {
+    const now = new Date();
+    return [now.getFullYear(), String(now.getMonth() + 1).padStart(2, "0"), String(now.getDate()).padStart(2, "0")].join("-");
+  })();
+  const reportDateLabel = reportDate.split("-").reverse().join("/");
+
+  const captureImage = async (): Promise<string> => {
+    if (!reportRef.current) throw new Error("Production planner image is not ready");
+    const html2canvas = (await import("html2canvas")).default;
+    const canvas = await html2canvas(reportRef.current, {
+      backgroundColor: "#ffffff",
+      scale: 2,
+      logging: false,
+      useCORS: true,
     });
-  }, [suppliers, stockBySupplier, otwBySupplier, inputs]);
+    return canvas.toDataURL("image/png");
+  };
 
-  const totals = useMemo(() => rows.reduce((acc, row) => {
-    acc.inHand += row.inHand;
-    acc.otw += row.otw;
-    acc.total += row.total;
-    acc.allocation15 += row.allocation15;
-    acc.allocation175 += row.allocation175;
-    acc.allocation20 += row.allocation20;
-    return acc;
-  }, { inHand: 0, otw: 0, total: 0, allocation15: 0, allocation175: 0, allocation20: 0 }), [rows]);
+  const whatsappMutation = useMutation({
+    mutationFn: async () => {
+      const imageBase64 = await captureImage();
+      const res = await apiRequest("POST", "/api/factory/send-mix-batch-image-whatsapp", {
+        imageBase64,
+        date: reportDate,
+        fileName: `FixedProductionPlan_${reportDate}.png`,
+        caption: `Fixed Production Plan — ${reportDateLabel}`,
+        reportLabel: "Fixed Production Planner",
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.message || "Could not send Fixed Production Planner image");
+      }
+      return res.json();
+    },
+    onSuccess: () => toast({ title: "Fixed Production Plan sent to WhatsApp group" }),
+    onError: (error: Error) => toast({ title: "WhatsApp send failed", description: error.message, variant: "destructive" }),
+  });
+
+  const downloadImage = async () => {
+    try {
+      const imageBase64 = await captureImage();
+      const link = document.createElement("a");
+      link.href = imageBase64;
+      link.download = `FixedProductionPlan_${reportDate}.png`;
+      link.click();
+    } catch (error) {
+      toast({ title: "Could not generate image", description: error instanceof Error ? error.message : "Unknown error", variant: "destructive" });
+    }
+  };
 
   const locked = planQuery.data?.locked ?? false;
   const ready = !!planQuery.data && !!otwQuery.data && !planQuery.isFetching && !otwQuery.isFetching;
