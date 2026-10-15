@@ -32,7 +32,7 @@ export async function runApprovedFactoryPayableReclassification(): Promise<void>
   );
   const result = await reclassifyFactoryImportPayables20261015(true);
   if (result.inspected !== 18 || result.pending !== 0) {
-    throw new Error("[FactoryPayableReclass] Missing verified journal repairs");
+    throw new Error("FPR_RESULT");
   }
   logger.info("FPR_APPLIED", {
     inspected: result.inspected,
