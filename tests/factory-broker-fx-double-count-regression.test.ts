@@ -22,6 +22,7 @@ describe("NASRA / broker FX source is counted exactly once", () => {
       expect(source).toContain("NOT LIKE 'FACTORY-PAY-%'");
       expect(source).toContain("NOT LIKE 'FACTORY-SFX-%'");
       expect(source).toContain("NOT LIKE 'FACTORY-PAYABLE-RECLASS-%'");
+      expect(source).toContain("NOT LIKE 'FACTORY-CORRECTION-%'");
     });
   }
 
@@ -55,6 +56,14 @@ describe("NASRA / broker FX source is counted exactly once", () => {
     expect(nasraFakeEurPayments.toFixed(2)).toBe("15796.80");
     expect(toMoney("41627.10").minus("41627.10").toFixed(2)).toBe("0.00");
     expect(toMoney("9320.11").minus("9320.11").toFixed(2)).toBe("0.00");
+  });
+
+  it("never counts October 14 accounting repair debits as cash payments", () => {
+    // Audited live journal #15975 reversed a duplicate SPAIN MANSOUR
+    // EUR 2290 freight payable. Journal #15977 fixed MODA freight currency
+    // at USD 1750. These are not supplier cash disbursements.
+    expect(sumMoney(["2290.00", "1750.00"]).toFixed(2)).toBe("4040.00");
+    expect(toMoney("2290.00").times("1.18").toFixed(2)).toBe("2702.20");
   });
 
   it("leaves NASRA USD pool unaltered while its separate 97-cent discrepancy is audited", () => {
