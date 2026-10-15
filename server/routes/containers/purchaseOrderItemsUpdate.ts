@@ -6,7 +6,6 @@ import { containers, containerCharges, purchaseOrders, poLineItems, vouchers, vo
 import { db } from "../../db";
 import { storage } from "../../storage";
 import { logAudit } from "../_helpers";
-import { logger } from "../../lib/logger";
 import { HttpError } from "../../lib/httpHandlers";
 import { syncIntercoParentVoucher } from "./containerHelpers";
 import type Decimal from "decimal.js";
