@@ -97,9 +97,12 @@ export async function runWithVerifiedPoParentScope<T>(
 ): Promise<T> {
   const requestContext = getCompanyRequestRuntimeContext();
   const databaseScope = getDatabaseScopeRuntimeContext();
-  if (!requestContext || databaseScope?.kind !== "tenant" ||
-      requestContext.companyId !== subsidiaryCompanyId ||
-      databaseScope.companyId !== subsidiaryCompanyId) {
+  if (
+    !requestContext ||
+    databaseScope?.kind !== "tenant" ||
+    requestContext.companyId !== subsidiaryCompanyId ||
+    databaseScope.companyId !== subsidiaryCompanyId
+  ) {
     throw new ParentCompanyPostingScopeError("Purchase order edit requires the active subsidiary tenant scope.", 403);
   }
 
