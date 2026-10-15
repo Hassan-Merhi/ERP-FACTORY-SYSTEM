@@ -233,11 +233,7 @@ export default function ProductionRawStock() {
         <div className="grid w-full grid-cols-1 gap-2 min-[360px]:grid-cols-2 sm:flex sm:w-auto sm:flex-wrap sm:items-center sm:justify-end">
           <Button
             variant="outline"
-            onClick={() => {
-              void queryClient.invalidateQueries({ queryKey: ["/api/factory/raw-stock"] });
-              void queryClient.invalidateQueries({ queryKey: ["/api/factory/suppliers"] });
-              setFixedPlannerOpen(true);
-            }}
+            onClick={() => setFixedPlannerOpen(true)}
             className="h-11 gap-2 rounded-lg border-blue-500/40 px-3 text-xs font-semibold sm:h-9"
             data-testid="button-fixed-production-planner"
           >
