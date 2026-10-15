@@ -31,6 +31,7 @@ import type {
   FactorySalesByCustomer,
   Location,
   LocationSales,
+  NetProfitAccount,
   NetProfitStatementData,
   OpeningStockItemsData,
   OpeningStockSummaryData,
@@ -56,6 +57,43 @@ function isInventoryOnlyExpenseAccount(account: { code?: string | null; name?: s
 
   const name = (account.name || "").trim().toLowerCase();
   return name === "credit note - customer return" || name === "stock adjustment (production/consumption)";
+}
+
+type ExpensePeriodBreakdown = { accounts: NetProfitAccount[]; total: number };
+type ExpensePeriodResponse = { direct: ExpensePeriodBreakdown; indirect: ExpensePeriodBreakdown };
+
+/** Keep the account hierarchy for period movements without using lifetime balances. */
+function withExpenseParents(section: ExpensePeriodBreakdown, allAccounts: Account[]): ExpensePeriodBreakdown {
+  const ledgerAccounts = new Map(allAccounts.filter((a) => a.type === "ledger").map((a) => [a.accountId, a]));
+  const rows = section.accounts
+    .filter((a) => !isInventoryOnlyExpenseAccount(a))
+    .map((a) => ({
+      ...a,
+      code: a.code ?? "",
+      parentId: ledgerAccounts.get(a.id)?.parentId ?? undefined,
+    }));
+  const seen = new Set(rows.map((a) => a.id));
+  for (const row of [...rows]) {
+    if (!row.parentId || seen.has(row.parentId)) continue;
+    const parent = ledgerAccounts.get(row.parentId);
+    if (!parent) continue;
+    rows.push({
+      id: parent.accountId,
+      code: parent.code ?? "",
+      name: parent.name,
+      debit: 0,
+      credit: 0,
+      balance: 0,
+      parentId: parent.parentId ?? undefined,
+    });
+    seen.add(parent.accountId);
+  }
+  // The report total is the actual net postings, not the sum of absolute child balances.
+  // If inventory-only rows slipped through, exclude their net amounts from the total.
+  const excluded = section.accounts
+    .filter((a) => isInventoryOnlyExpenseAccount(a))
+    .reduce((sum, a) => sum + Number(a.balance || 0), 0);
+  return { accounts: rows, total: Number(section.total) - excluded };
 }
 
 function sanitizeNetProfitInventoryExpenses(data: NetProfitStatementData): NetProfitStatementData {
@@ -500,6 +538,46 @@ export function useAnalyticsLegacy() {
     enabled: !!selectedCompany,
   });
 
+  // Expense cards are period activity, not as-of closing ledger balances.
+  // Their dedicated drill-downs also stay pinned to the Factory company.
+  const showingExpensePeriod = ["expenses", "direct-expenses", "indirect-expenses"].includes(activeSection);
+  const {
+    data: rawPeriodExpenses,
+    isLoading: loadingPeriodExpenses,
+    isError: periodExpensesError,
+  } = useQuery<ExpensePeriodResponse>({
+    queryKey: ["analytics-period-expenses", appMode, selectedCompany?.id, plStartDate, plEndDate],
+    queryFn: async () => {
+      const base =
+        appMode === "factory" ? "/api/factory/analytics" : "/api/reports/net-profit-statement";
+      const params = new URLSearchParams();
+      if (plStartDate) params.set("startDate", plStartDate);
+      if (plEndDate) params.set("endDate", plEndDate);
+      const suffix = params.toString() ? `?${params}` : "";
+      const [directResponse, indirectResponse] = await Promise.all([
+        fetch(`${base}/direct-expenses${suffix}`, { credentials: "include" }),
+        fetch(`${base}/indirect-expenses${suffix}`, { credentials: "include" }),
+      ]);
+      if (!directResponse.ok || !indirectResponse.ok) {
+        throw new Error("Could not load expenses for the selected period");
+      }
+      return {
+        direct: (await directResponse.json()) as ExpensePeriodBreakdown,
+        indirect: (await indirectResponse.json()) as ExpensePeriodBreakdown,
+      };
+    },
+    enabled: !!selectedCompany && showingExpensePeriod,
+    staleTime: 30_000,
+    refetchOnWindowFocus: false,
+    retry: 1,
+  });
+  const periodExpenses = rawPeriodExpenses
+    ? {
+        direct: withExpenseParents(rawPeriodExpenses.direct, accounts),
+        indirect: withExpenseParents(rawPeriodExpenses.indirect, accounts),
+      }
+    : undefined;
+
   // Fetch Net Profit Statement
   const { data: netProfitData, isLoading: loadingNetProfit } = useQuery<NetProfitStatementData>({
     queryKey: ["/api/reports/net-profit-statement", selectedCompany?.id, plStartDate, plEndDate],
@@ -760,6 +838,9 @@ export function useAnalyticsLegacy() {
     loadingOpeningStock,
     netProfitData,
     loadingNetProfit,
+    periodExpenses,
+    loadingPeriodExpenses,
+    periodExpensesError,
     toggleNetProfitSection,
     toggleStockGroup,
     toggleAccount,
