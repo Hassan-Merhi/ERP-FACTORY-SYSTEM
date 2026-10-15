@@ -8,6 +8,8 @@ interface LedgerBalancePanelProps {
   /** Same current-rate USD equivalent as the outside supplier card. */
   usdEquivalentBalance?: string | null;
   usdEquivalentMissingRates?: string[];
+  /** Trial display for ABO SOBHI only: one payable amount, no three-balance panel. */
+  simple?: boolean;
 }
 
 const amountText = (value: number, prefix: string, formatNum: (val: string) => string) =>
@@ -23,9 +25,49 @@ export function LedgerBalancePanel({
   formatNum,
   usdEquivalentBalance,
   usdEquivalentMissingRates = [],
+  simple = false,
 }: LedgerBalancePanelProps) {
   const ledger = Number(view.ledgerBalanceUsd);
   const natives = view.nativeBalances.filter((bucket) => Math.abs(Number(bucket.balance)) > 0.005);
+
+  // ABO SOBHI pilot: show what is actually payable, not three different USD
+  // amounts. This is display-only: historical vouchers stay in the ledger.
+  if (simple) {
+    const equivalent = usdEquivalentBalance == null ? null : Number(usdEquivalentBalance);
+    const owed = equivalent !== null && equivalent > 0.005;
+    const overpaid = equivalent !== null && equivalent < -0.005;
+    const balanceColor = owed
+      ? "text-red-600 dark:text-red-400"
+      : overpaid
+        ? "text-green-600 dark:text-green-400"
+        : "text-muted-foreground";
+    return (
+      <div className="rounded-xl border p-4 space-y-2" data-testid="panel-supplier-simple-balance">
+        <div className="text-sm font-medium">
+          {owed ? "You owe this supplier" : overpaid ? "This supplier owes you" : "Supplier balance"}
+        </div>
+        <div className={`text-xl font-bold tabular-nums ${balanceColor}`} data-testid="text-supplier-native-balance">
+          {natives.length > 0
+            ? natives.map((bucket) => `${bucket.currencyCode} ${formatNum(Math.abs(Number(bucket.balance)).toFixed(2))}${Number(bucket.balance) < -0.005 ? " DR" : Number(bucket.balance) > 0.005 ? " CR" : ""}`).join(" · ")
+            : "No outstanding currency balance"}
+        </div>
+        <div className="text-xs text-muted-foreground">USD equivalent at current Factory Settings exchange rates</div>
+        {equivalent === null ? (
+          <div className="text-sm text-amber-600" role="alert">
+            FX rate missing: {usdEquivalentMissingRates.join(", ") || "check Factory Settings"}
+          </div>
+        ) : (
+          <div className={`text-lg font-semibold tabular-nums ${balanceColor}`} data-testid="text-supplier-usd-equivalent">
+            {amountText(equivalent, "$", formatNum)}
+          </div>
+        )}
+        {view.ledgerFxUnresolved && (
+          <p className="text-xs text-amber-600" role="alert">Historical FX conversion needs review.</p>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="rounded-xl border p-4 space-y-3" data-testid="panel-supplier-ledger-balance">
       {usdEquivalentBalance !== undefined && (
