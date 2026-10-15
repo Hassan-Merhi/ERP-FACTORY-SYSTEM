@@ -33,6 +33,8 @@ export interface MixBatchSourceRow {
   containerNumber: string | null;
   categoryId?: number | null;
   categoryName?: string | null;
+  supplierId?: number | null;
+  sourceBatchId?: number | null;
   weightKg: number;
   costPerKg: string | number;
   totalCost: number;
