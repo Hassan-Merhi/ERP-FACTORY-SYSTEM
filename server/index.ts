@@ -61,6 +61,7 @@ import { runApprovedFactoryPayableReclassification } from "./startup/runApproved
 import { runApprovedFactoryPayableUndo } from "./startup/runApprovedFactoryPayableUndo";
 import { runApprovedAboSobhiGoods82 } from "./startup/runApprovedAboSobhiGoods82";
 import { runApprovedAboJaberPayableFix } from "./startup/runApprovedAboJaberPayableFix";
+import { runApprovedUkBasma38 } from "./startup/runApprovedUkBasma38";
 import { ensureFactorySheetsSacksSchema } from "./startup/factorySheetsSacksSchema";
 import { ensureRecurringJournalSchema } from "./services/accounting/ensureRecurringJournalSchema";
 import { bootstrapRecurringJournalFromEnvironment } from "./services/accounting/recurringJournalBootstrap";
@@ -344,6 +345,8 @@ let migrationsDone = false;
       await runApprovedAboSobhiGoods82();
       // One-time, source-reviewed, owner-approved company-12 JABER liability reassignment.
       await runApprovedAboJaberPayableFix();
+      // Exact-source, owner-requested UK BASMA supplier statement reconciliation.
+      await runApprovedUkBasma38();
       if (migrationsEnabled) {
         try {
           await runMigrations();
