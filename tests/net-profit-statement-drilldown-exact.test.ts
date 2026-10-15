@@ -86,6 +86,10 @@ describe("Analytics expense period filters", () => {
       );
     }
 
+    // The factory endpoint is pinned to a Factory company (tenantIsolationBoundary),
+    // so the seeded company must be one for both endpoints to read it.
+    await pool.query("UPDATE companies SET company_type = 'factory' WHERE id = $1", [ctx.companyId]);
+
     for (const path of [
       "/api/reports/net-profit-statement/indirect-expenses",
       "/api/factory/analytics/indirect-expenses",

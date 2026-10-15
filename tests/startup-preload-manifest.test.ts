@@ -49,6 +49,7 @@ describe("startup preload manifest", () => {
       "factoryTrilingualSchemaBridge.mjs",
       "companyScopeRlsBridge.mjs",
       "supplierCompanyScopeBridge.mjs",
+      "fixedProductionPlannerSchemaBridge.mjs",
     ]);
     expect(read("server/startupPreload.mjs")).not.toMatch(/^import\s+["']/m);
     expect(read("server/schemaPreload.mjs")).not.toMatch(/^import\s+["']/m);
