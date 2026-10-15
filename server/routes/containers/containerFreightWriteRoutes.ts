@@ -776,7 +776,8 @@ export function registerContainerFreightWriteRoutes(app: Express) {
                     subsidiaryCompanyId: existingPO.companyId,
                   }
                 : undefined,
-              _b2ParentId
+              _b2ParentId,
+              existingPO.companyId
             );
             if (!_b2Sync.found) {
               throw new HttpError(409, "Parent intercompany journal missing for this container; purchase-order edit was not saved.");
