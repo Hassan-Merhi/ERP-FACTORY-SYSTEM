@@ -66,7 +66,7 @@ export function registerFixedProductionPlannerRoutes(app: Express) {
     for (const [supplierId, value] of entries) {
       if (!/^[1-9][0-9]*$/.test(supplierId) || !Number.isSafeInteger(Number(supplierId)) ||
           typeof value !== "number" || !Number.isFinite(value) || value < 0 ||
-          value > 20000 || !/^\d+(?:\.\d{1,3})?$/.test(String(value))) {
+          !Number.isSafeInteger(Math.trunc(value)) || !/^\d+(?:\.\d{1,3})?$/.test(String(value))) {
         return res.status(400).json({ message: `Invalid 20-ton quantity for supplier ${supplierId}` });
       }
       allocations[supplierId] = value;
