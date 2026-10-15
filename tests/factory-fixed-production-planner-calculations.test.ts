@@ -98,7 +98,7 @@ describe("Fixed Production Planner — original 05 Oct 2026 workbook formulas", 
     expect(allocations["11"]).toBe(1000);
   });
 
-  it("filters using combined stock in kilograms without rounding nonzero amounts to zero", () => {
+  it("filters at displayed three-decimal kg precision while keeping negative balances visible", () => {
     const rows = calculateFixedProductionRows(
       [{ id: 1, name: "Zero" }, { id: 2, name: "Tiny balance" }, { id: 3, name: "Negative balance" }],
       [{ supplierId: 2, freeKg: "0.0004", remainingKg: "0.0004" },
