@@ -12,7 +12,7 @@ import { companyStockValue } from "../../services/inventory/stockValuation";
 import { storage } from "../../storage";
 import { getAccessibleCompanyIds } from "../../security/companyAccessBoundary";
 import { requireAuth, requireNonPOS } from "../../auth";
-import { stockItems, stockGroups, vouchers, salesItems, locations, stockItemLocationPrices } from "@shared/schema";
+import { stockItems, stockGroups, vouchers, salesItems, locations, stockItemLocationPrices, locationPriceGroups } from "@shared/schema";
 import { eq, and, sql, isNull } from "drizzle-orm";
 
 import { getMonthlyData, getStockSummary, getExpenseBreakdown } from "../../services/stats/dashboardStatsService";
@@ -50,6 +50,19 @@ function enhanceSalesReportItem<
     configuredProfitPercentage: configuredProfitPercentage.toNumber(),
   };
 }
+
+// Match /api/pos/price-list: follower locations use their master location's
+// price. The scalar subquery prevents duplicate sales rows if legacy group
+// configuration accidentally contains more than one follower mapping.
+const effectiveSalesPriceLocation = sql<number>`COALESCE(
+  (SELECT ${locationPriceGroups.masterLocationId}
+   FROM ${locationPriceGroups}
+   WHERE ${locationPriceGroups.companyId} = ${vouchers.companyId}
+     AND ${locationPriceGroups.followerLocationId} = ${vouchers.locationId}
+   ORDER BY ${locationPriceGroups.id}
+   LIMIT 1),
+  ${vouchers.locationId}
+)`;
 
 export function registerStatsDataRoutes(app: Express) {
   app.get("/api/stats/monthly-data", requireAuth, requireNonPOS, async (req, res) => {
@@ -127,7 +140,7 @@ export function registerStatsDataRoutes(app: Express) {
           stockGroupId: stockItems.stockGroupId,
           quantity: salesItems.quantity,
           actualSellingPrice: salesItems.sellingPrice,
-          configuredSellingPrice: stockItemLocationPrices.sellingPrice,
+          configuredSellingPrice: sql<string | null>`COALESCE(${stockItemLocationPrices.sellingPrice}, ${stockItems.sellingPrice})`,
           costPrice: salesItems.costPrice,
           totalSales: salesItems.totalSales,
           totalCost: salesItems.totalCost,
@@ -152,7 +165,7 @@ export function registerStatsDataRoutes(app: Express) {
           stockItemLocationPrices,
           and(
             eq(stockItemLocationPrices.stockItemId, salesItems.stockItemId),
-            eq(stockItemLocationPrices.locationId, vouchers.locationId)
+            eq(stockItemLocationPrices.locationId, effectiveSalesPriceLocation)
           )
         )
         .where(and(...conditions))
@@ -320,7 +333,7 @@ export function registerStatsDataRoutes(app: Express) {
             stockGroupName: stockGroups.name,
             quantity: salesItems.quantity,
             actualSellingPrice: salesItems.sellingPrice,
-            configuredSellingPrice: stockItemLocationPrices.sellingPrice,
+            configuredSellingPrice: sql<string | null>`COALESCE(${stockItemLocationPrices.sellingPrice}, ${stockItems.sellingPrice})`,
             costPrice: salesItems.costPrice,
             totalSales: salesItems.totalSales,
             totalCost: salesItems.totalCost,
@@ -336,7 +349,7 @@ export function registerStatsDataRoutes(app: Express) {
             stockItemLocationPrices,
             and(
               eq(stockItemLocationPrices.stockItemId, salesItems.stockItemId),
-              eq(stockItemLocationPrices.locationId, vouchers.locationId)
+              eq(stockItemLocationPrices.locationId, effectiveSalesPriceLocation)
             )
           )
           .where(and(...conditions, ...(stockGroupName ? [eq(stockGroups.name, stockGroupName as string)] : [])))
