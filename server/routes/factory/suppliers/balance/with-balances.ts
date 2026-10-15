@@ -537,17 +537,22 @@ export function registerSupplierWithBalancesRoutes(app: Express) {
         const children = suppliersList.filter((c) => c.parentId === s.id);
 
         if (!brokerParentIds.has(s.id)) {
-          // A narrowly scoped PORTUGAL SAAD display reconciliation. The supplier
-          // settlement statement uses today's container goods value (including
-          // supplier-paid freight) minus source-recorded FX transfers. Its native
-          // EUR payable differs from the historical voucher view because five
-          // old import journals no longer match their saved container values.
-          // Keep all vouchers/posted ledger fields unchanged; use the same
-          // operational calculation for the *directory display* only.
-          // Do not apply this treatment to NASRA or any other supplier.
+          // Narrow supplier-specific display parity for Portugal Saad and Talal.
+          // The inside settlement statement uses current container goods,
+          // supplier-paid freight and source FX transfers. Old import vouchers
+          // can differ. Keep all posted ledger amounts untouched, using the
+          // operational currency pools for these two directory cards only.
+          // Do not change NASRA, other suppliers or general ledger accounting.
           const usePortugalSettlementDisplay =
             companyId === 12 && s.id === 39 && s.name.trim().toUpperCase() === "PORTUGAL SAAD";
-          const portugalSettlementDisplay = usePortugalSettlementDisplay
+          // TALAL's saved containers and supplier-paid freight less original
+          // FX settlements give a net EUR -2609 credit owed back to us, while
+          // its historical posted voucher view reads EUR -8519. As with
+          // Portugal, reconcile only the directory presentation to the
+          // existing operational statement, not the accounting journals.
+          const useTalalSettlementDisplay =
+            companyId === 12 && s.id === 40 && s.name.trim().toUpperCase() === "TALAL ANAKYKLOS CYPRUS";
+          const portugalSettlementDisplay = usePortugalSettlementDisplay || useTalalSettlementDisplay
             ? {
                 displayBalanceBasis: "operational-statement" as const,
                 // Three USD decimals intentionally preserve the exact
