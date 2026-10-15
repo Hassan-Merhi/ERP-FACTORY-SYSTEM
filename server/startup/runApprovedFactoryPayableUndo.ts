@@ -17,7 +17,7 @@ export async function runApprovedFactoryPayableUndo(): Promise<void> {
     "../../scripts/reverse-factory-payable-reclass-20261015"
   );
   const result = await reverseFactoryPayableReclass20261015(apply);
-  if (result.checked !== 18 || result.pending !== 0) {
+  if (result.checked !== 18 || (apply ? result.pending !== 0 : result.pending !== 18)) {
     throw new Error("FPR_UNDO_NOT_VERIFIED");
   }
   logger.info(apply ? "FPR_UNDO_VERIFIED" : "FPR_UNDO_PREFLIGHT", { checked: result.checked, pending: result.pending, posted: result.posted });
