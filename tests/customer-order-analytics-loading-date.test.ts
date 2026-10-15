@@ -5,13 +5,16 @@ const read = (path: string) => readFileSync(path, "utf8");
 
 describe("customer order analytics official loading date", () => {
   const analyticsSource = read("server/routes/factory/docs-users/analyticsRoutes.ts");
-  const analyticsRoute = analyticsSource.split('// ── Factory Analytics: Customer orders grouped by customer')[1]
-    .split('// ── Factory Analytics: Customer order item profitability')[0];
+  const analyticsRoute = analyticsSource
+    .split("// ── Factory Analytics: Customer orders grouped by customer")[1]
+    .split("// ── Factory Analytics: Customer order item profitability")[0];
 
   it("uses the saved loading completion date before status and accounting dates", () => {
     const dateExpression = analyticsRoute.split("const officialOrderDate = sql`")[1].split("`;")[0];
-    expect(dateExpression).toMatch(/WHEN co\.loading_finalized_at IS NOT NULL THEN co\.loading_finalized_at::date/);
-    expect(dateExpression.indexOf("co.loading_finalized_at::date")).toBeLessThan(dateExpression.indexOf("co.status = 'FINALIZED'"));
+    expect(dateExpression).toContain("WHEN co.loading_finalized_at IS NOT NULL THEN co.loading_finalized_at::date");
+    const savedDatePosition = dateExpression.indexOf("co.loading_finalized_at::date");
+    const finalizedStatusPosition = dateExpression.indexOf("co.status = 'FINALIZED'");
+    expect(savedDatePosition).toBeLessThan(finalizedStatusPosition);
     expect(dateExpression).toContain("co.order_date");
   });
 
