@@ -54,6 +54,8 @@ export interface OrderDetail {
   companyId: number;
   orderDate: string;
   status: string;
+  // Business date chosen when Validate Loading was first confirmed.
+  loadingFinalizedAt?: string | null;
   proformaIdUsed: number | null;
   totalQtyBales: number;
   containerNotes: string | null;
