@@ -63,13 +63,16 @@ export function registerFixedProductionPlannerRoutes(app: Express) {
     const entries = Object.entries(input);
     if (entries.length > 1000) return res.status(400).json({ message: "Too many supplier allocations" });
     const allocations: Record<string, number> = {};
-    for (const [supplierId, value] of entries) {
-      if (!/^[1-9][0-9]*$/.test(supplierId) || !Number.isSafeInteger(Number(supplierId)) ||
+    for (const [key, value] of entries) {
+      const supplierKey = /^[1-9][0-9]*$/.test(key) && Number.isSafeInteger(Number(key));
+      const categoryKey = /^cat:[1-9][0-9]*$/.test(key) && Number.isSafeInteger(Number(key.slice(4)));
+      const uncategorizedKey = key === "cat:uncategorized";
+      if (!(supplierKey || categoryKey || uncategorizedKey) ||
           typeof value !== "number" || !Number.isFinite(value) || value < 0 ||
           !Number.isSafeInteger(Math.trunc(value)) || !/^\d+(?:\.\d{1,3})?$/.test(String(value))) {
-        return res.status(400).json({ message: `Invalid 20-ton quantity for supplier ${supplierId}` });
+        return res.status(400).json({ message: `Invalid 20-ton quantity for supplier ${key}` });
       }
-      allocations[supplierId] = value;
+      allocations[key] = value;
     }
     try {
       // Never accept an allocation for a supplier outside the currently selected factory company.
@@ -77,8 +80,16 @@ export function registerFixedProductionPlannerRoutes(app: Express) {
         "SELECT id FROM factory_suppliers WHERE company_id = $1",
         [companyId]
       );
-      const valid = new Set(suppliers.rows.map((supplier) => String(supplier.id)));
-      if (Object.keys(allocations).some((id) => !valid.has(id))) {
+      const supplierIds = new Set(suppliers.rows.map((supplier) => String(supplier.id)));
+      const categoryResult = await pool.query<{ id: number }>(
+        "SELECT id FROM factory_supplier_categories WHERE company_id = $1",
+        [companyId]
+      );
+      const categoryIds = new Set(categoryResult.rows.map((category) => `cat:${category.id}`));
+      if (Object.keys(allocations).some(key =>
+        key !== "cat:uncategorized" &&
+        !(key.startsWith("cat:") ? categoryIds.has(key) : supplierIds.has(key))
+      )) {
         return res.status(400).json({ message: "One or more suppliers do not belong to this company" });
       }
       const actor = String(req.session.userId || req.user?.id || "unknown");
