@@ -53,13 +53,12 @@ export function SalesReportBySaleView({
                 <TableHead>Location</TableHead>
                 {col("qty") && <TableHead className="text-right">Qty</TableHead>}
                 {col("costPrice") && <TableHead className="text-right">Cost Price</TableHead>}
-                {col("hassanPrice") && <TableHead className="text-right">Hassan's Price</TableHead>}
                 {col("pricePerBale") && <TableHead className="text-right">Price / Bale</TableHead>}
-                <TableHead className="text-right">Total Sales</TableHead>
                 {col("costProfitBale") && <TableHead className="text-right">Cost Profit / Bale</TableHead>}
+                {col("hassanPrice") && <TableHead className="text-right">Hassan's Price</TableHead>}
                 {col("hassanProfitBale") && <TableHead className="text-right">Hassan's Profit / Bale</TableHead>}
-                {col("costProfitTotal") && <TableHead className="text-right">Cost Profit</TableHead>}
                 {col("hassanProfitTotal") && <TableHead className="text-right">Hassan's Profit</TableHead>}
+                {col("costProfitTotal") && <TableHead className="text-right">Cost Profit</TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -90,33 +89,32 @@ export function SalesReportBySaleView({
                       {col("costPrice") && (
                         <TableCell className="text-right font-mono py-2 text-muted-foreground">—</TableCell>
                       )}
-                      {col("hassanPrice") && (
-                        <TableCell className="text-right font-mono py-2 text-muted-foreground">—</TableCell>
-                      )}
                       {col("pricePerBale") && (
                         <TableCell className="text-right font-mono py-2 text-muted-foreground">
                           {formatAmount(groupPricePerBale)}
                         </TableCell>
                       )}
-                      <TableCell className="text-right font-mono py-2">{formatAmount(vg.totalSales)}</TableCell>
                       {col("costProfitBale") && (
                         <TableCell className={`text-right font-mono py-2 ${profitColor(groupCostProfitBale)}`}>
                           {formatAmount(Math.abs(groupCostProfitBale))}
                         </TableCell>
+                      )}
+                      {col("hassanPrice") && (
+                        <TableCell className="text-right font-mono py-2 text-muted-foreground">—</TableCell>
                       )}
                       {col("hassanProfitBale") && (
                         <TableCell className={`text-right font-mono py-2 ${profitColor(groupHassanProfitBale)}`}>
                           {formatAmount(Math.abs(groupHassanProfitBale))}
                         </TableCell>
                       )}
-                      {col("costProfitTotal") && (
-                        <TableCell className={`text-right font-mono py-2 ${profitColor(vg.costProfit)}`}>
-                          {formatAmount(Math.abs(vg.costProfit))}
-                        </TableCell>
-                      )}
                       {col("hassanProfitTotal") && (
                         <TableCell className={`text-right font-mono py-2 ${profitColor(vg.configuredProfit)}`}>
                           {formatAmount(Math.abs(vg.configuredProfit))}
+                        </TableCell>
+                      )}
+                      {col("costProfitTotal") && (
+                        <TableCell className={`text-right font-mono py-2 ${profitColor(vg.costProfit)}`}>
+                          {formatAmount(Math.abs(vg.costProfit))}
                         </TableCell>
                       )}
                     </TableRow>
@@ -142,18 +140,17 @@ export function SalesReportBySaleView({
                                 {formatAmount(item.costPrice)}
                               </TableCell>
                             )}
-                            {col("hassanPrice") && (
-                              <TableCell className="text-right font-mono py-1">
-                                {formatAmount(item.configuredSellingPrice)}
-                              </TableCell>
-                            )}
                             {col("pricePerBale") && (
                               <TableCell className="text-right font-mono py-1">{formatAmount(pricePerBale)}</TableCell>
                             )}
-                            <TableCell className="text-right font-mono py-1">{formatAmount(item.totalSales)}</TableCell>
                             {col("costProfitBale") && (
                               <TableCell className={`text-right font-mono py-1 ${profitColor(itemCostProfitBale)}`}>
                                 {formatAmount(Math.abs(itemCostProfitBale))}
+                              </TableCell>
+                            )}
+                            {col("hassanPrice") && (
+                              <TableCell className="text-right font-mono py-1">
+                                {formatAmount(item.configuredSellingPrice)}
                               </TableCell>
                             )}
                             {col("hassanProfitBale") && (
@@ -161,14 +158,14 @@ export function SalesReportBySaleView({
                                 {formatAmount(Math.abs(itemHassanProfitBale))}
                               </TableCell>
                             )}
-                            {col("costProfitTotal") && (
-                              <TableCell className={`text-right font-mono py-1 ${profitColor(itemCostProfit)}`}>
-                                {formatAmount(Math.abs(itemCostProfit))}
-                              </TableCell>
-                            )}
                             {col("hassanProfitTotal") && (
                               <TableCell className={`text-right font-mono py-1 ${profitColor(item.configuredProfit)}`}>
                                 {formatAmount(Math.abs(item.configuredProfit))}
+                              </TableCell>
+                            )}
+                            {col("costProfitTotal") && (
+                              <TableCell className={`text-right font-mono py-1 ${profitColor(itemCostProfit)}`}>
+                                {formatAmount(Math.abs(itemCostProfit))}
                               </TableCell>
                             )}
                           </TableRow>
@@ -191,20 +188,10 @@ export function SalesReportBySaleView({
                   </TableCell>
                 )}
                 {col("costPrice") && <TableCell></TableCell>}
-                {col("hassanPrice") && <TableCell></TableCell>}
                 {col("pricePerBale") && <TableCell></TableCell>}
-                <TableCell className="text-right font-mono">
-                  {formatAmount(voucherGroups.reduce((s, v) => s + v.totalSales, 0))}
-                </TableCell>
                 {col("costProfitBale") && <TableCell></TableCell>}
+                {col("hassanPrice") && <TableCell></TableCell>}
                 {col("hassanProfitBale") && <TableCell></TableCell>}
-                {col("costProfitTotal") && (
-                  <TableCell
-                    className={`text-right font-mono ${profitColor(voucherGroups.reduce((s, v) => s + v.costProfit, 0))}`}
-                  >
-                    {formatAmount(Math.abs(voucherGroups.reduce((s, v) => s + v.costProfit, 0)))}
-                  </TableCell>
-                )}
                 {col("hassanProfitTotal") && (
                   <TableCell
                     className={`text-right font-mono ${profitColor(
@@ -212,6 +199,13 @@ export function SalesReportBySaleView({
                     )}`}
                   >
                     {formatAmount(Math.abs(voucherGroups.reduce((s, v) => s + v.configuredProfit, 0)))}
+                  </TableCell>
+                )}
+                {col("costProfitTotal") && (
+                  <TableCell
+                    className={`text-right font-mono ${profitColor(voucherGroups.reduce((s, v) => s + v.costProfit, 0))}`}
+                  >
+                    {formatAmount(Math.abs(voucherGroups.reduce((s, v) => s + v.costProfit, 0)))}
                   </TableCell>
                 )}
               </TableRow>
