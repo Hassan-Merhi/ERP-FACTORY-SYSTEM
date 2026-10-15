@@ -94,7 +94,7 @@ export async function runApprovedCustomerLoadingDateRepair(pool: Pool): Promise<
     ) ON COMMIT DROP`);
     const placeholders = PLAN.map(
       (_, index) =>
-        `($${index * 4 + 1}::integer, $${index * 4 + 2}::integer, $${index * 4 + 3}::date, $${index * 4 + 4}::date)`
+        `(${index * 4 + 1}::integer, ${index * 4 + 2}::integer, ${index * 4 + 3}::date, ${index * 4 + 4}::date)`
     ).join(", ");
     await client.query(
       `INSERT INTO customer_loading_date_plan (order_id, daybook_entry_id, expected_old_date, selected_date)
@@ -125,7 +125,9 @@ export async function runApprovedCustomerLoadingDateRepair(pool: Pool): Promise<
        ORDER BY o.id
        FOR UPDATE OF o`);
     if (locked.rowCount !== PLAN.length) {
-      throw new Error(`Historical loading date repair refused: preflight matched ${locked.rowCount}/${PLAN.length} orders`);
+      throw new Error(
+        `Historical loading date repair refused: preflight matched ${locked.rowCount}/${PLAN.length} orders`
+      );
     }
 
     const audit = await client.query(`
@@ -139,7 +141,9 @@ export async function runApprovedCustomerLoadingDateRepair(pool: Pool): Promise<
         FROM customer_loading_date_plan p
         JOIN customer_orders o ON o.company_id = 12 AND o.id = p.order_id
       RETURNING order_id`, [RUN_KEY]);
-    if (audit.rowCount !== PLAN.length) throw new Error("Historical loading date repair refused: incomplete before-image");
+    if (audit.rowCount !== PLAN.length) {
+      throw new Error("Historical loading date repair refused: incomplete before-image");
+    }
 
     const updated = await client.query(`
       UPDATE customer_orders o
@@ -150,7 +154,9 @@ export async function runApprovedCustomerLoadingDateRepair(pool: Pool): Promise<
          AND a.run_key = $1
          AND o.loading_finalized_at = a.old_loading_finalized_at
       RETURNING o.id`, [RUN_KEY]);
-    if (updated.rowCount !== PLAN.length) throw new Error("Historical loading date repair refused: incomplete update");
+    if (updated.rowCount !== PLAN.length) {
+      throw new Error("Historical loading date repair refused: incomplete update");
+    }
 
     const verified = await client.query(`
       SELECT count(*)::int AS count
@@ -158,10 +164,14 @@ export async function runApprovedCustomerLoadingDateRepair(pool: Pool): Promise<
         JOIN customer_orders o ON o.id = a.order_id AND o.company_id = a.company_id
        WHERE a.company_id = 12 AND a.run_key = $1
          AND o.loading_finalized_at = a.new_loading_finalized_at`, [RUN_KEY]);
-    if (verified.rows[0]?.count !== PLAN.length) throw new Error("Historical loading date repair refused: verification failed");
+    if (verified.rows[0]?.count !== PLAN.length) {
+      throw new Error("Historical loading date repair refused: verification failed");
+    }
 
     await client.query("COMMIT");
-    logger.info(`[CustomerLoadingDateRepair] Applied ${PLAN.length} audited dates to company 12; accounting and balances untouched`);
+    logger.info(
+      `[CustomerLoadingDateRepair] Applied ${PLAN.length} audited dates to company 12; accounting and balances untouched`
+    );
   } catch (error) {
     await client.query("ROLLBACK").catch(() => undefined);
     throw error;
