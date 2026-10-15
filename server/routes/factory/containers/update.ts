@@ -297,9 +297,60 @@ export function registerFactoryContainerUpdateRoutes(app: Express) {
       // A container's goods payable MUST follow changes to the supplier, goods value,
       // currency and historical rate. Previously only the descriptive daybook row
       // followed those edits, which left the supplier's actual ledger incorrect.
-      const goodsNeedsSync = ["supplierId", "totalKg", "ratePerKg", "currencyCode", "fxRateToUsd", "fxRateSource"].some(
+      let goodsNeedsSync = ["supplierId", "totalKg", "ratePerKg", "currencyCode", "fxRateToUsd", "fxRateSource"].some(
         (f) => f in b
       );
+
+      // The original goods credit on the 18 reviewed legacy containers was
+      // subsequently corrected by a separate, balanced EUR reclassification.
+      // Editing the original goods journal again would leave that correction in
+      // place and double-count the supplier transfer. A future change must first
+      // use a reviewed, compensating-voucher workflow, not a silent in-place edit.
+      if (goodsNeedsSync) {
+        const [reviewedReclassification] = await db
+          .select({ id: vouchers.id })
+          .from(vouchers)
+          .where(
+            and(
+              eq(vouchers.companyId, companyId),
+              eq(vouchers.voucherNumber, `FACTORY-PAYABLE-RECLASS-20261015-${id}`),
+              isNull(vouchers.deletedAt)
+            )
+          )
+          .limit(1);
+        if (reviewedReclassification) {
+          const goodsActuallyChanged =
+            (b.supplierId !== undefined && int(b.supplierId) !== existing.supplierId) ||
+            (b.totalKg !== undefined && !toMoney(dec(b.totalKg)).eq(toMoney(existing.totalKg))) ||
+            (b.ratePerKg !== undefined && !toMoney(dec(b.ratePerKg)).eq(toMoney(existing.ratePerKg))) ||
+            (b.currencyCode !== undefined &&
+              String(b.currencyCode || "USD").toUpperCase() !== String(existing.currencyCode || "USD").toUpperCase()) ||
+            (b.fxRateToUsd !== undefined && !toMoney(dec(b.fxRateToUsd)).eq(toMoney(existing.fxRateToUsd))) ||
+            (b.fxRateSource !== undefined &&
+              String(b.fxRateSource || "auto") !== String(existing.fxRateSource || "auto"));
+          if (goodsActuallyChanged) {
+            return res.status(409).json({
+              code: "FACTORY_IMPORT_RECLASS_REVIEW_REQUIRED",
+              message: "This historical goods journal has a posted supplier reclassification. Reverse and repost the reviewed correction before changing its goods supplier, value or currency.",
+              correctionVoucherId: reviewedReclassification.id,
+            });
+          }
+          // Many edit dialogs submit unchanged goods fields with unrelated
+          // updates. Permit those edits without resynchronizing (and thereby
+          // corrupting) the original imported-goods payable or stored FX.
+          goodsNeedsSync = false;
+          delete updateData.supplierId;
+          delete updateData.totalKg;
+          delete updateData.ratePerKg;
+          delete updateData.currencyCode;
+          delete updateData.fxRateToUsd;
+          delete updateData.fxRateSource;
+          delete updateData.fxRateToUsdImport;
+          delete updateData.fxRateDateImport;
+          delete updateData.fxRateConfirmed;
+          delete updateData.ratePerKgUsd;
+        }
+      }
       const existingImports = goodsNeedsSync
         ? await db
             .select()
