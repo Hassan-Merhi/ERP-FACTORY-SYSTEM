@@ -79,7 +79,7 @@ export function MixBatchWhatsAppPreview({
                   {batches.map(batch => batch.batchCode).join(" · ")}
                 </div>
                 <div style={{ fontSize: "12px", color: "#94a3b8" }}>
-                  {batches.length} {batches.length === 1 ? "batch" : "batches"} included for this date
+                  {batches.length === 1 ? tr("batchesForDateOne") : tr("batchesForDateMany", { count: batches.length })}
                 </div>
               </div>
               <span style={{ flexShrink: 0, padding: "6px 13px", borderRadius: "9px", backgroundColor: "#1d4ed8", color: "#fff", fontWeight: 800 }}>
