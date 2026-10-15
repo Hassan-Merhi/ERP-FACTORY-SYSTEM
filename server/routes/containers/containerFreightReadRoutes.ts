@@ -221,19 +221,19 @@ export function registerContainerFreightReadRoutes(app: Express) {
       const result = await runWithVerifiedPoParentScope(po.companyId, async (verifiedParentId) => {
         if (!verifiedParentId) throw new Error("This company has no verified parent company for intercompany credit.");
         return syncIntercoParentVoucher(
-        db,
-        po.poNumber,
-        poGrossTotal,
-        poContainerRow?.containerNumber,
-        poHasParentFreight
-          ? {
-              freightAmount: poFreightAmt,
-              freightParentAccountId: poFreightParentAcctId!,
-              subsidiaryCompanyId: po.companyId,
-            }
-          : undefined,
-        verifiedParentId,
-        po.companyId
+          db,
+          po.poNumber,
+          poGrossTotal,
+          poContainerRow?.containerNumber,
+          poHasParentFreight
+            ? {
+                freightAmount: poFreightAmt,
+                freightParentAccountId: poFreightParentAcctId!,
+                subsidiaryCompanyId: po.companyId,
+              }
+            : undefined,
+          verifiedParentId,
+          po.companyId
         );
       });
 
