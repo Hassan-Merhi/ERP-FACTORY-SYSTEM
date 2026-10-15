@@ -103,7 +103,7 @@ export function buildMixBatchCategoryReport(
   }
   if (allocations !== null) {
     const uncategorizedTarget = mixBatchCategoryTargetKg("uncategorized", selectedTons, allocations, suppliers);
-    if (uncategorizedTarget > 0 && !grouped.has("cat:uncategorized")) {
+    if (uncategorizedTarget !== null && uncategorizedTarget > 0 && !grouped.has("cat:uncategorized")) {
       grouped.set("cat:uncategorized", { id: "cat:uncategorized", name: "Uncategorized", weightKg: 0, totalCost: 0 });
     }
     for (const cat of categories) {
