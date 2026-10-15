@@ -3,7 +3,9 @@ import { pool } from "../db";
 import { logger } from "../lib/logger";
 
 export async function runApprovedFactoryPayableUndo(): Promise<void> {
-  if (process.env.FACTORY_IMPORT_PAYABLE_UNDO_20261015 !== "approved-company12-reverse-18") return;
+  const mode = process.env.FACTORY_IMPORT_PAYABLE_UNDO_20261015;
+  const apply = mode === "approved-company12-reverse-18";
+  if (!apply && mode !== "preview-company12-reverse-18") return;
   if (process.env.RENDER_SERVICE_ID !== "srv-d6kibgtactks739u7vl0") {
     throw new Error("FPR_UNDO_WRONG_SERVICE");
   }
@@ -14,9 +16,9 @@ export async function runApprovedFactoryPayableUndo(): Promise<void> {
   const { reverseFactoryPayableReclass20261015 } = await import(
     "../../scripts/reverse-factory-payable-reclass-20261015"
   );
-  const result = await reverseFactoryPayableReclass20261015(true);
+  const result = await reverseFactoryPayableReclass20261015(apply);
   if (result.checked !== 18 || result.pending !== 0) {
     throw new Error("FPR_UNDO_NOT_VERIFIED");
   }
-  logger.info("FPR_UNDO_VERIFIED", { checked: result.checked, posted: result.posted });
+  logger.info(apply ? "FPR_UNDO_VERIFIED" : "FPR_UNDO_PREFLIGHT", { checked: result.checked, pending: result.pending, posted: result.posted });
 }
