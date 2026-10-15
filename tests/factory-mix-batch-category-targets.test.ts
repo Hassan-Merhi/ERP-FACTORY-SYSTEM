@@ -36,6 +36,27 @@ describe("mix batch category report", () => {
     expect(mixBatchCategoryTargetKg(1, 20, { "101": 100, "102": 200 }, suppliers)).toBe(300);
     expect(mixBatchCategoryTargetKg(1, 20, { "101": 100, "102": 200, "cat:1": 0 }, suppliers)).toBe(0);
   });
+  it("credits uncategorized supplier sources to their saved pool and keeps batch sources unmapped", () => {
+    const categorylessSuppliers = [{ id: 104, supplierCategoryId: null }];
+    const rows = buildMixBatchCategoryReport([
+      { id: 1, sourceName: "Supplier without category", supplierId: 104, sourceBatchId: null, categoryId: null, weightKg: 9500, totalCost: 4700 },
+      { id: 2, sourceName: "Existing batch", supplierId: null, sourceBatchId: 29, categoryId: null, weightKg: 400, totalCost: 200 },
+    ], [], { "cat:uncategorized": 10000 }, categorylessSuppliers, 20);
+    expect(rows.find(r => r.id === "cat:uncategorized")).toMatchObject({
+      weightKg: 9500, totalCost: 4700, targetKg: 10000, differenceKg: -500,
+    });
+    expect(rows.find(r => r.id === "unmapped")).toMatchObject({
+      weightKg: 400, totalCost: 200, targetKg: null, differenceKg: null,
+    });
+  });
+
+  it("shows uncategorized shortfall even when no materials from that category were used", () => {
+    const rows = buildMixBatchCategoryReport([], [], { "cat:uncategorized": 800 }, [], 17.5);
+    expect(rows.find(r => r.id === "cat:uncategorized")).toMatchObject({
+      weightKg: 0, targetKg: 700, differenceKg: -700,
+    });
+  });
+
   it("preserves unmapped batch sources without a fabricated category target", () => {
     const rows = buildMixBatchCategoryReport([
       { id: 10, sourceName: "Existing Batch", categoryId: null, weightKg: 300, totalCost: 150 },
