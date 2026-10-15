@@ -11,7 +11,6 @@ vi.mock("../server/services/security/parentCompanyPostingScope", () => ({
     run(null),
 }));
 
-
 const harness = vi.hoisted(() => ({ writes: [] as [string, string, Record<string, unknown>][] }));
 
 const po = {
