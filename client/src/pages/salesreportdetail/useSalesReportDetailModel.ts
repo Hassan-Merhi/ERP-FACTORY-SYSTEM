@@ -20,15 +20,16 @@ export function useSalesReportDetailModel() {
   const ITEM_COLUMNS = [
     { id: "qty" as const, label: "Qty" },
     { id: "costPrice" as const, label: "Cost Price" },
-    { id: "hassanPrice" as const, label: "Hassan's Price" },
     { id: "pricePerBale" as const, label: "Price / Bale" },
     { id: "costProfitBale" as const, label: "Cost Profit / Bale" },
+    { id: "hassanPrice" as const, label: "Hassan's Price" },
     { id: "hassanProfitBale" as const, label: "Hassan's Profit / Bale" },
-    { id: "costProfitTotal" as const, label: "Cost Profit" },
     { id: "hassanProfitTotal" as const, label: "Hassan's Profit" },
+    { id: "costProfitTotal" as const, label: "Cost Profit" },
   ];
   type ItemColumnId = (typeof ITEM_COLUMNS)[number]["id"];
-  const [hiddenColumns, setHiddenColumns] = useState<Set<ItemColumnId>>(new Set());
+  // Keep the Cost Profit total available in the selector, but off by default.
+  const [hiddenColumns, setHiddenColumns] = useState<Set<ItemColumnId>>(new Set(["costProfitTotal"]));
   const col = (id: ItemColumnId) => !hiddenColumns.has(id);
   const toggleColumn = (id: ItemColumnId) => {
     setHiddenColumns((prev) => {
