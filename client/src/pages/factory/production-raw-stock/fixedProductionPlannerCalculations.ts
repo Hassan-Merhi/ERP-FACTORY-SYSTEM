@@ -88,6 +88,20 @@ export function calculateFixedProductionRows(
   });
 }
 
+/**
+ * A supplier with no combined stock (neither in hand nor in transit) is not
+ * part of the current production plan, even if it has a historic saved 20t
+ * allocation. Preserve the allocation in storage separately so it comes back
+ * if this supplier has stock again.
+ *
+ * Compare at the same three-decimal kg precision used in the popup.
+ */
+export function visibleFixedProductionRows(
+  rows: FixedProductionPlanRow[],
+): FixedProductionPlanRow[] {
+  return rows.filter((row) => Math.abs(row.total) >= 0.0005);
+}
+
 export function sumFixedProductionRows(rows: FixedProductionPlanRow[]): FixedProductionPlanTotals {
   return rows.reduce<FixedProductionPlanTotals>((totals, row) => ({
     inHand: totals.inHand + row.inHand,
