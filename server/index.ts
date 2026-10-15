@@ -60,6 +60,7 @@ import { runApprovedReturnedLoadingDateRepair } from "./startup/runApprovedRetur
 import { runApprovedFactoryPayableReclassification } from "./startup/runApprovedFactoryPayableReclassification";
 import { runApprovedFactoryPayableUndo } from "./startup/runApprovedFactoryPayableUndo";
 import { runApprovedAboSobhiGoods82 } from "./startup/runApprovedAboSobhiGoods82";
+import { runApprovedAboJaberPayableFix } from "./startup/runApprovedAboJaberPayableFix";
 import { ensureFactorySheetsSacksSchema } from "./startup/factorySheetsSacksSchema";
 import { ensureRecurringJournalSchema } from "./services/accounting/ensureRecurringJournalSchema";
 import { bootstrapRecurringJournalFromEnvironment } from "./services/accounting/recurringJournalBootstrap";
@@ -341,6 +342,8 @@ let migrationsDone = false;
       await runApprovedFactoryPayableUndo();
       // One-time exact goods payable catch-up for ABO SOBHI container TCLU8160430.
       await runApprovedAboSobhiGoods82();
+      // One-time, source-reviewed, owner-approved company-12 JABER liability reassignment.
+      await runApprovedAboJaberPayableFix();
       if (migrationsEnabled) {
         try {
           await runMigrations();
