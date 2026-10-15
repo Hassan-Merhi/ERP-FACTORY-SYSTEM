@@ -26,7 +26,17 @@ export const PAYABLE_CONTAINER_STATUSES = new Set(["OFFLOADED", "RECEIVED", "PAR
 export const isPayableContainer = (c: Record<string, unknown>) =>
   PAYABLE_CONTAINER_STATUSES.has(String(c.status || "").toUpperCase());
 
-export async function buildBrokerStatement(brokerId: number, companyId: number, includeOtw = false) {
+/**
+ * `asOf` (YYYY-MM-DD) limits the statement to what existed on that date, for
+ * the historical factory Net Position. Omitted, the statement is current.
+ */
+export async function buildBrokerStatement(
+  brokerId: number,
+  companyId: number,
+  includeOtw = false,
+  options: { asOf?: string | null } = {}
+) {
+  const { asOf } = options;
   // Fetch broker
   const [broker] = await db
     .select()
@@ -52,13 +62,15 @@ export async function buildBrokerStatement(brokerId: number, companyId: number, 
     ? and(
         eq(factoryContainers.companyId, companyId),
         inArray(factoryContainers.supplierId, allSupplierIds),
-        isNull(factoryContainers.deletedAt)
+        isNull(factoryContainers.deletedAt),
+        asOf ? sql`DATE(${factoryContainers.createdAt}) <= ${asOf}::date` : undefined
       )
     : and(
         eq(factoryContainers.companyId, companyId),
         inArray(factoryContainers.supplierId, allSupplierIds),
         isNull(factoryContainers.deletedAt),
-        sql`${factoryContainers.status} NOT IN ('PENDING', 'IN_TRANSIT')`
+        sql`${factoryContainers.status} NOT IN ('PENDING', 'IN_TRANSIT')`,
+        asOf ? sql`DATE(${factoryContainers.createdAt}) <= ${asOf}::date` : undefined
       );
   const allContainers =
     allSupplierIds.length > 0
@@ -80,7 +92,8 @@ export async function buildBrokerStatement(brokerId: number, companyId: number, 
           .where(
             and(
               eq(factorySupplierPayments.companyId, companyId),
-              inArray(factorySupplierPayments.supplierId, allSupplierIds)
+              inArray(factorySupplierPayments.supplierId, allSupplierIds),
+              asOf ? sql`${factorySupplierPayments.date} <= ${asOf}` : undefined
             )
           )
           .orderBy(factorySupplierPayments.date)
@@ -120,7 +133,8 @@ export async function buildBrokerStatement(brokerId: number, companyId: number, 
               // debit legs creates fake payments and corrupts broker pools.
               sql`${vouchers.voucherNumber} NOT LIKE 'FACTORY-PAYABLE-RECLASS-%'`,
               // Posted freight/FX repair journals are non-payment ledger corrections.
-              sql`${vouchers.voucherNumber} NOT LIKE 'FACTORY-CORRECTION-%'`
+              sql`${vouchers.voucherNumber} NOT LIKE 'FACTORY-CORRECTION-%'`,
+              asOf ? sql`COALESCE(${vouchers.effectiveDate}, ${vouchers.voucherDate}) <= ${asOf}` : undefined
             )
           )
           .orderBy(vouchers.voucherDate)
@@ -135,7 +149,8 @@ export async function buildBrokerStatement(brokerId: number, companyId: number, 
           .where(
             and(
               eq(factorySupplierFxTransfers.companyId, companyId),
-              sql`(${factorySupplierFxTransfers.fromSupplierId} = ANY(${sqlArray(allSupplierIds)}) OR ${factorySupplierFxTransfers.toSupplierId} = ANY(${sqlArray(allSupplierIds)}))`
+              sql`(${factorySupplierFxTransfers.fromSupplierId} = ANY(${sqlArray(allSupplierIds)}) OR ${factorySupplierFxTransfers.toSupplierId} = ANY(${sqlArray(allSupplierIds)}))`,
+              asOf ? sql`${factorySupplierFxTransfers.date} <= ${asOf}` : undefined
             )
           )
           .orderBy(factorySupplierFxTransfers.date)
@@ -161,7 +176,8 @@ export async function buildBrokerStatement(brokerId: number, companyId: number, 
           .where(
             and(
               eq(factoryOffloadAdditionalCharges.companyId, companyId),
-              sql`${factoryOffloadAdditionalCharges.supplierId} = ANY(${sqlArray(allSupplierIds)})`
+              sql`${factoryOffloadAdditionalCharges.supplierId} = ANY(${sqlArray(allSupplierIds)})`,
+              asOf ? sql`DATE(${factoryOffloadAdditionalCharges.createdAt}) <= ${asOf}::date` : undefined
             )
           )
           .orderBy(factoryOffloadAdditionalCharges.createdAt)
@@ -187,7 +203,8 @@ export async function buildBrokerStatement(brokerId: number, companyId: number, 
           .where(
             and(
               eq(factoryContainerOtherCharges.companyId, companyId),
-              inArray(factoryContainers.supplierId, allSupplierIds)
+              inArray(factoryContainers.supplierId, allSupplierIds),
+              asOf ? sql`DATE(${factoryContainerOtherCharges.createdAt}) <= ${asOf}::date` : undefined
             )
           )
           .orderBy(factoryContainerOtherCharges.createdAt)

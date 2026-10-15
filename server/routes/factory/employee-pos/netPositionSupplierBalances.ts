@@ -130,7 +130,7 @@ export async function computeNetPositionSupplierBalances(
     // Brokers: use buildBrokerStatement (same function as Suppliers page) for exact parity
     if (brokerIds.has(s.id) && !processedBrokers.has(s.id)) {
       processedBrokers.add(s.id);
-      const stmt = await buildBrokerStatement(s.id, ctx.companyId, true);
+      const stmt = await buildBrokerStatement(s.id, ctx.companyId, true, { asOf: ctx.asOf });
       if (!stmt) continue;
       let brokerUsd = new MoneyDecimal(0);
       for (const ledger of stmt.currencyLedgers) {

@@ -44,12 +44,37 @@ beforeAll(async () => {
   // Offloaded EUR 50,000 goods + EUR 1,000 freight; OTW EUR 5,000 goods + EUR 300 freight.
   await makeEurContainer("C1", "OFFLOADED", "100000", "1000");
   await makeEurContainer("C2", "IN_TRANSIT", "10000", "300");
+  // A deleted container's other charges must not reach the supplier.
+  await pool.query(
+    `INSERT INTO factory_containers
+       (company_id, container_number, supplier_id, currency_code, fx_rate_to_usd, fx_rate_confirmed,
+        fx_rate_source, rate_per_kg, total_kg, actual_received_kg, status, arrival_date, duty_status,
+        freight, other_charges, other_charges_supplier_id, other_charges_currency_code, commission_amount, deleted_at)
+     VALUES ($1, $2, $3, 'EUR', '1.10', true, 'manual', '0.50', '1000', '1000', 'OFFLOADED', '2026-06-08', 'NONE',
+             '0', '999', $3, 'EUR', '0', now())`,
+    [ctx.companyId, `${TEST_PREFIX}-DELETED`, supplierId]
+  );
   // EUR 20,000 settled to USD at the historical 1.10 rate.
   await pool.query(
     `INSERT INTO factory_supplier_fx_transfers
        (company_id, from_supplier_id, to_supplier_id, date, from_currency_code, from_amount, fx_rate_to_usd, to_amount_usd, source_type)
      VALUES ($1, $2, $2, '2026-06-09', 'EUR', '20000', '1.10', '22000', 'supplier')`,
     [ctx.companyId, supplierId]
+  );
+
+  // A broker whose only container arrives after 2026-06-15.
+  const broker = await pool.query<{ id: number }>(
+    `INSERT INTO factory_suppliers (company_id, name, is_active, is_broker) VALUES ($1, $2, true, true) RETURNING id`,
+    [ctx.companyId, `${TEST_PREFIX} Broker`]
+  );
+  await pool.query(
+    `INSERT INTO factory_containers
+       (company_id, container_number, supplier_id, currency_code, fx_rate_to_usd, fx_rate_confirmed,
+        fx_rate_source, rate_per_kg, total_kg, actual_received_kg, status, arrival_date, duty_status,
+        freight, other_charges, commission_amount, created_at)
+     VALUES ($1, $2, $3, 'USD', '1', true, 'manual', '1.00', '5000', '5000', 'OFFLOADED', '2026-07-01', 'NONE',
+             '0', '0', '0', '2026-07-01')`,
+    [ctx.companyId, `${TEST_PREFIX}-BROKER`, broker.rows[0].id]
   );
 
   agent = request.agent(ctx.app);
@@ -106,5 +131,17 @@ describe("supplier directory = inside settlement statement", () => {
       (account) => account.code === "SUPPLIER" && account.name === `${TEST_PREFIX} Euro Supplier`
     );
     expect(row?.value).toBeCloseTo(card, 2);
+  });
+
+  it("limits broker balances on a past-date Net Position to that date", async () => {
+    const accountFor = async (query: string) => {
+      const response = await agent.get(`/api/factory/net-position${query}`);
+      expect(response.status).toBe(200);
+      return (response.body.onUs.accounts as { name: string; value: number }[]).find(
+        (account) => account.name === `${TEST_PREFIX} Broker`
+      );
+    };
+    expect((await accountFor(""))?.value).toBeCloseTo(5000, 2);
+    expect(await accountFor("?asOf=2026-06-15")).toBeUndefined();
   });
 });

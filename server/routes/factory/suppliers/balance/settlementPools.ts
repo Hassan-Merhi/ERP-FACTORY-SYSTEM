@@ -365,7 +365,8 @@ export async function loadSupplierSettlementBalances(
       )
     );
   // Same as the statement: container-column other charges are attributed by
-  // other_charges_supplier_id whatever the container's status.
+  // other_charges_supplier_id whatever the container's status, and a deleted
+  // container's charges are dropped.
   const columnChargesQuery = db
     .select({
       supplierId: factoryContainers.otherChargesSupplierId,
@@ -378,6 +379,7 @@ export async function loadSupplierSettlementBalances(
         eq(factoryContainers.companyId, companyId),
         sql`${factoryContainers.otherChargesSupplierId} IS NOT NULL`,
         sql`${factoryContainers.otherCharges}::numeric > 0`,
+        isNull(factoryContainers.deletedAt),
         containerDate(factoryContainers.createdAt)
       )
     );

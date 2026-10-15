@@ -25,7 +25,7 @@ import {
 import { eq, and, sql, inArray, isNull } from "drizzle-orm";
 import { buildBrokerStatement, isPayableContainer, isSupplierPaidFreight, resolveDisplayFx } from "./_helpers";
 import { supplierUsdEquivalent } from "./supplierUsdEquivalent";
-import { loadSupplierSettlementBalances } from "./settlementPools";
+import { loadSupplierSettlementBalances, type SupplierSettlementBalance } from "./settlementPools";
 import {
   emptyFactorySupplierLedgerView,
   FACTORY_SUPPLIER_OPERATIONAL_MEMO_LABEL,
@@ -188,10 +188,10 @@ export function registerSupplierWithBalancesRoutes(app: Express) {
       // The inside Settlement Statement's currency pools (honouring the OTW
       // toggle), loaded in bulk. Each non-broker card shows exactly their
       // current-rate USD equivalent: USD + Σ(native × Factory Settings rate).
-      const settlementBalancesPromise = loadSupplierSettlementBalances(companyId, {
-        includeOtw,
-        configuredFxRates,
-      });
+      const settlementBalancesPromise =
+        allSupplierIds.length > 0
+          ? loadSupplierSettlementBalances(companyId, { includeOtw, configuredFxRates })
+          : Promise.resolve(new Map<number, SupplierSettlementBalance>());
 
       // Primary balances (wave 13, owner decision 3): the ledger from the balance
       // engine, the native balance per currency of the same lines, and the

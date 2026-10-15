@@ -85,9 +85,9 @@ describe("supplier settlement directory parity", () => {
     const directory = read("client/src/pages/factory/factory-suppliers/FactorySuppliersDirectory.tsx");
     const netPosition = read("server/routes/factory/employee-pos/netPositionSupplierBalances.ts");
     expect(statement).toContain("computeSettlementCurrencyGroups({");
-    expect(route).toContain("loadSupplierSettlementBalances(companyId, {\n        includeOtw,");
+    expect(route).toContain("loadSupplierSettlementBalances(companyId, { includeOtw, configuredFxRates })");
     expect(netPosition).toContain("includeOtw: true,");
-    expect(netPosition).toContain("buildBrokerStatement(s.id, ctx.companyId, true)");
+    expect(netPosition).toContain("buildBrokerStatement(s.id, ctx.companyId, true, { asOf: ctx.asOf })");
     // No supplier-specific branches remain on the card or the route.
     expect(directory).not.toMatch(/supplier\.id === \d+/);
     expect(route).not.toMatch(/s\.id === \d+/);

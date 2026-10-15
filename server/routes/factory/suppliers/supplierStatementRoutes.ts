@@ -171,7 +171,9 @@ export function registerSupplierStatementRoutes(app: Express) {
           and(
             eq(factoryContainers.companyId, companyId),
             eq(factoryContainers.otherChargesSupplierId, supplierId),
-            sql`${factoryContainers.otherCharges}::numeric > 0`
+            sql`${factoryContainers.otherCharges}::numeric > 0`,
+            // A deleted container's charges no longer belong to the supplier.
+            isNull(factoryContainers.deletedAt)
           )
         );
       // Merge into supplierOffloadCharges list for unified processing below
