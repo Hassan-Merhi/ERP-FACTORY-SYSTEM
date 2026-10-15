@@ -25,6 +25,7 @@ import {
 import { eq, and, sql, inArray, isNull } from "drizzle-orm";
 import { buildBrokerStatement, isPayableContainer, isSupplierPaidFreight, resolveDisplayFx } from "./_helpers";
 import { supplierUsdEquivalent } from "./supplierUsdEquivalent";
+import { loadSupplierSettlementBalances } from "./settlementPools";
 import {
   emptyFactorySupplierLedgerView,
   FACTORY_SUPPLIER_OPERATIONAL_MEMO_LABEL,
@@ -184,11 +185,22 @@ export function registerSupplierWithBalancesRoutes(app: Express) {
               )
           : [];
 
+      // The inside Settlement Statement's currency pools (honouring the OTW
+      // toggle), loaded in bulk. Each non-broker card shows exactly their
+      // current-rate USD equivalent: USD + Σ(native × Factory Settings rate).
+      const settlementBalancesPromise = loadSupplierSettlementBalances(companyId, {
+        includeOtw,
+        configuredFxRates,
+      });
+
       // Primary balances (wave 13, owner decision 3): the ledger from the balance
       // engine, the native balance per currency of the same lines, and the
       // container amounts not yet in the ledger. The operational figures
       // computed below are returned only as a labelled memo.
-      const ledgerViews = await loadFactorySupplierLedgerViews(db, companyId, { ids: allSupplierIds });
+      const [settlementBalances, ledgerViews] = await Promise.all([
+        settlementBalancesPromise,
+        loadFactorySupplierLedgerViews(db, companyId, { ids: allSupplierIds }),
+      ]);
       const ledgerFields = (supplierId: number) => {
         const view = ledgerViews.get(supplierId) ?? emptyFactorySupplierLedgerView(supplierId);
         return {
@@ -524,12 +536,13 @@ export function registerSupplierWithBalancesRoutes(app: Express) {
         suppliersList.filter((s) => s.isBroker || suppliersList.some((c) => c.parentId === s.id)).map((s) => s.id)
       );
       const brokerStmtMap: Record<number, NonNullable<Awaited<ReturnType<typeof buildBrokerStatement>>>> = {};
-      for (const s of suppliersList) {
-        if (brokerParentIds.has(s.id)) {
-          const stmt = await buildBrokerStatement(s.id, companyId, includeOtw);
-          if (stmt) brokerStmtMap[s.id] = stmt;
-        }
-      }
+      // Independent per-broker reads: run them together, not one after another.
+      await Promise.all(
+        [...brokerParentIds].map(async (brokerId) => {
+          const stmt = await buildBrokerStatement(brokerId, companyId, includeOtw);
+          if (stmt) brokerStmtMap[brokerId] = stmt;
+        })
+      );
 
       // Second pass: for parent suppliers, roll up children's stats
       const suppliersWithBalances = suppliersList.map((s) => {
@@ -537,37 +550,13 @@ export function registerSupplierWithBalancesRoutes(app: Express) {
         const children = suppliersList.filter((c) => c.parentId === s.id);
 
         if (!brokerParentIds.has(s.id)) {
-          // Narrow supplier-specific display parity for Portugal Saad and Talal.
-          // The inside settlement statement uses current container goods,
-          // supplier-paid freight and source FX transfers. Old import vouchers
-          // can differ. Keep all posted ledger amounts untouched, using the
-          // operational currency pools for these two directory cards only.
-          // Do not change NASRA, other suppliers or general ledger accounting.
-          const usePortugalSettlementDisplay =
-            companyId === 12 && s.id === 39 && s.name.trim().toUpperCase() === "PORTUGAL SAAD";
-          // TALAL's saved containers and supplier-paid freight less original
-          // FX settlements give a net EUR -2609 credit owed back to us, while
-          // its historical posted voucher view reads EUR -8519. As with
-          // Portugal, reconcile only the directory presentation to the
-          // existing operational statement, not the accounting journals.
-          const useTalalSettlementDisplay =
-            companyId === 12 &&
-            s.id === 40 &&
-            s.name.trim().toUpperCase() === "TALAL ANAKYKLOS CYPRUS";
-          const useSettlementDisplay = usePortugalSettlementDisplay || useTalalSettlementDisplay;
-          const portugalSettlementDisplay = useSettlementDisplay
+          const settlement = settlementBalances.get(s.id);
+          const settlementDisplay = settlement
             ? {
-                displayBalanceBasis: "operational-statement" as const,
-                // Three USD decimals intentionally preserve the exact
-                // EUR 106065.40 × Factory Settings EUR 1.18 = USD 125157.172.
-                // If any currency cannot be converted, don't show a partial total.
-                usdEquivalentBalance: own.fxUnresolved ? null : own.balance.toFixed(3),
-                usdEquivalentMissingRates: own.fxUnresolved
-                  ? own.currencyBalances
-                      .filter((b) => b.currencyCode !== "USD" && !configuredFxRates[b.currencyCode])
-                      .map((b) => b.currencyCode)
-                  : [],
-                currencyBalances: own.currencyBalances,
+                displayBalanceBasis: "settlement-statement" as const,
+                usdEquivalentBalance: settlement.usdEquivalentBalance,
+                usdEquivalentMissingRates: settlement.usdEquivalentMissingRates,
+                settlementBalances: settlement.settlementBalances,
               }
             : {};
           return {
@@ -585,7 +574,7 @@ export function registerSupplierWithBalancesRoutes(app: Express) {
             dueContainersCount: own.dueContainers.length,
             autoSettledFreightUsd: own.autoSettledFreightUsd.toFixed(2),
             ...ledgerFields(s.id),
-            ...portugalSettlementDisplay,
+            ...settlementDisplay,
             operationalMemo: {
               label: FACTORY_SUPPLIER_OPERATIONAL_MEMO_LABEL,
               totalValue: own.balance.toFixed(2),
