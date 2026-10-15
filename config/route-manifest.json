@@ -277,6 +277,7 @@
     "POST /api/factory/raw-stock/recalc-opening [requireAuth > <anonymous>]",
     "POST /api/factory/import/opening-raw-stock [requireAuth > <anonymous> > <anonymous>]",
     "GET /api/factory/import/template/:type [requireAuth > <anonymous>]",
+    "GET /api/factory/bale-cost/historical-sold-audit [requireAuth > <anonymous> > <anonymous>]",
     "GET /api/factory/bale-cost/recost-preview [requireAuth > <anonymous> > <anonymous>]",
     "POST /api/factory/bale-cost/recost-apply [requireAuth > <anonymous> > <anonymous>]",
     "GET /api/factory/daybook [requireAuth > <anonymous>]",
