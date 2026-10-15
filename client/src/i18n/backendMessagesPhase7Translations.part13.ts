@@ -262,4 +262,29 @@ export const backendMessagesPhase7TranslationsPart13: readonly Phase7BackendMess
     ar: "يجب أن ينتمي مورّد الشحن المحدد إلى هذه الشركة.",
     fr: "Le fournisseur de fret sélectionné doit appartenir à cette société.",
   },
+  {
+    en: "This company has no verified parent company for intercompany credit.",
+    ar: "لا توجد شركة أم معتمدة لهذه الشركة لتحديث الرصيد بين الشركات.",
+    fr: "Cette société n'a pas de société mère vérifiée pour le crédit intersociétés.",
+  },
+  {
+    en: "Parent intercompany journal missing for this container; purchase-order edit was not saved.",
+    ar: "قيد الشركة الأم لهذا الحاوية غير موجود؛ لم يتم حفظ تعديل أمر الشراء.",
+    fr: "Le journal intersociétés de la société mère est introuvable pour ce conteneur ; la modification du bon de commande n'a pas été enregistrée.",
+  },
+  {
+    en: "No matching parent intercompany journal for container ${poContainerRow?.containerNumber ?? \"unknown\"}; nothing was changed.",
+    ar: "لا يوجد قيد مطابق لدى الشركة الأم للحاوية {0}؛ لم يتم إجراء أي تعديل.",
+    fr: "Aucun journal intersociétés correspondant pour le conteneur {0} ; aucune modification effectuée.",
+  },
+  {
+    en: "Intercompany credit not synchronized for container ${_b1ContainerRow?.containerNumber ?? \"unknown\"} (PO ${existingPO.poNumber}). Parent journal missing; no changes saved.",
+    ar: "لم تتم مزامنة الرصيد بين الشركات للحاوية {0} (أمر الشراء {1}). قيد الشركة الأم مفقود؛ لم تُحفظ التعديلات.",
+    fr: "Le crédit intersociétés du conteneur {0} (BC {1}) n’a pas été synchronisé. Journal de la société mère introuvable ; modifications non enregistrées.",
+  },
+  {
+    en: "Multiple legacy parent journals match container ${containerNumber}; reconcile them before editing.",
+    ar: "توجد قيود قديمة متعددة لدى الشركة الأم تطابق الحاوية {0}؛ يرجى مطابقتها قبل التعديل.",
+    fr: "Plusieurs anciens journaux de la société mère correspondent au conteneur {0} ; rapprochez-les avant de modifier.",
+  },
 ];
