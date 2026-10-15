@@ -13,7 +13,7 @@ import { queryClient } from "@/lib/queryClient";
 import type { RawStockRow } from "./RawStockTable";
 import type { OffloadSupplierOption } from "./offloadDialogTypes";
 import { FixedProductionPlannerImage } from "./FixedProductionPlannerImage";
-import { calculateFixedProductionRows, sumFixedProductionRows } from "./fixedProductionPlannerCalculations";
+import { calculateFixedProductionRows, sumFixedProductionRows, visibleFixedProductionRows } from "./fixedProductionPlannerCalculations";
 
 interface FixedProductionPlannerDialogProps {
   open: boolean;
@@ -125,14 +125,14 @@ export function FixedProductionPlannerDialog({
   });
 
   const rows = useMemo(
-    () => calculateFixedProductionRows(suppliers, rawStock, otwQuery.data ?? [], inputs),
+    () => visibleFixedProductionRows(calculateFixedProductionRows(suppliers, rawStock, otwQuery.data ?? [], inputs)),
     [suppliers, rawStock, otwQuery.data, inputs],
   );
   const totals = useMemo(() => sumFixedProductionRows(rows), [rows]);
 
   // WhatsApp images always use saved allocations, never unsaved edits.
   const reportRows = useMemo(
-    () => calculateFixedProductionRows(suppliers, rawStock, otwQuery.data ?? [], planQuery.data?.allocations20t ?? {}),
+    () => visibleFixedProductionRows(calculateFixedProductionRows(suppliers, rawStock, otwQuery.data ?? [], planQuery.data?.allocations20t ?? {})),
     [suppliers, rawStock, otwQuery.data, planQuery.data?.allocations20t],
   );
   const reportTotals = useMemo(() => sumFixedProductionRows(reportRows), [reportRows]);
@@ -193,7 +193,14 @@ export function FixedProductionPlannerDialog({
 
   const saveAndLock = () => {
     if (locked || pending || !ready) return;
-    const allocations: Record<string, number> = {};
+    // Keep saved allocations for currently hidden zero-balance suppliers.
+    // When their stock returns the saved setting reappears; don't send IDs
+    // belonging to removed suppliers to the backend.
+    const supplierIds = new Set(suppliers.map((supplier) => String(supplier.id)));
+    const allocations: Record<string, number> = Object.fromEntries(
+      Object.entries(planQuery.data?.allocations20t ?? {})
+        .filter(([id]) => supplierIds.has(id))
+    );
     for (const row of rows) {
       const raw = inputs[row.id]?.trim() ?? "";
       const quantity = raw === "" ? 0 : Number(raw);
