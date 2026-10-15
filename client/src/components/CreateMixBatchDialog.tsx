@@ -404,20 +404,16 @@ export function CreateMixBatchDialog({ open, onOpenChange, onCreated }: CreateMi
               </div>
               <div className="inline-flex max-w-full rounded-md border border-border bg-muted/40 p-1 gap-1" role="group" aria-label="Automatically selected production target">
                 {MIX_BATCH_TARGET_OPTIONS.map((tons) => (
-                  <Button
+                  <span
                     key={tons}
-                    type="button"
-                    variant={automaticTargetTons === tons ? "default" : "ghost"}
-                    size="sm"
-                    className="min-w-20"
-                    aria-pressed={automaticTargetTons === tons}
-                    aria-label={`${tons} ton production target`}
+                    aria-current={automaticTargetTons === tons ? "true" : undefined}
+                    className={automaticTargetTons === tons
+                      ? "flex min-h-9 min-w-20 items-center justify-center rounded-md bg-primary px-3 text-sm font-semibold text-primary-foreground shadow-sm"
+                      : "flex min-h-9 min-w-20 items-center justify-center rounded-md px-3 text-sm font-semibold text-muted-foreground"}
                     data-testid={`mix-batch-target-${tons}`}
-                    // Read-only selector: automatically determined from source weights.
-                    disabled={false}
                   >
                     {tons} Tons
-                  </Button>
+                  </span>
                 ))}
               </div>
               <p className="text-xs text-muted-foreground">Automatically advances from 15 → 17.5 → 20 tons as total batch weight increases.</p>
