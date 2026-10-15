@@ -83,6 +83,27 @@ const messages = {
     fr: "Stock et arrivages selon l'inventaire au moment du rapport. Jours ouvrés : 26. Conteneur : 20 000 kg.",
   },
   reportCaption: { en: "Fixed Production Plan — {date}", ar: "خطة الإنتاج الثابتة — {date}", fr: "Plan de production fixe — {date}" },
+  noCompany: { en: "No company selected", ar: "لم يتم تحديد شركة", fr: "Aucune société sélectionnée" },
+  invalidAllocations: { en: "Invalid allocations or plan revision", ar: "توزيعات أو إصدار خطة غير صالح", fr: "Répartition ou version du plan invalide" },
+  tooManySuppliers: { en: "Too many supplier allocations", ar: "عدد توزيعات الموردين كبير جدًا", fr: "Trop de répartitions de fournisseurs" },
+  invalidSupplierAllocation: { en: "Invalid 20-ton quantity for supplier ${supplierId}", ar: "كمية 20 طن غير صالحة للمورد ${supplierId}", fr: "Quantité de 20 tonnes invalide pour le fournisseur ${supplierId}" },
+  wrongCompanySupplier: {
+    en: "One or more suppliers do not belong to this company",
+    ar: "مورد واحد أو أكثر لا ينتمي إلى هذه الشركة",
+    fr: "Un ou plusieurs fournisseurs n'appartiennent pas à cette société",
+  },
+  lockedConflict: {
+    en: "Planner was locked or edited elsewhere. Refresh before saving.",
+    ar: "تم قفل المخطط أو تعديله من مكان آخر. حدّث الصفحة قبل الحفظ.",
+    fr: "Le plan a été verrouillé ou modifié ailleurs. Actualisez avant d'enregistrer.",
+  },
+  invalidRevision: { en: "Invalid plan revision", ar: "إصدار الخطة غير صالح", fr: "Version du plan invalide" },
+  changedConflict: {
+    en: "Plan already changed. Refresh before unlocking.",
+    ar: "تم تعديل الخطة مسبقًا. حدّث الصفحة قبل فتح القفل.",
+    fr: "Le plan a déjà changé. Actualisez avant de le déverrouiller.",
+  },
+
 } as const;
 
 export type FixedProductionPlannerTranslationKey = keyof typeof messages;
@@ -97,4 +118,18 @@ export function translateFixedProductionPlanner(
   if (!params) return template;
   return template.replace(/\{(\w+)\}/g, (token, name: string) =>
     Object.prototype.hasOwnProperty.call(params, name) ? String(params[name]) : token);
+}
+
+/** Translate the exact planner API validation/conflict messages without changing the API contract. */
+export function translateFixedPlannerApiMessage(raw: string, language: ApplicationLanguage): string {
+  const match = /^Invalid 20-ton quantity for supplier (\d+)$/.exec(raw);
+  if (match) return messages.invalidSupplierAllocation[language].replace("${supplierId}", match[1]);
+  const keys = [
+    "noCompany", "invalidAllocations", "tooManySuppliers", "wrongCompanySupplier",
+    "lockedConflict", "invalidRevision", "changedConflict",
+  ] as const;
+  for (const key of keys) {
+    if (messages[key].en === raw) return messages[key][language];
+  }
+  return raw;
 }
