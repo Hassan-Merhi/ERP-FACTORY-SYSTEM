@@ -53,16 +53,20 @@ export function registerFactoryMixBatchesByDateRoutes(app: Express, requireAuth:
             s.id, s.mix_batch_id, s.container_id, s.supplier_id, s.source_batch_id,
             s.weight_kg, s.cost_per_kg, s.total_cost,
             c.container_number,
-            COALESCE(sup_via_c.name, sup_direct.name, mb.batch_code, 'Unknown') AS source_name
+            COALESCE(sup_via_c.name, sup_direct.name, mb.batch_code, 'Unknown') AS source_name,
+            supplier_cat.id AS category_id, supplier_cat.name AS category_name
           FROM factory_mix_batch_sources s
           LEFT JOIN factory_containers c ON c.id = s.container_id
           LEFT JOIN factory_suppliers sup_via_c ON sup_via_c.id = c.supplier_id
           LEFT JOIN factory_suppliers sup_direct ON sup_direct.id = s.supplier_id
           LEFT JOIN factory_mix_batches mb ON mb.id = s.source_batch_id
+          LEFT JOIN factory_supplier_categories supplier_cat
+            ON supplier_cat.id = COALESCE(sup_direct.supplier_category_id, sup_via_c.supplier_category_id)
+           AND supplier_cat.company_id = $2
           WHERE s.mix_batch_id = ANY($1)
           ORDER BY s.id
         `,
-            [batchIds]
+            [batchIds, companyId]
           );
           sources = sourcesResult.rows;
         }
@@ -92,6 +96,8 @@ export function registerFactoryMixBatchesByDateRoutes(app: Express, requireAuth:
               id: s.id,
               sourceName: s.source_name,
               containerNumber: s.container_number,
+              categoryId: s.category_id ?? null,
+              categoryName: s.category_name ?? null,
               weightKg: toMoney(s.weight_kg).toNumber(),
               costPerKg: toMoney(s.cost_per_kg).toNumber(),
               totalCost: toMoney(s.total_cost).toNumber(),
