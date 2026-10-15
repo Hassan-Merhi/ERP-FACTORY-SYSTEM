@@ -175,7 +175,16 @@ export function BrokerOverviewPanel({
                 FX rate missing: {parentSup.usdEquivalentMissingRates?.join(", ") || "broker statement unavailable"}
               </div>
             ) : (
-              <div className="text-2xl font-bold mt-1 tabular-nums" data-testid="text-broker-usd-equivalent">
+              <div
+                className={`text-2xl font-bold mt-1 tabular-nums ${
+                  Number(parentSup.usdEquivalentBalance ?? 0) > 0.005
+                    ? "text-red-600 dark:text-red-400"
+                    : Number(parentSup.usdEquivalentBalance ?? 0) < -0.005
+                      ? "text-green-600 dark:text-green-400"
+                      : "text-muted-foreground"
+                }`}
+                data-testid="text-broker-usd-equivalent"
+              >
                 {Number(parentSup.usdEquivalentBalance ?? 0) < 0 ? "-" : ""}$
                 {formatNum(Math.abs(Number(parentSup.usdEquivalentBalance ?? 0)).toFixed(2))}
               </div>
@@ -244,7 +253,15 @@ export function BrokerOverviewPanel({
                   {b.isBrokerPool ? "Pool Balance" : "Net Balance"} ({b.currencyCode})
                 </div>
                 <div
-                  className={`text-2xl font-bold mt-1 tabular-nums ${b.balance > 0 ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}
+                  className={`text-2xl font-bold mt-1 tabular-nums ${
+                    b.isBrokerPool
+                      ? b.balance > 0
+                        ? "text-green-600 dark:text-green-400"
+                        : "text-red-600 dark:text-red-400"
+                      : b.balance > 0
+                        ? "text-red-600 dark:text-red-400"
+                        : "text-green-600 dark:text-green-400"
+                  }`}
                   data-testid={`text-pool-balance-${b.currencyCode}`}
                 >
                   {b.currencyCode === "USD" ? "$" : `${b.currencyCode} `}
