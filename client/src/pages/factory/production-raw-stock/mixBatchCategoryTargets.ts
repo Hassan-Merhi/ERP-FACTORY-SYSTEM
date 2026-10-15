@@ -22,6 +22,8 @@ export interface MixBatchReportSource {
   totalCost: number;
   categoryId?: number | null;
   categoryName?: string | null;
+  supplierId?: number | null;
+  sourceBatchId?: number | null;
 }
 
 export interface MixBatchSupplierCategory {
@@ -51,7 +53,7 @@ const num = (value: number | string | null | undefined): number => {
 };
 
 export function mixBatchCategoryTargetKg(
-  categoryId: number,
+  categoryId: number | "uncategorized",
   selectedTons: MixBatchTargetTons,
   allocations: Record<string, number>,
   suppliers: MixBatchSupplierCategoryLink[],
@@ -61,7 +63,9 @@ export function mixBatchCategoryTargetKg(
   const base20 = Object.prototype.hasOwnProperty.call(allocations, key)
     ? num(allocations[key])
     : suppliers
-      .filter(s => s.supplierCategoryId === categoryId)
+      .filter(s => categoryId === "uncategorized"
+        ? s.supplierCategoryId == null
+        : s.supplierCategoryId === categoryId)
       .reduce((sum, s) => sum + num(allocations[String(s.id)]), 0);
   return base20 * selectedTons / 20;
 }
@@ -84,14 +88,24 @@ export function buildMixBatchCategoryReport(
   for (const s of sources) {
     const cat = s.categoryId !== null && s.categoryId !== undefined && known.has(s.categoryId)
       ? s.categoryId : null;
-    const id = cat === null ? "unmapped" : `cat:${cat}`;
-    const name = cat === null ? "Uncategorized / Existing Batch" : known.get(cat)!;
+    // Source batches cannot be safely attributed to a supplier category.
+    // A supplier source without an assigned category belongs to the saved
+    // Fixed Production Planner's "cat:uncategorized" pool instead.
+    const isUncategorizedSupplier = cat === null && s.sourceBatchId == null && s.supplierId != null;
+    const id = cat !== null ? `cat:${cat}`
+      : isUncategorizedSupplier ? "cat:uncategorized" : "unmapped";
+    const name = cat !== null ? known.get(cat)!
+      : isUncategorizedSupplier ? "Uncategorized" : "Existing Batch / Unmapped";
     const row = grouped.get(id) ?? { id, name, weightKg: 0, totalCost: 0 };
     row.weightKg += num(s.weightKg);
     row.totalCost += num(s.totalCost);
     grouped.set(id, row);
   }
   if (allocations !== null) {
+    const uncategorizedTarget = mixBatchCategoryTargetKg("uncategorized", selectedTons, allocations, suppliers);
+    if (uncategorizedTarget > 0 && !grouped.has("cat:uncategorized")) {
+      grouped.set("cat:uncategorized", { id: "cat:uncategorized", name: "Uncategorized", weightKg: 0, totalCost: 0 });
+    }
     for (const cat of categories) {
       const target = mixBatchCategoryTargetKg(cat.id, selectedTons, allocations, suppliers);
       if (target && target > 0 && !grouped.has(`cat:${cat.id}`)) {
@@ -105,7 +119,8 @@ export function buildMixBatchCategoryReport(
   return [...grouped.values()]
     .sort((a, b) => (categoryOrder.get(a.id) ?? 99999) - (categoryOrder.get(b.id) ?? 99999) || a.name.localeCompare(b.name))
     .map(row => {
-      const categoryId = row.id.startsWith("cat:") ? Number(row.id.slice(4)) : null;
+      const categoryId = row.id === "cat:uncategorized" ? "uncategorized"
+        : row.id.startsWith("cat:") ? Number(row.id.slice(4)) : null;
       const targetKg = allocations !== null && categoryId !== null
         ? mixBatchCategoryTargetKg(categoryId, selectedTons, allocations, suppliers) : null;
       return {
