@@ -30,6 +30,13 @@ import {
   sendVoucherCorrectionRefusal,
 } from "../../services/factory/factoryVoucherCorrection";
 import { PostingValidationError } from "../../services/accounting/centralPostingEngine";
+import { logger } from "../../lib/logger";
+import { storage } from "../../storage";
+import { upload } from "../_helpers";
+import { readExcel, sheetToJson } from "../../excelHelper";
+import { parsePoImportSheetRows } from "../import/poImportExcelParser";
+import { supplierService } from "../suppliers/supplierService";
+import { SP_CONTAINER_EXCEL_IMPORT_PARSE_PATH, buildSpContainerExcelImport } from "@shared/spContainerExcelImport";
 
 // ── Containers + Prepaid Charges ─────────────────────────────────────────────
 
@@ -196,6 +203,52 @@ export function registerSpContainerRoutes(app: Express) {
       if (sendVoucherCorrectionRefusal(res, error)) return;
       if (error instanceof PostingValidationError)
         return res.status(400).json({ code: error.code, message: error.message });
+      res.status(500).json({ message: getErrorMessage(error) });
+    }
+  });
+
+  // POST /api/sp/containers/import-excel/parse — read the ERP "PO Import" Excel
+  // (the file every ERP company imports for a container) and return the Supplier
+  // Partner container it describes: supplier, article lines, items total, charges,
+  // discount %, freight estimate and the Goods OTW total. Nothing is written; the
+  // dialog fills its form from this and POST /api/sp/containers posts the voucher.
+  app.post(SP_CONTAINER_EXCEL_IMPORT_PARSE_PATH, requireAuth, upload.single("file"), async (req, res) => {
+    try {
+      const companyId = await requireSpCompany(req, res);
+      if (!companyId) return;
+
+      if (!req.file) return res.status(400).json({ message: "No file uploaded" });
+
+      const workbook = await readExcel(req.file.buffer);
+      const sheetName = workbook.SheetNames[0];
+      const worksheet = workbook.Sheets[sheetName];
+      const rawData = sheetToJson(worksheet);
+      if (rawData.length === 0) return res.status(400).json({ message: "Excel file is empty" });
+
+      // Same reader as POST /api/po-import/parse, so a barcode, an alias, a charge
+      // row and a container total mean exactly what they mean for an ERP company.
+      const parsed = await parsePoImportSheetRows(rawData, {
+        getStockItemByCodeOrAlias: (codeOrAlias) => storage.getStockItemByCodeOrAlias(codeOrAlias, companyId),
+        allStockItems: await storage.getAllStockItems(companyId),
+      });
+      if (!parsed.ok) {
+        if (parsed.kind === "row-errors") {
+          return res.status(400).json({ message: "Validation errors", errors: parsed.errors });
+        }
+        return res.status(400).json({ message: "No valid item rows found" });
+      }
+
+      const suppliers = await supplierService.list(companyId, "");
+      const supplierOptions = suppliers.map((supplier) => ({
+        id: supplier.id,
+        legalName: supplier.legalName,
+        code: supplier.code,
+      }));
+      const containers = parsed.preview.map((container) => buildSpContainerExcelImport(container, supplierOptions));
+
+      res.json({ fileName: req.file.originalname, rowCount: rawData.length, containers });
+    } catch (error: unknown) {
+      logger.error("SP container Excel import parse failed", { error });
       res.status(500).json({ message: getErrorMessage(error) });
     }
   });

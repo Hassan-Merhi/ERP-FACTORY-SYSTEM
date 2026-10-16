@@ -16,6 +16,8 @@ import { Plus, Trash2, ClipboardPaste, FileText } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/queryClient";
 import { insertContainerSchema } from "@shared/schema";
+import type { SpExcelImportContainer } from "@shared/spContainerExcelImport";
+import { SpContainerExcelImport } from "./SpContainerExcelImport";
 
 // ── ERP schema (unchanged) ───────────────────────────────────────────────────
 const erpFormSchema = insertContainerSchema
@@ -38,6 +40,8 @@ const spLineSchema = z.object({
   description: z.string().optional(),
   qty: z.string().min(1, "Required"),
   unitRateUsd: z.string().min(1, "Required"),
+  /** Stock item resolved from the Excel barcode or alias; manual lines leave it empty. */
+  stockItemId: z.number().nullable().optional(),
 });
 
 const spFormSchema = z.object({
@@ -303,7 +307,7 @@ function SpContainerForm({ onOpenChange }: { onOpenChange: (open: boolean) => vo
       discountPct: "0",
       freightEstimateUsd: "0",
       notes: "",
-      lines: [{ articleCode: "", description: "", qty: "", unitRateUsd: "" }],
+      lines: [{ articleCode: "", description: "", qty: "", unitRateUsd: "", stockItemId: null }],
     },
   });
 
@@ -361,6 +365,7 @@ function SpContainerForm({ onOpenChange }: { onOpenChange: (open: boolean) => vo
         description: r.length >= 4 ? r[1] : "",
         qty: r.length >= 4 ? r[2] : r[1],
         unitRateUsd: r.length >= 4 ? r[3] : r[2],
+        stockItemId: null,
       }));
     if (parsed.length > 0) {
       form.setValue("lines", parsed);
@@ -370,9 +375,42 @@ function SpContainerForm({ onOpenChange }: { onOpenChange: (open: boolean) => vo
     }
   }, [pasteText, form, toast]);
 
+  // Fill the form from the ERP "PO Import" Excel, recalculated server-side for the
+  // Supplier Partner model. Every field stays editable; Create Container posts the
+  // Goods OTW voucher exactly as a manual entry would.
+  const applyExcelImport = useCallback(
+    (imported: SpExcelImportContainer) => {
+      if (imported.supplierId !== null) {
+        form.setValue("supplierId", imported.supplierId, { shouldDirty: true });
+        form.setValue("supplierName", imported.supplierName, { shouldDirty: true });
+      }
+      if (imported.containerNumber) form.setValue("containerNumber", imported.containerNumber, { shouldDirty: true });
+      form.setValue("invoiceNumber", imported.suggestedInvoiceNumber, { shouldDirty: true });
+      form.setValue("invoiceTotalUsd", imported.invoiceTotalUsd.toFixed(2), { shouldDirty: true });
+      form.setValue("discountPct", String(imported.discountPct), { shouldDirty: true });
+      form.setValue("freightEstimateUsd", imported.freightEstimateUsd.toFixed(2), { shouldDirty: true });
+      form.setValue("notes", imported.notes, { shouldDirty: true });
+      form.setValue(
+        "lines",
+        imported.lines.map((line) => ({
+          articleCode: line.articleCode,
+          description: line.description,
+          qty: String(line.qty),
+          unitRateUsd: String(line.unitRateUsd),
+          stockItemId: line.stockItemId,
+        })),
+        { shouldDirty: true }
+      );
+      setShowPaste(false);
+    },
+    [form]
+  );
+
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit((d) => createMutation.mutate(d))} className="space-y-5" noValidate>
+        <SpContainerExcelImport onApply={applyExcelImport} />
+
         {/* Supplier & Header */}
         <div className="space-y-3">
           <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Supplier &amp; Invoice</p>
@@ -583,7 +621,9 @@ function SpContainerForm({ onOpenChange }: { onOpenChange: (open: boolean) => vo
                 type="button"
                 variant="outline"
                 size="sm"
-                onClick={() => append({ articleCode: "", description: "", qty: "", unitRateUsd: "" })}
+                onClick={() =>
+                  append({ articleCode: "", description: "", qty: "", unitRateUsd: "", stockItemId: null })
+                }
                 data-testid="button-sp-add-line"
               >
                 <Plus className="h-3.5 w-3.5 mr-1" />
@@ -732,7 +772,7 @@ export function AddContainerDialog({ open, onOpenChange, isSP = false }: AddCont
           <DialogTitle>{isSP ? "Import Container" : "Add Container"}</DialogTitle>
           <DialogDescription>
             {isSP
-              ? "Record a supplier invoice. Posts: Dr Goods OTW / Cr Goods OTW Clearing."
+              ? "Upload the PO Import Excel or record the supplier invoice by hand. Posts: Dr Goods OTW / Cr Goods OTW Clearing."
               : "Manually add a container to the system"}
           </DialogDescription>
         </DialogHeader>

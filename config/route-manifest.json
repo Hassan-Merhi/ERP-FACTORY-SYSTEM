@@ -1,7 +1,7 @@
 {
   "formatVersion": 1,
   "description": "Ordered snapshot of every registered Express route (method, path, guard chain) and middleware mount. Regenerate with UPDATE_ROUTE_MANIFEST=1 only when a route change is intended; during a file split the manifest must not change at all.",
-  "routeCount": 2076,
+  "routeCount": 2077,
   "middlewareMountCount": 130,
   "routes": [
     "GET /api/admin/operational-monitoring [requireAuth > <anonymous> > <anonymous>]",
@@ -1938,6 +1938,7 @@
     "POST /api/sp/profit-splits [<anonymous> > <anonymous> > requireAuth > retireLegacyGoldenCoastProfitSplit]",
     "GET /api/sp/containers [requireAuth > <anonymous>]",
     "POST /api/sp/containers [requireAuth > <anonymous>]",
+    "POST /api/sp/containers/import-excel/parse [requireAuth > multerMiddleware > <anonymous>]",
     "PATCH /api/sp/containers/:id [requireAuth > <anonymous>]",
     "GET /api/sp/containers/:id [requireAuth > <anonymous>]",
     "GET /api/sp/containers/:id/line-preview [requireAuth > <anonymous>]",
