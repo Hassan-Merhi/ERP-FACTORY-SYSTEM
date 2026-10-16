@@ -9,6 +9,7 @@ import { Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { EnrichedContainerRow, DrawerForm, seedForm } from "./gitContainerTypes";
 import { ContainerDrawerForm } from "./ContainerDrawerForm";
+import { gitTrackingPatchUrl } from "./gitTrackingPatchUrl";
 
 export function ContainerDrawer({
   container,
@@ -58,7 +59,7 @@ export function ContainerDrawer({
 
   const mutation = useMutation({
     mutationFn: (data: Record<string, unknown>) =>
-      apiRequest("PATCH", `/api/containers/${container!.id}/tracking`, data),
+      apiRequest("PATCH", gitTrackingPatchUrl(container!.id), data),
     onSuccess: () => {
       void invalidateApiFamily(queryClient, "/api/git/containers");
       toast({ title: "Saved", description: `${container?.containerNumber} updated.` });
