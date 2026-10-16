@@ -12,7 +12,7 @@ export const SP_GIT_STATUSES = ["OTW", "Sea", "At Port", "Left Dar", "At Border"
 export const SP_GIT_FIELDS = [
   "shopName", "eta", "transporter", "transportFee", "numberPlate", "trackingLocation",
   "borderDate", "agent", "dutyFee", "docReceived", "trackingDescription", "blDocs",
-  "docsSentDate", "trackingLink",
+  "docsSentDate", "trackingLink", "freightStatus",
 ] as const;
 export type SpGitField = (typeof SP_GIT_FIELDS)[number];
 
@@ -40,6 +40,7 @@ export function ensureSpGitTracking(): Promise<void> {
           bl_docs text,
           docs_sent_date date,
           tracking_link text,
+          freight_status text,
           updated_at timestamptz NOT NULL DEFAULT now()
         )
       `);
@@ -65,7 +66,7 @@ type SpGitDbRow = {
   number_plate: string | null; tracking_location: string | null; border_date: string | null;
   agent: string | null; duty_fee: string | null; doc_received: boolean | null;
   tracking_description: string | null; bl_docs: string | null; docs_sent_date: string | null;
-  tracking_link: string | null; logistics_status: string | null;
+  tracking_link: string | null; freight_status: string | null; logistics_status: string | null;
 };
 
 export async function fetchSpGitContainers(
@@ -90,7 +91,7 @@ export async function fetchSpGitContainers(
       s.invoice_date, s.invoice_total_usd, s.freight_estimate_usd, s.created_at,
       t.status AS logistics_status, t.shop_name, t.eta, t.transporter, t.transport_fee,
       t.number_plate, t.tracking_location, t.border_date, t.agent, t.duty_fee,
-      t.doc_received, t.tracking_description, t.bl_docs, t.docs_sent_date, t.tracking_link
+      t.doc_received, t.tracking_description, t.bl_docs, t.docs_sent_date, t.tracking_link, t.freight_status
     FROM sp_containers s
     LEFT JOIN sp_container_git_tracking t ON t.container_id = s.id AND t.company_id = s.company_id
     WHERE s.company_id IN (${ids})
@@ -129,7 +130,7 @@ export async function fetchSpGitContainers(
       trackingDescription: str(row.tracking_description),
       blDocs: str(row.bl_docs),
       docsSentDate: str(row.docs_sent_date)?.slice(0, 10) ?? null,
-      freightStatus: null,
+      freightStatus: str(row.freight_status),
       trackingLink: str(row.tracking_link),
       poFreight: str(row.freight_estimate_usd) || "0",
       trackingProvider: null,
