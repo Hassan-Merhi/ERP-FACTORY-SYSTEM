@@ -26,6 +26,7 @@ import { createRequire } from "module";
 import type { ParcelsAppShipment } from "./parcelsAppClient";
 import { acquirePuppeteerSlot } from "./puppeteerSemaphore";
 import { existingStringPath } from "./puppeteerPath";
+import { urlHostMatches } from "./urlHost";
 
 // createRequire lets us use require() from an ESM / "type":"module" context.
 const _require = createRequire(import.meta.url);
@@ -300,7 +301,7 @@ export async function scrapeTracking(containerNumber: string): Promise<ScraperRe
     page.on("response", async (response: HTTPResponse) => {
       const url: string = response.url();
       if (
-        url.includes("parcelsapp.com") &&
+        urlHostMatches(url, "parcelsapp.com") &&
         (url.includes("/api/v2/parcel") ||
           url.includes("/api/v2/shipment") ||
           url.includes("/api/v3/shipment") ||

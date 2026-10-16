@@ -6,13 +6,16 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
-  pull-requests: read
+  contents: read
 
 jobs:
   janitor:
     name: Safe repository cleanup
     runs-on: ubuntu-26.04
+    # Deleting merged branch refs needs contents: write; scoped to this job only.
+    permissions:
+      contents: write
+      pull-requests: read
     steps:
       - name: Delete branches only when merged head still matches
         env:

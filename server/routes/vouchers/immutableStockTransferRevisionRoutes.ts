@@ -66,10 +66,11 @@ function sendError(res: Response, error: unknown, context: string) {
   if (sendBaleMirrorMovementRefusal(res, error)) return res;
   const status = statusForError(error);
   if (status === 500) logger.error(`[ImmutableStockTransferRevision ${context}]`, { error });
+  // Unexpected (500) failures are logged above; never echo their internal message to the client.
+  const fallbackMessage = `Failed to ${context.toLowerCase()} stock transfer revision`;
   const payload: Record<string, unknown> = {
-    message: String(
-      (error as { message: unknown })?.message ?? `Failed to ${context.toLowerCase()} stock transfer revision`
-    ),
+    message:
+      status === 500 ? fallbackMessage : String((error as { message: unknown })?.message ?? fallbackMessage),
   };
   for (const field of ["code", "stockItemId", "sourceLocationId", "requiredQuantity", "availableQuantity"]) {
     if ((error as { [key: string]: undefined })?.[field] !== undefined)

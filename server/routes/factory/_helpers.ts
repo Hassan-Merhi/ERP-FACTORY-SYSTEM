@@ -15,8 +15,7 @@ import {
   factoryOffloadAdditionalCharges,
 } from "@shared/schema";
 import { eq, and } from "drizzle-orm";
-import bcrypt from "bcryptjs";
-import { createHash, timingSafeEqual } from "node:crypto";
+import { isLegacySHA256Hash, verifyPassword } from "../helpers/passwordHelpers";
 import { resolveStoredFxRate, UnresolvedExchangeRateError } from "../../services/factory/currencyConversion";
 import type { DbTransaction, DatabaseOrTransaction } from "../../db";
 import type Decimal from "decimal.js";
@@ -88,17 +87,10 @@ export async function getOrCreateLedgerAccount(
   return created.id;
 }
 
-export function isLegacySHA256Hash(hash: string): boolean {
-  return /^[a-f0-9]{64}$/i.test(hash);
-}
+export { isLegacySHA256Hash };
 
 export async function verifySupervisorPassword(password: string, hash: string): Promise<boolean> {
-  if (isLegacySHA256Hash(hash)) {
-    const actual = createHash("sha256").update(password, "utf8").digest();
-    const expected = Buffer.from(hash, "hex");
-    return actual.length === expected.length && timingSafeEqual(actual, expected);
-  }
-  return bcrypt.compare(password, hash);
+  return (await verifyPassword(password, hash)).valid;
 }
 
 export async function recalculateOrderTotals(dbConn: DatabaseOrTransaction, orderId: number) {

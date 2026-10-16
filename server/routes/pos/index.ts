@@ -23,7 +23,7 @@ export function registerAllPosRoutes(app: Express): void {
   // and cash-account scope, and enforce body-dependent POS capabilities before any
   // business transaction begins.
   app.use("/api/pos", requireAuth, enforcePosOperationalPermissionScope, enforcePosCapabilityScope);
-  app.use(/^\/api\/vouchers\/\d+\/sales$/, requireAuth, enforcePosOperationalPermissionScope);
+  app.use(/^\/api\/vouchers\/\d+\/sales$/i, requireAuth, enforcePosOperationalPermissionScope);
 
   registerRetailPosRoutes(app);
   registerRetailStockOpsRoutes(app);

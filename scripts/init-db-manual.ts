@@ -1,15 +1,11 @@
 import { Pool } from "pg";
-import crypto from "crypto";
+import { hashPassword } from "../server/routes/helpers/passwordHelpers";
 
 // Use the DATABASE_URL but with SSL
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: { rejectUnauthorized: false }
 });
-
-function hashPassword(password: string): string {
-  return crypto.createHash('sha256').update(password).digest('hex');
-}
 
 async function init() {
   const client = await pool.connect();
@@ -34,7 +30,7 @@ async function init() {
       try {
         const result = await client.query(
           'INSERT INTO users (username, password, active) VALUES ($1, $2, $3) RETURNING id, username',
-          ['admin', hashPassword('admin'), true]
+          ['admin', await hashPassword('admin'), true]
         );
         console.log('✅ Admin user created:', result.rows[0]);
       } catch (err: any) {

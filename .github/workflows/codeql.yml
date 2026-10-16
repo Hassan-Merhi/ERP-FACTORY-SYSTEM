@@ -1,6 +1,9 @@
 name: CodeQL
 
 on:
+  # Analyse main after every merge so fixed alerts close on the default branch.
+  push:
+    branches: [main]
   pull_request:
     branches: [main]
   schedule:
@@ -9,7 +12,6 @@ on:
 
 permissions:
   contents: read
-  security-events: write
 
 concurrency:
   group: codeql-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -20,6 +22,9 @@ jobs:
     name: Analyze JavaScript / TypeScript
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    permissions:
+      contents: read
+      security-events: write
 
     steps:
       - name: Checkout repository

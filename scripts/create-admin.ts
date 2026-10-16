@@ -1,11 +1,6 @@
 import { db } from "../server/db";
 import { users, companies, userCompanyRoles } from "../shared/schema";
-import crypto from "crypto";
-
-// Simple password hashing function (same as in server/auth.ts)
-function hashPassword(password: string): string {
-  return crypto.createHash('sha256').update(password).digest('hex');
-}
+import { hashPassword } from "../server/routes/helpers/passwordHelpers";
 
 async function createAdmin() {
   try {
@@ -27,7 +22,7 @@ async function createAdmin() {
     
     const [user] = await db.insert(users).values({
       username,
-      password: hashPassword(password),
+      password: await hashPassword(password),
       active: true,
     }).returning();
     console.log(`✅ Admin user created (ID: ${user.id})\n`);

@@ -39,7 +39,6 @@ export function contentDisposition(
 
 function encodeRFC5987(str: string): string {
   return encodeURIComponent(str)
-    .replace(/%20/g, "%20")
     .replace(/%21/gi, "!")
     .replace(/%23/gi, "#")
     .replace(/%24/gi, "$")

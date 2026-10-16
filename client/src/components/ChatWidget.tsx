@@ -58,7 +58,7 @@ export function ChatWidget() {
   const [sessionId, setSessionId] = useState(() => {
     const stored = localStorage.getItem("erp_chat_session");
     if (stored) return stored;
-    const newId = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const newId = `session_${Date.now()}_${crypto.randomUUID()}`;
     localStorage.setItem("erp_chat_session", newId);
     return newId;
   });
@@ -349,7 +349,7 @@ export function ChatWidget() {
   };
 
   const handleNewChat = () => {
-    const newSessionId = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const newSessionId = `session_${Date.now()}_${crypto.randomUUID()}`;
     localStorage.setItem("erp_chat_session", newSessionId);
     queryClient.removeQueries({ queryKey: [`/api/chatbot/history/${sessionId}`] });
     setSessionId(newSessionId);

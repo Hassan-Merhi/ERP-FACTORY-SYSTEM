@@ -5,6 +5,7 @@ import { installOperationalAlertRuntime } from "./operationalAlertRuntime";
 import { captureRuntimeFailures, recordRuntimePerformance } from "./runtimePerformance";
 import { resolveSchedulerMetricName } from "./schedulerObservability";
 import { getTraceContext, runWithTraceContext, withTraceSpan } from "./traceContext";
+import { hostnameMatches } from "./urlHost";
 
 const BOOTSTRAP_KEY = "__erpObservabilityBootstrapInstalled";
 const originalFetch = globalThis.fetch?.bind(globalThis);
@@ -17,7 +18,7 @@ function safeDependencyName(input: RequestInfo | URL): string | undefined {
     if (host === "api.green-api.com") return "green-api";
     if (host.includes("maersk")) return "maersk";
     if (host.includes("cma-cgm") || host.includes("cmacgm")) return "cma-cgm";
-    if (host.includes("msc.com")) return "msc";
+    if (hostnameMatches(host, "msc.com")) return "msc";
     if (host.includes("hapag") || host.includes("hlag")) return "hapag-lloyd";
     return undefined;
   } catch {

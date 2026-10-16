@@ -34,10 +34,21 @@ export function checkFactoryWorkerContractAccess(
   return false;
 }
 
+export const WORKER_UPLOAD_DIR = path.join(process.cwd(), "uploads", "workers");
+
+/** Resolve a multer-stored upload path, refusing anything outside the worker upload directory. */
+export function resolveWorkerUploadPath(filePath: string): string {
+  const resolved = path.resolve(filePath);
+  if (!resolved.startsWith(path.resolve(WORKER_UPLOAD_DIR) + path.sep)) {
+    throw new Error("Uploaded file path is outside the worker upload directory");
+  }
+  return resolved;
+}
+
 export const workerUpload = multer({
   storage: multer.diskStorage({
     destination: (req, file, cb) => {
-      const dir = path.join(process.cwd(), "uploads", "workers");
+      const dir = WORKER_UPLOAD_DIR;
       if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
       cb(null, dir);
     },

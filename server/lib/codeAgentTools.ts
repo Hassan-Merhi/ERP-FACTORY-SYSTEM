@@ -133,7 +133,7 @@ export async function grepProjectFiles(pattern: string, relDir: string = "."): P
     );
     // Strip workspace root from paths for cleaner output
     const rootPfx = WORKSPACE_ROOT + path.sep;
-    return stdout.replace(new RegExp(rootPfx.replace(/\//g, "\\/"), "g"), "");
+    return stdout.replaceAll(rootPfx, "");
   } catch (e: unknown) {
     if ((e as { code?: number }).code === 1) return "(no matches found)";
     throw new Error(`grep failed: ${getErrorMessage(e)}`, { cause: e });

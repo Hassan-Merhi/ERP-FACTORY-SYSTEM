@@ -1,4 +1,6 @@
 import fs from "fs";
+import os from "os";
+import path from "path";
 import { logger } from "../lib/logger";
 
 const EXPORT_MARKER_KEY = Symbol.for("erp.export-buffer-bridge.marker");
@@ -26,10 +28,26 @@ function getMarkerPayload(source: ExportAttachmentSource): ExportFileMarkerPaylo
   return payload?.kind === "file" && payload.path ? payload : undefined;
 }
 
+/**
+ * File-backed export attachments are only ever written under the OS temp
+ * directory (or the configured export bridge temp dir). Refuse any other path so
+ * a malformed attachment source can never read or delete arbitrary files.
+ */
+function resolveManagedExportPath(filePath: string): string {
+  const resolved = path.resolve(filePath);
+  const roots = [os.tmpdir(), process.env.EXPORT_BRIDGE_TEMP_DIR]
+    .filter((root): root is string => Boolean(root))
+    .map((root) => path.resolve(root) + path.sep);
+  if (!roots.some((root) => resolved.startsWith(root))) {
+    throw new Error("Export attachment path is outside the managed export directory");
+  }
+  return resolved;
+}
+
 function getFileAttachment(source: ExportAttachmentSource): { filePath: string; sizeBytes: number } | undefined {
   const marker = getMarkerPayload(source);
-  if (marker) return { filePath: marker.path, sizeBytes: marker.length };
-  if (!Buffer.isBuffer(source)) return source;
+  if (marker) return { filePath: resolveManagedExportPath(marker.path), sizeBytes: marker.length };
+  if (!Buffer.isBuffer(source)) return { filePath: resolveManagedExportPath(source.filePath), sizeBytes: source.sizeBytes };
   return undefined;
 }
 
@@ -46,11 +64,12 @@ export function armExportAttachmentCleanup(
 ): void {
   const marker = getMarkerPayload(source);
   if (!marker?.managedAttachment) return;
+  const filePath = resolveManagedExportPath(marker.path);
 
   if (marker.cleanupTimer) clearTimeout(marker.cleanupTimer);
   marker.cleanupTimer = setTimeout(() => {
     marker.cleanupTimer = undefined;
-    fs.promises.rm(marker.path, { force: true }).catch((error: unknown) => {
+    fs.promises.rm(filePath, { force: true }).catch((error: unknown) => {
       if ((error as { code?: string }).code !== "ENOENT") {
         logger.warn(`[ExportAttachment] Failed to remove managed attachment ${marker.path}:`, { error });
       }
@@ -64,7 +83,7 @@ export async function releaseManagedExportAttachment(source: ExportAttachmentSou
   if (!marker?.managedAttachment) return;
   if (marker.cleanupTimer) clearTimeout(marker.cleanupTimer);
   marker.cleanupTimer = undefined;
-  await fs.promises.rm(marker.path, { force: true }).catch((error: unknown) => {
+  await fs.promises.rm(resolveManagedExportPath(marker.path), { force: true }).catch((error: unknown) => {
     if ((error as { code?: string }).code !== "ENOENT") throw error;
   });
 }
