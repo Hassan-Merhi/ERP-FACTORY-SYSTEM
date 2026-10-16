@@ -49,6 +49,8 @@ export type HistoryBale = {
 export type HistoryResponse = {
   items: HistoryItem[];
   pagination: Pagination;
+  // Aggregated across ALL dispatches matching the date filter, not just this page.
+  totals: { bales: number; weightKg: number; amount: number };
 };
 
 export type PrintDispatch = Pick<HistoryItem, "dispatchNumber" | "dispatchDate" | "notes">;
