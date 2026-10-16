@@ -159,6 +159,8 @@ export const OPERATIONAL_ROUTE_PERMISSIONS: Readonly<Record<OperationalPermissio
     "POST /api/production-bales/import-excel",
     "POST /api/chatbot/confirm-po-import",
     "POST /api/git/containers/import-excel",
+    "POST /api/git/sp-containers/import-excel",
+    "POST /api/git/sp-containers/import-excel/undo",
     "POST /api/git/containers/import-excel/undo",
     "POST /api/ai-import/upload",
     "GET /api/ai-import/jobs/:id",
