@@ -518,6 +518,19 @@ async function readProfitCorrection(req: Request, res: Response): Promise<void> 
     }
     const { plan } = await buildPlan(db, companyId, { periodMonth, clientRequestId: "developer-preview" }, false);
     const latest = await getLatestSpProfitCorrection(db, companyId, periodMonth);
+    const history = resultRows(await db.execute(sql`
+      SELECT id, target_net_profit, original_net_profit, reason, actor_name, created_at
+      FROM sp_profit_manual_corrections
+      WHERE company_id = ${companyId} AND period_month = ${periodMonth}
+      ORDER BY id DESC LIMIT 25
+    `)).map((item) => ({
+      id: Number(item.id),
+      targetNetProfit: String(item.target_net_profit),
+      originalNetProfit: String(item.original_net_profit),
+      reason: String(item.reason),
+      actorName: item.actor_name == null ? null : String(item.actor_name),
+      createdAt: String(item.created_at),
+    }));
     const [closed] = await db.select({ id: spProfitSplits.id })
       .from(spProfitSplits)
       .where(and(eq(spProfitSplits.companyId, companyId), eq(spProfitSplits.periodMonth, periodMonth)))
@@ -531,6 +544,7 @@ async function readProfitCorrection(req: Request, res: Response): Promise<void> 
       effectiveNetProfit: adjustedNet.toFixed(2),
       adjustment: adjustedNet.minus(rawNet).toFixed(2),
       correction: latest,
+      history,
       finalized: Boolean(closed),
     });
   } catch (error) {
