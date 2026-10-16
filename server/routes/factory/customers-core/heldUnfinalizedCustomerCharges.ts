@@ -76,6 +76,7 @@ export async function loadHeldChargeSnapshot(
             JOIN voucher_entries ve ON ve.voucher_id = v.id
            WHERE COALESCE(ve.debit_amount, 0) > 0
              AND COALESCE(ve.credit_amount, 0) = 0
+             AND (ve.narration ILIKE '%container%' OR v.description ILIKE '%container%')
         ) m ON m.container_number = o.container_number
        WHERE o.container_number <> ''
          AND (SELECT COUNT(*) FROM customer_orders all_orders
