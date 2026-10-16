@@ -38,6 +38,7 @@ const spImportWords = {
     "supplierSelect": "Select supplier",
     "supplierLoading": "Loading...",
     "supplierHelp": "Select the vendor who issued the invoice and should be paid for this container.",
+    "source": "Source",
     "freshStartOtw": "Fresh Start FZE (internal Goods OTW)",
     "freshStartOtwHint": "No supplier account needed. The import posts Dr Goods OTW / Cr Goods OTW Clearing.",
     "supplierCodeHint": "Excel supplier code:",
@@ -101,6 +102,7 @@ const spImportWords = {
     "supplierSelect": "Choisir un fournisseur",
     "supplierLoading": "Chargement...",
     "supplierHelp": "Sélectionnez le fournisseur ayant émis la facture et à qui le paiement est dû.",
+    "source": "Origine",
     "freshStartOtw": "Fresh Start FZE (marchandises en transit internes)",
     "freshStartOtwHint": "Aucun compte fournisseur nécessaire. Écriture : débit Goods OTW / crédit Goods OTW Clearing.",
     "supplierCodeHint": "Code fournisseur du fichier Excel :",
@@ -164,6 +166,7 @@ const spImportWords = {
     "supplierSelect": "اختر المورد",
     "supplierLoading": "جارٍ التحميل...",
     "supplierHelp": "اختر المورد الذي أصدر الفاتورة والذي يستحق الدفع مقابل هذه الحاوية.",
+    "source": "المصدر",
     "freshStartOtw": "Fresh Start FZE (بضاعة في الطريق داخلية)",
     "freshStartOtwHint": "لا حاجة إلى حساب مورد. القيد: مدين Goods OTW / دائن Goods OTW Clearing.",
     "supplierCodeHint": "رمز المورد في ملف إكسل:",
@@ -441,7 +444,7 @@ export default function SpPOImport() {
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 {freshStartOtw ? (
                   <div className="space-y-2" data-testid="fresh-start-otw-source">
-                    <Label>{copy.supplier}</Label>
+                    <Label>{copy.source}</Label>
                     <p className="font-medium">{copy.freshStartOtw}</p>
                     <p className="text-xs text-muted-foreground">{copy.freshStartOtwHint}</p>
                   </div>
