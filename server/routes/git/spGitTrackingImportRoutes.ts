@@ -21,19 +21,19 @@ export const SP_IMPORT_COLUMNS = {
   transportFee: "transport_fee", numberPlate: "number_plate", trackingLocation: "tracking_location",
   borderDate: "border_date", agent: "agent", dutyFee: "duty_fee",
   docReceived: "doc_received", trackingDescription: "tracking_description", blDocs: "bl_docs",
-  docsSentDate: "docs_sent_date", trackingLink: "tracking_link",
+  docsSentDate: "docs_sent_date", trackingLink: "tracking_link", freightStatus: "freight_status",
 } as const;
 
 const aliases: Record<string, keyof typeof SP_IMPORT_COLUMNS | "containerNumber"> = {
   container: "containerNumber", containerno: "containerNumber", containernumber: "containerNumber",
-  status: "status", platetruckno: "numberPlate", numberplate: "numberPlate", trucknumber: "numberPlate",
+  status: "status", platetruckno: "numberPlate", platetruck: "numberPlate", numberplate: "numberPlate", trucknumber: "numberPlate",
   eta: "eta", etayyyymmdd: "eta", neweta: "eta",
   borderdate: "borderDate", borderdateyyyymmdd: "borderDate",
   transporter: "transporter", location: "trackingLocation", trackinglocation: "trackingLocation",
   agent: "agent", dutyfee: "dutyFee", transportfee: "transportFee",
   docsreceived: "docReceived", docreceived: "docReceived", docssentdate: "docsSentDate",
   docssentdateyyyymmdd: "docsSentDate", trackinglink: "trackingLink",
-  trackingdescription: "trackingDescription", description: "trackingDescription",
+  trackingdescription: "trackingDescription", description: "trackingDescription", freightstatus: "freightStatus",
   shopname: "shopName", shop: "shopName", bldocs: "blDocs",
 };
 const normalizeHeader = (value: string) => value.toLowerCase().replace(/[^a-z0-9]/g, "");
@@ -105,6 +105,9 @@ export function registerSpGitTrackingImportRoutes(app: Express): void {
                 const amt = Number(str(v).replace(/,/g, ""));
                 if (!Number.isFinite(amt) || amt < 0 || amt > 1_000_000_000) throw new Error("Invalid logistics amount");
                 patch[name] = String(amt);
+              } else if (name === "freightStatus") {
+                const canonical = ["Yes", "No", "Pending"].find((v) => v.toLowerCase() === str(v === "" ? "" : normalized[name]).toLowerCase());
+                patch.freightStatus = canonical || null;
               } else if (name === "docReceived") {
                 patch[name] = ["yes", "y", "true", "1"].includes(str(v).toLowerCase());
               } else if (name === "status") {
