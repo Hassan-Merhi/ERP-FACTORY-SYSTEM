@@ -57,16 +57,18 @@ export function ensureSpGitTracking(): Promise<void> {
 
 const str = (value: unknown): string | null =>
   value === null || value === undefined || value === "" ? null : String(value);
+const isoDate = (value: unknown): string | null =>
+  value instanceof Date ? value.toISOString().slice(0, 10) : str(value)?.slice(0, 10) ?? null;
 
 type SpGitDbRow = {
   id: number; company_id: number; container_number: string | null;
   supplier_name: string | null; status: string; invoice_date: string;
   invoice_total_usd: string; freight_estimate_usd: string | null;
-  created_at: string | Date; shop_name: string | null; eta: string | null;
+  created_at: string | Date; offload_date: string | Date | null; shop_name: string | null; eta: string | Date | null;
   transporter: string | null; transport_fee: string | null;
-  number_plate: string | null; tracking_location: string | null; border_date: string | null;
+  number_plate: string | null; tracking_location: string | null; border_date: string | Date | null;
   agent: string | null; duty_fee: string | null; doc_received: boolean | null;
-  tracking_description: string | null; bl_docs: string | null; docs_sent_date: string | null;
+  tracking_description: string | null; bl_docs: string | null; docs_sent_date: string | Date | null;
   tracking_link: string | null; freight_status: string | null; logistics_status: string | null;
 };
 
@@ -89,12 +91,16 @@ export async function fetchSpGitContainers(
   const statusCondition = options.includeOffloaded ? sql`AND s.status <> 'cancelled'` : sql`AND s.status = 'open'`;
   const response = await db.execute(sql`
     SELECT s.id, s.company_id, s.container_number, s.supplier_name, s.status,
-      s.invoice_date, s.invoice_total_usd, s.freight_estimate_usd, s.created_at,
+      s.invoice_date, s.invoice_total_usd, s.freight_estimate_usd, s.created_at, offload.offload_date,
       t.status AS logistics_status, t.shop_name, t.eta, t.transporter, t.transport_fee,
       t.number_plate, t.tracking_location, t.border_date, t.agent, t.duty_fee,
       t.doc_received, t.tracking_description, t.bl_docs, t.docs_sent_date, t.tracking_link, t.freight_status
     FROM sp_containers s
     LEFT JOIN sp_container_git_tracking t ON t.container_id = s.id AND t.company_id = s.company_id
+    LEFT JOIN LATERAL (
+      SELECT MAX(o.offload_date) AS offload_date FROM sp_offloads o
+      WHERE o.container_id = s.id AND o.company_id = s.company_id
+    ) offload ON true
     WHERE s.company_id IN (${ids})
       ${statusCondition}
       ${idCondition}
@@ -113,24 +119,24 @@ export async function fetchSpGitContainers(
         SP_GIT_STATUSES.includes(row.logistics_status as (typeof SP_GIT_STATUSES)[number])
           ? row.logistics_status! : "OTW"
       ),
-      importDate: String(row.invoice_date),
+      importDate: isoDate(row.invoice_date) || "",
       grandTotal: String(row.invoice_total_usd),
       itemName: null,
       shopName: str(row.shop_name),
-      eta: str(row.eta)?.slice(0, 10) ?? null,
+      eta: isoDate(row.eta),
       etaSource: null,
       transporter: str(row.transporter),
       transportFee: str(row.transport_fee),
       numberPlate: str(row.number_plate),
       trackingLocation: str(row.tracking_location),
-      borderDate: str(row.border_date)?.slice(0, 10) ?? null,
-      offloadDate: null,
+      borderDate: isoDate(row.border_date),
+      offloadDate: isoDate(row.offload_date),
       agent: str(row.agent),
       dutyFee: str(row.duty_fee),
       docReceived: row.doc_received,
       trackingDescription: str(row.tracking_description),
       blDocs: str(row.bl_docs),
-      docsSentDate: str(row.docs_sent_date)?.slice(0, 10) ?? null,
+      docsSentDate: isoDate(row.docs_sent_date),
       freightStatus: str(row.freight_status),
       trackingLink: str(row.tracking_link),
       poFreight: str(row.freight_estimate_usd) || "0",
