@@ -693,6 +693,8 @@ export const phase3RemainingTranslationsPart08: readonly Phase3SharedUiEntry[] =
   },
   { en: "Factory Container Report", ar: "Factory Container Report", fr: "Déclaration des conteneurs d'usine" },
   { en: "All Factory Containers", ar: "جميع حاويات المصنع", fr: "Tous les conteneurs de l’usine" },
+  { en: "Factory container report view", ar: "عرض تقرير حاويات المصنع", fr: "Vue du rapport des conteneurs de l’usine" },
+  { en: "Failed to load factory containers", ar: "فشل تحميل حاويات المصنع", fr: "Échec du chargement des conteneurs de l’usine" },
   { en: "Container Sales", ar: "مبيعات الحاويات", fr: "Ventes de conteneurs" },
   {
     en: "Incoming, received and offloaded containers in the selected factory company",
