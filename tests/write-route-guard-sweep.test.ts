@@ -373,6 +373,7 @@ const SENSITIVE_WRITE_ROUTES = [
   "POST /api/sp/containers/:id/cancel",
   "POST /api/sp/containers/import-excel/validate",
   "POST /api/sp/golden-coast/phase11/profit-splits/monthly-close",
+  "POST /api/sp/golden-coast/profit-correction",
   "POST /api/sp/migration/create-sp-company",
   "POST /api/sp/migration/gc-container-charge-review/:chargeId/map",
   "POST /api/sp/migration/gc-create-accounts",

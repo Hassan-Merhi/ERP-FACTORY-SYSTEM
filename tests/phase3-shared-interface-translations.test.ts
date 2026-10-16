@@ -27,9 +27,10 @@ describe("Phase 3 shared interface translations", () => {
     // The reviewed shared-UI registry is the original seven parts. Phase 3
     // completion appends generated backlog parts to the aggregate registry,
     // so freeze the reviewed inventory itself rather than the completed
-    // aggregate that intentionally grows during generation.
-    expect(reviewedPhase3SharedUiTranslations).toHaveLength(598);
-    expect(new Set(reviewedPhase3SharedUiTranslations.map((entry) => entry.en)).size).toBe(598);
+    // aggregate that intentionally grows during generation. 598 -> 607 when
+    // the 2026-10-16 feature merges (#2298-#2326) added reviewed phrases.
+    expect(reviewedPhase3SharedUiTranslations).toHaveLength(607);
+    expect(new Set(reviewedPhase3SharedUiTranslations.map((entry) => entry.en)).size).toBe(607);
 
     for (const entry of reviewedPhase3SharedUiTranslations) {
       expect(entry.en.trim()).not.toBe("");
