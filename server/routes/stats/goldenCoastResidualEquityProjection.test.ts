@@ -369,6 +369,108 @@ describe("Golden Coast Excel-style Net Position projection", () => {
     expect(JSON.stringify(result.forUs?.breakdown)).not.toContain("Profit Correction Suspense");
   });
 
+  it("shows Goods OTW once beside GC Sales Cash and increases only Fresh Start's residual", () => {
+    const fixture = accounts({ gcSalesOpening: 83378 });
+    fixture.rows[1].openingBalance = "228603.43";
+    fixture.rows.push({
+      id: 8,
+      name: "Goods On The Way",
+      code: "SP-OTW",
+      accountType: "Asset",
+      subType: "sp_goods_otw",
+      openingBalance: "0",
+      openingBalanceSide: "Dr",
+      active: true,
+      deletedAt: null,
+    });
+    fixture.rows.push({
+      id: 9,
+      name: "Goods OTW Clearing",
+      code: "SP-OTWCLR",
+      accountType: "Liability",
+      subType: "sp_otw_clearing",
+      openingBalance: "0",
+      openingBalanceSide: "Cr",
+      active: true,
+      deletedAt: null,
+    });
+    fixture.balances.set(8, { debit: 34498.2, credit: 0 });
+    fixture.balances.set(9, { debit: 0, credit: 34498.2 });
+
+    const result = projectGoldenCoastResidualEquity({
+      body: baseBody({ tracker: 83378, stock: 163807.22 }),
+      companyAccounts: fixture.rows,
+      accountBalances: fixture.balances,
+    });
+    const have = result.forUs.accounts as Array<{ id?: number; name: string; value: number }>;
+    const owe = result.onUs.accounts as Array<{ id?: number; name: string }>;
+    expect(have.filter((line) => line.id === 8)).toEqual([
+      expect.objectContaining({ name: "Goods OTW", value: 34498.2 }),
+    ]);
+    expect(have.find((line) => line.name === "GC Sales Cash")?.value).toBe(83378);
+    expect(have.some((line) => line.id === 9)).toBe(false);
+    expect(owe.some((line) => line.id === 9)).toBe(false);
+    expect(result.forUs.total).toBe(281683.42);
+    expect(result.netPosition).toBe(281683.42);
+    expect(result.equity.hassanClaim).toBe(228603.43);
+    expect(result.equity.freshStartResidual).toBe(53079.99);
+  });
+
+  it("replaces an already-present Goods OTW row instead of double counting it", () => {
+    const fixture = accounts({ gcSalesOpening: 83378 });
+    fixture.rows.push({
+      id: 8,
+      name: "Goods On The Way",
+      code: "SP-OTW",
+      accountType: "Asset",
+      subType: "sp_goods_otw",
+      openingBalance: "0",
+      openingBalanceSide: "Dr",
+      active: true,
+      deletedAt: null,
+    });
+    fixture.balances.set(8, { debit: 34498.2, credit: 0 });
+    const body = baseBody({ tracker: 83378, stock: 163807.22 });
+    body.forUs.accounts.push({
+      id: 8,
+      name: "Stock OTW",
+      code: "SP-OTW",
+      category: "Stock OTW",
+      value: 34498.2,
+    });
+    body.forUs.total += 34498.2;
+    const result = projectGoldenCoastResidualEquity({
+      body, companyAccounts: fixture.rows, accountBalances: fixture.balances,
+    });
+    expect(result.forUs.total).toBe(281683.42);
+    expect(result.netPosition).toBe(281683.42);
+    expect((result.forUs.accounts as Array<{ id?: number }>).filter((line) => line.id === 8)).toHaveLength(1);
+  });
+
+  it("drops Goods OTW after offload moves the amount into Stock, without leaving phantom equity", () => {
+    const fixture = accounts({ gcSalesOpening: 83378 });
+    fixture.rows.push({
+      id: 8,
+      name: "Goods On The Way",
+      code: "SP-OTW",
+      accountType: "Asset",
+      subType: "sp_goods_otw",
+      openingBalance: "0",
+      openingBalanceSide: "Dr",
+      active: true,
+      deletedAt: null,
+    });
+    fixture.balances.set(8, { debit: 34498.2, credit: 34498.2 });
+    const result = projectGoldenCoastResidualEquity({
+      body: baseBody({ tracker: 83378, stock: 198305.42 }),
+      companyAccounts: fixture.rows,
+      accountBalances: fixture.balances,
+    });
+    expect(result.forUs.total).toBe(281683.42);
+    expect((result.forUs.accounts as Array<{ name: string }>).some((line) => line.name === "Goods OTW")).toBe(false);
+    expect(result.netPosition).toBe(281683.42);
+  });
+
   it("does nothing to an ordinary Supplier Partner without Golden Coast equity roles", () => {
     const body = baseBody({ tracker: 100 });
     const result = projectGoldenCoastResidualEquity({
