@@ -17,6 +17,7 @@ import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
 import {
   SP_CONTAINER_EXCEL_IMPORT_PARSE_PATH,
   type SpExcelImportContainer,
+  type SpExcelImportLine,
 } from "@shared/spContainerExcelImport";
 import type { Supplier } from "@shared/schema";
 
@@ -35,6 +36,9 @@ const spImportWords = {
     "supplier": "Supplier *",
     "supplierSelect": "Select supplier",
     "supplierLoading": "Loading...",
+    "supplierHelp": "Select the vendor who issued the invoice and should be paid for this container.",
+    "supplierCodeHint": "Excel supplier code:",
+    "supplierEmpty": "No suppliers set up for this company. Add the invoicing vendor in Suppliers before importing.",
     "containerNumber": "Container Number *",
     "invoiceDate": "Invoice Date *",
     "invoiceNumber": "Invoice / PO Number *",
@@ -93,6 +97,9 @@ const spImportWords = {
     "supplier": "Fournisseur *",
     "supplierSelect": "Choisir un fournisseur",
     "supplierLoading": "Chargement...",
+    "supplierHelp": "Sélectionnez le fournisseur ayant émis la facture et à qui le paiement est dû.",
+    "supplierCodeHint": "Code fournisseur du fichier Excel :",
+    "supplierEmpty": "Aucun fournisseur défini pour cette société. Ajoutez le fournisseur avant l’importation.",
     "containerNumber": "Numéro du conteneur *",
     "invoiceDate": "Date de facture *",
     "invoiceNumber": "Numéro de facture / commande *",
@@ -151,6 +158,9 @@ const spImportWords = {
     "supplier": "المورد *",
     "supplierSelect": "اختر المورد",
     "supplierLoading": "جارٍ التحميل...",
+    "supplierHelp": "اختر المورد الذي أصدر الفاتورة والذي يستحق الدفع مقابل هذه الحاوية.",
+    "supplierCodeHint": "رمز المورد في ملف إكسل:",
+    "supplierEmpty": "لا يوجد موردون لهذه الشركة. أضف المورد الذي أصدر الفاتورة قبل الاستيراد.",
     "containerNumber": "رقم الحاوية *",
     "invoiceDate": "تاريخ الفاتورة *",
     "invoiceNumber": "رقم الفاتورة / أمر الشراء *",
@@ -209,10 +219,18 @@ interface Validation {
 }
 
 function money(value: number) {
-  return "$" + Number(value || 0).toLocaleString("en-US", {
+  const amount = Number(value || 0);
+  const formatted = Math.abs(amount).toLocaleString("en-US", {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   });
+  return amount < 0 ? `-${formatted}` : `${formatted}`;
+}
+
+/** Visual highlighting only; never changes the imported price or accounting. */
+function isDiscountOrNegativeLine(line: SpExcelImportLine): boolean {
+  return line.qty < 0 || line.unitRateUsd < 0 || line.lineTotal < 0 ||
+    /\b(discount|rebate|remise)\b|خصم/i.test(line.description);
 }
 function requestId() {
   return crypto.randomUUID();
@@ -420,6 +438,15 @@ export default function SpPOImport() {
                       {suppliers.map((s) => <SelectItem key={s.id} value={String(s.id)}>{s.legalName}</SelectItem>)}
                     </SelectContent>
                   </Select>
+                  <p className="text-xs text-muted-foreground">
+                    {copy.supplierHelp}
+                    {selected?.supplierCode ? (
+                      <span className="block">{copy.supplierCodeHint} <strong>{selected.supplierCode}</strong></span>
+                    ) : null}
+                  </p>
+                  {!suppliersLoading && suppliers.length === 0 && (
+                    <p className="text-xs text-amber-600">{copy.supplierEmpty}</p>
+                  )}
                 </div>
                 <div className="space-y-2">
                   <Label>{copy.containerNumber}</Label>
@@ -464,15 +491,14 @@ export default function SpPOImport() {
             <div className="rounded-md border overflow-x-auto">
               <Table>
                 <TableHeader><TableRow>
-                  <TableHead>{copy.poNumber}</TableHead><TableHead>{copy.itemCode}</TableHead><TableHead>{copy.itemName}</TableHead>
+                  <TableHead>{copy.poNumber}</TableHead><TableHead>{copy.itemName}</TableHead>
                   <TableHead className="text-right">{copy.quantity}</TableHead>
                   <TableHead className="text-right">{copy.rate}</TableHead>
                   <TableHead className="text-right">{copy.lineTotal}</TableHead>
                 </TableRow></TableHeader>
                 <TableBody>{selected.lines.map((line, index) => (
-                  <TableRow key={index}>
+                  <TableRow key={index} className={isDiscountOrNegativeLine(line) ? "text-red-500" : undefined}>
                     <TableCell>{line.poNumber}</TableCell>
-                    <TableCell>{line.articleCode}</TableCell>
                     <TableCell>{line.description}</TableCell>
                     <TableCell className="text-right">{line.qty}</TableCell>
                     <TableCell className="text-right">{money(line.unitRateUsd)}</TableCell>
@@ -483,11 +509,31 @@ export default function SpPOImport() {
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 rounded-md bg-muted p-4">
               <div><p className="text-xs text-muted-foreground">{copy.itemsTotal}</p><p className="font-semibold">{money(selected.itemsTotal)}</p></div>
-              <div><p className="text-xs text-muted-foreground">{copy.freight}</p><p>{money(selected.charges.freight)}</p></div>
-              <div><p className="text-xs text-muted-foreground">{copy.surcharge}</p><p>{money(selected.charges.surcharge)}</p></div>
-              <div><p className="text-xs text-muted-foreground">{copy.fumigation}</p><p>{money(selected.charges.fumigation)}</p></div>
-              <div><p className="text-xs text-muted-foreground">{copy.documents}</p><p>{money(selected.charges.documentCharges)}</p></div>
-              <div><p className="text-xs text-muted-foreground">{copy.discount}</p><p>-{money(selected.charges.discount)}</p></div>
+              {selected.charges.freight !== 0 && (
+                <div className={selected.charges.freight < 0 ? "text-red-500" : undefined}>
+                  <p className="text-xs">{copy.freight}</p><p>{money(selected.charges.freight)}</p>
+                </div>
+              )}
+              {selected.charges.surcharge !== 0 && (
+                <div className={selected.charges.surcharge < 0 ? "text-red-500" : undefined}>
+                  <p className="text-xs">{copy.surcharge}</p><p>{money(selected.charges.surcharge)}</p>
+                </div>
+              )}
+              {selected.charges.fumigation !== 0 && (
+                <div className={selected.charges.fumigation < 0 ? "text-red-500" : undefined}>
+                  <p className="text-xs">{copy.fumigation}</p><p>{money(selected.charges.fumigation)}</p>
+                </div>
+              )}
+              {selected.charges.documentCharges !== 0 && (
+                <div className={selected.charges.documentCharges < 0 ? "text-red-500" : undefined}>
+                  <p className="text-xs">{copy.documents}</p><p>{money(selected.charges.documentCharges)}</p>
+                </div>
+              )}
+              {selected.charges.discount !== 0 && (
+                <div className="text-red-500">
+                  <p className="text-xs">{copy.discount}</p><p>{money(-Math.abs(selected.charges.discount))}</p>
+                </div>
+              )}
               <div><p className="text-xs text-muted-foreground">{copy.grandTotal}</p><p className="text-xl font-bold">{money(selected.grandTotal)}</p></div>
             </div>
             <div className="flex flex-wrap justify-end gap-2">
