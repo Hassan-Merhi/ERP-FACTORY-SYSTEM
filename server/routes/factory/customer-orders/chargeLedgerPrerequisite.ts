@@ -7,7 +7,7 @@ import { logger } from "../../../lib/logger";
 import { parseId } from "../../../lib/parseId";
 import { getOrCreateLedgerAccount } from "../_helpers";
 
-const POSTING_STATUSES = new Set(["PENDING_VERIFICATION", "VERIFIED", "FINALIZED"]);
+const POSTING_STATUSES = new Set(["FINALIZED"]);
 
 async function ensureCustomerLedgerForChargeWrite(req: Request, res: Response, next: NextFunction) {
   try {
@@ -60,7 +60,8 @@ async function ensureCustomerLedgerForChargeWrite(req: Request, res: Response, n
 /**
  * Charge POST/PATCH handlers create accounting vouchers only when the customer
  * already owns a ledger account. Register this prerequisite before the legacy
- * handlers so VERIFIED/PENDING charges can never be saved without their voucher.
+ * handlers. Pending/Loading/Verified orders do not post charge vouchers; the
+ * customer ledger is prepared at finalization instead.
  */
 export function registerChargeLedgerPrerequisite(app: Express) {
   app.post(
