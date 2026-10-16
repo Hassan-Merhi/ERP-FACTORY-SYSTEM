@@ -299,8 +299,10 @@ describe("Golden Coast Excel-style Net Position projection", () => {
   });
 
 
-  it("hides the positive correction suspense line but preserves the exact GC net position and partner equity", () => {
+  it("excludes correction suspense from GC net position and matches the user's Excel partner balances", () => {
     const fixture = accounts({ gcSalesOpening: 83378 });
+    // Hassan's live displayed partner claim after the September 50/50 close.
+    fixture.rows[1].openingBalance = "228603.43";
     fixture.rows.push({
       id: 7,
       name: "SP Profit Correction Suspense",
@@ -322,19 +324,25 @@ describe("Golden Coast Excel-style Net Position projection", () => {
     expect(visible).toHaveLength(2);
     expect(visible.map((row) => row.name)).toEqual(["Stock In Hand / Stock on Floor", "GC Sales Cash"]);
     expect(visible.map((row) => row.value)).toEqual([163807.22, 83378]);
-    expect(result.forUs?.total).toBe(256211.63);
-    expect(result.forUsTotal).toBe(256211.63);
+    expect(result.forUs?.total).toBe(247185.22);
+    expect(result.forUsTotal).toBe(247185.22);
     expect(result.onUsTotal).toBe(0);
-    expect(result.netPosition).toBe(256211.63);
-    expect(result.equity?.total).toBe(256211.63);
-    expect(result.equity?.partnerCapitalTotal).toBe(256211.63);
-    expect(result.netPositionBreakdown?.netPosition).toBe(256211.63);
+    expect(result.netPosition).toBe(247185.22);
+    expect(result.equity?.total).toBe(247185.22);
+    expect(result.equity?.partnerCapitalTotal).toBe(247185.22);
+    expect(result.netPositionBreakdown?.netPosition).toBe(247185.22);
+    expect(result.equity?.hassanClaim).toBe(228603.43);
+    expect(result.equity?.freshStartResidual).toBe(18581.79);
+    expect(result.equity?.accounts).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 1, value: 18581.79, balanceSide: "Cr" }),
+      expect.objectContaining({ id: 2, value: 228603.43, balanceSide: "Cr" }),
+    ]));
     expect(JSON.stringify(result.forUs?.accounts)).not.toContain("Profit Correction Suspense");
     expect(JSON.stringify(result.forUs?.breakdown)).not.toContain("Profit Correction Suspense");
     expect(JSON.stringify(result.netPositionBreakdown?.assets)).not.toContain("Profit Correction Suspense");
   });
 
-  it("removes an already-projected suspense account without deducting its balance a second time", () => {
+  it("removes an already-projected suspense asset exactly once from totals and the visible rows", () => {
     const fixture = accounts({ gcSalesOpening: 83378 });
     fixture.rows.push({
       id: 7,
@@ -355,8 +363,8 @@ describe("Golden Coast Excel-style Net Position projection", () => {
     const result = projectGoldenCoastResidualEquity({
       body, companyAccounts: fixture.rows, accountBalances: fixture.balances,
     });
-    expect(result.forUs?.total).toBe(256211.63);
-    expect(result.netPosition).toBe(256211.63);
+    expect(result.forUs?.total).toBe(247185.22);
+    expect(result.netPosition).toBe(247185.22);
     expect((result.forUs?.accounts as Array<{id?:number}>).some(row => row.id === 7)).toBe(false);
     expect(JSON.stringify(result.forUs?.breakdown)).not.toContain("Profit Correction Suspense");
   });
