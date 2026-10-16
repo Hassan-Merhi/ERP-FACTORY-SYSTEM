@@ -19,6 +19,7 @@ import {
 } from "../../../shared/schema";
 import { and, eq, inArray, isNotNull, isNull, or, sql } from "drizzle-orm";
 import { plusMoney, toMoney } from "../../lib/money";
+import { fetchSpGitContainers } from "../../lib/spGitTracking";
 
 // ── In-memory undo store for bulk Excel imports ────────────────────────────
 // Keyed by importId (UUID). Stores the "before" snapshot so the last import
@@ -223,10 +224,32 @@ export async function buildAgentsForCompany(cid: number) {
       )
     );
 
-  if (rawContainers.length === 0) return [];
+  // Use the same GIT source projection for Supplier Partner companies.
+  // These duty fees are logistics estimates, not voucher entries. Existing
+  // ledger matching and FIFO logic below remain the sole settlement logic.
+  const spContainers = (await fetchSpGitContainers([cid], { includeOffloaded: true }))
+    .filter((row) => !!row.agent?.trim() && Number(row.dutyFee) > 0)
+    .map((row) => ({
+      id: row.id,
+      containerNumber: row.containerNumber,
+      companyId: row.companyId,
+      numberPlate: row.numberPlate,
+      offloadDate: row.offloadDate,
+      borderDate: row.borderDate,
+      createdAt: row.createdAt,
+      transporter: row.transporter,
+      location: row.trackingLocation,
+      dutyFee: row.dutyFee,
+      agent: row.agent,
+      status: row.status,
+      supplierName: row.supplierName,
+      supplierCode: row.supplierCode,
+    }));
+  const allAgentContainers = [...rawContainers, ...spContainers];
+  if (allAgentContainers.length === 0) return [];
 
   // ── 2. Unique agent names ──
-  const uniqueAgents = [...new Set(rawContainers.map((r) => r.agent!.trim()).filter(Boolean))];
+  const uniqueAgents = [...new Set(allAgentContainers.map((r) => r.agent!.trim()).filter(Boolean))];
 
   // ── 3. Active mappings for this company + global (company_id IS NULL) ──
   const allMappings = await db
@@ -372,7 +395,7 @@ export async function buildAgentsForCompany(cid: number) {
     uniqueAgents.map(async (agentName) => {
       const resolution = resolveAgent(agentName);
 
-      const agentContainers: ContainerRow[] = rawContainers
+      const agentContainers: ContainerRow[] = allAgentContainers
         .filter((r) => r.agent?.trim() === agentName)
         .map((r) => ({
           id: r.id,
