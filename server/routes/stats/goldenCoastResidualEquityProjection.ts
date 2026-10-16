@@ -273,6 +273,27 @@ export function projectGoldenCoastResidualEquity(input: {
         value,
         category: displayCategory(account, "asset"),
       });
+    } else if (
+      (account.code || "").trim().toUpperCase() === "INVENTORY" ||
+      (account.name || "").trim().toLowerCase() === "inventory"
+    ) {
+      // Inventory is a contra-asset, not an outside party we owe.
+      // Offset the existing computed stock figure so the current net position
+      // remains identical while What We Owe contains only genuine liabilities.
+      forUsTotal = round2(forUsTotal + net);
+      const stockLine = forUsAccounts.find(
+        (line) => line.code === "COMPUTED" && line.category === "Inventory"
+      );
+      if (stockLine) stockLine.value = round2(stockLine.value + net);
+      else {
+        forUsAccounts.push({
+          id: account.id,
+          name: account.name,
+          code: account.code || "",
+          value: net,
+          category: "Inventory",
+        });
+      }
     } else {
       const value = round2(Math.abs(net));
       onUsTotal = round2(onUsTotal + value);
