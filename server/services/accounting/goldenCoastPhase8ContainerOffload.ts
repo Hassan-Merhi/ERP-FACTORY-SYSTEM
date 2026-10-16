@@ -411,7 +411,7 @@ export function buildGoldenCoastFreshStartExcelFundingPosting(input: {
     ...built.request,
     source: {
       sourceType: GOLDEN_COAST_PHASE8_SOURCE_TYPE,
-      sourceId: `container:${container.clientRequestId}:${GOLDEN_COAST_FRESH_START_EXCEL_FUNDING_MARKER}`,
+      sourceId: `container:${container.clientRequestId}:${createHash("sha256").update(JSON.stringify({ container, invoiceTotalUsd })).digest("hex").slice(0, 20)}:${GOLDEN_COAST_FRESH_START_EXCEL_FUNDING_MARKER}`,
       idempotencyKey: `gc8:${container.companyId}:${container.clientRequestId}:fund`,
     },
   };
