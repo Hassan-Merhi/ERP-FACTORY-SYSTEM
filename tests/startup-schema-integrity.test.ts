@@ -171,8 +171,14 @@ import { posPortDepartureDateSchema } from "../server/startup-schema/035-pos-por
  * permissions into Overview (Factory POS is its own page again). Three
  * statements were edited in place; the count is unchanged.
  */
-const EXPECTED_STATEMENT_COUNT = 1426;
-const EXPECTED_CONTENT_HASH = "0fa96fd2b4d9c68ac55bc95b29a12a9c5509bcddd2691124c03cc07760b1dcbc";
+/*
+ * Re-pinned when main certification was restored after #2299 (Supplier
+ * Partner invoice charges) appended stage 033's three sp_containers ADD COLUMN
+ * statements without re-pinning: 033 sits before 034, so the pre-034 hash
+ * moved and the count goes from 1426 to 1429. No existing statement changed.
+ */
+const EXPECTED_STATEMENT_COUNT = 1429;
+const EXPECTED_CONTENT_HASH = "29546605193be3d475c6e26253b6667ad850dbc706bb4815be71b1e383a0bf2d";
 /**
  * sha256 of JSON.stringify(startupMigrations) for the reviewed composed array.
  *
@@ -288,7 +294,9 @@ describe("startup schema integrity", () => {
 
   it("preserves statement content and order exactly", () => {
     expect(
-      contentHash(startupMigrations.slice(0, -(supplierTrackingShopDutyDefaultsSchema.length + posPortDepartureDateSchema.length))),
+      contentHash(
+        startupMigrations.slice(0, -(supplierTrackingShopDutyDefaultsSchema.length + posPortDepartureDateSchema.length))
+      ),
       "The pre-stage-034 startup migrations changed unexpectedly. " +
         "The 034 supplier tracking changes must remain appended after the existing baseline."
     ).toBe(EXPECTED_CONTENT_HASH);
@@ -299,7 +307,9 @@ describe("startup schema integrity", () => {
     expect(startupMigrations.slice(-4, -1)).toEqual(supplierTrackingShopDutyDefaultsSchema);
     expect(supplierTrackingShopDutyDefaultsSchema[0]).toContain("ADD COLUMN IF NOT EXISTS shop_name");
     expect(supplierTrackingShopDutyDefaultsSchema[1]).toContain("ADD COLUMN IF NOT EXISTS duty_fee");
-    expect(supplierTrackingShopDutyDefaultsSchema[2]).toContain("CREATE OR REPLACE FUNCTION apply_supplier_tracking_defaults_to_container");
+    expect(supplierTrackingShopDutyDefaultsSchema[2]).toContain(
+      "CREATE OR REPLACE FUNCTION apply_supplier_tracking_defaults_to_container"
+    );
     expect(supplierTrackingShopDutyDefaultsSchema[2]).toContain("NEW.duty_fee IS NULL");
   });
 

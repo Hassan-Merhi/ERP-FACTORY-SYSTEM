@@ -319,12 +319,15 @@ describe("1: the fiscal closing journal is not period profit", () => {
     expect(after.netProfit).toBe(820);
 
     // The closing month is the month's own activity, not a loss of the year's profit.
+    // The 45-day aging sale is dated relative to today, so on some days it lands
+    // in that month (e.g. 16 Oct -> 1 Sep); count it only when it does.
+    const agingSaleInMonth = daysAgo(45) >= monthStart(-1) && daysAgo(45) <= closeTo ? 50 : 0;
     const month = await calculateIncomeStatementForPeriod(ctx.companyId, monthStart(-1), closeTo);
-    expect(month.totalRevenue).toBe(0);
-    expect(month.netProfit).toBe(-290);
+    expect(month.totalRevenue).toBe(agingSaleInMonth);
+    expect(month.netProfit).toBe(-290 + agingSaleInMonth);
     const dashboard = await getMonthlyData(ctx.companyId);
     const closing = dashboard.find((row) => row.yearMonth === closingMonth);
-    expect(closing?.profit).toBe(-290);
+    expect(closing?.profit).toBe(-290 + agingSaleInMonth);
 
     // Balances keep it: income and expense accounts are zero at the period end.
     const ledger = await getPartyBalances(db, {

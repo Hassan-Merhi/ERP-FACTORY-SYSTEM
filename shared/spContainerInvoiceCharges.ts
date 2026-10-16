@@ -39,7 +39,7 @@ const INVOICE_CHARGE_FIELDS: ReadonlyArray<{
 ];
 
 function amountOf(value: string | number | null | undefined): number {
-  const n = typeof value === "number" ? value : parseFloat(String(value ?? "0"));
+  const n = typeof value === "number" ? value : Number(String(value ?? "0").trim() || "0");
   return Number.isFinite(n) ? Math.round((n + Number.EPSILON) * 100) / 100 : 0;
 }
 

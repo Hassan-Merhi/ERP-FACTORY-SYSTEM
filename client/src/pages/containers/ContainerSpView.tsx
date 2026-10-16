@@ -12,7 +12,12 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Plus, Package, Eye, Search, X, Ban, Loader2, Truck, Check, Download, ChevronDown, Filter } from "lucide-react";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { utils, writeFile } from "@/lib/excelHelper";
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
 import { spContainerInvoiceChargeLines } from "@shared/spContainerInvoiceCharges";
@@ -189,10 +194,12 @@ export function ContainerSpView({
   const offloadedContainers = visibleContainers.filter((c) => c.statusOffloaded);
   const totalValue = visibleContainers.reduce((sum, c) => sum + c.totalUsd, 0);
   const supplierNames = Array.from(new Set(allSpItems.map((c) => c.supplierName).filter(Boolean))).sort();
-  const filtered = allSpItems.filter((c) =>
-    searchAny(searchTerm, c.displayName, c.subName, c.supplierName) &&
-    (statusFilter === "ALL" || (statusFilter === "OTW" ? !c.statusOffloaded && !c.statusCancelled : c.statusOffloaded)) &&
-    (!supplierFilter || c.supplierName === supplierFilter)
+  const filtered = allSpItems.filter(
+    (c) =>
+      searchAny(searchTerm, c.displayName, c.subName, c.supplierName) &&
+      (statusFilter === "ALL" ||
+        (statusFilter === "OTW" ? !c.statusOffloaded && !c.statusCancelled : c.statusOffloaded)) &&
+      (!supplierFilter || c.supplierName === supplierFilter)
   );
 
   const exportContainers = async (full: boolean) => {
@@ -219,47 +226,69 @@ export function ContainerSpView({
               const quantity = parseFloat(line.qty ?? "0");
               const rate = parseFloat(line.unitRateUsd ?? "0") * factor;
               detailRows.push({
-                Container: native.containerNumber || "", Invoice: native.invoiceNumber || "",
-                Supplier: native.supplierName || "", "Item Name": line.description || line.articleCode,
-                Quantity: quantity, "Rate (USD)": rate, "Total (USD)": quantity * rate,
+                Container: native.containerNumber || "",
+                Invoice: native.invoiceNumber || "",
+                Supplier: native.supplierName || "",
+                "Item Name": line.description || line.articleCode,
+                Quantity: quantity,
+                "Rate (USD)": rate,
+                "Total (USD)": quantity * rate,
               });
             }
             for (const charge of spContainerInvoiceChargeLines(native)) {
               detailRows.push({
-                Container: native.containerNumber || "", Invoice: native.invoiceNumber || "",
-                Supplier: native.supplierName || "", "Item Name": charge.description,
-                Quantity: 1, "Rate (USD)": charge.amountUsd, "Total (USD)": charge.amountUsd,
+                Container: native.containerNumber || "",
+                Invoice: native.invoiceNumber || "",
+                Supplier: native.supplierName || "",
+                "Item Name": charge.description,
+                Quantity: 1,
+                "Rate (USD)": charge.amountUsd,
+                "Total (USD)": charge.amountUsd,
               });
             }
             detailRows.push({
-              Container: native.containerNumber || "", Invoice: native.invoiceNumber || "",
-              Supplier: native.supplierName || "", "Item Name": "Recorded Invoice Total",
-              Quantity: Number(native.totalQty || 0), "Rate (USD)": 0,
+              Container: native.containerNumber || "",
+              Invoice: native.invoiceNumber || "",
+              Supplier: native.supplierName || "",
+              "Item Name": "Recorded Invoice Total",
+              Quantity: Number(native.totalQty || 0),
+              "Rate (USD)": 0,
               "Total (USD)": Number(native.invoiceTotalUsd || 0),
             });
           } else {
             const response = await fetch("/api/containers/" + c.id, { credentials: "include" });
             if (!response.ok) throw new Error("Cannot export ERP container " + c.displayName);
-            const detail = await response.json() as {
-              pos?: { items?: { itemName?: string; quantity?: string; rate?: string; total?: string }[] }[];
+            const detail = (await response.json()) as {
+              pos?: { items?: { itemName?: string; quantity?: string; rate?: string; lineTotal?: string }[] }[];
             };
             for (const po of detail.pos ?? []) {
               for (const item of po.items ?? []) {
                 detailRows.push({
-                  Container: c.displayName, Invoice: "",
-                  Supplier: c.supplierName, "Item Name": item.itemName || "",
-                  Quantity: Number(item.quantity || 0), "Rate (USD)": Number(item.rate || 0),
+                  Container: c.displayName,
+                  Invoice: "",
+                  Supplier: c.supplierName,
+                  "Item Name": item.itemName || "",
+                  Quantity: Number(item.quantity || 0),
+                  "Rate (USD)": Number(item.rate || 0),
                   "Total (USD)": Number(item.lineTotal || 0),
                 });
               }
             }
           }
         }
-        utils.book_append_sheet(book, utils.json_to_sheet(detailRows.length ? detailRows : [{ Message: "No line items" }]), "Line Items");
+        utils.book_append_sheet(
+          book,
+          utils.json_to_sheet(detailRows.length ? detailRows : [{ Message: "No line items" }]),
+          "Line Items"
+        );
       }
       await writeFile(book, full ? "containers_full_export.xlsx" : "containers.xlsx");
     } catch (error) {
-      toast({ title: "Export failed", description: error instanceof Error ? error.message : String(error), variant: "destructive" });
+      toast({
+        title: "Export failed",
+        description: error instanceof Error ? error.message : String(error),
+        variant: "destructive",
+      });
     }
   };
 
@@ -274,8 +303,12 @@ export function ContainerSpView({
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start">
-              <DropdownMenuItem onClick={() => void exportContainers(false)} data-testid="button-export-excel">Export</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => void exportContainers(true)} data-testid="button-export-all-full">Export All (Full)</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => void exportContainers(false)} data-testid="button-export-excel">
+                Export
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => void exportContainers(true)} data-testid="button-export-all-full">
+                Export All (Full)
+              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
           <Button className="gap-2" onClick={() => setLocation("/po-import")} data-testid="button-add-container">
@@ -286,14 +319,17 @@ export function ContainerSpView({
       <div className="flex flex-wrap gap-3" data-testid="sp-container-summary">
         <div className="rounded-lg bg-muted/60 px-3 py-2 flex items-center gap-2">
           <Package className="h-4 w-4 text-muted-foreground" />
-          <strong className="text-sm">{visibleContainers.length}</strong><span className="text-xs text-muted-foreground">Containers</span>
+          <strong className="text-sm">{visibleContainers.length}</strong>
+          <span className="text-xs text-muted-foreground">Containers</span>
         </div>
         <div className="rounded-lg bg-blue-500/10 px-3 py-2 flex items-center gap-2">
-          <Truck className="h-4 w-4 text-blue-600" /><strong className="text-sm">{otwContainers.length}</strong>
+          <Truck className="h-4 w-4 text-blue-600" />
+          <strong className="text-sm">{otwContainers.length}</strong>
           <span className="text-xs text-muted-foreground">OTW</span>
         </div>
         <div className="rounded-lg bg-green-500/10 px-3 py-2 flex items-center gap-2">
-          <Check className="h-4 w-4 text-green-600" /><strong className="text-sm">{offloadedContainers.length}</strong>
+          <Check className="h-4 w-4 text-green-600" />
+          <strong className="text-sm">{offloadedContainers.length}</strong>
           <span className="text-xs text-muted-foreground">Offloaded</span>
         </div>
         <div className="rounded-lg bg-primary/10 px-3 py-2 flex items-center gap-2">
@@ -314,8 +350,13 @@ export function ContainerSpView({
         </div>
         <div className="flex gap-1">
           {(["ALL", "OTW", "OFFLOADED"] as const).map((status) => (
-            <Button key={status} size="sm" variant={statusFilter === status ? "default" : "outline"}
-              onClick={() => setStatusFilter(status)} data-testid={"button-status-" + status.toLowerCase()}>
+            <Button
+              key={status}
+              size="sm"
+              variant={statusFilter === status ? "default" : "outline"}
+              onClick={() => setStatusFilter(status)}
+              data-testid={"button-status-" + status.toLowerCase()}
+            >
               {status === "ALL" ? "All" : status === "OTW" ? "OTW" : "Offloaded"}
             </Button>
           ))}
@@ -323,18 +364,30 @@ export function ContainerSpView({
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="outline" size="sm" className="gap-1" data-testid="select-supplier-filter">
-              <Filter className="h-4 w-4" />{supplierFilter || "All Suppliers"}<ChevronDown className="h-4 w-4" />
+              <Filter className="h-4 w-4" />
+              {supplierFilter || "All Suppliers"}
+              <ChevronDown className="h-4 w-4" />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent>
             <DropdownMenuItem onClick={() => setSupplierFilter("")}>All Suppliers</DropdownMenuItem>
             {supplierNames.map((name) => (
-              <DropdownMenuItem key={name} onClick={() => setSupplierFilter(name)}>{name}</DropdownMenuItem>
+              <DropdownMenuItem key={name} onClick={() => setSupplierFilter(name)}>
+                {name}
+              </DropdownMenuItem>
             ))}
           </DropdownMenuContent>
         </DropdownMenu>
         {(searchTerm || supplierFilter || statusFilter !== "ALL") && (
-          <Button variant="ghost" size="sm" onClick={() => { setSearchTerm(""); setSupplierFilter(""); setStatusFilter("ALL"); }}>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              setSearchTerm("");
+              setSupplierFilter("");
+              setStatusFilter("ALL");
+            }}
+          >
             <X className="h-4 w-4 mr-1" /> Clear
           </Button>
         )}
@@ -376,24 +429,25 @@ export function ContainerSpView({
                     <Package className="h-5 w-5 text-primary" />
                   </div>
                   <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="font-semibold text-sm font-mono">{c.displayName}</span>
-                    <Badge
-                      variant="outline"
-                      className={
-                        c.statusCancelled
-                          ? "text-muted-foreground border-muted-foreground/40"
-                          : c.statusOffloaded
-                            ? "text-green-600 border-green-600/40"
-                            : "text-blue-600 border-blue-600/40"
-                      }
-                    >
-                      {c.statusLabel}
-                    </Badge>
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    {c.supplierName}{c.subName ? ` · PO ${c.subName}` : ""}
-                  </p>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-semibold text-sm font-mono">{c.displayName}</span>
+                      <Badge
+                        variant="outline"
+                        className={
+                          c.statusCancelled
+                            ? "text-muted-foreground border-muted-foreground/40"
+                            : c.statusOffloaded
+                              ? "text-green-600 border-green-600/40"
+                              : "text-blue-600 border-blue-600/40"
+                        }
+                      >
+                        {c.statusLabel}
+                      </Badge>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {c.supplierName}
+                      {c.subName ? ` · PO ${c.subName}` : ""}
+                    </p>
                   </div>
                 </div>
                 <div className="text-left sm:text-right">
@@ -440,7 +494,6 @@ export function ContainerSpView({
           })}
         </div>
       )}
-
 
       <Dialog
         open={!!selectedContainer}

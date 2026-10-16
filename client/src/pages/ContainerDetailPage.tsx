@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useParams, useLocation } from "wouter";
+import { useParams } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@/lib/form-resolver";
@@ -16,9 +16,14 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { ArrowLeft, Truck, Edit, Download, ChevronDown, Printer } from "lucide-react";
+import { Truck, Edit, Download, ChevronDown, Printer } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { utils, writeFile, ExcelJS } from "@/lib/excelHelper";
 import { spContainerInvoiceChargeLines } from "@shared/spContainerInvoiceCharges";
 import { useDateFormat } from "@/contexts/DateFormatContext";
@@ -67,7 +72,6 @@ export default function ContainerDetailPage() {
 
 function SpContainerDetailView() {
   const { id } = useParams<{ id: string }>();
-  const [, navigate] = useLocation();
   const [showOffloadDialog, setShowOffloadDialog] = useState(false);
   const [showEditDialog, setShowEditDialog] = useState(false);
   const { toast } = useToast();
@@ -169,8 +173,10 @@ function SpContainerDetailView() {
   const invoiceCharges = spContainerInvoiceChargeLines(spc);
   const chargesTotal = invoiceCharges.reduce((total, charge) => total + charge.amountUsd, 0);
   const totalQty = (spc.lines ?? []).reduce((sum, line) => sum + parseFloat(line.qty ?? "0"), 0);
-  const grossItemsTotal = (spc.lines ?? []).reduce((sum, line) =>
-    sum + parseFloat(line.qty ?? "0") * parseFloat(line.unitRateUsd ?? "0"), 0);
+  const grossItemsTotal = (spc.lines ?? []).reduce(
+    (sum, line) => sum + parseFloat(line.qty ?? "0") * parseFloat(line.unitRateUsd ?? "0"),
+    0
+  );
   const discountTotal = grossItemsTotal - baseCostAfterDiscount;
 
   const exportInvoice = async (includeCosts: boolean) => {
@@ -188,19 +194,33 @@ function SpContainerDetailView() {
         const workbook = utils.book_new();
         utils.book_append_sheet(workbook, utils.json_to_sheet(items), "Container Items");
         if (invoiceCharges.length > 0) {
-          utils.book_append_sheet(workbook, utils.json_to_sheet(invoiceCharges.map((charge) => ({
-            Type: charge.kind, Description: charge.description, "Amount (USD)": charge.amountUsd,
-          }))), "Extra Charges");
+          utils.book_append_sheet(
+            workbook,
+            utils.json_to_sheet(
+              invoiceCharges.map((charge) => ({
+                Type: charge.kind,
+                Description: charge.description,
+                "Amount (USD)": charge.amountUsd,
+              }))
+            ),
+            "Extra Charges"
+          );
         }
-        utils.book_append_sheet(workbook, utils.json_to_sheet([{
-          "Invoice / PO": spc.invoiceNumber || "",
-          "Container Number": spc.containerNumber || "",
-          Supplier: spc.supplierName || "",
-          "Invoice Date": spc.invoiceDate || "",
-          "Items Total": baseCostAfterDiscount,
-          "Charges Total": chargesTotal,
-          "Recorded Invoice Total": Number(spc.invoiceTotalUsd || 0),
-        }]), "Summary");
+        utils.book_append_sheet(
+          workbook,
+          utils.json_to_sheet([
+            {
+              "Invoice / PO": spc.invoiceNumber || "",
+              "Container Number": spc.containerNumber || "",
+              Supplier: spc.supplierName || "",
+              "Invoice Date": spc.invoiceDate || "",
+              "Items Total": baseCostAfterDiscount,
+              "Charges Total": chargesTotal,
+              "Recorded Invoice Total": Number(spc.invoiceTotalUsd || 0),
+            },
+          ]),
+          "Summary"
+        );
         await writeFile(workbook, fileBase + ".xlsx");
       } else {
         // Same printable NO / hidden BARCODE / DESCRIPTION / Q'TY layout as ERP.
@@ -218,7 +238,12 @@ function SpContainerDetailView() {
         sheet.mergeCells("A2:D2");
         sheet.addRow(["NO", "BARCODE", "DESCRIPTION", "Q'TY"]);
         (spc.lines ?? []).forEach((line, index) => {
-          sheet.addRow([index + 1, line.articleCode || "", line.description || line.articleCode, Number(line.qty || 0)]);
+          sheet.addRow([
+            index + 1,
+            line.articleCode || "",
+            line.description || line.articleCode,
+            Number(line.qty || 0),
+          ]);
         });
         sheet.getRow(1).font = { bold: true, size: 13 };
         sheet.getRow(3).font = { bold: true };
@@ -227,7 +252,11 @@ function SpContainerDetailView() {
       }
       toast({ title: "Export successful", description: "Container data downloaded as Excel" });
     } catch (error) {
-      toast({ title: "Export failed", description: error instanceof Error ? error.message : String(error), variant: "destructive" });
+      toast({
+        title: "Export failed",
+        description: error instanceof Error ? error.message : String(error),
+        variant: "destructive",
+      });
     }
   };
 
@@ -239,10 +268,15 @@ function SpContainerDetailView() {
         backTarget="/containers"
         meta={
           <>
-            <Badge variant={spc.status === "offloaded" ? "secondary" : "default"} data-testid={"badge-sp-status-" + spc.id}>
+            <Badge
+              variant={spc.status === "offloaded" ? "secondary" : "default"}
+              data-testid={"badge-sp-status-" + spc.id}
+            >
               {spc.status === "offloaded" ? "OFFLOADED" : "OTW"}
             </Badge>
-            <span>Invoice {spc.invoiceNumber} · {spc.invoiceDate ? formatDisplayDate(spc.invoiceDate) : "—"}</span>
+            <span>
+              Invoice {spc.invoiceNumber} · {spc.invoiceDate ? formatDisplayDate(spc.invoiceDate) : "—"}
+            </span>
           </>
         }
       >
@@ -290,19 +324,34 @@ function SpContainerDetailView() {
         {/* Same summary structure and labels as the ERP container detail. */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <Card>
-            <CardHeader className="pb-1"><CardTitle className="text-xs text-muted-foreground uppercase">Supplier</CardTitle></CardHeader>
-            <CardContent className="font-semibold">{spc.supplierName || "—"}<p className="text-xs font-normal text-muted-foreground">{spc.invoiceNumber}</p></CardContent>
+            <CardHeader className="pb-1">
+              <CardTitle className="text-xs text-muted-foreground uppercase">Supplier</CardTitle>
+            </CardHeader>
+            <CardContent className="font-semibold">
+              {spc.supplierName || "—"}
+              <p className="text-xs font-normal text-muted-foreground">{spc.invoiceNumber}</p>
+            </CardContent>
           </Card>
           <Card>
-            <CardHeader className="pb-1"><CardTitle className="text-xs text-muted-foreground uppercase">Items Total</CardTitle></CardHeader>
-            <CardContent className="text-xl font-semibold tabular-nums">{fmt2(baseCostAfterDiscount)}
+            <CardHeader className="pb-1">
+              <CardTitle className="text-xs text-muted-foreground uppercase">Items Total</CardTitle>
+            </CardHeader>
+            <CardContent className="text-xl font-semibold tabular-nums">
+              {fmt2(baseCostAfterDiscount)}
               <p className="text-xs font-normal text-muted-foreground">{spc.lines.length} items in 1 PO(s)</p>
             </CardContent>
           </Card>
           <Card>
-            <CardHeader className="pb-1"><CardTitle className="text-xs text-muted-foreground uppercase">Grand Total</CardTitle></CardHeader>
-            <CardContent className="text-xl font-semibold tabular-nums">{fmt2(spc.invoiceTotalUsd)}
-              {chargesTotal !== 0 && <p className="text-xs font-normal text-muted-foreground">Including {fmt2(chargesTotal)} invoice charges</p>}
+            <CardHeader className="pb-1">
+              <CardTitle className="text-xs text-muted-foreground uppercase">Grand Total</CardTitle>
+            </CardHeader>
+            <CardContent className="text-xl font-semibold tabular-nums">
+              {fmt2(spc.invoiceTotalUsd)}
+              {chargesTotal !== 0 && (
+                <p className="text-xs font-normal text-muted-foreground">
+                  Including {fmt2(chargesTotal)} invoice charges
+                </p>
+              )}
             </CardContent>
           </Card>
         </div>
@@ -310,7 +359,9 @@ function SpContainerDetailView() {
         <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Purchase Orders</h3>
         <div className="rounded-lg border bg-card overflow-hidden">
           <div className="flex justify-between bg-muted/40 px-4 py-3 text-sm font-semibold">
-            <span>{spc.invoiceNumber} <span className="text-muted-foreground font-normal ml-2">USD</span></span>
+            <span>
+              {spc.invoiceNumber} <span className="text-muted-foreground font-normal ml-2">USD</span>
+            </span>
             <span className="tabular-nums">{fmt2(baseCostAfterDiscount)}</span>
           </div>
           <Table mobileLayout="cards">
@@ -329,15 +380,27 @@ function SpContainerDetailView() {
                 const total = qty * rate;
                 return (
                   <TableRow key={line.id} data-testid={"row-sp-line-" + line.id}>
-                    <TableCell className={total < 0 ? "text-red-600 font-medium" : ""}>{line.description || line.articleCode}</TableCell>
-                    <TableCell className="text-right tabular-nums">{qty.toLocaleString("en-US", { maximumFractionDigits: 3 })}</TableCell>
-                    <TableCell className={"text-right tabular-nums " + (rate < 0 ? "text-red-600" : "")}>{fmt4(rate)}</TableCell>
-                    <TableCell className={"text-right tabular-nums font-semibold " + (total < 0 ? "text-red-600" : "")}>{fmt2(total)}</TableCell>
+                    <TableCell className={total < 0 ? "text-red-600 font-medium" : ""}>
+                      {line.description || line.articleCode}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {qty.toLocaleString("en-US", { maximumFractionDigits: 3 })}
+                    </TableCell>
+                    <TableCell className={"text-right tabular-nums " + (rate < 0 ? "text-red-600" : "")}>
+                      {fmt4(rate)}
+                    </TableCell>
+                    <TableCell className={"text-right tabular-nums font-semibold " + (total < 0 ? "text-red-600" : "")}>
+                      {fmt2(total)}
+                    </TableCell>
                   </TableRow>
                 );
               })}
               {spc.lines.length === 0 && (
-                <TableRow><TableCell colSpan={4} className="text-center py-6 text-muted-foreground">No line items</TableCell></TableRow>
+                <TableRow>
+                  <TableCell colSpan={4} className="text-center py-6 text-muted-foreground">
+                    No line items
+                  </TableCell>
+                </TableRow>
               )}
             </TableBody>
           </Table>
@@ -346,7 +409,12 @@ function SpContainerDetailView() {
           <div className="rounded-lg border bg-card overflow-hidden">
             <div className="bg-muted/40 px-4 py-3 text-sm font-semibold">Extra Charges</div>
             <Table>
-              <TableHeader><TableRow><TableHead>Misc Type</TableHead><TableHead className="text-right">Amount</TableHead></TableRow></TableHeader>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Misc Type</TableHead>
+                  <TableHead className="text-right">Amount</TableHead>
+                </TableRow>
+              </TableHeader>
               <TableBody>
                 {invoiceCharges.map((charge) => (
                   <TableRow key={charge.kind}>
@@ -364,11 +432,30 @@ function SpContainerDetailView() {
         )}
         <div className="rounded-lg border bg-card p-4 space-y-2 text-sm">
           <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Summary</p>
-          <div className="flex justify-between"><span>Items Total</span><span>{fmt2(baseCostAfterDiscount)}</span></div>
-          {discountTotal > 0 && <div className="flex justify-between text-red-600"><span>Discount ({spc.discountPct}%)</span><span>-{fmt2(discountTotal)}</span></div>}
-          {chargesTotal !== 0 && <div className="flex justify-between"><span>Charges Total</span><span>{fmt2(chargesTotal)}</span></div>}
-          <div className="flex justify-between"><span>Total Qty</span><span>{totalQty.toLocaleString("en-US", {maximumFractionDigits: 3})}</span></div>
-          <div className="flex justify-between border-t pt-2 font-bold"><span>Grand Total (Recorded Invoice)</span><span>{fmt2(spc.invoiceTotalUsd)}</span></div>
+          <div className="flex justify-between">
+            <span>Items Total</span>
+            <span>{fmt2(baseCostAfterDiscount)}</span>
+          </div>
+          {discountTotal > 0 && (
+            <div className="flex justify-between text-red-600">
+              <span>Discount ({spc.discountPct}%)</span>
+              <span>-{fmt2(discountTotal)}</span>
+            </div>
+          )}
+          {chargesTotal !== 0 && (
+            <div className="flex justify-between">
+              <span>Charges Total</span>
+              <span>{fmt2(chargesTotal)}</span>
+            </div>
+          )}
+          <div className="flex justify-between">
+            <span>Total Qty</span>
+            <span>{totalQty.toLocaleString("en-US", { maximumFractionDigits: 3 })}</span>
+          </div>
+          <div className="flex justify-between border-t pt-2 font-bold">
+            <span>Grand Total (Recorded Invoice)</span>
+            <span>{fmt2(spc.invoiceTotalUsd)}</span>
+          </div>
         </div>
 
         {/* Prepaid Charges */}
