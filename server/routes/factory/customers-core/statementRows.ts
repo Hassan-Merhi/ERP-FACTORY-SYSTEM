@@ -18,7 +18,7 @@
  * Row notes stay on customer_balances rows: an invoice row (memo or INV-GL
  * journal) carries the id and note of its INVOICE cache row when there is one.
  */
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import type Decimal from "decimal.js";
 import { customerBalances, customerOrders, customerOrderCharges } from "@shared/schema";
 
@@ -175,24 +175,26 @@ export async function buildFactoryCustomerStatement(
   // Link charges from all this customer's containers, not only invoices already
   // finalized. A VERIFIED container may already carry posted freight/clearance,
   // which the statement must identify as container cost until sale finalization.
-  const orders = await db
-    .select({
+  // Use a scoped join rather than a potentially huge inArray(orderIds) list.
+  const [orders, charges] = await Promise.all([
+    db.select({
       id: customerOrders.id,
       containerNumber: customerOrders.containerNumber,
       status: customerOrders.status,
-    })
-    .from(customerOrders)
-    .where(and(
+    }).from(customerOrders).where(and(
       eq(customerOrders.companyId, companyId),
       eq(customerOrders.customerId, customerId)
-    ));
-  const orderIds = orders.map((order) => order.id);
-  const charges = orderIds.length
-    ? await db
-      .select({ orderId: customerOrderCharges.orderId, voucherId: customerOrderCharges.voucherId })
-      .from(customerOrderCharges)
-      .where(inArray(customerOrderCharges.orderId, orderIds))
-    : [];
+    )),
+    db.select({
+      orderId: customerOrderCharges.orderId,
+      voucherId: customerOrderCharges.voucherId,
+    }).from(customerOrderCharges)
+      .innerJoin(customerOrders, eq(customerOrderCharges.orderId, customerOrders.id))
+      .where(and(
+        eq(customerOrders.companyId, companyId),
+        eq(customerOrders.customerId, customerId)
+      )),
+  ]);
   const ordersById = new Map(orders.map((order) => [order.id, {
     containerNumber: order.containerNumber ?? "",
     status: order.status,
