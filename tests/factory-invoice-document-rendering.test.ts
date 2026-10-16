@@ -89,7 +89,7 @@ describe("canonical factory invoice rendering", () => {
     expect(dataRow.getCell(totalColumn).value).toBe(240);
   });
 
-  it("groups Cream first, then Number 1/2, and writes green category subtotals", async () => {
+  it("groups Cream first, then Number 1/2, and writes readable blue subtotal bands", async () => {
     const grouped: CanonicalInvoiceDocument = {
       ...invoice,
       lines: [
@@ -194,6 +194,26 @@ describe("canonical factory invoice rendering", () => {
     expect(subtotalRow?.[7]).toBe(150);
     expect(subtotalRow?.[8]).toBe(8.5);
     expect(subtotalRow?.[9]).toBe(1275);
+
+    // All nine cells must be blue, including the blank cells between subtotal values.
+    let styledSubtotalCount = 0;
+    sheet.eachRow((row) => {
+      if (!String(row.getCell(3).value ?? "").startsWith("SUB-TOTAL ")) return;
+      styledSubtotalCount += 1;
+      for (let column = 1; column <= 9; column += 1) {
+        const cell = row.getCell(column);
+        expect(cell.fill).toMatchObject({
+          type: "pattern",
+          pattern: "solid",
+          fgColor: { argb: "FF2F75B5" },
+        });
+        expect(cell.font).toMatchObject({
+          bold: true,
+          color: { argb: "FFFFFFFF" },
+        });
+      }
+    });
+    expect(styledSubtotalCount).toBe(3);
   });
 
   it("renders the same canonical document as a valid PDF", async () => {
