@@ -106,8 +106,9 @@ export function registerSpGitTrackingImportRoutes(app: Express): void {
                 if (!Number.isFinite(amt) || amt < 0 || amt > 1_000_000_000) throw new Error("Invalid logistics amount");
                 patch[name] = String(amt);
               } else if (name === "freightStatus") {
-                const canonical = ["Yes", "No", "Pending"].find((v) => v.toLowerCase() === str(v === "" ? "" : normalized[name]).toLowerCase());
-                patch.freightStatus = canonical || null;
+                const canonical = ["Yes", "No", "Pending"].find((v) => v.toLowerCase() === str(normalized[name]).toLowerCase());
+                if (!canonical) throw new Error("Freight status must be Yes, No or Pending");
+                patch.freightStatus = canonical;
               } else if (name === "docReceived") {
                 patch[name] = ["yes", "y", "true", "1"].includes(str(v).toLowerCase());
               } else if (name === "status") {
@@ -168,7 +169,7 @@ export function registerSpGitTrackingImportRoutes(app: Express): void {
       }
       try {
         let reverted = 0;
-        for (const change of snapshot.changes) {
+        for (const change of [...snapshot.changes].reverse()) {
           const id = -change.id;
           if (change.prevData.__spTrackingNotExisting === true) {
             await db.execute(sql`DELETE FROM sp_container_git_tracking WHERE container_id = ${id} AND company_id = ${companyId}`);
