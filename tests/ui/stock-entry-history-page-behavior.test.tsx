@@ -8,6 +8,7 @@ const harness = vi.hoisted(() => ({
   invalidateQueries: vi.fn(),
   fetchQuery: vi.fn(),
   pickerEnabled: vi.fn(),
+  historyQueries: [] as string[],
   accessValue: undefined as any,
 }));
 
@@ -47,6 +48,17 @@ vi.mock("@tanstack/react-query", () => ({
     fetchQuery: harness.fetchQuery,
   }),
   useQueries: () => [],
+  useInfiniteQuery: ({ queryKey, enabled }: any) => {
+    harness.historyQueries.push(queryKey[1]);
+    const params = new URLSearchParams(queryKey[1]);
+    const selectedWorker = params.get("workerId");
+    const secondWorker = { ...group, workerId: 2, workerName: "Bob", bales: [
+      { ...bale, id: 202, workerId: 2, workerName: "Bob", referenceNumber: "REF-202" },
+    ] };
+    const items = selectedWorker === "2" ? [secondWorker] : selectedWorker ? [group] : [group];
+    const page = { items, total: items.length, totalBales: 3, totalWeight: 75, page: 1, hasNextPage: false };
+    return { data: enabled ? { pages: [page] } : undefined, isLoading: false, hasNextPage: false, isFetchingNextPage: false, fetchNextPage: vi.fn() };
+  },
   useQuery: ({ queryKey, enabled }: any) => {
     const root = queryKey?.[0];
     if (root === "/api/factory/my-access") return { data: harness.accessValue };
@@ -246,7 +258,7 @@ describe("stock entry history page behavior", () => {
     render(<StockEntryHistory onActiveDateChange={onActiveDateChange} />);
 
     await waitFor(() => expect(onActiveDateChange).toHaveBeenCalledWith(expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/)));
-    fireEvent.change(screen.getByTestId("input-stock-entry-date"), { target: { value: "" } });
+    fireEvent.change(screen.getByTestId("input-stock-entry-from"), { target: { value: "" } });
     await waitFor(() => expect(onActiveDateChange).toHaveBeenLastCalledWith(null));
   });
 
@@ -274,10 +286,42 @@ describe("stock entry history page behavior", () => {
   it("keeps search and unassigned filters available without loading removed picker payloads", () => {
     render(<StockEntryHistory />);
 
+    expect(screen.getByTestId("input-stock-entry-from")).toBeInTheDocument();
+    expect(screen.getByTestId("input-stock-entry-to")).toBeInTheDocument();
+    expect(screen.getByTestId("select-stock-entry-worker")).toBeInTheDocument();
     expect(screen.getByTestId("input-search")).toBeInTheDocument();
     expect(screen.getByTestId("checkbox-include-unassigned")).toBeChecked();
     expect(screen.getByTestId("button-view-condensed")).toBeInTheDocument();
     expect(screen.getByTestId("button-view-detailed")).toBeInTheDocument();
     expect(screen.queryByTestId("button-send-worker-pdf-whatsapp")).not.toBeInTheDocument();
   });
+  it("applies From/To to the history request without losing other filters", () => {
+    render(<StockEntryHistory />);
+    fireEvent.change(screen.getByTestId("input-stock-entry-from"), { target: { value: "2026-08-01" } });
+    fireEvent.change(screen.getByTestId("input-stock-entry-to"), { target: { value: "2026-08-31" } });
+    expect(harness.historyQueries.some((query) => {
+      const p = new URLSearchParams(query);
+      return p.get("startDate") === "2026-08-01" && p.get("endDate") === "2026-08-31";
+    })).toBe(true);
+    expect(screen.getByText("—")).toBeInTheDocument();
+  });
+
+  it("filters by the selected worker and opens detailed history", () => {
+    render(<StockEntryHistory />);
+    const filter = screen.getByTestId("select-stock-entry-worker");
+    fireEvent.click(within(filter.parentElement!).getByRole("button", { name: "Bob" }));
+    expect(harness.historyQueries.some((query) => new URLSearchParams(query).get("workerId") === "2")).toBe(true);
+    expect(screen.getByTestId("row-bale-202")).toBeInTheDocument();
+    expect(screen.getByText("REF-202")).toBeInTheDocument();
+  });
+
+  it("rejects reversed date ranges instead of querying the wrong period", () => {
+    render(<StockEntryHistory />);
+    const before = harness.historyQueries.length;
+    fireEvent.change(screen.getByTestId("input-stock-entry-from"), { target: { value: "2026-09-30" } });
+    fireEvent.change(screen.getByTestId("input-stock-entry-to"), { target: { value: "2026-09-01" } });
+    expect(screen.getByText(/Choose a valid From and To date/)).toBeInTheDocument();
+    expect(harness.historyQueries.length).toBeGreaterThan(before);
+  });
+
 });
