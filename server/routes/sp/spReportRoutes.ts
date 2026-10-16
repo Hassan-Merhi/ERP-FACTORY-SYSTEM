@@ -120,7 +120,7 @@ export function registerSpReportRoutes(app: Express) {
       // Partial date ranges retain their original source-ledger arithmetic.
       const first = typeof startDate === "string" ? startDate : "";
       const last = typeof endDate === "string" ? endDate : "";
-      const match = /^(\\d{4}-(?:0[1-9]|1[0-2]))-01$/.exec(first);
+      const match = /^(\d{4}-(?:0[1-9]|1[0-2]))-01$/.exec(first);
       if (match) {
         const [year, month] = match[1].split("-").map(Number);
         const periodEnd = `${match[1]}-${String(new Date(Date.UTC(year, month, 0)).getUTCDate()).padStart(2, "0")}`;
