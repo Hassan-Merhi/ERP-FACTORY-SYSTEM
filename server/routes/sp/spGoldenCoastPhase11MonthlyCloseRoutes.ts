@@ -342,7 +342,36 @@ async function readiness(req: Request, res: Response): Promise<void> {
       .where(and(eq(spProfitSplits.companyId, companyId), eq(spProfitSplits.periodMonth, probe.periodMonth)))
       .limit(1);
     if (existing.length) {
-      res.json({ ready: false, alreadyClosed: true, split: existing[0] });
+      // A finalized split must be traceable to its posted Journal voucher.
+      // Legacy split rows lacking a Phase 11 marker remain visible for review,
+      // but never imply that a journal was posted.
+      const [marker] = await db
+        .select({ voucherId: accountingPostingRequests.voucherId })
+        .from(accountingPostingRequests)
+        .where(
+          and(
+            eq(accountingPostingRequests.companyId, companyId),
+            eq(accountingPostingRequests.idempotencyKey, goldenCoastPhase11IdempotencyKey(companyId, probe.periodMonth))
+          )
+        )
+        .limit(1);
+      const [journal] = marker
+        ? await db
+            .select({ id: vouchers.id, voucherNumber: vouchers.voucherNumber, voucherType: vouchers.voucherType })
+            .from(vouchers)
+            .where(
+              and(
+                eq(vouchers.id, Number(marker.voucherId)),
+                eq(vouchers.companyId, companyId),
+                isNull(vouchers.deletedAt)
+              )
+            )
+            .limit(1)
+        : [];
+      const voucher = journal?.voucherType === "Journal"
+        ? { id: journal.id, voucherNumber: journal.voucherNumber }
+        : null;
+      res.json({ ready: false, alreadyClosed: true, split: existing[0], voucher, journalVerified: Boolean(voucher) });
       return;
     }
     const { accounts, plan } = await buildPlan(db, companyId, { periodMonth, clientRequestId: "readiness" });
