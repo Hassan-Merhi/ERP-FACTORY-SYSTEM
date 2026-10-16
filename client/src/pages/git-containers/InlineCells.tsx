@@ -4,13 +4,14 @@ import { apiRequest } from "@/lib/queryClient";
 import { CheckCircle2, XCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { fmtDate, parseNum, fmt, TRANSPORTER_OPTIONS, EnrichedContainerRow } from "./gitContainerTypes";
+import { gitTrackingPatchUrl } from "./gitTrackingPatchUrl";
 
 // Shared mutation hook — invalidates the full containers list on success
 export function useInlinePatch(containerId: number) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (patch: Record<string, unknown>) =>
-      apiRequest("PATCH", `/api/containers/${containerId}/tracking`, patch),
+      apiRequest("PATCH", gitTrackingPatchUrl(containerId), patch),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["/api/git/containers"] }),
   });
 }
@@ -22,7 +23,7 @@ export function EtaCell({ container }: { container: EnrichedContainerRow }) {
 
   const mutation = useMutation({
     mutationFn: (eta: string | null) =>
-      apiRequest("PATCH", `/api/containers/${container.id}/tracking`, { eta, etaSource: eta ? "manual" : undefined }),
+      apiRequest("PATCH", gitTrackingPatchUrl(container.id), { eta, etaSource: eta ? "manual" : undefined }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/git/containers"] });
       setEditing(false);
