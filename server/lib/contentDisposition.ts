@@ -5,21 +5,20 @@
  */
 
 export function sanitiseFilename(raw: string): string {
-  return raw
-    .replace(/[^\x20-\x7E]/g, "_")
-    .replace(/[\r\n\t]/g, "_")
-    .replace(/["\\]/g, "")
-    .replace(/[']/g, "")
-    .replace(/[/\\*?:[\]<>|;]/g, "")
-    .replace(/\s+/g, "_")
-    .replace(/^[._]+|[._]+$/g, "")
-    .trim() || "download";
+  return (
+    raw
+      .replace(/[^\x20-\x7E]/g, "_")
+      .replace(/[\r\n\t]/g, "_")
+      .replace(/["\\]/g, "")
+      .replace(/[']/g, "")
+      .replace(/[/\\*?:[\]<>|;]/g, "")
+      .replace(/\s+/g, "_")
+      .replace(/^[._]+|[._]+$/g, "")
+      .trim() || "download"
+  );
 }
 
-export function buildSafeFilename(
-  parts: (string | number | null | undefined)[],
-  ext?: string
-): string {
+export function buildSafeFilename(parts: (string | number | null | undefined)[], ext?: string): string {
   const safe = parts
     .filter((part): part is string | number => part !== null && part !== undefined && String(part).trim().length > 0)
     .map((part) => sanitiseFilename(String(part)))

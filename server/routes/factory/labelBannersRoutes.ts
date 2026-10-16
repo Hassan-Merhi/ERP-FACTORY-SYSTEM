@@ -32,7 +32,10 @@ const upload = multer({
 });
 
 function slugify(label: string): string {
-  const dashed = label.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-");
+  const dashed = label
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-");
   // Trim edge dashes by index rather than with /^-+|-+$/, which backtracks
   // polynomially on long user-supplied runs of separators.
   let start = 0;

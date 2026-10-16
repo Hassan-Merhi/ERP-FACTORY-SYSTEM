@@ -51,7 +51,8 @@ function resolveManagedExportPath(filePath: string): string {
 function getFileAttachment(source: ExportAttachmentSource): { filePath: string; sizeBytes: number } | undefined {
   const marker = getMarkerPayload(source);
   if (marker) return { filePath: resolveManagedExportPath(marker.path), sizeBytes: marker.length };
-  if (!Buffer.isBuffer(source)) return { filePath: resolveManagedExportPath(source.filePath), sizeBytes: source.sizeBytes };
+  if (!Buffer.isBuffer(source))
+    return { filePath: resolveManagedExportPath(source.filePath), sizeBytes: source.sizeBytes };
   return undefined;
 }
 
@@ -62,10 +63,7 @@ function requireBufferSource(source: ExportAttachmentSource): Buffer {
   return source;
 }
 
-export function armExportAttachmentCleanup(
-  source: ExportAttachmentSource,
-  delayMs = DEFAULT_CLEANUP_DELAY_MS,
-): void {
+export function armExportAttachmentCleanup(source: ExportAttachmentSource, delayMs = DEFAULT_CLEANUP_DELAY_MS): void {
   const marker = getMarkerPayload(source);
   if (!marker?.managedAttachment) return;
   const filePath = resolveManagedExportPath(marker.path);
@@ -100,7 +98,7 @@ export function getExportAttachmentSize(source: ExportAttachmentSource): number 
 export function toNodemailerAttachment(
   source: ExportAttachmentSource,
   filename: string,
-  contentType: string,
+  contentType: string
 ): { filename: string; contentType: string; content?: Buffer; path?: string } {
   const file = getFileAttachment(source);
   if (file) {
@@ -142,7 +140,7 @@ let materializationTail: Promise<void> = Promise.resolve();
  */
 export async function withSerializedExportAttachmentBuffer<T>(
   source: ExportAttachmentSource,
-  work: (buffer: Buffer) => Promise<T>,
+  work: (buffer: Buffer) => Promise<T>
 ): Promise<T> {
   if (!getFileAttachment(source)) {
     return work(requireBufferSource(source));
