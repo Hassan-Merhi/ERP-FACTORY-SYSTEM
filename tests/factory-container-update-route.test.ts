@@ -646,6 +646,43 @@ describe("PATCH /api/factory/containers/:id — legacy missing goods-import jour
     expect(after.fx_rate_to_usd).toBe("1.17000000");
   });
 
+  it("does not silently create historical freight or commission payables from unchanged form fields", async () => {
+    const id = await seedContainer({
+      freight: "125",
+      freightAccountId,
+      freightPaidBy: "supplier",
+      freightSupplierId: supplierId,
+      commissionAmount: "75",
+      commissionCurrencyCode: "USD",
+    });
+    const response = await patchContainer(id, {
+      notes: "Port document received",
+      supplierId,
+      ratePerKg: "2",
+      currencyCode: "USD",
+      fxRateSource: "manual",
+      fxRateToUsd: "1",
+      freight: "125.00",
+      freightCurrencyCode: "USD",
+      freightAccountId,
+      freightPaidBy: "supplier",
+      freightSupplierId: supplierId,
+      freightOwnAccountId: null,
+      commissionAmount: "75.00",
+      commissionCurrencyCode: "USD",
+      commissionSupplierId: null,
+      commissionAccountId: null,
+      commissionNotes: null,
+    });
+    expect(response.status, JSON.stringify(response.body)).toBe(200);
+    expect((await containerRow(id)).notes).toBe("Port document received");
+    const legacyJournals = await pool.query(
+      "SELECT id FROM vouchers WHERE company_id = $1 AND (voucher_number LIKE $2 OR voucher_number LIKE $3)",
+      [ctx.companyId, `FACTORY-FREIGHT-${id}%`, `FACTORY-COMM-${id}%`]
+    );
+    expect(legacyJournals.rows).toHaveLength(0);
+  });
+
   it("still refuses an actual goods change without a reviewed original journal", async () => {
     const id = await seedContainer({ supplierId, ratePerKg: "2.500000" });
     await pool.query("UPDATE factory_containers SET total_kg = '1200' WHERE id = $1", [id]);
