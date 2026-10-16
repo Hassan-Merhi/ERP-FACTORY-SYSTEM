@@ -45,7 +45,8 @@ import { SP_CONTAINER_EXCEL_IMPORT_PARSE_PATH, buildSpContainerExcelImport } fro
 async function validateSpExcelImport(
   companyId: number,
   body: Record<string, any>,
-  tx: Pick<typeof db, "select"> = db,
+  tx: any = db,
+  checkSupplier = true,
 ): Promise<{ errors: string[]; warnings: string[] }> {
   const errors: string[] = [];
   const warnings: string[] = [];
@@ -71,7 +72,7 @@ async function validateSpExcelImport(
     errors.push("Excel must contain 1 to 10,000 valid item lines.");
   }
 
-  if (Number.isSafeInteger(supplierId) && supplierId > 0) {
+  if (checkSupplier && Number.isSafeInteger(supplierId) && supplierId > 0) {
     const companySuppliers = await supplierService.list(companyId, "");
     const supplier = companySuppliers.find((s) => s.id === supplierId);
     if (!supplier) {
@@ -201,6 +202,9 @@ export function registerSpContainerRoutes(app: Express) {
         return res.status(400).json({ message: "supplierName, invoiceNumber, invoiceDate are required" });
       }
 
+      if (importSource === "excel" && (otwAccountId || otwClearingAccountId)) {
+        return res.status(400).json({ message: "Excel imports must use the Supplier Payable company\u0027s configured Goods OTW accounts." });
+      }
       if (importSource === "excel") {
         const validation = await validateSpExcelImport(companyId, req.body);
         if (validation.errors.length) return res.status(400).json({ code: "SP_EXCEL_IMPORT_INVALID", message: validation.errors.join("; "), ...validation });
@@ -248,7 +252,7 @@ export function registerSpContainerRoutes(app: Express) {
       const result = await db.transaction(async (tx) => {
         if (importSource === "excel") {
           await tx.execute(sql`SELECT pg_advisory_xact_lock(${companyId}, 20831016)`);
-          const recheck = await validateSpExcelImport(companyId, req.body, tx);
+          const recheck = await validateSpExcelImport(companyId, req.body, tx, false);
           if (recheck.errors.length) {
             const error = new Error(recheck.errors.join("; ")) as Error & { code?: string };
             error.code = "SP_EXCEL_IMPORT_INVALID";
