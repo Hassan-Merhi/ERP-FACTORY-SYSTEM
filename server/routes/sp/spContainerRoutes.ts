@@ -45,8 +45,8 @@ import { SP_CONTAINER_EXCEL_IMPORT_PARSE_PATH, buildSpContainerExcelImport } fro
 // company-scoped advisory lock, so concurrent imports cannot double post.
 async function validateSpExcelImport(
   companyId: number,
-  body: Record<string, any>,
-  tx: any = db,
+  body: Record<string, unknown>,
+  tx: Pick<typeof db, "select"> = db,
   checkSupplier = true,
 ): Promise<{ errors: string[]; warnings: string[] }> {
   const errors: string[] = [];
@@ -57,7 +57,7 @@ async function validateSpExcelImport(
   const invoiceDate = String(body.invoiceDate ?? "");
   const invoiceTotal = Number(body.invoiceTotalUsd);
   const discountPct = Number(body.discountPct ?? 0);
-  const lines = body.lines;
+  const lines = Array.isArray(body.lines) ? (body.lines as Array<Record<string, unknown>>) : null;
 
   if (!Number.isSafeInteger(supplierId) || supplierId <= 0) errors.push("Select a valid supplier.");
   if (!containerNumber) errors.push("Container number is required.");
@@ -107,12 +107,12 @@ async function validateSpExcelImport(
         itemsTotal += qty * rate;
       }
     }
-    const unmatched = lines.filter((line: any) => !line?.stockItemId).length;
+    const unmatched = lines.filter((line) => !line?.stockItemId).length;
     if (unmatched > 0) {
       warnings.push(unmatched + " item line(s) have no matching stock item/alias; map them before offloading.");
     }
     const linkedIds = [...new Set<number>(
-      lines.filter((line: any) => line?.stockItemId != null).map((line: any) => Number(line.stockItemId)),
+      lines.filter((line) => line?.stockItemId != null).map((line) => Number(line.stockItemId)),
     )];
     if (linkedIds.some((id) => !Number.isSafeInteger(id) || id <= 0)) {
       errors.push("Invalid stock item link in the imported Excel lines.");
