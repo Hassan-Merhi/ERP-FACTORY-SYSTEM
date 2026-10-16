@@ -1,4 +1,4 @@
-import { Fragment } from "react";
+import { Fragment, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -10,10 +10,12 @@ import { PeriodFilter } from "@/components/ui/period-filter";
 import { ChevronDown, Container as ContainerIcon, Check } from "lucide-react";
 
 import type { ReportContainer } from "../types";
+import { FactoryAllContainersReport } from "./FactoryAllContainersReport";
 
 import type { AnalyticsLegacyState } from "../useAnalyticsLegacy";
 
 export function ContainersSectionPanel({ analytics }: { analytics: AnalyticsLegacyState }) {
+  const [factoryReportView, setFactoryReportView] = useState<"all" | "sales">("all");
   const {
     activeSection,
     appMode,
@@ -44,6 +46,26 @@ export function ContainersSectionPanel({ analytics }: { analytics: AnalyticsLega
   return (
     <>
       {activeSection === "containers" && appMode === "factory" && (
+        <div className="space-y-4">
+          <div className="flex flex-wrap gap-2" aria-label="Factory container report view">
+            <Button
+              variant={factoryReportView === "all" ? "secondary" : "outline"}
+              onClick={() => setFactoryReportView("all")}
+              data-testid="factory-container-report-all"
+            >
+              All Containers
+            </Button>
+            <Button
+              variant={factoryReportView === "sales" ? "secondary" : "outline"}
+              onClick={() => setFactoryReportView("sales")}
+              data-testid="factory-container-report-sales"
+            >
+              Container Sales
+            </Button>
+          </div>
+          {factoryReportView === "all" ? (
+            <FactoryAllContainersReport />
+          ) : (
         <Card className="p-6">
           <div className="flex flex-wrap items-center gap-3 mb-4">
             <h3 className="text-lg font-medium flex items-center gap-2">
@@ -225,6 +247,8 @@ export function ContainersSectionPanel({ analytics }: { analytics: AnalyticsLega
             </div>
           )}
         </Card>
+          )}
+        </div>
       )}
 
       {activeSection === "containers" && appMode !== "factory" && (
