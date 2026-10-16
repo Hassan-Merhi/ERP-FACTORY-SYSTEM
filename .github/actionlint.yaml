@@ -1,5 +1,5 @@
+# GitHub-hosted ubuntu-26.04 runners are newer than the pinned actionlint's
+# built-in label list; declare the label so runner-label checks pass.
 self-hosted-runner:
-  # GitHub-hosted Ubuntu 26.04 image used across workflows; newer than the
-  # pinned actionlint release's built-in runner label list.
   labels:
     - ubuntu-26.04

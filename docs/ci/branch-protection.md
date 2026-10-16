@@ -215,7 +215,7 @@ Both contain explicit PR-aware logic, but neither currently declares a `pull_req
 
 ## Toolchain naming drift
 
-The canonical Node runtime is `24.21.0`. Workflow step names and the deployment docs used to say `24.19.0`; they were normalized to `24.21.0` on 2026-10-02.
+The canonical Node runtime is `24.22.0`. Workflow step names and the deployment docs used to say `24.19.0`; they were normalized to `24.21.0` on 2026-10-02 and moved to `24.22.0` with the Renovate Node update on 2026-10-16.
 
 ## Target ownership after consolidation
 

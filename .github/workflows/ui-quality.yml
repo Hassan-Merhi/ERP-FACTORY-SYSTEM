@@ -94,10 +94,10 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Set up Node.js 24.21.0
+      - name: Set up Node.js 24.22.0
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
-          node-version: "24.21.0"
+          node-version: "24.22.0"
 
       - name: Run classified i18n gate when relevant
         env:
@@ -147,10 +147,10 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Set up Node.js 24.21.0
+      - name: Set up Node.js 24.22.0
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
-          node-version: "24.21.0"
+          node-version: "24.22.0"
           cache: npm
 
       - name: Normalize registry URLs
@@ -239,10 +239,10 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Set up Node.js 24.21.0
+      - name: Set up Node.js 24.22.0
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
-          node-version: "24.21.0"
+          node-version: "24.22.0"
           cache: npm
 
       - name: Install dependencies
