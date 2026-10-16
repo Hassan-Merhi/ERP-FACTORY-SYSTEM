@@ -1,7 +1,7 @@
 {
   "formatVersion": 1,
   "description": "Ordered snapshot of every registered Express route (method, path, guard chain) and middleware mount. Regenerate with UPDATE_ROUTE_MANIFEST=1 only when a route change is intended; during a file split the manifest must not change at all.",
-  "routeCount": 2078,
+  "routeCount": 2079,
   "middlewareMountCount": 130,
   "routes": [
     "GET /api/admin/operational-monitoring [requireAuth > <anonymous> > <anonymous>]",
@@ -1926,6 +1926,7 @@
     "POST /api/sp/golden-coast/phase7/sales-cash-pay-fresh-start [<anonymous> > <anonymous> > requireAuth > requireNonPOS > <anonymous>]",
     "GET /api/sp/golden-coast/phase8/container-offload/readiness [<anonymous> > requireAuth > <anonymous>]",
     "POST /api/sp/golden-coast/phase8/containers [<anonymous> > <anonymous> > requireAuth > <anonymous>]",
+    "POST /api/sp/golden-coast/phase8/containers/import-excel [privilegedMutationRateLimit > phase8RequestBudget > requireAuth > <anonymous>]",
     "POST /api/sp/golden-coast/phase8/offload [<anonymous> > <anonymous> > requireAuth > <anonymous>]",
     "GET /api/sp/golden-coast/phase9/hassan-savings-withdrawal/readiness [<anonymous> > requireAuth > requireNonPOS > <anonymous>]",
     "POST /api/sp/golden-coast/phase9/hassan-savings-withdrawal [<anonymous> > <anonymous> > requireAuth > requireNonPOS > <anonymous>]",
