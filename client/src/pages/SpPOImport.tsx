@@ -224,7 +224,7 @@ function money(value: number) {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   });
-  return amount < 0 ? `-${formatted}` : `${formatted}`;
+  return (amount < 0 ? "-$" : "$") + formatted;
 }
 
 /** Visual highlighting only; never changes the imported price or accounting. */
