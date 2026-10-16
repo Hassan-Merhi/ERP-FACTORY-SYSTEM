@@ -44,6 +44,7 @@ export function ensureSpGitTracking(): Promise<void> {
           updated_at timestamptz NOT NULL DEFAULT now()
         )
       `);
+      await db.execute(sql`ALTER TABLE sp_container_git_tracking ADD COLUMN IF NOT EXISTS freight_status text`);
       await db.execute(sql`CREATE INDEX IF NOT EXISTS sp_container_git_tracking_company_idx
         ON sp_container_git_tracking(company_id)`);
     })().catch((error) => {
