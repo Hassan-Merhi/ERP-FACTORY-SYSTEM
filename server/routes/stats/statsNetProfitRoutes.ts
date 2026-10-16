@@ -50,7 +50,7 @@ export function registerStatsNetProfitRoutes(app: Express) {
 
       // Fetch company to know its base currency (CFA vs USD)
       // Check the 30-second TTL cache before touching the DB
-      const _cacheKey = `net-profit:${companyId}:${toDate || ""}`;
+      const _cacheKey = `net-profit:${companyId}:${toDate || ""}:${toDate ? "historical" : new Date().toISOString().slice(0, 7)}`;
       const _cached = _getCached(_cacheKey);
       if (_cached) return res.json(_cached);
 
@@ -521,8 +521,17 @@ export function registerStatsNetProfitRoutes(app: Express) {
       let spPosProfit = 0;
       const spPosProfitBaselineDate =
         isSpCompany && companySettings?.spPosProfitBaselineDate ? companySettings.spPosProfitBaselineDate : null;
+      // The tile is a month-to-date measure, never an accumulated balance.
+      // Selecting an historical as-of date shows that month's profit without
+      // deleting or rewriting any earlier sales or accounting records.
+      const spPosProfitAsOfDate = toDate || new Date().toISOString().slice(0, 10);
+      const monthStart = `${spPosProfitAsOfDate.slice(0, 7)}-01`;
+      const spPosProfitPeriodStartDate =
+        spPosProfitBaselineDate && spPosProfitBaselineDate > monthStart ? spPosProfitBaselineDate : monthStart;
       if (isSpCompany) {
-        spPosProfit = round2(await getSupplierPartnerPosProfit(companyId, spPosProfitBaselineDate, toDate));
+        spPosProfit = round2(
+          await getSupplierPartnerPosProfit(companyId, spPosProfitPeriodStartDate, spPosProfitAsOfDate)
+        );
       }
 
       // Owner's Capital for backward compatibility
@@ -569,6 +578,7 @@ export function registerStatsNetProfitRoutes(app: Express) {
         totalExpenses: expensesTotal,
         netProfit,
         spPosProfit,
+        ...(isSpCompany ? { spPosProfitPeriodStartDate, spPosProfitAsOfDate } : {}),
         ...(spPosProfitBaselineDate ? { spPosProfitBaselineDate } : {}),
         forUs: {
           total: forUsTotal,
