@@ -64,6 +64,7 @@ import { runApprovedAboSobhiGoods82 } from "./startup/runApprovedAboSobhiGoods82
 import { runApprovedAboJaberPayableFix } from "./startup/runApprovedAboJaberPayableFix";
 import { runApprovedUkBasma38 } from "./startup/runApprovedUkBasma38";
 import { ensureFactorySheetsSacksSchema } from "./startup/factorySheetsSacksSchema";
+import { ensureSpGitTracking } from "./lib/spGitTracking";
 import { ensureRecurringJournalSchema } from "./services/accounting/ensureRecurringJournalSchema";
 import { bootstrapRecurringJournalFromEnvironment } from "./services/accounting/recurringJournalBootstrap";
 import { ensureFactoryInvoiceDocumentSnapshotStore } from "./services/factoryInvoiceDocumentService";
@@ -356,7 +357,12 @@ let migrationsDone = false;
         } catch (err: unknown) {
           logger.error("Migration error (non-fatal — server will still start):", {
             error: getErrorMessage(err) ?? err,
-          });
+            // The SP tracking metadata table is required by the shared ERP GIT
+      // queries. Ensure it before Render accepts traffic, even when the
+      // optional bulk startup migration pass is disabled in production.
+      await ensureSpGitTracking();
+      logger.info("[startup] ✓ Supplier Partner GIT tracking schema ensured");
+    });
           migrationsDone = true;
           markStartupMigrationsComplete();
         }
