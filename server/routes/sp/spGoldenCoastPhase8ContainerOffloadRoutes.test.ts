@@ -132,9 +132,10 @@ describe("Golden Coast Phase 8 container/offload route", () => {
       "await validateFundingAccount(tx, selectedCompany, offloadInput.chargeFundingAccount)"
     );
     expect(phase8ServiceSource).toContain("GC_PHASE8_CHARGE_FUNDING_REQUIRED");
-    // The reserve ceiling and the Hassan Savings sweep are Phase 8-only.
+    // The reserve ceiling and the Hassan Savings sweep are Phase 8-only; cutover
+    // and Fresh Start Excel containers never funded a reserve to sweep.
     expect(phase8ServiceSource).toContain(
-      'const unused = funded.origin === "cutover" ? new Decimal(0) : reserve.minus(actual);'
+      'const unused = funded.origin === "cutover" || funded.origin === "fresh_start_excel" ? new Decimal(0) : reserve.minus(actual);'
     );
   });
 

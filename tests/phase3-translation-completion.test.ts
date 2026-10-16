@@ -51,7 +51,8 @@ const entries = [
 
 describe("Phase 3 translation completion", () => {
   it("keeps the complete generated translation inventory", () => {
-    expect(entries).toHaveLength(8208);
+    // 8208 -> 8221 with the phrases added by the 2026-10-16 feature merges (#2298-#2326).
+    expect(entries).toHaveLength(8221);
     expect(new Set(entries.map((entry) => entry.en)).size).toBe(entries.length);
   });
 

@@ -136,6 +136,7 @@ export const OPERATIONAL_ROUTE_PERMISSIONS: Readonly<Record<OperationalPermissio
     "POST /api/retail/import",
     "POST /api/po-import/parse",
     "POST /api/sp/containers/import-excel/parse",
+    "POST /api/sp/containers/import-excel/validate",
     "POST /api/sp/golden-coast/phase8/containers/import-excel",
     "POST /api/po-import/backfill",
     "POST /api/containers/:id/price-import/preview",
