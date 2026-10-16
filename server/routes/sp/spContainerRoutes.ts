@@ -133,8 +133,19 @@ async function validateSpExcelImport(
       }
     }
     const unmatched = lines.filter((line) => !line?.stockItemId).length;
-    if (unmatched > 0) {
+    if (freshStartOtw && unmatched > 0) {
+      errors.push(unmatched + " Excel item line(s) have no matching GC-LSHI stock item. Add or map stock items before importing into Golden Coast Phase 8.");
+    } else if (unmatched > 0) {
       warnings.push(unmatched + " item line(s) have no matching stock item/alias; map them before offloading.");
+    }
+    if (freshStartOtw && lines.length > 100) {
+      errors.push("Golden Coast Phase 8 supports up to 100 item lines in one container.");
+    }
+    if (freshStartOtw) {
+      const linked = lines.map((line) => Number(line.stockItemId));
+      if (new Set(linked).size !== linked.length) {
+        errors.push("Golden Coast Phase 8 requires each stock item only once in a container. Consolidate duplicate item rows.");
+      }
     }
     const linkedIds = [...new Set<number>(
       lines.filter((line) => line?.stockItemId != null).map((line) => Number(line.stockItemId)),
