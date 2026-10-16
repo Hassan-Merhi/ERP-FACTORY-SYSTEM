@@ -101,7 +101,7 @@ export async function resolveSharedFactoryRequirements(req: Request): Promise<Sh
     // not arbitrary account deletion, balance changes, bank APIs, or voucher APIs.
     const isAccountGroupsLedgerOperation =
       (path === "/api/ledger-accounts" && ["GET", "HEAD", "POST"].includes(method)) ||
-      (method === "PUT" && /^\\/api\\/ledger-accounts\\/\\d+$/.test(path)) ||
+      (method === "PUT" && /^\/api\/ledger-accounts\/\d+$/.test(path)) ||
       (method === "PATCH" && path === "/api/ledger-accounts/bulk-assign-parent");
 
     if (isAccountGroupsLedgerOperation) {
