@@ -32,7 +32,6 @@ interface SpProfitReport {
   totalCogs?: number;
   grossProfit?: number;
   totalSharedCharges?: number;
-  otherIncomeExpense?: number;
   netProfit?: number;
 }
 
@@ -347,11 +346,6 @@ export default function SpReports() {
                         value: -(profit.totalSharedCharges ?? 0),
                         className: "text-destructive",
                       },
-                      ...((profit.otherIncomeExpense ?? 0) !== 0 ? [{
-                        label: "Other Income / (Expense)",
-                        value: profit.otherIncomeExpense ?? 0,
-                        className: "text-muted-foreground",
-                      }] : []),
                       {
                         label: "Net Profit",
                         value: profit.netProfit ?? 0,
