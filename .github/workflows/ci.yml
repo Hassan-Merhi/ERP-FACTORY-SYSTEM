@@ -172,10 +172,10 @@ jobs:
             --header "Accept: application/vnd.github+json" \
             "https://api.github.com/repos/${GITHUB_REPOSITORY}/tarball/${GITHUB_SHA}" |
             tar --extract --gzip --strip-components=1
-      - name: Set up Node.js 24.21.0
+      - name: Set up Node.js 24.22.0
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
-          node-version: "24.21.0"
+          node-version: "24.22.0"
           cache: npm
       - name: Install dependencies
         id: install
@@ -233,10 +233,10 @@ jobs:
         run: |
           set -euo pipefail
           curl --fail --silent --show-error --location --header "Authorization: Bearer ${GH_TOKEN}" --header "Accept: application/vnd.github+json" "https://api.github.com/repos/${GITHUB_REPOSITORY}/tarball/${GITHUB_SHA}" | tar --extract --gzip --strip-components=1
-      - name: Set up Node.js 24.21.0
+      - name: Set up Node.js 24.22.0
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
-          node-version: "24.21.0"
+          node-version: "24.22.0"
           cache: npm
       - name: Install dependencies
         id: install
@@ -273,10 +273,10 @@ jobs:
         run: |
           set -euo pipefail
           curl --fail --silent --show-error --location --header "Authorization: Bearer ${GH_TOKEN}" --header "Accept: application/vnd.github+json" "https://api.github.com/repos/${GITHUB_REPOSITORY}/tarball/${GITHUB_SHA}" | tar --extract --gzip --strip-components=1
-      - name: Set up Node.js 24.21.0
+      - name: Set up Node.js 24.22.0
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
-          node-version: "24.21.0"
+          node-version: "24.22.0"
           cache: npm
       - name: Install dependencies
         id: install
@@ -340,10 +340,10 @@ jobs:
         run: |
           set -euo pipefail
           curl --fail --silent --show-error --location --header "Authorization: Bearer ${GH_TOKEN}" --header "Accept: application/vnd.github+json" "https://api.github.com/repos/${GITHUB_REPOSITORY}/tarball/${GITHUB_SHA}" | tar --extract --gzip --strip-components=1
-      - name: Set up Node.js 24.21.0
+      - name: Set up Node.js 24.22.0
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
-          node-version: "24.21.0"
+          node-version: "24.22.0"
           cache: npm
       - name: Install dependencies
         id: install
@@ -400,10 +400,10 @@ jobs:
         run: |
           set -euo pipefail
           curl --fail --silent --show-error --location --header "Authorization: Bearer ${GH_TOKEN}" --header "Accept: application/vnd.github+json" "https://api.github.com/repos/${GITHUB_REPOSITORY}/tarball/${GITHUB_SHA}" | tar --extract --gzip --strip-components=1
-      - name: Set up Node.js 24.21.0
+      - name: Set up Node.js 24.22.0
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
-          node-version: "24.21.0"
+          node-version: "24.22.0"
           cache: npm
       - name: Install dependencies
         id: install
@@ -525,10 +525,10 @@ jobs:
         run: |
           set -euo pipefail
           curl --fail --silent --show-error --location --header "Authorization: Bearer ${GH_TOKEN}" --header "Accept: application/vnd.github+json" "https://api.github.com/repos/${GITHUB_REPOSITORY}/tarball/${GITHUB_SHA}" | tar --extract --gzip --strip-components=1
-      - name: Set up Node.js 24.21.0
+      - name: Set up Node.js 24.22.0
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
-          node-version: "24.21.0"
+          node-version: "24.22.0"
           cache: npm
       - name: Install dependencies
         id: install
@@ -581,10 +581,10 @@ jobs:
         run: |
           set -euo pipefail
           curl --fail --silent --show-error --location --header "Authorization: Bearer ${GH_TOKEN}" --header "Accept: application/vnd.github+json" "https://api.github.com/repos/${GITHUB_REPOSITORY}/tarball/${GITHUB_SHA}" | tar --extract --gzip --strip-components=1
-      - name: Set up Node.js 24.21.0
+      - name: Set up Node.js 24.22.0
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
-          node-version: "24.21.0"
+          node-version: "24.22.0"
           cache: npm
       - name: Install dependencies
         run: npm ci --no-audit --bin-links=true
