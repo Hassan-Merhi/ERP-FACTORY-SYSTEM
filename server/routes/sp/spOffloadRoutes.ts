@@ -21,6 +21,7 @@ import { sumMoney, toMoney } from "../../lib/money";
 import { postFactoryVoucherTx, type FactoryVoucherLine } from "../../services/factory/factoryVoucherPosting";
 import { PostingValidationError } from "../../services/accounting/centralPostingEngine";
 import { resultRows, firstRow } from "../../lib/queryResult";
+import { SP_CONTAINER_INVOICE_CHARGE_TYPE, spContainerInvoiceChargeLines } from "@shared/spContainerInvoiceCharges";
 
 type SpOffloadChargeLine = {
   amountUsd?: unknown;
@@ -116,7 +117,10 @@ export function registerSpOffloadRoutes(app: Express) {
         return res.status(400).json({ message: "SP accounts not configured. Run setup first." });
       }
 
-      const charges: SpOffloadChargeLine[] = chargeLines || [];
+      // Charges the user adds in the offload dialog (prepaid, cash, payables, agents…).
+      // The supplier-invoice charges stated on the container itself are added below,
+      // once the container row is locked, so they cannot be forgotten or re-typed.
+      const requestedCharges: SpOffloadChargeLine[] = Array.isArray(chargeLines) ? chargeLines : [];
 
       const result = await db.transaction(async (tx) => {
         // Serialize every lifecycle mutation on the container row. The pre-transaction
@@ -146,6 +150,17 @@ export function registerSpOffloadRoutes(app: Express) {
         if (containerLines.length === 0) {
           throw new SpOffloadRouteError("Container has no lines", 400, "SP_OFFLOAD_EMPTY");
         }
+
+        // Freight, surcharge, fumigation and document charges stated on the container
+        // invoice (PO Import Excel or typed in) are landed cost of this offload,
+        // credited to SP Cost Clearing like the base goods cost: base + invoice
+        // charges = the invoice total that Goods OTW was posted for.
+        const containerInvoiceCharges: SpOffloadChargeLine[] = spContainerInvoiceChargeLines(container).map((line) => ({
+          chargeType: line.chargeType,
+          description: line.description,
+          amountUsd: line.amountUsd,
+        }));
+        const charges: SpOffloadChargeLine[] = [...containerInvoiceCharges, ...requestedCharges];
 
         // Phase 22 (C): exact Decimal amounts (were parseFloat sums) and every
         // journal through the engine with this offload's posting identity. The
@@ -289,6 +304,12 @@ export function registerSpOffloadRoutes(app: Express) {
               ledgerAccountId: prepaidExpAcct.id,
               credit: chargeAmt,
               narration: `Agent charge via HADI L'SHI — ${charge.description || ""}`,
+            });
+          } else if (charge.chargeType === SP_CONTAINER_INVOICE_CHARGE_TYPE) {
+            stockCredits.push({
+              ledgerAccountId: costClrAcct.id,
+              credit: chargeAmt,
+              narration: `${charge.description || "Container invoice charge"} — container #${container.id}`,
             });
           } else {
             stockCredits.push({

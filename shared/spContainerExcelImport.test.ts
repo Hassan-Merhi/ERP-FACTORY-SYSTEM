@@ -6,6 +6,11 @@ import {
   matchSupplierByCode,
   type SpExcelSourceContainer,
 } from "./spContainerExcelImport";
+import {
+  SP_CONTAINER_INVOICE_CHARGE_TYPE,
+  spContainerInvoiceChargeLines,
+  spContainerInvoiceChargesTotal,
+} from "./spContainerInvoiceCharges";
 
 const suppliers = [
   { id: 7, legalName: "Golden Coast Trading", code: "GC" },
@@ -55,6 +60,25 @@ describe(`Supplier Partner Excel import calculation (${SP_CONTAINER_EXCEL_IMPORT
     expect(result.grandTotal).toBe(11_200);
     expect(result.invoiceTotalUsd).toBe(11_200);
     expect(result.freightEstimateUsd).toBe(1_200);
+    expect(result.surchargeUsd).toBe(300);
+    expect(result.fumigationUsd).toBe(50);
+    expect(result.documentChargesUsd).toBe(150);
+  });
+
+  it("carries every invoice charge into landed cost at offload, so base + charges = Goods OTW", () => {
+    const result = buildSpContainerExcelImport(sourceContainer(), suppliers);
+    const offloadLines = spContainerInvoiceChargeLines(result);
+
+    expect(offloadLines.map((line) => [line.kind, line.amountUsd])).toEqual([
+      ["freight", 1_200],
+      ["surcharge", 300],
+      ["fumigation", 50],
+      ["document_charges", 150],
+    ]);
+    expect(offloadLines.every((line) => line.chargeType === SP_CONTAINER_INVOICE_CHARGE_TYPE)).toBe(true);
+    const base = result.itemsTotal - result.charges.discount;
+    expect(base + spContainerInvoiceChargesTotal(result)).toBe(result.invoiceTotalUsd);
+    expect(spContainerInvoiceChargeLines({ freightEstimateUsd: "0", surchargeUsd: null })).toEqual([]);
   });
 
   it("turns the sheet's discount amount into the SP uniform discount percentage", () => {
@@ -112,12 +136,10 @@ describe(`Supplier Partner Excel import calculation (${SP_CONTAINER_EXCEL_IMPORT
     expect(result.unmatchedArticleCodes).toEqual(["A002"]);
   });
 
-  it("records the charges the SP header cannot hold on the notes", () => {
+  it("records the source, the PO numbers and the discount conversion on the notes", () => {
     const result = buildSpContainerExcelImport(sourceContainer(), suppliers);
 
-    expect(result.notes).toContain("Surcharge $300.00");
-    expect(result.notes).toContain("Fumigation $50.00");
-    expect(result.notes).toContain("Document charges $150.00");
+    expect(result.notes).toContain("Imported from PO Import Excel");
     expect(result.notes).toContain("Discount $500.00 (5% of items)");
     expect(result.notes).toContain("PO PO-2026-001");
   });

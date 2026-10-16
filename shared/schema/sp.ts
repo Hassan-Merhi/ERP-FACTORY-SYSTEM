@@ -25,7 +25,13 @@ export const spContainers = pgTable(
     invoiceDate: date("invoice_date").notNull(),
     invoiceTotalUsd: decimal("invoice_total_usd", { precision: 20, scale: 4 }).notNull().default("0"),
     discountPct: decimal("discount_pct", { precision: 8, scale: 4 }).default("0"),
+    // Supplier-invoice charges stated on the container (from the PO Import Excel or
+    // typed in). They are part of the invoice total and become landed cost at
+    // offload automatically, credited to SP Cost Clearing like the base goods cost.
     freightEstimateUsd: decimal("freight_estimate_usd", { precision: 20, scale: 4 }).default("0"),
+    surchargeUsd: decimal("surcharge_usd", { precision: 20, scale: 4 }).default("0"),
+    fumigationUsd: decimal("fumigation_usd", { precision: 20, scale: 4 }).default("0"),
+    documentChargesUsd: decimal("document_charges_usd", { precision: 20, scale: 4 }).default("0"),
     status: varchar("status", { length: 20 }).notNull().default("open"),
     goodsOtwVoucherId: integer("goods_otw_voucher_id"),
     notes: text("notes"),

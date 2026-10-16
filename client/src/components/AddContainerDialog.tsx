@@ -18,6 +18,7 @@ import { queryClient } from "@/lib/queryClient";
 import { insertContainerSchema } from "@shared/schema";
 import type { SpExcelImportContainer } from "@shared/spContainerExcelImport";
 import { SpContainerExcelImport } from "./SpContainerExcelImport";
+import { spContainerInvoiceChargesTotal } from "@shared/spContainerInvoiceCharges";
 
 // ── ERP schema (unchanged) ───────────────────────────────────────────────────
 const erpFormSchema = insertContainerSchema
@@ -53,6 +54,9 @@ const spFormSchema = z.object({
   invoiceTotalUsd: z.string().min(1, "Required"),
   discountPct: z.string().optional(),
   freightEstimateUsd: z.string().optional(),
+  surchargeUsd: z.string().optional(),
+  fumigationUsd: z.string().optional(),
+  documentChargesUsd: z.string().optional(),
   notes: z.string().optional(),
   lines: z.array(spLineSchema).min(1, "Add at least one line item"),
 });
@@ -306,6 +310,9 @@ function SpContainerForm({ onOpenChange }: { onOpenChange: (open: boolean) => vo
       invoiceTotalUsd: "",
       discountPct: "0",
       freightEstimateUsd: "0",
+      surchargeUsd: "0",
+      fumigationUsd: "0",
+      documentChargesUsd: "0",
       notes: "",
       lines: [{ articleCode: "", description: "", qty: "", unitRateUsd: "", stockItemId: null }],
     },
@@ -316,6 +323,13 @@ function SpContainerForm({ onOpenChange }: { onOpenChange: (open: boolean) => vo
   const watchDiscount = form.watch("discountPct");
   const watchTotal = form.watch("invoiceTotalUsd");
 
+  const watchCharges = form.watch(["freightEstimateUsd", "surchargeUsd", "fumigationUsd", "documentChargesUsd"]);
+  const invoiceChargesTotal = spContainerInvoiceChargesTotal({
+    freightEstimateUsd: watchCharges[0],
+    surchargeUsd: watchCharges[1],
+    fumigationUsd: watchCharges[2],
+    documentChargesUsd: watchCharges[3],
+  });
   const discountFactor = 1 - parseFloat(watchDiscount || "0") / 100;
   const totalBaseCost = watchLines.reduce(
     (s, l) => s + parseFloat(l.qty || "0") * parseFloat(l.unitRateUsd || "0") * discountFactor,
@@ -389,6 +403,9 @@ function SpContainerForm({ onOpenChange }: { onOpenChange: (open: boolean) => vo
       form.setValue("invoiceTotalUsd", imported.invoiceTotalUsd.toFixed(2), { shouldDirty: true });
       form.setValue("discountPct", String(imported.discountPct), { shouldDirty: true });
       form.setValue("freightEstimateUsd", imported.freightEstimateUsd.toFixed(2), { shouldDirty: true });
+      form.setValue("surchargeUsd", imported.surchargeUsd.toFixed(2), { shouldDirty: true });
+      form.setValue("fumigationUsd", imported.fumigationUsd.toFixed(2), { shouldDirty: true });
+      form.setValue("documentChargesUsd", imported.documentChargesUsd.toFixed(2), { shouldDirty: true });
       form.setValue("notes", imported.notes, { shouldDirty: true });
       form.setValue(
         "lines",
@@ -536,25 +553,30 @@ function SpContainerForm({ onOpenChange }: { onOpenChange: (open: boolean) => vo
                 </FormItem>
               )}
             />
-            <FormField
-              control={form.control}
-              name="freightEstimateUsd"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Freight Estimate (USD)</FormLabel>
-                  <FormControl>
-                    <Input
-                      type="number"
-                      step="0.01"
-                      placeholder="0.00"
-                      {...field}
-                      data-testid="input-sp-freight-estimate"
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            {/* Supplier-invoice charges: part of the invoice total, added to landed cost at offload. */}
+            {(
+              [
+                { name: "freightEstimateUsd", label: "Freight (USD)", testId: "input-sp-freight-estimate" },
+                { name: "surchargeUsd", label: "Surcharge (USD)", testId: "input-sp-surcharge" },
+                { name: "fumigationUsd", label: "Fumigation (USD)", testId: "input-sp-fumigation" },
+                { name: "documentChargesUsd", label: "Document Charges (USD)", testId: "input-sp-document-charges" },
+              ] as const
+            ).map((charge) => (
+              <FormField
+                key={charge.name}
+                control={form.control}
+                name={charge.name}
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{charge.label}</FormLabel>
+                    <FormControl>
+                      <Input type="number" step="0.01" placeholder="0.00" {...field} data-testid={charge.testId} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            ))}
             <FormField
               control={form.control}
               name="notes"
@@ -746,6 +768,12 @@ function SpContainerForm({ onOpenChange }: { onOpenChange: (open: boolean) => vo
             </span>
             <span>
               Discounted total: <span className="font-semibold">{fmt2(totalBaseCost)}</span>
+            </span>
+            <span data-testid="text-sp-invoice-charges-total">
+              Invoice charges: <span className="font-semibold">{fmt2(invoiceChargesTotal)}</span>
+            </span>
+            <span data-testid="text-sp-expected-invoice-total">
+              Base + charges: <span className="font-semibold">{fmt2(totalBaseCost + invoiceChargesTotal)}</span>
             </span>
           </div>
         </div>

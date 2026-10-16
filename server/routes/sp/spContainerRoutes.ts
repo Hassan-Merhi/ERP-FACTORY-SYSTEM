@@ -83,6 +83,9 @@ export function registerSpContainerRoutes(app: Express) {
         invoiceTotalUsd,
         discountPct,
         freightEstimateUsd,
+        surchargeUsd,
+        fumigationUsd,
+        documentChargesUsd,
         notes,
         lines,
         otwAccountId,
@@ -145,6 +148,9 @@ export function registerSpContainerRoutes(app: Express) {
             invoiceTotalUsd: totalUsd.toFixed(2),
             discountPct: String(parseNum(discountPct)),
             freightEstimateUsd: String(parseNum(freightEstimateUsd)),
+            surchargeUsd: String(parseNum(surchargeUsd)),
+            fumigationUsd: String(parseNum(fumigationUsd)),
+            documentChargesUsd: String(parseNum(documentChargesUsd)),
             notes: notes || null,
             status: "open",
           })
@@ -282,6 +288,9 @@ export function registerSpContainerRoutes(app: Express) {
         invoiceTotalUsd,
         discountPct,
         freightEstimateUsd,
+        surchargeUsd,
+        fumigationUsd,
+        documentChargesUsd,
         notes,
       } = req.body;
 
@@ -326,6 +335,9 @@ export function registerSpContainerRoutes(app: Express) {
             invoiceTotalUsd: totalUsd.toFixed(2),
             discountPct: String(parseNum(discountPct ?? lockedExisting.discountPct)),
             freightEstimateUsd: String(parseNum(freightEstimateUsd ?? lockedExisting.freightEstimateUsd)),
+            surchargeUsd: String(parseNum(surchargeUsd ?? lockedExisting.surchargeUsd)),
+            fumigationUsd: String(parseNum(fumigationUsd ?? lockedExisting.fumigationUsd)),
+            documentChargesUsd: String(parseNum(documentChargesUsd ?? lockedExisting.documentChargesUsd)),
             notes: notes !== undefined ? notes || null : lockedExisting.notes,
           })
           .where(and(eq(spContainers.id, containerId), eq(spContainers.companyId, companyId)))

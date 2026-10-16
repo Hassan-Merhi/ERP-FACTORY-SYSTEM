@@ -7,8 +7,10 @@
  * or the equivalent Charge_Type / Charge_Amount rows). The ERP side turns that
  * file into purchase orders and a Purchases voucher. The Supplier Partner side
  * keeps a different model — one SP container with an invoice total, a uniform
- * discount percentage, a freight estimate and article lines — and posts
- * Dr Goods OTW / Cr Goods OTW Clearing for the invoice total.
+ * discount percentage, the supplier-invoice charges (freight, surcharge,
+ * fumigation, document charges) and article lines — and posts
+ * Dr Goods OTW / Cr Goods OTW Clearing for the invoice total. At offload the
+ * invoice charges become landed cost automatically (shared/spContainerInvoiceCharges.ts).
  *
  * This module is the calculation between the two: it takes one parsed container
  * of the ERP sheet and derives every Supplier Partner figure from it, so the
@@ -86,12 +88,16 @@ export interface SpExcelImportContainer {
    * model applies a discount (uniformly to every line). 0 when there is none.
    */
   discountPct: number;
+  /** Supplier-invoice charges kept on the SP container and added to landed cost at offload. */
   freightEstimateUsd: number;
+  surchargeUsd: number;
+  fumigationUsd: number;
+  documentChargesUsd: number;
   /** Goods OTW amount: the same grand total the ERP would post for this file. */
   invoiceTotalUsd: number;
   /** First PO number, else the container number — the user can still edit it. */
   suggestedInvoiceNumber: string;
-  /** Charges the SP header has no field for, kept on the container notes. */
+  /** Source file, PO numbers and the discount conversion, kept on the container notes. */
   notes: string;
   /** Article codes that matched no stock item or alias in this company. */
   unmatchedArticleCodes: string[];
@@ -166,9 +172,6 @@ export function buildSpContainerExcelImport(
   const poNumbers = source.pos.filter((po) => po.trim() !== "");
   const noteParts: string[] = [`Imported from PO Import Excel (container ${source.containerNumber || "n/a"})`];
   if (poNumbers.length > 0) noteParts.push(`PO ${poNumbers.join(", ")}`);
-  if (charges.surcharge > 0) noteParts.push(`Surcharge ${formatUsd(charges.surcharge)}`);
-  if (charges.fumigation > 0) noteParts.push(`Fumigation ${formatUsd(charges.fumigation)}`);
-  if (charges.documentCharges > 0) noteParts.push(`Document charges ${formatUsd(charges.documentCharges)}`);
   if (charges.discount > 0) noteParts.push(`Discount ${formatUsd(charges.discount)} (${discountPct}% of items)`);
 
   return {
@@ -184,6 +187,9 @@ export function buildSpContainerExcelImport(
     grandTotal,
     discountPct,
     freightEstimateUsd: charges.freight,
+    surchargeUsd: charges.surcharge,
+    fumigationUsd: charges.fumigation,
+    documentChargesUsd: charges.documentCharges,
     invoiceTotalUsd: grandTotal,
     suggestedInvoiceNumber: poNumbers[0] ?? source.containerNumber,
     notes: noteParts.join(" · "),

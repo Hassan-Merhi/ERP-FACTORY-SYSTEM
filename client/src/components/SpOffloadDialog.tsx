@@ -12,6 +12,7 @@ import { Plus, Trash2, FileText, TrendingDown, TrendingUp, Loader2, Building2 } 
 import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/queryClient";
 import { apiRequest } from "@/lib/queryClient";
+import { spContainerInvoiceChargeLines } from "@shared/spContainerInvoiceCharges";
 
 function fmt2(v: string | number | null | undefined) {
   const n = parseFloat(String(v ?? "0"));
@@ -55,6 +56,10 @@ interface SpOffloadContainer {
   invoiceNumber?: string | null;
   discountPct?: string | number | null;
   invoiceTotalUsd?: string | number | null;
+  freightEstimateUsd?: string | number | null;
+  surchargeUsd?: string | number | null;
+  fumigationUsd?: string | number | null;
+  documentChargesUsd?: string | number | null;
   lines?: SpContainerLine[];
   prepaid?: SpPrepaidCharge[];
 }
@@ -164,7 +169,11 @@ export function SpOffloadDialog({ open, onOpenChange, container, onSuccess }: Sp
     (s, l) => s + parseFloat(String(l.qty ?? "0")) * parseFloat(String(l.unitRateUsd ?? "0")) * discountFactor,
     0
   );
-  const totalLandedCost = chargeLines.reduce((s, c) => s + parseFloat(c.amountUsd || "0"), 0);
+  // Supplier-invoice charges stated on the container; the server adds them to this
+  // offload itself, so they are shown here but cannot be edited or removed.
+  const invoiceCharges = spContainerInvoiceChargeLines(container);
+  const invoiceChargesTotal = invoiceCharges.reduce((s, c) => s + c.amountUsd, 0);
+  const totalLandedCost = invoiceChargesTotal + chargeLines.reduce((s, c) => s + parseFloat(c.amountUsd || "0"), 0);
   const totalFinalCost = totalBaseCost + totalLandedCost;
   const invoiceTotal = parseFloat(String(container.invoiceTotalUsd ?? "0"));
 
@@ -271,7 +280,24 @@ export function SpOffloadDialog({ open, onOpenChange, container, onSuccess }: Sp
               </Button>
             </div>
 
-            {chargeLines.length === 0 && (
+            {invoiceCharges.length > 0 && (
+              <div
+                className="rounded-md border border-border bg-muted/30 p-3 space-y-1"
+                data-testid="sp-invoice-charges"
+              >
+                <p className="text-xs font-medium text-muted-foreground">
+                  From the container invoice — added automatically (Cr Cost Clearing)
+                </p>
+                {invoiceCharges.map((c) => (
+                  <div key={c.kind} className="flex items-center justify-between text-xs">
+                    <span>{c.description}</span>
+                    <span className="tabular-nums font-medium">{fmt2(c.amountUsd)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {chargeLines.length === 0 && invoiceCharges.length === 0 && (
               <p className="text-sm text-muted-foreground py-2">
                 No charges — all stock cost will equal the discounted base cost.
               </p>
@@ -512,6 +538,14 @@ export function SpOffloadDialog({ open, onOpenChange, container, onSuccess }: Sp
                   </span>
                   <span className="text-right tabular-nums">{fmt2(totalBaseCost)}</span>
                 </div>
+                {invoiceCharges.map((c) => (
+                  <div key={c.kind} className="grid grid-cols-3 text-xs py-0.5 text-muted-foreground">
+                    <span className="col-span-2 pl-4">
+                      {costClrAcct?.name ?? "Cost Clearing"} (Cr) — {c.description}
+                    </span>
+                    <span className="text-right tabular-nums">{fmt2(c.amountUsd)}</span>
+                  </div>
+                ))}
                 {activeCharges.map((c, idx) => {
                   const amt = parseFloat(c.amountUsd || "0");
                   let creditLabel: string;
@@ -541,7 +575,7 @@ export function SpOffloadDialog({ open, onOpenChange, container, onSuccess }: Sp
                     </div>
                   );
                 })}
-                {activeCharges.length === 0 && (
+                {activeCharges.length === 0 && invoiceCharges.length === 0 && (
                   <div className="grid grid-cols-3 text-xs py-0.5 text-muted-foreground">
                     <span className="col-span-2 pl-4">No landed charges — Cr equals base cost only</span>
                     <span className="text-right tabular-nums">—</span>

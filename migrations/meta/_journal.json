@@ -225,6 +225,13 @@
       "when": 1792055400000,
       "tag": "20261015_001_factory_fixed_production_planner",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1792141200000,
+      "tag": "20261016_001_sp_container_invoice_charges",
+      "breakpoints": true
     }
   ]
 }

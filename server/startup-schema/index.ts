@@ -43,6 +43,7 @@ import { userPresenceComplianceIndexes } from "./029-user-presence-compliance-in
 import { scheduledWhatsAppDeliveryTracking } from "./030-scheduled-whatsapp-delivery-tracking";
 import { inventoryValuationOverrides } from "./031-inventory-valuation-overrides";
 import { historicalReplaySafetySchema } from "./032-historical-replay-safety";
+import { spContainerInvoiceCharges } from "./033-sp-container-invoice-charges";
 
 export const startupMigrations: string[] = [
   ...coreTablesAndColumns,
@@ -84,6 +85,7 @@ export const startupMigrations: string[] = [
   // Appended last: references companies, locations and stock_items.
   ...inventoryValuationOverrides,
   ...historicalReplaySafetySchema,
+  ...spContainerInvoiceCharges,
 ];
 
 // Re-exported so server/index.ts can bootstrap the journal from the module it

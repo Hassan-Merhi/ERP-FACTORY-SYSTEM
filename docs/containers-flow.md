@@ -126,6 +126,12 @@ Containers linked to a Supplier Partner company trigger additional intercompany 
 
 When a SP container's existing offload is reversed and re-done, the SP-side Voucher C entries are also deleted before re-posting.
 
+### SP container import from the PO Import Excel
+
+A Supplier Partner company imports the same PO Import spreadsheet an ERP company uses. `POST /api/sp/containers/import-excel/parse` reads it with the shared parser (`server/routes/import/poImportExcelParser.ts`) and returns the SP figures (`shared/spContainerExcelImport.ts`): supplier by `Supplier_Code`, article lines, the discount as a uniform percentage of items, and the invoice charges — freight, surcharge, fumigation, document charges — which are stored on the `sp_containers` row. The invoice total posted to Goods OTW is the sheet's grand total.
+
+At `POST /api/sp/offload` those stored invoice charges are added to the offload automatically as `invoice_charge` lines credited to SP Cost Clearing (`shared/spContainerInvoiceCharges.ts`), so base cost + invoice charges equals the Goods OTW total and nothing has to be re-typed at offload. Charges the user adds in the offload dialog (prepaid, cash, payables, agents) come on top.
+
 ---
 
 ## Container Documents

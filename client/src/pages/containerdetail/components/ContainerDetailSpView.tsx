@@ -8,6 +8,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { SpOffloadDialog } from "@/components/SpOffloadDialog";
 import { queryClient } from "@/lib/queryClient";
 import type { useContainerDetailModel } from "../useContainerDetailModel";
+import { spContainerInvoiceChargeLines } from "@shared/spContainerInvoiceCharges";
 
 type Model = ReturnType<typeof useContainerDetailModel>;
 export function ContainerDetailSpView({ model }: { model: Model }) {
@@ -51,6 +52,8 @@ export function ContainerDetailSpView({ model }: { model: Model }) {
     (s: number, l) => s + parseFloat(l.qty || "0") * parseFloat(l.unitRateUsd || "0") * discFactor,
     0
   );
+  const invoiceCharges = spContainerInvoiceChargeLines(spc);
+  const invoiceChargesTotal = invoiceCharges.reduce((s, c) => s + c.amountUsd, 0);
 
   return (
     <div className="space-y-4 sm:space-y-6" data-testid="sp-container-detail">
@@ -162,6 +165,40 @@ export function ContainerDetailSpView({ model }: { model: Model }) {
           </Table>
         </CardContent>
       </Card>
+
+      {/* Invoice charges — part of the invoice, landed cost at offload */}
+      {invoiceCharges.length > 0 && (
+        <Card data-testid="sp-container-invoice-charges">
+          <CardHeader>
+            <CardTitle className="text-base">Invoice Charges</CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Charge</TableHead>
+                  <TableHead className="text-right">Amount (USD)</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {invoiceCharges.map((c) => (
+                  <TableRow key={c.kind}>
+                    <TableCell className="text-sm">{c.description}</TableCell>
+                    <TableCell className="text-right tabular-nums font-medium">{spFmt(c.amountUsd)}</TableCell>
+                  </TableRow>
+                ))}
+                <TableRow>
+                  <TableCell className="text-sm font-medium">
+                    Total · added to landed cost at offload (base {spFmt(baseCost)} + charges ={" "}
+                    {spFmt(baseCost + invoiceChargesTotal)})
+                  </TableCell>
+                  <TableCell className="text-right tabular-nums font-semibold">{spFmt(invoiceChargesTotal)}</TableCell>
+                </TableRow>
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Prepaid Charges */}
       {(spc.prepaid || []).length > 0 && (
