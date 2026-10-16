@@ -173,14 +173,19 @@ export function QuickMonthlyClose({ periodMonth, companyKey }: { periodMonth: st
           </div>
         ) : null}
 
-        {postedVoucher?.id ? (
+        {(postedVoucher?.id || phase11?.voucher?.id) ? (
           <a
-            href={`/voucher-detail/${postedVoucher.id}`}
+            href={`/voucher-detail/${postedVoucher?.id || phase11?.voucher?.id}`}
             className="text-sm font-medium underline underline-offset-2"
             data-testid="link-sp-monthly-close-journal"
           >
-            Journal voucher {postedVoucher.voucherNumber || `#${postedVoucher.id}`}
+            Journal voucher {postedVoucher?.voucherNumber || phase11?.voucher?.voucherNumber || `#${postedVoucher?.id || phase11?.voucher?.id}`}
           </a>
+        ) : null}
+        {phase11?.alreadyClosed && phase11.journalVerified === false ? (
+          <p className="text-sm text-destructive" data-testid="sp-close-missing-journal">
+            Existing monthly split has no verified Journal voucher; contact a developer before further accounting.
+          </p>
         ) : null}
 
         {closeMutation.error ? (
