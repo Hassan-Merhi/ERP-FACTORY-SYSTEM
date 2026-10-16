@@ -298,6 +298,69 @@ describe("Golden Coast Excel-style Net Position projection", () => {
     expect(result.forUs.accounts.some((account: { id?: number }) => account.id === 6)).toBe(false);
   });
 
+
+  it("hides the positive correction suspense line but preserves the exact GC net position and partner equity", () => {
+    const fixture = accounts({ gcSalesOpening: 83378 });
+    fixture.rows.push({
+      id: 7,
+      name: "SP Profit Correction Suspense",
+      code: "SP-PROFIT-ADJ-SUSPENSE",
+      accountType: "Asset",
+      subType: "sp_profit_correction_suspense",
+      openingBalance: "0",
+      openingBalanceSide: "Dr",
+      active: true,
+      deletedAt: null,
+    });
+    fixture.balances.set(7, { debit: 9026.41, credit: 0 });
+    const result = projectGoldenCoastResidualEquity({
+      body: baseBody({ tracker: 83378, stock: 163807.22 }),
+      companyAccounts: fixture.rows,
+      accountBalances: fixture.balances,
+    });
+    const visible = result.forUs?.accounts as Array<{ id?: number; name: string; value: number }>;
+    expect(visible).toHaveLength(2);
+    expect(visible.map((row) => row.name)).toEqual(["Stock In Hand / Stock on Floor", "GC Sales Cash"]);
+    expect(visible.map((row) => row.value)).toEqual([163807.22, 83378]);
+    expect(result.forUs?.total).toBe(256211.63);
+    expect(result.forUsTotal).toBe(256211.63);
+    expect(result.onUsTotal).toBe(0);
+    expect(result.netPosition).toBe(256211.63);
+    expect(result.equity?.total).toBe(256211.63);
+    expect(result.equity?.partnerCapitalTotal).toBe(256211.63);
+    expect(result.netPositionBreakdown?.netPosition).toBe(256211.63);
+    expect(JSON.stringify(result.forUs?.accounts)).not.toContain("Profit Correction Suspense");
+    expect(JSON.stringify(result.forUs?.breakdown)).not.toContain("Profit Correction Suspense");
+    expect(JSON.stringify(result.netPositionBreakdown?.assets)).not.toContain("Profit Correction Suspense");
+  });
+
+  it("removes an already-projected suspense account without deducting its balance a second time", () => {
+    const fixture = accounts({ gcSalesOpening: 83378 });
+    fixture.rows.push({
+      id: 7,
+      name: "SP Profit Correction Suspense",
+      code: "SP-PROFIT-ADJ-SUSPENSE",
+      accountType: "Asset",
+      subType: "sp_profit_correction_suspense",
+      openingBalance: "0",
+      openingBalanceSide: "Dr",
+      active: true,
+      deletedAt: null,
+    });
+    fixture.balances.set(7, { debit: 9026.41, credit: 0 });
+    const body = baseBody({ tracker: 83378, stock: 163807.22 });
+    (body.forUs.accounts as Array<{ id?: number; name: string; code: string; value: number; category: string }>)
+      .push({ id: 7, name: "SP Profit Correction Suspense", code: "SP-PROFIT-ADJ-SUSPENSE", value: 9026.41, category: "Asset" });
+    body.forUs.total += 9026.41;
+    const result = projectGoldenCoastResidualEquity({
+      body, companyAccounts: fixture.rows, accountBalances: fixture.balances,
+    });
+    expect(result.forUs?.total).toBe(256211.63);
+    expect(result.netPosition).toBe(256211.63);
+    expect((result.forUs?.accounts as Array<{id?:number}>).some(row => row.id === 7)).toBe(false);
+    expect(JSON.stringify(result.forUs?.breakdown)).not.toContain("Profit Correction Suspense");
+  });
+
   it("does nothing to an ordinary Supplier Partner without Golden Coast equity roles", () => {
     const body = baseBody({ tracker: 100 });
     const result = projectGoldenCoastResidualEquity({
