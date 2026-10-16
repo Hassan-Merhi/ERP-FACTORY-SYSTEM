@@ -129,7 +129,8 @@ export function classifyPermission(req: Pick<Request, "path" | "method">): SpPer
     path.includes("/report/") ||
     path.includes("/export") ||
     path.includes("reconciliation") ||
-    path.includes("profit-splits")
+    path.includes("profit-splits") ||
+    path.includes("profit-correction")
   )
     return "sp_reports";
   if (path.includes("/sales/") && path.endsWith("/reverse")) return "sp_sales_reverse";
@@ -202,7 +203,7 @@ async function enforceSpAccess(req: Request, res: Response, next: NextFunction):
     if (!userId || !(await hasPermission(companyId, userId, role, permission))) {
       await db.execute(sql`
         INSERT INTO sp_audit_events(company_id, user_id, username, role, permission, action, method, path, status_code, request_body)
-        VALUES (${companyId}, ${userId || null}, ${req.session.username ?? null}, ${role || null}, ${permission}, 'ACCESS_DENIED', ${req.method}, ${req.originalUrl}, 403, ${JSON.stringify(sanitizedBody(req.body))}::jsonb)
+        VALUES (${companyId}, ${userId || null}, ${req.session.username ?? null}, ${role || null}, ${permission}, 'ACCESS_DENIED', ${req.method}, ${req.originalUrl}, 403, ${req.path === "/golden-coast/profit-correction" ? JSON.stringify({ developerCorrection: true }) : JSON.stringify(sanitizedBody(req.body))}::jsonb)
       `);
       res.status(403).json({
         code: "SP_PERMISSION_DENIED",
@@ -214,6 +215,11 @@ async function enforceSpAccess(req: Request, res: Response, next: NextFunction):
     const sensitive = sensitiveRequirement(req);
     const reason = String(req.body?.reason ?? "").trim();
     const confirmation = String(req.body?.confirmation ?? "").trim();
+    // Correction value/reason are stored in the Developer-only correction audit,
+    // not copied into the broadly accessible Supplier Partner activity feed.
+    const isPrivateProfitCorrection = req.path === "/golden-coast/profit-correction";
+    const safeRequestBody = isPrivateProfitCorrection ? { developerCorrection: true } : sanitizedBody(req.body);
+    const auditReason = isPrivateProfitCorrection ? null : reason;
     let idempotencyKey: string | null = null;
     if (sensitive) {
       if (confirmation !== sensitive.confirmation) {
@@ -265,8 +271,8 @@ async function enforceSpAccess(req: Request, res: Response, next: NextFunction):
         ) VALUES (
           ${companyId}, ${userId}, ${req.session.username ?? null}, ${role}, ${permission},
           ${req.method === "GET" ? "READ" : "WRITE"}, ${req.method}, ${req.originalUrl},
-          ${req.params?.id ?? req.body?.id ?? req.body?.containerId ?? req.body?.cutoverId ?? null}, ${reason || null},
-          ${confirmation || null}, ${idempotencyKey}, ${res.statusCode}, ${JSON.stringify(sanitizedBody(req.body))}::jsonb
+          ${req.params?.id ?? req.body?.id ?? req.body?.containerId ?? req.body?.cutoverId ?? null}, ${auditReason},
+          ${confirmation || null}, ${idempotencyKey}, ${res.statusCode}, ${JSON.stringify(safeRequestBody)}::jsonb
         )
       `
         )
