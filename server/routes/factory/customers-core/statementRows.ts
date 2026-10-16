@@ -56,8 +56,12 @@ export interface FactoryCustomerStatement {
   rows: FactoryStatementRow[];
   /** The customer's opening (customer record), debit positive. */
   opening: Decimal;
-  /** Engine closing, debit positive. */
+  /** Customer-statement ledger closing, excluding legacy pre-finalization charges. */
   ledgerClosing: Decimal;
+  /** Unmodified general ledger closing for reconciliation, debit positive. */
+  generalLedgerClosing: Decimal;
+  /** Legacy pre-finalization customer debits held out of this statement. */
+  heldUnfinalizedCharges: Decimal;
   /** Sum of the memo rows with a USD amount, debit positive. */
   notInLedgerTotal: Decimal;
 }
@@ -172,10 +176,9 @@ export async function buildFactoryCustomerStatement(
     }
   }
 
-  // Link charges from all this customer's containers, not only invoices already
-  // finalized. A VERIFIED container may already carry posted freight/clearance,
-  // which the statement must identify as container cost until sale finalization.
-  // Use a scoped join rather than a potentially huge inArray(orderIds) list.
+  // Resolve linked charges even for unfinalized containers so the statement
+  // can exclude historical CHARGE-PRE ledger rows until FINALIZED. This
+  // changes the customer statement presentation, not posted accounting data.
   const [orders, charges] = await Promise.all([
     db.select({
       id: customerOrders.id,
@@ -210,6 +213,13 @@ export async function buildFactoryCustomerStatement(
   }
   const displayedRows = consolidateContainerCharges(rows, ordersById, chargeOrderByVoucherId, window);
 
+  // Consolidation preserves ledger totals except for suppressed, linked
+  // pre-finalization charges. Remove those debit effects from the displayed
+  // statement closing while retaining the untouched general-ledger figure.
+  const originalLedgerTotal = rows.reduce((sum, row) => sum.plus(row.ledgerEffect), ZERO);
+  const displayedLedgerTotal = displayedRows.reduce((sum, row) => sum.plus(row.ledgerEffect), ZERO);
+  const heldUnfinalizedCharges = originalLedgerTotal.minus(displayedLedgerTotal);
+
   // Oldest first; on the same day the operational rows come first, as before.
   displayedRows.sort((a, b) => {
     const byDate = a.transactionDate.localeCompare(b.transactionDate);
@@ -226,7 +236,9 @@ export async function buildFactoryCustomerStatement(
   return {
     rows: displayedRows,
     opening: toMoney(party?.masterOpening),
-    ledgerClosing: toMoney(party?.closing),
+    ledgerClosing: toMoney(party?.closing).minus(heldUnfinalizedCharges),
+    generalLedgerClosing: toMoney(party?.closing),
+    heldUnfinalizedCharges,
     notInLedgerTotal,
   };
 }
