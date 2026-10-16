@@ -1,4 +1,5 @@
 import type { ClientErrorLike } from "@/lib/clientError";
+import SpPOImport from "./SpPOImport";
 import { useCallback, useEffect, useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
@@ -139,7 +140,7 @@ function SupplierCombobox({
   );
 }
 
-export default function POImport() {
+function ErpPOImport() {
   const [, navigate] = useLocation();
   const { toast } = useToast();
   const { selectedCompany } = useCompany();
@@ -699,4 +700,11 @@ export default function POImport() {
       )}
     </div>
   );
+}
+
+// Keep ERP and Supplier Payable routes identical from the user perspective,
+// while keeping their separate accounting and import endpoints.
+export default function POImport() {
+  const { selectedCompany } = useCompany();
+  return selectedCompany?.companyType === "supplier_partner" ? <SpPOImport /> : <ErpPOImport />;
 }
