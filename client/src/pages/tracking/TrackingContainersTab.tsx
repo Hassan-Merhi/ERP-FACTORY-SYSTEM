@@ -3,6 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useCompany } from "@/contexts/CompanyContext";
 import { isAbortError } from "@/lib/abortError";
 import GITContainers from "@/pages/GITContainers";
+import SupplierPartnerTrackingOTW from "./SupplierPartnerTrackingOTW";
 
 /**
  * Containers OTW loads a large, company-scoped query. Two things used to leave
@@ -76,5 +77,11 @@ export default function TrackingContainersTab() {
 
   if (companyId === null || readyCompanyId !== companyId) return null;
 
+  // Supplier Partner containers live in sp_containers, not the ERP /api/git table.
+  // Show the SP source of truth in Tracking instead of copying journal-backed
+  // containers into the unrelated logistics system.
+  if (selectedCompany?.companyType === "supplier_partner") {
+    return <SupplierPartnerTrackingOTW key={`tracking-sp-${companyId}`} />;
+  }
   return <GITContainers key={`tracking-containers-${companyId}`} embedded />;
 }
