@@ -39,6 +39,7 @@ export const containers = pgTable(
     totalKg: decimal("total_kg", { precision: 15, scale: 2 }),
     shopName: text("shop_name"),
     eta: date("eta"),
+    portDepartureDate: date("port_departure_date"),
     etaSource: text("eta_source").default("manual"),
     transporter: varchar("transporter", { length: 100 }),
     transportFee: decimal("transport_fee", { precision: 15, scale: 2 }),
