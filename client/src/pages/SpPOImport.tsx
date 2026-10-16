@@ -374,7 +374,16 @@ export default function SpPOImport() {
   });
   const importMutation = useMutation({
     mutationFn: async () => {
-      return spPost<{ id: number }>("/api/sp/containers", payload(), importKey);
+      // Golden Coast retired the generic SP mutation after September 1.
+      // Keep ordinary Supplier Partners on the legacy SP importer, but send
+      // Fresh Start-owned GC containers through the supported Phase 8 flow.
+      return spPost<{ id?: number; container?: { id: number } }>(
+        freshStartOtw
+          ? "/api/sp/golden-coast/phase8/containers/import-excel"
+          : "/api/sp/containers",
+        payload(),
+        importKey,
+      );
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/sp/containers"] });
