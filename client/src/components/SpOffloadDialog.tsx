@@ -518,7 +518,6 @@ export function SpOffloadDialog({ open, onOpenChange, container, onSuccess }: Sp
               )}
             </div>
           ) : (
-            {/* Accounting Preview */}
             <div className="space-y-3">
               <div className="flex items-center gap-2">
                 <FileText className="h-4 w-4 text-muted-foreground" />
