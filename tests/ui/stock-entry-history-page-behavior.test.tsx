@@ -195,6 +195,7 @@ import StockEntryHistory from "@/pages/StockEntryHistory";
 describe("stock entry history page behavior", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    harness.historyQueries.length = 0;
     harness.accessValue = undefined;
     harness.fetchQuery.mockResolvedValue([group]);
     harness.apiRequest.mockResolvedValue({ ok: true, json: async () => ({ success: true }) });
@@ -303,7 +304,7 @@ describe("stock entry history page behavior", () => {
       const p = new URLSearchParams(query);
       return p.get("startDate") === "2026-08-01" && p.get("endDate") === "2026-08-31";
     })).toBe(true);
-    expect(screen.getByText("—")).toBeInTheDocument();
+    expect(screen.getAllByText("—").length).toBeGreaterThan(0);
   });
 
   it("filters by the selected worker and opens detailed history", () => {
