@@ -158,6 +158,20 @@ export const phase3SharedUiTranslationsPart6: readonly Phase3SharedUiEntry[] = [
   { en: "Avg Rate", ar: "متوسط السعر", fr: "Taux moyen" },
   { en: "Clear", ar: "مسح", fr: "Effacer" },
   { en: "Dispatch History", ar: "سجل التصريف", fr: "Historique des sorties" },
+  // Waste Dispatch history period controls, totals, and infinite-scroll statuses.
+  { en: "Condensed", ar: "مختصر", fr: "Condensé" },
+  { en: "Detailed", ar: "مفصل", fr: "Détaillé" },
+  { en: "Total Qty (Bales)", ar: "إجمالي الكمية (بالات)", fr: "Quantité totale (balles)" },
+  { en: "Total KG", ar: "إجمالي الكيلوغرامات", fr: "Total kg" },
+  { en: "Total Amount (Written Off)", ar: "إجمالي المبلغ المشطوب", fr: "Montant total radié" },
+  { en: "No dispatches in the selected date range.", ar: "لا توجد عمليات تصريف ضمن الفترة المحددة.", fr: "Aucune sortie sur la période sélectionnée." },
+  { en: "Unable to load dispatch history.", ar: "تعذر تحميل سجل التصريف.", fr: "Impossible de charger l’historique des sorties." },
+  { en: "Retry", ar: "إعادة المحاولة", fr: "Réessayer" },
+  { en: "Loading more dispatches...", ar: "جارٍ تحميل المزيد من عمليات التصريف...", fr: "Chargement d’autres sorties..." },
+  { en: "No bale details available.", ar: "لا تتوفر تفاصيل للبالات.", fr: "Aucun détail de balle disponible." },
+  { en: "Loading bale details", ar: "جارٍ تحميل تفاصيل البالات", fr: "Chargement des détails des balles" },
+  { en: "Loading dispatches", ar: "جارٍ تحميل عمليات التصريف", fr: "Chargement des sorties" },
+
   {
     en: "No dispatches yet.",
     ar: "لا توجد عمليات تصريف بعد.",
