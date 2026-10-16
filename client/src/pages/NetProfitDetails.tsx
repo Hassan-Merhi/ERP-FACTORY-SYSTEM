@@ -60,6 +60,8 @@ interface NetProfitData {
   netProfit: number;
   spPosProfit?: number;
   spPosProfitBaselineDate?: string | null;
+  spPosProfitPeriodStartDate?: string | null;
+  spPosProfitAsOfDate?: string | null;
   forUs: { total: number; breakdown: BreakdownItem[]; accounts: AccountItem[] };
   onUs: { total: number; breakdown: BreakdownItem[]; accounts: AccountItem[] };
   equity?: { total: number; accounts: AccountItem[] };
@@ -416,7 +418,9 @@ export default function NetProfitDetails() {
         incomeTotal: diff(closing.incomeTotal, opening.incomeTotal),
         expensesTotal: diff(closing.expensesTotal, opening.expensesTotal),
         netProfit: diff(closing.netProfit, opening.netProfit),
-        spPosProfit: diff(closing.spPosProfit ?? 0, opening.spPosProfit ?? 0),
+        // The realized-profit tile always presents the month containing periodEnd,
+        // independently of the balance-sheet custom From date.
+        spPosProfit: closing.spPosProfit ?? 0,
         netPositionLabel: "Net Position Change (selected period)",
       };
     },
@@ -784,8 +788,8 @@ export default function NetProfitDetails() {
                   <div className="text-xs text-muted-foreground mt-0.5">
                     Supplier partner POS profit —{" "}
                     {hasSpPosProfitBaseline
-                      ? `calculated since ${data?.spPosProfitBaselineDate}`
-                      : "calculated from actual sale & cost per item"}
+                      ? `monthly profit from ${data?.spPosProfitPeriodStartDate || data?.spPosProfitBaselineDate}`
+                      : `monthly profit from ${data?.spPosProfitPeriodStartDate || "the first of this month"}`}
                   </div>
                 </div>
               </div>
@@ -805,12 +809,10 @@ export default function NetProfitDetails() {
                 </span>
               </div>
               <div className="px-3 py-2 bg-muted/40 text-xs text-muted-foreground border-t border-border/50">
-                Formula: Sum of (sale price − cost price) across all POS sale lines
-                {hasSpPosProfitBaseline
-                  ? ` on or after ${data?.spPosProfitBaselineDate}${toDate ? `, up to ${toDate}` : ""}`
-                  : toDate
-                    ? ` up to ${toDate}`
-                    : " (all time)"}
+                Formula: Sum of (sale price − cost price) for sales in this month
+                {data?.spPosProfitPeriodStartDate
+                  ? ` (${data.spPosProfitPeriodStartDate} to ${data.spPosProfitAsOfDate || "today"})`
+                  : ""}. Prior months remain available through the date filter.
               </div>
             </div>
           </CardContent>
