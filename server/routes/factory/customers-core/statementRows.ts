@@ -18,15 +18,16 @@
  * Row notes stay on customer_balances rows: an invoice row (memo or INV-GL
  * journal) carries the id and note of its INVOICE cache row when there is one.
  */
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import type Decimal from "decimal.js";
-import { customerBalances } from "@shared/schema";
+import { customerBalances, customerOrders, customerOrderCharges } from "@shared/schema";
 
 import { db } from "../../../db";
 import { MoneyDecimal, toMoney } from "../../../lib/money";
 import { getPartyBalance } from "../../../services/accounting/balances/ledgerBalanceEngine";
 import { loadCustomerLedgerLines } from "../../../services/accounting/balances/customerLedgerStatement";
 import { loadPartyMemoLines } from "../../../services/accounting/balances/unpostedMemo";
+import { consolidateContainerCharges } from "./containerChargeStatementRows";
 
 export interface FactoryStatementRow {
   id: number | string;
@@ -170,16 +171,54 @@ export async function buildFactoryCustomerStatement(
     }
   }
 
+  // Attach charge journals to the proper invoice for *statement presentation*.
+  // Use only this customer's finalized orders and their explicit charge voucher
+  // links. Legacy offload vouchers can be matched by the unique container
+  // number in their narration, and only within the same posting date.
+  const invoiceIds = [...new Set(
+    rows.filter((row) => row.referenceType === "INVOICE" && row.referenceId != null)
+      .map((row) => row.referenceId as number)
+  )];
+  let displayedRows = rows;
+  if (invoiceIds.length > 0) {
+    const [invoices, charges] = await Promise.all([
+      db.select({ id: customerOrders.id, containerNumber: customerOrders.containerNumber })
+        .from(customerOrders)
+        .where(and(
+          eq(customerOrders.companyId, companyId),
+          eq(customerOrders.customerId, customerId),
+          eq(customerOrders.status, "FINALIZED"),
+          inArray(customerOrders.id, invoiceIds)
+        )),
+      db.select({ orderId: customerOrderCharges.orderId, voucherId: customerOrderCharges.voucherId })
+        .from(customerOrderCharges)
+        .where(inArray(customerOrderCharges.orderId, invoiceIds)),
+    ]);
+    const invoiceContainerByOrder = new Map(invoices.map((invoice) => [invoice.id, invoice.containerNumber ?? ""]));
+    const chargeOrderByVoucherId = new Map<number, number>();
+    for (const charge of charges) {
+      if (charge.voucherId && invoiceContainerByOrder.has(charge.orderId)) {
+        chargeOrderByVoucherId.set(charge.voucherId, charge.orderId);
+      }
+    }
+    displayedRows = consolidateContainerCharges(rows, invoiceContainerByOrder, chargeOrderByVoucherId);
+  }
+
   // Oldest first; on the same day the operational rows come first, as before.
-  rows.sort((a, b) => {
+  displayedRows.sort((a, b) => {
     const byDate = a.transactionDate.localeCompare(b.transactionDate);
     if (byDate !== 0) return byDate;
     return (a._fromVoucher ? 1 : 0) - (b._fromVoucher ? 1 : 0);
   });
 
-  const notInLedgerTotal = rows.reduce((sum, row) => (row.notInLedger ? sum.plus(row.combinedEffect) : sum), ZERO);
+  // Memo portions must remain outside the ledger even when the visible row
+  // also includes separate posted charges. Compute the operational remainder
+  // from the combined minus posted ledger movement, not the display flag.
+  const notInLedgerTotal = displayedRows.reduce(
+    (sum, row) => sum.plus(row.combinedEffect.minus(row.ledgerEffect)), ZERO
+  );
   return {
-    rows,
+    rows: displayedRows,
     opening: toMoney(party?.masterOpening),
     ledgerClosing: toMoney(party?.closing),
     notInLedgerTotal,
