@@ -7,6 +7,7 @@ import { spStockMovements, spProfitSplits } from "@shared/schema";
 import { requireSpCompany, getSpAccount, parseNum } from "./spHelpers";
 import { resultRows } from "../../lib/queryResult";
 import { getLatestSpProfitCorrection } from "./spProfitManualCorrections";
+import { presentSpMonthlyProfit } from "./spProfitReportPresentation";
 
 // ── Reports + Profit Splits ───────────────────────────────────────────────────
 
@@ -89,8 +90,6 @@ export function registerSpReportRoutes(app: Express) {
       totalCogs = parseNum(siRow?.total_cogs);
       saleCount = parseInt(String(siRow?.cnt ?? "0"), 10);
 
-      const grossProfit = totalRevenue - totalCogs;
-
       // Shared Charges can be posted on either side depending on the settlement flow.
       // Report the net charge magnitude so a credit-side GC settlement still appears as
       // a positive charge while debit-side SP expense postings continue to work.
@@ -115,8 +114,7 @@ export function registerSpReportRoutes(app: Express) {
         totalSharedCharges = parseNum(sr?.total);
       }
 
-      const sourceNetProfit = grossProfit - totalSharedCharges;
-      let netProfit = sourceNetProfit;
+      let approvedNetProfit: string | null = null;
       // Only a whole calendar-month report may use a developer-approved target.
       // Partial date ranges retain their original source-ledger arithmetic.
       const first = typeof startDate === "string" ? startDate : "";
@@ -127,12 +125,19 @@ export function registerSpReportRoutes(app: Express) {
         const periodEnd = `${match[1]}-${String(new Date(Date.UTC(year, month, 0)).getUTCDate()).padStart(2, "0")}`;
         if (last === periodEnd) {
           const approved = await getLatestSpProfitCorrection(db, companyId, match[1]);
-          if (approved) netProfit = Number(approved.targetNetProfit);
+          if (approved) approvedNetProfit = approved.targetNetProfit;
         }
       }
-      // Keep the public P&L arithmetic reconcilable without exposing private
-      // developer notes, prior targets, actors or the correction controls.
-      const otherIncomeExpense = Math.round((netProfit - sourceNetProfit) * 100) / 100;
+      // Display the approved net adjustment in Gross Profit rather than a
+      // separate Other Income / (Expense) row. Shared Charges are unchanged.
+      // This is presentation only: POS source revenue/COGS remain immutable and
+      // any approved difference stays auditable in the month-close suspense journal.
+      const { grossProfit, netProfit } = presentSpMonthlyProfit({
+        totalRevenue,
+        totalCogs,
+        totalSharedCharges,
+        approvedNetProfit,
+      });
       const splitPct = 50;
       // Assign odd cents deterministically so both shares sum to the exact
       // corrected net profit, matching the Decimal rounding in Phase 11.
@@ -146,7 +151,6 @@ export function registerSpReportRoutes(app: Express) {
         totalCogs,
         grossProfit,
         totalSharedCharges,
-        otherIncomeExpense,
         netProfit,
         splitPct,
         ourShare,
