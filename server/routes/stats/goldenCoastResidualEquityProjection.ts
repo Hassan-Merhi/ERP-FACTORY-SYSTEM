@@ -46,6 +46,9 @@ const INTERNAL_SP_SUBTYPES = new Set([
   "sp_cost_clearing",
   "sp_pay_deduction_clearing",
   "sp_opnbal",
+  // This is a debit-side control account for an approved profit correction,
+  // not cash, sale proceeds, stock or a collectible balance-sheet asset.
+  "sp_profit_correction_suspense",
 ]);
 
 function numberValue(value: unknown): number {
@@ -210,6 +213,22 @@ export function projectGoldenCoastResidualEquity(input: {
     onUsTotal = round2(onUsTotal - removedLiability.removed);
   }
 
+  // Exclude the profit-correction suspense counterpart from GC Net Position
+  // entirely, not just from visible rows. It is a reconciliation control
+  // ledger used to balance the month-close journal, not an additional asset.
+  // If the generic projection included the account, reverse its contribution
+  // here; otherwise INTERNAL_SP_SUBTYPES prevents it being added below.
+  // Neither the actual journal nor either partner's posted split is changed.
+  for (const account of roles.active) {
+    if (account.subType !== "sp_profit_correction_suspense") continue;
+    const asset = removeAccountById(forUsAccounts, account.id);
+    const liability = removeAccountById(onUsAccounts, account.id);
+    forUsAccounts = asset.accounts;
+    onUsAccounts = liability.accounts;
+    forUsTotal = round2(forUsTotal - asset.removed);
+    onUsTotal = round2(onUsTotal - liability.removed);
+  }
+
   const existingIds = new Set<number>(
     [...forUsAccounts, ...onUsAccounts]
       .map((account) => Number(account.id ?? 0))
@@ -356,10 +375,9 @@ export function projectGoldenCoastResidualEquity(input: {
     legacyOpeningPayableReclassification: 0,
   };
 
-  // Keep correction suspense in the already-calculated asset/liability totals
-  // and residual partner equity, but do NOT expose it as a Net Position line.
-  // Do not move it into Stock or Cash: neither operational balance has changed.
-  // Its real ledger posting remains available for accounting reconciliation.
+  // Defensive final presentation filter. A correction journal retains its
+  // original suspense line for audit, while Net Position excludes that line
+  // both from the visible account groups AND from its balance-sheet totals.
   const correctionSuspenseIds = new Set(
     roles.active
       .filter((account) => account.subType === "sp_profit_correction_suspense")
