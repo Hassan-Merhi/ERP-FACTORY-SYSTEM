@@ -327,7 +327,9 @@ export default function SpPOImport() {
   });
 
   const validateMutation = useMutation({
-    mutationFn: async (request: ReturnType<typeof payload>) => spPost<Validation>("/api/sp/containers/import-excel/validate", request, requestId()),
+    mutationFn: async (request: ReturnType<typeof payload>) => {
+      return spPost<Validation>("/api/sp/containers/import-excel/validate", request, requestId());
+    },
     onSuccess: (data, request) => {
       // An older response must not validate changed supplier, date, or amounts.
       if (JSON.stringify(request) !== JSON.stringify(payload())) return;
@@ -341,7 +343,9 @@ export default function SpPOImport() {
     onError: (error: Error) => toast({ title: copy.validationFailed, description: error.message, variant: "destructive" }),
   });
   const importMutation = useMutation({
-    mutationFn: async () => spPost<{ id: number }>("/api/sp/containers", payload(), importKey),
+    mutationFn: async () => {
+      return spPost<{ id: number }>("/api/sp/containers", payload(), importKey);
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/sp/containers"] });
       queryClient.invalidateQueries({ queryKey: ["/api/sp/report/payable"] });
