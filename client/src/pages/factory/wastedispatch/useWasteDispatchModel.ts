@@ -11,6 +11,7 @@ import { useEffect, useMemo, useState, type KeyboardEvent } from "react";
 import { useInfiniteQuery, useMutation, useQueries, useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { getDefaultPeriodValue, type PeriodFilterValue } from "@/components/ui/period-filter";
 import { baleMatchesSearch, fetchGroupBales, fetchHistoryBales, readWasteJson } from "./optimizedData";
 import { printDispatchDocument } from "./optimizedPrint";
 import { today } from "./utils";
@@ -46,8 +47,11 @@ export function useWasteDispatchModel() {
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [balePage, setBalePage] = useState(1);
-  const [historyStartDate, setHistoryStartDate] = useState("");
-  const [historyEndDate, setHistoryEndDate] = useState("");
+  // Reuse the same preset-date contract as Analytics and Accounts.
+  // All Time preserves the previously unfiltered history on first load.
+  const [historyPeriod, setHistoryPeriod] = useState<PeriodFilterValue>(() => getDefaultPeriodValue("all_time"));
+  const historyStartDate = historyPeriod.fromDate;
+  const historyEndDate = historyPeriod.toDate;
   const [historyView, setHistoryView] = useState<"condensed" | "detailed">("condensed");
   const [scanInput, setScanInput] = useState("");
   const [dispatchDate, setDispatchDate] = useState(today());
@@ -339,10 +343,8 @@ export function useWasteDispatchModel() {
     debouncedSearch,
     balePage,
     setBalePage,
-    historyStartDate,
-    setHistoryStartDate,
-    historyEndDate,
-    setHistoryEndDate,
+    historyPeriod,
+    setHistoryPeriod,
     historyView,
     setHistoryView,
     scanInput,
