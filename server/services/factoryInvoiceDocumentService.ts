@@ -175,6 +175,7 @@ export async function buildCanonicalInvoiceExcel(
   sheet.columns = columns.map((width) => ({ width }));
   const COL = columns.length;
   const DARK_BLUE = "FF1F3864";
+  const SUBTOTAL_BLUE = "FF2F75B5";
   const LIGHT_GRAY = "FFF5F5F5";
   const WHITE = "FFFFFFFF";
   const moneyFmt = excelMoneyFormat(document.baseCurrency);
@@ -308,17 +309,19 @@ export async function buildCanonicalInvoiceExcel(
     if (!hideSelling) subtotalValues.push(group.subtotalUnitPrice ?? "", group.totalPrice);
     const subtotalRow = sheet.addRow(subtotalValues);
     subtotalRow.height = 22;
-    subtotalRow.eachCell((cell) => {
-      cell.font = { bold: true, size: 10, color: { argb: DARK_BLUE } };
-      cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: LIGHT_GRAY } };
+    // Style every cell, including the blank cells, as one continuous blue subtotal band.
+    for (let column = 1; column <= COL; column += 1) {
+      const cell = subtotalRow.getCell(column);
+      cell.font = { bold: true, size: 10, color: { argb: WHITE } };
+      cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: SUBTOTAL_BLUE } };
       cell.alignment = { vertical: "middle", wrapText: true };
       cell.border = {
-        top: { style: "thin", color: { argb: DARK_BLUE } },
-        bottom: { style: "thin", color: { argb: DARK_BLUE } },
-        left: { style: "thin", color: { argb: "FFDDDDDD" } },
-        right: { style: "thin", color: { argb: "FFDDDDDD" } },
+        top: { style: "thin", color: { argb: WHITE } },
+        bottom: { style: "thin", color: { argb: WHITE } },
+        left: { style: "thin", color: { argb: "FF9EC3E1" } },
+        right: { style: "thin", color: { argb: "FF9EC3E1" } },
       };
-    });
+    }
     subtotalRow.getCell(3).alignment = { horizontal: "center", vertical: "middle" };
     subtotalRow.getCell(5).numFmt = "#,##0";
     subtotalRow.getCell(7).numFmt = "#,##0.00";
@@ -628,8 +631,8 @@ export async function buildCanonicalInvoicePdf(
       y = drawTableHeader(drawPageBranding(false));
     }
 
-    doc.rect(pageLeft, y, usableWidth, subtotalHeight).fill("#F5F5F5");
-    boldFont().fillColor("#1F3864").fontSize(8);
+    doc.rect(pageLeft, y, usableWidth, subtotalHeight).fill("#2F75B5");
+    boldFont().fillColor("#FFFFFF").fontSize(8);
     const subtotalValues: string[] = [
       "",
       "",
