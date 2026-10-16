@@ -19,7 +19,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { ArrowLeft, Truck, Edit, Download, ChevronDown, Printer } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { utils, writeFile } from "@/lib/excelHelper";
+import { utils, writeFile, ExcelJS } from "@/lib/excelHelper";
 import { spContainerInvoiceChargeLines } from "@shared/spContainerInvoiceCharges";
 import { useDateFormat } from "@/contexts/DateFormatContext";
 import { useToast } from "@/hooks/use-toast";
@@ -174,46 +174,61 @@ function SpContainerDetailView() {
   const discountTotal = grossItemsTotal - baseCostAfterDiscount;
 
   const exportInvoice = async (includeCosts: boolean) => {
-    const rows: Record<string, string | number>[] = (spc.lines ?? []).map((line) => {
-      const qty = parseFloat(line.qty ?? "0");
-      const rate = parseFloat(line.unitRateUsd ?? "0") * discountFactor;
-      return {
-        "Container Number": spc.containerNumber || "",
-        "Invoice / PO": spc.invoiceNumber || "",
-        Supplier: spc.supplierName || "",
-        "Invoice Date": spc.invoiceDate || "",
-        "Item Name": line.description || line.articleCode,
-        Quantity: qty,
-        ...(includeCosts ? { "Rate (USD)": rate, "Total (USD)": qty * rate } : {}),
-      };
-    });
-    if (includeCosts) {
-      for (const charge of invoiceCharges) {
-        rows.push({
-          "Container Number": spc.containerNumber || "",
+    try {
+      const fileBase = "container_" + String(title).replace(/[^a-z0-9-]/gi, "_");
+      if (includeCosts) {
+        // Same columns and worksheet name used by ERP's Full Export.
+        const items = (spc.lines ?? []).map((line) => ({
+          Code: line.articleCode || "",
+          Name: line.description || line.articleCode,
+          Qty: line.qty || "0",
+          Rate: String(parseFloat(line.unitRateUsd ?? "0") * discountFactor),
+          Value: String(parseFloat(line.qty ?? "0") * parseFloat(line.unitRateUsd ?? "0") * discountFactor),
+        }));
+        const workbook = utils.book_new();
+        utils.book_append_sheet(workbook, utils.json_to_sheet(items), "Container Items");
+        if (invoiceCharges.length > 0) {
+          utils.book_append_sheet(workbook, utils.json_to_sheet(invoiceCharges.map((charge) => ({
+            Type: charge.kind, Description: charge.description, "Amount (USD)": charge.amountUsd,
+          }))), "Extra Charges");
+        }
+        utils.book_append_sheet(workbook, utils.json_to_sheet([{
           "Invoice / PO": spc.invoiceNumber || "",
+          "Container Number": spc.containerNumber || "",
           Supplier: spc.supplierName || "",
           "Invoice Date": spc.invoiceDate || "",
-          "Item Name": charge.description,
-          Quantity: 1,
-          "Rate (USD)": charge.amountUsd,
-          "Total (USD)": charge.amountUsd,
+          "Items Total": baseCostAfterDiscount,
+          "Charges Total": chargesTotal,
+          "Recorded Invoice Total": Number(spc.invoiceTotalUsd || 0),
+        }]), "Summary");
+        await writeFile(workbook, fileBase + ".xlsx");
+      } else {
+        // Same printable NO / hidden BARCODE / DESCRIPTION / Q'TY layout as ERP.
+        const book = new ExcelJS.Workbook();
+        const sheet = book.addWorksheet("Container Items");
+        sheet.columns = [
+          { key: "no", width: 6 },
+          { key: "bc", width: 20, hidden: true },
+          { key: "desc", width: 70 },
+          { key: "qty", width: 18 },
+        ];
+        sheet.addRow([spc.supplierName || "", "", "", ""]);
+        sheet.mergeCells("A1:D1");
+        sheet.addRow(["CONTAINER: " + (spc.containerNumber || ""), "", "", ""]);
+        sheet.mergeCells("A2:D2");
+        sheet.addRow(["NO", "BARCODE", "DESCRIPTION", "Q'TY"]);
+        (spc.lines ?? []).forEach((line, index) => {
+          sheet.addRow([index + 1, line.articleCode || "", line.description || line.articleCode, Number(line.qty || 0)]);
         });
+        sheet.getRow(1).font = { bold: true, size: 13 };
+        sheet.getRow(3).font = { bold: true };
+        sheet.getColumn(4).numFmt = "#,##0.###";
+        await writeFile(book, fileBase + "_no_cost.xlsx");
       }
-      rows.push({
-        "Container Number": spc.containerNumber || "",
-        "Invoice / PO": spc.invoiceNumber || "",
-        Supplier: spc.supplierName || "",
-        "Invoice Date": spc.invoiceDate || "",
-        "Item Name": "Recorded Invoice Total",
-        Quantity: totalQty,
-        "Rate (USD)": 0,
-        "Total (USD)": parseFloat(spc.invoiceTotalUsd ?? "0"),
-      });
+      toast({ title: "Export successful", description: "Container data downloaded as Excel" });
+    } catch (error) {
+      toast({ title: "Export failed", description: error instanceof Error ? error.message : String(error), variant: "destructive" });
     }
-    const workbook = utils.book_new();
-    utils.book_append_sheet(workbook, utils.json_to_sheet(rows), "Container Invoice");
-    await writeFile(workbook, "container_" + String(title).replace(/[^a-z0-9-]/gi, "_") + (includeCosts ? "_full" : "_no_cost") + ".xlsx");
   };
 
   return (
