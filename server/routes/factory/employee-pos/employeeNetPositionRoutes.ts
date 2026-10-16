@@ -274,12 +274,14 @@ export function registerEmployeeNetPositionRoutes(app: Express) {
       const balanceOnTableValue = computedBalanceOnTableValue;
 
       // ── 4. Pending, Verified & Loading orders (upcoming receivables) ──────────
-      // Fetched here (before forUsTotal) so PENDING/VERIFIED totals can be
-      // included in "What We Have". LOADING is shown for reference only.
+      // Verified and Loading orders are included in the dashboard's "What We Have"
+      // at their current order values, even though they have not been invoiced.
+      // Pending Verification stays informational. These are dashboard pipeline
+      // values only: do not create or change ledger receivables here.
       //
-      // No double-counting risk: once an order is PENDING or VERIFIED the
-      // bales allocated to it are set to RESERVED_FOR_ORDER status, which
-      // means they are already excluded from the IN_STOCK baleInventoryValue.
+      // Allocated bales are excluded from Stock In Hand by
+      // computeNetPositionInventory, including bales still marked IN_STOCK,
+      // so an order's allocated stock is not also valued as available inventory.
       const pendingVerifiedRows = await db
         .select({
           id: customerOrders.id,
@@ -499,11 +501,11 @@ export function registerEmployeeNetPositionRoutes(app: Express) {
       const employeeReceivablesTotal = round2(receivablesExact.toNumber());
 
       // forUsTotal: ledger assets + inventory + raw material + balance on table + stock OTW
-      //             + customer receivables (DR) + pending orders + verified orders + loading orders
+      //             + customer receivables (DR) + verified orders + loading orders
       //             + overpaid suppliers (they owe us the overpayment back)
       //             + prepaidRent (we overpaid our landlord → asset)
       //             + employee receivables (negative employee balances — they owe us back)
-      //             (bales are reserved/excluded from baleInventoryValue — no double-count)
+      //             (allocated bales are excluded from baleInventoryValue — no double-count)
       const totalSupplierOverpaymentsRounded = round2(totalSupplierOverpayments);
       const forUsTotal = round2(
         cleanLedgerForUsTotal +
@@ -512,9 +514,11 @@ export function registerEmployeeNetPositionRoutes(app: Express) {
           selectedBalanceOnTableValue +
           stockOtwValue +
           totalCustomerDr +
-          // At cost from the cut-over, the orders' bales are in the ledger's finished goods.
-          // Unfinalized orders are not collectible receivables. Keep them as informational rows only.
-          0 +
+          // Operational net-position projection: count VERIFIED and LOADING
+          // orders once, at their displayed selling totals. No accounting
+          // receivable is posted until actual finalization; PENDING is excluded.
+          verifiedTotal +
+          loadingTotal +
           totalSupplierOverpaymentsRounded +
           prepaidRent +
           employeeReceivablesTotal +
@@ -553,12 +557,26 @@ export function registerEmployeeNetPositionRoutes(app: Express) {
         value: stockOtwValue,
         category: "Stock OTW",
       };
+      const verifiedOrderEntry = {
+        name: "Verified Orders (Not Invoiced)",
+        code: "VERIFIED_ORDERS",
+        value: verifiedTotal,
+        category: "Uninvoiced Orders",
+      };
+      const loadingOrderEntry = {
+        name: "Loading Orders (In Progress)",
+        code: "LOADING_ORDERS",
+        value: loadingTotal,
+        category: "Uninvoiced Orders",
+      };
 
       const forUsAccounts = [
         factoryInventoryEntry,
         factoryRawMaterialEntry,
         ...(selectedBalanceOnTableValue > 0 ? [factoryBalanceOnTableEntry] : []),
         ...(stockOtwValue > 0 ? [factoryStockOtwEntry] : []),
+        ...(verifiedOrders.length > 0 ? [verifiedOrderEntry] : []),
+        ...(loadingOrders.length > 0 ? [loadingOrderEntry] : []),
         ...cleanLedgerForUs.sort((a, b) => b.value - a.value).map((a) => ({ ...a, value: round2(a.value) })),
         ...customerDrItems
           .sort((a, b) => b.balanceUsd - a.balanceUsd)
