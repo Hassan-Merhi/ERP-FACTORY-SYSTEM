@@ -116,6 +116,8 @@ export interface Phase11Plan {
 export interface Phase11Readiness {
   ready: boolean;
   alreadyClosed: boolean;
+  voucher?: { id: number; voucherNumber: string } | null;
+  journalVerified?: boolean;
   plan?: Phase11Plan;
   splitPct?: string;
   profitPendingDistributionBalanceUsd?: string;
