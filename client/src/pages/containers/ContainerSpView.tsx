@@ -12,7 +12,6 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Plus, Package, Eye, Search, X, Ban, Loader2 } from "lucide-react";
-import { AddContainerDialog } from "../../components/AddContainerDialog";
 import type { Container, Supplier } from "@shared/schema";
 import type { SpContainerWithLines } from "./types";
 
@@ -43,8 +42,6 @@ interface ContainerSpViewProps {
   searchTerm: string;
   setSearchTerm: (v: string) => void;
   isSpLoading: boolean;
-  addDialogOpen: boolean;
-  setAddDialogOpen: (v: boolean) => void;
   setLocation: (path: string) => void;
   formatDisplayDate: (date: string) => string;
 }
@@ -56,8 +53,6 @@ export function ContainerSpView({
   searchTerm,
   setSearchTerm,
   isSpLoading,
-  addDialogOpen,
-  setAddDialogOpen,
   setLocation,
   formatDisplayDate,
 }: ContainerSpViewProps) {
@@ -189,7 +184,7 @@ export function ContainerSpView({
     <div className="space-y-4 sm:space-y-6">
       <PageHeader title="Container Tracking" subtitle="Supplier partner containers">
         <div className="flex gap-2 flex-wrap">
-          <Button className="gap-2" onClick={() => setAddDialogOpen(true)} data-testid="button-add-container">
+          <Button className="gap-2" onClick={() => setLocation("/po-import")} data-testid="button-add-container">
             <Plus className="h-4 w-4" />
             Import Container
           </Button>
@@ -310,7 +305,6 @@ export function ContainerSpView({
         </div>
       )}
 
-      <AddContainerDialog open={addDialogOpen} onOpenChange={setAddDialogOpen} isSP={true} />
 
       <Dialog
         open={!!selectedContainer}
