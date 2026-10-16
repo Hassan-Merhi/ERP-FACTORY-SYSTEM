@@ -154,6 +154,8 @@ function sensitiveRequirement(req: Request): { confirmation: string; requireReas
     return { confirmation: "REVERSE SP OFFLOAD", requireReason: true };
   if (path.includes("opening-stock") && req.method !== "GET")
     return { confirmation: "POST SP OPENING STOCK", requireReason: true };
+  if (path === "/golden-coast/profit-correction" && req.method === "POST")
+    return { confirmation: "ADJUST SP PROFIT", requireReason: true };
   if (path.includes("profit-splits") && req.method === "POST")
     return { confirmation: "FINALIZE SP PROFIT SPLIT", requireReason: true };
   if ((path.includes("migration") || path.includes("cutover")) && req.method !== "GET")
