@@ -84,7 +84,7 @@ export async function loadHeldChargeSnapshot(
                  AND UPPER(BTRIM(COALESCE(all_orders.container_number, ''))) = o.container_number) = 1
     )
     SELECT m.customer_id, m.voucher_id,
-           COALESCE(SUM(ve.debit_amount - ve.credit_amount), 0)::text AS amount
+           COALESCE(SUM(COALESCE(ve.debit_amount,0) - COALESCE(ve.credit_amount,0)), 0)::text AS amount
       FROM (SELECT DISTINCT customer_id, voucher_id FROM matched) m
       JOIN customers c ON c.id = m.customer_id AND c.company_id = ${companyId}
       JOIN voucher_entries ve ON ve.voucher_id = m.voucher_id
