@@ -67,7 +67,7 @@ const spImportWords = {
     "requestFailed": "Request failed",
     "firstParse": "Parse a file first",
     "chooseFile": "Select an Excel file first",
-    "excelReadError": copy.excelReadError,
+    "excelReadError": "Could not parse Excel",
     "emptyFile": "No containers found",
     "fileParsed": "File parsed",
     "parsedHint": "Review the preview, then click Validate.",
@@ -78,7 +78,7 @@ const spImportWords = {
     "containerImported": "Container imported",
     "posted": "Supplier Payable accounting posted automatically.",
     "importFailed": "Import failed",
-    "unnamed": copy.unnamed
+    "unnamed": "Unnamed"
   },
   "fr": {
     "pageHeading": "Importation de commande (Excel)",
