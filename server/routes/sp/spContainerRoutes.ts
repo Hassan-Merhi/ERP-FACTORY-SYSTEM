@@ -209,7 +209,7 @@ export function registerSpContainerRoutes(app: Express) {
       const {
         importSource,
         supplierId,
-        supplierName,
+        supplierName: requestedSupplierName,
         containerNumber,
         invoiceNumber,
         invoiceDate,
@@ -225,11 +225,11 @@ export function registerSpContainerRoutes(app: Express) {
         otwClearingAccountId,
       } = req.body;
 
-      if (!invoiceNumber || !invoiceDate || (importSource !== "excel" && !supplierName)) {
-        return res.status(400).json({ message: "supplierName (except Fresh Start Excel), invoiceNumber, invoiceDate are required" });
+      if (!invoiceNumber || !invoiceDate || (importSource !== "excel" && !requestedSupplierName)) {
+        return res.status(400).json({ message: "supplierName, invoiceNumber, invoiceDate are required" });
       }
       const freshStartOtw = importSource === "excel" && await isFreshStartOtwCompany(companyId);
-      const sourceName = freshStartOtw ? FRESH_START_OTW_SOURCE_NAME : supplierName;
+      const supplierName = freshStartOtw ? FRESH_START_OTW_SOURCE_NAME : requestedSupplierName;
 
       if (importSource === "excel" && (otwAccountId || otwClearingAccountId)) {
         return res.status(400).json({ message: "Excel imports must use the Supplier Payable company\u0027s configured Goods OTW accounts." });
@@ -293,7 +293,7 @@ export function registerSpContainerRoutes(app: Express) {
           .values({
             companyId,
             supplierId: supplierIdNum,
-            supplierName: sourceName,
+            supplierName: supplierName,
             containerNumber: containerNumber || null,
             invoiceNumber,
             invoiceDate,
@@ -332,20 +332,20 @@ export function registerSpContainerRoutes(app: Express) {
             companyId,
             voucherNumber: (generation) => `SP-OTW-${container.id}-${generation}`,
             voucherDate: invoiceDate,
-            description: `Goods OTW: ${sourceName} — Invoice ${invoiceNumber}`,
+            description: `Goods OTW: ${supplierName} — Invoice ${invoiceNumber}`,
             sourceModule: "SP",
             source: { sourceType: "sp-container-otw", sourceId: `${companyId}:${container.id}`, phase: "voucher" },
             lines: [
               {
                 ledgerAccountId: otwAcct.id,
                 debit: totalUsd,
-                narration: `Goods OTW — ${sourceName} inv ${invoiceNumber}`,
+                narration: `Goods OTW — ${supplierName} inv ${invoiceNumber}`,
               },
               {
                 ledgerAccountId: otwClrAcct.id,
                 supplierId: supplierIdNum,
                 credit: totalUsd,
-                narration: `OTW Clearing — ${sourceName} inv ${invoiceNumber}`,
+                narration: `OTW Clearing — ${supplierName} inv ${invoiceNumber}`,
               },
             ],
           });
