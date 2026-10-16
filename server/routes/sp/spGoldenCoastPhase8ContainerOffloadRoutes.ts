@@ -39,6 +39,8 @@ import {
 import {
   GOLDEN_COAST_PHASE8_OFFLOAD_FIFO_SOURCE,
   GOLDEN_COAST_PHASE8_SOURCE_TYPE,
+  GOLDEN_COAST_FRESH_START_EXCEL_FUNDING_MARKER,
+  buildGoldenCoastFreshStartExcelFundingPosting,
   GoldenCoastPhase8Error,
   buildGoldenCoastPhase8FundingPosting,
   buildGoldenCoastPhase8OffloadPosting,
@@ -54,6 +56,7 @@ import {
 import { adjustSpInventoryAtomic, respondToSpInventoryIntegrityError } from "../../services/sp/spInventoryIntegrity";
 import { isGoldenCoastCompany, type DbLike } from "./spGoldenCoastPhase4CutoverFifoRoutes";
 import { requireSpCompany } from "./spHelpers";
+import { FRESH_START_OTW_SOURCE_NAME } from "@shared/goldenCoastOtwSource";
 
 const postingDependencies = createDatabasePostingDependencies();
 const phase8RequestBudget = privilegedRequestBudget({ maxBodyBytes: 64 * 1024, maxCollectionItems: 100 });
@@ -319,7 +322,9 @@ async function loadFundedContainer(
   `);
   const markers = resultRows(markerResult);
   let origin: GoldenCoastPhase8ContainerOrigin;
-  if (markers.length === 1 && String(markers[0].source_id ?? "").endsWith(":fund")) {
+  if (markers.length === 1 && String(markers[0].source_id ?? "").endsWith(`:${GOLDEN_COAST_FRESH_START_EXCEL_FUNDING_MARKER}`)) {
+    origin = "fresh_start_excel";
+  } else if (markers.length === 1 && String(markers[0].source_id ?? "").endsWith(":fund")) {
     origin = "phase8";
   } else if (markers.length > 0) {
     throw new GoldenCoastPhase8RouteError(
@@ -369,7 +374,7 @@ async function loadFundedContainer(
       409
     );
   }
-  if (origin === "cutover" && reserveEntry.length > 0) {
+  if ((origin === "cutover" || origin === "fresh_start_excel") && reserveEntry.length > 0) {
     throw new GoldenCoastPhase8RouteError(
       "A migration cutover container cannot carry a Phase 8 container reserve",
       "GC_PHASE8_FUNDING_CORRUPT",
@@ -393,6 +398,31 @@ async function loadFundedContainer(
   // Nothing debits it back either: a cutover container has no reserve to return.
   if (origin === "phase8") {
     await validateFundingAccount(tx, companyId, fundingAccount);
+  } else if (origin === "fresh_start_excel") {
+    const clearingRows = await tx.select({ id: ledgerAccounts.id }).from(ledgerAccounts).where(and(
+      eq(ledgerAccounts.companyId, companyId),
+      eq(ledgerAccounts.subType, "sp_otw_clearing"),
+      eq(ledgerAccounts.active, true),
+      isNull(ledgerAccounts.deletedAt),
+    )).limit(2);
+    if (clearingRows.length !== 1 || fundingAccount.kind !== "ledger" || fundingAccount.id !== clearingRows[0].id) {
+      throw new GoldenCoastPhase8RouteError(
+        "Fresh Start invoice funding must credit exactly this company's Goods OTW Clearing",
+        "GC_PHASE8_FUNDING_CORRUPT", 409,
+      );
+    }
+    if (container.supplierId != null || container.supplierName !== FRESH_START_OTW_SOURCE_NAME) {
+      throw new GoldenCoastPhase8RouteError(
+        "Fresh Start invoice has an unexpected supplier link",
+        "GC_PHASE8_FUNDING_CORRUPT", 409,
+      );
+    }
+    if (toMoney(container.invoiceTotalUsd).minus(stockEntry[0].debitAmount).abs().greaterThan("0.005")) {
+      throw new GoldenCoastPhase8RouteError(
+        "Fresh Start invoice total differs from Goods OTW voucher",
+        "GC_PHASE8_FUNDING_CORRUPT", 409,
+      );
+    }
   }
 
   // Phase 22 (C), PE13: exact Decimal checks (were float arithmetic).
@@ -428,7 +458,7 @@ async function loadFundedContainer(
     lines.map((line) => line.stockItemId)
   );
   const lineValue = sumMoney(lines.map((line) => toMoney(line.qty).times(toMoney(line.unitRateUsd))));
-  if (lineValue.minus(goodsCostUsd).abs().greaterThan("0.01")) {
+  if (origin !== "fresh_start_excel" && lineValue.minus(goodsCostUsd).abs().greaterThan("0.01")) {
     throw new GoldenCoastPhase8RouteError(
       "Container lines no longer reconcile to the funded Stock OTW amount",
       "GC_PHASE8_FUNDING_CORRUPT",
@@ -608,7 +638,7 @@ async function handleOffload(req: Request, res: Response): Promise<void> {
       await validateLocation(tx, selectedCompany, offloadInput.locationId);
       const funded = await loadFundedContainer(tx, selectedCompany, offloadInput.containerId, accounts);
       if (offloadInput.chargeFundingAccount) {
-        if (funded.origin !== "cutover") {
+        if (funded.origin !== "cutover" && funded.origin !== "fresh_start_excel") {
           throw new GoldenCoastPhase8RouteError(
             "chargeFundingAccount only applies to a cutover container; a Phase 8 container pays its charges from the funded reserve",
             "GC_PHASE8_CHARGE_FUNDING_UNEXPECTED"
