@@ -54,6 +54,13 @@ describe("Golden Coast Phase 11 monthly close route surface", () => {
     expect(routeSource).toContain("Profit Pending Distribution did not return to zero");
   });
 
+  it("returns the persisted Journal voucher when a month has already been closed", () => {
+    expect(routeSource).toContain("goldenCoastPhase11IdempotencyKey(companyId, probe.periodMonth)");
+    expect(routeSource).toContain('journal?.voucherType === "Journal"');
+    expect(routeSource).toContain("journalVerified: Boolean(voucher)");
+    expect(routeSource).toContain("return { replayed: false, split, voucher: posted.voucher, plan }");
+  });
+
   it("posts only through the central engine", () => {
     expect(routeSource).toContain("postBalancedVoucherTx");
     expect(routeSource).toContain("createDatabasePostingDependencies()");
