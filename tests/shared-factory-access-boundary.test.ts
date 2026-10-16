@@ -35,6 +35,35 @@ describe("Wave 4 shared Factory API ownership", () => {
     );
   });
 
+  it("permits Account Groups only its ledger read/create/update/assign endpoints", async () => {
+    const groupPage = { pageKey: "factory/account-groups" };
+    for (const [path, method] of [
+      ["/api/ledger-accounts?companyId=12", "GET"],
+      ["/api/ledger-accounts", "POST"],
+      ["/api/ledger-accounts/42", "PUT"],
+      ["/api/ledger-accounts/bulk-assign-parent", "PATCH"],
+    ]) {
+      expect(await resolveSharedFactoryRequirements(req(path, method))).toEqual(
+        expect.arrayContaining([groupPage])
+      );
+    }
+
+    // A page-scoped group manager must not unlock unrelated write routes.
+    for (const [path, method] of [
+      ["/api/ledger-accounts/42", "DELETE"],
+      ["/api/ledger-accounts/42", "PATCH"],
+      ["/api/ledger-accounts/42", "GET"],
+      ["/api/ledger-accounts/bulk-delete", "POST"],
+      ["/api/ledger-accounts/zero-balances", "POST"],
+      ["/api/bank-accounts", "GET"],
+      ["/api/accounts/all", "GET"],
+    ]) {
+      expect(await resolveSharedFactoryRequirements(req(path, method))).not.toEqual(
+        expect.arrayContaining([groupPage])
+      );
+    }
+  });
+
   it("allows Agent Ledger to read only the account catalog and statement endpoints it owns", async () => {
     expect(await resolveSharedFactoryRequirements(req("/api/accounts/all"))).toEqual(
       expect.arrayContaining([{ pageKey: "factory/agents" }])
