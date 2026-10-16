@@ -45,6 +45,7 @@ import { inventoryValuationOverrides } from "./031-inventory-valuation-overrides
 import { historicalReplaySafetySchema } from "./032-historical-replay-safety";
 import { spContainerInvoiceCharges } from "./033-sp-container-invoice-charges";
 import { supplierTrackingShopDutyDefaultsSchema } from "./034-supplier-tracking-shop-duty-defaults";
+import { posPortDepartureDateSchema } from "./035-pos-port-departure-date";
 
 export const startupMigrations: string[] = [
   ...coreTablesAndColumns,
@@ -88,6 +89,7 @@ export const startupMigrations: string[] = [
   ...historicalReplaySafetySchema,
   ...spContainerInvoiceCharges,
   ...supplierTrackingShopDutyDefaultsSchema,
+  ...posPortDepartureDateSchema,
 ];
 
 // Re-exported so server/index.ts can bootstrap the journal from the module it
