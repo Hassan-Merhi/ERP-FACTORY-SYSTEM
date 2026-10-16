@@ -134,8 +134,12 @@ export function registerSpReportRoutes(app: Express) {
       // developer notes, prior targets, actors or the correction controls.
       const otherIncomeExpense = Math.round((netProfit - sourceNetProfit) * 100) / 100;
       const splitPct = 50;
-      const ourShare = netProfit * (splitPct / 100);
-      const supplierShare = netProfit - ourShare;
+      // Assign odd cents deterministically so both shares sum to the exact
+      // corrected net profit, matching the Decimal rounding in Phase 11.
+      const netCents = Math.round(netProfit * 100);
+      const ourCents = Math.sign(netCents) * Math.round(Math.abs(netCents) / 2);
+      const ourShare = ourCents / 100;
+      const supplierShare = (netCents - ourCents) / 100;
 
       res.json({
         totalRevenue,
