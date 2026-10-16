@@ -6,12 +6,27 @@ import { Button } from "@/components/ui/button";
 import { ArrowLeft, Package, Truck } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PageHeader } from "@/components/PageHeader";
+import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
 import { SpOffloadDialog } from "@/components/SpOffloadDialog";
 import { queryClient } from "@/lib/queryClient";
 import type { useContainerDetailModel } from "../useContainerDetailModel";
 import { spContainerInvoiceChargeLines } from "@shared/spContainerInvoiceCharges";
 
 type Model = ReturnType<typeof useContainerDetailModel>;
+const poWords = {
+  "en": {
+    "back": "Back to Containers",
+    "extras": "Extra Charges & Discount"
+  },
+  "fr": {
+    "back": "Retour aux conteneurs",
+    "extras": "Frais supplémentaires et remise"
+  },
+  "ar": {
+    "back": "العودة إلى الحاويات",
+    "extras": "الرسوم الإضافية والخصم"
+  }
+} as const;
 const amount = (value: number | string | null | undefined) => {
   const n = Number(value ?? 0);
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(
@@ -26,6 +41,8 @@ const qty = (value: number | string | null | undefined) =>
  * do not fabricate ERP purchase_orders or duplicate the OTW journal.
  */
 export function ContainerDetailSpView({ model }: { model: Model }) {
+  const { language } = useApplicationLanguage();
+  const copy = poWords[language];
   const { containerId, spContainerData, spDetailLoading, showSpOffloadDialog, setShowSpOffloadDialog } = model;
   if (spDetailLoading) {
     return <div className="space-y-4">
@@ -39,7 +56,7 @@ export function ContainerDetailSpView({ model }: { model: Model }) {
       <div className="flex flex-col items-center justify-center min-h-[400px] gap-3">
         <Package className="h-12 w-12 text-muted-foreground" />
         <h2 className="text-lg font-semibold">Container not found</h2>
-        <Link href="/containers"><Button variant="outline"><ArrowLeft className="h-4 w-4 mr-1" /> Back to Containers</Button></Link>
+        <Link href="/containers"><Button variant="outline"><ArrowLeft className="h-4 w-4 mr-1" /> {copy.back}</Button></Link>
       </div>
     );
   }
@@ -153,7 +170,7 @@ export function ContainerDetailSpView({ model }: { model: Model }) {
       {(charges.length > 0 || Math.abs(discountAmount) >= 0.005) && (
         <div className="rounded-lg border bg-card overflow-hidden" data-testid="sp-container-invoice-charges">
           <div className="px-4 py-3 bg-muted/40 border-b">
-            <p className="text-sm font-semibold">Extra Charges & Discount</p>
+            <p className="text-sm font-semibold">{copy.extras}</p>
           </div>
           <Table>
             <TableHeader><TableRow><TableHead>Misc Type</TableHead><TableHead className="text-right">Amount</TableHead></TableRow></TableHeader>
