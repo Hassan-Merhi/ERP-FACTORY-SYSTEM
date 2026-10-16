@@ -144,7 +144,7 @@ export function ContainerTable({ containers, colVis, sessionCompanyId, onOpenDra
                         </TableCell>
                         <TableCell className="font-mono font-bold text-[11px] h-10">
                           <Link
-                            href={`/containers/${c.id}`}
+                            href={`/containers/${Math.abs(c.id)}${c.id < 0 ? "" : ""}`}
                             className="text-foreground hover:text-primary hover:underline underline-offset-2 transition-colors"
                             onClick={(event) => event.stopPropagation()}
                             data-testid={`link-container-${c.id}`}
