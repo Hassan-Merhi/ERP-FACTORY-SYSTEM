@@ -174,7 +174,7 @@ export type RawContainerRow = {
   itemName: string | null;
   shopName: string | null;
   eta: string | null;
-  portDepartureDate: string | null;
+  portDepartureDate?: string | null;
   etaSource: string | null;
   transporter: string | null;
   transportFee: string | null;
