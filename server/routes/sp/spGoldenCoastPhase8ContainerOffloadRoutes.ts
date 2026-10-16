@@ -678,8 +678,8 @@ async function handleFreshStartExcelImport(req: Request, res: Response): Promise
         },
       });
       await validateStockItems(tx, selectedCompany, containerInput.lines.map((line) => line.stockItemId));
-      const netInvoice = toMoney(raw.invoiceTotalUsd);
-      const pct = toMoney(raw.discountPct ?? "0");
+      const netInvoice = toMoney(String(raw.invoiceTotalUsd ?? "0"));
+      const pct = toMoney(String(raw.discountPct ?? "0"));
       if (pct.lessThan(0) || pct.greaterThan(100) || netInvoice.lessThanOrEqualTo(0)) {
         throw new GoldenCoastPhase8RouteError("Invalid invoice total or discount percentage");
       }
@@ -687,7 +687,7 @@ async function handleFreshStartExcelImport(req: Request, res: Response): Promise
         (line) => toMoney(line.qty).times(line.unitRateUsd),
       ));
       const chargeFields = ["freightEstimateUsd", "surchargeUsd", "fumigationUsd", "documentChargesUsd"] as const;
-      const fees = chargeFields.map((field) => toMoney(raw[field] ?? "0"));
+      const fees = chargeFields.map((field) => toMoney(String(raw[field] ?? "0")));
       if (fees.some((fee) => fee.lessThan(0))) {
         throw new GoldenCoastPhase8RouteError("Invoice fees cannot be negative");
       }
