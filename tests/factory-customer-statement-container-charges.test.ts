@@ -124,7 +124,7 @@ describe("factory customer statement container charge consolidation", () => {
     expect(result[0].transactionDate).toBe("2026-09-01");
   });
 
-  it("shows posted freight on a VERIFIED container as a container cost, not a journal or sale", () => {
+  it("omits posted freight from the customer statement until a VERIFIED container is finalized", () => {
     const posted = row({ id: "ve-15969", referenceId: 15969,
       transactionDate: "2026-09-22", combinedEffect: d(2250),
       ledgerEffect: d(2250), debitAmount: "2250.00",
@@ -134,12 +134,39 @@ describe("factory customer statement container charge consolidation", () => {
       new Map([[184, { containerNumber: "MRSU7669057", status: "VERIFIED" }]]),
       new Map([[15969, 184]])
     );
-    expect(result).toHaveLength(1);
-    expect(result[0].transactionType).toBe("CONTAINER_COST");
-    expect(result[0].referenceType).toBe("INVOICE");
-    expect(result[0].referenceId).toBe(184);
-    expect(result[0].debitAmount).toBe("2250.00");
-    expect(result[0].ledgerEffect.toFixed(2)).toBe("2250.00");
+    expect(result).toHaveLength(0);
+    // The original posted voucher remains intact in the general ledger.
+    expect(posted.ledgerEffect.toFixed(2)).toBe("2250.00");
+  });
+
+  it.each(["LOADING", "PENDING_VERIFICATION", "VERIFIED", "DRAFT"])(
+    "does not put %s container charges in the customer statement",
+    (status) => {
+      const charge = row({
+        id: "ve-55", referenceId: 55, referenceNumber: "CHARGE-PRE-184-12",
+        combinedEffect: d(300), ledgerEffect: d(300), debitAmount: "300.00",
+      });
+      const result = consolidateContainerCharges(
+        [charge],
+        new Map([[184, { containerNumber: "MRSU7669057", status }]]),
+        new Map([[55, 184]])
+      );
+      expect(result).toEqual([]);
+    }
+  );
+
+  it("shows that same charge once the container is finalized", () => {
+    const posted = row({
+      id: "ve-55", referenceId: 55,
+      combinedEffect: d(300), ledgerEffect: d(300), debitAmount: "300.00",
+    });
+    const finalized = consolidateContainerCharges(
+      [sale(), posted],
+      new Map([[90, { containerNumber: "CAAU5379196", status: "FINALIZED" }]]),
+      new Map([[55, 90]])
+    );
+    expect(finalized).toHaveLength(1);
+    expect(finalized[0].combinedEffect.toFixed(2)).toBe("26160.00");
   });
 
   it("retains the actual period allocation when a charge is posted after the invoice", () => {
