@@ -1,17 +1,16 @@
 /**
- * "Dispatch History" card for the Waste Dispatch page: the paged list of
- * past dispatches with expandable per-dispatch bale details, reprint, and
- * delete actions.
- *
- * Extracted from WasteDispatchOptimized.tsx during the P1 god-file split.
- * Purely presentational — all queries and mutations come from
- * useWasteDispatchModel.
+ * Filterable, infinite-scroll waste dispatch history.
+ * Detailed view shows bale-level records only as they enter the viewport;
+ * condensed view keeps the existing on-demand expansion and print/delete.
  */
-
-import { ChevronLeft, ChevronRight, History, Loader2, Printer, Trash2 } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { CalendarDays, ChevronRight, History, Loader2, Printer, Trash2, Weight } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { fetchHistoryBales } from "../optimizedData";
 import { fmt, fmtKg } from "../utils";
 import type { useWasteDispatchModel } from "../useWasteDispatchModel";
 import type { HistoryBale } from "../optimizedTypes";
@@ -19,59 +18,179 @@ import type { HistoryBale } from "../optimizedTypes";
 type WasteDispatchModel = ReturnType<typeof useWasteDispatchModel>;
 
 export function DispatchHistoryPanel({ model }: { model: WasteDispatchModel }) {
-  const { historyPage, setHistoryPage, historyLoading, historyItems, historyPagination } = model;
+  const {
+    historyItems,
+    historyPagination,
+    historyTotals,
+    historyLoading,
+    historyError,
+    historyFetchError,
+    historyFetchingNextPage,
+    historyHasNextPage,
+    fetchNextHistoryPage,
+    refetchHistory,
+    historyStartDate,
+    setHistoryStartDate,
+    historyEndDate,
+    setHistoryEndDate,
+    historyView,
+    setHistoryView,
+  } = model;
+  const loadMoreRef = useRef<HTMLDivElement>(null);
+
+  // The sentinel follows the outer page's scroll container (no separate history
+  // scrollbar). It starts the next page only when the bottom comes into view.
+  useEffect(() => {
+    const node = loadMoreRef.current;
+    if (!node || !historyHasNextPage || historyFetchingNextPage || historyError) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          observer.disconnect();
+          void fetchNextHistoryPage();
+        }
+      },
+      { rootMargin: "350px" }
+    );
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [historyItems.length, historyHasNextPage, historyFetchingNextPage, historyError, fetchNextHistoryPage]);
+
+  const hasDateFilter = Boolean(historyStartDate || historyEndDate);
 
   return (
     <Card>
-      <CardHeader className="flex flex-row items-center justify-between gap-2 px-4 pb-2 pt-3">
-        <CardTitle className="flex items-center gap-2 text-sm">
-          <History className="h-4 w-4 text-muted-foreground" /> Dispatch History
-        </CardTitle>
-        <span className="text-xs text-muted-foreground">
-          {historyPagination.total} dispatch{historyPagination.total !== 1 ? "es" : ""}
-        </span>
+      <CardHeader className="space-y-3 px-4 pb-3 pt-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <CardTitle className="flex items-center gap-2 text-sm">
+            <History className="h-4 w-4 text-muted-foreground" /> Dispatch History
+          </CardTitle>
+          <span className="text-xs text-muted-foreground" data-testid="text-dispatch-history-count">
+            {historyPagination.total} dispatch{historyPagination.total !== 1 ? "es" : ""}
+          </span>
+        </div>
+        <div className="flex flex-wrap items-end gap-2">
+          <div className="flex gap-1 rounded-md border p-0.5" aria-label="History display mode">
+            <Button
+              size="sm"
+              variant={historyView === "condensed" ? "secondary" : "ghost"}
+              className="h-8 px-3 text-xs"
+              aria-pressed={historyView === "condensed"}
+              onClick={() => setHistoryView("condensed")}
+              data-testid="button-history-condensed"
+            >
+              Condensed
+            </Button>
+            <Button
+              size="sm"
+              variant={historyView === "detailed" ? "secondary" : "ghost"}
+              className="h-8 px-3 text-xs"
+              aria-pressed={historyView === "detailed"}
+              onClick={() => setHistoryView("detailed")}
+              data-testid="button-history-detailed"
+            >
+              Detailed
+            </Button>
+          </div>
+          <div className="flex items-end gap-2">
+            <CalendarDays className="mb-2 h-4 w-4 text-muted-foreground" aria-hidden="true" />
+            <label className="flex flex-col gap-1 text-xs text-muted-foreground">
+              From
+              <Input
+                type="date"
+                value={historyStartDate}
+                max={historyEndDate || undefined}
+                onChange={(event) => setHistoryStartDate(event.target.value)}
+                className="h-8 w-36 text-xs"
+                data-testid="input-history-start-date"
+              />
+            </label>
+            <label className="flex flex-col gap-1 text-xs text-muted-foreground">
+              To
+              <Input
+                type="date"
+                value={historyEndDate}
+                min={historyStartDate || undefined}
+                onChange={(event) => setHistoryEndDate(event.target.value)}
+                className="h-8 w-36 text-xs"
+                data-testid="input-history-end-date"
+              />
+            </label>
+          </div>
+          {hasDateFilter && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-8 text-xs"
+              onClick={() => {
+                setHistoryStartDate("");
+                setHistoryEndDate("");
+              }}
+              data-testid="button-history-clear-dates"
+            >
+              Clear dates
+            </Button>
+          )}
+        </div>
+        <div className="grid grid-cols-2 gap-2 rounded-md border bg-muted/20 p-3 sm:grid-cols-3" data-testid="bar-history-totals">
+          <div className="flex flex-col gap-0.5">
+            <span className="text-xs text-muted-foreground">Total Qty (Bales)</span>
+            <span className="text-base font-semibold tabular-nums" data-testid="text-history-total-bales">
+              {historyTotals.bales.toLocaleString("en-US")}
+            </span>
+          </div>
+          <div className="flex flex-col gap-0.5">
+            <span className="flex items-center gap-1 text-xs text-muted-foreground">
+              <Weight className="h-3 w-3" /> Total KG
+            </span>
+            <span className="text-base font-semibold tabular-nums" data-testid="text-history-total-kg">
+              {fmtKg(historyTotals.weightKg)} kg
+            </span>
+          </div>
+          <div className="flex flex-col gap-0.5">
+            <span className="text-xs text-muted-foreground">Total Amount (Written Off)</span>
+            <span className="text-base font-semibold tabular-nums" data-testid="text-history-total-amount">
+              {fmt(historyTotals.amount)}
+            </span>
+          </div>
+        </div>
       </CardHeader>
       <CardContent className="p-0">
         {historyLoading && !historyItems.length ? (
-          <div className="flex justify-center py-8">
+          <div className="flex justify-center py-8" aria-label="Loading dispatches">
             <Loader2 className="h-5 w-5 animate-spin" />
           </div>
-        ) : historyItems.length === 0 ? (
-          <p className="p-4 text-sm text-muted-foreground">No dispatches yet.</p>
+        ) : !historyItems.length && !historyError ? (
+          <p className="p-4 text-sm text-muted-foreground">
+            {hasDateFilter ? "No dispatches in the selected date range." : "No dispatches yet."}
+          </p>
         ) : (
-          <>
-            <div className="divide-y">
-              {historyItems.map((dispatch) => (
-                <DispatchHistoryItem key={dispatch.id} model={model} dispatch={dispatch} />
-              ))}
-            </div>
-
-            <div className="flex items-center justify-between border-t px-4 py-2">
-              <span className="text-xs text-muted-foreground">
-                Page {historyPagination.page} of {historyPagination.totalPages}
-              </span>
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-7 px-2"
-                  disabled={historyPage <= 1}
-                  onClick={() => setHistoryPage((page) => Math.max(1, page - 1))}
-                >
-                  <ChevronLeft className="h-3.5 w-3.5" /> Previous
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-7 px-2"
-                  disabled={historyPage >= historyPagination.totalPages}
-                  onClick={() => setHistoryPage((page) => Math.min(historyPagination.totalPages, page + 1))}
-                >
-                  Next <ChevronRight className="h-3.5 w-3.5" />
-                </Button>
-              </div>
-            </div>
-          </>
+          <div className="divide-y">
+            {historyItems.map((dispatch) => (
+              <DispatchHistoryItem key={dispatch.id} model={model} dispatch={dispatch} />
+            ))}
+          </div>
+        )}
+        {historyError && (
+          <div className="flex flex-wrap items-center justify-center gap-2 border-t px-4 py-3 text-xs text-destructive">
+            <span>
+              {historyFetchError instanceof Error ? historyFetchError.message : "Unable to load dispatch history."}
+            </span>
+            <Button variant="outline" size="sm" onClick={() => void refetchHistory()}>
+              Retry
+            </Button>
+          </div>
+        )}
+        {historyFetchingNextPage && (
+          <div className="flex items-center justify-center gap-2 border-t px-4 py-3 text-xs text-muted-foreground">
+            <Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading more dispatches...
+          </div>
+        )}
+        <div ref={loadMoreRef} className="h-1" aria-hidden="true" data-testid="sentinel-history-load-more" />
+        {!historyHasNextPage && !historyLoading && historyItems.length > 0 && (
+          <p className="border-t px-4 py-2 text-center text-xs text-muted-foreground">
+            All {historyPagination.total} dispatches loaded
+          </p>
         )}
       </CardContent>
     </Card>
@@ -85,18 +204,49 @@ function DispatchHistoryItem({
   model: WasteDispatchModel;
   dispatch: WasteDispatchModel["historyItems"][number];
 }) {
-  const { expandedHistoryIds, toggleHistoryItem, handleHistoryPrint, setDeleteDispatchId, historyQueryById } = model;
+  const { expandedHistoryIds, toggleHistoryItem, handleHistoryPrint, setDeleteDispatchId, historyView } = model;
+  const isDetailed = historyView === "detailed";
+  const isOpen = isDetailed || expandedHistoryIds.has(dispatch.id);
+  const itemRef = useRef<HTMLDivElement>(null);
+  const [nearViewport, setNearViewport] = useState(false);
 
-  const isOpen = expandedHistoryIds.has(dispatch.id);
-  const detailQuery = historyQueryById.get(dispatch.id);
-  const bales = (detailQuery?.data as HistoryBale[] | undefined) ?? [];
+  // Don't download bale details for history records well below the user's scroll
+  // position. The detail query remains cached for condensed expand/reprint.
+  useEffect(() => {
+    const node = itemRef.current;
+    if (!node || !isOpen || nearViewport) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setNearViewport(true);
+          observer.disconnect();
+        }
+      },
+      { rootMargin: "250px" }
+    );
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [isOpen, nearViewport]);
+
+  const detailQuery = useQuery<HistoryBale[]>({
+    queryKey: ["/api/factory/waste-dispatch/history-bales", dispatch.id],
+    queryFn: () => fetchHistoryBales(dispatch.id),
+    enabled: isOpen && nearViewport,
+    staleTime: 5 * 60_000,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+  });
+  const bales = detailQuery.data ?? [];
 
   return (
-    <div>
+    <div ref={itemRef}>
       <div
-        className="flex cursor-pointer items-center justify-between px-4 py-2.5 hover:bg-muted/30"
-        onClick={() => toggleHistoryItem(dispatch.id)}
+        className={`flex flex-wrap items-center justify-between gap-2 px-4 hover:bg-muted/30 ${isDetailed ? "py-3" : "py-2.5 cursor-pointer"}`}
+        onClick={() => {
+          if (!isDetailed) toggleHistoryItem(dispatch.id);
+        }}
         data-testid={`row-dispatch-${dispatch.id}`}
+        aria-expanded={isOpen}
       >
         <div className="flex items-center gap-2">
           <ChevronRight
@@ -107,7 +257,7 @@ function DispatchHistoryItem({
             <p className="text-xs text-muted-foreground">{dispatch.dispatchDate}</p>
           </div>
         </div>
-        <div className="flex items-center gap-3 text-xs">
+        <div className="flex flex-wrap items-center gap-3 text-xs">
           <span className="text-muted-foreground">
             {dispatch.totalBales} bale{dispatch.totalBales !== 1 ? "s" : ""}
           </span>
@@ -141,7 +291,6 @@ function DispatchHistoryItem({
           </Button>
         </div>
       </div>
-
       {isOpen && (
         <div className="bg-muted/30 px-4 pb-4 pt-2">
           {dispatch.notes && (
@@ -149,35 +298,42 @@ function DispatchHistoryItem({
               <span className="font-medium">Note:</span> {dispatch.notes}
             </p>
           )}
-          {detailQuery?.isLoading ? (
-            <div className="py-4 text-center">
+          {!nearViewport || detailQuery.isLoading || detailQuery.isPending ? (
+            <div className="py-4 text-center" aria-label="Loading bale details">
               <Loader2 className="mx-auto h-4 w-4 animate-spin" />
             </div>
-          ) : detailQuery?.isError ? (
-            <p className="text-xs text-destructive">Could not load bale details.</p>
+          ) : detailQuery.isError ? (
+            <div className="flex items-center gap-2 text-xs text-destructive">
+              Could not load bale details.
+              <Button variant="outline" size="sm" onClick={() => void detailQuery.refetch()}>
+                Retry
+              </Button>
+            </div>
           ) : bales.length === 0 ? (
             <p className="text-xs text-muted-foreground">No bale details available.</p>
           ) : (
-            <table className="mt-1 w-full border-collapse text-xs">
-              <thead>
-                <tr className="border-b">
-                  <th className="py-1.5 text-left">Reference</th>
-                  <th className="py-1.5 text-left">Product</th>
-                  <th className="py-1.5 text-right">Weight (kg)</th>
-                  <th className="py-1.5 text-right">Cost W/O</th>
-                </tr>
-              </thead>
-              <tbody>
-                {bales.map((bale) => (
-                  <tr key={bale.id} className="border-b border-border/40 last:border-0">
-                    <td className="py-1 font-mono text-primary">{bale.referenceNumber}</td>
-                    <td className="py-1">{bale.productName}</td>
-                    <td className="py-1 text-right">{fmtKg(Number(bale.weightKg || 0))}</td>
-                    <td className="py-1 text-right">{fmt(Number(bale.totalCost || 0))}</td>
+            <div className="overflow-x-auto">
+              <table className="mt-1 w-full min-w-[420px] border-collapse text-xs">
+                <thead>
+                  <tr className="border-b">
+                    <th className="py-1.5 text-left">Reference</th>
+                    <th className="py-1.5 text-left">Product</th>
+                    <th className="py-1.5 text-right">Weight (kg)</th>
+                    <th className="py-1.5 text-right">Cost W/O</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {bales.map((bale) => (
+                    <tr key={bale.id} className="border-b border-border/40 last:border-0">
+                      <td className="py-1 font-mono text-primary">{bale.referenceNumber}</td>
+                      <td className="py-1">{bale.productName}</td>
+                      <td className="py-1 text-right">{fmtKg(Number(bale.weightKg || 0))}</td>
+                      <td className="py-1 text-right">{fmt(Number(bale.totalCost || 0))}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </div>
       )}
