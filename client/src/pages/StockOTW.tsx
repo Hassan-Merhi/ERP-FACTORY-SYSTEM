@@ -20,6 +20,8 @@ import { Package, Ship, AlertCircle, ChevronRight, ChevronDown, X, Layers, FileD
 import { Skeleton } from "@/components/ui/skeleton";
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
 import type { Container } from "@shared/schema";
+import { useCompany } from "@/contexts/CompanyContext";
+import type { SpContainerWithLines } from "./containers/types";
 import { PageHeader } from "@/components/PageHeader";
 import CombinedInventory from "@/pages/CombinedInventory";
 import { ExcelJS, writeFile } from "@/lib/excelHelper";
@@ -32,6 +34,8 @@ import {
 
 function StockOTWContent({ showCombined, onToggleCombined }: { showCombined: boolean; onToggleCombined: () => void }) {
   const { formatAmount } = useCurrencyContext();
+  const { selectedCompany } = useCompany();
+  const isSupplierPartner = selectedCompany?.companyType === "supplier_partner";
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedGrade, setSelectedGrade] = useState<string>("all");
   const [selectedCategory, setSelectedCategory] = useState<string[]>([]);
@@ -65,22 +69,71 @@ function StockOTWContent({ showCombined, onToggleCombined }: { showCombined: boo
     select: expandStockOtwWirePayload,
   });
 
+  // Native SP containers live outside regular ERP container/PO tables.
+  const {
+    data: spContainers = [],
+    isLoading: loadingSpContainers,
+    error: spContainersError,
+    refetch: refetchSpContainers,
+  } = useQuery<SpContainerWithLines[]>({
+    queryKey: ["/api/sp/containers"],
+    queryFn: async () => {
+      const response = await fetch("/api/sp/containers", { credentials: "include" });
+      if (!response.ok) throw new Error("Failed to load Supplier Partner containers");
+      return response.json();
+    },
+    enabled: !!selectedCompany?.id && isSupplierPartner,
+  });
   const otwContainers = useMemo(() => containers.filter((c) => c.status === "OTW"), [containers]);
-
-  const isLoading = loadingContainers || loadingOtwItems;
+  const spOtwContainers = useMemo(() => {
+    const erpNumbers = new Set(otwContainers.map((c) => c.containerNumber?.trim().toUpperCase()).filter(Boolean));
+    // An imported PO may have both a native SP and an ERP representation.
+    return spContainers.filter((c) =>
+      c.status === "open" &&
+      (!c.containerNumber || !erpNumbers.has(c.containerNumber.trim().toUpperCase()))
+    );
+  }, [otwContainers, spContainers]);
+  const otwContainerCount = otwContainers.length + spOtwContainers.length;
+  const isLoading = loadingContainers || loadingOtwItems || (isSupplierPartner && loadingSpContainers);
   // A failed background refetch leaves the last good data on screen and an error
   // beside it, and a cancelled request is not a failure at all. Report only what
   // actually left the page without data.
   const containersFailed = isBlockingQueryError(containersError, containers.length > 0);
   const otwItemsFailed = isBlockingQueryError(otwItemsError, otwItemsRaw.length > 0);
-  const hasErrors = containersFailed || otwItemsFailed;
+  const spContainersFailed = isSupplierPartner && isBlockingQueryError(spContainersError, spContainers.length > 0);
+  const hasErrors = containersFailed || otwItemsFailed || spContainersFailed;
 
   const retryFailedQueries = () => {
     if (containersFailed) void refetchContainers();
     if (otwItemsFailed) void refetchOtwItems();
+    if (spContainersFailed) void refetchSpContainers();
   };
 
-  const stockItems: StockItem[] = otwItemsRaw;
+  const stockItems: StockItem[] = useMemo(() => {
+    const nativeLines: StockItem[] = [];
+    for (const container of spOtwContainers) {
+      const factor = 1 - Number(container.discountPct || 0) / 100;
+      for (const line of container.lines ?? []) {
+        const qty = Number(line.qty || 0);
+        const rate = Number(line.unitRateUsd || 0) * factor;
+        nativeLines.push({
+          stockItemCode: line.articleCode || "",
+          stockItemName: line.description || line.articleCode || "Unnamed item",
+          quantity: String(qty),
+          totalCost: String(qty * rate),
+          rate: String(rate),
+          containerNumber: container.containerNumber || container.invoiceNumber || "SP #" + container.id,
+          supplierName: container.supplierName || "",
+          importDate: container.invoiceDate || "",
+          gradeId: null,
+          gradeName: null,
+          categoryId: null,
+          categoryName: null,
+        });
+      }
+    }
+    return [...otwItemsRaw, ...nativeLines];
+  }, [otwItemsRaw, spOtwContainers]);
 
   const groupedItems: GroupedStockItem[] = useMemo(() => {
     const grouped = new Map<string, GroupedStockItem>();
@@ -179,7 +232,8 @@ function StockOTWContent({ showCombined, onToggleCombined }: { showCombined: boo
   const totalValue = filteredItems.reduce((sum, item) => sum + item.totalCost, 0);
   const uniqueItemCount = filteredItems.length;
 
-  const containerGrandTotal = otwContainers.reduce((sum, c) => sum + parseFloat(c.grandTotal || "0"), 0);
+  const containerGrandTotal = otwContainers.reduce((sum, c) => sum + parseFloat(c.grandTotal || "0"), 0) +
+    spOtwContainers.reduce((sum, c) => sum + parseFloat(c.invoiceTotalUsd || "0"), 0);
   const isFiltered =
     searchTerm.trim() !== "" || selectedGrade !== "all" || selectedCategory.length > 0 || selectedSupplier.length > 0;
   const displayTotal = isFiltered ? totalValue : containerGrandTotal;
@@ -239,7 +293,7 @@ function StockOTWContent({ showCombined, onToggleCombined }: { showCombined: boo
       const statsRow = ws.getRow(4);
       statsRow.height = 20;
       const statsText = [
-        `${otwContainers.length} container${otwContainers.length !== 1 ? "s" : ""} OTW`,
+        `${otwContainerCount} container${otwContainerCount !== 1 ? "s" : ""} OTW`,
         `${filteredItems.length} unique item${filteredItems.length !== 1 ? "s" : ""}`,
         `Total qty: ${Math.round(totalQuantity).toLocaleString()}`,
         `Total value: ${formatAmount(displayTotal)}`,
@@ -452,6 +506,7 @@ function StockOTWContent({ showCombined, onToggleCombined }: { showCombined: boo
             <span>
               {containersFailed ? "Failed to load containers. " : ""}
               {otwItemsFailed ? "Failed to load stock items. " : ""}
+              {spContainersFailed ? "Failed to load Supplier Partner containers. " : ""}
             </span>
             <Button variant="outline" size="sm" onClick={retryFailedQueries} data-testid="button-otw-retry">
               Try again
@@ -461,7 +516,7 @@ function StockOTWContent({ showCombined, onToggleCombined }: { showCombined: boo
       )}
 
       {/* Stats bar */}
-      {otwContainers.length > 0 && (
+      {otwContainerCount > 0 && (
         <div className="flex flex-wrap gap-3">
           <div className="flex items-center gap-2 bg-blue-500/10 rounded-lg px-3 py-2">
             <Ship className="h-4 w-4 text-blue-600 dark:text-blue-400" />
@@ -469,7 +524,7 @@ function StockOTWContent({ showCombined, onToggleCombined }: { showCombined: boo
               className="text-sm font-semibold text-blue-700 dark:text-blue-300"
               data-testid="text-containers-count"
             >
-              {otwContainers.length}
+              {otwContainerCount}
             </span>
             <span className="text-xs text-muted-foreground">Containers OTW</span>
           </div>
