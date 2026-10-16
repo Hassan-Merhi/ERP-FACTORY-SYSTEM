@@ -313,7 +313,7 @@ export default function SpReports() {
                       <CardTitle className="text-sm">Profit & Loss Summary</CardTitle>
                       <CardDescription className="text-xs">{profit.saleCount} sales in period</CardDescription>
                     </div>
-                    {isDeveloper && completeMonth && (
+                    {isDeveloper && completeMonth && developerCorrection && (
                       <Button size="sm" variant="outline" disabled={developerCorrection?.finalized === true}
                         data-testid="button-sp-developer-edit-profit"
                         onClick={() => {
