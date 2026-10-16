@@ -50,7 +50,14 @@ export function registerStatsNetProfitRoutes(app: Express) {
 
       // Fetch company to know its base currency (CFA vs USD)
       // Check the 30-second TTL cache before touching the DB
-      const _cacheKey = `net-profit:${companyId}:${toDate || ""}:${toDate ? "historical" : new Date().toISOString().slice(0, 7)}`;
+      // Monthly SP display uses the business day rather than the Render server's
+      // UTC midnight. GC operates in Lebanon unless a company timezone is set.
+      const localDateParts = new Intl.DateTimeFormat("en-US", {
+        timeZone: "Asia/Beirut", year: "numeric", month: "2-digit", day: "2-digit",
+      }).formatToParts(new Date());
+      const localPart = (key: string) => localDateParts.find((part) => part.type === key)?.value || "";
+      const businessToday = `${localPart("year")}-${localPart("month")}-${localPart("day")}`;
+      const _cacheKey = `net-profit:${companyId}:${toDate || ""}:${toDate ? "historical" : businessToday.slice(0, 7)}`;
       const _cached = _getCached(_cacheKey);
       if (_cached) return res.json(_cached);
 
@@ -524,7 +531,7 @@ export function registerStatsNetProfitRoutes(app: Express) {
       // The tile is a month-to-date measure, never an accumulated balance.
       // Selecting an historical as-of date shows that month's profit without
       // deleting or rewriting any earlier sales or accounting records.
-      const spPosProfitAsOfDate = toDate || new Date().toISOString().slice(0, 10);
+      const spPosProfitAsOfDate = toDate || businessToday;
       const monthStart = `${spPosProfitAsOfDate.slice(0, 7)}-01`;
       const spPosProfitPeriodStartDate =
         spPosProfitBaselineDate && spPosProfitBaselineDate > monthStart ? spPosProfitBaselineDate : monthStart;
