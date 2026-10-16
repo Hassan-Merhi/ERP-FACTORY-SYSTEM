@@ -17,6 +17,7 @@ export function canUseFactorySurface(
 
 const SHARED_ACCOUNTING_READ_OWNERS = new Set([
   "factory/accounts",
+  "factory/account-groups",
   "factory/vouchers",
   "factory/payroll-hub",
   "factory/import",
