@@ -6,6 +6,7 @@ import { sql, eq, asc, desc } from "drizzle-orm";
 import { spStockMovements, spProfitSplits } from "@shared/schema";
 import { requireSpCompany, getSpAccount, parseNum } from "./spHelpers";
 import { resultRows } from "../../lib/queryResult";
+import { getLatestSpProfitCorrection } from "./spProfitManualCorrections";
 
 // ── Reports + Profit Splits ───────────────────────────────────────────────────
 
@@ -114,7 +115,20 @@ export function registerSpReportRoutes(app: Express) {
         totalSharedCharges = parseNum(sr?.total);
       }
 
-      const netProfit = grossProfit - totalSharedCharges;
+      let netProfit = grossProfit - totalSharedCharges;
+      // Only a whole calendar-month report may use a developer-approved target.
+      // Partial date ranges retain their original source-ledger arithmetic.
+      const first = typeof startDate === "string" ? startDate : "";
+      const last = typeof endDate === "string" ? endDate : "";
+      const match = /^(\\d{4}-(?:0[1-9]|1[0-2]))-01$/.exec(first);
+      if (match) {
+        const [year, month] = match[1].split("-").map(Number);
+        const periodEnd = `${match[1]}-${String(new Date(Date.UTC(year, month, 0)).getUTCDate()).padStart(2, "0")}`;
+        if (last === periodEnd) {
+          const approved = await getLatestSpProfitCorrection(db, companyId, match[1]);
+          if (approved) netProfit = Number(approved.targetNetProfit);
+        }
+      }
       const splitPct = 50;
       const ourShare = netProfit * (splitPct / 100);
       const supplierShare = netProfit - ourShare;
