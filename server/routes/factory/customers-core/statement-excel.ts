@@ -38,7 +38,12 @@ export function registerFactoryCustomerStatementExcelRoutes(app: Express) {
       // ledger, flagged (statementRows.ts). Debit/credit are each row's effect
       // on the combined figure the statement has always closed on; the closing
       // is then split into its ledger and not-yet-in-the-ledger parts.
-      const statement = await buildFactoryCustomerStatement(companyId, customerId);
+      const dateFromXlsx = ((req.query.dateFrom as string) || "").trim();
+      const dateToXlsx = ((req.query.dateTo as string) || "").trim();
+      const destFilterXlsx = ((req.query.destination as string) || "").trim().toLowerCase();
+      const statement = await buildFactoryCustomerStatement(companyId, customerId, {
+        from: dateFromXlsx || undefined, to: dateToXlsx || undefined,
+      });
       const allRowsXlsx = statement.rows.map((row) => ({
         transactionDate: row.transactionDate,
         transactionType: row.transactionType,
@@ -74,10 +79,7 @@ export function registerFactoryCustomerStatementExcelRoutes(app: Express) {
       const openingBalance = openingExact.abs().toNumber();
       const openingSide = openingExact.lessThan(0) ? "Cr" : "Dr";
 
-      // Read filter params (forwarded from frontend export button)
-      const dateFromXlsx = ((req.query.dateFrom as string) || "").trim();
-      const dateToXlsx = ((req.query.dateTo as string) || "").trim();
-      const destFilterXlsx = ((req.query.destination as string) || "").trim().toLowerCase();
+      // Filters read ahead of grouping to preserve period totals.
 
       // First pass: enrich ALL rows (needed before filtering)
       const allEnrichedXlsx = allRowsXlsx.map((row) => {
