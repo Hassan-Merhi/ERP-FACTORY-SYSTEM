@@ -186,7 +186,7 @@ describe("Phase 33D employee/factory net position", () => {
     expect(res.body.onUs.accounts).toEqual([expect.objectContaining({ code: "EMPLOYEE_PAYROLL_PAYABLE", value: 0 })]);
   });
 
-  it("takes customers at their Parties balance, keeps ledger balances, and lists unfinalized orders apart", async () => {
+  it("keeps Parties customer balances and adds verified and loading orders without pending orders", async () => {
     harness.classifyNetPositionAccounts.mockReturnValue({
       forUsAccounts: [
         { id: 1, name: "Operating Cash", code: "CASH", category: "Asset", value: 100 },
@@ -286,13 +286,14 @@ describe("Phase 33D employee/factory net position", () => {
 
     expect(res.statusCode).toBe(200);
     // What We Have: ledger cash 100 + inventory 200 + raw 100 + table 25 + OTW 50
-    // + customer 70 + supplier overpaid 10 + employee 12 + worker advances 15 = 582.
+    // + customer 70 + supplier overpaid 10 + employee 12 + worker advances 15
+    // + verified orders 70 + loading orders 80 = 732. Pending 60 is not counted.
     // What We Owe: ledger 30 + supplier 40 + customer credit 30 + payroll 20 = 120.
     expect(res.body).toMatchObject({
       asOf: "2026-09-15",
-      forUsTotal: 582,
+      forUsTotal: 732,
       onUsTotal: 120,
-      netPosition: 462,
+      netPosition: 612,
       supplierLiabilities: 40,
       supplierOverpayments: 10,
       inventoryValue: 200,
@@ -312,6 +313,8 @@ describe("Phase 33D employee/factory net position", () => {
       RAW_MATERIAL: 100,
       BALANCE_ON_TABLE: 25,
       STOCK_OTW: 50,
+      VERIFIED_ORDERS: 70,
+      LOADING_ORDERS: 80,
       CASH: 100,
       CUSTOMER_DR: 70,
       SUPPLIER_OVERPAID: 10,
@@ -319,12 +322,17 @@ describe("Phase 33D employee/factory net position", () => {
       WORKER_ADVANCES: 15,
     });
     // Legacy inventory, the worker-advance and prepaid-rent ledgers, insurance
-    // members, the customer's own ledger and the unfinalized orders stay out.
+    // members, the customer's own ledger, and pending orders stay out.
     const forUsCodes = Object.keys(forUs);
     for (const code of ["LEGACY_INV", "ADV", "RENT", "INS", "CUST-6", "PENDING_ORDERS"]) {
       expect(forUsCodes).not.toContain(code);
     }
 
+    const orderLines = res.body.forUs.accounts.filter((a: any) => a.code === "VERIFIED_ORDERS" || a.code === "LOADING_ORDERS");
+    expect(orderLines).toEqual([
+      expect.objectContaining({ name: "Verified Orders (Not Invoiced)", value: 70, category: "Uninvoiced Orders" }),
+      expect.objectContaining({ name: "Loading Orders (In Progress)", value: 80, category: "Uninvoiced Orders" }),
+    ]);
     const onUs = Object.fromEntries(res.body.onUs.accounts.map((account: any) => [account.code, account.value]));
     expect(onUs).toMatchObject({ SUPPLIER: 40, OTHER: 30, EMPLOYEE_PAYROLL_PAYABLE: 20, CUSTOMER_CR: 30 });
     for (const code of ["PAYROLL_PAYABLE", "ACCR-RENT-PAY", "ADV", "INS"]) {
