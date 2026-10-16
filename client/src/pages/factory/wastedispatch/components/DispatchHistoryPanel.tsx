@@ -5,11 +5,11 @@
  */
 import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { CalendarDays, ChevronRight, History, Loader2, Printer, Trash2, Weight } from "lucide-react";
+import { ChevronRight, History, Loader2, Printer, Trash2, Weight } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
+import { PeriodFilter } from "@/components/ui/period-filter";
 import { fetchHistoryBales } from "../optimizedData";
 import { fmt, fmtKg } from "../utils";
 import type { useWasteDispatchModel } from "../useWasteDispatchModel";
@@ -29,10 +29,8 @@ export function DispatchHistoryPanel({ model }: { model: WasteDispatchModel }) {
     historyHasNextPage,
     fetchNextHistoryPage,
     refetchHistory,
-    historyStartDate,
-    setHistoryStartDate,
-    historyEndDate,
-    setHistoryEndDate,
+    historyPeriod,
+    setHistoryPeriod,
     historyView,
     setHistoryView,
   } = model;
@@ -56,7 +54,7 @@ export function DispatchHistoryPanel({ model }: { model: WasteDispatchModel }) {
     return () => observer.disconnect();
   }, [historyItems.length, historyHasNextPage, historyFetchingNextPage, historyError, fetchNextHistoryPage]);
 
-  const hasDateFilter = Boolean(historyStartDate || historyEndDate);
+  const hasDateFilter = historyPeriod.preset !== "all_time";
 
   return (
     <Card>
@@ -69,7 +67,7 @@ export function DispatchHistoryPanel({ model }: { model: WasteDispatchModel }) {
             {historyPagination.total} dispatch{historyPagination.total !== 1 ? "es" : ""}
           </span>
         </div>
-        <div className="flex flex-wrap items-end gap-2">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex gap-1 rounded-md border p-0.5" aria-label="History display mode">
             <Button
               size="sm"
@@ -92,45 +90,12 @@ export function DispatchHistoryPanel({ model }: { model: WasteDispatchModel }) {
               Detailed
             </Button>
           </div>
-          <div className="flex items-end gap-2">
-            <CalendarDays className="mb-2 h-4 w-4 text-muted-foreground" aria-hidden="true" />
-            <label className="flex flex-col gap-1 text-xs text-muted-foreground">
-              From
-              <Input
-                type="date"
-                value={historyStartDate}
-                max={historyEndDate || undefined}
-                onChange={(event) => setHistoryStartDate(event.target.value)}
-                className="h-8 w-36 text-xs"
-                data-testid="input-history-start-date"
-              />
-            </label>
-            <label className="flex flex-col gap-1 text-xs text-muted-foreground">
-              To
-              <Input
-                type="date"
-                value={historyEndDate}
-                min={historyStartDate || undefined}
-                onChange={(event) => setHistoryEndDate(event.target.value)}
-                className="h-8 w-36 text-xs"
-                data-testid="input-history-end-date"
-              />
-            </label>
-          </div>
-          {hasDateFilter && (
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-8 text-xs"
-              onClick={() => {
-                setHistoryStartDate("");
-                setHistoryEndDate("");
-              }}
-              data-testid="button-history-clear-dates"
-            >
-              Clear dates
-            </Button>
-          )}
+          {/* Use the exact Analytics period dropdown and two-date custom calendar. */}
+          <PeriodFilter
+            value={historyPeriod}
+            onChange={setHistoryPeriod}
+            data-testid="period-filter-dispatch-history"
+          />
         </div>
         <div className="grid grid-cols-2 gap-2 rounded-md border bg-muted/20 p-3 sm:grid-cols-3" data-testid="bar-history-totals">
           <div className="flex flex-col gap-0.5">
