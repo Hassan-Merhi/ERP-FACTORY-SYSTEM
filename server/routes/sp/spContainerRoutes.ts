@@ -38,6 +38,110 @@ import { parsePoImportSheetRows } from "../import/poImportExcelParser";
 import { supplierService } from "../suppliers/supplierService";
 import { SP_CONTAINER_EXCEL_IMPORT_PARSE_PATH, buildSpContainerExcelImport } from "@shared/spContainerExcelImport";
 
+
+// Validate Supplier Payable Excel imports before any invoice or voucher is written.
+// The same check is repeated inside the posting transaction after taking a
+// company-scoped advisory lock, so concurrent imports cannot double post.
+async function validateSpExcelImport(
+  companyId: number,
+  body: Record<string, any>,
+  tx: Pick<typeof db, "select"> = db,
+): Promise<{ errors: string[]; warnings: string[] }> {
+  const errors: string[] = [];
+  const warnings: string[] = [];
+  const supplierId = Number(body.supplierId);
+  const containerNumber = String(body.containerNumber ?? "").trim();
+  const invoiceNumber = String(body.invoiceNumber ?? "").trim();
+  const invoiceDate = String(body.invoiceDate ?? "");
+  const invoiceTotal = Number(body.invoiceTotalUsd);
+  const discountPct = Number(body.discountPct ?? 0);
+  const lines = body.lines;
+
+  if (!Number.isSafeInteger(supplierId) || supplierId <= 0) errors.push("Select a valid supplier.");
+  if (!containerNumber) errors.push("Container number is required.");
+  if (!invoiceNumber) errors.push("Invoice / PO number is required.");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(invoiceDate) || Number.isNaN(Date.parse(invoiceDate))) {
+    errors.push("A valid invoice date is required.");
+  }
+  if (!Number.isFinite(invoiceTotal) || invoiceTotal <= 0) errors.push("Invoice total must be positive.");
+  if (!Number.isFinite(discountPct) || discountPct < 0 || discountPct > 100) {
+    errors.push("Discount must be between 0 and 100%.");
+  }
+  if (!Array.isArray(lines) || lines.length === 0 || lines.length > 10000) {
+    errors.push("Excel must contain 1 to 10,000 valid item lines.");
+  }
+
+  if (Number.isSafeInteger(supplierId) && supplierId > 0) {
+    const companySuppliers = await supplierService.list(companyId, "");
+    const supplier = companySuppliers.find((s) => s.id === supplierId);
+    if (!supplier) {
+      errors.push("Supplier is not available in the selected Supplier Payable company.");
+    } else if (supplier.legalName !== String(body.supplierName ?? "")) {
+      errors.push("Supplier details changed. Select the supplier again.");
+    }
+  }
+
+  let chargesTotal = 0;
+  for (const field of ["freightEstimateUsd", "surchargeUsd", "fumigationUsd", "documentChargesUsd"]) {
+    const amount = Number(body[field] ?? 0);
+    if (!Number.isFinite(amount) || amount < 0) {
+      errors.push(field + " must be a non-negative amount.");
+    } else {
+      chargesTotal += amount;
+    }
+  }
+
+  let itemsTotal = 0;
+  if (Array.isArray(lines) && lines.length > 0 && lines.length <= 10000) {
+    for (const [index, line] of lines.entries()) {
+      const qty = Number(line?.qty);
+      const rate = Number(line?.unitRateUsd);
+      if (!String(line?.articleCode ?? "").trim() ||
+          !Number.isFinite(qty) || qty <= 0 ||
+          !Number.isFinite(rate) || rate < 0) {
+        errors.push("Invalid code, quantity or rate on line " + (index + 1) + ".");
+        if (errors.length > 20) break;
+      } else {
+        itemsTotal += qty * rate;
+      }
+    }
+    const unmatched = lines.filter((line: any) => !line?.stockItemId).length;
+    if (unmatched > 0) {
+      warnings.push(unmatched + " item line(s) have no matching stock item/alias; map them before offloading.");
+    }
+  }
+
+  if (errors.length === 0) {
+    const expected = itemsTotal * (1 - discountPct / 100) + chargesTotal;
+    // The Excel conversion stores a four-decimal discount percentage.
+    const tolerance = 0.03 + itemsTotal * 0.0000006 + (Array.isArray(lines) ? lines.length * 0.005 : 0);
+    if (Math.abs(invoiceTotal - expected) > tolerance) {
+      errors.push("Invoice total does not reconcile with item lines, discount and charges.");
+    }
+  }
+
+  if (containerNumber) {
+    const duplicate = await tx.select({ id: spContainers.id }).from(spContainers)
+      .where(and(
+        eq(spContainers.companyId, companyId),
+        sql`upper(trim(${spContainers.containerNumber})) = upper(${containerNumber})`,
+        sql`${spContainers.status} <> 'cancelled'`,
+      )).limit(1);
+    if (duplicate.length) errors.push("This container is already imported for this company.");
+  }
+  if (invoiceNumber && Number.isSafeInteger(supplierId) && supplierId > 0) {
+    const duplicate = await tx.select({ id: spContainers.id }).from(spContainers)
+      .where(and(
+        eq(spContainers.companyId, companyId),
+        eq(spContainers.supplierId, supplierId),
+        sql`upper(trim(${spContainers.invoiceNumber})) = upper(${invoiceNumber})`,
+        sql`${spContainers.status} <> 'cancelled'`,
+      )).limit(1);
+    if (duplicate.length) errors.push("This supplier invoice is already imported for this company.");
+  }
+  return { errors, warnings };
+}
+
 // ── Containers + Prepaid Charges ─────────────────────────────────────────────
 
 export function registerSpContainerRoutes(app: Express) {
@@ -75,6 +179,7 @@ export function registerSpContainerRoutes(app: Express) {
       if (!companyId) return;
 
       const {
+        importSource,
         supplierId,
         supplierName,
         containerNumber,
@@ -94,6 +199,11 @@ export function registerSpContainerRoutes(app: Express) {
 
       if (!supplierName || !invoiceNumber || !invoiceDate) {
         return res.status(400).json({ message: "supplierName, invoiceNumber, invoiceDate are required" });
+      }
+
+      if (importSource === "excel") {
+        const validation = await validateSpExcelImport(companyId, req.body);
+        if (validation.errors.length) return res.status(400).json({ code: "SP_EXCEL_IMPORT_INVALID", message: validation.errors.join("; "), ...validation });
       }
 
       let otwAcct = await getSpAccount(companyId, "sp_goods_otw");
@@ -136,6 +246,15 @@ export function registerSpContainerRoutes(app: Express) {
       const supplierIdNum = supplierId ? parseInt(String(supplierId)) : null;
 
       const result = await db.transaction(async (tx) => {
+        if (importSource === "excel") {
+          await tx.execute(sql`SELECT pg_advisory_xact_lock(${companyId}, 20831016)`);
+          const recheck = await validateSpExcelImport(companyId, req.body, tx);
+          if (recheck.errors.length) {
+            const error = new Error(recheck.errors.join("; ")) as Error & { code?: string };
+            error.code = "SP_EXCEL_IMPORT_INVALID";
+            throw error;
+          }
+        }
         const [container] = await tx
           .insert(spContainers)
           .values({
@@ -206,6 +325,9 @@ export function registerSpContainerRoutes(app: Express) {
 
       res.json(result);
     } catch (error: unknown) {
+      if ((error as { code?: string })?.code === "SP_EXCEL_IMPORT_INVALID") {
+        return res.status(409).json({ code: "SP_EXCEL_IMPORT_INVALID", message: getErrorMessage(error) });
+      }
       if (sendVoucherCorrectionRefusal(res, error)) return;
       if (error instanceof PostingValidationError)
         return res.status(400).json({ code: error.code, message: error.message });
@@ -255,6 +377,18 @@ export function registerSpContainerRoutes(app: Express) {
       res.json({ fileName: req.file.originalname, rowCount: rawData.length, containers });
     } catch (error: unknown) {
       logger.error("SP container Excel import parse failed", { error });
+      res.status(500).json({ message: getErrorMessage(error) });
+    }
+  });
+
+  // The Validate button is a read-only preflight. Import repeats this check
+  // inside its transaction before posting Supplier Payable accounting.
+  app.post("/api/sp/containers/import-excel/validate", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const companyId = await requireSpCompany(req, res);
+      if (!companyId) return;
+      res.json(await validateSpExcelImport(companyId, req.body));
+    } catch (error: unknown) {
       res.status(500).json({ message: getErrorMessage(error) });
     }
   });
