@@ -84,10 +84,16 @@ export function consolidateContainerCharges(
         row.referenceId == null) return;
 
     let orderId: number | undefined;
+    // Historical PRE-vouchers may not have a charge.voucher_id backlink.
+    // Parse their deterministic identity before trying a narration fallback.
+    const historicalPre = /^CHARGE-PRE-(\d+)-(\d+)$/.exec(row.referenceNumber ?? "");
     if (chargeOrderByVoucherId.has(row.referenceId)) {
       const linkedId = chargeOrderByVoucherId.get(row.referenceId);
       if (linkedId !== undefined && linkedId > 0 && orderInfo(linkedId)) orderId = linkedId;
       // An ambiguous or invalid explicit link must not fall back to narration.
+    } else if (historicalPre) {
+      const preOrderId = Number(historicalPre[1]);
+      if (orderInfo(preOrderId)) orderId = preOrderId;
     } else {
       const container = containerFromChargeNarration(row.description);
       if (!container) return;
@@ -97,7 +103,6 @@ export function consolidateContainerCharges(
     if (orderId === undefined) return;
     const order = orderInfo(orderId);
     if (!order ||
-        ["CANCELLED", "DELETED"].includes(order.status.toUpperCase()) ||
         row.companyId !== rows[0]?.companyId ||
         row.customerId !== rows[0]?.customerId) return;
 
