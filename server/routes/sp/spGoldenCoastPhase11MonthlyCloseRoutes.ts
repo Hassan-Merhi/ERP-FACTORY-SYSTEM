@@ -491,8 +491,8 @@ async function closeMonth(req: Request, res: Response): Promise<void> {
 }
 
 
-const PERIOD_RE = /^\\d{4}-(0[1-9]|1[0-2])$/;
-const TARGET_RE = /^-?\\d{1,10}(?:\\.\\d{1,2})?$/;
+const PERIOD_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
+const TARGET_RE = /^-?\d{1,10}(?:\.\d{1,2})?$/;
 
 function requireDeveloperProfitEdit(req: Request, res: Response): boolean {
   if (!isDeveloperForProfitCorrection(req)) {
