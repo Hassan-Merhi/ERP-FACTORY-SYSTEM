@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isBlankTrackingValue, resolveTrackingDefaults } from "../server/services/supplierTrackingDefaults";
+import { isBlankTrackingValue, resolveTrackingDefaults, resolveTrackingDutyFee } from "../server/services/supplierTrackingDefaults";
 
 describe("supplier tracking defaults", () => {
   it("fills blank shop and agent values from the supplier mapping", () => {
@@ -32,4 +32,12 @@ describe("supplier tracking defaults", () => {
     expect(isBlankTrackingValue("   ")).toBe(true);
     expect(isBlankTrackingValue("NAHLI")).toBe(false);
   });
+  it("fills only a missing duty fee and preserves explicit 0 or a manual amount", () => {
+    expect(resolveTrackingDutyFee(null, "48.31")).toBe("48.31");
+    expect(resolveTrackingDutyFee(undefined, "0")).toBe("0");
+    expect(resolveTrackingDutyFee("0", "48.31")).toBe("0");
+    expect(resolveTrackingDutyFee("30.00", "48.31")).toBe("30.00");
+    expect(resolveTrackingDutyFee(null, null)).toBeNull();
+  });
+
 });
