@@ -62,11 +62,21 @@ export function registerFactoryCustomerStatementRoutes(app: Express) {
         .orderBy(desc(customerOrders.createdAt));
 
       // Build orderId → various field maps for enriching statement rows
+      // Verified orders can already have posted freight even without a finalized
+      // invoice. Enrich their Container Cost rows with container and destination.
+      const orderContainers = await db.select({
+        id: customerOrders.id,
+        containerNumber: customerOrders.containerNumber,
+        destination: customerOrders.destination,
+      }).from(customerOrders).where(and(
+        eq(customerOrders.companyId, companyId),
+        eq(customerOrders.customerId, customerId)
+      ));
       const containerByOrderId = new Map<number, string | null>(
-        invoices.map((inv) => [inv.id, inv.containerNumber ?? null])
+        orderContainers.map((order) => [order.id, order.containerNumber ?? null])
       );
       const destinationByOrderId = new Map<number, string | null>(
-        invoices.map((inv) => [inv.id, inv.destination ?? null])
+        orderContainers.map((order) => [order.id, order.destination ?? null])
       );
       const totalQtyBalesByOrderId = new Map<number, number>(invoices.map((inv) => [inv.id, inv.totalQtyBales ?? 0]));
       const totalWeightKgByOrderId = new Map<number, number>(
@@ -77,7 +87,15 @@ export function registerFactoryCustomerStatementRoutes(app: Express) {
       // ledger as flagged memo rows (statementRows.ts). `runningBalance` and
       // `currentBalance` keep the page's combined meaning (ledger + not in the
       // ledger); `ledgerRunningBalance` / `ledgerBalance` are the ledger alone.
-      const statement = await buildFactoryCustomerStatement(companyId, customerId);
+      const dateFrom = typeof req.query.dateFrom === "string" ? req.query.dateFrom : "";
+      const dateTo = typeof req.query.dateTo === "string" ? req.query.dateTo : "";
+      if ([dateFrom, dateTo].some((date) => date && !/^\d{4}-\d{2}-\d{2}$/.test(date))) {
+        return res.status(400).json({ message: "Invalid statement date filter" });
+      }
+      const statement = await buildFactoryCustomerStatement(companyId, customerId, {
+        from: dateFrom || undefined,
+        to: dateTo || undefined,
+      });
       const balanceHistory = withRunningBalances(statement).map(({ row, combined, ledger }) => {
         const { ledgerEffect: _ledgerEffect, combinedEffect: _combinedEffect, ...rest } = row;
         const orderId = row.referenceType === "INVOICE" ? row.referenceId : null;
