@@ -195,6 +195,10 @@
       "reason": "Startup schema maintenance is controlled and idempotent, not caller-driven data access."
     },
     {
+      "path": "server/startup/ensureSupplierTrackingShopDutyDefaults.ts",
+      "reason": "Process-level startup DDL: the only containers reference is a to_regclass existence probe, and the applied statements install schema defaults/triggers. No tenant rows are read or written and no caller-supplied company identity exists at startup."
+    },
+    {
       "path": "server/startup/postStartupJobs.ts",
       "reason": "Product policy disables automated carrier tracking for every company, so these statements deliberately clear the tracking flags on all rows; they touch no other column and read nothing back."
     },

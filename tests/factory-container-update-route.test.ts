@@ -317,12 +317,14 @@ describe("PATCH /api/factory/containers/:id — exchange rates", () => {
       ratePerKg: "10.000000",
     });
 
-    const response = await patchContainer(id, { fxRateSource: "manual", ratePerKg: "10" });
+    // Resubmitting unchanged goods fields is a deliberate no-op (#2322), so
+    // change the rate to make the route reprice with the carried-forward FX.
+    const response = await patchContainer(id, { fxRateSource: "manual", ratePerKg: "12" });
 
     expect(response.status).toBe(200);
     const after = await containerRow(id);
     expect(Number(after.fx_rate_to_usd)).toBeCloseTo(0.7, 8);
-    expect(Number(after.rate_per_kg_usd)).toBeCloseTo(7, 6);
+    expect(Number(after.rate_per_kg_usd)).toBeCloseTo(8.4, 6);
   });
 });
 
@@ -593,7 +595,6 @@ describe("container goods value is exact", () => {
   });
 });
 
-
 describe("PATCH /api/factory/containers/:id — legacy missing goods-import journals", () => {
   it("saves an unrelated change when the form resubmits identical goods fields", async () => {
     const id = await seedContainer({ ratePerKg: "2.500000", supplierId });
@@ -613,10 +614,10 @@ describe("PATCH /api/factory/containers/:id — legacy missing goods-import jour
     const after = await containerRow(id);
     expect(after.notes).toBe("Updated delivery instructions");
     expect(after.total_kg).toBe("1200.500");
-    const journals = await pool.query(
-      "SELECT id FROM vouchers WHERE company_id = $1 AND voucher_number LIKE $2",
-      [ctx.companyId, `FACTORY-IMPORT-${id}-%`]
-    );
+    const journals = await pool.query("SELECT id FROM vouchers WHERE company_id = $1 AND voucher_number LIKE $2", [
+      ctx.companyId,
+      `FACTORY-IMPORT-${id}-%`,
+    ]);
     expect(journals.rows).toHaveLength(0);
   });
 
@@ -627,10 +628,7 @@ describe("PATCH /api/factory/containers/:id — legacy missing goods-import jour
       fxRateToUsd: "1.17000000",
       fxRateConfirmed: true,
     });
-    await pool.query(
-      "UPDATE factory_containers SET total_kg = '200', fx_rate_source = 'auto' WHERE id = $1",
-      [id]
-    );
+    await pool.query("UPDATE factory_containers SET total_kg = '200', fx_rate_source = 'auto' WHERE id = $1", [id]);
     const response = await patchContainer(id, {
       arrivalDate: "2026-07-01",
       supplierId,

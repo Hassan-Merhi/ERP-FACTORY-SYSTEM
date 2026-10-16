@@ -40,13 +40,18 @@ assert.doesNotMatch(
 
 assert.match(
   stockEntrySource,
-  /const pageSize = 9999;/,
-  "Stock Entry History must request its full screen dataset in one request"
+  /useInfiniteQuery<StockEntryHistoryPage, Error>\(/,
+  "Stock Entry History must load its date-range dataset through bounded infinite pages"
 );
 assert.match(
   stockEntrySource,
-  /const groups: GroupRow\[\] = useMemo\(\(\) => pagedGroups\?\.items \?\? \[\]/,
-  "Stock Entry History must consume the full response object"
+  /getNextPageParam: \(lastPage\) => lastPage\.hasNextPage \? lastPage\.page \+ 1 : undefined/,
+  "Stock Entry History must keep fetching pages until the server reports no next page"
+);
+assert.match(
+  stockEntrySource,
+  /const groups: GroupRow\[\] = useMemo\(\(\) => historyPages\?\.pages\.flatMap\(\(page\) => page\.items\) \?\? \[\]/,
+  "Stock Entry History must consume every loaded page"
 );
 assert.match(stockEntrySource, /const useLite = viewMode === "condensed";/, "condensed mode must retain its lite payload");
 assert.match(stockEntrySource, /if \(useLite\) params\.set\("lite", "1"\);/, "detailed mode must retain full rows");
@@ -88,7 +93,7 @@ console.log(
       ok: true,
       checks: [
         "floating Stock Entry History pagination UI disabled",
-        "single-request full Stock Entry History screen load",
+        "bounded infinite-page Stock Entry History screen load",
         "normal API page-size cap preserved for other callers",
         "condensed/detailed payload mode preservation",
         "full-data Excel summary transform",

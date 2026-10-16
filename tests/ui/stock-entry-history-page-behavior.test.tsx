@@ -52,12 +52,21 @@ vi.mock("@tanstack/react-query", () => ({
     harness.historyQueries.push(queryKey[1]);
     const params = new URLSearchParams(queryKey[1]);
     const selectedWorker = params.get("workerId");
-    const secondWorker = { ...group, workerId: 2, workerName: "Bob", bales: [
-      { ...bale, id: 202, workerId: 2, workerName: "Bob", referenceNumber: "REF-202" },
-    ] };
+    const secondWorker = {
+      ...group,
+      workerId: 2,
+      workerName: "Bob",
+      bales: [{ ...bale, id: 202, workerId: 2, workerName: "Bob", referenceNumber: "REF-202" }],
+    };
     const items = selectedWorker === "2" ? [secondWorker] : selectedWorker ? [group] : [group];
     const page = { items, total: items.length, totalBales: 3, totalWeight: 75, page: 1, hasNextPage: false };
-    return { data: enabled ? { pages: [page] } : undefined, isLoading: false, hasNextPage: false, isFetchingNextPage: false, fetchNextPage: vi.fn() };
+    return {
+      data: enabled ? { pages: [page] } : undefined,
+      isLoading: false,
+      hasNextPage: false,
+      isFetchingNextPage: false,
+      fetchNextPage: vi.fn(),
+    };
   },
   useQuery: ({ queryKey, enabled }: any) => {
     const root = queryKey?.[0];
@@ -79,6 +88,7 @@ vi.mock("@tanstack/react-query", () => ({
     if (root === "/api/factory/worker-categories") return { data: [{ id: 4, name: "Pressing", workerIds: [1] }] };
     if (root === "/api/factory/categories") return { data: [{ id: 5, name: "Clothing" }] };
     if (root === "/api/factory/staff-tracking") {
+      if (enabled === false) return { data: undefined };
       return {
         data: {
           page: "production",
@@ -300,10 +310,12 @@ describe("stock entry history page behavior", () => {
     render(<StockEntryHistory />);
     fireEvent.change(screen.getByTestId("input-stock-entry-from"), { target: { value: "2026-08-01" } });
     fireEvent.change(screen.getByTestId("input-stock-entry-to"), { target: { value: "2026-08-31" } });
-    expect(harness.historyQueries.some((query) => {
-      const p = new URLSearchParams(query);
-      return p.get("startDate") === "2026-08-01" && p.get("endDate") === "2026-08-31";
-    })).toBe(true);
+    expect(
+      harness.historyQueries.some((query) => {
+        const p = new URLSearchParams(query);
+        return p.get("startDate") === "2026-08-01" && p.get("endDate") === "2026-08-31";
+      })
+    ).toBe(true);
     expect(screen.getAllByText("—").length).toBeGreaterThan(0);
   });
 
@@ -324,5 +336,4 @@ describe("stock entry history page behavior", () => {
     expect(screen.getByText(/Choose a valid From and To date/)).toBeInTheDocument();
     expect(harness.historyQueries.length).toBeGreaterThan(before);
   });
-
 });

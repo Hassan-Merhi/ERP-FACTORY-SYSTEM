@@ -123,10 +123,16 @@ requireText(
   "/api/factory/bales/stock-entry-history",
   "Stock Entry History must use the bounded stock-entry history endpoint."
 );
+const stockEntryHistoryFilters = read("client/src/pages/stockentryhistory/HistoryFilters.tsx");
 requireText(
-  stockEntryHistory,
-  'data-testid="input-stock-entry-date"',
-  "Stock Entry History must preserve its single-date compact filter."
+  stockEntryHistoryFilters,
+  'data-testid="input-stock-entry-from"',
+  "Stock Entry History must preserve its From date filter."
+);
+requireText(
+  stockEntryHistoryFilters,
+  'data-testid="input-stock-entry-to"',
+  "Stock Entry History must preserve its To date filter."
 );
 requireText(
   stockEntryHistory,
