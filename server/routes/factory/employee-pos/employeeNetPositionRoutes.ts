@@ -26,6 +26,7 @@ import {
 } from "@shared/schema";
 import { eq, and, desc, sql, inArray, isNull, lte } from "drizzle-orm";
 import { getCustomerLedgerAndMemo } from "../customers-core/customerLedgerSplit";
+import { loadHeldChargeSnapshot } from "../customers-core/heldUnfinalizedCustomerCharges";
 import { computeNetPositionInventory } from "./netPositionInventory";
 import { computeNetPositionSupplierBalances } from "./netPositionSupplierBalances";
 import { resultRows } from "../../../lib/queryResult";
@@ -166,25 +167,45 @@ export function registerEmployeeNetPositionRoutes(app: Express) {
       // Perpetual inventory (wave 8.5): from the cut-over the ledger carries the
       // factory's stock (raw material, work in progress, finished goods).
       const ledgerStock = await ledgerCarriesStock(companyId, asOf);
-      const classified = classifyNetPositionAccounts(factoryAccounts as AccountLike[], accBalances, {
-        ledgerStockAccounts: ledgerStock,
-        additionalExcludedCodes: factoryExcludedCodes,
-        // Supplier-type ledger accounts excluded: factory supplier balances are
-        // calculated separately above from factorySuppliers / factoryContainers.
-        includeSupplierTypeAccounts: false,
-      });
-
       // ── 2c. Customer balances — ALL customers, authoritative formula ─────────
-      // Customer ledger accounts (linked via customers.ledgerAccountId) capture only
-      // a subset of the true customer balance: CHARGE-* freight/clearance vouchers.
-      // The bulk of the balance lives in customer_orders (FINALIZED grandTotal).
-      // To get the correct figure we:
+      // Customer ledger accounts can carry premature CHARGE-PRE debits.
+      // The Parties page and this page now share one reconciled projection.
+      // To avoid counting a linked account twice we:
       //   a) exclude customer-owned ledger accounts from the ledger classification, and
       //   b) compute every customer's balance via the same formula as the Customers page.
       const allCustomersForNP = await db
         .select()
         .from(customers)
         .where(and(eq(customers.companyId, companyId), isNull(customers.deletedAt)));
+
+      // The previous code hid pre-finalization customer debits in the statement
+      // while keeping them on Parties AND in the net-position account totals.
+      // Exclude BOTH sides of the same premature voucher from this projected
+      // dashboard (the trial balance remains the unmodified ledger).
+      const heldSnapshot = await loadHeldChargeSnapshot(
+        companyId, allCustomersForNP.map((c) => c.id), asOf
+      );
+      let projectedAccountBalances = accBalances;
+      if (heldSnapshot.voucherIds.size > 0) {
+        const netByAccount = new Map<number, { debit: Decimal; credit: Decimal }>();
+        for (const entry of factoryEntries) {
+          if (!entry.ledgerAccountId || heldSnapshot.voucherIds.has(entry.voucherId)) continue;
+          const current = netByAccount.get(entry.ledgerAccountId);
+          netByAccount.set(entry.ledgerAccountId, {
+            debit: toMoney(entry.debitAmount).plus(current?.debit ?? 0),
+            credit: toMoney(entry.creditAmount).plus(current?.credit ?? 0),
+          });
+        }
+        projectedAccountBalances = new Map(
+          [...netByAccount].map(([id, value]) => [id, { debit: value.debit.toNumber(), credit: value.credit.toNumber() }])
+        );
+      }
+      const classified = classifyNetPositionAccounts(factoryAccounts as AccountLike[], projectedAccountBalances, {
+        ledgerStockAccounts: ledgerStock,
+        additionalExcludedCodes: factoryExcludedCodes,
+        // Supplier-type ledger accounts are independently calculated.
+        includeSupplierTypeAccounts: false,
+      });
 
       // Build a set of ledger account IDs owned by customers so we can strip them
       // from the ledger classification output (prevents double-counting).
