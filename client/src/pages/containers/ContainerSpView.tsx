@@ -15,6 +15,7 @@ import { Plus, Package, Eye, Search, X, Ban, Loader2, Truck, Check, Download, Ch
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { utils, writeFile } from "@/lib/excelHelper";
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
+import { spContainerInvoiceChargeLines } from "@shared/spContainerInvoiceCharges";
 import type { Container, Supplier } from "@shared/schema";
 import type { SpContainerWithLines } from "./types";
 
@@ -106,8 +107,8 @@ export function ContainerSpView({
       _key: `sp-${c.id}`,
       id: c.id,
       _source: "sp",
-      displayName: c.invoiceNumber || c.containerNumber || `#${c.id}`,
-      subName: c.containerNumber && c.invoiceNumber ? c.containerNumber : null,
+      displayName: c.containerNumber || c.invoiceNumber || `#${c.id}`,
+      subName: c.containerNumber && c.invoiceNumber ? c.invoiceNumber : null,
       supplierName: c.supplierName ?? "",
       status: c.status,
       statusLabel: statusCancelled ? "Cancelled" : statusOffloaded ? "Offloaded" : "Open / OTW",
@@ -223,6 +224,19 @@ export function ContainerSpView({
                 Quantity: quantity, "Rate (USD)": rate, "Total (USD)": quantity * rate,
               });
             }
+            for (const charge of spContainerInvoiceChargeLines(native)) {
+              detailRows.push({
+                Container: native.containerNumber || "", Invoice: native.invoiceNumber || "",
+                Supplier: native.supplierName || "", "Item Name": charge.description,
+                Quantity: 1, "Rate (USD)": charge.amountUsd, "Total (USD)": charge.amountUsd,
+              });
+            }
+            detailRows.push({
+              Container: native.containerNumber || "", Invoice: native.invoiceNumber || "",
+              Supplier: native.supplierName || "", "Item Name": "Recorded Invoice Total",
+              Quantity: Number(native.totalQty || 0), "Rate (USD)": 0,
+              "Total (USD)": Number(native.invoiceTotalUsd || 0),
+            });
           } else {
             const response = await fetch("/api/containers/" + c.id, { credentials: "include" });
             if (!response.ok) throw new Error("Cannot export ERP container " + c.displayName);
