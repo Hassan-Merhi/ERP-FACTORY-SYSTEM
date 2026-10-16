@@ -16,12 +16,7 @@ import { StockEntryHistoryEditableDateCell } from "./stockentryhistory/EditableD
 import { HistoryFilters } from "./stockentryhistory/HistoryFilters";
 import { createStockEntryHistoryGroupBaleHelpers, groupKey } from "./stockentryhistory/groupBaleHelpers";
 import { useStockEntryHistoryMutations } from "./stockentryhistory/useStockEntryHistoryMutations";
-import {
-  STATUS_COLORS,
-  fetchAllStockEntryHistoryPages,
-  formatDailyNum,
-  formatHistoryTime,
-} from "./stockentryhistory/utils";
+import { STATUS_COLORS, fetchAllStockEntryHistoryPages, formatDailyNum, formatHistoryTime } from "./stockentryhistory/utils";
 
 export default function StockEntryHistory({ onActiveDateChange }: StockEntryHistoryProps = {}) {
   const { formatDisplayDate } = useDateFormat();
@@ -107,16 +102,10 @@ export default function StockEntryHistory({ onActiveDateChange }: StockEntryHist
   }, [hasNextPage, isFetchingNextPage, fetchNextPage, viewMode]);
 
   const firstPage = historyPages?.pages[0];
-  const groups: GroupRow[] = useMemo(
-    () => historyPages?.pages.flatMap((page) => page.items) ?? [],
-    [historyPages]
-  );
+  const groups: GroupRow[] = useMemo(() => historyPages?.pages.flatMap((page) => page.items) ?? [], [historyPages]);
   const allBales = useMemo(() => groups.flatMap((group) => group.bales ?? []), [groups]);
   const totalBales = useMemo(() => groups.reduce((sum, group) => sum + group.baleCount, 0), [groups]);
-  const totalWeight = useMemo(
-    () => groups.reduce((sum, group) => sum + parseFloat(group.totalWeight || "0"), 0),
-    [groups]
-  );
+  const totalWeight = useMemo(() => groups.reduce((sum, group) => sum + parseFloat(group.totalWeight || "0"), 0), [groups]);
 
   const { data: workers = [] } = useQuery<StockEntryWorker[]>({
     queryKey: ["/api/factory/workers?profile=picker"],
