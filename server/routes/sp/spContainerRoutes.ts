@@ -2,9 +2,10 @@ import type { Express, Request, Response } from "express";
 import { getErrorMessage } from "../../lib/httpHandlers";
 import { db } from "../../db";
 import { requireAuth } from "../../auth";
-import { sql, eq, and, isNull, desc, asc } from "drizzle-orm";
+import { sql, eq, and, isNull, desc, asc, inArray } from "drizzle-orm";
 import {
   ledgerAccounts,
+  stockItems,
   vouchers,
   voucherEntries,
   bankAccounts,
@@ -110,6 +111,18 @@ async function validateSpExcelImport(
     if (unmatched > 0) {
       warnings.push(unmatched + " item line(s) have no matching stock item/alias; map them before offloading.");
     }
+    const linkedIds = [...new Set<number>(
+      lines.filter((line: any) => line?.stockItemId != null).map((line: any) => Number(line.stockItemId)),
+    )];
+    if (linkedIds.some((id) => !Number.isSafeInteger(id) || id <= 0)) {
+      errors.push("Invalid stock item link in the imported Excel lines.");
+    } else if (linkedIds.length > 0) {
+      const found = await tx.select({ id: stockItems.id }).from(stockItems)
+        .where(and(eq(stockItems.companyId, companyId), inArray(stockItems.id, linkedIds)));
+      if (found.length !== linkedIds.length) {
+        errors.push("An imported stock item belongs to another company or no longer exists.");
+      }
+    }
   }
 
   if (errors.length === 0) {
@@ -129,16 +142,6 @@ async function validateSpExcelImport(
         sql`${spContainers.status} <> 'cancelled'`,
       )).limit(1);
     if (duplicate.length) errors.push("This container is already imported for this company.");
-  }
-  if (invoiceNumber && Number.isSafeInteger(supplierId) && supplierId > 0) {
-    const duplicate = await tx.select({ id: spContainers.id }).from(spContainers)
-      .where(and(
-        eq(spContainers.companyId, companyId),
-        eq(spContainers.supplierId, supplierId),
-        sql`upper(trim(${spContainers.invoiceNumber})) = upper(${invoiceNumber})`,
-        sql`${spContainers.status} <> 'cancelled'`,
-      )).limit(1);
-    if (duplicate.length) errors.push("This supplier invoice is already imported for this company.");
   }
   return { errors, warnings };
 }
