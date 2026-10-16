@@ -146,8 +146,10 @@ export default function SpPOImport() {
   });
 
   const validateMutation = useMutation({
-    mutationFn: async () => spPost<Validation>("/api/sp/containers/import-excel/validate", payload(), requestId()),
-    onSuccess: (data) => {
+    mutationFn: async (request: ReturnType<typeof payload>) => spPost<Validation>("/api/sp/containers/import-excel/validate", request, requestId()),
+    onSuccess: (data, request) => {
+      // An older response must not validate changed supplier, date, or amounts.
+      if (JSON.stringify(request) !== JSON.stringify(payload())) return;
       setValidation(data);
       toast({
         title: data.errors.length ? "Validation failed" : "Validation passed",
@@ -192,6 +194,7 @@ export default function SpPOImport() {
             <Input
               id="sp-po-file"
               type="file"
+              disabled={parseMutation.isPending || importMutation.isPending}
               accept=".xlsx,.xls"
               data-testid="input-file-upload"
               onChange={(event) => {
@@ -304,7 +307,7 @@ export default function SpPOImport() {
             </div>
             <div className="flex flex-wrap justify-end gap-2">
               <Button variant="outline" onClick={() => navigate("/containers")}>Cancel</Button>
-              <Button data-testid="button-validate" onClick={() => validateMutation.mutate()} disabled={!canValidate}>
+              <Button data-testid="button-validate" onClick={() => validateMutation.mutate(payload())} disabled={!canValidate}>
                 {validateMutation.isPending ? "Validating..." : "Validate"}
               </Button>
               <Button data-testid="button-import" onClick={() => importMutation.mutate()} disabled={!canImport}>
