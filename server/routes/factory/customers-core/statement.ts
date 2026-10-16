@@ -61,9 +61,7 @@ export function registerFactoryCustomerStatementRoutes(app: Express) {
         )
         .orderBy(desc(customerOrders.createdAt));
 
-      // Build orderId → various field maps for enriching statement rows
-      // Verified orders can already have posted freight even without a finalized
-      // invoice. Enrich their Container Cost rows with container and destination.
+      // Build orderId → field maps for the finalized statement rows.
       const orderContainers = await db.select({
         id: customerOrders.id,
         containerNumber: customerOrders.containerNumber,
@@ -127,6 +125,11 @@ export function registerFactoryCustomerStatementRoutes(app: Express) {
         balanceBasis: "ledger+notInLedger",
         ledgerBalance: statement.ledgerClosing.abs().toNumber(),
         ledgerBalanceSide: statement.ledgerClosing.lessThan(0) ? "Cr" : "Dr",
+        // The trial balance still includes any historical pre-finalization
+        // vouchers. Do not alter or conceal that accounting fact.
+        generalLedgerBalance: statement.generalLedgerClosing.abs().toNumber(),
+        generalLedgerBalanceSide: statement.generalLedgerClosing.lessThan(0) ? "Cr" : "Dr",
+        heldUnfinalizedCharges: statement.heldUnfinalizedCharges.toNumber(),
         notInLedgerTotal: statement.notInLedgerTotal.toNumber(),
         notInLedgerLabel: NOT_IN_LEDGER_LABEL,
         openingBalance,
