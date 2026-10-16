@@ -24,9 +24,10 @@ const names: Record<(typeof SP_GIT_FIELDS)[number], string> = {
   blDocs: "bl_docs",
   docsSentDate: "docs_sent_date",
   trackingLink: "tracking_link",
+  freightStatus: "freight_status",
 };
 const textFields = new Set<string>([
-  "shopName", "transporter", "numberPlate", "trackingLocation", "agent", "trackingDescription", "blDocs", "trackingLink",
+  "shopName", "transporter", "numberPlate", "trackingLocation", "agent", "trackingDescription", "blDocs", "trackingLink", "freightStatus",
 ]);
 const dateFields = new Set<string>(["eta", "borderDate", "docsSentDate"]);
 const moneyFields = new Set<string>(["transportFee", "dutyFee"]);
@@ -40,9 +41,8 @@ export function registerSpGitTrackingRoutes(app: Express): void {
       if (!parsed.success) return res.status(400).json({ message: "Invalid tracking data", errors: parsed.error.issues });
       // GIT status is distinct from SP financial lifecycle. No caller can
       // mark a container offloaded or change its invoice/ledger through GIT.
-      if (parsed.data.offloadDate !== undefined || parsed.data.freightStatus !== undefined ||
-          parsed.data.etaSource !== undefined) {
-        return res.status(400).json({ message: "Offload, financial and automated ETA fields cannot be changed through SP GIT tracking" });
+      if (parsed.data.offloadDate !== undefined || parsed.data.etaSource !== undefined) {
+        return res.status(400).json({ message: "Offload and automated ETA fields cannot be changed through SP GIT tracking" });
       }
       const status = parsed.data.status;
       if (status !== undefined && status !== null && !SP_GIT_STATUSES.some((allowed) => allowed === status)) {
