@@ -27,7 +27,7 @@ import { MoneyDecimal, toMoney } from "../../../lib/money";
 import { getPartyBalance } from "../../../services/accounting/balances/ledgerBalanceEngine";
 import { loadCustomerLedgerLines } from "../../../services/accounting/balances/customerLedgerStatement";
 import { loadPartyMemoLines } from "../../../services/accounting/balances/unpostedMemo";
-import { consolidateContainerCharges } from "./containerChargeStatementRows";
+import { consolidateContainerCharges, type StatementGroupingWindow } from "./containerChargeStatementRows";
 
 export interface FactoryStatementRow {
   id: number | string;
@@ -73,7 +73,8 @@ function amountsOf(value: Decimal) {
 
 export async function buildFactoryCustomerStatement(
   companyId: number,
-  customerId: number
+  customerId: number,
+  window: StatementGroupingWindow = {}
 ): Promise<FactoryCustomerStatement> {
   const [party, ledgerLines, memo, cacheRows] = await Promise.all([
     getPartyBalance(db, { companyId, kind: "customer", id: customerId }),
@@ -171,38 +172,41 @@ export async function buildFactoryCustomerStatement(
     }
   }
 
-  // Attach charge journals to the proper invoice for *statement presentation*.
-  // Use only this customer's finalized orders and their explicit charge voucher
-  // links. Legacy offload vouchers can be matched by the unique container
-  // number in their narration, and only within the same posting date.
-  const invoiceIds = [...new Set(
-    rows.filter((row) => row.referenceType === "INVOICE" && row.referenceId != null)
-      .map((row) => row.referenceId as number)
-  )];
-  let displayedRows = rows;
-  if (invoiceIds.length > 0) {
-    const [invoices, charges] = await Promise.all([
-      db.select({ id: customerOrders.id, containerNumber: customerOrders.containerNumber })
-        .from(customerOrders)
-        .where(and(
-          eq(customerOrders.companyId, companyId),
-          eq(customerOrders.customerId, customerId),
-          eq(customerOrders.status, "FINALIZED"),
-          inArray(customerOrders.id, invoiceIds)
-        )),
-      db.select({ orderId: customerOrderCharges.orderId, voucherId: customerOrderCharges.voucherId })
-        .from(customerOrderCharges)
-        .where(inArray(customerOrderCharges.orderId, invoiceIds)),
-    ]);
-    const invoiceContainerByOrder = new Map(invoices.map((invoice) => [invoice.id, invoice.containerNumber ?? ""]));
-    const chargeOrderByVoucherId = new Map<number, number>();
-    for (const charge of charges) {
-      if (charge.voucherId && invoiceContainerByOrder.has(charge.orderId)) {
-        chargeOrderByVoucherId.set(charge.voucherId, charge.orderId);
-      }
+  // Link charges from all this customer's containers, not only invoices already
+  // finalized. A VERIFIED container may already carry posted freight/clearance,
+  // which the statement must identify as container cost until sale finalization.
+  const orders = await db
+    .select({
+      id: customerOrders.id,
+      containerNumber: customerOrders.containerNumber,
+      status: customerOrders.status,
+    })
+    .from(customerOrders)
+    .where(and(
+      eq(customerOrders.companyId, companyId),
+      eq(customerOrders.customerId, customerId)
+    ));
+  const orderIds = orders.map((order) => order.id);
+  const charges = orderIds.length
+    ? await db
+      .select({ orderId: customerOrderCharges.orderId, voucherId: customerOrderCharges.voucherId })
+      .from(customerOrderCharges)
+      .where(inArray(customerOrderCharges.orderId, orderIds))
+    : [];
+  const ordersById = new Map(orders.map((order) => [order.id, {
+    containerNumber: order.containerNumber ?? "",
+    status: order.status,
+  }]));
+  const chargeOrderByVoucherId = new Map<number, number>();
+  for (const charge of charges) {
+    if (!charge.voucherId || !ordersById.has(charge.orderId)) continue;
+    if (chargeOrderByVoucherId.has(charge.voucherId)) {
+      chargeOrderByVoucherId.set(charge.voucherId, -1); // ambiguous; fail closed
+    } else {
+      chargeOrderByVoucherId.set(charge.voucherId, charge.orderId);
     }
-    displayedRows = consolidateContainerCharges(rows, invoiceContainerByOrder, chargeOrderByVoucherId);
   }
+  const displayedRows = consolidateContainerCharges(rows, ordersById, chargeOrderByVoucherId, window);
 
   // Oldest first; on the same day the operational rows come first, as before.
   displayedRows.sort((a, b) => {
