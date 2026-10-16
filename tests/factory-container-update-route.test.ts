@@ -592,3 +592,74 @@ describe("container goods value is exact", () => {
     expect(credit.rows).toEqual([{ factory_supplier_id: supplierId, credit_amount: "350.18" }]);
   });
 });
+
+
+describe("PATCH /api/factory/containers/:id — legacy missing goods-import journals", () => {
+  it("saves an unrelated change when the form resubmits identical goods fields", async () => {
+    const id = await seedContainer({ ratePerKg: "2.500000", supplierId });
+    await pool.query("UPDATE factory_containers SET total_kg = '1200.500' WHERE id = $1", [id]);
+
+    const response = await patchContainer(id, {
+      notes: "Updated delivery instructions",
+      supplierId,
+      totalKg: "1200.5",
+      ratePerKg: "2.5",
+      currencyCode: "USD",
+      fxRateSource: "manual",
+      fxRateToUsd: "1",
+    });
+
+    expect(response.status, JSON.stringify(response.body)).toBe(200);
+    const after = await containerRow(id);
+    expect(after.notes).toBe("Updated delivery instructions");
+    expect(after.total_kg).toBe("1200.500");
+    const journals = await pool.query(
+      "SELECT id FROM vouchers WHERE company_id = $1 AND voucher_number LIKE $2",
+      [ctx.companyId, `FACTORY-IMPORT-${id}-%`]
+    );
+    expect(journals.rows).toHaveLength(0);
+  });
+
+  it("does not revalue historical FX for a full-form ETA-only edit", async () => {
+    const id = await seedContainer({
+      currencyCode: "EUR",
+      ratePerKg: "3",
+      fxRateToUsd: "1.17000000",
+      fxRateConfirmed: true,
+    });
+    await pool.query(
+      "UPDATE factory_containers SET total_kg = '200', fx_rate_source = 'auto' WHERE id = $1",
+      [id]
+    );
+    const response = await patchContainer(id, {
+      arrivalDate: "2026-07-01",
+      supplierId,
+      totalKg: "200.000",
+      ratePerKg: "3.000",
+      currencyCode: "EUR",
+      fxRateSource: "auto",
+    });
+
+    expect(response.status, JSON.stringify(response.body)).toBe(200);
+    const after = await containerRow(id);
+    expect(isoDate(after.arrival_date)).toBe("2026-07-01");
+    expect(after.fx_rate_to_usd).toBe("1.17000000");
+  });
+
+  it("still refuses an actual goods change without a reviewed original journal", async () => {
+    const id = await seedContainer({ supplierId, ratePerKg: "2.500000" });
+    await pool.query("UPDATE factory_containers SET total_kg = '1200' WHERE id = $1", [id]);
+    const response = await patchContainer(id, {
+      totalKg: "1300",
+      supplierId,
+      ratePerKg: "2.5",
+      currencyCode: "USD",
+      fxRateSource: "manual",
+    });
+
+    expect(response.status).toBe(400);
+    expect(response.body.message).toMatch(/no goods-import journal/i);
+    const after = await containerRow(id);
+    expect(after.total_kg).toBe("1200.000");
+  });
+});
