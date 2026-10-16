@@ -11,7 +11,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Package, Eye, Search, X, Ban, Loader2 } from "lucide-react";
+import { Plus, Package, Eye, Search, X, Ban, Loader2, Truck, CheckCircle2 } from "lucide-react";
 import type { Container, Supplier } from "@shared/schema";
 import type { SpContainerWithLines } from "./types";
 
@@ -100,8 +100,8 @@ export function ContainerSpView({
       _key: `sp-${c.id}`,
       id: c.id,
       _source: "sp",
-      displayName: c.invoiceNumber || c.containerNumber || `#${c.id}`,
-      subName: c.containerNumber && c.invoiceNumber ? c.containerNumber : null,
+      displayName: c.containerNumber || c.invoiceNumber || `#${c.id}`,
+      subName: c.invoiceNumber && c.containerNumber ? c.invoiceNumber : null,
       supplierName: c.supplierName ?? "",
       status: c.status,
       statusLabel: statusCancelled ? "Cancelled" : statusOffloaded ? "Offloaded" : "Open / OTW",
@@ -210,6 +210,26 @@ export function ContainerSpView({
         )}
       </div>
 
+      {!isSpLoading && allSpItems.length > 0 && (
+        <div className="flex flex-wrap gap-3" data-testid="sp-container-summary">
+          <div className="flex items-center gap-2 rounded-lg bg-muted/60 px-3 py-2">
+            <Package className="h-4 w-4 text-muted-foreground" />
+            <strong className="text-sm">{allSpItems.length.toLocaleString()}</strong>
+            <span className="text-xs text-muted-foreground">Containers</span>
+          </div>
+          <div className="flex items-center gap-2 rounded-lg bg-blue-500/10 px-3 py-2">
+            <Truck className="h-4 w-4 text-blue-600" />
+            <strong className="text-sm">{allSpItems.filter((row) => row.status === "open" || row.status === "OTW").length}</strong>
+            <span className="text-xs text-muted-foreground">OTW</span>
+          </div>
+          <div className="flex items-center gap-2 rounded-lg bg-green-500/10 px-3 py-2">
+            <CheckCircle2 className="h-4 w-4 text-green-600" />
+            <strong className="text-sm">{allSpItems.filter((row) => row.statusOffloaded).length}</strong>
+            <span className="text-xs text-muted-foreground">Offloaded</span>
+          </div>
+        </div>
+      )}
+
       {isSpLoading ? (
         <div className="space-y-3">
           {[1, 2, 3].map((i) => (
@@ -233,7 +253,7 @@ export function ContainerSpView({
             return (
               <div
                 key={c._key}
-                className={`flex items-center gap-4 p-4 rounded-md border border-border bg-card ${
+                className={`flex flex-col gap-3 p-4 rounded-xl border border-border bg-card sm:flex-row sm:items-center sm:gap-4 ${
                   rowIsNavigable ? "hover-elevate cursor-pointer" : "opacity-75"
                 }`}
                 onClick={() => {
@@ -241,10 +261,13 @@ export function ContainerSpView({
                 }}
                 data-testid={`row-sp-container-${c.id}`}
               >
-                <div className="flex-1 min-w-0">
+                <div className="flex flex-1 min-w-0 items-center gap-3">
+                  <div className="shrink-0 w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                    <Package className="h-5 w-5 text-primary" />
+                  </div>
+                  <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className="font-medium text-sm">{c.displayName}</span>
-                    {c.subName && <span className="text-xs text-muted-foreground font-mono">{c.subName}</span>}
+                    <span className="font-semibold text-sm font-mono">{c.displayName}</span>
                     <Badge
                       variant="outline"
                       className={
@@ -258,14 +281,17 @@ export function ContainerSpView({
                       {c.statusLabel}
                     </Badge>
                   </div>
-                  <p className="text-xs text-muted-foreground mt-0.5">{c.supplierName}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    {c.supplierName}{c.subName ? ` · PO ${c.subName}` : ""}
+                  </p>
+                  </div>
                 </div>
-                <div className="text-right hidden sm:block">
+                <div className="text-left sm:text-right">
                   <p className="text-xs text-muted-foreground">{c.dateLabel}</p>
                   <p className="text-sm font-mono">{formatDisplayDate(c.date)}</p>
                 </div>
-                <div className="text-right">
-                  <p className="text-xs text-muted-foreground hidden sm:block">Total (USD)</p>
+                <div className="text-left sm:text-right">
+                  <p className="text-xs text-muted-foreground">Total (USD)</p>
                   <p className="text-sm font-mono font-semibold">
                     ${c.totalUsd.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </p>
@@ -295,7 +321,7 @@ export function ContainerSpView({
                       data-remote-control-action="view-container"
                     >
                       <Eye className="h-4 w-4 mr-1" />
-                      View
+                      View PO
                     </Button>
                   </Link>
                 )}
