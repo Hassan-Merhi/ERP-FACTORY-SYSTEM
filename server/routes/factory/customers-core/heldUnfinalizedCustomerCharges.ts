@@ -18,13 +18,18 @@ import { MoneyDecimal, toMoney } from "../../../lib/money";
 
 const ZERO = new MoneyDecimal(0);
 
-export async function heldUnfinalizedCustomerCharges(
+export interface HeldChargeSnapshot {
+  byCustomer: Map<number, Decimal>;
+  voucherIds: Set<number>;
+}
+
+export async function loadHeldChargeSnapshot(
   companyId: number,
   customerIds: readonly number[],
   asOf?: string | null
-): Promise<Map<number, Decimal>> {
+): Promise<HeldChargeSnapshot> {
   const ids = [...new Set(customerIds.filter((id) => Number.isSafeInteger(id) && id > 0))];
-  if (!ids.length) return new Map();
+  if (!ids.length) return { byCustomer: new Map(), voucherIds: new Set() };
   const idList = sql.join(ids.map((id) => sql`${id}`), sql`, `);
   const dateCut = asOf ? sql`AND COALESCE(v.effective_date, v.voucher_date) <= ${asOf}::date` : sql``;
 
@@ -77,7 +82,8 @@ export async function heldUnfinalizedCustomerCharges(
                WHERE all_orders.company_id = ${companyId}
                  AND UPPER(BTRIM(COALESCE(all_orders.container_number, ''))) = o.container_number) = 1
     )
-    SELECT m.customer_id, COALESCE(SUM(ve.debit_amount - ve.credit_amount), 0)::text AS amount
+    SELECT m.customer_id, m.voucher_id,
+           COALESCE(SUM(ve.debit_amount - ve.credit_amount), 0)::text AS amount
       FROM (SELECT DISTINCT customer_id, voucher_id FROM matched) m
       JOIN customers c ON c.id = m.customer_id AND c.company_id = ${companyId}
       JOIN voucher_entries ve ON ve.voucher_id = m.voucher_id
@@ -93,16 +99,28 @@ export async function heldUnfinalizedCustomerCharges(
            AND ve.factory_supplier_id IS NULL
          )
        )
-     GROUP BY m.customer_id
+     GROUP BY m.customer_id, m.voucher_id
   `);
 
   const held = new Map<number, Decimal>();
-  for (const row of result.rows as Array<{ customer_id: number | string; amount: string }>) {
+  const voucherIds = new Set<number>();
+  for (const row of result.rows as Array<{ customer_id: number | string; voucher_id: number | string; amount: string }>) {
     const customerId = Number(row.customer_id);
+    const voucherId = Number(row.voucher_id);
     const value = toMoney(row.amount);
-    if (Number.isSafeInteger(customerId) && !value.isZero()) held.set(customerId, value);
+    if (!Number.isSafeInteger(customerId) || value.isZero()) continue;
+    held.set(customerId, (held.get(customerId) ?? ZERO).plus(value));
+    if (Number.isSafeInteger(voucherId)) voucherIds.add(voucherId);
   }
-  return held;
+  return { byCustomer: held, voucherIds };
+}
+
+export async function heldUnfinalizedCustomerCharges(
+  companyId: number,
+  customerIds: readonly number[],
+  asOf?: string | null
+): Promise<Map<number, Decimal>> {
+  return (await loadHeldChargeSnapshot(companyId, customerIds, asOf)).byCustomer;
 }
 
 export function customerStatementLedgerBalance(
