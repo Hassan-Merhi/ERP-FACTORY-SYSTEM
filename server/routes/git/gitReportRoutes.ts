@@ -286,7 +286,7 @@ export function registerGitReportRoutes(app: Express) {
     if (!/^\d+$/.test(req.params.id)) return next();
     try {
       const containerId = Number.parseInt(req.params.id, 10);
-      if (!Number.isFinite(containerId) || containerId <= 0) {
+      if (!Number.isSafeInteger(containerId) || containerId === 0) {
         return res.status(400).json({ message: "Invalid container ID" });
       }
       const userId: string = (req.user as { id: string }).id;
