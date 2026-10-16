@@ -97,6 +97,7 @@ export function consolidateContainerCharges(
     if (orderId === undefined) return;
     const order = orderInfo(orderId);
     if (!order ||
+        ["CANCELLED", "DELETED"].includes(order.status.toUpperCase()) ||
         row.companyId !== rows[0]?.companyId ||
         row.customerId !== rows[0]?.customerId) return;
 
