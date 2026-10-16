@@ -140,6 +140,7 @@ export default function GITContainers({ embedded = false }: { embedded?: boolean
   const allContainers = data?.containers ?? [];
 
   const { importMutation, undoImportMutation } = useGITContainersData({
+    isSupplierPartner: selectedCompany?.companyType === "supplier_partner",
     refetch,
     toast,
     setImportResult,
