@@ -19,6 +19,7 @@ import {
   type SpExcelImportContainer,
   type SpExcelImportLine,
 } from "@shared/spContainerExcelImport";
+import { FRESH_START_OTW_SOURCE_NAME } from "@shared/goldenCoastOtwSource";
 import type { Supplier } from "@shared/schema";
 
 
@@ -37,6 +38,8 @@ const spImportWords = {
     "supplierSelect": "Select supplier",
     "supplierLoading": "Loading...",
     "supplierHelp": "Select the vendor who issued the invoice and should be paid for this container.",
+    "freshStartOtw": "Fresh Start FZE (internal Goods OTW)",
+    "freshStartOtwHint": "No supplier account needed. The import posts Dr Goods OTW / Cr Goods OTW Clearing.",
     "supplierCodeHint": "Excel supplier code:",
     "supplierEmpty": "No suppliers set up for this company. Add the invoicing vendor in Suppliers before importing.",
     "containerNumber": "Container Number *",
@@ -98,6 +101,8 @@ const spImportWords = {
     "supplierSelect": "Choisir un fournisseur",
     "supplierLoading": "Chargement...",
     "supplierHelp": "Sélectionnez le fournisseur ayant émis la facture et à qui le paiement est dû.",
+    "freshStartOtw": "Fresh Start FZE (marchandises en transit internes)",
+    "freshStartOtwHint": "Aucun compte fournisseur nécessaire. Écriture : débit Goods OTW / crédit Goods OTW Clearing.",
     "supplierCodeHint": "Code fournisseur du fichier Excel :",
     "supplierEmpty": "Aucun fournisseur défini pour cette société. Ajoutez le fournisseur avant l’importation.",
     "containerNumber": "Numéro du conteneur *",
@@ -159,6 +164,8 @@ const spImportWords = {
     "supplierSelect": "اختر المورد",
     "supplierLoading": "جارٍ التحميل...",
     "supplierHelp": "اختر المورد الذي أصدر الفاتورة والذي يستحق الدفع مقابل هذه الحاوية.",
+    "freshStartOtw": "Fresh Start FZE (بضاعة في الطريق داخلية)",
+    "freshStartOtwHint": "لا حاجة إلى حساب مورد. القيد: مدين Goods OTW / دائن Goods OTW Clearing.",
     "supplierCodeHint": "رمز المورد في ملف إكسل:",
     "supplierEmpty": "لا يوجد موردون لهذه الشركة. أضف المورد الذي أصدر الفاتورة قبل الاستيراد.",
     "containerNumber": "رقم الحاوية *",
@@ -211,6 +218,7 @@ const spImportWords = {
 interface ParsedFile {
   fileName: string;
   rowCount: number;
+  freshStartOtwSource?: boolean;
   containers: SpExcelImportContainer[];
 }
 interface Validation {
@@ -275,6 +283,7 @@ export default function SpPOImport() {
     enabled: Boolean(selectedCompany?.id),
   });
   const selected = parsed?.containers[selectedIndex] ?? null;
+  const freshStartOtw = parsed?.freshStartOtwSource === true;
   const companyMatches = Boolean(selectedCompany?.id && parsedCompanyId === selectedCompany.id);
 
   function invalidateValidation() {
@@ -294,8 +303,8 @@ export default function SpPOImport() {
     const supplier = suppliers.find((s) => String(s.id) === supplierId);
     return {
       importSource: "excel",
-      supplierId: Number(supplierId),
-      supplierName: supplier?.legalName ?? "",
+      supplierId: freshStartOtw ? null : Number(supplierId),
+      supplierName: freshStartOtw ? FRESH_START_OTW_SOURCE_NAME : supplier?.legalName ?? "",
       containerNumber: containerNumber.trim(),
       invoiceNumber: invoiceNumber.trim(),
       invoiceDate,
@@ -374,7 +383,7 @@ export default function SpPOImport() {
     onError: (error: Error) => toast({ title: copy.importFailed, description: error.message, variant: "destructive" }),
   });
 
-  const canValidate = !!selected && !!supplierId && !!containerNumber.trim() &&
+  const canValidate = !!selected && (freshStartOtw || !!supplierId) && !!containerNumber.trim() &&
     !!invoiceNumber.trim() && !!invoiceDate && companyMatches && !validateMutation.isPending;
   const canImport = canValidate && validation !== null && validation.errors.length === 0 &&
     !importMutation.isPending;
@@ -430,24 +439,32 @@ export default function SpPOImport() {
                 </div>
               )}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="space-y-2">
-                  <Label>{copy.supplier}</Label>
-                  <Select value={supplierId} onValueChange={(v) => { setSupplierId(v); invalidateValidation(); }}>
-                    <SelectTrigger data-testid="select-supplier"><SelectValue placeholder={suppliersLoading ? copy.supplierLoading : copy.supplierSelect} /></SelectTrigger>
-                    <SelectContent>
-                      {suppliers.map((s) => <SelectItem key={s.id} value={String(s.id)}>{s.legalName}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                  <p className="text-xs text-muted-foreground">
-                    {copy.supplierHelp}
-                    {selected?.supplierCode ? (
-                      <span className="block">{copy.supplierCodeHint} <strong>{selected.supplierCode}</strong></span>
-                    ) : null}
-                  </p>
-                  {!suppliersLoading && suppliers.length === 0 && (
-                    <p className="text-xs text-amber-600">{copy.supplierEmpty}</p>
-                  )}
-                </div>
+                {freshStartOtw ? (
+                  <div className="space-y-2" data-testid="fresh-start-otw-source">
+                    <Label>{copy.supplier}</Label>
+                    <p className="font-medium">{copy.freshStartOtw}</p>
+                    <p className="text-xs text-muted-foreground">{copy.freshStartOtwHint}</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <Label>{copy.supplier}</Label>
+                    <Select value={supplierId} onValueChange={(v) => { setSupplierId(v); invalidateValidation(); }}>
+                      <SelectTrigger data-testid="select-supplier"><SelectValue placeholder={suppliersLoading ? copy.supplierLoading : copy.supplierSelect} /></SelectTrigger>
+                      <SelectContent>
+                        {suppliers.map((s) => <SelectItem key={s.id} value={String(s.id)}>{s.legalName}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground">
+                      {copy.supplierHelp}
+                      {selected?.supplierCode ? (
+                        <span className="block">{copy.supplierCodeHint} <strong>{selected.supplierCode}</strong></span>
+                      ) : null}
+                    </p>
+                    {!suppliersLoading && suppliers.length === 0 && (
+                      <p className="text-xs text-amber-600">{copy.supplierEmpty}</p>
+                    )}
+                  </div>
+                )}
                 <div className="space-y-2">
                   <Label>{copy.containerNumber}</Label>
                   <Input value={containerNumber} onChange={(e) => { setContainerNumber(e.target.value); invalidateValidation(); }} data-testid="input-container-number" />
