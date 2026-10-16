@@ -417,7 +417,7 @@ async function loadFundedContainer(
         "GC_PHASE8_FUNDING_CORRUPT", 409,
       );
     }
-    if (toMoney(container.invoiceTotalUsd).minus(stockEntry[0].debitAmount).abs().greaterThan("0.005")) {
+    if (toMoney(container.invoiceTotalUsd).minus(toMoney(stockEntry[0].debitAmount)).abs().greaterThan("0.005")) {
       throw new GoldenCoastPhase8RouteError(
         "Fresh Start invoice total differs from Goods OTW voucher",
         "GC_PHASE8_FUNDING_CORRUPT", 409,
