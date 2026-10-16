@@ -73,8 +73,14 @@ export async function fetchSpGitContainers(
   options: { includeOffloaded?: boolean; containerId?: number } = {},
 ): Promise<RawContainerRow[]> {
   if (companyIds.length === 0 || (options.containerId !== undefined && options.containerId > 0)) return [];
-  await ensureSpGitTracking();
   const ids = sql.join(companyIds.map((id) => sql`${id}`), sql`, `);
+  // Do not run SP schema DDL in ordinary ERP tracking requests that have
+  // zero Supplier Partner containers. Legacy ERP queries stay read-only.
+  const presence = await db.execute(sql`
+    SELECT 1 FROM sp_containers WHERE company_id IN (${ids}) LIMIT 1
+  `);
+  if (resultRows(presence).length === 0) return [];
+  await ensureSpGitTracking();
   const idCondition = options.containerId && options.containerId < 0
     ? sql`AND s.id = ${-options.containerId}`
     : sql``;
@@ -142,7 +148,7 @@ export async function fetchSpGitContainers(
       trackingFallbackReason: null,
       trackingNextCheckAt: null,
       trackingLastSkipReason: null,
-      createdAt: new Date(row.created_at),
+      createdAt: row.created_at instanceof Date ? row.created_at : new Date(String(row.created_at)),
     };
   });
 }
