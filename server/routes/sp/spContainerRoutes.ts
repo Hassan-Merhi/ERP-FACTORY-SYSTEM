@@ -49,6 +49,7 @@ async function isFreshStartOtwCompany(companyId: number): Promise<boolean> {
   }).from(ledgerAccounts).where(and(
     eq(ledgerAccounts.companyId, companyId),
     isNull(ledgerAccounts.deletedAt),
+    eq(ledgerAccounts.active, true),
     inArray(ledgerAccounts.subType, ["gc_partner_capital", "gc_owner_capital"]),
   ));
   return isGoldenCoastOtwSource(accounts);
