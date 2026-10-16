@@ -155,6 +155,20 @@ describe("factory customer statement container charge consolidation", () => {
     }
   );
 
+  it("suppresses legacy PRE vouchers without a charge FK, including on cancelled orders", () => {
+    for (const status of ["VERIFIED", "CANCELLED"]) {
+      const posted = row({
+        id: "ve-55", referenceId: 55, referenceNumber: "CHARGE-PRE-184-12",
+        description: "Other charge", combinedEffect: d(300),
+        ledgerEffect: d(300), debitAmount: "300.00",
+      });
+      expect(consolidateContainerCharges(
+        [posted],
+        new Map([[184, { containerNumber: "MRSU7669057", status }]])
+      )).toEqual([]);
+    }
+  });
+
   it("shows that same charge once the container is finalized", () => {
     const posted = row({
       id: "ve-55", referenceId: 55,
