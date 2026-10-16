@@ -223,7 +223,6 @@ export function FactoryAllContainersReport() {
               <TableHeader className="sticky top-0 z-10 bg-background">
                 <TableRow>
                   <TableHead>Container #</TableHead><TableHead>Supplier</TableHead><TableHead>Status</TableHead>
-                  <TableHead>Arrival / Created</TableHead><TableHead>Origin</TableHead>
                   <TableHead className="text-right">Total KG</TableHead>
                   <TableHead className="text-right">Goods Value</TableHead>
                 </TableRow>
@@ -237,8 +236,6 @@ export function FactoryAllContainersReport() {
                         <TableCell className="font-mono text-xs">{container.containerNumber}</TableCell>
                         <TableCell className="text-sm">{container.supplierName || "No Supplier"}</TableCell>
                         <TableCell className="text-xs">{factoryReportStatus(container.status)}</TableCell>
-                        <TableCell className="text-xs">{dateValue(container) || "—"}</TableCell>
-                        <TableCell className="text-xs">{container.origin || "—"}</TableCell>
                         <TableCell className="text-right font-mono text-xs">{formatQty(number(container.totalKg) ?? 0, 3)} kg</TableCell>
                         <TableCell className="text-right font-mono text-xs">
                           {amount ? `${formatGoods(amount.amount, container.currencyCode || "USD")}${amount.estimated ? " *" : ""}` : "—"}
@@ -247,7 +244,7 @@ export function FactoryAllContainersReport() {
                     );
                   })}
                   <TableRow className="bg-muted/30 font-medium">
-                    <TableCell colSpan={5}>{group.name} — {group.rows.length} containers</TableCell>
+                    <TableCell colSpan={3}>{group.name} — {group.rows.length} containers</TableCell>
                     <TableCell className="text-right font-mono text-xs">{formatQty(group.weight, 3)} kg</TableCell>
                     <TableCell />
                   </TableRow>
@@ -264,7 +261,7 @@ export function FactoryAllContainersReport() {
                     <span className="font-mono text-sm font-semibold">{container.containerNumber}</span>
                     <span className="text-xs text-muted-foreground">{factoryReportStatus(container.status)}</span>
                   </div>
-                  <p className="mt-1 text-xs text-muted-foreground">{container.supplierName || "No Supplier"} · {dateValue(container) || "—"}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">{container.supplierName || "No Supplier"}</p>
                   <div className="mt-2 flex justify-between gap-2 border-t pt-2 text-xs">
                     <span>{formatQty(number(container.totalKg) ?? 0, 3)} kg</span>
                     <span className="font-mono">{amount ? `${formatGoods(amount.amount, container.currencyCode || "USD")}${amount.estimated ? " *" : ""}` : "—"}</span>
