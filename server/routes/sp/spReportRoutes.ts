@@ -115,7 +115,8 @@ export function registerSpReportRoutes(app: Express) {
         totalSharedCharges = parseNum(sr?.total);
       }
 
-      let netProfit = grossProfit - totalSharedCharges;
+      const sourceNetProfit = grossProfit - totalSharedCharges;
+      let netProfit = sourceNetProfit;
       // Only a whole calendar-month report may use a developer-approved target.
       // Partial date ranges retain their original source-ledger arithmetic.
       const first = typeof startDate === "string" ? startDate : "";
@@ -129,6 +130,9 @@ export function registerSpReportRoutes(app: Express) {
           if (approved) netProfit = Number(approved.targetNetProfit);
         }
       }
+      // Keep the public P&L arithmetic reconcilable without exposing private
+      // developer notes, prior targets, actors or the correction controls.
+      const otherIncomeExpense = Math.round((netProfit - sourceNetProfit) * 100) / 100;
       const splitPct = 50;
       const ourShare = netProfit * (splitPct / 100);
       const supplierShare = netProfit - ourShare;
@@ -138,6 +142,7 @@ export function registerSpReportRoutes(app: Express) {
         totalCogs,
         grossProfit,
         totalSharedCharges,
+        otherIncomeExpense,
         netProfit,
         splitPct,
         ourShare,
