@@ -2,6 +2,7 @@ import type { Express, NextFunction, Request, Response } from "express";
 import { and, eq, isNull, sql } from "drizzle-orm";
 import Decimal from "decimal.js";
 import { accountingPostingRequests, ledgerAccounts, spProfitSplits, vouchers } from "@shared/schema";
+import { getLatestSpProfitCorrection, ensureSpProfitManualCorrectionStorage, isDeveloperForProfitCorrection, GC_MANUAL_PROFIT_SUSPENSE_SUBTYPE } from "./spProfitManualCorrections";
 import { requireAuth, requireNonPOS } from "../../auth";
 import { db } from "../../db";
 import { releaseDebtEnglish } from "../../i18n/finalCloseoutEnglish";
@@ -121,13 +122,14 @@ async function resolveLegacyIncomeExpense(
 }
 
 async function resolveAccounts(conn: DbLike, companyId: number): Promise<GoldenCoastPhase11Accounts> {
-  const [sales, cogs, shared, ppd, fresh, hassan] = await Promise.all([
+  const [sales, cogs, shared, ppd, fresh, hassan, suspense] = await Promise.all([
     resolveLegacyIncomeExpense(conn, companyId, "sp_sales", ["Income", "Direct Income"], true),
     resolveLegacyIncomeExpense(conn, companyId, "sp_cogs", ["Direct Expense", "Expense"], true),
     resolveLegacyIncomeExpense(conn, companyId, "sp_shared_charges", ["Direct Expense", "Expense"], false),
     resolveCanonicalRole(conn, companyId, "profit_pending_distribution"),
     resolveCanonicalRole(conn, companyId, "fresh_start_equity"),
     resolveCanonicalRole(conn, companyId, "hassan_equity"),
+    resolveLegacyIncomeExpense(conn, companyId, GC_MANUAL_PROFIT_SUSPENSE_SUBTYPE, ["Asset"], false),
   ]);
   return {
     salesAccountId: Number(sales),
@@ -136,6 +138,7 @@ async function resolveAccounts(conn: DbLike, companyId: number): Promise<GoldenC
     profitPendingDistributionAccountId: ppd,
     freshStartEquityAccountId: fresh,
     hassanEquityAccountId: hassan,
+    correctionSuspenseAccountId: suspense,
   };
 }
 
@@ -257,24 +260,33 @@ async function ppdBalance(conn: DbLike, companyId: number, accountId: number): P
   return new Decimal(String(resultRows(result)[0]?.balance ?? "0"));
 }
 
-async function buildPlan(conn: DbLike, companyId: number, body: unknown) {
+async function buildPlan(conn: DbLike, companyId: number, body: unknown, applyManualCorrection = true) {
   const close = parseGoldenCoastPhase11CloseInput({ companyId, body });
   const accounts = await resolveAccounts(conn, companyId);
   const { start, end } = monthBounds(close.periodMonth);
-  const [salesItems, shared] = await Promise.all([
+  const [salesItems, shared, approvedCorrection] = await Promise.all([
     salesItemsPeriodActivity(conn, companyId, accounts.salesAccountId, accounts.cogsAccountId, start, end),
     accountPeriodActivity(conn, companyId, accounts.sharedChargesAccountId, start, end),
+    applyManualCorrection ? getLatestSpProfitCorrection(conn, companyId, close.periodMonth) : Promise.resolve(null),
   ]);
   const revenue = new Decimal(salesItems.revenue);
   const totalCogs = new Decimal(salesItems.cogs);
   // Shared Charges are a P&L expense magnitude. Settlement flows can post the
   // account on either side, so normalize net period activity before subtraction.
   const totalShared = new Decimal(shared.debit).minus(shared.credit).abs();
+  const baseNet = revenue.minus(totalCogs).minus(totalShared);
+  const manualAdjustment = approvedCorrection
+    ? new Decimal(approvedCorrection.targetNetProfit).minus(baseNet)
+    : new Decimal(0);
+  if (!manualAdjustment.isZero() && !accounts.correctionSuspenseAccountId) {
+    throw new Phase11RouteError("Profit correction suspense account missing", "GC_PHASE11_ACCOUNT_INVALID", 409);
+  }
   const plan = planGoldenCoastPhase11MonthlyClose({
     close,
     totalRevenueUsd: revenue.toFixed(2),
     totalCogsUsd: totalCogs.toFixed(2),
     totalSharedChargesUsd: totalShared.toFixed(2),
+    manualAdjustmentUsd: manualAdjustment.toFixed(2),
   });
   return { accounts, plan };
 }
@@ -379,7 +391,10 @@ async function readiness(req: Request, res: Response): Promise<void> {
     res.json({
       ready: pending.isZero(),
       alreadyClosed: false,
-      plan,
+      plan: isDeveloperForProfitCorrection(req) ? plan : (() => {
+        const { manualAdjustmentUsd: _privateCorrection, ...publicPlan } = plan;
+        return publicPlan;
+      })(),
       splitPct: GOLDEN_COAST_PHASE11_SPLIT_PCT,
       profitPendingDistributionBalanceUsd: pending.toFixed(2),
     });
@@ -462,7 +477,12 @@ async function closeMonth(req: Request, res: Response): Promise<void> {
         .returning();
       return { replayed: false, split, voucher: posted.voucher, plan };
     });
-    res.json(result);
+    if (!isDeveloperForProfitCorrection(req) && "plan" in result && result.plan) {
+      const { manualAdjustmentUsd: _privateCorrection, ...publicPlan } = result.plan;
+      res.json({ ...result, plan: publicPlan });
+    } else {
+      res.json(result);
+    }
   } catch (error: unknown) {
     logger.error("Golden Coast Phase 11 monthly close failed", { error });
     if (respondKnownError(res, error)) return;
