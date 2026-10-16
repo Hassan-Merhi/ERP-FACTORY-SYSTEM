@@ -90,7 +90,7 @@ export default function SpReports() {
   const queryClient = useQueryClient();
   const { selectedCompany } = useCompany();
   const { data: currentUser } = useQuery<{ role?: string; currentRole?: string }>({ queryKey: ["/api/auth/me"] });
-  const isDeveloper = (currentUser?.currentRole ?? currentUser?.role) === "Developer";
+  const isDeveloper = currentUser?.role === "Developer";
   const [tab, setTab] = useHubQueryState<ReportTab>({
     key: "tab",
     allowedValues: REPORT_TABS,
@@ -395,7 +395,7 @@ export default function SpReports() {
                   data-testid={`row-sp-split-${s.id}`}
                 >
                   <span className="font-mono">{s.periodMonth}</span>
-                  <span className="text-muted-foreground">Net {fmt(s.grossProfit)}</span>
+                  <span className="text-muted-foreground">Net {fmt(Number(s.ourShare ?? 0) + Number(s.supplierShare ?? 0))}</span>
                   <span className="text-green-600">Our: {fmt(s.ourShare)}</span>
                   <span className="text-orange-600">Sup: {fmt(s.supplierShare)}</span>
                 </div>
