@@ -356,8 +356,24 @@ export function projectGoldenCoastResidualEquity(input: {
     legacyOpeningPayableReclassification: 0,
   };
 
-  const forUsBreakdown = addBreakdown(forUsAccounts);
-  const onUsBreakdown = addBreakdown(onUsAccounts);
+  // Keep correction suspense in the already-calculated asset/liability totals
+  // and residual partner equity, but do NOT expose it as a Net Position line.
+  // Do not move it into Stock or Cash: neither operational balance has changed.
+  // Its real ledger posting remains available for accounting reconciliation.
+  const correctionSuspenseIds = new Set(
+    roles.active
+      .filter((account) => account.subType === "sp_profit_correction_suspense")
+      .map((account) => account.id)
+  );
+  const isCorrectionSuspense = (account: DisplayAccount): boolean =>
+    (account.id != null && correctionSuspenseIds.has(account.id)) ||
+    (account.code || "").toUpperCase() === "SP-PROFIT-ADJ-SUSPENSE" ||
+    account.name.trim().toLowerCase() === "sp profit correction suspense";
+  const visibleForUsAccounts = forUsAccounts.filter((account) => !isCorrectionSuspense(account));
+  const visibleOnUsAccounts = onUsAccounts.filter((account) => !isCorrectionSuspense(account));
+
+  const forUsBreakdown = addBreakdown(visibleForUsAccounts);
+  const onUsBreakdown = addBreakdown(visibleOnUsAccounts);
   const netPositionBreakdown = {
     ...(body.netPositionBreakdown || {}),
     assets: { total: forUsTotal, breakdown: forUsBreakdown },
@@ -372,13 +388,13 @@ export function projectGoldenCoastResidualEquity(input: {
       ...body.forUs,
       total: forUsTotal,
       breakdown: forUsBreakdown,
-      accounts: forUsAccounts,
+      accounts: visibleForUsAccounts,
     },
     onUs: {
       ...body.onUs,
       total: onUsTotal,
       breakdown: onUsBreakdown,
-      accounts: onUsAccounts,
+      accounts: visibleOnUsAccounts,
     },
     equity,
     netPosition,
