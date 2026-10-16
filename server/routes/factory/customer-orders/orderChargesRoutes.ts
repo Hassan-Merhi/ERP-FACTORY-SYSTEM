@@ -343,7 +343,7 @@ export function registerOrderChargesRoutes(app: Express) {
             ? toMoney(updatedCharge.amount)
             : (parseMoneyInput(String(amount)) ?? toMoney(0));
           const customerAccountId = chargeAmt.greaterThan(0)
-            ? await customerLedgerAccountId(companyId, order.customerId)
+            ? await existingCustomerLedgerAccountId(order.customerId)
             : null;
           if (customerAccountId) {
             await postOrderChargeVoucherTx(tx, {
