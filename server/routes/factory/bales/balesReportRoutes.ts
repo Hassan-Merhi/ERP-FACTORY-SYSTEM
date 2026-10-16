@@ -109,12 +109,14 @@ export function registerBalesReportRoutes(app: Express) {
       // Privileged users can see deleted bales when searching by ref code;
       // otherwise exclude deleted/removed bales (consistent with daily-summary)
       const deletedFilter = isPrivileged && search ? sql`` : sql`AND fb.status NOT IN ('DELETED', 'REMOVED')`;
-      const dateFilter = search
+      // Explicit date ranges always constrain reference searches; legacy search
+      // without date parameters may still find historical references globally.
+      const dateFilter = search && !startDate && !endDate
         ? sql``
         : sql`AND fb.stock_entry_date >= ${effectiveStart} AND fb.stock_entry_date <= ${effectiveEnd}`;
 
       // Shared WHERE base reused by both the data query and the COUNT subquery.
-      // Reference search spans all dates; the date picker resumes once search is cleared.
+      // Date and worker filters must apply together when the caller supplies a range.
       const whereClause = sql`
         WHERE fb.company_id = ${companyId}
           ${deletedFilter}
@@ -276,7 +278,9 @@ export function registerBalesReportRoutes(app: Express) {
         : sql``;
       const unassignedFilter = includeUnassigned === "false" ? sql`AND fb.finalized_by IS NOT NULL` : sql``;
       const deletedFilter = isPrivileged && search ? sql`` : sql`AND fb.status NOT IN ('DELETED', 'REMOVED')`;
-      const dateFilter = search
+      // Explicit date ranges always constrain reference searches; legacy search
+      // without date parameters may still find historical references globally.
+      const dateFilter = search && !startDate && !endDate
         ? sql``
         : sql`AND fb.stock_entry_date >= ${effectiveStart} AND fb.stock_entry_date <= ${effectiveEnd}`;
 
