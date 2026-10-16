@@ -174,6 +174,7 @@ export type RawContainerRow = {
   itemName: string | null;
   shopName: string | null;
   eta: string | null;
+  portDepartureDate: string | null;
   etaSource: string | null;
   transporter: string | null;
   transportFee: string | null;
@@ -257,6 +258,7 @@ export async function fetchActiveContainers(
       itemName: containers.itemName,
       shopName: containers.shopName,
       eta: containers.eta,
+      portDepartureDate: containers.portDepartureDate,
       etaSource: containers.etaSource,
       transporter: containers.transporter,
       transportFee: containers.transportFee,
