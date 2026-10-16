@@ -19,10 +19,15 @@ import type Decimal from "decimal.js";
 import { db } from "../../../db";
 import { MoneyDecimal, toMoney } from "../../../lib/money";
 import { getPartyBalances, type PartyBalanceMemoLine } from "../../../services/accounting/balances/ledgerBalanceEngine";
+import { heldUnfinalizedCustomerCharges, customerStatementLedgerBalance } from "./heldUnfinalizedCustomerCharges";
 
 export interface CustomerLedgerAndMemo {
-  /** Engine closing, debit positive. */
+  /** Customer statement ledger projection: excludes premature charge vouchers. */
   ledger: Decimal;
+  /** Unmodified general-ledger closing for accounting reconciliation. */
+  generalLedger: Decimal;
+  /** Historical unfinalized charge debits awaiting audited ledger retirement. */
+  heldUnfinalizedCharges: Decimal;
   /** Engine opening (customer record), debit positive. */
   masterOpening: Decimal;
   /** Sum of the memo lines with a USD amount, debit positive. */
@@ -40,11 +45,18 @@ export async function getCustomerLedgerAndMemo(
 ): Promise<Map<number, CustomerLedgerAndMemo>> {
   const out = new Map<number, CustomerLedgerAndMemo>();
   if (ids.length === 0) return out;
-  const { parties } = await getPartyBalances(db, { companyId, kind: "customer", ids, asOf, memo: true });
+  const [{ parties }, heldByCustomer] = await Promise.all([
+    getPartyBalances(db, { companyId, kind: "customer", ids, asOf, memo: true }),
+    heldUnfinalizedCustomerCharges(companyId, ids, asOf),
+  ]);
   for (const party of parties) {
     if (party.id === null) continue;
+    const generalLedger = toMoney(party.closing);
+    const heldUnfinalizedCharges = heldByCustomer.get(party.id) ?? ZERO;
     out.set(party.id, {
-      ledger: toMoney(party.closing),
+      ledger: customerStatementLedgerBalance(generalLedger, heldUnfinalizedCharges),
+      generalLedger,
+      heldUnfinalizedCharges,
       masterOpening: toMoney(party.masterOpening),
       memoTotal: toMoney(party.memoTotal),
       memoLines: party.memoLines,
@@ -69,6 +81,9 @@ export function splitBalanceFields(figures: CustomerLedgerAndMemo | undefined) {
     balanceBasis: "ledger+notInLedger" as const,
     ledgerBalance: ledger.abs().toNumber(),
     ledgerBalanceSide: sideOf(ledger),
+    generalLedgerBalance: (figures?.generalLedger ?? ledger).abs().toNumber(),
+    generalLedgerBalanceSide: sideOf(figures?.generalLedger ?? ledger),
+    heldUnfinalizedCharges: figures?.heldUnfinalizedCharges?.toNumber() ?? 0,
     /** Debit positive. */
     notInLedgerTotal: memo.toNumber(),
     notInLedgerCount: figures?.memoLines.length ?? 0,
