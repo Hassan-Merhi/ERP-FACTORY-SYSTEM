@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { useDateFormat } from "@/contexts/DateFormatContext";
 import { useLocation } from "wouter";
 import { Package, Truck, Check, MapPin } from "lucide-react";
@@ -21,7 +20,6 @@ import { ContainerConfirmDialogs } from "./containers/ContainerConfirmDialogs";
 
 export default function Containers() {
   const { formatDisplayDate } = useDateFormat();
-  const [addDialogOpen, setAddDialogOpen] = useState(false);
   const { selectedCompany } = useCompany();
   const { formatAmount } = useCurrencyContext();
   const [, setLocation] = useLocation();
@@ -78,8 +76,6 @@ export default function Containers() {
         searchTerm={searchTerm}
         setSearchTerm={setSearchTerm}
         isSpLoading={spContainersLoading || isLoading}
-        addDialogOpen={addDialogOpen}
-        setAddDialogOpen={setAddDialogOpen}
         setLocation={setLocation}
         formatDisplayDate={formatDisplayDate}
       />

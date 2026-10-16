@@ -76,5 +76,7 @@ export default function TrackingContainersTab() {
 
   if (companyId === null || readyCompanyId !== companyId) return null;
 
+  // The same ERP table now includes SP rows from the read-only GIT projection.
+  // Negative synthetic ids disambiguate SP and ERP container records.
   return <GITContainers key={`tracking-containers-${companyId}`} embedded />;
 }

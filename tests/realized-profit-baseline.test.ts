@@ -107,5 +107,26 @@ describe("Supplier Partner realized-profit baseline", () => {
     expect(cached.status).toBe(200);
     expect(cached.body.spPosProfit).toBe(0);
     expect(cached.body.spPosProfitBaselineDate).toBe("2099-01-01");
+  });  it("shows each selected month independently without deleting earlier-month sales", async () => {
+    await pool.query(
+      "UPDATE company_settings SET sp_pos_profit_baseline_date = DATE '2026-09-01' WHERE company_id = $1",
+      [ctx.companyId]
+    );
+    await insertSale("2026-10-03", "17");
+    const september = await agent.get("/api/stats/net-profit?toDate=2026-09-30");
+    expect(september.status).toBe(200);
+    expect(september.body.spPosProfit).toBe(50);
+    expect(september.body.spPosProfitPeriodStartDate).toBe("2026-09-01");
+
+    const october = await agent.get("/api/stats/net-profit?toDate=2026-10-10");
+    expect(october.status).toBe(200);
+    expect(october.body.spPosProfit).toBe(17);
+    expect(october.body.spPosProfitPeriodStartDate).toBe("2026-10-01");
+    expect(october.body.spPosProfitAsOfDate).toBe("2026-10-10");
+
+    // Historical records remain intact; only the report's date window changes.
+    await expect(getSupplierPartnerPosProfit(ctx.companyId, "2026-09-01", "2026-10-10")).resolves.toBe(67);
   });
+
+
 });

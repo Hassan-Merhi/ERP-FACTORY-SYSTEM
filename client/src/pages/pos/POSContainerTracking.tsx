@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
-import { CheckCircle2, Columns3, FileClock, FilterX, MapPin, PackageSearch, Search, Truck } from "lucide-react";
+import { CheckCircle2, Columns3, FileClock, FilterX, Loader2, MapPin, PackageSearch, Save, Search, Truck } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -17,6 +17,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useDateFormat } from "@/contexts/DateFormatContext";
+import { useToast } from "@/hooks/use-toast";
+import { daysSincePortDeparture, getLocalTodayISO } from "./portDeparture";
 
 interface PosUserContext {
   currentCompanyId?: number | null;
@@ -31,6 +33,7 @@ interface PosContainerRow {
   supplierCode: string | null;
   status: string;
   eta: string | null;
+  portDepartureDate: string | null;
   numberPlate: string | null;
   trackingLocation: string | null;
   agent: string | null;
@@ -50,15 +53,18 @@ interface PosContainerTrackingResponse {
 }
 
 type ColumnKey =
-  "container" | "supplier" | "status" | "eta" | "truck" | "location" | "agent" | "transporter" | "docs" | "docsSent";
+  | "container" | "supplier" | "status" | "eta" | "portDeparture" | "daysSinceDeparture"
+  | "truck" | "location" | "agent" | "transporter" | "docs" | "docsSent";
 
-const COLUMN_PREF_KEY = "pos-container-tracking-visible-columns-v2";
+const COLUMN_PREF_KEY = "pos-container-tracking-visible-columns-v3";
 
 const COLUMN_DEFS: Array<{ key: ColumnKey; label: string }> = [
   { key: "container", label: "Container #" },
   { key: "supplier", label: "Supplier" },
   { key: "status", label: "Status" },
   { key: "eta", label: "ETA" },
+  { key: "portDeparture", label: "Left Port" },
+  { key: "daysSinceDeparture", label: "Days Since" },
   { key: "truck", label: "Truck #" },
   { key: "location", label: "Location" },
   { key: "agent", label: "Agent" },
@@ -72,6 +78,7 @@ const DEFAULT_VISIBLE_COLUMNS: ColumnKey[] = COLUMN_DEFS.map((column) => column.
 async function loadPosContainers(): Promise<PosContainerTrackingResponse> {
   const response = await fetch("/api/pos/containers-otw", {
     credentials: "include",
+    cache: "no-store",
   });
   const body = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(body.message || "Failed to load containers");
@@ -90,6 +97,7 @@ function containsSearch(row: PosContainerRow, search: string): boolean {
     row.supplierName,
     row.status,
     row.eta,
+    row.portDepartureDate,
     row.numberPlate,
     row.trackingLocation,
     row.agent,
@@ -108,9 +116,86 @@ function uniqueValues(rows: PosContainerRow[], selector: (row: PosContainerRow) 
   );
 }
 
+function PortDepartureDateCell({ container, todayISO }: { container: PosContainerRow; todayISO: string }) {
+  const [draft, setDraft] = useState(container.portDepartureDate ?? "");
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  useEffect(() => {
+    setDraft(container.portDepartureDate ?? "");
+  }, [container.portDepartureDate]);
+
+  const mutation = useMutation({
+    mutationFn: async () => {
+      const response = await fetch(`/api/pos/containers-otw/${container.id}/departure-date`, {
+        method: "PATCH",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ portDepartureDate: draft || null }),
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(body.message || "Could not save departure date");
+      return body as { id: number; portDepartureDate: string | null };
+    },
+    onSuccess: (updated) => {
+      queryClient.setQueriesData<PosContainerTrackingResponse>(
+        { queryKey: ["/api/pos/containers-otw"] },
+        (cached) => cached ? {
+          ...cached,
+          containers: cached.containers.map((row) =>
+            row.id === updated.id ? { ...row, portDepartureDate: updated.portDepartureDate } : row
+          ),
+        } : cached
+      );
+      void queryClient.invalidateQueries({ queryKey: ["/api/pos/containers-otw"] });
+      toast({ title: "Departure date saved" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Could not save departure date", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const dirty = draft !== (container.portDepartureDate ?? "");
+  return (
+    <div className="flex items-center gap-1">
+      <Input
+        type="date"
+        value={draft}
+        max={todayISO}
+        onChange={(event) => setDraft(event.target.value)}
+        disabled={mutation.isPending}
+        className="h-8 w-[145px] min-w-[145px] text-xs"
+        aria-label={`Date ${container.containerNumber} left the port`}
+        data-testid={`input-port-departure-${container.id}`}
+      />
+      {dirty ? (
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          className="h-8 gap-1 px-2"
+          disabled={mutation.isPending || Boolean(draft && draft > todayISO)}
+          onClick={() => mutation.mutate()}
+          aria-label={`Save port departure date for ${container.containerNumber}`}
+          data-testid={`button-save-port-departure-${container.id}`}
+        >
+          {mutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+          Save
+        </Button>
+      ) : null}
+    </div>
+  );
+}
+
 export default function POSContainerTracking({ posUser }: { posUser?: PosUserContext }) {
   const [, setLocation] = useLocation();
   const { formatDisplayDate } = useDateFormat();
+  const [todayISO, setTodayISO] = useState(() => getLocalTodayISO());
+  useEffect(() => {
+    const refreshToday = () => setTodayISO(getLocalTodayISO());
+    const interval = window.setInterval(refreshToday, 60_000);
+    return () => window.clearInterval(interval);
+  }, []);
   const [search, setSearch] = useState("");
   const [supplierFilter, setSupplierFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -120,10 +205,13 @@ export default function POSContainerTracking({ posUser }: { posUser?: PosUserCon
   const [visibleColumns, setVisibleColumns] = useState<Set<ColumnKey>>(() => {
     if (typeof window === "undefined") return new Set(DEFAULT_VISIBLE_COLUMNS);
     try {
-      const parsed = JSON.parse(window.localStorage.getItem(COLUMN_PREF_KEY) || "[]") as ColumnKey[];
+      const saved = window.localStorage.getItem(COLUMN_PREF_KEY);
+      const previous = saved === null ? window.localStorage.getItem("pos-container-tracking-visible-columns-v2") : null;
+      const parsed = JSON.parse(saved ?? previous ?? "[]") as ColumnKey[];
       const valid = parsed.filter((key) => COLUMN_DEFS.some((column) => column.key === key));
+      const newlyAdded = previous !== null ? (["portDeparture", "daysSinceDeparture"] as ColumnKey[]) : [];
       return new Set<ColumnKey>(
-        valid.length > 0 ? ["container", ...valid.filter((key) => key !== "container")] : DEFAULT_VISIBLE_COLUMNS
+        valid.length > 0 ? ["container", ...valid.filter((key) => key !== "container"), ...newlyAdded] : DEFAULT_VISIBLE_COLUMNS
       );
     } catch {
       return new Set(DEFAULT_VISIBLE_COLUMNS);
@@ -425,6 +513,8 @@ export default function POSContainerTracking({ posUser }: { posUser?: PosUserCon
                 {isColumnVisible("supplier") ? <TableHead className="whitespace-nowrap">Supplier</TableHead> : null}
                 {isColumnVisible("status") ? <TableHead className="whitespace-nowrap">Status</TableHead> : null}
                 {isColumnVisible("eta") ? <TableHead className="whitespace-nowrap">ETA</TableHead> : null}
+                {isColumnVisible("portDeparture") ? <TableHead className="whitespace-nowrap">Left Port</TableHead> : null}
+                {isColumnVisible("daysSinceDeparture") ? <TableHead className="whitespace-nowrap">Days Since</TableHead> : null}
                 {isColumnVisible("truck") ? <TableHead className="whitespace-nowrap">Truck #</TableHead> : null}
                 {isColumnVisible("location") ? <TableHead className="whitespace-nowrap">Location</TableHead> : null}
                 {isColumnVisible("agent") ? <TableHead className="whitespace-nowrap">Agent</TableHead> : null}
@@ -474,6 +564,16 @@ export default function POSContainerTracking({ posUser }: { posUser?: PosUserCon
                     {isColumnVisible("eta") ? (
                       <TableCell className="whitespace-nowrap">
                         {container.eta ? formatDisplayDate(container.eta) : "—"}
+                      </TableCell>
+                    ) : null}
+                    {isColumnVisible("portDeparture") ? (
+                      <TableCell className="whitespace-nowrap">
+                        <PortDepartureDateCell container={container} todayISO={todayISO} />
+                      </TableCell>
+                    ) : null}
+                    {isColumnVisible("daysSinceDeparture") ? (
+                      <TableCell className="whitespace-nowrap tabular-nums" data-testid={`days-since-port-departure-${container.id}`}>
+                        {daysSincePortDeparture(container.portDepartureDate, todayISO) ?? "—"}
                       </TableCell>
                     ) : null}
                     {isColumnVisible("truck") ? (

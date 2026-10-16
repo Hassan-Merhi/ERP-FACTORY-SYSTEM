@@ -7,7 +7,6 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Loader2, MapPin, RefreshCw, Save, Search, Truck } from "lucide-react";
 
@@ -17,6 +16,8 @@ interface TrackingDefaultSupplier {
   supplierName: string;
   locationId: number | null;
   agentName: string | null;
+  shopName: string | null;
+  dutyFee: string | null;
 }
 
 interface TrackingLocation {
@@ -32,14 +33,16 @@ interface TrackingDefaultsResponse {
 }
 
 interface DraftValue {
-  locationId: string;
+  shopName: string;
   agentName: string;
+  dutyFee: string;
 }
 
 function toDraft(row: TrackingDefaultSupplier): DraftValue {
   return {
-    locationId: row.locationId ? String(row.locationId) : "none",
+    shopName: row.shopName ?? "",
     agentName: row.agentName ?? "",
+    dutyFee: row.dutyFee ?? "",
   };
 }
 
@@ -76,8 +79,10 @@ export function SupplierTrackingDefaultsTab({ canManage = false }: { canManage?:
     mutationFn: async ({ supplierId, draft }: { supplierId: number; draft: DraftValue }) => {
       setSavingSupplierId(supplierId);
       const res = await apiRequest("PUT", `/api/tracking-defaults/suppliers/${supplierId}`, {
-        locationId: draft.locationId === "none" ? null : Number(draft.locationId),
+        locationId: null,
+        shopName: draft.shopName.trim() || null,
         agentName: draft.agentName.trim() || null,
+        dutyFee: draft.dutyFee.trim() || null,
       });
       return await res.json();
     },
@@ -97,14 +102,14 @@ export function SupplierTrackingDefaultsTab({ canManage = false }: { canManage?:
   const backfillMutation = useMutation({
     mutationFn: async () => {
       const res = await apiRequest("POST", "/api/tracking-defaults/backfill", {});
-      return (await res.json()) as { containersUpdated: number; shopsFilled: number; agentsFilled: number };
+      return (await res.json()) as { containersUpdated: number; shopsFilled: number; agentsFilled: number; dutiesFilled: number };
     },
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ["/api/containers"] });
       queryClient.invalidateQueries({ queryKey: ["/api/git/containers"] });
       toast({
         title: "Blank tracking fields backfilled",
-        description: `${result.containersUpdated} container(s) updated · ${result.shopsFilled} shop name(s) · ${result.agentsFilled} agent(s).`,
+        description: `${result.containersUpdated} container(s) updated · ${result.shopsFilled} shop name(s) · ${result.agentsFilled} agent(s) · ${result.dutiesFilled} duty fee(s).`,
       });
     },
     onError: (error: ClientErrorLike) => {
@@ -115,7 +120,9 @@ export function SupplierTrackingDefaultsTab({ canManage = false }: { canManage?:
   const hasChanged = (row: TrackingDefaultSupplier) => {
     const draft = drafts[row.supplierId] ?? toDraft(row);
     const original = toDraft(row);
-    return draft.locationId !== original.locationId || draft.agentName.trim() !== original.agentName.trim();
+    return draft.shopName.trim() !== original.shopName.trim() ||
+      draft.agentName.trim() !== original.agentName.trim() ||
+      draft.dutyFee.trim() !== original.dutyFee.trim();
   };
 
   return (
@@ -126,9 +133,8 @@ export function SupplierTrackingDefaultsTab({ canManage = false }: { canManage?:
           <h2 className="text-lg font-semibold sm:text-xl">Supplier Tracking Defaults</h2>
         </div>
         <p className="mt-1 text-sm text-muted-foreground">
-          Link each supplier to its normal shop/location and clearing agent. When a new container is created, blank Shop
-          Name and Agent fields are filled automatically. Values entered manually or supplied by an import are
-          preserved.
+          Enter a default Shop Name, clearing agent and Duty Fee for each supplier. New containers get these
+          values in Tracking only when the corresponding field is blank; imported or manually entered values are kept.
         </p>
       </div>
 
@@ -170,7 +176,7 @@ export function SupplierTrackingDefaultsTab({ canManage = false }: { canManage?:
                 return (
                   <div
                     key={row.supplierId}
-                    className="grid gap-3 rounded-lg border p-3 md:grid-cols-[minmax(180px,1.2fr)_minmax(190px,1fr)_minmax(170px,1fr)_auto] md:items-end"
+                    className="grid gap-3 rounded-lg border p-3 md:grid-cols-2 lg:grid-cols-[minmax(160px,1.2fr)_minmax(150px,1fr)_minmax(130px,0.9fr)_minmax(125px,0.8fr)_auto] lg:items-end"
                   >
                     <div className="min-w-0">
                       <div className="flex items-center gap-2">
@@ -183,29 +189,20 @@ export function SupplierTrackingDefaultsTab({ canManage = false }: { canManage?:
                     </div>
 
                     <div className="space-y-1.5">
-                      <Label className="text-xs">Default Shop / Location</Label>
-                      <Select
-                        value={draft.locationId}
-                        onValueChange={(value) =>
+                      <Label className="text-xs">Default Shop Name</Label>
+                      <Input
+                        value={draft.shopName}
+                        onChange={(event) =>
                           setDrafts((current) => ({
                             ...current,
-                            [row.supplierId]: { ...draft, locationId: value },
+                            [row.supplierId]: { ...draft, shopName: event.target.value },
                           }))
                         }
+                        placeholder="Enter shop name"
+                        maxLength={255}
                         disabled={!canManage}
-                      >
-                        <SelectTrigger data-testid={`select-tracking-location-${row.supplierId}`}>
-                          <SelectValue placeholder="No default" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="none">No default</SelectItem>
-                          {(data?.locations ?? []).map((location) => (
-                            <SelectItem key={location.id} value={String(location.id)}>
-                              {location.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                        data-testid={`input-tracking-shop-${row.supplierId}`}
+                      />
                     </div>
 
                     <div className="space-y-1.5">
@@ -222,6 +219,23 @@ export function SupplierTrackingDefaultsTab({ canManage = false }: { canManage?:
                         list="tracking-agent-options"
                         disabled={!canManage}
                         data-testid={`input-tracking-agent-${row.supplierId}`}
+                      />
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">Default Duty Fee</Label>
+                      <Input
+                        value={draft.dutyFee}
+                        onChange={(event) =>
+                          setDrafts((current) => ({
+                            ...current,
+                            [row.supplierId]: { ...draft, dutyFee: event.target.value },
+                          }))
+                        }
+                        inputMode="decimal"
+                        placeholder="e.g. 48.31"
+                        disabled={!canManage}
+                        data-testid={`input-tracking-duty-${row.supplierId}`}
                       />
                     </div>
 
@@ -259,8 +273,8 @@ export function SupplierTrackingDefaultsTab({ canManage = false }: { canManage?:
             <div>
               <CardTitle className="text-base">Existing containers</CardTitle>
               <CardDescription>
-                Fill only empty Shop Name and Agent fields using the mappings above. Existing non-empty values are never
-                changed.
+                Fill only blank Shop Name, Agent and Duty Fee fields using the mappings above. Existing values,
+                including a manually entered 0 duty, are never changed.
               </CardDescription>
             </div>
           </div>

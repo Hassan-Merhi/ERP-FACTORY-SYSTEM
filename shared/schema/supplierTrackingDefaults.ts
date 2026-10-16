@@ -1,4 +1,4 @@
-import { boolean, index, integer, pgTable, serial, timestamp, uniqueIndex, varchar } from "drizzle-orm/pg-core";
+import { boolean, decimal, index, integer, pgTable, serial, text, timestamp, uniqueIndex, varchar } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import { companies, locations } from "./common";
@@ -23,6 +23,8 @@ export const supplierTrackingDefaults = pgTable(
       .notNull()
       .references(() => companyScopedSuppliers.id, { onDelete: "cascade" }),
     locationId: integer("location_id").references(() => locations.id, { onDelete: "set null" }),
+    shopName: text("shop_name"),
+    dutyFee: decimal("duty_fee", { precision: 15, scale: 2 }),
     agentName: varchar("agent_name", { length: 100 }),
     active: boolean("active").notNull().default(true),
     createdAt: timestamp("created_at").notNull().defaultNow(),
@@ -40,6 +42,8 @@ export const supplierTrackingDefaults = pgTable(
 export const upsertSupplierTrackingDefaultSchema = z.object({
   locationId: z.number().int().positive().nullable().optional(),
   agentName: z.string().trim().max(100).nullable().optional(),
+  shopName: z.string().trim().max(255).nullable().optional(),
+  dutyFee: z.string().trim().regex(/^(?:0|[1-9]\d{0,12})(?:\.\d{1,2})?$/, "Duty must be a non-negative amount with up to 2 decimals").nullable().optional(),
 });
 
 export const insertSupplierTrackingDefaultSchema = createInsertSchema(supplierTrackingDefaults).omit({

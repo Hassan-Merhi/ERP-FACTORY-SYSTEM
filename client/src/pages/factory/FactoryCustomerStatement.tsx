@@ -130,9 +130,17 @@ export default function FactoryCustomerStatement() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { data: statement, isLoading } = useQuery<StatementData>({
-    queryKey: ["/api/factory/customers", customerId, "statement"],
+    queryKey: ["/api/factory/customers", customerId, "statement", filterDateFrom, filterDateTo],
     queryFn: async () => {
-      const res = await fetch(`/api/factory/customers/${customerId}/statement`, { credentials: "include" });
+      // Re-group at each date boundary: a late charge must never shift into
+      // a different accounting period when filtering the statement.
+      const params = new URLSearchParams();
+      if (filterDateFrom) params.set("dateFrom", filterDateFrom);
+      if (filterDateTo) params.set("dateTo", filterDateTo);
+      const query = params.toString();
+      const res = await fetch(`/api/factory/customers/${customerId}/statement${query ? `?${query}` : ""}`, {
+        credentials: "include",
+      });
       if (!res.ok) throw new Error((await res.json()).message || "Failed to fetch statement");
       return res.json();
     },

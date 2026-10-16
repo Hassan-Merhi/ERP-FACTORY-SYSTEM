@@ -11,8 +11,16 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Package, Eye, Search, X, Ban, Loader2 } from "lucide-react";
-import { AddContainerDialog } from "../../components/AddContainerDialog";
+import { Plus, Package, Eye, Search, X, Ban, Loader2, Truck, Check, Download, ChevronDown, Filter } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { utils, writeFile } from "@/lib/excelHelper";
+import { useCurrencyContext } from "@/contexts/CurrencyContext";
+import { spContainerInvoiceChargeLines } from "@shared/spContainerInvoiceCharges";
 import type { Container, Supplier } from "@shared/schema";
 import type { SpContainerWithLines } from "./types";
 
@@ -43,8 +51,6 @@ interface ContainerSpViewProps {
   searchTerm: string;
   setSearchTerm: (v: string) => void;
   isSpLoading: boolean;
-  addDialogOpen: boolean;
-  setAddDialogOpen: (v: boolean) => void;
   setLocation: (path: string) => void;
   formatDisplayDate: (date: string) => string;
 }
@@ -56,15 +62,16 @@ export function ContainerSpView({
   searchTerm,
   setSearchTerm,
   isSpLoading,
-  addDialogOpen,
-  setAddDialogOpen,
   setLocation,
   formatDisplayDate,
 }: ContainerSpViewProps) {
   const { toast } = useToast();
+  const { formatAmount } = useCurrencyContext();
   const queryClient = useQueryClient();
   const [selectedContainer, setSelectedContainer] = useState<SpContainerRowView | null>(null);
   const [reason, setReason] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"ALL" | "OTW" | "OFFLOADED">("ALL");
+  const [supplierFilter, setSupplierFilter] = useState("");
 
   const { data: currentUser } = useQuery<{ role?: string; currentRole?: string | null }>({
     queryKey: ["/api/auth/me"],
@@ -105,8 +112,8 @@ export function ContainerSpView({
       _key: `sp-${c.id}`,
       id: c.id,
       _source: "sp",
-      displayName: c.invoiceNumber || c.containerNumber || `#${c.id}`,
-      subName: c.containerNumber && c.invoiceNumber ? c.containerNumber : null,
+      displayName: c.containerNumber || c.invoiceNumber || `#${c.id}`,
+      subName: c.containerNumber && c.invoiceNumber ? c.invoiceNumber : null,
       supplierName: c.supplierName ?? "",
       status: c.status,
       statusLabel: statusCancelled ? "Cancelled" : statusOffloaded ? "Offloaded" : "Open / OTW",
@@ -180,37 +187,208 @@ export function ContainerSpView({
     };
   });
 
+  // Keep native Supplier Partner and ERP-imported containers in one ERP-style list.
   const allSpItems = [...spNative, ...erpNormalized];
-  const filtered = allSpItems.filter((c) =>
-    searchAny(searchTerm, c.displayName, c.subName, c.supplierName)
+  const visibleContainers = allSpItems.filter((c) => !c.statusCancelled);
+  const otwContainers = visibleContainers.filter((c) => !c.statusOffloaded);
+  const offloadedContainers = visibleContainers.filter((c) => c.statusOffloaded);
+  const totalValue = visibleContainers.reduce((sum, c) => sum + c.totalUsd, 0);
+  const supplierNames = Array.from(new Set(allSpItems.map((c) => c.supplierName).filter(Boolean))).sort();
+  const filtered = allSpItems.filter(
+    (c) =>
+      searchAny(searchTerm, c.displayName, c.subName, c.supplierName) &&
+      (statusFilter === "ALL" ||
+        (statusFilter === "OTW" ? !c.statusOffloaded && !c.statusCancelled : c.statusOffloaded)) &&
+      (!supplierFilter || c.supplierName === supplierFilter)
   );
+
+  const exportContainers = async (full: boolean) => {
+    try {
+      const summary = filtered.map((c) => ({
+        "Container Number": c.subName || c.displayName,
+        "Invoice / PO": c._source === "sp" ? c.displayName : "",
+        Supplier: c.supplierName,
+        Status: c.statusLabel,
+        "Import / Invoice Date": formatDisplayDate(c.date),
+        "Total (USD)": c.totalUsd,
+        Source: c._source === "sp" ? "Supplier Partner" : "ERP",
+      }));
+      const book = utils.book_new();
+      utils.book_append_sheet(book, utils.json_to_sheet(summary), "Containers");
+      if (full) {
+        const detailRows: Record<string, string | number>[] = [];
+        for (const c of filtered) {
+          if (c._source === "sp") {
+            const native = spContainersList.find((item) => item.id === c.id);
+            if (!native) continue;
+            const factor = 1 - parseFloat(native.discountPct ?? "0") / 100;
+            for (const line of native.lines ?? []) {
+              const quantity = parseFloat(line.qty ?? "0");
+              const rate = parseFloat(line.unitRateUsd ?? "0") * factor;
+              detailRows.push({
+                Container: native.containerNumber || "",
+                Invoice: native.invoiceNumber || "",
+                Supplier: native.supplierName || "",
+                "Item Name": line.description || line.articleCode,
+                Quantity: quantity,
+                "Rate (USD)": rate,
+                "Total (USD)": quantity * rate,
+              });
+            }
+            for (const charge of spContainerInvoiceChargeLines(native)) {
+              detailRows.push({
+                Container: native.containerNumber || "",
+                Invoice: native.invoiceNumber || "",
+                Supplier: native.supplierName || "",
+                "Item Name": charge.description,
+                Quantity: 1,
+                "Rate (USD)": charge.amountUsd,
+                "Total (USD)": charge.amountUsd,
+              });
+            }
+            detailRows.push({
+              Container: native.containerNumber || "",
+              Invoice: native.invoiceNumber || "",
+              Supplier: native.supplierName || "",
+              "Item Name": "Recorded Invoice Total",
+              Quantity: Number(native.totalQty || 0),
+              "Rate (USD)": 0,
+              "Total (USD)": Number(native.invoiceTotalUsd || 0),
+            });
+          } else {
+            const response = await fetch("/api/containers/" + c.id, { credentials: "include" });
+            if (!response.ok) throw new Error("Cannot export ERP container " + c.displayName);
+            const detail = (await response.json()) as {
+              pos?: { items?: { itemName?: string; quantity?: string; rate?: string; lineTotal?: string }[] }[];
+            };
+            for (const po of detail.pos ?? []) {
+              for (const item of po.items ?? []) {
+                detailRows.push({
+                  Container: c.displayName,
+                  Invoice: "",
+                  Supplier: c.supplierName,
+                  "Item Name": item.itemName || "",
+                  Quantity: Number(item.quantity || 0),
+                  "Rate (USD)": Number(item.rate || 0),
+                  "Total (USD)": Number(item.lineTotal || 0),
+                });
+              }
+            }
+          }
+        }
+        utils.book_append_sheet(
+          book,
+          utils.json_to_sheet(detailRows.length ? detailRows : [{ Message: "No line items" }]),
+          "Line Items"
+        );
+      }
+      await writeFile(book, full ? "containers_full_export.xlsx" : "containers.xlsx");
+    } catch (error) {
+      toast({
+        title: "Export failed",
+        description: error instanceof Error ? error.message : String(error),
+        variant: "destructive",
+      });
+    }
+  };
 
   return (
     <div className="space-y-4 sm:space-y-6">
-      <PageHeader title="Container Tracking" subtitle="Supplier partner containers">
-        <div className="flex gap-2 flex-wrap">
-          <Button className="gap-2" onClick={() => setAddDialogOpen(true)} data-testid="button-add-container">
-            <Plus className="h-4 w-4" />
-            Import Container
+      <PageHeader title="Container Tracking" subtitle="Track containers and manage offloading">
+        <div className="flex flex-wrap gap-2">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" className="gap-2" data-testid="button-export-dropdown">
+                <Download className="h-4 w-4" /> Export <ChevronDown className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start">
+              <DropdownMenuItem onClick={() => void exportContainers(false)} data-testid="button-export-excel">
+                Export
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => void exportContainers(true)} data-testid="button-export-all-full">
+                Export All (Full)
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <Button className="gap-2" onClick={() => setLocation("/po-import")} data-testid="button-add-container">
+            <Plus className="h-4 w-4" /> Add
           </Button>
         </div>
       </PageHeader>
-
+      <div className="flex flex-wrap gap-3" data-testid="sp-container-summary">
+        <div className="rounded-lg bg-muted/60 px-3 py-2 flex items-center gap-2">
+          <Package className="h-4 w-4 text-muted-foreground" />
+          <strong className="text-sm">{visibleContainers.length}</strong>
+          <span className="text-xs text-muted-foreground">Containers</span>
+        </div>
+        <div className="rounded-lg bg-blue-500/10 px-3 py-2 flex items-center gap-2">
+          <Truck className="h-4 w-4 text-blue-600" />
+          <strong className="text-sm">{otwContainers.length}</strong>
+          <span className="text-xs text-muted-foreground">OTW</span>
+        </div>
+        <div className="rounded-lg bg-green-500/10 px-3 py-2 flex items-center gap-2">
+          <Check className="h-4 w-4 text-green-600" />
+          <strong className="text-sm">{offloadedContainers.length}</strong>
+          <span className="text-xs text-muted-foreground">Offloaded</span>
+        </div>
+        <div className="rounded-lg bg-primary/10 px-3 py-2 flex items-center gap-2">
+          <strong className="text-sm tabular-nums">{formatAmount(totalValue)}</strong>
+          <span className="text-xs text-muted-foreground">total value</span>
+        </div>
+      </div>
       <div className="flex flex-wrap gap-2 items-center">
-        <div className="relative flex-1 min-w-[200px]">
+        <div className="relative flex-1 min-w-[220px]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder="Search by invoice, container, supplier…"
+            placeholder="Search by container number, invoice, supplier..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="pl-10"
             data-testid="input-search-container"
           />
         </div>
-        {searchTerm && (
-          <Button variant="ghost" size="sm" onClick={() => setSearchTerm("")} data-testid="button-clear-search">
-            <X className="h-4 w-4 mr-1" />
-            Clear
+        <div className="flex gap-1">
+          {(["ALL", "OTW", "OFFLOADED"] as const).map((status) => (
+            <Button
+              key={status}
+              size="sm"
+              variant={statusFilter === status ? "default" : "outline"}
+              onClick={() => setStatusFilter(status)}
+              data-testid={"button-status-" + status.toLowerCase()}
+            >
+              {status === "ALL" ? "All" : status === "OTW" ? "OTW" : "Offloaded"}
+            </Button>
+          ))}
+        </div>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" size="sm" className="gap-1" data-testid="select-supplier-filter">
+              <Filter className="h-4 w-4" />
+              {supplierFilter || "All Suppliers"}
+              <ChevronDown className="h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent>
+            <DropdownMenuItem onClick={() => setSupplierFilter("")}>All Suppliers</DropdownMenuItem>
+            {supplierNames.map((name) => (
+              <DropdownMenuItem key={name} onClick={() => setSupplierFilter(name)}>
+                {name}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+        {(searchTerm || supplierFilter || statusFilter !== "ALL") && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              setSearchTerm("");
+              setSupplierFilter("");
+              setStatusFilter("ALL");
+            }}
+          >
+            <X className="h-4 w-4 mr-1" /> Clear
           </Button>
         )}
       </div>
@@ -238,7 +416,7 @@ export function ContainerSpView({
             return (
               <div
                 key={c._key}
-                className={`flex items-center gap-4 p-4 rounded-md border border-border bg-card ${
+                className={`flex flex-col gap-3 p-4 rounded-xl border border-border bg-card sm:flex-row sm:items-center sm:gap-4 ${
                   rowIsNavigable ? "hover-elevate cursor-pointer" : "opacity-75"
                 }`}
                 onClick={() => {
@@ -246,31 +424,38 @@ export function ContainerSpView({
                 }}
                 data-testid={`row-sp-container-${c.id}`}
               >
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="font-medium text-sm">{c.displayName}</span>
-                    {c.subName && <span className="text-xs text-muted-foreground font-mono">{c.subName}</span>}
-                    <Badge
-                      variant="outline"
-                      className={
-                        c.statusCancelled
-                          ? "text-muted-foreground border-muted-foreground/40"
-                          : c.statusOffloaded
-                            ? "text-green-600 border-green-600/40"
-                            : "text-blue-600 border-blue-600/40"
-                      }
-                    >
-                      {c.statusLabel}
-                    </Badge>
+                <div className="flex flex-1 min-w-0 items-center gap-3">
+                  <div className="shrink-0 w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                    <Package className="h-5 w-5 text-primary" />
                   </div>
-                  <p className="text-xs text-muted-foreground mt-0.5">{c.supplierName}</p>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-semibold text-sm font-mono">{c.displayName}</span>
+                      <Badge
+                        variant="outline"
+                        className={
+                          c.statusCancelled
+                            ? "text-muted-foreground border-muted-foreground/40"
+                            : c.statusOffloaded
+                              ? "text-green-600 border-green-600/40"
+                              : "text-blue-600 border-blue-600/40"
+                        }
+                      >
+                        {c.statusLabel}
+                      </Badge>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {c.supplierName}
+                      {c.subName ? ` · PO ${c.subName}` : ""}
+                    </p>
+                  </div>
                 </div>
-                <div className="text-right hidden sm:block">
+                <div className="text-left sm:text-right">
                   <p className="text-xs text-muted-foreground">{c.dateLabel}</p>
                   <p className="text-sm font-mono">{formatDisplayDate(c.date)}</p>
                 </div>
-                <div className="text-right">
-                  <p className="text-xs text-muted-foreground hidden sm:block">Total (USD)</p>
+                <div className="text-left sm:text-right">
+                  <p className="text-xs text-muted-foreground">Total (USD)</p>
                   <p className="text-sm font-mono font-semibold">
                     ${c.totalUsd.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </p>
@@ -300,7 +485,7 @@ export function ContainerSpView({
                       data-remote-control-action="view-container"
                     >
                       <Eye className="h-4 w-4 mr-1" />
-                      View
+                      View PO
                     </Button>
                   </Link>
                 )}
@@ -309,8 +494,6 @@ export function ContainerSpView({
           })}
         </div>
       )}
-
-      <AddContainerDialog open={addDialogOpen} onOpenChange={setAddDialogOpen} isSP={true} />
 
       <Dialog
         open={!!selectedContainer}

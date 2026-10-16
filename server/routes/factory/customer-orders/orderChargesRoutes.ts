@@ -91,15 +91,14 @@ export function registerOrderChargesRoutes(app: Express) {
         .from(customerOrders)
         .where(and(eq(customerOrders.id, orderId), eq(customerOrders.companyId, companyId)));
       if (!orderPreview) return res.status(404).json({ message: "Order not found" });
-      // Read as parseFloat read it; one that does not parse posts no voucher.
+      // Charge vouchers are only posted on FINALIZED invoices. Non-finalized
+      // order charges remain operational amounts until the customer is billed.
       const chargeAmt = parseMoneyInput(String(amount)) ?? toMoney(0);
       const resolvedLedgerAccountId = ledgerAccountId ? parseInt(ledgerAccountId) : null;
       // Master data first (its own commit): the customer's ledger account.
       const customerAccountId =
-        resolvedLedgerAccountId && chargeAmt.greaterThan(0)
-          ? orderPreview.status === "FINALIZED"
-            ? await customerLedgerAccountId(companyId, orderPreview.customerId)
-            : await existingCustomerLedgerAccountId(orderPreview.customerId)
+        resolvedLedgerAccountId && chargeAmt.greaterThan(0) && orderPreview.status === "FINALIZED"
+          ? await customerLedgerAccountId(companyId, orderPreview.customerId)
           : null;
 
       const result = await db.transaction(async (tx) => {
@@ -143,29 +142,10 @@ export function registerOrderChargesRoutes(app: Express) {
             chargeWarning =
               "Charge saved but no ledger entry was created — no ledger account was linked to this charge.";
           }
-        } else if (
-          ["PENDING_VERIFICATION", "VERIFIED"].includes(status) &&
-          newCharge &&
-          resolvedLedgerAccountId &&
-          chargeAmt.greaterThan(0) &&
-          customerAccountId
-        ) {
-          // PRE-voucher before finalization (CHARGE-PRE-{order}-{charge}); finalize
-          // renames it to the invoice-based number, so it is never counted twice.
-          await postOrderChargeVoucherTx(tx, {
-            companyId,
-            chargeId: newCharge.id,
-            voucherNumber: preChargeVoucherNumber(orderId, newCharge.id),
-            voucherDate: order.orderDate || getClientDate(req),
-            description: order.containerNumber
-              ? `${name} for container - ${order.containerNumber}`
-              : `${name} - Order #${orderId}`,
-            customerId: order.customerId,
-            customerLedgerAccountId: customerAccountId,
-            chargeLedgerAccountId: resolvedLedgerAccountId,
-            amount: chargeAmt,
-          });
         }
+        // Pending/Loading/Verified charges do not generate customer debt.
+        // finalize-loading/finalize.ts creates their vouchers when the order
+        // becomes FINALIZED, while preserving any historical linked PRE-vouchers.
 
         await syncOrderTotalsTx(tx, companyId, orderId);
         return { chargeWarning };
@@ -346,13 +326,14 @@ export function registerOrderChargesRoutes(app: Express) {
           });
         }
 
-        // If a ledger account is being assigned to a charge that has NO voucher yet,
-        // create the accounting voucher retroactively now (handles old/legacy charges).
+        // A newly linked ledger account can create a charge voucher only
+        // AFTER finalization. Pending and verified charges stay outside the
+        // customer's statement and ledger until the invoice is finalized.
         const newLedgerAccountId = ledgerAccountId ? parseInt(ledgerAccountId) : null;
         if (
           newLedgerAccountId &&
           !chargeBeforeUpdate.voucherId &&
-          ["PENDING_VERIFICATION", "VERIFIED", "FINALIZED"].includes(order.status)
+          order.status === "FINALIZED"
         ) {
           const [updatedCharge] = await tx
             .select()
@@ -365,14 +346,10 @@ export function registerOrderChargesRoutes(app: Express) {
             ? await existingCustomerLedgerAccountId(order.customerId)
             : null;
           if (customerAccountId) {
-            const isFinalized = order.status === "FINALIZED";
             await postOrderChargeVoucherTx(tx, {
               companyId,
               chargeId,
-              voucherNumber:
-                isFinalized && order.invoiceNumber
-                  ? finalizedChargeVoucherNumber(order.invoiceNumber, chargeId)
-                  : preChargeVoucherNumber(orderId, chargeId),
+              voucherNumber: finalizedChargeVoucherNumber(order.invoiceNumber || `ORD-${orderId}`, chargeId),
               voucherDate: order.orderDate || getClientDate(req),
               description: order.containerNumber
                 ? `${updatedCharge?.name || "Charge"} for container - ${order.containerNumber}`

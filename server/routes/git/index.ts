@@ -10,10 +10,14 @@ import { registerGitReportRoutes } from "./gitReportRoutes";
 import { registerGitImportRoutes } from "./gitImportRoutes";
 import { registerGitWhatsappRoutes } from "./gitWhatsappRoutes";
 import { registerGitAgentRoutes } from "./gitAgentRoutes";
+import { registerSpGitTrackingRoutes } from "./spGitTrackingRoutes";
+import { registerSpGitTrackingImportRoutes } from "./spGitTrackingImportRoutes";
 
 export function registerGitRoutes(app: Express) {
   registerGitReportRoutes(app);
   registerGitImportRoutes(app);
   registerGitWhatsappRoutes(app);
   registerGitAgentRoutes(app);
+  registerSpGitTrackingRoutes(app);
+  registerSpGitTrackingImportRoutes(app);
 }

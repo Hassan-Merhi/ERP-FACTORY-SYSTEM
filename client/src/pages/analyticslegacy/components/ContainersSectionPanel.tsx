@@ -1,11 +1,10 @@
-import { Fragment, useState } from "react";
+import { Fragment } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { DatePickerInput } from "@/components/ui/date-picker-input";
 import { PeriodFilter } from "@/components/ui/period-filter";
 import { ChevronDown, Container as ContainerIcon, Check } from "lucide-react";
 
@@ -15,29 +14,17 @@ import { FactoryAllContainersReport } from "./FactoryAllContainersReport";
 import type { AnalyticsLegacyState } from "../useAnalyticsLegacy";
 
 export function ContainersSectionPanel({ analytics }: { analytics: AnalyticsLegacyState }) {
-  const [factoryReportView, setFactoryReportView] = useState<"all" | "sales">("all");
   const {
     activeSection,
     appMode,
     containerData,
     containerPeriodFilter,
-    factoryContainerCustomerId,
-    factoryContainerEndDate,
-    factoryContainerPaymentStatus,
-    factoryContainerSales,
-    factoryContainerStartDate,
-    factorySalesByCustomer,
     formatAmount,
     loadingContainers,
-    loadingFactoryContainerSales,
     reportAllCompanies,
     reportContainerStatus,
     reportSupplierIds,
     setContainerPeriodFilter,
-    setFactoryContainerCustomerId,
-    setFactoryContainerEndDate,
-    setFactoryContainerPaymentStatus,
-    setFactoryContainerStartDate,
     setReportAllCompanies,
     setReportContainerStatus,
     setReportSupplierIds,
@@ -45,210 +32,7 @@ export function ContainersSectionPanel({ analytics }: { analytics: AnalyticsLega
   } = analytics;
   return (
     <>
-      {activeSection === "containers" && appMode === "factory" && (
-        <div className="flex flex-wrap gap-2" aria-label="Factory container report view">
-          <Button
-            variant={factoryReportView === "all" ? "secondary" : "outline"}
-            onClick={() => setFactoryReportView("all")}
-            data-testid="factory-container-report-all"
-          >
-            All Containers
-          </Button>
-          <Button
-            variant={factoryReportView === "sales" ? "secondary" : "outline"}
-            onClick={() => setFactoryReportView("sales")}
-            data-testid="factory-container-report-sales"
-          >
-            Container Sales
-          </Button>
-        </div>
-      )}
-      {activeSection === "containers" && appMode === "factory" && factoryReportView === "all" && (
-        <FactoryAllContainersReport />
-      )}
-      {activeSection === "containers" && appMode === "factory" && factoryReportView === "sales" && (
-        <Card className="p-6">
-          <div className="flex flex-wrap items-center gap-3 mb-4">
-            <h3 className="text-lg font-medium flex items-center gap-2">
-              <ContainerIcon className="h-5 w-5" />
-              Container Report
-            </h3>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-            <div>
-              <Label>Start Date</Label>
-              <DatePickerInput
-                value={factoryContainerStartDate}
-                onChange={setFactoryContainerStartDate}
-                placeholder="Start date"
-              />
-            </div>
-            <div>
-              <Label>End Date</Label>
-              <DatePickerInput
-                value={factoryContainerEndDate}
-                onChange={setFactoryContainerEndDate}
-                placeholder="End date"
-              />
-            </div>
-            <div>
-              <Label>Customer</Label>
-              <Select value={factoryContainerCustomerId} onValueChange={setFactoryContainerCustomerId}>
-                <SelectTrigger>
-                  <SelectValue placeholder="All Customers" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Customers</SelectItem>
-                  {factorySalesByCustomer.map((r) => (
-                    <SelectItem key={r.customerId} value={String(r.customerId ?? "")}>
-                      {r.customerName || `Customer #${r.customerId}`}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label>Payment Status</Label>
-              <Select value={factoryContainerPaymentStatus} onValueChange={setFactoryContainerPaymentStatus}>
-                <SelectTrigger>
-                  <SelectValue placeholder="All Status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All</SelectItem>
-                  <SelectItem value="PENDING">Pending</SelectItem>
-                  <SelectItem value="PARTIAL">Partial</SelectItem>
-                  <SelectItem value="PAID">Paid</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          {loadingFactoryContainerSales ? (
-            <div className="text-center py-8 text-muted-foreground">Loading...</div>
-          ) : factoryContainerSales ? (
-            <div className="space-y-4">
-              {/* Summary cards */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                <div className="border rounded-md p-3">
-                  <div className="text-xs text-muted-foreground">Containers</div>
-                  <div className="text-xl font-bold">{factoryContainerSales.summary.count}</div>
-                </div>
-                <div className="border rounded-md p-3">
-                  <div className="text-xs text-muted-foreground">Total Value</div>
-                  <div className="text-xl font-bold font-mono">{formatAmount(factoryContainerSales.summary.total)}</div>
-                </div>
-                <div className="border rounded-md p-3">
-                  <div className="text-xs text-muted-foreground">Paid</div>
-                  <div className="text-xl font-bold font-mono text-green-600 dark:text-green-400">
-                    {formatAmount(factoryContainerSales.summary.paid)}
-                  </div>
-                </div>
-                <div className="border rounded-md p-3">
-                  <div className="text-xs text-muted-foreground">Outstanding</div>
-                  <div className="text-xl font-bold font-mono text-amber-600 dark:text-amber-400">
-                    {formatAmount(factoryContainerSales.summary.outstanding)}
-                  </div>
-                </div>
-              </div>
-
-              <div className="hidden md:block overflow-x-auto">
-                <Table>
-                  <TableHeader className="sticky top-0 z-30 bg-background">
-                    <TableRow>
-                      <TableHead>Container #</TableHead>
-                      <TableHead>Customer</TableHead>
-                      <TableHead>Invoice</TableHead>
-                      <TableHead>Sale Date</TableHead>
-                      <TableHead>Container Status</TableHead>
-                      <TableHead>Payment</TableHead>
-                      <TableHead className="text-right">Total</TableHead>
-                      <TableHead className="text-right">Paid</TableHead>
-                      <TableHead className="text-right">Outstanding</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {factoryContainerSales.rows.map((row) => (
-                      <TableRow key={row.id}>
-                        <TableCell className="font-mono">{row.containerNumber || "-"}</TableCell>
-                        <TableCell className="font-medium">{row.customerName || `#${row.customerId}`}</TableCell>
-                        <TableCell className="font-mono text-sm">{row.invoiceNumber || "-"}</TableCell>
-                        <TableCell>{row.saleDate}</TableCell>
-                        <TableCell>
-                          <span
-                            className={`text-xs font-medium px-2 py-0.5 rounded-full border ${row.containerStatus === "OFFLOADED" ? "bg-green-50 border-green-200 text-green-700 dark:bg-green-950 dark:border-green-800 dark:text-green-300" : "bg-muted border-muted-foreground/20 text-muted-foreground"}`}
-                          >
-                            {row.containerStatus || "-"}
-                          </span>
-                        </TableCell>
-                        <TableCell>
-                          <span
-                            className={`text-xs font-medium px-2 py-0.5 rounded-full border ${row.paymentStatus === "PAID" ? "bg-green-50 border-green-200 text-green-700 dark:bg-green-950 dark:border-green-800 dark:text-green-300" : row.paymentStatus === "PARTIAL" ? "bg-amber-50 border-amber-200 text-amber-700 dark:bg-amber-950 dark:border-amber-800 dark:text-amber-300" : "bg-muted border-muted-foreground/20 text-muted-foreground"}`}
-                          >
-                            {row.paymentStatus}
-                          </span>
-                        </TableCell>
-                        <TableCell className="text-right font-mono">
-                          {formatAmount(parseFloat(row.totalAmount))}
-                        </TableCell>
-                        <TableCell className="text-right font-mono text-green-600 dark:text-green-400">
-                          {formatAmount(parseFloat(row.paidAmount))}
-                        </TableCell>
-                        <TableCell className="text-right font-mono text-amber-600 dark:text-amber-400">
-                          {formatAmount(parseFloat(row.totalAmount) - parseFloat(row.paidAmount))}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-              <div className="md:hidden space-y-3">
-                {factoryContainerSales.rows.map((row) => (
-                  <Card key={row.id}>
-                    <CardContent className="p-4 space-y-2">
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="font-mono font-medium">{row.containerNumber || "-"}</span>
-                        <span
-                          className={`text-xs font-medium px-2 py-0.5 rounded-full border ${row.paymentStatus === "PAID" ? "bg-green-50 border-green-200 text-green-700 dark:bg-green-950 dark:border-green-800 dark:text-green-300" : row.paymentStatus === "PARTIAL" ? "bg-amber-50 border-amber-200 text-amber-700 dark:bg-amber-950 dark:border-amber-800 dark:text-amber-300" : "bg-muted border-muted-foreground/20 text-muted-foreground"}`}
-                        >
-                          {row.paymentStatus}
-                        </span>
-                      </div>
-                      <div className="text-sm text-muted-foreground">
-                        {row.customerName} · {row.saleDate}
-                      </div>
-                      <div className="grid grid-cols-3 gap-2 text-xs pt-1 border-t">
-                        <div>
-                          <span className="text-muted-foreground block">Total</span>
-                          <span className="font-mono">{formatAmount(parseFloat(row.totalAmount))}</span>
-                        </div>
-                        <div>
-                          <span className="text-muted-foreground block">Paid</span>
-                          <span className="font-mono text-green-600 dark:text-green-400">
-                            {formatAmount(parseFloat(row.paidAmount))}
-                          </span>
-                        </div>
-                        <div className="text-right">
-                          <span className="text-muted-foreground block">Outstanding</span>
-                          <span className="font-mono text-amber-600 dark:text-amber-400">
-                            {formatAmount(parseFloat(row.totalAmount) - parseFloat(row.paidAmount))}
-                          </span>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            </div>
-          ) : (
-            <div className="flex flex-col items-center justify-center gap-3 py-14 text-muted-foreground">
-              <ContainerIcon className="h-10 w-10 opacity-25" />
-              <p className="text-sm font-medium">No data yet</p>
-              <p className="text-xs opacity-60">Adjust the filters above to load the report</p>
-            </div>
-          )}
-        </Card>
-      )}
+      {activeSection === "containers" && appMode === "factory" && <FactoryAllContainersReport />}
 
       {activeSection === "containers" && appMode !== "factory" && (
         <Card className="p-6">

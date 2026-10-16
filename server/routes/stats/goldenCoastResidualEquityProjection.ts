@@ -46,6 +46,9 @@ const INTERNAL_SP_SUBTYPES = new Set([
   "sp_cost_clearing",
   "sp_pay_deduction_clearing",
   "sp_opnbal",
+  // This is a debit-side control account for an approved profit correction,
+  // not cash, sale proceeds, stock or a collectible balance-sheet asset.
+  "sp_profit_correction_suspense",
 ]);
 
 function numberValue(value: unknown): number {
@@ -210,6 +213,63 @@ export function projectGoldenCoastResidualEquity(input: {
     onUsTotal = round2(onUsTotal - removedLiability.removed);
   }
 
+  // Exclude the profit-correction suspense counterpart from GC Net Position
+  // entirely, not just from visible rows. It is a reconciliation control
+  // ledger used to balance the month-close journal, not an additional asset.
+  // If the generic projection included the account, reverse its contribution
+  // here; otherwise INTERNAL_SP_SUBTYPES prevents it being added below.
+  // Neither the actual journal nor either partner's posted split is changed.
+  for (const account of roles.active) {
+    if (account.subType !== "sp_profit_correction_suspense") continue;
+    const asset = removeAccountById(forUsAccounts, account.id);
+    const liability = removeAccountById(onUsAccounts, account.id);
+    forUsAccounts = asset.accounts;
+    onUsAccounts = liability.accounts;
+    forUsTotal = round2(forUsTotal - asset.removed);
+    onUsTotal = round2(onUsTotal - liability.removed);
+  }
+
+  // Fresh Start inventory in transit is a GC asset, like GC Sales Cash on the
+  // "What We Have" side of Net Position. Rebase from the canonical Goods OTW
+  // ledger instead of blindly adding a second row if the base report included
+  // the account already. Goods OTW Clearing is an internal balance-sheet
+  // counterpart and MUST remain excluded from this partner-equity presentation.
+  // As goods are offloaded, their debit leaves Goods OTW and moves to Stock;
+  // showing both the old and new value would overstate Fresh Start's residual.
+  for (const account of roles.active) {
+    if (account.subType !== "sp_goods_otw") continue;
+    const oldAsset = removeAccountById(forUsAccounts, account.id);
+    const oldLiability = removeAccountById(onUsAccounts, account.id);
+    forUsAccounts = oldAsset.accounts;
+    onUsAccounts = oldLiability.accounts;
+    forUsTotal = round2(forUsTotal - oldAsset.removed);
+    onUsTotal = round2(onUsTotal - oldLiability.removed);
+
+    const amount = round2(getAccountNetBalance(account, accountBalances));
+    if (amount >= 0.005) {
+      forUsAccounts.push({
+        id: account.id,
+        name: "Goods OTW",
+        code: account.code || "",
+        value: amount,
+        category: "Goods OTW",
+      });
+      forUsTotal = round2(forUsTotal + amount);
+    } else if (amount <= -0.005) {
+      // A credit/negative OTW balance is not an asset. Represent its adverse
+      // effect once on the owe side rather than inflating Fresh Start equity.
+      const deficit = round2(-amount);
+      onUsAccounts.push({
+        id: account.id,
+        name: "Goods OTW",
+        code: account.code || "",
+        value: deficit,
+        category: "Goods OTW Adjustment",
+      });
+      onUsTotal = round2(onUsTotal + deficit);
+    }
+  }
+
   const existingIds = new Set<number>(
     [...forUsAccounts, ...onUsAccounts]
       .map((account) => Number(account.id ?? 0))
@@ -226,6 +286,7 @@ export function projectGoldenCoastResidualEquity(input: {
   for (const account of roles.active) {
     if (existingIds.has(account.id)) continue;
     if (INTERNAL_SP_SUBTYPES.has(account.subType || "")) continue;
+    if (account.subType === "sp_goods_otw") continue; // displayed once above from ledger
     if (account.id === roles.fresh.id || account.id === roles.hassan.id) continue;
     if (account.subType === "sp_hadi_intercompany") continue;
     if (isCustomerNetPositionAccount(account)) continue;
@@ -273,6 +334,27 @@ export function projectGoldenCoastResidualEquity(input: {
         value,
         category: displayCategory(account, "asset"),
       });
+    } else if (
+      (account.code || "").trim().toUpperCase() === "INVENTORY" ||
+      (account.name || "").trim().toLowerCase() === "inventory"
+    ) {
+      // Inventory is a contra-asset, not an outside party we owe.
+      // Offset the existing computed stock figure so the current net position
+      // remains identical while What We Owe contains only genuine liabilities.
+      forUsTotal = round2(forUsTotal + net);
+      const stockLine = forUsAccounts.find(
+        (line) => line.code === "COMPUTED" && line.category === "Inventory"
+      );
+      if (stockLine) stockLine.value = round2(stockLine.value + net);
+      else {
+        forUsAccounts.push({
+          id: account.id,
+          name: account.name,
+          code: account.code || "",
+          value: net,
+          category: "Inventory",
+        });
+      }
     } else {
       const value = round2(Math.abs(net));
       onUsTotal = round2(onUsTotal + value);
@@ -335,8 +417,23 @@ export function projectGoldenCoastResidualEquity(input: {
     legacyOpeningPayableReclassification: 0,
   };
 
-  const forUsBreakdown = addBreakdown(forUsAccounts);
-  const onUsBreakdown = addBreakdown(onUsAccounts);
+  // Defensive final presentation filter. A correction journal retains its
+  // original suspense line for audit, while Net Position excludes that line
+  // both from the visible account groups AND from its balance-sheet totals.
+  const correctionSuspenseIds = new Set(
+    roles.active
+      .filter((account) => account.subType === "sp_profit_correction_suspense")
+      .map((account) => account.id)
+  );
+  const isCorrectionSuspense = (account: DisplayAccount): boolean =>
+    (account.id != null && correctionSuspenseIds.has(account.id)) ||
+    (account.code || "").toUpperCase() === "SP-PROFIT-ADJ-SUSPENSE" ||
+    account.name.trim().toLowerCase() === "sp profit correction suspense";
+  const visibleForUsAccounts = forUsAccounts.filter((account) => !isCorrectionSuspense(account));
+  const visibleOnUsAccounts = onUsAccounts.filter((account) => !isCorrectionSuspense(account));
+
+  const forUsBreakdown = addBreakdown(visibleForUsAccounts);
+  const onUsBreakdown = addBreakdown(visibleOnUsAccounts);
   const netPositionBreakdown = {
     ...(body.netPositionBreakdown || {}),
     assets: { total: forUsTotal, breakdown: forUsBreakdown },
@@ -351,13 +448,13 @@ export function projectGoldenCoastResidualEquity(input: {
       ...body.forUs,
       total: forUsTotal,
       breakdown: forUsBreakdown,
-      accounts: forUsAccounts,
+      accounts: visibleForUsAccounts,
     },
     onUs: {
       ...body.onUs,
       total: onUsTotal,
       breakdown: onUsBreakdown,
-      accounts: onUsAccounts,
+      accounts: visibleOnUsAccounts,
     },
     equity,
     netPosition,

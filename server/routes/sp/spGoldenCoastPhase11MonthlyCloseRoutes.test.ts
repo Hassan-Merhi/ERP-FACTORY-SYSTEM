@@ -54,6 +54,26 @@ describe("Golden Coast Phase 11 monthly close route surface", () => {
     expect(routeSource).toContain("Profit Pending Distribution did not return to zero");
   });
 
+
+  it("allows only developers to edit an unfinalized month and keeps corrections auditable", () => {
+    expect(routeSource).toContain('"/api/sp/golden-coast/profit-correction"');
+    expect(routeSource).toContain("requireDeveloperProfitEdit(req, res)");
+    expect(routeSource).toContain("getLatestSpProfitCorrection");
+    expect(routeSource).toContain("GC_PROFIT_PERIOD_CLOSED");
+    expect(routeSource).toContain("pg_advisory_xact_lock(73111");
+    expect(routeSource).toContain("sp_profit_manual_corrections");
+    expect(routeSource).toContain("correctionSuspenseAccountId");
+    expect(serviceSource).toContain("manualAdjustmentUsd");
+    expect(serviceSource).toContain("Manual profit correction suspense ledger");
+  });
+
+  it("returns the persisted Journal voucher when a month has already been closed", () => {
+    expect(routeSource).toContain("goldenCoastPhase11IdempotencyKey(companyId, probe.periodMonth)");
+    expect(routeSource).toContain('journal?.voucherType === "Journal"');
+    expect(routeSource).toContain("journalVerified: Boolean(voucher)");
+    expect(routeSource).toContain("return { replayed: false, split, voucher: posted.voucher, plan }");
+  });
+
   it("posts only through the central engine", () => {
     expect(routeSource).toContain("postBalancedVoucherTx");
     expect(routeSource).toContain("createDatabasePostingDependencies()");

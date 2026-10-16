@@ -565,7 +565,11 @@ export function resolveFactoryPageKey(path: string): string | null {
 export function factoryPageAllowsRole(page: FactoryPageDefinition, role?: string | null): boolean {
   const level = page.accessLevel ?? "user";
   if (level === "developer") return role === "Developer";
-  if (level === "admin") return role === "Admin" || role === "Developer";
+  // Account Groups is also routed to Owners in FactoryRoutes; keep the
+  // exception local rather than widening every admin-only Factory page.
+  if (level === "admin") {
+    return role === "Admin" || role === "Developer" || (page.key === "factory/account-groups" && role === "Owner");
+  }
   return true;
 }
 

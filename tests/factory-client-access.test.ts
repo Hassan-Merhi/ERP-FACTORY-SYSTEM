@@ -6,6 +6,7 @@ import {
   factoryPageOwnsSharedAccountingRead,
 } from "../client/src/lib/factoryClientAccess";
 import type { FactoryMyAccess } from "../shared/apiTypes";
+import { factoryPageAllowsRole, resolveFactoryPage } from "../shared/factoryAccessRegistry";
 
 function access(overrides: Partial<FactoryMyAccess> = {}): FactoryMyAccess {
   return {
@@ -57,14 +58,28 @@ describe("canUseFactorySurface", () => {
 });
 
 describe("Factory shared accounting ownership", () => {
+  it("lets Factory Owners access Account Groups without broadening admin-only pages", () => {
+    const groups = resolveFactoryPage("/factory/account-groups");
+    const settings = resolveFactoryPage("/factory/settings");
+    expect(groups).not.toBeNull();
+    expect(settings).not.toBeNull();
+    expect(factoryPageAllowsRole(groups!, "Owner")).toBe(true);
+    expect(factoryPageAllowsRole(groups!, "Admin")).toBe(true);
+    expect(factoryPageAllowsRole(groups!, "Developer")).toBe(true);
+    expect(factoryPageAllowsRole(groups!, "Accountant")).toBe(false);
+    expect(factoryPageAllowsRole(settings!, "Owner")).toBe(false);
+  });
+
   it("allows ledger/bank reads only from backend-owned Factory pages", () => {
     expect(factoryPageOwnsSharedAccountingRead("/factory/accounts")).toBe(true);
+    expect(factoryPageOwnsSharedAccountingRead("/factory/account-groups")).toBe(true);
     expect(factoryPageOwnsSharedAccountingRead("/factory/invoicing?tab=proformas")).toBe(true);
     expect(factoryPageOwnsSharedAccountingRead("/factory/production-report")).toBe(false);
   });
 
   it("keeps /api/accounts/all stricter than ledger/bank picker reads", () => {
     expect(factoryPageOwnsAccountsAllRead("/factory/accounts")).toBe(true);
+    expect(factoryPageOwnsAccountsAllRead("/factory/account-groups")).toBe(false);
     expect(factoryPageOwnsAccountsAllRead("/factory/invoicing")).toBe(false);
     expect(factoryPageOwnsAccountsAllRead("/factory/stock-entry")).toBe(false);
   });

@@ -4,6 +4,7 @@ import { apiRequest } from "@/lib/queryClient";
 interface UseGITContainersDataProps {
   refetch: () => void;
   toast: (opts: { title: string; description?: string; variant?: "destructive" | "default" }) => void;
+  isSupplierPartner?: boolean;
   setImportResult: (
     v: { updated: number; skipped: number; notFound: number; errors: string[]; importId: string | null } | null
   ) => void;
@@ -13,12 +14,13 @@ export function useGITContainersData({
   refetch,
   toast,
   setImportResult,
+  isSupplierPartner = false,
 }: UseGITContainersDataProps) {
   const importMutation = useMutation({
     mutationFn: async (file: File) => {
       const form = new FormData();
       form.append("file", file);
-      const res = await fetch("/api/git/containers/import-excel", {
+      const res = await fetch(isSupplierPartner ? "/api/git/sp-containers/import-excel" : "/api/git/containers/import-excel", {
         method: "POST",
         body: form,
         credentials: "include",
@@ -50,7 +52,7 @@ export function useGITContainersData({
 
   const undoImportMutation = useMutation({
     mutationFn: async (importId: string) => {
-      const res = await apiRequest("POST", "/api/git/containers/import-excel/undo", { importId });
+      const res = await apiRequest("POST", isSupplierPartner ? "/api/git/sp-containers/import-excel/undo" : "/api/git/containers/import-excel/undo", { importId });
       if (!res.ok) {
         const err = await res.json().catch(() => ({ message: "Undo failed" }));
         throw new Error(err.message || "Undo failed");

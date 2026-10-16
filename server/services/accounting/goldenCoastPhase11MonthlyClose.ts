@@ -31,6 +31,7 @@ export interface GoldenCoastPhase11Accounts {
   salesAccountId: number;
   cogsAccountId: number;
   sharedChargesAccountId: number | null;
+  correctionSuspenseAccountId?: number | null;
   profitPendingDistributionAccountId: number;
   freshStartEquityAccountId: number;
   hassanEquityAccountId: number;
@@ -42,6 +43,8 @@ export interface GoldenCoastPhase11ClosePlan extends GoldenCoastPhase11CloseInpu
   totalRevenueUsd: string;
   totalCogsUsd: string;
   totalSharedChargesUsd: string;
+  /** Developer-approved difference, booked to an auditable suspense ledger in the close Journal. */
+  manualAdjustmentUsd: string;
   netProfitLossUsd: string;
   freshStartShareUsd: string;
   hassanShareUsd: string;
@@ -108,18 +111,20 @@ export function planGoldenCoastPhase11MonthlyClose(input: {
   totalRevenueUsd: string | number;
   totalCogsUsd: string | number;
   totalSharedChargesUsd: string | number;
+  manualAdjustmentUsd?: string | number;
 }): GoldenCoastPhase11ClosePlan {
   const { periodStart, periodEnd } = parseMonth(input.close.periodMonth);
   const revenue = signedMoney(input.totalRevenueUsd, "totalRevenueUsd");
   const cogs = signedMoney(input.totalCogsUsd, "totalCogsUsd");
   const shared = signedMoney(input.totalSharedChargesUsd, "totalSharedChargesUsd");
+  const manualAdjustment = signedMoney(input.manualAdjustmentUsd ?? "0", "manualAdjustmentUsd");
   if (revenue.isZero() && cogs.isZero() && shared.isZero()) {
     throw new GoldenCoastPhase11CloseError(
       "The selected month has no closeable Golden Coast activity",
       "GC_PHASE11_NOTHING_TO_CLOSE"
     );
   }
-  const net = revenue.minus(cogs).minus(shared);
+  const net = revenue.minus(cogs).minus(shared).plus(manualAdjustment);
   const fresh = net.div(2).toDecimalPlaces(2, Decimal.ROUND_HALF_UP);
   const hassan = net.minus(fresh);
   return {
@@ -129,6 +134,7 @@ export function planGoldenCoastPhase11MonthlyClose(input: {
     totalRevenueUsd: money(revenue),
     totalCogsUsd: money(cogs),
     totalSharedChargesUsd: money(shared),
+    manualAdjustmentUsd: money(manualAdjustment),
     netProfitLossUsd: money(net),
     freshStartShareUsd: money(fresh),
     hassanShareUsd: money(hassan),
@@ -159,6 +165,7 @@ export function buildGoldenCoastPhase11MonthlyClosePosting(input: {
   const revenue = new Decimal(plan.totalRevenueUsd);
   const cogs = new Decimal(plan.totalCogsUsd);
   const shared = new Decimal(plan.totalSharedChargesUsd);
+  const adjustment = new Decimal(plan.manualAdjustmentUsd || "0");
   const net = new Decimal(plan.netProfitLossUsd);
   const description = releaseDebtEnglish(`Golden Coast monthly 50/50 close — ${plan.periodMonth}`);
   const entries: Parameters<typeof buildGenericVoucherPostingRequest>[0]["entries"] = [];
@@ -253,6 +260,31 @@ export function buildGoldenCoastPhase11MonthlyClosePosting(input: {
         narration: description,
       });
     }
+  }
+
+  // An approved profit difference must have a real, balanced ledger counterpart:
+  // the suspense debit/credit remains auditable until its underlying economics
+  // are reconciled. No POS sales/costs are rewritten by this correction.
+  if (!adjustment.isZero()) {
+    if (!accounts.correctionSuspenseAccountId) {
+      throw new GoldenCoastPhase11CloseError(
+        "Manual profit correction suspense ledger is not configured",
+        "GC_PHASE11_ACCOUNT_INVALID"
+      );
+    }
+    const amount = money(adjustment.abs());
+    entries.push({
+      ledgerAccountId: accounts.correctionSuspenseAccountId,
+      debitAmount: adjustment.gt(0) ? amount : "0",
+      creditAmount: adjustment.lt(0) ? amount : "0",
+      narration: description,
+    });
+    entries.push({
+      ledgerAccountId: accounts.profitPendingDistributionAccountId,
+      debitAmount: adjustment.lt(0) ? amount : "0",
+      creditAmount: adjustment.gt(0) ? amount : "0",
+      narration: description,
+    });
   }
 
   if (net.gt(0)) {

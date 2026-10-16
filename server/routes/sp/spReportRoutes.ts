@@ -6,6 +6,8 @@ import { sql, eq, asc, desc } from "drizzle-orm";
 import { spStockMovements, spProfitSplits } from "@shared/schema";
 import { requireSpCompany, getSpAccount, parseNum } from "./spHelpers";
 import { resultRows } from "../../lib/queryResult";
+import { getLatestSpProfitCorrection } from "./spProfitManualCorrections";
+import { presentSpMonthlyProfit } from "./spProfitReportPresentation";
 
 // ── Reports + Profit Splits ───────────────────────────────────────────────────
 
@@ -88,8 +90,6 @@ export function registerSpReportRoutes(app: Express) {
       totalCogs = parseNum(siRow?.total_cogs);
       saleCount = parseInt(String(siRow?.cnt ?? "0"), 10);
 
-      const grossProfit = totalRevenue - totalCogs;
-
       // Shared Charges can be posted on either side depending on the settlement flow.
       // Report the net charge magnitude so a credit-side GC settlement still appears as
       // a positive charge while debit-side SP expense postings continue to work.
@@ -114,10 +114,37 @@ export function registerSpReportRoutes(app: Express) {
         totalSharedCharges = parseNum(sr?.total);
       }
 
-      const netProfit = grossProfit - totalSharedCharges;
+      let approvedNetProfit: string | null = null;
+      // Only a whole calendar-month report may use a developer-approved target.
+      // Partial date ranges retain their original source-ledger arithmetic.
+      const first = typeof startDate === "string" ? startDate : "";
+      const last = typeof endDate === "string" ? endDate : "";
+      const match = /^(\d{4}-(?:0[1-9]|1[0-2]))-01$/.exec(first);
+      if (match) {
+        const [year, month] = match[1].split("-").map(Number);
+        const periodEnd = `${match[1]}-${String(new Date(Date.UTC(year, month, 0)).getUTCDate()).padStart(2, "0")}`;
+        if (last === periodEnd) {
+          const approved = await getLatestSpProfitCorrection(db, companyId, match[1]);
+          if (approved) approvedNetProfit = approved.targetNetProfit;
+        }
+      }
+      // Display the approved net adjustment in Gross Profit rather than a
+      // separate Other Income / (Expense) row. Shared Charges are unchanged.
+      // This is presentation only: POS source revenue/COGS remain immutable and
+      // any approved difference stays auditable in the month-close suspense journal.
+      const { grossProfit, netProfit } = presentSpMonthlyProfit({
+        totalRevenue,
+        totalCogs,
+        totalSharedCharges,
+        approvedNetProfit,
+      });
       const splitPct = 50;
-      const ourShare = netProfit * (splitPct / 100);
-      const supplierShare = netProfit - ourShare;
+      // Assign odd cents deterministically so both shares sum to the exact
+      // corrected net profit, matching the Decimal rounding in Phase 11.
+      const netCents = Math.round(netProfit * 100);
+      const ourCents = Math.sign(netCents) * Math.round(Math.abs(netCents) / 2);
+      const ourShare = ourCents / 100;
+      const supplierShare = (netCents - ourCents) / 100;
 
       res.json({
         totalRevenue,

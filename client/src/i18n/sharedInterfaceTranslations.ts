@@ -35,6 +35,8 @@ export const sharedInterfaceTranslations: SharedEntry[] = [
   { en: "Supplier Partner", ar: "شريك المورد", fr: "Partenaire fournisseur" },
   { en: "Containers", ar: "الحاويات", fr: "Conteneurs" },
   { en: "Container Tracking", ar: "تتبع الحاويات", fr: "Suivi des conteneurs" },
+  { en: "Left Port", ar: "غادر الميناء", fr: "Départ du port" },
+  { en: "Days Since", ar: "الأيام المنقضية", fr: "Jours écoulés" },
   { en: "Containers on the Way", ar: "الحاويات في الطريق", fr: "Conteneurs en route" },
   { en: "Factory", ar: "المصنع", fr: "Usine" },
   { en: "Production", ar: "الإنتاج", fr: "Production" },

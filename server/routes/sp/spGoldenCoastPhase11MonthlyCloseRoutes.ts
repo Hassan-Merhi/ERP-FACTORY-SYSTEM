@@ -2,6 +2,7 @@ import type { Express, NextFunction, Request, Response } from "express";
 import { and, eq, isNull, sql } from "drizzle-orm";
 import Decimal from "decimal.js";
 import { accountingPostingRequests, ledgerAccounts, spProfitSplits, vouchers } from "@shared/schema";
+import { getLatestSpProfitCorrection, ensureSpProfitManualCorrectionStorage, isDeveloperForProfitCorrection, GC_MANUAL_PROFIT_SUSPENSE_SUBTYPE } from "./spProfitManualCorrections";
 import { requireAuth, requireNonPOS } from "../../auth";
 import { db } from "../../db";
 import { releaseDebtEnglish } from "../../i18n/finalCloseoutEnglish";
@@ -121,13 +122,14 @@ async function resolveLegacyIncomeExpense(
 }
 
 async function resolveAccounts(conn: DbLike, companyId: number): Promise<GoldenCoastPhase11Accounts> {
-  const [sales, cogs, shared, ppd, fresh, hassan] = await Promise.all([
+  const [sales, cogs, shared, ppd, fresh, hassan, suspense] = await Promise.all([
     resolveLegacyIncomeExpense(conn, companyId, "sp_sales", ["Income", "Direct Income"], true),
     resolveLegacyIncomeExpense(conn, companyId, "sp_cogs", ["Direct Expense", "Expense"], true),
     resolveLegacyIncomeExpense(conn, companyId, "sp_shared_charges", ["Direct Expense", "Expense"], false),
     resolveCanonicalRole(conn, companyId, "profit_pending_distribution"),
     resolveCanonicalRole(conn, companyId, "fresh_start_equity"),
     resolveCanonicalRole(conn, companyId, "hassan_equity"),
+    resolveLegacyIncomeExpense(conn, companyId, GC_MANUAL_PROFIT_SUSPENSE_SUBTYPE, ["Asset"], false),
   ]);
   return {
     salesAccountId: Number(sales),
@@ -136,6 +138,7 @@ async function resolveAccounts(conn: DbLike, companyId: number): Promise<GoldenC
     profitPendingDistributionAccountId: ppd,
     freshStartEquityAccountId: fresh,
     hassanEquityAccountId: hassan,
+    correctionSuspenseAccountId: suspense,
   };
 }
 
@@ -257,24 +260,33 @@ async function ppdBalance(conn: DbLike, companyId: number, accountId: number): P
   return new Decimal(String(resultRows(result)[0]?.balance ?? "0"));
 }
 
-async function buildPlan(conn: DbLike, companyId: number, body: unknown) {
+async function buildPlan(conn: DbLike, companyId: number, body: unknown, applyManualCorrection = true) {
   const close = parseGoldenCoastPhase11CloseInput({ companyId, body });
   const accounts = await resolveAccounts(conn, companyId);
   const { start, end } = monthBounds(close.periodMonth);
-  const [salesItems, shared] = await Promise.all([
+  const [salesItems, shared, approvedCorrection] = await Promise.all([
     salesItemsPeriodActivity(conn, companyId, accounts.salesAccountId, accounts.cogsAccountId, start, end),
     accountPeriodActivity(conn, companyId, accounts.sharedChargesAccountId, start, end),
+    applyManualCorrection ? getLatestSpProfitCorrection(conn, companyId, close.periodMonth) : Promise.resolve(null),
   ]);
   const revenue = new Decimal(salesItems.revenue);
   const totalCogs = new Decimal(salesItems.cogs);
   // Shared Charges are a P&L expense magnitude. Settlement flows can post the
   // account on either side, so normalize net period activity before subtraction.
   const totalShared = new Decimal(shared.debit).minus(shared.credit).abs();
+  const baseNet = revenue.minus(totalCogs).minus(totalShared);
+  const manualAdjustment = approvedCorrection
+    ? new Decimal(approvedCorrection.targetNetProfit).minus(baseNet)
+    : new Decimal(0);
+  if (!manualAdjustment.isZero() && !accounts.correctionSuspenseAccountId) {
+    throw new Phase11RouteError("Profit correction suspense account missing", "GC_PHASE11_ACCOUNT_INVALID", 409);
+  }
   const plan = planGoldenCoastPhase11MonthlyClose({
     close,
     totalRevenueUsd: revenue.toFixed(2),
     totalCogsUsd: totalCogs.toFixed(2),
     totalSharedChargesUsd: totalShared.toFixed(2),
+    manualAdjustmentUsd: manualAdjustment.toFixed(2),
   });
   return { accounts, plan };
 }
@@ -342,7 +354,36 @@ async function readiness(req: Request, res: Response): Promise<void> {
       .where(and(eq(spProfitSplits.companyId, companyId), eq(spProfitSplits.periodMonth, probe.periodMonth)))
       .limit(1);
     if (existing.length) {
-      res.json({ ready: false, alreadyClosed: true, split: existing[0] });
+      // A finalized split must be traceable to its posted Journal voucher.
+      // Legacy split rows lacking a Phase 11 marker remain visible for review,
+      // but never imply that a journal was posted.
+      const [marker] = await db
+        .select({ voucherId: accountingPostingRequests.voucherId })
+        .from(accountingPostingRequests)
+        .where(
+          and(
+            eq(accountingPostingRequests.companyId, companyId),
+            eq(accountingPostingRequests.idempotencyKey, goldenCoastPhase11IdempotencyKey(companyId, probe.periodMonth))
+          )
+        )
+        .limit(1);
+      const [journal] = marker
+        ? await db
+            .select({ id: vouchers.id, voucherNumber: vouchers.voucherNumber, voucherType: vouchers.voucherType })
+            .from(vouchers)
+            .where(
+              and(
+                eq(vouchers.id, Number(marker.voucherId)),
+                eq(vouchers.companyId, companyId),
+                isNull(vouchers.deletedAt)
+              )
+            )
+            .limit(1)
+        : [];
+      const voucher = journal?.voucherType === "Journal"
+        ? { id: journal.id, voucherNumber: journal.voucherNumber }
+        : null;
+      res.json({ ready: false, alreadyClosed: true, split: existing[0], voucher, journalVerified: Boolean(voucher) });
       return;
     }
     const { accounts, plan } = await buildPlan(db, companyId, { periodMonth, clientRequestId: "readiness" });
@@ -350,7 +391,10 @@ async function readiness(req: Request, res: Response): Promise<void> {
     res.json({
       ready: pending.isZero(),
       alreadyClosed: false,
-      plan,
+      plan: isDeveloperForProfitCorrection(req) ? plan : (() => {
+        const { manualAdjustmentUsd: _privateCorrection, ...publicPlan } = plan;
+        return publicPlan;
+      })(),
       splitPct: GOLDEN_COAST_PHASE11_SPLIT_PCT,
       profitPendingDistributionBalanceUsd: pending.toFixed(2),
     });
@@ -433,9 +477,166 @@ async function closeMonth(req: Request, res: Response): Promise<void> {
         .returning();
       return { replayed: false, split, voucher: posted.voucher, plan };
     });
-    res.json(result);
+    if (!isDeveloperForProfitCorrection(req) && "plan" in result && result.plan) {
+      const { manualAdjustmentUsd: _privateCorrection, ...publicPlan } = result.plan;
+      res.json({ ...result, plan: publicPlan });
+    } else {
+      res.json(result);
+    }
   } catch (error: unknown) {
     logger.error("Golden Coast Phase 11 monthly close failed", { error });
+    if (respondKnownError(res, error)) return;
+    res.status(500).json({ message: getErrorMessage(error) });
+  }
+}
+
+
+const PERIOD_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
+const TARGET_RE = /^-?\d{1,10}(?:\.\d{1,2})?$/;
+
+function requireDeveloperProfitEdit(req: Request, res: Response): boolean {
+  if (!isDeveloperForProfitCorrection(req)) {
+    res.status(403).json({ code: "SP_DEVELOPER_ONLY", message: "Developer access required" });
+    return false;
+  }
+  return true;
+}
+
+async function readProfitCorrection(req: Request, res: Response): Promise<void> {
+  try {
+    if (!requireDeveloperProfitEdit(req, res)) return;
+    const companyId = await requireSpCompany(req, res);
+    if (!companyId) return;
+    if (!(await isGoldenCoastCompany(db, companyId))) {
+      res.status(409).json({ message: "Monthly profit correction is available for Golden Coast only" });
+      return;
+    }
+    const periodMonth = String(req.query.periodMonth ?? "");
+    if (!PERIOD_RE.test(periodMonth)) {
+      res.status(400).json({ message: "Select a valid month in YYYY-MM format" });
+      return;
+    }
+    const { plan } = await buildPlan(db, companyId, { periodMonth, clientRequestId: "developer-preview" }, false);
+    const latest = await getLatestSpProfitCorrection(db, companyId, periodMonth);
+    const history = resultRows(await db.execute(sql`
+      SELECT id, target_net_profit, original_net_profit, reason, actor_name, created_at
+      FROM sp_profit_manual_corrections
+      WHERE company_id = ${companyId} AND period_month = ${periodMonth}
+      ORDER BY id DESC LIMIT 25
+    `)).map((item) => ({
+      id: Number(item.id),
+      targetNetProfit: String(item.target_net_profit),
+      originalNetProfit: String(item.original_net_profit),
+      reason: String(item.reason),
+      actorName: item.actor_name == null ? null : String(item.actor_name),
+      createdAt: String(item.created_at),
+    }));
+    const [closed] = await db.select({ id: spProfitSplits.id })
+      .from(spProfitSplits)
+      .where(and(eq(spProfitSplits.companyId, companyId), eq(spProfitSplits.periodMonth, periodMonth)))
+      .limit(1);
+    const rawNet = new Decimal(plan.netProfitLossUsd);
+    const adjustedNet = latest ? new Decimal(latest.targetNetProfit) : rawNet;
+    res.setHeader("Cache-Control", "private, no-store");
+    res.json({
+      periodMonth,
+      sourceNetProfit: rawNet.toFixed(2),
+      effectiveNetProfit: adjustedNet.toFixed(2),
+      adjustment: adjustedNet.minus(rawNet).toFixed(2),
+      correction: latest,
+      history,
+      finalized: Boolean(closed),
+    });
+  } catch (error) {
+    logger.error("Developer SP profit correction read failed", { error });
+    if (respondKnownError(res, error)) return;
+    res.status(500).json({ message: getErrorMessage(error) });
+  }
+}
+
+async function writeProfitCorrection(req: Request, res: Response): Promise<void> {
+  try {
+    if (!requireDeveloperProfitEdit(req, res)) return;
+    const companyId = await requireSpCompany(req, res);
+    if (!companyId) return;
+    if (!(await isGoldenCoastCompany(db, companyId))) {
+      res.status(409).json({ message: "Manual correction is available for Golden Coast only" });
+      return;
+    }
+    const periodMonth = String(req.body?.periodMonth ?? "");
+    const rawTarget = String(req.body?.targetNetProfit ?? "").trim();
+    const reason = String(req.body?.reason ?? "").trim();
+    if (!PERIOD_RE.test(periodMonth) || !TARGET_RE.test(rawTarget) || reason.length < 5 || reason.length > 500) {
+      res.status(400).json({
+        message: "Valid month, final profit with at most 2 decimals, and a 5–500 character reason are required",
+      });
+      return;
+    }
+    await ensureSpProfitManualCorrectionStorage();
+    const target = new Decimal(rawTarget).toFixed(2);
+    const actorId = String(req.user?.id ?? req.session.userId ?? "");
+    if (!actorId) {
+      res.status(403).json({ message: "Authenticated developer identity required" });
+      return;
+    }
+    const saved = await db.transaction(async (tx) => {
+      // Same company lock as the actual Phase 11 close prevents corrections racing splits.
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(73111, ${companyId})`);
+      const [closed] = await tx.select({ id: spProfitSplits.id })
+        .from(spProfitSplits)
+        .where(and(eq(spProfitSplits.companyId, companyId), eq(spProfitSplits.periodMonth, periodMonth)))
+        .limit(1);
+      if (closed) {
+        throw new Phase11RouteError("This month is finalized and cannot be manually edited", "GC_PROFIT_PERIOD_CLOSED", 409);
+      }
+      const { plan } = await buildPlan(tx, companyId, { periodMonth, clientRequestId: "developer-override" }, false);
+      const sourceNet = new Decimal(plan.netProfitLossUsd);
+      const difference = new Decimal(target).minus(sourceNet);
+      // A signed profit difference needs a real counterparty in its closing Journal.
+      // This suspense account remains reconcilable as an asset / contra-asset.
+      if (!difference.isZero()) {
+        const existing = await tx.select({ id: ledgerAccounts.id })
+          .from(ledgerAccounts)
+          .where(and(
+            eq(ledgerAccounts.companyId, companyId),
+            eq(ledgerAccounts.subType, GC_MANUAL_PROFIT_SUSPENSE_SUBTYPE),
+            eq(ledgerAccounts.active, true),
+            isNull(ledgerAccounts.deletedAt)
+          ))
+          .limit(2);
+        if (existing.length > 1) {
+          throw new Phase11RouteError("Ambiguous SP profit correction account", "GC_PROFIT_ACCOUNT_AMBIGUOUS", 409);
+        }
+        if (!existing.length) {
+          await tx.insert(ledgerAccounts).values({
+            companyId,
+            code: "SP-PROFIT-ADJ-SUSPENSE",
+            name: "SP Profit Correction Suspense",
+            accountType: "Asset",
+            subType: GC_MANUAL_PROFIT_SUSPENSE_SUBTYPE,
+            openingBalance: "0.00",
+            openingBalanceSide: "Dr",
+            isHidden: true,
+            active: true,
+          });
+        }
+      }
+      const row = resultRows(await tx.execute(sql`
+        INSERT INTO sp_profit_manual_corrections (
+          company_id, period_month, target_net_profit, original_net_profit,
+          reason, actor_id, actor_name
+        ) VALUES (
+          ${companyId}, ${periodMonth}, ${target}, ${sourceNet.toFixed(2)},
+          ${reason}, ${actorId}, ${String(req.session.username ?? req.user?.username ?? "")}
+        )
+        RETURNING id
+      `))[0];
+      return { correctionId: Number(row?.id), sourceNetProfit: sourceNet.toFixed(2), effectiveNetProfit: target, difference: difference.toFixed(2) };
+    });
+    res.setHeader("Cache-Control", "private, no-store");
+    res.json(saved);
+  } catch (error) {
+    logger.error("Developer SP profit correction save failed", { error });
     if (respondKnownError(res, error)) return;
     res.status(500).json({ message: getErrorMessage(error) });
   }
@@ -461,6 +662,21 @@ async function retireLegacyGoldenCoastProfitSplit(req: Request, res: Response, n
 }
 
 export function registerSpGoldenCoastPhase11MonthlyCloseRoutes(app: Express) {
+  app.get(
+    "/api/sp/golden-coast/profit-correction",
+    privilegedReadRateLimit,
+    requireAuth,
+    requireNonPOS,
+    readProfitCorrection
+  );
+  app.post(
+    "/api/sp/golden-coast/profit-correction",
+    privilegedMutationRateLimit,
+    phase11RequestBudget,
+    requireAuth,
+    requireNonPOS,
+    writeProfitCorrection
+  );
   app.get(
     "/api/sp/golden-coast/phase11/profit-splits/monthly-close/readiness",
     privilegedReadRateLimit,

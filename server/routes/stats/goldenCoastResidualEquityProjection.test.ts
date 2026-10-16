@@ -267,6 +267,210 @@ describe("Golden Coast Excel-style Net Position projection", () => {
     expect(result.onUs.accounts.some((account: { id?: number }) => account.id === 5)).toBe(false);
   });
 
+  it("keeps a credit Inventory ledger balance out of What We Owe and nets it into stock", () => {
+    const fixture = accounts();
+    fixture.rows.push({
+      id: 6,
+      name: "Inventory",
+      code: "INVENTORY",
+      accountType: "Asset",
+      subType: "Current Asset",
+      openingBalance: "0",
+      openingBalanceSide: "Dr",
+      active: true,
+      deletedAt: null,
+    });
+    fixture.balances.set(6, { debit: 1928.22, credit: 1968.58 });
+
+    const result = projectGoldenCoastResidualEquity({
+      body: baseBody({ tracker: EXCEL_GC_SALES_CASH, stock: 163847.58 }),
+      companyAccounts: fixture.rows,
+      accountBalances: fixture.balances,
+    });
+
+    expect(result.onUs.total).toBe(0);
+    expect(result.onUs.accounts).toEqual([]);
+    expect(result.forUs.total).toBe(163807.22 + EXCEL_GC_SALES_CASH);
+    expect(result.netPosition).toBe(163807.22 + EXCEL_GC_SALES_CASH);
+    expect(result.forUs.accounts).toEqual(
+      expect.arrayContaining([expect.objectContaining({ code: "COMPUTED", value: 163807.22 })])
+    );
+    expect(result.forUs.accounts.some((account: { id?: number }) => account.id === 6)).toBe(false);
+  });
+
+
+  it("excludes correction suspense from GC net position and matches the user's Excel partner balances", () => {
+    const fixture = accounts({ gcSalesOpening: 83378 });
+    // Hassan's live displayed partner claim after the September 50/50 close.
+    fixture.rows[1].openingBalance = "228603.43";
+    fixture.rows.push({
+      id: 7,
+      name: "SP Profit Correction Suspense",
+      code: "SP-PROFIT-ADJ-SUSPENSE",
+      accountType: "Asset",
+      subType: "sp_profit_correction_suspense",
+      openingBalance: "0",
+      openingBalanceSide: "Dr",
+      active: true,
+      deletedAt: null,
+    });
+    fixture.balances.set(7, { debit: 9026.41, credit: 0 });
+    const result = projectGoldenCoastResidualEquity({
+      body: baseBody({ tracker: 83378, stock: 163807.22 }),
+      companyAccounts: fixture.rows,
+      accountBalances: fixture.balances,
+    });
+    const visible = result.forUs?.accounts as Array<{ id?: number; name: string; value: number }>;
+    expect(visible).toHaveLength(2);
+    expect(visible.map((row) => row.name)).toEqual(["Stock In Hand / Stock on Floor", "GC Sales Cash"]);
+    expect(visible.map((row) => row.value)).toEqual([163807.22, 83378]);
+    expect(result.forUs?.total).toBe(247185.22);
+    expect(result.forUsTotal).toBe(247185.22);
+    expect(result.onUsTotal).toBe(0);
+    expect(result.netPosition).toBe(247185.22);
+    expect(result.equity?.total).toBe(247185.22);
+    expect(result.equity?.partnerCapitalTotal).toBe(247185.22);
+    expect(result.netPositionBreakdown?.netPosition).toBe(247185.22);
+    expect(result.equity?.hassanClaim).toBe(228603.43);
+    expect(result.equity?.freshStartResidual).toBe(18581.79);
+    expect(result.equity?.accounts).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 1, value: 18581.79, balanceSide: "Cr" }),
+      expect.objectContaining({ id: 2, value: 228603.43, balanceSide: "Cr" }),
+    ]));
+    expect(JSON.stringify(result.forUs?.accounts)).not.toContain("Profit Correction Suspense");
+    expect(JSON.stringify(result.forUs?.breakdown)).not.toContain("Profit Correction Suspense");
+    expect(JSON.stringify(result.netPositionBreakdown?.assets)).not.toContain("Profit Correction Suspense");
+  });
+
+  it("removes an already-projected suspense asset exactly once from totals and the visible rows", () => {
+    const fixture = accounts({ gcSalesOpening: 83378 });
+    fixture.rows.push({
+      id: 7,
+      name: "SP Profit Correction Suspense",
+      code: "SP-PROFIT-ADJ-SUSPENSE",
+      accountType: "Asset",
+      subType: "sp_profit_correction_suspense",
+      openingBalance: "0",
+      openingBalanceSide: "Dr",
+      active: true,
+      deletedAt: null,
+    });
+    fixture.balances.set(7, { debit: 9026.41, credit: 0 });
+    const body = baseBody({ tracker: 83378, stock: 163807.22 });
+    (body.forUs.accounts as Array<{ id?: number; name: string; code: string; value: number; category: string }>)
+      .push({ id: 7, name: "SP Profit Correction Suspense", code: "SP-PROFIT-ADJ-SUSPENSE", value: 9026.41, category: "Asset" });
+    body.forUs.total += 9026.41;
+    const result = projectGoldenCoastResidualEquity({
+      body, companyAccounts: fixture.rows, accountBalances: fixture.balances,
+    });
+    expect(result.forUs?.total).toBe(247185.22);
+    expect(result.netPosition).toBe(247185.22);
+    expect((result.forUs?.accounts as Array<{id?:number}>).some(row => row.id === 7)).toBe(false);
+    expect(JSON.stringify(result.forUs?.breakdown)).not.toContain("Profit Correction Suspense");
+  });
+
+  it("shows Goods OTW once beside GC Sales Cash and increases only Fresh Start's residual", () => {
+    const fixture = accounts({ gcSalesOpening: 83378 });
+    fixture.rows[1].openingBalance = "228603.43";
+    fixture.rows.push({
+      id: 8,
+      name: "Goods On The Way",
+      code: "SP-OTW",
+      accountType: "Asset",
+      subType: "sp_goods_otw",
+      openingBalance: "0",
+      openingBalanceSide: "Dr",
+      active: true,
+      deletedAt: null,
+    });
+    fixture.rows.push({
+      id: 9,
+      name: "Goods OTW Clearing",
+      code: "SP-OTWCLR",
+      accountType: "Liability",
+      subType: "sp_otw_clearing",
+      openingBalance: "0",
+      openingBalanceSide: "Cr",
+      active: true,
+      deletedAt: null,
+    });
+    fixture.balances.set(8, { debit: 34498.2, credit: 0 });
+    fixture.balances.set(9, { debit: 0, credit: 34498.2 });
+
+    const result = projectGoldenCoastResidualEquity({
+      body: baseBody({ tracker: 83378, stock: 163807.22 }),
+      companyAccounts: fixture.rows,
+      accountBalances: fixture.balances,
+    });
+    const have = result.forUs.accounts as Array<{ id?: number; name: string; value: number }>;
+    const owe = result.onUs.accounts as Array<{ id?: number; name: string }>;
+    expect(have.filter((line) => line.id === 8)).toEqual([
+      expect.objectContaining({ name: "Goods OTW", value: 34498.2 }),
+    ]);
+    expect(have.find((line) => line.name === "GC Sales Cash")?.value).toBe(83378);
+    expect(have.some((line) => line.id === 9)).toBe(false);
+    expect(owe.some((line) => line.id === 9)).toBe(false);
+    expect(result.forUs.total).toBe(281683.42);
+    expect(result.netPosition).toBe(281683.42);
+    expect(result.equity.hassanClaim).toBe(228603.43);
+    expect(result.equity.freshStartResidual).toBe(53079.99);
+  });
+
+  it("replaces an already-present Goods OTW row instead of double counting it", () => {
+    const fixture = accounts({ gcSalesOpening: 83378 });
+    fixture.rows.push({
+      id: 8,
+      name: "Goods On The Way",
+      code: "SP-OTW",
+      accountType: "Asset",
+      subType: "sp_goods_otw",
+      openingBalance: "0",
+      openingBalanceSide: "Dr",
+      active: true,
+      deletedAt: null,
+    });
+    fixture.balances.set(8, { debit: 34498.2, credit: 0 });
+    const body = baseBody({ tracker: 83378, stock: 163807.22 });
+    body.forUs.accounts.push({
+      id: 8,
+      name: "Stock OTW",
+      code: "SP-OTW",
+      category: "Stock OTW",
+      value: 34498.2,
+    });
+    body.forUs.total += 34498.2;
+    const result = projectGoldenCoastResidualEquity({
+      body, companyAccounts: fixture.rows, accountBalances: fixture.balances,
+    });
+    expect(result.forUs.total).toBe(281683.42);
+    expect(result.netPosition).toBe(281683.42);
+    expect((result.forUs.accounts as Array<{ id?: number }>).filter((line) => line.id === 8)).toHaveLength(1);
+  });
+
+  it("drops Goods OTW after offload moves the amount into Stock, without leaving phantom equity", () => {
+    const fixture = accounts({ gcSalesOpening: 83378 });
+    fixture.rows.push({
+      id: 8,
+      name: "Goods On The Way",
+      code: "SP-OTW",
+      accountType: "Asset",
+      subType: "sp_goods_otw",
+      openingBalance: "0",
+      openingBalanceSide: "Dr",
+      active: true,
+      deletedAt: null,
+    });
+    fixture.balances.set(8, { debit: 34498.2, credit: 34498.2 });
+    const result = projectGoldenCoastResidualEquity({
+      body: baseBody({ tracker: 83378, stock: 198305.42 }),
+      companyAccounts: fixture.rows,
+      accountBalances: fixture.balances,
+    });
+    expect(result.forUs.total).toBe(281683.42);
+    expect((result.forUs.accounts as Array<{ name: string }>).some((line) => line.name === "Goods OTW")).toBe(false);
+    expect(result.netPosition).toBe(281683.42);
+  });
+
   it("does nothing to an ordinary Supplier Partner without Golden Coast equity roles", () => {
     const body = baseBody({ tracker: 100 });
     const result = projectGoldenCoastResidualEquity({

@@ -1,9 +1,9 @@
 import type { Express, Request, Response } from "express";
 import { and, eq, inArray, isNull } from "drizzle-orm";
-import { locations, poLineItems, stockItems, userCompanyRoles } from "@shared/schema";
+import { containers, locations, poLineItems, stockItems, userCompanyRoles } from "@shared/schema";
 import { requireAuth, requireRole } from "../../auth";
 import { db } from "../../db";
-import { fetchActiveContainers, type RawContainerRow } from "../../lib/gitHelpers";
+import { ACTIVE_STATUSES, fetchActiveContainers, type RawContainerRow } from "../../lib/gitHelpers";
 import { storage } from "../../storage";
 import { parseMoneyInput } from "../../lib/money";
 
@@ -15,6 +15,18 @@ type PosTrackingContext = {
     code: string;
   };
 };
+
+/** The saved date is intentionally a calendar DATE, never a timestamp. */
+function parsePortDepartureDate(value: unknown): string | null | undefined {
+  if (value === null) return null;
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return undefined;
+  const [year, month, day] = value.split("-").map(Number);
+  const timestamp = Date.UTC(year, month - 1, day);
+  if (!Number.isFinite(timestamp) || new Date(timestamp).toISOString().slice(0, 10) !== value) return undefined;
+  // One-day grace across server/client timezones; client input still caps at local today.
+  const tomorrowUTC = new Date(Date.now() + 86_400_000).toISOString().slice(0, 10);
+  return value <= tomorrowUTC ? value : undefined;
+}
 
 function normalizeLocationLabel(value: string | null | undefined): string {
   return String(value ?? "")
@@ -110,6 +122,7 @@ export function registerPosContainerTrackingRoutes(app: Express): void {
           supplierCode: row.supplierCode,
           status: row.status,
           eta: row.eta,
+          portDepartureDate: row.portDepartureDate,
           numberPlate: row.numberPlate,
           trackingLocation: row.trackingLocation,
           agent: row.agent,
@@ -128,6 +141,55 @@ export function registerPosContainerTrackingRoutes(app: Express): void {
       return res.status(500).json({
         message: error instanceof Error ? error.message : "Failed to load containers",
       });
+    }
+  });
+
+  /** POS-only write: cannot mutate any other tracking or accounting field. */
+  app.patch("/api/pos/containers-otw/:id/departure-date", requireAuth, requireRole("POS"), async (req, res) => {
+    try {
+      // requireRole also lets Developers through; do not permit them on this POS-only endpoint.
+      if (req.user?.role !== "POS") return res.status(403).json({ message: "POS role required" });
+
+      const context = await resolvePosTrackingContext(req, res);
+      if (!context) return;
+      const containerId = Number(req.params.id);
+      if (!Number.isSafeInteger(containerId) || containerId <= 0) {
+        return res.status(400).json({ message: "Invalid container ID" });
+      }
+      const body = req.body;
+      if (!body || typeof body !== "object" || Array.isArray(body) ||
+          Object.keys(body).length !== 1 || !Object.prototype.hasOwnProperty.call(body, "portDepartureDate")) {
+        return res.status(400).json({ message: "Only portDepartureDate can be changed" });
+      }
+      const portDepartureDate = parsePortDepartureDate(body.portDepartureDate);
+      if (portDepartureDate === undefined) {
+        return res.status(400).json({ message: "Enter a valid port departure date, or null to clear it" });
+      }
+
+      const [[container], includeUnassigned] = await Promise.all([
+        fetchActiveContainers([context.companyId], { containerId }),
+        canShowUnassignedContainers(context),
+      ]);
+      if (!container || !containerMatchesAssignedLocation(container, context, includeUnassigned)) {
+        return res.status(404).json({ message: "Container not found for your location" });
+      }
+
+      // Check company, original shop and active status in the UPDATE itself, to
+      // protect against another user moving/offloading the container after the read.
+      const [updated] = await db.update(containers)
+        .set({ portDepartureDate })
+        .where(and(
+          eq(containers.id, containerId),
+          eq(containers.companyId, context.companyId),
+          container.shopName === null ? isNull(containers.shopName) : eq(containers.shopName, container.shopName),
+          inArray(containers.status, [...ACTIVE_STATUSES])
+        ))
+        .returning({ id: containers.id, portDepartureDate: containers.portDepartureDate });
+      if (!updated) return res.status(404).json({ message: "Container is no longer available" });
+      res.setHeader("Cache-Control", "no-store");
+      return res.json(updated);
+    } catch (error) {
+      return res.status(500).json({ message: error instanceof Error ? error.message : "Could not save departure date" });
     }
   });
 
@@ -189,6 +251,7 @@ export function registerPosContainerTrackingRoutes(app: Express): void {
           supplierCode: container.supplierCode,
           status: container.status,
           eta: container.eta,
+          portDepartureDate: container.portDepartureDate,
           numberPlate: container.numberPlate,
           trackingLocation: container.trackingLocation,
           agent: container.agent,

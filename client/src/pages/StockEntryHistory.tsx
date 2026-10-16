@@ -1,10 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
-import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlignJustify, CalendarRange, ChevronDown, ChevronRight, History, List, Search } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useInfiniteQuery, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
+import { AlignJustify, ChevronDown, ChevronRight, History, List } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useDateFormat } from "@/contexts/DateFormatContext";
 import { useToast } from "@/hooks/use-toast";
@@ -16,14 +13,10 @@ import type { StockEntryWorker } from "./stockentryhistory/derived";
 import type { BaleDetail, GroupRow, StockEntryHistoryPage, StockEntryHistoryProps } from "./stockentryhistory/types";
 import { DetailedHistoryTable } from "./stockentryhistory/DetailedHistoryTable";
 import { StockEntryHistoryEditableDateCell } from "./stockentryhistory/EditableDateCell";
+import { HistoryFilters } from "./stockentryhistory/HistoryFilters";
 import { createStockEntryHistoryGroupBaleHelpers, groupKey } from "./stockentryhistory/groupBaleHelpers";
 import { useStockEntryHistoryMutations } from "./stockentryhistory/useStockEntryHistoryMutations";
-import {
-  STATUS_COLORS,
-  fetchAllStockEntryHistoryPages,
-  formatDailyNum,
-  formatHistoryTime,
-} from "./stockentryhistory/utils";
+import { STATUS_COLORS, fetchAllStockEntryHistoryPages, formatDailyNum, formatHistoryTime } from "./stockentryhistory/utils";
 
 export default function StockEntryHistory({ onActiveDateChange }: StockEntryHistoryProps = {}) {
   const { formatDisplayDate } = useDateFormat();
@@ -41,7 +34,12 @@ export default function StockEntryHistory({ onActiveDateChange }: StockEntryHist
   ]);
   const today = new Date().toLocaleDateString("en-CA");
 
-  const [selectedDate, setSelectedDate] = useState(today);
+  const [fromDate, setFromDate] = useState(today);
+  const [toDate, setToDate] = useState(today);
+  const [selectedWorkerId, setSelectedWorkerId] = useState("all");
+  const dateRangeValid = !!fromDate && !!toDate && fromDate <= toDate;
+  const isSingleDay = dateRangeValid && fromDate === toDate;
+  const loadMoreRef = useRef<HTMLDivElement>(null);
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [includeUnassigned, setIncludeUnassigned] = useState(true);
@@ -50,33 +48,35 @@ export default function StockEntryHistory({ onActiveDateChange }: StockEntryHist
   const [expandedKeys, setExpandedKeys] = useState<Set<string>>(new Set());
 
   useEffect(() => {
-    onActiveDateChange?.(selectedDate || null);
-  }, [onActiveDateChange, selectedDate]);
+    onActiveDateChange?.(isSingleDay ? fromDate : null);
+  }, [onActiveDateChange, isSingleDay, fromDate]);
 
   useEffect(() => {
     const timeout = setTimeout(() => setDebouncedSearch(search), 400);
     return () => clearTimeout(timeout);
   }, [search]);
 
-  const page = 1;
-  const pageSize = 9999;
   const useLite = viewMode === "condensed";
-
   const params = new URLSearchParams();
-  if (selectedDate) {
-    params.set("startDate", selectedDate);
-    params.set("endDate", selectedDate);
+  if (dateRangeValid) {
+    params.set("startDate", fromDate);
+    params.set("endDate", toDate);
   }
+  if (selectedWorkerId !== "all") params.set("workerId", selectedWorkerId);
   if (debouncedSearch.trim()) params.set("search", debouncedSearch.trim());
   if (!includeUnassigned) params.set("includeUnassigned", "false");
   if (useLite) params.set("lite", "1");
-  params.set("page", String(page));
-  params.set("limit", String(pageSize));
+  params.set("limit", "250");
 
-  const { data: pagedGroups, isLoading } = useQuery<StockEntryHistoryPage>({
-    queryKey: ["/api/factory/bales/stock-entry-history", params.toString(), page, pageSize],
-    queryFn: async () => {
-      const response = await fetch(`/api/factory/bales/stock-entry-history?${params.toString()}`, {
+  const {
+    data: historyPages, isLoading, hasNextPage, isFetchingNextPage, fetchNextPage,
+  } = useInfiniteQuery<StockEntryHistoryPage, Error>({
+    queryKey: ["/api/factory/bales/stock-entry-history", params.toString()],
+    initialPageParam: 1,
+    queryFn: async ({ pageParam }) => {
+      const pageParams = new URLSearchParams(params);
+      pageParams.set("page", String(pageParam));
+      const response = await fetch(`/api/factory/bales/stock-entry-history?${pageParams.toString()}`, {
         credentials: "include",
       });
       if (!response.ok) throw new Error(`Stock entry history failed: ${response.status}`);
@@ -84,19 +84,28 @@ export default function StockEntryHistory({ onActiveDateChange }: StockEntryHist
       if (!Array.isArray(data.items)) throw new Error("Invalid response: items is not an array");
       return data as StockEntryHistoryPage;
     },
+    getNextPageParam: (lastPage) => lastPage.hasNextPage ? lastPage.page + 1 : undefined,
+    enabled: dateRangeValid,
     staleTime: 60_000,
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
-    placeholderData: (previous) => previous,
   });
 
-  const groups: GroupRow[] = useMemo(() => pagedGroups?.items ?? [], [pagedGroups]);
+  useEffect(() => {
+    const element = loadMoreRef.current;
+    if (!element || !hasNextPage || isFetchingNextPage || typeof IntersectionObserver === "undefined") return;
+    const observer = new IntersectionObserver(([entry]) => {
+      if (entry.isIntersecting) void fetchNextPage();
+    }, { rootMargin: "300px" });
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage, viewMode]);
+
+  const firstPage = historyPages?.pages[0];
+  const groups: GroupRow[] = useMemo(() => historyPages?.pages.flatMap((page) => page.items) ?? [], [historyPages]);
   const allBales = useMemo(() => groups.flatMap((group) => group.bales ?? []), [groups]);
   const totalBales = useMemo(() => groups.reduce((sum, group) => sum + group.baleCount, 0), [groups]);
-  const totalWeight = useMemo(
-    () => groups.reduce((sum, group) => sum + parseFloat(group.totalWeight || "0"), 0),
-    [groups]
-  );
+  const totalWeight = useMemo(() => groups.reduce((sum, group) => sum + parseFloat(group.totalWeight || "0"), 0), [groups]);
 
   const { data: workers = [] } = useQuery<StockEntryWorker[]>({
     queryKey: ["/api/factory/workers?profile=picker"],
@@ -105,7 +114,7 @@ export default function StockEntryHistory({ onActiveDateChange }: StockEntryHist
     enabled: canReadWorkerPicker,
   });
 
-  const targetDate = selectedDate || null;
+  const targetDate = isSingleDay ? fromDate : null;
   const { data: productionTargets } = useQuery<ProductionResponse>({
     queryKey: ["/api/factory/staff-tracking", "production", "daily", targetDate, targetDate],
     queryFn: () => fetchProduction("daily", targetDate!, targetDate!),
@@ -230,8 +239,8 @@ export default function StockEntryHistory({ onActiveDateChange }: StockEntryHist
   }
 
   const { updateDateMutation, bulkAssignMutation } = useStockEntryHistoryMutations({
-    fromActive: Boolean(selectedDate),
-    fromDate: selectedDate || today,
+    fromActive: isSingleDay,
+    fromDate: fromDate || today,
     today,
     setEditingDateKey,
   });
@@ -275,63 +284,44 @@ export default function StockEntryHistory({ onActiveDateChange }: StockEntryHist
         </div>
       </div>
 
-      <div className="flex items-end gap-2 px-3 py-2 rounded-xl border bg-muted/30 flex-wrap">
-        <div className="space-y-1 shrink-0">
-          <Label htmlFor="stock-entry-history-date" className="flex items-center gap-1 text-xs text-muted-foreground">
-            <CalendarRange className="h-3.5 w-3.5" />
-            Date
-          </Label>
-          <Input
-            id="stock-entry-history-date"
-            type="date"
-            value={selectedDate}
-            onChange={(event) => setSelectedDate(event.target.value)}
-            data-testid="input-stock-entry-date"
-            className="w-40 h-8 text-xs"
-          />
-        </div>
-
-        <div className="relative flex-1 min-w-[180px]">
-          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-          <Input
-            className="pl-8 h-8 text-xs"
-            placeholder="Search by reference number…"
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            data-testid="input-search"
-          />
-        </div>
-
-        <div className="flex items-center gap-1.5 shrink-0 h-8">
-          <Checkbox
-            id="include-unassigned"
-            checked={includeUnassigned}
-            onCheckedChange={(value) => setIncludeUnassigned(!!value)}
-            data-testid="checkbox-include-unassigned"
-          />
-          <Label htmlFor="include-unassigned" className="text-xs cursor-pointer whitespace-nowrap">
-            Include Unassigned
-          </Label>
-        </div>
-      </div>
+      <HistoryFilters
+        fromDate={fromDate}
+        toDate={toDate}
+        onFromDateChange={setFromDate}
+        onToDateChange={setToDate}
+        selectedWorkerId={selectedWorkerId}
+        onWorkerChange={(workerId) => {
+          setSelectedWorkerId(workerId);
+          if (workerId !== "all") setViewMode("detailed");
+        }}
+        workers={workers}
+        groups={groups}
+        search={search}
+        onSearchChange={setSearch}
+        includeUnassigned={includeUnassigned}
+        onIncludeUnassignedChange={setIncludeUnassigned}
+      />
+      {!dateRangeValid && (
+        <p className="text-xs text-destructive">Choose a valid From and To date (From must be on or before To).</p>
+      )}
 
       <div className="flex items-center gap-2 flex-wrap">
         <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg border bg-slate-500/10 border-slate-500/20">
           <span className="text-xs font-semibold text-slate-500">Groups</span>
           <span className="text-sm font-bold tabular-nums text-slate-600 dark:text-slate-300">
-            {(pagedGroups?.total ?? groups.length).toLocaleString()}
+            {(firstPage?.total ?? groups.length).toLocaleString()}
           </span>
         </div>
         <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg border bg-emerald-500/10 border-emerald-500/20">
           <span className="text-xs font-semibold text-emerald-500">Bales</span>
           <span className="text-sm font-bold tabular-nums text-emerald-600 dark:text-emerald-400">
-            {(pagedGroups?.totalBales ?? totalBales).toLocaleString()}
+            {(firstPage?.totalBales ?? totalBales).toLocaleString()}
           </span>
         </div>
         <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg border bg-sky-500/10 border-sky-500/20">
           <span className="text-xs font-semibold text-sky-500">Weight</span>
           <span className="text-sm font-bold tabular-nums text-sky-600 dark:text-sky-400">
-            {formatDailyNum(pagedGroups?.totalWeight ?? totalWeight)}
+            {formatDailyNum(firstPage?.totalWeight ?? totalWeight)}
           </span>
           <span className="text-xs text-sky-600/70 dark:text-sky-400/70">kg</span>
         </div>
@@ -593,6 +583,13 @@ export default function StockEntryHistory({ onActiveDateChange }: StockEntryHist
           onUpdateDate={(baleId, stockEntryDate) => updateDateMutation.mutate({ ids: [baleId], stockEntryDate })}
           onAssignWorker={(baleId, workerId) => bulkAssignMutation.mutate({ baleIds: [baleId], workerId })}
         />
+      )}
+      {hasNextPage && (
+        <div ref={loadMoreRef} className="flex justify-center pt-2">
+          <Button variant="outline" size="sm" onClick={() => void fetchNextPage()} disabled={isFetchingNextPage}>
+            {isFetchingNextPage ? "Loading more entries…" : "Load more entries"}
+          </Button>
+        </div>
       )}
     </div>
   );

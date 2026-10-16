@@ -51,7 +51,9 @@ export function registerFactoryContainerUpdateRoutes(app: Express) {
       const id = parseId(req.params.id);
       if (id === null) return res.status(400).json({ message: "Invalid id" });
 
-      const b = req.body;
+      // Keep a mutable copy: the edit dialog submits unchanged goods fields.
+      // Those fields must not be mistaken for a new accounting event.
+      const b: Record<string, unknown> = { ...(req.body || {}) };
 
       // Helper: coerce empty-string / undefined to null for numeric/integer columns
       const dec = (v: unknown) => (v === "" || v === undefined || v === null ? null : String(v));
@@ -120,6 +122,56 @@ export function registerFactoryContainerUpdateRoutes(app: Express) {
         .from(factoryContainers)
         .where(and(eq(factoryContainers.id, id), eq(factoryContainers.companyId, companyId)));
       if (!existing) return res.status(404).json({ message: "Container not found" });
+
+      // The edit dialog sends the entire goods section on each Save, including
+      // when the user only changed an ETA, note, duty or freight. Preserve
+      // historical goods, supplier and FX fields if their values are unchanged.
+      // No-op fields must not trigger an import-journal backfill or revaluation.
+      const unchangedGoodsFields = {
+        supplierId: updateData.supplierId === existing.supplierId,
+        totalKg: toMoney(updateData.totalKg).eq(toMoney(existing.totalKg)),
+        ratePerKg: toMoney(updateData.ratePerKg).eq(toMoney(existing.ratePerKg)),
+        currencyCode:
+          String(updateData.currencyCode || "USD").toUpperCase() ===
+          String(existing.currencyCode || "USD").toUpperCase(),
+        fxRateSource:
+          String(updateData.fxRateSource || "auto") === String(existing.fxRateSource || "auto"),
+        fxRateToUsd: toMoney(updateData.fxRateToUsd).eq(toMoney(existing.fxRateToUsd)),
+      };
+      for (const field of Object.keys(unchangedGoodsFields) as Array<keyof typeof unchangedGoodsFields>) {
+        if (b[field] === undefined || unchangedGoodsFields[field]) {
+          delete b[field];
+          delete updateData[field];
+        }
+      }
+
+      // Do the same for freight/commission: otherwise a full-form notes edit
+      // can create a missing legacy freight or commission journal, or silently
+      // reprice an existing one. Only a genuine charge edit should sync it.
+      const unchangedChargeFields = {
+        freight: toMoney(updateData.freight).eq(toMoney(existing.freight)),
+        freightCurrencyCode:
+          String(updateData.freightCurrencyCode || "USD").toUpperCase() ===
+          String(existing.freightCurrencyCode || "USD").toUpperCase(),
+        freightAccountId: updateData.freightAccountId === existing.freightAccountId,
+        freightSupplierId: updateData.freightSupplierId === existing.freightSupplierId,
+        freightPaidBy:
+          String(updateData.freightPaidBy || "supplier") === String(existing.freightPaidBy || "supplier"),
+        freightOwnAccountId: updateData.freightOwnAccountId === existing.freightOwnAccountId,
+        commissionAmount: toMoney(updateData.commissionAmount).eq(toMoney(existing.commissionAmount)),
+        commissionCurrencyCode:
+          String(updateData.commissionCurrencyCode || "USD").toUpperCase() ===
+          String(existing.commissionCurrencyCode || "USD").toUpperCase(),
+        commissionAccountId: updateData.commissionAccountId === existing.commissionAccountId,
+        commissionSupplierId: updateData.commissionSupplierId === existing.commissionSupplierId,
+        commissionNotes: updateData.commissionNotes === existing.commissionNotes,
+      };
+      for (const field of Object.keys(unchangedChargeFields) as Array<keyof typeof unchangedChargeFields>) {
+        if (b[field] === undefined || unchangedChargeFields[field]) {
+          delete b[field];
+          delete updateData[field];
+        }
+      }
 
       // Resolve commission FX when commission amount or currency changed.
       // A partial PATCH that touches an unrelated field must preserve existing commission FX.

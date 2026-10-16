@@ -3,6 +3,7 @@ import {
   GOLDEN_COAST_PHASE8_OFFLOAD_FIFO_SOURCE,
   GoldenCoastPhase8Error,
   buildGoldenCoastPhase8FundingPosting,
+  buildGoldenCoastFreshStartExcelFundingPosting,
   buildGoldenCoastPhase8OffloadPosting,
   parseGoldenCoastPhase8ContainerInput,
   parseGoldenCoastPhase8OffloadInput,
@@ -108,6 +109,67 @@ describe("Golden Coast Phase 8 container/offload accounting", () => {
     const credit = posting.entries.reduce((sum, entry) => sum + Number(entry.creditAmount), 0);
     expect(debit).toBe(67900);
     expect(credit).toBe(67900);
+  });
+
+
+  it("funds Fresh Start invoice through OTW clearing without supplier, cash, or Hassan equity", () => {
+    const input = parseGoldenCoastPhase8ContainerInput({
+      companyId: 7,
+      body: {
+        clientRequestId: "freshstart-excel-1",
+        supplierId: null,
+        supplierName: "Fresh Start FZE",
+        containerNumber: "MRKU2427063",
+        invoiceNumber: "PO-2024-01119",
+        invoiceDate: "2026-10-16",
+        reserveUsd: "0",
+        fundingAccount: { kind: "ledger", id: 55 },
+        lines: [{ stockItemId: 1, articleCode: "BAG", qty: "2000", unitRateUsd: "22" }],
+      },
+    });
+    const posting = buildGoldenCoastFreshStartExcelFundingPosting({
+      container: input,
+      invoiceTotalUsd: "47000.00",
+      otwClearingAccountId: 55,
+      stockOtwAccountId: 10,
+    });
+    expect(posting.source.sourceType).toBe("golden-coast-phase8-container");
+    expect(posting.source.sourceId).toMatch(/fresh-start-excel:fund$/);
+    expect(posting.entries).toHaveLength(2);
+    expect(posting.entries[0].ledgerAccountId).toBe(10);
+    expect(Number(posting.entries[0].debitAmount)).toBe(47000);
+    expect(posting.entries[1].ledgerAccountId).toBe(55);
+    expect(Number(posting.entries[1].creditAmount)).toBe(47000);
+    expect(posting.entries.some((entry) => entry.supplierId != null || entry.bankAccountId != null)).toBe(false);
+  });
+
+  it("offloads Fresh Start invoice freight net of discount without double-charging or changing item price", () => {
+    const state: GoldenCoastPhase8FundedContainerState = {
+      ...cutoverFunded(),
+      origin: "fresh_start_excel",
+      goodsCostUsd: "47000.00",
+    };
+    const offload = parseGoldenCoastPhase8OffloadInput({
+      companyId: 7,
+      body: {
+        clientRequestId: "freshstart-offload-1",
+        containerId: 21,
+        locationId: 5,
+        offloadDate: "2026-10-16",
+      },
+    });
+    const plan = planGoldenCoastPhase8Offload({ offload, funded: state });
+    expect(plan.goodsCostUsd).toBe("47000.00");
+    expect(plan.totalFinalCostUsd).toBe("47000.00");
+    expect(plan.lines[0].baseUnitCostUsd).toBe("22.000000");
+    expect(plan.lines[0].landedUnitCostUsd).toBe("1.500000");
+    expect(plan.lines[0].finalUnitCostUsd).toBe("23.500000");
+    const voucher = buildGoldenCoastPhase8OffloadPosting({ offload, funded: state, plan, accounts });
+    expect(voucher.entries).toHaveLength(2);
+    expect(voucher.entries[0].ledgerAccountId).toBe(11);
+    expect(Number(voucher.entries[0].debitAmount)).toBe(47000);
+    expect(voucher.entries[1].ledgerAccountId).toBe(10);
+    expect(Number(voucher.entries[1].creditAmount)).toBe(47000);
   });
 
   it("rejects actual charges above the funded reserve", () => {

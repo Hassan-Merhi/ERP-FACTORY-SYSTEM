@@ -356,8 +356,9 @@ export default function FactoryNetPosition() {
               </div>
             </div>
             <p className="text-xs text-muted-foreground">
-              Unfinalized orders are not receivables yet: they are listed under "Not yet in the ledger" and are not
-              included in "What We Have." Loading orders update live as bales are scanned.
+              Verified and Loading orders are included in "What We Have" as projected, uninvoiced order values;
+              Pending orders are shown for reference only. This does not post customer receivables to the ledger.
+              Loading amounts update as bales are scanned.
             </p>
           </CardHeader>
           <CardContent className="space-y-3">

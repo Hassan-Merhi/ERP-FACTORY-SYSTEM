@@ -1,12 +1,14 @@
 import { getErrorDetails } from "@shared/errorUtils";
 import { useEffect, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useToast } from "@/hooks/use-toast";
 import { useHubQueryState } from "@/hooks/use-hub-query-state";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Loader2, BarChart3, FileSpreadsheet } from "lucide-react";
@@ -32,6 +34,11 @@ interface SpProfitReport {
   totalSharedCharges?: number;
   netProfit?: number;
 }
+
+type DeveloperProfitCorrection = {
+  sourceNetProfit: string; effectiveNetProfit: string; adjustment: string; finalized: boolean;
+  correction: { reason: string; actorName: string | null } | null;
+};
 
 interface SpProfitSplit {
   id: number;
@@ -80,7 +87,10 @@ function getCurrentMonthRange(now = new Date()) {
 
 export default function SpReports() {
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const { selectedCompany } = useCompany();
+  const { data: currentUser } = useQuery<{ role?: string; currentRole?: string }>({ queryKey: ["/api/auth/me"] });
+  const isDeveloper = currentUser?.role === "Developer";
   const [tab, setTab] = useHubQueryState<ReportTab>({
     key: "tab",
     allowedValues: REPORT_TABS,
@@ -95,6 +105,10 @@ export default function SpReports() {
   const [exportCashAccountId, setExportCashAccountId] = useState<string>("none");
   const [exporting, setExporting] = useState(false);
   const [exportingV2, setExportingV2] = useState(false);
+  const [editProfitOpen, setEditProfitOpen] = useState(false);
+  const [correctedProfit, setCorrectedProfit] = useState("");
+  const [correctionReason, setCorrectionReason] = useState("");
+  const [correctionConfirmation, setCorrectionConfirmation] = useState("");
 
   useEffect(() => {
     let activeMonthKey = getCurrentMonthRange().key;
@@ -120,6 +134,41 @@ export default function SpReports() {
       : ""
   }`;
   const splitsUrl = "/api/sp/profit-splits";
+  const selectedMonth = endDate.slice(0, 7);
+  const [yearOfMonth, monthOfYear] = selectedMonth.split("-").map(Number);
+  const completeMonth = Number.isInteger(yearOfMonth) && Number.isInteger(monthOfYear) &&
+    startDate === `${selectedMonth}-01` &&
+    endDate === `${selectedMonth}-${String(new Date(Date.UTC(yearOfMonth, monthOfYear, 0)).getUTCDate()).padStart(2, "0")}`;
+  const correctionUrl = `/api/sp/golden-coast/profit-correction?periodMonth=${encodeURIComponent(selectedMonth)}`;
+  const { data: developerCorrection } = useQuery<DeveloperProfitCorrection>({
+    queryKey: [correctionUrl, selectedCompany?.id], enabled: isDeveloper && completeMonth, retry: false,
+  });
+  const saveProfitCorrection = useMutation({
+    mutationFn: async () => {
+      const response = await apiRequest("POST", "/api/sp/golden-coast/profit-correction", {
+        periodMonth: selectedMonth, targetNetProfit: correctedProfit, reason: correctionReason,
+        confirmation: correctionConfirmation,
+        idempotencyKey: `sp-profit-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      });
+      return response.json();
+    },
+    onSuccess: () => {
+      setEditProfitOpen(false);
+      setCorrectionReason("");
+      setCorrectionConfirmation("");
+      void queryClient.invalidateQueries({ queryKey: [correctionUrl, selectedCompany?.id] });
+      void queryClient.invalidateQueries({ predicate: ({ queryKey }) =>
+        typeof queryKey[0] === "string" && (
+          queryKey[0].startsWith("/api/sp/report/profit") ||
+          queryKey[0].includes("/phase11/profit-splits/monthly-close/readiness")
+        ),
+      });
+      toast({ title: "Profit correction saved", description: "The correction will be included in the split Journal." });
+    },
+    onError: (error) => toast({
+      title: "Profit correction failed", description: getErrorDetails(error).message, variant: "destructive",
+    }),
+  });
 
   const { data: profit, isLoading: profitLoading } = useQuery<SpProfitReport>({ queryKey: [profitUrl] });
   const { data: splits = [], isLoading: splitsLoading } = useQuery<SpProfitSplit[]>({ queryKey: [splitsUrl] });
@@ -259,8 +308,24 @@ export default function SpReports() {
             <>
               <Card>
                 <CardHeader>
-                  <CardTitle className="text-sm">Profit & Loss Summary</CardTitle>
-                  <CardDescription className="text-xs">{profit.saleCount} sales in period</CardDescription>
+                  <div className="flex items-center justify-between gap-3 flex-wrap">
+                    <div>
+                      <CardTitle className="text-sm">Profit & Loss Summary</CardTitle>
+                      <CardDescription className="text-xs">{profit.saleCount} sales in period</CardDescription>
+                    </div>
+                    {isDeveloper && completeMonth && developerCorrection && (
+                      <Button size="sm" variant="outline" disabled={developerCorrection?.finalized === true}
+                        data-testid="button-sp-developer-edit-profit"
+                        onClick={() => {
+                          setCorrectedProfit(String(developerCorrection?.effectiveNetProfit ?? profit.netProfit ?? "0"));
+                          setCorrectionReason("");
+                          setCorrectionConfirmation("");
+                          setEditProfitOpen(true);
+                        }}>
+                        Edit Profit
+                      </Button>
+                    )}
+                  </div>
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-1">
@@ -330,7 +395,7 @@ export default function SpReports() {
                   data-testid={`row-sp-split-${s.id}`}
                 >
                   <span className="font-mono">{s.periodMonth}</span>
-                  <span className="text-muted-foreground">Net {fmt(s.grossProfit)}</span>
+                  <span className="text-muted-foreground">Net {fmt(Number(s.ourShare ?? 0) + Number(s.supplierShare ?? 0))}</span>
                   <span className="text-green-600">Our: {fmt(s.ourShare)}</span>
                   <span className="text-orange-600">Sup: {fmt(s.supplierShare)}</span>
                 </div>
@@ -463,6 +528,48 @@ export default function SpReports() {
           </Card>
         </TabsContent>
       </Tabs>
+      {isDeveloper && (
+        <Dialog open={editProfitOpen} onOpenChange={setEditProfitOpen}>
+          <DialogContent data-testid="dialog-sp-developer-profit-correction">
+            <DialogHeader>
+              <DialogTitle>Correct Net Profit — {selectedMonth}</DialogTitle>
+              <DialogDescription>
+                Developer only. Set the final monthly profit; the original POS sales stay unchanged.
+                The closing Journal will include a balanced correction.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-3">
+              <div className="text-sm">Original profit: {fmt(developerCorrection?.sourceNetProfit)}</div>
+              <label className="block text-sm font-medium" htmlFor="sp-correct-net-profit">Correct final profit (USD)</label>
+              <Input id="sp-correct-net-profit" type="number" step="0.01" value={correctedProfit}
+                onChange={(event) => setCorrectedProfit(event.target.value)} data-testid="input-sp-correct-profit" />
+              <label className="block text-sm font-medium" htmlFor="sp-correct-profit-reason">Reason (developer audit only)</label>
+              <Input id="sp-correct-profit-reason" value={correctionReason} maxLength={500}
+                onChange={(event) => setCorrectionReason(event.target.value)} data-testid="input-sp-profit-correction-reason" />
+              <p className="text-xs text-muted-foreground">
+                Any difference posts to a suspense ledger at the monthly close and must be reconciled later.
+              </p>
+              <label className="block text-sm font-medium" htmlFor="sp-correct-profit-confirm">Type ADJUST SP PROFIT</label>
+              <Input id="sp-correct-profit-confirm" value={correctionConfirmation}
+                onChange={(event) => setCorrectionConfirmation(event.target.value)} />
+              {developerCorrection?.correction && (
+                <div className="text-xs text-muted-foreground" data-testid="sp-profit-correction-audit">
+                  Previous correction: {developerCorrection.correction.reason}
+                  {" — "}{developerCorrection.correction.actorName || "Developer"}
+                </div>
+              )}
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setEditProfitOpen(false)}>Cancel</Button>
+              <Button disabled={saveProfitCorrection.isPending || correctionReason.trim().length < 5 ||
+                correctionConfirmation !== "ADJUST SP PROFIT" || !/^-?[0-9]+(?:[.][0-9]{1,2})?$/.test(correctedProfit)}
+                onClick={() => saveProfitCorrection.mutate()} data-testid="button-sp-save-correct-profit">
+                {saveProfitCorrection.isPending ? "Saving..." : "Save Corrected Profit"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 }

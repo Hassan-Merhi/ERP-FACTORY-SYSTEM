@@ -38,7 +38,12 @@ export function registerFactoryCustomerStatementPdfRoutes(app: Express) {
 
       // Ledger rows from the balance engine plus the amounts not yet in the
       // ledger, flagged (statementRows.ts); the closing is split below.
-      const statement = await buildFactoryCustomerStatement(companyId, customerId);
+      const dateFromParam = ((req.query.dateFrom as string) || "").trim();
+      const dateToParam = ((req.query.dateTo as string) || "").trim();
+      const destFilterParam = ((req.query.destination as string) || "").trim().toLowerCase();
+      const statement = await buildFactoryCustomerStatement(companyId, customerId, {
+        from: dateFromParam || undefined, to: dateToParam || undefined,
+      });
       const allRowsPdf = statement.rows.map((row) => ({
         transactionDate: row.transactionDate,
         transactionType: row.transactionType,
@@ -52,10 +57,7 @@ export function registerFactoryCustomerStatementPdfRoutes(app: Express) {
       }));
       const openingExact = statement.opening;
 
-      // Read filter params (forwarded from the frontend export button)
-      const dateFromParam = ((req.query.dateFrom as string) || "").trim();
-      const dateToParam = ((req.query.dateTo as string) || "").trim();
-      const destFilterParam = ((req.query.destination as string) || "").trim().toLowerCase();
+      // Filters are read before grouping so no charges cross period boundaries.
 
       // Build container number + destination maps for INVOICE-type rows
       const invoiceRefIds = [

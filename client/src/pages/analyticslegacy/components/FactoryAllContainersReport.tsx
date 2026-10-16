@@ -9,11 +9,12 @@ import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Container as ContainerIcon, Loader2, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { PeriodFilter, getDefaultPeriodValue, type PeriodFilterValue } from "@/components/ui/period-filter";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { factoryReportStatus, isFactoryReportContainer } from "./factoryContainerReportStatus";
 
 type ContainerRow = {
   id: number;
@@ -78,36 +79,44 @@ export function FactoryAllContainersReport() {
     refetchOnWindowFocus: false,
   });
 
-  const suppliers = useMemo(
-    () =>
-      Array.from(
-        new Map(containers.map((c) => [String(c.supplierId ?? "none"), c.supplierName || "No Supplier"])).entries()
-      ).sort((a, b) => a[1].localeCompare(b[1])),
+  // Exclude synthetic opening-balance container records from this report
+  // entirely, including the supplier/status filters and total denominator.
+  const reportContainers = useMemo(
+    () => containers.filter((container) => isFactoryReportContainer(container.status)),
     [containers]
   );
 
+  const suppliers = useMemo(
+    () =>
+      Array.from(
+        new Map(reportContainers.map((c) => [String(c.supplierId ?? "none"), c.supplierName || "No Supplier"])).entries()
+      ).sort((a, b) => a[1].localeCompare(b[1])),
+    [reportContainers]
+  );
+
+  // Group report labels only; keep their original warehouse lifecycle statuses.
   const statuses = useMemo(
-    () => [...new Set(containers.map((c) => c.status).filter(Boolean))].sort(),
-    [containers]
+    () => [...new Set(reportContainers.map((c) => factoryReportStatus(c.status)))].sort(),
+    [reportContainers]
   );
 
   const visible = useMemo(() => {
     const searchText = search.trim().toLowerCase();
-    return containers
+    return reportContainers
       .filter((c) => {
         if (supplier !== "all" && String(c.supplierId ?? "none") !== supplier) return false;
-        if (status !== "all" && c.status !== status) return false;
+        if (status !== "all" && factoryReportStatus(c.status) !== status) return false;
         const date = dateValue(c);
         if (period.fromDate && (!date || date < period.fromDate)) return false;
         if (period.toDate && (!date || date > period.toDate)) return false;
         if (
           searchText &&
-          ![c.containerNumber, c.supplierName, c.origin, c.status].some((v) => String(v || "").toLowerCase().includes(searchText))
+          ![c.containerNumber, c.supplierName, c.origin, factoryReportStatus(c.status)].some((v) => String(v || "").toLowerCase().includes(searchText))
         ) return false;
         return true;
       })
       .sort((a, b) => dateValue(b).localeCompare(dateValue(a)) || b.id - a.id);
-  }, [containers, supplier, status, search, period.fromDate, period.toDate]);
+  }, [reportContainers, supplier, status, search, period.fromDate, period.toDate]);
 
   const totals = useMemo(() => {
     const currencies = new Map<string, number>();
@@ -151,7 +160,7 @@ export function FactoryAllContainersReport() {
           </h3>
           <p className="text-xs text-muted-foreground">Incoming, received and offloaded containers in the selected factory company</p>
         </div>
-        <span className="text-xs text-muted-foreground">{visible.length} of {containers.length} containers</span>
+        <span className="text-xs text-muted-foreground">{visible.length} of {reportContainers.length} containers</span>
       </div>
       <div className="mb-4 flex flex-wrap items-end gap-3">
         <div className="flex flex-col gap-1">
@@ -174,7 +183,7 @@ export function FactoryAllContainersReport() {
             <SelectTrigger data-testid="factory-container-status-filter"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Statuses</SelectItem>
-              {statuses.map((value) => <SelectItem key={value} value={value}>{value.replace(/_/g, " ")}</SelectItem>)}
+              {statuses.map((value) => <SelectItem key={value} value={value}>{value}</SelectItem>)}
             </SelectContent>
           </Select>
         </div>
@@ -214,7 +223,6 @@ export function FactoryAllContainersReport() {
               <TableHeader className="sticky top-0 z-10 bg-background">
                 <TableRow>
                   <TableHead>Container #</TableHead><TableHead>Supplier</TableHead><TableHead>Status</TableHead>
-                  <TableHead>Arrival / Created</TableHead><TableHead>Origin</TableHead>
                   <TableHead className="text-right">Total KG</TableHead>
                   <TableHead className="text-right">Goods Value</TableHead>
                 </TableRow>
@@ -227,9 +235,7 @@ export function FactoryAllContainersReport() {
                       <TableRow key={container.id} data-testid={`factory-report-container-${container.id}`}>
                         <TableCell className="font-mono text-xs">{container.containerNumber}</TableCell>
                         <TableCell className="text-sm">{container.supplierName || "No Supplier"}</TableCell>
-                        <TableCell className="text-xs">{container.status.replace(/_/g, " ")}</TableCell>
-                        <TableCell className="text-xs">{dateValue(container) || "—"}</TableCell>
-                        <TableCell className="text-xs">{container.origin || "—"}</TableCell>
+                        <TableCell className="text-xs">{factoryReportStatus(container.status)}</TableCell>
                         <TableCell className="text-right font-mono text-xs">{formatQty(number(container.totalKg) ?? 0, 3)} kg</TableCell>
                         <TableCell className="text-right font-mono text-xs">
                           {amount ? `${formatGoods(amount.amount, container.currencyCode || "USD")}${amount.estimated ? " *" : ""}` : "—"}
@@ -238,7 +244,7 @@ export function FactoryAllContainersReport() {
                     );
                   })}
                   <TableRow className="bg-muted/30 font-medium">
-                    <TableCell colSpan={5}>{group.name} — {group.rows.length} containers</TableCell>
+                    <TableCell colSpan={3}>{group.name} — {group.rows.length} containers</TableCell>
                     <TableCell className="text-right font-mono text-xs">{formatQty(group.weight, 3)} kg</TableCell>
                     <TableCell />
                   </TableRow>
@@ -253,9 +259,9 @@ export function FactoryAllContainersReport() {
                 <div key={container.id} className="rounded-md border p-3" data-testid={`factory-report-container-mobile-${container.id}`}>
                   <div className="flex items-start justify-between gap-2">
                     <span className="font-mono text-sm font-semibold">{container.containerNumber}</span>
-                    <span className="text-xs text-muted-foreground">{container.status.replace(/_/g, " ")}</span>
+                    <span className="text-xs text-muted-foreground">{factoryReportStatus(container.status)}</span>
                   </div>
-                  <p className="mt-1 text-xs text-muted-foreground">{container.supplierName || "No Supplier"} · {dateValue(container) || "—"}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">{container.supplierName || "No Supplier"}</p>
                   <div className="mt-2 flex justify-between gap-2 border-t pt-2 text-xs">
                     <span>{formatQty(number(container.totalKg) ?? 0, 3)} kg</span>
                     <span className="font-mono">{amount ? `${formatGoods(amount.amount, container.currencyCode || "USD")}${amount.estimated ? " *" : ""}` : "—"}</span>

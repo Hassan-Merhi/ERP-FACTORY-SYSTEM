@@ -20,13 +20,14 @@
  */
 import { and, eq } from "drizzle-orm";
 import type Decimal from "decimal.js";
-import { customerBalances } from "@shared/schema";
+import { customerBalances, customerOrders, customerOrderCharges } from "@shared/schema";
 
 import { db } from "../../../db";
 import { MoneyDecimal, toMoney } from "../../../lib/money";
 import { getPartyBalance } from "../../../services/accounting/balances/ledgerBalanceEngine";
 import { loadCustomerLedgerLines } from "../../../services/accounting/balances/customerLedgerStatement";
 import { loadPartyMemoLines } from "../../../services/accounting/balances/unpostedMemo";
+import { consolidateContainerCharges, type StatementGroupingWindow } from "./containerChargeStatementRows";
 
 export interface FactoryStatementRow {
   id: number | string;
@@ -55,8 +56,12 @@ export interface FactoryCustomerStatement {
   rows: FactoryStatementRow[];
   /** The customer's opening (customer record), debit positive. */
   opening: Decimal;
-  /** Engine closing, debit positive. */
+  /** Customer-statement ledger closing, excluding legacy pre-finalization charges. */
   ledgerClosing: Decimal;
+  /** Unmodified general ledger closing for reconciliation, debit positive. */
+  generalLedgerClosing: Decimal;
+  /** Legacy pre-finalization customer debits held out of this statement. */
+  heldUnfinalizedCharges: Decimal;
   /** Sum of the memo rows with a USD amount, debit positive. */
   notInLedgerTotal: Decimal;
 }
@@ -72,7 +77,8 @@ function amountsOf(value: Decimal) {
 
 export async function buildFactoryCustomerStatement(
   companyId: number,
-  customerId: number
+  customerId: number,
+  window: StatementGroupingWindow = {}
 ): Promise<FactoryCustomerStatement> {
   const [party, ledgerLines, memo, cacheRows] = await Promise.all([
     getPartyBalance(db, { companyId, kind: "customer", id: customerId }),
@@ -170,18 +176,69 @@ export async function buildFactoryCustomerStatement(
     }
   }
 
+  // Resolve linked charges even for unfinalized containers so the statement
+  // can exclude historical CHARGE-PRE ledger rows until FINALIZED. This
+  // changes the customer statement presentation, not posted accounting data.
+  const [orders, charges] = await Promise.all([
+    db.select({
+      id: customerOrders.id,
+      containerNumber: customerOrders.containerNumber,
+      status: customerOrders.status,
+    }).from(customerOrders).where(and(
+      eq(customerOrders.companyId, companyId),
+      eq(customerOrders.customerId, customerId)
+    )),
+    db.select({
+      orderId: customerOrderCharges.orderId,
+      voucherId: customerOrderCharges.voucherId,
+    }).from(customerOrderCharges)
+      .innerJoin(customerOrders, eq(customerOrderCharges.orderId, customerOrders.id))
+      .where(and(
+        eq(customerOrders.companyId, companyId),
+        eq(customerOrders.customerId, customerId)
+      )),
+  ]);
+  const ordersById = new Map(orders.map((order) => [order.id, {
+    containerNumber: order.containerNumber ?? "",
+    status: order.status,
+  }]));
+  const chargeOrderByVoucherId = new Map<number, number>();
+  for (const charge of charges) {
+    if (!charge.voucherId || !ordersById.has(charge.orderId)) continue;
+    if (chargeOrderByVoucherId.has(charge.voucherId)) {
+      chargeOrderByVoucherId.set(charge.voucherId, -1); // ambiguous; fail closed
+    } else {
+      chargeOrderByVoucherId.set(charge.voucherId, charge.orderId);
+    }
+  }
+  const displayedRows = consolidateContainerCharges(rows, ordersById, chargeOrderByVoucherId, window);
+
+  // Consolidation preserves ledger totals except for suppressed, linked
+  // pre-finalization charges. Remove those debit effects from the displayed
+  // statement closing while retaining the untouched general-ledger figure.
+  const originalLedgerTotal = rows.reduce((sum, row) => sum.plus(row.ledgerEffect), ZERO);
+  const displayedLedgerTotal = displayedRows.reduce((sum, row) => sum.plus(row.ledgerEffect), ZERO);
+  const heldUnfinalizedCharges = originalLedgerTotal.minus(displayedLedgerTotal);
+
   // Oldest first; on the same day the operational rows come first, as before.
-  rows.sort((a, b) => {
+  displayedRows.sort((a, b) => {
     const byDate = a.transactionDate.localeCompare(b.transactionDate);
     if (byDate !== 0) return byDate;
     return (a._fromVoucher ? 1 : 0) - (b._fromVoucher ? 1 : 0);
   });
 
-  const notInLedgerTotal = rows.reduce((sum, row) => (row.notInLedger ? sum.plus(row.combinedEffect) : sum), ZERO);
+  // Memo portions must remain outside the ledger even when the visible row
+  // also includes separate posted charges. Compute the operational remainder
+  // from the combined minus posted ledger movement, not the display flag.
+  const notInLedgerTotal = displayedRows.reduce(
+    (sum, row) => sum.plus(row.combinedEffect.minus(row.ledgerEffect)), ZERO
+  );
   return {
-    rows,
+    rows: displayedRows,
     opening: toMoney(party?.masterOpening),
-    ledgerClosing: toMoney(party?.closing),
+    ledgerClosing: toMoney(party?.closing).minus(heldUnfinalizedCharges),
+    generalLedgerClosing: toMoney(party?.closing),
+    heldUnfinalizedCharges,
     notInLedgerTotal,
   };
 }

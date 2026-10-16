@@ -96,6 +96,18 @@ export async function resolveSharedFactoryRequirements(req: Request): Promise<Sh
       page("factory/settings"),
     ];
 
+    // The Factory Account Groups page is a separate admin/owner/developer
+    // surface built on ledger accounts. Grant only its actual group operations,
+    // not arbitrary account deletion, balance changes, bank APIs, or voucher APIs.
+    const isAccountGroupsLedgerOperation =
+      (path === "/api/ledger-accounts" && ["GET", "HEAD", "POST"].includes(method)) ||
+      (method === "PUT" && /^\/api\/ledger-accounts\/\d+$/.test(path)) ||
+      (method === "PATCH" && path === "/api/ledger-accounts/bulk-assign-parent");
+
+    if (isAccountGroupsLedgerOperation) {
+      accountRequirements.push(page("factory/account-groups"));
+    }
+
     // Invoicing needs read-only ledger/bank options for Freight & Charges and
     // invoice account pickers. Keep mutations excluded so Invoicing access
     // cannot create/edit/delete accounting records.

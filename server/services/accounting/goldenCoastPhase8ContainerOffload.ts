@@ -7,6 +7,7 @@ import { GOLDEN_COAST_CUTOVER_DATE } from "./goldenCoastPhase4CutoverFifo";
 
 export const GOLDEN_COAST_PHASE8_SOURCE_TYPE = "golden-coast-phase8-container";
 export const GOLDEN_COAST_PHASE8_OFFLOAD_FIFO_SOURCE = "golden_coast_phase8_offload";
+export const GOLDEN_COAST_FRESH_START_EXCEL_FUNDING_MARKER = "fresh-start-excel:fund";
 export const GOLDEN_COAST_PHASE8_MAX_REQUEST_ID_LENGTH = 48;
 
 const REQUEST_ID_PATTERN = /^[A-Za-z0-9._:-]+$/;
@@ -99,7 +100,7 @@ export interface GoldenCoastPhase8FundingPlan {
  * cutover by the migration, which links a `GC-OTW-*` voucher and never funds a
  * reserve — their charges settle against a funding account at offload instead.
  */
-export type GoldenCoastPhase8ContainerOrigin = "phase8" | "cutover";
+export type GoldenCoastPhase8ContainerOrigin = "phase8" | "cutover" | "fresh_start_excel";
 
 export interface GoldenCoastPhase8FundedContainerState {
   containerId: number;
@@ -362,6 +363,60 @@ export function buildGoldenCoastPhase8FundingPosting(input: {
   };
 }
 
+
+/** Post Fresh Start invoice against GC Goods OTW and its internal clearing
+ * account, NOT a supplier payable or Cash/Bank account.
+ */
+export function buildGoldenCoastFreshStartExcelFundingPosting(input: {
+  container: GoldenCoastPhase8ContainerInput;
+  invoiceTotalUsd: string;
+  otwClearingAccountId: number;
+  stockOtwAccountId: number;
+  actor?: PostingActor;
+}): CentralPostingRequest {
+  const { container, invoiceTotalUsd, otwClearingAccountId, stockOtwAccountId } = input;
+  const amount = decimal(invoiceTotalUsd, "invoiceTotalUsd");
+  if (!amount.gt(0) || amount.decimalPlaces() > MONEY_SCALE) {
+    throw new GoldenCoastPhase8Error("invoiceTotalUsd must be positive with at most two decimals");
+  }
+  const entries = [
+    {
+      ledgerAccountId: stockOtwAccountId,
+      debitAmount: money(amount),
+      creditAmount: "0.00",
+      narration: `Fresh Start FZE container ${container.invoiceNumber} goods in transit`,
+    },
+    {
+      ledgerAccountId: otwClearingAccountId,
+      debitAmount: "0.00",
+      creditAmount: money(amount),
+      narration: `Fresh Start FZE container ${container.invoiceNumber} Goods OTW Clearing`,
+    },
+  ];
+  const built = buildGenericVoucherPostingRequest({
+    companyId: container.companyId,
+    clientRequestId: `gc8-${container.clientRequestId}-fund`,
+    voucher: {
+      voucherNumber: `GC-C8-${container.companyId}-${container.clientRequestId}-F`,
+      voucherType: "Journal",
+      voucherDate: container.invoiceDate,
+      description: releaseDebtEnglish(`Golden Coast Fresh Start container funding — ${container.invoiceNumber}`),
+      currency: "USD",
+    },
+    entries,
+    exchangeRate: null,
+    actor: input.actor,
+  });
+  return {
+    ...built.request,
+    source: {
+      sourceType: GOLDEN_COAST_PHASE8_SOURCE_TYPE,
+      sourceId: `container:${container.clientRequestId}:${createHash("sha256").update(JSON.stringify({ container, invoiceTotalUsd })).digest("hex").slice(0, 20)}:${GOLDEN_COAST_FRESH_START_EXCEL_FUNDING_MARKER}`,
+      idempotencyKey: `gc8:${container.companyId}:${container.clientRequestId}:fund`,
+    },
+  };
+}
+
 export function parseGoldenCoastPhase8OffloadInput(input: {
   companyId: number;
   body: unknown;
@@ -420,9 +475,9 @@ export function planGoldenCoastPhase8Offload(input: {
   // A cutover container never had a reserve funded for it, so there is no
   // ceiling to exceed and nothing to sweep back: its charges settle straight
   // against the funding account the operator names on the offload.
-  if (funded.origin === "cutover") {
+  if (funded.origin === "cutover" || funded.origin === "fresh_start_excel") {
     if (!reserve.isZero()) {
-      throw new GoldenCoastPhase8Error("A cutover container cannot carry a funded reserve", "GC_PHASE8_SCOPE_MISMATCH");
+      throw new GoldenCoastPhase8Error("An unfunded-clearing container cannot carry a cash reserve", "GC_PHASE8_SCOPE_MISMATCH");
     }
     if (actual.gt(0) && !offload.chargeFundingAccount) {
       throw new GoldenCoastPhase8Error(
@@ -436,10 +491,16 @@ export function planGoldenCoastPhase8Offload(input: {
       "GC_PHASE8_RESERVE_EXCEEDED"
     );
   }
-  const unused = funded.origin === "cutover" ? new Decimal(0) : reserve.minus(actual);
+  const unused = funded.origin === "cutover" || funded.origin === "fresh_start_excel" ? new Decimal(0) : reserve.minus(actual);
   const totalQty = funded.lines.reduce((sum, line) => sum.plus(line.qty), new Decimal(0));
   if (!totalQty.gt(0)) throw new GoldenCoastPhase8Error("Funded container has no positive quantity");
-  const landedPerUnit = actual.div(totalQty);
+  const grossLines = funded.lines.reduce(
+    (sum, line) => sum.plus(new Decimal(line.qty).times(line.unitRateUsd)), new Decimal(0),
+  );
+  // Original item rates remain unchanged; net invoice freight, fees and
+  // discount already in Goods OTW are allocated as landed cost at offload.
+  const invoiceAdjustment = funded.origin === "fresh_start_excel" ? goods.minus(grossLines) : new Decimal(0);
+  const landedPerUnit = actual.plus(invoiceAdjustment).div(totalQty);
   const lines = funded.lines.map((line): GoldenCoastPhase8OffloadLinePlan => {
     const base = new Decimal(line.unitRateUsd);
     const final = base.plus(landedPerUnit);
@@ -504,7 +565,7 @@ export function buildGoldenCoastPhase8OffloadPosting(input: {
   // A cutover container has no reserve to clear and no unused remainder to
   // sweep. Its actual charges are paid at offload, so they credit the funding
   // account the operator named instead of a pre-funded reserve.
-  if (funded.origin === "cutover") {
+  if (funded.origin === "cutover" || funded.origin === "fresh_start_excel") {
     const actual = new Decimal(plan.actualChargesUsd);
     if (actual.gt(0)) {
       if (!offload.chargeFundingAccount) {

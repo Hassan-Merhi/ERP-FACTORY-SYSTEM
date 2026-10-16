@@ -29,6 +29,11 @@ export function resolveTrackingDefaults(
   };
 }
 
+/** Null means no explicit container duty; 0 is a valid manual amount. */
+export function resolveTrackingDutyFee(current: string | null | undefined, fallback: string | null | undefined) {
+  return current == null ? (fallback ?? null) : current;
+}
+
 async function assertSupplierInCompany(companyId: number, supplierId: number) {
   const [supplier] = await db
     .select({ id: companyScopedSuppliers.id })
@@ -70,7 +75,9 @@ export async function listSupplierTrackingDefaults(companyId: number) {
         supplierCode: companyScopedSuppliers.code,
         supplierName: companyScopedSuppliers.legalName,
         locationId: supplierTrackingDefaults.locationId,
+        shopName: supplierTrackingDefaults.shopName,
         agentName: supplierTrackingDefaults.agentName,
+        dutyFee: supplierTrackingDefaults.dutyFee,
       })
       .from(companyScopedSuppliers)
       .leftJoin(
@@ -101,12 +108,13 @@ export async function listSupplierTrackingDefaults(companyId: number) {
     db.select({ name: containers.agent }).from(containers).where(eq(containers.companyId, companyId)),
   ]);
 
-  const activeLocationIds = new Set(locationRows.map((location) => location.id));
+  const activeLocationNames = new Map(locationRows.map((location) => [location.id, location.name]));
   const suppliers = supplierRows.map((row) => ({
     ...row,
-    // A soft-deleted/deactivated location is not a usable default. Expose it as
-    // unassigned so the UI can repair the mapping instead of posting a stale id.
-    locationId: row.locationId && activeLocationIds.has(row.locationId) ? row.locationId : null,
+    // Continue showing legacy location mappings as editable text.
+    shopName: row.shopName?.trim() || (row.locationId ? activeLocationNames.get(row.locationId) : null) || null,
+    // A soft-deleted/deactivated location cannot be used as a default.
+    locationId: row.locationId && activeLocationNames.has(row.locationId) ? row.locationId : null,
   }));
 
   const agentOptions = Array.from(
@@ -125,11 +133,13 @@ export async function saveSupplierTrackingDefault(
 ) {
   await assertSupplierInCompany(companyId, supplierId);
 
-  const locationId = input.locationId ?? null;
+  const shopName = input.shopName?.trim() || null;
+  const locationId = shopName ? null : (input.locationId ?? null);
   const agentName = input.agentName?.trim() || null;
+  const dutyFee = input.dutyFee?.trim() || null;
   if (locationId !== null) await assertLocationInCompany(companyId, locationId);
 
-  if (locationId === null && agentName === null) {
+  if (locationId === null && shopName === null && agentName === null && dutyFee === null) {
     await db
       .delete(supplierTrackingDefaults)
       .where(
@@ -140,10 +150,10 @@ export async function saveSupplierTrackingDefault(
 
   const [saved] = await db
     .insert(supplierTrackingDefaults)
-    .values({ companyId, supplierId, locationId, agentName, active: true })
+    .values({ companyId, supplierId, locationId, shopName, agentName, dutyFee, active: true })
     .onConflictDoUpdate({
       target: [supplierTrackingDefaults.companyId, supplierTrackingDefaults.supplierId],
-      set: { locationId, agentName, active: true, updatedAt: new Date() },
+      set: { locationId, shopName, agentName, dutyFee, active: true, updatedAt: new Date() },
     })
     .returning();
 
@@ -156,8 +166,11 @@ export async function backfillSupplierTrackingDefaults(companyId: number) {
       containerId: containers.id,
       shopName: containers.shopName,
       agent: containers.agent,
+      dutyFee: containers.dutyFee,
       locationName: locations.name,
+      defaultShopName: supplierTrackingDefaults.shopName,
       agentName: supplierTrackingDefaults.agentName,
+      defaultDutyFee: supplierTrackingDefaults.dutyFee,
     })
     .from(containers)
     .innerJoin(
@@ -182,14 +195,16 @@ export async function backfillSupplierTrackingDefaults(companyId: number) {
   let containersUpdated = 0;
   let shopsFilled = 0;
   let agentsFilled = 0;
+  let dutiesFilled = 0;
 
   await db.transaction(async (tx) => {
     for (const row of rows) {
       const resolved = resolveTrackingDefaults(
         { shopName: row.shopName, agent: row.agent },
-        { locationName: row.locationName, agentName: row.agentName }
+        { locationName: row.defaultShopName?.trim() || row.locationName, agentName: row.agentName }
       );
-      const patch: { shopName?: string; agent?: string } = {};
+      const resolvedDutyFee = resolveTrackingDutyFee(row.dutyFee, row.defaultDutyFee);
+      const patch: { shopName?: string; agent?: string; dutyFee?: string } = {};
 
       if (isBlankTrackingValue(row.shopName) && !isBlankTrackingValue(resolved.shopName)) {
         patch.shopName = resolved.shopName!;
@@ -199,6 +214,10 @@ export async function backfillSupplierTrackingDefaults(companyId: number) {
         patch.agent = resolved.agent!;
         agentsFilled++;
       }
+      if (row.dutyFee == null && resolvedDutyFee != null) {
+        patch.dutyFee = resolvedDutyFee;
+        dutiesFilled++;
+      }
       if (Object.keys(patch).length > 0) {
         await tx.update(containers).set(patch).where(eq(containers.id, row.containerId));
         containersUpdated++;
@@ -206,5 +225,5 @@ export async function backfillSupplierTrackingDefaults(companyId: number) {
     }
   });
 
-  return { containersUpdated, shopsFilled, agentsFilled };
+  return { containersUpdated, shopsFilled, agentsFilled, dutiesFilled };
 }

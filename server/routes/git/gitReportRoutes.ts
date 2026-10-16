@@ -283,10 +283,10 @@ export function registerGitReportRoutes(app: Express) {
 
   app.get("/api/git/containers/:id", requireAuth, requireRole("Admin", "Owner"), async (req, res, next) => {
     // Pass through literal sub-paths (e.g. import-template.xlsx) to later handlers.
-    if (!/^\d+$/.test(req.params.id)) return next();
+    if (!/^-?\d+$/.test(req.params.id)) return next();
     try {
       const containerId = Number.parseInt(req.params.id, 10);
-      if (!Number.isFinite(containerId) || containerId <= 0) {
+      if (!Number.isSafeInteger(containerId) || containerId === 0) {
         return res.status(400).json({ message: "Invalid container ID" });
       }
       const userId: string = (req.user as { id: string }).id;

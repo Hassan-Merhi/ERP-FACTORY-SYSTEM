@@ -33,6 +33,7 @@ import { freezeCanonicalInvoiceDocument } from "../../../../services/factoryInvo
 import {
   FactoryInvoiceRateRefusalError,
   syncFactoryInvoiceTx,
+  customerLedgerAccountTx,
 } from "../../../../services/accounting/perpetualInventory/factoryInvoice";
 import { toMoney } from "../../../../lib/money";
 import {
@@ -179,9 +180,10 @@ export function registerOrderFinalizeRoutes(app: Express) {
           );
 
         if (chargesForJournal.length > 0) {
-          const [customer] = await tx.select().from(customers).where(eq(customers.id, order.customerId));
-          if (customer?.ledgerAccountId) {
-            for (const charge of chargesForJournal) {
+          // New charge vouchers no longer post before finalization. Make sure
+          // the customer's ledger exists here even if no pre-voucher prepared it.
+          const customerLedgerId = await customerLedgerAccountTx(tx, companyId, order.customerId);
+          for (const charge of chargesForJournal) {
               const chargeAmountDecimal = toMoney(charge.amount);
               if (chargeAmountDecimal.lte(0)) continue;
 
@@ -245,12 +247,11 @@ export function registerOrderFinalizeRoutes(app: Express) {
                   voucherDate: today,
                   description: chargeDesc,
                   customerId: order.customerId,
-                  customerLedgerAccountId: customer.ledgerAccountId,
+                  customerLedgerAccountId: customerLedgerId,
                   chargeLedgerAccountId: charge.ledgerAccountId!,
                   amount: chargeAmountDecimal,
                 });
               }
-            }
           }
         }
 

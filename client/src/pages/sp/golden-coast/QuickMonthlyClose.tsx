@@ -48,6 +48,7 @@ export function QuickMonthlyClose({ periodMonth, companyKey }: { periodMonth: st
   const [confirmationOpen, setConfirmationOpen] = useState(false);
   const [confirmation, setConfirmation] = useState("");
   const [requestId, setRequestId] = useState(() => makeRequestId("gc-p11"));
+  const [postedVoucher, setPostedVoucher] = useState<MutationResult["voucher"] | null>(null);
 
   const validMonth = /^\d{4}-\d{2}$/.test(periodMonth);
   const readinessUrl = `${PHASE11_READINESS}?periodMonth=${encodeURIComponent(periodMonth)}`;
@@ -61,6 +62,7 @@ export function QuickMonthlyClose({ periodMonth, companyKey }: { periodMonth: st
   useEffect(() => {
     setConfirmationOpen(false);
     setConfirmation("");
+    setPostedVoucher(null);
     setRequestId(makeRequestId("gc-p11"));
   }, [periodMonth]);
 
@@ -80,7 +82,8 @@ export function QuickMonthlyClose({ periodMonth, companyKey }: { periodMonth: st
       });
       return (await response.json()) as MutationResult;
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
+      setPostedVoucher(result.voucher ?? null);
       setConfirmationOpen(false);
       setConfirmation("");
       setRequestId(makeRequestId("gc-p11"));
@@ -91,7 +94,9 @@ export function QuickMonthlyClose({ periodMonth, companyKey }: { periodMonth: st
       void readinessQuery.refetch();
       toast({
         title: releaseDebtEnglish("Monthly close finalized"),
-        description: releaseDebtEnglish(`The ${periodMonth} profit split was posted from the ledger.`),
+        description: releaseDebtEnglish(
+          `The ${periodMonth} split was posted as journal voucher ${result.voucher?.voucherNumber ?? result.voucher?.id ?? "in the ledger"}.`
+        ),
       });
     },
     onError: (error: ClientErrorLike) => {
@@ -166,6 +171,21 @@ export function QuickMonthlyClose({ periodMonth, companyKey }: { periodMonth: st
               <p className="font-semibold tabular-nums">{money(phase11.plan.hassanShareUsd)}</p>
             </div>
           </div>
+        ) : null}
+
+        {(postedVoucher?.id || phase11?.voucher?.id) ? (
+          <a
+            href={`/voucher-detail/${postedVoucher?.id || phase11?.voucher?.id}`}
+            className="text-sm font-medium underline underline-offset-2"
+            data-testid="link-sp-monthly-close-journal"
+          >
+            Journal voucher {postedVoucher?.voucherNumber || phase11?.voucher?.voucherNumber || `#${postedVoucher?.id || phase11?.voucher?.id}`}
+          </a>
+        ) : null}
+        {phase11?.alreadyClosed && phase11.journalVerified === false ? (
+          <p className="text-sm text-destructive" data-testid="sp-close-missing-journal">
+            Existing monthly split has no verified Journal voucher; contact a developer before further accounting.
+          </p>
         ) : null}
 
         {closeMutation.error ? (

@@ -11,6 +11,7 @@ import {
   InlineBoolCell,
 } from "./InlineCells";
 import { cn } from "@/lib/utils";
+import { gitContainerDetailPath } from "./gitTrackingPatchUrl";
 import { useBoundedTableRows } from "@/hooks/useBoundedTableRows";
 import { useErpPhoneLayout } from "@/hooks/use-erp-phone-layout";
 
@@ -144,7 +145,7 @@ export function ContainerTable({ containers, colVis, sessionCompanyId, onOpenDra
                         </TableCell>
                         <TableCell className="font-mono font-bold text-[11px] h-10">
                           <Link
-                            href={`/containers/${c.id}`}
+                            href={gitContainerDetailPath(c.id)}
                             className="text-foreground hover:text-primary hover:underline underline-offset-2 transition-colors"
                             onClick={(event) => event.stopPropagation()}
                             data-testid={`link-container-${c.id}`}

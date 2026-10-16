@@ -51,6 +51,7 @@ import { listenWithRetry, registerGracefulShutdown } from "./startup/listenWithR
 import { registerProcessErrorHandlers } from "./startup/registerProcessErrorHandlers";
 import { runStartupMigrations, warmupDb } from "./startup/runServerStartupMigrations";
 import { ensureFactoryStaffTrackingSchema } from "./startup/factoryStaffTrackingSchema";
+import { ensureSupplierTrackingShopDutyDefaults } from "./startup/ensureSupplierTrackingShopDutyDefaults";
 import { ensureFactoryContainerPlannerSchemaOnBoot } from "./startup/factoryContainerPlannerSchema";
 import { ensurePriorityScanSchema } from "./startup/priorityScanSchema";
 import { ensureFactoryBaleOrderIntegrity } from "./startup/ensureFactoryBaleOrderIntegrity";
@@ -63,6 +64,7 @@ import { runApprovedAboSobhiGoods82 } from "./startup/runApprovedAboSobhiGoods82
 import { runApprovedAboJaberPayableFix } from "./startup/runApprovedAboJaberPayableFix";
 import { runApprovedUkBasma38 } from "./startup/runApprovedUkBasma38";
 import { ensureFactorySheetsSacksSchema } from "./startup/factorySheetsSacksSchema";
+import { ensureSpGitTracking } from "./lib/spGitTracking";
 import { ensureRecurringJournalSchema } from "./services/accounting/ensureRecurringJournalSchema";
 import { bootstrapRecurringJournalFromEnvironment } from "./services/accounting/recurringJournalBootstrap";
 import { ensureFactoryInvoiceDocumentSnapshotStore } from "./services/factoryInvoiceDocumentService";
@@ -298,6 +300,8 @@ let migrationsDone = false;
         logger.error("[startup] ✗ System account provisioning failed", { error: getErrorMessage(error) });
       });
       await ensureFinancialOperationRequests(pool);
+      await ensureSupplierTrackingShopDutyDefaults(pool);
+      logger.info("[startup] ✓ Supplier Tracking Shop/Duty defaults ensured");
       await ensureRecurringJournalSchema(pool);
       await ensurePriorityScanSchema(pool);
       logger.info("[startup] ✓ Priority Scan schema ensured");
@@ -358,6 +362,10 @@ let migrationsDone = false;
           markStartupMigrationsComplete();
         }
       }
+      // Initialize isolated GIT metadata before production accepts requests.
+      // Financial SP containers and Goods OTW vouchers remain untouched.
+      await ensureSpGitTracking();
+      logger.info("[startup] ✓ Supplier Partner GIT tracking schema ensured");
     })
     .then(() => {
       listenWithRetry(server, port, () => runPostStartupJobs());
