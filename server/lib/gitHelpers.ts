@@ -7,6 +7,7 @@ import { searchAny } from "@shared/searchNormalization";
  */
 
 import { db } from "../db";
+import { fetchSpGitContainers } from "./spGitTracking";
 import { containers, companies, suppliers } from "../../shared/schema";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import {
@@ -238,7 +239,7 @@ export async function fetchActiveContainers(
   ];
   if (opts.containerId) conditions.push(eq(containers.id, opts.containerId));
 
-  return db
+  const erpRows = opts.containerId !== undefined && opts.containerId < 0 ? [] : await db
     .select({
       id: containers.id,
       companyId: containers.companyId,
@@ -295,6 +296,11 @@ export async function fetchActiveContainers(
     .leftJoin(suppliers, eq(containers.supplierId, suppliers.id))
     .where(and(...conditions))
     .orderBy(containers.containerNumber);
+
+  // Supplier Partner source ids are negative in GIT only; never mirror them
+  // into ERP containers or post another Goods OTW voucher.
+  const spRows = await fetchSpGitContainers(companyIds, opts);
+  return [...erpRows, ...spRows];
 }
 
 /**
