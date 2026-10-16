@@ -13,11 +13,190 @@ import { queryClient } from "@/lib/queryClient";
 import { companyQueryKey } from "@/lib/companyQueryScope";
 import { useCompany } from "@/contexts/CompanyContext";
 import { CheckCircle, Download, FileSpreadsheet, Upload, XCircle } from "lucide-react";
+import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
 import {
   SP_CONTAINER_EXCEL_IMPORT_PARSE_PATH,
   type SpExcelImportContainer,
 } from "@shared/spContainerExcelImport";
 import type { Supplier } from "@shared/schema";
+
+
+const spImportWords = {
+  "en": {
+    "pageHeading": "PO Import (Excel)",
+    "downloadTemplate": "Download Template",
+    "uploadHeading": "Upload Purchase Order Excel File",
+    "instructions": "Three-step process: Parse → Validate → Import. Uses the normal ERP Excel template and the Supplier Payable accounting flow.",
+    "stepOne": "Step 1: Select & Parse Excel File (.xlsx)",
+    "parse": "Parse",
+    "parsing": "Parsing...",
+    "stepTwo": "Step 2: Configure Import Details",
+    "fromFile": "Container from file",
+    "supplier": "Supplier *",
+    "supplierSelect": "Select supplier",
+    "supplierLoading": "Loading...",
+    "containerNumber": "Container Number *",
+    "invoiceDate": "Invoice Date *",
+    "invoiceNumber": "Invoice / PO Number *",
+    "companyChanged": "Company changed since parsing. Parse again under the selected company.",
+    "previewHeading": "Preview & Validation",
+    "previewDescription": "Review the line items and amounts before importing. Nothing posts until Import is confirmed.",
+    "validationErrors": "Validation Errors",
+    "validationPassed": "Validation Passed",
+    "container": "Container:",
+    "items": "items",
+    "poCount": "PO(s)",
+    "poNumber": "PO Number",
+    "itemCode": "Item Code",
+    "itemName": "Item Name",
+    "quantity": "Quantity",
+    "rate": "Rate",
+    "lineTotal": "Line Total",
+    "itemsTotal": "Items Total",
+    "freight": "Freight",
+    "surcharge": "Surcharge",
+    "fumigation": "Fumigation",
+    "documents": "Documents",
+    "discount": "Discount",
+    "grandTotal": "Grand Total (USD)",
+    "cancel": "Cancel",
+    "validate": "Validate",
+    "validating": "Validating...",
+    "import": "Import",
+    "importing": "Importing...",
+    "requestFailed": "Request failed",
+    "firstParse": "Parse a file first",
+    "chooseFile": "Select an Excel file first",
+    "excelReadError": copy.excelReadError,
+    "emptyFile": "No containers found",
+    "fileParsed": "File parsed",
+    "parsedHint": "Review the preview, then click Validate.",
+    "excelParseFailed": "Excel parse failed",
+    "validationFailed": "Validation failed",
+    "validationPassedToast": "Validation passed",
+    "ready": "Ready to import.",
+    "containerImported": "Container imported",
+    "posted": "Supplier Payable accounting posted automatically.",
+    "importFailed": "Import failed",
+    "unnamed": copy.unnamed
+  },
+  "fr": {
+    "pageHeading": "Importation de commande (Excel)",
+    "downloadTemplate": "Télécharger le modèle",
+    "uploadHeading": "Importer un fichier Excel de commande",
+    "instructions": "Trois étapes : analyser → valider → importer. Utilise le modèle ERP normal avec la comptabilité des fournisseurs.",
+    "stepOne": "Étape 1 : choisir et analyser le fichier Excel (.xlsx)",
+    "parse": "Analyser",
+    "parsing": "Analyse...",
+    "stepTwo": "Étape 2 : renseigner les détails",
+    "fromFile": "Conteneur du fichier",
+    "supplier": "Fournisseur *",
+    "supplierSelect": "Choisir un fournisseur",
+    "supplierLoading": "Chargement...",
+    "containerNumber": "Numéro du conteneur *",
+    "invoiceDate": "Date de facture *",
+    "invoiceNumber": "Numéro de facture / commande *",
+    "companyChanged": "La société a changé. Analysez de nouveau le fichier pour la société sélectionnée.",
+    "previewHeading": "Aperçu et validation",
+    "previewDescription": "Vérifiez les articles et montants. Rien ne sera comptabilisé avant l'importation.",
+    "validationErrors": "Erreurs de validation",
+    "validationPassed": "Validation réussie",
+    "container": "Conteneur :",
+    "items": "articles",
+    "poCount": "commande(s)",
+    "poNumber": "N° commande",
+    "itemCode": "Code article",
+    "itemName": "Désignation",
+    "quantity": "Quantité",
+    "rate": "Prix",
+    "lineTotal": "Montant ligne",
+    "itemsTotal": "Total articles",
+    "freight": "Fret",
+    "surcharge": "Supplément",
+    "fumigation": "Fumigation",
+    "documents": "Documents",
+    "discount": "Remise",
+    "grandTotal": "Total général (USD)",
+    "cancel": "Annuler",
+    "validate": "Valider",
+    "validating": "Validation...",
+    "import": "Importer",
+    "importing": "Importation...",
+    "requestFailed": "Échec de la requête",
+    "firstParse": "Analysez d'abord un fichier",
+    "chooseFile": "Choisissez un fichier Excel",
+    "excelReadError": "Impossible de lire le fichier Excel",
+    "emptyFile": "Aucun conteneur trouvé",
+    "fileParsed": "Fichier analysé",
+    "parsedHint": "Vérifiez l'aperçu, puis cliquez sur Valider.",
+    "excelParseFailed": "Échec de l'analyse Excel",
+    "validationFailed": "Validation échouée",
+    "validationPassedToast": "Validation réussie",
+    "ready": "Prêt à importer.",
+    "containerImported": "Conteneur importé",
+    "posted": "Écriture comptable fournisseur créée automatiquement.",
+    "importFailed": "Échec de l'importation",
+    "unnamed": "Sans nom"
+  },
+  "ar": {
+    "pageHeading": "استيراد أمر شراء (إكسل)",
+    "downloadTemplate": "تنزيل القالب",
+    "uploadHeading": "استيراد ملف إكسل لأمر الشراء",
+    "instructions": "ثلاث خطوات: تحليل ثم تحقق ثم استيراد. يستخدم قالب ERP العادي مع محاسبة الموردين.",
+    "stepOne": "الخطوة ١: اختيار ملف إكسل وتحليله",
+    "parse": "تحليل",
+    "parsing": "جارٍ التحليل...",
+    "stepTwo": "الخطوة ٢: تحديد تفاصيل الاستيراد",
+    "fromFile": "الحاوية من الملف",
+    "supplier": "المورد *",
+    "supplierSelect": "اختر المورد",
+    "supplierLoading": "جارٍ التحميل...",
+    "containerNumber": "رقم الحاوية *",
+    "invoiceDate": "تاريخ الفاتورة *",
+    "invoiceNumber": "رقم الفاتورة / أمر الشراء *",
+    "companyChanged": "تغيرت الشركة. أعد تحليل الملف ضمن الشركة المحددة.",
+    "previewHeading": "المعاينة والتحقق",
+    "previewDescription": "راجع الأصناف والمبالغ قبل الاستيراد. لن تُسجل قيود حتى تأكيد الاستيراد.",
+    "validationErrors": "أخطاء التحقق",
+    "validationPassed": "تم التحقق بنجاح",
+    "container": "الحاوية:",
+    "items": "صنف",
+    "poCount": "أمر شراء",
+    "poNumber": "رقم أمر الشراء",
+    "itemCode": "رمز الصنف",
+    "itemName": "اسم الصنف",
+    "quantity": "الكمية",
+    "rate": "السعر",
+    "lineTotal": "إجمالي السطر",
+    "itemsTotal": "إجمالي الأصناف",
+    "freight": "الشحن",
+    "surcharge": "رسوم إضافية",
+    "fumigation": "تبخير",
+    "documents": "المستندات",
+    "discount": "خصم",
+    "grandTotal": "الإجمالي (دولار)",
+    "cancel": "إلغاء",
+    "validate": "تحقق",
+    "validating": "جارٍ التحقق...",
+    "import": "استيراد",
+    "importing": "جارٍ الاستيراد...",
+    "requestFailed": "فشل الطلب",
+    "firstParse": "حلل الملف أولاً",
+    "chooseFile": "اختر ملف إكسل أولاً",
+    "excelReadError": "تعذر قراءة ملف إكسل",
+    "emptyFile": "لم يتم العثور على حاويات",
+    "fileParsed": "تم تحليل الملف",
+    "parsedHint": "راجع المعاينة ثم انقر على تحقق.",
+    "excelParseFailed": "فشل تحليل إكسل",
+    "validationFailed": "فشل التحقق",
+    "validationPassedToast": "نجح التحقق",
+    "ready": "جاهز للاستيراد.",
+    "containerImported": "تم استيراد الحاوية",
+    "posted": "تم تسجيل القيود المحاسبية للمورد تلقائياً.",
+    "importFailed": "فشل الاستيراد",
+    "unnamed": "بدون اسم"
+  }
+} as const;
 
 interface ParsedFile {
   fileName: string;
@@ -59,6 +238,8 @@ export default function SpPOImport() {
   const [, navigate] = useLocation();
   const { toast } = useToast();
   const { selectedCompany } = useCompany();
+  const { language } = useApplicationLanguage();
+  const copy = spImportWords[language];
   const [file, setFile] = useState<File | null>(null);
   const [parseKey, setParseKey] = useState(requestId);
   const [importKey, setImportKey] = useState(requestId);
@@ -91,7 +272,7 @@ export default function SpPOImport() {
     invalidateValidation();
   }
   function payload() {
-    if (!selected) throw new Error("Parse a file first");
+    if (!selected) throw new Error(copy.firstParse);
     const supplier = suppliers.find((s) => String(s.id) === supplierId);
     return {
       importSource: "excel",
@@ -119,7 +300,7 @@ export default function SpPOImport() {
 
   const parseMutation = useMutation({
     mutationFn: async () => {
-      if (!file) throw new Error("Select an Excel file first");
+      if (!file) throw new Error(copy.chooseFile);
       const form = new FormData();
       form.append("file", file);
       const response = await fetch(SP_CONTAINER_EXCEL_IMPORT_PARSE_PATH, {
@@ -129,20 +310,20 @@ export default function SpPOImport() {
         body: form,
       });
       const data = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(data.message || data.errors?.join("; ") || "Could not parse Excel");
+      if (!response.ok) throw new Error(data.message || data.errors?.join("; ") || copy.excelReadError);
       return data as ParsedFile;
     },
     onSuccess: (data) => {
       if (!data.containers.length) {
-        toast({ title: "No containers found", variant: "destructive" });
+        toast({ title: copy.emptyFile, variant: "destructive" });
         return;
       }
       setParsed(data);
       setParsedCompanyId(selectedCompany?.id ?? null);
       selectContainer(0, data.containers);
-      toast({ title: "File parsed", description: "Review the preview, then click Validate." });
+      toast({ title: copy.fileParsed, description: copy.parsedHint });
     },
-    onError: (error: Error) => toast({ title: "Excel parse failed", description: error.message, variant: "destructive" }),
+    onError: (error: Error) => toast({ title: copy.excelParseFailed, description: error.message, variant: "destructive" }),
   });
 
   const validateMutation = useMutation({
@@ -152,12 +333,12 @@ export default function SpPOImport() {
       if (JSON.stringify(request) !== JSON.stringify(payload())) return;
       setValidation(data);
       toast({
-        title: data.errors.length ? "Validation failed" : "Validation passed",
-        description: data.errors.length ? data.errors.join("; ") : "Ready to import.",
+        title: data.errors.length ? copy.validationFailed : copy.validationPassedToast,
+        description: data.errors.length ? data.errors.join("; ") : copy.ready,
         variant: data.errors.length ? "destructive" : "default",
       });
     },
-    onError: (error: Error) => toast({ title: "Validation failed", description: error.message, variant: "destructive" }),
+    onError: (error: Error) => toast({ title: copy.validationFailed, description: error.message, variant: "destructive" }),
   });
   const importMutation = useMutation({
     mutationFn: async () => spPost<{ id: number }>("/api/sp/containers", payload(), importKey),
@@ -165,10 +346,10 @@ export default function SpPOImport() {
       queryClient.invalidateQueries({ queryKey: ["/api/sp/containers"] });
       queryClient.invalidateQueries({ queryKey: ["/api/sp/report/payable"] });
       queryClient.invalidateQueries({ queryKey: ["/api/vouchers"] });
-      toast({ title: "Container imported", description: "Supplier Payable accounting posted automatically." });
+      toast({ title: copy.containerImported, description: copy.posted });
       navigate("/containers");
     },
-    onError: (error: Error) => toast({ title: "Import failed", description: error.message, variant: "destructive" }),
+    onError: (error: Error) => toast({ title: copy.importFailed, description: error.message, variant: "destructive" }),
   });
 
   const canValidate = !!selected && !!supplierId && !!containerNumber.trim() &&
@@ -178,18 +359,18 @@ export default function SpPOImport() {
 
   return (
     <div className="space-y-4">
-      <PageHeader title="PO Import (Excel)">
+      <PageHeader title={copy.pageHeading}>
         <Button variant="outline" onClick={() => window.open("/api/po-import/template", "_blank")}>
-          <Download className="h-4 w-4 mr-2" /> Download Template
+          <Download className="h-4 w-4 mr-2" /> {copy.downloadTemplate}
         </Button>
       </PageHeader>
       <Card>
         <CardHeader>
-          <CardTitle>Upload Purchase Order Excel File</CardTitle>
-          <CardDescription>Three-step process: Parse → Validate → Import. Uses the normal ERP Excel template and the Supplier Payable accounting flow.</CardDescription>
+          <CardTitle>{copy.uploadHeading}</CardTitle>
+          <CardDescription>{copy.instructions}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <Label htmlFor="sp-po-file">Step 1: Select &amp; Parse Excel File (.xlsx)</Label>
+          <Label htmlFor="sp-po-file">{copy.stepOne}</Label>
           <div className="flex flex-col sm:flex-row gap-2">
             <Input
               id="sp-po-file"
@@ -207,20 +388,20 @@ export default function SpPOImport() {
             />
             <Button data-testid="button-parse" disabled={!file || parseMutation.isPending} onClick={() => parseMutation.mutate()}>
               <FileSpreadsheet className="h-4 w-4 mr-2" />
-              {parseMutation.isPending ? "Parsing..." : "Parse"}
+              {parseMutation.isPending ? copy.parsing : copy.parse}
             </Button>
           </div>
           {parsed && (
             <div className="space-y-3">
-              <Label>Step 2: Configure Import Details</Label>
+              <Label>{copy.stepTwo}</Label>
               {parsed.containers.length > 1 && (
                 <div className="space-y-2">
-                  <Label>Container from file</Label>
+                  <Label>{copy.fromFile}</Label>
                   <Select value={String(selectedIndex)} onValueChange={(value) => selectContainer(Number(value), parsed.containers)}>
                     <SelectTrigger data-testid="select-sp-excel-container"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       {parsed.containers.map((c, index) => (
-                        <SelectItem key={index} value={String(index)}>{c.containerNumber || "Unnamed"} — {c.itemsCount} items</SelectItem>
+                        <SelectItem key={index} value={String(index)}>{c.containerNumber || copy.unnamed} — {c.itemsCount} items</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -228,28 +409,28 @@ export default function SpPOImport() {
               )}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="space-y-2">
-                  <Label>Supplier *</Label>
+                  <Label>{copy.supplier}</Label>
                   <Select value={supplierId} onValueChange={(v) => { setSupplierId(v); invalidateValidation(); }}>
-                    <SelectTrigger data-testid="select-supplier"><SelectValue placeholder={suppliersLoading ? "Loading..." : "Select supplier"} /></SelectTrigger>
+                    <SelectTrigger data-testid="select-supplier"><SelectValue placeholder={suppliersLoading ? copy.supplierLoading : copy.supplierSelect} /></SelectTrigger>
                     <SelectContent>
                       {suppliers.map((s) => <SelectItem key={s.id} value={String(s.id)}>{s.legalName}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label>Container Number *</Label>
+                  <Label>{copy.containerNumber}</Label>
                   <Input value={containerNumber} onChange={(e) => { setContainerNumber(e.target.value); invalidateValidation(); }} data-testid="input-container-number" />
                 </div>
                 <div className="space-y-2">
-                  <Label>Invoice Date *</Label>
+                  <Label>{copy.invoiceDate}</Label>
                   <Input type="date" value={invoiceDate} onChange={(e) => { setInvoiceDate(e.target.value); invalidateValidation(); }} data-testid="input-import-date" />
                 </div>
                 <div className="space-y-2">
-                  <Label>Invoice / PO Number *</Label>
+                  <Label>{copy.invoiceNumber}</Label>
                   <Input value={invoiceNumber} onChange={(e) => { setInvoiceNumber(e.target.value); invalidateValidation(); }} data-testid="input-invoice-number" />
                 </div>
               </div>
-              {!companyMatches && <p className="text-sm text-destructive">Company changed since parsing. Parse again under the selected company.</p>}
+              {!companyMatches && <p className="text-sm text-destructive">{copy.companyChanged}</p>}
             </div>
           )}
         </CardContent>
@@ -257,32 +438,32 @@ export default function SpPOImport() {
       {selected && (
         <Card>
           <CardHeader>
-            <CardTitle>Preview &amp; Validation</CardTitle>
-            <CardDescription>Review the line items and amounts before importing. Nothing posts until Import is confirmed.</CardDescription>
+            <CardTitle>{copy.previewHeading}</CardTitle>
+            <CardDescription>{copy.previewDescription}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             {validation && (
               <div className={validation.errors.length ? "rounded-md border border-destructive p-3" : "rounded-md border p-3"}>
                 <div className="flex items-center gap-2 font-semibold">
                   {validation.errors.length ? <XCircle className="h-4 w-4 text-destructive" /> : <CheckCircle className="h-4 w-4 text-green-600" />}
-                  {validation.errors.length ? "Validation Errors" : "Validation Passed"}
+                  {validation.errors.length ? copy.validationErrors : copy.validationPassed}
                 </div>
                 {validation.errors.map((e, i) => <p key={i} className="text-sm text-destructive">{e}</p>)}
                 {validation.warnings.map((w, i) => <p key={i} className="text-sm text-amber-600">{w}</p>)}
               </div>
             )}
             <div className="flex flex-wrap gap-4 text-sm">
-              <span>Container: <strong>{selected.containerNumber}</strong></span>
-              <span>{selected.itemsCount} items</span>
-              <span>{selected.poNumbers.length} PO(s)</span>
+              <span>{copy.container} <strong>{selected.containerNumber}</strong></span>
+              <span>{selected.itemsCount} {copy.items}</span>
+              <span>{selected.poNumbers.length} {copy.poCount}</span>
             </div>
             <div className="rounded-md border overflow-x-auto">
               <Table>
                 <TableHeader><TableRow>
-                  <TableHead>PO Number</TableHead><TableHead>Item Code</TableHead><TableHead>Item Name</TableHead>
-                  <TableHead className="text-right">Quantity</TableHead>
-                  <TableHead className="text-right">Rate</TableHead>
-                  <TableHead className="text-right">Line Total</TableHead>
+                  <TableHead>{copy.poNumber}</TableHead><TableHead>{copy.itemCode}</TableHead><TableHead>{copy.itemName}</TableHead>
+                  <TableHead className="text-right">{copy.quantity}</TableHead>
+                  <TableHead className="text-right">{copy.rate}</TableHead>
+                  <TableHead className="text-right">{copy.lineTotal}</TableHead>
                 </TableRow></TableHeader>
                 <TableBody>{selected.lines.map((line, index) => (
                   <TableRow key={index}>
@@ -297,21 +478,21 @@ export default function SpPOImport() {
               </Table>
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 rounded-md bg-muted p-4">
-              <div><p className="text-xs text-muted-foreground">Items Total</p><p className="font-semibold">{money(selected.itemsTotal)}</p></div>
-              <div><p className="text-xs text-muted-foreground">Freight</p><p>{money(selected.charges.freight)}</p></div>
-              <div><p className="text-xs text-muted-foreground">Surcharge</p><p>{money(selected.charges.surcharge)}</p></div>
-              <div><p className="text-xs text-muted-foreground">Fumigation</p><p>{money(selected.charges.fumigation)}</p></div>
-              <div><p className="text-xs text-muted-foreground">Documents</p><p>{money(selected.charges.documentCharges)}</p></div>
-              <div><p className="text-xs text-muted-foreground">Discount</p><p>-{money(selected.charges.discount)}</p></div>
-              <div><p className="text-xs text-muted-foreground">Grand Total (USD)</p><p className="text-xl font-bold">{money(selected.grandTotal)}</p></div>
+              <div><p className="text-xs text-muted-foreground">{copy.itemsTotal}</p><p className="font-semibold">{money(selected.itemsTotal)}</p></div>
+              <div><p className="text-xs text-muted-foreground">{copy.freight}</p><p>{money(selected.charges.freight)}</p></div>
+              <div><p className="text-xs text-muted-foreground">{copy.surcharge}</p><p>{money(selected.charges.surcharge)}</p></div>
+              <div><p className="text-xs text-muted-foreground">{copy.fumigation}</p><p>{money(selected.charges.fumigation)}</p></div>
+              <div><p className="text-xs text-muted-foreground">{copy.documents}</p><p>{money(selected.charges.documentCharges)}</p></div>
+              <div><p className="text-xs text-muted-foreground">{copy.discount}</p><p>-{money(selected.charges.discount)}</p></div>
+              <div><p className="text-xs text-muted-foreground">{copy.grandTotal}</p><p className="text-xl font-bold">{money(selected.grandTotal)}</p></div>
             </div>
             <div className="flex flex-wrap justify-end gap-2">
-              <Button variant="outline" onClick={() => navigate("/containers")}>Cancel</Button>
+              <Button variant="outline" onClick={() => navigate("/containers")}>{copy.cancel}</Button>
               <Button data-testid="button-validate" onClick={() => validateMutation.mutate(payload())} disabled={!canValidate}>
-                {validateMutation.isPending ? "Validating..." : "Validate"}
+                {validateMutation.isPending ? copy.validating : copy.validate}
               </Button>
               <Button data-testid="button-import" onClick={() => importMutation.mutate()} disabled={!canImport}>
-                <Upload className="h-4 w-4 mr-2" />{importMutation.isPending ? "Importing..." : "Import"}
+                <Upload className="h-4 w-4 mr-2" />{importMutation.isPending ? copy.importing : copy.import}
               </Button>
             </div>
           </CardContent>
