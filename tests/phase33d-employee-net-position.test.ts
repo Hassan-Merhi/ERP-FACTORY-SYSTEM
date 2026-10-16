@@ -30,6 +30,7 @@ const harness = vi.hoisted(() => {
     computeNetPositionInventory: vi.fn(),
     computeNetPositionSupplierBalances: vi.fn(),
     getCustomerLedgerAndMemo: vi.fn(),
+    loadHeldChargeSnapshot: vi.fn(),
     loggerError: vi.fn(),
   };
 });
@@ -39,6 +40,9 @@ const harness = vi.hoisted(() => {
 // employees.currentBalance.
 vi.mock("../server/routes/factory/customers-core/customerLedgerSplit", () => ({
   getCustomerLedgerAndMemo: harness.getCustomerLedgerAndMemo,
+}));
+vi.mock("../server/routes/factory/customers-core/heldUnfinalizedCustomerCharges", () => ({
+  loadHeldChargeSnapshot: harness.loadHeldChargeSnapshot,
 }));
 
 vi.mock("../server/db", () => ({
@@ -130,6 +134,7 @@ describe("Phase 33D employee/factory net position", () => {
       balanceOnTableValue: 0,
     });
     harness.getCustomerLedgerAndMemo.mockResolvedValue(new Map());
+    harness.loadHeldChargeSnapshot.mockResolvedValue({ byCustomer: new Map(), voucherIds: new Set() });
   });
 
   it("returns 400 when neither the session nor an active factory company can resolve a company", async () => {
@@ -355,6 +360,37 @@ describe("Phase 33D employee/factory net position", () => {
     // A currency with no confirmed manual rate is refused, never guessed (#2216).
     expect(() => supplierArgs.getConfigFx("EUR")).toThrow("Missing confirmed USD exchange rate for EUR");
     expect(harness.getCustomerLedgerAndMemo).toHaveBeenCalledWith(7, [5, 6], "2026-09-15");
+  });
+
+  it("excludes both ledger sides of unfinalized charges before classifying net position", async () => {
+    harness.loadHeldChargeSnapshot.mockResolvedValue({
+      byCustomer: new Map([[42, new MoneyDecimal(2900)]]),
+      voucherIds: new Set([15969]),
+    });
+    harness.getCustomerLedgerAndMemo.mockResolvedValue(new Map([
+      [42, { ledger: new MoneyDecimal(0), memoTotal: new MoneyDecimal(0) }],
+    ]));
+    harness.executeResults.push({ rows: [] }, { rows: [] });
+    harness.selectResults.push(
+      [{ id: 1, name: "Customer Ledger", accountType: "Asset" },
+       { id: 2, name: "Freight Payable", accountType: "Liability" }],
+      [{ id: 15969 }, { id: 15970 }],
+      [
+        { voucherId: 15969, ledgerAccountId: 1, debitAmount: "2900", creditAmount: "0" },
+        { voucherId: 15969, ledgerAccountId: 2, debitAmount: "0", creditAmount: "2900" },
+        { voucherId: 15970, ledgerAccountId: 2, debitAmount: "0", creditAmount: "100" },
+      ],
+      [{ id: 42, legalName: "ANGOLA", ledgerAccountId: 1 }],
+      [],
+      []
+    );
+    const res = resHarness();
+    await routes.get("GET /api/factory/net-position")!(req(), res);
+    expect(res.statusCode).toBe(200);
+    const balances = harness.classifyNetPositionAccounts.mock.calls[0][1];
+    expect(balances.get(1)).toBeUndefined();
+    expect(balances.get(2)).toEqual({ debit: 0, credit: 100 });
+    expect(res.body.forUs.accounts.some((row: any) => row.name === "ANGOLA")).toBe(false);
   });
 
   it("sums ledger movements exactly", async () => {
