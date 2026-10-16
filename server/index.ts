@@ -51,6 +51,7 @@ import { listenWithRetry, registerGracefulShutdown } from "./startup/listenWithR
 import { registerProcessErrorHandlers } from "./startup/registerProcessErrorHandlers";
 import { runStartupMigrations, warmupDb } from "./startup/runServerStartupMigrations";
 import { ensureFactoryStaffTrackingSchema } from "./startup/factoryStaffTrackingSchema";
+import { ensureSupplierTrackingShopDutyDefaults } from "./startup/ensureSupplierTrackingShopDutyDefaults";
 import { ensureFactoryContainerPlannerSchemaOnBoot } from "./startup/factoryContainerPlannerSchema";
 import { ensurePriorityScanSchema } from "./startup/priorityScanSchema";
 import { ensureFactoryBaleOrderIntegrity } from "./startup/ensureFactoryBaleOrderIntegrity";
@@ -298,6 +299,8 @@ let migrationsDone = false;
         logger.error("[startup] ✗ System account provisioning failed", { error: getErrorMessage(error) });
       });
       await ensureFinancialOperationRequests(pool);
+      await ensureSupplierTrackingShopDutyDefaults(pool);
+      logger.info("[startup] ✓ Supplier Tracking Shop/Duty defaults ensured");
       await ensureRecurringJournalSchema(pool);
       await ensurePriorityScanSchema(pool);
       logger.info("[startup] ✓ Priority Scan schema ensured");
