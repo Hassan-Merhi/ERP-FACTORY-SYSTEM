@@ -59,12 +59,14 @@ describe("canUseFactorySurface", () => {
 describe("Factory shared accounting ownership", () => {
   it("allows ledger/bank reads only from backend-owned Factory pages", () => {
     expect(factoryPageOwnsSharedAccountingRead("/factory/accounts")).toBe(true);
+    expect(factoryPageOwnsSharedAccountingRead("/factory/account-groups")).toBe(true);
     expect(factoryPageOwnsSharedAccountingRead("/factory/invoicing?tab=proformas")).toBe(true);
     expect(factoryPageOwnsSharedAccountingRead("/factory/production-report")).toBe(false);
   });
 
   it("keeps /api/accounts/all stricter than ledger/bank picker reads", () => {
     expect(factoryPageOwnsAccountsAllRead("/factory/accounts")).toBe(true);
+    expect(factoryPageOwnsAccountsAllRead("/factory/account-groups")).toBe(false);
     expect(factoryPageOwnsAccountsAllRead("/factory/invoicing")).toBe(false);
     expect(factoryPageOwnsAccountsAllRead("/factory/stock-entry")).toBe(false);
   });
