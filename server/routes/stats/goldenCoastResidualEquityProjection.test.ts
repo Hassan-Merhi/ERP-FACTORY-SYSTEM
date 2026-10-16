@@ -267,6 +267,37 @@ describe("Golden Coast Excel-style Net Position projection", () => {
     expect(result.onUs.accounts.some((account: { id?: number }) => account.id === 5)).toBe(false);
   });
 
+  it("keeps a credit Inventory ledger balance out of What We Owe and nets it into stock", () => {
+    const fixture = accounts();
+    fixture.rows.push({
+      id: 6,
+      name: "Inventory",
+      code: "INVENTORY",
+      accountType: "Asset",
+      subType: "Current Asset",
+      openingBalance: "0",
+      openingBalanceSide: "Dr",
+      active: true,
+      deletedAt: null,
+    });
+    fixture.balances.set(6, { debit: 1928.22, credit: 1968.58 });
+
+    const result = projectGoldenCoastResidualEquity({
+      body: baseBody({ tracker: EXCEL_GC_SALES_CASH, stock: 163847.58 }),
+      companyAccounts: fixture.rows,
+      accountBalances: fixture.balances,
+    });
+
+    expect(result.onUs.total).toBe(0);
+    expect(result.onUs.accounts).toEqual([]);
+    expect(result.forUs.total).toBe(163807.22 + EXCEL_GC_SALES_CASH);
+    expect(result.netPosition).toBe(163807.22 + EXCEL_GC_SALES_CASH);
+    expect(result.forUs.accounts).toEqual(
+      expect.arrayContaining([expect.objectContaining({ code: "COMPUTED", value: 163807.22 })])
+    );
+    expect(result.forUs.accounts.some((account: { id?: number }) => account.id === 6)).toBe(false);
+  });
+
   it("does nothing to an ordinary Supplier Partner without Golden Coast equity roles", () => {
     const body = baseBody({ tracker: 100 });
     const result = projectGoldenCoastResidualEquity({
