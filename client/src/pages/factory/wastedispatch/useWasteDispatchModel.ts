@@ -8,7 +8,7 @@
  */
 
 import { useEffect, useMemo, useState, type KeyboardEvent } from "react";
-import { useMutation, useQueries, useQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useMutation, useQueries, useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { baleMatchesSearch, fetchGroupBales, fetchHistoryBales, readWasteJson } from "./optimizedData";
@@ -46,7 +46,9 @@ export function useWasteDispatchModel() {
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [balePage, setBalePage] = useState(1);
-  const [historyPage, setHistoryPage] = useState(1);
+  const [historyStartDate, setHistoryStartDate] = useState("");
+  const [historyEndDate, setHistoryEndDate] = useState("");
+  const [historyView, setHistoryView] = useState<"condensed" | "detailed">("condensed");
   const [scanInput, setScanInput] = useState("");
   const [dispatchDate, setDispatchDate] = useState(today());
   const [notes, setNotes] = useState("");
@@ -72,7 +74,7 @@ export function useWasteDispatchModel() {
 
   useEffect(() => {
     setExpandedHistoryIds(new Set());
-  }, [historyPage]);
+  }, [historyStartDate, historyEndDate, historyView]);
 
   const summaryParams = new URLSearchParams({
     page: String(balePage),
@@ -89,14 +91,31 @@ export function useWasteDispatchModel() {
     placeholderData: (previous) => previous,
   });
 
-  const { data: history, isLoading: historyLoading } = useQuery<HistoryResponse>({
-    queryKey: ["/api/factory/waste-dispatch/history-summary", historyPage],
-    queryFn: () =>
-      readWasteJson(`/api/factory/waste-dispatch/history-summary?page=${historyPage}&limit=${HISTORY_PAGE_SIZE}`),
+  // Load dispatches as the user scrolls; query keys include dates so old results never
+  // appear in a newly filtered history. The server returns grand totals on page 1.
+  const {
+    data: history,
+    isLoading: historyLoading,
+    isError: historyError,
+    error: historyFetchError,
+    isFetchingNextPage: historyFetchingNextPage,
+    hasNextPage: historyHasNextPage,
+    fetchNextPage: fetchNextHistoryPage,
+    refetch: refetchHistory,
+  } = useInfiniteQuery({
+    queryKey: ["/api/factory/waste-dispatch/history-summary", historyStartDate, historyEndDate],
+    initialPageParam: 1,
+    queryFn: ({ pageParam }) => {
+      const params = new URLSearchParams({ page: String(pageParam), limit: String(HISTORY_PAGE_SIZE) });
+      if (historyStartDate) params.set("startDate", historyStartDate);
+      if (historyEndDate) params.set("endDate", historyEndDate);
+      return readWasteJson<HistoryResponse>(`/api/factory/waste-dispatch/history-summary?${params}`);
+    },
+    getNextPageParam: (lastPage) =>
+      lastPage.pagination.page < lastPage.pagination.totalPages ? lastPage.pagination.page + 1 : undefined,
     staleTime: 30_000,
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
-    placeholderData: (previous) => previous,
   });
 
   useEffect(() => {
@@ -104,21 +123,17 @@ export function useWasteDispatchModel() {
     if (balePage > totalPages) setBalePage(totalPages);
   }, [balePage, summary?.pagination.totalPages]);
 
-  useEffect(() => {
-    const totalPages = history?.pagination.totalPages || 1;
-    if (historyPage > totalPages) setHistoryPage(totalPages);
-  }, [historyPage, history?.pagination.totalPages]);
-
   const groups = useMemo(() => summary?.groups ?? [], [summary?.groups]);
   const summaryTotals = summary?.totals ?? { bales: 0, weight: 0, cost: 0 };
   const summaryPagination = summary?.pagination ?? { page: 1, limit: GROUP_PAGE_SIZE, total: 0, totalPages: 1 };
-  const historyItems = useMemo(() => history?.items ?? [], [history?.items]);
-  const historyPagination = history?.pagination ?? {
+  const historyItems = useMemo(() => history?.pages.flatMap((page) => page.items) ?? [], [history?.pages]);
+  const historyPagination = history?.pages[0]?.pagination ?? {
     page: 1,
     limit: HISTORY_PAGE_SIZE,
     total: 0,
     totalPages: 1,
   };
+  const historyTotals = history?.pages[0]?.totals ?? { bales: 0, weightKg: 0, amount: 0 };
 
   const visibleExpandedProductIds = useMemo(
     () => Array.from(expandedGroups).filter((productId) => groups.some((group) => group.productId === productId)),
@@ -136,24 +151,6 @@ export function useWasteDispatchModel() {
   const groupQueryById = useMemo(
     () => new Map(visibleExpandedProductIds.map((productId, index) => [productId, groupQueries[index]])),
     [visibleExpandedProductIds, groupQueries]
-  );
-
-  const visibleExpandedHistoryIds = useMemo(
-    () => Array.from(expandedHistoryIds).filter((dispatchId) => historyItems.some((item) => item.id === dispatchId)),
-    [expandedHistoryIds, historyItems]
-  );
-  const historyDetailQueries = useQueries({
-    queries: visibleExpandedHistoryIds.map((dispatchId) => ({
-      queryKey: ["/api/factory/waste-dispatch/history-bales", dispatchId],
-      queryFn: () => fetchHistoryBales(dispatchId),
-      staleTime: DETAIL_STALE_MS,
-      refetchOnWindowFocus: false,
-      refetchOnReconnect: false,
-    })),
-  });
-  const historyQueryById = useMemo(
-    () => new Map(visibleExpandedHistoryIds.map((dispatchId, index) => [dispatchId, historyDetailQueries[index]])),
-    [visibleExpandedHistoryIds, historyDetailQueries]
   );
 
   const selectedBales = useMemo(() => Array.from(selected.values()), [selected]);
@@ -342,8 +339,12 @@ export function useWasteDispatchModel() {
     debouncedSearch,
     balePage,
     setBalePage,
-    historyPage,
-    setHistoryPage,
+    historyStartDate,
+    setHistoryStartDate,
+    historyEndDate,
+    setHistoryEndDate,
+    historyView,
+    setHistoryView,
     scanInput,
     setScanInput,
     dispatchDate,
@@ -362,13 +363,19 @@ export function useWasteDispatchModel() {
     // data
     summaryLoading,
     historyLoading,
+    historyError,
+    historyFetchError,
+    historyFetchingNextPage,
+    historyHasNextPage,
+    fetchNextHistoryPage,
+    refetchHistory,
     groups,
     summaryTotals,
     summaryPagination,
     historyItems,
     historyPagination,
+    historyTotals,
     groupQueryById,
-    historyQueryById,
     selectedBales,
     selectedTotals,
     // actions
