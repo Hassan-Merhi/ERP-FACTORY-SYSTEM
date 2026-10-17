@@ -294,17 +294,23 @@ export function registerFactoryContainerUpdateRoutes(app: Express) {
       const effectiveFreightSupplierId =
         updateData.freightSupplierId !== undefined ? updateData.freightSupplierId : existing.freightSupplierId;
 
-      // Auto-create freight ledger account if effective freight > 0 and no account selected
+      const freightNeedsSync = [
+        "freight", "freightCurrencyCode", "freightAccountId", "freightSupplierId",
+        "freightPaidBy", "freightOwnAccountId", "supplierId", "currencyCode",
+        "ratePerKg", "fxRateToUsd", "fxRateSource",
+      ].some((f) => f in b);
+
+      // A notes-only/ETA-only edit must not repair or reject historical freight
+      // records with incomplete payer details. Validate/canonicalize only when
+      // freight posting inputs really change.
       const effectiveFreightAccountId =
         updateData.freightAccountId !== undefined ? updateData.freightAccountId : existing.freightAccountId;
-      if (!effectiveFreightAccountId && toMoney(effectiveFreight).greaterThan(0)) {
+      if (freightNeedsSync && !effectiveFreightAccountId && toMoney(effectiveFreight).greaterThan(0)) {
         updateData.freightAccountId = await getOrCreateLedgerAccount(companyId, "FREIGHT", "Freight");
       }
 
-      // Canonicalize freight payer fields so switching "own" ↔ "supplier" never
-      // leaves a stale value in the opposing field.  Rules are enforced using
-      // the EFFECTIVE values (not just what was sent in this request).
-      {
+      // Canonicalize only when the freight payable is being changed.
+      if (freightNeedsSync) {
         if (toMoney(effectiveFreight).lessThanOrEqualTo(0)) {
           // Rule A: no freight → clear both payer fields
           updateData.freightSupplierId = null;
@@ -348,20 +354,6 @@ export function registerFactoryContainerUpdateRoutes(app: Express) {
       // must NOT trigger resolveStoredFxRateOrThrow — doing so causes a 400
       // for EUR/AUD containers that have freight but no confirmed FX rate,
       // because the import only changes the ETA, not anything freight-related.
-      const freightNeedsSync = [
-        "freight",
-        "freightCurrencyCode",
-        "freightAccountId",
-        "freightSupplierId",
-        "freightPaidBy",
-        "freightOwnAccountId",
-        "supplierId",
-        "currencyCode",
-        "ratePerKg",
-        "fxRateToUsd",
-        "fxRateSource",
-      ].some((f) => f in b);
-
       // A container's goods payable MUST follow changes to the supplier, goods value,
       // currency and historical rate. Previously only the descriptive daybook row
       // followed those edits, which left the supplier's actual ledger incorrect.
