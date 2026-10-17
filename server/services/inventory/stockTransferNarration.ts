@@ -39,11 +39,13 @@ export async function stockTransferNarrationTx(
  * locations (or with the old "transfer to ..." text). A batched lookup avoids
  * one round-trip per row. No historical accounting/stock data is rewritten.
  */
-export async function withStockTransferNarrations<T extends {
-  id: number;
-  voucherType: string;
-  description: string | null;
-}>(companyId: number, voucherRows: T[]): Promise<T[]> {
+export async function withStockTransferNarrations<
+  T extends {
+    id: number;
+    voucherType: string;
+    description: string | null;
+  },
+>(companyId: number, voucherRows: T[]): Promise<T[]> {
   const transferIds = voucherRows
     .filter((row) => ["stocktransfer", "transfer"].includes(row.voucherType.toLowerCase().replace(/\s+/g, "")))
     .map((row) => row.id);
@@ -61,9 +63,13 @@ export async function withStockTransferNarrations<T extends {
     .innerJoin(stockTransferItems, eq(stockTransferItems.transferId, stockTransferVouchers.id))
     .where(and(eq(vouchers.companyId, companyId), inArray(stockTransferVouchers.voucherId, transferIds)));
 
-  const ids = [...new Set(transferLegs.flatMap((leg) =>
-    [leg.destinationId, leg.itemSourceId ?? leg.headerSourceId].filter((id): id is number => id != null)
-  ))];
+  const ids = [
+    ...new Set(
+      transferLegs.flatMap((leg) =>
+        [leg.destinationId, leg.itemSourceId ?? leg.headerSourceId].filter((id): id is number => id != null)
+      )
+    ),
+  ];
   if (!ids.length) return voucherRows;
   const namedLocations = await db
     .select({ id: locations.id, name: locations.name })

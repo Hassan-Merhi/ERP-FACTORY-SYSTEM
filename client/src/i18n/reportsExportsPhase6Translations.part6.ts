@@ -256,6 +256,22 @@ export const reportsExportsPhase6TranslationsPart6: readonly Phase6ReportsExport
     ar: "يجب أن يكون لكل يوم مفعّل وقت إرسال صالح بنظام 24 ساعة",
     fr: "Chaque jour activé doit avoir une heure d’envoi valide au format 24 h",
   },
+  // Stock transfer narration with source and destination locations (#2346).
+  {
+    en: "Stock transfer narration requires source and destination locations",
+    ar: "يتطلب بيان تحويل المخزون موقعي المصدر والوجهة",
+    fr: "Le libellé du transfert de stock nécessite les emplacements source et destination",
+  },
+  {
+    en: "Stock transfer requires a source location",
+    ar: "يتطلب تحويل المخزون موقع مصدر",
+    fr: "Le transfert de stock nécessite un emplacement source",
+  },
+  {
+    en: "Stock transfer narration location was not found in this company",
+    ar: "لم يتم العثور على موقع بيان تحويل المخزون في هذه الشركة",
+    fr: "L’emplacement du libellé du transfert de stock est introuvable dans cette société",
+  },
   // Barcode Lookup restoration of legacy deleted bales (#2345).
   { en: "Restored to Stock", ar: "أُعيدت إلى المخزون", fr: "Remis en stock" },
   {

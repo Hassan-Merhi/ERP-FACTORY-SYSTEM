@@ -275,14 +275,17 @@ export async function updateStockTransfer(
       deltas: transferDeltas,
     });
 
-    await tx.update(schema.vouchers).set({
-      description: await stockTransferNarrationTx(
-        tx,
-        voucher.companyId,
-        items.map((item) => item.sourceLocationId),
-        destinationLocationId
-      ),
-    }).where(eq(schema.vouchers.id, voucher.id));
+    await tx
+      .update(schema.vouchers)
+      .set({
+        description: await stockTransferNarrationTx(
+          tx,
+          voucher.companyId,
+          items.map((item) => item.sourceLocationId),
+          destinationLocationId
+        ),
+      })
+      .where(eq(schema.vouchers.id, voucher.id));
 
     const result = { transfer: updatedTransfer, items: transferItems };
     if (afterWriteTx) await afterWriteTx(tx, result);
