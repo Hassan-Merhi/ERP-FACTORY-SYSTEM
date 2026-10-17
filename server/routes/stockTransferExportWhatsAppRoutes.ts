@@ -44,16 +44,17 @@ function invalidGroupId(input: unknown) {
 }
 
 function excelText(input: unknown, max = 180): string {
-  const text = String(input ?? "")
-    .trim()
-    .slice(0, max);
-  // Replace control characters (U+0000–U+001F, U+007F) with spaces.
-  const printable = Array.from(text, (ch) => {
-    const code = ch.charCodeAt(0);
-    return code < 0x20 || code === 0x7f ? " " : ch;
-  }).join("");
+  const text = Array.from(
+    String(input ?? "")
+      .trim()
+      .slice(0, max),
+    (ch) => {
+      const code = ch.charCodeAt(0);
+      return code <= 0x1f || code === 0x7f ? " " : ch;
+    }
+  ).join("");
   // Prevent spreadsheet formula injection even when names come from editable data.
-  return /^[=+\-@]/.test(printable) ? "'" + printable : printable;
+  return /^[=+\-@]/.test(text) ? "'" + text : text;
 }
 
 type NoCostItem = { stockItemName: string; sourceLocationName: string; quantity: number };

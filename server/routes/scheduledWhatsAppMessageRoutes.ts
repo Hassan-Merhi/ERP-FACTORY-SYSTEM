@@ -19,38 +19,40 @@ function companyForManager(req: Request, res: Response): number | null {
   return id;
 }
 
-function parseScheduleBody(rawBody: unknown) {
-  const body = (rawBody && typeof rawBody === "object" ? rawBody : {}) as Record<string, unknown>;
-  const title = String(body?.title ?? "").trim();
-  const message = String(body?.message ?? "").trim();
+function parseScheduleBody(body: unknown) {
+  const input: Record<string, unknown> = body && typeof body === "object" ? (body as Record<string, unknown>) : {};
+  const title = String(input.title ?? "").trim();
+  const message = String(input.message ?? "").trim();
   if (!title || title.length > 120) throw new Error("Title is required (maximum 120 characters)");
   if (!message || message.length > 4000) throw new Error("Message must be 1–4000 characters");
-  const timezone = String(body?.timezone ?? "Asia/Beirut").trim();
+  const timezone = String(input.timezone ?? "Asia/Beirut").trim();
   if (!timezone || timezone.length > 80) throw new Error("Invalid timezone");
   try {
     new Intl.DateTimeFormat("en-US", { timeZone: timezone });
   } catch {
     throw new Error("Choose a valid timezone (e.g. Asia/Beirut)");
   }
-  const weeklyTimes = parseWeeklyTimes(body?.weeklyTimes);
-  const startDate = body?.startDate || null;
-  const endDate = body?.endDate || null;
-  const validDate = (date: unknown) =>
+  const weeklyTimes = parseWeeklyTimes(input.weeklyTimes);
+  const startDate = input.startDate || null;
+  const endDate = input.endDate || null;
+  const validDate = (date: unknown): date is string | null =>
     date === null || (typeof date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(date) && !Number.isNaN(Date.parse(date)));
   if (!validDate(startDate) || !validDate(endDate) || (startDate && endDate && startDate > endDate)) {
     throw new Error("Invalid start or end date");
   }
+  const rawRecipientIds = input.recipientIds;
   if (
-    !Array.isArray(body?.recipientIds) ||
-    body.recipientIds.length < 1 ||
-    body.recipientIds.length > 50 ||
-    body.recipientIds.some((id: unknown) => !Number.isSafeInteger(Number(id)) || Number(id) <= 0)
+    !Array.isArray(rawRecipientIds) ||
+    rawRecipientIds.length < 1 ||
+    rawRecipientIds.length > 50 ||
+    rawRecipientIds.some((id: unknown) => !Number.isSafeInteger(Number(id)) || Number(id) <= 0)
   ) {
     throw new Error("Select between 1 and 50 WhatsApp groups");
   }
-  const recipientIds = [...new Set<number>(body.recipientIds.map(Number))];
-  if (typeof body.enabled !== "boolean") throw new Error("Enabled must be true or false");
-  return { title, message, timezone, weeklyTimes, startDate, endDate, recipientIds, enabled: body.enabled };
+  const recipientIds = [...new Set<number>(rawRecipientIds.map(Number))];
+  const enabled = input.enabled;
+  if (typeof enabled !== "boolean") throw new Error("Enabled must be true or false");
+  return { title, message, timezone, weeklyTimes, startDate, endDate, recipientIds, enabled };
 }
 
 export function registerScheduledWhatsAppMessageRoutes(app: Express): void {
