@@ -5,6 +5,7 @@ import { reportsExportsPhase6TranslationsPart2 } from "./reportsExportsPhase6Tra
 import { reportsExportsPhase6TranslationsPart3 } from "./reportsExportsPhase6Translations.part3";
 import { reportsExportsPhase6TranslationsPart4 } from "./reportsExportsPhase6Translations.part4";
 import { reportsExportsPhase6TranslationsPart5 } from "./reportsExportsPhase6Translations.part5";
+import { reportsExportsPhase6TranslationsPart6 } from "./reportsExportsPhase6Translations.part6";
 
 export const reportsExportsPhase6Translations: readonly Phase6ReportsExportsEntry[] = [
   ...reportsExportsPhase6TranslationsPart1,
@@ -12,6 +13,7 @@ export const reportsExportsPhase6Translations: readonly Phase6ReportsExportsEntr
   ...reportsExportsPhase6TranslationsPart3,
   ...reportsExportsPhase6TranslationsPart4,
   ...reportsExportsPhase6TranslationsPart5,
+  ...reportsExportsPhase6TranslationsPart6,
 ];
 
 const languages = ["en", "ar", "fr"] as const;

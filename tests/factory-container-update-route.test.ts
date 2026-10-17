@@ -718,7 +718,9 @@ describe("PATCH /api/factory/containers/:id — legacy missing goods-import jour
 
   it("retains an explicit manual FX rate when switching from auto mode", async () => {
     const id = await seedContainer({
-      currencyCode: "EUR", fxRateToUsd: "1.20000000", fxRateConfirmed: false,
+      currencyCode: "EUR",
+      fxRateToUsd: "1.20000000",
+      fxRateConfirmed: false,
     });
     await pool.query("UPDATE factory_containers SET fx_rate_source = 'auto' WHERE id = $1", [id]);
     const response = await patchContainer(id, { fxRateSource: "manual", fxRateToUsd: "1.2" });

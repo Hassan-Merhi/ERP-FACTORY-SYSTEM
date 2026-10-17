@@ -240,7 +240,9 @@ export function ContainerFormDialog({
         }
       })
       .catch(() => {});
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [currency, fxRateSource, editingContainer]);
 
   useEffect(() => {
@@ -400,7 +402,12 @@ export function ContainerFormDialog({
           return String(value || "auto").toLowerCase();
         };
         const goodsFields = [
-          "supplierId", "totalKg", "ratePerKg", "currencyCode", "fxRateSource", "fxRateToUsd",
+          "supplierId",
+          "totalKg",
+          "ratePerKg",
+          "currencyCode",
+          "fxRateSource",
+          "fxRateToUsd",
         ] as const;
         const changedMode =
           normalized("currencyCode", patch.currencyCode) !== normalized("currencyCode", original.currencyCode) ||
