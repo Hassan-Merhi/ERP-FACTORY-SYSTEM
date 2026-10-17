@@ -685,6 +685,40 @@ describe("PATCH /api/factory/containers/:id — legacy missing goods-import jour
     expect(legacyJournals.rows).toHaveLength(0);
   });
 
+  it("permits legacy notes edits without manufacturing missing freight account or payee", async () => {
+    const id = await seedContainer({
+      freight: "125",
+      freightAccountId: null,
+      freightPaidBy: "supplier",
+      freightSupplierId: null,
+    });
+    const response = await patchContainer(id, {
+      notes: "Port received",
+      freight: "125.00",
+      freightAccountId: null,
+      freightPaidBy: "supplier",
+      freightSupplierId: null,
+    });
+    expect(response.status, JSON.stringify(response.body)).toBe(200);
+    const saved = await containerRow(id);
+    expect(saved.notes).toBe("Port received");
+    expect(saved.freight_account_id).toBeNull();
+    expect(saved.freight_supplier_id).toBeNull();
+  });
+
+  it("retains an explicit manual FX rate when switching from auto mode", async () => {
+    const id = await seedContainer({
+      currencyCode: "EUR", fxRateToUsd: "1.20000000", fxRateConfirmed: false,
+    });
+    await pool.query("UPDATE factory_containers SET fx_rate_source = 'auto' WHERE id = $1", [id]);
+    const response = await patchContainer(id, { fxRateSource: "manual", fxRateToUsd: "1.2" });
+    // The explicit manual FX passes validation; without an import journal, the
+    // independent historical-liability guard still refuses the actual edit.
+    expect(response.status).toBe(400);
+    expect(response.body.message).toMatch(/no goods-import journal/i);
+    expect((await containerRow(id)).fx_rate_source).toBe("auto");
+  });
+
   it("still refuses an actual goods change without a reviewed original journal", async () => {
     const id = await seedContainer({ supplierId, ratePerKg: "2.500000" });
     await pool.query("UPDATE factory_containers SET total_kg = '1200' WHERE id = $1", [id]);
