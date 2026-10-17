@@ -256,6 +256,9 @@ export function registerFactoryContainerUpdateRoutes(app: Express) {
           // confirmed already (or, absent the flag on this row, looks like a real explicit
           // rate under the legacy heuristic).
           const explicitRate = b.fxRateToUsd !== undefined ? parseMoneyInput(dec(b.fxRateToUsd) ?? "") : null;
+          if (b.fxRateToUsd !== undefined && (!explicitRate || !explicitRate.greaterThan(0))) {
+            return res.status(400).json({ message: "Manual FX rate must be a positive number." });
+          }
           let fxRateNum: Decimal;
           if (explicitRate && explicitRate.greaterThan(0)) {
             // A manual rate is accepted only where a recorded dated rate exists (the factory document rule).
