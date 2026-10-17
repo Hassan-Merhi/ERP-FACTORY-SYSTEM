@@ -19,33 +19,40 @@ function companyForManager(req: Request, res: Response): number | null {
   return id;
 }
 
-function parseScheduleBody(body: any) {
-  const title = String(body?.title ?? "").trim();
-  const message = String(body?.message ?? "").trim();
+function parseScheduleBody(body: unknown) {
+  const input: Record<string, unknown> = body && typeof body === "object" ? (body as Record<string, unknown>) : {};
+  const title = String(input.title ?? "").trim();
+  const message = String(input.message ?? "").trim();
   if (!title || title.length > 120) throw new Error("Title is required (maximum 120 characters)");
   if (!message || message.length > 4000) throw new Error("Message must be 1–4000 characters");
-  const timezone = String(body?.timezone ?? "Asia/Beirut").trim();
+  const timezone = String(input.timezone ?? "Asia/Beirut").trim();
   if (!timezone || timezone.length > 80) throw new Error("Invalid timezone");
   try {
     new Intl.DateTimeFormat("en-US", { timeZone: timezone });
   } catch {
     throw new Error("Choose a valid timezone (e.g. Asia/Beirut)");
   }
-  const weeklyTimes = parseWeeklyTimes(body?.weeklyTimes);
-  const startDate = body?.startDate || null;
-  const endDate = body?.endDate || null;
-  const validDate = (date: unknown) =>
+  const weeklyTimes = parseWeeklyTimes(input.weeklyTimes);
+  const startDate = input.startDate || null;
+  const endDate = input.endDate || null;
+  const validDate = (date: unknown): date is string | null =>
     date === null || (typeof date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(date) && !Number.isNaN(Date.parse(date)));
   if (!validDate(startDate) || !validDate(endDate) || (startDate && endDate && startDate > endDate)) {
     throw new Error("Invalid start or end date");
   }
-  if (!Array.isArray(body?.recipientIds) || body.recipientIds.length < 1 || body.recipientIds.length > 50 ||
-      body.recipientIds.some((id: unknown) => !Number.isSafeInteger(Number(id)) || Number(id) <= 0)) {
+  const rawRecipientIds = input.recipientIds;
+  if (
+    !Array.isArray(rawRecipientIds) ||
+    rawRecipientIds.length < 1 ||
+    rawRecipientIds.length > 50 ||
+    rawRecipientIds.some((id: unknown) => !Number.isSafeInteger(Number(id)) || Number(id) <= 0)
+  ) {
     throw new Error("Select between 1 and 50 WhatsApp groups");
   }
-  const recipientIds = [...new Set<number>(body.recipientIds.map(Number))];
-  if (typeof body.enabled !== "boolean") throw new Error("Enabled must be true or false");
-  return { title, message, timezone, weeklyTimes, startDate, endDate, recipientIds, enabled: body.enabled };
+  const recipientIds = [...new Set<number>(rawRecipientIds.map(Number))];
+  const enabled = input.enabled;
+  if (typeof enabled !== "boolean") throw new Error("Enabled must be true or false");
+  return { title, message, timezone, weeklyTimes, startDate, endDate, recipientIds, enabled };
 }
 
 export function registerScheduledWhatsAppMessageRoutes(app: Express): void {
@@ -56,18 +63,27 @@ export function registerScheduledWhatsAppMessageRoutes(app: Express): void {
       await ensureScheduledWhatsAppMessageSchema();
       const result = await pool.query(
         "SELECT s.id::text, s.title, s.message, s.timezone, s.weekly_times, " +
-        "s.start_date::text, s.end_date::text, s.enabled, s.created_at, s.updated_at, " +
-        "COALESCE(array_agg(sr.recipient_id) FILTER (WHERE sr.recipient_id IS NOT NULL), ARRAY[]::integer[]) AS recipient_ids " +
-        "FROM whatsapp_message_schedules s " +
-        "LEFT JOIN whatsapp_message_schedule_recipients sr ON sr.schedule_id = s.id " +
-        "WHERE s.company_id = $1 GROUP BY s.id ORDER BY s.updated_at DESC",
+          "s.start_date::text, s.end_date::text, s.enabled, s.created_at, s.updated_at, " +
+          "COALESCE(array_agg(sr.recipient_id) FILTER (WHERE sr.recipient_id IS NOT NULL), ARRAY[]::integer[]) AS recipient_ids " +
+          "FROM whatsapp_message_schedules s " +
+          "LEFT JOIN whatsapp_message_schedule_recipients sr ON sr.schedule_id = s.id " +
+          "WHERE s.company_id = $1 GROUP BY s.id ORDER BY s.updated_at DESC",
         [companyId]
       );
-      res.json(result.rows.map((r) => ({
-        id: r.id, title: r.title, message: r.message, timezone: r.timezone,
-        weeklyTimes: r.weekly_times, startDate: r.start_date, endDate: r.end_date,
-        enabled: r.enabled, recipientIds: r.recipient_ids, updatedAt: r.updated_at,
-      })));
+      res.json(
+        result.rows.map((r) => ({
+          id: r.id,
+          title: r.title,
+          message: r.message,
+          timezone: r.timezone,
+          weeklyTimes: r.weekly_times,
+          startDate: r.start_date,
+          endDate: r.end_date,
+          enabled: r.enabled,
+          recipientIds: r.recipient_ids,
+          updatedAt: r.updated_at,
+        }))
+      );
     } catch (err) {
       res.status(500).json({ message: getErrorMessage(err) });
     }
@@ -80,16 +96,24 @@ export function registerScheduledWhatsAppMessageRoutes(app: Express): void {
       await ensureScheduledWhatsAppMessageSchema();
       const result = await pool.query(
         "SELECT d.id::text, s.title, d.recipient_name, d.local_date::text, " +
-        "d.status, d.error, d.sent_at, d.created_at " +
-        "FROM whatsapp_message_schedule_deliveries d " +
-        "JOIN whatsapp_message_schedules s ON s.id = d.schedule_id " +
-        "WHERE s.company_id = $1 ORDER BY d.created_at DESC LIMIT 100",
+          "d.status, d.error, d.sent_at, d.created_at " +
+          "FROM whatsapp_message_schedule_deliveries d " +
+          "JOIN whatsapp_message_schedules s ON s.id = d.schedule_id " +
+          "WHERE s.company_id = $1 ORDER BY d.created_at DESC LIMIT 100",
         [companyId]
       );
-      res.json(result.rows.map((r) => ({
-        id: r.id, title: r.title, recipientName: r.recipient_name, localDate: r.local_date,
-        status: r.status, error: r.error, sentAt: r.sent_at, createdAt: r.created_at,
-      })));
+      res.json(
+        result.rows.map((r) => ({
+          id: r.id,
+          title: r.title,
+          recipientName: r.recipient_name,
+          localDate: r.local_date,
+          status: r.status,
+          error: r.error,
+          sentAt: r.sent_at,
+          createdAt: r.created_at,
+        }))
+      );
     } catch (err) {
       res.status(500).json({ message: getErrorMessage(err) });
     }
@@ -111,7 +135,7 @@ export function registerScheduledWhatsAppMessageRoutes(app: Express): void {
       await client.query("BEGIN");
       const validRecipients = await client.query(
         "SELECT id FROM whatsapp_recipients WHERE company_id = $1 AND active = true " +
-        "AND is_group = true AND id = ANY($2::integer[])",
+          "AND is_group = true AND id = ANY($2::integer[])",
         [companyId, form.recipientIds]
       );
       if (validRecipients.rows.length !== form.recipientIds.length) {
@@ -119,22 +143,29 @@ export function registerScheduledWhatsAppMessageRoutes(app: Express): void {
         return res.status(400).json({ message: "One or more selected groups are not active in this company" });
       }
       const values = [
-        companyId, form.title, form.message, form.timezone,
-        JSON.stringify(form.weeklyTimes), form.startDate, form.endDate, form.enabled,
+        companyId,
+        form.title,
+        form.message,
+        form.timezone,
+        JSON.stringify(form.weeklyTimes),
+        form.startDate,
+        form.endDate,
+        form.enabled,
       ];
-      const schedule = id === undefined
-        ? await client.query(
-          "INSERT INTO whatsapp_message_schedules " +
-          "(company_id, title, message, timezone, weekly_times, start_date, end_date, enabled) " +
-          "VALUES ($1,$2,$3,$4,$5::jsonb,$6::date,$7::date,$8) RETURNING id",
-          values
-        )
-        : await client.query(
-          "UPDATE whatsapp_message_schedules SET title=$2, message=$3, timezone=$4, " +
-          "weekly_times=$5::jsonb, start_date=$6::date, end_date=$7::date, enabled=$8, updated_at=now() " +
-          "WHERE id=$9 AND company_id=$1 RETURNING id",
-          [...values, id]
-        );
+      const schedule =
+        id === undefined
+          ? await client.query(
+              "INSERT INTO whatsapp_message_schedules " +
+                "(company_id, title, message, timezone, weekly_times, start_date, end_date, enabled) " +
+                "VALUES ($1,$2,$3,$4,$5::jsonb,$6::date,$7::date,$8) RETURNING id",
+              values
+            )
+          : await client.query(
+              "UPDATE whatsapp_message_schedules SET title=$2, message=$3, timezone=$4, " +
+                "weekly_times=$5::jsonb, start_date=$6::date, end_date=$7::date, enabled=$8, updated_at=now() " +
+                "WHERE id=$9 AND company_id=$1 RETURNING id",
+              [...values, id]
+            );
       if (!schedule.rowCount) {
         await client.query("ROLLBACK");
         return res.status(404).json({ message: "Schedule not found for this company" });
