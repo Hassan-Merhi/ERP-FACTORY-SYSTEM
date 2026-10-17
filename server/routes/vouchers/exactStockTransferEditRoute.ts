@@ -12,6 +12,8 @@ import { storage } from "../../storage";
 import { sumMoney } from "../../lib/money";
 import { allStockItemsOwned, ownLocationIds } from "../helpers/companyOwnership";
 
+import { stockTransferNarrationTx } from "../../services/inventory/stockTransferNarration";
+
 const bodySchema = z.object({
   voucherDate: z.string().optional(),
   description: z.string().optional().default(""),
@@ -132,7 +134,7 @@ export function registerExactStockTransferEditRoute(app: Express): void {
                 totalAmount: totalAmount.toFixed(2),
                 ...(uniqueSources.length === 1 ? { locationId: uniqueSources[0] } : {}),
                 ...(parsed.voucherDate !== undefined ? { voucherDate: parsed.voucherDate } : {}),
-                description: parsed.description,
+                description: await stockTransferNarrationTx(tx, companyId, uniqueSources, parsed.destinationLocationId),
               })
               .where(eq(vouchers.id, voucherId))
               .returning();
