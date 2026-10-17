@@ -718,7 +718,9 @@ describe("PATCH /api/factory/containers/:id — legacy missing goods-import jour
 
   it("retains an explicit manual FX rate when switching from auto mode", async () => {
     const id = await seedContainer({
-      currencyCode: "EUR", fxRateToUsd: "1.20000000", fxRateConfirmed: false,
+      currencyCode: "EUR",
+      fxRateToUsd: "1.20000000",
+      fxRateConfirmed: false,
     });
     // A positive historical goods value: a zero-value container may now post
     // its first goods payable, so it would not exercise the historical guard.
