@@ -44,6 +44,8 @@ function sameDecimal(a: Decimal, b: Decimal): boolean {
   return a.equals(b);
 }
 
+import { stockTransferNarrationTx } from "../../services/inventory/stockTransferNarration";
+
 export async function updateStockTransfer(
   id: number,
   destinationLocationId: number,
@@ -273,6 +275,15 @@ export async function updateStockTransfer(
       reference: voucher.voucherNumber,
       deltas: transferDeltas,
     });
+
+    await tx.update(schema.vouchers).set({
+      description: await stockTransferNarrationTx(
+        tx,
+        voucher.companyId,
+        items.map((item) => item.sourceLocationId),
+        destinationLocationId
+      ),
+    }).where(eq(schema.vouchers.id, voucher.id));
 
     const result = { transfer: updatedTransfer, items: transferItems };
     if (afterWriteTx) await afterWriteTx(tx, result);
