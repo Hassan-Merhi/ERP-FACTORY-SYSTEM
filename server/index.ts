@@ -56,6 +56,7 @@ import { ensureFactoryContainerPlannerSchemaOnBoot } from "./startup/factoryCont
 import { ensurePriorityScanSchema } from "./startup/priorityScanSchema";
 import { ensureFactoryBaleOrderIntegrity } from "./startup/ensureFactoryBaleOrderIntegrity";
 import { runApprovedLegacyBaleUnitCostRepair } from "./startup/runApprovedLegacyBaleUnitCostRepair";
+import { runApprovedLegacySoldBaleUnitCostRepair } from "./startup/runApprovedLegacySoldBaleUnitCostRepair";
 import { runApprovedCustomerLoadingDateRepair } from "./startup/runApprovedCustomerLoadingDateRepair";
 import { runApprovedReturnedLoadingDateRepair } from "./startup/runApprovedReturnedLoadingDateRepair";
 import { runApprovedFactoryPayableReclassification } from "./startup/runApprovedFactoryPayableReclassification";
@@ -336,6 +337,8 @@ let migrationsDone = false;
       // Explicitly owner-approved, one-time monetary correction. Disabled by
       // default and guarded against repeat execution or accounting cutover.
       await runApprovedLegacyBaleUnitCostRepair(pool);
+      // Owner-approved (2026-10-17) follow-up for the remaining historical/sold bales.
+      await runApprovedLegacySoldBaleUnitCostRepair(pool);
       // One-time owner-authorized, company-12 historical loading-date reconciliation.
       // Atomic before-image audit and exact first-submission evidence are required.
       await runApprovedCustomerLoadingDateRepair(pool);
