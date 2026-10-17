@@ -2,7 +2,7 @@ import type { Express } from "express";
 import { getErrorMessage } from "../lib/httpHandlers";
 import { db } from "../db";
 import { requireAuth } from "../auth";
-import { notifications, notificationRules, users, companies } from "@shared/schema";
+import { notifications, notificationRules, users, companies, customerOrders } from "@shared/schema";
 import { eq, and, desc, sql, inArray } from "drizzle-orm";
 import { NOTIFICATION_EVENT_TYPES } from "../lib/notificationService";
 
@@ -66,11 +66,51 @@ export function registerNotificationRoutes(app: Express) {
             : [];
         const companyMap = Object.fromEntries(companyRows.map((c) => [c.id, c.name]));
 
-        const enriched = rows.map((n) => ({
-          ...n,
-          triggeredByUsername: n.triggeredByUserId ? (userMap[n.triggeredByUserId] ?? null) : null,
-          companyName: n.companyId ? (companyMap[n.companyId] ?? null) : null,
-        }));
+        // Load destinations once for the relevant order-backed notifications.
+        // Resolve at read time so loading-started notifications also show a
+        // destination entered later, without changing stored notification history.
+        const orderEventTypes = new Set(["LOADING_STARTED", "LOADING_FINALIZED", "INVOICE_FINALIZED"]);
+        const linkedOrderNotifications = rows.filter(
+          (n) =>
+            orderEventTypes.has(n.eventType) &&
+            n.entityType === "customer_order" &&
+            n.entityId != null &&
+            n.companyId != null
+        );
+        const linkedOrderIds = [...new Set(linkedOrderNotifications.map((n) => n.entityId!))];
+        const linkedCompanyIds = [...new Set(linkedOrderNotifications.map((n) => n.companyId!))];
+        const destinationRows =
+          linkedOrderIds.length > 0
+            ? await db
+                .select({
+                  id: customerOrders.id,
+                  companyId: customerOrders.companyId,
+                  destination: customerOrders.destination,
+                })
+                .from(customerOrders)
+                .where(
+                  and(inArray(customerOrders.id, linkedOrderIds), inArray(customerOrders.companyId, linkedCompanyIds))
+                )
+            : [];
+        const destinationByOrder = new Map(
+          destinationRows.map((order) => [`${order.companyId}:${order.id}`, order.destination?.trim() || ""])
+        );
+
+        const enriched = rows.map((n) => {
+          const destination =
+            orderEventTypes.has(n.eventType) &&
+            n.entityType === "customer_order" &&
+            n.entityId != null &&
+            n.companyId != null
+              ? destinationByOrder.get(`${n.companyId}:${n.entityId}`)
+              : undefined;
+          return {
+            ...n,
+            message: destination ? `${n.message} — Destination: ${destination}` : n.message,
+            triggeredByUsername: n.triggeredByUserId ? (userMap[n.triggeredByUserId] ?? null) : null,
+            companyName: n.companyId ? (companyMap[n.companyId] ?? null) : null,
+          };
+        });
 
         res.json(enriched);
       } catch (err: unknown) {
