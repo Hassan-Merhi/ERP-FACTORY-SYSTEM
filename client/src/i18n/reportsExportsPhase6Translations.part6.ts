@@ -256,6 +256,13 @@ export const reportsExportsPhase6TranslationsPart6: readonly Phase6ReportsExport
     ar: "يجب أن يكون لكل يوم مفعّل وقت إرسال صالح بنظام 24 ساعة",
     fr: "Chaque jour activé doit avoir une heure d’envoi valide au format 24 h",
   },
+  // Barcode Lookup restoration of legacy deleted bales (#2345).
+  { en: "Restored to Stock", ar: "أُعيدت إلى المخزون", fr: "Remis en stock" },
+  {
+    en: "Deleted bale restored. Existing ERP stock quantity was preserved without a duplicate receipt.",
+    ar: "تمت استعادة البالة المحذوفة. تم الحفاظ على كمية مخزون ERP الحالية دون إدخال مكرر.",
+    fr: "Balle supprimée restaurée. La quantité de stock ERP existante a été conservée sans réception en double.",
+  },
   {
     en: "Enable at least one weekday",
     ar: "فعّل يومًا واحدًا على الأقل من أيام الأسبوع",
