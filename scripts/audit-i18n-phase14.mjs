@@ -59,6 +59,7 @@ const compatibilityTranslationFiles = [
   "client/src/i18n/reportsExportsPhase6Translations.part3.ts",
   "client/src/i18n/reportsExportsPhase6Translations.part4.ts",
   "client/src/i18n/reportsExportsPhase6Translations.part5.ts",
+  "client/src/i18n/reportsExportsPhase6Translations.part6.ts",
   "client/src/i18n/backendMessagesPhase7Translations.part1.ts",
   "client/src/i18n/backendMessagesPhase7Translations.part2.ts",
   "client/src/i18n/backendMessagesPhase7Translations.part3.ts",
@@ -95,6 +96,10 @@ const compatibilityTranslationFiles = [
 ];
 
 const reviewedTechnicalValues = new Set([
+  // Scheduled WhatsApp placeholders: an example group chat ID and an IANA timezone
+  // identifier. Both are literal technical formats the user must type as-is.
+  "120363012345678901@g.us",
+  "Asia/Beirut",
   // Detector false positive: `requestJson<ControllerSessionsResponse>(...)` reads as JSX to the
   // scanner, so the generic call's function name surfaces as translatable text. It is an
   // identifier, never rendered.
