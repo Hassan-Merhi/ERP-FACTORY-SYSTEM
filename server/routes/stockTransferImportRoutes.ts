@@ -18,6 +18,7 @@ import { getClientDate } from "../lib/dateUtils";
 import { sendTransferWhatsApp } from "../helpers/sendTransferWhatsApp";
 import { inventory, stockTransferVouchers, vouchers } from "@shared/schema";
 import { MoneyDecimal, toMoney } from "../lib/money";
+import { formatStockTransferNarration } from "../services/inventory/stockTransferNarration";
 import { resolveTransferLocations } from "./helpers/transferLocations";
 import type { ParsedStockTransferItem, SpreadsheetRow, ValidatedStockTransferItem } from "./stockTransferImportTypes";
 import { requestQuantity, rowQuantity, type Decimal } from "./stockTransferImportQuantity";
@@ -309,8 +310,7 @@ export function registerStockTransferImportRoutes(app: Express) {
             voucherNumber,
             voucherType: "Stock Transfer",
             voucherDate: transferDate,
-            description:
-              notes || `Excel Import - ${items.length} items from ${sourceLocation.name} to ${destLocation.name}`,
+            description: formatStockTransferNarration([sourceLocation.name], destLocation.name),
             totalAmount: totalValue.toFixed(),
           })
           .returning();
@@ -322,6 +322,7 @@ export function registerStockTransferImportRoutes(app: Express) {
             voucherId: voucher.id,
             sourceLocationId: sourceLocationId,
             destinationLocationId,
+            notes: notes || null,
             inventoryApplied: true,
           })
           .returning();
@@ -773,7 +774,10 @@ export function registerStockTransferImportRoutes(app: Express) {
             voucherType: "Stock Transfer",
             voucherNumber,
             voucherDate: transferDate || getClientDate(req),
-            description: notes || `Multi-source Stock Transfer Import (${processedItems.length} items)`,
+            description: formatStockTransferNarration(
+              processedItems.map((item) => locationsById[item.sourceLocationId]),
+              destLocation.name
+            ),
             totalAmount: totalValue.toFixed(),
             locationId: destinationLocationId,
             locationName: destLocation.name,
@@ -788,6 +792,7 @@ export function registerStockTransferImportRoutes(app: Express) {
             voucherId: voucher.id,
             sourceLocationId: firstSourceId,
             destinationLocationId,
+            notes: notes || null,
             inventoryApplied: true,
           })
           .returning();
