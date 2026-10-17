@@ -719,6 +719,34 @@ describe("PATCH /api/factory/containers/:id — legacy missing goods-import jour
     expect((await containerRow(id)).fx_rate_source).toBe("auto");
   });
 
+  it("posts the initial goods payable when a previously empty container receives its first weight", async () => {
+    const id = await seedContainer({
+      currencyCode: "EUR",
+      fxRateToUsd: "1.18000000",
+      fxRateConfirmed: true,
+      ratePerKg: "0.38",
+    });
+    const before = await containerRow(id);
+    expect(before.total_kg).toBeNull();
+    const response = await patchContainer(id, { totalKg: "500", supplierId, ratePerKg: "0.38" });
+    expect(response.status, JSON.stringify(response.body)).toBe(200);
+    expect((await containerRow(id)).total_kg).toBe("500.000");
+
+    const vouchersForContainer = await pool.query<{ total_amount: string; currency: string }>(
+      "SELECT total_amount, currency FROM vouchers WHERE company_id = $1 AND voucher_number LIKE $2 AND deleted_at IS NULL",
+      [ctx.companyId, `FACTORY-IMPORT-${id}-%`]
+    );
+    expect(vouchersForContainer.rows).toHaveLength(1);
+    expect(vouchersForContainer.rows[0]).toEqual({ total_amount: "190.00", currency: "EUR" });
+    const credits = await pool.query<{ factory_supplier_id: number; credit_amount: string }>(
+      `SELECT ve.factory_supplier_id, ve.credit_amount FROM voucher_entries ve
+        JOIN vouchers v ON v.id = ve.voucher_id
+        WHERE v.company_id = $1 AND v.voucher_number LIKE $2 AND ve.credit_amount > 0`,
+      [ctx.companyId, `FACTORY-IMPORT-${id}-%`]
+    );
+    expect(credits.rows).toEqual([{ factory_supplier_id: supplierId, credit_amount: "190.00" }]);
+  });
+
   it("still refuses an actual goods change without a reviewed original journal", async () => {
     const id = await seedContainer({ supplierId, ratePerKg: "2.500000" });
     await pool.query("UPDATE factory_containers SET total_kg = '1200' WHERE id = $1", [id]);
