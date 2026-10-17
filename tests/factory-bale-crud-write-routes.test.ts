@@ -265,10 +265,10 @@ describe("PATCH /api/factory/bales/:id/status", () => {
 describe("restoring historic status-only deleted bales from Barcode Lookup", () => {
   it("restores a legacy DELETED bale without adding another ERP stock movement", async () => {
     const id = await createBale({ status: "DELETED", costPerKg: "0" });
-    await pool.query(
-      "UPDATE factory_bales SET deleted_at = NOW(), erp_location_id = $2 WHERE id = $1",
-      [id, ctx.locationId]
-    );
+    await pool.query("UPDATE factory_bales SET deleted_at = NOW(), erp_location_id = $2 WHERE id = $1", [
+      id,
+      ctx.locationId,
+    ]);
     const before = await pool.query<{ count: string }>(
       `SELECT count(*)::text AS count FROM canonical_stock_movements
        WHERE company_id = $1 AND source_id = $2`,
@@ -290,10 +290,10 @@ describe("restoring historic status-only deleted bales from Barcode Lookup", () 
 
   it("refuses to revive a bale with a physical deletion audit (no phantom stock)", async () => {
     const id = await createBale({ status: "DELETED", costPerKg: "0" });
-    await pool.query(
-      "UPDATE factory_bales SET deleted_at = NOW(), erp_location_id = $2 WHERE id = $1",
-      [id, ctx.locationId]
-    );
+    await pool.query("UPDATE factory_bales SET deleted_at = NOW(), erp_location_id = $2 WHERE id = $1", [
+      id,
+      ctx.locationId,
+    ]);
     await pool.query(
       `INSERT INTO factory_physical_bale_deletions
          (company_id, bale_id, reference_number, previous_status, original_location_id, removed_by_name, reason)

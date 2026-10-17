@@ -401,10 +401,7 @@ export function registerBalesCrudRoutes(app: Express) {
               .select({ id: factoryPhysicalBaleDeletions.id })
               .from(factoryPhysicalBaleDeletions)
               .where(
-                and(
-                  eq(factoryPhysicalBaleDeletions.companyId, companyId),
-                  eq(factoryPhysicalBaleDeletions.baleId, id)
-                )
+                and(eq(factoryPhysicalBaleDeletions.companyId, companyId), eq(factoryPhysicalBaleDeletions.baleId, id))
               )
               .limit(1);
             const removalMovement = await tx.execute(sql`
@@ -450,11 +447,7 @@ export function registerBalesCrudRoutes(app: Express) {
               .update(factoryBales)
               .set({ status: "IN_STOCK", deletedAt: null, updatedAt: new Date() })
               .where(
-                and(
-                  eq(factoryBales.id, id),
-                  eq(factoryBales.companyId, companyId),
-                  eq(factoryBales.status, "DELETED")
-                )
+                and(eq(factoryBales.id, id), eq(factoryBales.companyId, companyId), eq(factoryBales.status, "DELETED"))
               )
               .returning({ id: factoryBales.id, status: factoryBales.status });
             if (!restored) return null;
