@@ -309,6 +309,16 @@ describe("PATCH /api/factory/containers/:id — exchange rates", () => {
     expect(after.rate_per_kg_usd).toBeNull();
   });
 
+  it("rejects a bad explicit manual FX rate instead of silently reusing the previous rate", async () => {
+    const id = await seedContainer({ currencyCode: "EUR", fxRateToUsd: "1.2", fxRateConfirmed: true });
+    for (const rate of ["0", "-1", "not-a-number"]) {
+      const response = await patchContainer(id, { fxRateToUsd: rate });
+      expect(response.status).toBe(400);
+      expect(response.body.message).toMatch(/Manual FX rate must be a positive number/i);
+      expect((await containerRow(id)).fx_rate_to_usd).toBe("1.20000000");
+    }
+  });
+
   it("manual mode carries forward an already-confirmed stored rate", async () => {
     const id = await seedContainer({
       currencyCode: "AUD",
