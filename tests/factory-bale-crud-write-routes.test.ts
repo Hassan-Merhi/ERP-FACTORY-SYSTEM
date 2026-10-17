@@ -271,7 +271,7 @@ describe("restoring historic status-only deleted bales from Barcode Lookup", () 
     );
     const before = await pool.query<{ count: string }>(
       `SELECT count(*)::text AS count FROM canonical_stock_movements
-       WHERE company_id = $1 AND source_id = $2 AND source_type = 'factory_bale_removal'`,
+       WHERE company_id = $1 AND source_id = $2`,
       [ctx.companyId, String(id)]
     );
 
@@ -282,7 +282,7 @@ describe("restoring historic status-only deleted bales from Barcode Lookup", () 
 
     const after = await pool.query<{ count: string }>(
       `SELECT count(*)::text AS count FROM canonical_stock_movements
-       WHERE company_id = $1 AND source_id = $2 AND source_type = 'factory_bale_removal'`,
+       WHERE company_id = $1 AND source_id = $2`,
       [ctx.companyId, String(id)]
     );
     expect(after.rows[0].count).toBe(before.rows[0].count);
