@@ -3,6 +3,7 @@ import { eq, and, isNull, inArray } from "drizzle-orm";
 import { db, type DbTransaction } from "../../db";
 import { createDatabaseStockMovementAdapter } from "../../services/inventory/databaseStockMovementAdapter";
 import { postStockMovementTx } from "../../services/inventory/stockMovementIntegrityService";
+import { stockTransferNarrationTx } from "../../services/inventory/stockTransferNarration";
 import {
   addInventoryValues,
   inventoryMoney,
@@ -43,8 +44,6 @@ function isProductionAdjustment(adjustmentType: string, quantity: Decimal): bool
 function sameDecimal(a: Decimal, b: Decimal): boolean {
   return a.equals(b);
 }
-
-import { stockTransferNarrationTx } from "../../services/inventory/stockTransferNarration";
 
 export async function updateStockTransfer(
   id: number,
