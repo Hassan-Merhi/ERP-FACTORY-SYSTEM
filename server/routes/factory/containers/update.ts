@@ -448,6 +448,28 @@ export function registerFactoryContainerUpdateRoutes(app: Express) {
         });
       }
 
+      // A container created with no goods quantity/value has no initial goods
+      // payable. When a user explicitly enters its FIRST positive goods value,
+      // post the initial liability through the normal voucher engine. This is
+      // not a historical backfill: a container whose old goods value was
+      // positive must still follow the reviewed backfill workflow.
+      const previousGoodsValue = toMoney(existing.totalKg).times(toMoney(existing.ratePerKg));
+      let firstGoodsCostAccountId: number | null = null;
+      if (goodsNeedsSync && existingImports.length === 0 && previousGoodsValue.isZero()) {
+        // A retired/soft-deleted voucher is historical evidence. Never post a
+        // replacement automatically merely because the live query finds none.
+        const [historicalImport] = await db
+          .select({ id: vouchers.id })
+          .from(vouchers)
+          .where(and(eq(vouchers.companyId, companyId), ilike(vouchers.voucherNumber, `FACTORY-IMPORT-${id}-%`)))
+          .limit(1);
+        if (!historicalImport) {
+          firstGoodsCostAccountId = await getOrCreateLedgerAccount(
+            companyId, "FACTORY_IMPORT_COST", "Factory Import Cost"
+          );
+        }
+      }
+
       // Find any existing freight voucher for this container (stable or timestamped number)
       const existingFreightVouchers = await db
         .select()
@@ -572,10 +594,34 @@ export function registerFactoryContainerUpdateRoutes(app: Express) {
                     .where(eq(voucherEntries.id, creditLines[0].id));
                 }
               );
+            } else if (firstGoodsCostAccountId && previousGoodsValue.isZero()) {
+              // An explicit first-time goods entry on a previously zero-value
+              // container: Dr import cost / Cr the selected goods supplier.
+              // Post on the edit date rather than silently backdating a liability.
+              await postFactoryVoucherTx(tx, {
+                companyId,
+                voucherNumber: (generation) => `FACTORY-IMPORT-${id}-${generation}`,
+                voucherDate: getClientDate(req),
+                description: `Goods import - container ${updated.containerNumber}`,
+                currency: goodsCcy,
+                fxRateToUsd: String(goodsFx),
+                source: { sourceType: "factory-container-import", sourceId: id, phase: "goods" },
+                lines: [
+                  {
+                    ledgerAccountId: firstGoodsCostAccountId,
+                    debit: goodsValue,
+                    narration: `Goods import cost - container ${updated.containerNumber}`,
+                  },
+                  {
+                    factorySupplierId: updated.supplierId,
+                    credit: goodsValue,
+                    narration: `Goods payable to supplier - container ${updated.containerNumber}`,
+                  },
+                ],
+              });
             } else {
-              // Historical documents must not acquire a new liability merely
-              // because a user edits a container. Require the audited,
-              // explicitly-selected backfill workflow instead.
+              // Legacy positive-value (or previously reversed) imports still
+              // require explicit review; an edit must never re-create history.
               throw new Error(
                 "This container has no goods-import journal. Review it in the import-credit backfill preview and post the missing journal explicitly before editing its goods or supplier."
               );
