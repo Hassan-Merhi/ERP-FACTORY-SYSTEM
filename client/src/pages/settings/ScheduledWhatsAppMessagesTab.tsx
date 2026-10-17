@@ -48,13 +48,20 @@ const days = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", 
 
 function blankForm(): Form {
   return {
-    title: "", message: "", timezone: "Asia/Beirut",
+    title: "",
+    message: "",
+    timezone: "Asia/Beirut",
     weeklyTimes: { "1": "09:00", "2": "09:00", "3": "09:00", "4": "09:00", "5": "09:00" },
-    startDate: null, endDate: null, enabled: true, recipientIds: [],
+    startDate: null,
+    endDate: null,
+    enabled: true,
+    recipientIds: [],
   };
 }
 function formatDays(times: WeeklyTimes): string {
-  return days.flatMap((day, index) => times?.[String(index)] ? [day.slice(0, 3) + " " + times[String(index)]] : []).join(" · ");
+  return days
+    .flatMap((day, index) => (times?.[String(index)] ? [day.slice(0, 3) + " " + times[String(index)]] : []))
+    .join(" · ");
 }
 
 export function ScheduledWhatsAppMessagesTab() {
@@ -95,9 +102,11 @@ export function ScheduledWhatsAppMessagesTab() {
   };
   const save = useMutation({
     mutationFn: async (payload: { id?: string; values: Form }) =>
-      apiRequest(payload.id ? "PUT" : "POST",
+      apiRequest(
+        payload.id ? "PUT" : "POST",
         payload.id ? "/api/whatsapp/message-schedules/" + payload.id : "/api/whatsapp/message-schedules",
-        payload.values),
+        payload.values
+      ),
     onSuccess: () => {
       refresh();
       setEditorOpen(false);
@@ -126,14 +135,18 @@ export function ScheduledWhatsAppMessagesTab() {
   const beginEdit = (item: Schedule) => {
     setEditingId(item.id);
     setForm({
-      title: item.title, message: item.message, timezone: item.timezone,
-      weeklyTimes: { ...item.weeklyTimes }, startDate: item.startDate,
-      endDate: item.endDate, enabled: item.enabled, recipientIds: [...item.recipientIds],
+      title: item.title,
+      message: item.message,
+      timezone: item.timezone,
+      weeklyTimes: { ...item.weeklyTimes },
+      startDate: item.startDate,
+      endDate: item.endDate,
+      enabled: item.enabled,
+      recipientIds: [...item.recipientIds],
     });
     setEditorOpen(true);
   };
-  const setField = <K extends keyof Form>(key: K, value: Form[K]) =>
-    setForm((old) => ({ ...old, [key]: value }));
+  const setField = <K extends keyof Form>(key: K, value: Form[K]) => setForm((old) => ({ ...old, [key]: value }));
   const submit = () => {
     if (!form.title.trim() || !form.message.trim()) {
       toast({ title: "Enter a title and message", variant: "destructive" });
@@ -166,8 +179,8 @@ export function ScheduledWhatsAppMessagesTab() {
       {whatsappSettings && (!whatsappSettings.enabled || !whatsappSettings.hasCredentials) && (
         <Card>
           <CardContent className="py-4 text-sm text-muted-foreground">
-            Automatic messages require the main WhatsApp connection and its master switch to be enabled.
-            Configure them in Settings → Export Center → WhatsApp Export.
+            Automatic messages require the main WhatsApp connection and its master switch to be enabled. Configure them
+            in Settings → Export Center → WhatsApp Export.
           </CardContent>
         </Card>
       )}
@@ -175,8 +188,8 @@ export function ScheduledWhatsAppMessagesTab() {
       {!groups.length && !editorOpen && (
         <Card>
           <CardContent className="py-4 text-sm text-muted-foreground">
-            No WhatsApp groups are saved for this company yet. Click New message,
-            then search your connected groups or add a group manually.
+            No WhatsApp groups are saved for this company yet. Click New message, then search your connected groups or
+            add a group manually.
           </CardContent>
         </Card>
       )}
@@ -185,43 +198,73 @@ export function ScheduledWhatsAppMessagesTab() {
         <Card>
           <CardHeader>
             <CardTitle>{editingId ? "Edit scheduled message" : "Create scheduled message"}</CardTitle>
-            <CardDescription>Messages and changes are saved on the server. No group receives anything until its scheduled time.</CardDescription>
+            <CardDescription>
+              Messages and changes are saved on the server. No group receives anything until its scheduled time.
+            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-5">
             <div className="space-y-2">
               <Label htmlFor="wa-message-title">Schedule name</Label>
-              <Input id="wa-message-title" maxLength={120} placeholder="Daily staff reminder"
-                value={form.title} onChange={(e) => setField("title", e.target.value)} />
+              <Input
+                id="wa-message-title"
+                maxLength={120}
+                placeholder="Daily staff reminder"
+                value={form.title}
+                onChange={(e) => setField("title", e.target.value)}
+              />
             </div>
             <div className="space-y-2">
               <Label htmlFor="wa-message-body">WhatsApp message</Label>
-              <Textarea id="wa-message-body" rows={5} maxLength={4000}
+              <Textarea
+                id="wa-message-body"
+                rows={5}
+                maxLength={4000}
                 placeholder="Type the message exactly as the groups should receive it..."
-                value={form.message} onChange={(e) => setField("message", e.target.value)} />
+                value={form.message}
+                onChange={(e) => setField("message", e.target.value)}
+              />
               <p className="text-xs text-muted-foreground">{form.message.length} / 4000 characters · Edit anytime</p>
             </div>
 
             <div className="space-y-3">
-              <h3 className="font-medium flex gap-2 items-center"><Clock className="w-4 h-4" /> Days and send times</h3>
-              <p className="text-sm text-muted-foreground">Switch a day off to skip it. Each active day can have its own time.</p>
+              <h3 className="font-medium flex gap-2 items-center">
+                <Clock className="w-4 h-4" /> Days and send times
+              </h3>
+              <p className="text-sm text-muted-foreground">
+                Switch a day off to skip it. Each active day can have its own time.
+              </p>
               <div className="grid gap-2 sm:grid-cols-2">
                 {days.map((day, index) => {
                   const key = String(index);
                   const on = !!form.weeklyTimes[key];
                   return (
                     <div key={key} className="flex items-center gap-3 rounded-lg border p-3">
-                      <Switch checked={on} aria-label={"Send on " + day}
-                        onCheckedChange={(checked) => setForm((prev) => {
-                          const times = { ...prev.weeklyTimes };
-                          if (checked) times[key] = "09:00"; else delete times[key];
-                          return { ...prev, weeklyTimes: times };
-                        })} />
+                      <Switch
+                        checked={on}
+                        aria-label={"Send on " + day}
+                        onCheckedChange={(checked) =>
+                          setForm((prev) => {
+                            const times = { ...prev.weeklyTimes };
+                            if (checked) times[key] = "09:00";
+                            else delete times[key];
+                            return { ...prev, weeklyTimes: times };
+                          })
+                        }
+                      />
                       <span className="text-sm flex-1">{day}</span>
-                      <Input aria-label={day + " time"} type="time" className="w-32" disabled={!on}
+                      <Input
+                        aria-label={day + " time"}
+                        type="time"
+                        className="w-32"
+                        disabled={!on}
                         value={form.weeklyTimes[key] || "09:00"}
-                        onChange={(e) => setForm((prev) => ({
-                          ...prev, weeklyTimes: { ...prev.weeklyTimes, [key]: e.target.value },
-                        }))} />
+                        onChange={(e) =>
+                          setForm((prev) => ({
+                            ...prev,
+                            weeklyTimes: { ...prev.weeklyTimes, [key]: e.target.value },
+                          }))
+                        }
+                      />
                     </div>
                   );
                 })}
@@ -231,26 +274,38 @@ export function ScheduledWhatsAppMessagesTab() {
             <div className="grid gap-4 sm:grid-cols-3">
               <div className="space-y-2">
                 <Label htmlFor="wa-timezone">Timezone</Label>
-                <Input id="wa-timezone" placeholder="Asia/Beirut" value={form.timezone}
-                  onChange={(e) => setField("timezone", e.target.value)} />
+                <Input
+                  id="wa-timezone"
+                  placeholder="Asia/Beirut"
+                  value={form.timezone}
+                  onChange={(e) => setField("timezone", e.target.value)}
+                />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="wa-start-date">Start date (optional)</Label>
-                <Input id="wa-start-date" type="date" value={form.startDate || ""}
-                  onChange={(e) => setField("startDate", e.target.value || null)} />
+                <Input
+                  id="wa-start-date"
+                  type="date"
+                  value={form.startDate || ""}
+                  onChange={(e) => setField("startDate", e.target.value || null)}
+                />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="wa-end-date">End date (optional)</Label>
-                <Input id="wa-end-date" type="date" value={form.endDate || ""}
-                  onChange={(e) => setField("endDate", e.target.value || null)} />
+                <Input
+                  id="wa-end-date"
+                  type="date"
+                  value={form.endDate || ""}
+                  onChange={(e) => setField("endDate", e.target.value || null)}
+                />
               </div>
             </div>
 
             <div className="space-y-3">
               <h3 className="font-medium">Send to WhatsApp groups</h3>
               <p className="text-sm text-muted-foreground">
-                Search saved groups, find groups from your connected WhatsApp, or add new groups manually.
-                You can select as many groups as you need.
+                Search saved groups, find groups from your connected WhatsApp, or add new groups manually. You can
+                select as many groups as you need.
               </p>
               <ScheduledWhatsAppGroupPicker
                 key={String(companyId ?? "no-company")}
@@ -268,8 +323,12 @@ export function ScheduledWhatsAppMessagesTab() {
               <Switch checked={form.enabled} onCheckedChange={(value) => setField("enabled", value)} />
             </div>
             <div className="flex flex-wrap gap-2">
-              <Button disabled={save.isPending} onClick={submit}>{save.isPending ? "Saving..." : "Save schedule"}</Button>
-              <Button variant="outline" onClick={() => setEditorOpen(false)}>Cancel</Button>
+              <Button disabled={save.isPending} onClick={submit}>
+                {save.isPending ? "Saving..." : "Save schedule"}
+              </Button>
+              <Button variant="outline" onClick={() => setEditorOpen(false)}>
+                Cancel
+              </Button>
             </div>
           </CardContent>
         </Card>
@@ -277,7 +336,9 @@ export function ScheduledWhatsAppMessagesTab() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2"><CalendarClock className="w-5 h-5" /> Your scheduled messages</CardTitle>
+          <CardTitle className="flex items-center gap-2">
+            <CalendarClock className="w-5 h-5" /> Your scheduled messages
+          </CardTitle>
           <CardDescription>Separate messages can have separate days, times, and group selections.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
@@ -294,21 +355,31 @@ export function ScheduledWhatsAppMessagesTab() {
                   <Button size="sm" variant="outline" onClick={() => beginEdit(item)}>
                     <Pencil className="w-3 h-3 mr-1" /> Edit
                   </Button>
-                  <Button size="sm" variant="ghost" disabled={remove.isPending}
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    disabled={remove.isPending}
                     onClick={() => {
                       if (window.confirm("Delete this scheduled message and its history?")) remove.mutate(item.id);
-                    }} aria-label={"Delete " + item.title}>
+                    }}
+                    aria-label={"Delete " + item.title}
+                  >
                     <Trash2 className="w-4 h-4" />
                   </Button>
                 </div>
               </div>
               <p className="text-sm whitespace-pre-wrap break-words">{item.message}</p>
-              <p className="text-xs text-muted-foreground">{formatDays(item.weeklyTimes)} · {item.timezone}</p>
               <p className="text-xs text-muted-foreground">
-                Groups: {item.recipientIds.map((id) => recipients.find((r) => r.id === id)?.name || "Removed group").join(", ")}
+                {formatDays(item.weeklyTimes)} · {item.timezone}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Groups:{" "}
+                {item.recipientIds.map((id) => recipients.find((r) => r.id === id)?.name || "Removed group").join(", ")}
               </p>
               {(item.startDate || item.endDate) && (
-                <p className="text-xs text-muted-foreground">Date range: {item.startDate || "Any"} to {item.endDate || "Ongoing"}</p>
+                <p className="text-xs text-muted-foreground">
+                  Date range: {item.startDate || "Any"} to {item.endDate || "Ongoing"}
+                </p>
               )}
             </div>
           ))}
@@ -317,7 +388,9 @@ export function ScheduledWhatsAppMessagesTab() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="flex gap-2 items-center"><CheckCircle2 className="w-5 h-5" /> Send history</CardTitle>
+          <CardTitle className="flex gap-2 items-center">
+            <CheckCircle2 className="w-5 h-5" /> Send history
+          </CardTitle>
           <CardDescription>Latest 100 delivery attempts. A separate result is recorded for each group.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-2">
@@ -325,7 +398,9 @@ export function ScheduledWhatsAppMessagesTab() {
           {history.map((entry) => (
             <div key={entry.id} className="flex flex-wrap justify-between gap-2 border-b py-2 text-sm">
               <div>
-                <p className="font-medium">{entry.title} → {entry.recipientName}</p>
+                <p className="font-medium">
+                  {entry.title} → {entry.recipientName}
+                </p>
                 <p className="text-xs text-muted-foreground">{entry.localDate}</p>
                 {entry.error && <p className="text-xs text-destructive break-words">{entry.error}</p>}
               </div>

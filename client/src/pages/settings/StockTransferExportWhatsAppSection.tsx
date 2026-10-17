@@ -48,7 +48,8 @@ export function StockTransferExportWhatsAppSection() {
       setGroupName("");
       toast({ title: "WhatsApp group saved" });
     },
-    onError: (error) => toast({ title: "Could not save group", description: getErrorDetails(error).message, variant: "destructive" }),
+    onError: (error) =>
+      toast({ title: "Could not save group", description: getErrorDetails(error).message, variant: "destructive" }),
   });
   const removeGroup = useMutation({
     mutationFn: (groupId: number) => apiRequest("DELETE", endpoint + "/" + groupId),
@@ -56,7 +57,8 @@ export function StockTransferExportWhatsAppSection() {
       invalidate();
       toast({ title: "WhatsApp group removed" });
     },
-    onError: (error) => toast({ title: "Could not remove group", description: getErrorDetails(error).message, variant: "destructive" }),
+    onError: (error) =>
+      toast({ title: "Could not remove group", description: getErrorDetails(error).message, variant: "destructive" }),
   });
 
   function chooseChat(nextId: string) {
@@ -86,31 +88,53 @@ export function StockTransferExportWhatsAppSection() {
         </div>
         <div className="space-y-2">
           <Label>Saved WhatsApp groups for {selectedCompany?.name || "current company"}</Label>
-          {groupQuery.isLoading ? <p className="text-sm text-muted-foreground">Loading groups…</p> :
-            groupQuery.isError ? <p className="text-sm text-destructive">Unable to load groups. Check the connection.</p> :
-            (groupQuery.data?.groups.length ?? 0) === 0 ? <p className="text-sm text-muted-foreground">No groups linked yet.</p> :
+          {groupQuery.isLoading ? (
+            <p className="text-sm text-muted-foreground">Loading groups…</p>
+          ) : groupQuery.isError ? (
+            <p className="text-sm text-destructive">Unable to load groups. Check the connection.</p>
+          ) : (groupQuery.data?.groups.length ?? 0) === 0 ? (
+            <p className="text-sm text-muted-foreground">No groups linked yet.</p>
+          ) : (
             <div className="space-y-2">
               {groupQuery.data?.groups.map((group) => (
-                <div key={group.id} className="flex items-center justify-between gap-3 rounded-md border p-2.5" data-testid={"transfer-export-saved-group-" + group.id}>
+                <div
+                  key={group.id}
+                  className="flex items-center justify-between gap-3 rounded-md border p-2.5"
+                  data-testid={"transfer-export-saved-group-" + group.id}
+                >
                   <div className="min-w-0">
                     <div className="font-medium text-sm truncate">{group.name}</div>
                     <div className="text-xs text-muted-foreground font-mono truncate">{group.chatId}</div>
                   </div>
-                  <Button size="icon" variant="ghost" title={"Remove " + group.name}
-                    disabled={removeGroup.isPending} onClick={() => removeGroup.mutate(group.id)}>
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    title={"Remove " + group.name}
+                    disabled={removeGroup.isPending}
+                    onClick={() => removeGroup.mutate(group.id)}
+                  >
                     <Trash2 className="h-4 w-4" />
                   </Button>
                 </div>
               ))}
             </div>
-          }
+          )}
         </div>
         <div className="space-y-3 rounded-md border p-3">
           <div className="flex items-center justify-between gap-2">
             <Label>Add a WhatsApp group</Label>
-            <Button variant="outline" size="sm" onClick={() => chatQuery.refetch()} disabled={chatQuery.isFetching || !groupQuery.data?.connected}
-              data-testid="transfer-export-load-wa-groups">
-              {chatQuery.isFetching ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-1" />}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => chatQuery.refetch()}
+              disabled={chatQuery.isFetching || !groupQuery.data?.connected}
+              data-testid="transfer-export-load-wa-groups"
+            >
+              {chatQuery.isFetching ? (
+                <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+              ) : (
+                <RefreshCw className="h-4 w-4 mr-1" />
+              )}
               Load groups
             </Button>
           </div>
@@ -119,15 +143,33 @@ export function StockTransferExportWhatsAppSection() {
               <SelectValue placeholder="Choose a WhatsApp group" />
             </SelectTrigger>
             <SelectContent>
-              {chats.map((chat) => <SelectItem key={chat.id} value={chat.id}>{chat.name}</SelectItem>)}
+              {chats.map((chat) => (
+                <SelectItem key={chat.id} value={chat.id}>
+                  {chat.name}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
-          {chatQuery.isError && <p className="text-xs text-destructive">Could not load WhatsApp groups. Check your Green API connection.</p>}
-          <Input placeholder="Group label (editable)" value={groupName} onChange={(e) => setGroupName(e.target.value)}
-            maxLength={100} data-testid="transfer-export-group-label" />
-          <Button onClick={() => saveGroup.mutate()} disabled={!chatId || !groupName.trim() || saveGroup.isPending}
-            data-testid="transfer-export-save-wa-group">
-            {saveGroup.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Plus className="h-4 w-4 mr-2" />}
+          {chatQuery.isError && (
+            <p className="text-xs text-destructive">Could not load WhatsApp groups. Check your Green API connection.</p>
+          )}
+          <Input
+            placeholder="Group label (editable)"
+            value={groupName}
+            onChange={(e) => setGroupName(e.target.value)}
+            maxLength={100}
+            data-testid="transfer-export-group-label"
+          />
+          <Button
+            onClick={() => saveGroup.mutate()}
+            disabled={!chatId || !groupName.trim() || saveGroup.isPending}
+            data-testid="transfer-export-save-wa-group"
+          >
+            {saveGroup.isPending ? (
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            ) : (
+              <Plus className="h-4 w-4 mr-2" />
+            )}
             Add group
           </Button>
           <p className="text-xs text-muted-foreground">

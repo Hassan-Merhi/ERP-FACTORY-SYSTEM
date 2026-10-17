@@ -139,13 +139,11 @@ export function registerFactoryContainerUpdateRoutes(app: Express) {
         currencyCode:
           String(updateData.currencyCode || "USD").toUpperCase() ===
           String(existing.currencyCode || "USD").toUpperCase(),
-        fxRateSource:
-          String(updateData.fxRateSource || "auto") === String(existing.fxRateSource || "auto"),
+        fxRateSource: String(updateData.fxRateSource || "auto") === String(existing.fxRateSource || "auto"),
         // A switch to manual FX is a genuine action even when the displayed
         // numeric rate matches the old row. Keep the submitted rate so the
         // manual-rate validation can run, instead of treating it as absent.
-        fxRateToUsd:
-          !goodsFxModeChanged && toMoney(updateData.fxRateToUsd).eq(toMoney(existing.fxRateToUsd)),
+        fxRateToUsd: !goodsFxModeChanged && toMoney(updateData.fxRateToUsd).eq(toMoney(existing.fxRateToUsd)),
       };
       for (const field of Object.keys(unchangedGoodsFields) as Array<keyof typeof unchangedGoodsFields>) {
         if (b[field] === undefined || unchangedGoodsFields[field]) {
@@ -164,8 +162,7 @@ export function registerFactoryContainerUpdateRoutes(app: Express) {
           String(existing.freightCurrencyCode || "USD").toUpperCase(),
         freightAccountId: updateData.freightAccountId === existing.freightAccountId,
         freightSupplierId: updateData.freightSupplierId === existing.freightSupplierId,
-        freightPaidBy:
-          String(updateData.freightPaidBy || "supplier") === String(existing.freightPaidBy || "supplier"),
+        freightPaidBy: String(updateData.freightPaidBy || "supplier") === String(existing.freightPaidBy || "supplier"),
         freightOwnAccountId: updateData.freightOwnAccountId === existing.freightOwnAccountId,
         commissionAmount: toMoney(updateData.commissionAmount).eq(toMoney(existing.commissionAmount)),
         commissionCurrencyCode:
@@ -298,9 +295,17 @@ export function registerFactoryContainerUpdateRoutes(app: Express) {
         updateData.freightSupplierId !== undefined ? updateData.freightSupplierId : existing.freightSupplierId;
 
       const freightNeedsSync = [
-        "freight", "freightCurrencyCode", "freightAccountId", "freightSupplierId",
-        "freightPaidBy", "freightOwnAccountId", "supplierId", "currencyCode",
-        "ratePerKg", "fxRateToUsd", "fxRateSource",
+        "freight",
+        "freightCurrencyCode",
+        "freightAccountId",
+        "freightSupplierId",
+        "freightPaidBy",
+        "freightOwnAccountId",
+        "supplierId",
+        "currencyCode",
+        "ratePerKg",
+        "fxRateToUsd",
+        "fxRateSource",
       ].some((f) => f in b);
 
       // A notes-only/ETA-only edit must not repair or reject historical freight
@@ -468,7 +473,9 @@ export function registerFactoryContainerUpdateRoutes(app: Express) {
           .limit(1);
         if (!historicalImport) {
           firstGoodsCostAccountId = await getOrCreateLedgerAccount(
-            companyId, "FACTORY_IMPORT_COST", "Factory Import Cost"
+            companyId,
+            "FACTORY_IMPORT_COST",
+            "Factory Import Cost"
           );
         }
       }
