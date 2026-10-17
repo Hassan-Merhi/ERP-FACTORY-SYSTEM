@@ -82,9 +82,7 @@ export function ScheduledWhatsAppGroupPicker({ recipients, selectedIds, onChange
   });
 
   const activeGroups = recipients.filter((r) => r.active && r.isGroup);
-  const visibleSaved = activeGroups.filter(
-    (r) => matches(r.name, search) || matches(r.chatId, search),
-  );
+  const visibleSaved = activeGroups.filter((r) => matches(r.name, search) || matches(r.chatId, search));
   const savedChatIds = new Set(activeGroups.map((r) => r.chatId));
   const providerGroups = chats
     .filter((c) => c.type === "group" || c.id.endsWith("@g.us"))
@@ -93,11 +91,7 @@ export function ScheduledWhatsAppGroupPicker({ recipients, selectedIds, onChange
     .sort((a, b) => a.name.localeCompare(b.name));
 
   const toggleGroup = (id: number, checked: boolean) => {
-    onChange(
-      checked
-        ? [...new Set([...selectedIds, id])]
-        : selectedIds.filter((selected) => selected !== id),
-    );
+    onChange(checked ? [...new Set([...selectedIds, id])] : selectedIds.filter((selected) => selected !== id));
   };
 
   const saveManualGroup = () => {
@@ -159,18 +153,14 @@ export function ScheduledWhatsAppGroupPicker({ recipients, selectedIds, onChange
           disabled={loadingChats}
           data-testid="button-scheduled-wa-find-groups"
         >
-          {loadingChats ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> :
-            <RefreshCw className="w-4 h-4 mr-2" />}
+          {loadingChats ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <RefreshCw className="w-4 h-4 mr-2" />}
           {loadingChats ? "Loading groups..." : "Find groups from WhatsApp"}
         </Button>
       </div>
 
       <div className="grid gap-2 sm:grid-cols-2 max-h-64 overflow-y-auto">
         {visibleSaved.map((group) => (
-          <label
-            key={group.id}
-            className="flex items-center gap-3 border rounded-lg p-3 cursor-pointer min-w-0"
-          >
+          <label key={group.id} className="flex items-center gap-3 border rounded-lg p-3 cursor-pointer min-w-0">
             <Checkbox
               checked={selectedIds.includes(group.id)}
               onCheckedChange={(checked) => toggleGroup(group.id, checked === true)}
@@ -193,14 +183,13 @@ export function ScheduledWhatsAppGroupPicker({ recipients, selectedIds, onChange
           <div className="flex items-center gap-2">
             <Users className="w-4 h-4" />
             <p className="text-sm font-medium">Groups from your connected WhatsApp</p>
-            {chatsFetched && !chatsFailed && (
-              <Badge variant="outline">{providerGroups.length} to add</Badge>
-            )}
+            {chatsFetched && !chatsFailed && <Badge variant="outline">{providerGroups.length} to add</Badge>}
           </div>
           {chatsFailed && (
             <p className="text-sm text-destructive">
-              Unable to load WhatsApp groups: {chatsError instanceof Error ? chatsError.message : "Check your Green API connection."}
-              {" "}You can still add a group by chat ID below.
+              Unable to load WhatsApp groups:{" "}
+              {chatsError instanceof Error ? chatsError.message : "Check your Green API connection."} You can still add
+              a group by chat ID below.
             </p>
           )}
           {!loadingChats && !chatsFailed && chatsFetched && !providerGroups.length && (
@@ -236,8 +225,8 @@ export function ScheduledWhatsAppGroupPicker({ recipients, selectedIds, onChange
       <div className="rounded-lg border p-4 space-y-3">
         <h4 className="text-sm font-medium">Add group manually</h4>
         <p className="text-xs text-muted-foreground">
-          Enter a group name and its WhatsApp group chat ID (ending in @g.us).
-          A group name by itself cannot be used to deliver messages.
+          Enter a group name and its WhatsApp group chat ID (ending in @g.us). A group name by itself cannot be used to
+          deliver messages.
         </p>
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="space-y-1">
@@ -268,14 +257,16 @@ export function ScheduledWhatsAppGroupPicker({ recipients, selectedIds, onChange
           onClick={saveManualGroup}
           data-testid="button-scheduled-wa-add-manual-group"
         >
-          {addRecipient.isPending
-            ? <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-            : <Plus className="w-4 h-4 mr-2" />}
+          {addRecipient.isPending ? (
+            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+          ) : (
+            <Plus className="w-4 h-4 mr-2" />
+          )}
           Save group & select it
         </Button>
         <p className="text-xs text-muted-foreground">
-          Group changes are saved to the company's WhatsApp recipients. Click Save schedule
-          afterward to apply the selected groups to this daily message.
+          Group changes are saved to the company's WhatsApp recipients. Click Save schedule afterward to apply the
+          selected groups to this daily message.
         </p>
       </div>
     </div>
