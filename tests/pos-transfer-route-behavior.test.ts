@@ -76,6 +76,11 @@ vi.mock("../server/db", () => ({
   db: { transaction: harness.transaction, select: harness.select },
 }));
 vi.mock("../server/storage", () => ({ storage: { getLocationById: harness.getLocationById } }));
+// Narration is resolved from company locations (#2346); its own behaviour is
+// covered elsewhere, and this file's transaction double has no location rows.
+vi.mock("../server/services/inventory/stockTransferNarration", () => ({
+  stockTransferNarrationTx: vi.fn(async () => 'Stock Transfer from "Main Warehouse" to "Shop"'),
+}));
 vi.mock("../server/storage/stock-ops/transfers-create", () => {
   class DuplicateStockTransferError extends Error {
     readonly code = "STOCK_TRANSFER_ALREADY_EXISTS";
