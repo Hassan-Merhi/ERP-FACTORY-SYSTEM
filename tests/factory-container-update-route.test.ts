@@ -673,7 +673,11 @@ describe("PATCH /api/factory/containers/:id — legacy missing goods-import jour
       commissionNotes: null,
     });
     expect(response.status, JSON.stringify(response.body)).toBe(200);
-    expect((await containerRow(id)).notes).toBe("Port document received");
+    const saved = await containerRow(id);
+    expect(saved.notes).toBe("Port document received");
+    // Regression: removing an unchanged freightAccountId from the PATCH must
+    // not cause the auto-create fallback to replace the existing ledger account.
+    expect(saved.freight_account_id).toBe(freightAccountId);
     const legacyJournals = await pool.query(
       "SELECT id FROM vouchers WHERE company_id = $1 AND (voucher_number LIKE $2 OR voucher_number LIKE $3)",
       [ctx.companyId, `FACTORY-FREIGHT-${id}%`, `FACTORY-COMM-${id}%`]
