@@ -127,6 +127,11 @@ export function registerFactoryContainerUpdateRoutes(app: Express) {
       // when the user only changed an ETA, note, duty or freight. Preserve
       // historical goods, supplier and FX fields if their values are unchanged.
       // No-op fields must not trigger an import-journal backfill or revaluation.
+      const goodsFxModeChanged =
+        (b.fxRateSource !== undefined &&
+          String(b.fxRateSource || "auto").toLowerCase() !== String(existing.fxRateSource || "auto").toLowerCase()) ||
+        (b.currencyCode !== undefined &&
+          String(b.currencyCode || "USD").toUpperCase() !== String(existing.currencyCode || "USD").toUpperCase());
       const unchangedGoodsFields = {
         supplierId: updateData.supplierId === existing.supplierId,
         totalKg: toMoney(updateData.totalKg).eq(toMoney(existing.totalKg)),
@@ -136,7 +141,11 @@ export function registerFactoryContainerUpdateRoutes(app: Express) {
           String(existing.currencyCode || "USD").toUpperCase(),
         fxRateSource:
           String(updateData.fxRateSource || "auto") === String(existing.fxRateSource || "auto"),
-        fxRateToUsd: toMoney(updateData.fxRateToUsd).eq(toMoney(existing.fxRateToUsd)),
+        // A switch to manual FX is a genuine action even when the displayed
+        // numeric rate matches the old row. Keep the submitted rate so the
+        // manual-rate validation can run, instead of treating it as absent.
+        fxRateToUsd:
+          !goodsFxModeChanged && toMoney(updateData.fxRateToUsd).eq(toMoney(existing.fxRateToUsd)),
       };
       for (const field of Object.keys(unchangedGoodsFields) as Array<keyof typeof unchangedGoodsFields>) {
         if (b[field] === undefined || unchangedGoodsFields[field]) {
@@ -218,7 +227,12 @@ export function registerFactoryContainerUpdateRoutes(app: Express) {
       }
 
       // FX rate computation (same logic as before)
-      const needsFxCalc = updateData.currencyCode || updateData.ratePerKg || updateData.fxRateSource;
+      const needsFxCalc =
+        updateData.currencyCode ||
+        updateData.ratePerKg ||
+        updateData.fxRateSource ||
+        (updateData.fxRateToUsd !== undefined &&
+          (updateData.fxRateSource || existing.fxRateSource || "auto") === "manual");
       if (needsFxCalc) {
         const currencyCode = updateData.currencyCode || existing.currencyCode || "USD";
         const fxRateSource = updateData.fxRateSource || existing.fxRateSource || "auto";
@@ -281,7 +295,9 @@ export function registerFactoryContainerUpdateRoutes(app: Express) {
         updateData.freightSupplierId !== undefined ? updateData.freightSupplierId : existing.freightSupplierId;
 
       // Auto-create freight ledger account if effective freight > 0 and no account selected
-      if (!updateData.freightAccountId && toMoney(effectiveFreight).greaterThan(0)) {
+      const effectiveFreightAccountId =
+        updateData.freightAccountId !== undefined ? updateData.freightAccountId : existing.freightAccountId;
+      if (!effectiveFreightAccountId && toMoney(effectiveFreight).greaterThan(0)) {
         updateData.freightAccountId = await getOrCreateLedgerAccount(companyId, "FREIGHT", "Freight");
       }
 
