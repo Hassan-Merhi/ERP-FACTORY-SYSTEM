@@ -722,7 +722,9 @@ describe("PATCH /api/factory/containers/:id — legacy missing goods-import jour
       fxRateToUsd: "1.20000000",
       fxRateConfirmed: false,
     });
-    await pool.query("UPDATE factory_containers SET fx_rate_source = 'auto' WHERE id = $1", [id]);
+    // A positive historical goods value: a zero-value container may now post
+    // its first goods payable, so it would not exercise the historical guard.
+    await pool.query("UPDATE factory_containers SET fx_rate_source = 'auto', total_kg = '500' WHERE id = $1", [id]);
     const response = await patchContainer(id, { fxRateSource: "manual", fxRateToUsd: "1.2" });
     // The explicit manual FX passes validation; without an import journal, the
     // independent historical-liability guard still refuses the actual edit.
@@ -750,13 +752,22 @@ describe("PATCH /api/factory/containers/:id — legacy missing goods-import jour
     );
     expect(vouchersForContainer.rows).toHaveLength(1);
     expect(vouchersForContainer.rows[0]).toEqual({ total_amount: "190.00", currency: "EUR" });
-    const credits = await pool.query<{ factory_supplier_id: number; credit_amount: string }>(
-      `SELECT ve.factory_supplier_id, ve.credit_amount FROM voucher_entries ve
+    // credit_amount is the USD base (190 EUR x 1.18); the EUR amount is the
+    // transaction amount.
+    const credits = await pool.query<{
+      factory_supplier_id: number;
+      transaction_credit_amount: string;
+      credit_amount: string;
+    }>(
+      `SELECT ve.factory_supplier_id, ve.transaction_credit_amount::numeric(14,2)::text AS transaction_credit_amount,
+              ve.credit_amount FROM voucher_entries ve
         JOIN vouchers v ON v.id = ve.voucher_id
         WHERE v.company_id = $1 AND v.voucher_number LIKE $2 AND ve.credit_amount > 0`,
       [ctx.companyId, `FACTORY-IMPORT-${id}-%`]
     );
-    expect(credits.rows).toEqual([{ factory_supplier_id: supplierId, credit_amount: "190.00" }]);
+    expect(credits.rows).toEqual([
+      { factory_supplier_id: supplierId, transaction_credit_amount: "190.00", credit_amount: "224.20" },
+    ]);
   });
 
   it("still refuses an actual goods change without a reviewed original journal", async () => {
