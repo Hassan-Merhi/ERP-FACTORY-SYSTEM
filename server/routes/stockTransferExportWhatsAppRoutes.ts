@@ -16,10 +16,14 @@ async function ensureGroupsTable() {
   if (!tableSetup) {
     tableSetup = pool
       .query(
-        "CREATE TABLE IF NOT EXISTS stock_transfer_export_wa_groups (" +
-          "id SERIAL PRIMARY KEY, company_id INTEGER NOT NULL REFERENCES companies(id) ON DELETE CASCADE, " +
-          "name TEXT NOT NULL, chat_id TEXT NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), " +
-          "UNIQUE(company_id, chat_id))"
+        `CREATE TABLE IF NOT EXISTS stock_transfer_export_wa_groups (
+          id SERIAL PRIMARY KEY,
+          company_id INTEGER NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+          name TEXT NOT NULL,
+          chat_id TEXT NOT NULL,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          UNIQUE(company_id, chat_id)
+        )`
       )
       .then(() => undefined)
       .catch((error: unknown) => {
