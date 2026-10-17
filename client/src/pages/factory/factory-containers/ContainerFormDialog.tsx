@@ -222,7 +222,14 @@ export function ContainerFormDialog({
       editingContainer &&
       currency === (editingContainer.currencyCode || "USD") &&
       fxRateSource === (editingContainer.fxRateSource || "auto")
-    ) return;
+    ) {
+      // Restore the actual stored rate on returning to the original FX mode.
+      // Otherwise a quote fetched for another currency could remain in state
+      // and later be submitted as a manual historical exchange rate.
+      setFxRate(stripTrailingZeros(editingContainer.fxRateToUsd) || "1");
+      setFxEffectiveDate(editingContainer.fxRateDateImport || "");
+      return;
+    }
     let cancelled = false;
     fetch(`/api/factory/fx-rates/latest/${currency}`)
       .then((res) => (res.ok ? res.json() : null))
