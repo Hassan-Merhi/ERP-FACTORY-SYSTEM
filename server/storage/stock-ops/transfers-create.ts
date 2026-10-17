@@ -13,6 +13,7 @@ import * as schema from "@shared/schema";
 import type { StockTransferItem, StockAdjustmentItem } from "@shared/schema";
 import { createDatabaseStockMovementAdapter } from "../../services/inventory/databaseStockMovementAdapter";
 import { postStockMovementTx } from "../../services/inventory/stockMovementIntegrityService";
+import { stockTransferNarrationTx } from "../../services/inventory/stockTransferNarration";
 import { shouldInsertAdjustmentVoucherEntry } from "./adjustmentVoucherEntryGuard";
 import { stockAdjustmentHeaderTotal, stockAdjustmentNetLine } from "./stockAdjustmentTotals";
 import { lockInventoryRow } from "../inventoryRowLock";
@@ -286,8 +287,6 @@ export async function applyStockTransferInventoryTx(
     deltas,
   });
 }
-
-import { stockTransferNarrationTx } from "../../services/inventory/stockTransferNarration";
 
 export async function createStockTransfer(
   voucherId: number,
