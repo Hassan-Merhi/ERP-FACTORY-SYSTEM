@@ -1,0 +1,9 @@
+{
+  "name": "remote-support-e2e-harness",
+  "private": true,
+  "description": "Isolated, lockfile-pinned Playwright harness for the remote support rollout E2E workflow.",
+  "license": "UNLICENSED",
+  "devDependencies": {
+    "@playwright/test": "1.55.1"
+  }
+}

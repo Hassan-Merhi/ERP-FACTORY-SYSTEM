@@ -51,6 +51,16 @@ export function startScheduler(): void {
 
   cron.schedule("* * * * *", locationStockTick);
 
+  const customMessageTick = createSchedulerTick(
+    "scheduledWhatsAppCustomMessages",
+    async () => {
+      const { runScheduledWhatsAppMessages } = await import("../scheduledWhatsAppMessages");
+      await runScheduledWhatsAppMessages();
+    },
+    { quiet: true }
+  );
+  cron.schedule("* * * * *", customMessageTick);
+
   // Perpetual inventory (wave 8.4): the factory stock journal, every evening (UTC),
   // for each company whose cut-over is applied.
   const factoryStockTick = createSchedulerTick("factoryStockJournal", async () => {
@@ -64,6 +74,7 @@ export function startScheduler(): void {
     action: "start",
     jobs: [
       "locationStockWhatsApp(every minute; per-location timezone/time/day rules)",
+      "scheduledWhatsAppCustomMessages(every minute; per-message timezone and weekday times)",
       "factoryStockJournal(23:45 UTC daily)",
     ],
   });

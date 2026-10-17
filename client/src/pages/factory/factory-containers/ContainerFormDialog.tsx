@@ -215,16 +215,33 @@ export function ContainerFormDialog({
       return;
     }
     if (fxRateSource === "manual") return;
+    // The "latest" rate is not the historical import rate. When editing an
+    // unchanged currency/source, preserve the container's stored rate instead
+    // of silently overwriting the form with today's FX quote.
+    if (
+      editingContainer &&
+      currency === (editingContainer.currencyCode || "USD") &&
+      fxRateSource === (editingContainer.fxRateSource || "auto")
+    ) {
+      // Restore the actual stored rate on returning to the original FX mode.
+      // Otherwise a quote fetched for another currency could remain in state
+      // and later be submitted as a manual historical exchange rate.
+      setFxRate(stripTrailingZeros(editingContainer.fxRateToUsd) || "1");
+      setFxEffectiveDate(editingContainer.fxRateDateImport || "");
+      return;
+    }
+    let cancelled = false;
     fetch(`/api/factory/fx-rates/latest/${currency}`)
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
-        if (data?.rate) {
+        if (!cancelled && data?.rate) {
           setFxRate(String(data.rate));
           setFxEffectiveDate(data.effectiveDate || "");
         }
       })
       .catch(() => {});
-  }, [currency, fxRateSource]);
+    return () => { cancelled = true; };
+  }, [currency, fxRateSource, editingContainer]);
 
   useEffect(() => {
     if (!editingContainer) setFormData((f) => ({ ...f, commissionCurrencyCode: currency }));
@@ -369,6 +386,33 @@ export function ContainerFormDialog({
         // can read the correct currency when pre-filling the Other Charges field.
         otherChargesCurrencyCode: otherChargeLines.find((l) => parseFloat(l.amount || "0") > 0)?.currencyCode || null,
       };
+      // PATCH only the accounting fields the user actually changed. Submitting
+      // the entire goods form can make legacy containers with no import journal
+      // look like a new payable event even during notes/freight-only edits.
+      if (editingContainer?.id === id) {
+        const original = editingContainer as unknown as Record<string, unknown>;
+        const patch = payload as Record<string, unknown>;
+        const normalized = (field: string, value: unknown): string => {
+          if (field === "supplierId") return value == null || value === "" ? "" : String(value);
+          if (field === "totalKg" || field === "ratePerKg" || field === "fxRateToUsd")
+            return stripTrailingZeros(value as string | number | null | undefined) || "0";
+          if (field === "currencyCode") return String(value || "USD").toUpperCase();
+          return String(value || "auto").toLowerCase();
+        };
+        const goodsFields = [
+          "supplierId", "totalKg", "ratePerKg", "currencyCode", "fxRateSource", "fxRateToUsd",
+        ] as const;
+        const changedMode =
+          normalized("currencyCode", patch.currencyCode) !== normalized("currencyCode", original.currencyCode) ||
+          normalized("fxRateSource", patch.fxRateSource) !== normalized("fxRateSource", original.fxRateSource);
+        for (const field of goodsFields) {
+          if (patch[field] === undefined) continue;
+          // A deliberate switch to manual mode must retain its explicitly
+          // chosen rate so the server validates it even if numerically equal.
+          if (field === "fxRateToUsd" && changedMode) continue;
+          if (normalized(field, patch[field]) === normalized(field, original[field])) delete patch[field];
+        }
+      }
       const validCharges = otherChargeLines
         .filter((l) => parseFloat(l.amount || "0") > 0)
         .map((l) => ({

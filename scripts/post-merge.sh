@@ -1,8 +1,9 @@
 #!/bin/bash
 set -e
 
-# Install any new dependencies pulled in by the merged task.
-npm install --legacy-peer-deps
+# Install the dependencies pinned by the merged lockfile. `npm ci` installs
+# exactly what package-lock.json records instead of re-resolving versions.
+npm ci --legacy-peer-deps
 
 # NOTE: We deliberately do NOT run `drizzle-kit push` here.
 #

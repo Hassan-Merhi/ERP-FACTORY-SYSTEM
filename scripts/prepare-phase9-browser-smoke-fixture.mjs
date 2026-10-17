@@ -83,7 +83,6 @@ try {
     JSON.stringify({
       status: "phase9-browser-fixture-ready",
       companyIds,
-      username,
       databaseHost: database.hostname,
     }),
   );

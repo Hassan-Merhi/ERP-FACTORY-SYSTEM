@@ -176,7 +176,7 @@ function elementDescriptor(element: Element): string {
 
 function isSameOriginNavigation(anchor: HTMLAnchorElement, location: Location): boolean {
   const href = anchor.getAttribute("href")?.trim() ?? "";
-  if (!href || href.startsWith("#") || href.toLowerCase().startsWith("javascript:")) return false;
+  if (!href || href.startsWith("#") || /^(?:javascript|data|vbscript):/i.test(href)) return false;
   if (anchor.hasAttribute("download") || anchor.target === "_blank") return false;
 
   try {

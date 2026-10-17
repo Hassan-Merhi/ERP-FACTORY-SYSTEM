@@ -53,8 +53,9 @@ const server = http.createServer(async (req, res) => {
     res.setHeader("Content-Length", String(workbookResult.byteLength));
     res.end(workbookResult);
   } catch (error) {
+    console.error("[phase9-export-bridge] smoke export failed:", error);
     res.statusCode = 500;
-    res.end(error instanceof Error ? error.stack || error.message : String(error));
+    res.end("phase9 smoke export failed");
   }
 });
 

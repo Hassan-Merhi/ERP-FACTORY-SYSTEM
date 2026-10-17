@@ -42,10 +42,20 @@ function createWindow() {
   });
 
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    if (url.startsWith(APP_URL) || url.startsWith('https://www.hmdinternationalgroup.com')) {
+    let parsed;
+    try {
+      parsed = new URL(url);
+    } catch {
+      return { action: 'deny' };
+    }
+    // Compare full origins: a prefix check would also allow look-alike hosts
+    // such as https://www.hmdinternationalgroup.com.example.net.
+    if (parsed.origin === new URL(APP_URL).origin) {
       return { action: 'allow' };
     }
-    shell.openExternal(url);
+    if (parsed.protocol === 'https:' || parsed.protocol === 'http:') {
+      shell.openExternal(url);
+    }
     return { action: 'deny' };
   });
 
@@ -170,7 +180,9 @@ app.on('web-contents-created', (_event, contents) => {
     const allowedHosts = ['www.hmdinternationalgroup.com', 'hmdinternationalgroup.com'];
     if (!allowedHosts.includes(parsedUrl.hostname)) {
       event.preventDefault();
-      shell.openExternal(navigationUrl);
+      if (parsedUrl.protocol === 'https:' || parsedUrl.protocol === 'http:') {
+        shell.openExternal(navigationUrl);
+      }
     }
   });
 });

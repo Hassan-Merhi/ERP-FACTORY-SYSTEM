@@ -7,7 +7,12 @@
     "server/routes/sp/spGoldenCoastPhase8ContainerOffloadRoutes.ts": 977,
     "server/services/retail/retailStockCount.ts": 1021
   },
-  "routeManifestAdditions": [],
+  "routeManifestAdditions": [
+    "GET /api/stock-transfer-order/whatsapp-groups [requireAuth > <anonymous> > <anonymous>]",
+    "POST /api/stock-transfer-order/whatsapp-groups [requireAuth > <anonymous> > <anonymous>]",
+    "DELETE /api/stock-transfer-order/whatsapp-groups/:groupId [requireAuth > <anonymous> > <anonymous>]",
+    "POST /api/stock-transfer-order/send-whatsapp [requireAuth > <anonymous> > <anonymous>]"
+  ],
   "routeManifestMountAdditions": [],
   "routeManifestReplacements": [],
   "sourceTextAssertionDelta": {

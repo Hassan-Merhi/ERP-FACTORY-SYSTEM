@@ -24,6 +24,7 @@ import { StockReportSection } from "./StockReportSection";
 import { PosWhatsAppSection } from "./PosWhatsAppSection";
 import { ContainersWhatsAppSection } from "./ContainersWhatsAppSection";
 import { TransferWhatsAppSection } from "./TransferWhatsAppSection";
+import { StockTransferExportWhatsAppSection } from "./StockTransferExportWhatsAppSection";
 import { AgentDutyWhatsAppSection } from "./AgentDutyWhatsAppSection";
 
 export function ExportCenter() {
@@ -211,6 +212,7 @@ export function ExportCenter() {
             <StockReportSection />
             <ContainersWhatsAppSection />
             <TransferWhatsAppSection />
+            <StockTransferExportWhatsAppSection />
             <AgentDutyWhatsAppSection />
           </div>
         </TabsContent>

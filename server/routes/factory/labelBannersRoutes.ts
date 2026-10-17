@@ -32,12 +32,17 @@ const upload = multer({
 });
 
 function slugify(label: string): string {
-  return label
+  const dashed = label
     .toLowerCase()
     .trim()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 40);
+    .replace(/[^a-z0-9]+/g, "-");
+  // Trim edge dashes by index rather than with /^-+|-+$/, which backtracks
+  // polynomially on long user-supplied runs of separators.
+  let start = 0;
+  let end = dashed.length;
+  while (start < end && dashed[start] === "-") start++;
+  while (end > start && dashed[end - 1] === "-") end--;
+  return dashed.slice(start, end).slice(0, 40);
 }
 
 function rowInfo(row: { imageData: string | null; imageUpdatedAt: Date | null }): {

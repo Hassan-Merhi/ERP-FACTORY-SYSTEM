@@ -58,8 +58,12 @@ function sendError(res: Response, error: unknown, context: string) {
   if (sendBaleMirrorMovementRefusal(res, error)) return res;
   const status = errorStatus(error);
   if (status === 500) logger.error(`[StockTransferLifecycle ${context}]`, { error: error });
+  // Unexpected (500) failures are logged above; never echo their internal message to the client.
   const payload: Record<string, unknown> = {
-    message: String((error as { message: unknown })?.message ?? `Failed to ${context.toLowerCase()} stock transfer`),
+    message: String(
+      (status === 500 ? undefined : (error as { message: unknown })?.message) ??
+        `Failed to ${context.toLowerCase()} stock transfer`
+    ),
   };
   for (const field of ["code", "stockItemId", "sourceLocationId", "requiredQuantity", "availableQuantity"]) {
     if ((error as { [key: string]: undefined })?.[field] !== undefined)

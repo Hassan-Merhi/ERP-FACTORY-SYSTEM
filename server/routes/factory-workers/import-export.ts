@@ -15,7 +15,7 @@ import XLSX from "xlsx-js-style";
 import ExcelJS from "exceljs";
 import { factoryWorkers } from "@shared/schema";
 
-import { getFactoryCompanyId, workerUpload, writeDaybookEntry } from "./_helpers";
+import { getFactoryCompanyId, resolveWorkerUploadPath, workerUpload, writeDaybookEntry } from "./_helpers";
 import { toMoney } from "../../lib/money";
 
 export function registerFactoryWorkerImportExportRoutes(app: Express, requireAuth: AuthMiddleware, db: AppDb) {
@@ -192,10 +192,11 @@ export function registerFactoryWorkerImportExportRoutes(app: Express, requireAut
         if (!req.file) return res.status(400).json({ message: "No file uploaded" });
 
         // Parse xlsx
-        const workbook = XLSX.readFile(req.file.path);
+        const uploadPath = resolveWorkerUploadPath(req.file.path);
+        const workbook = XLSX.readFile(uploadPath);
         const sheet = workbook.Sheets[workbook.SheetNames[0]];
         const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: "" });
-        fs.unlinkSync(req.file.path);
+        fs.unlinkSync(uploadPath);
 
         // Case-insensitive column mapping
         const normalize = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");

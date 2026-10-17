@@ -166,7 +166,7 @@ export function shouldAnnotateRemoteEditable(
 
 function sameOriginNavigation(anchor: HTMLAnchorElement, location: Location): boolean {
   const href = anchor.getAttribute("href")?.trim() ?? "";
-  if (!href || href.startsWith("#") || href.toLowerCase().startsWith("javascript:")) return false;
+  if (!href || href.startsWith("#") || /^(?:javascript|data|vbscript):/i.test(href)) return false;
   if (anchor.hasAttribute("download") || anchor.target === "_blank") return false;
   try {
     return new URL(href, location.href).origin === location.origin;

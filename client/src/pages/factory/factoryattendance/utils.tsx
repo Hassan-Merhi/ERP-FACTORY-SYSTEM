@@ -287,7 +287,7 @@ export function generateWeeklyResultsSheetHtml(
     .map((w, i) => {
       const status = attendanceMap[w.id] ?? "Present";
       const color = STATUS_PRINT_COLORS[status] ?? "#374151";
-      const mark = STATUS_MARKS[status] ?? status.charAt(0);
+      const mark = STATUS_MARKS[status] ?? escHtml(status.charAt(0));
       const notes = escHtml(notesMap[w.id] ?? "");
 
       const dayCells = weekDays
@@ -570,7 +570,7 @@ export function generateRangePrintHtml(
           const isFri = dt.getDay() === 5;
           const isSat = dt.getDay() === 6;
           const status = wMap.get(d) ?? "Present";
-          const mark = STATUS_MARKS[status] ?? status.charAt(0);
+          const mark = STATUS_MARKS[status] ?? escHtml(status.charAt(0));
           const color = STATUS_PRINT_COLORS[status] ?? "#374151";
           if (status === "Absent") absentCount++;
           else presentCount++;
@@ -619,7 +619,7 @@ export function generateRangePrintHtml(
 </head>
 <body>
   <h1>${titleLabel}</h1>
-  <div class="subtitle">${startDate} &ndash; ${endDate} &nbsp;|&nbsp; ${workers.length} ${lang === "ar" ? "عامل" : "workers"}</div>
+  <div class="subtitle">${escHtml(startDate)} &ndash; ${escHtml(endDate)} &nbsp;|&nbsp; ${workers.length} ${lang === "ar" ? "عامل" : "workers"}</div>
   <table>
     <thead>
       <tr>

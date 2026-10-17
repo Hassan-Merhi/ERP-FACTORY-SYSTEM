@@ -19,6 +19,7 @@ import { logger } from "./logger";
 import { execSync } from "child_process";
 import { createRequire } from "module";
 import type { ParcelsAppShipment } from "./parcelsAppClient";
+import { urlHostMatches } from "./urlHost";
 
 const _require = createRequire(import.meta.url);
 
@@ -229,7 +230,7 @@ export async function scrapeTrackTrace(containerNumber: string): Promise<TrackTr
       const handler = (target: Target) => {
         try {
           const url: string = target.url?.() ?? "";
-          if (url && url.startsWith("http") && !url.includes("track-trace.com")) {
+          if (url && url.startsWith("http") && !urlHostMatches(url, "track-trace.com")) {
             activeBrowser.off("targetcreated", handler);
             resolve(url);
           }

@@ -95,9 +95,11 @@ jobs:
           set -euo pipefail
           rm -rf /tmp/remote-support-playwright
           mkdir -p /tmp/remote-support-playwright
+          cp "$GITHUB_WORKSPACE/tests/e2e/remote-support-harness/package.json" \
+            "$GITHUB_WORKSPACE/tests/e2e/remote-support-harness/package-lock.json" \
+            /tmp/remote-support-playwright/
           cd /tmp/remote-support-playwright
-          npm init -y >/dev/null
-          npm install --no-save @playwright/test@1.55.0
+          npm ci --no-audit --no-fund
           npx playwright install --with-deps chromium
           cp "$GITHUB_WORKSPACE/tests/e2e/remote-support-watch.spec.mjs" ./remote-support-watch.spec.mjs
 

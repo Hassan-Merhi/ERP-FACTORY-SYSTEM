@@ -1,5 +1,6 @@
+import { useState } from "react";
 import { format } from "date-fns";
-import { CalendarIcon, ChevronDown, FileDown, List, Settings2 } from "lucide-react";
+import { CalendarIcon, ChevronDown, FileDown, List, Settings2, MessageCircle } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
@@ -17,6 +18,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import type { useStockTransferOrderModel } from "./useStockTransferOrderModel";
+import { SendStockTransferWhatsAppDialog } from "./SendStockTransferWhatsAppDialog";
 
 type Model = ReturnType<typeof useStockTransferOrderModel>;
 
@@ -26,6 +28,7 @@ interface StockTransferOrderHeaderProps {
 }
 
 export function StockTransferOrderHeader({ model, onSwitchToNormalView }: StockTransferOrderHeaderProps) {
+  const [sendWhatsAppOpen, setSendWhatsAppOpen] = useState(false);
   const {
     editVoucherId,
     destinationLocationId,
@@ -87,6 +90,9 @@ export function StockTransferOrderHeader({ model, onSwitchToNormalView }: StockT
                 <DropdownMenuItem onClick={() => handleExportOrder(false)} data-testid="export-order-no-cost">
                   Export without Cost
                 </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setSendWhatsAppOpen(true)} data-testid="send-export-no-cost-whatsapp">
+                  <MessageCircle className="mr-2 h-4 w-4" /> Send to WhatsApp (without Cost)
+                </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => handleExportOrder(true)} data-testid="export-order-with-cost">
                   Export with Cost
                 </DropdownMenuItem>
@@ -117,6 +123,8 @@ export function StockTransferOrderHeader({ model, onSwitchToNormalView }: StockT
           </PageHeader>
         );
       })()}
+
+      <SendStockTransferWhatsAppDialog model={model} open={sendWhatsAppOpen} onOpenChange={setSendWhatsAppOpen} />
 
       <div
         className="grid grid-cols-1 gap-3 min-[420px]:grid-cols-2 sm:flex sm:flex-wrap sm:items-center"

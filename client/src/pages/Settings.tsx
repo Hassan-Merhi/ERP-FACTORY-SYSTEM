@@ -22,6 +22,7 @@ import {
   Wrench,
   MapPin,
   CalendarClock,
+  MessageSquareText,
   LayoutPanelLeft,
   Printer,
 } from "lucide-react";
@@ -39,6 +40,7 @@ import { ExportCenter } from "./settings/ExportCenter";
 import { UsersPermissionsHub } from "./settings/UsersPermissionsHub";
 import { SupplierTrackingDefaultsTab } from "./settings/SupplierTrackingDefaultsTab";
 import { RecurringJournalsTab } from "./settings/RecurringJournalsTab";
+import { ScheduledWhatsAppMessagesTab } from "./settings/ScheduledWhatsAppMessagesTab";
 import { AutomaticPriorityPrintingCard } from "./factory/factorysettings/AutomaticPriorityPrintingCard";
 import { useUserPreferences } from "@/hooks/use-user-preferences";
 import { Switch } from "@/components/ui/switch";
@@ -125,6 +127,12 @@ export default function Settings() {
       label: "Tracking",
       items: showSupplierTrackingDefaults
         ? [{ key: "supplier-tracking-defaults", label: "Supplier Defaults", icon: MapPin }]
+        : [],
+    },
+    {
+      label: "WhatsApp",
+      items: ["Admin", "Owner", "Developer"].includes(currentUser?.role ?? "")
+        ? [{ key: "scheduled-whatsapp-messages", label: "Scheduled Messages", icon: MessageSquareText }]
         : [],
     },
     {
@@ -293,6 +301,7 @@ export default function Settings() {
             <SupplierTrackingDefaultsTab canManage={canManageTrackingDefaults} />
           )}
           {activeSection === "recurring-journals" && <RecurringJournalsTab />}
+          {activeSection === "scheduled-whatsapp-messages" && <ScheduledWhatsAppMessagesTab />}
           {activeSection === "edit-log" && <EditLogTab selectedCompany={selectedCompany} />}
           {activeSection === "data-tools" && currentUser?.role === "Developer" && <DataToolsTab />}
           {activeSection === "pos-setup" && currentUser?.role === "Developer" && (
