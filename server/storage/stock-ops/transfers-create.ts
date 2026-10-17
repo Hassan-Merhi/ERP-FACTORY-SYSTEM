@@ -287,6 +287,8 @@ export async function applyStockTransferInventoryTx(
   });
 }
 
+import { stockTransferNarrationTx } from "../../services/inventory/stockTransferNarration";
+
 export async function createStockTransfer(
   voucherId: number,
   destinationLocationId: number,
@@ -395,7 +397,12 @@ export async function createStockTransfer(
     await tx
       .update(schema.vouchers)
       .set({
-        description: notes || null,
+        description: await stockTransferNarrationTx(
+          tx,
+          voucher.companyId,
+          costedTransferItems.map((item) => item.sourceLocationId),
+          destinationLocationId
+        ),
         totalAmount: inventoryMoney(totalAmount),
       })
       .where(eq(schema.vouchers.id, voucherId));
