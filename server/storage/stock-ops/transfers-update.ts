@@ -3,6 +3,7 @@ import { eq, and, isNull, inArray } from "drizzle-orm";
 import { db, type DbTransaction } from "../../db";
 import { createDatabaseStockMovementAdapter } from "../../services/inventory/databaseStockMovementAdapter";
 import { postStockMovementTx } from "../../services/inventory/stockMovementIntegrityService";
+import { stockTransferNarrationTx } from "../../services/inventory/stockTransferNarration";
 import {
   addInventoryValues,
   inventoryMoney,
@@ -273,6 +274,15 @@ export async function updateStockTransfer(
       reference: voucher.voucherNumber,
       deltas: transferDeltas,
     });
+
+    await tx.update(schema.vouchers).set({
+      description: await stockTransferNarrationTx(
+        tx,
+        voucher.companyId,
+        items.map((item) => item.sourceLocationId),
+        destinationLocationId
+      ),
+    }).where(eq(schema.vouchers.id, voucher.id));
 
     const result = { transfer: updatedTransfer, items: transferItems };
     if (afterWriteTx) await afterWriteTx(tx, result);

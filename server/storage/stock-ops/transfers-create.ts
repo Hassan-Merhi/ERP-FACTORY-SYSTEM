@@ -13,6 +13,7 @@ import * as schema from "@shared/schema";
 import type { StockTransferItem, StockAdjustmentItem } from "@shared/schema";
 import { createDatabaseStockMovementAdapter } from "../../services/inventory/databaseStockMovementAdapter";
 import { postStockMovementTx } from "../../services/inventory/stockMovementIntegrityService";
+import { stockTransferNarrationTx } from "../../services/inventory/stockTransferNarration";
 import { shouldInsertAdjustmentVoucherEntry } from "./adjustmentVoucherEntryGuard";
 import { stockAdjustmentHeaderTotal, stockAdjustmentNetLine } from "./stockAdjustmentTotals";
 import { lockInventoryRow } from "../inventoryRowLock";
@@ -395,7 +396,12 @@ export async function createStockTransfer(
     await tx
       .update(schema.vouchers)
       .set({
-        description: notes || null,
+        description: await stockTransferNarrationTx(
+          tx,
+          voucher.companyId,
+          costedTransferItems.map((item) => item.sourceLocationId),
+          destinationLocationId
+        ),
         totalAmount: inventoryMoney(totalAmount),
       })
       .where(eq(schema.vouchers.id, voucherId));
