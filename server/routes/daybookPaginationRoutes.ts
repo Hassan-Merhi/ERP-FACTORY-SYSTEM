@@ -183,7 +183,27 @@ export function registerDaybookPaginationRoutes(app: Express): void {
               'voucherType', v.voucher_type,
               'voucherDate', v.voucher_date,
               'effectiveDate', v.effective_date,
-              'description', v.description,
+              'description',
+                CASE
+                  WHEN LOWER(REPLACE(v.voucher_type, ' ', '')) IN ('stocktransfer', 'transfer')
+                  THEN COALESCE(
+                    (
+                      SELECT 'Stock Transfer from "' ||
+                             string_agg(DISTINCT src.name, ', ' ORDER BY src.name) ||
+                             '" to "' || dst.name || '"'
+                      FROM stock_transfer_vouchers st
+                      JOIN locations dst ON dst.id = st.destination_location_id AND dst.company_id = v.company_id
+                      JOIN stock_transfer_items sti ON sti.transfer_id = st.id
+                      JOIN locations src ON src.id = COALESCE(sti.source_location_id, st.source_location_id)
+                        AND src.company_id = v.company_id
+                      WHERE st.voucher_id = v.id
+                      GROUP BY dst.name
+                      LIMIT 1
+                    ),
+                    v.description
+                  )
+                  ELSE v.description
+                END,
               'totalAmount',
                 CASE
                   WHEN ${hideStockTransferAmountsParam}::boolean
