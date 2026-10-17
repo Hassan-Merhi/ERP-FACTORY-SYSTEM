@@ -89,10 +89,7 @@ export function registerNotificationRoutes(app: Express) {
                 })
                 .from(customerOrders)
                 .where(
-                  and(
-                    inArray(customerOrders.id, linkedOrderIds),
-                    inArray(customerOrders.companyId, linkedCompanyIds)
-                  )
+                  and(inArray(customerOrders.id, linkedOrderIds), inArray(customerOrders.companyId, linkedCompanyIds))
                 )
             : [];
         const destinationByOrder = new Map(
@@ -101,8 +98,10 @@ export function registerNotificationRoutes(app: Express) {
 
         const enriched = rows.map((n) => {
           const destination =
-            orderEventTypes.has(n.eventType) && n.entityType === "customer_order" &&
-            n.entityId != null && n.companyId != null
+            orderEventTypes.has(n.eventType) &&
+            n.entityType === "customer_order" &&
+            n.entityId != null &&
+            n.companyId != null
               ? destinationByOrder.get(`${n.companyId}:${n.entityId}`)
               : undefined;
           return {
