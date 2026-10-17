@@ -262,6 +262,62 @@ describe("PATCH /api/factory/bales/:id/status", () => {
   });
 });
 
+describe("restoring historic status-only deleted bales from Barcode Lookup", () => {
+  it("restores a legacy DELETED bale without adding another ERP stock movement", async () => {
+    const id = await createBale({ status: "DELETED", costPerKg: "0" });
+    await pool.query(
+      "UPDATE factory_bales SET deleted_at = NOW(), erp_location_id = $2 WHERE id = $1",
+      [id, ctx.locationId]
+    );
+    const before = await pool.query<{ count: string }>(
+      `SELECT count(*)::text AS count FROM canonical_stock_movements
+       WHERE company_id = $1 AND source_id = $2`,
+      [ctx.companyId, String(id)]
+    );
+
+    const response = await agent.patch(`/api/factory/bales/${id}/status`).send({ status: "IN_STOCK" });
+    expect(response.status, JSON.stringify(response.body)).toBe(200);
+    expect((await baleRow(id))?.status).toBe("IN_STOCK");
+    expect((await baleRow(id))?.deleted_at).toBeNull();
+
+    const after = await pool.query<{ count: string }>(
+      `SELECT count(*)::text AS count FROM canonical_stock_movements
+       WHERE company_id = $1 AND source_id = $2`,
+      [ctx.companyId, String(id)]
+    );
+    expect(after.rows[0].count).toBe(before.rows[0].count);
+  });
+
+  it("refuses to revive a bale with a physical deletion audit (no phantom stock)", async () => {
+    const id = await createBale({ status: "DELETED", costPerKg: "0" });
+    await pool.query(
+      "UPDATE factory_bales SET deleted_at = NOW(), erp_location_id = $2 WHERE id = $1",
+      [id, ctx.locationId]
+    );
+    await pool.query(
+      `INSERT INTO factory_physical_bale_deletions
+         (company_id, bale_id, reference_number, previous_status, original_location_id, removed_by_name, reason)
+       VALUES ($1, $2, $3, 'IN_STOCK', $4, 'Test', 'physical removal evidence')`,
+      [ctx.companyId, id, `${TEST_PREFIX}-B${baleSeq}`, ctx.locationId]
+    );
+
+    const response = await agent.patch(`/api/factory/bales/${id}/status`).send({ status: "IN_STOCK" });
+    expect(response.status).toBe(409);
+    expect(response.body.message).toMatch(/physically removed|re-entry/i);
+    expect((await baleRow(id))?.status).toBe("DELETED");
+    expect((await baleRow(id))?.deleted_at).not.toBeNull();
+  });
+
+  it("does not silently promote a deleted bale without a traceable stock location", async () => {
+    const id = await createBale({ status: "DELETED" });
+    await pool.query("UPDATE factory_bales SET deleted_at = NOW() WHERE id = $1", [id]);
+
+    const response = await agent.patch(`/api/factory/bales/${id}/status`).send({ status: "IN_STOCK" });
+    expect(response.status).toBe(409);
+    expect((await baleRow(id))?.status).toBe("DELETED");
+  });
+});
+
 describe("DELETE /api/factory/bales/:id", () => {
   it("soft-deletes by setting status and deletedAt together", async () => {
     // Phase 19 C (F3): a stock bale is removed through Stock Removal (409); a

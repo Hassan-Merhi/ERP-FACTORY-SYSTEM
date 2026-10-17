@@ -14,6 +14,7 @@ import { parseId } from "../../../lib/parseId";
 import { db } from "../../../db";
 import { requireAuth, requireRole } from "../../../auth";
 import { writeAuditEvent } from "../../../services/audit/auditService";
+import { recordFactoryStockValueEventTx } from "../../../services/factory/factoryStockValueEvents";
 import {
   BaleStatusChangeRefusal,
   FACTORY_BALE_STATUS_CHANGES_VALUE_MESSAGE,
@@ -31,8 +32,10 @@ import {
   factoryV3LoadBales,
   factoryInvoiceLoadingBales,
   factoryBaleProductionAttributions,
+  factoryPhysicalBaleDeletions,
+  customerOrders,
 } from "@shared/schema";
-import { eq, and, desc, sql, inArray, not } from "drizzle-orm";
+import { eq, and, desc, sql, inArray, not, isNull } from "drizzle-orm";
 import {
   ALLOWED,
   assertNoLiveLoadingLinkOutsideLoadingStatusTx,
@@ -381,11 +384,108 @@ export function registerBalesCrudRoutes(app: Express) {
               status: factoryBales.status,
               deletedAt: factoryBales.deletedAt,
               referenceNumber: factoryBales.referenceNumber,
+              totalCost: factoryBales.totalCost,
+              erpLocationId: factoryBales.erpLocationId,
             })
             .from(factoryBales)
             .where(and(eq(factoryBales.id, id), eq(factoryBales.companyId, companyId)))
             .for("update");
           if (!bale) return null;
+          // Legacy status-only deletions never posted an ERP stock debit. Restore
+          // those bales without a SECOND receipt. This is intentionally not an
+          // exception to the generic value-neutral status policy: the branch
+          // verifies that no controlled physical removal took place, and keeps
+          // its own stock-value reversal and audit inside the same transaction.
+          if (status === "IN_STOCK" && bale.status === "DELETED") {
+            const [physicalDeletion] = await tx
+              .select({ id: factoryPhysicalBaleDeletions.id })
+              .from(factoryPhysicalBaleDeletions)
+              .where(
+                and(
+                  eq(factoryPhysicalBaleDeletions.companyId, companyId),
+                  eq(factoryPhysicalBaleDeletions.baleId, id)
+                )
+              )
+              .limit(1);
+            const removalMovement = await tx.execute(sql`
+              SELECT id FROM canonical_stock_movements
+               WHERE company_id = ${companyId}
+                 AND source_type = 'factory_bale_removal'
+                 AND source_id = ${String(id)}
+               LIMIT 1
+            `);
+            if (physicalDeletion || removalMovement.rows.length) {
+              throw new BaleStatusChangeRefusal(
+                "This bale was physically removed from inventory. Restore it through a supervised stock re-entry, not a status change.",
+                [{ id, from: bale.status, to: status }]
+              );
+            }
+            // An unlocated bale cannot be reconciled to its existing ERP stock.
+            if (!bale.erpLocationId) {
+              throw new BaleStatusChangeRefusal(
+                "This deleted bale has no stock location. Reconcile its original stock entry before restoring it.",
+                [{ id, from: bale.status, to: status }]
+              );
+            }
+            const [activeOrder] = await tx
+              .select({ id: customerOrderBales.id })
+              .from(customerOrderBales)
+              .innerJoin(customerOrders, eq(customerOrderBales.orderId, customerOrders.id))
+              .where(
+                and(
+                  eq(customerOrderBales.baleId, id),
+                  eq(customerOrders.companyId, companyId),
+                  isNull(customerOrders.deletedAt),
+                  not(inArray(customerOrders.status, ["CANCELLED"]))
+                )
+              )
+              .limit(1);
+            if (activeOrder) {
+              throw new BaleStatusChangeRefusal(
+                "This deleted bale is linked to an active customer order. Resolve the order before restoring the bale.",
+                [{ id, from: bale.status, to: status }]
+              );
+            }
+            const [restored] = await tx
+              .update(factoryBales)
+              .set({ status: "IN_STOCK", deletedAt: null, updatedAt: new Date() })
+              .where(
+                and(
+                  eq(factoryBales.id, id),
+                  eq(factoryBales.companyId, companyId),
+                  eq(factoryBales.status, "DELETED")
+                )
+              )
+              .returning({ id: factoryBales.id, status: factoryBales.status });
+            if (!restored) return null;
+            // Finished-goods value reappears; the ERP location inventory was
+            // never debited and MUST NOT receive another quantity movement.
+            await recordFactoryStockValueEventTx(tx, {
+              companyId,
+              kind: "WASTE",
+              amount: toMoney(bale.totalCost ?? 0),
+              sourceType: "factory-bale-legacy-status-restore",
+              sourceId: id,
+            });
+            await writeAuditEvent(
+              {
+                userId: String(req.session.userId ?? "unknown"),
+                username: req.session.username || String(req.session.userId ?? "unknown"),
+                companyId,
+                action: "update",
+                tableName: "factory_bales",
+                recordId: id,
+                recordIdentifier: bale.referenceNumber || `Bale #${id}`,
+                changes: {
+                  status: { old: "DELETED", new: "IN_STOCK" },
+                  deletedAt: { old: bale.deletedAt, new: null },
+                  source: { new: "legacy-status-only-restore; ERP inventory unchanged" },
+                },
+              },
+              tx
+            );
+            return restored;
+          }
           if (!isValueNeutralBaleStatusChange(bale.status, status, bale.deletedAt)) {
             throw new BaleStatusChangeRefusal(FACTORY_BALE_STATUS_CHANGES_VALUE_MESSAGE, [
               { id, from: bale.status, to: status },

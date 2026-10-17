@@ -206,7 +206,10 @@ export function useBarcodeLookupModel() {
     onSuccess: () => {
       const referenceNumber = referenceResult?.labelPrint?.referenceNumber;
       if (referenceNumber) referenceLookup.mutate(referenceNumber);
-      toast({ title: "Returned to Stock", description: "Bale status set back to In Stock." });
+      toast({
+        title: "Restored to Stock",
+        description: "Deleted bale restored. Existing ERP stock quantity was preserved without a duplicate receipt.",
+      });
     },
     onError: (error: Error) => {
       toast({
