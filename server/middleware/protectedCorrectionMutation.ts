@@ -11,7 +11,7 @@ function isRestricted(req: Request): boolean {
 }
 
 function block(res: Response): Response {
-  return res.status(403).json({ message: "Developer authorization required to modify this correction voucher" });
+  return res.status(403).json({ message: "FORBIDDEN", code: "CORRECTION_DEVELOPER_ONLY" });
 }
 
 function isVoucherId(value: unknown): boolean {
@@ -28,11 +28,7 @@ export function registerProtectedCorrectionMutationBoundary(app: Express): void 
 
   // Reject the entire bulk operation if the protected voucher is included.
   app.post("/api/vouchers/bulk-delete", (req, res, next) => {
-    if (
-      isRestricted(req) &&
-      Array.isArray(req.body?.voucherIds) &&
-      req.body.voucherIds.some(isVoucherId)
-    ) {
+    if (isRestricted(req) && Array.isArray(req.body?.voucherIds) && req.body.voucherIds.some(isVoucherId)) {
       return block(res);
     }
     return next();
