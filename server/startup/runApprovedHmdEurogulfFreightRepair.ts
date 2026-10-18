@@ -111,7 +111,7 @@ async function inspect(tx: DbTransaction): Promise<{ corrected: boolean; payable
        v.deleted_at, v.optional, v.currency, e.id AS line_id, e.ledger_account_id,
        e.supplier_id, e.bank_account_id, e.customer_id, e.employee_id,
        e.fixed_asset_id, e.debit_amount, e.credit_amount
-    FROM vouchers v LEFT JOIN voucher_entries e ON e.voucher_id=v.id
+    FROM vouchers v JOIN voucher_entries e ON e.voucher_id=v.id
     WHERE v.company_id=8 AND v.voucher_number='ERP-HMD-EUROGULF-FREIGHT-RECLASS-20261018-599'
     ORDER BY e.id FOR SHARE OF v,e
   `)).rows as Row[];
