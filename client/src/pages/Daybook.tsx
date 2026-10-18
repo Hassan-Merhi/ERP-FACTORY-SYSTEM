@@ -594,8 +594,8 @@ export default function Daybook({ user }: { user?: DaybookUser | null } = {}) {
     }));
     const ws = utils.json_to_sheet(data);
     const wb = utils.book_new();
-    utils.book_append_sheet(wb, ws, "Daybook");
-    await writeFile(wb, `Daybook_${format(new Date(), "yyyy-MM-dd")}.xlsx`);
+    utils.book_append_sheet(wb, ws, routineAccountingViewFiltered ? "Operational Filtered" : "Daybook");
+    await writeFile(wb, `${routineAccountingViewFiltered ? "Operational_Filtered_Daybook" : "Daybook"}_${format(new Date(), "yyyy-MM-dd")}.xlsx`);
   };
   const handleExportDetailedToExcel = async () => {
     const exportVouchers = await loadAllVouchers();
@@ -605,8 +605,8 @@ export default function Daybook({ user }: { user?: DaybookUser | null } = {}) {
     );
     const ws = utils.json_to_sheet(detailRows);
     const wb = utils.book_new();
-    utils.book_append_sheet(wb, ws, "Daybook Detail");
-    await writeFile(wb, `Daybook_Detail_${format(new Date(), "yyyy-MM-dd")}.xlsx`);
+    utils.book_append_sheet(wb, ws, routineAccountingViewFiltered ? "Operational Detail Filtered" : "Daybook Detail");
+    await writeFile(wb, `${routineAccountingViewFiltered ? "Operational_Filtered_Detail" : "Daybook_Detail"}_${format(new Date(), "yyyy-MM-dd")}.xlsx`);
     toast({ title: "Export complete", description: `${detailRows.length} detail rows exported.` });
   };
 
