@@ -7,6 +7,7 @@ import { getErrorMessage } from "../../lib/httpHandlers";
 import { userLocations, vouchers } from "@shared/schema";
 import { parseMoneyInput } from "../../lib/money";
 import { parsePositiveInt } from "../../lib/listPagination";
+import { withStockTransferNarrations } from "../../services/inventory/stockTransferNarration";
 
 const DEFAULT_PAGE_SIZE = 100;
 const MAX_PAGE_SIZE = 250;
@@ -149,7 +150,8 @@ export function registerVoucherPaginationRoutes(app: Express): void {
 
       const total = countRows[0]?.total ?? 0;
       const totalPages = total === 0 ? 0 : Math.ceil(total / limit);
-      const items = isPos ? sanitizeForPos(data) : data;
+      const narrated = await withStockTransferNarrations(companyId, data);
+      const items = isPos ? sanitizeForPos(narrated) : narrated;
       applyPaginationHeaders(res, total, page, limit, totalPages);
       return res.json({
         items,

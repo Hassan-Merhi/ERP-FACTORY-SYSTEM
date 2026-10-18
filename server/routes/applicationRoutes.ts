@@ -65,6 +65,8 @@ import { registerVoucherEntryRoutes } from "./voucher-entries";
 import { registerVoucherRoutes } from "./voucherRoutes";
 import { registerWhatsAppFastSendRoutes } from "./whatsappFastSendRoutes";
 import { registerWhatsAppRoutes } from "./whatsappRoutes";
+import { registerStockTransferExportWhatsAppRoutes } from "./stockTransferExportWhatsAppRoutes";
+import { registerScheduledWhatsAppMessageRoutes } from "./scheduledWhatsAppMessageRoutes";
 import { registerWriteInvalidationSignal } from "./writeInvalidationSignal";
 import { registerDispatchBatchRoutes } from "./factory/dispatch-batches";
 import { registerFactoryInvoiceLoadingRoutes } from "./factory/invoice-loading";
@@ -179,6 +181,9 @@ export async function registerApplicationRoutes(app: Express): Promise<Server> {
     load: async () => (await import("./netPositionMonthlyExcelRoute")).registerNetPositionMonthlyExcelRoute,
   });
   registerWhatsAppRoutes(app);
+  // Must be mounted eagerly: production GIT lazy routes only match /api/git.
+  registerStockTransferExportWhatsAppRoutes(app);
+  registerScheduledWhatsAppMessageRoutes(app);
   await registerLazyRouteModule(app, {
     prefixes: ["/api/export"],
     load: async () => (await import("./exportRoutes")).registerExportRoutes,
