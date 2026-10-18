@@ -76,6 +76,7 @@ import { entryBalanceUrl, selectBalanceDisplayEntries, selectCashAccountId } fro
 export default function Daybook({ user }: { user?: DaybookUser | null } = {}) {
   const { toast } = useToast();
   const { selectedCompany } = useCompany();
+  const routineAccountingViewFiltered = selectedCompany?.id === 8 && (user?.currentRole ?? user?.role) !== "Developer";
   const vouchersBase = selectedCompany?.companyType === "properties" ? "/properties/vouchers" : "/vouchers";
   const { formatDisplayDate, formatDisplayTime } = useDateFormat();
   const { formatHistoricalBaseAmount: formatAmount, formatTransactionAmount } = useCurrencyContext();
@@ -611,7 +612,7 @@ export default function Daybook({ user }: { user?: DaybookUser | null } = {}) {
 
   return (
     <div className="flex flex-col gap-4 md:gap-6 p-3 md:p-6">
-      <PageHeader title="Daybook" subtitle="View all accounting transactions chronologically" showBackButton>
+      <PageHeader title="Daybook" subtitle={routineAccountingViewFiltered ? "Operational activity view" : "View all accounting transactions chronologically"} showBackButton>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="outline" className="gap-2">
@@ -630,6 +631,12 @@ export default function Daybook({ user }: { user?: DaybookUser | null } = {}) {
           New Voucher
         </Button>
       </PageHeader>
+
+      {routineAccountingViewFiltered && (
+        <p role="note" className="rounded-md border border-border bg-muted/30 p-3 text-sm text-muted-foreground">
+          Operational view excludes a correction journal. Official ledger statements, financial reports and audit history retain every posted entry.
+        </p>
+      )}
 
       {/* Tab selector: Transactions / Edits & Activity */}
       <Tabs
