@@ -259,8 +259,7 @@ export function registerChatbotPatchRoutes(app: Express) {
       const rawToken = tokenRow[0]?.value ?? process.env.GITHUB_TOKEN ?? "";
       // Saved tokens are v2 ciphertext; old CryptoJS ciphertext (U2FsdGVkX1…) is no
       // longer decryptable and resolves to "" so the push fails until it is re-saved.
-      const token =
-        rawToken.startsWith("v2:") || rawToken.startsWith("U2FsdGVkX1") ? decryptToken(rawToken) : rawToken;
+      const token = rawToken.startsWith("v2:") || rawToken.startsWith("U2FsdGVkX1") ? decryptToken(rawToken) : rawToken;
 
       if (!baseUrl) {
         return res.status(422).json({

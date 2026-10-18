@@ -34,18 +34,19 @@ function getMarkerPayload(source: ExportAttachmentSource): ExportFileMarkerPaylo
  * a malformed attachment source can never read or delete arbitrary files.
  */
 function resolveManagedExportPath(filePath: string): string {
-  // This is the traversal guard: the resolved path is checked against the managed roots below.
+  // This is the traversal guard: each return below is behind a prefix check of a managed root.
+  // Roots come from the OS temp dir and server configuration, not from requests.
   // nosemgrep: javascript.lang.security.audit.path-traversal.path-join-resolve-traversal.path-join-resolve-traversal
   const resolved = path.resolve(filePath);
-  const roots = [os.tmpdir(), process.env.EXPORT_BRIDGE_TEMP_DIR]
-    .filter((root): root is string => Boolean(root))
-    // Roots come from the OS temp dir and server configuration, not from requests.
+  const tempRoot = path.resolve(os.tmpdir()) + path.sep;
+  if (resolved.startsWith(tempRoot)) return resolved;
+  const bridgeDir = process.env.EXPORT_BRIDGE_TEMP_DIR;
+  if (bridgeDir) {
     // nosemgrep: javascript.lang.security.audit.path-traversal.path-join-resolve-traversal.path-join-resolve-traversal
-    .map((root) => path.resolve(root) + path.sep);
-  if (!roots.some((root) => resolved.startsWith(root))) {
-    throw new Error("Invalid file path");
+    const bridgeRoot = path.resolve(bridgeDir) + path.sep;
+    if (resolved.startsWith(bridgeRoot)) return resolved;
   }
-  return resolved;
+  throw new Error("Invalid file path");
 }
 
 function getFileAttachment(source: ExportAttachmentSource): { filePath: string; sizeBytes: number } | undefined {
