@@ -1,8 +1,10 @@
 import type { Express } from "express";
 
 import { requireActionAccess, requireExportAccess, requireModuleAccess } from "../../lib/permissionMiddleware";
+import { registerProtectedCorrectionMutationBoundary } from "../../middleware/protectedCorrectionMutation";
 
 export function registerPermissionBoundaryRoutes(app: Express): void {
+  registerProtectedCorrectionMutationBoundary(app);
   app.use("/api/factory", requireModuleAccess("mod_factory"));
   app.use("/api/pos", requireModuleAccess("mod_pos"));
   app.use("/api/properties", requireModuleAccess("mod_properties"));
