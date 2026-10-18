@@ -28,7 +28,8 @@ const base = {
 describe("scheduled WhatsApp custom messages", () => {
   it("validates day-specific times and disabled days", () => {
     expect(parseWeeklyTimes({ "1": "09:00", "2": null, "5": "17:45" })).toEqual({
-      "1": "09:00", "5": "17:45",
+      "1": "09:00",
+      "5": "17:45",
     });
     expect(() => parseWeeklyTimes({ "1": "26:00" })).toThrow();
     expect(() => parseWeeklyTimes({})).toThrow();
@@ -36,7 +37,9 @@ describe("scheduled WhatsApp custom messages", () => {
 
   it("uses the schedule timezone rather than the server timezone", () => {
     expect(getScheduledMessageLocalParts(monday, "Asia/Beirut")).toEqual({
-      localDate: "2026-10-19", dayOfWeek: 1, localTime: "09:01",
+      localDate: "2026-10-19",
+      dayOfWeek: 1,
+      localTime: "09:01",
     });
   });
 
@@ -52,8 +55,14 @@ describe("scheduled WhatsApp custom messages", () => {
   });
 
   it("does not unexpectedly send today's morning message after editing it later", () => {
-    expect(shouldSendScheduledMessage({
-      ...base, updated_at: new Date("2026-10-19T07:00:00Z"),
-    }, monday)).toBeNull();
+    expect(
+      shouldSendScheduledMessage(
+        {
+          ...base,
+          updated_at: new Date("2026-10-19T07:00:00Z"),
+        },
+        monday
+      )
+    ).toBeNull();
   });
 });
