@@ -34,7 +34,7 @@ const eqMoney = (value: unknown, expected: string) =>
   toMoney(String(value ?? 0)).eq(expected);
 
 function must(condition: unknown, message: string): asserts condition {
-  if (!condition) throw new Error("HMD_EUROGULF_REPAIR_REFUSED_" + message);
+  if (!condition) throw new Error("HMD_ERR" + "_" + message);
 }
 
 async function inspect(tx: DbTransaction): Promise<{ corrected: boolean; payable: string }> {
@@ -175,7 +175,7 @@ export async function runApprovedHmdEurogulfFreightRepair(): Promise<void> {
             voucherType: "Journal",
             voucherNumber: NUMBER,
             voucherDate: "2026-10-18",
-            description: "Owner-approved EUROGULF PO-2024-304/MRSU4898018: remove duplicate $11,971.12 parent-paid freight expense and residual subsidiary supplier payable. No change to HADI L'SHI Credit.",
+            description: ["EUROGULF PO-2024-304/MRSU4898018:", "owner-approved duplicate freight correction.", "Clear $11,971.12 subsidiary payable and duplicated Purchases cost.", "Keep HADI L'SHI Credit unchanged."].join(" "),
             currency: "USD",
             sourceModule: "ERP",
             source: { sourceType: "erp-hmd-eurogulf-parent-freight-correction", sourceId: "8:618:599", phase: "owner-approved-20261018" },
