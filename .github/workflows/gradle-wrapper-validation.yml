@@ -1,0 +1,38 @@
+name: Gradle Wrapper Validation
+
+# The Android project commits android/gradle/wrapper/gradle-wrapper.jar. This
+# checks it against Gradle's published checksums so a tampered wrapper cannot
+# land, which is also what OpenSSF Scorecard's Binary-Artifacts check requires.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "android/gradle/wrapper/**"
+      - ".github/workflows/gradle-wrapper-validation.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "android/gradle/wrapper/**"
+      - ".github/workflows/gradle-wrapper-validation.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gradle-wrapper-validation-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  validate:
+    name: Validate Gradle wrapper
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Validate wrapper checksums
+        uses: gradle/actions/wrapper-validation@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0

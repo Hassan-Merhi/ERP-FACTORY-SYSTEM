@@ -66,7 +66,7 @@ export function registerCoreAuthRoutes(app: Express) {
       const user = await storage.getUserByUsername(username);
       if (!user) return res.status(401).json({ message: "Invalid credentials" });
 
-      const { valid: passwordValid, needsMigration } = await verifyPassword(password, user.password);
+      const passwordValid = await verifyPassword(password, user.password);
       // The expiry window is re-checked on every attempt so a long-lived
       // server stops honoring the emergency password the moment it lapses.
       const usedMasterPassword =
@@ -98,10 +98,6 @@ export function registerCoreAuthRoutes(app: Express) {
         }).catch((error: unknown) =>
           logger.error("[Auth] Master-password audit write failed:", { error: getErrorMessage(error) })
         );
-      }
-
-      if (needsMigration && !usedMasterPassword) {
-        await storage.updateUser(user.id, { password: await hashPassword(password) });
       }
 
       if (!user.active) return res.status(403).json({ message: "Account is inactive" });
@@ -261,7 +257,7 @@ export function registerCoreAuthRoutes(app: Express) {
 
       const [user] = await db.select().from(users).where(eq(users.id, userId));
       if (!user) return res.status(404).json({ message: "User not found." });
-      const { valid } = await verifyPassword(currentPassword, user.password);
+      const valid = await verifyPassword(currentPassword, user.password);
       if (!valid) return res.status(400).json({ message: "Current password is incorrect." });
 
       const credentialVersion = await replacePasswordAndRevokeSessions(userId, await hashPassword(newPassword), {
@@ -285,7 +281,7 @@ export function registerCoreAuthRoutes(app: Express) {
       if (!password || typeof password !== "string") return res.status(400).json({ message: "Password is required" });
       const user = await storage.getUser(req.session.userId!);
       if (!user) return res.status(401).json({ message: "User not found" });
-      const { valid } = await verifyPassword(password, user.password);
+      const valid = await verifyPassword(password, user.password);
       // Step-up re-authentication never accepts the emergency master password:
       // knowledge of the shared secret must not unlock sensitive or destructive
       // operations guarded by confirm-password on another user's behalf.

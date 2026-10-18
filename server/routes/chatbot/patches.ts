@@ -257,8 +257,10 @@ export function registerChatbotPatchRoutes(app: Express) {
 
       const baseUrl = urlRow[0]?.value ?? process.env.GITHUB_REPO_URL ?? "";
       const rawToken = tokenRow[0]?.value ?? process.env.GITHUB_TOKEN ?? "";
-      // Decrypt if it looks like a CryptoJS AES cipher (base64 with U2FsdGVkX1 prefix)
-      const token = rawToken.startsWith("U2FsdGVkX1") ? decryptToken(rawToken) : rawToken;
+      // Saved tokens are v2 ciphertext; old CryptoJS ciphertext (U2FsdGVkX1…) is no
+      // longer decryptable and resolves to "" so the push fails until it is re-saved.
+      const token =
+        rawToken.startsWith("v2:") || rawToken.startsWith("U2FsdGVkX1") ? decryptToken(rawToken) : rawToken;
 
       if (!baseUrl) {
         return res.status(422).json({

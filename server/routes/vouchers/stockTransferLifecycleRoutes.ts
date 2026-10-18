@@ -65,10 +65,19 @@ function sendError(res: Response, error: unknown, context: string) {
         `Failed to ${context.toLowerCase()} stock transfer`
     ),
   };
-  for (const field of ["code", "stockItemId", "sourceLocationId", "requiredQuantity", "availableQuantity"]) {
-    if ((error as { [key: string]: undefined })?.[field] !== undefined)
-      payload[field] = (error as { [key: string]: unknown })[field];
-  }
+  // Named reads only: a computed `error[field]` read could reach `stack`.
+  const details = error as {
+    code?: unknown;
+    stockItemId?: unknown;
+    sourceLocationId?: unknown;
+    requiredQuantity?: unknown;
+    availableQuantity?: unknown;
+  } | null;
+  if (details?.code !== undefined) payload.code = details.code;
+  if (details?.stockItemId !== undefined) payload.stockItemId = details.stockItemId;
+  if (details?.sourceLocationId !== undefined) payload.sourceLocationId = details.sourceLocationId;
+  if (details?.requiredQuantity !== undefined) payload.requiredQuantity = details.requiredQuantity;
+  if (details?.availableQuantity !== undefined) payload.availableQuantity = details.availableQuantity;
   return res.status(status).json(payload);
 }
 

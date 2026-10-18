@@ -207,7 +207,7 @@ for (const file of codeFiles.filter((f) => sourceFile(f) && /\.(ts|tsx)$/.test(f
         : [];
     for (const name of names) {
       if (imported.has(name)) continue;
-      const local = (text.match(new RegExp(`(?<![\\w$])${name.replace(/\$/g, "\\$")}(?![\\w$])`, "g")) ?? []).length;
+      const local = (text.match(new RegExp(`(?<![\\w$])${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?![\\w$])`, "g")) ?? []).length;
       unusedExports.push({ file, name, usedLocally: local > 1 });
     }
   }

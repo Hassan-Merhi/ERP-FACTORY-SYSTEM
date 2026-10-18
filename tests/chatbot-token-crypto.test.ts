@@ -27,8 +27,8 @@ describe("chatbot token encryption", () => {
     expect(decryptToken(parts.join(":"))).toBe("");
   });
 
-  it("keeps decrypting legacy CryptoJS/OpenSSL passphrase ciphertext", () => {
+  it("no longer decrypts legacy CryptoJS/OpenSSL (MD5-derived key) ciphertext", () => {
     const legacyCiphertext = "U2FsdGVkX19YwGofltY6OjUuFIuuT5IMWqgsazF0DwsGqc5WqG1QLIhehffjT9Au";
-    expect(decryptToken(legacyCiphertext)).toBe("legacy-token-value");
+    expect(decryptToken(legacyCiphertext)).toBe("");
   });
 });

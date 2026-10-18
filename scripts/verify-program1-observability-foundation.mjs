@@ -35,7 +35,7 @@ const runbook = read("docs/program-1-incident-response-runbook.md");
 const checks = [
   [logger.includes("SENSITIVE_KEY_PATTERN") && logger.includes("JSON.stringify(entry)"), "logger must remain structured and redacted"],
   [trace.includes("AsyncLocalStorage") && trace.includes("normaliseRouteTemplate"), "trace context must remain concurrency safe and normalized"],
-  [bootstrap.includes("api.green-api.com") && bootstrap.includes("maersk"), "supported dependencies must remain traced"],
+  [bootstrap.includes('host === "api.green-api.com"') && bootstrap.includes("maersk"), "supported dependencies must remain traced"],
   [bootstrap.includes("response.ok") && bootstrap.includes("captureRuntimeFailures"), "HTTP and swallowed scheduler failures must be captured"],
   [bootstrap.includes("installOperationalAlertRuntime"), "alert runtime must be installed"],
   [requestLogger.includes("recordPerformanceSample") && requestLogger.includes("X-Request-Id"), "HTTP requests must feed correlated performance samples"],
