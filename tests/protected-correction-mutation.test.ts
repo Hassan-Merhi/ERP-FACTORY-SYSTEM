@@ -34,12 +34,8 @@ describe("posted correction voucher write permissions", () => {
 
   it("rejects bulk deletes involving the correction, but not unrelated vouchers", async () => {
     const app = createApp("Owner");
-    expect(
-      (await request(app).post("/api/vouchers/bulk-delete").send({ voucherIds: [100, 16303] })).status
-    ).toBe(403);
-    expect((await request(app).post("/api/vouchers/bulk-delete").send({ voucherIds: [100] })).status).toBe(
-      200
-    );
+    expect((await request(app).post("/api/vouchers/bulk-delete").send({ voucherIds: [100, 16303] })).status).toBe(403);
+    expect((await request(app).post("/api/vouchers/bulk-delete").send({ voucherIds: [100] })).status).toBe(200);
   });
 
   it("blocks non-developers from adding entries to the protected voucher", async () => {
