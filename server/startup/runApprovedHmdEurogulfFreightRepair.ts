@@ -12,12 +12,15 @@ import { sql } from "drizzle-orm";
 import { db, pool, type DbTransaction } from "../db";
 import { logger } from "../lib/logger";
 import { toMoney } from "../lib/money";
+// prettier-ignore
 import {
   postFactoryPartyLineVoucherTx,
 } from "../services/factory/factoryVoucherPosting";
+// prettier-ignore
 import {
   createTenantDatabaseScope, runWithDatabaseScopeRuntimeContext,
 } from "../services/security/databaseScopeRuntimeContext";
+// prettier-ignore
 import { runAsSystemAuditActor, runWithAuditReason } from "../services/audit/auditActorContext";
 
 const ENV = "ERP_HMD_EUROGULF_FREIGHT_REPAIR_20261018";
@@ -30,13 +33,16 @@ const ORIGINAL = "11971.12";
 
 type Row = Record<string, unknown>;
 const n = (value: unknown) => Number(value);
+// prettier-ignore
 const eqMoney = (value: unknown, expected: string) =>
   toMoney(String(value ?? 0)).eq(expected);
 
+// prettier-ignore
 function must(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error("HMD_ERR" + "_" + message);
 }
 
+// prettier-ignore
 async function inspect(tx: DbTransaction): Promise<{ corrected: boolean; payable: string }> {
   const [company] = (await tx.execute(sql`
     SELECT id, parent_company_id, company_type FROM companies WHERE id=8
@@ -157,6 +163,7 @@ async function inspect(tx: DbTransaction): Promise<{ corrected: boolean; payable
   return { corrected, payable };
 }
 
+// prettier-ignore
 export async function runApprovedHmdEurogulfFreightRepair(): Promise<void> {
   if (process.env[ENV] !== ENABLE) return;
   must(process.env.RENDER_SERVICE_ID === SERVICE, "WRONG_RENDER_SERVICE");
