@@ -12,6 +12,7 @@ import {
   factoryBales,
   customerProformas,
   customerProformaLines,
+  customerOrderExpectedLines,
   customerOrders,
   customerOrderLines,
   customerOrderBales,
@@ -242,9 +243,41 @@ export function registerOrderCrudRoutes(app: Express) {
           .select({ id: customerProformas.id })
           .from(customerProformas)
           .where(and(eq(customerProformas.id, orderProformaId), eq(customerProformas.companyId, companyId)));
-        const proformaLines = continuationProforma
+        // Continuations have a loading-specific remaining plan; prefer it
+        // over the full reusable proforma when calculating follow-on quantities.
+        const currentExpectedLines = continuationProforma
+          ? await db
+              .select()
+              .from(customerOrderExpectedLines)
+              .where(
+                and(
+                  eq(customerOrderExpectedLines.companyId, companyId),
+                  eq(customerOrderExpectedLines.orderId, id),
+                  eq(customerOrderExpectedLines.proformaId, orderProformaId)
+                )
+              )
+          : [];
+        const originalProformaLines = continuationProforma
           ? await db.select().from(customerProformaLines).where(eq(customerProformaLines.proformaId, orderProformaId))
           : [];
+        const proformaLines = currentExpectedLines.length
+          ? currentExpectedLines.map((line) => {
+              const source =
+                originalProformaLines.find((original) => original.id === line.proformaLineId) ||
+                originalProformaLines.find(
+                  (original) => original.articleCode.trim().toLowerCase() === line.articleCode.trim().toLowerCase()
+                );
+              return {
+                id: line.id,
+                articleCode: line.articleCode,
+                productName: line.productName || source?.productName || line.articleCode,
+                quantity: line.expectedQty,
+                pricePerBale: source?.pricePerBale ?? "0",
+                pricingMode: source?.pricingMode ?? "per_bale",
+                pricePerKg: source?.pricePerKg ?? null,
+              };
+            })
+          : originalProformaLines;
         const capacity = continuationProforma
           ? await getProformaCapacitySnapshot(db, {
               companyId,

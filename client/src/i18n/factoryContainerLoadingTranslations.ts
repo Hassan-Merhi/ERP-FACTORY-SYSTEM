@@ -181,6 +181,17 @@ const factoryContainerLoadingTranslations = {
   loadingDate: { en: "Loading Date", ar: "تاريخ التحميل", fr: "Date de chargement" },
   cancel: { en: "Cancel", ar: "إلغاء", fr: "Annuler" },
   confirmFinalize: { en: "Confirm Finalize", ar: "تأكيد الإنهاء", fr: "Confirmer la finalisation" },
+  finalizeOnly: { en: "Finalize Only", ar: "إنهاء فقط", fr: "Finaliser uniquement" },
+  finalizeOpenNextLoading: {
+    en: "Finalize & Open New Loading",
+    ar: "إنهاء وفتح تحميل جديد",
+    fr: "Finaliser et ouvrir un nouveau chargement",
+  },
+  remainingOnlyNextLoadingHint: {
+    en: "The next loading will show only the remaining quantities from this loading. Already loaded bales stay in this container.",
+    ar: "سيعرض التحميل التالي الكميات المتبقية فقط من هذا التحميل. تبقى البالات المحمّلة بالفعل في هذه الحاوية.",
+    fr: "Le prochain chargement affichera uniquement les quantités restantes de ce chargement. Les balles déjà chargées restent dans ce conteneur.",
+  },
   finalizing: { en: "Finalizing...", ar: "جارٍ الإنهاء...", fr: "Finalisation..." },
   proformaAlreadyLoading: {
     en: "Proforma Already Being Loaded",

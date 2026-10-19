@@ -257,12 +257,37 @@ export async function getProformaCapacitySnapshot(
   const proforma = proformaRows[0];
   if (!proforma) return null;
 
+  // An ordinary loading uses the full reusable proforma. A continuation has
+  // a separate, persisted remaining-only plan in customer_order_expected_lines.
+  // Prefer that plan for the current order so its progress and scanner capacity
+  // never reset to the original quantities (and sibling orders stay isolated).
+  // A single UNION ALL query also preserves the existing 3-query read contract.
   const lineRows = resultRows<ProformaLineRow>(
-    await executor.execute(sql`
-      SELECT article_code AS "articleCode", quantity
-      FROM customer_proforma_lines
-      WHERE proforma_id = ${options.proformaId}
-    `)
+    await executor.execute(
+      options.currentOrderId == null
+        ? sql`
+            SELECT article_code AS "articleCode", quantity
+            FROM customer_proforma_lines
+            WHERE proforma_id = ${options.proformaId}
+          `
+        : sql`
+            SELECT article_code AS "articleCode", expected_qty AS quantity
+            FROM customer_order_expected_lines
+            WHERE company_id = ${options.companyId}
+              AND order_id = ${options.currentOrderId}
+              AND proforma_id = ${options.proformaId}
+            UNION ALL
+            SELECT article_code AS "articleCode", quantity
+            FROM customer_proforma_lines
+            WHERE proforma_id = ${options.proformaId}
+              AND NOT EXISTS (
+                SELECT 1 FROM customer_order_expected_lines
+                WHERE company_id = ${options.companyId}
+                  AND order_id = ${options.currentOrderId}
+                  AND proforma_id = ${options.proformaId}
+              )
+          `
+    )
   );
 
   // Live loading capacity is deliberately per-loading. Push that scope into
