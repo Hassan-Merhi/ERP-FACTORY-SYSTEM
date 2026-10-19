@@ -1,6 +1,6 @@
 # FX Agent USD/EUR Wallets — Draft Feature
 
-**Status: UNMERGED / NOT DEPLOYED.** Do not enable on production or run the migration before review, type checks, integration tests, and owner approval.
+**Status: code merged, feature off in production.** The two tables are declared in `shared/schema/runtime/fxAgentWallets.ts` (so test databases created with `drizzle-kit push` have them), but nothing creates them at startup and production never runs a push: the feature stays disabled (`setupRequired: true`) until `migrations/20261019_factory_fx_agent_wallets.sql` is reviewed and applied by hand with owner approval.
 
 ## Owner case: Ramadan FX
 An agent holds USD on the company's behalf, then agrees to hold EUR at an agreed historic conversion rate (e.g. USD 1.1115 per EUR). His native balance must remain EUR. Factory Net Position values outstanding EUR at the manually configured EUR-to-USD Settings rate **effective on or before the report as-of date**. A supplier payment can use a *different, explicitly entered* USD-per-EUR rate, post USD to the supplier, deduct the native EUR held by the agent, and recognize realized FX gain/loss.
@@ -29,13 +29,16 @@ An agent holds USD on the company's behalf, then agrees to hold EUR at an agreed
 - Pay a supplier EUR 1,000 at USD/EUR 1.14: supplier USD payment 1,140, agent EUR native 7,996.851102, realized FX gain USD 28.50 at historical booked basis ~USD 1,111.50.
 - Change Settings to 1.20: EUR balance is untouched; USD report value updates independently.
 
-## Required pre-merge verification / remaining follow-ups
-- Run `npm run check` and focused Vitest, then wider accounting and Net Position regressions.
-- Test company isolation, authorization, double-submit, manual-ledger drift, rate-unavailable historical snapshots, accounting journal balance, voucher retirement/reversal lifecycle, and supplier statement reconciliation.
+## Verified
+- `tests/factory-fx-agent-wallet-routes.test.ts` runs the whole lifecycle against PostgreSQL: activation (explicit USD confirmation, one wallet per account), USD->EUR conversion at 1.1115, a partial EUR settlement at 1.16 (balanced voucher, USD 4,640.00 paid, realized gain USD 194.00), the final settlement at 1.10 (realized loss USD 57.46, agent ledger back to zero within a cent), idempotent replay and key reuse, overdraw and self-payment refusals, the generic voucher edit/retirement lock, and the ledger-drift guard.
+- The Factory backend access boundary owns `/api/factory/fx-agent-wallets*` through Net Position Details, like `/api/factory/net-position`.
+- Net Position figures are unchanged when no wallet is active (the report characterization hash without the two new fields equals the previous pin).
+
+## Remaining follow-ups
+- Test company isolation, rate-unavailable historical snapshots and supplier statement reconciliation for a `factorySupplier` beneficiary.
+- Add a dedicated atomic wallet + journal reversal; until then ordinary edit, reversal and retirement of a settlement voucher are refused.
 - Enforce wallet-awareness in *ordinary Journal Voucher* entry/edit and voucher retirement flows, rather than relying only on discrepancy detection. The current draft exposes the FX payment workflow in Factory Net Position; the existing generic journal editor is **not yet wallet-aware**.
 - Test opening-balance sources with unresolved legacy currency metadata before production activation.
 - Test and specify formal unrealized revaluation accounting policy; Net Position display translation must not silently post P&L.
 - Integrate wallet-native EUR balances in the general Accounts/Agent Ledger pages and exported statements, not just Factory Net Position.
 - Check migration registry/startup policy and get an explicit migration deployment plan. No production SQL has been run here.
-
-**Owner instruction:** Claude to repair failing checks and review all open accounting/security items before merging. Keep this PR a draft until then.

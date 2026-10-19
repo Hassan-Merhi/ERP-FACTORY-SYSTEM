@@ -42,6 +42,8 @@ describe("customer order totals", () => {
           where: async () => void writes.push([getTableName(table), row]),
         }),
       }),
+      // The Loading Started daybook amount sync (#2381).
+      execute: async () => ({ rows: [] }),
     };
 
     await recalculateOrderTotals(tx as never, 77);
