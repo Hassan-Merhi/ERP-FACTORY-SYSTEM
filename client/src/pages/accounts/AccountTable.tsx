@@ -22,6 +22,7 @@ interface AccountTableProps {
   onSwap?: (key: string, targetKey: string) => void;
   onMove?: (key: string, targetKey: string) => void;
   isSavingOrder?: boolean;
+  searchActive?: boolean;
 }
 
 export function AccountTable({
@@ -38,6 +39,7 @@ export function AccountTable({
   onSwap,
   onMove,
   isSavingOrder = false,
+  searchActive = false,
 }: AccountTableProps) {
   const { formatHistoricalBaseAmount } = useCurrencyContext();
 
@@ -80,6 +82,7 @@ export function AccountTable({
     if (!displayLayout?.nodes?.length) return filteredAccounts;
     const groups = displayLayout.nodes.filter(n => n.type === "group");
     const ledgerNodes = displayLayout.nodes.filter(n => n.type === "ledger");
+    const legacyGroupKeys = new Set(groups.map(n => n.key));
     const groupIdByKey = new Map(groups.map((n, i) => [n.key, -(i + 1)]));
     const accountByKey = new Map(filteredAccounts.filter(a => a.type === "ledger").map(a => [`ledger:${a.accountId}`, a]));
     const groupedLedger = new Set<string>();
@@ -111,7 +114,10 @@ export function AccountTable({
     }
     const used = new Set(result.filter(a => a.type !== "displayGroup").map(a => a.id));
     // Untracked accounts and all non-ledger types retain their existing list order.
-    result.push(...filteredAccounts.filter(a => !used.has(a.id)));
+    result.push(...filteredAccounts.filter(a =>
+      !used.has(a.id) && !(a.subType === "Group" &&
+      legacyGroupKeys.has(`group:legacy-${a.accountId}`) && Math.abs(a.balance) < 0.001)
+    ));
     return result;
   }, [filteredAccounts, displayLayout]);
 
@@ -165,7 +171,7 @@ export function AccountTable({
             {parents.map((account) => {
               const kids = childMap.get(account.accountId) || [];
               const hasKids = kids.length > 0;
-              const isExpanded = expandedParents.has(account.id);
+              const isExpanded = searchActive || expandedParents.has(account.id);
               const isGroup = account.subType === "Group" || hasKids;
               const balanceSide = account.balanceSide || (account.balance >= 0 ? "Dr" : "Cr");
 
