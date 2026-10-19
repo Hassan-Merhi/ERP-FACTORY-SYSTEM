@@ -47,21 +47,21 @@ function resolveManagedExportPath(filePath: string, allowMissing = false): strin
   const isBridge =
     directory === bridgeRoot &&
     /^\d{13}-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.(xlsx|attachment)$/i.test(filename);
-  if (!isArchive && !isBridge) throw new Error("INVALID_EXPORT_ATTACHMENT_PATH");
+  if (!isArchive && !isBridge) throw new Error("EXPORT_PATH_ERR");
 
   const trustedRoot = fs.realpathSync.native(isArchive ? archiveRoot : bridgeRoot);
   if (fs.realpathSync.native(directory) !== trustedRoot) {
-    throw new Error("INVALID_EXPORT_ATTACHMENT_PATH");
+    throw new Error("EXPORT_PATH_ERR");
   }
   const safePath = path.join(trustedRoot, filename);
   try {
     const metadata = fs.lstatSync(safePath);
     // Do not follow symbolic links or accept hard-linked files as export artifacts.
     if (!metadata.isFile() || metadata.isSymbolicLink() || metadata.nlink !== 1) {
-      throw new Error("INVALID_EXPORT_ATTACHMENT_PATH");
+      throw new Error("EXPORT_PATH_ERR");
     }
     if (path.dirname(fs.realpathSync.native(safePath)) !== trustedRoot) {
-      throw new Error("INVALID_EXPORT_ATTACHMENT_PATH");
+      throw new Error("EXPORT_PATH_ERR");
     }
   } catch (error: unknown) {
     if (!allowMissing || (error as NodeJS.ErrnoException)?.code !== "ENOENT") throw error;
