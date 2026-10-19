@@ -85,7 +85,7 @@ afterAll(async () => {
 }, 120_000);
 
 describe("FX agent EUR wallet lifecycle", () => {
-  it("activates only with explicit USD confirmation and captures the USD book balance", async () => {
+  it("POST /api/factory/fx-agent-wallets activates only with explicit USD confirmation and captures the USD book balance", async () => {
     const unconfirmed = await agent.post("/api/factory/fx-agent-wallets").send({ ledgerAccountId: agentAccountId });
     expect(unconfirmed.status).toBe(400);
 
@@ -102,7 +102,7 @@ describe("FX agent EUR wallet lifecycle", () => {
     expect(again.status).toBe(400);
   });
 
-  it("converts USD to EUR at the negotiated rate without posting a journal", async () => {
+  it("POST /api/factory/fx-agent-wallets/:id/convert converts USD to EUR at the negotiated rate without posting a journal", async () => {
     const body = { usdAmount: "10000", rateUsdPerEur: "1.1115", requestKey: `${PREFIX}-convert-1` };
     const converted = await agent.post(`/api/factory/fx-agent-wallets/${walletId}/convert`).send(body);
     expect(converted.status, converted.text).toBe(201);
@@ -125,7 +125,7 @@ describe("FX agent EUR wallet lifecycle", () => {
 
   let partialVoucherId: number;
 
-  it("posts a balanced partial settlement with the realized FX gain", async () => {
+  it("POST /api/factory/fx-agent-wallets/:id/settle posts a balanced partial settlement with the realized FX gain", async () => {
     const body = {
       eurAmount: "4000",
       rateUsdPerEur: "1.16",

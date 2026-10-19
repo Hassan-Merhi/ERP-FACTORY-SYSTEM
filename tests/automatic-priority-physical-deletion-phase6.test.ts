@@ -469,7 +469,7 @@ describe("Phase 6 review fixes: every deletion path, live links only", () => {
     expect(await inventoryQty()).toBe(before - 1);
   }, 60000);
 
-  it("supervised bale restoration reverses one physical debit, preserves deletion evidence and rejects retries", async () => {
+  it("POST /api/factory/bales/:id/restore-to-stock reverses one physical debit, preserves deletion evidence and rejects retries", async () => {
     const [bale] = await newStockBales(1);
     const originalQty = await inventoryQty();
     const removal = await agent.post(API).send({
