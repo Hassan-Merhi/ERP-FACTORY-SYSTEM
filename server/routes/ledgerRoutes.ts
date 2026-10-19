@@ -2,6 +2,7 @@ import type { Express } from "express";
 import { getErrorMessage } from "../lib/httpHandlers";
 import { requireAuth } from "../auth";
 import { getLedgerParentGroupOptions } from "../services/ledgerAccountOptionsService";
+import { registerAccountDisplayLayoutRoutes } from "./accountDisplayLayoutRoutes";
 import { registerLedgerAccountPaginationRoutes } from "./ledgerAccountPaginationRoutes";
 import { registerAccountTransactionPaginationRoutes } from "./account-transaction-pagination";
 import { registerLedgerRoutes as registerLegacyLedgerRoutes } from "./ledger";
@@ -19,6 +20,7 @@ export function registerLedgerRoutes(app: Express) {
   // editor here so existing URLs remain compatible.
   app.use(normalizeAccountOpeningBalance);
   registerGoldenCoastSystemAccountPresentation(app);
+  registerAccountDisplayLayoutRoutes(app);
   registerHistoricalCurrencyGuardRoutes(app);
   registerHistoricalCurrencyRepairCenterRoutes(app);
   registerAccountCurrencyRoutes(app);
