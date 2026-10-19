@@ -895,4 +895,9 @@ export const phase3RemainingTranslationsPart28: readonly Phase3SharedUiEntry[] =
     ar: "رصيد الحساب لا يطابق محفظة الصرف؛ التسويات محظورة حتى إجراء المطابقة.",
     fr: "Écart entre le compte et le portefeuille de change ; les règlements sont bloqués jusqu'au rapprochement.",
   },
+  {
+    en: "native EUR balance",
+    ar: "الرصيد الأصلي باليورو",
+    fr: "solde natif en EUR",
+  },
 ];
