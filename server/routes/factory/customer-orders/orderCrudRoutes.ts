@@ -755,12 +755,21 @@ export function registerOrderCrudRoutes(app: Express) {
       const orderId = parseId(req.params.id);
       if (orderId === null) return res.status(400).json({ message: "Invalid id" });
       const { containerNumber, shippingCompany, containerNotes, bookingInfo, destination } = req.body || {};
+      // Existing loading forms may submit an empty bookingInfo along with
+      // unrelated changes. Treat that as omitted for non-privileged staff;
+      // never let them change or clear the private stored value.
+      let requestedBookingInfo: unknown = bookingInfo;
       if (bookingInfo !== undefined && !canViewBookingInfo(req.session)) {
-        return res.status(403).json({ message: "Only Admin, Owner or Developer can edit booking info" });
+        if (bookingInfo === "" || bookingInfo === null) {
+          requestedBookingInfo = undefined;
+        } else {
+          return res.status(403).json({ message: "Only Admin, Owner or Developer can edit booking info" });
+        }
       }
 
       const normalizeText = (value: unknown, max: number, field: string): string | null | undefined => {
         if (value === undefined) return undefined;
+        if (value === null) return null;
         if (typeof value !== "string" || value.length > max) {
           throw new HttpError(400, `${field} must be text up to ${max} characters`);
         }
@@ -769,10 +778,10 @@ export function registerOrderCrudRoutes(app: Express) {
       const normalizedContainer = normalizeText(containerNumber, 100, "Container");
       const normalizedShipping = normalizeText(shippingCompany, 200, "Shipping company");
       const normalizedNotes = normalizeText(containerNotes, 10000, "Notes");
-      if (bookingInfo !== undefined && !isValidBookingInfo(bookingInfo)) {
+      if (requestedBookingInfo !== undefined && !isValidBookingInfo(requestedBookingInfo)) {
         return res.status(400).json({ message: "Booking info must be text up to 2000 characters" });
       }
-      const normalizedBooking = normalizeText(bookingInfo, 2000, "Booking info");
+      const normalizedBooking = normalizeText(requestedBookingInfo, 2000, "Booking info");
       const normalizedDestination = normalizeText(destination, 500, "Destination");
       const updateData: Partial<typeof customerOrders.$inferInsert> = {};
       if (normalizedContainer !== undefined) updateData.containerNumber = normalizedContainer;
