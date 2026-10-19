@@ -260,7 +260,7 @@ export default function DisplayAccountGroups() {
   };
 
   return (
-    <div className="p-4 md:p-6 space-y-4">
+    <div data-testid="account-display-groups-root" className="p-4 md:p-6 space-y-4 min-w-0 w-full">
       <div>
         <h2 className="text-lg font-semibold">Display-only Account Groups</h2>
         <p className="text-sm text-muted-foreground">
