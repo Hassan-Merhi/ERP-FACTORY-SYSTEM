@@ -134,7 +134,38 @@ export function registerOrderCrudRoutes(app: Express) {
           )`,
           totalQtyBales: customerOrders.totalQtyBales,
           totalWeightKg: sql<string>`COALESCE((SELECT SUM(cob.weight) FROM customer_order_bales cob WHERE cob.order_id = ${customerOrders.id}), 0)`,
-          proformaExpectedBales: sql<string>`COALESCE((SELECT SUM(quantity) FROM customer_proforma_lines WHERE proforma_id = ${customerOrders.proformaIdUsed}), 0)`,
+          // A continuation uses its own frozen expected quantities. If the
+          // order has no continuation plan, retain the original reusable proforma.
+          proformaExpectedBales: sql<string>`COALESCE(
+            (SELECT SUM(expected_qty)
+             FROM customer_order_expected_lines
+             WHERE company_id = ${customerOrders.companyId}
+               AND order_id = ${customerOrders.id}
+               AND proforma_id = ${customerOrders.proformaIdUsed}),
+            (SELECT SUM(quantity)
+             FROM customer_proforma_lines
+             WHERE proforma_id = ${customerOrders.proformaIdUsed}),
+            0
+          )`,
+          // For continuation plans, compute remaining PER ARTICLE. Subtracting
+          // total bales alone can hide shortages when another article is over-loaded.
+          continuationRemainingBales: sql<string | null>`(
+            SELECT SUM(GREATEST(plan.expected - COALESCE(scanned.loaded, 0), 0))::text
+            FROM (
+              SELECT LOWER(TRIM(article_code)) AS article, SUM(expected_qty)::int AS expected
+              FROM customer_order_expected_lines
+              WHERE company_id = ${customerOrders.companyId}
+                AND order_id = ${customerOrders.id}
+                AND proforma_id = ${customerOrders.proformaIdUsed}
+              GROUP BY LOWER(TRIM(article_code))
+            ) plan
+            LEFT JOIN (
+              SELECT LOWER(TRIM(article_code)) AS article, COUNT(DISTINCT bale_id)::int AS loaded
+              FROM customer_order_bales
+              WHERE order_id = ${customerOrders.id}
+              GROUP BY LOWER(TRIM(article_code))
+            ) scanned ON scanned.article = plan.article
+          )`,
           loadedNotInProformaBales: sql<string>`CASE WHEN ${customerOrders.proformaIdUsed} IS NULL THEN 0 ELSE COALESCE((SELECT COUNT(*)::int FROM customer_order_bales cob2 WHERE cob2.order_id = ${customerOrders.id} AND (cob2.article_code IS NULL OR cob2.article_code NOT IN (SELECT article_code FROM customer_proforma_lines WHERE proforma_id = ${customerOrders.proformaIdUsed}))), 0) END`,
           containerNumber: customerOrders.containerNumber,
           shippingCompany: customerOrders.shippingCompany,
