@@ -327,7 +327,7 @@ export function StockItemsView({ stockItems }: { stockItems: StockItemsModel }) 
                   <th className="w-10 px-3">
                     <Checkbox
                       checked={allPageSelected}
-                      onCheckedChange={handleSelectAll}
+                      onCheckedChange={(checked) => handleSelectAll(checked === true)}
                       data-testid="checkbox-select-all"
                     />
                   </th>
@@ -477,7 +477,7 @@ export function StockItemsView({ stockItems }: { stockItems: StockItemsModel }) 
             <div className="flex items-center gap-2 pb-2 border-b">
               <Checkbox
                 checked={allPageSelected}
-                onCheckedChange={handleSelectAll}
+                onCheckedChange={(checked) => handleSelectAll(checked === true)}
                 data-testid="checkbox-select-all-mobile"
               />
               <span className="text-sm text-muted-foreground">Select All</span>
