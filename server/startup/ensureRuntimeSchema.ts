@@ -614,6 +614,28 @@ export async function ensureRuntimeSchema(pool: Pool): Promise<void> {
     });
   }
 
+  // Display-only grouping is a presentation feature: the table is separate
+  // from the financial ledger and must exist even when bulk migrations are off.
+  // Every statement is idempotent and creates no vouchers or journal entries.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS account_display_layout (
+      company_id INTEGER NOT NULL,
+      node_key VARCHAR(100) NOT NULL,
+      node_type VARCHAR(12) NOT NULL CHECK (node_type IN ('group', 'ledger')),
+      name TEXT,
+      parent_key VARCHAR(100),
+      sort_order INTEGER NOT NULL DEFAULT 0,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (company_id, node_key),
+      CONSTRAINT account_display_layout_shape CHECK (
+        (node_type = 'group' AND parent_key IS NULL AND length(trim(coalesce(name, ''))) > 0)
+        OR (node_type = 'ledger' AND name IS NULL)
+      )
+    );
+    CREATE INDEX IF NOT EXISTS account_display_layout_company_parent_sort_idx
+      ON account_display_layout(company_id, parent_key, sort_order);
+  `);
+
   // Scheduled WhatsApp claims are a correctness boundary: production disables
   // the bulk startup migration pass, so these tables must be guaranteed by the
   // always-on pre-listen schema guard.
