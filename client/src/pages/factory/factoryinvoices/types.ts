@@ -28,6 +28,7 @@ export interface CustomerOrder {
   totalQtyBales: number;
   totalWeightKg: string;
   proformaExpectedBales: string;
+  continuationRemainingBales?: string | null;
   loadedNotInProformaBales: string;
   customerName: string;
   containerNumber?: string | null;
