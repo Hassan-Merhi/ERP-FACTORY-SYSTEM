@@ -828,6 +828,7 @@ export default function NetProfitDetails() {
           accounts={data?.onUs.accounts || []}
           formatAmount={formatAmount}
           displayLayout={displayLayout}
+          orderActions={orderActions}
         />
       </div>
 
