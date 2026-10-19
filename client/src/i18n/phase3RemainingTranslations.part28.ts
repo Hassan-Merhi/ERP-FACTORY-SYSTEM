@@ -900,4 +900,204 @@ export const phase3RemainingTranslationsPart28: readonly Phase3SharedUiEntry[] =
     ar: "الرصيد الأصلي باليورو",
     fr: "solde natif en EUR",
   },
+  {
+    en: "Cannot load native FX agent balance",
+    ar: "تعذّر تحميل الرصيد الأصلي لوكيل الصرف",
+    fr: "Impossible de charger le solde natif de l’agent de change",
+  },
+  {
+    en: "FX wallet SQL migration required",
+    ar: "يلزم تنفيذ ترحيل SQL لمحفظة الصرف",
+    fr: "La migration SQL du portefeuille de change est requise",
+  },
+  {
+    en: "Positive amount required (max 6 decimals)",
+    ar: "المبلغ الموجب مطلوب (بحد أقصى 6 منازل عشرية)",
+    fr: "Un montant positif est requis (6 décimales maximum)",
+  },
+  {
+    en: "Enter a positive USD-per-EUR rate",
+    ar: "أدخل سعر دولار موجب لكل يورو",
+    fr: "Saisissez un taux USD par EUR positif",
+  },
+  {
+    en: "Date must not be in the future",
+    ar: "لا يجوز أن يكون التاريخ في المستقبل",
+    fr: "La date ne doit pas être future",
+  },
+  {
+    en: "Invalid ledger account",
+    ar: "حساب دفتر أستاذ غير صالح",
+    fr: "Compte du grand livre invalide",
+  },
+  {
+    en: "Confirm this ledger currently represents USD funds held by the FX agent",
+    ar: "أكّد أن هذا الحساب يمثل حالياً أموالاً بالدولار لدى وكيل الصرف",
+    fr: "Confirmez que ce compte représente actuellement des USD détenus par l’agent",
+  },
+  {
+    en: "Account already linked to FX wallet",
+    ar: "الحساب مرتبط بالفعل بمحفظة صرف",
+    fr: "Ce compte est déjà lié à un portefeuille de change",
+  },
+  {
+    en: "A linked customer or bank account cannot be made an FX agent",
+    ar: "لا يمكن تحويل حساب عميل أو بنك مرتبط إلى حساب وكيل صرف",
+    fr: "Un compte client ou bancaire lié ne peut pas devenir un compte d’agent de change",
+  },
+  {
+    en: "Existing foreign-currency voucher history needs manual reconciliation before activation",
+    ar: "يجب مطابقة تاريخ السندات بالعملات الأجنبية يدوياً قبل التفعيل",
+    fr: "L’historique des pièces en devises étrangères doit être rapproché manuellement avant activation",
+  },
+  {
+    en: "FX agent must hold a positive (debit) USD asset balance",
+    ar: "يجب أن يحتفظ وكيل الصرف برصيد أصل مدين موجب بالدولار",
+    fr: "L’agent de change doit détenir un solde d’actif débiteur USD positif",
+  },
+  {
+    en: "Invalid company, wallet or idempotency key",
+    ar: "الشركة أو المحفظة أو مفتاح منع التكرار غير صالح",
+    fr: "Société, portefeuille ou clé d’idempotence invalide",
+  },
+  {
+    en: "FX agent wallet not found",
+    ar: "لم يتم العثور على محفظة وكيل الصرف",
+    fr: "Portefeuille de l’agent de change introuvable",
+  },
+  {
+    en: "This request key already belongs to a different conversion",
+    ar: "مفتاح الطلب مستخدم بالفعل لتحويل آخر",
+    fr: "Cette clé de requête appartient déjà à une autre conversion",
+  },
+  {
+    en: "FX wallet inactive on selected date",
+    ar: "محفظة الصرف غير نشطة في التاريخ المحدد",
+    fr: "Le portefeuille de change est inactif à la date choisie",
+  },
+  {
+    en: "Manual ledger changes detected; reconcile the FX agent before conversion",
+    ar: "تم اكتشاف تعديلات يدوية في دفتر الأستاذ؛ طابق حساب وكيل الصرف قبل التحويل",
+    fr: "Des modifications manuelles du grand livre ont été détectées ; rapprochez l’agent avant conversion",
+  },
+  {
+    en: "Cannot insert conversion before a later FX operation",
+    ar: "لا يمكن إدخال تحويل بتاريخ يسبق عملية صرف أحدث",
+    fr: "Impossible d’insérer une conversion avant une opération de change ultérieure",
+  },
+  {
+    en: "Insufficient USD in FX wallet",
+    ar: "رصيد الدولار في محفظة الصرف غير كافٍ",
+    fr: "Solde USD insuffisant dans le portefeuille de change",
+  },
+  {
+    en: "Invalid FX settlement parameters",
+    ar: "معلمات تسوية الصرف غير صالحة",
+    fr: "Paramètres du règlement de change invalides",
+  },
+  {
+    en: "FX agent EUR settlement to USD beneficiary",
+    ar: "تسوية يورو من وكيل الصرف إلى مستفيد بالدولار",
+    fr: "Règlement EUR de l’agent de change vers un bénéficiaire USD",
+  },
+  {
+    en: "Idempotency key already used for another operation",
+    ar: "مفتاح منع التكرار مستخدم بالفعل لعملية أخرى",
+    fr: "Clé d’idempotence déjà utilisée pour une autre opération",
+  },
+  {
+    en: "FX wallet not active on this date",
+    ar: "محفظة الصرف غير نشطة في هذا التاريخ",
+    fr: "Le portefeuille de change n’est pas actif à cette date",
+  },
+  {
+    en: "Cannot pay the source account from its own EUR wallet",
+    ar: "لا يمكن دفع الحساب المصدر من محفظة اليورو الخاصة به",
+    fr: "Impossible de payer le compte source depuis son propre portefeuille EUR",
+  },
+  {
+    en: "Ledger changed outside FX wallet. Reconcile before paying",
+    ar: "تغير دفتر الأستاذ خارج محفظة الصرف؛ يجب المطابقة قبل الدفع",
+    fr: "Le grand livre a changé hors du portefeuille de change ; effectuez un rapprochement avant paiement",
+  },
+  {
+    en: "Cannot backdate before a more recent FX operation",
+    ar: "لا يمكن تأريخ العملية قبل عملية صرف أحدث",
+    fr: "Impossible d’antidater avant une opération de change plus récente",
+  },
+  {
+    en: "USD beneficiary is not active in this company",
+    ar: "المستفيد بالدولار غير نشط في هذه الشركة",
+    fr: "Le bénéficiaire USD n’est pas actif dans cette société",
+  },
+  {
+    en: "FX revaluation account is unavailable",
+    ar: "حساب إعادة تقييم الصرف غير متاح",
+    fr: "Le compte de réévaluation de change est indisponible",
+  },
+  {
+    en: "FX agent ledger account is missing",
+    ar: "حساب دفتر أستاذ وكيل الصرف مفقود",
+    fr: "Le compte du grand livre de l’agent de change est introuvable",
+  },
+  {
+    en: "Negative wallet opening balance",
+    ar: "رصيد افتتاحي سالب للمحفظة",
+    fr: "Solde d’ouverture du portefeuille négatif",
+  },
+  {
+    en: "Invalid FX agent operation",
+    ar: "عملية وكيل صرف غير صالحة",
+    fr: "Opération de l’agent de change invalide",
+  },
+  {
+    en: "USD wallet has insufficient balance",
+    ar: "رصيد المحفظة بالدولار غير كافٍ",
+    fr: "Solde insuffisant du portefeuille USD",
+  },
+  {
+    en: "EUR wallet has insufficient balance",
+    ar: "رصيد المحفظة باليورو غير كافٍ",
+    fr: "Solde insuffisant du portefeuille EUR",
+  },
+  {
+    en: "Unallocated final EUR book basis",
+    ar: "أساس قيمة اليورو النهائي غير موزع بالكامل",
+    fr: "Base comptable EUR finale non entièrement affectée",
+  },
+  {
+    en: "Unsupported FX agent wallet event",
+    ar: "حدث محفظة وكيل الصرف غير مدعوم",
+    fr: "Événement de portefeuille de change non pris en charge",
+  },
+  {
+    en: "Conversion amount and rate must be positive",
+    ar: "يجب أن يكون مبلغ التحويل والسعر موجبين",
+    fr: "Le montant et le taux de conversion doivent être positifs",
+  },
+  {
+    en: "EUR amount below supported precision",
+    ar: "مبلغ اليورو أصغر من الدقة المسموح بها",
+    fr: "Montant EUR inférieur à la précision prise en charge",
+  },
+  {
+    en: "Invalid EUR settlement or insufficient funds",
+    ar: "تسوية اليورو غير صالحة أو الرصيد غير كافٍ",
+    fr: "Règlement EUR invalide ou fonds insuffisants",
+  },
+  {
+    en: "USD payout below supported precision",
+    ar: "مبلغ الدفع بالدولار أصغر من الدقة المسموح بها",
+    fr: "Paiement USD inférieur à la précision prise en charge",
+  },
+  {
+    en: "Current EUR rate is missing",
+    ar: "سعر اليورو الحالي غير موجود",
+    fr: "Le taux EUR actuel est manquant",
+  },
+  {
+    en: "Known non-USD opening balance cannot be activated as a USD FX wallet",
+    ar: "لا يمكن تفعيل رصيد افتتاحي معروف بعملة غير الدولار كمحفظة صرف بالدولار",
+    fr: "Un solde d’ouverture connu dans une devise autre que l’USD ne peut pas être activé comme portefeuille USD",
+  },
 ];
