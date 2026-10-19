@@ -562,7 +562,9 @@ export function registerBalesCrudRoutes(app: Express) {
           const [physicalDeletion] = await tx
             .select()
             .from(factoryPhysicalBaleDeletions)
-            .where(and(eq(factoryPhysicalBaleDeletions.companyId, companyId), eq(factoryPhysicalBaleDeletions.baleId, id)))
+            .where(
+              and(eq(factoryPhysicalBaleDeletions.companyId, companyId), eq(factoryPhysicalBaleDeletions.baleId, id))
+            )
             .limit(1);
           if (!physicalDeletion) {
             // The existing PATCH /status endpoint handles historic status-only
@@ -651,7 +653,9 @@ export function registerBalesCrudRoutes(app: Express) {
                 .where(and(eq(factoryBaleProducts.companyId, companyId), eq(factoryBaleProducts.id, bale.productId)))
                 .limit(1)
             : [];
-          const currentCode = bale.productId ? product?.articleCode || product?.code : bale.articleCode || bale.baleCode;
+          const currentCode = bale.productId
+            ? product?.articleCode || product?.code
+            : bale.articleCode || bale.baleCode;
           const [stockItem] = await tx
             .select({ code: stockItems.code })
             .from(stockItems)
@@ -693,7 +697,9 @@ export function registerBalesCrudRoutes(app: Express) {
           const [restored] = await tx
             .update(factoryBales)
             .set({ status: "IN_STOCK", deletedAt: null, updatedAt: new Date() })
-            .where(and(eq(factoryBales.id, id), eq(factoryBales.companyId, companyId), eq(factoryBales.status, "DELETED")))
+            .where(
+              and(eq(factoryBales.id, id), eq(factoryBales.companyId, companyId), eq(factoryBales.status, "DELETED"))
+            )
             .returning({ id: factoryBales.id, status: factoryBales.status });
           if (!restored) throw new Error("Bale status changed while restoring; transaction cancelled");
 
