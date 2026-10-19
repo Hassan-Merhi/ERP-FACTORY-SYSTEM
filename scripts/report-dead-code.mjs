@@ -28,6 +28,7 @@ import path from "node:path";
 import { execSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import ts from "typescript";
+import { countStandaloneIdentifierOccurrences } from "./lib/countStandaloneIdentifierOccurrences.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 process.chdir(root);
@@ -207,7 +208,7 @@ for (const file of codeFiles.filter((f) => sourceFile(f) && /\.(ts|tsx)$/.test(f
         : [];
     for (const name of names) {
       if (imported.has(name)) continue;
-      const local = (text.match(new RegExp(`(?<![\\w$])${name.replace(/\$/g, "\\$")}(?![\\w$])`, "g")) ?? []).length;
+      const local = countStandaloneIdentifierOccurrences(text, name);
       unusedExports.push({ file, name, usedLocally: local > 1 });
     }
   }
