@@ -632,12 +632,6 @@ export default function Daybook({ user }: { user?: DaybookUser | null } = {}) {
         </Button>
       </PageHeader>
 
-      {routineAccountingViewFiltered && (
-        <p role="note" className="rounded-md border border-border bg-muted/30 p-3 text-sm text-muted-foreground">
-          Operational view excludes a correction journal. Official ledger statements, financial reports and audit history retain every posted entry.
-        </p>
-      )}
-
       {/* Tab selector: Transactions / Edits & Activity */}
       <Tabs
         value={activeDaybookTab}
