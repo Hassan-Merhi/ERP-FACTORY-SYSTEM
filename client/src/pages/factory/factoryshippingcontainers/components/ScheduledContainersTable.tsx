@@ -390,8 +390,6 @@ export function ScheduledContainersTable() {
           </div>
         )}
       </div>
-
-
     </div>
   );
 }
