@@ -47,6 +47,24 @@ describe("getRemainingBales / getOverloadedBales", () => {
     expect(getRemainingBales({ proformaExpectedBales: "20", totalQtyBales: 25 })).toBe(0);
   });
 
+  it("uses remaining-only continuation counts even if another article was overloaded", () => {
+    expect(getRemainingBales({
+      proformaExpectedBales: "179",
+      totalQtyBales: 0,
+      continuationRemainingBales: "179",
+    })).toBe(179);
+    expect(getRemainingBales({
+      proformaExpectedBales: "179",
+      totalQtyBales: 30,
+      continuationRemainingBales: "160",
+    })).toBe(160);
+    expect(getRemainingBales({
+      proformaExpectedBales: "179",
+      totalQtyBales: 190,
+      continuationRemainingBales: "0",
+    })).toBe(0);
+  });
+
   it("has no expectation when the proforma target is absent or zero", () => {
     expect(getRemainingBales({ proformaExpectedBales: "0", totalQtyBales: 5 })).toBe(0);
     expect(getRemainingBales({ totalQtyBales: 5 })).toBe(0);
