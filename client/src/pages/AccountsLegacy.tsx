@@ -18,6 +18,7 @@ import { useErpPhoneLayout } from "@/hooks/use-erp-phone-layout";
 import { ErrorState } from "@/components/ui/page-state";
 import { AccountDialogs } from "./accounts/AccountDialogs";
 import { AccountTable } from "./accounts/AccountTable";
+import type { AccountDisplayLayout } from "./accounts/DisplayAccountGroups";
 import { AccountStatementView } from "./accounts/AccountStatementView";
 import { useAccountsLegacyModel } from "./accountslegacy/useAccountsLegacyModel";
 import { AccountSearchResults } from "./accountslegacy/AccountSearchResults";
@@ -34,6 +35,18 @@ import {
 export default function Accounts() {
   const model = useAccountsLegacyModel();
   const { selectedAccount, selectedAccountIsLedger } = model;
+  const { data: displayLayout } = useQuery<AccountDisplayLayout>({
+    queryKey: ["/api/accounts/display-layout", model.selectedCompany?.id],
+    queryFn: async () => {
+      const r = await fetch("/api/accounts/display-layout", { credentials: "include" });
+      if (!r.ok) throw new Error("Shared account display layout is unavailable");
+      return r.json();
+    },
+    enabled: !!model.selectedCompany,
+    staleTime: 30000,
+    refetchOnWindowFocus: false,
+    retry: false,
+  });
   const isPhone = useErpPhoneLayout();
   // An open statement owns the phone screen: its own header carries Back and the statement actions.
   const phoneStatementOpen = isPhone && !!selectedAccount;
@@ -249,6 +262,7 @@ export default function Accounts() {
                       hideBalances={model.hideBalances}
                       formatAmount={(amt) => model.formatAmountForAccount(amt, undefined)}
                       onEdit={model.openEditAccountDialog}
+                      displayLayout={displayLayout}
                     />
                   )}
                 </div>
