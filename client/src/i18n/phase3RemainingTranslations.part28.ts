@@ -1110,4 +1110,9 @@ export const phase3RemainingTranslationsPart28: readonly Phase3SharedUiEntry[] =
     ar: "تحذيرات مطابقة حسابات وكلاء الصرف",
     fr: "Avertissements de rapprochement des comptes d’agents de change",
   },
+  {
+    en: "Refresh Layout",
+    ar: "تحديث ترتيب الحسابات",
+    fr: "Actualiser la disposition des comptes",
+  },
 ];
