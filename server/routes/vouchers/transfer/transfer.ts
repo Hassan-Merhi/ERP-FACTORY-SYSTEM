@@ -21,6 +21,7 @@ import { MoneyDecimal, toMoney } from "../../../lib/money";
 import { adjustInventory } from "../../../inventoryHelper";
 import { createDatabaseStockMovementAdapter } from "../../../services/inventory/databaseStockMovementAdapter";
 import { postStockMovementTx } from "../../../services/inventory/stockMovementIntegrityService";
+import { stockTransferNarrationTx } from "../../../services/inventory/stockTransferNarration";
 import type { PgUpdateSetSource } from "drizzle-orm/pg-core";
 
 /** The columns a voucher edit may set, checked against the vouchers table. */
@@ -318,7 +319,14 @@ export function registerVoucherTransferOnlyRoutes(app: Express) {
           voucherUpdates.locationName = sourceLocation.name;
         }
         if (voucherDate !== undefined) voucherUpdates.voucherDate = voucherDate;
-        if (description !== undefined) voucherUpdates.description = description;
+        if (description !== undefined) {
+          voucherUpdates.description = description.trim() || await stockTransferNarrationTx(
+            tx,
+            existingVoucher.companyId,
+            [parsedSourceLocationId],
+            parseInt(destinationLocationId)
+          );
+        }
 
         const [updatedVoucher] = await tx.update(vouchers).set(voucherUpdates).where(eq(vouchers.id, id)).returning();
 
