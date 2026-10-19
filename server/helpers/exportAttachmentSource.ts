@@ -43,10 +43,10 @@ function resolveManagedExportPath(filePath: string, allowMissing = false): strin
   // Only the two server-created artifact families may be attached or removed.
   // Being anywhere beneath a writable /tmp directory is NOT sufficient.
   const isArchive =
-    directory === archiveRoot && /^erp-export-[a-zA-Z0-9_-]+-\\d{13}\\.zip$/.test(filename);
+    directory === archiveRoot && /^erp-export-[a-zA-Z0-9_-]+-\d{13}\.zip$/.test(filename);
   const isBridge =
     directory === bridgeRoot &&
-    /^\\d{13}-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\\.(xlsx|attachment)$/i.test(filename);
+    /^\d{13}-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.(xlsx|attachment)$/i.test(filename);
   if (!isArchive && !isBridge) throw new Error("Invalid export attachment path");
 
   const trustedRoot = fs.realpathSync.native(isArchive ? archiveRoot : bridgeRoot);
