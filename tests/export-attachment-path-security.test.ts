@@ -41,7 +41,7 @@ describe("managed export attachment path security", () => {
     const filePath = path.join(bridgeDir, "credentials.json");
     fs.writeFileSync(filePath, "private");
     expect(() => toNodemailerAttachment({ filePath, sizeBytes: 7 }, "x", "text/plain")).toThrow(
-      /Invalid export attachment path/
+      /INVALID_EXPORT_ATTACHMENT_PATH/
     );
   });
 
@@ -51,7 +51,7 @@ describe("managed export attachment path security", () => {
     const filePath = path.join(nested, serverBridgeFilename());
     fs.writeFileSync(filePath, "report");
     expect(() => toNodemailerAttachment({ filePath, sizeBytes: 6 }, "x", "text/plain")).toThrow(
-      /Invalid export attachment path/
+      /INVALID_EXPORT_ATTACHMENT_PATH/
     );
   });
 
@@ -61,7 +61,7 @@ describe("managed export attachment path security", () => {
     fs.writeFileSync(sensitive, "do not attach");
     fs.symlinkSync(sensitive, candidate);
     expect(() => toNodemailerAttachment({ filePath: candidate, sizeBytes: 13 }, "x", "text/plain")).toThrow(
-      /Invalid export attachment file/
+      /INVALID_EXPORT_ATTACHMENT_PATH/
     );
   });
 
@@ -82,7 +82,7 @@ describe("managed export attachment path security", () => {
     try {
       fs.writeFileSync(filePath, "secret");
       expect(() => toNodemailerAttachment({ filePath, sizeBytes: 6 }, "x", "text/plain")).toThrow(
-        /Invalid export attachment path/
+        /INVALID_EXPORT_ATTACHMENT_PATH/
       );
     } finally {
       fs.rmSync(filePath, { force: true });
