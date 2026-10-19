@@ -167,7 +167,16 @@ export default function FactoryInvoices() {
       }
       return response.json();
     },
-    onSuccess: () => {
+    onSuccess: (_saved, { orderId, field, value }) => {
+      // Update cached list/detail rows immediately, even if the browser still
+      // has the GET response in its short HTTP cache.
+      queryClient.setQueriesData({ predicate: keyStartsWith("/api/factory/customer-orders") }, (cached: unknown) => {
+        const applyEdit = (order: CustomerOrder) =>
+          order.id === orderId ? { ...order, [field]: value || null } : order;
+        if (Array.isArray(cached)) return cached.map((item) => applyEdit(item as CustomerOrder));
+        if (cached && typeof cached === "object" && "id" in cached) return applyEdit(cached as CustomerOrder);
+        return cached;
+      });
       for (const prefix of [
         "/api/factory/customer-orders",
         "/api/factory/shipping-container",
