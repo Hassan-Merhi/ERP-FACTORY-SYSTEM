@@ -278,7 +278,7 @@ export default function DisplayAccountGroups() {
               placeholder="Group name (e.g. KAZEMBE)"
               className="max-w-sm"
             />
-            <Button variant="outline" onClick={createGroup} disabled={!newName.trim()}>
+            <Button variant="outline" data-testid="button-create-group" onClick={createGroup} disabled={!newName.trim()}>
               <Plus className="h-4 w-4 mr-1" /> New display group
             </Button>
             <Button onClick={() => save.mutate()} disabled={!dirty || save.isPending} className="ml-auto">
