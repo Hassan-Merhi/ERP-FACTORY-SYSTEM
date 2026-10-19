@@ -34,6 +34,6 @@ describe("chatbot token encryption", () => {
 
   it("does not use a predictable fallback encryption key", () => {
     delete process.env.SESSION_SECRET;
-    expect(() => encryptToken("github-token-value")).toThrow("SESSION_SECRET_REQUIRED");
+    expect(() => encryptToken("github-token-value")).toThrow("TOKEN_KEY_ERR");
   });
 });
