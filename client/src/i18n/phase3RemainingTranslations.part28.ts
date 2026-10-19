@@ -625,4 +625,249 @@ export const phase3RemainingTranslationsPart28: readonly Phase3SharedUiEntry[] =
     ar: "فشل التحقق من إصلاح تاريخ تحميل المرتجع",
     fr: "Échec de la vérification de la réparation de la date de chargement du retour",
   },
+  {
+    en: "FX Agent Accounts (USD / EUR)",
+    ar: "حسابات وكلاء الصرف (دولار / يورو)",
+    fr: "Comptes des agents de change (USD / EUR)",
+  },
+  {
+    en: "Native EUR held by an agent; Net Position values it at the dated Settings rate.",
+    ar: "رصيد اليورو لدى الوكيل؛ يُقيَّم في صافي المركز بسعر الإعدادات بتاريخ التقرير.",
+    fr: "Solde EUR détenu par l'agent ; la position nette utilise le taux des paramètres à la date du rapport.",
+  },
+  {
+    en: "FX agent account data could not be loaded.",
+    ar: "تعذّر تحميل بيانات حساب وكيل الصرف.",
+    fr: "Impossible de charger les données du compte de change.",
+  },
+  {
+    en: "FX agent transaction saved",
+    ar: "تم حفظ معاملة وكيل الصرف",
+    fr: "Opération de change enregistrée",
+  },
+  {
+    en: "FX transaction refused",
+    ar: "تم رفض معاملة الصرف",
+    fr: "Opération de change refusée",
+  },
+  {
+    en: "Loading agent balances…",
+    ar: "جارٍ تحميل أرصدة الوكلاء…",
+    fr: "Chargement des soldes des agents…",
+  },
+  {
+    en: "The reviewed FX-agent wallet SQL migration must be applied before this can be used.",
+    ar: "يجب تنفيذ ترحيل قاعدة بيانات محفظة وكيل الصرف بعد مراجعته أولاً.",
+    fr: "La migration SQL du portefeuille de change doit être vérifiée et appliquée avant utilisation.",
+  },
+  {
+    en: "Rate required",
+    ar: "السعر مطلوب",
+    fr: "Taux requis",
+  },
+  {
+    en: "Ledger mismatch — blocked",
+    ar: "اختلاف في دفتر الحسابات — العملية محظورة",
+    fr: "Écart du grand livre — opération bloquée",
+  },
+  {
+    en: "Link an existing FX agent ledger account",
+    ar: "ربط حساب دفتر أستاذ موجود لوكيل الصرف",
+    fr: "Lier un compte existant du grand livre à l'agent de change",
+  },
+  {
+    en: "Search account name or code",
+    ar: "ابحث عن اسم الحساب أو رمزه",
+    fr: "Rechercher un nom ou un code de compte",
+  },
+  {
+    en: "Choose a ledger account",
+    ar: "اختر حساب دفتر الأستاذ",
+    fr: "Choisir un compte du grand livre",
+  },
+  {
+    en: "Activate FX wallet",
+    ar: "تفعيل محفظة الصرف",
+    fr: "Activer le portefeuille de change",
+  },
+  {
+    en: "Choose agent",
+    ar: "اختر الوكيل",
+    fr: "Choisir l'agent",
+  },
+  {
+    en: "Not set",
+    ar: "غير محدد",
+    fr: "Non défini",
+  },
+  {
+    en: "Convert agent USD balance to EUR",
+    ar: "تحويل رصيد الوكيل من الدولار إلى اليورو",
+    fr: "Convertir le solde USD de l'agent en EUR",
+  },
+  {
+    en: "USD to convert",
+    ar: "المبلغ بالدولار المراد تحويله",
+    fr: "Montant USD à convertir",
+  },
+  {
+    en: "Agreed rate: USD per 1 EUR",
+    ar: "السعر المتفق عليه: دولار لكل يورو",
+    fr: "Taux convenu : USD pour 1 EUR",
+  },
+  {
+    en: "Enter the conversion details",
+    ar: "أدخل تفاصيل التحويل",
+    fr: "Saisir les détails de la conversion",
+  },
+  {
+    en: "Convert USD → EUR",
+    ar: "تحويل دولار → يورو",
+    fr: "Convertir USD → EUR",
+  },
+  {
+    en: "Pay a USD beneficiary from agent EUR",
+    ar: "الدفع بالدولار لمستفيد من رصيد الوكيل باليورو",
+    fr: "Payer un bénéficiaire en USD à partir des EUR de l'agent",
+  },
+  {
+    en: "EUR to use",
+    ar: "مبلغ اليورو المستخدم",
+    fr: "Montant EUR à utiliser",
+  },
+  {
+    en: "Agreed payment rate: USD per 1 EUR",
+    ar: "سعر الدفع المتفق عليه: دولار لكل يورو",
+    fr: "Taux de paiement convenu : USD pour 1 EUR",
+  },
+  {
+    en: "Enter the payment details",
+    ar: "أدخل تفاصيل الدفع",
+    fr: "Saisir les détails du paiement",
+  },
+  {
+    en: "Factory supplier",
+    ar: "مورّد المصنع",
+    fr: "Fournisseur de l'usine",
+  },
+  {
+    en: "Ledger account",
+    ar: "حساب دفتر الأستاذ",
+    fr: "Compte du grand livre",
+  },
+  {
+    en: "Choose USD recipient",
+    ar: "اختر مستلم الدولار",
+    fr: "Choisir le bénéficiaire USD",
+  },
+  {
+    en: "Post USD payment",
+    ar: "ترحيل دفعة الدولار",
+    fr: "Comptabiliser le paiement USD",
+  },
+  {
+    en: "Optional transaction narration",
+    ar: "وصف المعاملة (اختياري)",
+    fr: "Libellé de transaction facultatif",
+  },
+  {
+    en: "Read-only: historical mode or role without FX settlement permission.",
+    ar: "للعرض فقط: وضع تاريخي أو دور بلا صلاحية تسوية الصرف.",
+    fr: "Lecture seule : période historique ou rôle sans permission de règlement FX.",
+  },
+  {
+    en: "Confirm this account represents USD funds held by the FX agent. Activate a EUR wallet using its existing posted USD balance? This does not change old vouchers.",
+    ar: "أكّد أن هذا الحساب يمثل أموالاً بالدولار لدى وكيل الصرف. هل تريد تفعيل محفظة يورو باستخدام الرصيد المرحّل؟ لن تتغير السندات القديمة.",
+    fr: "Confirmer que ce compte contient des USD détenus par l'agent. Activer le portefeuille EUR avec le solde USD comptabilisé ? Les anciens justificatifs restent inchangés.",
+  },
+  {
+    en: "Pay the selected USD beneficiary using the quoted EUR and exchange rate? This will post a journal.",
+    ar: "هل تريد دفع المستفيد بالدولار باستخدام مبلغ اليورو والسعر المحددين؟ سيتم ترحيل قيد يومية.",
+    fr: "Payer le bénéficiaire USD avec le montant EUR et le taux indiqués ? Une écriture de journal sera comptabilisée.",
+  },
+  {
+    en: "FX Agent Accounts",
+    ar: "حسابات وكلاء الصرف",
+    fr: "Comptes des agents de change",
+  },
+  {
+    en: "USD / EUR",
+    ar: "دولار / يورو",
+    fr: "USD / EUR",
+  },
+  {
+    en: "Ledger mismatch",
+    ar: "اختلاف في دفتر الأستاذ",
+    fr: "Écart comptable",
+  },
+  {
+    en: "EUR available:",
+    ar: "اليورو المتاح:",
+    fr: "EUR disponibles :",
+  },
+  {
+    en: "Historical USD basis:",
+    ar: "أساس القيمة التاريخية بالدولار:",
+    fr: "Base historique en USD :",
+  },
+  {
+    en: "Settings EUR rate:",
+    ar: "سعر اليورو في الإعدادات:",
+    fr: "Taux EUR des paramètres :",
+  },
+  {
+    en: "Supplier receives USD",
+    ar: "يتلقى المورد بالدولار",
+    fr: "Le fournisseur reçoit en USD",
+  },
+  {
+    en: "EUR",
+    ar: "يورو",
+    fr: "EUR",
+  },
+  {
+    en: "USD",
+    ar: "دولار أمريكي",
+    fr: "USD",
+  },
+  {
+    en: "Manage",
+    ar: "إدارة",
+    fr: "Gérer",
+  },
+  {
+    en: "Hide",
+    ar: "إخفاء",
+    fr: "Masquer",
+  },
+  {
+    en: "e.g. 1.1115",
+    ar: "مثلاً 1.1115",
+    fr: "p. ex. 1,1115",
+  },
+  {
+    en: "e.g. 1.14",
+    ar: "مثلاً 1.14",
+    fr: "p. ex. 1,14",
+  },
+  {
+    en: "EUR available",
+    ar: "اليورو المتاح",
+    fr: "EUR disponibles",
+  },
+  {
+    en: "Historical USD basis",
+    ar: "أساس الدولار التاريخي",
+    fr: "Base historique USD",
+  },
+  {
+    en: "Settings EUR rate",
+    ar: "سعر اليورو في الإعدادات",
+    fr: "Taux EUR des paramètres",
+  },
+  {
+    en: "USD payment",
+    ar: "دفعة بالدولار",
+    fr: "Paiement USD",
+  },
 ];
