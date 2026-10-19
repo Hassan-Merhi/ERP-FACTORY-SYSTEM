@@ -24,7 +24,6 @@ import { hasAnyOpenDialog } from "@/hooks/use-escape-back";
 import type { DaybookEntry, DisplayEntry, FactoryDaybookUIState } from "./types";
 import {
   parseBalesMeta,
-  withLiveLoadingAmounts,
   expandBaleEntries,
   formatDaybookDescription,
   formatTxType,
@@ -187,46 +186,46 @@ export function useFactoryDaybookModel() {
   const hiddenErpCosts: string[] = myErpPages?.hiddenErpCostFields ?? [];
   const showAmounts = !hiddenErpCosts.includes("daybook_amounts");
 
-  // Keep Loading Started amounts live while the Daybook is open, without
-  // refetching the multi-MB daybook list on every bale scan. The backend owns
-  // the price: these are saved customer_orders.grand_total values, not a second
-  // client-side pricing calculation. Poll only the order IDs on this page.
-  const loadingOrderIdsKey = useMemo(
-    () =>
-      [...new Set(
-        entries
-          .filter((entry) => entry.txType === "LOADING_CREATED" && entry.referenceId && entry.currencyCode === "USD")
-          .map((entry) => entry.referenceId as number)
-      )].sort((a, b) => a - b).join(","),
-    [entries]
-  );
-  const { data: liveLoadingAmounts } = useQuery<{ amounts: Record<string, string> }>({
-    queryKey: ["/api/factory/daybook/loading-amounts", loadingOrderIdsKey],
-    enabled: showAmounts && !!loadingOrderIdsKey,
+  // Keep the type dropdown in sync with transactions that actually exist for
+  // the selected company and date range. Unlike the full daybook query, this
+  // metadata query remains small even with a large history or a type filter.
+  const { data: availableTypeData, isSuccess: typeOptionsReady, isFetching: isFetchingTypeOptions } = useQuery<{
+    types: string[];
+  }>({
+    queryKey: ["/api/factory/daybook", "filter-options", startDate, endDate, currencyFilter],
     queryFn: async () => {
-      const ids = loadingOrderIdsKey.split(",");
-      const chunks: string[] = [];
-      for (let i = 0; i < ids.length; i += 150) chunks.push(ids.slice(i, i + 150).join(","));
-      const results = await Promise.all(chunks.map(async (orderIds) => {
-        const res = await fetch(
-          `/api/factory/daybook/loading-amounts?orderIds=${encodeURIComponent(orderIds)}`,
-          { credentials: "include" }
-        );
-        if (!res.ok) throw new Error("Could not retrieve current loading totals");
-        return (await res.json()) as { amounts: Record<string, string> };
-      }));
-      return { amounts: Object.assign({}, ...results.map((result) => result.amounts)) as Record<string, string> };
+      const params = new URLSearchParams({
+        filterOptions: "true",
+        startDate: startDate || "",
+        endDate: endDate || "",
+      });
+      if (currencyFilter !== "ALL") params.set("currencyCode", currencyFilter);
+      const res = await fetch(`/api/factory/daybook?${params.toString()}`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to load daybook filter options");
+      const result: { types?: unknown } = await res.json();
+      if (!Array.isArray(result.types)) throw new Error("Invalid daybook filter options");
+      return { types: result.types.filter((type): type is string => typeof type === "string") };
     },
-    refetchInterval: 2_500,
-    refetchIntervalInBackground: false,
+    staleTime: 60_000,
     refetchOnWindowFocus: false,
-    retry: 1,
+    refetchOnReconnect: false,
   });
-  const displayedEntries = useMemo(
-    () => withLiveLoadingAmounts(entries, liveLoadingAmounts?.amounts),
-    [entries, liveLoadingAmounts]
+
+  const availableTxTypes = useMemo(
+    () =>
+      [...new Set((availableTypeData?.types ?? entries.map((entry) => entry.txType)).filter(
+        (type) => type && type !== "WORKER_EDITED"
+      ))].sort((a, b) => formatTxType(a).localeCompare(formatTxType(b))),
+    [availableTypeData, entries]
   );
 
+  // A type can disappear after moving to another date or after deleting the
+  // last matching entry. Reset it so the user isn't stuck on an empty filter.
+  useEffect(() => {
+    if (typeOptionsReady && !isFetchingTypeOptions && txTypeFilter !== "ALL" && !availableTxTypes.includes(txTypeFilter)) {
+      setTxTypeFilter("ALL");
+    }
+  }, [typeOptionsReady, isFetchingTypeOptions, txTypeFilter, availableTxTypes]);
 
   // ── URL deep link: ?entryId= or ?voucherId= on mount ─────────────────────
   useEffect(() => {
@@ -257,7 +256,7 @@ export function useFactoryDaybookModel() {
 
   // ── Client-side filters (search, amount range, status) ────────────────────
   const filteredEntries = useMemo(() => {
-    let result = displayedEntries;
+    let result = entries;
     // Always hide worker edit audit entries
     result = result.filter((e) => e.txType !== "WORKER_EDITED");
     // Non-admins only see their own entries (View Only users are observers — they see everything)
@@ -290,7 +289,7 @@ export function useFactoryDaybookModel() {
     });
     return result;
   }, [
-    displayedEntries,
+    entries,
     isAdminOrOwner,
     currentUser?.role,
     currentUser?.id,
@@ -610,6 +609,7 @@ export function useFactoryDaybookModel() {
     stepPeriod,
     txTypeFilter,
     setTxTypeFilter,
+    availableTxTypes,
     statusFilter,
     setStatusFilter,
     searchQuery,
