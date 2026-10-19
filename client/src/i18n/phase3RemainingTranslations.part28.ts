@@ -870,4 +870,29 @@ export const phase3RemainingTranslationsPart28: readonly Phase3SharedUiEntry[] =
     ar: "دفعة بالدولار",
     fr: "Paiement USD",
   },
+  {
+    en: "FX Agent Native Balance",
+    ar: "الرصيد الأصلي لوكيل الصرف",
+    fr: "Solde natif de l'agent de change",
+  },
+  {
+    en: "USD equivalent:",
+    ar: "المعادل بالدولار:",
+    fr: "Équivalent USD :",
+  },
+  {
+    en: "FX rate missing",
+    ar: "سعر الصرف غير متوفر",
+    fr: "Taux de change manquant",
+  },
+  {
+    en: "Native currency balance is separate from historical USD journal totals shown below.",
+    ar: "الرصيد بالعملة الأصلية منفصل عن إجماليات قيود اليومية التاريخية بالدولار أدناه.",
+    fr: "Le solde en devise native est distinct des totaux historiques USD du journal ci-dessous.",
+  },
+  {
+    en: "Account and FX wallet mismatch; settlements are blocked pending reconciliation.",
+    ar: "رصيد الحساب لا يطابق محفظة الصرف؛ التسويات محظورة حتى إجراء المطابقة.",
+    fr: "Écart entre le compte et le portefeuille de change ; les règlements sont bloqués jusqu'au rapprochement.",
+  },
 ];
