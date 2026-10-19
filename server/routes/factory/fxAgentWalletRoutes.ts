@@ -88,4 +88,50 @@ export function registerFactoryFxAgentWalletRoutes(app: Express) {
       res.status(201).json(created);
     } catch (error) { res.status(400).json({ message: getErrorMessage(error) }); }
   });
+  app.post("/api/factory/fx-agent-wallets/:id/convert", requireAuth, requireRole(...ROLES), async (req: Request, res: Response) => {
+    try {
+      const cid = company(req), walletId = Number(req.params.id);
+      const usd = positive(req.body?.usdAmount), fx = rate(req.body?.rateUsdPerEur), date = dateOf(req);
+      const key = String(req.body?.requestKey || "");
+      if (!cid || !Number.isSafeInteger(walletId) || walletId <= 0 || !/^[A-Za-z0-9._:-]{8,100}$/.test(key))
+        throw new Error("Invalid company, wallet or idempotency key");
+      const saved = await db.transaction(async (tx) => {
+        const locked = await tx.execute(sql`
+          SELECT id FROM factory_fx_agent_wallets WHERE company_id = ${cid} AND id = ${walletId} FOR UPDATE`);
+        if (!locked.rows.length) throw new Error("FX agent wallet not found");
+        const already = await tx.execute(sql`
+          SELECT id, wallet_id AS "walletId", source_amount::text AS usd,
+                 rate_usd_per_eur::text AS rate, kind
+          FROM factory_fx_agent_wallet_operations WHERE company_id = ${cid} AND request_key = ${key}`);
+        if (already.rows.length) {
+          const row = already.rows[0];
+          if (Number(row.walletId) !== walletId || row.kind !== "USD_TO_EUR" ||
+              !toMoney(String(row.usd)).eq(usd) || !toMoney(String(row.rate)).eq(fx))
+            throw new Error("This request key already belongs to a different conversion");
+          return { id: Number(row.id), replayed: true };
+        }
+        const wallet = (await loadFxAgentWallets(cid, undefined, tx)).find((w) => w.id === walletId);
+        if (!wallet || date < wallet.activatedOn) throw new Error("FX wallet inactive on selected date");
+        const snapshot = await getFxAgentWalletSnapshot(wallet, getClientDate(req), tx);
+        if (!snapshot.synchronized)
+          throw new Error("Manual ledger changes detected; reconcile the FX agent before conversion");
+        if (snapshot.latestOperationDate && date < snapshot.latestOperationDate)
+          throw new Error("Cannot insert conversion before a later FX operation");
+        const conversion = conversionPreview(usd, fx);
+        if (toMoney(conversion.usd).gt(snapshot.state.usd))
+          throw new Error("Insufficient USD in FX wallet");
+        const inserted = await tx.execute(sql`
+          INSERT INTO factory_fx_agent_wallet_operations
+          (company_id,wallet_id,effective_date,kind,source_currency,source_amount,
+           target_currency,target_amount,rate_usd_per_eur,source_book_usd,request_key,narration,created_by)
+          VALUES (${cid},${walletId},${date},'USD_TO_EUR','USD',${conversion.usd},
+            'EUR',${conversion.eur},${conversion.rate},${conversion.usd},${key},
+            ${String(req.body?.narration || "").slice(0,500)},${req.session.username || "unknown"})
+          RETURNING id`);
+        return { id: Number(inserted.rows[0].id), conversion, replayed: false };
+      });
+      res.status(201).json(saved);
+    } catch (error) { res.status(400).json({ message: getErrorMessage(error) }); }
+  });
+
 }
