@@ -36,9 +36,9 @@ export default function Accounts() {
   const model = useAccountsLegacyModel();
   const { selectedAccount, selectedAccountIsLedger } = model;
   const { data: displayLayout } = useQuery<AccountDisplayLayout>({
-    queryKey: ["/api/accounts/display-layout", model.selectedCompany?.id],
+    queryKey: [model.appMode === "factory" ? "/api/factory/account-display-layout" : "/api/accounts/display-layout", model.selectedCompany?.id],
     queryFn: async () => {
-      const r = await fetch("/api/accounts/display-layout", { credentials: "include" });
+      const r = await fetch(model.appMode === "factory" ? "/api/factory/account-display-layout" : "/api/accounts/display-layout", { credentials: "include" });
       if (!r.ok) throw new Error("Shared account display layout is unavailable");
       return r.json();
     },
