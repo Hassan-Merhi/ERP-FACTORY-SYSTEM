@@ -42,10 +42,16 @@ export function ScheduledContainersTable() {
     details: "",
   });
 
-  const { data: rows = [], isLoading } = useQuery<ScheduledRow[]>({
+  const { data: rows = [], isLoading, isError, refetch } = useQuery<ScheduledRow[]>({
     queryKey: [SCHEDULED_KEY],
-    refetchInterval: 5000,
-    refetchOnWindowFocus: true,
+    // This is an editable schedule, not a live status feed. Background polling
+    // used to refetch every five seconds while someone was typing into a row.
+    // Successful add/edit/archive/delete actions already invalidate this key.
+    staleTime: 5 * 60 * 1000,
+    refetchInterval: false,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+    retry: false,
   });
 
   const activeRows = rows.filter((row) => !row.isArchived);
@@ -189,6 +195,15 @@ export function ScheduledContainersTable() {
                     <TableCell colSpan={6} className="text-center py-6 text-muted-foreground">
                       <Loader2 className="h-4 w-4 animate-spin inline mr-2" />
                       Loading…
+                    </TableCell>
+                  </TableRow>
+                ) : isError && activeRows.length === 0 && !adding ? (
+                  <TableRow>
+                    <TableCell colSpan={6} className="text-center py-6 text-destructive">
+                      Could not load scheduled containers.
+                      <Button size="sm" variant="outline" className="ml-3" onClick={() => void refetch()}>
+                        Retry
+                      </Button>
                     </TableCell>
                   </TableRow>
                 ) : activeRows.length === 0 && !adding ? (
