@@ -68,6 +68,7 @@ type RawOrderLineRow = {
 };
 
 type RawProformaLineRow = {
+  id?: number | null;
   article_code?: string | null;
   articleCode?: string | null;
   pricing_mode?: string | null;
@@ -278,7 +279,7 @@ export function registerOrderVerificationSummaryRoutes(app: Express) {
         const rawProformaResult = await db.execute(
           sql`SELECT * FROM customer_proforma_lines WHERE proforma_id = ${order.proformaIdUsed}`
         );
-        proformaLines = resultRows<RawProformaLineRow & { id?: number }>(rawProformaResult);
+        proformaLines = resultRows<RawProformaLineRow>(rawProformaResult);
 
         const rawExpectedResult = await db.execute(
           sql`SELECT article_code, product_name, expected_qty, proforma_line_id
