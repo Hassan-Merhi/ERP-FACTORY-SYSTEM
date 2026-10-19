@@ -57,6 +57,7 @@ import { DateCellInput } from "./factoryshippingcontainers/components/DateCellIn
 import { DocumentsModal } from "./factoryshippingcontainers/components/DocumentsModal";
 import { WhatsAppModal } from "./factoryshippingcontainers/components/WhatsAppModal";
 import { ShippingAvailabilityTable } from "./factoryshippingcontainers/components/ShippingAvailabilityTable";
+import { ScheduledContainersTable } from "./factoryshippingcontainers/components/ScheduledContainersTable";
 import { useShippingColumnVisibility } from "./factoryshippingcontainers/hooks/useShippingColumnVisibility";
 import { FilterPanel, type DocsFilter } from "./factoryshippingcontainers/components/FilterPanel";
 
@@ -611,7 +612,8 @@ export default function FactoryShippingContainers() {
           </Table>
         </div>
 
-        {/* ── Container Availability ── */}
+        {/* ── Scheduled Containers and Container Availability ── */}
+        <ScheduledContainersTable />
         <ShippingAvailabilityTable />
 
         {/* ── Done / Hidden Containers ── */}
