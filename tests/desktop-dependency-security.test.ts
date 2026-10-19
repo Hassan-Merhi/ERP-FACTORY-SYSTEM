@@ -6,7 +6,9 @@ type DesktopLock = { packages: Record<string, LockEntry> };
 type DesktopManifest = { overrides?: Record<string, Record<string, string>> };
 
 const lock = JSON.parse(readFileSync(new URL("../desktop/package-lock.json", import.meta.url), "utf8")) as DesktopLock;
-const manifest = JSON.parse(readFileSync(new URL("../desktop/package.json", import.meta.url), "utf8")) as DesktopManifest;
+const manifest = JSON.parse(
+  readFileSync(new URL("../desktop/package.json", import.meta.url), "utf8")
+) as DesktopManifest;
 
 describe("desktop build dependency security", () => {
   it("excludes the vulnerable sprintf-js dependency and its retired roarr parent", () => {
