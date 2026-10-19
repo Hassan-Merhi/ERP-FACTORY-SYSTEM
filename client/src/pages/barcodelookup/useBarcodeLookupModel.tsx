@@ -41,6 +41,8 @@ export function useBarcodeLookupModel() {
   const [articleResult, setArticleResult] = useState<ArticleLookupResult | null>(null);
   const [referenceResult, setReferenceResult] = useState<ReferenceLookupResult | null>(null);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [showRestoreDeletedDialog, setShowRestoreDeletedDialog] = useState(false);
+  const [restoreReason, setRestoreReason] = useState("");
   const [showChangeProductDialog, setShowChangeProductDialog] = useState(false);
   const [changeProductSearch, setChangeProductSearch] = useState("");
   const [selectedNewProductId, setSelectedNewProductId] = useState<number | null>(null);
@@ -198,17 +200,35 @@ export function useBarcodeLookupModel() {
   });
 
   const restoreDeletedMutation = useMutation({
-    mutationFn: async (baleId: number) => {
-      const response = await modeApiRequest("PATCH", `/api/factory/bales/${baleId}/status`, { status: "IN_STOCK" });
-      if (!response.ok) throw await readError(response, "Failed to return bale to stock");
-      return response.json();
+    mutationFn: async ({ baleId, reason }: { baleId: number; reason: string }) => {
+      let response = await modeApiRequest("POST", `/api/factory/bales/${baleId}/restore-to-stock`, {
+        reason,
+      });
+      if (response.status === 409) {
+        const body = (await response.clone().json()) as { code?: string };
+        if (body.code === "BALE_LEGACY_STATUS_RESTORE") {
+          // Old deletions without a physical ERP debit keep their original,
+          // no-extra-stock-movement path.
+          response = await modeApiRequest("PATCH", `/api/factory/bales/${baleId}/status`, {
+            status: "IN_STOCK",
+          });
+          if (!response.ok) throw await readError(response, "Failed to return bale to stock");
+          return { legacy: true };
+        }
+      }
+      if (!response.ok) throw await readError(response, "Failed to restore bale and stock");
+      return { legacy: false };
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
+      setShowRestoreDeletedDialog(false);
+      setRestoreReason("");
       const referenceNumber = referenceResult?.labelPrint?.referenceNumber;
       if (referenceNumber) referenceLookup.mutate(referenceNumber);
       toast({
         title: "Restored to Stock",
-        description: "Deleted bale restored. Existing ERP stock quantity was preserved without a duplicate receipt.",
+        description: result.legacy
+          ? "Legacy deleted bale restored. ERP stock quantity was already present and was not added twice."
+          : "Bale and original ERP stock quantity restored. The original removal remains in the audit history.",
       });
     },
     onError: (error: Error) => {
@@ -382,6 +402,10 @@ export function useBarcodeLookupModel() {
     referenceResult,
     showDeleteDialog,
     setShowDeleteDialog,
+    showRestoreDeletedDialog,
+    setShowRestoreDeletedDialog,
+    restoreReason,
+    setRestoreReason,
     showChangeProductDialog,
     setShowChangeProductDialog,
     changeProductSearch,

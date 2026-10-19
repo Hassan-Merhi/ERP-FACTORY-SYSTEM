@@ -70,7 +70,7 @@ export function BarcodeReferenceResults({ model }: { model: BarcodeLookupModel }
                   size="sm"
                   variant="outline"
                   disabled={model.restoreDeletedMutation.isPending}
-                  onClick={() => baleInfo && model.restoreDeletedMutation.mutate(baleInfo.id)}
+                  onClick={() => model.setShowRestoreDeletedDialog(true)}
                   data-testid="button-restore-deleted"
                 >
                   <ArchiveRestore className="h-3.5 w-3.5 mr-1" />
