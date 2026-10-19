@@ -6,7 +6,7 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Archive, Check, ChevronDown, ChevronRight, Loader2, Plus, RotateCcw, Trash2, X } from "lucide-react";
+import { Check, ChevronDown, ChevronRight, Loader2, Plus, Trash2, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 interface ScheduledRow {
   id: number;
@@ -33,7 +33,6 @@ export function ScheduledContainersTable() {
   const [editing, setEditing] = useState<EditingScheduled | null>(null);
   const [adding, setAdding] = useState(false);
   const [expanded, setExpanded] = useState(true);
-  const [archivedExpanded, setArchivedExpanded] = useState(false);
   const [newRow, setNewRow] = useState({
     date: "",
     shippingCompany: "",
@@ -46,7 +45,7 @@ export function ScheduledContainersTable() {
     queryKey: [SCHEDULED_KEY],
     // This is an editable schedule, not a live status feed. Background polling
     // used to refetch every five seconds while someone was typing into a row.
-    // Successful add/edit/archive/delete actions already invalidate this key.
+    // Successful add/edit/delete actions already invalidate this key.
     staleTime: 5 * 60 * 1000,
     refetchInterval: false,
     refetchOnWindowFocus: false,
@@ -55,14 +54,6 @@ export function ScheduledContainersTable() {
   });
 
   const activeRows = rows.filter((row) => !row.isArchived);
-  const archivedRows = rows
-    .filter((row) => row.isArchived)
-    .sort((a, b) => {
-      const aTime = a.archivedAt ? new Date(a.archivedAt).getTime() : 0;
-      const bTime = b.archivedAt ? new Date(b.archivedAt).getTime() : 0;
-      return bTime - aTime;
-    });
-
   const addMutation = useMutation({
     mutationFn: () =>
       apiRequest("POST", SCHEDULED_KEY, {
@@ -96,22 +87,6 @@ export function ScheduledContainersTable() {
       toast({ title: "Row saved" });
     },
     onError: (e: ClientErrorLike) => toast({ title: "Failed to save", description: e.message, variant: "destructive" }),
-  });
-
-  const archiveMutation = useMutation({
-    mutationFn: ({ id, archived }: { id: number; archived: boolean }) =>
-      apiRequest("PATCH", `${SCHEDULED_KEY}/${id}`, { isArchived: archived }),
-    onSuccess: (_response, variables) => {
-      queryClient.invalidateQueries({ queryKey: [SCHEDULED_KEY] });
-      if (variables.archived) {
-        setEditing(null);
-        toast({ title: "Scheduled container archived" });
-      } else {
-        toast({ title: "Scheduled container restored" });
-      }
-    },
-    onError: (e: ClientErrorLike) =>
-      toast({ title: "Failed to update archive", description: e.message, variant: "destructive" }),
   });
 
   const deleteMutation = useMutation({
@@ -305,19 +280,6 @@ export function ScheduledContainersTable() {
                           <TableCell>
                             <div className="flex items-center justify-end gap-1">
                               <Button
-                                size="sm"
-                                variant="ghost"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  archiveMutation.mutate({ id: row.id, archived: true });
-                                }}
-                                disabled={archiveMutation.isPending}
-                                title="Archive this scheduled container"
-                                data-testid={`button-scheduled-archive-${row.id}`}
-                              >
-                                <Archive className="h-3.5 w-3.5 mr-1" /> Archive
-                              </Button>
-                              <Button
                                 size="icon"
                                 variant="ghost"
                                 onClick={(e) => {
@@ -429,81 +391,7 @@ export function ScheduledContainersTable() {
         )}
       </div>
 
-      <div className="rounded-md border overflow-hidden">
-        <button
-          type="button"
-          className="w-full flex items-center justify-between px-4 py-3 text-sm font-medium text-muted-foreground hover-elevate bg-muted/20"
-          onClick={() => setArchivedExpanded((value) => !value)}
-          aria-expanded={archivedExpanded}
-          data-testid="button-toggle-archived-scheduled"
-        >
-          <span className="flex items-center gap-2">
-            {archivedExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-            Archived Scheduled Containers
-            <span className="text-xs">({archivedRows.length})</span>
-          </span>
-          <span className="text-xs">Archived rows stay here until restored or deleted</span>
-        </button>
 
-        {archivedExpanded &&
-          (archivedRows.length === 0 ? (
-            <div className="px-4 py-6 text-center text-xs text-muted-foreground">
-              No archived scheduled containers yet.
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <Table mobileLayout="cards" className="text-xs">
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="text-xs w-36">Date</TableHead>
-                    <TableHead className="text-xs">Shipping Company</TableHead>
-                    <TableHead className="text-xs w-40">Scheduled Containers</TableHead>
-                    <TableHead className="text-xs">Note</TableHead>
-                    <TableHead className="text-xs">Details</TableHead>
-                    <TableHead className="text-xs w-44">Archived</TableHead>
-                    <TableHead className="text-xs w-40" />
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {archivedRows.map((row) => (
-                    <TableRow key={row.id} className="opacity-70" data-testid={`row-archived-scheduled-${row.id}`}>
-                      <TableCell>{row.date}</TableCell>
-                      <TableCell>{row.shippingCompany}</TableCell>
-                      <TableCell>{row.scheduledContainers}</TableCell>
-                      <TableCell className="text-muted-foreground">{row.note || "—"}</TableCell>
-                      <TableCell className="text-muted-foreground">{row.details || "—"}</TableCell>
-                      <TableCell className="whitespace-nowrap text-muted-foreground">
-                        {row.archivedAt ? new Date(row.archivedAt).toLocaleString() : "—"}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center justify-end gap-1">
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => archiveMutation.mutate({ id: row.id, archived: false })}
-                            disabled={archiveMutation.isPending}
-                            data-testid={`button-scheduled-restore-${row.id}`}
-                          >
-                            <RotateCcw className="h-3.5 w-3.5 mr-1" /> Restore
-                          </Button>
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            onClick={() => deleteMutation.mutate(row.id)}
-                            disabled={deleteMutation.isPending}
-                            data-testid={`button-scheduled-delete-archived-${row.id}`}
-                          >
-                            <Trash2 className="h-3.5 w-3.5 text-destructive" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          ))}
-      </div>
     </div>
   );
 }
