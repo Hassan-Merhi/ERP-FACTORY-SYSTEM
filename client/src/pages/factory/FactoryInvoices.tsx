@@ -29,7 +29,7 @@ import {
   statusFilterCounts,
 } from "./factoryinvoices/invoiceCalculations";
 import { InvoiceGroupRow } from "./factoryinvoices/InvoiceGroupRow";
-import { InvoiceOrderRow } from "./factoryinvoices/InvoiceOrderRow";
+import { InvoiceOrderRow, type EditableShippingField } from "./factoryinvoices/InvoiceOrderRow";
 import { ShippingAvailabilityTable } from "./factoryshippingcontainers/components/ShippingAvailabilityTable";
 import { ScheduledContainersTable } from "./factoryshippingcontainers/components/ScheduledContainersTable";
 
@@ -152,6 +152,35 @@ export default function FactoryInvoices() {
       invalidateCustomerBalances();
     },
     onError: (error: Error) => toast({ title: "Cannot change customer", description: error.message, variant: "destructive" }),
+  });
+
+  // Update the canonical order record, not a display-only copy. All linked
+  // factory pages get invalidated so they read the latest shipping metadata.
+  const shippingFieldMutation = useMutation({
+    mutationFn: async ({ orderId, field, value }: { orderId: number; field: EditableShippingField; value: string }) => {
+      const response = await modeApiRequest("POST", `/api/factory/customer-orders/${orderId}/assign-container`, {
+        [field]: value,
+      });
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error(body.message || "Could not update container details");
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      for (const prefix of [
+        "/api/factory/customer-orders",
+        "/api/factory/shipping-container",
+        "/api/factory/invoice-container-tracking",
+        "/api/factory/invoices",
+      ]) {
+        queryClient.invalidateQueries({ predicate: keyStartsWith(prefix) });
+      }
+      toast({ title: "Container details updated", description: "Changes saved to the linked loading." });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Could not save container details", description: error.message, variant: "destructive" });
+    },
   });
 
   const hideMutation = useMutation({
@@ -306,6 +335,9 @@ export default function FactoryInvoices() {
     onRowClick: handleRowClick,
     onToggleHideOrder: (order: CustomerOrder) => hideMutation.mutate({ orderId: order.id, isHidden: !order.isHidden }),
     onDownload: downloadFromUrl,
+    onSaveShippingField: async (orderId: number, field: EditableShippingField, value: string) => {
+      await shippingFieldMutation.mutateAsync({ orderId, field, value });
+    },
     isAdmin,
     unfinalizePending: unfinalizeMutation.isPending,
     onRevertOrder: (orderId: number) => unfinalizeMutation.mutate(orderId),
