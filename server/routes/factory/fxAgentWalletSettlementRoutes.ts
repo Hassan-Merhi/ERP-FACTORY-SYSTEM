@@ -23,7 +23,7 @@ export function registerFactoryFxAgentSettlementRoutes(app: Express) {
   app.post(
     "/api/factory/fx-agent-wallets/:id/settle",
     requireAuth,
-    requireRole("Admin", "Owner"),
+    requireRole("Admin", "Owner", "Developer"),
     async (req: Request, res: Response) => {
       try {
         const cid = Number(req.session.factoryCompanyId || req.session.currentCompanyId || 0);
@@ -81,7 +81,7 @@ export function registerFactoryFxAgentSettlementRoutes(app: Express) {
           if (snapshot.latestOperationDate && date < snapshot.latestOperationDate)
             throw new Error("Cannot backdate before a more recent FX operation");
           let destinationTable = sql`ledger_accounts`;
-          let destinationExtra = sql`AND deleted_at IS NULL`;
+          let destinationExtra = sql`AND deleted_at IS NULL AND active = true`;
           if (targetKind === "factorySupplier") {
             destinationTable = sql`factory_suppliers`;
             destinationExtra = sql`AND is_active = true`;
