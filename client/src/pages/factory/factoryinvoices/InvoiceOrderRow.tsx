@@ -173,7 +173,7 @@ export function InvoiceOrderRow({
       </TableCell>
       <TableCell>{getStatusBadge(order.status)}</TableCell>
       <TableCell
-        className="text-right font-mono text-lg font-bold tabular-nums"
+        className="text-right font-mono text-sm font-semibold tabular-nums"
         data-testid={`text-total-bales-${order.id}`}
       >
         <span className={getLoadedBalesColorClass(order.totalQtyBales ?? 0)}>{order.totalQtyBales ?? "-"}</span>
