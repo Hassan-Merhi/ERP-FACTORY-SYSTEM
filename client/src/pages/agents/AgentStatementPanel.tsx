@@ -201,12 +201,38 @@ export function AgentStatementPanel({
         <div className="rounded-lg border p-3 space-y-1" data-testid="agent-native-fx-wallet">
           <p className="text-sm font-semibold">FX Agent Native Balance</p>
           <div className="flex flex-wrap gap-x-6 gap-y-1 text-sm font-mono tabular-nums">
-            <span>EUR {Number(fxWallet.state.eur).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-            <span>USD {Number(fxWallet.state.usd).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-            <span>USD equivalent: {fxWallet.currentUsd == null ? "FX rate missing" : Number(fxWallet.currentUsd).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+            <span>
+              EUR{" "}
+              {Number(fxWallet.state.eur).toLocaleString(undefined, {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+              })}
+            </span>
+            <span>
+              USD{" "}
+              {Number(fxWallet.state.usd).toLocaleString(undefined, {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+              })}
+            </span>
+            <span>
+              USD equivalent:{" "}
+              {fxWallet.currentUsd == null
+                ? "FX rate missing"
+                : Number(fxWallet.currentUsd).toLocaleString(undefined, {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
+                  })}
+            </span>
           </div>
-          <p className="text-xs text-muted-foreground">Native currency balance is separate from historical USD journal totals shown below.</p>
-          {!fxWallet.synchronized && <p role="alert" className="text-xs text-destructive">Account and FX wallet mismatch; settlements are blocked pending reconciliation.</p>}
+          <p className="text-xs text-muted-foreground">
+            Native currency balance is separate from historical USD journal totals shown below.
+          </p>
+          {!fxWallet.synchronized && (
+            <p role="alert" className="text-xs text-destructive">
+              Account and FX wallet mismatch; settlements are blocked pending reconciliation.
+            </p>
+          )}
         </div>
       )}
 
@@ -257,9 +283,8 @@ export function AgentStatementPanel({
       <div ref={printRef} className="print-container">
         {fxWallet && (
           <div className="hidden print:block text-xs mb-3">
-            <strong>FX Agent Native Balance:</strong> EUR {fxWallet.state.eur}, USD {fxWallet.state.usd}.
-            Current USD equivalent: {fxWallet.currentUsd ?? "FX rate missing"}.
-            Historical journal entries below remain in USD.
+            <strong>FX Agent Native Balance:</strong> EUR {fxWallet.state.eur}, USD {fxWallet.state.usd}. Current USD
+            equivalent: {fxWallet.currentUsd ?? "FX rate missing"}. Historical journal entries below remain in USD.
           </div>
         )}
         {/* Print-only header */}

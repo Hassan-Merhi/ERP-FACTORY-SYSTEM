@@ -7,12 +7,18 @@ import { getClientDate } from "../../lib/dateUtils";
 import { getErrorMessage } from "../../lib/httpHandlers";
 import { toMoney } from "../../lib/money";
 import { getPartyBalance } from "../../services/accounting/balances/ledgerBalanceEngine";
-import { fxAgentTablesExist, getFxAgentWalletSnapshot, loadFxAgentWallets } from "../../services/factory/fxAgentWalletDb";
+import {
+  fxAgentTablesExist,
+  getFxAgentWalletSnapshot,
+  loadFxAgentWallets,
+} from "../../services/factory/fxAgentWalletDb";
 import { conversionPreview } from "../../services/factory/fxAgentWalletState";
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 const ROLES = ["Admin", "Owner"] as const;
-function company(req: Request) { return Number(req.session.factoryCompanyId || req.session.currentCompanyId || 0); }
+function company(req: Request) {
+  return Number(req.session.factoryCompanyId || req.session.currentCompanyId || 0);
+}
 function positive(value: unknown): string {
   const v = String(value ?? "");
   if (!/^\d+(?:\.\d{1,6})?$/.test(v) || toMoney(v).lte(0)) throw new Error("Positive amount required (max 6 decimals)");
@@ -44,7 +50,8 @@ export function registerFactoryFxAgentWalletRoutes(app: Express) {
       const cid = company(req);
       if (!cid) return res.status(400).json({ message: "Select a factory company" });
       if (!(await fxAgentTablesExist())) return res.json({ setupRequired: true, wallets: [], candidates: [] });
-      const asOf = typeof req.query.asOf === "string" && DATE.test(req.query.asOf) ? req.query.asOf : getClientDate(req);
+      const asOf =
+        typeof req.query.asOf === "string" && DATE.test(req.query.asOf) ? req.query.asOf : getClientDate(req);
       const currentRate = await configRate(cid, asOf);
       const wallets = await loadFxAgentWallets(cid, asOf);
       const snapshots = await Promise.all(wallets.map((w) => getFxAgentWalletSnapshot(w, asOf, db, currentRate)));
@@ -56,24 +63,49 @@ export function registerFactoryFxAgentWalletRoutes(app: Express) {
       const supplierChoices = await db.execute(sql`
         SELECT id, name FROM factory_suppliers
         WHERE company_id = ${cid} AND is_active = true ORDER BY name LIMIT 1200`);
-      res.json({ setupRequired: false, asOf, currentRate, wallets: snapshots,
-        candidates: accounts.rows, factorySuppliers: supplierChoices.rows });
-    } catch (error) { res.status(400).json({ message: getErrorMessage(error) }); }
+      res.json({
+        setupRequired: false,
+        asOf,
+        currentRate,
+        wallets: snapshots,
+        candidates: accounts.rows,
+        factorySuppliers: supplierChoices.rows,
+      });
+    } catch (error) {
+      res.status(400).json({ message: getErrorMessage(error) });
+    }
   });
 
   app.post("/api/factory/fx-agent-wallets", requireAuth, requireRole(...ROLES), async (req: Request, res: Response) => {
     try {
-      const cid = company(req), accountId = Number(req.body?.ledgerAccountId), date = dateOf(req);
-      if (!cid || !(await fxAgentTablesExist())) return res.status(409).json({ message: "FX wallet SQL migration required" });
+      const cid = company(req),
+        accountId = Number(req.body?.ledgerAccountId),
+        date = dateOf(req);
+      if (!cid || !(await fxAgentTablesExist()))
+        return res.status(409).json({ message: "FX wallet SQL migration required" });
       if (!Number.isSafeInteger(accountId) || accountId <= 0) throw new Error("Invalid ledger account");
-      if (req.body?.confirmUsdSource !== true) throw new Error("Confirm this ledger currently represents USD funds held by the FX agent");
+      if (req.body?.confirmUsdSource !== true)
+        throw new Error("Confirm this ledger currently represents USD funds held by the FX agent");
       const created = await db.transaction(async (tx) => {
         const accounts = await tx.execute(sql`
           SELECT id, account_type AS type, opening_balance_currency AS "openingCurrency" FROM ledger_accounts
           WHERE company_id = ${cid} AND id = ${accountId} AND deleted_at IS NULL AND active = true
           FOR UPDATE`);
         const account = accounts.rows[0];
-        if (!account || ['Income','Indirect Income','Expense','Indirect Expense','Direct Expense','Equity','Profit','Cash','Bank'].includes(String(account.type)))
+        if (
+          !account ||
+          [
+            "Income",
+            "Indirect Income",
+            "Expense",
+            "Indirect Expense",
+            "Direct Expense",
+            "Equity",
+            "Profit",
+            "Cash",
+            "Bank",
+          ].includes(String(account.type))
+        )
           throw new Error("Select an active balance-sheet ledger account");
         if (account.openingCurrency && String(account.openingCurrency).toUpperCase() !== "USD")
           throw new Error("Known non-USD opening balance cannot be activated as a USD FX wallet");
@@ -107,52 +139,66 @@ export function registerFactoryFxAgentWalletRoutes(app: Express) {
         return { walletId: Number(inserted.rows[0].id), openingUsd: book.toFixed(6) };
       });
       res.status(201).json(created);
-    } catch (error) { res.status(400).json({ message: getErrorMessage(error) }); }
+    } catch (error) {
+      res.status(400).json({ message: getErrorMessage(error) });
+    }
   });
-  app.post("/api/factory/fx-agent-wallets/:id/convert", requireAuth, requireRole(...ROLES), async (req: Request, res: Response) => {
-    try {
-      const cid = company(req), walletId = Number(req.params.id);
-      const usd = positive(req.body?.usdAmount), fx = rate(req.body?.rateUsdPerEur), date = dateOf(req);
-      const key = String(req.body?.requestKey || "");
-      if (!cid || !Number.isSafeInteger(walletId) || walletId <= 0 || !/^[A-Za-z0-9._:-]{8,100}$/.test(key))
-        throw new Error("Invalid company, wallet or idempotency key");
-      const saved = await db.transaction(async (tx) => {
-        const locked = await tx.execute(sql`
+  app.post(
+    "/api/factory/fx-agent-wallets/:id/convert",
+    requireAuth,
+    requireRole(...ROLES),
+    async (req: Request, res: Response) => {
+      try {
+        const cid = company(req),
+          walletId = Number(req.params.id);
+        const usd = positive(req.body?.usdAmount),
+          fx = rate(req.body?.rateUsdPerEur),
+          date = dateOf(req);
+        const key = String(req.body?.requestKey || "");
+        if (!cid || !Number.isSafeInteger(walletId) || walletId <= 0 || !/^[A-Za-z0-9._:-]{8,100}$/.test(key))
+          throw new Error("Invalid company, wallet or idempotency key");
+        const saved = await db.transaction(async (tx) => {
+          const locked = await tx.execute(sql`
           SELECT id FROM factory_fx_agent_wallets WHERE company_id = ${cid} AND id = ${walletId} FOR UPDATE`);
-        if (!locked.rows.length) throw new Error("FX agent wallet not found");
-        const already = await tx.execute(sql`
+          if (!locked.rows.length) throw new Error("FX agent wallet not found");
+          const already = await tx.execute(sql`
           SELECT id, wallet_id AS "walletId", source_amount::text AS usd,
                  rate_usd_per_eur::text AS rate, kind
           FROM factory_fx_agent_wallet_operations WHERE company_id = ${cid} AND request_key = ${key}`);
-        if (already.rows.length) {
-          const row = already.rows[0];
-          if (Number(row.walletId) !== walletId || row.kind !== "USD_TO_EUR" ||
-              !toMoney(String(row.usd)).eq(usd) || !toMoney(String(row.rate)).eq(fx))
-            throw new Error("This request key already belongs to a different conversion");
-          return { id: Number(row.id), replayed: true };
-        }
-        const wallet = (await loadFxAgentWallets(cid, undefined, tx)).find((w) => w.id === walletId);
-        if (!wallet || date < wallet.activatedOn) throw new Error("FX wallet inactive on selected date");
-        const snapshot = await getFxAgentWalletSnapshot(wallet, getClientDate(req), tx);
-        if (!snapshot.synchronized)
-          throw new Error("Manual ledger changes detected; reconcile the FX agent before conversion");
-        if (snapshot.latestOperationDate && date < snapshot.latestOperationDate)
-          throw new Error("Cannot insert conversion before a later FX operation");
-        const conversion = conversionPreview(usd, fx);
-        if (toMoney(conversion.usd).gt(snapshot.state.usd))
-          throw new Error("Insufficient USD in FX wallet");
-        const inserted = await tx.execute(sql`
+          if (already.rows.length) {
+            const row = already.rows[0];
+            if (
+              Number(row.walletId) !== walletId ||
+              row.kind !== "USD_TO_EUR" ||
+              !toMoney(String(row.usd)).eq(usd) ||
+              !toMoney(String(row.rate)).eq(fx)
+            )
+              throw new Error("This request key already belongs to a different conversion");
+            return { id: Number(row.id), replayed: true };
+          }
+          const wallet = (await loadFxAgentWallets(cid, undefined, tx)).find((w) => w.id === walletId);
+          if (!wallet || date < wallet.activatedOn) throw new Error("FX wallet inactive on selected date");
+          const snapshot = await getFxAgentWalletSnapshot(wallet, getClientDate(req), tx);
+          if (!snapshot.synchronized)
+            throw new Error("Manual ledger changes detected; reconcile the FX agent before conversion");
+          if (snapshot.latestOperationDate && date < snapshot.latestOperationDate)
+            throw new Error("Cannot insert conversion before a later FX operation");
+          const conversion = conversionPreview(usd, fx);
+          if (toMoney(conversion.usd).gt(snapshot.state.usd)) throw new Error("Insufficient USD in FX wallet");
+          const inserted = await tx.execute(sql`
           INSERT INTO factory_fx_agent_wallet_operations
           (company_id,wallet_id,effective_date,kind,source_currency,source_amount,
            target_currency,target_amount,rate_usd_per_eur,source_book_usd,request_key,narration,created_by)
           VALUES (${cid},${walletId},${date},'USD_TO_EUR','USD',${conversion.usd},
             'EUR',${conversion.eur},${conversion.rate},${conversion.usd},${key},
-            ${String(req.body?.narration || "").slice(0,500)},${req.session.username || "unknown"})
+            ${String(req.body?.narration || "").slice(0, 500)},${req.session.username || "unknown"})
           RETURNING id`);
-        return { id: Number(inserted.rows[0].id), conversion, replayed: false };
-      });
-      res.status(201).json(saved);
-    } catch (error) { res.status(400).json({ message: getErrorMessage(error) }); }
-  });
-
+          return { id: Number(inserted.rows[0].id), conversion, replayed: false };
+        });
+        res.status(201).json(saved);
+      } catch (error) {
+        res.status(400).json({ message: getErrorMessage(error) });
+      }
+    }
+  );
 }

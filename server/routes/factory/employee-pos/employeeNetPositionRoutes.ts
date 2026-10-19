@@ -1,5 +1,9 @@
 import { getClientDate } from "../../../lib/dateUtils";
-import { fxAgentTablesExist, loadFxAgentWallets, getFxAgentWalletSnapshot } from "../../../services/factory/fxAgentWalletDb";
+import {
+  fxAgentTablesExist,
+  loadFxAgentWallets,
+  getFxAgentWalletSnapshot,
+} from "../../../services/factory/fxAgentWalletDb";
 import { getErrorMessage } from "../../../lib/httpHandlers";
 import { logger } from "../../../lib/logger";
 import { getRentalBillingDay, getRentalPeriodDueDate } from "../../../services/rental/rentalPeriodService";
@@ -185,7 +189,9 @@ export function registerEmployeeNetPositionRoutes(app: Express) {
       // Exclude BOTH sides of the same premature voucher from this projected
       // dashboard (the trial balance remains the unmodified ledger).
       const heldSnapshot = await loadHeldChargeSnapshot(
-        companyId, allCustomersForNP.map((c) => c.id), asOf
+        companyId,
+        allCustomersForNP.map((c) => c.id),
+        asOf
       );
       let projectedAccountBalances = accBalances;
       if (heldSnapshot.voucherIds.size > 0) {
@@ -199,7 +205,10 @@ export function registerEmployeeNetPositionRoutes(app: Express) {
           });
         }
         projectedAccountBalances = new Map(
-          [...netByAccount].map(([id, value]) => [id, { debit: value.debit.toNumber(), credit: value.credit.toNumber() }])
+          [...netByAccount].map(([id, value]) => [
+            id,
+            { debit: value.debit.toNumber(), credit: value.credit.toNumber() },
+          ])
         );
       }
 
@@ -208,8 +217,13 @@ export function registerEmployeeNetPositionRoutes(app: Express) {
       // If an account was changed outside the wallet, leave the historic book
       // balance visible and return a warning rather than invent an FX amount.
       const fxAgentWallets: Array<{
-        accountId: number; name: string; eur: string; usd: string;
-        currentUsd: string | null; rate: string | null; synchronized: boolean;
+        accountId: number;
+        name: string;
+        eur: string;
+        usd: string;
+        currentUsd: string | null;
+        rate: string | null;
+        synchronized: boolean;
       }> = [];
       const fxAgentWalletWarnings: string[] = [];
       if (await fxAgentTablesExist()) {
@@ -221,12 +235,15 @@ export function registerEmployeeNetPositionRoutes(app: Express) {
           const rate = configFxRates.EUR ? String(configFxRates.EUR) : null;
           const snapshot = await getFxAgentWalletSnapshot(wallet, asOf, db, rate);
           const projectedBook = toMoney(getAccountNetBalance(account as AccountLike, projectedAccountBalances));
-          const matching = snapshot.synchronized &&
-            projectedBook.minus(snapshot.state.totalBookUsd).abs().lte("0.01");
+          const matching = snapshot.synchronized && projectedBook.minus(snapshot.state.totalBookUsd).abs().lte("0.01");
           fxAgentWallets.push({
-            accountId: account.id, name: account.name, eur: snapshot.state.eur,
-            usd: snapshot.state.usd, currentUsd: snapshot.currentUsd,
-            rate, synchronized: matching,
+            accountId: account.id,
+            name: account.name,
+            eur: snapshot.state.eur,
+            usd: snapshot.state.usd,
+            currentUsd: snapshot.currentUsd,
+            rate,
+            synchronized: matching,
           });
           if (!matching || snapshot.currentUsd === null) {
             fxAgentWalletWarnings.push(

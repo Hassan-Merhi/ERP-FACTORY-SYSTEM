@@ -179,7 +179,9 @@ export default function FactoryNetPosition() {
       {!!data?.fxAgentWalletWarnings?.length && (
         <div role="alert" className="rounded-md border border-amber-300 p-3 text-sm text-amber-700 dark:text-amber-300">
           <p className="font-semibold">FX Agent Account Reconciliation Warnings</p>
-          {data.fxAgentWalletWarnings.map((warning, index) => <p key={index}>{warning}</p>)}
+          {data.fxAgentWalletWarnings.map((warning, index) => (
+            <p key={index}>{warning}</p>
+          ))}
         </div>
       )}
 
@@ -365,9 +367,9 @@ export default function FactoryNetPosition() {
               </div>
             </div>
             <p className="text-xs text-muted-foreground">
-              Verified and Loading orders are included in "What We Have" as projected, uninvoiced order values;
-              Pending orders are shown for reference only. This does not post customer receivables to the ledger.
-              Loading amounts update as bales are scanned.
+              Verified and Loading orders are included in "What We Have" as projected, uninvoiced order values; Pending
+              orders are shown for reference only. This does not post customer receivables to the ledger. Loading
+              amounts update as bales are scanned.
             </p>
           </CardHeader>
           <CardContent className="space-y-3">

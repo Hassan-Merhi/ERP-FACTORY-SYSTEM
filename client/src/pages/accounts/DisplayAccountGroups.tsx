@@ -78,12 +78,17 @@ export default function DisplayAccountGroups() {
     refetchOnWindowFocus: false,
   });
 
-  const ledgerOptions = useMemo(() => (Array.isArray(accounts) ? accounts : []).filter((a) => a.subType !== "Group"), [accounts]);
+  const ledgerOptions = useMemo(
+    () => (Array.isArray(accounts) ? accounts : []).filter((a) => a.subType !== "Group"),
+    [accounts]
+  );
   const accountMap = useMemo(() => new Map(ledgerOptions.map((a) => [`ledger:${a.id}`, a])), [ledgerOptions]);
 
   useEffect(() => {
     if (!layout || loadingAccounts) return;
-    const retained = (Array.isArray(layout.nodes) ? layout.nodes : []).filter((n) => n.type === "group" || accountMap.has(n.key));
+    const retained = (Array.isArray(layout.nodes) ? layout.nodes : []).filter(
+      (n) => n.type === "group" || accountMap.has(n.key)
+    );
     const known = new Set(retained.map((n) => n.key));
     const additional = ledgerOptions
       .filter((a) => !known.has(`ledger:${a.id}`))
@@ -278,7 +283,12 @@ export default function DisplayAccountGroups() {
               placeholder="Group name (e.g. KAZEMBE)"
               className="max-w-sm"
             />
-            <Button variant="outline" data-testid="button-create-group" onClick={createGroup} disabled={!newName.trim()}>
+            <Button
+              variant="outline"
+              data-testid="button-create-group"
+              onClick={createGroup}
+              disabled={!newName.trim()}
+            >
               <Plus className="h-4 w-4 mr-1" /> New display group
             </Button>
             <Button onClick={() => save.mutate()} disabled={!dirty || save.isPending} className="ml-auto">

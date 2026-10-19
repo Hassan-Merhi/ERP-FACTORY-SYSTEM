@@ -75,9 +75,7 @@ export function settlementPreview(
   }
   const paid = from.times(rate).toDecimalPlaces(2);
   if (paid.lte(0)) throw new Error("USD payout below supported precision");
-  const book = from.eq(eurBalance)
-    ? bookBalance
-    : bookBalance.times(from).div(eurBalance).toDecimalPlaces(6);
+  const book = from.eq(eurBalance) ? bookBalance : bookBalance.times(from).div(eurBalance).toDecimalPlaces(6);
   const gain = paid.minus(book);
   return {
     eur: from.toFixed(6),

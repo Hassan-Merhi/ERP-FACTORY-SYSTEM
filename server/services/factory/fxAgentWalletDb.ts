@@ -97,14 +97,19 @@ export async function getFxAgentWalletSnapshot(
 ): Promise<FxAgentWalletSnapshot> {
   const { state, latestOperationDate } = await loadFxAgentWalletState(wallet, asOf, executor);
   const ledger = await getPartyBalance(executor, {
-    kind: "ledger", companyId: wallet.companyId, id: wallet.ledgerAccountId, asOf,
+    kind: "ledger",
+    companyId: wallet.companyId,
+    id: wallet.ledgerAccountId,
+    asOf,
   });
   if (!ledger) throw new Error("FX agent ledger account is missing");
   const book = toMoney(ledger.historicalBaseClosing);
   const difference = book.minus(state.totalBookUsd);
   const currentUsd = rateUsdPerEur
     ? walletCurrentUsd(state, rateUsdPerEur)
-    : toMoney(state.eur).isZero() ? state.usd : null;
+    : toMoney(state.eur).isZero()
+      ? state.usd
+      : null;
   return {
     wallet,
     state,

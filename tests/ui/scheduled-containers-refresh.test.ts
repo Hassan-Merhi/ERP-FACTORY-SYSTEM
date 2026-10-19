@@ -2,7 +2,10 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
-const file = resolve(process.cwd(), "client/src/pages/factory/factoryshippingcontainers/components/ScheduledContainersTable.tsx");
+const file = resolve(
+  process.cwd(),
+  "client/src/pages/factory/factoryshippingcontainers/components/ScheduledContainersTable.tsx"
+);
 const source = readFileSync(file, "utf8");
 
 describe("scheduled containers request policy", () => {
