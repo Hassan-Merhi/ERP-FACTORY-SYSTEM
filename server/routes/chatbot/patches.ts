@@ -264,7 +264,7 @@ export function registerChatbotPatchRoutes(app: Express) {
       if (isEncryptedToken && !token) {
         return res.status(422).json({
           success: false,
-          error: "Stored GitHub token cannot be decrypted. Reconnect the token in Chatbot Settings.",
+          error: "GITHUB_TOKEN_RECONNECT_REQUIRED",
         });
       }
 
