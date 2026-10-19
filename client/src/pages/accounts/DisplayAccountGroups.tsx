@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { ArrowDown, ArrowUp, Folder, GripVertical, Plus, Save, Trash2 } from "lucide-react";
 import { useCompany } from "@/contexts/CompanyContext";
+import { useAppMode } from "@/contexts/AppModeContext";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
@@ -36,6 +37,7 @@ function moveNode(nodes: AccountDisplayNode[], key: string, parentKey: string | 
 
 export default function DisplayAccountGroups() {
   const { selectedCompany } = useCompany();
+  const layoutUrl = useAppMode() === "factory" ? "/api/factory/account-display-layout" : "/api/accounts/display-layout";
   const { toast } = useToast();
   const [nodes, setNodes] = useState<AccountDisplayNode[]>([]);
   const [newName, setNewName] = useState("");
@@ -43,11 +45,11 @@ export default function DisplayAccountGroups() {
   const [draggedKey, setDraggedKey] = useState<string | null>(null);
   const [dirty, setDirty] = useState(false);
 
-  const layoutKey = ["/api/accounts/display-layout", selectedCompany?.id];
+  const layoutKey = [layoutUrl, selectedCompany?.id];
   const { data: layout, isLoading: loadingLayout, error: layoutError } = useQuery<AccountDisplayLayout>({
     queryKey: layoutKey,
     queryFn: async () => {
-      const r = await fetch("/api/accounts/display-layout", { credentials: "include" });
+      const r = await fetch(layoutUrl, { credentials: "include" });
       if (!r.ok) throw new Error((await r.json().catch(() => ({}))).message || "Cannot load account groups");
       return r.json();
     },
@@ -89,9 +91,9 @@ export default function DisplayAccountGroups() {
 
   const mutate = (next: AccountDisplayNode[]) => { setNodes(next); setDirty(true); };
   const save = useMutation({
-    mutationFn: () => apiRequest("PUT", "/api/accounts/display-layout", { nodes }),
+    mutationFn: () => apiRequest("PUT", layoutUrl, { nodes }),
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["/api/accounts/display-layout"] });
+      await queryClient.invalidateQueries({ queryKey: [layoutUrl] });
       toast({ title: "Account order saved for all users" });
     },
     onError: (error: Error) => toast({ title: "Unable to save order", description: error.message, variant: "destructive" }),
@@ -135,7 +137,7 @@ export default function DisplayAccountGroups() {
     if (!dragged || !target) return;
     // Dropping a ledger on a group header assigns it to that group.
     const destination = target.type === "group" && dragged.type === "ledger" ? target.key : parentKey;
-    mutate(moveNode(nodes, draggedKey, destination, target.type === "ledger" ? targetKey : undefined));
+    mutate(moveNode(nodes, draggedKey, destination, target.type === "ledger" || dragged.type === "group" ? targetKey : undefined));
     setDraggedKey(null);
   };
   const groupName = (item: AccountDisplayNode) => item.name || "";
