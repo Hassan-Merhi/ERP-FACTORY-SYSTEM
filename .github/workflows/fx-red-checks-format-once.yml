@@ -25,6 +25,14 @@ jobs:
           cache: npm
       - name: Install dependencies
         run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Bring latest main into FX feature branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin main
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git merge --no-edit origin/main
       - name: Format reported files and verify
         shell: bash
         run: |
@@ -40,8 +48,6 @@ jobs:
           node node_modules/prettier/bin/prettier.cjs --check "${files[@]}"
           git add -- "${files[@]}"
           if ! git diff --cached --quiet; then
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
             git commit -m "style(factory): fix barcode, bale and FX branch Prettier failures"
-            git push origin HEAD:feat/factory-agent-fx-wallets-20261019
           fi
+          git push origin HEAD:feat/factory-agent-fx-wallets-20261019
