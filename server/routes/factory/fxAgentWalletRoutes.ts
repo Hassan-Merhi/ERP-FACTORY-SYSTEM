@@ -69,12 +69,14 @@ export function registerFactoryFxAgentWalletRoutes(app: Express) {
       if (req.body?.confirmUsdSource !== true) throw new Error("Confirm this ledger currently represents USD funds held by the FX agent");
       const created = await db.transaction(async (tx) => {
         const accounts = await tx.execute(sql`
-          SELECT id, account_type AS type FROM ledger_accounts
+          SELECT id, account_type AS type, opening_balance_currency AS "openingCurrency" FROM ledger_accounts
           WHERE company_id = ${cid} AND id = ${accountId} AND deleted_at IS NULL AND active = true
           FOR UPDATE`);
         const account = accounts.rows[0];
         if (!account || ['Income','Indirect Income','Expense','Indirect Expense','Direct Expense','Equity','Profit','Cash','Bank'].includes(String(account.type)))
           throw new Error("Select an active balance-sheet ledger account");
+        if (account.openingCurrency && String(account.openingCurrency).toUpperCase() !== "USD")
+          throw new Error("Known non-USD opening balance cannot be activated as a USD FX wallet");
         const existing = await tx.execute(sql`
           SELECT id FROM factory_fx_agent_wallets WHERE company_id = ${cid} AND ledger_account_id = ${accountId}`);
         if (existing.rows.length) throw new Error("Account already linked to FX wallet");
