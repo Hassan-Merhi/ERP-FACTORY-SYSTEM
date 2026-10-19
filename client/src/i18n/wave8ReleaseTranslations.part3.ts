@@ -333,6 +333,11 @@ export const wave8ReleaseTranslationsPart3: readonly Phase3SharedUiEntry[] = [
     fr: "L’empreinte du plan revu est requise",
   },
   {
+    en: "Account groups layout could not be read",
+    ar: "تعذّرت قراءة تخطيط مجموعات الحسابات",
+    fr: "La disposition des groupes de comptes n’a pas pu être lue",
+  },
+  {
     en: "Pending orders at selling price (not invoiced; for information, their bales are in stock at cost)",
     ar: "طلبات معلّقة بسعر البيع (غير مفوترة؛ للعلم فقط، بالاتها ضمن المخزون بالتكلفة)",
     fr: "Commandes en attente au prix de vente (non facturées ; pour information, leurs balles sont en stock au coût)",
