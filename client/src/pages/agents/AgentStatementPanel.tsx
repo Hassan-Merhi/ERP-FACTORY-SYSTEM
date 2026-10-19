@@ -255,6 +255,13 @@ export function AgentStatementPanel({
 
       {/* Ledger table */}
       <div ref={printRef} className="print-container">
+        {fxWallet && (
+          <div className="hidden print:block text-xs mb-3">
+            <strong>FX Agent Native Balance:</strong> EUR {fxWallet.state.eur}, USD {fxWallet.state.usd}.
+            Current USD equivalent: {fxWallet.currentUsd ?? "FX rate missing"}.
+            Historical journal entries below remain in USD.
+          </div>
+        )}
         {/* Print-only header */}
         <div className="hidden print:block mb-4">
           <div className="text-center">
