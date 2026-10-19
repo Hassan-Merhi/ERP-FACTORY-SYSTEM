@@ -23,6 +23,8 @@ import {
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
 import { useCompany } from "@/contexts/CompanyContext";
 import type { AccountDisplayLayout } from "../accounts/DisplayAccountGroups";
+import { useAccountDisplayOrder } from "@/hooks/useAccountDisplayOrder";
+import { InlineOrderButtons, inlineDrag, type InlineOrderActions } from "@/components/accounts/InlineOrderButtons";
 import { useUserPreferences } from "@/hooks/use-user-preferences";
 
 interface AccountItem {
@@ -121,14 +123,21 @@ function CategoryGroup({
   amountColor,
   formatAmount,
   accentColor,
+  groupKey,
+  groupSiblings = [],
+  actions,
 }: {
   category: string;
   accounts: AccountItem[];
   amountColor: string;
   formatAmount: (n: number) => string;
   accentColor: string;
+  groupKey?: string | null;
+  groupSiblings?: string[];
+  actions?: InlineOrderActions;
 }) {
   const [open, setOpen] = useState(true);
+  const accountKeys = accounts.filter(a => a.id != null).map(a => `ledger:${a.id}`);
   const total = accounts.reduce((s, a) => s + Math.abs(a.value), 0);
 
   const insuranceAccounts = accounts.filter((a) => /^Insurance\s*[-–]/i.test(a.name));
@@ -136,11 +145,12 @@ function CategoryGroup({
   const displayCount = otherAccounts.length + (insuranceAccounts.length > 0 ? 1 : 0);
 
   return (
-    <div className="border border-border rounded-md overflow-hidden">
+    <div className="border border-border rounded-md overflow-hidden" {...inlineDrag(groupKey || null, actions)}>
+      <div className="flex items-stretch bg-muted/40">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="w-full flex items-center justify-between px-4 py-2.5 bg-muted/40 hover-elevate text-sm font-semibold"
+        className="flex-1 flex items-center justify-between px-4 py-2.5 hover-elevate text-sm font-semibold"
         data-testid={`button-category-${category.toLowerCase().replace(/\s+/g, "-")}`}
       >
         <div className="flex items-center gap-2">
@@ -156,6 +166,8 @@ function CategoryGroup({
         </div>
         <span className={`shrink-0 whitespace-nowrap font-mono font-bold ${accentColor}`}>{formatAmount(total)}</span>
       </button>
+      <InlineOrderButtons label={category} nodeKey={groupKey || null} siblingKeys={groupSiblings} actions={actions} />
+      </div>
       {open && (
         <div className="divide-y divide-border">
           {otherAccounts.map((acc, i) => (
@@ -163,6 +175,7 @@ function CategoryGroup({
               key={i}
               className="flex items-center justify-between px-4 py-2 text-sm"
               data-testid={`row-account-${i}`}
+              {...inlineDrag(acc.id != null ? `ledger:${acc.id}` : null, actions)}
             >
               {acc.id ? (
                 <button
@@ -176,9 +189,12 @@ function CategoryGroup({
               ) : (
                 <span className="font-medium text-foreground">{acc.name}</span>
               )}
-              <span className={`shrink-0 whitespace-nowrap font-mono tabular-nums ${amountColor}`}>
-                {formatAmount(Math.abs(acc.value))}
-              </span>
+              <div className="flex items-center gap-1">
+                <InlineOrderButtons label={acc.name} nodeKey={acc.id != null ? `ledger:${acc.id}` : null} siblingKeys={accountKeys} actions={actions} />
+                <span className={`shrink-0 whitespace-nowrap font-mono tabular-nums ${amountColor}`}>
+                  {formatAmount(Math.abs(acc.value))}
+                </span>
+              </div>
             </div>
           ))}
           {insuranceAccounts.length > 0 && (
@@ -203,6 +219,7 @@ function CollapsibleSection({
   amountColor,
   formatAmount,
   displayLayout,
+  orderActions,
 }: {
   id: string;
   title: string;
@@ -216,6 +233,7 @@ function CollapsibleSection({
   amountColor: string;
   formatAmount: (n: number) => string;
   displayLayout?: AccountDisplayLayout;
+  orderActions?: InlineOrderActions;
 }) {
   const [open, setOpen] = useState(true);
 
@@ -245,6 +263,7 @@ function CollapsibleSection({
       a.reduce((s, x) => s + Math.abs(x.value), 0);
   });
 
+  const groupKeys = sortedCategories.filter(([key]) => labels.has(key)).map(([key]) => key.slice("display:".length));
   return (
     <Card data-testid={`card-${id}`} className="flex flex-col">
       <CardHeader className="cursor-pointer select-none pb-3" onClick={() => setOpen((v) => !v)}>
@@ -278,6 +297,9 @@ function CollapsibleSection({
                   key={cat}
                   category={labels.get(cat) || cat}
                   accounts={catAccounts}
+                  groupKey={labels.has(cat) ? cat.slice("display:".length) : null}
+                  groupSiblings={groupKeys}
+                  actions={orderActions}
                   amountColor={amountColor}
                   formatAmount={formatAmount}
                   accentColor={totalColor}
@@ -588,18 +610,12 @@ function CustomNetPositionView({
 export default function FactoryNetPositionDetails() {
   const { formatAmount } = useCurrencyContext();
   const { selectedCompany } = useCompany();
-  const { data: displayLayout } = useQuery<AccountDisplayLayout>({
-    queryKey: ["/api/factory/account-display-layout", selectedCompany?.id],
-    queryFn: async () => {
-      const r = await fetch("/api/factory/account-display-layout", { credentials: "include" });
-      if (!r.ok) throw new Error("Display groups unavailable");
-      return r.json();
-    },
-    enabled: !!selectedCompany,
-    staleTime: 30000,
-    refetchOnWindowFocus: false,
-    retry: false,
-  });
+  const accountOrder = useAccountDisplayOrder();
+  const displayLayout = accountOrder.layout;
+  const orderActions: InlineOrderActions = {
+    canArrange: accountOrder.canArrange, arranging: accountOrder.arranging,
+    isSaving: accountOrder.isSaving, swap: accountOrder.swap, move: accountOrder.move,
+  };
   const [asOf, setAsOf] = useState<string>(todayStr);
   const isToday = asOf === todayStr();
   const { prefs, updatePref, isPending: isSavingValuationMode } = useUserPreferences();
@@ -808,6 +824,15 @@ export default function FactoryNetPositionDetails() {
       </Card>
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 items-start">
+        {accountOrder.canArrange && (
+          <div className="col-span-full flex items-center justify-end gap-2 flex-wrap">
+            {accountOrder.arranging && <span className="text-xs text-muted-foreground">Drag groups/accounts or use arrows. Saved for everyone.</span>}
+            <Button size="sm" variant={accountOrder.arranging ? "default" : "outline"} disabled={accountOrder.isSaving}
+              onClick={() => accountOrder.setArranging(!accountOrder.arranging)} data-testid="button-arrange-factory-net-position">
+              {accountOrder.arranging ? "Finish arranging" : "Arrange groups & accounts"}
+            </Button>
+          </div>
+        )}
         <CollapsibleSection
           id="assets"
           title="What We Have"
@@ -821,6 +846,7 @@ export default function FactoryNetPositionDetails() {
           amountColor="text-green-600"
           formatAmount={formatAmount}
           displayLayout={displayLayout}
+          orderActions={orderActions}
         />
         <CollapsibleSection
           id="liabilities"
@@ -835,6 +861,7 @@ export default function FactoryNetPositionDetails() {
           amountColor="text-red-600"
           formatAmount={formatAmount}
           displayLayout={displayLayout}
+          orderActions={orderActions}
         />
       </div>
 
