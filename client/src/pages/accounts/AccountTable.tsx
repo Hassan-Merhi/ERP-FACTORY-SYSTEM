@@ -1,7 +1,7 @@
 import { Fragment, useState, useMemo } from "react";
 import { Table, TableBody, TableCell, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import { ChevronDown, ChevronRight, Pencil } from "lucide-react";
+import { ArrowDown, ArrowUp, ChevronDown, ChevronRight, GripVertical, Pencil } from "lucide-react";
 import type { Account } from "./accountTypes";
 import type { AccountDisplayLayout } from "./DisplayAccountGroups";
 import { cn } from "@/lib/utils";
@@ -16,6 +16,12 @@ interface AccountTableProps {
   formatAmount: (amt: number) => string;
   onEdit?: (account: Account) => void;
   displayLayout?: AccountDisplayLayout;
+  canArrange?: boolean;
+  arranging?: boolean;
+  onArrangeChange?: (next: boolean) => void;
+  onSwap?: (key: string, targetKey: string) => void;
+  onMove?: (key: string, targetKey: string) => void;
+  isSavingOrder?: boolean;
 }
 
 export function AccountTable({
@@ -26,6 +32,12 @@ export function AccountTable({
   hideBalances,
   onEdit,
   displayLayout,
+  canArrange = false,
+  arranging = false,
+  onArrangeChange,
+  onSwap,
+  onMove,
+  isSavingOrder = false,
 }: AccountTableProps) {
   const { formatHistoricalBaseAmount } = useCurrencyContext();
 
@@ -34,6 +46,32 @@ export function AccountTable({
     return formatHistoricalBaseAmount(amount);
   }
   const [showZeroBalances, setShowZeroBalances] = useState(false);
+  const [dragging, setDragging] = useState<string | null>(null);
+  const layoutKey = (a: Account): string | null =>
+    a.type === "displayGroup" ? a.id.slice("display:".length) :
+    a.type === "ledger" && a.accountId > 0 ? `ledger:${a.accountId}` : null;
+  const moveButtons = (account: Account, siblings: Account[]) => {
+    const key = layoutKey(account);
+    if (!arranging || !canArrange || !key) return null;
+    const ordered = siblings.filter(a => layoutKey(a) &&
+      (a.type === "displayGroup") === (account.type === "displayGroup"));
+    const index = ordered.findIndex(a => a.id === account.id);
+    const previousKey = index > 0 ? layoutKey(ordered[index - 1]) : null;
+    const nextKey = index >= 0 && index < ordered.length - 1 ? layoutKey(ordered[index + 1]) : null;
+    return (
+      <span className="inline-flex items-center shrink-0" onClick={e => e.stopPropagation()}>
+        <GripVertical className="h-3.5 w-3.5 text-muted-foreground hidden sm:block" />
+        <Button size="icon" variant="ghost" className="h-7 w-7" aria-label={`Move ${account.name} up`}
+          disabled={!previousKey || isSavingOrder} onClick={() => previousKey && onSwap?.(key, previousKey)}>
+          <ArrowUp className="h-3.5 w-3.5" />
+        </Button>
+        <Button size="icon" variant="ghost" className="h-7 w-7" aria-label={`Move ${account.name} down`}
+          disabled={!nextKey || isSavingOrder} onClick={() => nextKey && onSwap?.(key, nextKey)}>
+          <ArrowDown className="h-3.5 w-3.5" />
+        </Button>
+      </span>
+    );
+  };
 
 
   // Display grouping is a pure projection: synthetic negative IDs are only used
@@ -101,7 +139,14 @@ export function AccountTable({
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-end">
+      <div className="flex flex-wrap items-center justify-end gap-2">
+        {canArrange && (
+          <Button size="sm" variant={arranging ? "default" : "outline"} disabled={isSavingOrder}
+            onClick={() => onArrangeChange?.(!arranging)} data-testid="button-arrange-accounts">
+            {arranging ? "Finish arranging" : "Arrange accounts"}
+          </Button>
+        )}
+        {arranging && <span className="text-xs text-muted-foreground">Use arrows or drag rows. Changes save for all users.</span>}
         <Button
           variant={showZeroBalances ? "default" : "outline"}
           size="sm"
@@ -127,6 +172,21 @@ export function AccountTable({
               return (
                 <Fragment key={account.id}>
                   <TableRow
+                    draggable={arranging && !!layoutKey(account)}
+                    onDragStart={e => {
+                      const key = layoutKey(account);
+                      if (key) { setDragging(key); e.dataTransfer.setData("text/plain", key); }
+                    }}
+                    onDragEnd={() => setDragging(null)}
+                    onDragOver={e => { if (arranging) e.preventDefault(); }}
+                    onDrop={e => {
+                      if (!arranging) return;
+                      e.preventDefault();
+                      const key = dragging || e.dataTransfer.getData("text/plain");
+                      const target = layoutKey(account);
+                      if (key && target) onMove?.(key, target);
+                      setDragging(null);
+                    }}
                     className="cursor-pointer transition-colors hover:bg-muted/30 group/row"
                     onClick={() => {
                       if (hasKids) toggleParent(account.id);
@@ -155,6 +215,7 @@ export function AccountTable({
                             #{account.accountId}
                           </span>
                         )}
+                        {moveButtons(account, parents)}
                         {onEdit && account.type === "ledger" && (
                           <button
                             className="opacity-0 group-hover/row:opacity-100 [@media(hover:none)]:opacity-100 [@media(hover:none)]:p-2.5 transition-opacity ml-1 p-0.5 rounded-sm hover:bg-muted text-muted-foreground hover:text-foreground shrink-0"
@@ -200,6 +261,23 @@ export function AccountTable({
                       return (
                         <TableRow
                           key={child.id}
+                          draggable={arranging && !!layoutKey(child)}
+                          onDragStart={e => {
+                            const key = layoutKey(child);
+                            if (key) { setDragging(key); e.dataTransfer.setData("text/plain", key); }
+                            e.stopPropagation();
+                          }}
+                          onDragEnd={() => setDragging(null)}
+                          onDragOver={e => { if (arranging) e.preventDefault(); }}
+                          onDrop={e => {
+                            if (!arranging) return;
+                            e.preventDefault();
+                            e.stopPropagation();
+                            const key = dragging || e.dataTransfer.getData("text/plain");
+                            const target = layoutKey(child);
+                            if (key && target) onMove?.(key, target);
+                            setDragging(null);
+                          }}
                           className="cursor-pointer hover:bg-muted/20 group/child"
                           onClick={() => handleAccountChange(child.id)}
                           data-testid={`row-account-${child.id}`}
@@ -212,6 +290,7 @@ export function AccountTable({
                                   #{child.accountId}
                                 </span>
                               )}
+                              {moveButtons(child, kids)}
                               {onEdit && child.type === "ledger" && (
                                 <button
                                   className="opacity-0 group-hover/child:opacity-100 transition-opacity p-0.5 rounded-sm hover:bg-muted text-muted-foreground hover:text-foreground shrink-0"
