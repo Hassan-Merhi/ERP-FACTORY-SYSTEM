@@ -589,9 +589,9 @@ export default function FactoryNetPositionDetails() {
   const { formatAmount } = useCurrencyContext();
   const { selectedCompany } = useCompany();
   const { data: displayLayout } = useQuery<AccountDisplayLayout>({
-    queryKey: ["/api/accounts/display-layout", selectedCompany?.id],
+    queryKey: ["/api/factory/account-display-layout", selectedCompany?.id],
     queryFn: async () => {
-      const r = await fetch("/api/accounts/display-layout", { credentials: "include" });
+      const r = await fetch("/api/factory/account-display-layout", { credentials: "include" });
       if (!r.ok) throw new Error("Display groups unavailable");
       return r.json();
     },
