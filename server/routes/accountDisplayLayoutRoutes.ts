@@ -64,7 +64,39 @@ export function registerAccountDisplayLayoutRoutes(app: Express) {
            ORDER BY sort_order, node_key`,
         [companyId]
       );
-      return res.json({ nodes: result.rows });
+      // Existing Account Groups are real ledger parent records. Preserve their
+      // accounting meaning, but reuse their parent/child relationship as a
+      // presentation-only group when no explicit display layout exists yet.
+      const ledger = await pool.query(
+        `SELECT id, name, parent_id AS "parentId", sub_type AS "subType"
+           FROM ledger_accounts
+           WHERE company_id = $1 AND deleted_at IS NULL AND active = TRUE
+           ORDER BY name, id`,
+        [companyId]
+      );
+      const effective: LayoutNode[] = (result.rows as LayoutNode[]).map(n => ({ ...n }));
+      const storedKeys = new Set(effective.map(n => n.key));
+      const parentIds = new Set<number>(
+        ledger.rows.filter(a => a.parentId != null).map(a => Number(a.parentId))
+      );
+      const legacyGroups = ledger.rows.filter(a => a.subType === "Group" || parentIds.has(Number(a.id)));
+      legacyGroups.forEach((a, i) => {
+        const key = `group:legacy-${a.id}`;
+        if (!storedKeys.has(key)) {
+          effective.push({ key, type: "group", name: a.name, parentKey: null, order: 500000 + i });
+          storedKeys.add(key);
+        }
+      });
+      const legacyIds = new Set(legacyGroups.map(a => Number(a.id)));
+      ledger.rows.forEach((a, i) => {
+        const key = `ledger:${a.id}`;
+        if (storedKeys.has(key)) return;
+        const parentKey = a.parentId != null && legacyIds.has(Number(a.parentId))
+          ? `group:legacy-${a.parentId}`
+          : null;
+        effective.push({ key, type: "ledger", name: null, parentKey, order: 10000 + i });
+      });
+      return res.json({ nodes: effective });
     } catch (error) {
       return res.status(503).json({ message: "Account layout is not available. Apply the account_display_layout migration.", detail: getErrorMessage(error) });
     }
