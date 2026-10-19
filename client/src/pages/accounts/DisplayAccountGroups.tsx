@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { ArrowDown, ArrowUp, Folder, GripVertical, Plus, Save, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowUp, Folder, GripVertical, Plus, RefreshCw, Save, Trash2 } from "lucide-react";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useAppMode } from "@/contexts/AppModeContext";
 import { useToast } from "@/hooks/use-toast";
@@ -54,6 +54,7 @@ export default function DisplayAccountGroups() {
     data: layout,
     isLoading: loadingLayout,
     error: layoutError,
+    refetch: refetchLayout,
   } = useQuery<AccountDisplayLayout>({
     queryKey: layoutKey,
     queryFn: async () => {
@@ -283,6 +284,20 @@ export default function DisplayAccountGroups() {
               placeholder="Group name (e.g. KAZEMBE)"
               className="max-w-sm"
             />
+            <Button
+              variant="outline"
+              size="sm"
+              data-testid="button-refresh-display-account-layout"
+              disabled={dirty || !selectedCompany}
+              onClick={() => {
+                void refetchLayout();
+                void queryClient.invalidateQueries({
+                  queryKey: ["/api/ledger-accounts/display-group-picker", selectedCompany?.id],
+                });
+              }}
+            >
+              <RefreshCw className="h-4 w-4 mr-1" /> Refresh Layout
+            </Button>
             <Button
               variant="outline"
               data-testid="button-create-group"
