@@ -16,6 +16,7 @@ import { writeDaybookEntry } from "../../_helpers";
 import { syncProformaReservations } from "../../_stockReservationHelper";
 import { acquireProformaCapacityTransactionLock } from "../proformaCapacityConcurrency";
 import { getProformaCapacitySnapshot } from "../proformaCapacity";
+import { buildRemainingLoadingPlan } from "../remainingLoadingPlan";
 import { guardProformaOrderCreation } from "../proformaCapacityWriteGuards";
 import {
   factoryBales,
@@ -229,35 +230,8 @@ export function registerOrderLoadingRoutes(app: Express) {
                 .from(customerProformaLines)
                 .where(eq(customerProformaLines.proformaId, proforma.id));
 
-          const normalizeCode = (code: string | null | undefined) => (code || "").trim().toLowerCase();
-          const expectedByArticle = new Map<
-            string,
-            { articleCode: string; productName: string | null; expectedQty: number; proformaLineId: number | null }
-          >();
-          for (const line of existingPlan.length
-            ? existingPlan
-            : proformaLines.map((line) => ({
-                articleCode: line.articleCode,
-                productName: line.productName,
-                expectedQty: line.quantity,
-                proformaLineId: line.id,
-              }))) {
-            const code = normalizeCode(line.articleCode);
-            if (!code) continue;
-            const qty = Number(line.expectedQty);
-            if (!Number.isSafeInteger(qty) || qty < 0) throw new Error("Invalid expected quantity in loading plan");
-            const previous = expectedByArticle.get(code);
-            if (previous) previous.expectedQty += qty;
-            else expectedByArticle.set(code, {
-              articleCode: line.articleCode,
-              productName: line.productName,
-              expectedQty: qty,
-              proformaLineId: line.proformaLineId,
-            });
-          }
-
-          // Same distinct-physical-bale counts used by the scanner and
-          // progress display (including historical article-code fallbacks).
+          // The shared capacity engine counts each distinct physical bale once,
+          // including the article-code fallbacks used by the scan route.
           const capacity = await getProformaCapacitySnapshot(tx, {
             companyId,
             proformaId: proforma.id,
@@ -267,18 +241,19 @@ export function registerOrderLoadingRoutes(app: Express) {
           const loadedByArticle = new Map(
             capacity.articles.map((article) => [article.normalizedArticleCode, article.currentOrderLoadedQty])
           );
-          for (const [code, line] of expectedByArticle) {
-            const remaining = Math.max(0, line.expectedQty - (loadedByArticle.get(code) || 0));
-            if (remaining > 0) {
-              nextLoadingLines.push({
-                articleCode: line.articleCode,
-                productName: line.productName,
-                expectedQty: remaining,
-                proformaLineId: line.proformaLineId,
-              });
-              nextLoadingRemainingBales += remaining;
-            }
-          }
+          const plan = buildRemainingLoadingPlan(
+            existingPlan.length
+              ? existingPlan
+              : proformaLines.map((line) => ({
+                  articleCode: line.articleCode,
+                  productName: line.productName,
+                  expectedQty: line.quantity,
+                  proformaLineId: line.id,
+                })),
+            loadedByArticle
+          );
+          nextLoadingLines.push(...plan.lines);
+          nextLoadingRemainingBales = plan.remainingBales;
           if (nextLoadingRemainingBales <= 0) {
             throw new Error("This loading has no remaining proforma quantities; use Finalize Only");
           }
