@@ -53,7 +53,8 @@ function resolveManagedExportPath(filePath: string, allowMissing = false): strin
   if (fs.realpathSync.native(directory) !== trustedRoot) {
     throw new Error("EXPORT_PATH_ERR");
   }
-  const safePath = path.join(trustedRoot, filename);
+  // Preserve the validated absolute path: do not rebuild an input-derived path.
+  const safePath = resolved;
   try {
     const metadata = fs.lstatSync(safePath);
     // Do not follow symbolic links or accept hard-linked files as export artifacts.
