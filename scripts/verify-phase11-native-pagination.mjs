@@ -43,7 +43,8 @@ for (const [label, text] of [
   containsAll(
     text,
     [
-      /if \(!wantsPagination\(req\)\) return next\(\)/,
+      // The daybook also answers filter-option requests without pagination (#2382).
+      /if \(!wantsPagination\(req\)(?: && !filterOptionsOnly)?\) return next\(\)/,
       /LIMIT \$\{/,
       /OFFSET \$\{/,
       /COUNT\(\*\)/,

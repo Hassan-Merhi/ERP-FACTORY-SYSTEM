@@ -1,11 +1,12 @@
 import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
-const file = new URL(
-  "../../client/src/pages/factory/factoryshippingcontainers/components/ScheduledContainersTable.tsx",
-  import.meta.url
+// jsdom gives import.meta.url an http: scheme, so resolve from the repository root.
+const source = readFileSync(
+  resolve(process.cwd(), "client/src/pages/factory/factoryshippingcontainers/components/ScheduledContainersTable.tsx"),
+  "utf8"
 );
-const source = readFileSync(file, "utf8");
 
 describe("scheduled containers request policy", () => {
   it("does not poll or refetch the editor on focus or reconnect", () => {

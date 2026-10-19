@@ -52,7 +52,7 @@ const PAGES: PageCase[] = [
     load: () => import("@/components/StockNameUpdateImport"),
     landmark: "input-update-stock-names-file",
   },
-  { name: "AccountGroups", load: () => import("@/pages/AccountGroups"), landmark: "button-create-group" },
+  { name: "AccountGroups", load: () => import("@/pages/AccountGroups"), landmark: "button-mode-display-groups" },
   { name: "AccountMigration", load: () => import("@/pages/AccountMigration"), landmark: "select-source-company" },
   {
     name: "AiValidationPage",
