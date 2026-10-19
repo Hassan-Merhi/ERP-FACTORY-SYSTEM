@@ -2,6 +2,7 @@ import { AlertTriangle, ArrowLeftRight, Undo2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Dialog,
   DialogContent,
@@ -19,6 +20,64 @@ export function BarcodeAdminDialogs({ model }: { model: BarcodeLookupModel }) {
 
   return (
     <>
+      <Dialog
+        open={model.showRestoreDeletedDialog}
+        onOpenChange={(open) => {
+          if (model.restoreDeletedMutation.isPending) return;
+          model.setShowRestoreDeletedDialog(open);
+          if (!open) model.setRestoreReason("");
+        }}
+      >
+        <DialogContent className="max-w-md" data-testid="dialog-restore-deleted-bale">
+          <DialogHeader>
+            <DialogTitle>Restore Deleted Bale to Stock</DialogTitle>
+            <DialogDescription>
+              Restore <span className="font-mono font-semibold">{referenceNumber}</span> to its original inventory
+              location. If the bale was physically removed, the original stock debit will be reversed exactly once.
+              The deletion and restoration remain in the audit history.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <label htmlFor="bale-restore-reason" className="text-sm font-medium">
+              Reason for restoration
+            </label>
+            <Textarea
+              id="bale-restore-reason"
+              value={model.restoreReason}
+              onChange={(event) => model.setRestoreReason(event.target.value)}
+              placeholder="Why is this bale being returned to inventory?"
+              maxLength={500}
+              data-testid="input-restore-bale-reason"
+            />
+          </div>
+          <DialogFooter className="gap-2 flex-wrap">
+            <Button
+              variant="outline"
+              onClick={() => model.setShowRestoreDeletedDialog(false)}
+              disabled={model.restoreDeletedMutation.isPending}
+            >
+              Cancel
+            </Button>
+            <Button
+              disabled={
+                model.restoreDeletedMutation.isPending ||
+                !model.restoreReason.trim() ||
+                !model.referenceResult?.baleInfo?.id
+              }
+              onClick={() => {
+                const baleId = model.referenceResult?.baleInfo?.id;
+                if (baleId && model.restoreReason.trim()) {
+                  model.restoreDeletedMutation.mutate({ baleId, reason: model.restoreReason.trim() });
+                }
+              }}
+              data-testid="button-confirm-restore-deleted-bale"
+            >
+              {model.restoreDeletedMutation.isPending ? "Restoring..." : "Confirm Restore to Stock"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={model.showDeleteDialog} onOpenChange={model.setShowDeleteDialog}>
         <DialogContent>
           <DialogHeader>
