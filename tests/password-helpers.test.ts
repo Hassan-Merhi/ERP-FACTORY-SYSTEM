@@ -1,10 +1,8 @@
 import bcrypt from "bcryptjs";
-import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import {
   hashPassword,
   isLegacySHA256Hash,
-  verifyLegacyPassword,
   verifyPassword,
   verifyPasswordBcryptOnly,
 } from "../server/routes/helpers/passwordHelpers";
@@ -17,20 +15,13 @@ describe("passwordHelpers", () => {
     expect(isLegacySHA256Hash("a".repeat(63))).toBe(false);
   });
 
-  it("verifies legacy SHA-256 passwords case-insensitively", () => {
-    const hash = createHash("sha256").update("correct horse battery staple").digest("hex");
-    expect(verifyLegacyPassword("correct horse battery staple", hash.toUpperCase())).toBe(true);
-    expect(verifyLegacyPassword("wrong password", hash)).toBe(false);
-    expect(verifyLegacyPassword("anything", "")).toBe(false);
-  });
-
-  it("marks a successful legacy login for bcrypt migration", async () => {
-    const hash = createHash("sha256").update("legacy-secret").digest("hex");
-    await expect(verifyPassword("legacy-secret", hash)).resolves.toEqual({
-      valid: true,
-      needsMigration: true,
+  it("refuses legacy SHA-256 password hashes rather than using weak verification", async () => {
+    const legacyHash = "a".repeat(64);
+    await expect(verifyPassword("legacy-secret", legacyHash)).resolves.toEqual({
+      valid: false,
+      needsMigration: false,
     });
-    await expect(verifyPassword("wrong", hash)).resolves.toEqual({
+    await expect(verifyPassword("legacy-secret", legacyHash.toUpperCase())).resolves.toEqual({
       valid: false,
       needsMigration: false,
     });
