@@ -82,7 +82,7 @@ export function InvoiceGroupRow({
         <TableCell />
         <TableCell />
         <TableCell />
-        <TableCell className="text-right font-mono text-lg font-bold tabular-nums">
+        <TableCell className="text-right font-mono text-sm font-semibold tabular-nums">
           <span className={getLoadedBalesColorClass(totals.totalBales)}>{totals.totalBales}</span>
         </TableCell>
         <TableCell className="text-right font-mono text-sm">{fmtKg(totals.totalWeightKg)}</TableCell>
