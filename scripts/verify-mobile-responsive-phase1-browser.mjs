@@ -280,12 +280,19 @@ async function readState(page, route, workspace) {
         "(max-width: 639px), (hover: none) and (pointer: coarse) and (max-height: 500px)",
       ).matches;
     } else if (currentRoute === "/account-groups") {
-      const anchor = document.querySelector('[data-testid="button-create-group"]');
-      const pane = anchor?.closest(".w-72");
-      const layout = pane?.parentElement;
-      state.anchorVisible = Boolean(visibleRect(anchor));
-      state.paneWidth = visibleRect(pane)?.width ?? null;
-      state.flexDirection = layout instanceof HTMLElement ? window.getComputedStyle(layout).flexDirection : null;
+      // The page opens on the single-column Display Groups editor; the legacy
+      // two-pane ledger hierarchy (and its stacking contract) is one toggle away.
+      const legacyAnchor = document.querySelector('[data-testid="button-create-group"]');
+      if (legacyAnchor) {
+        const pane = legacyAnchor.closest(".w-72");
+        const layout = pane?.parentElement;
+        state.anchorVisible = Boolean(visibleRect(legacyAnchor));
+        state.paneWidth = visibleRect(pane)?.width ?? null;
+        state.flexDirection = layout instanceof HTMLElement ? window.getComputedStyle(layout).flexDirection : null;
+      } else {
+        state.anchorVisible = Boolean(visibleRect(document.querySelector('[data-testid="button-mode-display-groups"]')));
+        state.stackedLayoutChecked = false;
+      }
     } else if (currentRoute.endsWith("/chat") || currentRoute === "/chat") {
       const chat = document.querySelector('[data-testid="chat-page"]');
       const pane = chat?.querySelector(":scope > .w-64");
@@ -314,11 +321,13 @@ function assertState(state, viewport, route, workspace) {
   if (state.paneWidth !== null && state.paneWidth > state.viewportWidth + 2) {
     failures.push(`${label}: legacy navigation pane is ${Math.round(state.paneWidth)}px wide for ${state.viewportWidth}px viewport`);
   }
-  if (shouldStack && state.flexDirection !== "column") {
-    failures.push(`${label}: critical layout is ${state.flexDirection || "unknown"} instead of the phone column layout`);
-  }
-  if (!shouldStack && state.flexDirection === "column") {
-    failures.push(`${label}: tablet/desktop layout unexpectedly uses the phone column layout`);
+  if (state.stackedLayoutChecked !== false) {
+    if (shouldStack && state.flexDirection !== "column") {
+      failures.push(`${label}: critical layout is ${state.flexDirection || "unknown"} instead of the phone column layout`);
+    }
+    if (!shouldStack && state.flexDirection === "column") {
+      failures.push(`${label}: tablet/desktop layout unexpectedly uses the phone column layout`);
+    }
   }
 
   const expectedTouchOpacity = viewport.hasTouch ? "1" : "0";
