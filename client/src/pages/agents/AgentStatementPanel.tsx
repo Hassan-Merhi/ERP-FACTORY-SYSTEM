@@ -131,12 +131,14 @@ export function AgentStatementPanel({
               <TrendingUp className="w-3.5 h-3.5 text-red-500" />
             )}
             <span className="text-base font-bold font-mono tabular-nums" data-testid="text-agent-balance">
-              {formatAmount(Math.abs(selectedAccount.balance))}
+              {fxWallet
+                ? `EUR ${Number(fxWallet.state.eur).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                : formatAmount(Math.abs(selectedAccount.balance))}
             </span>
             <span className={`text-xs font-semibold ${drCrClass(selectedAccount.balanceSide)}`}>
-              {selectedAccount.balanceSide ?? ""}
+              {fxWallet ? (Number(fxWallet.state.eur) >= 0 ? "Dr" : "Cr") : (selectedAccount.balanceSide ?? "")}
             </span>
-            <span className="text-xs text-muted-foreground">current balance</span>
+            <span className="text-xs text-muted-foreground">{fxWallet ? "native EUR balance" : "current balance"}</span>
           </div>
         </div>
         {phone ? (
