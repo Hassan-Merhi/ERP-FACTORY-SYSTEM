@@ -8,7 +8,7 @@ export function formatStockTransferNarration(sourceNames: readonly string[], des
   if (!uniqueSources.length || !destinationName.trim()) {
     throw new Error("Stock transfer narration requires source and destination locations");
   }
-  return `Stock Transfer from "${uniqueSources.join(", ")}" to "${destinationName.trim()}"`;
+  return `Stock Transfer from ${uniqueSources.join(", ")} to ${destinationName.trim()}`;
 }
 
 /** Resolve names from this company's locations; never trust labels supplied by the browser. */
@@ -54,6 +54,7 @@ export async function withStockTransferNarrations<
   const transferLegs = await db
     .select({
       voucherId: stockTransferVouchers.voucherId,
+      notes: stockTransferVouchers.notes,
       destinationId: stockTransferVouchers.destinationLocationId,
       itemSourceId: stockTransferItems.sourceLocationId,
       headerSourceId: stockTransferVouchers.sourceLocationId,
@@ -89,6 +90,13 @@ export async function withStockTransferNarrations<
     entry.sources.add(sourceId);
   }
 
+  // Notes typed by a user always take precedence over the generated narration.
+  const manualNotesById = new Map<number, string>();
+  for (const leg of transferLegs) {
+    const note = leg.notes?.trim();
+    if (note) manualNotesById.set(leg.voucherId, note);
+  }
+
   const narrationById = new Map<number, string>();
   for (const [voucherId, transfer] of sourcesByVoucher) {
     const destination = namesById.get(transfer.destinationId);
@@ -97,7 +105,8 @@ export async function withStockTransferNarrations<
       narrationById.set(voucherId, formatStockTransferNarration(sources, destination));
     }
   }
-  return voucherRows.map((row) =>
-    narrationById.has(row.id) ? { ...row, description: narrationById.get(row.id)! } : row
-  );
+  return voucherRows.map((row) => {
+    const narration = manualNotesById.get(row.id) ?? narrationById.get(row.id);
+    return narration ? { ...row, description: narration } : row;
+  });
 }
