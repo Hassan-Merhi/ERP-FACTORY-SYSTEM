@@ -1,6 +1,7 @@
 import { sql, type SQL } from "drizzle-orm";
 
 import { resultRows } from "../../../../lib/queryResult";
+import { syncLoadingStartedDaybookTotal } from "../loadingDaybookAmount";
 
 type SqlExecutor = {
   execute: (query: SQL) => Promise<unknown>;
@@ -204,6 +205,9 @@ export async function recalculateOrderTotalsForScannedArticle(
     FROM updated_order uo
     LEFT JOIN inserted_target it ON TRUE
   `);
+
+  // The customer-order patch and its daybook amount must commit atomically.
+  await syncLoadingStartedDaybookTotal(dbConn, orderId);
 
   const row: OrderTotalsRow = resultRows<OrderTotalsRow>(result)[0] || {};
 
