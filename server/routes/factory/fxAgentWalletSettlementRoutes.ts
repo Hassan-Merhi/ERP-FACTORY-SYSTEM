@@ -32,7 +32,7 @@ export function registerFactoryFxAgentSettlementRoutes(app: Express) {
           !/^\d+(?:\.\d{1,6})?$/.test(eur) ||
           !/^\d+(?:\.\d{1,10})?$/.test(fx) ||
           !/^\d{4}-\d{2}-\d{2}$/.test(date) || date > getClientDate(req) ||
-          !["factorySupplier","supplier","ledger"].includes(targetKind)) {
+          !["factorySupplier","ledger"].includes(targetKind)) {
         return res.status(400).json({ message: "Invalid FX settlement parameters" });
       }
       const result = await db.transaction(async (tx) => {
@@ -67,7 +67,6 @@ export function registerFactoryFxAgentSettlementRoutes(app: Express) {
           destinationTable = sql`factory_suppliers`;
           destinationExtra = sql`AND is_active = true`;
         }
-        if (targetKind === "supplier") destinationTable = sql`suppliers`;
         const targetRows = await tx.execute(sql`
           SELECT id, name FROM ${destinationTable}
           WHERE company_id = ${cid} AND id = ${targetId} ${destinationExtra}`);
@@ -79,7 +78,7 @@ export function registerFactoryFxAgentSettlementRoutes(app: Express) {
         const lines: FactoryVoucherLine[] = [
           {
             ...(targetKind === "ledger" ? { ledgerAccountId: targetId } :
-              targetKind === "supplier" ? { supplierId: targetId } : { factorySupplierId: targetId }),
+              { factorySupplierId: targetId }),
             currency: "USD", debit: quote.usd,
             narration: "USD payment from FX agent",
           },
