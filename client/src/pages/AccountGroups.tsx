@@ -634,7 +634,9 @@ export default function AccountGroups() {
           Legacy Ledger Hierarchy
         </Button>
       </div>
-      {mode === "display" ? <DisplayAccountGroups /> : (
+      {mode === "display" ? (
+        <DisplayAccountGroups />
+      ) : (
         <div>
           <p className="mx-4 mt-3 text-sm text-amber-600">
             Legacy ledger parent groups are real accounting accounts. Use Display Groups for new visual groupings.

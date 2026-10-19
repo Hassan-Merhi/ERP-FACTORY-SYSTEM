@@ -48,7 +48,7 @@ export function useAccountDisplayOrder() {
       if (!r.ok) throw new Error("Unable to save account order");
       return r.json() as Promise<DisplayLayout>;
     },
-    onMutate: async nodes => {
+    onMutate: async (nodes) => {
       await queryClient.cancelQueries({ queryKey });
       const previous = queryClient.getQueryData<DisplayLayout>(queryKey);
       queryClient.setQueryData<DisplayLayout>(queryKey, { nodes });
@@ -63,38 +63,38 @@ export function useAccountDisplayOrder() {
 
   const swap = (key: string, targetKey: string) => {
     if (!canArrange || save.isPending || !layout || key === targetKey) return;
-    const source = layout.nodes.find(n => n.key === key);
-    const target = layout.nodes.find(n => n.key === targetKey);
-    if (!source || !target || source.parentKey !== target.parentKey ||
-        source.type !== target.type) return;
-    save.mutate(layout.nodes.map(n =>
-      n.key === key ? { ...n, order: target.order } :
-      n.key === targetKey ? { ...n, order: source.order } : n
-    ));
+    const source = layout.nodes.find((n) => n.key === key);
+    const target = layout.nodes.find((n) => n.key === targetKey);
+    if (!source || !target || source.parentKey !== target.parentKey || source.type !== target.type) return;
+    save.mutate(
+      layout.nodes.map((n) =>
+        n.key === key ? { ...n, order: target.order } : n.key === targetKey ? { ...n, order: source.order } : n
+      )
+    );
   };
 
   // A drag onto a group header assigns that account to the group; dropping
   // onto another account places it immediately above that account.
   const move = (key: string, targetKey: string) => {
     if (!canArrange || save.isPending || !layout || key === targetKey) return;
-    const source = layout.nodes.find(n => n.key === key);
-    const target = layout.nodes.find(n => n.key === targetKey);
+    const source = layout.nodes.find((n) => n.key === key);
+    const target = layout.nodes.find((n) => n.key === targetKey);
     if (!source || !target || (source.type === "group" && target.type !== "group")) return;
     const nextParent = target.type === "group" && source.type === "ledger" ? target.key : target.parentKey;
     if (source.type === "group" && nextParent !== null) return;
-    const remaining = layout.nodes.filter(n => n.key !== key);
-    const siblings = remaining.filter(n => n.parentKey === nextParent).sort(sort);
-    const before = target.type === "group" && source.type === "ledger" ? -1 :
-      siblings.findIndex(n => n.key === targetKey);
+    const remaining = layout.nodes.filter((n) => n.key !== key);
+    const siblings = remaining.filter((n) => n.parentKey === nextParent).sort(sort);
+    const before =
+      target.type === "group" && source.type === "ledger" ? -1 : siblings.findIndex((n) => n.key === targetKey);
     siblings.splice(before < 0 ? siblings.length : before, 0, { ...source, parentKey: nextParent });
     const indices = new Map(siblings.map((n, i) => [n.key, i]));
-    let next = remaining.map(n => indices.has(n.key) ? { ...n, order: indices.get(n.key)! } : n);
-    const appended = siblings.find(n => n.key === key)!;
+    let next = remaining.map((n) => (indices.has(n.key) ? { ...n, order: indices.get(n.key)! } : n));
+    const appended = siblings.find((n) => n.key === key)!;
     next.push({ ...appended, order: indices.get(key)! });
     if (source.parentKey !== nextParent) {
-      const oldSiblings = next.filter(n => n.parentKey === source.parentKey).sort(sort);
+      const oldSiblings = next.filter((n) => n.parentKey === source.parentKey).sort(sort);
       const oldOrder = new Map(oldSiblings.map((n, i) => [n.key, i]));
-      next = next.map(n => oldOrder.has(n.key) ? { ...n, order: oldOrder.get(n.key)! } : n);
+      next = next.map((n) => (oldOrder.has(n.key) ? { ...n, order: oldOrder.get(n.key)! } : n));
     }
     save.mutate(next);
   };

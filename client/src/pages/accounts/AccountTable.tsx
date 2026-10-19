@@ -50,74 +50,102 @@ export function AccountTable({
   const [showZeroBalances, setShowZeroBalances] = useState(false);
   const [dragging, setDragging] = useState<string | null>(null);
   const layoutKey = (a: Account): string | null =>
-    a.type === "displayGroup" ? a.id.slice("display:".length) :
-    a.type === "ledger" && a.accountId > 0 ? `ledger:${a.accountId}` : null;
+    a.type === "displayGroup"
+      ? a.id.slice("display:".length)
+      : a.type === "ledger" && a.accountId > 0
+        ? `ledger:${a.accountId}`
+        : null;
   const moveButtons = (account: Account, siblings: Account[]) => {
     const key = layoutKey(account);
     if (!arranging || !canArrange || !key) return null;
-    const ordered = siblings.filter(a => layoutKey(a) &&
-      (a.type === "displayGroup") === (account.type === "displayGroup"));
-    const index = ordered.findIndex(a => a.id === account.id);
+    const ordered = siblings.filter(
+      (a) => layoutKey(a) && (a.type === "displayGroup") === (account.type === "displayGroup")
+    );
+    const index = ordered.findIndex((a) => a.id === account.id);
     const previousKey = index > 0 ? layoutKey(ordered[index - 1]) : null;
     const nextKey = index >= 0 && index < ordered.length - 1 ? layoutKey(ordered[index + 1]) : null;
     return (
-      <span className="inline-flex items-center shrink-0" onClick={e => e.stopPropagation()}>
+      <span className="inline-flex items-center shrink-0" onClick={(e) => e.stopPropagation()}>
         <GripVertical className="h-3.5 w-3.5 text-muted-foreground hidden sm:block" />
-        <Button size="icon" variant="ghost" className="h-7 w-7" aria-label={`Move ${account.name} up`}
-          disabled={!previousKey || isSavingOrder} onClick={() => previousKey && onSwap?.(key, previousKey)}>
+        <Button
+          size="icon"
+          variant="ghost"
+          className="h-7 w-7"
+          aria-label={`Move ${account.name} up`}
+          disabled={!previousKey || isSavingOrder}
+          onClick={() => previousKey && onSwap?.(key, previousKey)}
+        >
           <ArrowUp className="h-3.5 w-3.5" />
         </Button>
-        <Button size="icon" variant="ghost" className="h-7 w-7" aria-label={`Move ${account.name} down`}
-          disabled={!nextKey || isSavingOrder} onClick={() => nextKey && onSwap?.(key, nextKey)}>
+        <Button
+          size="icon"
+          variant="ghost"
+          className="h-7 w-7"
+          aria-label={`Move ${account.name} down`}
+          disabled={!nextKey || isSavingOrder}
+          onClick={() => nextKey && onSwap?.(key, nextKey)}
+        >
           <ArrowDown className="h-3.5 w-3.5" />
         </Button>
       </span>
     );
   };
 
-
   // Display grouping is a pure projection: synthetic negative IDs are only used
   // for rendering, and no real account parentId / balance is ever mutated.
   const orderedAccounts = useMemo(() => {
     if (!displayLayout?.nodes?.length) return filteredAccounts;
-    const groups = displayLayout.nodes.filter(n => n.type === "group");
-    const ledgerNodes = displayLayout.nodes.filter(n => n.type === "ledger");
-    const legacyGroupKeys = new Set(groups.map(n => n.key));
+    const groups = displayLayout.nodes.filter((n) => n.type === "group");
+    const ledgerNodes = displayLayout.nodes.filter((n) => n.type === "ledger");
+    const legacyGroupKeys = new Set(groups.map((n) => n.key));
     const groupIdByKey = new Map(groups.map((n, i) => [n.key, -(i + 1)]));
-    const accountByKey = new Map(filteredAccounts.filter(a => a.type === "ledger").map(a => [`ledger:${a.accountId}`, a]));
+    const accountByKey = new Map(
+      filteredAccounts.filter((a) => a.type === "ledger").map((a) => [`ledger:${a.accountId}`, a])
+    );
     const groupedLedger = new Set<string>();
     const result: Account[] = [];
-    const rootNodes = [...displayLayout.nodes.filter(n => !n.parentKey)].sort((a, b) => a.order - b.order);
+    const rootNodes = [...displayLayout.nodes.filter((n) => !n.parentKey)].sort((a, b) => a.order - b.order);
     for (const node of rootNodes) {
       if (node.type === "group") {
         const virtualId = groupIdByKey.get(node.key)!;
         const members = ledgerNodes
-          .filter(n => n.parentKey === node.key)
+          .filter((n) => n.parentKey === node.key)
           .sort((a, b) => a.order - b.order)
-          .map(n => accountByKey.get(n.key))
+          .map((n) => accountByKey.get(n.key))
           .filter((a): a is Account => !!a);
         for (const member of members) groupedLedger.add(`ledger:${member.accountId}`);
-        const signedTotal = members.reduce((sum, a) => sum + (
-          a.balanceSide === "Cr" ? -Math.abs(a.balance) :
-          a.balanceSide === "Dr" ? Math.abs(a.balance) : a.balance
-        ), 0);
+        const signedTotal = members.reduce(
+          (sum, a) =>
+            sum +
+            (a.balanceSide === "Cr" ? -Math.abs(a.balance) : a.balanceSide === "Dr" ? Math.abs(a.balance) : a.balance),
+          0
+        );
         result.push({
-          id: `display:${node.key}`, accountId: virtualId, type: "displayGroup",
-          code: "", name: node.name || "Group", balance: signedTotal,
-          balanceSide: signedTotal < 0 ? "Cr" : "Dr", active: true, subType: "Group",
+          id: `display:${node.key}`,
+          accountId: virtualId,
+          type: "displayGroup",
+          code: "",
+          name: node.name || "Group",
+          balance: signedTotal,
+          balanceSide: signedTotal < 0 ? "Cr" : "Dr",
+          active: true,
+          subType: "Group",
         });
-        result.push(...members.map(a => ({ ...a, parentId: virtualId })));
+        result.push(...members.map((a) => ({ ...a, parentId: virtualId })));
       } else {
         const account = accountByKey.get(node.key);
         if (account && !groupedLedger.has(node.key)) result.push(account);
       }
     }
-    const used = new Set(result.filter(a => a.type !== "displayGroup").map(a => a.id));
+    const used = new Set(result.filter((a) => a.type !== "displayGroup").map((a) => a.id));
     // Untracked accounts and all non-ledger types retain their existing list order.
-    result.push(...filteredAccounts.filter(a =>
-      !used.has(a.id) && !(a.subType === "Group" &&
-      legacyGroupKeys.has(`group:legacy-${a.accountId}`) && Math.abs(a.balance) < 0.001)
-    ));
+    result.push(
+      ...filteredAccounts.filter(
+        (a) =>
+          !used.has(a.id) &&
+          !(a.subType === "Group" && legacyGroupKeys.has(`group:legacy-${a.accountId}`) && Math.abs(a.balance) < 0.001)
+      )
+    );
     return result;
   }, [filteredAccounts, displayLayout]);
 
@@ -147,12 +175,19 @@ export function AccountTable({
     <div className="space-y-3">
       <div className="flex flex-wrap items-center justify-end gap-2">
         {canArrange && (
-          <Button size="sm" variant={arranging ? "default" : "outline"} disabled={isSavingOrder}
-            onClick={() => onArrangeChange?.(!arranging)} data-testid="button-arrange-accounts">
+          <Button
+            size="sm"
+            variant={arranging ? "default" : "outline"}
+            disabled={isSavingOrder}
+            onClick={() => onArrangeChange?.(!arranging)}
+            data-testid="button-arrange-accounts"
+          >
             {arranging ? "Finish arranging" : "Arrange accounts"}
           </Button>
         )}
-        {arranging && <span className="text-xs text-muted-foreground">Use arrows or drag rows. Changes save for all users.</span>}
+        {arranging && (
+          <span className="text-xs text-muted-foreground">Use arrows or drag rows. Changes save for all users.</span>
+        )}
         <Button
           variant={showZeroBalances ? "default" : "outline"}
           size="sm"
@@ -179,13 +214,18 @@ export function AccountTable({
                 <Fragment key={account.id}>
                   <TableRow
                     draggable={arranging && !!layoutKey(account)}
-                    onDragStart={e => {
+                    onDragStart={(e) => {
                       const key = layoutKey(account);
-                      if (key) { setDragging(key); e.dataTransfer.setData("text/plain", key); }
+                      if (key) {
+                        setDragging(key);
+                        e.dataTransfer.setData("text/plain", key);
+                      }
                     }}
                     onDragEnd={() => setDragging(null)}
-                    onDragOver={e => { if (arranging) e.preventDefault(); }}
-                    onDrop={e => {
+                    onDragOver={(e) => {
+                      if (arranging) e.preventDefault();
+                    }}
+                    onDrop={(e) => {
                       if (!arranging) return;
                       e.preventDefault();
                       const key = dragging || e.dataTransfer.getData("text/plain");
@@ -268,14 +308,19 @@ export function AccountTable({
                         <TableRow
                           key={child.id}
                           draggable={arranging && !!layoutKey(child)}
-                          onDragStart={e => {
+                          onDragStart={(e) => {
                             const key = layoutKey(child);
-                            if (key) { setDragging(key); e.dataTransfer.setData("text/plain", key); }
+                            if (key) {
+                              setDragging(key);
+                              e.dataTransfer.setData("text/plain", key);
+                            }
                             e.stopPropagation();
                           }}
                           onDragEnd={() => setDragging(null)}
-                          onDragOver={e => { if (arranging) e.preventDefault(); }}
-                          onDrop={e => {
+                          onDragOver={(e) => {
+                            if (arranging) e.preventDefault();
+                          }}
+                          onDrop={(e) => {
                             if (!arranging) return;
                             e.preventDefault();
                             e.stopPropagation();

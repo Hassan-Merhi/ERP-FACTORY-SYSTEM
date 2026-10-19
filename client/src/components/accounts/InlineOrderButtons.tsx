@@ -25,16 +25,28 @@ export function InlineOrderButtons({
   const index = siblingKeys.indexOf(nodeKey);
   if (index < 0) return null;
   return (
-    <span className="inline-flex items-center shrink-0" onClick={event => event.stopPropagation()}>
+    <span className="inline-flex items-center shrink-0" onClick={(event) => event.stopPropagation()}>
       <GripVertical className="h-3.5 w-3.5 text-muted-foreground hidden sm:block" />
-      <Button type="button" size="icon" variant="ghost" className="h-7 w-7"
-        disabled={actions.isSaving || index === 0} aria-label={`Move ${label} up`}
-        onClick={() => actions.swap(nodeKey, siblingKeys[index - 1])}>
+      <Button
+        type="button"
+        size="icon"
+        variant="ghost"
+        className="h-7 w-7"
+        disabled={actions.isSaving || index === 0}
+        aria-label={`Move ${label} up`}
+        onClick={() => actions.swap(nodeKey, siblingKeys[index - 1])}
+      >
         <ArrowUp className="h-3.5 w-3.5" />
       </Button>
-      <Button type="button" size="icon" variant="ghost" className="h-7 w-7"
-        disabled={actions.isSaving || index === siblingKeys.length - 1} aria-label={`Move ${label} down`}
-        onClick={() => actions.swap(nodeKey, siblingKeys[index + 1])}>
+      <Button
+        type="button"
+        size="icon"
+        variant="ghost"
+        className="h-7 w-7"
+        disabled={actions.isSaving || index === siblingKeys.length - 1}
+        aria-label={`Move ${label} down`}
+        onClick={() => actions.swap(nodeKey, siblingKeys[index + 1])}
+      >
         <ArrowDown className="h-3.5 w-3.5" />
       </Button>
     </span>
