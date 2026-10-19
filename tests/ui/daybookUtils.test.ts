@@ -18,6 +18,7 @@ import {
   getFactoryTxTypeBadge,
 } from "@/pages/factory/daybook/daybookUtils";
 import type { DaybookEntry } from "@/pages/factory/daybook/types";
+import { formatFactoryBaleRemovalDescription } from "@shared/factoryBaleRemovalDescription";
 
 function entry(overrides: Partial<DaybookEntry> = {}): DaybookEntry {
   return {
@@ -153,6 +154,79 @@ describe("formatDaybookDescription", () => {
         entry({ txType: "BALE_STOCK_ENTRY", description: "Stock entry: 3 bales - Cotton, REFAB12" })
       )
     ).toBe("Cotton");
+  });
+});
+
+describe("factory bale removal descriptions", () => {
+  it("shows the exact bale reference and removing username", () => {
+    expect(
+      formatFactoryBaleRemovalDescription({
+        references: ["AB123"],
+        username: "Ahmad Ramadan",
+        reason: "Bale damaged",
+      })
+    ).toBe("Removed bale #AB123 by Ahmad Ramadan. Reason: Bale damaged.");
+  });
+
+  it("lists every reference for multi-bale removals", () => {
+    expect(
+      formatFactoryBaleRemovalDescription({
+        references: ["B1", "B2", "B3"],
+        username: "admin",
+        reason: "",
+      })
+    ).toBe("Removed bales #B1, #B2, and #B3 by admin.");
+  });
+
+  it("omits the reason label when no explanation was provided", () => {
+    expect(
+      formatFactoryBaleRemovalDescription({
+        references: ["X5"],
+        username: "admin",
+        reason: "   ",
+      })
+    ).toBe("Removed bale #X5 by admin.");
+  });
+
+  it("hides automatic system reasons while keeping custom reason punctuation", () => {
+    expect(
+      formatFactoryBaleRemovalDescription({
+        references: ["X5"],
+        username: "admin",
+        reason: "Bale deleted everywhere from Barcode Lookup",
+      })
+    ).toBe("Removed bale #X5 by admin.");
+    expect(
+      formatFactoryBaleRemovalDescription({
+        references: ["X5"],
+        username: "admin",
+        reason: "Damaged!",
+      })
+    ).toBe("Removed bale #X5 by admin. Reason: Damaged!");
+  });
+
+  it("updates existing daybook rows from audit metadata without a database migration", () => {
+    expect(
+      formatDaybookDescription(
+        entry({
+          txType: "BALE_REMOVAL",
+          description: "Removed 1 bale(s) from factory stock. Supervisor: admin. Reason: Factory bale stock removal",
+          metaJson: JSON.stringify({
+            bales: [{ id: 7, ref: "REF100", productName: "Denim" }],
+            actorName: "admin",
+            reason: "Factory bale stock removal",
+          }),
+        })
+      )
+    ).toBe("Removed bale #REF100 by admin.");
+  });
+
+  it("keeps old descriptions intact when bale metadata is unavailable", () => {
+    expect(
+      formatDaybookDescription(
+        entry({ txType: "BALE_REMOVAL", description: "Legacy bale removal", metaJson: "{bad" })
+      )
+    ).toBe("Legacy bale removal");
   });
 });
 
