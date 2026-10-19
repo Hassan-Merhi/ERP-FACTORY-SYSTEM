@@ -127,7 +127,9 @@ export default function Agents() {
       vouchersWithBalance,
       openingBalance,
       formatAmount,
-      fxNote,
+      fxNote: selectedFxWallet
+        ? `Agent native balance: EUR ${selectedFxWallet.state.eur}; USD ${selectedFxWallet.state.usd}; current USD equivalent ${selectedFxWallet.currentUsd ?? "rate missing"}. Historical voucher entries remain in USD.`
+        : fxNote,
     });
     await exportAgentStatementExcel(selectedAccount, rows);
     toast({ title: "Exported successfully" });
