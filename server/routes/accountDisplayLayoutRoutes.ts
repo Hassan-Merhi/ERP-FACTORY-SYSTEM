@@ -25,7 +25,7 @@ function parseNodes(raw: unknown): LayoutNode[] {
     if (typeof n.key !== "string" || keys.has(n.key)) throw new Error("Duplicate or invalid layout key");
     keys.add(n.key);
     if (n.type !== "group" && n.type !== "ledger") throw new Error("Invalid layout node type");
-    if (!Number.isInteger(n.order) || (n.order as number) < 0 || (n.order as number) > 10000) {
+    if (!Number.isInteger(n.order) || (n.order as number) < 0 || (n.order as number) > 1000000) {
       throw new Error("Invalid account order");
     }
     if (n.type === "group") {
