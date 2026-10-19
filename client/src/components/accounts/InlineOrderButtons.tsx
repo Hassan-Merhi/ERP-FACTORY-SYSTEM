@@ -1,3 +1,4 @@
+import type { DragEvent } from "react";
 import { ArrowDown, ArrowUp, GripVertical } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -45,16 +46,16 @@ export function inlineDrag(nodeKey: string | null, actions?: InlineOrderActions)
   const enabled = !!nodeKey && !!actions?.canArrange && !!actions?.arranging;
   return {
     draggable: enabled,
-    onDragStart: (event: React.DragEvent) => {
+    onDragStart: (event: DragEvent) => {
       if (!enabled || !nodeKey) return;
       event.dataTransfer.setData("text/plain", nodeKey);
       event.dataTransfer.effectAllowed = "move";
       event.stopPropagation();
     },
-    onDragOver: (event: React.DragEvent) => {
+    onDragOver: (event: DragEvent) => {
       if (enabled) event.preventDefault();
     },
-    onDrop: (event: React.DragEvent) => {
+    onDrop: (event: DragEvent) => {
       if (!enabled || !nodeKey) return;
       event.preventDefault();
       event.stopPropagation();
