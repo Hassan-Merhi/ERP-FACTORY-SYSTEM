@@ -26,6 +26,7 @@ import { NotInLedgerCard } from "@/components/netposition/NotInLedgerCard";
 import { Side } from "./factorynetposition/components/Side";
 import { OrderGroup } from "./factorynetposition/components/OrderGroup";
 import { CustomNetPositionView } from "./factorynetposition/components/CustomNetPositionView";
+import { FactoryFxAgentWalletCard } from "./factorynetposition/components/FactoryFxAgentWalletCard";
 
 export default function FactoryNetPosition() {
   const [asOf, setAsOf] = useState<string>(todayStr);
@@ -173,6 +174,8 @@ export default function FactoryNetPosition() {
           </span>
         </div>
       )}
+
+      <FactoryFxAgentWalletCard asOf={asOf} readOnly={!isToday} />
 
       {/* Net Position Banner */}
       {isLoading ? (
