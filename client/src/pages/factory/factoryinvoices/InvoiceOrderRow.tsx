@@ -39,7 +39,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { getLoadedBalesColorClass, getOverloadedBales, getRemainingBales } from "./invoiceCalculations";
+import { getFactoryInvoiceDate, getLoadedBalesColorClass, getOverloadedBales, getRemainingBales } from "./invoiceCalculations";
 import type { CustomerOrder } from "./types";
 
 /** Weight cell formatting shared by the order row and the customer group row. */
@@ -104,16 +104,8 @@ export function InvoiceOrderRow({
   const expected = parseFloat(order.proformaExpectedBales || "0");
   const overloaded = getOverloadedBales(order);
 
-  // The table date follows the actual verification/finalization event, not loading creation.
-  const eventTimestamp = order.status === "FINALIZED"
-    ? (order.finalizedAt || order.verifiedAt || order.loadingFinalizedAt)
-    : order.status === "VERIFIED"
-      ? (order.verifiedAt || order.loadingFinalizedAt)
-      : null;
-  const eventDate = eventTimestamp ? new Date(eventTimestamp) : null;
-  const displayDate = eventDate && !Number.isNaN(eventDate.getTime())
-    ? formatDisplayDate(`${eventDate.getFullYear()}-${String(eventDate.getMonth() + 1).padStart(2, "0")}-${String(eventDate.getDate()).padStart(2, "0")}`)
-    : order.orderDate ? formatDisplayDate(order.orderDate) : "-";
+  const dateForStatus = getFactoryInvoiceDate(order);
+  const displayDate = dateForStatus ? formatDisplayDate(dateForStatus) : "-";
 
   return (
     <TableRow
