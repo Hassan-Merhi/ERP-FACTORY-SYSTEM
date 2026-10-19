@@ -76,7 +76,11 @@ const reviewedSpMounts: string[] = [];
 // the import-export account-migration execute copy and the cross-company supplier purchase-order
 // reader). Every remaining overlap is a reviewed guard, fallback or conditional dispatch listed in
 // docs/archive/engineering/dead-code/phase-3-route-disposition.json.
-const MAX_SHADOWED_REGISTRATIONS = 77;
+// Raised from 77 to 79 for the protected-correction boundary (#2352): it registers
+// POST /api/vouchers/bulk-delete and POST /api/voucher-entries ahead of their
+// handlers to refuse changes to correction voucher 16303, and calls next() for
+// every other request, so the later registrations stay reachable.
+const MAX_SHADOWED_REGISTRATIONS = 79;
 let actual: SerializedRouteManifest;
 
 async function buildManifest(): Promise<SerializedRouteManifest> {
