@@ -16,7 +16,6 @@ import {
 } from "@shared/schema";
 import { eq, and } from "drizzle-orm";
 import bcrypt from "bcryptjs";
-import { createHash, timingSafeEqual } from "node:crypto";
 import { resolveStoredFxRate, UnresolvedExchangeRateError } from "../../services/factory/currencyConversion";
 import type { DbTransaction, DatabaseOrTransaction } from "../../db";
 import type Decimal from "decimal.js";
@@ -93,11 +92,9 @@ export function isLegacySHA256Hash(hash: string): boolean {
 }
 
 export async function verifySupervisorPassword(password: string, hash: string): Promise<boolean> {
-  if (isLegacySHA256Hash(hash)) {
-    const actual = createHash("sha256").update(password, "utf8").digest();
-    const expected = Buffer.from(hash, "hex");
-    return actual.length === expected.length && timingSafeEqual(actual, expected);
-  }
+  // Privileged approvals never accept the legacy unsalted SHA-256 password.
+  // Users must sign in (which migrates that hash to bcrypt) or reset it first.
+  if (isLegacySHA256Hash(hash)) return false;
   return bcrypt.compare(password, hash);
 }
 
