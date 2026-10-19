@@ -329,6 +329,9 @@ export default function FactoryPendingInvoiceVerify() {
       {/* Recovery banner — shown when the order has 0 linked bales, no fallback, and the user is admin */}
       {!verificationLoading &&
         (verification?.totalLoadedBales ?? 0) === 0 &&
+        // An empty, active continuation is normal — it has not scanned yet.
+        // Recovery is relevant only after the loading was submitted.
+        !["LOADING", "DRAFT"].includes(verification?.order?.status || "") &&
         verification?.dataSource !== "order_lines" &&
         isAdminOrOwner && (
           <div
