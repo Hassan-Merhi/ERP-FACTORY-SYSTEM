@@ -39,6 +39,7 @@ import {
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
 import { useCompany } from "@/contexts/CompanyContext";
 import type { NotInLedgerSectionData } from "@/components/netposition/NotInLedgerCard";
+import type { AccountDisplayLayout } from "./accounts/DisplayAccountGroups";
 
 interface AccountItem {
   id?: number;
@@ -195,6 +196,7 @@ function SidePanel({
   total,
   accounts,
   formatAmount,
+  displayLayout,
 }: {
   id: string;
   title: string;
@@ -203,19 +205,43 @@ function SidePanel({
   total: number;
   accounts: AccountItem[];
   formatAmount: (n: number) => string;
+  displayLayout?: AccountDisplayLayout;
 }) {
   const [open, setOpen] = useState(true);
 
+  const layoutGroups = (displayLayout?.nodes || []).filter(n => n.type === "group");
+  const layoutMembership = new Map(
+    (displayLayout?.nodes || []).filter(n => n.type === "ledger" && n.parentKey)
+      .map(n => [Number(n.key.slice(7)), n])
+  );
+  const layoutGroupNames = new Map(layoutGroups.map(n => [`display:${n.key}`, n.name || "Group"]));
+  const layoutOrder = new Map(layoutGroups.map((n, i) => [`display:${n.key}`, n.order]));
+  // A group can have accounts on both sides. Partition each side separately,
+  // so liabilities never cancel assets and dashboard totals never change.
   const grouped = accounts.reduce<Record<string, AccountItem[]>>((acc, item) => {
-    const cat = item.category || "Other";
-    if (!acc[cat]) acc[cat] = [];
-    acc[cat].push(item);
+    const membership = item.id ? layoutMembership.get(item.id) : undefined;
+    const category = membership?.parentKey ? `display:${membership.parentKey}` : item.category || "Other";
+    if (!acc[category]) acc[category] = [];
+    acc[category].push(item);
     return acc;
   }, {});
-
-  const sortedCategories = Object.entries(grouped).sort(
-    ([, a], [, b]) => b.reduce((s, x) => s + Math.abs(x.value), 0) - a.reduce((s, x) => s + Math.abs(x.value), 0)
-  );
+  const sortedCategories = Object.entries(grouped)
+    .map(([key, items]) => {
+      if (layoutGroupNames.has(key)) {
+        items.sort((a, b) =>
+          (layoutMembership.get(a.id || -1)?.order ?? 10000) -
+          (layoutMembership.get(b.id || -1)?.order ?? 10000));
+      }
+      return [key, items] as const;
+    })
+    .sort(([keyA, a], [keyB, b]) => {
+      const aRank = layoutOrder.get(keyA), bRank = layoutOrder.get(keyB);
+      if (aRank != null && bRank != null) return aRank - bRank;
+      if (aRank != null) return -1;
+      if (bRank != null) return 1;
+      return b.reduce((s, x) => s + Math.abs(x.value), 0) -
+        a.reduce((s, x) => s + Math.abs(x.value), 0);
+    });
 
   const isAsset = side === "asset";
   const isEquity = side === "equity";
@@ -285,7 +311,7 @@ function SidePanel({
               {sortedCategories.map(([cat, catAccounts]) => (
                 <CategoryGroup
                   key={cat}
-                  category={cat}
+                  category={layoutGroupNames.get(cat) || cat}
                   accounts={catAccounts}
                   side={side}
                   formatAmount={formatAmount}
@@ -319,6 +345,18 @@ function todayStr() {
 export default function NetProfitDetails() {
   const { formatHistoricalBaseAmount: formatAmount } = useCurrencyContext();
   const { selectedCompany } = useCompany();
+  const { data: displayLayout } = useQuery<AccountDisplayLayout>({
+    queryKey: ["/api/accounts/display-layout", selectedCompany?.id],
+    queryFn: async () => {
+      const r = await fetch("/api/accounts/display-layout", { credentials: "include" });
+      if (!r.ok) throw new Error("Display groups unavailable");
+      return r.json();
+    },
+    enabled: !!selectedCompany,
+    staleTime: 30000,
+    refetchOnWindowFocus: false,
+    retry: false,
+  });
   const { toast } = useToast();
   const [fromDate, setFromDate] = useState<string>("");
   const [toDate, setToDate] = useState<string>("");
@@ -745,6 +783,7 @@ export default function NetProfitDetails() {
           total={forUsTotal}
           accounts={data?.forUs.accounts || []}
           formatAmount={formatAmount}
+          displayLayout={displayLayout}
         />
         <SidePanel
           id="liabilities"
@@ -754,6 +793,7 @@ export default function NetProfitDetails() {
           total={onUsTotal}
           accounts={data?.onUs.accounts || []}
           formatAmount={formatAmount}
+          displayLayout={displayLayout}
         />
       </div>
 
