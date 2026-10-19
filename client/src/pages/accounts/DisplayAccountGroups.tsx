@@ -59,7 +59,12 @@ export default function DisplayAccountGroups() {
     queryFn: async () => {
       const r = await fetch(layoutUrl, { credentials: "include" });
       if (!r.ok) throw new Error((await r.json().catch(() => ({}))).message || "Cannot load account groups");
-      return r.json();
+      const body = (await r.json()) as Partial<AccountDisplayLayout> | null;
+      // A successful response without a nodes list is not a layout. Treating
+      // it as an empty editable layout would let Save replace the company-wide
+      // order with the synthesized rows, so it surfaces as a load error instead.
+      if (!body || !Array.isArray(body.nodes)) throw new Error("Account groups layout could not be read");
+      return body as AccountDisplayLayout;
     },
     enabled: !!selectedCompany,
     staleTime: 30000,
@@ -86,9 +91,7 @@ export default function DisplayAccountGroups() {
 
   useEffect(() => {
     if (!layout || loadingAccounts) return;
-    // A layout response without nodes must not blank the page.
-    const savedNodes = Array.isArray(layout.nodes) ? layout.nodes : [];
-    const retained = savedNodes.filter((n) => n.type === "group" || accountMap.has(n.key));
+    const retained = layout.nodes.filter((n) => n.type === "group" || accountMap.has(n.key));
     const known = new Set(retained.map((n) => n.key));
     const additional = ledgerOptions
       .filter((a) => !known.has(`ledger:${a.id}`))
