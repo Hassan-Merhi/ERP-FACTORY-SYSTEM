@@ -48,7 +48,7 @@ describe("security boundary property fuzzing", () => {
           const result = sanitizeDownloadFileName(value);
           expect(result).not.toBeNull();
           expect(result).not.toMatch(/[\\/]/);
-          expect(result).not.toMatch(/[\\x00-\\x1f\\x7f]/);
+          expect(result).not.toMatch(/[\u0000-\u001f\u007f]/);
           expect(result?.length).toBeGreaterThan(0);
           expect(result?.length).toBeLessThanOrEqual(180);
           expect(result).not.toBe(".");
