@@ -1,8 +1,8 @@
 /**
  * Filter bar for the Factory Daybook transactions tab.
  *
- * Pure presentation over the page model: same controls, same test ids, same
- * transaction-type option list and ordering as the inline markup it replaces.
+ * Pure presentation over the page model: only transaction types available
+ * for the selected period appear in the type dropdown.
  */
 import { ChevronLeft, ChevronRight, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -12,28 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { PeriodFilter } from "@/components/ui/period-filter";
 import { ErpMobileFilters } from "@/components/ui/erp-mobile-filters";
 import type { FactoryDaybookModel } from "./useFactoryDaybookModel";
-
-const TX_TYPE_OPTIONS: Array<{ value: string; label: string }> = [
-  { value: "ALL", label: "All Types" },
-  { value: "PAYMENT", label: "Payment" },
-  { value: "RECEIPT", label: "Receipt" },
-  { value: "JOURNAL", label: "Journal" },
-  { value: "INVOICE", label: "Invoice" },
-  { value: "BALE_TRANSFER", label: "Bale Transfer" },
-  { value: "CONTAINER_IMPORT", label: "Container Import" },
-  { value: "OFFLOAD_RAW_STOCK", label: "Offload Raw Stock" },
-  { value: "COMMISSION", label: "Commission" },
-  { value: "BALE_PRESSING", label: "Bale Pressing" },
-  { value: "BALE_FINALIZE", label: "Bale Finalize" },
-  { value: "BALE_STOCK_ENTRY", label: "Bale Stock Entry" },
-  { value: "BALE_REMOVAL", label: "Bale Removal" },
-  { value: "FREIGHT_PAYMENT", label: "Freight Payment" },
-  { value: "SUPPLIER_PAYMENT", label: "Supplier Payment" },
-  { value: "PAYROLL_PAYMENT", label: "Payroll Payment" },
-  { value: "DOC_UPLOAD", label: "Doc Upload" },
-  { value: "DOC_DELETE", label: "Doc Delete" },
-  { value: "FREIGHT_ADD", label: "Freight Add" },
-];
+import { formatTxType } from "./daybookUtils";
 
 export function FactoryDaybookFilters({ model }: { model: FactoryDaybookModel }) {
   const search = (
@@ -80,9 +59,10 @@ export function FactoryDaybookFilters({ model }: { model: FactoryDaybookModel })
         <SelectValue />
       </SelectTrigger>
       <SelectContent>
-        {TX_TYPE_OPTIONS.map((option) => (
-          <SelectItem key={option.value} value={option.value}>
-            {option.label}
+        <SelectItem value="ALL">All Types</SelectItem>
+        {model.availableTxTypes.map((type) => (
+          <SelectItem key={type} value={type}>
+            {formatTxType(type)}
           </SelectItem>
         ))}
       </SelectContent>
