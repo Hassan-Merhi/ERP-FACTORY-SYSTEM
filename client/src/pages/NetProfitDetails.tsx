@@ -215,7 +215,7 @@ function SidePanel({
       .map(n => [Number(n.key.slice(7)), n])
   );
   const layoutGroupNames = new Map(layoutGroups.map(n => [`display:${n.key}`, n.name || "Group"]));
-  const layoutOrder = new Map(layoutGroups.map((n, i) => [`display:${n.key}`, n.order]));
+  const layoutOrder = new Map(layoutGroups.map((n) => [`display:${n.key}`, n.order]));
   // A group can have accounts on both sides. Partition each side separately,
   // so liabilities never cancel assets and dashboard totals never change.
   const grouped = accounts.reduce<Record<string, AccountItem[]>>((acc, item) => {
