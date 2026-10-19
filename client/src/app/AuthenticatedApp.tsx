@@ -89,7 +89,7 @@ export function AuthenticatedApp({ user, handleLogout }: AuthenticatedAppProps) 
             leaveConfirmDialog={leaveConfirmDialog}
           />
         </Suspense>
-        <AuthenticatedAppOverlays userId={user.id} />
+        <AuthenticatedAppOverlays />
       </>
     );
   }
@@ -106,7 +106,7 @@ export function AuthenticatedApp({ user, handleLogout }: AuthenticatedAppProps) 
             leaveConfirmDialog={leaveConfirmDialog}
           />
         </Suspense>
-        <AuthenticatedAppOverlays userId={user.id} />
+        <AuthenticatedAppOverlays />
       </>
     );
   }
@@ -124,7 +124,7 @@ export function AuthenticatedApp({ user, handleLogout }: AuthenticatedAppProps) 
             leaveConfirmDialog={leaveConfirmDialog}
           />
         </Suspense>
-        <AuthenticatedAppOverlays userId={user.id} />
+        <AuthenticatedAppOverlays />
       </>
     );
   }
@@ -140,7 +140,7 @@ export function AuthenticatedApp({ user, handleLogout }: AuthenticatedAppProps) 
           leaveConfirmDialog={leaveConfirmDialog}
         />
       </Suspense>
-      <AuthenticatedAppOverlays userId={user.id} />
+      <AuthenticatedAppOverlays />
     </>
   );
 }
