@@ -102,8 +102,8 @@ export function FactoryFxAgentWalletCard({ asOf, readOnly }: { asOf: string; rea
                 </select>
                 <Button disabled={write.isPending || !accountId} variant="secondary" size="sm"
                   onClick={() => {
-                    if (window.confirm("Activate a currency wallet for this account using its posted USD balance? This does not change old vouchers.")) {
-                      write.mutate({ path: "/api/factory/fx-agent-wallets", body: { ledgerAccountId: Number(accountId) } });
+                    if (window.confirm("Confirm this account represents USD funds held by the FX agent. Activate a EUR wallet using its existing posted USD balance? This does not change old vouchers.")) {
+                      write.mutate({ path: "/api/factory/fx-agent-wallets", body: { ledgerAccountId: Number(accountId), confirmUsdSource: true } });
                     }
                   }}>Activate FX wallet</Button>
               </section>
