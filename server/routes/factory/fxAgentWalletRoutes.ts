@@ -53,7 +53,11 @@ export function registerFactoryFxAgentWalletRoutes(app: Express) {
         WHERE company_id = ${cid} AND deleted_at IS NULL AND active = true
         AND account_type NOT IN ('Income','Indirect Income','Expense','Indirect Expense','Direct Expense','Equity','Profit')
         ORDER BY name LIMIT 1200`);
-      res.json({ setupRequired: false, asOf, currentRate, wallets: snapshots, candidates: accounts.rows });
+      const supplierChoices = await db.execute(sql`
+        SELECT id, name FROM factory_suppliers
+        WHERE company_id = ${cid} AND is_active = true ORDER BY name LIMIT 1200`);
+      res.json({ setupRequired: false, asOf, currentRate, wallets: snapshots,
+        candidates: accounts.rows, factorySuppliers: supplierChoices.rows });
     } catch (error) { res.status(400).json({ message: getErrorMessage(error) }); }
   });
 
