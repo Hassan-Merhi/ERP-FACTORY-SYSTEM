@@ -16,6 +16,7 @@ export interface CustomerOrder {
   companyId: number;
   customerId: number;
   orderDate: string;
+  loadingStartedAt?: string | null;
   verifiedAt?: string | null;
   loadingFinalizedAt?: string | null;
   finalizedAt?: string | null;
