@@ -27,6 +27,8 @@ export function registerSpReportRoutes(app: Express) {
         JOIN vouchers v ON ve.voucher_id = v.id
         WHERE ve.ledger_account_id = ${payableAcct.id}
           AND v.company_id = ${companyId}
+          AND v.deleted_at IS NULL
+          AND v.optional = false
         ORDER BY v.voucher_date ASC, v.id ASC
       `);
 
