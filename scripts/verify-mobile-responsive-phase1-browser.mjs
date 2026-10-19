@@ -281,11 +281,25 @@ async function readState(page, route, workspace) {
       ).matches;
     } else if (currentRoute === "/account-groups") {
       const anchor = document.querySelector('[data-testid="button-create-group"]');
-      const pane = anchor?.closest(".w-72");
-      const layout = pane?.parentElement;
+      const displayRoot = document.querySelector('[data-testid="account-display-groups-root"]');
       state.anchorVisible = Boolean(visibleRect(anchor));
-      state.paneWidth = visibleRect(pane)?.width ?? null;
-      state.flexDirection = layout instanceof HTMLElement ? window.getComputedStyle(layout).flexDirection : null;
+      if (displayRoot instanceof HTMLElement && visibleRect(displayRoot)) {
+        // Display-only groups replaced the legacy two-pane grid. Verify the
+        // real single-column flow and wrapping instead of expecting a .w-72 pane.
+        const rootRect = visibleRect(displayRoot);
+        const toolbar = displayRoot.querySelector(".flex.flex-wrap");
+        state.accountGroupsDisplayLayout = {
+          rootWidth: rootRect?.width ?? 0,
+          mainWidth: visibleRect(mainContent)?.width ?? 0,
+          display: window.getComputedStyle(displayRoot).display,
+          toolbarWrap: toolbar instanceof HTMLElement ? window.getComputedStyle(toolbar).flexWrap : null,
+        };
+      } else {
+        const pane = anchor?.closest(".w-72");
+        const layout = pane?.parentElement;
+        state.paneWidth = visibleRect(pane)?.width ?? null;
+        state.flexDirection = layout instanceof HTMLElement ? window.getComputedStyle(layout).flexDirection : null;
+      }
     } else if (currentRoute.endsWith("/chat") || currentRoute === "/chat") {
       const chat = document.querySelector('[data-testid="chat-page"]');
       const pane = chat?.querySelector(":scope > .w-64");
@@ -314,11 +328,24 @@ function assertState(state, viewport, route, workspace) {
   if (state.paneWidth !== null && state.paneWidth > state.viewportWidth + 2) {
     failures.push(`${label}: legacy navigation pane is ${Math.round(state.paneWidth)}px wide for ${state.viewportWidth}px viewport`);
   }
-  if (shouldStack && state.flexDirection !== "column") {
-    failures.push(`${label}: critical layout is ${state.flexDirection || "unknown"} instead of the phone column layout`);
-  }
-  if (!shouldStack && state.flexDirection === "column") {
-    failures.push(`${label}: tablet/desktop layout unexpectedly uses the phone column layout`);
+  if (route === "/account-groups" && state.accountGroupsDisplayLayout) {
+    const layout = state.accountGroupsDisplayLayout;
+    if (layout.display !== "block") {
+      failures.push(`${label}: display-only groups should use a normal block/column flow, got ${layout.display}`);
+    }
+    if (layout.toolbarWrap !== "wrap") {
+      failures.push(`${label}: display-only group controls do not wrap on narrow screens`);
+    }
+    if (layout.rootWidth > Math.min(state.main?.width ?? viewport.width, viewport.width) + 2) {
+      failures.push(`${label}: display-only group content exceeds available viewport width`);
+    }
+  } else {
+    if (shouldStack && state.flexDirection !== "column") {
+      failures.push(`${label}: critical layout is ${state.flexDirection || "unknown"} instead of the phone column layout`);
+    }
+    if (!shouldStack && state.flexDirection === "column") {
+      failures.push(`${label}: tablet/desktop layout unexpectedly uses the phone column layout`);
+    }
   }
 
   const expectedTouchOpacity = viewport.hasTouch ? "1" : "0";
