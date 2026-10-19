@@ -135,6 +135,8 @@ These describe work in progress and carry live figures bound to their sources.
 | [use-cases.md](use-cases.md) | What each role does day to day |
 | [examples.md](examples.md) | Worked examples |
 | [faq.md](faq.md) | Frequently asked questions |
+| [factory-fx-agent-wallets.md](factory-fx-agent-wallets.md) | In-progress USD/EUR FX agent wallet design and review requirements |
+| [security/scorecard-review-and-exceptions.md](security/scorecard-review-and-exceptions.md) | Current security Scorecard review and documented exceptions |
 | [releases.md](releases.md) | Release notes |
 
 ## Known issues

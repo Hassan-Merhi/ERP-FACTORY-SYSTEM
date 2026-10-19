@@ -27,10 +27,7 @@ export function registerProtectedCorrectionMutationBoundary(app: Express): void 
   });
 
   // Reject the entire bulk operation if the protected voucher is included.
-  // Path middleware rather than a second POST route: the authenticated handler
-  // stays the single registration for the route manifest and guard audits.
-  app.use("/api/vouchers/bulk-delete", (req, res, next) => {
-    if (req.method !== "POST") return next();
+  app.post("/api/vouchers/bulk-delete", function protectCorrectionBulkDelete(req, res, next) {
     if (isRestricted(req) && Array.isArray(req.body?.voucherIds) && req.body.voucherIds.some(isVoucherId)) {
       return block(res);
     }
@@ -38,8 +35,7 @@ export function registerProtectedCorrectionMutationBoundary(app: Express): void 
   });
 
   // Prevent insertion of journal lines on the protected voucher.
-  app.use("/api/voucher-entries", (req, res, next) => {
-    if (req.method !== "POST" || req.path !== "/") return next();
+  app.post("/api/voucher-entries", function protectCorrectionEntryInsert(req, res, next) {
     if (isRestricted(req) && isVoucherId(req.body?.voucherId)) return block(res);
     return next();
   });

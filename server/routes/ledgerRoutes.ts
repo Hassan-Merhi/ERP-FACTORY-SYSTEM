@@ -1,4 +1,5 @@
 import type { Express } from "express";
+import { registerFactoryFxAgentWalletRoutes } from "./factory/fxAgentWalletRoutes";
 import { getErrorMessage } from "../lib/httpHandlers";
 import { requireAuth } from "../auth";
 import { getLedgerParentGroupOptions } from "../services/ledgerAccountOptionsService";
@@ -24,6 +25,7 @@ export function registerLedgerRoutes(app: Express) {
   registerHistoricalCurrencyGuardRoutes(app);
   registerHistoricalCurrencyRepairCenterRoutes(app);
   registerAccountCurrencyRoutes(app);
+  registerFactoryFxAgentWalletRoutes(app);
   registerOpeningBalanceResolutionRoutes(app);
   registerVoucherEntryCurrencyEditRoutes(app);
 

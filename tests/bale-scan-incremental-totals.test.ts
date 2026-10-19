@@ -4,8 +4,8 @@ import { recalculateOrderTotalsForScannedArticle } from "../server/routes/factor
 describe("single-bale scan incremental totals", () => {
   // The scanner already holds the order row FOR UPDATE, so the helper runs one
   // statement to rebuild the scanned article's line and re-derive the totals,
-  // then one to mirror the total into the Loading Started daybook event (#2381).
-  it("uses one recalculation statement plus the daybook sync and maps the line and totals", async () => {
+  // then one more to keep the Loading Started daybook amount in step (#2381).
+  it("uses one totals statement plus the daybook sync and maps the recalculated line and totals", async () => {
     const execute = vi.fn().mockResolvedValueOnce({
       rows: [
         {

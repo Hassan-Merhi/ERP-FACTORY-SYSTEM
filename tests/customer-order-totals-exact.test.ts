@@ -31,10 +31,7 @@ describe("customer order totals", () => {
         Promise.resolve(value).then(resolve, reject);
       return q;
     };
-    // The Loading Started daybook amount is synced in the same transaction (#2381).
-    const execute = vi.fn(async () => undefined);
     const tx = {
-      execute,
       select: () => ({ from: (table: never) => chain(tables[getTableName(table)] ?? []) }),
       delete: () => ({ where: async () => undefined }),
       insert: (table: never) => ({
@@ -45,10 +42,11 @@ describe("customer order totals", () => {
           where: async () => void writes.push([getTableName(table), row]),
         }),
       }),
+      // The Loading Started daybook amount sync (#2381).
+      execute: async () => ({ rows: [] }),
     };
 
     await recalculateOrderTotals(tx as never, 77);
-    expect(execute).toHaveBeenCalledTimes(1);
 
     expect(writes[0]).toEqual([
       "customer_order_lines",

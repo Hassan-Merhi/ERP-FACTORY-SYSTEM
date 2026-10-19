@@ -295,7 +295,8 @@ export function resolveFactoryBackendAccessRequirement(req: Request): FactoryApi
     return requirement("factory/production-report", ["hide_tab_overview_shipping"]);
   }
 
-  if (hasPrefix(path, "/net-position")) {
+  // FX agent EUR wallets are valued and managed alongside Net Position.
+  if (hasPrefix(path, "/net-position") || hasPrefix(path, "/fx-agent-wallets")) {
     return requirement("factory/net-position-details");
   }
 

@@ -43,6 +43,11 @@ import { postBalancedVoucherTx, type CentralPostingDependencies, type PostingAct
 import { companyBusinessDate } from "./companyBusinessDate";
 import { applyEmployeeBalanceDeltasTx } from "./employeeBalancePosting";
 import { assertExactReversalAllowedTx, buildExactVoucherReversal } from "./voucherReversal";
+import {
+  isFxAgentSettlementVoucherTx,
+  FX_AGENT_VOUCHER_LOCKED,
+  FX_AGENT_VOUCHER_LOCKED_MESSAGE,
+} from "./fxAgentVoucherLock";
 
 export const VOUCHER_CLOSED_PERIOD_REVERSE_INSTEAD = "VOUCHER_CLOSED_PERIOD_REVERSE_INSTEAD";
 
@@ -189,6 +194,9 @@ export async function assertVoucherEditableTx(
   options: VoucherEditCheckOptions = {}
 ): Promise<VoucherEditContext> {
   const voucher = await lockVoucherTx(tx, voucherId, options.companyId);
+  if (await isFxAgentSettlementVoucherTx(tx, voucher.companyId, [voucherId])) {
+    throw new VoucherCorrectionError(409, FX_AGENT_VOUCHER_LOCKED, FX_AGENT_VOUCHER_LOCKED_MESSAGE, { voucherId });
+  }
   if (voucher.deletedAt) {
     throw new VoucherCorrectionError(409, "VOUCHER_DELETED", VOUCHER_CORRECTION_MESSAGES.deleted, { voucherId });
   }
@@ -324,6 +332,11 @@ export async function reverseVoucherTx(
   const original = await lockVoucherTx(tx, input.voucherId, input.companyId);
   const companyId = original.companyId;
   await assertTransactionCompanyScope(tx, companyId);
+  if (await isFxAgentSettlementVoucherTx(tx, companyId, [original.id])) {
+    throw new VoucherCorrectionError(409, FX_AGENT_VOUCHER_LOCKED, FX_AGENT_VOUCHER_LOCKED_MESSAGE, {
+      voucherId: original.id,
+    });
+  }
 
   if (original.deletedAt) {
     throw new VoucherCorrectionError(409, "VOUCHER_DELETED", VOUCHER_CORRECTION_MESSAGES.deleted, {

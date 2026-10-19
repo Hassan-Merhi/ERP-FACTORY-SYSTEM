@@ -36,7 +36,8 @@ export function BarcodeAdminDialogs({ model }: { model: BarcodeLookupModel }) {
                 Restore <span className="font-mono font-semibold">{referenceNumber}</span> to its original location.
               </span>
               <span className="mt-2 block">
-                The original stock debit will be reversed exactly once. The deletion record remains in the audit history.
+                The original stock debit will be reversed exactly once. The deletion record remains in the audit
+                history.
               </span>
             </DialogDescription>
           </DialogHeader>

@@ -35,6 +35,7 @@ export interface OrderItem {
 }
 
 export interface NetPositionData {
+  fxAgentWalletWarnings?: string[];
   forUsTotal: number;
   onUsTotal: number;
   netPosition: number;

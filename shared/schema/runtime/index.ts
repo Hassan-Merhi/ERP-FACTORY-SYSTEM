@@ -2,6 +2,7 @@ export * from "./accountDisplayLayout";
 export * from "./agents";
 export * from "./factory";
 export * from "./factoryBaleRepairs";
+export * from "./fxAgentWallets";
 export * from "./factoryPlanningRepairs";
 export * from "./historicalSalesCostRepair";
 export * from "./inventory";

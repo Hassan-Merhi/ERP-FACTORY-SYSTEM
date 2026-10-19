@@ -71,6 +71,14 @@ vi.mock("../server/routes/factory/employee-pos/netPositionInventory", () => ({
 vi.mock("../server/routes/factory/employee-pos/netPositionSupplierBalances", () => ({
   computeNetPositionSupplierBalances: harness.computeNetPositionSupplierBalances,
 }));
+// No FX agent wallets: Net Position presents the posted ledger values as is.
+vi.mock("../server/services/factory/fxAgentWalletDb", () => ({
+  fxAgentTablesExist: async () => false,
+  loadFxAgentWallets: async () => [],
+  getFxAgentWalletSnapshot: async () => {
+    throw new Error("No FX agent wallet in this fixture");
+  },
+}));
 vi.mock("../server/lib/queryResult", () => ({ resultRows: (value: any) => value?.rows ?? [] }));
 
 import { MoneyDecimal } from "../server/lib/money";
@@ -333,7 +341,9 @@ describe("Phase 33D employee/factory net position", () => {
       expect(forUsCodes).not.toContain(code);
     }
 
-    const orderLines = res.body.forUs.accounts.filter((a: any) => a.code === "VERIFIED_ORDERS" || a.code === "LOADING_ORDERS");
+    const orderLines = res.body.forUs.accounts.filter(
+      (a: any) => a.code === "VERIFIED_ORDERS" || a.code === "LOADING_ORDERS"
+    );
     expect(orderLines).toEqual([
       expect.objectContaining({ name: "Verified Orders (Not Invoiced)", value: 70, category: "Uninvoiced Orders" }),
       expect.objectContaining({ name: "Loading Orders (In Progress)", value: 80, category: "Uninvoiced Orders" }),
@@ -367,13 +377,15 @@ describe("Phase 33D employee/factory net position", () => {
       byCustomer: new Map([[42, new MoneyDecimal(2900)]]),
       voucherIds: new Set([15969]),
     });
-    harness.getCustomerLedgerAndMemo.mockResolvedValue(new Map([
-      [42, { ledger: new MoneyDecimal(0), memoTotal: new MoneyDecimal(0) }],
-    ]));
+    harness.getCustomerLedgerAndMemo.mockResolvedValue(
+      new Map([[42, { ledger: new MoneyDecimal(0), memoTotal: new MoneyDecimal(0) }]])
+    );
     harness.executeResults.push({ rows: [] }, { rows: [] });
     harness.selectResults.push(
-      [{ id: 1, name: "Customer Ledger", accountType: "Asset" },
-       { id: 2, name: "Freight Payable", accountType: "Liability" }],
+      [
+        { id: 1, name: "Customer Ledger", accountType: "Asset" },
+        { id: 2, name: "Freight Payable", accountType: "Liability" },
+      ],
       [{ id: 15969 }, { id: 15970 }],
       [
         { voucherId: 15969, ledgerAccountId: 1, debitAmount: "2900", creditAmount: "0" },

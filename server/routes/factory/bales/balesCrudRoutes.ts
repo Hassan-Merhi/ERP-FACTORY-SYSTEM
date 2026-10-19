@@ -599,10 +599,9 @@ export function registerBalesCrudRoutes(app: Express) {
             )
             .limit(1);
           if (activeOrder) {
-            throw new BaleStatusChangeRefusal(
-              "Remove the bale from its active customer order before restoring it.",
-              [{ id, from: bale.status, to: "IN_STOCK" }]
-            );
+            throw new BaleStatusChangeRefusal("Remove the bale from its active customer order before restoring it.", [
+              { id, from: bale.status, to: "IN_STOCK" },
+            ]);
           }
 
           const removals = await tx

@@ -1,4 +1,9 @@
 import { getClientDate } from "../../../lib/dateUtils";
+import {
+  fxAgentTablesExist,
+  loadFxAgentWallets,
+  getFxAgentWalletSnapshot,
+} from "../../../services/factory/fxAgentWalletDb";
 import { getErrorMessage } from "../../../lib/httpHandlers";
 import { logger } from "../../../lib/logger";
 import { getRentalBillingDay, getRentalPeriodDueDate } from "../../../services/rental/rentalPeriodService";
@@ -8,6 +13,7 @@ import { db } from "../../../db";
 import { requireAuth } from "../../../auth";
 import {
   classifyNetPositionAccounts,
+  getAccountNetBalance,
   PERPETUAL_STOCK_ACCOUNT_CODES,
   type AccountLike,
 } from "../../../netPositionHelper";
@@ -83,7 +89,7 @@ export function registerEmployeeNetPositionRoutes(app: Express) {
       const fxRateRows = await db.execute(sql`
         SELECT DISTINCT ON (currency_code) currency_code, rate_to_usd
         FROM factory_fx_rates
-        WHERE company_id = ${companyId} AND source = 'manual'
+        WHERE company_id = ${companyId} AND source = 'manual' AND effective_date <= ${asOf}::date
         ORDER BY currency_code, effective_date DESC
       `);
       const configFxRates: Record<string, number> = {};
@@ -183,7 +189,9 @@ export function registerEmployeeNetPositionRoutes(app: Express) {
       // Exclude BOTH sides of the same premature voucher from this projected
       // dashboard (the trial balance remains the unmodified ledger).
       const heldSnapshot = await loadHeldChargeSnapshot(
-        companyId, allCustomersForNP.map((c) => c.id), asOf
+        companyId,
+        allCustomersForNP.map((c) => c.id),
+        asOf
       );
       let projectedAccountBalances = accBalances;
       if (heldSnapshot.voucherIds.size > 0) {
@@ -197,8 +205,61 @@ export function registerEmployeeNetPositionRoutes(app: Express) {
           });
         }
         projectedAccountBalances = new Map(
-          [...netByAccount].map(([id, value]) => [id, { debit: value.debit.toNumber(), credit: value.credit.toNumber() }])
+          [...netByAccount].map(([id, value]) => [
+            id,
+            { debit: value.debit.toNumber(), credit: value.credit.toNumber() },
+          ])
         );
+      }
+
+      // Revalue only specifically activated FX-agent ledger accounts for the
+      // current/as-of Net Position display. No voucher/book amount is mutated.
+      // If an account was changed outside the wallet, leave the historic book
+      // balance visible and return a warning rather than invent an FX amount.
+      const fxAgentWallets: Array<{
+        accountId: number;
+        name: string;
+        eur: string;
+        usd: string;
+        currentUsd: string | null;
+        rate: string | null;
+        synchronized: boolean;
+      }> = [];
+      const fxAgentWalletWarnings: string[] = [];
+      if (await fxAgentTablesExist()) {
+        const wallets = await loadFxAgentWallets(companyId, asOf);
+        projectedAccountBalances = new Map(projectedAccountBalances);
+        for (const wallet of wallets) {
+          const account = factoryAccounts.find((a) => a.id === wallet.ledgerAccountId);
+          if (!account) continue;
+          const rate = configFxRates.EUR ? String(configFxRates.EUR) : null;
+          const snapshot = await getFxAgentWalletSnapshot(wallet, asOf, db, rate);
+          const projectedBook = toMoney(getAccountNetBalance(account as AccountLike, projectedAccountBalances));
+          const matching = snapshot.synchronized && projectedBook.minus(snapshot.state.totalBookUsd).abs().lte("0.01");
+          fxAgentWallets.push({
+            accountId: account.id,
+            name: account.name,
+            eur: snapshot.state.eur,
+            usd: snapshot.state.usd,
+            currentUsd: snapshot.currentUsd,
+            rate,
+            synchronized: matching,
+          });
+          if (!matching || snapshot.currentUsd === null) {
+            fxAgentWalletWarnings.push(
+              !matching
+                ? account.name + ": FX wallet and posted ledger do not agree; showing historical ledger value"
+                : account.name + ": Set EUR rate in Factory Settings to value this FX balance"
+            );
+            continue;
+          }
+          const change = toMoney(snapshot.currentUsd).minus(projectedBook);
+          const before = projectedAccountBalances.get(account.id) || { debit: 0, credit: 0 };
+          projectedAccountBalances.set(account.id, {
+            debit: before.debit + (change.gt(0) ? change.toNumber() : 0),
+            credit: before.credit + (change.lt(0) ? change.negated().toNumber() : 0),
+          });
+        }
       }
       const classified = classifyNetPositionAccounts(factoryAccounts as AccountLike[], projectedAccountBalances, {
         ledgerStockAccounts: ledgerStock,
@@ -714,6 +775,8 @@ export function registerEmployeeNetPositionRoutes(app: Express) {
 
       res.json({
         asOf,
+        fxAgentWallets,
+        fxAgentWalletWarnings,
         forUsTotal,
         onUsTotal,
         netPosition,

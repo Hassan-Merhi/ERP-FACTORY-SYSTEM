@@ -8,6 +8,8 @@ import { searchAny } from "@shared/searchNormalization";
  * pages/agents/agentStatementExcel.ts. Behaviour is unchanged.
  */
 import { useState, useCallback, useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { useAppMode } from "@/contexts/AppModeContext";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
 import { useDateFormat } from "@/contexts/DateFormatContext";
@@ -33,6 +35,7 @@ import { AddAgentDialog } from "./agents/AddAgentDialog";
 
 export default function Agents() {
   const { selectedCompany } = useCompany();
+  const factoryMode = useAppMode() === "factory";
   const { formatAmount, selectedCurrency, exchangeRate, isMultiCurrency } = useCurrencyContext();
   const { formatDisplayDate } = useDateFormat();
   const { toast } = useToast();
@@ -58,6 +61,29 @@ export default function Agents() {
     addMutation,
     removeMutation,
   } = useAgentLedger(selectedCompany, selectedAccount, periodFilter, setSelectedAccount, toast);
+
+  // Native FX-agent wallet is an independent denomination view; never
+  // reinterpret historical USD journal columns as native EUR.
+  const { data: fxWalletData } = useQuery<{
+    wallets: Array<{
+      wallet: { ledgerAccountId: number };
+      state: { usd: string; eur: string; eurBookUsd: string };
+      currentUsd: string | null;
+      synchronized: boolean;
+    }>;
+  }>({
+    queryKey: ["/api/factory/fx-agent-wallets", selectedCompany?.id, "agent-ledger"],
+    queryFn: async () => {
+      const response = await fetch("/api/factory/fx-agent-wallets", { credentials: "include" });
+      if (!response.ok) throw new Error("Cannot load native FX agent balance");
+      return response.json();
+    },
+    enabled: factoryMode && !!selectedAccount && !!selectedCompany,
+    staleTime: 30_000,
+  });
+  const selectedFxWallet = fxWalletData?.wallets?.find(
+    (item) => item.wallet.ledgerAccountId === Number(selectedAccount?.accountId)
+  );
 
   const agentIds = useMemo(() => new Set(agentAccountRows.map((a) => a.accountId)), [agentAccountRows]);
 
@@ -101,7 +127,9 @@ export default function Agents() {
       vouchersWithBalance,
       openingBalance,
       formatAmount,
-      fxNote,
+      fxNote: selectedFxWallet
+        ? `Agent native balance: EUR ${selectedFxWallet.state.eur}; USD ${selectedFxWallet.state.usd}; current USD equivalent ${selectedFxWallet.currentUsd ?? "rate missing"}. Historical voucher entries remain in USD.`
+        : fxNote,
     });
     await exportAgentStatementExcel(selectedAccount, rows);
     toast({ title: "Exported successfully" });
@@ -133,6 +161,7 @@ export default function Agents() {
     <AgentStatementPanel
       companyName={selectedCompany?.name}
       selectedAccount={selectedAccount}
+      fxWallet={selectedFxWallet}
       periodFilter={periodFilter}
       onPeriodChange={handlePeriodChange}
       transactionsLoading={transactionsLoading}

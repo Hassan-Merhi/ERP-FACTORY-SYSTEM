@@ -256,8 +256,9 @@ describe("AT1a money paths", () => {
     });
     const items = await pool.query(`SELECT quantity FROM stock_transfer_items WHERE transfer_id = $1`, [transferId]);
     expect(items.rows.map((row) => Number(row.quantity))).toEqual([4]);
+    // Typed notes take precedence over the generated location narration (#2355),
+    // and the rolled-back edit left the first edit's notes in place.
     const header = await pool.query(`SELECT description FROM vouchers WHERE id = $1`, [voucherId]);
-    // Notes entered on the edit take precedence over the location narration (#2355).
     expect(header.rows[0].description).toBe("edited");
   });
 

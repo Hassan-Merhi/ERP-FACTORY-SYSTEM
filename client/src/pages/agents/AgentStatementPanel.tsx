@@ -34,6 +34,11 @@ function voucherBadgeClass(type: string) {
 interface AgentStatementPanelProps {
   companyName: string | undefined;
   selectedAccount: Account;
+  fxWallet?: {
+    state: { usd: string; eur: string; eurBookUsd: string };
+    currentUsd: string | null;
+    synchronized: boolean;
+  };
   periodFilter: PeriodFilterValue;
   onPeriodChange: (value: PeriodFilterValue) => void;
   transactionsLoading: boolean;
@@ -53,6 +58,7 @@ interface AgentStatementPanelProps {
 export function AgentStatementPanel({
   companyName,
   selectedAccount,
+  fxWallet,
   periodFilter,
   onPeriodChange,
   transactionsLoading,
@@ -125,12 +131,14 @@ export function AgentStatementPanel({
               <TrendingUp className="w-3.5 h-3.5 text-red-500" />
             )}
             <span className="text-base font-bold font-mono tabular-nums" data-testid="text-agent-balance">
-              {formatAmount(Math.abs(selectedAccount.balance))}
+              {fxWallet
+                ? `EUR ${Number(fxWallet.state.eur).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                : formatAmount(Math.abs(selectedAccount.balance))}
             </span>
             <span className={`text-xs font-semibold ${drCrClass(selectedAccount.balanceSide)}`}>
-              {selectedAccount.balanceSide ?? ""}
+              {fxWallet ? (Number(fxWallet.state.eur) >= 0 ? "Dr" : "Cr") : (selectedAccount.balanceSide ?? "")}
             </span>
-            <span className="text-xs text-muted-foreground">current balance</span>
+            <span className="text-xs text-muted-foreground">{fxWallet ? "native EUR balance" : "current balance"}</span>
           </div>
         </div>
         {phone ? (
@@ -189,6 +197,45 @@ export function AgentStatementPanel({
         )}
       </div>
 
+      {fxWallet && (
+        <div className="rounded-lg border p-3 space-y-1" data-testid="agent-native-fx-wallet">
+          <p className="text-sm font-semibold">FX Agent Native Balance</p>
+          <div className="flex flex-wrap gap-x-6 gap-y-1 text-sm font-mono tabular-nums">
+            <span>
+              EUR{" "}
+              {Number(fxWallet.state.eur).toLocaleString(undefined, {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+              })}
+            </span>
+            <span>
+              USD{" "}
+              {Number(fxWallet.state.usd).toLocaleString(undefined, {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+              })}
+            </span>
+            <span>
+              USD equivalent:{" "}
+              {fxWallet.currentUsd == null
+                ? "FX rate missing"
+                : Number(fxWallet.currentUsd).toLocaleString(undefined, {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
+                  })}
+            </span>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Native currency balance is separate from historical USD journal totals shown below.
+          </p>
+          {!fxWallet.synchronized && (
+            <p role="alert" className="text-xs text-destructive">
+              Account and FX wallet mismatch; settlements are blocked pending reconciliation.
+            </p>
+          )}
+        </div>
+      )}
+
       {/* Period filter */}
       <PeriodFilter value={periodFilter} onChange={onPeriodChange} />
 
@@ -234,6 +281,12 @@ export function AgentStatementPanel({
 
       {/* Ledger table */}
       <div ref={printRef} className="print-container">
+        {fxWallet && (
+          <div className="hidden print:block text-xs mb-3">
+            <strong>FX Agent Native Balance:</strong> EUR {fxWallet.state.eur}, USD {fxWallet.state.usd}. Current USD
+            equivalent: {fxWallet.currentUsd ?? "FX rate missing"}. Historical journal entries below remain in USD.
+          </div>
+        )}
         {/* Print-only header */}
         <div className="hidden print:block mb-4">
           <div className="text-center">
