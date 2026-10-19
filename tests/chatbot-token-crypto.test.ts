@@ -27,8 +27,13 @@ describe("chatbot token encryption", () => {
     expect(decryptToken(parts.join(":"))).toBe("");
   });
 
-  it("keeps decrypting legacy CryptoJS/OpenSSL passphrase ciphertext", () => {
+  it("rejects legacy OpenSSL/MD5 ciphertext instead of invoking weak decryption", () => {
     const legacyCiphertext = "U2FsdGVkX19YwGofltY6OjUuFIuuT5IMWqgsazF0DwsGqc5WqG1QLIhehffjT9Au";
-    expect(decryptToken(legacyCiphertext)).toBe("legacy-token-value");
+    expect(decryptToken(legacyCiphertext)).toBe("");
+  });
+
+  it("does not use a predictable fallback encryption key", () => {
+    delete process.env.SESSION_SECRET;
+    expect(() => encryptToken("github-token-value")).toThrow("SESSION_SECRET is required");
   });
 });
