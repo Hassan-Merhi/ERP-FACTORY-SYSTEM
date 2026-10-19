@@ -32,9 +32,12 @@ export function BarcodeAdminDialogs({ model }: { model: BarcodeLookupModel }) {
           <DialogHeader>
             <DialogTitle>Restore Deleted Bale to Stock</DialogTitle>
             <DialogDescription>
-              Restore <span className="font-mono font-semibold">{referenceNumber}</span> to its original inventory
-              location. If the bale was physically removed, the original stock debit will be reversed exactly once.
-              The deletion and restoration remain in the audit history.
+              <span className="block">
+                Restore <span className="font-mono font-semibold">{referenceNumber}</span> to its original location.
+              </span>
+              <span className="mt-2 block">
+                The original stock debit will be reversed exactly once. The deletion record remains in the audit history.
+              </span>
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-2">
