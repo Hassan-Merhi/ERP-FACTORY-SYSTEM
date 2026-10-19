@@ -137,11 +137,11 @@ function CategoryGroup({
   actions?: InlineOrderActions;
 }) {
   const [open, setOpen] = useState(true);
-  const accountKeys = accounts.filter(a => a.id != null).map(a => `ledger:${a.id}`);
   const total = accounts.reduce((s, a) => s + Math.abs(a.value), 0);
 
   const insuranceAccounts = accounts.filter((a) => /^Insurance\s*[-–]/i.test(a.name));
   const otherAccounts = accounts.filter((a) => !/^Insurance\s*[-–]/i.test(a.name));
+  const accountKeys = otherAccounts.filter(a => a.id != null).map(a => `ledger:${a.id}`);
   const displayCount = otherAccounts.length + (insuranceAccounts.length > 0 ? 1 : 0);
 
   return (
