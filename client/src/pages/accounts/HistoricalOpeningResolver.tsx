@@ -149,9 +149,10 @@ export function HistoricalOpeningResolver() {
                     <TableCell className="min-w-[120px]">
                       <Select
                         value={draft.currency}
-                        onValueChange={(currency: "USD" | "CFA") =>
-                          setDrafts((current) => ({ ...current, [key]: { ...draft, currency } }))
-                        }
+                        onValueChange={(currency) => {
+                          if (currency !== "USD" && currency !== "CFA") return;
+                          setDrafts((current) => ({ ...current, [key]: { ...draft, currency } }));
+                        }}
                       >
                         <SelectTrigger><SelectValue /></SelectTrigger>
                         <SelectContent>
