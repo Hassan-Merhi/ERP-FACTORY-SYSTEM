@@ -78,12 +78,12 @@ export default function DisplayAccountGroups() {
     refetchOnWindowFocus: false,
   });
 
-  const ledgerOptions = useMemo(() => accounts.filter((a) => a.subType !== "Group"), [accounts]);
+  const ledgerOptions = useMemo(() => (Array.isArray(accounts) ? accounts : []).filter((a) => a.subType !== "Group"), [accounts]);
   const accountMap = useMemo(() => new Map(ledgerOptions.map((a) => [`ledger:${a.id}`, a])), [ledgerOptions]);
 
   useEffect(() => {
     if (!layout || loadingAccounts) return;
-    const retained = layout.nodes.filter((n) => n.type === "group" || accountMap.has(n.key));
+    const retained = (Array.isArray(layout.nodes) ? layout.nodes : []).filter((n) => n.type === "group" || accountMap.has(n.key));
     const known = new Set(retained.map((n) => n.key));
     const additional = ledgerOptions
       .filter((a) => !known.has(`ledger:${a.id}`))
