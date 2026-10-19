@@ -15,7 +15,7 @@ import {
   factoryOffloadAdditionalCharges,
 } from "@shared/schema";
 import { eq, and } from "drizzle-orm";
-import bcrypt from "bcryptjs";
+import { verifyPasswordBcryptOnly } from "../helpers/passwordHelpers";
 import { resolveStoredFxRate, UnresolvedExchangeRateError } from "../../services/factory/currencyConversion";
 import type { DbTransaction, DatabaseOrTransaction } from "../../db";
 import type Decimal from "decimal.js";
@@ -92,10 +92,8 @@ export function isLegacySHA256Hash(hash: string): boolean {
 }
 
 export async function verifySupervisorPassword(password: string, hash: string): Promise<boolean> {
-  // Privileged approvals never accept the legacy unsalted SHA-256 password.
-  // Users must sign in (which migrates that hash to bcrypt) or reset it first.
-  if (isLegacySHA256Hash(hash)) return false;
-  return bcrypt.compare(password, hash);
+  // Shared bcrypt-only step-up; old SHA-256 accounts must first log in and migrate.
+  return verifyPasswordBcryptOnly(password, hash);
 }
 
 export async function recalculateOrderTotals(dbConn: DatabaseOrTransaction, orderId: number) {
