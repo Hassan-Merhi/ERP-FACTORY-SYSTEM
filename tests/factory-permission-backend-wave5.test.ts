@@ -80,6 +80,41 @@ describe("Wave 5 Factory backend access certification", () => {
     });
   });
 
+  it("permits scheduled container creation from Invoicing without granting unrelated pages", async () => {
+    accessMocks.authorizeFactoryPageAccess.mockImplementation(async (_req: unknown, page: string) => {
+      if (page === "factory/invoicing") {
+        return { allowed: true, state: { ...normalState, pageKeys: [page] } };
+      }
+      return {
+        allowed: false,
+        code: "FACTORY_PAGE_ACCESS_DENIED",
+        message: "No access",
+      };
+    });
+    const { res } = response();
+    const next = vi.fn();
+    await enforceFactoryBackendAccess(request("/scheduled-containers", { method: "POST" }), res, next);
+    expect(next).toHaveBeenCalledTimes(1);
+    expect(res.status).not.toHaveBeenCalled();
+  });
+
+  it("denies scheduled container edits when both owning tabs are hidden", async () => {
+    accessMocks.authorizeFactoryPageAccess.mockImplementation(async (_req: unknown, page: string) => ({
+      allowed: true,
+      state: {
+        ...normalState,
+        pageKeys: [page],
+        hiddenTabs: ["hide_invoicing_invoices_tab", "hide_tab_overview_shipping"],
+      },
+    }));
+    const { res, state } = response();
+    const next = vi.fn();
+    await enforceFactoryBackendAccess(request("/scheduled-containers/2", { method: "PATCH" }), res, next);
+    expect(state.status).toBe(403);
+    expect(state.body).toMatchObject({ code: "FACTORY_TAB_ACCESS_DENIED" });
+    expect(next).not.toHaveBeenCalled();
+  });
+
   it("returns 403 when an authenticated Factory API has no declared owner", async () => {
     const { res, state } = response();
     const next = vi.fn();
