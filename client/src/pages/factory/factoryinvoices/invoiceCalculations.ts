@@ -11,11 +11,17 @@ import type { CustomerOrder, StatusFilter } from "./types";
 
 export interface OrderLike {
   proformaExpectedBales?: string;
+  continuationRemainingBales?: string | number | null;
   totalQtyBales: number;
 }
 
 /** How many bales still need to be loaded to meet the proforma target. */
 export function getRemainingBales(order: OrderLike): number {
+  // Server-calculated, article-by-article remainder is authoritative for a
+  // continuation. A value of zero is valid, so do not use a truthy fallback.
+  if (order.continuationRemainingBales != null) {
+    return Math.max(0, Number(order.continuationRemainingBales) || 0);
+  }
   const expected = parseFloat(order.proformaExpectedBales || "0");
   if (expected <= 0) return 0;
   return Math.max(0, expected - (order.totalQtyBales || 0));
