@@ -65,7 +65,7 @@ export function registerFactoryStockRemovalRoutes(app: Express) {
           baleIds,
           actorId: String(supervisor.id),
           actorName: supervisorUsername,
-          reason: reason || "Factory bale stock removal",
+          reason: typeof reason === "string" ? reason.trim() : "",
         });
       });
 
@@ -142,7 +142,7 @@ export function registerFactoryStockRemovalRoutes(app: Express) {
           baleIds: selected.map((row) => row.id),
           actorId: String(supervisor.id),
           actorName: supervisorUsername,
-          reason: reason || "Factory bale stock removal",
+          reason: typeof reason === "string" ? reason.trim() : "",
         });
       });
 
