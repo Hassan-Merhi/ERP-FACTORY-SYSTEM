@@ -10,7 +10,6 @@ export { upload } from "./helpers/uploadHelpers";
 export {
   hashPassword,
   isLegacySHA256Hash,
-  verifyLegacyPassword,
   verifyPassword,
   verifyPasswordBcryptOnly,
 } from "./helpers/passwordHelpers";
