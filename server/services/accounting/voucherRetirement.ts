@@ -98,7 +98,13 @@ export async function retireVouchersTx(
     .orderBy(vouchers.id)
     .for("update");
   if (found.length === 0) return [];
-  if (await isFxAgentSettlementVoucherTx(tx, companyId, found.map((voucher) => voucher.id))) {
+  if (
+    await isFxAgentSettlementVoucherTx(
+      tx,
+      companyId,
+      found.map((voucher) => voucher.id)
+    )
+  ) {
     throw new Error(FX_AGENT_VOUCHER_LOCKED_MESSAGE);
   }
 

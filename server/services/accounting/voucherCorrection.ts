@@ -43,7 +43,11 @@ import { postBalancedVoucherTx, type CentralPostingDependencies, type PostingAct
 import { companyBusinessDate } from "./companyBusinessDate";
 import { applyEmployeeBalanceDeltasTx } from "./employeeBalancePosting";
 import { assertExactReversalAllowedTx, buildExactVoucherReversal } from "./voucherReversal";
-import { isFxAgentSettlementVoucherTx, FX_AGENT_VOUCHER_LOCKED, FX_AGENT_VOUCHER_LOCKED_MESSAGE } from "./fxAgentVoucherLock";
+import {
+  isFxAgentSettlementVoucherTx,
+  FX_AGENT_VOUCHER_LOCKED,
+  FX_AGENT_VOUCHER_LOCKED_MESSAGE,
+} from "./fxAgentVoucherLock";
 
 export const VOUCHER_CLOSED_PERIOD_REVERSE_INSTEAD = "VOUCHER_CLOSED_PERIOD_REVERSE_INSTEAD";
 

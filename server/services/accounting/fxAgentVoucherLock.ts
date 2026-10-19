@@ -26,7 +26,10 @@ export async function isFxAgentSettlementVoucherTx(
   const matches = resultRows<{ id: number }>(
     await tx.execute(sql`
       SELECT id FROM factory_fx_agent_wallet_operations
-       WHERE company_id = ${companyId} AND voucher_id IN ${sql`(${sql.join(ids.map((id) => sql`${id}`), sql`, `)})`}
+       WHERE company_id = ${companyId} AND voucher_id IN ${sql`(${sql.join(
+         ids.map((id) => sql`${id}`),
+         sql`, `
+       )})`}
        LIMIT 1
     `)
   );
