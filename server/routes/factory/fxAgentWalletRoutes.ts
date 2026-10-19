@@ -73,7 +73,7 @@ export function registerFactoryFxAgentWalletRoutes(app: Express) {
         if (existing.rows.length) throw new Error("Account already linked to FX wallet");
         const linked = await tx.execute(sql`
           SELECT 1 FROM customers WHERE company_id = ${cid} AND ledger_account_id = ${accountId} AND deleted_at IS NULL
-          UNION ALL SELECT 1 FROM bank_accounts WHERE company_id = ${cid} AND ledger_account_id = ${accountId}
+          UNION ALL SELECT 1 FROM bank_accounts WHERE company_id = ${cid} AND linked_ledger_id = ${accountId}
           LIMIT 1`);
         if (linked.rows.length) throw new Error("A linked customer or bank account cannot be made an FX agent");
         const ledger = await getPartyBalance(tx, { kind: "ledger", companyId: cid, id: accountId, asOf: date });
