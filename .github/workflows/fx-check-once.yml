@@ -1,0 +1,64 @@
+# Temporary branch-only quality tool; remove after successful use.
+name: Temporary FX agent formatting and focused checks
+on:
+  push:
+    branches:
+      - feat/factory-agent-fx-wallets-20261019
+    paths:
+      - .github/workflows/fx-check-once.yml
+permissions:
+  contents: write
+jobs:
+  format-and-verify:
+    runs-on: ubuntu-26.04
+    timeout-minutes: 20
+    steps:
+      - name: Check out PR branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4.2.2
+        with:
+          ref: feat/factory-agent-fx-wallets-20261019
+          persist-credentials: true
+      - name: Set up Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Install dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Format PR source and commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          files=(
+            client/src/i18n/phase3RemainingTranslations.part28.ts
+            client/src/pages/Agents.tsx
+            client/src/pages/accounts/DisplayAccountGroups.tsx
+            client/src/pages/agents/AgentStatementPanel.tsx
+            client/src/pages/factory/FactoryNetPosition.tsx
+            client/src/pages/factory/factorynetposition/components/FactoryFxAgentWalletCard.tsx
+            client/src/pages/factory/factorynetposition/types.ts
+            server/routes/factory/employee-pos/employeeNetPositionRoutes.ts
+            server/routes/factory/fxAgentWalletRoutes.ts
+            server/routes/factory/fxAgentWalletSettlementRoutes.ts
+            server/routes/ledgerRoutes.ts
+            server/services/accounting/fxAgentVoucherLock.ts
+            server/services/accounting/voucherCorrection.ts
+            server/services/accounting/voucherRetirement.ts
+            server/services/factory/fxAgentWalletDb.ts
+            server/services/factory/fxAgentWalletState.ts
+            tests/factory-fx-agent-wallet-state.test.ts
+            tests/ui/scheduled-containers-refresh.test.ts
+          )
+          node node_modules/prettier/bin/prettier.cjs --write "${files[@]}"
+          node node_modules/prettier/bin/prettier.cjs --check "${files[@]}"
+          git add -- "${files[@]}"
+          if ! git diff --cached --quiet; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git commit -m "style(factory): format FX agent accounting safeguards"
+            git push origin HEAD:feat/factory-agent-fx-wallets-20261019
+          fi
+      - name: TypeScript type-check
+        run: npm run check
+      - name: FX agent wallet unit tests
+        run: node node_modules/vitest/vitest.mjs run tests/factory-fx-agent-wallet-state.test.ts
