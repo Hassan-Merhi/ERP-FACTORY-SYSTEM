@@ -21,6 +21,8 @@ import {
   CalendarDays,
 } from "lucide-react";
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
+import { useCompany } from "@/contexts/CompanyContext";
+import type { AccountDisplayLayout } from "../accounts/DisplayAccountGroups";
 import { useUserPreferences } from "@/hooks/use-user-preferences";
 
 interface AccountItem {
@@ -200,6 +202,7 @@ function CollapsibleSection({
   accounts,
   amountColor,
   formatAmount,
+  displayLayout,
 }: {
   id: string;
   title: string;
@@ -212,19 +215,35 @@ function CollapsibleSection({
   accounts: AccountItem[];
   amountColor: string;
   formatAmount: (n: number) => string;
+  displayLayout?: AccountDisplayLayout;
 }) {
   const [open, setOpen] = useState(true);
 
+  const layoutGroups = (displayLayout?.nodes || []).filter(n => n.type === "group");
+  const membership = new Map((displayLayout?.nodes || [])
+    .filter(n => n.type === "ledger" && n.parentKey)
+    .map(n => [Number(n.key.slice(7)), n]));
+  const labels = new Map(layoutGroups.map(n => [`display:${n.key}`, n.name || "Group"]));
+  const groupOrder = new Map(layoutGroups.map(n => [`display:${n.key}`, n.order]));
   const grouped = accounts.reduce<Record<string, AccountItem[]>>((acc, item) => {
-    const cat = item.category || "Other";
+    const member = item.id ? membership.get(item.id) : undefined;
+    const cat = member?.parentKey ? `display:${member.parentKey}` : item.category || "Other";
     if (!acc[cat]) acc[cat] = [];
     acc[cat].push(item);
     return acc;
   }, {});
-
-  const sortedCategories = Object.entries(grouped).sort(
-    ([, a], [, b]) => b.reduce((s, x) => s + Math.abs(x.value), 0) - a.reduce((s, x) => s + Math.abs(x.value), 0)
-  );
+  const sortedCategories = Object.entries(grouped).map(([key, items]) => {
+    if (labels.has(key)) items.sort((a, b) => (membership.get(a.id || -1)?.order ?? 10000) -
+      (membership.get(b.id || -1)?.order ?? 10000));
+    return [key, items] as const;
+  }).sort(([ak, a], [bk, b]) => {
+    const ai = groupOrder.get(ak), bi = groupOrder.get(bk);
+    if (ai != null && bi != null) return ai - bi;
+    if (ai != null) return -1;
+    if (bi != null) return 1;
+    return b.reduce((s, x) => s + Math.abs(x.value), 0) -
+      a.reduce((s, x) => s + Math.abs(x.value), 0);
+  });
 
   return (
     <Card data-testid={`card-${id}`} className="flex flex-col">
@@ -257,7 +276,7 @@ function CollapsibleSection({
               {sortedCategories.map(([cat, catAccounts]) => (
                 <CategoryGroup
                   key={cat}
-                  category={cat}
+                  category={labels.get(cat) || cat}
                   accounts={catAccounts}
                   amountColor={amountColor}
                   formatAmount={formatAmount}
@@ -568,6 +587,19 @@ function CustomNetPositionView({
 
 export default function FactoryNetPositionDetails() {
   const { formatAmount } = useCurrencyContext();
+  const { selectedCompany } = useCompany();
+  const { data: displayLayout } = useQuery<AccountDisplayLayout>({
+    queryKey: ["/api/accounts/display-layout", selectedCompany?.id],
+    queryFn: async () => {
+      const r = await fetch("/api/accounts/display-layout", { credentials: "include" });
+      if (!r.ok) throw new Error("Display groups unavailable");
+      return r.json();
+    },
+    enabled: !!selectedCompany,
+    staleTime: 30000,
+    refetchOnWindowFocus: false,
+    retry: false,
+  });
   const [asOf, setAsOf] = useState<string>(todayStr);
   const isToday = asOf === todayStr();
   const { prefs, updatePref, isPending: isSavingValuationMode } = useUserPreferences();
@@ -788,6 +820,7 @@ export default function FactoryNetPositionDetails() {
           accounts={data?.forUs.accounts || []}
           amountColor="text-green-600"
           formatAmount={formatAmount}
+          displayLayout={displayLayout}
         />
         <CollapsibleSection
           id="liabilities"
@@ -801,6 +834,7 @@ export default function FactoryNetPositionDetails() {
           accounts={data?.onUs.accounts || []}
           amountColor="text-red-600"
           formatAmount={formatAmount}
+          displayLayout={displayLayout}
         />
       </div>
 
