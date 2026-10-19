@@ -15,7 +15,7 @@ import {
 import { conversionPreview } from "../../services/factory/fxAgentWalletState";
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
-const ROLES = ["Admin", "Owner"] as const;
+const ROLES = ["Admin", "Owner", "Developer"] as const;
 function company(req: Request) {
   return Number(req.session.factoryCompanyId || req.session.currentCompanyId || 0);
 }
