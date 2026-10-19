@@ -100,7 +100,6 @@ export function registerCoreAuthRoutes(app: Express) {
         );
       }
 
-
       if (!user.active) return res.status(403).json({ message: "Account is inactive" });
       const userCompanies = await storage.getUserCompaniesWithRoles(user.id);
 

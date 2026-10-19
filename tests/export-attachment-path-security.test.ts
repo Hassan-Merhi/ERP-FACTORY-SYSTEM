@@ -40,9 +40,7 @@ describe("managed export attachment path security", () => {
   it("rejects a different filename in an otherwise trusted temp directory", () => {
     const filePath = path.join(bridgeDir, "credentials.json");
     fs.writeFileSync(filePath, "private");
-    expect(() => toNodemailerAttachment({ filePath, sizeBytes: 7 }, "x", "text/plain")).toThrow(
-      /EXPORT_PATH_ERR/
-    );
+    expect(() => toNodemailerAttachment({ filePath, sizeBytes: 7 }, "x", "text/plain")).toThrow(/EXPORT_PATH_ERR/);
   });
 
   it("rejects a path from a nested directory even with a matching filename", () => {
@@ -50,9 +48,7 @@ describe("managed export attachment path security", () => {
     fs.mkdirSync(nested);
     const filePath = path.join(nested, serverBridgeFilename());
     fs.writeFileSync(filePath, "report");
-    expect(() => toNodemailerAttachment({ filePath, sizeBytes: 6 }, "x", "text/plain")).toThrow(
-      /EXPORT_PATH_ERR/
-    );
+    expect(() => toNodemailerAttachment({ filePath, sizeBytes: 6 }, "x", "text/plain")).toThrow(/EXPORT_PATH_ERR/);
   });
 
   it.skipIf(process.platform === "win32")("rejects symbolic links to other files", () => {
@@ -81,9 +77,7 @@ describe("managed export attachment path security", () => {
     const filePath = path.join(os.tmpdir(), `not-an-erp-export-${randomUUID()}.txt`);
     try {
       fs.writeFileSync(filePath, "secret");
-      expect(() => toNodemailerAttachment({ filePath, sizeBytes: 6 }, "x", "text/plain")).toThrow(
-        /EXPORT_PATH_ERR/
-      );
+      expect(() => toNodemailerAttachment({ filePath, sizeBytes: 6 }, "x", "text/plain")).toThrow(/EXPORT_PATH_ERR/);
     } finally {
       fs.rmSync(filePath, { force: true });
     }

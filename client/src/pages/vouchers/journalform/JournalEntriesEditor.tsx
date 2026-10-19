@@ -317,8 +317,8 @@ export function JournalEntriesEditor({ model }: { model: Model }) {
                           <Select
                             value={typeField.value}
                             onValueChange={(value) => {
-                          if (value === "DR" || value === "CR") handleJournalTypeChange(index, value);
-                        }}
+                              if (value === "DR" || value === "CR") handleJournalTypeChange(index, value);
+                            }}
                           >
                             <FormControl>
                               <SelectTrigger
