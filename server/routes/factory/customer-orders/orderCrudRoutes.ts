@@ -257,19 +257,27 @@ export function registerOrderCrudRoutes(app: Express) {
                 )
               )
           : [];
+        const originalProformaLines = continuationProforma
+          ? await db.select().from(customerProformaLines).where(eq(customerProformaLines.proformaId, orderProformaId))
+          : [];
         const proformaLines = currentExpectedLines.length
-          ? currentExpectedLines.map((line) => ({
-              id: line.id,
-              articleCode: line.articleCode,
-              productName: line.productName || line.articleCode,
-              quantity: line.expectedQty,
-              pricePerBale: "0",
-              pricingMode: "per_bale",
-              pricePerKg: null,
-            }))
-          : continuationProforma
-            ? await db.select().from(customerProformaLines).where(eq(customerProformaLines.proformaId, orderProformaId))
-            : [];
+          ? currentExpectedLines.map((line) => {
+              const source =
+                originalProformaLines.find((original) => original.id === line.proformaLineId) ||
+                originalProformaLines.find(
+                  (original) => original.articleCode.trim().toLowerCase() === line.articleCode.trim().toLowerCase()
+                );
+              return {
+                id: line.id,
+                articleCode: line.articleCode,
+                productName: line.productName || source?.productName || line.articleCode,
+                quantity: line.expectedQty,
+                pricePerBale: source?.pricePerBale ?? "0",
+                pricingMode: source?.pricingMode ?? "per_bale",
+                pricePerKg: source?.pricePerKg ?? null,
+              };
+            })
+          : originalProformaLines;
         const capacity = continuationProforma
           ? await getProformaCapacitySnapshot(db, {
               companyId,
