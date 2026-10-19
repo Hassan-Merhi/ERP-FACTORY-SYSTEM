@@ -39,7 +39,12 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { getFactoryInvoiceDate, getLoadedBalesColorClass, getOverloadedBales, getRemainingBales } from "./invoiceCalculations";
+import {
+  getFactoryInvoiceDate,
+  getLoadedBalesColorClass,
+  getOverloadedBales,
+  getRemainingBales,
+} from "./invoiceCalculations";
 import type { CustomerOrder } from "./types";
 
 /** Weight cell formatting shared by the order row and the customer group row. */
