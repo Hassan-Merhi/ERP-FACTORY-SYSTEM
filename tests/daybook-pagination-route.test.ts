@@ -87,6 +87,8 @@ describe("ERP Daybook pagination route", () => {
       totalPages: 2,
       hasNextPage: false,
       hasPreviousPage: true,
+      // This company is not the one whose audited correction is hidden (#2353).
+      routineViewFiltered: false,
     });
     expect(headers.get("X-Total-Count")).toBe("251");
     expect(headers.get("X-Page")).toBe("2");
