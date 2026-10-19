@@ -376,6 +376,16 @@ function LoadedOrderCard({ model }: { model: BarcodeLookupModel }) {
         {order.loadingFinalizedAt && (
           <InfoRow label="Loading Finalized" value={model.formatDate(order.loadingFinalizedAt)} />
         )}
+        <InfoRow
+          label="Destination"
+          value={<span className="whitespace-pre-wrap break-words">{order.destination?.trim() || "—"}</span>}
+        />
+        {order.canViewBookingInfo && (
+          <InfoRow
+            label="Booking Info"
+            value={<span className="whitespace-pre-wrap break-words">{order.bookingInfo?.trim() || "—"}</span>}
+          />
+        )}
         {order.scannedBy && (
           <InfoRow
             label="Scanned by"
