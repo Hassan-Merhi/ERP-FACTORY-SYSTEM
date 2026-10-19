@@ -562,6 +562,15 @@ export function useFactoryContainerLoadingScanModel() {
       );
       const nextLoading = data?.nextLoading as { id: number; remainingBales: number } | undefined;
       if (nextLoading?.id) {
+        // The next order is empty. Do not carry the previous container's
+        // note, last-scanned reference, scanner input, or bypass state into it.
+        setOrderId(nextLoading.id);
+        setIsResuming(true);
+        setLoadingNote("");
+        setScanCode("");
+        setLastScannedRef(null);
+        setPendingBypassBaleRef(null);
+        setPendingBypassOverloadRef(null);
         setShowFinalizeDialog(false);
         toast({
           title: "Loading finalized — new loading opened",
