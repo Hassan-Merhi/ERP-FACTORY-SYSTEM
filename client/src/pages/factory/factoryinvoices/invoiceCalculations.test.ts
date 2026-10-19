@@ -212,17 +212,21 @@ describe("Factory Invoicing Date column", () => {
 
   it("falls back to first confirmation, and then the order date, for historical records", () => {
     expect(getFactoryInvoiceDate({ ...base, status: "VERIFIED", verifiedAt: null })).toBe("2026-10-17");
-    expect(getFactoryInvoiceDate({
-      ...base,
-      status: "LOADING",
-      loadingStartedAt: null,
-    })).toBe("2026-10-15");
-    expect(getFactoryInvoiceDate({
-      ...base,
-      status: "VERIFIED",
-      verifiedAt: null,
-      loadingFinalizedAt: null,
-    })).toBe("2026-10-15");
+    expect(
+      getFactoryInvoiceDate({
+        ...base,
+        status: "LOADING",
+        loadingStartedAt: null,
+      })
+    ).toBe("2026-10-15");
+    expect(
+      getFactoryInvoiceDate({
+        ...base,
+        status: "VERIFIED",
+        verifiedAt: null,
+        loadingFinalizedAt: null,
+      })
+    ).toBe("2026-10-15");
   });
 
   it("never displays an invalid timestamp", () => {
