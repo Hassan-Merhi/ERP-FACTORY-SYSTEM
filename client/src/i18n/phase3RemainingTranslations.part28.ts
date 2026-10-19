@@ -1115,4 +1115,49 @@ export const phase3RemainingTranslationsPart28: readonly Phase3SharedUiEntry[] =
     ar: "تحديث ترتيب الحسابات",
     fr: "Actualiser la disposition des comptes",
   },
+  {
+    en: "Why is this bale being returned to inventory?",
+    ar: "لماذا تتم إعادة هذه البالة إلى المخزون؟",
+    fr: "Pourquoi cette balle est-elle remise en stock ?",
+  },
+  {
+    en: "Restore Deleted Bale to Stock",
+    ar: "إعادة البالة المحذوفة إلى المخزون",
+    fr: "Remettre la balle supprimée en stock",
+  },
+  {
+    en: "to its original location.",
+    ar: "إلى موقعها الأصلي.",
+    fr: "à son emplacement d’origine.",
+  },
+  {
+    en: "The original stock debit will be reversed exactly once. The deletion record remains in the audit history.",
+    ar: "سيتم عكس خصم المخزون الأصلي مرة واحدة فقط. وسيبقى سجل الحذف ضمن سجل التدقيق.",
+    fr: "Le débit de stock initial sera contrepassé une seule fois. La suppression restera dans l’historique d’audit.",
+  },
+  {
+    en: "Reason for restoration",
+    ar: "سبب الاستعادة",
+    fr: "Motif de restauration",
+  },
+  {
+    en: "A restoration reason of up to 500 characters is required",
+    ar: "يجب إدخال سبب للاستعادة لا يزيد عن 500 حرف",
+    fr: "Un motif de restauration de 500 caractères maximum est requis",
+  },
+  {
+    en: "Bale ${bale.referenceNumber} restored to stock by ${actorName}. Reason: ${reason}",
+    ar: "تمت إعادة البالة ${bale.referenceNumber} إلى المخزون بواسطة ${actorName}. السبب: ${reason}",
+    fr: "Balle ${bale.referenceNumber} remise en stock par ${actorName}. Motif : ${reason}",
+  },
+  {
+    en: "This bale has only a legacy status deletion; use the status restoration path.",
+    ar: "حُذفت هذه البالة وفق حالة قديمة فقط؛ استخدم مسار استعادة الحالة.",
+    fr: "Cette balle n’a qu’une suppression d’état héritée ; utilisez la restauration de l’état.",
+  },
+  {
+    en: "Bale status changed while restoring; transaction cancelled",
+    ar: "تغيرت حالة البالة أثناء الاستعادة؛ أُلغيت المعاملة",
+    fr: "Le statut de la balle a changé pendant la restauration ; opération annulée",
+  },
 ];
