@@ -278,7 +278,7 @@ export async function updateStockTransfer(
     await tx
       .update(schema.vouchers)
       .set({
-        description: await stockTransferNarrationTx(
+        description: notes.trim() || await stockTransferNarrationTx(
           tx,
           voucher.companyId,
           items.map((item) => item.sourceLocationId),
