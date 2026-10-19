@@ -6,6 +6,7 @@
  * and cheap to unit test.
  */
 import type { DaybookEntry, BaleMeta, DisplayEntry } from "./types";
+import { formatFactoryBaleRemovalDescription } from "@shared/factoryBaleRemovalDescription";
 
 export function parseBalesMeta(entry: DaybookEntry): BaleMeta[] {
   if (!entry.metaJson) return [];
@@ -65,6 +66,25 @@ export function expandBaleEntries(entries: DaybookEntry[]): DisplayEntry[] {
 }
 
 export function formatDaybookDescription(entry: DaybookEntry): string {
+  if (entry.txType === "BALE_REMOVAL" && entry.metaJson) {
+    try {
+      const meta = JSON.parse(entry.metaJson);
+      const references = parseBalesMeta(entry)
+        .map((bale) => bale.ref)
+        .filter((ref): ref is string => typeof ref === "string" && !!ref.trim());
+      // Older rows already contain these details in metadata; display them
+      // consistently without rewriting financial/audit history in the DB.
+      if (references.length && typeof meta.actorName === "string" && meta.actorName.trim()) {
+        return formatFactoryBaleRemovalDescription({
+          references,
+          username: meta.actorName,
+          reason: typeof meta.reason === "string" ? meta.reason : "",
+        });
+      }
+    } catch {
+      // Legacy/malformed metadata: retain the original stored description.
+    }
+  }
   if (entry.txType === "BALE_STOCK_ENTRY") {
     const bales = parseBalesMeta(entry);
     if (bales.length === 1) return bales[0].productName || bales[0].ref || "Unknown";
