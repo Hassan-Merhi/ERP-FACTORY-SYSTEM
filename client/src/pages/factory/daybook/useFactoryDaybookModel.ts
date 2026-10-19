@@ -24,6 +24,7 @@ import { hasAnyOpenDialog } from "@/hooks/use-escape-back";
 import type { DaybookEntry, DisplayEntry, FactoryDaybookUIState } from "./types";
 import {
   parseBalesMeta,
+  withLiveLoadingAmounts,
   expandBaleEntries,
   formatDaybookDescription,
   formatTxType,
@@ -221,16 +222,10 @@ export function useFactoryDaybookModel() {
     refetchOnWindowFocus: false,
     retry: 1,
   });
-  const displayedEntries = useMemo(() => {
-    const amounts = liveLoadingAmounts?.amounts;
-    if (!amounts) return entries;
-    return entries.map((entry) => {
-      if (entry.txType !== "LOADING_CREATED" || entry.referenceId == null || entry.currencyCode !== "USD") return entry;
-      const amount = amounts[String(entry.referenceId)];
-      if (amount == null || amount === entry.amountCurrency) return entry;
-      return { ...entry, amountCurrency: amount, amountUsd: amount };
-    });
-  }, [entries, liveLoadingAmounts]);
+  const displayedEntries = useMemo(
+    () => withLiveLoadingAmounts(entries, liveLoadingAmounts?.amounts),
+    [entries, liveLoadingAmounts]
+  );
 
 
   // ── URL deep link: ?entryId= or ?voucherId= on mount ─────────────────────
