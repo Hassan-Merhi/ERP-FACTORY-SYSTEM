@@ -1100,4 +1100,14 @@ export const phase3RemainingTranslationsPart28: readonly Phase3SharedUiEntry[] =
     ar: "لا يمكن تفعيل رصيد افتتاحي معروف بعملة غير الدولار كمحفظة صرف بالدولار",
     fr: "Un solde d’ouverture connu dans une devise autre que l’USD ne peut pas être activé comme portefeuille USD",
   },
+  {
+    en: "FX Agent Native Balance:",
+    ar: "رصيد وكيل الصرف بالعملة الأصلية:",
+    fr: "Solde natif de l’agent de change :",
+  },
+  {
+    en: "FX Agent Account Reconciliation Warnings",
+    ar: "تحذيرات مطابقة حسابات وكلاء الصرف",
+    fr: "Avertissements de rapprochement des comptes d’agents de change",
+  },
 ];
