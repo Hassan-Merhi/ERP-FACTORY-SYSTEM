@@ -23,7 +23,7 @@ export function withLiveLoadingAmounts(
       return entry;
     }
     const amount = amounts[String(entry.referenceId)];
-    if (amount == null || amount === entry.amountCurrency) return entry;
+    if (amount == null || (amount === entry.amountCurrency && amount === entry.amountUsd)) return entry;
     return { ...entry, amountCurrency: amount, amountUsd: amount };
   });
 }
