@@ -1,4 +1,5 @@
 import type { Express, Request, Response } from "express";
+import { registerFactoryFxAgentSettlementRoutes } from "./fxAgentWalletSettlementRoutes";
 import { sql } from "drizzle-orm";
 import { db } from "../../db";
 import { requireAuth, requireRole } from "../../auth";
@@ -37,6 +38,7 @@ async function configRate(cid: number, date: string) {
 }
 
 export function registerFactoryFxAgentWalletRoutes(app: Express) {
+  registerFactoryFxAgentSettlementRoutes(app);
   app.get("/api/factory/fx-agent-wallets", requireAuth, async (req: Request, res: Response) => {
     try {
       const cid = company(req);
