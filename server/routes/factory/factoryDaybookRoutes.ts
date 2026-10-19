@@ -41,7 +41,7 @@ export function registerFactoryDaybookRoutes(app: Express) {
       if (!companyId) return res.status(400).json({ message: "No company selected" });
 
       const rawOrderIds = req.query.orderIds;
-      if (typeof rawOrderIds !== "string" || !/^\\d+(,\\d+)*$/.test(rawOrderIds)) {
+      if (typeof rawOrderIds !== "string" || !/^\d+(,\d+)*$/.test(rawOrderIds)) {
         return res.status(400).json({ message: "Provide comma-separated order IDs" });
       }
       const orderIds = [...new Set(rawOrderIds.split(",").map(Number))];
