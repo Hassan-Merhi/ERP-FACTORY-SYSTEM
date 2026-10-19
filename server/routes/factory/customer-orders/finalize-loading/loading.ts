@@ -122,6 +122,12 @@ export function registerOrderLoadingRoutes(app: Express) {
       // the new carried-over-proforma behavior after the server is deployed.
       const createCarryoverProforma =
         req.body?.createCarryoverProforma === true || req.body?.createContinuation === true;
+      // This is a separate workflow: keep the reusable proforma active and open
+      // an empty loading, rather than splitting/deactivating the source proforma.
+      const createNextLoading = req.body?.createNextLoading === true;
+      if (createNextLoading && createCarryoverProforma) {
+        return res.status(400).json({ message: "Choose either a new loading or legacy proforma carryover" });
+      }
 
       // The date selected in Validate & Finalize is the business-effective date.
       // Keep a separate actual timestamp for audit/update bookkeeping.
@@ -170,6 +176,52 @@ export function registerOrderLoadingRoutes(app: Express) {
 
         const bales = await tx.select().from(customerOrderBales).where(eq(customerOrderBales.orderId, orderId));
         if (bales.length === 0) throw new Error("Order has no bales scanned");
+
+        let nextLoadingRemainingBales = 0;
+        if (createNextLoading) {
+          if (!order.proformaIdUsed) {
+            throw new Error("A linked proforma is required to open a loading for remaining quantities");
+          }
+          const [proforma] = await tx
+            .select({ id: customerProformas.id, isActive: customerProformas.isActive })
+            .from(customerProformas)
+            .where(
+              and(
+                eq(customerProformas.id, order.proformaIdUsed),
+                eq(customerProformas.companyId, companyId),
+                eq(customerProformas.customerId, order.customerId),
+                isNull(customerProformas.deletedAt)
+              )
+            );
+          if (!proforma?.isActive) throw new Error("Linked proforma is no longer active");
+
+          // Calculate the unused quantities of THIS loading alone. A proforma
+          // is reusable, so sibling loadings must not consume this allowance.
+          const proformaLines = await tx
+            .select({ articleCode: customerProformaLines.articleCode, quantity: customerProformaLines.quantity })
+            .from(customerProformaLines)
+            .where(eq(customerProformaLines.proformaId, proforma.id));
+          const normalizeCode = (code: string | null | undefined) => (code || "").trim().toLowerCase();
+          const expectedByArticle = new Map<string, number>();
+          for (const line of proformaLines) {
+            const code = normalizeCode(line.articleCode);
+            if (!code) continue;
+            expectedByArticle.set(code, (expectedByArticle.get(code) || 0) + Number(line.quantity));
+          }
+          const loadedByArticle = new Map<string, number>();
+          for (const bale of bales) {
+            const code = normalizeCode(bale.articleCode);
+            if (!code) continue;
+            loadedByArticle.set(code, (loadedByArticle.get(code) || 0) + 1);
+          }
+          nextLoadingRemainingBales = [...expectedByArticle].reduce(
+            (sum, [code, expected]) => sum + Math.max(0, expected - (loadedByArticle.get(code) || 0)),
+            0
+          );
+          if (nextLoadingRemainingBales <= 0) {
+            throw new Error("This loading has no remaining proforma quantities; use Finalize Only");
+          }
+        }
 
         let carriedOverProforma: typeof customerProformas.$inferSelect | null = null;
         if (createCarryoverProforma && order.proformaIdUsed) {
@@ -359,11 +411,41 @@ export function registerOrderLoadingRoutes(app: Express) {
           amountUsd: verifyTotalValue,
         });
 
+        // Both actions commit together: a failure to create the next loading
+        // must not leave the original container finalized without its successor.
+        let nextLoading: { id: number; remainingBales: number } | null = null;
+        if (createNextLoading) {
+          const [created] = await tx
+            .insert(customerOrders)
+            .values({
+              companyId,
+              customerId: order.customerId,
+              proformaIdUsed: order.proformaIdUsed,
+              locationId: order.locationId,
+              orderDate: getClientDate(req),
+              status: "LOADING",
+              loadingStartedAt: now,
+              containerNotes: null,
+            })
+            .returning();
+          if (!created) throw new Error("Could not create the next loading");
+          nextLoading = { id: created.id, remainingBales: nextLoadingRemainingBales };
+          await writeDaybookEntry(tx, {
+            companyId,
+            txDate: getClientDate(req),
+            txType: "LOADING_CREATED",
+            referenceId: created.id,
+            referenceTable: "customer_orders",
+            description: `Continuation of loading #${orderId} for ${loadingCustomer?.legalName || "Customer"}`,
+          });
+        }
+
         return {
           updated,
           customerName: loadingCustomer?.legalName || "customer",
           baleCount: bales.length,
           carriedOverProforma,
+          nextLoading,
         };
       });
 
@@ -378,9 +460,22 @@ export function registerOrderLoadingRoutes(app: Express) {
         companyId,
       }).catch(() => {});
 
+      if (finalized.nextLoading) {
+        dispatchNotification({
+          eventType: "LOADING_STARTED",
+          title: "Loading Started",
+          message: `Continuation loading #${finalized.nextLoading.id} started for ${finalized.customerName}`,
+          entityType: "customer_order",
+          entityId: finalized.nextLoading.id,
+          triggeredByUserId: req.session?.userId ?? null,
+          companyId,
+        }).catch(() => {});
+      }
+
       res.json({
         ...finalized.updated,
         ...(finalized.carriedOverProforma ? { carriedOverProforma: finalized.carriedOverProforma } : {}),
+        ...(finalized.nextLoading ? { nextLoading: finalized.nextLoading } : {}),
       });
     } catch (error: unknown) {
       logger.error("Error finalizing loading:", { error: error });
