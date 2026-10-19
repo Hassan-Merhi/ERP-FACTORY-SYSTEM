@@ -15,9 +15,8 @@ import { buildRemainingLoadingPlan } from "../server/routes/factory/customer-ord
 const runCount = Number(process.env.FUZZ_RUNS ?? "250");
 const numRuns = Number.isSafeInteger(runCount) && runCount > 0 ? Math.min(runCount, 20000) : 250;
 const seedValue = process.env.FUZZ_SEED;
-const seedOptions = seedValue !== undefined && Number.isSafeInteger(Number(seedValue))
-  ? { seed: Number(seedValue) }
-  : {};
+const seedOptions =
+  seedValue !== undefined && Number.isSafeInteger(Number(seedValue)) ? { seed: Number(seedValue) } : {};
 const params = { numRuns, ...seedOptions };
 
 describe("security boundary property fuzzing", () => {
@@ -31,7 +30,9 @@ describe("security boundary property fuzzing", () => {
           expect(key.length).toBeLessThanOrEqual(500);
           expect(key.startsWith("/")).toBe(false);
           expect(key.includes("\\")).toBe(false);
-          expect(key.split("/").every((segment) => segment.length > 0 && segment !== "." && segment !== "..")).toBe(true);
+          expect(key.split("/").every((segment) => segment.length > 0 && segment !== "." && segment !== "..")).toBe(
+            true
+          );
         } catch (error) {
           expect(error).toBeInstanceOf(ProtectedAssetAccessError);
           expect((error as ProtectedAssetAccessError).code).toBe("ASSET_STORAGE_KEY_INVALID");
@@ -74,7 +75,8 @@ describe("security boundary property fuzzing", () => {
   });
 
   it("refuses all legacy SHA-256 passwords rather than comparing weak hashes", async () => {
-    const hex = fc.array(fc.constantFrom(..."0123456789abcdefABCDEF"), { minLength: 64, maxLength: 64 })
+    const hex = fc
+      .array(fc.constantFrom(..."0123456789abcdefABCDEF"), { minLength: 64, maxLength: 64 })
       .map((digits) => digits.join(""));
     await fc.assert(
       fc.asyncProperty(fc.string({ maxLength: 100 }), hex, async (password, legacyHash) => {
@@ -122,7 +124,9 @@ describe("security boundary property fuzzing", () => {
             0
           );
           expect(result.remainingBales).toBe(expected);
-          expect(result.lines.every((line) => line.expectedQty > 0 && Number.isSafeInteger(line.expectedQty))).toBe(true);
+          expect(result.lines.every((line) => line.expectedQty > 0 && Number.isSafeInteger(line.expectedQty))).toBe(
+            true
+          );
           expect(new Set(result.lines.map((line) => line.articleCode.toLowerCase())).size).toBe(result.lines.length);
           expect(result.lines.reduce((sum, line) => sum + line.expectedQty, 0)).toBe(expected);
         }
