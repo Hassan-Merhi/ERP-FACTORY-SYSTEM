@@ -8,6 +8,26 @@
 import type { DaybookEntry, BaleMeta, DisplayEntry } from "./types";
 import { formatFactoryBaleRemovalDescription } from "@shared/factoryBaleRemovalDescription";
 
+/**
+ * Overlay small live loading totals onto already-loaded daybook rows.
+ * Retains untouched rows by reference, and never changes non-USD or unrelated
+ * transactions. The amounts come from customer_orders, not client pricing.
+ */
+export function withLiveLoadingAmounts(
+  entries: DaybookEntry[],
+  amounts?: Record<string, string>
+): DaybookEntry[] {
+  if (!amounts) return entries;
+  return entries.map((entry) => {
+    if (entry.txType !== "LOADING_CREATED" || entry.referenceId == null || entry.currencyCode !== "USD") {
+      return entry;
+    }
+    const amount = amounts[String(entry.referenceId)];
+    if (amount == null || amount === entry.amountCurrency) return entry;
+    return { ...entry, amountCurrency: amount, amountUsd: amount };
+  });
+}
+
 export function parseBalesMeta(entry: DaybookEntry): BaleMeta[] {
   if (!entry.metaJson) return [];
   try {
