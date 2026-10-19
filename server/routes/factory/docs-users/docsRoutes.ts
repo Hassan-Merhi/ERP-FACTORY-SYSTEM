@@ -11,7 +11,7 @@ import { logger } from "../../../lib/logger";
 import { db } from "../../../db";
 import { sanitiseFilename, contentDisposition } from "../../../lib/contentDisposition";
 import { requireAuth } from "../../../auth";
-import { writeDaybookEntry, isLegacySHA256Hash, verifySupervisorPassword } from "../_helpers";
+import { writeDaybookEntry, verifySupervisorPassword } from "../_helpers";
 import {
   users,
   userCompanyRoles,
@@ -21,7 +21,6 @@ import {
   insertContainerDocumentTypeSchema,
 } from "@shared/schema";
 import { eq, and, inArray } from "drizzle-orm";
-import bcrypt from "bcryptjs";
 import path from "path";
 import fs from "fs";
 
@@ -51,13 +50,8 @@ export function registerFactoryDocsRoutes(app: Express) {
         return res.status(403).json({ message: "This account is inactive and cannot authorize actions." });
       }
 
-      // Verify password (bcrypt or legacy SHA256)
-      const valid = await (async () => {
-        if (isLegacySHA256Hash(targetUser.password)) {
-          return verifySupervisorPassword(password, targetUser.password);
-        }
-        return bcrypt.compare(password, targetUser.password);
-      })();
+      // Privileged step-up requires bcrypt, never a legacy SHA-256 comparison.
+      const valid = await verifySupervisorPassword(password, targetUser.password);
 
       if (!valid) {
         return res.status(401).json({ message: "Invalid username or password." });
