@@ -216,7 +216,11 @@ export function registerOrderLoadingRoutes(app: Express) {
             })
             .from(customerOrderExpectedLines)
             .where(
-              and(eq(customerOrderExpectedLines.orderId, orderId), eq(customerOrderExpectedLines.companyId, companyId))
+              and(
+                eq(customerOrderExpectedLines.orderId, orderId),
+                eq(customerOrderExpectedLines.companyId, companyId),
+                eq(customerOrderExpectedLines.proformaId, proforma.id)
+              )
             );
           const proformaLines = existingPlan.length
             ? []
