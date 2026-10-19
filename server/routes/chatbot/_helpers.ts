@@ -8,31 +8,19 @@ import { createCipheriv, createDecipheriv, createHash, randomBytes } from "node:
 
 // ── GitHub token encryption helpers ────────────────────────────────────────
 // Key is derived from SESSION_SECRET so it survives restarts without a new env var.
-// New ciphertext uses authenticated AES-256-GCM. Legacy CryptoJS/OpenSSL
-// AES-256-CBC ciphertext remains decryptable so existing stored tokens do not break.
-export const _tokenKey = () => process.env.SESSION_SECRET ?? "erp-github-token-fallback-key";
+// Stored tokens use authenticated AES-256-GCM only. Legacy OpenSSL/CryptoJS
+// ciphertext must be reconfigured rather than decrypted with MD5.
+export const _tokenKey = (): string => {
+  const secret = process.env.SESSION_SECRET;
+  if (!secret) throw new Error("SESSION_SECRET is required for GitHub token encryption");
+  return secret;
+};
 
 const TOKEN_FORMAT_V2 = "v2";
 const GCM_AUTH_TAG_LENGTH = 16;
 
 function modernTokenKey(): Buffer {
   return createHash("sha256").update(_tokenKey(), "utf8").digest();
-}
-
-function deriveLegacyOpenSslKeyAndIv(passphrase: string, salt: Buffer): { key: Buffer; iv: Buffer } {
-  const password = Buffer.from(passphrase, "utf8");
-  let derived = Buffer.alloc(0);
-  let previous = Buffer.alloc(0);
-  while (derived.length < 48) {
-    // Legacy compatibility only: CryptoJS passphrase AES used OpenSSL EVP_BytesToKey
-    // with MD5. This path decrypts existing data only; new encryption uses AES-GCM.
-    // nosemgrep: javascript.lang.security.audit.md5-used-as-password.md5-used-as-password
-    previous = createHash("md5")
-      .update(Buffer.concat([previous, password, salt]))
-      .digest();
-    derived = Buffer.concat([derived, previous]);
-  }
-  return { key: derived.subarray(0, 32), iv: derived.subarray(32, 48) };
 }
 
 export function encryptToken(plain: string): string {
@@ -59,20 +47,9 @@ function decryptModernToken(ciphertext: string): string {
   return Buffer.concat([decipher.update(encrypted), decipher.final()]).toString("utf8");
 }
 
-function decryptLegacyToken(ciphertext: string): string {
-  const payload = Buffer.from(ciphertext, "base64");
-  if (payload.length < 17 || payload.subarray(0, 8).toString("ascii") !== "Salted__") return "";
-  const salt = payload.subarray(8, 16);
-  const { key, iv } = deriveLegacyOpenSslKeyAndIv(_tokenKey(), salt);
-  const decipher = createDecipheriv("aes-256-cbc", key, iv);
-  return Buffer.concat([decipher.update(payload.subarray(16)), decipher.final()]).toString("utf8");
-}
-
 export function decryptToken(ciphertext: string): string {
   try {
-    return ciphertext.startsWith(`${TOKEN_FORMAT_V2}:`)
-      ? decryptModernToken(ciphertext)
-      : decryptLegacyToken(ciphertext);
+    return ciphertext.startsWith(`${TOKEN_FORMAT_V2}:`) ? decryptModernToken(ciphertext) : "";
   } catch {
     return "";
   }
