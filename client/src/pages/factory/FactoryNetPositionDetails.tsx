@@ -21,7 +21,6 @@ import {
   CalendarDays,
 } from "lucide-react";
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
-import { useCompany } from "@/contexts/CompanyContext";
 import type { AccountDisplayLayout } from "../accounts/DisplayAccountGroups";
 import { useAccountDisplayOrder } from "@/hooks/useAccountDisplayOrder";
 import { InlineOrderButtons, inlineDrag, type InlineOrderActions } from "@/components/accounts/InlineOrderButtons";
@@ -609,7 +608,6 @@ function CustomNetPositionView({
 
 export default function FactoryNetPositionDetails() {
   const { formatAmount } = useCurrencyContext();
-  const { selectedCompany } = useCompany();
   const accountOrder = useAccountDisplayOrder();
   const displayLayout = accountOrder.layout;
   const orderActions: InlineOrderActions = {
