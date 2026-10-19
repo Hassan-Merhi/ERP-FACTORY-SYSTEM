@@ -20,6 +20,7 @@ import {
   factoryBales,
   customerOrders,
   customerOrderBales,
+  customerOrderExpectedLines,
   customerProformas,
   customerProformaLines,
   customers,
@@ -177,6 +178,15 @@ export function registerOrderLoadingRoutes(app: Express) {
         const bales = await tx.select().from(customerOrderBales).where(eq(customerOrderBales.orderId, orderId));
         if (bales.length === 0) throw new Error("Order has no bales scanned");
 
+        // Use the current loading's own immutable expected plan, when present.
+        // Otherwise this is the first container and the proforma is the plan.
+        // In both cases only this container's bales are subtracted.
+        const nextLoadingLines: Array<{
+          articleCode: string;
+          productName: string | null;
+          expectedQty: number;
+          proformaLineId: number | null;
+        }> = [];
         let nextLoadingRemainingBales = 0;
         if (createNextLoading) {
           if (!order.proformaIdUsed) {
@@ -195,29 +205,74 @@ export function registerOrderLoadingRoutes(app: Express) {
             );
           if (!proforma?.isActive) throw new Error("Linked proforma is no longer active");
 
-          // Calculate the unused quantities of THIS loading alone. A proforma
-          // is reusable, so sibling loadings must not consume this allowance.
-          const proformaLines = await tx
-            .select({ articleCode: customerProformaLines.articleCode, quantity: customerProformaLines.quantity })
-            .from(customerProformaLines)
-            .where(eq(customerProformaLines.proformaId, proforma.id));
+          const existingPlan = await tx
+            .select({
+              articleCode: customerOrderExpectedLines.articleCode,
+              productName: customerOrderExpectedLines.productName,
+              expectedQty: customerOrderExpectedLines.expectedQty,
+              proformaLineId: customerOrderExpectedLines.proformaLineId,
+            })
+            .from(customerOrderExpectedLines)
+            .where(
+              and(eq(customerOrderExpectedLines.orderId, orderId), eq(customerOrderExpectedLines.companyId, companyId))
+            );
+          const proformaLines = existingPlan.length
+            ? []
+            : await tx
+                .select({
+                  id: customerProformaLines.id,
+                  articleCode: customerProformaLines.articleCode,
+                  productName: customerProformaLines.productName,
+                  quantity: customerProformaLines.quantity,
+                })
+                .from(customerProformaLines)
+                .where(eq(customerProformaLines.proformaId, proforma.id));
+
           const normalizeCode = (code: string | null | undefined) => (code || "").trim().toLowerCase();
-          const expectedByArticle = new Map<string, number>();
-          for (const line of proformaLines) {
+          const expectedByArticle = new Map<
+            string,
+            { articleCode: string; productName: string | null; expectedQty: number; proformaLineId: number | null }
+          >();
+          for (const line of existingPlan.length
+            ? existingPlan
+            : proformaLines.map((line) => ({
+                articleCode: line.articleCode,
+                productName: line.productName,
+                expectedQty: line.quantity,
+                proformaLineId: line.id,
+              }))) {
             const code = normalizeCode(line.articleCode);
             if (!code) continue;
-            expectedByArticle.set(code, (expectedByArticle.get(code) || 0) + Number(line.quantity));
+            const qty = Number(line.expectedQty);
+            if (!Number.isSafeInteger(qty) || qty < 0) throw new Error("Invalid expected quantity in loading plan");
+            const previous = expectedByArticle.get(code);
+            if (previous) previous.expectedQty += qty;
+            else expectedByArticle.set(code, {
+              articleCode: line.articleCode,
+              productName: line.productName,
+              expectedQty: qty,
+              proformaLineId: line.proformaLineId,
+            });
           }
+
           const loadedByArticle = new Map<string, number>();
           for (const bale of bales) {
             const code = normalizeCode(bale.articleCode);
             if (!code) continue;
             loadedByArticle.set(code, (loadedByArticle.get(code) || 0) + 1);
           }
-          nextLoadingRemainingBales = [...expectedByArticle].reduce(
-            (sum, [code, expected]) => sum + Math.max(0, expected - (loadedByArticle.get(code) || 0)),
-            0
-          );
+          for (const [code, line] of expectedByArticle) {
+            const remaining = Math.max(0, line.expectedQty - (loadedByArticle.get(code) || 0));
+            if (remaining > 0) {
+              nextLoadingLines.push({
+                articleCode: line.articleCode,
+                productName: line.productName,
+                expectedQty: remaining,
+                proformaLineId: line.proformaLineId,
+              });
+              nextLoadingRemainingBales += remaining;
+            }
+          }
           if (nextLoadingRemainingBales <= 0) {
             throw new Error("This loading has no remaining proforma quantities; use Finalize Only");
           }
@@ -429,6 +484,20 @@ export function registerOrderLoadingRoutes(app: Express) {
             })
             .returning();
           if (!created) throw new Error("Could not create the next loading");
+          // Persist the remaining-only plan BEFORE this transaction commits.
+          // It is used for the next loading's progress, scan limits, and any
+          // subsequent continuation. Original proforma lines stay untouched.
+          await tx.insert(customerOrderExpectedLines).values(
+            nextLoadingLines.map((line) => ({
+              companyId,
+              orderId: created.id,
+              proformaId: order.proformaIdUsed,
+              proformaLineId: line.proformaLineId,
+              articleCode: line.articleCode,
+              productName: line.productName,
+              expectedQty: line.expectedQty,
+            }))
+          );
           nextLoading = { id: created.id, remainingBales: nextLoadingRemainingBales };
           await writeDaybookEntry(tx, {
             companyId,
