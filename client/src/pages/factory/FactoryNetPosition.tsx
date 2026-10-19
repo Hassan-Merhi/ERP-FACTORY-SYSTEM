@@ -176,6 +176,12 @@ export default function FactoryNetPosition() {
       )}
 
       <FactoryFxAgentWalletCard asOf={asOf} readOnly={!isToday} />
+      {!!data?.fxAgentWalletWarnings?.length && (
+        <div role="alert" className="rounded-md border border-amber-300 p-3 text-sm text-amber-700 dark:text-amber-300">
+          <p className="font-semibold">FX Agent Account Reconciliation Warnings</p>
+          {data.fxAgentWalletWarnings.map((warning, index) => <p key={index}>{warning}</p>)}
+        </div>
+      )}
 
       {/* Net Position Banner */}
       {isLoading ? (
