@@ -6,6 +6,7 @@ CREATE TABLE IF NOT EXISTS factory_fx_agent_wallets (
  company_id INTEGER NOT NULL REFERENCES companies(id),
  ledger_account_id INTEGER NOT NULL REFERENCES ledger_accounts(id),
  opening_usd NUMERIC(20,6) NOT NULL CHECK (opening_usd >= 0),
+ confirmed_native_usd BOOLEAN NOT NULL DEFAULT false,
  activated_on DATE NOT NULL,
  created_by TEXT,
  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
