@@ -1,0 +1,60 @@
+name: Temporary Phase 2 desktop dependency repair
+
+on:
+  push:
+    branches:
+      - security/phase2-remove-sprintf-js-via-global-agent-20261019
+    paths:
+      - .github/workflows/phase2-desktop-dependency-repair.yml
+
+permissions:
+  contents: write
+
+jobs:
+  desktop-security-repair:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    defaults:
+      run:
+        working-directory: desktop
+    steps:
+      - name: Checkout desktop branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: true
+      - name: Set up Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: "24.22.0"
+      - name: Regenerate lockfile respecting exact override
+        run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+      - name: Verify lockfile excludes vulnerable package
+        run: |
+          node - <<'NODE'
+          const assert = require('node:assert/strict');
+          const p = require('./package-lock.json').packages;
+          const dep = p['node_modules/global-agent'];
+          assert.equal(dep?.version, '4.1.3', 'global-agent override must resolve to 4.1.3');
+          assert.ok(!Object.keys(p).some(key => key.endsWith('/sprintf-js')), 'GHSA-hp3w-g68c-fv3c must be absent');
+          assert.ok(!Object.keys(p).some(key => key.endsWith('/roarr')), 'orphaned roarr must be absent');
+          console.log('Desktop lockfile has no sprintf-js or roarr; global-agent 4.1.3 present.');
+          NODE
+      - name: Verify clean reproducible desktop install
+        run: |
+          ELECTRON_SKIP_BINARY_DOWNLOAD=1 npm ci --ignore-scripts --no-audit --no-fund
+          npm ls sprintf-js --all --parseable || test "$?" -eq 1
+          node -e "const p=require('./node_modules/global-agent/package.json');if(p.version!=='4.1.3')process.exit(1);if(typeof require('global-agent').bootstrap!=='function')process.exit(1);console.log('global-agent v4 bootstrap API is present')"
+          node -e "const path=require('path');const from=path.dirname(require.resolve('app-builder-lib'));const p=require.resolve('@electron/get',{paths:[from]});const get=require(p);if(typeof get.initializeProxy!=='function')process.exit(1);console.log('electron-builder @electron/get proxy entrypoint loaded')"
+          ./node_modules/.bin/electron-builder --version
+      - name: Verify package audit
+        run: npm audit --omit=dev --audit-level=moderate
+      - name: Commit regenerated desktop lockfile
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -- package-lock.json
+          if ! git diff --cached --quiet; then
+            git commit -m "lock(desktop): resolve global-agent 4 without vulnerable sprintf-js"
+            git push origin HEAD:refs/heads/security/phase2-remove-sprintf-js-via-global-agent-20261019
+          fi
