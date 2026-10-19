@@ -39,8 +39,16 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { getLoadedBalesColorClass, getOverloadedBales, getRemainingBales } from "./invoiceCalculations";
+import {
+  getFactoryInvoiceDate,
+  getLoadedBalesColorClass,
+  getOverloadedBales,
+  getRemainingBales,
+} from "./invoiceCalculations";
 import type { CustomerOrder } from "./types";
+import { EditableShippingCell } from "./EditableShippingCell";
+
+export type EditableShippingField = "containerNumber" | "bookingInfo" | "destination" | "containerNotes";
 
 /** Weight cell formatting shared by the order row and the customer group row. */
 export function fmtKg(val: string | number | null | undefined) {
@@ -64,6 +72,7 @@ export interface InvoiceOrderRowContext {
   onRevertOrder: (orderId: number) => void;
   onDeleteOrder: (orderId: number) => void;
   onChangeCustomer: (orderId: number) => void;
+  onSaveShippingField: (orderId: number, field: EditableShippingField, value: string) => Promise<void>;
 }
 
 interface InvoiceOrderRowProps extends InvoiceOrderRowContext {
@@ -99,21 +108,14 @@ export function InvoiceOrderRow({
   onRevertOrder,
   onDeleteOrder,
   onChangeCustomer,
+  onSaveShippingField,
 }: InvoiceOrderRowProps) {
   const remaining = getRemainingBales(order);
   const expected = parseFloat(order.proformaExpectedBales || "0");
   const overloaded = getOverloadedBales(order);
 
-  // The table date follows the actual verification/finalization event, not loading creation.
-  const eventTimestamp = order.status === "FINALIZED"
-    ? (order.finalizedAt || order.verifiedAt || order.loadingFinalizedAt)
-    : order.status === "VERIFIED"
-      ? (order.verifiedAt || order.loadingFinalizedAt)
-      : null;
-  const eventDate = eventTimestamp ? new Date(eventTimestamp) : null;
-  const displayDate = eventDate && !Number.isNaN(eventDate.getTime())
-    ? formatDisplayDate(`${eventDate.getFullYear()}-${String(eventDate.getMonth() + 1).padStart(2, "0")}-${String(eventDate.getDate()).padStart(2, "0")}`)
-    : order.orderDate ? formatDisplayDate(order.orderDate) : "-";
+  const dateForStatus = getFactoryInvoiceDate(order);
+  const displayDate = dateForStatus ? formatDisplayDate(dateForStatus) : "-";
 
   return (
     <TableRow
@@ -147,33 +149,29 @@ export function InvoiceOrderRow({
         </TableCell>
       )}
       <TableCell className="font-mono text-sm" data-testid={`text-container-${order.id}`}>
-        {order.containerNumber || <span className="text-muted-foreground/50">—</span>}
+        <EditableShippingCell orderId={order.id} field="containerNumber" value={order.containerNumber}
+          maxLength={100} onSave={onSaveShippingField} />
       </TableCell>
       {showBookingInfo && (
-        <TableCell
-          className="text-sm max-w-[180px] truncate"
-          title={order.bookingInfo ?? undefined}
-          data-testid={`text-booking-info-${order.id}`}
-        >
-          {order.bookingInfo || <span className="text-muted-foreground/50">—</span>}
+        <TableCell className="text-sm max-w-[180px]" data-testid={`text-booking-info-${order.id}`}>
+          <EditableShippingCell orderId={order.id} field="bookingInfo" value={order.bookingInfo}
+            maxLength={2000} onSave={onSaveShippingField} />
         </TableCell>
       )}
       <TableCell className="text-sm" data-testid={`text-destination-${order.id}`}>
-        {order.destination || <span className="text-muted-foreground/50">—</span>}
+        <EditableShippingCell orderId={order.id} field="destination" value={order.destination}
+          maxLength={500} onSave={onSaveShippingField} />
       </TableCell>
-      <TableCell
-        className="text-sm max-w-[200px] truncate"
-        data-testid={`text-notes-${order.id}`}
-        title={order.containerNotes ?? undefined}
-      >
-        {order.containerNotes || <span className="text-muted-foreground/50">—</span>}
+      <TableCell className="text-sm max-w-[200px]" data-testid={`text-notes-${order.id}`}>
+        <EditableShippingCell orderId={order.id} field="containerNotes" value={order.containerNotes}
+          maxLength={10000} multiline onSave={onSaveShippingField} />
       </TableCell>
       <TableCell className="font-mono text-sm" data-testid={`text-order-date-${order.id}`}>
         {displayDate}
       </TableCell>
       <TableCell>{getStatusBadge(order.status)}</TableCell>
       <TableCell
-        className="text-right font-mono text-lg font-bold tabular-nums"
+        className="text-right font-mono text-sm font-semibold tabular-nums"
         data-testid={`text-total-bales-${order.id}`}
       >
         <span className={getLoadedBalesColorClass(order.totalQtyBales ?? 0)}>{order.totalQtyBales ?? "-"}</span>

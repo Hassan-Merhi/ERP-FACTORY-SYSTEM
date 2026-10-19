@@ -69,6 +69,8 @@ describe("Wave 2 frontend speed contracts", () => {
     expect(app).toContain('import("@/components/ChatWidget")');
     expect(overlays).toContain("useDeferredRemoteSupport");
     expect(overlays).toContain('import("@/components/RemoteSupportRuntime")');
+    expect(overlays).not.toContain("LanguageOnboardingDialog");
+    expect(source("client/src/app/AuthenticatedApp.tsx")).not.toContain("userId={user.id}");
 
     expect(screenFeed).not.toContain("  captureAndUploadScreenFrame,");
     expect(screenFeed).toContain('import("./screen-feed-capture-engine")');

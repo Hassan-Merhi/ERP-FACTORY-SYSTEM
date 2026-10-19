@@ -76,6 +76,7 @@ import { entryBalanceUrl, selectBalanceDisplayEntries, selectCashAccountId } fro
 export default function Daybook({ user }: { user?: DaybookUser | null } = {}) {
   const { toast } = useToast();
   const { selectedCompany } = useCompany();
+  const routineAccountingViewFiltered = selectedCompany?.id === 8 && (user?.currentRole ?? user?.role) !== "Developer";
   const vouchersBase = selectedCompany?.companyType === "properties" ? "/properties/vouchers" : "/vouchers";
   const { formatDisplayDate, formatDisplayTime } = useDateFormat();
   const { formatHistoricalBaseAmount: formatAmount, formatTransactionAmount } = useCurrencyContext();
@@ -593,8 +594,8 @@ export default function Daybook({ user }: { user?: DaybookUser | null } = {}) {
     }));
     const ws = utils.json_to_sheet(data);
     const wb = utils.book_new();
-    utils.book_append_sheet(wb, ws, "Daybook");
-    await writeFile(wb, `Daybook_${format(new Date(), "yyyy-MM-dd")}.xlsx`);
+    utils.book_append_sheet(wb, ws, routineAccountingViewFiltered ? "Operational Filtered" : "Daybook");
+    await writeFile(wb, `${routineAccountingViewFiltered ? "Operational_Filtered_Daybook" : "Daybook"}_${format(new Date(), "yyyy-MM-dd")}.xlsx`);
   };
   const handleExportDetailedToExcel = async () => {
     const exportVouchers = await loadAllVouchers();
@@ -604,14 +605,14 @@ export default function Daybook({ user }: { user?: DaybookUser | null } = {}) {
     );
     const ws = utils.json_to_sheet(detailRows);
     const wb = utils.book_new();
-    utils.book_append_sheet(wb, ws, "Daybook Detail");
-    await writeFile(wb, `Daybook_Detail_${format(new Date(), "yyyy-MM-dd")}.xlsx`);
+    utils.book_append_sheet(wb, ws, routineAccountingViewFiltered ? "Operational Detail Filtered" : "Daybook Detail");
+    await writeFile(wb, `${routineAccountingViewFiltered ? "Operational_Filtered_Detail" : "Daybook_Detail"}_${format(new Date(), "yyyy-MM-dd")}.xlsx`);
     toast({ title: "Export complete", description: `${detailRows.length} detail rows exported.` });
   };
 
   return (
     <div className="flex flex-col gap-4 md:gap-6 p-3 md:p-6">
-      <PageHeader title="Daybook" subtitle="View all accounting transactions chronologically" showBackButton>
+      <PageHeader title="Daybook" subtitle={routineAccountingViewFiltered ? "Operational activity view" : "View all accounting transactions chronologically"} showBackButton>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="outline" className="gap-2">

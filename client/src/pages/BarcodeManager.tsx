@@ -336,7 +336,7 @@ export default function BarcodeManager() {
                     <TableHead className="w-12">
                       <Checkbox
                         checked={selectedIds.length === unusedBarcodes.length && unusedBarcodes.length > 0}
-                        onCheckedChange={handleSelectAll}
+                        onCheckedChange={(checked) => handleSelectAll(checked === true)}
                         data-testid="checkbox-select-all"
                       />
                     </TableHead>
@@ -386,7 +386,7 @@ export default function BarcodeManager() {
               <div className="flex items-center gap-2 mb-2">
                 <Checkbox
                   checked={selectedIds.length === unusedBarcodes.length && unusedBarcodes.length > 0}
-                  onCheckedChange={handleSelectAll}
+                  onCheckedChange={(checked) => handleSelectAll(checked === true)}
                 />
                 <span className="text-sm text-muted-foreground">Select All</span>
               </div>

@@ -10,6 +10,7 @@ import {
   transferVoucherDateTx,
 } from "./inventory/conservedStockTransfer";
 import { lineValueMoved, reversalDate } from "./inventory/valueExactReversal";
+import { stockTransferNarrationTx } from "./inventory/stockTransferNarration";
 import { locations, stockItems, stockTransferItems, stockTransferVouchers, vouchers } from "@shared/schema";
 import { journalStockTransferLeg, nextStockTransferRevision } from "./inventory/stockTransferJournal";
 import type { DbTransaction } from "../db";
@@ -441,10 +442,14 @@ export async function saveStockTransferLifecycle(
     const voucherUpdates: Record<string, unknown> = { totalAmount: totalAmount.toFixed(2) };
     if (headerSourceLocationId(normalizedItems)) voucherUpdates.locationId = headerSourceLocationId(normalizedItems);
     if (input.voucherDate !== undefined) voucherUpdates.voucherDate = input.voucherDate;
-    // Keep the voucher header description aligned with the transfer notes.
-    // Most transfer clients submit the user-entered description as `notes`,
-    // while Daybook and voucher views read `vouchers.description`.
-    voucherUpdates.description = input.description ?? input.notes;
+    // User notes override the automatic location narration. Clearing them
+    // restores the generated description in every voucher read path.
+    voucherUpdates.description = input.notes.trim() || await stockTransferNarrationTx(
+      tx,
+      companyId,
+      normalizedItems.map((item) => item.sourceLocationId),
+      destinationLocationId
+    );
     await tx.update(vouchers).set(voucherUpdates).where(eq(vouchers.id, voucherId));
 
     return {

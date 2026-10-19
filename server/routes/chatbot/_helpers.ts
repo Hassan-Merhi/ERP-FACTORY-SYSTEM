@@ -8,10 +8,13 @@ import { createCipheriv, createDecipheriv, createHash, randomBytes } from "node:
 
 // ── GitHub token encryption helpers ────────────────────────────────────────
 // Key is derived from SESSION_SECRET so it survives restarts without a new env var.
-// Ciphertext uses authenticated AES-256-GCM. Tokens stored in the old CryptoJS
-// (MD5-derived key) format are no longer decrypted and must be re-saved in
-// Chatbot Settings → GitHub Integration.
-export const _tokenKey = () => process.env.SESSION_SECRET ?? "erp-github-token-fallback-key";
+// Stored tokens use authenticated AES-256-GCM only. Legacy OpenSSL/CryptoJS
+// ciphertext must be reconfigured rather than decrypted with MD5.
+export const _tokenKey = (): string => {
+  const secret = process.env.SESSION_SECRET;
+  if (!secret) throw new Error("TOKEN_KEY_ERR");
+  return secret;
+};
 
 const TOKEN_FORMAT_V2 = "v2";
 const GCM_AUTH_TAG_LENGTH = 16;
@@ -46,7 +49,7 @@ function decryptModernToken(ciphertext: string): string {
 
 export function decryptToken(ciphertext: string): string {
   try {
-    return decryptModernToken(ciphertext);
+    return ciphertext.startsWith(`${TOKEN_FORMAT_V2}:`) ? decryptModernToken(ciphertext) : "";
   } catch {
     return "";
   }

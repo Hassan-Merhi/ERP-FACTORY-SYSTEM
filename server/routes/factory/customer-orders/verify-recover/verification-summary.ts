@@ -68,6 +68,7 @@ type RawOrderLineRow = {
 };
 
 type RawProformaLineRow = {
+  id?: number | null;
   article_code?: string | null;
   articleCode?: string | null;
   pricing_mode?: string | null;
@@ -271,27 +272,70 @@ export function registerOrderVerificationSummaryRoutes(app: Express) {
       > = {};
 
       if (order.proformaIdUsed) {
-        // SELECT * to avoid explicit-column failures on production tables that may
-        // be missing price_fixed or production_price_per_bale columns.
+        // The master proforma is reusable. A continuation instead has a frozen,
+        // remaining-only expected plan; verification must compare THIS order
+        // against that plan rather than resetting to the original proforma.
+        // Keep raw reads for the existing schema-drift tolerant endpoint.
         const rawProformaResult = await db.execute(
           sql`SELECT * FROM customer_proforma_lines WHERE proforma_id = ${order.proformaIdUsed}`
         );
         proformaLines = resultRows<RawProformaLineRow>(rawProformaResult);
 
-        for (const pl of proformaLines) {
-          const articleCode = pl.article_code ?? pl.articleCode ?? "";
+        const rawExpectedResult = await db.execute(
+          sql`SELECT article_code, product_name, expected_qty, proforma_line_id
+              FROM customer_order_expected_lines
+              WHERE company_id = ${companyId}
+                AND order_id = ${orderId}
+                AND proforma_id = ${order.proformaIdUsed}`
+        );
+        const expectedPlan = resultRows<{
+          article_code: string;
+          product_name: string | null;
+          expected_qty: number;
+          proforma_line_id: number | null;
+        }>(rawExpectedResult);
+
+        const originalsById = new Map(proformaLines.map((line) => [Number(line.id), line]));
+        const originalsByCode = new Map<string, RawProformaLineRow>();
+        for (const line of proformaLines) {
+          const code = String(line.article_code ?? line.articleCode ?? "").trim().toLowerCase();
+          if (code && !originalsByCode.has(code)) originalsByCode.set(code, line);
+        }
+        const planLines: RawProformaLineRow[] = expectedPlan.length
+          ? expectedPlan.map((line) => {
+              const source =
+                originalsById.get(Number(line.proforma_line_id)) ||
+                originalsByCode.get(line.article_code.trim().toLowerCase());
+              return {
+                article_code: line.article_code,
+                product_name: line.product_name ?? source?.product_name ?? source?.productName ?? line.article_code,
+                quantity: Number(line.expected_qty),
+                price_per_bale: source?.price_per_bale ?? source?.pricePerBale ?? "0",
+                pricing_mode: source?.pricing_mode ?? source?.pricingMode ?? "per_bale",
+                price_per_kg: source?.price_per_kg ?? source?.pricePerKg ?? null,
+              };
+            })
+          : proformaLines;
+
+        for (const pl of planLines) {
+          const articleCode = String(pl.article_code ?? pl.articleCode ?? "").trim();
           if (!articleCode) continue;
           const pMode = pl.pricing_mode ?? pl.pricingMode ?? "per_bale";
           const pkgRate = toMoney(pl.price_per_kg ?? pl.pricePerKg).toNumber();
-          proformaByArticle[articleCode] = {
-            articleCode,
-            productName: pl.product_name ?? pl.productName ?? articleCode,
-            expectedQty: pl.quantity ?? 0,
-            pricePerBale: pl.price_per_bale ?? pl.pricePerBale ?? "0",
-            pricingMode: pMode,
-            pricePerKg: pkgRate,
-          };
-          // Propagate pricing mode into loadedByArticle so the frontend can display correctly
+          const previous = proformaByArticle[articleCode];
+          if (previous) {
+            // Duplicate article lines still represent one quantity bucket.
+            previous.expectedQty += Number(pl.quantity ?? 0);
+          } else {
+            proformaByArticle[articleCode] = {
+              articleCode,
+              productName: pl.product_name ?? pl.productName ?? articleCode,
+              expectedQty: Number(pl.quantity ?? 0),
+              pricePerBale: pl.price_per_bale ?? pl.pricePerBale ?? "0",
+              pricingMode: pMode,
+              pricePerKg: pkgRate,
+            };
+          }
           if (loadedByArticle[articleCode]) {
             loadedByArticle[articleCode].pricingMode = pMode;
             loadedByArticle[articleCode].pricePerKg = pkgRate;

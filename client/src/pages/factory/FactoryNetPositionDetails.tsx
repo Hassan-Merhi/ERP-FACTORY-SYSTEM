@@ -21,6 +21,9 @@ import {
   CalendarDays,
 } from "lucide-react";
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
+import type { AccountDisplayLayout } from "../accounts/DisplayAccountGroups";
+import { useAccountDisplayOrder } from "@/hooks/useAccountDisplayOrder";
+import { InlineOrderButtons, inlineDrag, type InlineOrderActions } from "@/components/accounts/InlineOrderButtons";
 import { useUserPreferences } from "@/hooks/use-user-preferences";
 
 interface AccountItem {
@@ -119,41 +122,51 @@ function CategoryGroup({
   amountColor,
   formatAmount,
   accentColor,
+  groupKey,
+  groupSiblings = [],
+  actions,
 }: {
   category: string;
   accounts: AccountItem[];
   amountColor: string;
   formatAmount: (n: number) => string;
   accentColor: string;
+  groupKey?: string | null;
+  groupSiblings?: string[];
+  actions?: InlineOrderActions;
 }) {
   const [open, setOpen] = useState(true);
   const total = accounts.reduce((s, a) => s + Math.abs(a.value), 0);
 
   const insuranceAccounts = accounts.filter((a) => /^Insurance\s*[-–]/i.test(a.name));
   const otherAccounts = accounts.filter((a) => !/^Insurance\s*[-–]/i.test(a.name));
+  const accountKeys = otherAccounts.filter((a) => a.id != null).map((a) => `ledger:${a.id}`);
   const displayCount = otherAccounts.length + (insuranceAccounts.length > 0 ? 1 : 0);
 
   return (
-    <div className="border border-border rounded-md overflow-hidden">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className="w-full flex items-center justify-between px-4 py-2.5 bg-muted/40 hover-elevate text-sm font-semibold"
-        data-testid={`button-category-${category.toLowerCase().replace(/\s+/g, "-")}`}
-      >
-        <div className="flex items-center gap-2">
-          {open ? (
-            <ChevronDown className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-          ) : (
-            <ChevronRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-          )}
-          <span>{category}</span>
-          <Badge variant="outline" className="text-xs font-normal">
-            {displayCount}
-          </Badge>
-        </div>
-        <span className={`shrink-0 whitespace-nowrap font-mono font-bold ${accentColor}`}>{formatAmount(total)}</span>
-      </button>
+    <div className="border border-border rounded-md overflow-hidden" {...inlineDrag(groupKey || null, actions)}>
+      <div className="flex items-stretch bg-muted/40">
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          className="flex-1 flex items-center justify-between px-4 py-2.5 hover-elevate text-sm font-semibold"
+          data-testid={`button-category-${category.toLowerCase().replace(/\s+/g, "-")}`}
+        >
+          <div className="flex items-center gap-2">
+            {open ? (
+              <ChevronDown className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+            ) : (
+              <ChevronRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+            )}
+            <span>{category}</span>
+            <Badge variant="outline" className="text-xs font-normal">
+              {displayCount}
+            </Badge>
+          </div>
+          <span className={`shrink-0 whitespace-nowrap font-mono font-bold ${accentColor}`}>{formatAmount(total)}</span>
+        </button>
+        <InlineOrderButtons label={category} nodeKey={groupKey || null} siblingKeys={groupSiblings} actions={actions} />
+      </div>
       {open && (
         <div className="divide-y divide-border">
           {otherAccounts.map((acc, i) => (
@@ -161,6 +174,7 @@ function CategoryGroup({
               key={i}
               className="flex items-center justify-between px-4 py-2 text-sm"
               data-testid={`row-account-${i}`}
+              {...inlineDrag(acc.id != null ? `ledger:${acc.id}` : null, actions)}
             >
               {acc.id ? (
                 <button
@@ -174,9 +188,17 @@ function CategoryGroup({
               ) : (
                 <span className="font-medium text-foreground">{acc.name}</span>
               )}
-              <span className={`shrink-0 whitespace-nowrap font-mono tabular-nums ${amountColor}`}>
-                {formatAmount(Math.abs(acc.value))}
-              </span>
+              <div className="flex items-center gap-1">
+                <InlineOrderButtons
+                  label={acc.name}
+                  nodeKey={acc.id != null ? `ledger:${acc.id}` : null}
+                  siblingKeys={accountKeys}
+                  actions={actions}
+                />
+                <span className={`shrink-0 whitespace-nowrap font-mono tabular-nums ${amountColor}`}>
+                  {formatAmount(Math.abs(acc.value))}
+                </span>
+              </div>
             </div>
           ))}
           {insuranceAccounts.length > 0 && (
@@ -200,6 +222,8 @@ function CollapsibleSection({
   accounts,
   amountColor,
   formatAmount,
+  displayLayout,
+  orderActions,
 }: {
   id: string;
   title: string;
@@ -212,20 +236,44 @@ function CollapsibleSection({
   accounts: AccountItem[];
   amountColor: string;
   formatAmount: (n: number) => string;
+  displayLayout?: AccountDisplayLayout;
+  orderActions?: InlineOrderActions;
 }) {
   const [open, setOpen] = useState(true);
 
+  const layoutGroups = (displayLayout?.nodes || []).filter((n) => n.type === "group");
+  const membership = new Map(
+    (displayLayout?.nodes || [])
+      .filter((n) => n.type === "ledger" && n.parentKey)
+      .map((n) => [Number(n.key.slice(7)), n])
+  );
+  const labels = new Map(layoutGroups.map((n) => [`display:${n.key}`, n.name || "Group"]));
+  const groupOrder = new Map(layoutGroups.map((n) => [`display:${n.key}`, n.order]));
   const grouped = accounts.reduce<Record<string, AccountItem[]>>((acc, item) => {
-    const cat = item.category || "Other";
+    const member = item.id ? membership.get(item.id) : undefined;
+    const cat = member?.parentKey ? `display:${member.parentKey}` : item.category || "Other";
     if (!acc[cat]) acc[cat] = [];
     acc[cat].push(item);
     return acc;
   }, {});
+  const sortedCategories = Object.entries(grouped)
+    .map(([key, items]) => {
+      if (labels.has(key))
+        items.sort(
+          (a, b) => (membership.get(a.id || -1)?.order ?? 10000) - (membership.get(b.id || -1)?.order ?? 10000)
+        );
+      return [key, items] as const;
+    })
+    .sort(([ak, a], [bk, b]) => {
+      const ai = groupOrder.get(ak),
+        bi = groupOrder.get(bk);
+      if (ai != null && bi != null) return ai - bi;
+      if (ai != null) return -1;
+      if (bi != null) return 1;
+      return b.reduce((s, x) => s + Math.abs(x.value), 0) - a.reduce((s, x) => s + Math.abs(x.value), 0);
+    });
 
-  const sortedCategories = Object.entries(grouped).sort(
-    ([, a], [, b]) => b.reduce((s, x) => s + Math.abs(x.value), 0) - a.reduce((s, x) => s + Math.abs(x.value), 0)
-  );
-
+  const groupKeys = sortedCategories.filter(([key]) => labels.has(key)).map(([key]) => key.slice("display:".length));
   return (
     <Card data-testid={`card-${id}`} className="flex flex-col">
       <CardHeader className="cursor-pointer select-none pb-3" onClick={() => setOpen((v) => !v)}>
@@ -257,8 +305,11 @@ function CollapsibleSection({
               {sortedCategories.map(([cat, catAccounts]) => (
                 <CategoryGroup
                   key={cat}
-                  category={cat}
+                  category={labels.get(cat) || cat}
                   accounts={catAccounts}
+                  groupKey={labels.has(cat) ? cat.slice("display:".length) : null}
+                  groupSiblings={groupKeys}
+                  actions={orderActions}
                   amountColor={amountColor}
                   formatAmount={formatAmount}
                   accentColor={totalColor}
@@ -568,6 +619,15 @@ function CustomNetPositionView({
 
 export default function FactoryNetPositionDetails() {
   const { formatAmount } = useCurrencyContext();
+  const accountOrder = useAccountDisplayOrder();
+  const displayLayout = accountOrder.layout;
+  const orderActions: InlineOrderActions = {
+    canArrange: accountOrder.canArrange,
+    arranging: accountOrder.arranging,
+    isSaving: accountOrder.isSaving,
+    swap: accountOrder.swap,
+    move: accountOrder.move,
+  };
   const [asOf, setAsOf] = useState<string>(todayStr);
   const isToday = asOf === todayStr();
   const { prefs, updatePref, isPending: isSavingValuationMode } = useUserPreferences();
@@ -776,6 +836,24 @@ export default function FactoryNetPositionDetails() {
       </Card>
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 items-start">
+        {accountOrder.canArrange && (
+          <div className="col-span-full flex items-center justify-end gap-2 flex-wrap">
+            {accountOrder.arranging && (
+              <span className="text-xs text-muted-foreground">
+                Drag groups/accounts or use arrows. Saved for everyone.
+              </span>
+            )}
+            <Button
+              size="sm"
+              variant={accountOrder.arranging ? "default" : "outline"}
+              disabled={accountOrder.isSaving}
+              onClick={() => accountOrder.setArranging(!accountOrder.arranging)}
+              data-testid="button-arrange-factory-net-position"
+            >
+              {accountOrder.arranging ? "Finish arranging" : "Arrange groups & accounts"}
+            </Button>
+          </div>
+        )}
         <CollapsibleSection
           id="assets"
           title="What We Have"
@@ -788,6 +866,8 @@ export default function FactoryNetPositionDetails() {
           accounts={data?.forUs.accounts || []}
           amountColor="text-green-600"
           formatAmount={formatAmount}
+          displayLayout={displayLayout}
+          orderActions={orderActions}
         />
         <CollapsibleSection
           id="liabilities"
@@ -801,6 +881,8 @@ export default function FactoryNetPositionDetails() {
           accounts={data?.onUs.accounts || []}
           amountColor="text-red-600"
           formatAmount={formatAmount}
+          displayLayout={displayLayout}
+          orderActions={orderActions}
         />
       </div>
 

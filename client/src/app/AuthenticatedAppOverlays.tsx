@@ -1,11 +1,6 @@
 import { Suspense, useEffect, useState } from "react";
 import { lazyRetry as lazy } from "@/lib/lazyRetry";
 
-const LanguageOnboardingDialog = lazy(() =>
-  import("@/components/LanguageOnboardingDialog").then((module) => ({
-    default: module.LanguageOnboardingDialog,
-  }))
-);
 const RemoteSupportRuntime = lazy(() =>
   import("@/components/RemoteSupportRuntime").then((module) => ({
     default: module.RemoteSupportRuntime,
@@ -38,17 +33,14 @@ function useDeferredRemoteSupport() {
 
 /**
  * Global overlays rendered above every workspace shell.
- *
- * Language onboarding stays available immediately for first-run users. Remote
- * support is non-blocking infrastructure, so its network/capture runtime is
- * loaded after the authenticated workspace gets an idle turn.
+ * Language selection is managed by the profile menu, without a blocking
+ * first-login onboarding dialog. Remote support remains deferred.
  */
-export function AuthenticatedAppOverlays({ userId }: { userId: number | string | undefined }) {
+export function AuthenticatedAppOverlays() {
   const remoteSupportReady = useDeferredRemoteSupport();
 
   return (
     <Suspense fallback={null}>
-      {userId === undefined ? null : <LanguageOnboardingDialog userId={userId} />}
       {remoteSupportReady ? <RemoteSupportRuntime /> : null}
     </Suspense>
   );

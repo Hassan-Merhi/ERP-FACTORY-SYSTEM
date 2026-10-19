@@ -1,0 +1,46 @@
+name: Android Gradle Wrapper Integrity
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  schedule:
+    - cron: "43 6 * * 2"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-wrapper-integrity-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  verify-wrapper:
+    name: Verify official Gradle wrapper and distribution
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout source without persisted credentials
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Verify official wrapper JAR and Gradle 9.8.1 distribution checksums
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Official release reference: https://gradle.org/release-checksums/
+          wrapper_jar="android/gradle/wrapper/gradle-wrapper.jar"
+          wrapper_properties="android/gradle/wrapper/gradle-wrapper.properties"
+          expected_jar_sha256="2db75c40782f5e8ba1fc278a5574bab070adccb2d21ca5a6e5ed840888448046"
+          expected_distribution_sha256="5ceda8d2425eb2af196dec31b6fc1f38af2fb638fd621f86fa685805f2262224"
+          echo "${expected_jar_sha256}  ${wrapper_jar}" | sha256sum --check --strict
+          grep -Fxq 'distributionUrl=https\://services.gradle.org/distributions/gradle-9.8.1-all.zip' "$wrapper_properties"
+          grep -Fxq "distributionSha256Sum=${expected_distribution_sha256}" "$wrapper_properties"
+          grep -Fxq 'validateDistributionUrl=true' "$wrapper_properties"
+          echo "Official Gradle 8.12-family wrapper JAR and Gradle 9.8.1 distribution SHA-256 are pinned."
+
+      - name: Validate wrapper JARs and homoglyph lookalikes against official Gradle releases
+        uses: gradle/actions/wrapper-validation@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0

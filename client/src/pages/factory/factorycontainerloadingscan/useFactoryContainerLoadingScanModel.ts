@@ -551,7 +551,7 @@ export function useFactoryContainerLoadingScanModel() {
   });
 
   const finalizeMutation = useMutation({
-    mutationFn: async (variables: { txDate?: string; createCarryoverProforma?: boolean }) => {
+    mutationFn: async (variables: { txDate?: string; createCarryoverProforma?: boolean; createNextLoading?: boolean }) => {
       const res = await modeApiRequest("POST", `/api/factory/customer-orders/${orderId}/finalize-loading`, variables);
       return await res.json();
     },
@@ -560,6 +560,25 @@ export function useFactoryContainerLoadingScanModel() {
         { predicate: keyStartsWith("/api/factory/customer-orders"), refetchType: "active" },
         { cancelRefetch: false }
       );
+      const nextLoading = data?.nextLoading as { id: number; remainingBales: number } | undefined;
+      if (nextLoading?.id) {
+        // The next order is empty. Do not carry the previous container's
+        // note, last-scanned reference, scanner input, or bypass state into it.
+        setOrderId(nextLoading.id);
+        setIsResuming(true);
+        setLoadingNote("");
+        setScanCode("");
+        setLastScannedRef(null);
+        setPendingBypassBaleRef(null);
+        setPendingBypassOverloadRef(null);
+        setShowFinalizeDialog(false);
+        toast({
+          title: "Loading finalized — new loading opened",
+          description: `Loading #${nextLoading.id} is ready with only ${nextLoading.remainingBales} remaining bales.`,
+        });
+        navigate(`/factory/sales/loading/new?orderId=${nextLoading.id}`);
+        return;
+      }
       const carriedOverProforma = data?.carriedOverProforma;
       toast({
         title: "Loading finalized",
@@ -571,9 +590,7 @@ export function useFactoryContainerLoadingScanModel() {
       navigate("/factory/invoicing?tab=invoices");
     },
     onError: (error: Error) => {
-      if (error?._handledGlobally) return;
-      setShowFinalizeDialog(false);
-      if ((error as { _handledGlobally?: boolean })?._handledGlobally) return;
+      if ((error as Error & { _handledGlobally?: boolean })?._handledGlobally) return;
       toast({
         title: "Error",
         description: error.message,

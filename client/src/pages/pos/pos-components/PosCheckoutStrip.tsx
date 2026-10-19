@@ -125,7 +125,13 @@ export function PosCheckoutStrip({
         <>
           <Select
             value={paymentAccountType}
-            onValueChange={posUser ? undefined : (v: "bank" | "cash") => setPaymentAccountType(v)}
+            onValueChange={
+              posUser
+                ? undefined
+                : (v) => {
+                    if (v === "bank" || v === "cash") setPaymentAccountType(v);
+                  }
+            }
             disabled={!!posUser}
           >
             <SelectTrigger className="w-24" data-testid="select-account-type">

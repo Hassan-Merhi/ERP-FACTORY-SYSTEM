@@ -1,3 +1,4 @@
+import DisplayAccountGroups from "./accounts/DisplayAccountGroups";
 import type { ClientErrorLike } from "@/lib/clientError";
 import { useState, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
@@ -48,7 +49,7 @@ const ACCOUNT_TYPES = [
   "Profit",
 ] as const;
 
-export default function AccountGroups() {
+function LegacyAccountGroups() {
   const isErp = useAppMode() === "erp";
   const { toast } = useToast();
   const { selectedCompany } = useCompany();
@@ -615,6 +616,34 @@ export default function AccountGroups() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+    </div>
+  );
+}
+
+/** New presentation-only groups are the default; keep old ledger parent trees
+ * accessible explicitly for existing installations without migrating their data. */
+export default function AccountGroups() {
+  const [mode, setMode] = useState<"display" | "ledger">("display");
+  return (
+    <div>
+      <div className="flex flex-wrap gap-2 px-4 pt-4">
+        <Button variant={mode === "display" ? "default" : "outline"} onClick={() => setMode("display")}>
+          Display Groups (no vouchers)
+        </Button>
+        <Button variant={mode === "ledger" ? "default" : "outline"} onClick={() => setMode("ledger")}>
+          Legacy Ledger Hierarchy
+        </Button>
+      </div>
+      {mode === "display" ? (
+        <DisplayAccountGroups />
+      ) : (
+        <div>
+          <p className="mx-4 mt-3 text-sm text-amber-600">
+            Legacy ledger parent groups are real accounting accounts. Use Display Groups for new visual groupings.
+          </p>
+          <LegacyAccountGroups />
+        </div>
+      )}
     </div>
   );
 }

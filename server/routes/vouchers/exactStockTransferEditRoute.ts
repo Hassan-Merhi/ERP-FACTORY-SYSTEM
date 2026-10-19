@@ -134,7 +134,7 @@ export function registerExactStockTransferEditRoute(app: Express): void {
                 totalAmount: totalAmount.toFixed(2),
                 ...(uniqueSources.length === 1 ? { locationId: uniqueSources[0] } : {}),
                 ...(parsed.voucherDate !== undefined ? { voucherDate: parsed.voucherDate } : {}),
-                description: await stockTransferNarrationTx(tx, companyId, uniqueSources, parsed.destinationLocationId),
+                description: parsed.description.trim() || await stockTransferNarrationTx(tx, companyId, uniqueSources, parsed.destinationLocationId),
               })
               .where(eq(vouchers.id, voucherId))
               .returning();

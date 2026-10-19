@@ -6,6 +6,27 @@
  * and cheap to unit test.
  */
 import type { DaybookEntry, BaleMeta, DisplayEntry } from "./types";
+import { formatFactoryBaleRemovalDescription } from "@shared/factoryBaleRemovalDescription";
+
+/**
+ * Overlay small live loading totals onto already-loaded daybook rows.
+ * Retains untouched rows by reference, and never changes non-USD or unrelated
+ * transactions. The amounts come from customer_orders, not client pricing.
+ */
+export function withLiveLoadingAmounts(
+  entries: DaybookEntry[],
+  amounts?: Record<string, string>
+): DaybookEntry[] {
+  if (!amounts) return entries;
+  return entries.map((entry) => {
+    if (entry.txType !== "LOADING_CREATED" || entry.referenceId == null || entry.currencyCode !== "USD") {
+      return entry;
+    }
+    const amount = amounts[String(entry.referenceId)];
+    if (amount == null || (amount === entry.amountCurrency && amount === entry.amountUsd)) return entry;
+    return { ...entry, amountCurrency: amount, amountUsd: amount };
+  });
+}
 
 export function parseBalesMeta(entry: DaybookEntry): BaleMeta[] {
   if (!entry.metaJson) return [];
@@ -65,6 +86,25 @@ export function expandBaleEntries(entries: DaybookEntry[]): DisplayEntry[] {
 }
 
 export function formatDaybookDescription(entry: DaybookEntry): string {
+  if (entry.txType === "BALE_REMOVAL" && entry.metaJson) {
+    try {
+      const meta = JSON.parse(entry.metaJson);
+      const references = parseBalesMeta(entry)
+        .map((bale) => bale.ref)
+        .filter((ref): ref is string => typeof ref === "string" && !!ref.trim());
+      // Older rows already contain these details in metadata; display them
+      // consistently without rewriting financial/audit history in the DB.
+      if (references.length && typeof meta.actorName === "string" && meta.actorName.trim()) {
+        return formatFactoryBaleRemovalDescription({
+          references,
+          username: meta.actorName,
+          reason: typeof meta.reason === "string" ? meta.reason : "",
+        });
+      }
+    } catch {
+      // Legacy/malformed metadata: retain the original stored description.
+    }
+  }
   if (entry.txType === "BALE_STOCK_ENTRY") {
     const bales = parseBalesMeta(entry);
     if (bales.length === 1) return bales[0].productName || bales[0].ref || "Unknown";

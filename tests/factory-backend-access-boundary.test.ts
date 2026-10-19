@@ -42,6 +42,26 @@ describe("Wave 4 Factory backend access ownership", () => {
     });
   });
 
+  it("allows Scheduled Containers CRUD through either owning visible page/tab", () => {
+    const expected = [
+      { pageKey: "factory/invoicing", tabs: ["hide_invoicing_invoices_tab"] },
+      { pageKey: "factory/production-report", tabs: ["hide_tab_overview_shipping"] },
+    ];
+    for (const method of ["GET", "POST", "PATCH", "DELETE"]) {
+      const url = method === "PATCH" || method === "DELETE" ? "/scheduled-containers/14" : "/scheduled-containers";
+      expect(resolveFactoryBackendAccessRequirement(req(url, method))?.alternatives).toEqual(expected);
+    }
+    // Keep the existing shipping and invoicing rules unchanged.
+    expect(resolveFactoryBackendAccessRequirement(req("/shipping-availability", "POST"))).toEqual({
+      pageKey: "factory/production-report",
+      tabs: ["hide_tab_overview_shipping"],
+    });
+    expect(resolveFactoryBackendAccessRequirement(req("/customer-proformas"))).toEqual({
+      pageKey: "factory/invoicing",
+      tabs: ["hide_invoicing_proformas_tab"],
+    });
+  });
+
   it("maps proformas and invoice loading to their Invoicing tabs", () => {
     expect(resolveFactoryBackendAccessRequirement(req("/customer-proformas/8"))).toMatchObject({
       pageKey: "factory/invoicing",

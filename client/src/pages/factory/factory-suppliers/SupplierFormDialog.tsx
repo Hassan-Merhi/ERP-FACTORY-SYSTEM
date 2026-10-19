@@ -83,7 +83,8 @@ export function SupplierFormDialog({
             <Label>Account Type</Label>
             <Select
               value={formRole}
-              onValueChange={(v: "broker" | "standalone" | "linked") => {
+              onValueChange={(v) => {
+                if (v !== "broker" && v !== "standalone" && v !== "linked") return;
                 setFormRole(v);
                 if (v !== "linked") setFormData({ ...formData, parentId: null });
               }}

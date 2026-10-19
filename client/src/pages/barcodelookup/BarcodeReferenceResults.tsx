@@ -70,7 +70,7 @@ export function BarcodeReferenceResults({ model }: { model: BarcodeLookupModel }
                   size="sm"
                   variant="outline"
                   disabled={model.restoreDeletedMutation.isPending}
-                  onClick={() => baleInfo && model.restoreDeletedMutation.mutate(baleInfo.id)}
+                  onClick={() => model.setShowRestoreDeletedDialog(true)}
                   data-testid="button-restore-deleted"
                 >
                   <ArchiveRestore className="h-3.5 w-3.5 mr-1" />
@@ -375,6 +375,16 @@ function LoadedOrderCard({ model }: { model: BarcodeLookupModel }) {
         {order.loadingStartedAt && <InfoRow label="Loading Started" value={model.formatDate(order.loadingStartedAt)} />}
         {order.loadingFinalizedAt && (
           <InfoRow label="Loading Finalized" value={model.formatDate(order.loadingFinalizedAt)} />
+        )}
+        <InfoRow
+          label="Destination"
+          value={<span className="whitespace-pre-wrap break-words">{order.destination?.trim() || "—"}</span>}
+        />
+        {order.canViewBookingInfo && (
+          <InfoRow
+            label="Booking Info"
+            value={<span className="whitespace-pre-wrap break-words">{order.bookingInfo?.trim() || "—"}</span>}
+          />
         )}
         {order.scannedBy && (
           <InfoRow

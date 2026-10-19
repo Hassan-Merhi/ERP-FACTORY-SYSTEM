@@ -131,7 +131,8 @@ async function deriveBaleStockEntryAmounts(rows: BaleStockDaybookRow[], companyI
 
 export function registerFactoryDaybookPaginationRoutes(app: Express): void {
   app.get("/api/factory/daybook", requireAuth, async (req: Request, res: Response, next: NextFunction) => {
-    if (!wantsPagination(req)) return next();
+    const filterOptionsOnly = req.query.filterOptions === "true";
+    if (!wantsPagination(req) && !filterOptionsOnly) return next();
 
     try {
       const session = req.session;
@@ -383,7 +384,9 @@ export function registerFactoryDaybookPaginationRoutes(app: Express): void {
             ORDER BY sort_date ${sortDirection}, ABS(id) ${sortDirection}
             LIMIT ${limitParam} OFFSET ${offsetParam}
           )
-          SELECT
+          ${filterOptionsOnly
+            ? `SELECT DISTINCT "txType" FROM filtered WHERE "txType" <> 'WORKER_EDITED' ORDER BY "txType"`
+            : `SELECT
             (SELECT COUNT(*)::int FROM filtered) AS total,
             COALESCE(
               (
@@ -391,10 +394,15 @@ export function registerFactoryDaybookPaginationRoutes(app: Express): void {
                 FROM page_rows
               ),
               '[]'::jsonb
-            ) AS items
+            ) AS items`}
         `;
 
       const result = await pool.query(query, values);
+      // Lightweight filter metadata: same company, date, permissions and source
+      // integrity rules as the paginated Daybook, without returning full rows.
+      if (filterOptionsOnly) {
+        return res.json({ types: result.rows.map((row: { txType: string }) => row.txType) });
+      }
       const total = Number(result.rows[0]?.total || 0);
       const items = Array.isArray(result.rows[0]?.items) ? result.rows[0].items : [];
       await deriveBaleStockEntryAmounts(items as BaleStockDaybookRow[], companyId);

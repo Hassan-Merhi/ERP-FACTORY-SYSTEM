@@ -613,6 +613,17 @@ export function resolveFactoryBackendAccessRequirement(req: Request): FactoryApi
     );
   }
 
+  // Scheduled Containers is shown in both Invoicing > Invoices and the
+  // Production Report shipping section. Own its CRUD API under either visible
+  // page/tab, rather than rejecting it as an unmapped Factory action.
+  // Keep this narrower than the general shipping routes below.
+  if (hasPrefix(path, "/scheduled-containers")) {
+    return anyOf(
+      requirement("factory/invoicing", ["hide_invoicing_invoices_tab"]),
+      requirement("factory/production-report", ["hide_tab_overview_shipping"])
+    );
+  }
+
   if (
     hasPrefix(path, "/shipping-availability") ||
     hasPrefix(path, "/shipping-containers") ||

@@ -42,7 +42,14 @@ export function registerVoucherEntryByAccountRoutes(app: Express) {
         voucherDate: vouchers.voucherDate,
         voucherDescription: vouchers.description,
       };
-      const conditions: SQL[] = [eq(voucherEntries.ledgerAccountId, accountId), eq(vouchers.companyId, companyId)];
+      // Account transfers only expose active, posted entries. Deleted vouchers keep their
+      // lines for audit, but must never appear as transferable or posted movements.
+      const conditions: SQL[] = [
+        eq(voucherEntries.ledgerAccountId, accountId),
+        eq(vouchers.companyId, companyId),
+        isNull(vouchers.deletedAt),
+        eq(vouchers.optional, false),
+      ];
       const search = typeof req.query.search === "string" ? req.query.search.trim().slice(0, 200) : "";
       if (search) {
         const searchCondition = or(
@@ -142,6 +149,8 @@ export function registerVoucherEntryByAccountRoutes(app: Express) {
             id: voucherEntries.id,
             voucherId: voucherEntries.voucherId,
             companyId: vouchers.companyId,
+            deletedAt: vouchers.deletedAt,
+            optional: vouchers.optional,
             voucherNumber: vouchers.voucherNumber,
             voucherDate: vouchers.voucherDate,
             effectiveDate: vouchers.effectiveDate,
@@ -166,6 +175,11 @@ export function registerVoucherEntryByAccountRoutes(app: Express) {
         }
         if (entriesWithVouchers.length !== entryIds.length) {
           return { status: 404, message: "Some entries were not found" } as const;
+        }
+        // Recheck inside the write transaction: a stale client selection must
+        // not transfer lines from deleted or optional vouchers into live books.
+        if (entriesWithVouchers.some((entry) => entry.deletedAt !== null || entry.optional)) {
+          return { status: 409, message: "Deleted or optional vouchers cannot be transferred" } as const;
         }
         const blocked = entriesWithVouchers
           .map((e) => voucherMutationBlockReason({ voucherNumber: e.voucherNumber, sourceModule: e.sourceModule }))

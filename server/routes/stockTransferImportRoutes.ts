@@ -310,7 +310,7 @@ export function registerStockTransferImportRoutes(app: Express) {
             voucherNumber,
             voucherType: "Stock Transfer",
             voucherDate: transferDate,
-            description: formatStockTransferNarration([sourceLocation.name], destLocation.name),
+            description: (typeof notes === "string" ? notes.trim() : "") || formatStockTransferNarration([sourceLocation.name], destLocation.name),
             totalAmount: totalValue.toFixed(),
           })
           .returning();
@@ -774,7 +774,7 @@ export function registerStockTransferImportRoutes(app: Express) {
             voucherType: "Stock Transfer",
             voucherNumber,
             voucherDate: transferDate || getClientDate(req),
-            description: formatStockTransferNarration(
+            description: (typeof notes === "string" ? notes.trim() : "") || formatStockTransferNarration(
               processedItems.map((item) => locationsById[item.sourceLocationId]),
               destLocation.name
             ),

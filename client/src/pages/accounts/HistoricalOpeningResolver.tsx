@@ -34,21 +34,17 @@ export function HistoricalOpeningResolver() {
     staleTime: 30_000,
   });
 
-  const rows = useMemo(() => (query.data || []), [query.data]);
+  const rows = useMemo(() => query.data || [], [query.data]);
   const rowKeys = useMemo(() => new Set(rows.map((row) => `${row.entity_type}:${row.id}`)), [rows]);
 
   const mutation = useMutation({
     mutationFn: async ({ row, draft }: { row: UnresolvedOpening; draft: Draft }) => {
-      return apiRequest(
-        "PUT",
-        `/api/accounts/multi-currency/opening-balance/${row.entity_type}/${row.id}`,
-        {
-          nativeAmount: row.raw_amount,
-          currency: draft.currency,
-          historicalRate: draft.currency === "CFA" ? draft.historicalRate : "1",
-          side: row.side,
-        },
-      );
+      return apiRequest("PUT", `/api/accounts/multi-currency/opening-balance/${row.entity_type}/${row.id}`, {
+        nativeAmount: row.raw_amount,
+        currency: draft.currency,
+        historicalRate: draft.currency === "CFA" ? draft.historicalRate : "1",
+        side: row.side,
+      });
     },
     onSuccess: (_data, variables) => {
       toast({
@@ -91,7 +87,9 @@ export function HistoricalOpeningResolver() {
       <Alert variant="destructive">
         <AlertTriangle className="h-4 w-4" />
         <AlertTitle>Historical values unavailable</AlertTitle>
-        <AlertDescription>{query.error instanceof Error ? query.error.message : "Unable to load unresolved values."}</AlertDescription>
+        <AlertDescription>
+          {query.error instanceof Error ? query.error.message : "Unable to load unresolved values."}
+        </AlertDescription>
       </Alert>
     );
   }
@@ -101,7 +99,9 @@ export function HistoricalOpeningResolver() {
       <Alert>
         <CheckCircle2 className="h-4 w-4" />
         <AlertTitle>Opening and acquisition values resolved</AlertTitle>
-        <AlertDescription>No unresolved ledger, bank, customer, supplier, employee, or fixed-asset values remain.</AlertDescription>
+        <AlertDescription>
+          No unresolved ledger, bank, customer, supplier, employee, or fixed-asset values remain.
+        </AlertDescription>
       </Alert>
     );
   }
@@ -116,7 +116,8 @@ export function HistoricalOpeningResolver() {
           <AlertTriangle className="h-4 w-4" />
           <AlertTitle>Manual review required</AlertTitle>
           <AlertDescription>
-            Choose the currency originally entered and the historical CFA-per-USD rate. This preserves the native amount and stores a separate historical USD value. It does not use today’s rate.
+            Choose the currency originally entered and the historical CFA-per-USD rate. This preserves the native amount
+            and stores a separate historical USD value. It does not use today’s rate.
           </AlertDescription>
         </Alert>
 
@@ -136,24 +137,35 @@ export function HistoricalOpeningResolver() {
               {rows.map((row) => {
                 const key = `${row.entity_type}:${row.id}`;
                 const draft = drafts[key] || { currency: "USD" as const, historicalRate: "" };
-                const isSaving = mutation.isPending && mutation.variables?.row.entity_type === row.entity_type && mutation.variables?.row.id === row.id;
-                const invalidRate = draft.currency === "CFA" && (!draft.historicalRate || Number(draft.historicalRate) <= 0);
+                const isSaving =
+                  mutation.isPending &&
+                  mutation.variables?.row.entity_type === row.entity_type &&
+                  mutation.variables?.row.id === row.id;
+                const invalidRate =
+                  draft.currency === "CFA" && (!draft.historicalRate || Number(draft.historicalRate) <= 0);
                 return (
                   <TableRow key={key}>
-                    <TableCell className="capitalize">{row.entity_type === "fixedAsset" ? "Fixed asset" : row.entity_type}</TableCell>
+                    <TableCell className="capitalize">
+                      {row.entity_type === "fixedAsset" ? "Fixed asset" : row.entity_type}
+                    </TableCell>
                     <TableCell>
                       <div className="font-medium">{row.name}</div>
-                      <div className="text-xs text-muted-foreground">{row.code || `#${row.id}`} · {row.side}</div>
+                      <div className="text-xs text-muted-foreground">
+                        {row.code || `#${row.id}`} · {row.side}
+                      </div>
                     </TableCell>
                     <TableCell className="font-mono">{Number(row.raw_amount || 0).toLocaleString()}</TableCell>
                     <TableCell className="min-w-[120px]">
                       <Select
                         value={draft.currency}
-                        onValueChange={(currency: "USD" | "CFA") =>
-                          setDrafts((current) => ({ ...current, [key]: { ...draft, currency } }))
-                        }
+                        onValueChange={(currency) => {
+                          if (currency !== "USD" && currency !== "CFA") return;
+                          setDrafts((current) => ({ ...current, [key]: { ...draft, currency } }));
+                        }}
                       >
-                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="USD">USD</SelectItem>
                           <SelectItem value="CFA">CFA</SelectItem>

@@ -414,6 +414,53 @@ describe("POST /api/factory/customer-orders/:id/assign-container", () => {
   });
 });
 
+describe("Inline shipping details on the canonical customer order", () => {
+  it("updates each field independently and reflects the changes in list and detail reads", async () => {
+    const orderId = await createOrder("LOADING");
+    for (const [field, value] of [
+      ["containerNumber", "MRKU0001001"],
+      ["bookingInfo", "Booking BK100"],
+      ["destination", "Kolwezi"],
+      ["containerNotes", "Load red bales first"],
+    ] as const) {
+      const response = await agent.post(`/api/factory/customer-orders/${orderId}/assign-container`).send({ [field]: value });
+      expect(response.status).toBe(200);
+      expect(response.body[field]).toBe(value);
+    }
+    const detail = await agent.get(`/api/factory/customer-orders/${orderId}`);
+    expect(detail.body).toMatchObject({
+      containerNumber: "MRKU0001001",
+      bookingInfo: "Booking BK100",
+      destination: "Kolwezi",
+      containerNotes: "Load red bales first",
+    });
+    const list = await agent.get("/api/factory/customer-orders");
+    const order = list.body.find((row: { id: number }) => row.id === orderId);
+    expect(order).toMatchObject({
+      containerNumber: "MRKU0001001",
+      bookingInfo: "Booking BK100",
+      destination: "Kolwezi",
+      containerNotes: "Load red bales first",
+    });
+
+    const cleared = await agent.post(`/api/factory/customer-orders/${orderId}/assign-container`).send({ destination: "" });
+    expect(cleared.status).toBe(200);
+    expect(cleared.body.destination).toBeNull();
+    expect(cleared.body.bookingInfo).toBe("Booking BK100");
+  });
+
+  it("rejects invalid metadata and refuses cross-company orders", async () => {
+    const orderId = await createOrder("VERIFIED");
+    const badValue = await agent.post(`/api/factory/customer-orders/${orderId}/assign-container`).send({ containerNumber: "X".repeat(101) });
+    expect(badValue.status).toBe(400);
+    const badBooking = await agent.post(`/api/factory/customer-orders/${orderId}/assign-container`).send({ bookingInfo: "X".repeat(2001) });
+    expect(badBooking.status).toBe(400);
+    const missing = await agent.post("/api/factory/customer-orders/999999/assign-container").send({ destination: "Zambia" });
+    expect(missing.status).toBe(404);
+    expect((await orderRow(orderId))?.container_number).toBeNull();
+  });
+});
+
 describe("DELETE /api/factory/customer-orders/:id", () => {
   it("soft-deletes the order and releases its bales back to stock", async () => {
     const orderId = await createOrder("LOADING");

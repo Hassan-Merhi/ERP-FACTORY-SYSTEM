@@ -1,5 +1,4 @@
 import bcrypt from "bcryptjs";
-import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import {
   hashPassword,
@@ -16,17 +15,36 @@ describe("passwordHelpers", () => {
     expect(isLegacySHA256Hash("a".repeat(63))).toBe(false);
   });
 
-  it("refuses a legacy SHA-256 hash even for the matching password", async () => {
-    const hash = createHash("sha256").update("legacy-secret").digest("hex");
-    await expect(verifyPassword("legacy-secret", hash)).resolves.toBe(false);
-    await expect(verifyPasswordBcryptOnly("legacy-secret", hash)).resolves.toBe(false);
+  it("refuses legacy SHA-256 password hashes rather than using weak verification", async () => {
+    const legacyHash = "a".repeat(64);
+    await expect(verifyPassword("legacy-secret", legacyHash)).resolves.toEqual({
+      valid: false,
+      needsMigration: false,
+    });
+    await expect(verifyPassword("legacy-secret", legacyHash.toUpperCase())).resolves.toEqual({
+      valid: false,
+      needsMigration: false,
+    });
   });
 
-  it("verifies bcrypt passwords", async () => {
+  it("verifies bcrypt passwords without requesting migration", async () => {
     const hash = await bcrypt.hash("modern-secret", 4);
-    await expect(verifyPassword("modern-secret", hash)).resolves.toBe(true);
-    await expect(verifyPassword("wrong", hash)).resolves.toBe(false);
+    await expect(verifyPassword("modern-secret", hash)).resolves.toEqual({
+      valid: true,
+      needsMigration: false,
+    });
+    await expect(verifyPassword("wrong", hash)).resolves.toEqual({
+      valid: false,
+      needsMigration: false,
+    });
+  });
+
+  it("verifies bcrypt-only passwords and refuses a legacy hash outright", async () => {
+    const hash = await bcrypt.hash("modern-secret", 4);
     await expect(verifyPasswordBcryptOnly("modern-secret", hash)).resolves.toBe(true);
+    await expect(verifyPasswordBcryptOnly("wrong", hash)).resolves.toBe(false);
+    // Privileged confirmations never fall back to the weak legacy comparison.
+    await expect(verifyPasswordBcryptOnly("modern-secret", "a".repeat(64))).resolves.toBe(false);
   });
 
   it("creates a bcrypt hash that verifies", async () => {

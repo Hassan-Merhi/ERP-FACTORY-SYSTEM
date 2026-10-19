@@ -45,7 +45,7 @@ vi.mock("@/pages/barcodelookup/components/BaleStatusBadge", () => ({
 vi.mock("@/pages/barcodelookup/components/InfoRow", () => ({
   InfoRow: ({ label, value }: any) => (
     <div>
-      {label}:{String(value ?? "")}
+      {label}:{value ?? ""}
     </div>
   ),
 }));
@@ -89,6 +89,27 @@ const referencePayload = {
   containers_used: [],
   loadedOnOrder: null,
   auditHistory: [],
+};
+
+const outboundLoading = {
+  orderId: 99,
+  invoiceNumber: null,
+  orderDate: "2026-10-07",
+  status: "VERIFIED",
+  containerNumber: "CAAU5989692",
+  shippingCompany: "MAERSK",
+  containerNotes: "Blue",
+  destination: "ANGOLA",
+  bookingInfo: "BK123 / Quotation 2450",
+  canViewBookingInfo: true,
+  loadingStartedAt: "2026-10-07T08:00:00.000Z",
+  loadingFinalizedAt: "2026-10-16T15:00:00.000Z",
+  grandTotal: "0",
+  totalQtyBales: 589,
+  customerName: "ANGOLA",
+  priceUsed: "0",
+  baleWeight: "40",
+  scannedBy: "Hadi",
 };
 
 const articlePayload = {
@@ -183,7 +204,47 @@ describe("barcode lookup page behavior", () => {
     expect(input).toHaveValue("REF001");
   });
 
-  it("loads a reference supplied in the URL query string automatically", async () => {
+  it("shows destination and booking info on a bale linked to an outbound loading", async () => {
+    harness.modeApiRequest.mockResolvedValue({
+      ok: true,
+      json: async () => ({ ...referencePayload, loadedOnOrder: outboundLoading }),
+    });
+    render(<BarcodeLookup />);
+    const input = screen.getByTestId("input-lookup-search");
+    fireEvent.change(input, { target: { value: "REF001" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+
+    const card = await screen.findByTestId("card-loaded-on-order");
+    expect(card).toHaveTextContent("Destination");
+    expect(card).toHaveTextContent("ANGOLA");
+    expect(card).toHaveTextContent("Booking Info");
+    expect(card).toHaveTextContent("BK123 / Quotation 2450");
+  });
+
+  it("shows a dash for blank loading metadata and never renders private booking info without permission", async () => {
+    harness.modeApiRequest.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        ...referencePayload,
+        loadedOnOrder: {
+          ...outboundLoading,
+          destination: null,
+          bookingInfo: null,
+          canViewBookingInfo: false,
+        },
+      }),
+    });
+    render(<BarcodeLookup />);
+    const input = screen.getByTestId("input-lookup-search");
+    fireEvent.change(input, { target: { value: "REF001" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+
+    const card = await screen.findByTestId("card-loaded-on-order");
+    expect(card).toHaveTextContent("Destination:—");
+    expect(card).not.toHaveTextContent("Booking Info");
+  });
+
+    it("loads a reference supplied in the URL query string automatically", async () => {
     window.history.replaceState({}, "", "/barcode-lookup?ref=REF001");
     render(<BarcodeLookup />);
 

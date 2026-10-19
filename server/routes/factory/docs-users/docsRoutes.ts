@@ -50,6 +50,7 @@ export function registerFactoryDocsRoutes(app: Express) {
         return res.status(403).json({ message: "This account is inactive and cannot authorize actions." });
       }
 
+      // Privileged step-up requires bcrypt, never a legacy SHA-256 comparison.
       const valid = await verifySupervisorPassword(password, targetUser.password);
 
       if (!valid) {

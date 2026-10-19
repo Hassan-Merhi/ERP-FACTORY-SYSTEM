@@ -33,6 +33,46 @@ function liveVoucherAmounts(v: { currency: string | null; exchangeRate: string |
 }
 
 export function registerFactoryDaybookRoutes(app: Express) {
+  // Live totals for visible Loading Started rows. Small, company-scoped response
+  // so the daybook can update dollar amounts without reloading its full history.
+  app.get("/api/factory/daybook/loading-amounts", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
+      if (!companyId) return res.status(400).json({ message: "No company selected" });
+
+      const rawOrderIds = req.query.orderIds;
+      if (typeof rawOrderIds !== "string" || !/^\d+(,\d+)*$/.test(rawOrderIds)) {
+        return res.status(400).json({ message: "Provide comma-separated order IDs" });
+      }
+      const orderIds = [...new Set(rawOrderIds.split(",").map(Number))];
+      if (orderIds.length > 150 || orderIds.some((id) => !Number.isSafeInteger(id) || id < 1)) {
+        return res.status(400).json({ message: "Up to 150 valid order IDs are allowed" });
+      }
+
+      const orders = await db
+        .select({ id: customerOrders.id, grandTotal: customerOrders.grandTotal })
+        .from(customerOrders)
+        .where(
+          and(
+            eq(customerOrders.companyId, companyId),
+            inArray(customerOrders.id, orderIds),
+            sql`EXISTS (
+              SELECT 1 FROM factory_daybook_entries fde
+              WHERE fde.company_id = ${companyId}
+                AND fde.reference_table = 'customer_orders'
+                AND fde.reference_id = ${customerOrders.id}
+                AND fde.tx_type = 'LOADING_CREATED'
+            )`
+          )
+        );
+      res.json({
+        amounts: Object.fromEntries(orders.map((order) => [order.id, toMoney(order.grandTotal).toFixed(2)])),
+      });
+    } catch (error: unknown) {
+      res.status(500).json({ message: getErrorMessage(error) });
+    }
+  });
+
   app.get("/api/factory/daybook", requireAuth, async (req: Request, res: Response) => {
     try {
       const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;

@@ -9,13 +9,57 @@
 
 import type { CustomerOrder, StatusFilter } from "./types";
 
+/**
+ * Date column: active loadings use the loading start timestamp; submitted and
+ * finalized containers use the chosen verification submission business date.
+ * UTC-noon date markers must be read as UTC dates to avoid timezone shifts.
+ */
+export function getFactoryInvoiceDate(
+  order: Pick<
+    CustomerOrder,
+    "status" | "orderDate" | "loadingStartedAt" | "verifiedAt" | "loadingFinalizedAt" | "finalizedAt"
+  >
+): string | null {
+  const toDateOnly = (raw: string | null | undefined, businessDate: boolean): string | null => {
+    if (!raw) return null;
+    if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
+    const date = new Date(raw);
+    if (Number.isNaN(date.getTime())) return null;
+    if (businessDate) return date.toISOString().slice(0, 10);
+    const year = String(date.getFullYear());
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  };
+
+  if (order.status === "LOADING" || order.status === "DRAFT") {
+    return toDateOnly(order.loadingStartedAt, false) || order.orderDate || null;
+  }
+  if (["VERIFIED", "PENDING_VERIFICATION", "FINALIZED"].includes(order.status)) {
+    return (
+      toDateOnly(order.verifiedAt, true) ||
+      toDateOnly(order.loadingFinalizedAt, true) ||
+      (order.status === "FINALIZED" ? toDateOnly(order.finalizedAt, false) : null) ||
+      order.orderDate ||
+      null
+    );
+  }
+  return order.orderDate || null;
+}
+
 export interface OrderLike {
   proformaExpectedBales?: string;
+  continuationRemainingBales?: string | number | null;
   totalQtyBales: number;
 }
 
 /** How many bales still need to be loaded to meet the proforma target. */
 export function getRemainingBales(order: OrderLike): number {
+  // Server-calculated, article-by-article remainder is authoritative for a
+  // continuation. A value of zero is valid, so do not use a truthy fallback.
+  if (order.continuationRemainingBales != null) {
+    return Math.max(0, Number(order.continuationRemainingBales) || 0);
+  }
   const expected = parseFloat(order.proformaExpectedBales || "0");
   if (expected <= 0) return 0;
   return Math.max(0, expected - (order.totalQtyBales || 0));

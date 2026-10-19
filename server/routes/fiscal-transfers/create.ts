@@ -232,7 +232,7 @@ export function registerStockTransferCreateRoutes(app: Express) {
                 voucherDate: effectiveDate,
               }),
               voucherDate: effectiveDate,
-              description: await stockTransferNarrationTx(
+              description: (typeof notes === "string" ? notes.trim() : "") || await stockTransferNarrationTx(
                 tx,
                 companyId,
                 normalizedMovementItems.map((item) => item.sourceLocationId),

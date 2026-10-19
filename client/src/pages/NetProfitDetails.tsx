@@ -39,6 +39,9 @@ import {
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
 import { useCompany } from "@/contexts/CompanyContext";
 import type { NotInLedgerSectionData } from "@/components/netposition/NotInLedgerCard";
+import type { AccountDisplayLayout } from "./accounts/DisplayAccountGroups";
+import { useAccountDisplayOrder } from "@/hooks/useAccountDisplayOrder";
+import { InlineOrderButtons, inlineDrag, type InlineOrderActions } from "@/components/accounts/InlineOrderButtons";
 
 interface AccountItem {
   id?: number;
@@ -92,13 +95,20 @@ function CategoryGroup({
   accounts,
   side,
   formatAmount,
+  groupKey,
+  groupSiblings = [],
+  actions,
 }: {
   category: string;
   accounts: AccountItem[];
   side: "asset" | "liability" | "equity";
   formatAmount: (n: number) => string;
+  groupKey?: string | null;
+  groupSiblings?: string[];
+  actions?: InlineOrderActions;
 }) {
   const [open, setOpen] = useState(true);
+  const accountKeys = accounts.filter((a) => a.id != null).map((a) => `ledger:${a.id}`);
   // Use signed sum so credit-balance prepaid entries (negative) reduce the total
   const total = accounts.reduce((s, a) => s + a.value, 0);
   const color =
@@ -115,26 +125,29 @@ function CategoryGroup({
         : "bg-rose-50/60 dark:bg-rose-950/30";
 
   return (
-    <div className="rounded-md overflow-hidden border border-border/60">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className={`w-full flex items-center justify-between px-3 py-2 ${headerBg} text-sm font-semibold hover-elevate`}
-        data-testid={`button-category-${category.toLowerCase().replace(/\s+/g, "-")}`}
-      >
-        <div className="flex items-center gap-2">
-          {open ? (
-            <ChevronDown className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-          ) : (
-            <ChevronRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-          )}
-          <span className="text-foreground">{category}</span>
-          <span className="text-xs font-normal text-muted-foreground bg-background/60 rounded-sm px-1.5 py-0.5">
-            {accounts.length}
-          </span>
-        </div>
-        <span className={`font-mono font-bold tabular-nums ${color}`}>{formatAmount(Math.abs(total))}</span>
-      </button>
+    <div className="rounded-md overflow-hidden border border-border/60" {...inlineDrag(groupKey || null, actions)}>
+      <div className={`flex items-stretch ${headerBg}`}>
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          className="flex-1 flex items-center justify-between px-3 py-2 text-sm font-semibold hover-elevate"
+          data-testid={`button-category-${category.toLowerCase().replace(/\s+/g, "-")}`}
+        >
+          <div className="flex items-center gap-2">
+            {open ? (
+              <ChevronDown className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+            ) : (
+              <ChevronRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+            )}
+            <span className="text-foreground">{category}</span>
+            <span className="text-xs font-normal text-muted-foreground bg-background/60 rounded-sm px-1.5 py-0.5">
+              {accounts.length}
+            </span>
+          </div>
+          <span className={`font-mono font-bold tabular-nums ${color}`}>{formatAmount(Math.abs(total))}</span>
+        </button>
+        <InlineOrderButtons label={category} nodeKey={groupKey || null} siblingKeys={groupSiblings} actions={actions} />
+      </div>
       {open && (
         <div className="divide-y divide-border/50">
           {accounts.map((acc, i) => {
@@ -146,8 +159,9 @@ function CategoryGroup({
             return (
               <div
                 key={i}
-                className="flex items-center justify-between px-3 py-2 text-sm hover:bg-muted/30 transition-colors"
+                className="flex items-center justify-between gap-2 px-3 py-2 text-sm hover:bg-muted/30 transition-colors"
                 data-testid={`row-account-${i}`}
+                {...inlineDrag(acc.id != null ? `ledger:${acc.id}` : null, actions)}
               >
                 {acc.id ? (
                   <button
@@ -175,9 +189,17 @@ function CategoryGroup({
                     )}
                   </span>
                 )}
-                <span className={`font-mono tabular-nums font-medium ${rowColor}`}>
-                  {formatAmount(Math.abs(acc.value))}
-                </span>
+                <div className="flex items-center gap-1">
+                  <InlineOrderButtons
+                    label={acc.name}
+                    nodeKey={acc.id != null ? `ledger:${acc.id}` : null}
+                    siblingKeys={accountKeys}
+                    actions={actions}
+                  />
+                  <span className={`font-mono tabular-nums font-medium ${rowColor}`}>
+                    {formatAmount(Math.abs(acc.value))}
+                  </span>
+                </div>
               </div>
             );
           })}
@@ -195,6 +217,8 @@ function SidePanel({
   total,
   accounts,
   formatAmount,
+  displayLayout,
+  orderActions,
 }: {
   id: string;
   title: string;
@@ -203,20 +227,50 @@ function SidePanel({
   total: number;
   accounts: AccountItem[];
   formatAmount: (n: number) => string;
+  displayLayout?: AccountDisplayLayout;
+  orderActions?: InlineOrderActions;
 }) {
   const [open, setOpen] = useState(true);
 
+  const layoutGroups = (displayLayout?.nodes || []).filter((n) => n.type === "group");
+  const layoutMembership = new Map(
+    (displayLayout?.nodes || [])
+      .filter((n) => n.type === "ledger" && n.parentKey)
+      .map((n) => [Number(n.key.slice(7)), n])
+  );
+  const layoutGroupNames = new Map(layoutGroups.map((n) => [`display:${n.key}`, n.name || "Group"]));
+  const layoutOrder = new Map(layoutGroups.map((n) => [`display:${n.key}`, n.order]));
+  // A group can have accounts on both sides. Partition each side separately,
+  // so liabilities never cancel assets and dashboard totals never change.
   const grouped = accounts.reduce<Record<string, AccountItem[]>>((acc, item) => {
-    const cat = item.category || "Other";
-    if (!acc[cat]) acc[cat] = [];
-    acc[cat].push(item);
+    const membership = item.id ? layoutMembership.get(item.id) : undefined;
+    const category = membership?.parentKey ? `display:${membership.parentKey}` : item.category || "Other";
+    if (!acc[category]) acc[category] = [];
+    acc[category].push(item);
     return acc;
   }, {});
+  const sortedCategories = Object.entries(grouped)
+    .map(([key, items]) => {
+      if (layoutGroupNames.has(key)) {
+        items.sort(
+          (a, b) =>
+            (layoutMembership.get(a.id || -1)?.order ?? 10000) - (layoutMembership.get(b.id || -1)?.order ?? 10000)
+        );
+      }
+      return [key, items] as const;
+    })
+    .sort(([keyA, a], [keyB, b]) => {
+      const aRank = layoutOrder.get(keyA),
+        bRank = layoutOrder.get(keyB);
+      if (aRank != null && bRank != null) return aRank - bRank;
+      if (aRank != null) return -1;
+      if (bRank != null) return 1;
+      return b.reduce((s, x) => s + Math.abs(x.value), 0) - a.reduce((s, x) => s + Math.abs(x.value), 0);
+    });
 
-  const sortedCategories = Object.entries(grouped).sort(
-    ([, a], [, b]) => b.reduce((s, x) => s + Math.abs(x.value), 0) - a.reduce((s, x) => s + Math.abs(x.value), 0)
-  );
-
+  const groupKeys = sortedCategories
+    .filter(([key]) => layoutGroupNames.has(key))
+    .map(([key]) => key.slice("display:".length));
   const isAsset = side === "asset";
   const isEquity = side === "equity";
   const headerGradient = isAsset
@@ -285,10 +339,13 @@ function SidePanel({
               {sortedCategories.map(([cat, catAccounts]) => (
                 <CategoryGroup
                   key={cat}
-                  category={cat}
+                  category={layoutGroupNames.get(cat) || cat}
                   accounts={catAccounts}
                   side={side}
                   formatAmount={formatAmount}
+                  groupKey={layoutGroupNames.has(cat) ? cat.slice("display:".length) : null}
+                  groupSiblings={groupKeys}
+                  actions={orderActions}
                 />
               ))}
               <div
@@ -319,6 +376,15 @@ function todayStr() {
 export default function NetProfitDetails() {
   const { formatHistoricalBaseAmount: formatAmount } = useCurrencyContext();
   const { selectedCompany } = useCompany();
+  const accountOrder = useAccountDisplayOrder();
+  const displayLayout = accountOrder.layout;
+  const orderActions: InlineOrderActions = {
+    canArrange: accountOrder.canArrange,
+    arranging: accountOrder.arranging,
+    isSaving: accountOrder.isSaving,
+    swap: accountOrder.swap,
+    move: accountOrder.move,
+  };
   const { toast } = useToast();
   const [fromDate, setFromDate] = useState<string>("");
   const [toDate, setToDate] = useState<string>("");
@@ -736,6 +802,22 @@ export default function NetProfitDetails() {
       </Card>
 
       {/* ── Assets + Liabilities side by side ── */}
+      {accountOrder.canArrange && (
+        <div className="flex flex-wrap items-center justify-end gap-2 mb-2">
+          <span className="text-xs text-muted-foreground">
+            {accountOrder.arranging ? "Drag grouped accounts or use the arrows. Saved for all users." : ""}
+          </span>
+          <Button
+            size="sm"
+            variant={accountOrder.arranging ? "default" : "outline"}
+            onClick={() => accountOrder.setArranging(!accountOrder.arranging)}
+            disabled={accountOrder.isSaving}
+            data-testid="button-arrange-net-position"
+          >
+            {accountOrder.arranging ? "Finish arranging" : "Arrange groups & accounts"}
+          </Button>
+        </div>
+      )}
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 items-start">
         <SidePanel
           id="assets"
@@ -745,6 +827,8 @@ export default function NetProfitDetails() {
           total={forUsTotal}
           accounts={data?.forUs.accounts || []}
           formatAmount={formatAmount}
+          displayLayout={displayLayout}
+          orderActions={orderActions}
         />
         <SidePanel
           id="liabilities"
@@ -754,6 +838,8 @@ export default function NetProfitDetails() {
           total={onUsTotal}
           accounts={data?.onUs.accounts || []}
           formatAmount={formatAmount}
+          displayLayout={displayLayout}
+          orderActions={orderActions}
         />
       </div>
 
@@ -812,7 +898,8 @@ export default function NetProfitDetails() {
                 Formula: Sum of (sale price − cost price) for sales in this month
                 {data?.spPosProfitPeriodStartDate
                   ? ` (${data.spPosProfitPeriodStartDate} to ${data.spPosProfitAsOfDate || "today"})`
-                  : ""}. Prior months remain available through the date filter.
+                  : ""}
+                . Prior months remain available through the date filter.
               </div>
             </div>
           </CardContent>

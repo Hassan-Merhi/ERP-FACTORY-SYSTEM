@@ -96,6 +96,7 @@ failure, so a correct document cannot quietly become undiscoverable.
 | [security-company-isolation-wave3.md](security-company-isolation-wave3.md) | Company isolation, RLS, and privileged maintenance boundaries |
 | [program-8b-approval-exception-workflows.md](program-8b-approval-exception-workflows.md) | Control model for high-risk actions |
 | [audit-framework.md](audit-framework.md) | Server-side audit foundation |
+| [security/scorecard-review-and-exceptions.md](security/scorecard-review-and-exceptions.md) | Security scorecard review and documented exceptions |
 
 ## Ongoing programs
 

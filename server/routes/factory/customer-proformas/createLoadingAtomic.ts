@@ -1,6 +1,7 @@
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { db } from "../../../db";
 import { writeDaybookEntry, recalculateOrderTotals } from "../_helpers";
+import { syncLoadingStartedDaybookTotal } from "../customer-orders/loadingDaybookAmount";
 import { syncProformaReservations } from "../_stockReservationHelper";
 import {
   factoryBaleProducts,
@@ -209,6 +210,8 @@ export async function createLoadingFromProformaAtomically(input: CreateLoadingFr
       referenceTable: "customer_orders",
       description: `Loading created from proforma "${proforma.name}" for ${loadingCustomer?.legalName || "customer"} — ${totalBalesAdded} bale(s) added${insufficientNote}`,
     });
+    // Bales may already have been allocated before the daybook event exists.
+    await syncLoadingStartedDaybookTotal(tx, order.id);
 
     return {
       order,

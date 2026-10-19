@@ -18,6 +18,7 @@ import { useErpPhoneLayout } from "@/hooks/use-erp-phone-layout";
 import { ErrorState } from "@/components/ui/page-state";
 import { AccountDialogs } from "./accounts/AccountDialogs";
 import { AccountTable } from "./accounts/AccountTable";
+import { useAccountDisplayOrder } from "@/hooks/useAccountDisplayOrder";
 import { AccountStatementView } from "./accounts/AccountStatementView";
 import { useAccountsLegacyModel } from "./accountslegacy/useAccountsLegacyModel";
 import { AccountSearchResults } from "./accountslegacy/AccountSearchResults";
@@ -34,6 +35,8 @@ import {
 export default function Accounts() {
   const model = useAccountsLegacyModel();
   const { selectedAccount, selectedAccountIsLedger } = model;
+  const accountOrder = useAccountDisplayOrder();
+  const displayLayout = accountOrder.layout;
   const isPhone = useErpPhoneLayout();
   // An open statement owns the phone screen: its own header carries Back and the statement actions.
   const phoneStatementOpen = isPhone && !!selectedAccount;
@@ -236,11 +239,10 @@ export default function Accounts() {
                       onAction={() => void model.refetchAccounts()}
                       data-testid="accounts-error"
                     />
-                  ) : model.searchTerm ? (
-                    /* Command-palette result list when searching */
+                  ) : model.searchTerm && !displayLayout?.nodes?.length ? (
                     <AccountSearchResults model={presentedSearchModel} />
                   ) : (
-                    /* Full account table when not searching */
+                    /* The grouped account table also powers search, showing group headings. */
                     <AccountTable
                       filteredAccounts={visibleFilteredAccounts}
                       expandedParents={model.expandedParents}
@@ -249,6 +251,14 @@ export default function Accounts() {
                       hideBalances={model.hideBalances}
                       formatAmount={(amt) => model.formatAmountForAccount(amt, undefined)}
                       onEdit={model.openEditAccountDialog}
+                      displayLayout={displayLayout}
+                      searchActive={!!model.searchTerm}
+                      canArrange={accountOrder.canArrange}
+                      arranging={accountOrder.arranging}
+                      onArrangeChange={accountOrder.setArranging}
+                      onSwap={accountOrder.swap}
+                      onMove={accountOrder.move}
+                      isSavingOrder={accountOrder.isSaving}
                     />
                   )}
                 </div>

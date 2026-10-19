@@ -16,6 +16,7 @@ import { requireAuth, requireRole } from "../auth";
 import { writeAuditEvent } from "../services/audit/auditService";
 import { deletePhysicalFactoryBalesTx, PhysicalBaleDeletionError } from "./factory/stock/physicalBaleDeletion";
 import { PRIORITY_SCAN_LOCK_NAMESPACE } from "./factory/customer-orders/priorityScanQueue";
+import { canViewBookingInfo } from "./factory/customer-orders/bookingInfo";
 import {
   auditLog,
   baleLabelPrints,
@@ -165,6 +166,7 @@ export function registerBaleLookupRoutes(app: Express) {
       }
 
       const referenceNumber = decodeURIComponent(req.params.referenceNumber).trim().toUpperCase();
+      const bookingInfoVisible = canViewBookingInfo(req.session);
       const labelPrint = await storage.getBaleLabelPrintByReference(referenceNumber, companyId);
 
       // If no label print exists, try to find the bale directly in factory_bales
@@ -223,9 +225,28 @@ export function registerBaleLookupRoutes(app: Express) {
         // Check if this bale is in a non-deleted outbound order.
         // Soft-deleted orders are historical records only and must not make a bale look loaded.
         const [directOrderBale] = await db
-          .select({ orderId: customerOrderBales.orderId, status: customerOrders.status })
+          .select({
+            orderId: customerOrderBales.orderId,
+            status: customerOrders.status,
+            invoiceNumber: customerOrders.invoiceNumber,
+            orderDate: customerOrders.orderDate,
+            containerNumber: customerOrders.containerNumber,
+            shippingCompany: customerOrders.shippingCompany,
+            containerNotes: customerOrders.containerNotes,
+            destination: customerOrders.destination,
+            bookingInfo: customerOrders.bookingInfo,
+            loadingStartedAt: customerOrders.loadingStartedAt,
+            loadingFinalizedAt: customerOrders.loadingFinalizedAt,
+            grandTotal: customerOrders.grandTotal,
+            totalQtyBales: customerOrders.totalQtyBales,
+            customerName: customers.legalName,
+            priceUsed: customerOrderBales.priceUsed,
+            baleWeight: customerOrderBales.weight,
+            scannedBy: customerOrderBales.scannedBy,
+          })
           .from(customerOrderBales)
           .innerJoin(customerOrders, eq(customerOrderBales.orderId, customerOrders.id))
+          .leftJoin(customers, eq(customerOrders.customerId, customers.id))
           .where(
             and(
               sql`LOWER(TRIM(${customerOrderBales.baleReference})) = LOWER(TRIM(${referenceNumber}))`,
@@ -243,7 +264,11 @@ export function registerBaleLookupRoutes(app: Express) {
         let directIsInLoadingOrder = false;
         if (directOrderBale) {
           if (directOrderBale.status === "LOADING") directIsInLoadingOrder = true;
-          directLoadedOnOrder = { status: directOrderBale.status };
+          directLoadedOnOrder = {
+            ...directOrderBale,
+            bookingInfo: bookingInfoVisible ? directOrderBale.bookingInfo : null,
+            canViewBookingInfo: bookingInfoVisible,
+          };
         }
 
         // If the bale's stored status is IN_STOCK but it's already on a finalized order,
@@ -544,6 +569,9 @@ export function registerBaleLookupRoutes(app: Express) {
               containerNumber: bestOrder.customer_orders.containerNumber,
               shippingCompany: bestOrder.customer_orders.shippingCompany,
               containerNotes: bestOrder.customer_orders.containerNotes,
+              destination: bestOrder.customer_orders.destination,
+              bookingInfo: bookingInfoVisible ? bestOrder.customer_orders.bookingInfo : null,
+              canViewBookingInfo: bookingInfoVisible,
               loadingStartedAt: bestOrder.customer_orders.loadingStartedAt,
               loadingFinalizedAt: bestOrder.customer_orders.loadingFinalizedAt,
               grandTotal: bestOrder.customer_orders.grandTotal,

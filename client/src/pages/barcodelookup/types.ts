@@ -62,6 +62,9 @@ export interface LoadedOrderInfo {
   containerNumber: string | null;
   shippingCompany: string | null;
   containerNotes: string | null;
+  destination: string | null;
+  bookingInfo: string | null;
+  canViewBookingInfo: boolean;
   loadingStartedAt: string | null;
   loadingFinalizedAt: string | null;
   grandTotal: string;

@@ -106,6 +106,10 @@ export function ViewEntryModal({
   const { data: loadingOrder } = useQuery<LoadingOrder>({
     queryKey: [`/api/factory/customer-orders/${entry.referenceId}`],
     enabled: isLoadingCreated,
+    // Only while this detail dialog is open: keep scanned bales and totals live.
+    refetchInterval: isLoadingCreated ? 2_500 : false,
+    refetchIntervalInBackground: false,
+    refetchOnWindowFocus: false,
   });
 
   const { data: metaContainerDetail } = useQuery<ContainerDetail>({

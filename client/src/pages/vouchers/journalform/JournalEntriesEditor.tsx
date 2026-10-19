@@ -120,7 +120,9 @@ export function JournalEntriesEditor({ model }: { model: Model }) {
                     <FormItem className="shrink-0">
                       <Select
                         value={typeField.value}
-                        onValueChange={(value: "DR" | "CR") => handleJournalTypeChange(index, value)}
+                        onValueChange={(value) => {
+                          if (value === "DR" || value === "CR") handleJournalTypeChange(index, value);
+                        }}
                       >
                         <FormControl>
                           <SelectTrigger
@@ -314,7 +316,9 @@ export function JournalEntriesEditor({ model }: { model: Model }) {
                         <FormItem>
                           <Select
                             value={typeField.value}
-                            onValueChange={(value: "DR" | "CR") => handleJournalTypeChange(index, value)}
+                            onValueChange={(value) => {
+                              if (value === "DR" || value === "CR") handleJournalTypeChange(index, value);
+                            }}
                           >
                             <FormControl>
                               <SelectTrigger

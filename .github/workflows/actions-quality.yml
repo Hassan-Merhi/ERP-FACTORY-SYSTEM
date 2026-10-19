@@ -84,12 +84,12 @@ jobs:
           persist-credentials: false
 
       - name: Audit GitHub Actions security
-        # v0.6.4 — the pinned action ships the digest list of supported zizmor
-        # releases, so it has to move together with `version` below.
+        # Pinned action resolves its own verified tool version; do not override it
+        # with a zizmor release that is not in the pinned action's digest list.
         uses: zizmorcore/zizmor-action@cc914d7f3750a2d13d75c7f184a1060aa0e9d482
         with:
           inputs: .github
-          version: "1.30.1"
+          version: "latest"
           persona: regular
           min-severity: low
           min-confidence: medium

@@ -376,3 +376,37 @@ export const insertFactoryShippingAvailabilitySchema = createInsertSchema(factor
   });
 export type InsertFactoryShippingAvailability = z.infer<typeof insertFactoryShippingAvailabilitySchema>;
 export type FactoryShippingAvailability = typeof factoryShippingAvailability.$inferSelect;
+
+// ─── Factory Scheduled Containers ────────────────────────────────────────────
+// Planned containers stay separate from actual container availability.
+export const factoryScheduledContainers = pgTable(
+  "factory_scheduled_containers",
+  {
+    id: serial("id").primaryKey(),
+    companyId: integer("company_id").notNull(),
+    date: date("date").notNull(),
+    shippingCompany: text("shipping_company").notNull(),
+    scheduledContainers: integer("scheduled_containers").notNull().default(0),
+    note: text("note"),
+    details: text("details"),
+    isArchived: boolean("is_archived").notNull().default(false),
+    archivedAt: timestamp("archived_at"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => ({
+    companyDateIdx: index("fsc_company_date_idx").on(t.companyId, t.date),
+  })
+);
+
+export const insertFactoryScheduledContainerSchema = createInsertSchema(factoryScheduledContainers)
+  .omit({ id: true, isArchived: true, archivedAt: true, createdAt: true })
+  .extend({
+    companyId: z.number().int().min(1),
+    date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Valid date is required"),
+    shippingCompany: z.string().trim().min(1),
+    scheduledContainers: z.number().int().min(0),
+    note: z.string().nullable().optional(),
+    details: z.string().nullable().optional(),
+  });
+export type InsertFactoryScheduledContainer = z.infer<typeof insertFactoryScheduledContainerSchema>;
+export type FactoryScheduledContainer = typeof factoryScheduledContainers.$inferSelect;

@@ -186,6 +186,47 @@ export function useFactoryDaybookModel() {
   const hiddenErpCosts: string[] = myErpPages?.hiddenErpCostFields ?? [];
   const showAmounts = !hiddenErpCosts.includes("daybook_amounts");
 
+  // Keep the type dropdown in sync with transactions that actually exist for
+  // the selected company and date range. Unlike the full daybook query, this
+  // metadata query remains small even with a large history or a type filter.
+  const { data: availableTypeData, isSuccess: typeOptionsReady, isFetching: isFetchingTypeOptions } = useQuery<{
+    types: string[];
+  }>({
+    queryKey: ["/api/factory/daybook", "filter-options", startDate, endDate, currencyFilter],
+    queryFn: async () => {
+      const params = new URLSearchParams({
+        filterOptions: "true",
+        startDate: startDate || "",
+        endDate: endDate || "",
+      });
+      if (currencyFilter !== "ALL") params.set("currencyCode", currencyFilter);
+      const res = await fetch(`/api/factory/daybook?${params.toString()}`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to load daybook filter options");
+      const result: { types?: unknown } = await res.json();
+      if (!Array.isArray(result.types)) throw new Error("Invalid daybook filter options");
+      return { types: result.types.filter((type): type is string => typeof type === "string") };
+    },
+    staleTime: 60_000,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+  });
+
+  const availableTxTypes = useMemo(
+    () =>
+      [...new Set((availableTypeData?.types ?? entries.map((entry) => entry.txType)).filter(
+        (type) => type && type !== "WORKER_EDITED"
+      ))].sort((a, b) => formatTxType(a).localeCompare(formatTxType(b))),
+    [availableTypeData, entries]
+  );
+
+  // A type can disappear after moving to another date or after deleting the
+  // last matching entry. Reset it so the user isn't stuck on an empty filter.
+  useEffect(() => {
+    if (typeOptionsReady && !isFetchingTypeOptions && txTypeFilter !== "ALL" && !availableTxTypes.includes(txTypeFilter)) {
+      setTxTypeFilter("ALL");
+    }
+  }, [typeOptionsReady, isFetchingTypeOptions, txTypeFilter, availableTxTypes]);
+
   // ── URL deep link: ?entryId= or ?voucherId= on mount ─────────────────────
   useEffect(() => {
     if (urlEntryHandled || isLoading || entries.length === 0) return;
@@ -568,6 +609,7 @@ export function useFactoryDaybookModel() {
     stepPeriod,
     txTypeFilter,
     setTxTypeFilter,
+    availableTxTypes,
     statusFilter,
     setStatusFilter,
     searchQuery,

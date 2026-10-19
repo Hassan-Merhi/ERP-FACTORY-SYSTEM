@@ -117,7 +117,7 @@ export function registerUserAdministrationRoutes(app: Express) {
       if (!userId) return res.status(401).json({ message: "Not authenticated" });
       const user = await storage.getUser(userId);
       if (!user) return res.status(404).json({ message: "User not found" });
-      const valid = await verifyPassword(currentPassword, user.password);
+      const { valid } = await verifyPassword(currentPassword, user.password);
       if (!valid) return res.status(400).json({ message: "Current password is incorrect" });
 
       const credentialVersion = await replacePasswordAndRevokeSessions(userId, await hashPassword(newPassword), {

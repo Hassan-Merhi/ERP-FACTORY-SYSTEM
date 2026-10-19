@@ -355,7 +355,13 @@ export function PosMobileLayout({
             <div className="grid min-w-0 grid-cols-[7rem_minmax(0,1fr)] gap-2 sm:col-span-2">
               <Select
                 value={paymentAccountType}
-                onValueChange={posUser ? undefined : (value: "bank" | "cash") => setPaymentAccountType(value)}
+                onValueChange={
+                  posUser
+                    ? undefined
+                    : (value) => {
+                        if (value === "bank" || value === "cash") setPaymentAccountType(value);
+                      }
+                }
                 disabled={Boolean(posUser)}
               >
                 <SelectTrigger className="min-h-11 w-full" data-testid="select-mobile-account-type">

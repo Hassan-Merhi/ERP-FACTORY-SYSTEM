@@ -12,6 +12,7 @@ import {
   factoryBales,
   customerProformas,
   customerProformaLines,
+  customerOrderExpectedLines,
   customerOrders,
   customerOrderLines,
   customerOrderBales,
@@ -133,7 +134,38 @@ export function registerOrderCrudRoutes(app: Express) {
           )`,
           totalQtyBales: customerOrders.totalQtyBales,
           totalWeightKg: sql<string>`COALESCE((SELECT SUM(cob.weight) FROM customer_order_bales cob WHERE cob.order_id = ${customerOrders.id}), 0)`,
-          proformaExpectedBales: sql<string>`COALESCE((SELECT SUM(quantity) FROM customer_proforma_lines WHERE proforma_id = ${customerOrders.proformaIdUsed}), 0)`,
+          // A continuation uses its own frozen expected quantities. If the
+          // order has no continuation plan, retain the original reusable proforma.
+          proformaExpectedBales: sql<string>`COALESCE(
+            (SELECT SUM(expected_qty)
+             FROM customer_order_expected_lines
+             WHERE company_id = ${customerOrders.companyId}
+               AND order_id = ${customerOrders.id}
+               AND proforma_id = ${customerOrders.proformaIdUsed}),
+            (SELECT SUM(quantity)
+             FROM customer_proforma_lines
+             WHERE proforma_id = ${customerOrders.proformaIdUsed}),
+            0
+          )`,
+          // For continuation plans, compute remaining PER ARTICLE. Subtracting
+          // total bales alone can hide shortages when another article is over-loaded.
+          continuationRemainingBales: sql<string | null>`(
+            SELECT SUM(GREATEST(plan.expected - COALESCE(scanned.loaded, 0), 0))::text
+            FROM (
+              SELECT LOWER(TRIM(article_code)) AS article, SUM(expected_qty)::int AS expected
+              FROM customer_order_expected_lines
+              WHERE company_id = ${customerOrders.companyId}
+                AND order_id = ${customerOrders.id}
+                AND proforma_id = ${customerOrders.proformaIdUsed}
+              GROUP BY LOWER(TRIM(article_code))
+            ) plan
+            LEFT JOIN (
+              SELECT LOWER(TRIM(article_code)) AS article, COUNT(DISTINCT bale_id)::int AS loaded
+              FROM customer_order_bales
+              WHERE order_id = ${customerOrders.id}
+              GROUP BY LOWER(TRIM(article_code))
+            ) scanned ON scanned.article = plan.article
+          )`,
           loadedNotInProformaBales: sql<string>`CASE WHEN ${customerOrders.proformaIdUsed} IS NULL THEN 0 ELSE COALESCE((SELECT COUNT(*)::int FROM customer_order_bales cob2 WHERE cob2.order_id = ${customerOrders.id} AND (cob2.article_code IS NULL OR cob2.article_code NOT IN (SELECT article_code FROM customer_proforma_lines WHERE proforma_id = ${customerOrders.proformaIdUsed}))), 0) END`,
           containerNumber: customerOrders.containerNumber,
           shippingCompany: customerOrders.shippingCompany,
@@ -211,7 +243,7 @@ export function registerOrderCrudRoutes(app: Express) {
         containerNumber: r.container_number ?? null,
         shippingCompany: r.shipping_company ?? null,
         containerNotes: r.container_notes ?? null,
-        bookingInfo: r.booking_info ?? null,
+        bookingInfo: canViewBookingInfo(req.session) ? (r.booking_info ?? null) : null,
         destination: r.destination ?? null,
         verifiedByUserId: r.verified_by_user_id ?? null,
         verifiedAt: r.verified_at ?? null,
@@ -242,9 +274,41 @@ export function registerOrderCrudRoutes(app: Express) {
           .select({ id: customerProformas.id })
           .from(customerProformas)
           .where(and(eq(customerProformas.id, orderProformaId), eq(customerProformas.companyId, companyId)));
-        const proformaLines = continuationProforma
+        // Continuations have a loading-specific remaining plan; prefer it
+        // over the full reusable proforma when calculating follow-on quantities.
+        const currentExpectedLines = continuationProforma
+          ? await db
+              .select()
+              .from(customerOrderExpectedLines)
+              .where(
+                and(
+                  eq(customerOrderExpectedLines.companyId, companyId),
+                  eq(customerOrderExpectedLines.orderId, id),
+                  eq(customerOrderExpectedLines.proformaId, orderProformaId)
+                )
+              )
+          : [];
+        const originalProformaLines = continuationProforma
           ? await db.select().from(customerProformaLines).where(eq(customerProformaLines.proformaId, orderProformaId))
           : [];
+        const proformaLines = currentExpectedLines.length
+          ? currentExpectedLines.map((line) => {
+              const source =
+                originalProformaLines.find((original) => original.id === line.proformaLineId) ||
+                originalProformaLines.find(
+                  (original) => original.articleCode.trim().toLowerCase() === line.articleCode.trim().toLowerCase()
+                );
+              return {
+                id: line.id,
+                articleCode: line.articleCode,
+                productName: line.productName || source?.productName || line.articleCode,
+                quantity: line.expectedQty,
+                pricePerBale: source?.pricePerBale ?? "0",
+                pricingMode: source?.pricingMode ?? "per_bale",
+                pricePerKg: source?.pricePerKg ?? null,
+              };
+            })
+          : originalProformaLines;
         const capacity = continuationProforma
           ? await getProformaCapacitySnapshot(db, {
               companyId,
@@ -680,6 +744,9 @@ export function registerOrderCrudRoutes(app: Express) {
     }
   });
 
+  // Single source of truth for the Invoicing table, loading form, shipping
+  // containers, tracking and invoice detail. Never mirror these values into a
+  // separate display-only table.
   app.post("/api/factory/customer-orders/:id/assign-container", requireAuth, async (req: Request, res: Response) => {
     try {
       const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
@@ -687,64 +754,81 @@ export function registerOrderCrudRoutes(app: Express) {
 
       const orderId = parseId(req.params.id);
       if (orderId === null) return res.status(400).json({ message: "Invalid id" });
-      const { containerNumber, shippingCompany, containerNotes, bookingInfo, destination } = req.body;
+      const { containerNumber, shippingCompany, containerNotes, bookingInfo, destination } = req.body || {};
+      // Existing loading forms may submit an empty bookingInfo along with
+      // unrelated changes. Treat that as omitted for non-privileged staff;
+      // never let them change or clear the private stored value.
+      let requestedBookingInfo: unknown = bookingInfo;
+      if (bookingInfo !== undefined && !canViewBookingInfo(req.session)) {
+        if (bookingInfo === "" || bookingInfo === null) {
+          requestedBookingInfo = undefined;
+        } else {
+          return res.status(403).json({ message: "Only Admin, Owner or Developer can edit booking info" });
+        }
+      }
 
-      const [order] = await db
-        .select()
-        .from(customerOrders)
-        .where(and(eq(customerOrders.id, orderId), eq(customerOrders.companyId, companyId)));
-      if (!order) return res.status(404).json({ message: "Order not found" });
-
-      const updateData: Partial<typeof customerOrders.$inferInsert> = { updatedAt: new Date() };
-      if (containerNumber !== undefined) updateData.containerNumber = containerNumber;
-      if (shippingCompany !== undefined) updateData.shippingCompany = shippingCompany;
-      if (containerNotes !== undefined) updateData.containerNotes = containerNotes;
-      if (bookingInfo !== undefined && !isValidBookingInfo(bookingInfo)) {
+      const normalizeText = (value: unknown, max: number, field: string): string | null | undefined => {
+        if (value === undefined) return undefined;
+        if (value === null) return null;
+        if (typeof value !== "string" || value.length > max) {
+          throw new HttpError(400, `${field} must be text up to ${max} characters`);
+        }
+        return value.trim() || null;
+      };
+      const normalizedContainer = normalizeText(containerNumber, 100, "Container");
+      const normalizedShipping = normalizeText(shippingCompany, 200, "Shipping company");
+      const normalizedNotes = normalizeText(containerNotes, 10000, "Notes");
+      if (requestedBookingInfo !== undefined && !isValidBookingInfo(requestedBookingInfo)) {
         return res.status(400).json({ message: "Booking info must be text up to 2000 characters" });
       }
-      if (bookingInfo !== undefined) updateData.bookingInfo = bookingInfo;
-      if (destination !== undefined) updateData.destination = destination || null;
+      const normalizedBooking = normalizeText(requestedBookingInfo, 2000, "Booking info");
+      const normalizedDestination = normalizeText(destination, 500, "Destination");
+      const updateData: Partial<typeof customerOrders.$inferInsert> = {};
+      if (normalizedContainer !== undefined) updateData.containerNumber = normalizedContainer;
+      if (normalizedShipping !== undefined) updateData.shippingCompany = normalizedShipping;
+      if (normalizedNotes !== undefined) updateData.containerNotes = normalizedNotes;
+      if (normalizedBooking !== undefined) updateData.bookingInfo = normalizedBooking;
+      if (normalizedDestination !== undefined) updateData.destination = normalizedDestination;
+      if (!Object.keys(updateData).length) return res.status(400).json({ message: "No fields to update" });
 
-      // Phase 21 (B): the write and its audit commit together.
       const updated = await db.transaction(async (tx) => {
+        const [order] = await tx
+          .select()
+          .from(customerOrders)
+          .where(and(eq(customerOrders.id, orderId), eq(customerOrders.companyId, companyId)))
+          .for("update");
+        if (!order || order.deletedAt) throw new HttpError(404, "Loading not found");
+
+        const changes: Record<string, { old: string | null; new: string | null }> = {};
+        const fieldNames = ["containerNumber", "shippingCompany", "containerNotes", "bookingInfo", "destination"] as const;
+        for (const field of fieldNames) {
+          if (updateData[field] !== undefined && updateData[field] !== (order[field] || null)) {
+            changes[field] = { old: order[field] ?? null, new: updateData[field] as string | null };
+          }
+        }
+        if (!Object.keys(changes).length) return order;
         const [written] = await tx
           .update(customerOrders)
-          .set(updateData)
-          .where(eq(customerOrders.id, orderId))
+          .set({ ...updateData, updatedAt: new Date() })
+          .where(and(eq(customerOrders.id, orderId), eq(customerOrders.companyId, companyId)))
           .returning();
-
-        // Shipping company is order-specific. The customers table has no
-        // defaultShippingCompany field, so do not perform a swallowed invalid update.
-
-        await logAudit(
-          {
-            userId: req.session.userId!,
-            username: req.session.username || req.session.userId!,
-            companyId,
-            action: "update",
-            tableName: "factory_customer_orders",
-            recordId: orderId,
-            recordIdentifier: orderAuditIdentifier(order, orderId),
-            changes: {
-              ...(containerNumber !== undefined
-                ? { containerNumber: { old: order.containerNumber ?? null, new: containerNumber } }
-                : {}),
-              ...(destination !== undefined
-                ? { destination: { old: order.destination ?? null, new: destination || null } }
-                : {}),
-              ...(shippingCompany !== undefined
-                ? { shippingCompany: { old: order.shippingCompany ?? null, new: shippingCompany } }
-                : {}),
-            },
-          },
-          tx
-        );
+        await logAudit({
+          userId: req.session.userId!,
+          username: req.session.username || req.session.userId!,
+          companyId,
+          action: "update",
+          tableName: "factory_customer_orders",
+          recordId: orderId,
+          recordIdentifier: orderAuditIdentifier(order, orderId),
+          changes,
+        }, tx);
         return written;
       });
-      res.json(updated);
+      // Booking information is private even when the caller edits other fields.
+      res.json(canViewBookingInfo(req.session) ? updated : { ...updated, bookingInfo: null });
     } catch (error: unknown) {
-      logger.error("Error assigning container:", { error: error });
-      res.status(400).json({ message: getErrorMessage(error) });
+      logger.error("Error updating container details:", { error });
+      sendHttpError(res, error);
     }
   });
 

@@ -16,6 +16,7 @@ export interface CustomerOrder {
   companyId: number;
   customerId: number;
   orderDate: string;
+  loadingStartedAt?: string | null;
   verifiedAt?: string | null;
   loadingFinalizedAt?: string | null;
   finalizedAt?: string | null;
@@ -28,6 +29,7 @@ export interface CustomerOrder {
   totalQtyBales: number;
   totalWeightKg: string;
   proformaExpectedBales: string;
+  continuationRemainingBales?: string | null;
   loadedNotInProformaBales: string;
   customerName: string;
   containerNumber?: string | null;

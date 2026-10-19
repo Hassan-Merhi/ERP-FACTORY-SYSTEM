@@ -15,6 +15,7 @@ import {
   getEstimatedPrice,
   getOverloadedBales,
   getRemainingBales,
+  getFactoryInvoiceDate,
   getLoadedBalesColorClass,
   groupOrdersByCustomer,
   statusFilterCounts,
@@ -45,6 +46,24 @@ describe("getRemainingBales / getOverloadedBales", () => {
   it("computes bales still needed against the proforma target", () => {
     expect(getRemainingBales({ proformaExpectedBales: "40", totalQtyBales: 25 })).toBe(15);
     expect(getRemainingBales({ proformaExpectedBales: "20", totalQtyBales: 25 })).toBe(0);
+  });
+
+  it("uses remaining-only continuation counts even if another article was overloaded", () => {
+    expect(getRemainingBales({
+      proformaExpectedBales: "179",
+      totalQtyBales: 0,
+      continuationRemainingBales: "179",
+    })).toBe(179);
+    expect(getRemainingBales({
+      proformaExpectedBales: "179",
+      totalQtyBales: 30,
+      continuationRemainingBales: "160",
+    })).toBe(160);
+    expect(getRemainingBales({
+      proformaExpectedBales: "179",
+      totalQtyBales: 190,
+      continuationRemainingBales: "0",
+    })).toBe(0);
   });
 
   it("has no expectation when the proforma target is absent or zero", () => {
@@ -164,5 +183,53 @@ describe("computeGroupTotals", () => {
       totalOverloaded: 10, // 10 over on order 2
       totalAmount: 11000,
     });
+  });
+});
+
+describe("Factory Invoicing Date column", () => {
+  const startedAt = new Date(2026, 9, 16, 9, 30).toISOString();
+  const base = order({
+    orderDate: "2026-10-15",
+    loadingStartedAt: startedAt,
+    verifiedAt: "2026-10-18T12:00:00.000Z",
+    loadingFinalizedAt: "2026-10-17T12:00:00.000Z",
+    finalizedAt: "2026-10-19T09:00:00.000Z",
+  });
+
+  it("shows the actual loading-start date while the order is LOADING", () => {
+    expect(getFactoryInvoiceDate({ ...base, status: "LOADING" })).toBe("2026-10-16");
+    expect(getFactoryInvoiceDate({ ...base, status: "DRAFT" })).toBe("2026-10-16");
+  });
+
+  it("shows the selected submission business date once sent to verification", () => {
+    expect(getFactoryInvoiceDate({ ...base, status: "VERIFIED" })).toBe("2026-10-18");
+    expect(getFactoryInvoiceDate({ ...base, status: "PENDING_VERIFICATION" })).toBe("2026-10-18");
+  });
+
+  it("keeps the submission date after office finalization", () => {
+    expect(getFactoryInvoiceDate({ ...base, status: "FINALIZED" })).toBe("2026-10-18");
+  });
+
+  it("falls back to first confirmation, and then the order date, for historical records", () => {
+    expect(getFactoryInvoiceDate({ ...base, status: "VERIFIED", verifiedAt: null })).toBe("2026-10-17");
+    expect(
+      getFactoryInvoiceDate({
+        ...base,
+        status: "LOADING",
+        loadingStartedAt: null,
+      })
+    ).toBe("2026-10-15");
+    expect(
+      getFactoryInvoiceDate({
+        ...base,
+        status: "VERIFIED",
+        verifiedAt: null,
+        loadingFinalizedAt: null,
+      })
+    ).toBe("2026-10-15");
+  });
+
+  it("never displays an invalid timestamp", () => {
+    expect(getFactoryInvoiceDate({ ...base, status: "LOADING", loadingStartedAt: "not-a-date" })).toBe("2026-10-15");
   });
 });
