@@ -47,10 +47,10 @@ export function ContainerTable({ containers, colVis, sessionCompanyId, onOpenDra
         data-horizontal-scroll="true"
         className="min-w-0 w-full flex-1 overflow-auto custom-scrollbar relative"
       >
-          <div
-            ref={printRef as React.RefObject<HTMLDivElement>}
-            className={isPhone ? "min-w-0 w-full" : "w-max min-w-full"}
-          >
+        <div
+          ref={printRef as React.RefObject<HTMLDivElement>}
+          className={isPhone ? "min-w-0 w-full" : "w-max min-w-full"}
+        >
           {/* The container number stays in view while the wide table scrolls sideways (the page
               column scrolls it); the narrow row-number column slides under it. The card layout
               on phones is left alone. */}
