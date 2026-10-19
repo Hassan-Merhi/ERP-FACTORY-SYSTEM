@@ -469,6 +469,58 @@ describe("Phase 6 review fixes: every deletion path, live links only", () => {
     expect(await inventoryQty()).toBe(before - 1);
   }, 60000);
 
+  it("supervised bale restoration reverses one physical debit, preserves deletion evidence and rejects retries", async () => {
+    const [bale] = await newStockBales(1);
+    const originalQty = await inventoryQty();
+    const removal = await agent.post(API).send({
+      baleIds: [bale.id],
+      supervisorUsername: `${PREFIX}_testuser`,
+      supervisorPassword: "testpassword123",
+      reason: "Testing supervised re-entry",
+    });
+    expect(removal.status, JSON.stringify(removal.body)).toBe(200);
+    expect(await inventoryQty()).toBe(originalQty - 1);
+
+    const noReason = await agent.post(`/api/factory/bales/${bale.id}/restore-to-stock`).send({ reason: " " });
+    expect(noReason.status).toBe(400);
+    expect(await inventoryQty()).toBe(originalQty - 1);
+
+    const restored = await agent
+      .post(`/api/factory/bales/${bale.id}/restore-to-stock`)
+      .send({ reason: "Physically returned and checked in the stock room" });
+    expect(restored.status, JSON.stringify(restored.body)).toBe(200);
+    expect(restored.body.status).toBe("IN_STOCK");
+    expect(await baleStatus(bale.id)).toMatchObject({ status: "IN_STOCK", deleted_at: null });
+    expect(await inventoryQty()).toBe(originalQty);
+
+    const { rows: journal } = await pool.query<{
+      id: number;
+      reversal_of_movement_id: number | null;
+      quantity_delta: string;
+    }>(
+      `SELECT id, reversal_of_movement_id, quantity_delta
+         FROM canonical_stock_movements
+        WHERE company_id = $1 AND source_type = 'factory_bale_reentry' AND source_id = $2`,
+      [ctx.companyId, String(bale.id)]
+    );
+    expect(journal).toHaveLength(1);
+    expect(Number(journal[0].quantity_delta)).toBe(1);
+    expect(journal[0].reversal_of_movement_id).toBeTruthy();
+    const { rows: originalDeletion } = await pool.query(
+      "SELECT id FROM factory_physical_bale_deletions WHERE company_id = $1 AND bale_id = $2",
+      [ctx.companyId, bale.id]
+    );
+    expect(originalDeletion).toHaveLength(1);
+    const retry = await agent.post(`/api/factory/bales/${bale.id}/restore-to-stock`).send({ reason: "Retry" });
+    expect(retry.status).toBe(409);
+    expect(await inventoryQty()).toBe(originalQty);
+    const { rows: repeated } = await pool.query(
+      "SELECT id FROM canonical_stock_movements WHERE company_id = $1 AND source_type = 'factory_bale_reentry' AND source_id = $2",
+      [ctx.companyId, String(bale.id)]
+    );
+    expect(repeated).toHaveLength(1);
+  }, 60000);
+
   it("waste dispatch refuses a bale that is still on a live loading", async () => {
     const [loaded, free] = await newStockBales(2);
     const live = await newOrder("LOADING");
