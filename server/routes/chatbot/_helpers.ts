@@ -12,7 +12,7 @@ import { createCipheriv, createDecipheriv, createHash, randomBytes } from "node:
 // ciphertext must be reconfigured rather than decrypted with MD5.
 export const _tokenKey = (): string => {
   const secret = process.env.SESSION_SECRET;
-  if (!secret) throw new Error("SESSION_SECRET is required for GitHub token encryption");
+  if (!secret) throw new Error("SESSION_SECRET_REQUIRED");
   return secret;
 };
 
