@@ -1,0 +1,44 @@
+name: Security Property Fuzzing
+
+on:
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: "31 3 * * 2"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: security-fuzz-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  fuzz:
+    name: Fuzz security input boundaries
+    runs-on: ubuntu-26.04
+    timeout-minutes: 15
+    env:
+      NODE_ENV: test
+      FUZZ_RUNS: ${{ github.event_name == 'schedule' && '5000' || '1000' }}
+    steps:
+      - name: Harden Runner (audit mode)
+        uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
+        with:
+          egress-policy: audit
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: "24.22.0"
+          cache: npm
+      - name: Normalize Replit registry URLs for CI
+        run: sed -i 's#http://package-firewall.replit.local/npm/#https://registry.npmjs.org/#g' package-lock.json
+      - name: Install pinned dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Run property-based security fuzz tests
+        run: npm run test:fuzz
