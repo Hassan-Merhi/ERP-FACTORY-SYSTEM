@@ -15,6 +15,7 @@ import { requireAuth } from "../../../../auth";
 import { writeDaybookEntry } from "../../_helpers";
 import { syncProformaReservations } from "../../_stockReservationHelper";
 import { acquireProformaCapacityTransactionLock } from "../proformaCapacityConcurrency";
+import { getProformaCapacitySnapshot } from "../proformaCapacity";
 import { guardProformaOrderCreation } from "../proformaCapacityWriteGuards";
 import {
   factoryBales,
@@ -255,12 +256,17 @@ export function registerOrderLoadingRoutes(app: Express) {
             });
           }
 
-          const loadedByArticle = new Map<string, number>();
-          for (const bale of bales) {
-            const code = normalizeCode(bale.articleCode);
-            if (!code) continue;
-            loadedByArticle.set(code, (loadedByArticle.get(code) || 0) + 1);
-          }
+          // Same distinct-physical-bale counts used by the scanner and
+          // progress display (including historical article-code fallbacks).
+          const capacity = await getProformaCapacitySnapshot(tx, {
+            companyId,
+            proformaId: proforma.id,
+            currentOrderId: orderId,
+          });
+          if (!capacity) throw new Error("Unable to read loading capacity");
+          const loadedByArticle = new Map(
+            capacity.articles.map((article) => [article.normalizedArticleCode, article.currentOrderLoadedQty])
+          );
           for (const [code, line] of expectedByArticle) {
             const remaining = Math.max(0, line.expectedQty - (loadedByArticle.get(code) || 0));
             if (remaining > 0) {
