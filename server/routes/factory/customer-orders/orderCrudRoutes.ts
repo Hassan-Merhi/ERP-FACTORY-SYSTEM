@@ -243,7 +243,7 @@ export function registerOrderCrudRoutes(app: Express) {
         containerNumber: r.container_number ?? null,
         shippingCompany: r.shipping_company ?? null,
         containerNotes: r.container_notes ?? null,
-        bookingInfo: r.booking_info ?? null,
+        bookingInfo: canViewBookingInfo(req.session) ? (r.booking_info ?? null) : null,
         destination: r.destination ?? null,
         verifiedByUserId: r.verified_by_user_id ?? null,
         verifiedAt: r.verified_at ?? null,
@@ -744,6 +744,9 @@ export function registerOrderCrudRoutes(app: Express) {
     }
   });
 
+  // Single source of truth for the Invoicing table, loading form, shipping
+  // containers, tracking and invoice detail. Never mirror these values into a
+  // separate display-only table.
   app.post("/api/factory/customer-orders/:id/assign-container", requireAuth, async (req: Request, res: Response) => {
     try {
       const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
@@ -751,64 +754,72 @@ export function registerOrderCrudRoutes(app: Express) {
 
       const orderId = parseId(req.params.id);
       if (orderId === null) return res.status(400).json({ message: "Invalid id" });
-      const { containerNumber, shippingCompany, containerNotes, bookingInfo, destination } = req.body;
+      const { containerNumber, shippingCompany, containerNotes, bookingInfo, destination } = req.body || {};
+      if (bookingInfo !== undefined && !canViewBookingInfo(req.session)) {
+        return res.status(403).json({ message: "Only Admin, Owner or Developer can edit booking info" });
+      }
 
-      const [order] = await db
-        .select()
-        .from(customerOrders)
-        .where(and(eq(customerOrders.id, orderId), eq(customerOrders.companyId, companyId)));
-      if (!order) return res.status(404).json({ message: "Order not found" });
-
-      const updateData: Partial<typeof customerOrders.$inferInsert> = { updatedAt: new Date() };
-      if (containerNumber !== undefined) updateData.containerNumber = containerNumber;
-      if (shippingCompany !== undefined) updateData.shippingCompany = shippingCompany;
-      if (containerNotes !== undefined) updateData.containerNotes = containerNotes;
+      const normalizeText = (value: unknown, max: number, field: string): string | null | undefined => {
+        if (value === undefined) return undefined;
+        if (typeof value !== "string" || value.length > max) {
+          throw new HttpError(400, `${field} must be text up to ${max} characters`);
+        }
+        return value.trim() || null;
+      };
+      const normalizedContainer = normalizeText(containerNumber, 100, "Container");
+      const normalizedShipping = normalizeText(shippingCompany, 200, "Shipping company");
+      const normalizedNotes = normalizeText(containerNotes, 10000, "Notes");
       if (bookingInfo !== undefined && !isValidBookingInfo(bookingInfo)) {
         return res.status(400).json({ message: "Booking info must be text up to 2000 characters" });
       }
-      if (bookingInfo !== undefined) updateData.bookingInfo = bookingInfo;
-      if (destination !== undefined) updateData.destination = destination || null;
+      const normalizedBooking = normalizeText(bookingInfo, 2000, "Booking info");
+      const normalizedDestination = normalizeText(destination, 500, "Destination");
+      const updateData: Partial<typeof customerOrders.$inferInsert> = {};
+      if (normalizedContainer !== undefined) updateData.containerNumber = normalizedContainer;
+      if (normalizedShipping !== undefined) updateData.shippingCompany = normalizedShipping;
+      if (normalizedNotes !== undefined) updateData.containerNotes = normalizedNotes;
+      if (normalizedBooking !== undefined) updateData.bookingInfo = normalizedBooking;
+      if (normalizedDestination !== undefined) updateData.destination = normalizedDestination;
+      if (!Object.keys(updateData).length) return res.status(400).json({ message: "No fields to update" });
 
-      // Phase 21 (B): the write and its audit commit together.
       const updated = await db.transaction(async (tx) => {
+        const [order] = await tx
+          .select()
+          .from(customerOrders)
+          .where(and(eq(customerOrders.id, orderId), eq(customerOrders.companyId, companyId)))
+          .for("update");
+        if (!order || order.deletedAt) throw new HttpError(404, "Loading not found");
+
+        const changes: Record<string, { old: string | null; new: string | null }> = {};
+        const fieldNames = ["containerNumber", "shippingCompany", "containerNotes", "bookingInfo", "destination"] as const;
+        for (const field of fieldNames) {
+          if (updateData[field] !== undefined && updateData[field] !== (order[field] || null)) {
+            changes[field] = { old: order[field] ?? null, new: updateData[field] as string | null };
+          }
+        }
+        if (!Object.keys(changes).length) return order;
         const [written] = await tx
           .update(customerOrders)
-          .set(updateData)
-          .where(eq(customerOrders.id, orderId))
+          .set({ ...updateData, updatedAt: new Date() })
+          .where(and(eq(customerOrders.id, orderId), eq(customerOrders.companyId, companyId)))
           .returning();
-
-        // Shipping company is order-specific. The customers table has no
-        // defaultShippingCompany field, so do not perform a swallowed invalid update.
-
-        await logAudit(
-          {
-            userId: req.session.userId!,
-            username: req.session.username || req.session.userId!,
-            companyId,
-            action: "update",
-            tableName: "factory_customer_orders",
-            recordId: orderId,
-            recordIdentifier: orderAuditIdentifier(order, orderId),
-            changes: {
-              ...(containerNumber !== undefined
-                ? { containerNumber: { old: order.containerNumber ?? null, new: containerNumber } }
-                : {}),
-              ...(destination !== undefined
-                ? { destination: { old: order.destination ?? null, new: destination || null } }
-                : {}),
-              ...(shippingCompany !== undefined
-                ? { shippingCompany: { old: order.shippingCompany ?? null, new: shippingCompany } }
-                : {}),
-            },
-          },
-          tx
-        );
+        await logAudit({
+          userId: req.session.userId!,
+          username: req.session.username || req.session.userId!,
+          companyId,
+          action: "update",
+          tableName: "factory_customer_orders",
+          recordId: orderId,
+          recordIdentifier: orderAuditIdentifier(order, orderId),
+          changes,
+        }, tx);
         return written;
       });
-      res.json(updated);
+      // Booking information is private even when the caller edits other fields.
+      res.json(canViewBookingInfo(req.session) ? updated : { ...updated, bookingInfo: null });
     } catch (error: unknown) {
-      logger.error("Error assigning container:", { error: error });
-      res.status(400).json({ message: getErrorMessage(error) });
+      logger.error("Error updating container details:", { error });
+      sendHttpError(res, error);
     }
   });
 
