@@ -12,6 +12,7 @@ import {
   factoryBales,
   customerProformas,
   customerProformaLines,
+  customerOrderExpectedLines,
   customerOrders,
   customerOrderLines,
   customerOrderBales,
@@ -242,9 +243,33 @@ export function registerOrderCrudRoutes(app: Express) {
           .select({ id: customerProformas.id })
           .from(customerProformas)
           .where(and(eq(customerProformas.id, orderProformaId), eq(customerProformas.companyId, companyId)));
-        const proformaLines = continuationProforma
-          ? await db.select().from(customerProformaLines).where(eq(customerProformaLines.proformaId, orderProformaId))
+        // Continuations have a loading-specific remaining plan; prefer it
+        // over the full reusable proforma when calculating follow-on quantities.
+        const currentExpectedLines = continuationProforma
+          ? await db
+              .select()
+              .from(customerOrderExpectedLines)
+              .where(
+                and(
+                  eq(customerOrderExpectedLines.companyId, companyId),
+                  eq(customerOrderExpectedLines.orderId, id),
+                  eq(customerOrderExpectedLines.proformaId, orderProformaId)
+                )
+              )
           : [];
+        const proformaLines = currentExpectedLines.length
+          ? currentExpectedLines.map((line) => ({
+              id: line.id,
+              articleCode: line.articleCode,
+              productName: line.productName || line.articleCode,
+              quantity: line.expectedQty,
+              pricePerBale: "0",
+              pricingMode: "per_bale",
+              pricePerKg: null,
+            }))
+          : continuationProforma
+            ? await db.select().from(customerProformaLines).where(eq(customerProformaLines.proformaId, orderProformaId))
+            : [];
         const capacity = continuationProforma
           ? await getProformaCapacitySnapshot(db, {
               companyId,
