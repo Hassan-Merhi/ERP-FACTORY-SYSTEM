@@ -1,4 +1,5 @@
 import { db } from "../../db";
+import { syncLoadingStartedDaybookTotal } from "./customer-orders/loadingDaybookAmount";
 import {
   ledgerAccounts,
   customerOrderBales,
@@ -201,6 +202,9 @@ export async function recalculateOrderTotals(dbConn: DatabaseOrTransaction, orde
       updatedAt: new Date(),
     })
     .where(eq(customerOrders.id, orderId));
+
+  // Scans removed, swapped or repriced use this same synchronized loading event.
+  await syncLoadingStartedDaybookTotal(dbConn, orderId);
 
   // Perpetual inventory (wave 8.4): a finalized order's invoice journal follows its new totals.
   const [owner] = await dbConn
