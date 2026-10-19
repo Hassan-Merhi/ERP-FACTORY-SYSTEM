@@ -6,6 +6,7 @@
  * movement and daybook must commit or fail as a single unit.
  */
 import { companyBusinessDate } from "../../../services/accounting/companyBusinessDate";
+import { formatFactoryBaleRemovalDescription } from "@shared/factoryBaleRemovalDescription";
 import { and, eq, inArray, isNull, ne } from "drizzle-orm";
 
 import {
@@ -333,7 +334,11 @@ export async function deletePhysicalFactoryBalesTx(
     companyId,
     txDate: await companyBusinessDate(companyId, tx),
     txType: "BALE_REMOVAL",
-    description: `Removed ${removed.length} bale(s) from factory stock. Supervisor: ${actorName}. Reason: ${reason}`,
+    description: formatFactoryBaleRemovalDescription({
+      references: removed.map((bale) => bale.referenceNumber || String(bale.id)),
+      username: actorName,
+      reason,
+    }),
     metaJson,
   });
   return removed;
