@@ -547,8 +547,8 @@ export default function FactoryInvoices() {
           </div>
         )}
 
-        {/* Shared container availability — below the container loading list */}
-        <div className="border-t px-4 py-4">
+        {/* Scheduled containers above existing container availability */}
+        <div className="border-t px-4 py-4 space-y-3">
           <ScheduledContainersTable />
           <ShippingAvailabilityTable />
         </div>
