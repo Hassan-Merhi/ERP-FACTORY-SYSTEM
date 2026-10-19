@@ -239,11 +239,10 @@ export default function Accounts() {
                       onAction={() => void model.refetchAccounts()}
                       data-testid="accounts-error"
                     />
-                  ) : model.searchTerm ? (
-                    /* Command-palette result list when searching */
+                  ) : model.searchTerm && !displayLayout?.nodes?.length ? (
                     <AccountSearchResults model={presentedSearchModel} />
                   ) : (
-                    /* Full account table when not searching */
+                    /* The grouped account table also powers search, showing group headings. */
                     <AccountTable
                       filteredAccounts={visibleFilteredAccounts}
                       expandedParents={model.expandedParents}
@@ -253,6 +252,7 @@ export default function Accounts() {
                       formatAmount={(amt) => model.formatAmountForAccount(amt, undefined)}
                       onEdit={model.openEditAccountDialog}
                       displayLayout={displayLayout}
+                      searchActive={!!model.searchTerm}
                       canArrange={accountOrder.canArrange}
                       arranging={accountOrder.arranging}
                       onArrangeChange={accountOrder.setArranging}
