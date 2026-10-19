@@ -13,6 +13,7 @@ import {
   mergeBaleEntries,
   expandBaleEntries,
   formatDaybookDescription,
+  withLiveLoadingAmounts,
   currencySymbol,
   formatTxType,
   getFactoryTxTypeBadge,
@@ -227,6 +228,29 @@ describe("factory bale removal descriptions", () => {
         entry({ txType: "BALE_REMOVAL", description: "Legacy bale removal", metaJson: "{bad" })
       )
     ).toBe("Legacy bale removal");
+  });
+});
+
+describe("live Loading Started amount overlays", () => {
+  it("shows the order total for a loading without touching other daybook rows", () => {
+    const loading = entry({ id: 10, txType: "LOADING_CREATED", referenceId: 210, amountCurrency: "0", amountUsd: "0" });
+    const voucher = entry({ id: 11, txType: "PAYMENT", referenceId: 210, amountCurrency: "50.00" });
+    const [updated, untouched] = withLiveLoadingAmounts([loading, voucher], { "210": "285.00" });
+    expect(updated.amountCurrency).toBe("285.00");
+    expect(updated.amountUsd).toBe("285.00");
+    expect(untouched).toBe(voucher);
+    expect(loading.amountCurrency).toBe("0");
+  });
+
+  it("allows amounts to drop back to zero after removing all bales", () => {
+    const loading = entry({ txType: "LOADING_CREATED", referenceId: 210, amountCurrency: "285.00" });
+    expect(withLiveLoadingAmounts([loading], { "210": "0.00" })[0].amountCurrency).toBe("0.00");
+  });
+
+  it("does not overwrite an unrelated currency or a missing order", () => {
+    const loading = entry({ txType: "LOADING_CREATED", referenceId: 210, currencyCode: "EUR" });
+    expect(withLiveLoadingAmounts([loading], { "210": "285.00" })[0]).toBe(loading);
+    expect(withLiveLoadingAmounts([loading], {})[0]).toBe(loading);
   });
 });
 
