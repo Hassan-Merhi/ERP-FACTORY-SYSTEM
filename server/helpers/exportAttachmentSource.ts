@@ -64,9 +64,7 @@ function resolveManagedExportPath(filePath: string, allowMissing = false): strin
   }
   if (!entry.isFile()) throw new Error("EXPORT_PATH_ERR");
 
-  const safePath = trustedRoot.endsWith(path.sep)
-    ? trustedRoot + entry.name
-    : trustedRoot + path.sep + entry.name;
+  const safePath = trustedRoot.endsWith(path.sep) ? trustedRoot + entry.name : trustedRoot + path.sep + entry.name;
   const metadata = fs.lstatSync(safePath);
   // Do not follow symbolic links or accept hard-linked files as export artifacts.
   if (!metadata.isFile() || metadata.isSymbolicLink() || metadata.nlink !== 1) {
