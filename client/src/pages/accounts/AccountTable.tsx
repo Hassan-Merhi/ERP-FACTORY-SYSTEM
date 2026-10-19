@@ -3,6 +3,7 @@ import { Table, TableBody, TableCell, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { ChevronDown, ChevronRight, Pencil } from "lucide-react";
 import type { Account } from "./accountTypes";
+import type { AccountDisplayLayout } from "./DisplayAccountGroups";
 import { cn } from "@/lib/utils";
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
 
@@ -14,6 +15,7 @@ interface AccountTableProps {
   hideBalances: boolean;
   formatAmount: (amt: number) => string;
   onEdit?: (account: Account) => void;
+  displayLayout?: AccountDisplayLayout;
 }
 
 export function AccountTable({
@@ -23,6 +25,7 @@ export function AccountTable({
   handleAccountChange,
   hideBalances,
   onEdit,
+  displayLayout,
 }: AccountTableProps) {
   const { formatHistoricalBaseAmount } = useCurrencyContext();
 
@@ -32,16 +35,58 @@ export function AccountTable({
   }
   const [showZeroBalances, setShowZeroBalances] = useState(false);
 
-  const visibleAccounts = useMemo(() => {
-    if (showZeroBalances) return filteredAccounts;
 
-    const nonZeroAccounts = filteredAccounts.filter((account) => Math.abs(Number(account.balance) || 0) > 0.001);
+  // Display grouping is a pure projection: synthetic negative IDs are only used
+  // for rendering, and no real account parentId / balance is ever mutated.
+  const orderedAccounts = useMemo(() => {
+    if (!displayLayout?.nodes?.length) return filteredAccounts;
+    const groups = displayLayout.nodes.filter(n => n.type === "group");
+    const ledgerNodes = displayLayout.nodes.filter(n => n.type === "ledger");
+    const groupIdByKey = new Map(groups.map((n, i) => [n.key, -(i + 1)]));
+    const accountByKey = new Map(filteredAccounts.filter(a => a.type === "ledger").map(a => [`ledger:${a.accountId}`, a]));
+    const groupedLedger = new Set<string>();
+    const result: Account[] = [];
+    const rootNodes = [...displayLayout.nodes.filter(n => !n.parentKey)].sort((a, b) => a.order - b.order);
+    for (const node of rootNodes) {
+      if (node.type === "group") {
+        const virtualId = groupIdByKey.get(node.key)!;
+        const members = ledgerNodes
+          .filter(n => n.parentKey === node.key)
+          .sort((a, b) => a.order - b.order)
+          .map(n => accountByKey.get(n.key))
+          .filter((a): a is Account => !!a);
+        for (const member of members) groupedLedger.add(`ledger:${member.accountId}`);
+        const signedTotal = members.reduce((sum, a) => sum + (
+          a.balanceSide === "Cr" ? -Math.abs(a.balance) :
+          a.balanceSide === "Dr" ? Math.abs(a.balance) : a.balance
+        ), 0);
+        result.push({
+          id: `display:${node.key}`, accountId: virtualId, type: "displayGroup",
+          code: "", name: node.name || "Group", balance: signedTotal,
+          balanceSide: signedTotal < 0 ? "Cr" : "Dr", active: true, subType: "Group",
+        });
+        result.push(...members.map(a => ({ ...a, parentId: virtualId })));
+      } else {
+        const account = accountByKey.get(node.key);
+        if (account && !groupedLedger.has(node.key)) result.push(account);
+      }
+    }
+    const used = new Set(result.filter(a => a.type !== "displayGroup").map(a => a.id));
+    // Untracked accounts and all non-ledger types retain their existing list order.
+    result.push(...filteredAccounts.filter(a => !used.has(a.id)));
+    return result;
+  }, [filteredAccounts, displayLayout]);
+
+  const visibleAccounts = useMemo(() => {
+    if (showZeroBalances) return orderedAccounts;
+
+    const nonZeroAccounts = orderedAccounts.filter((account) => Math.abs(Number(account.balance) || 0) > 0.001);
     const parentIdsWithVisibleChildren = new Set(nonZeroAccounts.map((account) => account.parentId).filter(Boolean));
 
-    return filteredAccounts.filter(
+    return orderedAccounts.filter(
       (account) => Math.abs(Number(account.balance) || 0) > 0.001 || parentIdsWithVisibleChildren.has(account.accountId)
     );
-  }, [filteredAccounts, showZeroBalances]);
+  }, [orderedAccounts, showZeroBalances]);
 
   const accountIds = new Set(visibleAccounts.map((a) => a.accountId));
   const parents = visibleAccounts.filter((a) => !a.parentId || !accountIds.has(a.parentId));
@@ -127,7 +172,7 @@ export function AccountTable({
                     </TableCell>
                     {!hideBalances && (
                       <TableCell className="text-right py-3 max-sm:w-28">
-                        {hasKids ? (
+                        {hasKids && account.type !== "displayGroup" ? (
                           <span className="text-muted-foreground text-xs">
                             {kids.length} {kids.length === 1 ? "account" : "accounts"}
                           </span>
