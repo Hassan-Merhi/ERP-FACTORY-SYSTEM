@@ -3,7 +3,7 @@
  * This table is deliberately separate from ledger_accounts: grouping and sorting
  * must never affect vouchers, account balances, accountType or Net Position math.
  */
-import type { Express } from "express";
+import type { Express, Request } from "express";
 import { pool } from "../db";
 import { requireAuth, requireRole } from "../auth";
 import { getErrorMessage } from "../lib/httpHandlers";
@@ -47,9 +47,14 @@ function parseNodes(raw: unknown): LayoutNode[] {
   return nodes;
 }
 
+function resolveLayoutCompany(req: Request): number | undefined {
+  return req.path.startsWith("/api/factory/") ? req.session.factoryCompanyId : req.session.currentCompanyId;
+}
+
 export function registerAccountDisplayLayoutRoutes(app: Express) {
-  app.get("/api/accounts/display-layout", requireAuth, async (req, res) => {
-    const companyId = req.session.currentCompanyId;
+  for (const path of ["/api/accounts/display-layout", "/api/factory/account-display-layout"]) {
+  app.get(path, requireAuth, async (req, res) => {
+    const companyId = resolveLayoutCompany(req);
     if (!companyId) return res.status(400).json({ message: "No company selected" });
     try {
       const result = await pool.query(
@@ -65,8 +70,8 @@ export function registerAccountDisplayLayoutRoutes(app: Express) {
     }
   });
 
-  app.put("/api/accounts/display-layout", requireAuth, requireRole("Admin"), async (req, res) => {
-    const companyId = req.session.currentCompanyId;
+  app.put(path, requireAuth, requireRole("Admin"), async (req, res) => {
+    const companyId = resolveLayoutCompany(req);
     if (!companyId) return res.status(400).json({ message: "No company selected" });
     let nodes: LayoutNode[];
     try { nodes = parseNodes(req.body?.nodes); }
@@ -109,4 +114,5 @@ export function registerAccountDisplayLayoutRoutes(app: Express) {
       return res.status(500).json({ message: getErrorMessage(error) });
     } finally { client.release(); }
   });
+  }
 }
