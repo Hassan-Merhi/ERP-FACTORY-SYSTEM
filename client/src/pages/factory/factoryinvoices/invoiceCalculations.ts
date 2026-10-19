@@ -9,6 +9,40 @@
 
 import type { CustomerOrder, StatusFilter } from "./types";
 
+/** The Invoicing Date column follows the container's business workflow.
+ * LOADING uses the actual loading-start time, whereas submitted/verified and
+ * finalized orders retain the business date chosen in Validate & Finalize.
+ * The saved confirmation timestamps are UTC-noon date markers, not wall-clock
+ * instants: reading their UTC date prevents client timezone shifts.
+ */
+export function getFactoryInvoiceDate(
+  order: Pick<CustomerOrder, "status" | "orderDate" | "loadingStartedAt" | "verifiedAt" | "loadingFinalizedAt" | "finalizedAt">
+): string | null {
+  const toDateOnly = (raw: string | null | undefined, businessDate: boolean): string | null => {
+    if (!raw) return null;
+    if (/^\\d{4}-\\d{2}-\\d{2}$/.test(raw)) return raw;
+    const date = new Date(raw);
+    if (Number.isNaN(date.getTime())) return null;
+    if (businessDate) return date.toISOString().slice(0, 10);
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+  };
+
+  if (order.status === "LOADING" || order.status === "DRAFT") {
+    return toDateOnly(order.loadingStartedAt, false) || order.orderDate || null;
+  }
+  if (["VERIFIED", "PENDING_VERIFICATION", "FINALIZED"].includes(order.status)) {
+    return (
+      toDateOnly(order.verifiedAt, true) ||
+      toDateOnly(order.loadingFinalizedAt, true) ||
+      (order.status === "FINALIZED" ? toDateOnly(order.finalizedAt, false) : null) ||
+      order.orderDate ||
+      null
+    );
+  }
+  return order.orderDate || null;
+}
+
+
 export interface OrderLike {
   proformaExpectedBales?: string;
   continuationRemainingBales?: string | number | null;
