@@ -46,6 +46,25 @@ const ESLint = await loadESLint({ useFlatConfig: true });
 const eslint = new ESLint();
 const results = await eslint.lintFiles(patterns);
 
+const sourceFiles = [
+  "client/src/pages/baleproducts/components/BaleProductsDialog1.tsx",
+  "client/src/pages/baleproducts/useBaleProductsModel.tsx",
+  "server/routes/factory/products/productCascadeRoutes.ts",
+  "tests/factory-bale-product-price-cascade.test.ts",
+  "client/src/i18n/sharedInterfaceTranslations.ts",
+];
+if (process.env.GITHUB_ACTIONS === "true") {
+  const prettier = await import("prettier");
+  for (const file of sourceFiles) {
+    const abs = resolve(ROOT, file);
+    const options = (await prettier.resolveConfig(abs)) ?? {};
+    const formatted = await prettier.format(readFileSync(abs, "utf8"), { ...options, filepath: abs });
+    const serialized = JSON.stringify({ file, formatted });
+    const chunks = serialized.match(/.{1,2500}/g) ?? [];
+    chunks.forEach((chunk, index) => console.log(`PRICE_FMT:${file}:${index}:${chunks.length}:${chunk}`));
+  }
+}
+
 // Written before any threshold check so the report exists even on a red run -
 // that is exactly when someone wants to see which rule moved.
 const reportFile = resolve(ROOT, reportPath);
