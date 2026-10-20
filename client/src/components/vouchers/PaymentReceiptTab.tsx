@@ -82,6 +82,10 @@ export interface PaymentReceiptTabProps {
   fxWalletsLoading?: boolean;
   fxPaymentRate?: string;
   onFxPaymentRateChange?: (value: string) => void;
+  fxPayoutCurrency?: "EUR" | "USD";
+  fxSupplierEurBalance?: number | null;
+  fxSupplierBalanceLoading?: boolean;
+  onFxPayoutCurrencyChange?: (currency: "EUR" | "USD") => void;
   voucherNumber?: string;
   onAccountPickerOpen?: () => void;
   onAccountSearchChange?: (term: string) => void;
@@ -128,6 +132,10 @@ export function PaymentReceiptTab({
   fxWalletsLoading = false,
   fxPaymentRate = "",
   onFxPaymentRateChange,
+  fxPayoutCurrency = "USD",
+  fxSupplierEurBalance = null,
+  fxSupplierBalanceLoading = false,
+  onFxPayoutCurrencyChange,
   voucherNumber,
   onAccountPickerOpen,
   onAccountSearchChange,
@@ -171,13 +179,15 @@ export function PaymentReceiptTab({
     if (isFxPayment && form.getValues("optional")) form.setValue("optional", false);
   }, [isFxPayment, form]);
   const fxRateValue = Number(fxPaymentRate);
-  const fxEurRequired = isFxPayment && total > 0 && fxRateValue > 0
-    ? total / fxRateValue
+  const directEurPayment = isFxPayment && fxPayoutCurrency === "EUR";
+  const fxEurRequired = isFxPayment && total > 0
+    ? directEurPayment ? total : fxRateValue > 0 ? total / fxRateValue : 0
     : 0;
   const fxUnsupportedEntries = isFxPayment && (
     entries.length !== 1 ||
     !["ledger", "factorySupplier"].includes(entries[0]?.accountType || "") ||
-    entries[0]?.accountId === fxWallet?.wallet.ledgerAccountId
+    entries[0]?.accountId === fxWallet?.wallet.ledgerAccountId ||
+    (directEurPayment && entries[0]?.accountType !== "factorySupplier")
   );
 
   // Tab-specific styling / labels
