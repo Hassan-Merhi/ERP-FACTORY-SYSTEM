@@ -598,7 +598,7 @@ export function PaymentReceiptTab({
                       style={total > 0 ? { color: accentColor } : undefined}
                       data-testid="text-hero-total"
                     >
-                      {total > 0 ? formatAmount(total) : "—"}
+                      {total > 0 ? directEurPayment ? `EUR ${total.toFixed(2)}` : formatAmount(total) : "—"}
                     </span>
                     <span className="text-xs text-muted-foreground mt-0.5 tabular-nums">
                       {validEntryCount} {validEntryCount === 1 ? "line" : "lines"}
@@ -683,6 +683,9 @@ export function PaymentReceiptTab({
                     {fxEurRequired > Number(fxWallet!.state.eur) && (
                       <p className="text-sm text-destructive">Insufficient EUR held by this agent.</p>
                     )}
+                    {directEurPayment && fxSupplierEurBalance !== null && total > fxSupplierEurBalance && (
+                      <p className="text-sm text-destructive">Amount exceeds supplier EUR balance.</p>
+                    )}
                     {fxUnsupportedEntries && (
                       <p className="text-sm text-destructive">
                         Use one factory supplier or USD ledger recipient (not the FX agent itself) per payment.
@@ -696,6 +699,7 @@ export function PaymentReceiptTab({
 
                 {/* ── Entries table ── */}
                 <VoucherEntriesTable
+                  amountCurrencyOverride={directEurPayment ? "EUR" : undefined}
                   form={form}
                   fieldArray={fieldArray}
                   entries={entries}
@@ -854,7 +858,10 @@ export function PaymentReceiptTab({
                         className="w-full sm:w-auto"
                         disabled={
                           paymentAccountId === 0 || total === 0 || isPending || fxWalletsLoading ||
-                          (isFxPayment && (!fxWallet?.synchronized || fxRateValue <= 0 ||
+                          (isFxPayment && (!fxWallet?.synchronized || fxSupplierBalanceLoading ||
+                             (!directEurPayment && fxRateValue <= 0) ||
+                             (directEurPayment && (fxSupplierEurBalance === null ||
+                               fxSupplierEurBalance <= 0 || total > fxSupplierEurBalance)) ||
                             !Number.isFinite(fxEurRequired) || fxEurRequired > Number(fxWallet!.state.eur) ||
                             fxUnsupportedEntries))
                         }
@@ -867,7 +874,7 @@ export function PaymentReceiptTab({
                           : isEditMode
                             ? `Update Voucher${total > 0 ? ` · ${formatAmount(total)}` : ""}`
                             : isFxPayment
-                              ? `Post FX Payment · USD ${total.toFixed(2)}`
+                              ? `Post Payment · ${fxPayoutCurrency} ${total.toFixed(2)}`
                               : `Save Voucher${total > 0 ? ` · ${formatAmount(total)}` : ""}`}
                       </Button>
                       {saveHint ? (
