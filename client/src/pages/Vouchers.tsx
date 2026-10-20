@@ -629,6 +629,30 @@ export default function Vouchers({ posUser }: VouchersProps = {}) {
       });
       return;
     }
+    if (selectedFxWallet && activeTab === "payment" && !voucherIdToEdit) {
+      const rate = Number(fxPaymentRate);
+      const usdAmount = Number(validEntries[0]?.amount || 0);
+      const eurAmount = rate > 0 ? usdAmount / rate : 0;
+      if (!Number.isFinite(eurAmount) || eurAmount <= 0 ||
+          validEntries.length !== 1 || !fxPaymentRate ||
+          !["ledger", "factorySupplier"].includes(validEntries[0].accountType)) {
+        toast({
+          title: "FX payment details required",
+          description: "Choose one USD ledger/factory supplier recipient, amount, and agreed EUR rate.",
+          variant: "destructive",
+        });
+        return;
+      }
+      if (!window.confirm(
+        "Post FX Payment Voucher?\\n" +
+          "From: " + selectedFxWallet.wallet.accountName + "\\n" +
+          "To: " + validEntries[0].accountName + "\\n" +
+          "USD recipient receives: " + usdAmount.toFixed(2) + "\\n" +
+          "Agreed USD/EUR rate: " + fxPaymentRate + "\\n" +
+          "EUR deducted (approx.): " + eurAmount.toFixed(6) + "\\n" +
+          "This posts the USD voucher, EUR wallet deduction and FX gain/loss together."
+      )) return;
+    }
     saveMutation.mutate({ ...data, entries: validEntries });
   };
 
