@@ -645,11 +645,11 @@ export default function Vouchers({ posUser }: VouchersProps = {}) {
       }
       if (!window.confirm(
         "Post FX Payment Voucher?\\n" +
-          "From: " + selectedFxWallet.wallet.accountName + "\\n" +
-          "To: " + validEntries[0].accountName + "\\n" +
-          "USD recipient receives: " + usdAmount.toFixed(2) + "\\n" +
-          "Agreed USD/EUR rate: " + fxPaymentRate + "\\n" +
-          "EUR deducted (approx.): " + eurAmount.toFixed(6) + "\\n" +
+          "From: " + selectedFxWallet.wallet.accountName + "\n" +
+          "To: " + validEntries[0].accountName + "\n" +
+          "USD recipient receives: " + usdAmount.toFixed(2) + "\n" +
+          "Agreed USD/EUR rate: " + fxPaymentRate + "\n" +
+          "EUR deducted (approx.): " + eurAmount.toFixed(6) + "\n" +
           "This posts the USD voucher, EUR wallet deduction and FX gain/loss together."
       )) return;
     }
