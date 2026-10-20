@@ -63,8 +63,8 @@ export function registerFactoryFxAgentSettlementRoutes(app: Express) {
           SELECT id FROM factory_fx_agent_wallets WHERE id = ${walletId} AND company_id = ${cid} FOR UPDATE`);
           if (!locked.rows.length) throw new Error("FX agent wallet not found");
           const prior = await tx.execute(sql`
-          SELECT id,kind,wallet_id AS "walletId",source_amount::text AS amount,
-            rate_usd_per_eur::text AS rate,target_kind AS "targetKind",
+          SELECT op.id, op.kind, op.wallet_id AS "walletId", op.source_amount::text AS amount,
+            op.rate_usd_per_eur::text AS rate, op.target_kind AS "targetKind",
             target_id AS "targetId",op.voucher_id AS "voucherId",
             v.voucher_type AS "voucherType"
           FROM factory_fx_agent_wallet_operations op
