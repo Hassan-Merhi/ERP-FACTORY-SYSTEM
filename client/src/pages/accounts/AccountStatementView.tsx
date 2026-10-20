@@ -25,6 +25,7 @@ import type { PeriodFilterValue } from "@/components/ui/period-filter";
 import type { Account, Transaction, WaRule } from "./accountTypes";
 import { AccountTransactionRows } from "./AccountTransactionRows";
 import { AccountStatementCards } from "./AccountStatementCards";
+import { FxAgentNativeBalance } from "./FxAgentNativeBalance";
 import { ErpMobileActionsMenu, ErpMobileSummaryGrid } from "@/components/ui/erp-mobile-records";
 import { useErpPhoneLayout } from "@/hooks/use-erp-phone-layout";
 import { useCompany } from "@/contexts/CompanyContext";
@@ -207,6 +208,8 @@ export function AccountStatementView({
     : vouchersWithBalance.length;
 
   const balSide = (val: number) => (val >= 0 ? "Dr" : "Cr");
+  const nativeWallet = selectedAccount.fxWallet;
+  const showNativeBalance = !!nativeWallet?.synchronized;
 
   if (isFactorySupplierAccount) {
     return (
@@ -318,14 +321,20 @@ export function AccountStatementView({
               />
             </div>
             {!hideBalances && (
-              <p
-                className="mt-2 font-mono text-2xl font-semibold tabular-nums"
-                dir="ltr"
-                style={{ textAlign: "start" }}
-              >
-                {formatAmount(Math.abs(displayClosingBalance))}
-                <span className="ms-1 text-sm font-normal opacity-70">{balSide(displayClosingBalance)}</span>
-              </p>
+              showNativeBalance ? (
+                <div className="mt-2">
+                  <FxAgentNativeBalance wallet={nativeWallet!} compact />
+                </div>
+              ) : (
+                <p
+                  className="mt-2 font-mono text-2xl font-semibold tabular-nums"
+                  dir="ltr"
+                  style={{ textAlign: "start" }}
+                >
+                  {formatAmount(Math.abs(displayClosingBalance))}
+                  <span className="ms-1 text-sm font-normal opacity-70">{balSide(displayClosingBalance)}</span>
+                </p>
+              )
             )}
             {/* The everyday actions stay one tap away; exports in other languages, WhatsApp
                 settings and deleted-voucher controls remain in the Actions menu. */}
@@ -371,10 +380,14 @@ export function AccountStatementView({
               {!hideBalances && (
                 <>
                   <span className="text-muted-foreground text-xs shrink-0">|</span>
-                  <span className="text-sm font-mono tabular-nums shrink-0">
-                    {formatAmount(Math.abs(displayClosingBalance))}
-                    <span className="ml-1 text-[11px] opacity-70">{displayClosingBalance >= 0 ? "Dr" : "Cr"}</span>
-                  </span>
+                  {showNativeBalance ? (
+                    <FxAgentNativeBalance wallet={nativeWallet!} compact />
+                  ) : (
+                    <span className="text-sm font-mono tabular-nums shrink-0">
+                      {formatAmount(Math.abs(displayClosingBalance))}
+                      <span className="ml-1 text-[11px] opacity-70">{displayClosingBalance >= 0 ? "Dr" : "Cr"}</span>
+                    </span>
+                  )}
                 </>
               )}
             </div>
@@ -481,6 +494,8 @@ export function AccountStatementView({
         </>
       )}
 
+      {!hideBalances && nativeWallet && <FxAgentNativeBalance wallet={nativeWallet} />}
+
       {/* Error state */}
       {transactionError && !transactionsLoading && (
         <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
@@ -495,16 +510,18 @@ export function AccountStatementView({
           items={[
             { label: "Transactions", value: transactionCount },
             {
-              label: "Closing Balance",
-              value: (
+              label: showNativeBalance ? "Native EUR balance" : "Closing Balance",
+              value: showNativeBalance ? (
+                <>EUR {Number(nativeWallet!.state.eur).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</>
+              ) : (
                 <>
                   {formatAmount(Math.abs(displayClosingBalance))}
                   <span className="ms-1 text-[11px] font-normal opacity-70">{balSide(displayClosingBalance)}</span>
                 </>
               ),
             },
-            { label: "Total Debit", value: formatAmount(totalDebit) },
-            { label: "Total Credit", value: formatAmount(totalCredit) },
+            { label: showNativeBalance ? "Historic USD debit" : "Total Debit", value: formatAmount(totalDebit) },
+            { label: showNativeBalance ? "Historic USD credit" : "Total Credit", value: formatAmount(totalCredit) },
           ]}
         />
       )}
@@ -520,24 +537,30 @@ export function AccountStatementView({
           <div className="rounded-lg border bg-muted/30 px-4 py-2.5 flex items-center gap-3 min-w-[150px]">
             <TrendingUp className="w-4 h-4 text-muted-foreground shrink-0" />
             <div>
-              <p className="text-[11px] text-muted-foreground leading-none mb-0.5">Total Debit</p>
+              <p className="text-[11px] text-muted-foreground leading-none mb-0.5">{showNativeBalance ? "Historical USD debit" : "Total Debit"}</p>
               <p className="text-base font-semibold leading-none tabular-nums">{formatAmount(totalDebit)}</p>
             </div>
           </div>
           <div className="rounded-lg border bg-muted/30 px-4 py-2.5 flex items-center gap-3 min-w-[150px]">
             <TrendingDown className="w-4 h-4 text-muted-foreground shrink-0" />
             <div>
-              <p className="text-[11px] text-muted-foreground leading-none mb-0.5">Total Credit</p>
+              <p className="text-[11px] text-muted-foreground leading-none mb-0.5">{showNativeBalance ? "Historical USD credit" : "Total Credit"}</p>
               <p className="text-base font-semibold leading-none tabular-nums">{formatAmount(totalCredit)}</p>
             </div>
           </div>
           <div className="rounded-lg border bg-muted/30 px-4 py-2.5 flex items-center gap-3 min-w-[160px]">
             <Scale className="w-4 h-4 text-muted-foreground shrink-0" />
             <div>
-              <p className="text-[11px] text-muted-foreground leading-none mb-0.5">Closing Balance</p>
+              <p className="text-[11px] text-muted-foreground leading-none mb-0.5">{showNativeBalance ? "Native EUR closing" : "Closing Balance"}</p>
               <p className="text-base font-semibold leading-none tabular-nums">
-                {formatAmount(Math.abs(displayClosingBalance))}
-                <span className="ml-1 text-[11px] font-normal opacity-70">{balSide(displayClosingBalance)}</span>
+                {showNativeBalance ? (
+                  <>EUR {Number(nativeWallet!.state.eur).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</>
+                ) : (
+                  <>
+                    {formatAmount(Math.abs(displayClosingBalance))}
+                    <span className="ml-1 text-[11px] font-normal opacity-70">{balSide(displayClosingBalance)}</span>
+                  </>
+                )}
               </p>
             </div>
           </div>
