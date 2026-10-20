@@ -12,6 +12,8 @@ type Wallet = {
   wallet: { id: number; ledgerAccountId: number; accountName: string; accountCode: string };
   state: { usd: string; eur: string; eurBookUsd: string; totalBookUsd: string };
   ledgerBookUsd: string;
+  bookDifferenceUsd: string;
+  hasOperations: boolean;
   synchronized: boolean;
   currentUsd: string | null;
   currentRateUsdPerEur: string | null;
@@ -50,6 +52,7 @@ export function FactoryFxAgentWalletCard({
   const [targetKind, setTargetKind] = useState<"factorySupplier" | "ledger">("factorySupplier");
   const [targetId, setTargetId] = useState("");
   const [notes, setNotes] = useState("");
+  const [rebaselineReason, setRebaselineReason] = useState("");
   const [open, setOpen] = useState(Boolean(scopeAccountId));
 
   const { data, isLoading, error } = useQuery<WalletResponse>({
@@ -108,6 +111,7 @@ export function FactoryFxAgentWalletCard({
       toast({ title: "FX agent transaction saved" });
       void queryClient.invalidateQueries({ queryKey: ["/api/factory/fx-agent-wallets"] });
       setReversalReason("");
+      setRebaselineReason("");
       void queryClient.invalidateQueries({ queryKey: ["/api/factory/net-position"] });
       void queryClient.invalidateQueries({ queryKey: ["/api/ledger-accounts"] });
       void queryClient.invalidateQueries({ queryKey: ["/api/factory/suppliers"] });
@@ -227,6 +231,66 @@ export function FactoryFxAgentWalletCard({
                     EUR available: {fmt(active.state.eur)}. Historical USD basis: {fmt(active.state.eurBookUsd)}.
                     Settings EUR rate: {active.currentRateUsdPerEur || "Not set"}.
                   </p>
+                )}
+              </section>
+            )}
+            {!!active && !active.synchronized && (
+              <section className="space-y-3 rounded-lg border border-destructive/50 p-3" data-testid="fx-agent-ledger-reconciliation">
+                <h4 className="font-semibold text-sm">USD ledger and FX wallet do not match</h4>
+                <p className="text-sm">
+                  Wallet USD book: <strong>USD {fmt(active.state.totalBookUsd)}</strong>.
+                  Posted account balance: <strong>USD {fmt(active.ledgerBookUsd)}</strong>.
+                  Difference: <strong>USD {fmt(active.bookDifferenceUsd)}</strong>.
+                </p>
+                {active.hasOperations ? (
+                  <p className="text-sm text-destructive">
+                    FX conversions or payouts already exist. Review the ledger changes before any new operation;
+                    an existing wallet with movements cannot be reset.
+                  </p>
+                ) : (
+                  <>
+                    <p className="text-sm text-muted-foreground">
+                      This wallet has no FX transactions. If the posted ledger is still entirely USD,
+                      you can restart the wallet from today's posted USD balance. This does not change
+                      vouchers, and the previous baseline remains in the audit history. Older dates use
+                      the ordinary posted ledger balance.
+                    </p>
+                    {canEdit && (
+                      <>
+                        <Input
+                          placeholder="Reason for resetting the unused USD baseline (required)"
+                          aria-label="Reason for FX wallet baseline reset"
+                          maxLength={500}
+                          value={rebaselineReason}
+                          onChange={(e) => setRebaselineReason(e.target.value)}
+                        />
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={write.isPending || !rebaselineReason.trim() || Number(active.ledgerBookUsd) <= 0}
+                          onClick={() => {
+                            if (window.confirm(
+                              "Reset this unused FX wallet to the current posted ledger balance USD " +
+                                fmt(active.ledgerBookUsd) +
+                                "? Its activation date will become today. Existing vouchers are unchanged."
+                            )) {
+                              write.mutate({
+                                path: "/api/factory/fx-agent-wallets/" + active.wallet.id + "/rebaseline",
+                                body: {
+                                  expectedOpeningUsd: active.state.usd,
+                                  expectedLedgerBookUsd: active.ledgerBookUsd,
+                                  confirmUsdSource: true,
+                                  reason: rebaselineReason.trim(),
+                                },
+                              });
+                            }
+                          }}
+                        >
+                          Reconcile unused USD wallet
+                        </Button>
+                      </>
+                    )}
+                  </>
                 )}
               </section>
             )}
