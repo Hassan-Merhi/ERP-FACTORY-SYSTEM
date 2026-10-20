@@ -277,14 +277,34 @@ export async function getProformaCapacitySnapshot(
               AND order_id = ${options.currentOrderId}
               AND proforma_id = ${options.proformaId}
             UNION ALL
-            SELECT article_code AS "articleCode", quantity
-            FROM customer_proforma_lines
-            WHERE proforma_id = ${options.proformaId}
+            SELECT cpl.article_code AS "articleCode", cpl.quantity
+            FROM customer_proforma_lines cpl
+            WHERE cpl.proforma_id = ${options.proformaId}
               AND NOT EXISTS (
-                SELECT 1 FROM customer_order_expected_lines
-                WHERE company_id = ${options.companyId}
-                  AND order_id = ${options.currentOrderId}
-                  AND proforma_id = ${options.proformaId}
+                SELECT 1 FROM customer_order_expected_lines expected
+                WHERE expected.company_id = ${options.companyId}
+                  AND expected.order_id = ${options.currentOrderId}
+                  AND expected.proforma_id = ${options.proformaId}
+                  AND LOWER(TRIM(expected.article_code)) = LOWER(TRIM(cpl.article_code))
+              )
+              AND (
+                -- No saved plan: use the master proforma, as before.
+                NOT EXISTS (
+                  SELECT 1 FROM customer_order_expected_lines saved
+                  WHERE saved.company_id = ${options.companyId}
+                    AND saved.order_id = ${options.currentOrderId}
+                    AND saved.proforma_id = ${options.proformaId}
+                )
+                OR EXISTS (
+                  -- Existing plan: include ONLY new articles for unfinished loadings.
+                  -- Preserve historical plans and customized continuation quantities.
+                  SELECT 1 FROM customer_orders co
+                  WHERE co.id = ${options.currentOrderId}
+                    AND co.company_id = ${options.companyId}
+                    AND co.proforma_id_used = ${options.proformaId}
+                    AND co.status NOT IN ('FINALIZED', 'CANCELLED')
+                    AND co.deleted_at IS NULL
+                )
               )
           `
     )
