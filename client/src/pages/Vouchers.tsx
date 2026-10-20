@@ -859,6 +859,10 @@ export default function Vouchers({ posUser }: VouchersProps = {}) {
                 fxWalletsLoading={fxWalletsLoading && isFactoryMode}
                 fxPaymentRate={fxPaymentRate}
                 onFxPaymentRateChange={setFxPaymentRate}
+                fxPayoutCurrency={fxPayoutCurrency}
+                fxSupplierEurBalance={fxSupplierId ? fxSupplierEurBalance : null}
+                fxSupplierBalanceLoading={fxSupplierBalanceLoading}
+                onFxPayoutCurrencyChange={changeFxPayoutCurrency}
                 voucherNumber={voucherToEdit?.voucherNumber}
                 onAccountPickerOpen={() => setAccountPickersNeeded(true)}
                 onAccountSearchChange={setLiveAccountSearch}
