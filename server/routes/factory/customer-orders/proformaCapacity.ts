@@ -271,15 +271,15 @@ export async function getProformaCapacitySnapshot(
       WHERE co.id = ${options.currentOrderId}
         AND co.company_id = ${options.companyId}
         AND co.proforma_id_used = ${options.proformaId}
-        AND co.status IN ('DRAFT', 'LOADING', 'PENDING_VERIFICATION')
+        AND co.status IN ('LOADING', 'PENDING_VERIFICATION')
         AND co.deleted_at IS NULL
-        AND NOT EXISTS (
+        AND EXISTS (
           SELECT 1 FROM factory_daybook_entries event
           WHERE event.company_id = ${options.companyId}
             AND event.reference_table = 'customer_orders'
             AND event.reference_id = co.id
             AND event.tx_type = 'LOADING_CREATED'
-            AND event.description LIKE 'Continuation of loading #%'
+            AND event.description LIKE 'Loading started for customer:%'
         )
     )
   `;
@@ -327,6 +327,14 @@ export async function getProformaCapacitySnapshot(
                       AND co.status NOT IN ('VERIFIED', 'FINALIZED', 'CANCELLED')
                       AND co.deleted_at IS NULL
                       AND cpl.created_at > co.created_at
+                      AND EXISTS (
+                        SELECT 1 FROM factory_daybook_entries event
+                        WHERE event.company_id = ${options.companyId}
+                          AND event.reference_table = 'customer_orders'
+                          AND event.reference_id = co.id
+                          AND event.tx_type = 'LOADING_CREATED'
+                          AND event.description LIKE 'Continuation of loading #%'
+                      )
                   )
                 )
               )
