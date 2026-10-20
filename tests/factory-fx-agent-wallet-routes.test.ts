@@ -60,6 +60,9 @@ beforeAll(async () => {
   ctx = await seedTestData(PREFIX);
   await pool.query(`UPDATE companies SET company_type = 'factory' WHERE id = $1`, [ctx.companyId]);
   await pool.query(readFileSync(path.join(__dirname, "../migrations/20261019_factory_fx_agent_wallets.sql"), "utf8"));
+  await pool.query(
+    readFileSync(path.join(__dirname, "../migrations/20261020_factory_fx_agent_conversion_reversals.sql"), "utf8")
+  );
   agent = request.agent(ctx.app) as request.SuperAgentTest;
   const login = await agent
     .post("/api/auth/login")
@@ -210,6 +213,144 @@ describe("FX agent EUR wallet lifecycle", () => {
     const snapshot = await walletSnapshot();
     expect(snapshot.state).toMatchObject({ usd: "0.000000", eur: "0.000000", eurBookUsd: "0.000000" });
     expect(snapshot.synchronized).toBe(true);
+  });
+
+  it("deleting an older FX payout from Daybook restores EUR and removes its USD legs even after a later payout", async () => {
+    const cancelled = await agent.delete(`/api/factory/daybook/entry/-${partialVoucherId}/void`);
+    expect(cancelled.status, cancelled.text).toBe(200);
+    expect(cancelled.body.fxPaymentCancelled).toBe(true);
+    const retired = await pool.query<{ deleted_at: Date | null }>(
+      `SELECT deleted_at FROM vouchers WHERE id = $1 AND company_id = $2`,
+      [partialVoucherId, ctx.companyId]
+    );
+    expect(retired.rows[0]?.deleted_at).not.toBeNull();
+    expect(await voucherTotals(partialVoucherId)).toMatchObject({ debit: expect.any(String), credit: expect.any(String) });
+
+    const movement = await pool.query(
+      `SELECT id FROM factory_fx_agent_wallet_operations WHERE company_id = $1 AND voucher_id = $2`,
+      [ctx.companyId, partialVoucherId]
+    );
+    expect(movement.rows).toHaveLength(0);
+
+    const snapshot = await walletSnapshot();
+    expect(snapshot.state.eur).toBe("4000.000000");
+    expect(snapshot.synchronized).toBe(true);
+    expect((await bookUsd(beneficiaryId)).toFixed(2)).toBe("5496.54");
+    expect((await bookUsd(agentAccountId)).toFixed(2)).toBe("4446.00");
+    const statement = await agent.get(`/api/factory/fx-agent-wallets/${walletId}/statement`);
+    expect(statement.status, statement.text).toBe(200);
+    expect(statement.body.rows.some((row: { voucherId: number }) => row.voucherId === partialVoucherId)).toBe(false);
+
+    // Second attempt cannot resurrect or reapply the cancellation.
+    expect((await agent.delete(`/api/factory/daybook/entry/-${partialVoucherId}/void`)).status).toBe(404);
+  });
+
+  it("deleting a Payment voucher restores EUR, the beneficiary and realized FX without changing the original conversion", async () => {
+    const before = await walletSnapshot();
+    const beneficiaryBefore = (await bookUsd(beneficiaryId)).toFixed(2);
+    const agentBefore = (await bookUsd(agentAccountId)).toFixed(2);
+    const payment = await agent.post(`/api/factory/fx-agent-wallets/${walletId}/settle`).send({
+      paymentVoucher: true,
+      usdAmount: "111.55",
+      rateUsdPerEur: "1.1155",
+      targetKind: "ledger",
+      targetId: beneficiaryId,
+      requestKey: `${PREFIX}-cancel-payment`,
+    });
+    expect(payment.status, payment.text).toBe(201);
+    expect((await walletSnapshot()).state.eur).not.toBe(before.state.eur);
+
+    const removed = await agent.delete(`/api/vouchers/${payment.body.voucherId}`);
+    expect(removed.status, removed.text).toBe(200);
+    const after = await walletSnapshot();
+    expect(after.state).toEqual(before.state);
+    expect(after.synchronized).toBe(true);
+    expect((await bookUsd(beneficiaryId)).toFixed(2)).toBe(beneficiaryBefore);
+    expect((await bookUsd(agentAccountId)).toFixed(2)).toBe(agentBefore);
+    const posted = await pool.query(`SELECT deleted_at FROM vouchers WHERE id = $1`, [payment.body.voucherId]);
+    expect(posted.rows[0]?.deleted_at).not.toBeNull();
+    const operations = await pool.query(
+      `SELECT id FROM factory_fx_agent_wallet_operations WHERE company_id = $1 AND voucher_id = $2`,
+      [ctx.companyId, payment.body.voucherId]
+    );
+    expect(operations.rows).toHaveLength(0);
+  });
+
+  it("POST /api/factory/fx-agent-wallets/:id/reverse-conversion restores unused USD and refuses settled EUR", async () => {
+    const reversalAccount = await ledgerAccount("REVERSAL", "FX reversal", "Asset", "1000");
+    const activation = await agent.post("/api/factory/fx-agent-wallets").send({
+      ledgerAccountId: reversalAccount,
+      confirmUsdSource: true,
+    });
+    expect(activation.status, activation.text).toBe(201);
+    const wid = activation.body.walletId;
+    const initial = await agent.post(`/api/factory/fx-agent-wallets/${wid}/convert`).send({
+      usdAmount: "1000",
+      rateUsdPerEur: "1.25",
+      requestKey: `${PREFIX}-reversal-convert1`,
+    });
+    expect(initial.status, initial.text).toBe(201);
+    const conversions = await agent.get(`/api/factory/fx-agent-wallets/${wid}/conversions`);
+    expect(conversions.status).toBe(200);
+    expect(conversions.body.conversions[0]).toMatchObject({
+      id: initial.body.id,
+      reversed: false,
+      hasLaterSettlement: false,
+    });
+
+    const reason = {
+      conversionId: initial.body.id,
+      reason: "Wrong conversion confirmed by agent",
+      requestKey: `${PREFIX}-reverse-convert1`,
+    };
+    const reversed = await agent.post(`/api/factory/fx-agent-wallets/${wid}/reverse-conversion`).send(reason);
+    expect(reversed.status, reversed.text).toBe(201);
+    expect(reversed.body).toMatchObject({
+      restoredUsd: "1000.000000",
+      deductedEur: "800.000000",
+      replayed: false,
+    });
+    const current = await agent.get("/api/factory/fx-agent-wallets");
+    expect(current.status).toBe(200);
+    const wallet = current.body.wallets.find((w: { wallet: { id: number } }) => w.wallet.id === wid);
+    expect(wallet.state).toMatchObject({ usd: "1000.000000", eur: "0.000000", eurBookUsd: "0.000000" });
+    expect(wallet.synchronized).toBe(true);
+    expect((await bookUsd(reversalAccount)).toFixed(2)).toBe("1000.00");
+    const replay = await agent.post(`/api/factory/fx-agent-wallets/${wid}/reverse-conversion`).send(reason);
+    expect(replay.status).toBe(201);
+    expect(replay.body).toMatchObject({ id: reversed.body.id, replayed: true });
+    const alteredReason = await agent.post(`/api/factory/fx-agent-wallets/${wid}/reverse-conversion`).send({
+      ...reason,
+      reason: "Changed audit reason",
+    });
+    expect(alteredReason.status).toBe(400);
+    const double = await agent.post(`/api/factory/fx-agent-wallets/${wid}/reverse-conversion`).send({
+      ...reason,
+      requestKey: `${PREFIX}-reverse-duplicate`,
+    });
+    expect(double.status).toBe(400);
+
+    const next = await agent.post(`/api/factory/fx-agent-wallets/${wid}/convert`).send({
+      usdAmount: "500",
+      rateUsdPerEur: "1.25",
+      requestKey: `${PREFIX}-reversal-convert2`,
+    });
+    expect(next.status, next.text).toBe(201);
+    const paid = await agent.post(`/api/factory/fx-agent-wallets/${wid}/settle`).send({
+      eurAmount: "100",
+      rateUsdPerEur: "1.25",
+      targetKind: "ledger",
+      targetId: beneficiaryId,
+      requestKey: `${PREFIX}-reversal-settle`,
+    });
+    expect(paid.status, paid.text).toBe(201);
+    const forbidden = await agent.post(`/api/factory/fx-agent-wallets/${wid}/reverse-conversion`).send({
+      conversionId: next.body.id,
+      reason: "Cannot undo spent EUR",
+      requestKey: `${PREFIX}-reverse-spent`,
+    });
+    expect(forbidden.status).toBe(400);
+    expect(forbidden.body.message).toMatch(/paid out/i);
   });
 
   it("refuses further operations once ordinary journals drift the agent ledger", async () => {

@@ -295,8 +295,20 @@ export function resolveFactoryBackendAccessRequirement(req: Request): FactoryApi
     return requirement("factory/production-report", ["hide_tab_overview_shipping"]);
   }
 
-  // FX agent EUR wallets are valued and managed alongside Net Position.
-  if (hasPrefix(path, "/net-position") || hasPrefix(path, "/fx-agent-wallets")) {
+  // FX activation, conversion and reversal belong to Accounts. Reading the
+  // wallet for Pay From and posting a USD-beneficiary settlement are also
+  // available to users permitted on Vouchers > Payment, not every FX write.
+  if (hasPrefix(path, "/fx-agent-wallets")) {
+    if ((req.method === "GET" && path === "/fx-agent-wallets") ||
+        (req.method === "POST" && /^\/fx-agent-wallets\/\d+\/settle$/.test(path))) {
+      return anyOf(
+        requirement("factory/accounts"),
+        requirement("factory/vouchers", ["hide_tab_vouchers_payment"])
+      );
+    }
+    return requirement("factory/accounts");
+  }
+  if (hasPrefix(path, "/net-position")) {
     return requirement("factory/net-position-details");
   }
 

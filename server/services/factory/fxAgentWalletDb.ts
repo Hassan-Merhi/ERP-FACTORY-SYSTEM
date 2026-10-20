@@ -27,6 +27,7 @@ export interface FxAgentWalletSnapshot {
   bookDifferenceUsd: string;
   synchronized: boolean;
   latestOperationDate: string | null;
+  hasOperations: boolean;
   currentRateUsdPerEur: string | null;
   currentUsd: string | null;
 }
@@ -66,7 +67,7 @@ export async function loadFxAgentWalletState(
   wallet: FxAgentWalletRow,
   asOf: string,
   executor: DatabaseOrTransaction = db
-): Promise<{ state: FxAgentWalletState; latestOperationDate: string | null }> {
+): Promise<{ state: FxAgentWalletState; latestOperationDate: string | null; hasOperations: boolean }> {
   const result = await executor.execute(sql`
     SELECT kind, source_amount::text AS "sourceAmount", target_amount::text AS "targetAmount",
       source_book_usd::text AS "sourceBookUsd", effective_date::text AS "effectiveDate"
@@ -83,6 +84,7 @@ export async function loadFxAgentWalletState(
   }));
   return {
     state: replayFxAgentWallet(wallet.openingUsd, events),
+    hasOperations: events.length > 0,
     latestOperationDate: result.rows.length
       ? String(result.rows[result.rows.length - 1].effectiveDate).slice(0, 10)
       : null,
@@ -95,7 +97,7 @@ export async function getFxAgentWalletSnapshot(
   executor: DatabaseOrTransaction = db,
   rateUsdPerEur: string | null = null
 ): Promise<FxAgentWalletSnapshot> {
-  const { state, latestOperationDate } = await loadFxAgentWalletState(wallet, asOf, executor);
+  const { state, latestOperationDate, hasOperations } = await loadFxAgentWalletState(wallet, asOf, executor);
   const ledger = await getPartyBalance(executor, {
     kind: "ledger",
     companyId: wallet.companyId,
@@ -117,6 +119,7 @@ export async function getFxAgentWalletSnapshot(
     bookDifferenceUsd: difference.toFixed(6),
     synchronized: difference.abs().lte("0.01"),
     latestOperationDate,
+    hasOperations,
     currentRateUsdPerEur: rateUsdPerEur,
     currentUsd,
   };

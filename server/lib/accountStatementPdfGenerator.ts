@@ -16,6 +16,7 @@ import { sumMoney, toMoney } from "./money";
 import { getCustomerByLedgerId } from "./factoryCustomerLedger";
 import { getPartyBalance } from "../services/accounting/balances/ledgerBalanceEngine";
 import { loadCustomerLedgerLines } from "../services/accounting/balances/customerLedgerStatement";
+import { projectCustomerStatementLines } from "../routes/factory/customers-core/heldUnfinalizedCustomerCharges";
 import { loadPartyMemoLines, memoTotal } from "../services/accounting/balances/unpostedMemo";
 
 /** The account is not a master of this company (wave 18 C): the route answers 404. */
@@ -60,7 +61,14 @@ async function customerStatementEntries(
   startDate: string | undefined,
   endDate: string | undefined
 ): Promise<StatementSourceEntry[]> {
-  return loadCustomerLedgerLines(db, { companyId, customerId, from: startDate ?? null, to: endDate ?? null });
+  const lines = await loadCustomerLedgerLines(db, {
+    companyId,
+    customerId,
+    from: startDate ?? null,
+    to: endDate ?? null,
+  });
+  const projected = await projectCustomerStatementLines(companyId, customerId, lines, startDate, endDate);
+  return projected.rows;
 }
 
 export async function generateAccountStatementPdf(opts: StatementPdfOptions): Promise<Buffer> {
@@ -264,7 +272,13 @@ export async function generateAccountStatementPdf(opts: StatementPdfOptions): Pr
       })).get(customerOwnerId) ?? []
     : [];
   const openingMemo = startDate ? memoTotal(historicalMemo, startDate) : toMoney(0);
-  const openingBalanceExact: Decimal = (isSupplier ? engineOpening.negated() : engineOpening).plus(openingMemo);
+  const heldBefore =
+    customerOwnerId !== null && startDate
+      ? (await projectCustomerStatementLines(companyId, customerOwnerId, [], startDate, endDate)).heldBefore
+      : toMoney(0);
+  const openingBalanceExact: Decimal = (isSupplier ? engineOpening.negated() : engineOpening)
+    .plus(openingMemo)
+    .minus(heldBefore);
 
   const openingBalance = openingBalanceExact.toNumber();
 

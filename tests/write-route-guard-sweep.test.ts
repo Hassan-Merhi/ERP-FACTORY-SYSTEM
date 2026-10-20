@@ -284,6 +284,7 @@ const SENSITIVE_WRITE_ROUTES = [
   "POST /api/factory/employees/bulk-withdraw",
   "POST /api/factory/finalize",
   "POST /api/factory/fx-agent-wallets/:id/settle",
+  "POST /api/factory/fx-agent-wallets/:id/reverse-conversion",
   "POST /api/factory/import-company-data",
   "POST /api/factory/import/bales",
   "POST /api/factory/import/opening-raw-stock",

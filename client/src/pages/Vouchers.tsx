@@ -1,5 +1,6 @@
 import type { ClientErrorLike } from "@/lib/clientError";
 import { useState, useRef, useEffect, useMemo } from "react";
+import Decimal from "decimal.js";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useForm, useFieldArray, useWatch } from "react-hook-form";
 import { zodResolver } from "@/lib/form-resolver";
@@ -103,6 +104,8 @@ export default function Vouchers({ posUser }: VouchersProps = {}) {
   const [transactionRate, setTransactionRate] = useState<number | null>(null);
   const exchangeRate = transactionRate || dailyExchangeRate;
   const [voucherEffectiveDate, setVoucherEffectiveDate] = useState<string>("");
+  const [fxPaymentRate, setFxPaymentRate] = useState("");
+  const fxPaymentRequestRef = useRef<{ fingerprint: string; key: string } | null>(null);
   const [, setLocation] = useLocation();
   const printRef = useRef<HTMLDivElement>(null);
   const isPOS = !!posUser;
@@ -338,8 +341,107 @@ export default function Vouchers({ posUser }: VouchersProps = {}) {
     setSidebarHighlightedIndex,
   });
 
+  // Pay From can be an FX agent ledger. Wallet balances are native EUR,
+  // while regular account balances are only historical USD book values.
+  const { data: fxWallets, isLoading: fxWalletsLoading } = useQuery<{
+    wallets: Array<{
+      wallet: { id: number; ledgerAccountId: number; accountName: string };
+      state: { eur: string; usd: string; totalBookUsd: string };
+      synchronized: boolean;
+    }>;
+  }>({
+    queryKey: ["/api/factory/fx-agent-wallets", selectedCompany?.id, "payment"],
+    queryFn: async () => {
+      const res = await fetch("/api/factory/fx-agent-wallets", { credentials: "include" });
+      if (!res.ok) throw new Error("Unable to load FX agent wallet balances");
+      return res.json();
+    },
+    enabled: isFactoryMode && isFactoryCompany && !isPOS,
+    staleTime: 15_000,
+  });
+  const selectedFxWallet = activeTab === "payment" && !voucherIdToEdit &&
+    paymentAccountType === "ledger"
+    ? fxWallets?.wallets?.find((w) => w.wallet.ledgerAccountId === paymentAccountId)
+    : undefined;
+
+  // Most source pickers offer Cash/Bank only. Add active FX agent ledgers so
+  // they are selectable directly in Pay From without editing their account.
+  const paymentPayFromAccounts = useMemo(() => {
+    const walletAccounts = (fxWallets?.wallets || []).map((w) => ({
+      type: "ledger" as const, id: w.wallet.ledgerAccountId,
+      name: w.wallet.accountName + " (FX EUR)", code: "FX",
+    }));
+    const present = new Set(payFromAccounts.map((account) => account.type + ":" + account.id));
+    return [...payFromAccounts, ...walletAccounts.filter((a) => !present.has("ledger:" + a.id))]
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [payFromAccounts, fxWallets?.wallets]);
+
   const saveMutation = useMutation({
     mutationFn: async (formData: VoucherFormData) => {
+      // One atomic FX settlement creates a Payment voucher and a native EUR
+      // wallet movement. Do not also submit to the generic USD voucher path.
+      if (selectedFxWallet && activeTab === "payment" && !voucherIdToEdit) {
+        if (!navigator.onLine) throw new Error("FX payments must be posted online");
+        if (!selectedFxWallet.synchronized) throw new Error("FX agent ledger needs reconciliation");
+        if (selectedCurrency !== "USD") throw new Error("Use USD as the payout currency");
+        if (formData.optional) throw new Error("FX payments cannot be optional vouchers");
+        if (!/^\d+(?:\.\d{1,10})?$/.test(fxPaymentRate) || Number(fxPaymentRate) <= 0) {
+          throw new Error("Enter the negotiated USD per EUR payment rate");
+        }
+        if (formData.entries.length !== 1) {
+          throw new Error("FX agent payment supports one USD beneficiary per voucher");
+        }
+        const [beneficiary] = formData.entries;
+        if (!["ledger", "factorySupplier"].includes(beneficiary.accountType)) {
+          throw new Error("Choose a factory supplier or USD ledger account as the beneficiary");
+        }
+        if (beneficiary.accountType === "ledger" && beneficiary.accountId === selectedFxWallet.wallet.ledgerAccountId) {
+          throw new Error("FX agent cannot pay itself");
+        }
+        if (!/^\d+(?:\.\d{1,2})?$/.test(beneficiary.amount)) {
+          throw new Error("USD payout must be positive with at most 2 decimal places");
+        }
+        const amount = new Decimal(beneficiary.amount);
+        if (amount.lte(0)) throw new Error("USD payment must be positive");
+        const eurNeeded = amount.div(new Decimal(fxPaymentRate)).toDecimalPlaces(6);
+        if (eurNeeded.lte(0) || eurNeeded.gt(new Decimal(selectedFxWallet.state.eur))) {
+          throw new Error("FX agent has insufficient EUR for this USD payment");
+        }
+        if (!eurNeeded.times(new Decimal(fxPaymentRate)).toDecimalPlaces(2).eq(amount)) {
+          throw new Error("USD amount cannot be paid precisely at this rate; adjust the amount or rate");
+        }
+        const date = format(formData.voucherDate, "yyyy-MM-dd");
+        if (voucherEffectiveDate && voucherEffectiveDate !== date) {
+          throw new Error("FX agent Payment Voucher requires the effective date to match the voucher date");
+        }
+        const fingerprint = JSON.stringify({
+          walletId: selectedFxWallet.wallet.id, date, effectiveDate: voucherEffectiveDate || null,
+          beneficiary: beneficiary.accountType + ":" + beneficiary.accountId,
+          usdAmount: amount.toFixed(2), rate: fxPaymentRate,
+          notes: formData.notes, narration: beneficiary.narration,
+          paymentAccountNarration: formData.paymentAccountNarration,
+        });
+        if (fxPaymentRequestRef.current?.fingerprint !== fingerprint) {
+          fxPaymentRequestRef.current = { fingerprint, key: crypto.randomUUID() };
+        }
+        const result = await modeApiRequest(
+          "POST",
+          "/api/factory/fx-agent-wallets/" + selectedFxWallet.wallet.id + "/settle",
+          {
+            paymentVoucher: true,
+            usdAmount: amount.toFixed(2),
+            rateUsdPerEur: fxPaymentRate,
+            targetKind: beneficiary.accountType,
+            targetId: beneficiary.accountId,
+            date,
+            requestKey: fxPaymentRequestRef.current.key,
+            narration: formData.notes || "",
+            paymentAccountNarration: formData.paymentAccountNarration || "",
+            beneficiaryNarration: beneficiary.narration || "",
+          }
+        );
+        return result.json();
+      }
       const voucherType = activeTab === "payment" ? "Payment" : "Receipt";
       const isEditMode = !!voucherIdToEdit;
       const autoDesc = formData.notes?.trim()
@@ -376,6 +478,11 @@ export default function Vouchers({ posUser }: VouchersProps = {}) {
       const waPrompt = resolveWhatsAppPrompt(data);
       if (waPrompt) setWaPendingPrompt(waPrompt);
       discardPaymentDraft();
+      fxPaymentRequestRef.current = null;
+      setFxPaymentRate("");
+      queryClient.invalidateQueries({ queryKey: ["/api/factory/fx-agent-wallets"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/factory/net-position"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/accounts/all"] });
       queryClient.invalidateQueries({ queryKey: ["/api/vouchers"] });
       queryClient.invalidateQueries({ queryKey: ["/api/daybook"] });
       queryClient.invalidateQueries({ queryKey: ["/api/factory/daybook"] });
@@ -525,6 +632,30 @@ export default function Vouchers({ posUser }: VouchersProps = {}) {
       });
       return;
     }
+    if (selectedFxWallet && activeTab === "payment" && !voucherIdToEdit) {
+      const rate = Number(fxPaymentRate);
+      const usdAmount = Number(validEntries[0]?.amount || 0);
+      const eurAmount = rate > 0 ? usdAmount / rate : 0;
+      if (!Number.isFinite(eurAmount) || eurAmount <= 0 ||
+          validEntries.length !== 1 || !fxPaymentRate ||
+          !["ledger", "factorySupplier"].includes(validEntries[0].accountType)) {
+        toast({
+          title: "FX payment details required",
+          description: "Choose one USD ledger/factory supplier recipient, amount, and agreed EUR rate.",
+          variant: "destructive",
+        });
+        return;
+      }
+      if (!window.confirm(
+        "Post FX Payment Voucher?\\n" +
+          "From: " + selectedFxWallet.wallet.accountName + "\n" +
+          "To: " + validEntries[0].accountName + "\n" +
+          "USD recipient receives: " + usdAmount.toFixed(2) + "\n" +
+          "Agreed USD/EUR rate: " + fxPaymentRate + "\n" +
+          "EUR deducted (approx.): " + eurAmount.toFixed(6) + "\n" +
+          "This posts the USD voucher, EUR wallet deduction and FX gain/loss together."
+      )) return;
+    }
     saveMutation.mutate({ ...data, entries: validEntries });
   };
 
@@ -635,7 +766,7 @@ export default function Vouchers({ posUser }: VouchersProps = {}) {
                 accountBalance={accountBalance}
                 accountCurrencyBalances={accountCurrencyBalances}
                 allAccounts={allAccounts}
-                payFromAccounts={payFromAccounts}
+                payFromAccounts={paymentPayFromAccounts}
                 sidebarAccounts={sidebarAccounts}
                 isEditMode={!!voucherIdToEdit}
                 filteredSidebarAccounts={filteredSidebarAccounts}
@@ -659,6 +790,10 @@ export default function Vouchers({ posUser }: VouchersProps = {}) {
                 isAutoCreating={isAutoCreating}
                 originalTotal={originalTotal}
                 isPending={saveMutation.isPending}
+                fxWallet={selectedFxWallet}
+                fxWalletsLoading={fxWalletsLoading && isFactoryMode}
+                fxPaymentRate={fxPaymentRate}
+                onFxPaymentRateChange={setFxPaymentRate}
                 voucherNumber={voucherToEdit?.voucherNumber}
                 onAccountPickerOpen={() => setAccountPickersNeeded(true)}
                 onAccountSearchChange={setLiveAccountSearch}

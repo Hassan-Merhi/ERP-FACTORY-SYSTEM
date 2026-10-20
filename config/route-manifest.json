@@ -1,7 +1,7 @@
 {
   "formatVersion": 1,
   "description": "Ordered snapshot of every registered Express route (method, path, guard chain) and middleware mount. Regenerate with UPDATE_ROUTE_MANIFEST=1 only when a route change is intended; during a file split the manifest must not change at all.",
-  "routeCount": 2110,
+  "routeCount": 2112,
   "middlewareMountCount": 132,
   "routes": [
     "GET /api/admin/operational-monitoring [requireAuth > <anonymous> > <anonymous>]",
@@ -1093,6 +1093,8 @@
     "GET /api/accounts/ledger/:id/balance [requireAuth > <anonymous>]",
     "GET /api/accounts/ledger/:id/currency-balances [requireAuth > <anonymous>]",
     "POST /api/factory/fx-agent-wallets/:id/settle [requireAuth > <anonymous> > <anonymous>]",
+    "GET /api/factory/fx-agent-wallets/:id/conversions [requireAuth > <anonymous>]",
+    "POST /api/factory/fx-agent-wallets/:id/reverse-conversion [requireAuth > <anonymous> > <anonymous>]",
     "GET /api/factory/fx-agent-wallets [requireAuth > <anonymous>]",
     "POST /api/factory/fx-agent-wallets [requireAuth > <anonymous> > <anonymous>]",
     "POST /api/factory/fx-agent-wallets/:id/convert [requireAuth > <anonymous> > <anonymous>]",

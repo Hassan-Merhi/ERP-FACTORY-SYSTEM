@@ -12,6 +12,8 @@ type Wallet = {
   wallet: { id: number; ledgerAccountId: number; accountName: string; accountCode: string };
   state: { usd: string; eur: string; eurBookUsd: string; totalBookUsd: string };
   ledgerBookUsd: string;
+  bookDifferenceUsd: string;
+  hasOperations: boolean;
   synchronized: boolean;
   currentUsd: string | null;
   currentRateUsdPerEur: string | null;
@@ -28,7 +30,15 @@ type WalletWrite = { path: string; body: Record<string, unknown> };
 const fmt = (v: string | number) =>
   Number(v).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-export function FactoryFxAgentWalletCard({ asOf, readOnly }: { asOf: string; readOnly: boolean }) {
+export function FactoryFxAgentWalletCard({
+  asOf,
+  readOnly,
+  scopeAccountId,
+}: {
+  asOf: string;
+  readOnly: boolean;
+  scopeAccountId?: number;
+}) {
   const { toast } = useToast();
   const { data: user } = useQuery(authenticatedUserQueryOptions());
   const canEdit = ["Admin", "Owner", "Developer"].includes(user?.role || "") && !readOnly;
@@ -42,7 +52,8 @@ export function FactoryFxAgentWalletCard({ asOf, readOnly }: { asOf: string; rea
   const [targetKind, setTargetKind] = useState<"factorySupplier" | "ledger">("factorySupplier");
   const [targetId, setTargetId] = useState("");
   const [notes, setNotes] = useState("");
-  const [open, setOpen] = useState(false);
+  const [rebaselineReason, setRebaselineReason] = useState("");
+  const [open, setOpen] = useState(Boolean(scopeAccountId));
 
   const { data, isLoading, error } = useQuery<WalletResponse>({
     queryKey: ["/api/factory/fx-agent-wallets", asOf],
@@ -55,19 +66,52 @@ export function FactoryFxAgentWalletCard({ asOf, readOnly }: { asOf: string; rea
     },
     staleTime: 30_000,
   });
-  const active = data?.wallets.find((w) => String(w.wallet.id) === walletId) || data?.wallets[0];
+  const visibleWallets = (data?.wallets || []).filter(
+    (w) => scopeAccountId == null || w.wallet.ledgerAccountId === scopeAccountId
+  );
+  const active = visibleWallets.find((w) => String(w.wallet.id) === walletId) || visibleWallets[0];
   const choices = useMemo(
     () =>
       (data?.candidates || [])
-        .filter((a) => (a.name + " " + (a.code || "")).toLowerCase().includes(accountSearch.toLowerCase()))
+        .filter(
+          (a) =>
+            (scopeAccountId == null || a.id === scopeAccountId) &&
+            (a.name + " " + (a.code || "")).toLowerCase().includes(accountSearch.toLowerCase())
+        )
         .slice(0, 100),
-    [data?.candidates, accountSearch]
+    [data?.candidates, accountSearch, scopeAccountId]
   );
+  const { data: reversalHistory } = useQuery<{
+    migrationRequired: boolean;
+    conversions: Array<{
+      id: number;
+      date: string;
+      usdAmount: string;
+      eurAmount: string;
+      rate: string;
+      actor: string | null;
+      reversed: boolean;
+      hasLaterSettlement: boolean;
+    }>;
+  }>({
+    queryKey: ["/api/factory/fx-agent-wallets", active?.wallet.id, "conversions"],
+    enabled: Boolean(active) && open,
+    queryFn: async () => {
+      const res = await fetch("/api/factory/fx-agent-wallets/" + active!.wallet.id + "/conversions", {
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    },
+  });
+  const [reversalReason, setReversalReason] = useState("");
   const write = useMutation({
     mutationFn: async ({ path, body }: WalletWrite) => (await apiRequest("POST", path, body)).json(),
     onSuccess: () => {
       toast({ title: "FX agent transaction saved" });
       void queryClient.invalidateQueries({ queryKey: ["/api/factory/fx-agent-wallets"] });
+      setReversalReason("");
+      setRebaselineReason("");
       void queryClient.invalidateQueries({ queryKey: ["/api/factory/net-position"] });
       void queryClient.invalidateQueries({ queryKey: ["/api/ledger-accounts"] });
       void queryClient.invalidateQueries({ queryKey: ["/api/factory/suppliers"] });
@@ -90,9 +134,11 @@ export function FactoryFxAgentWalletCard({ asOf, readOnly }: { asOf: string; rea
               Native EUR held by an agent; Net Position values it at the dated Settings rate.
             </CardDescription>
           </div>
-          <Button size="sm" variant="outline" onClick={() => setOpen((v) => !v)}>
-            {open ? "Hide" : "Manage"}
-          </Button>
+          {scopeAccountId == null && (
+            <Button size="sm" variant="outline" onClick={() => setOpen((v) => !v)}>
+              {open ? "Hide" : "Manage"}
+            </Button>
+          )}
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -103,7 +149,7 @@ export function FactoryFxAgentWalletCard({ asOf, readOnly }: { asOf: string; rea
           </p>
         )}
         {!data?.setupRequired &&
-          data?.wallets.map((w) => (
+          visibleWallets.map((w) => (
             <div
               key={w.wallet.id}
               className="border rounded-md px-3 py-2 flex flex-wrap items-center justify-between gap-2"
@@ -121,17 +167,19 @@ export function FactoryFxAgentWalletCard({ asOf, readOnly }: { asOf: string; rea
           ))}
         {open && !data?.setupRequired && (
           <div className="space-y-4 border-t pt-4">
-            {canEdit && (
+            {canEdit && !active && (
               <section className="space-y-2">
                 <h4 className="text-sm font-semibold">Link an existing FX agent ledger account</h4>
-                <Input
-                  placeholder="Search account name or code"
-                  value={accountSearch}
-                  onChange={(e) => setAccountSearch(e.target.value)}
-                />
+                {scopeAccountId == null && (
+                  <Input
+                    placeholder="Search account name or code"
+                    value={accountSearch}
+                    onChange={(e) => setAccountSearch(e.target.value)}
+                  />
+                )}
                 <select
                   className="w-full h-10 border rounded-md bg-background px-2 text-sm"
-                  value={accountId}
+                  value={scopeAccountId == null ? accountId : String(scopeAccountId)}
                   onChange={(e) => setAccountId(e.target.value)}
                 >
                   <option value="">Choose a ledger account</option>
@@ -142,7 +190,7 @@ export function FactoryFxAgentWalletCard({ asOf, readOnly }: { asOf: string; rea
                   ))}
                 </select>
                 <Button
-                  disabled={write.isPending || !accountId}
+                  disabled={write.isPending || !(scopeAccountId || Number(accountId))}
                   variant="secondary"
                   size="sm"
                   onClick={() => {
@@ -153,7 +201,7 @@ export function FactoryFxAgentWalletCard({ asOf, readOnly }: { asOf: string; rea
                     ) {
                       write.mutate({
                         path: "/api/factory/fx-agent-wallets",
-                        body: { ledgerAccountId: Number(accountId), confirmUsdSource: true },
+                        body: { ledgerAccountId: scopeAccountId ?? Number(accountId), confirmUsdSource: true },
                       });
                     }
                   }}
@@ -162,25 +210,87 @@ export function FactoryFxAgentWalletCard({ asOf, readOnly }: { asOf: string; rea
                 </Button>
               </section>
             )}
-            {!!data?.wallets.length && (
+            {visibleWallets.length > 0 && (
               <section className="space-y-2">
-                <h4 className="text-sm font-semibold">Choose agent</h4>
-                <select
-                  className="w-full h-10 border rounded-md bg-background px-2 text-sm"
-                  value={active?.wallet.id || ""}
-                  onChange={(e) => setWalletId(e.target.value)}
-                >
-                  {data.wallets.map((w) => (
-                    <option key={w.wallet.id} value={w.wallet.id}>
-                      {w.wallet.accountName}
-                    </option>
-                  ))}
-                </select>
+                {scopeAccountId == null && <h4 className="text-sm font-semibold">Choose agent</h4>}
+                {scopeAccountId == null && (
+                  <select
+                    className="w-full h-10 border rounded-md bg-background px-2 text-sm"
+                    value={active?.wallet.id || ""}
+                    onChange={(e) => setWalletId(e.target.value)}
+                  >
+                    {visibleWallets.map((w) => (
+                      <option key={w.wallet.id} value={w.wallet.id}>
+                        {w.wallet.accountName}
+                      </option>
+                    ))}
+                  </select>
+                )}
                 {!!active && (
                   <p className="text-xs text-muted-foreground">
                     EUR available: {fmt(active.state.eur)}. Historical USD basis: {fmt(active.state.eurBookUsd)}.
                     Settings EUR rate: {active.currentRateUsdPerEur || "Not set"}.
                   </p>
+                )}
+              </section>
+            )}
+            {!!active && !active.synchronized && (
+              <section className="space-y-3 rounded-lg border border-destructive/50 p-3" data-testid="fx-agent-ledger-reconciliation">
+                <h4 className="font-semibold text-sm">USD ledger and FX wallet do not match</h4>
+                <p className="text-sm">
+                  Wallet USD book: <strong>USD {fmt(active.state.totalBookUsd)}</strong>.
+                  Posted account balance: <strong>USD {fmt(active.ledgerBookUsd)}</strong>.
+                  Difference: <strong>USD {fmt(active.bookDifferenceUsd)}</strong>.
+                </p>
+                {active.hasOperations ? (
+                  <p className="text-sm text-destructive">
+                    FX conversions or payouts already exist. Review the ledger changes before any new operation;
+                    an existing wallet with movements cannot be reset.
+                  </p>
+                ) : (
+                  <>
+                    <p className="text-sm text-muted-foreground">
+                      This wallet has no FX transactions. If the posted ledger is still entirely USD,
+                      you can restart the wallet from today's posted USD balance. This does not change
+                      vouchers, and the previous baseline remains in the audit history. Older dates use
+                      the ordinary posted ledger balance.
+                    </p>
+                    {canEdit && (
+                      <>
+                        <Input
+                          placeholder="Reason for resetting the unused USD baseline (required)"
+                          aria-label="Reason for FX wallet baseline reset"
+                          maxLength={500}
+                          value={rebaselineReason}
+                          onChange={(e) => setRebaselineReason(e.target.value)}
+                        />
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={write.isPending || !rebaselineReason.trim() || Number(active.ledgerBookUsd) <= 0}
+                          onClick={() => {
+                            if (window.confirm(
+                              "Reset this unused FX wallet to the current posted ledger balance USD " +
+                                fmt(active.ledgerBookUsd) +
+                                "? Its activation date will become today. Existing vouchers are unchanged."
+                            )) {
+                              write.mutate({
+                                path: "/api/factory/fx-agent-wallets/" + active.wallet.id + "/rebaseline",
+                                body: {
+                                  expectedOpeningUsd: active.state.usd,
+                                  expectedLedgerBookUsd: active.ledgerBookUsd,
+                                  confirmUsdSource: true,
+                                  reason: rebaselineReason.trim(),
+                                },
+                              });
+                            }
+                          }}
+                        >
+                          Reconcile unused USD wallet
+                        </Button>
+                      </>
+                    )}
+                  </>
                 )}
               </section>
             )}
@@ -322,6 +432,88 @@ export function FactoryFxAgentWalletCard({ asOf, readOnly }: { asOf: string; rea
                   </Button>
                 </section>
               </div>
+            )}
+            {!!active && (
+              <section className="space-y-3 rounded-lg border p-3" data-testid="fx-conversion-history">
+                <h4 className="text-sm font-semibold">USD → EUR conversions and reversals</h4>
+                {reversalHistory?.migrationRequired && (
+                  <p className="text-sm text-destructive">
+                    Apply the 20261020 FX reversal SQL migration before reversing conversions.
+                  </p>
+                )}
+                {reversalHistory?.conversions.length === 0 && (
+                  <p className="text-xs text-muted-foreground">No conversions recorded.</p>
+                )}
+                {reversalHistory?.conversions.map((item) => {
+                  const reversible =
+                    canEdit &&
+                    active.synchronized &&
+                    !item.reversed &&
+                    !item.hasLaterSettlement &&
+                    !reversalHistory.migrationRequired;
+                  return (
+                    <div key={item.id} className="space-y-2 rounded-md border p-3">
+                      <div className="flex flex-wrap justify-between gap-2 text-sm">
+                        <div>
+                          <p className="font-medium">
+                            USD {fmt(item.usdAmount)} → EUR {fmt(item.eurAmount)}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {item.date.slice(0, 10)} · 1 EUR = USD {item.rate}
+                            {item.actor ? " · " + item.actor : ""}
+                          </p>
+                        </div>
+                        {item.reversed ? (
+                          <span className="text-xs text-muted-foreground">Reversed</span>
+                        ) : item.hasLaterSettlement ? (
+                          <span className="text-xs text-destructive">
+                            EUR used in a later payment — reversal blocked
+                          </span>
+                        ) : null}
+                      </div>
+                      {reversible && (
+                        <div className="flex flex-col gap-2 sm:flex-row">
+                          <Input
+                            placeholder="Reason for reversal (required)"
+                            aria-label={"Reason for reversal " + item.id}
+                            maxLength={500}
+                            value={reversalReason}
+                            onChange={(e) => setReversalReason(e.target.value)}
+                          />
+                          <Button
+                            type="button"
+                            variant="destructive"
+                            size="sm"
+                            disabled={write.isPending || !reversalReason.trim()}
+                            onClick={() => {
+                              if (
+                                window.confirm(
+                                  "Reverse this conversion? Restore USD " +
+                                    fmt(item.usdAmount) +
+                                    " by deducting exactly EUR " +
+                                    fmt(item.eurAmount) +
+                                    ". Original entries will remain in the audit trail."
+                                )
+                              ) {
+                                write.mutate({
+                                  path: "/api/factory/fx-agent-wallets/" + active.wallet.id + "/reverse-conversion",
+                                  body: {
+                                    conversionId: item.id,
+                                    reason: reversalReason.trim(),
+                                    requestKey: crypto.randomUUID(),
+                                  },
+                                });
+                              }
+                            }}
+                          >
+                            Reverse to USD
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </section>
             )}
             {canEdit && !!active && (
               <Input

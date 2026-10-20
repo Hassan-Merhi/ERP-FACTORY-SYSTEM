@@ -1,3 +1,4 @@
+import { isFxAgentSettlementVoucherTx, FX_AGENT_VOUCHER_LOCKED_MESSAGE } from "../../services/accounting/fxAgentVoucherLock";
 /**
  * voucherEntryRoutes: VoucherBulkDelete endpoints.
  *
@@ -88,6 +89,9 @@ export function registerVoucherBulkDeleteRoutes(app: Express) {
 
           // Use the same transaction-wrapped deletion logic as the single delete endpoint
           await db.transaction(async (tx) => {
+            if (await isFxAgentSettlementVoucherTx(tx, currentCompanyId, [id])) {
+              throw new Error(FX_AGENT_VOUCHER_LOCKED_MESSAGE);
+            }
             const auditBefore = await readVoucherAuditState(tx, id);
             // Wave 11: every stock document moves back exactly the value its
             // lines moved, and a sale's COGS journal leaves with it.

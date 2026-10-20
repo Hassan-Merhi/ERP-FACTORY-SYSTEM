@@ -10,7 +10,7 @@ import { resultRows } from "../../lib/queryResult";
 
 export const FX_AGENT_VOUCHER_LOCKED = "FX_AGENT_VOUCHER_LOCKED";
 export const FX_AGENT_VOUCHER_LOCKED_MESSAGE =
-  "This journal belongs to an FX agent EUR settlement. Reverse the wallet and journal together using the FX agent workflow; ordinary voucher edit, reversal or deletion is blocked.";
+  "This voucher belongs to an FX agent EUR payment. Its native EUR movement and USD posting must stay linked; ordinary voucher edit, reversal or deletion is blocked.";
 
 export async function isFxAgentSettlementVoucherTx(
   tx: Pick<DatabaseOrTransaction, "execute">,

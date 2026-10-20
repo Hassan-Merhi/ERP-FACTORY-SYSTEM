@@ -80,7 +80,7 @@ export function useJournalFormModel({ voucherIdToEdit, isPOS }: JournalFormProps
     queryKey: ["/api/bank-accounts", selectedCompany?.id],
   });
   const { data: ledgerAccounts = [], isFetched: ledgerAccountsFetched } = useQuery<LedgerAccount[]>({
-    queryKey: ["/api/ledger-accounts", selectedCompany?.id],
+    queryKey: ["/api/ledger-accounts?profile=voucher-picker", selectedCompany?.id],
   });
   const { data: suppliers = [], isFetched: suppliersFetched } = useQuery<Supplier[]>({
     queryKey: ["/api/suppliers", selectedCompany?.id],

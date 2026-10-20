@@ -81,6 +81,29 @@ export async function postOrderChargeVoucherTx(
     amount: MoneyInput;
   }
 ): Promise<number> {
+  // Charge rows on LOADING / VERIFIED / pending containers are operational,
+  // never a receivable. Enforce this at the shared writer (not only its HTTP
+  // callers), so future routes and replays cannot post a premature journal.
+  // Finalization updates the order status inside the SAME locked transaction
+  // before it invokes this writer. This check does not alter historical vouchers.
+  const [owner] = await tx
+    .select({
+      companyId: customerOrders.companyId,
+      customerId: customerOrders.customerId,
+      status: customerOrders.status,
+    })
+    .from(customerOrderCharges)
+    .innerJoin(customerOrders, eq(customerOrderCharges.orderId, customerOrders.id))
+    .where(eq(customerOrderCharges.id, input.chargeId));
+  if (
+    !owner ||
+    owner.companyId !== input.companyId ||
+    owner.customerId !== input.customerId ||
+    owner.status !== "FINALIZED"
+  ) {
+    throw new Error("factory_order_charge_requires_finalized_invoice");
+  }
+
   const amount = toMoney(input.amount).toDecimalPlaces(2);
   const { voucher } = await postFactoryVoucherTx(tx, {
     companyId: input.companyId,

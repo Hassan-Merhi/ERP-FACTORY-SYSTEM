@@ -1,5 +1,5 @@
 import { useVoucherEditCancel } from "@/pages/vouchers/VoucherPhoneActionBar";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { UseFormReturn, UseFieldArrayReturn, type SubmitHandler } from "react-hook-form";
 import { format } from "date-fns";
 import { Button } from "@/components/ui/button";
@@ -74,6 +74,14 @@ export interface PaymentReceiptTabProps {
   isEditMode?: boolean;
   originalTotal?: number;
   isPending?: boolean;
+  fxWallet?: {
+    wallet: { id: number; ledgerAccountId: number; accountName: string };
+    state: { eur: string; usd: string; totalBookUsd: string };
+    synchronized: boolean;
+  };
+  fxWalletsLoading?: boolean;
+  fxPaymentRate?: string;
+  onFxPaymentRateChange?: (value: string) => void;
   voucherNumber?: string;
   onAccountPickerOpen?: () => void;
   onAccountSearchChange?: (term: string) => void;
@@ -116,6 +124,10 @@ export function PaymentReceiptTab({
   isEditMode = false,
   originalTotal = 0,
   isPending = false,
+  fxWallet,
+  fxWalletsLoading = false,
+  fxPaymentRate = "",
+  onFxPaymentRateChange,
   voucherNumber,
   onAccountPickerOpen,
   onAccountSearchChange,
@@ -154,6 +166,19 @@ export function PaymentReceiptTab({
   const showValidation = form.formState.isSubmitted || payFromTouched;
 
   const isPayment = activeTab === "payment";
+  const isFxPayment = isPayment && !!fxWallet && !isEditMode;
+  useEffect(() => {
+    if (isFxPayment && form.getValues("optional")) form.setValue("optional", false);
+  }, [isFxPayment, form]);
+  const fxRateValue = Number(fxPaymentRate);
+  const fxEurRequired = isFxPayment && total > 0 && fxRateValue > 0
+    ? total / fxRateValue
+    : 0;
+  const fxUnsupportedEntries = isFxPayment && (
+    entries.length !== 1 ||
+    !["ledger", "factorySupplier"].includes(entries[0]?.accountType || "") ||
+    entries[0]?.accountId === fxWallet?.wallet.ledgerAccountId
+  );
 
   // Tab-specific styling / labels
   const Icon = isPayment ? ArrowUpCircle : ArrowDownCircle;
@@ -459,7 +484,7 @@ export function PaymentReceiptTab({
                 {/* ── Source account + running total ── */}
                 <div className="grid gap-3 lg:grid-cols-[1fr_minmax(170px,210px)]">
                   {/* Selected-account summary card — the picker collapses into this */}
-                  {paymentAccountId > 0 && !editingSource && (
+                  {paymentAccountId > 0 && !editingSource && !isFxPayment && (
                     <VoucherSourceCard
                       label={accountLabel}
                       accountName={paymentAccountName}
@@ -471,6 +496,16 @@ export function PaymentReceiptTab({
                       currencyBalances={accountCurrencyBalances}
                       onChange={() => setEditingSource(true)}
                     />
+                  )}
+
+                  {isFxPayment && paymentAccountId > 0 && !editingSource && (
+                    <div className="rounded-lg border bg-muted/20 px-4 py-3 space-y-1" data-testid="fx-payment-source">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-sm font-semibold">Pay from {paymentAccountName} (EUR wallet)</p>
+                        <Button type="button" variant="outline" size="sm" onClick={() => setEditingSource(true)}>Change</Button>
+                      </div>
+                      <p className="font-mono text-sm">EUR {Number(fxWallet!.state.eur).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} available</p>
+                    </div>
                   )}
 
                   {/* Account picker — shown until an account is chosen, or on "Change" */}
@@ -574,6 +609,50 @@ export function PaymentReceiptTab({
                     </FormItem>
                   )}
                 />
+
+                {isFxPayment && (
+                  <section className="space-y-3 rounded-lg border border-primary/30 bg-muted/20 p-4" data-testid="fx-payment-voucher">
+                    <div>
+                      <h4 className="text-sm font-semibold">FX agent payment — recipient gets USD</h4>
+                    </div>
+                    <label className="block text-sm font-medium" htmlFor="fx-voucher-rate">Agreed payment rate — USD per 1 EUR</label>
+                    <Input
+                      id="fx-voucher-rate"
+                      type="number"
+                      min="0"
+                      step="any"
+                      placeholder="e.g. 1.14"
+                      value={fxPaymentRate}
+                      onChange={(event) => onFxPaymentRateChange?.(event.target.value)}
+                    />
+                    {fxRateValue > 0 && total > 0 && (
+                      <div className="grid grid-cols-2 gap-3 text-sm">
+                        <div>
+                          <p className="text-xs text-muted-foreground">Recipient receives</p>
+                          <p className="font-mono font-semibold">USD {total.toFixed(2)}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-muted-foreground">Agent EUR deduction (estimated)</p>
+                          <p className="font-mono font-semibold">EUR {fxEurRequired.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 6})}</p>
+                        </div>
+                      </div>
+                    )}
+                    {!fxWallet?.synchronized && (
+                      <p className="text-sm text-destructive">Ledger mismatch: reconcile the FX wallet before paying.</p>
+                    )}
+                    {fxEurRequired > Number(fxWallet!.state.eur) && (
+                      <p className="text-sm text-destructive">Insufficient EUR held by this agent.</p>
+                    )}
+                    {fxUnsupportedEntries && (
+                      <p className="text-sm text-destructive">
+                        Use one factory supplier or USD ledger recipient (not the FX agent itself) per payment.
+                      </p>
+                    )}
+                  </section>
+                )}
+                {isPayment && fxWalletsLoading && (
+                  <p className="text-xs text-muted-foreground">Loading FX wallet status before payment…</p>
+                )}
 
                 {/* ── Entries table ── */}
                 <VoucherEntriesTable
@@ -700,7 +779,8 @@ export function PaymentReceiptTab({
                         <FormItem className="flex flex-row items-center gap-2 space-y-0">
                           <FormControl>
                             <Switch
-                              checked={field.value}
+                              checked={isFxPayment ? false : field.value}
+                              disabled={isFxPayment}
                               onCheckedChange={field.onChange}
                               data-testid="checkbox-optional"
                             />
@@ -732,7 +812,12 @@ export function PaymentReceiptTab({
                         type="submit"
                         size="default"
                         className="w-full sm:w-auto"
-                        disabled={paymentAccountId === 0 || total === 0 || isPending}
+                        disabled={
+                          paymentAccountId === 0 || total === 0 || isPending || fxWalletsLoading ||
+                          (isFxPayment && (!fxWallet?.synchronized || fxRateValue <= 0 ||
+                            !Number.isFinite(fxEurRequired) || fxEurRequired > Number(fxWallet!.state.eur) ||
+                            fxUnsupportedEntries))
+                        }
                         data-testid="button-save-voucher"
                       >
                         {isPending
@@ -741,7 +826,9 @@ export function PaymentReceiptTab({
                             : "Saving…"
                           : isEditMode
                             ? `Update Voucher${total > 0 ? ` · ${formatAmount(total)}` : ""}`
-                            : `Save Voucher${total > 0 ? ` · ${formatAmount(total)}` : ""}`}
+                            : isFxPayment
+                              ? `Post FX Payment · USD ${total.toFixed(2)}`
+                              : `Save Voucher${total > 0 ? ` · ${formatAmount(total)}` : ""}`}
                       </Button>
                       {saveHint ? (
                         <span className="text-[11px] text-muted-foreground" data-testid="text-save-hint">

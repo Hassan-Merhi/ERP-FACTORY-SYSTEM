@@ -77,6 +77,7 @@ export const factoryFxAgentWalletOperations = pgTable(
     targetKind: text("target_kind"),
     targetId: integer("target_id"),
     voucherId: integer("voucher_id"),
+    reversesOperationId: bigint("reverses_operation_id", { mode: "number" }),
     requestKey: varchar("request_key", { length: 100 }).notNull(),
     narration: text(),
     createdBy: text("created_by"),
@@ -106,7 +107,16 @@ export const factoryFxAgentWalletOperations = pgTable(
       name: "factory_fx_agent_wallet_operations_voucher_id_fkey",
     }),
     unique("factory_fx_agent_wallet_operations_company_id_request_key_key").on(table.companyId, table.requestKey),
-    check("factory_fx_agent_wallet_operations_kind_check", sql`kind IN ('USD_TO_EUR', 'EUR_SETTLEMENT')`),
+    unique("fx_agent_one_reversal_per_conversion").on(table.companyId, table.reversesOperationId),
+    foreignKey({
+      columns: [table.reversesOperationId],
+      foreignColumns: [table.id],
+      name: "fx_agent_reverses_operation_fkey",
+    }),
+    check(
+      "factory_fx_agent_wallet_operations_kind_check",
+      sql`kind IN ('USD_TO_EUR', 'EUR_SETTLEMENT', 'EUR_TO_USD_REVERSAL')`
+    ),
     check("factory_fx_agent_wallet_operations_source_amount_check", sql`source_amount > 0`),
     check("factory_fx_agent_wallet_operations_target_amount_check", sql`target_amount > 0`),
     check("factory_fx_agent_wallet_operations_rate_usd_per_eur_check", sql`rate_usd_per_eur > 0`),
@@ -117,7 +127,7 @@ export const factoryFxAgentWalletOperations = pgTable(
     ),
     check(
       "fx_agent_operation_shape",
-      sql`(kind = 'USD_TO_EUR' AND source_currency = 'USD' AND target_currency = 'EUR' AND target_kind IS NULL AND target_id IS NULL AND voucher_id IS NULL) OR (kind = 'EUR_SETTLEMENT' AND source_currency = 'EUR' AND target_currency = 'USD' AND target_kind IS NOT NULL AND target_id IS NOT NULL AND voucher_id IS NOT NULL)`
+      sql`(kind = 'USD_TO_EUR' AND source_currency = 'USD' AND target_currency = 'EUR' AND target_kind IS NULL AND target_id IS NULL AND voucher_id IS NULL AND reverses_operation_id IS NULL) OR (kind = 'EUR_SETTLEMENT' AND source_currency = 'EUR' AND target_currency = 'USD' AND target_kind IS NOT NULL AND target_id IS NOT NULL AND voucher_id IS NOT NULL AND reverses_operation_id IS NULL) OR (kind = 'EUR_TO_USD_REVERSAL' AND source_currency = 'EUR' AND target_currency = 'USD' AND target_kind IS NULL AND target_id IS NULL AND voucher_id IS NULL AND reverses_operation_id IS NOT NULL)`
     ),
   ]
 );

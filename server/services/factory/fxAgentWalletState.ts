@@ -6,7 +6,7 @@
 import { toMoney } from "../../lib/money";
 
 export type FxAgentWalletEvent = {
-  kind: "USD_TO_EUR" | "EUR_SETTLEMENT";
+  kind: "USD_TO_EUR" | "EUR_SETTLEMENT" | "EUR_TO_USD_REVERSAL";
   sourceAmount: string;
   targetAmount: string;
   sourceBookUsd: string;
@@ -34,6 +34,16 @@ export function replayFxAgentWallet(openingUsd: string, events: readonly FxAgent
       usd = usd.minus(from);
       eur = eur.plus(to);
       eurBookUsd = eurBookUsd.plus(book);
+    } else if (event.kind === "EUR_TO_USD_REVERSAL") {
+      // Compensating, immutable event: restore precisely the original USD
+      // book basis, not a fresh market-rate quote.
+      if (from.gt(eur) || book.gt(eurBookUsd) || !book.eq(to)) {
+        throw new Error("EUR wallet has insufficient balance for reversal");
+      }
+      eur = eur.minus(from);
+      eurBookUsd = eurBookUsd.minus(book);
+      usd = usd.plus(to);
+      if (eur.isZero() && !eurBookUsd.isZero()) throw new Error("Unallocated final EUR book basis");
     } else if (event.kind === "EUR_SETTLEMENT") {
       if (from.gt(eur) || book.gt(eurBookUsd)) throw new Error("EUR wallet has insufficient balance");
       eur = eur.minus(from);

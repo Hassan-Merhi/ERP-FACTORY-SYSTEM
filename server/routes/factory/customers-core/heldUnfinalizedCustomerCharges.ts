@@ -124,6 +124,34 @@ export async function heldUnfinalizedCustomerCharges(
   return (await loadHeldChargeSnapshot(companyId, customerIds, asOf)).byCustomer;
 }
 
+/**
+ * Display-only projection for the generic Accounts/Agents customer statements.
+ * Factory Parties and the dedicated customer statement already hold these
+ * legacy debits; linked-ledger statements must not show a different balance.
+ * Vouchers, voucher entries and the trial balance are never changed here.
+ */
+export async function projectCustomerStatementLines<T extends { voucherId: number | null }>(
+  companyId: number,
+  customerId: number,
+  rows: readonly T[],
+  from: string | null | undefined,
+  to: string | null | undefined
+): Promise<{ rows: T[]; heldBefore: Decimal }> {
+  const snapshot = await loadHeldChargeSnapshot(companyId, [customerId], to);
+  const visibleRows = rows.filter((row) => !snapshot.voucherIds.has(Number(row.voucherId)));
+  let heldBefore = ZERO;
+  if (from) {
+    // The statement brought-forward amount covers dates strictly before from.
+    // Use a date-only UTC predecessor rather than subtracting from the time of day.
+    const date = Date.parse(`${from}T00:00:00Z`);
+    if (!Number.isFinite(date)) throw new Error("invalid_factory_statement_start_date");
+    const before = new Date(date - 86400000).toISOString().slice(0, 10);
+    const earlier = await loadHeldChargeSnapshot(companyId, [customerId], before);
+    heldBefore = earlier.byCustomer.get(customerId) ?? ZERO;
+  }
+  return { rows: visibleRows, heldBefore };
+}
+
 export function customerStatementLedgerBalance(
   generalLedger: Decimal,
   heldPreFinalizationCharges: Decimal = ZERO

@@ -436,6 +436,36 @@ describe("order charges and pricing (one transaction, row-locked, invoice sync i
   let orderId: number;
   let chargeId: number;
 
+  it("refuses customer charge voucher posting before invoice finalization", async () => {
+    const pendingOrderId = await insertId(
+      `INSERT INTO customer_orders (company_id, customer_id, order_date, status)
+       VALUES ($1, $2, '2026-06-01', 'VERIFIED') RETURNING id`,
+      [ctx.companyId, ids.CUSTOMER]
+    );
+    const pendingChargeId = await insertId(
+      `INSERT INTO customer_order_charges (order_id, name, amount, charge_type, ledger_account_id)
+       VALUES ($1, 'Freight', 2250, 'FREIGHT', $2) RETURNING id`,
+      [pendingOrderId, ctx.salesAccountId]
+    );
+    const voucherNumber = `CHARGE-PRE-${pendingOrderId}-${pendingChargeId}`;
+    await expect(
+      db.transaction((tx) =>
+        postOrderChargeVoucherTx(tx, {
+          companyId: ctx.companyId,
+          chargeId: pendingChargeId,
+          voucherNumber,
+          voucherDate: "2026-06-01",
+          description: "Freight for container - TEST1234567",
+          customerId: ids.CUSTOMER,
+          customerLedgerAccountId: ids.CUSTOMER_LEDGER,
+          chargeLedgerAccountId: ctx.salesAccountId,
+          amount: "2250.00",
+        })
+      )
+    ).rejects.toThrow("factory_order_charge_requires_finalized_invoice");
+    expect(await liveVoucher(voucherNumber)).toBeFalsy();
+  });
+
   it("posts the charge voucher through the engine and moves the invoice balance in the same transaction", async () => {
     orderId = await insertId(
       `INSERT INTO customer_orders (company_id, customer_id, order_date, status, invoice_number)

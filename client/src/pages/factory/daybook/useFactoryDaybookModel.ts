@@ -485,15 +485,24 @@ export function useFactoryDaybookModel() {
       const res = await factoryApiRequest("DELETE", `/api/factory/daybook/entry/${entryId}/void`);
       return res.json();
     },
-    onSuccess: () => {
+    onSuccess: (result: { fxPaymentCancelled?: boolean }) => {
       queryClient.invalidateQueries({ queryKey: ["/api/factory/daybook"] });
       queryClient.invalidateQueries({ queryKey: ["/api/accounts/all"] });
       queryClient.invalidateQueries({ queryKey: ["/api/factory/vouchers"] });
       queryClient.invalidateQueries({ queryKey: ["/api/vouchers"] });
       queryClient.invalidateQueries({ queryKey: ["/api/factory/advances"] });
       queryClient.invalidateQueries({ queryKey: ["/api/factory/workers"] });
+      if (result.fxPaymentCancelled) {
+        queryClient.invalidateQueries({ queryKey: ["/api/factory/fx-agent-wallets"] });
+        queryClient.invalidateQueries({ queryKey: ["fx-agent-eur-statement"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/factory/net-position"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/ledger-accounts"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/accounts/voucher-sidebar"] });
+      }
       setVoidEntry(null);
-      toast({ title: "Voucher voided", description: "All accounting entries have been reversed." });
+      toast(result.fxPaymentCancelled
+        ? { title: "FX payment deleted", description: "EUR restored; USD posting and FX gain/loss reversed." }
+        : { title: "Voucher voided", description: "All accounting entries have been reversed." });
     },
     onError: (e: ClientErrorLike) => {
       if (e?._handledGlobally) return;

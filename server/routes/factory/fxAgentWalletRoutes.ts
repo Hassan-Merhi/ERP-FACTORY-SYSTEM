@@ -1,10 +1,13 @@
 import type { Express, Request, Response } from "express";
 import { registerFactoryFxAgentSettlementRoutes } from "./fxAgentWalletSettlementRoutes";
+import { registerFactoryFxAgentReversalRoutes } from "./fxAgentWalletReversalRoutes";
+import { registerFactoryFxAgentStatementRoutes } from "./fxAgentWalletStatementRoutes";
 import { sql } from "drizzle-orm";
 import { db } from "../../db";
 import { requireAuth, requireRole } from "../../auth";
 import { getClientDate } from "../../lib/dateUtils";
 import { getErrorMessage } from "../../lib/httpHandlers";
+import { logAudit } from "../helpers/auditWriteAdapter";
 import { toMoney } from "../../lib/money";
 import { getPartyBalance } from "../../services/accounting/balances/ledgerBalanceEngine";
 import {
@@ -45,6 +48,8 @@ async function configRate(cid: number, date: string) {
 
 export function registerFactoryFxAgentWalletRoutes(app: Express) {
   registerFactoryFxAgentSettlementRoutes(app);
+  registerFactoryFxAgentReversalRoutes(app);
+  registerFactoryFxAgentStatementRoutes(app);
   app.get("/api/factory/fx-agent-wallets", requireAuth, async (req: Request, res: Response) => {
     try {
       const cid = company(req);
@@ -143,6 +148,112 @@ export function registerFactoryFxAgentWalletRoutes(app: Express) {
       res.status(400).json({ message: getErrorMessage(error) });
     }
   });
+  // An unused wallet is just a snapshot. If the USD ledger changed after
+  // activation, explicitly restart its baseline rather than mislabeling the
+  // difference as EUR or silently ignoring posted vouchers.
+  app.post(
+    "/api/factory/fx-agent-wallets/:id/rebaseline",
+    requireAuth,
+    requireRole(...ROLES),
+    async (req: Request, res: Response) => {
+      try {
+        const cid = company(req);
+        const walletId = Number(req.params.id);
+        const reason = String(req.body?.reason ?? "").trim();
+        const expectedOpeningUsd = String(req.body?.expectedOpeningUsd ?? "");
+        const expectedLedgerBookUsd = String(req.body?.expectedLedgerBookUsd ?? "");
+        if (
+          !cid || !Number.isSafeInteger(walletId) || walletId <= 0 ||
+          !reason || reason.length > 500 ||
+          !/^\d+(?:\.\d{1,6})?$/.test(expectedOpeningUsd) ||
+          !/^\d+(?:\.\d{1,6})?$/.test(expectedLedgerBookUsd) ||
+          req.body?.confirmUsdSource !== true
+        ) {
+          return res.status(400).json({ message: "Confirm the updated USD ledger balance and give a reason (max 500 characters)" });
+        }
+        const today = getClientDate(req);
+        const saved = await db.transaction(async (tx) => {
+          // Lock the wallet and its source ledger so two rebaseline requests
+          // cannot race; the expected figures protect against a stale screen.
+          const found = await tx.execute(sql`
+            SELECT w.id, w.opening_usd::text AS "openingUsd",
+              w.activated_on::text AS "activatedOn", a.name AS "accountName",
+              a.account_type AS "accountType", a.opening_balance_currency AS "openingCurrency"
+            FROM factory_fx_agent_wallets w
+            JOIN ledger_accounts a ON a.id = w.ledger_account_id
+            WHERE w.id = ${walletId} AND w.company_id = ${cid}
+              AND a.company_id = ${cid} AND a.active = true AND a.deleted_at IS NULL
+            FOR UPDATE OF w, a
+          `);
+          if (!found.rows.length) throw new Error("FX wallet or active ledger account not found");
+          const account = found.rows[0];
+          if (String(account.openingCurrency || "USD").toUpperCase() !== "USD") {
+            throw new Error("Account opening currency is not USD; manual reconciliation required");
+          }
+          const movements = await tx.execute(sql`
+            SELECT 1 FROM factory_fx_agent_wallet_operations
+            WHERE company_id = ${cid} AND wallet_id = ${walletId} LIMIT 1
+          `);
+          if (movements.rows.length) {
+            throw new Error("Wallet already has FX transactions; manual reconciliation is required");
+          }
+          const foreign = await tx.execute(sql`
+            SELECT 1 FROM voucher_entries ve
+            JOIN vouchers v ON v.id = ve.voucher_id
+            JOIN factory_fx_agent_wallets w ON w.id = ${walletId} AND w.company_id = ${cid}
+            WHERE v.company_id = ${cid} AND ve.ledger_account_id = w.ledger_account_id
+              AND v.deleted_at IS NULL AND v.optional = false
+              AND COALESCE(v.effective_date, v.voucher_date) <= ${today}::date
+              AND ve.transaction_currency IS NOT NULL
+              AND UPPER(ve.transaction_currency) <> 'USD'
+            LIMIT 1
+          `);
+          if (foreign.rows.length) {
+            throw new Error("Non-USD voucher history exists; review the account manually");
+          }
+          const accountIdRow = await tx.execute(sql`
+            SELECT ledger_account_id AS id FROM factory_fx_agent_wallets
+            WHERE id = ${walletId} AND company_id = ${cid}
+          `);
+          const accountId = Number(accountIdRow.rows[0].id);
+          const ledger = await getPartyBalance(tx, { kind: "ledger", companyId: cid, id: accountId, asOf: today });
+          if (!ledger) throw new Error("FX agent ledger account is missing");
+          const current = toMoney(ledger.historicalBaseClosing);
+          const previous = toMoney(String(account.openingUsd));
+          if (!previous.eq(expectedOpeningUsd) || !current.eq(expectedLedgerBookUsd)) {
+            throw new Error("Account or wallet balance changed. Reload before confirming the adjustment");
+          }
+          if (current.lte(0)) throw new Error("USD ledger balance must be positive to restart the wallet");
+          if (current.minus(previous).abs().lte("0.01")) {
+            throw new Error("FX wallet already matches the USD ledger");
+          }
+          await tx.execute(sql`
+            UPDATE factory_fx_agent_wallets
+            SET opening_usd = ${current.toFixed(6)}, activated_on = ${today}::date
+            WHERE id = ${walletId} AND company_id = ${cid}
+          `);
+          await logAudit({
+            userId: String(req.session.userId || "unknown"),
+            username: req.session.username || "unknown",
+            companyId: cid,
+            action: "repair",
+            tableName: "factory_fx_agent_wallets",
+            recordId: walletId,
+            recordIdentifier: String(account.accountName),
+            changes: {
+              opening_usd: { old: previous.toFixed(6), new: current.toFixed(6) },
+              activated_on: { old: String(account.activatedOn).slice(0, 10), new: today },
+              reason: { old: null, new: reason },
+            },
+          }, tx);
+          return { walletId, openingUsd: current.toFixed(6), activatedOn: today };
+        });
+        return res.json(saved);
+      } catch (error) {
+        return res.status(409).json({ message: getErrorMessage(error) });
+      }
+    }
+  );
   app.post(
     "/api/factory/fx-agent-wallets/:id/convert",
     requireAuth,

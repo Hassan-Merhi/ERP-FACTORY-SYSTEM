@@ -1,3 +1,6 @@
+import { cancelFxAgentSettlementVoucherTx } from "../../services/factory/fxAgentSettlementCancellation";
+import { sessionRetirementActor } from "../../services/accounting/voucherRetirement";
+import { getClientDate } from "../../lib/dateUtils";
 /**
  * voucherEntryRoutes: VoucherDelete endpoints.
  *
@@ -118,6 +121,9 @@ export function registerVoucherDeleteRoutes(app: Express) {
 
       // Wrap balance sync and deletion in a transaction
       await db.transaction(async (tx) => {
+        if (await cancelFxAgentSettlementVoucherTx({
+          tx, companyId, voucherId: id, actor: sessionRetirementActor(req), asOfDate: getClientDate(req),
+        })) return;
         const auditBefore = await readVoucherAuditState(tx, id);
         // Wave 11: every stock document moves back exactly the value its lines
         // moved, and a sale's COGS journal leaves with it (voucherStockReversal).

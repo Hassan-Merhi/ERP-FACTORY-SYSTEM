@@ -29,6 +29,7 @@ import {
   loadCustomerNotInLedger,
 } from "../services/accounting/balances/customerLedgerStatement";
 import { getCustomerByLedgerId } from "../lib/factoryCustomerLedger";
+import { projectCustomerStatementLines } from "./factory/customers-core/heldUnfinalizedCustomerCharges";
 import { requireFactoryAgentStatementAccount } from "../middleware/factoryAgentAccountScope";
 import { projectExportCurrencyRow, summarizeExportCurrencyRows } from "../services/accounting/exportCurrency";
 import {
@@ -158,8 +159,11 @@ export function registerAccountStatementRoutes(app: Express) {
           getPartyBalance(db, { companyId, kind: "customer", id: customerOwnerId, from: endDate ?? null }),
           loadCustomerNotInLedger(db, window),
         ]);
+        const held = endDate
+          ? await projectCustomerStatementLines(companyId, customerOwnerId, [], endDate, null)
+          : null;
         return res.json({
-          balance: toMoney(party?.opening).toNumber(),
+          balance: toMoney(party?.opening).minus(held?.heldBefore ?? 0).toNumber(),
           notInLedgerBefore: endDate ? notInLedger.prePeriodTotal : "0.00",
         });
       }
@@ -415,6 +419,7 @@ export function registerAccountStatementRoutes(app: Express) {
       const openingBalanceSide = masterOpening.isNegative() ? "Cr" : "Dr";
 
       let txRows: AccountStatementEntryRow[] = [];
+      let heldBeforeExport = new MoneyDecimal(0);
       if (ownedCustomerId !== null) {
         txRows = await loadCustomerLedgerEntryRows(db, {
           companyId,
@@ -422,6 +427,15 @@ export function registerAccountStatementRoutes(app: Express) {
           from: startDate ?? null,
           to: endDate ?? null,
         });
+        const projected = await projectCustomerStatementLines(
+          companyId,
+          ownedCustomerId,
+          txRows,
+          startDate ?? null,
+          endDate ?? null
+        );
+        txRows = projected.rows;
+        heldBeforeExport = projected.heldBefore;
       } else if (accountType === "ledger") {
         txRows = await storage.getVoucherEntriesByLedger(accountId, startDate, endDate, companyId);
       } else if (accountType === "bank") {
@@ -452,7 +466,7 @@ export function registerAccountStatementRoutes(app: Express) {
       const openingBalance = openingBalanceExact.toNumber();
       const signedOpening = masterOpening;
       // Brought forward: the engine's period opening (masterOpening without a start date).
-      const bfExact = toMoney(party?.opening);
+      const bfExact = toMoney(party?.opening).minus(heldBeforeExport);
       const bfBalance = bfExact.toNumber();
 
       let runExact = startDate ? bfExact : signedOpening;

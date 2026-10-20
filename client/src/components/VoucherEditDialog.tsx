@@ -60,7 +60,7 @@ export function VoucherEditDialog({ voucherId, open, onOpenChange }: VoucherEdit
 
   // Fetch reference data
   const { data: ledgerAccounts = [] } = useQuery<LedgerAccount[]>({
-    queryKey: ["/api/ledger-accounts"],
+    queryKey: ["/api/ledger-accounts?profile=voucher-picker"],
     enabled: open,
   });
   const { data: bankAccounts = [] } = useQuery<BankAccount[]>({

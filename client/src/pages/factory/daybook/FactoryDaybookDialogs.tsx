@@ -271,7 +271,10 @@ export function FactoryDaybookDialogs({ model }: { model: FactoryDaybookModel })
           <AlertDialogHeader>
             <AlertDialogTitle>Delete this voucher?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will reverse all accounting entries. This action cannot be undone.
+              {voidEntry?.description?.startsWith("FX agent payment:") ||
+              voidEntry?.description === "FX agent EUR settlement to USD beneficiary"
+                ? "The USD payment and FX gain/loss will be removed from posted balances, and the exact EUR amount returned to the agent. The cancelled payment remains in the audit trail."
+                : "This will reverse all accounting entries. This action cannot be undone."}
               {voidEntry && <span className="block mt-2 font-medium text-foreground">{voidEntry.description}</span>}
             </AlertDialogDescription>
           </AlertDialogHeader>
@@ -285,7 +288,7 @@ export function FactoryDaybookDialogs({ model }: { model: FactoryDaybookModel })
               className="bg-destructive text-destructive-foreground"
               data-testid="button-confirm-void"
             >
-              {model.voidMutation.isPending ? "Voiding..." : "Void Voucher"}
+              {model.voidMutation.isPending ? "Deleting..." : "Delete Voucher"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

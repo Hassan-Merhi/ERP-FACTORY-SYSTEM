@@ -20,6 +20,7 @@ import { AccountDialogs } from "./accounts/AccountDialogs";
 import { AccountTable } from "./accounts/AccountTable";
 import { useAccountDisplayOrder } from "@/hooks/useAccountDisplayOrder";
 import { AccountStatementView } from "./accounts/AccountStatementView";
+import type { Account, FxAgentAccountBalance } from "./accounts/accountTypes";
 import { useAccountsLegacyModel } from "./accountslegacy/useAccountsLegacyModel";
 import { AccountSearchResults } from "./accountslegacy/AccountSearchResults";
 import { FindVoucherTab } from "./accountslegacy/FindVoucherTab";
@@ -62,6 +63,33 @@ export default function Accounts() {
     }
   }, [activeAccountTab, requestedAccountTab]);
 
+  // Native FX funds are a presentation layer on top of historical USD vouchers.
+  // Never replace the book balance used by account groups or statement maths.
+  const { data: fxAgentData } = useQuery<{
+    wallets: Array<{ wallet: { ledgerAccountId: number } } & FxAgentAccountBalance>;
+  }>({
+    queryKey: ["/api/factory/fx-agent-wallets", model.selectedCompany?.id, model.periodFilter.toDate || null],
+    enabled: model.appMode === "factory" && !!model.selectedCompany?.id && showViewAccounts,
+    staleTime: 30_000,
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      if (model.periodFilter.toDate) params.set("asOf", model.periodFilter.toDate);
+      const response = await fetch("/api/factory/fx-agent-wallets?" + params.toString(), {
+        credentials: "include",
+      });
+      if (!response.ok) throw new Error("FX wallet balances could not be loaded");
+      return response.json();
+    },
+  });
+  const walletByLedgerId = new Map(
+    (fxAgentData?.wallets ?? []).map((snapshot) => [snapshot.wallet.ledgerAccountId, snapshot])
+  );
+  const withFxWallet = (account: Account): Account => {
+    if (model.appMode !== "factory" || account.type !== "ledger") return account;
+    const fxWallet = walletByLedgerId.get(account.accountId);
+    return fxWallet ? { ...account, fxWallet } : account;
+  };
+
   const freshStartAccount = model.allAccounts.find(
     (account) => account.subType === "gc_partner_capital" && account.active !== false
   );
@@ -85,16 +113,16 @@ export default function Accounts() {
   // Keep the aggregate insurance expense/accounting ledgers visible.
   const visibleFilteredAccounts =
     model.appMode === "factory"
-      ? presentedFilteredAccounts.filter(
-          (account) => !account.name.trim().toLocaleLowerCase().startsWith("insurance - ")
-        )
+      ? presentedFilteredAccounts
+          .filter((account) => !account.name.trim().toLocaleLowerCase().startsWith("insurance - "))
+          .map(withFxWallet)
       : presentedFilteredAccounts;
   const selectedFreshStartPresentation =
     selectedAccount?.subType === "gc_partner_capital" && selectedAccount.accountId === freshStartAccount?.accountId
       ? freshStartPresentation
       : null;
   const presentedSelectedAccount = selectedAccount
-    ? projectGoldenCoastFreshStartAccounts([selectedAccount], selectedFreshStartPresentation)[0]
+    ? withFxWallet(projectGoldenCoastFreshStartAccounts([selectedAccount], selectedFreshStartPresentation)[0])
     : null;
   const presentedStatement = projectGoldenCoastFreshStartStatement({
     openingBalance: model.broughtForwardBalance,

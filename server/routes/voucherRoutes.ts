@@ -6,6 +6,7 @@ import { registerVoucherPaginationRoutes } from "./vouchers/voucherPaginationRou
 import { registerVoucherQueryRoutes } from "./vouchers/voucherQueryRoutes";
 import { registerVoucherCreateRoutes } from "./vouchers/voucherCreateRoutes";
 import { registerVoucherPaymentRoutes } from "./vouchers/voucherPaymentRoutes";
+import { guardFxWalletPaymentSource } from "./vouchers/fxAgentPaymentSourceGuard";
 import { registerCentralGenericVoucherCreateRoute } from "./vouchers/centralGenericVoucherCreateRoute";
 import { registerCentralPaymentReceiptCreateRoute } from "./vouchers/centralPaymentReceiptCreateRoute";
 import { registerVoucherExactReversalRoute } from "./vouchers/voucherExactReversalRoute";
@@ -111,6 +112,8 @@ export function registerVoucherRoutes(app: Express) {
   registerCentralGenericVoucherCreateRoute(app);
   registerVoucherCreateRoutes(app);
 
+  // Protect FX native balances before central and legacy Payment creators.
+  app.use("/api/vouchers/payment-receipt", guardFxWalletPaymentSource);
   registerCentralPaymentReceiptCreateRoute(app);
   registerVoucherExactReversalRoute(app);
   registerVoucherReverseRoute(app);

@@ -24,6 +24,7 @@ import {
   loadCustomerNotInLedger,
 } from "../services/accounting/balances/customerLedgerStatement";
 import { summarizeAccountStatementCurrency } from "../services/accounting/accountStatementCurrency";
+import { projectCustomerStatementLines } from "./factory/customers-core/heldUnfinalizedCustomerCharges";
 
 /**
  * The statement body. Lines dated after the server's business date are
@@ -88,9 +89,14 @@ export function registerAccountTransactionRoutes(app: Express) {
           customerLedgerNetBefore(db, companyId, owner.id, rawStart),
           loadCustomerNotInLedger(db, window),
         ]);
+        // Legacy CHARGE-PRE freight remains in the audit ledger, but must not
+        // surface as receivable in customer-owned Accounts / Factory Agents.
+        const projected = await projectCustomerStatementLines(
+          companyId, owner.id, lines, rawStart, effectiveEndDate
+        );
         return res.json(
-          statementResponse(lines, {
-            preNetBalance,
+          statementResponse(projected.rows, {
+            preNetBalance: toMoney(preNetBalance).minus(projected.heldBefore).toNumber(),
             asOfDate,
             startDate: rawStart ?? null,
             endDate: effectiveEndDate,
@@ -456,9 +462,12 @@ export function registerAccountTransactionRoutes(app: Express) {
         loadCustomerNotInLedger(db, window),
       ]);
 
+      const projected = await projectCustomerStatementLines(
+        companyId, customerId, mapped, rawStart, effectiveEndDate
+      );
       return res.json(
-        statementResponse(mapped, {
-          preNetBalance,
+        statementResponse(projected.rows, {
+          preNetBalance: toMoney(preNetBalance).minus(projected.heldBefore).toNumber(),
           asOfDate,
           startDate: rawStart ?? null,
           endDate: effectiveEndDate,

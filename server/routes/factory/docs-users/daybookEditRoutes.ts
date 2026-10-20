@@ -36,6 +36,7 @@ import type Decimal from "decimal.js";
 import { MoneyDecimal, parseMoneyInput, toMoney, type MoneyInput } from "../../../lib/money";
 import { syncContainerCommissionJournalTx } from "../../../services/factory/containerCommissionJournal";
 import { retireVouchersTx, sessionRetirementActor } from "../../../services/accounting/voucherRetirement";
+import { cancelFxAgentSettlementVoucherTx } from "../../../services/factory/fxAgentSettlementCancellation";
 import {
   editPostedFactoryVoucherTx,
   sendVoucherCorrectionRefusal,
@@ -630,7 +631,15 @@ export function registerFactoryDaybookEditRoutes(app: Express) {
       const txTypeVal = voucherTxTypeMap[voucher.voucherType] || "JOURNAL";
       const today = getClientDate(req);
 
+      let fxPaymentCancelled = false;
       await db.transaction(async (tx) => {
+        // Cancel the linked native EUR payout and USD voucher together. A generic
+        // voucher retirement alone would strand the wallet movement.
+        fxPaymentCancelled = await cancelFxAgentSettlementVoucherTx({
+          tx, companyId, voucherId, actor: sessionRetirementActor(req), asOfDate: today,
+        });
+        if (fxPaymentCancelled) return;
+
         // 0. Read employee-linked entries BEFORE deletion so we can reverse balances
         const empEntries = await tx
           .select()
@@ -812,7 +821,7 @@ export function registerFactoryDaybookEditRoutes(app: Express) {
         });
       });
 
-      res.json({ message: "Voucher voided successfully", voucherId });
+      res.json({ message: fxPaymentCancelled ? "FX payment deleted and EUR restored" : "Voucher voided successfully", voucherId, fxPaymentCancelled });
     } catch (error: unknown) {
       logger.error("Error voiding voucher:", { error: error });
       res.status(500).json({ message: getErrorMessage(error) });

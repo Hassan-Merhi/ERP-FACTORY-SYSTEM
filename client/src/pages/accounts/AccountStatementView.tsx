@@ -25,6 +25,8 @@ import type { PeriodFilterValue } from "@/components/ui/period-filter";
 import type { Account, Transaction, WaRule } from "./accountTypes";
 import { AccountTransactionRows } from "./AccountTransactionRows";
 import { AccountStatementCards } from "./AccountStatementCards";
+import { FxAgentNativeBalance } from "./FxAgentNativeBalance";
+import { FxAgentEurStatement, fxEurStatementUrl } from "./FxAgentEurStatement";
 import { ErpMobileActionsMenu, ErpMobileSummaryGrid } from "@/components/ui/erp-mobile-records";
 import { useErpPhoneLayout } from "@/hooks/use-erp-phone-layout";
 import { useCompany } from "@/contexts/CompanyContext";
@@ -115,6 +117,14 @@ export function AccountStatementView({
   const isFactorySupplierAccount = selectedAccount?.type === "factorySupplier";
   const [pdfLang, setPdfLang] = useState<"en" | "fr" | "ar">("en");
   const isPhone = useErpPhoneLayout();
+  const nativeWallet = selectedAccount.fxWallet;
+  const fxWalletId = nativeWallet?.wallet?.id;
+  const [fxTabChoice, setFxTabChoice] = useState<{ accountId: number; tab: "eur" | "usd" } | null>(null);
+  const hasFxTabs = selectedAccount.type === "ledger" && !!fxWalletId;
+  const activeFxTab = fxTabChoice?.accountId === selectedAccount.accountId
+    ? fxTabChoice.tab
+    : Number(nativeWallet?.state.eur || 0) > 0 ? "eur" : "usd";
+  const isEurTab = hasFxTabs && activeFxTab === "eur";
 
   const statementMetadata = queryClient.getQueryData<AccountStatementPageMetadata>([
     "account-statement",
@@ -151,6 +161,7 @@ export function AccountStatementView({
 
   const buildPdfUrl = (lang: "en" | "fr" | "ar" = pdfLang) => {
     if (!selectedAccount) return null;
+    if (isEurTab && fxWalletId) return fxEurStatementUrl(fxWalletId, periodFilter, ".pdf");
     const serverType = pdfTypeMap[selectedAccount.type] || "ledger";
     const params = new URLSearchParams({ lang });
     if (periodFilter?.fromDate) params.set("startDate", periodFilter.fromDate);
@@ -160,6 +171,10 @@ export function AccountStatementView({
 
   const canExportExcel = ["ledger", "bank-account", "bank", "supplier", "employee"].includes(selectedAccount.type);
   const exportExcel = () => {
+    if (isEurTab && fxWalletId) {
+      window.open(fxEurStatementUrl(fxWalletId, periodFilter, ".xlsx"), "_blank");
+      return;
+    }
     const typeMap: Record<string, string> = {
       ledger: "ledger",
       bank: "bank",
@@ -207,6 +222,7 @@ export function AccountStatementView({
     : vouchersWithBalance.length;
 
   const balSide = (val: number) => (val >= 0 ? "Dr" : "Cr");
+  const showNativeBalance = !!nativeWallet?.synchronized;
 
   if (isFactorySupplierAccount) {
     return (
@@ -282,7 +298,7 @@ export function AccountStatementView({
                     onSelect: openWaRuleDialog,
                     testId: "button-wa-rule",
                   },
-                  showWhatsApp &&
+                  !isEurTab && showWhatsApp &&
                     waRule?.enabled && {
                       label: "Send statement via WhatsApp",
                       icon: Send,
@@ -297,17 +313,17 @@ export function AccountStatementView({
                     separated: true,
                     testId: "button-export-excel",
                   },
-                  { label: "PDF (English)", icon: FileDown, onSelect: () => openPdf("en"), testId: "button-pdf-en" },
-                  { label: "PDF (Français)", icon: FileDown, onSelect: () => openPdf("fr"), testId: "button-pdf-fr" },
-                  { label: "PDF (العربية)", icon: FileDown, onSelect: () => openPdf("ar"), testId: "button-pdf-ar" },
-                  {
+                  { label: isEurTab ? "EUR PDF statement" : "PDF (English)", icon: FileDown, onSelect: () => openPdf("en"), testId: "button-pdf-en" },
+                  !isEurTab && { label: "PDF (Français)", icon: FileDown, onSelect: () => openPdf("fr"), testId: "button-pdf-fr" },
+                  !isEurTab && { label: "PDF (العربية)", icon: FileDown, onSelect: () => openPdf("ar"), testId: "button-pdf-ar" },
+                  !isEurTab && {
                     label: showDeletedVouchers ? "Hide Deleted" : "Show Deleted",
                     icon: Clock,
                     onSelect: () => setShowDeletedVouchers((p: boolean) => !p),
                     separated: true,
                     testId: "button-show-deleted",
                   },
-                  selectedVoucherIds.size > 0 && {
+                  !isEurTab && selectedVoucherIds.size > 0 && {
                     label: `Delete Selected (${selectedVoucherIds.size})`,
                     icon: Trash2,
                     destructive: true,
@@ -318,14 +334,20 @@ export function AccountStatementView({
               />
             </div>
             {!hideBalances && (
-              <p
-                className="mt-2 font-mono text-2xl font-semibold tabular-nums"
-                dir="ltr"
-                style={{ textAlign: "start" }}
-              >
-                {formatAmount(Math.abs(displayClosingBalance))}
-                <span className="ms-1 text-sm font-normal opacity-70">{balSide(displayClosingBalance)}</span>
-              </p>
+              showNativeBalance ? (
+                <div className="mt-2">
+                  <FxAgentNativeBalance wallet={nativeWallet!} compact />
+                </div>
+              ) : (
+                <p
+                  className="mt-2 font-mono text-2xl font-semibold tabular-nums"
+                  dir="ltr"
+                  style={{ textAlign: "start" }}
+                >
+                  {formatAmount(Math.abs(displayClosingBalance))}
+                  <span className="ms-1 text-sm font-normal opacity-70">{balSide(displayClosingBalance)}</span>
+                </p>
+              )
             )}
             {/* The everyday actions stay one tap away; exports in other languages, WhatsApp
                 settings and deleted-voucher controls remain in the Actions menu. */}
@@ -333,14 +355,14 @@ export function AccountStatementView({
               <Button
                 type="button"
                 variant="outline"
-                className={showWhatsApp && waRule?.enabled ? undefined : "col-span-2"}
+                className={showWhatsApp && waRule?.enabled && !isEurTab ? undefined : "col-span-2"}
                 onClick={() => openPdf(phonePdfLanguage)}
                 data-testid="button-pdf-phone"
               >
                 <FileDown className="me-2 h-4 w-4" aria-hidden="true" />
-                PDF
+                {isEurTab ? "EUR PDF" : "PDF"}
               </Button>
-              {showWhatsApp && waRule?.enabled && (
+              {!isEurTab && showWhatsApp && waRule?.enabled && (
                 <Button
                   type="button"
                   variant="outline"
@@ -371,10 +393,14 @@ export function AccountStatementView({
               {!hideBalances && (
                 <>
                   <span className="text-muted-foreground text-xs shrink-0">|</span>
-                  <span className="text-sm font-mono tabular-nums shrink-0">
-                    {formatAmount(Math.abs(displayClosingBalance))}
-                    <span className="ml-1 text-[11px] opacity-70">{displayClosingBalance >= 0 ? "Dr" : "Cr"}</span>
-                  </span>
+                  {showNativeBalance ? (
+                    <FxAgentNativeBalance wallet={nativeWallet!} compact />
+                  ) : (
+                    <span className="text-sm font-mono tabular-nums shrink-0">
+                      {formatAmount(Math.abs(displayClosingBalance))}
+                      <span className="ml-1 text-[11px] opacity-70">{displayClosingBalance >= 0 ? "Dr" : "Cr"}</span>
+                    </span>
+                  )}
                 </>
               )}
             </div>
@@ -390,7 +416,7 @@ export function AccountStatementView({
                   >
                     <MessageCircle className={`h-4 w-4 ${waRule?.enabled ? "text-green-500" : ""}`} />
                   </Button>
-                  {waRule?.enabled && (
+                  {!isEurTab && waRule?.enabled && (
                     <Button
                       size="icon"
                       variant="ghost"
@@ -413,15 +439,15 @@ export function AccountStatementView({
                   <Button
                     size="icon"
                     variant="ghost"
-                    title="Export Excel Statement"
+                    title={isEurTab ? "Export EUR Excel Statement" : "Export Excel Statement"}
                     data-testid="button-export-excel"
                     onClick={exportExcel}
                   >
                     <FileSpreadsheet className="h-4 w-4 text-green-600" />
                   </Button>
                 )}
-              {/* Language toggle for PDF */}
-              <div className="flex items-center rounded-sm border text-[11px] font-semibold overflow-hidden">
+              {/* Language selection applies to the historical USD PDF only. */}
+              {!isEurTab && <div className="flex items-center rounded-sm border text-[11px] font-semibold overflow-hidden">
                 {(["en", "fr", "ar"] as const).map((l) => (
                   <button
                     key={l}
@@ -432,12 +458,12 @@ export function AccountStatementView({
                     {l === "en" ? "EN" : l === "fr" ? "FR" : "عر"}
                   </button>
                 ))}
-              </div>
+              </div>}
               {/* PDF download */}
               <Button
                 size="icon"
                 variant="ghost"
-                title="Download PDF Statement"
+                title={isEurTab ? "Download EUR PDF Statement" : "Download PDF Statement"}
                 data-testid="button-pdf-download"
                 onClick={() => {
                   const url = buildPdfUrl();
@@ -456,7 +482,7 @@ export function AccountStatementView({
           <div className="flex items-center justify-between gap-2 flex-wrap">
             <h3 className="font-semibold text-base">Ledger: {selectedAccount?.name}</h3>
             <div className="flex items-center gap-2 flex-wrap">
-              {selectedVoucherIds.size > 0 && (
+              {!isEurTab && selectedVoucherIds.size > 0 && (
                 <Button
                   variant="destructive"
                   size="sm"
@@ -467,7 +493,7 @@ export function AccountStatementView({
                 </Button>
               )}
               <PeriodFilter value={periodFilter} onChange={setPeriodFilter} />
-              <Button
+              {!isEurTab && <Button
                 variant={showDeletedVouchers ? "secondary" : "outline"}
                 size="sm"
                 onClick={() => setShowDeletedVouchers((p: boolean) => !p)}
@@ -475,27 +501,61 @@ export function AccountStatementView({
               >
                 <Clock className="h-4 w-4 mr-1" />
                 {showDeletedVouchers ? "Hide Deleted" : "Show Deleted"}
-              </Button>
+              </Button>}
             </div>
           </div>
         </>
       )}
 
+      {hasFxTabs && (
+        <div className="flex items-center justify-between gap-2 flex-wrap" data-testid="fx-agent-currency-tabs">
+          <div className="inline-flex rounded-lg border bg-muted/30 p-1 gap-1" role="tablist" aria-label="FX transaction currency">
+            <Button
+              type="button"
+              size="sm"
+              role="tab"
+              aria-selected={isEurTab}
+              variant={isEurTab ? "default" : "ghost"}
+              data-testid="button-fx-eur-tab"
+              onClick={() => setFxTabChoice({ accountId: selectedAccount.accountId, tab: "eur" })}
+            >
+              EUR · Native
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              role="tab"
+              aria-selected={!isEurTab}
+              variant={!isEurTab ? "default" : "ghost"}
+              data-testid="button-fx-usd-tab"
+              onClick={() => setFxTabChoice({ accountId: selectedAccount.accountId, tab: "usd" })}
+            >
+              USD · Historical
+            </Button>
+          </div>
+          <span className="text-xs text-muted-foreground">
+            {isEurTab ? "Real EUR conversions and payments" : "Original USD accounting journal"}
+          </span>
+        </div>
+      )}
+
+      {!hideBalances && nativeWallet && <FxAgentNativeBalance wallet={nativeWallet} />}
+
       {/* Error state */}
-      {transactionError && !transactionsLoading && (
+      {!isEurTab && transactionError && !transactionsLoading && (
         <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
           Failed to load this account period: {transactionError}
         </div>
       )}
 
       {/* Stats row */}
-      {isPhone && !hideBalances && !transactionsLoading && !transactionError && (
+      {!isEurTab && isPhone && !hideBalances && !transactionsLoading && !transactionError && (
         <ErpMobileSummaryGrid
           data-testid="account-statement-summary"
           items={[
             { label: "Transactions", value: transactionCount },
             {
-              label: "Closing Balance",
+              label: showNativeBalance ? "Historical USD closing" : "Closing Balance",
               value: (
                 <>
                   {formatAmount(Math.abs(displayClosingBalance))}
@@ -503,12 +563,12 @@ export function AccountStatementView({
                 </>
               ),
             },
-            { label: "Total Debit", value: formatAmount(totalDebit) },
-            { label: "Total Credit", value: formatAmount(totalCredit) },
+            { label: showNativeBalance ? "Historic USD debit" : "Total Debit", value: formatAmount(totalDebit) },
+            { label: showNativeBalance ? "Historic USD credit" : "Total Credit", value: formatAmount(totalCredit) },
           ]}
         />
       )}
-      {!isPhone && !hideBalances && !transactionsLoading && !transactionError && (
+      {!isEurTab && !isPhone && !hideBalances && !transactionsLoading && !transactionError && (
         <div className="flex flex-wrap gap-3">
           <div className="rounded-lg border bg-muted/30 px-4 py-2.5 flex items-center gap-3 min-w-[130px]">
             <FileText className="w-4 h-4 text-muted-foreground shrink-0" />
@@ -520,32 +580,36 @@ export function AccountStatementView({
           <div className="rounded-lg border bg-muted/30 px-4 py-2.5 flex items-center gap-3 min-w-[150px]">
             <TrendingUp className="w-4 h-4 text-muted-foreground shrink-0" />
             <div>
-              <p className="text-[11px] text-muted-foreground leading-none mb-0.5">Total Debit</p>
+              <p className="text-[11px] text-muted-foreground leading-none mb-0.5">{showNativeBalance ? "Historical USD debit" : "Total Debit"}</p>
               <p className="text-base font-semibold leading-none tabular-nums">{formatAmount(totalDebit)}</p>
             </div>
           </div>
           <div className="rounded-lg border bg-muted/30 px-4 py-2.5 flex items-center gap-3 min-w-[150px]">
             <TrendingDown className="w-4 h-4 text-muted-foreground shrink-0" />
             <div>
-              <p className="text-[11px] text-muted-foreground leading-none mb-0.5">Total Credit</p>
+              <p className="text-[11px] text-muted-foreground leading-none mb-0.5">{showNativeBalance ? "Historical USD credit" : "Total Credit"}</p>
               <p className="text-base font-semibold leading-none tabular-nums">{formatAmount(totalCredit)}</p>
             </div>
           </div>
           <div className="rounded-lg border bg-muted/30 px-4 py-2.5 flex items-center gap-3 min-w-[160px]">
             <Scale className="w-4 h-4 text-muted-foreground shrink-0" />
             <div>
-              <p className="text-[11px] text-muted-foreground leading-none mb-0.5">Closing Balance</p>
+              <p className="text-[11px] text-muted-foreground leading-none mb-0.5">{showNativeBalance ? "Historical USD closing" : "Closing Balance"}</p>
               <p className="text-base font-semibold leading-none tabular-nums">
-                {formatAmount(Math.abs(displayClosingBalance))}
-                <span className="ml-1 text-[11px] font-normal opacity-70">{balSide(displayClosingBalance)}</span>
+                <>
+                  {formatAmount(Math.abs(displayClosingBalance))}
+                  <span className="ml-1 text-[11px] font-normal opacity-70">{balSide(displayClosingBalance)}</span>
+                </>
               </p>
             </div>
           </div>
         </div>
       )}
 
-      {/* Table */}
-      {transactionsLoading ? (
+      {/* Transactions are never blended across native EUR and historical USD. */}
+      {isEurTab && fxWalletId ? (
+        <FxAgentEurStatement walletId={fxWalletId} periodFilter={periodFilter} hideBalances={hideBalances} />
+      ) : transactionsLoading ? (
         <Skeleton className="h-40 w-full" />
       ) : transactionError ? null : (
         <div ref={printRef as React.RefObject<HTMLDivElement>}>
@@ -556,7 +620,7 @@ export function AccountStatementView({
             toggleVoucherSelection={toggleVoucherSelection}
             handleOpenVoucher={handleOpenVoucher}
             formatAmount={formatAmount}
-            formatTransactionAmount={formatTransactionAmount}
+            formatTransactionAmount={hasFxTabs ? undefined : formatTransactionAmount}
             hideBalances={hideBalances}
             appMode={appMode}
             openingBalance={openingBalance}
@@ -566,13 +630,13 @@ export function AccountStatementView({
           />
         </div>
       )}
-      {!transactionsLoading && !transactionError && (
+      {!isEurTab && !transactionsLoading && !transactionError && (
         <AccountStatementCards
           vouchersWithBalance={vouchersWithBalance}
           selectedVoucherIds={selectedVoucherIds}
           handleOpenVoucher={handleOpenVoucher}
           formatAmount={formatAmount}
-          formatTransactionAmount={formatTransactionAmount}
+          formatTransactionAmount={hasFxTabs ? undefined : formatTransactionAmount}
           hideBalances={hideBalances}
           openingBalance={openingBalance}
           closingBalance={displayClosingBalance}

@@ -3,6 +3,7 @@ import { Table, TableBody, TableCell, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { ArrowDown, ArrowUp, ChevronDown, ChevronRight, GripVertical, Pencil } from "lucide-react";
 import type { Account } from "./accountTypes";
+import { FxAgentNativeBalance } from "./FxAgentNativeBalance";
 import type { AccountDisplayLayout } from "./DisplayAccountGroups";
 import { cn } from "@/lib/utils";
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
@@ -279,7 +280,9 @@ export function AccountTable({
                     </TableCell>
                     {!hideBalances && (
                       <TableCell className="text-right py-3 max-sm:w-28">
-                        {hasKids && account.type !== "displayGroup" ? (
+                        {account.fxWallet ? (
+                          <FxAgentNativeBalance wallet={account.fxWallet} compact />
+                        ) : hasKids && account.type !== "displayGroup" ? (
                           <span className="text-muted-foreground text-xs">
                             {kids.length} {kids.length === 1 ? "account" : "accounts"}
                           </span>
@@ -359,17 +362,21 @@ export function AccountTable({
                           </TableCell>
                           {!hideBalances && (
                             <TableCell className="text-right py-2.5">
-                              <span
-                                className={cn(
-                                  "font-mono tabular-nums text-sm",
-                                  childSide === "Dr"
-                                    ? "text-emerald-600/80 dark:text-emerald-400/80"
-                                    : "text-amber-600/80 dark:text-amber-400/80"
-                                )}
-                              >
-                                {fmtBalance(Math.abs(child.balance), child.type)}
-                                <span className="ml-1 text-[11px] opacity-60">{childSide}</span>
-                              </span>
+                              {child.fxWallet ? (
+                                <FxAgentNativeBalance wallet={child.fxWallet} compact />
+                              ) : (
+                                <span
+                                  className={cn(
+                                    "font-mono tabular-nums text-sm",
+                                    childSide === "Dr"
+                                      ? "text-emerald-600/80 dark:text-emerald-400/80"
+                                      : "text-amber-600/80 dark:text-amber-400/80"
+                                  )}
+                                >
+                                  {fmtBalance(Math.abs(child.balance), child.type)}
+                                  <span className="ml-1 text-[11px] opacity-60">{childSide}</span>
+                                </span>
+                              )}
                             </TableCell>
                           )}
                         </TableRow>

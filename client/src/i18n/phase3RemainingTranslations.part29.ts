@@ -537,4 +537,109 @@ export const phase3RemainingTranslationsPart29: readonly Phase3SharedUiEntry[] =
     ar: "تغيرت حالة البالة أثناء الاستعادة؛ أُلغيت المعاملة",
     fr: "Le statut de la balle a changé pendant la restauration ; opération annulée",
   },
+  {
+    en: "FX Agent USD / EUR — Convert, Pay, Reverse",
+    ar: "وكيل الصرف دولار / يورو — تحويل، دفع، عكس",
+    fr: "Agent de change USD / EUR — convertir, payer, annuler",
+  },
+  {
+    en: "USD → EUR conversions and reversals",
+    ar: "تحويلات الدولار إلى اليورو وعمليات العكس",
+    fr: "Conversions USD → EUR et annulations",
+  },
+  {
+    en: "Apply the 20261020 FX reversal SQL migration before reversing conversions.",
+    ar: "يجب تطبيق ترحيل SQL لعكس تحويلات الصرف بتاريخ 20261020 أولاً.",
+    fr: "Appliquez la migration SQL du 20/10/2026 avant d'annuler une conversion.",
+  },
+  {
+    en: "No conversions recorded.",
+    ar: "لا توجد تحويلات مسجلة.",
+    fr: "Aucune conversion enregistrée.",
+  },
+  {
+    en: "Reversed",
+    ar: "تم العكس",
+    fr: "Annulée",
+  },
+  {
+    en: "EUR used in a later payment — reversal blocked",
+    ar: "تم استخدام اليورو في دفعة لاحقة — العكس محظور",
+    fr: "EUR utilisés dans un paiement ultérieur — annulation interdite",
+  },
+  {
+    en: "Reason for reversal (required)",
+    ar: "سبب العكس (إلزامي)",
+    fr: "Motif de l'annulation (obligatoire)",
+  },
+  {
+    en: "Reverse to USD",
+    ar: "عكس إلى الدولار",
+    fr: "Annuler vers USD",
+  },
+  {
+    en: "FX agent wallet — ${fxAccount?.name}",
+    ar: "محفظة وكيل الصرف — ${fxAccount?.name}",
+    fr: "Portefeuille de change — ${fxAccount?.name}",
+  },
+  {
+    en: "Convert this account's USD to EUR, pay USD beneficiaries or reverse an unused conversion. Net Position values EUR using the Settings rate.",
+    ar: "حوّل رصيد الدولار إلى اليورو، أو ادفع للمستفيدين بالدولار، أو اعكس تحويلاً لم يُستخدم. يُقيّم صافي المركز اليورو بسعر الإعدادات.",
+    fr: "Convertissez les USD du compte en EUR, payez les bénéficiaires en USD ou annulez une conversion non utilisée. Le taux des paramètres détermine la valeur en USD.",
+  },
+  {
+    en: "Select a conversion and provide a reversal reason (max 500 characters)",
+    ar: "اختر تحويلاً واكتب سبب العكس (500 حرف كحد أقصى)",
+    fr: "Sélectionnez une conversion et indiquez un motif (500 caractères maximum)",
+  },
+  {
+    en: "Apply the FX reversal SQL migration first",
+    ar: "طبّق ترحيل SQL لعكس الصرف أولاً",
+    fr: "Appliquez d'abord la migration SQL d'annulation FX",
+  },
+  {
+    en: "Conversion does not belong to this FX wallet",
+    ar: "هذا التحويل لا يخص محفظة الصرف هذه",
+    fr: "La conversion n'appartient pas à ce portefeuille",
+  },
+  {
+    en: "This conversion has already been reversed",
+    ar: "تم عكس هذا التحويل مسبقاً",
+    fr: "Cette conversion a déjà été annulée",
+  },
+  {
+    en: "Cannot reverse a conversion after EUR has been paid out. Reconcile the settlement first",
+    ar: "لا يمكن عكس التحويل بعد دفع اليورو. يجب تسوية الدفعة أولاً.",
+    fr: "Impossible d'annuler après un paiement en EUR. Rapprochez d'abord le règlement.",
+  },
+  {
+    en: "Agent ledger does not match wallet. Reconcile before reversing",
+    ar: "رصيد الأستاذ لا يطابق المحفظة. قم بالمطابقة قبل العكس.",
+    fr: "Le grand livre ne correspond pas au portefeuille. Rapprochez avant d'annuler.",
+  },
+  {
+    en: "Insufficient native EUR or USD book basis for reversal",
+    ar: "رصيد اليورو أو أساس الدولار الدفتري غير كافٍ للعكس",
+    fr: "Solde EUR ou base comptable USD insuffisant pour annuler",
+  },
+  {
+    en: "Cannot reverse before a later wallet movement",
+    ar: "لا يمكن عكس تحويل قبل حركة محفظة لاحقة",
+    fr: "Impossible d'annuler avant un mouvement ultérieur du portefeuille",
+  },
+  {
+    en: "EUR wallet has insufficient balance for reversal",
+    ar: "رصيد اليورو غير كافٍ للعكس",
+    fr: "Solde EUR insuffisant pour l'annulation",
+  },
+  {
+    en: "Invalid wallet",
+    ar: "محفظة غير صالحة",
+    fr: "Portefeuille invalide",
+  },
+  {
+    en: "Request key was used for a different operation",
+    ar: "تم استخدام مفتاح الطلب في عملية أخرى",
+    fr: "La clé de requête a déjà été utilisée pour une autre opération",
+  },
 ];

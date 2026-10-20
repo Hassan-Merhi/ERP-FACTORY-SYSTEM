@@ -49,6 +49,28 @@ describe("FX agent EUR settlement and Net Position", () => {
     expect(after.totalBookUsd).toBe("8888.500000");
   });
 
+  it("returns the exact historic USD basis after an unused conversion is reversed", () => {
+    const restored = replayFxAgentWallet("10000", [
+      { kind: "USD_TO_EUR", sourceAmount: quote.usd, targetAmount: quote.eur, sourceBookUsd: quote.usd },
+      { kind: "EUR_TO_USD_REVERSAL", sourceAmount: quote.eur, targetAmount: quote.usd, sourceBookUsd: quote.usd },
+    ]);
+    expect(restored).toEqual({
+      usd: "10000.000000",
+      eur: "0.000000",
+      eurBookUsd: "0.000000",
+      totalBookUsd: "10000.000000",
+    });
+  });
+
+  it("rejects reversals when the wallet cannot return the recorded EUR or USD basis", () => {
+    expect(() =>
+      replayFxAgentWallet("1000", [
+        { kind: "USD_TO_EUR", sourceAmount: "1000", targetAmount: "900", sourceBookUsd: "1000" },
+        { kind: "EUR_TO_USD_REVERSAL", sourceAmount: "901", targetAmount: "1000", sourceBookUsd: "1000" },
+      ])
+    ).toThrow();
+  });
+
   it("rejects overspending, inconsistent book basis and non-positive rates", () => {
     expect(() => conversionPreview("100", "0")).toThrow();
     expect(() =>
