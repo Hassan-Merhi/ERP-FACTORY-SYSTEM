@@ -38,20 +38,23 @@ const CLEAR_CONFIRMATION = "CLEAR ALL INSURANCE";
 
 // Insurance-owned journal creation has its own narrow API rather than exposing
 // generic Voucher journal creation to everybody with Insurance-tab access.
-const insuranceExtraChargeSchema = z.object({
-  voucherDate: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/),
-  amount: z.string().regex(/^(?:0|[1-9]\d{0,10})(?:\.\d{1,2})?$/),
-  debitAccountId: z.number().int().positive(),
-  creditAccountId: z.number().int().positive(),
-  notes: z.string().trim().max(2000).optional().default(""),
-  clientRequestId: z.string().uuid(),
-}).refine((value) => value.debitAccountId !== value.creditAccountId, {
-  path: ["creditAccountId"],
-  message: "Debit and credit accounts must be different",
-}).refine((value) => toMoney(value.amount).gt(0), {
-  path: ["amount"],
-  message: "Amount must be greater than zero",
-});
+const insuranceExtraChargeSchema = z
+  .object({
+    voucherDate: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/),
+    amount: z.string().regex(/^(?:0|[1-9]\d{0,10})(?:\.\d{1,2})?$/),
+    debitAccountId: z.number().int().positive(),
+    creditAccountId: z.number().int().positive(),
+    notes: z.string().trim().max(2000).optional().default(""),
+    clientRequestId: z.string().uuid(),
+  })
+  .refine((value) => value.debitAccountId !== value.creditAccountId, {
+    path: ["creditAccountId"],
+    message: "Debit and credit accounts must be different",
+  })
+  .refine((value) => toMoney(value.amount).gt(0), {
+    path: ["amount"],
+    message: "Amount must be greater than zero",
+  });
 
 const insuranceImportApplySchema = z.object({
   rows: z
@@ -196,7 +199,10 @@ export function registerFactoryInsuranceRoutes(app: Express) {
               )
             );
           if (ownedAccounts.length !== 2) {
-            throw new PostingValidationError("POSTING_TARGET_NOT_OWNED", "An account is not available in this company");
+            throw new PostingValidationError(
+              "POSTING_TARGET_NOT_OWNED",
+              "An account is not available in this company"
+            );
           }
 
           return postBalancedVoucherTx(
