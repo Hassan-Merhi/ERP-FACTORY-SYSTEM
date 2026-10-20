@@ -295,8 +295,12 @@ export function resolveFactoryBackendAccessRequirement(req: Request): FactoryApi
     return requirement("factory/production-report", ["hide_tab_overview_shipping"]);
   }
 
-  // FX agent EUR wallets are valued and managed alongside Net Position.
-  if (hasPrefix(path, "/net-position") || hasPrefix(path, "/fx-agent-wallets")) {
+  // FX wallet management lives inside the per-account Edit popup.
+  // Net Position valuation remains a separate report-only endpoint.
+  if (hasPrefix(path, "/fx-agent-wallets")) {
+    return requirement("factory/accounts");
+  }
+  if (hasPrefix(path, "/net-position")) {
     return requirement("factory/net-position-details");
   }
 
