@@ -79,6 +79,8 @@ export default function FactoryInsurance() {
   const [ecNotes, setEcNotes] = useState("");
   const ecDrRef = useRef<HTMLDivElement>(null);
   const ecCrRef = useRef<HTMLDivElement>(null);
+  // Reuse the request ID when retrying an unchanged form after a network error.
+  const extraChargeRequestRef = useRef<{ fingerprint: string; id: string } | null>(null);
 
   const { data: ledgerAccounts = [] } = useQuery<LedgerAccountOption[]>({
     queryKey: ["/api/ledger-accounts?includeHidden=true&profile=picker"],
@@ -109,21 +111,24 @@ export default function FactoryInsurance() {
       const amt = parseFloat(ecAmount);
       if (!ecDrId || !ecCrId || isNaN(amt) || amt <= 0) throw new Error("Fill in all fields with a valid amount.");
       if (ecDrId === ecCrId) throw new Error("Debit and credit accounts must be different.");
-      return apiRequest("POST", "/api/vouchers/with-entries", {
-        voucher: {
-          voucherType: "Journal",
-          voucherDate: ecDate,
-          voucherNumber: `INS-CHARGE-${Date.now()}`,
-          description: ecNotes || "Insurance extra charge",
-          optional: false,
-        },
-        entries: [
-          { ledgerAccountId: ecDrId, debitAmount: amt.toFixed(2), creditAmount: "0", narration: ecNotes || null },
-          { ledgerAccountId: ecCrId, debitAmount: "0", creditAmount: amt.toFixed(2), narration: ecNotes || null },
-        ],
+      const fingerprint = JSON.stringify([ecDate, amt.toFixed(2), ecDrId, ecCrId, ecNotes]);
+      if (extraChargeRequestRef.current?.fingerprint !== fingerprint) {
+        extraChargeRequestRef.current = { fingerprint, id: crypto.randomUUID() };
+      }
+      return apiRequest("POST", "/api/insurance/extra-charges", {
+        voucherDate: ecDate,
+        amount: amt.toFixed(2),
+        debitAccountId: ecDrId,
+        creditAccountId: ecCrId,
+        notes: ecNotes,
+        clientRequestId: extraChargeRequestRef.current.id,
       });
     },
     onSuccess: () => {
+      extraChargeRequestRef.current = null;
+      queryClient.invalidateQueries({ queryKey: ["/api/accounts/ledger"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/vouchers"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/daybook"] });
       setShowExtraCharges(false);
       setEcAmount("");
       setEcDrId(null);
