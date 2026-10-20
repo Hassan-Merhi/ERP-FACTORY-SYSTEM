@@ -15,6 +15,18 @@ describe("new proforma articles on already-created loadings", () => {
     { article_code: "HMD12101", product_name: "HAND - BAG 25KG", quantity: 5 },
   ];
 
+  it("shows the newly added jogging pant WCR with its expected 2 and loaded 1", () => {
+    const oldPlan = [{ article_code: "HMD11026", quantity: 4 }];
+    const editedProforma = [
+      { article_code: "HMD11026", quantity: 4 },
+      { article_code: "HMD10027", quantity: 2 },
+    ];
+    const plan = mergeNewProformaArticles(oldPlan, editedProforma, true);
+    const jogging = plan.find((line) => line.article_code === "HMD10027");
+    expect(jogging?.quantity).toBe(2);
+    expect(jogging!.quantity - 1).toBe(1);
+  });
+
   it("keeps per-loading quantities while adding codes missing from the snapshot", () => {
     const plan = mergeNewProformaArticles(saved, master, true);
     expect(plan).toHaveLength(3);
