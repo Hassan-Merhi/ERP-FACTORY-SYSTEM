@@ -30,6 +30,7 @@ import {
   loadFactorySupplierLedgerViews,
 } from "./factorySupplierLedger";
 import { entryStoredUsdAmounts, voucherEntryCurrencyColumns } from "../../../../services/factory/voucherEntryCurrency";
+import { loadFxAgentEurSupplierPayable } from "../../../../services/factory/fxAgentEurSupplierPayable";
 
 export function registerSupplierBalanceSingleRoutes(app: Express) {
   app.get("/api/factory/suppliers/:id/balance", requireAuth, async (req: Request, res: Response) => {
@@ -274,6 +275,13 @@ export function registerSupplierBalanceSingleRoutes(app: Express) {
         (await loadFactorySupplierLedgerViews(db, companyId, { ids: [supplierId], asOf })).get(supplierId) ??
         emptyFactorySupplierLedgerView(supplierId);
       const ledgerBalance = toMoney(view.ledgerBalanceUsd).toNumber();
+      // Broker EUR payment eligibility uses the same native settlement pool
+      // as Parties, rather than the separate posted USD accounting ledger.
+      const fxEurPayable = req.query.fxEurPayout === "true"
+        ? await loadFxAgentEurSupplierPayable(
+            db, companyId, { id: supplier.id, isBroker: supplier.isBroker }, true
+          )
+        : undefined;
 
       res.json({
         balance: ledgerBalance,
@@ -282,6 +290,7 @@ export function registerSupplierBalanceSingleRoutes(app: Express) {
         ledgerBalance,
         ledgerBalanceSide: view.ledgerBalanceSide,
         nativeBalances: view.nativeBalances,
+        ...(fxEurPayable ? { fxEurPayable } : {}),
         // The ledger's USD figure is unresolved only where a legacy line holds a native amount.
         fxUnresolved: view.ledgerFxUnresolved,
         notInLedger: view.notInLedger,
