@@ -63,6 +63,33 @@ is shown. A ledger/wallet mismatch displays a reconciliation warning instead
 of reporting a potentially incorrect native current balance. No SQL migration
 is needed for this display-only change.
 
+## Pay an FX agent directly from Factory Payment Voucher
+Factory → Vouchers → Payment now includes activated FX agent ledgers such as
+RAMADAN FX in the Pay From selector, even though ordinary pay-from choices are
+normally limited to Cash, Bank and Loans. Choose the FX agent, select **one**
+factory supplier or USD ledger beneficiary, enter the **USD the recipient will
+receive**, and enter the agreed **USD per EUR** rate. The form displays current
+native EUR availability and a preview of the corresponding EUR deduction.
+Confirm the payout to post it.
+
+The backend derives EUR from USD/rate at six-decimal precision; it requires the
+resulting USD payout rounded to cents to match the requested amount exactly.
+A single transaction creates a **Payment** voucher, deducts native EUR, and
+recognizes the realized FX difference relative to the agent's historical USD
+book basis. The voucher has a linked FX wallet operation and is protected from
+generic correction, retirement, reversal or deletion; those cannot undo the EUR
+movement. The voucher date must match any explicit effective date, and the
+payment must not be optional. Existing EUR settlements from the account popup
+continue to work and post Journal vouchers as before.
+
+Only one recipient is supported per FX Payment voucher at present. The source
+wallet cannot pay itself, and both source and beneficiary must be in the active
+company. Ordinary USD Payment creation from an FX wallet source is explicitly
+rejected server-side so the historical USD ledger cannot be double-spent.
+The Factory payment tab permission may read wallets and post FX settlements,
+but activation, denomination conversion, rebaseline and reversal remain owned
+by the Accounts page. No SQL migration is required for this addition.
+
 ## Reversing a USD → EUR conversion
 - Apply the **20261020 reversal migration** first. The popup will explain if the migration is missing; normal conversion/settlement functionality stays available.
 - In Accounts → Edit the agent → FX popup → **USD → EUR conversions and reversals**, choose the conversion and supply a mandatory reason; confirm **Reverse to USD**.
