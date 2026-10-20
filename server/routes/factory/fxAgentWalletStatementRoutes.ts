@@ -45,16 +45,16 @@ async function build(req: Request): Promise<EurStatement> {
   if (!companyId || !Number.isSafeInteger(walletId) || walletId <= 0) throw new Error("Select a valid FX wallet");
   if (!(await fxAgentTablesExist())) throw new Error("FX wallet migration required");
   const { fromDate, toDate } = dates(req);
-  const found = await db.execute(sql\`
+  const found = await db.execute(sql`
     SELECT a.name AS "accountName", w.activated_on::text AS "activatedOn"
     FROM factory_fx_agent_wallets w JOIN ledger_accounts a ON a.id = w.ledger_account_id
-    WHERE w.company_id = \${companyId} AND w.id = \${walletId}
-      AND a.company_id = \${companyId} AND a.deleted_at IS NULL LIMIT 1
-  \`);
+    WHERE w.company_id = ${companyId} AND w.id = ${walletId}
+      AND a.company_id = ${companyId} AND a.deleted_at IS NULL LIMIT 1
+  `);
   const wallet = found.rows[0];
   if (!wallet) throw new Error("FX wallet not found in this company");
   // Include pre-period events to calculate the opening EUR balance correctly.
-  const ops = await db.execute(sql\`
+  const ops = await db.execute(sql`
     SELECT op.id, op.effective_date::text AS date, op.kind,
       op.source_amount::text AS "sourceAmount", op.target_amount::text AS "targetAmount",
       op.rate_usd_per_eur::text AS rate, op.narration, op.voucher_id AS "voucherId",
@@ -62,13 +62,13 @@ async function build(req: Request): Promise<EurStatement> {
            WHEN op.target_kind = 'factorySupplier' THEN fs.name ELSE NULL END AS beneficiary
     FROM factory_fx_agent_wallet_operations op
     LEFT JOIN ledger_accounts la ON op.target_kind = 'ledger' AND op.target_id = la.id
-      AND la.company_id = \${companyId}
+      AND la.company_id = ${companyId}
     LEFT JOIN factory_suppliers fs ON op.target_kind = 'factorySupplier' AND op.target_id = fs.id
-      AND fs.company_id = \${companyId}
-    WHERE op.company_id = \${companyId} AND op.wallet_id = \${walletId}
-      AND op.effective_date <= \${toDate}::date
+      AND fs.company_id = ${companyId}
+    WHERE op.company_id = ${companyId} AND op.wallet_id = ${walletId}
+      AND op.effective_date <= ${toDate}::date
     ORDER BY op.effective_date, op.id
-  \`);
+  `);
   let balance = toMoney(0), opening = toMoney(0), totalIn = toMoney(0), totalOut = toMoney(0);
   const rows: EurRow[] = [];
   for (const op of ops.rows) {
