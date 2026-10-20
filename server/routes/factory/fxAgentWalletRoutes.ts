@@ -163,8 +163,8 @@ export function registerFactoryFxAgentWalletRoutes(app: Express) {
         if (
           !cid || !Number.isSafeInteger(walletId) || walletId <= 0 ||
           !reason || reason.length > 500 ||
-          !/^\\d+(?:\\.\\d{1,6})?$/.test(expectedOpeningUsd) ||
-          !/^\\d+(?:\\.\\d{1,6})?$/.test(expectedLedgerBookUsd) ||
+          !/^\d+(?:\.\d{1,6})?$/.test(expectedOpeningUsd) ||
+          !/^\d+(?:\.\d{1,6})?$/.test(expectedLedgerBookUsd) ||
           req.body?.confirmUsdSource !== true
         ) {
           return res.status(400).json({ message: "Confirm the updated USD ledger balance and give a reason (max 500 characters)" });
