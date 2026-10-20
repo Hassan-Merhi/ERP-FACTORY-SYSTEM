@@ -144,7 +144,7 @@ export async function projectCustomerStatementLines<T extends { voucherId: numbe
     // The statement brought-forward amount covers dates strictly before from.
     // Use a date-only UTC predecessor rather than subtracting from the time of day.
     const date = Date.parse(`${from}T00:00:00Z`);
-    if (!Number.isFinite(date)) throw new Error("Invalid statement start date");
+    if (!Number.isFinite(date)) throw new Error("invalid_factory_statement_start_date");
     const before = new Date(date - 86400000).toISOString().slice(0, 10);
     const earlier = await loadHeldChargeSnapshot(companyId, [customerId], before);
     heldBefore = earlier.byCustomer.get(customerId) ?? ZERO;
