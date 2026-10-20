@@ -226,10 +226,14 @@ export function registerFactoryProductCascadeRoutes(app: Express) {
 
       const baleUpdate: Partial<typeof factoryBales.$inferInsert> = {};
       if (name !== undefined && name !== existing.name) baleUpdate.productName = name;
-      if (weightPerBaleKg !== undefined &&
-          (weightPerBaleKg == null ? null : Number(weightPerBaleKg)) !==
-            (existing.weightPerBaleKg == null ? null : Number(existing.weightPerBaleKg)))
-        baleUpdate.weightKg = weightPerBaleKg == null ? null : String(weightPerBaleKg);
+      if (
+        weightPerBaleKg !== undefined &&
+        weightPerBaleKg !== null &&
+        Number(weightPerBaleKg) !==
+          (existing.weightPerBaleKg == null ? null : Number(existing.weightPerBaleKg))
+      ) {
+        baleUpdate.weightKg = String(weightPerBaleKg);
+      }
       if (nextArticleCode !== undefined && nextArticleCode !== existing.articleCode)
         baleUpdate.articleCode = nextArticleCode;
       if (grade !== undefined && grade !== existingGrade) baleUpdate.grade = grade;
