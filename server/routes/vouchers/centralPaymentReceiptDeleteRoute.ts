@@ -15,6 +15,7 @@ import { logger } from "../../lib/logger";
 import { voucherMutationBlockReason } from "../../lib/migratedVoucherGuard";
 import { storage } from "../../storage";
 import { applyEmployeeBalanceDeltasTx } from "../../services/accounting/employeeBalancePosting";
+import { isFxAgentSettlementVoucherTx, FX_AGENT_VOUCHER_LOCKED_MESSAGE } from "../../services/accounting/fxAgentVoucherLock";
 import { removeFactoryDaybookMirrorTx } from "../../services/accounting/factoryDaybookMirrorRemoval";
 import {
   isPaymentReceiptVoucherType,
@@ -95,6 +96,9 @@ async function deleteActivePaymentReceipt(req: Request, res: Response, next: Nex
         .limit(1);
 
       if (!lockedVoucher) throw new Error("Voucher not found");
+      if (await isFxAgentSettlementVoucherTx(tx, companyId, [voucherId])) {
+        throw new Error(FX_AGENT_VOUCHER_LOCKED_MESSAGE);
+      }
       if (lockedVoucher.deletedAt) {
         return {
           replayed: true,
