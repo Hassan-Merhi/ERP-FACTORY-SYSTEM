@@ -419,6 +419,7 @@ export default function Vouchers({ posUser }: VouchersProps = {}) {
           beneficiary: beneficiary.accountType + ":" + beneficiary.accountId,
           usdAmount: amount.toFixed(2), rate: fxPaymentRate,
           notes: formData.notes, narration: beneficiary.narration,
+          paymentAccountNarration: formData.paymentAccountNarration,
         });
         if (fxPaymentRequestRef.current?.fingerprint !== fingerprint) {
           fxPaymentRequestRef.current = { fingerprint, key: crypto.randomUUID() };
@@ -434,7 +435,9 @@ export default function Vouchers({ posUser }: VouchersProps = {}) {
             targetId: beneficiary.accountId,
             date,
             requestKey: fxPaymentRequestRef.current.key,
-            narration: formData.notes || beneficiary.narration || "",
+            narration: formData.notes || "",
+            paymentAccountNarration: formData.paymentAccountNarration || "",
+            beneficiaryNarration: beneficiary.narration || "",
           }
         );
         return result.json();
