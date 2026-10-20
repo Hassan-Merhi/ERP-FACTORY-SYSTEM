@@ -32,6 +32,8 @@ interface VoucherEntriesTableProps {
   fieldArray: UseFieldArrayReturn<VoucherFormData, "entries", "id">;
   entries: VoucherEntry[];
   total: number;
+  /** Native EUR voucher amounts must never pass through the USD display conversion. */
+  amountCurrencyOverride?: "EUR";
   mode: "payment" | "receipt";
   onAmountCommit?: (rowIndex: number) => void;
   activeRow: number | null;
@@ -53,6 +55,7 @@ export function VoucherEntriesTable({
   fieldArray,
   entries,
   total,
+  amountCurrencyOverride,
   mode,
   onAmountCommit,
   activeRow,
@@ -69,6 +72,8 @@ export function VoucherEntriesTable({
 }: VoucherEntriesTableProps) {
   const { fields, append, remove } = fieldArray;
   const { formatAmount, selectedCurrency, convertToUSD } = useCurrencyContext();
+  const formatEntryAmount = (value: number) =>
+    amountCurrencyOverride === "EUR" ? `EUR ${value.toFixed(2)}` : formatAmount(value);
 
   const [mobileEditIndex, setMobileEditIndex] = useState<number | null>(null);
   const [mobileEditOpen, setMobileEditOpen] = useState(false);
@@ -127,7 +132,7 @@ export function VoucherEntriesTable({
       const numVal = parseFloat(mobileAmountStr);
       const isPositive = !isNaN(numVal) && numVal > 0;
       const finalAmount = isPositive
-        ? selectedCurrency !== "USD"
+        ? selectedCurrency !== "USD" && !amountCurrencyOverride
           ? convertToUSD(numVal).toFixed(2)
           : numVal.toFixed(2)
         : "";
@@ -252,7 +257,7 @@ export function VoucherEntriesTable({
   const handleAmountBlur = (e: React.FocusEvent<HTMLInputElement>, index: number) => {
     const enteredAmount = Number(e.target.value);
     if (!isNaN(enteredAmount) && enteredAmount > 0) {
-      if (selectedCurrency !== "USD") {
+      if (selectedCurrency !== "USD" && !amountCurrencyOverride) {
         const usdAmount = convertToUSD(enteredAmount);
         form.setValue(`entries.${index}.amount`, usdAmount.toFixed(2));
       }
@@ -298,7 +303,7 @@ export function VoucherEntriesTable({
               <th className="text-center px-2 py-2 font-semibold w-8">#</th>
               <th className="text-left px-2 py-2 font-semibold min-w-[10rem]">Account</th>
               <th className="text-left px-2 py-2 font-semibold w-24 hidden lg:table-cell">Type</th>
-              <th className="text-right px-2 py-2 font-semibold w-[22%] min-w-[6.5rem]">Amount</th>
+              <th className="text-right px-2 py-2 font-semibold w-[22%] min-w-[6.5rem]">{amountCurrencyOverride === "EUR" ? "Amount (EUR)" : "Amount"}</th>
               <th className="text-left px-2 py-2 font-semibold w-[24%] hidden md:table-cell">Narration</th>
               <th className="text-right px-2 py-2 font-semibold w-28 hidden lg:table-cell">Running</th>
               <th className="w-10"></th>
@@ -412,7 +417,7 @@ export function VoucherEntriesTable({
                       className="text-xs font-mono tabular-nums text-muted-foreground"
                       data-testid={`text-running-${index}`}
                     >
-                      {runningTotals[index] > 0 ? formatAmount(runningTotals[index]) : "—"}
+                      {runningTotals[index] > 0 ? formatEntryAmount(runningTotals[index]) : "—"}
                     </span>
                   </td>
                   <td className="px-1 py-1.5 align-top pt-2">
@@ -456,7 +461,7 @@ export function VoucherEntriesTable({
                   {hasAnyAmount && (
                     <div className="text-right xl:hidden">
                       <div className="text-[11px] text-muted-foreground uppercase tracking-wider">Subtotal</div>
-                      <div className="text-sm font-semibold font-mono tabular-nums">{formatAmount(total)}</div>
+                      <div className="text-sm font-semibold font-mono tabular-nums">{formatEntryAmount(total)}</div>
                     </div>
                   )}
                 </div>
