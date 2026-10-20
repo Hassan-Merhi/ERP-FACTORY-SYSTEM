@@ -79,8 +79,16 @@ export function registerFactoryCustomerProformaLineRoutes(app: Express) {
           FROM customer_orders co
           WHERE co.company_id = ${companyId}
             AND co.proforma_id_used = ${parsed.proformaId}
-            AND co.status IN ('DRAFT', 'LOADING', 'PENDING_VERIFICATION', 'VERIFIED')
+            AND co.status IN ('DRAFT', 'LOADING', 'PENDING_VERIFICATION')
             AND co.deleted_at IS NULL
+            AND NOT EXISTS (
+              SELECT 1 FROM factory_daybook_entries event
+              WHERE event.company_id = ${companyId}
+                AND event.reference_table = 'customer_orders'
+                AND event.reference_id = co.id
+                AND event.tx_type = 'LOADING_CREATED'
+                AND event.description LIKE 'Continuation of loading #%'
+            )
             AND NOT EXISTS (
               SELECT 1 FROM customer_order_expected_lines expected
               WHERE expected.company_id = ${companyId}
@@ -181,6 +189,36 @@ export function registerFactoryCustomerProformaLineRoutes(app: Express) {
         .returning();
 
       if (!updated) return res.status(404).json({ message: "Proforma line not found" });
+
+      // Keep ordinary open loading snapshots in step with edits to an
+      // EXISTING proforma line. Previously only newly inserted article codes
+      // were synchronized. Do not modify remaining-only continuation plans
+      // or verified/finalized historical quantities.
+      if (updateData.quantity !== undefined || updateData.productName !== undefined) {
+        await db.execute(sql`
+          UPDATE customer_order_expected_lines expected
+          SET expected_qty = ${updated.quantity},
+              product_name = ${updated.productName},
+              updated_at = NOW()
+          FROM customer_orders co
+          WHERE expected.order_id = co.id
+            AND expected.company_id = ${companyId}
+            AND expected.proforma_id = ${existingLine.proformaId}
+            AND LOWER(TRIM(expected.article_code)) = LOWER(TRIM(${existingLine.articleCode}))
+            AND co.company_id = ${companyId}
+            AND co.proforma_id_used = ${existingLine.proformaId}
+            AND co.status IN ('DRAFT', 'LOADING', 'PENDING_VERIFICATION')
+            AND co.deleted_at IS NULL
+            AND NOT EXISTS (
+              SELECT 1 FROM factory_daybook_entries event
+              WHERE event.company_id = ${companyId}
+                AND event.reference_table = 'customer_orders'
+                AND event.reference_id = co.id
+                AND event.tx_type = 'LOADING_CREATED'
+                AND event.description LIKE 'Continuation of loading #%'
+            )
+        `);
+      }
       // Sync — quantity change alters reservedNotYetLoaded
       await syncProformaReservations(db, companyId, existingLine.proformaId);
 
