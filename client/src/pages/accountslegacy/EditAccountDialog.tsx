@@ -6,10 +6,11 @@
  * balance/side pair, the same parent-group combobox (which excludes the
  * account itself and is hidden for Group accounts) and the same active toggle.
  */
-import { Check, ChevronsUpDown, Edit, Trash2 } from "lucide-react";
+import { useState } from "react";
+import { ArrowLeftRight, Check, ChevronsUpDown, Edit, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from "@/components/ui/command";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -18,6 +19,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import type { AccountsLegacyModel } from "./useAccountsLegacyModel";
+import { FactoryFxAgentWalletCard } from "../factory/factorynetposition/components/FactoryFxAgentWalletCard";
+import { todayStr } from "../factory/factorynetposition/utils";
 
 const ACCOUNT_TYPES = [
   "Asset",
@@ -58,8 +61,10 @@ const SUB_TYPE_PARENTS = ["Income", "Expense", "Liability", "Asset"];
 
 export function EditAccountDialog({ model }: { model: AccountsLegacyModel }) {
   const { editForm, alterSelectedAccount, alterAccountType, updateLedgerMutation, deleteLedgerMutation } = model;
+  const [fxAccount, setFxAccount] = useState<{ id: number; name: string } | null>(null);
 
   return (
+    <>
     <Dialog
       open={model.editDialogOpen}
       onOpenChange={(open) => {
@@ -308,6 +313,22 @@ export function EditAccountDialog({ model }: { model: AccountsLegacyModel }) {
                 )}
               />
 
+              {model.appMode === "factory" && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full"
+                  data-testid="button-manage-account-fx"
+                  onClick={() => {
+                    setFxAccount({ id: alterSelectedAccount.accountId, name: alterSelectedAccount.name });
+                    model.closeEditAccountDialog();
+                  }}
+                >
+                  <ArrowLeftRight className="mr-2 h-4 w-4" />
+                  FX Agent USD / EUR — Convert, Pay, Reverse
+                </Button>
+              )}
+
               <div className="flex justify-between gap-2 pt-1">
                 <Button
                   type="button"
@@ -345,5 +366,20 @@ export function EditAccountDialog({ model }: { model: AccountsLegacyModel }) {
         )}
       </DialogContent>
     </Dialog>
+    <Dialog open={fxAccount !== null} onOpenChange={(open) => !open && setFxAccount(null)}>
+      <DialogContent className="w-[95vw] max-w-5xl max-h-[90dvh] overflow-y-auto" data-testid="dialog-account-fx-manager">
+        <DialogHeader>
+          <DialogTitle>FX agent wallet — {fxAccount?.name}</DialogTitle>
+          <DialogDescription>
+            Convert this account's USD to EUR, pay USD beneficiaries or reverse an unused conversion.
+            Net Position values EUR using the Settings rate.
+          </DialogDescription>
+        </DialogHeader>
+        {fxAccount && (
+          <FactoryFxAgentWalletCard asOf={todayStr()} readOnly={false} scopeAccountId={fxAccount.id} />
+        )}
+      </DialogContent>
+    </Dialog>
+    </>
   );
 }
