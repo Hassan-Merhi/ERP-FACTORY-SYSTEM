@@ -1,5 +1,5 @@
 /**
- * Atomically cancel an FX agent EUR payout together with its posted USD voucher.
+ * Atomically cancel an FX agent EUR payout together with its posted EUR or USD voucher.
  * Only this path may detach the linked wallet operation; generic voucher
  * retirement is intentionally blocked while the operation is still present.
  *
@@ -24,7 +24,7 @@ type CancelOptions = {
 
 /**
  * Returns false if the voucher is not an FX wallet settlement.
- * Returns true only after both native EUR and the USD voucher are cancelled.
+ * Returns true only after both native EUR and the linked voucher are cancelled.
  * Every step is inside the caller's database transaction.
  */
 export async function cancelFxAgentSettlementVoucherTx({
@@ -94,7 +94,9 @@ export async function cancelFxAgentSettlementVoucherTx({
         voucherId,
         date: String(movement.date).slice(0, 10),
         eurPaid: String(movement.sourceAmount),
-        usdPaid: String(movement.targetAmount),
+        targetCurrency: String(movement.targetCurrency),
+        beneficiaryPaidAmount: String(movement.targetAmount),
+        usdPaid: movement.targetCurrency === "USD" ? String(movement.targetAmount) : null,
         rateUsdPerEur: String(movement.rate),
         historicalUsdBasis: String(movement.sourceBookUsd),
         fxGainUsd: String(movement.fxGainUsd),
