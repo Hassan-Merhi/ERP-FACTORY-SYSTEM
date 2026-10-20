@@ -23,7 +23,7 @@ import { eq, and, or, desc, sql, inArray, isNull, gte, lte } from "drizzle-orm";
 import { parseListPagination, setListPaginationHeaders } from "../../../lib/listPagination";
 import { resultRows } from "../../../lib/queryResult";
 import { getProformaCapacitySnapshot } from "./proformaCapacity";
-import { mergeNewProformaArticles } from "./proformaPlan";
+import { mergeNewProformaArticles, isContinuationLoading, usesLiveMasterProforma } from "./proformaPlan";
 import { allocateRemainingProformaLines } from "./proformaCapacityEnforcement";
 import { guardProformaOrderCreation } from "./proformaCapacityWriteGuards";
 import { acquireProformaCapacityTransactionLock } from "./proformaCapacityConcurrency";
@@ -308,11 +308,10 @@ export function registerOrderCrudRoutes(app: Express) {
                 pricePerKg: source?.pricePerKg ?? null,
               };
             });
-        const proformaLines = mergeNewProformaArticles(
-          savedProformaLines,
-          originalProformaLines,
-          !["FINALIZED", "CANCELLED"].includes(order.status)
-        );
+        const continuation = await isContinuationLoading(db, companyId, id);
+        const proformaLines = usesLiveMasterProforma(order.status, continuation)
+          ? originalProformaLines
+          : mergeNewProformaArticles(savedProformaLines, originalProformaLines, false);
         const capacity = continuationProforma
           ? await getProformaCapacitySnapshot(db, {
               companyId,
