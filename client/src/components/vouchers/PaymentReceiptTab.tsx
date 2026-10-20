@@ -505,7 +505,6 @@ export function PaymentReceiptTab({
                         <Button type="button" variant="outline" size="sm" onClick={() => setEditingSource(true)}>Change</Button>
                       </div>
                       <p className="font-mono text-sm">EUR {Number(fxWallet!.state.eur).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} available</p>
-                      <p className="text-xs text-muted-foreground">USD {Number(fxWallet!.state.usd).toFixed(2)} native · Historic USD {Number(fxWallet!.state.totalBookUsd).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (not cash available)</p>
                     </div>
                   )}
 
@@ -615,10 +614,6 @@ export function PaymentReceiptTab({
                   <section className="space-y-3 rounded-lg border border-primary/30 bg-muted/20 p-4" data-testid="fx-payment-voucher">
                     <div>
                       <h4 className="text-sm font-semibold">FX agent payment — recipient gets USD</h4>
-                      <p className="text-xs text-muted-foreground">
-                        Enter one USD recipient and amount below, then enter the agreed rate.
-                        This posts a Payment voucher, deducts EUR from the agent and books the FX difference atomically.
-                      </p>
                     </div>
                     <label className="block text-sm font-medium" htmlFor="fx-voucher-rate">Agreed payment rate — USD per 1 EUR</label>
                     <Input
