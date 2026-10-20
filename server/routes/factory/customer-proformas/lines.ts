@@ -79,15 +79,15 @@ export function registerFactoryCustomerProformaLineRoutes(app: Express) {
           FROM customer_orders co
           WHERE co.company_id = ${companyId}
             AND co.proforma_id_used = ${parsed.proformaId}
-            AND co.status IN ('DRAFT', 'LOADING', 'PENDING_VERIFICATION')
+            AND co.status IN ('LOADING', 'PENDING_VERIFICATION')
             AND co.deleted_at IS NULL
-            AND NOT EXISTS (
+            AND EXISTS (
               SELECT 1 FROM factory_daybook_entries event
               WHERE event.company_id = ${companyId}
                 AND event.reference_table = 'customer_orders'
                 AND event.reference_id = co.id
                 AND event.tx_type = 'LOADING_CREATED'
-                AND event.description LIKE 'Continuation of loading #%'
+                AND event.description LIKE 'Loading started for customer:%'
             )
             AND NOT EXISTS (
               SELECT 1 FROM customer_order_expected_lines expected
@@ -207,15 +207,15 @@ export function registerFactoryCustomerProformaLineRoutes(app: Express) {
             AND LOWER(TRIM(expected.article_code)) = LOWER(TRIM(${existingLine.articleCode}))
             AND co.company_id = ${companyId}
             AND co.proforma_id_used = ${existingLine.proformaId}
-            AND co.status IN ('DRAFT', 'LOADING', 'PENDING_VERIFICATION')
+            AND co.status IN ('LOADING', 'PENDING_VERIFICATION')
             AND co.deleted_at IS NULL
-            AND NOT EXISTS (
+            AND EXISTS (
               SELECT 1 FROM factory_daybook_entries event
               WHERE event.company_id = ${companyId}
                 AND event.reference_table = 'customer_orders'
                 AND event.reference_id = co.id
                 AND event.tx_type = 'LOADING_CREATED'
-                AND event.description LIKE 'Continuation of loading #%'
+                AND event.description LIKE 'Loading started for customer:%'
             )
         `);
       }
