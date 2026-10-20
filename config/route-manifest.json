@@ -1,7 +1,7 @@
 {
   "formatVersion": 1,
   "description": "Ordered snapshot of every registered Express route (method, path, guard chain) and middleware mount. Regenerate with UPDATE_ROUTE_MANIFEST=1 only when a route change is intended; during a file split the manifest must not change at all.",
-  "routeCount": 2112,
+  "routeCount": 2113,
   "middlewareMountCount": 132,
   "routes": [
     "GET /api/admin/operational-monitoring [requireAuth > <anonymous> > <anonymous>]",
@@ -928,6 +928,7 @@
     "DELETE /api/factory/label-design-colors/:slug [requireAuth > requireNonPOS > <anonymous>]",
     "POST /api/factory/label-banners/:slug [requireAuth > requireNonPOS > <anonymous>]",
     "DELETE /api/factory/label-banners/:slug [requireAuth > requireNonPOS > <anonymous>]",
+    "POST /api/insurance/extra-charges [requireAuth > <anonymous> > <anonymous>]",
     "GET /api/insurance/members [requireAuth > <anonymous>]",
     "GET /api/insurance/members/:id/entries [requireAuth > <anonymous>]",
     "POST /api/insurance/members [requireAuth > <anonymous>]",
