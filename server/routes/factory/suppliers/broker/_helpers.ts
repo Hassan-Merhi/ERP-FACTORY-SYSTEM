@@ -3,7 +3,7 @@
  *
  * Extracted verbatim from the former single-file supplierBrokerRoutes.ts.
  */
-import { db } from "../../../../db";
+import { db, type DatabaseOrTransaction } from "../../../../db";
 import { sqlArray } from "../../../../lib/sqlArray";
 import { toMoney, sumMoney } from "../../../../lib/money";
 import type Decimal from "decimal.js";
@@ -34,18 +34,19 @@ export async function buildBrokerStatement(
   brokerId: number,
   companyId: number,
   includeOtw = false,
-  options: { asOf?: string | null } = {}
+  options: { asOf?: string | null; executor?: DatabaseOrTransaction } = {}
 ) {
   const { asOf } = options;
+  const executor = options.executor ?? db;
   // Fetch broker
-  const [broker] = await db
+  const [broker] = await executor
     .select()
     .from(factorySuppliers)
     .where(and(eq(factorySuppliers.id, brokerId), eq(factorySuppliers.companyId, companyId)));
   if (!broker) return null;
 
   // Linked suppliers
-  const linkedRaw = await db
+  const linkedRaw = await executor
     .select()
     .from(factorySuppliers)
     .where(and(eq(factorySuppliers.parentId, brokerId), eq(factorySuppliers.companyId, companyId)));
@@ -74,7 +75,7 @@ export async function buildBrokerStatement(
       );
   const allContainers =
     allSupplierIds.length > 0
-      ? await db
+      ? await executor
           .select()
           .from(factoryContainers)
           .where(containersWhereClause)
@@ -86,7 +87,7 @@ export async function buildBrokerStatement(
   // Payments (direct)
   const allPayments =
     allSupplierIds.length > 0
-      ? await db
+      ? await executor
           .select()
           .from(factorySupplierPayments)
           .where(
@@ -102,7 +103,7 @@ export async function buildBrokerStatement(
   // Voucher-based payments (from general accounting, linked via factorySupplierId)
   const allVoucherPayments =
     allSupplierIds.length > 0
-      ? await db
+      ? await executor
           .select({
             id: voucherEntries.id,
             ...voucherEntryCurrencyColumns,
@@ -143,7 +144,7 @@ export async function buildBrokerStatement(
   // FX transfers (involving any of the suppliers)
   const allFx =
     allSupplierIds.length > 0
-      ? await db
+      ? await executor
           .select()
           .from(factorySupplierFxTransfers)
           .where(
@@ -161,7 +162,7 @@ export async function buildBrokerStatement(
   // account (loan, payable, etc.) its supplierId is null intentionally and must NOT appear here.
   const allOffloadCharges =
     allSupplierIds.length > 0
-      ? await db
+      ? await executor
           .select({
             id: factoryOffloadAdditionalCharges.id,
             containerId: factoryOffloadAdditionalCharges.containerId,
@@ -186,7 +187,7 @@ export async function buildBrokerStatement(
   // Container-level other charges (entered per-container, use charge's own currency first)
   const allContainerOtherCharges =
     allSupplierIds.length > 0
-      ? await db
+      ? await executor
           .select({
             id: factoryContainerOtherCharges.id,
             containerId: factoryContainerOtherCharges.containerId,
@@ -441,7 +442,7 @@ export async function buildBrokerStatement(
   // (distinct from the factoryContainerOtherCharges table which is a separate multi-row charges table)
   const containerColOtherCharges =
     allSupplierIds.length > 0
-      ? await db
+      ? await executor
           .select({
             id: factoryContainers.id,
             containerNumber: factoryContainers.containerNumber,
