@@ -51,7 +51,7 @@ describe("new proforma articles on already-created loadings", () => {
     const scanner = read("server/routes/factory/customer-orders/proformaCapacity.ts");
     expect(add).toContain("INSERT INTO customer_order_expected_lines");
     expect(add).toContain("ON CONFLICT (order_id, article_code) DO NOTHING");
-    expect(add).toContain("co.status IN ('DRAFT', 'LOADING', 'PENDING_VERIFICATION', 'VERIFIED')");
+    expect(add).toContain("co.status IN ('DRAFT', 'LOADING', 'PENDING_VERIFICATION')");
     expect(verify).toContain("mergeNewProformaArticles(");
     expect(scanner).toContain("LOWER(TRIM(expected.article_code)) = LOWER(TRIM(cpl.article_code))");
   });
