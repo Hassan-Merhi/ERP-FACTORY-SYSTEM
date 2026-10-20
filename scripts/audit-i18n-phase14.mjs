@@ -313,27 +313,3 @@ if (!noEnforce) {
     process.exit(1);
   }
 }
-
-
-// Temporary PR formatter snapshot for reviewing the exact repository style.
-// The outputs are packaged with the existing i18n audit artifact in CI.
-if (process.env.GITHUB_ACTIONS === "true" && jsonOutput?.endsWith("/report.json")) {
-  const prettier = await import("prettier");
-  const files = [
-    "client/src/pages/baleproducts/components/BaleProductsDialog1.tsx",
-    "client/src/pages/baleproducts/useBaleProductsModel.tsx",
-    "server/routes/factory/products/productCascadeRoutes.ts",
-    "tests/factory-bale-product-price-cascade.test.ts",
-    "client/src/i18n/sharedInterfaceTranslations.ts",
-  ];
-  for (const file of files) {
-    const full = path.resolve(file);
-    const options = (await prettier.resolveConfig(full)) ?? {};
-    const output = await prettier.format(fs.readFileSync(full, "utf8"), {
-      ...options,
-      filepath: full,
-    });
-    const filename = file.replace(/[\\/]/g, "__");
-    writeOutput(path.join(path.dirname(jsonOutput), "formatted", filename), output);
-  }
-}
