@@ -273,17 +273,19 @@ export function useBaleProductsModel() {
   });
 
   const editProductMutation = useMutation({
-    mutationFn: async (data: Partial<{
-      name: string;
-      weightPerBaleKg: number | null;
-      articleCode: string;
-      description: string;
-      categoryId: number | null;
-      labelDesignColor: string | null;
-      productionPrice: string;
-      sellingPrice: string;
-      grade: string;
-    }>) => {
+    mutationFn: async (
+      data: Partial<{
+        name: string;
+        weightPerBaleKg: number | null;
+        articleCode: string;
+        description: string;
+        categoryId: number | null;
+        labelDesignColor: string | null;
+        productionPrice: string;
+        sellingPrice: string;
+        grade: string;
+      }>
+    ) => {
       if (!editingProduct) throw new Error("Select a product before saving changes");
       const response = await modeApiRequest(
         "POST",
