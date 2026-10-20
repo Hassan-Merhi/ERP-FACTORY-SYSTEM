@@ -1,6 +1,7 @@
 import type { Express, Request, Response } from "express";
 import { logger } from "../../lib/logger";
 import { z } from "zod";
+import { requireFactoryTabAccess } from "../../lib/factoryAccessControl";
 import { and, desc, eq, ilike, inArray, isNull, or, sql } from "drizzle-orm";
 import { db, pool, type DbTransaction } from "../../db";
 import { requireAuth, requireRole } from "../../auth";
@@ -13,7 +14,7 @@ import {
   voucherEntries,
   vouchers,
 } from "@shared/schema";
-import { postBalancedVoucherTx } from "../../services/accounting/centralPostingEngine";
+import { PostingValidationError, postBalancedVoucherTx } from "../../services/accounting/centralPostingEngine";
 import { createDatabasePostingDependencies } from "../../services/accounting/databasePostingDependencies";
 import { infrastructurePostingIdentity } from "../../services/accounting/infrastructureVoucherIdentity";
 import { isCompanyIsolationError, resolveRequestCompanyId } from "../../services/security/requestCompanyScope";
@@ -34,6 +35,23 @@ import { sumMoney, toMoney } from "../../lib/money";
 import { retireVouchersTx, sessionRetirementActor } from "../../services/accounting/voucherRetirement";
 
 const CLEAR_CONFIRMATION = "CLEAR ALL INSURANCE";
+
+// Insurance-owned journal creation has its own narrow API rather than exposing
+// generic Voucher journal creation to everybody with Insurance-tab access.
+const insuranceExtraChargeSchema = z.object({
+  voucherDate: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/),
+  amount: z.string().regex(/^(?:0|[1-9]\d{0,10})(?:\.\d{1,2})?$/),
+  debitAccountId: z.number().int().positive(),
+  creditAccountId: z.number().int().positive(),
+  notes: z.string().trim().max(2000).optional().default(""),
+  clientRequestId: z.string().uuid(),
+}).refine((value) => value.debitAccountId !== value.creditAccountId, {
+  path: ["creditAccountId"],
+  message: "Debit and credit accounts must be different",
+}).refine((value) => toMoney(value.amount).gt(0), {
+  path: ["amount"],
+  message: "Amount must be greater than zero",
+});
 
 const insuranceImportApplySchema = z.object({
   rows: z
@@ -145,6 +163,92 @@ function normalizedMemberName(name: string): string {
 }
 
 export function registerFactoryInsuranceRoutes(app: Express) {
+  // Payroll & Benefits > Insurance owns this action, not the Vouchers page.
+  // The shared /api/vouchers/with-entries endpoint remains Vouchers-only.
+  app.post(
+    "/api/insurance/extra-charges",
+    requireAuth,
+    requireFactoryTabAccess("factory/payroll-hub", "hide_tab_payrollhub_insurance"),
+    async (req: Request, res: Response) => {
+      const parsed = insuranceExtraChargeSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: "Invalid insurance extra charge", errors: parsed.error.issues });
+      }
+
+      try {
+        const companyId = resolveRequestCompanyId(req);
+        const { voucherDate, debitAccountId, creditAccountId, notes, clientRequestId } = parsed.data;
+        const amount = toMoney(parsed.data.amount).toFixed(2);
+        const narration = notes || "Insurance extra charge";
+
+        const result = await db.transaction(async (tx) => {
+          // Never accept an account from another company or a deleted account,
+          // even when a caller bypasses the Insurance account picker.
+          const ownedAccounts = await tx
+            .select({ id: ledgerAccounts.id })
+            .from(ledgerAccounts)
+            .where(
+              and(
+                eq(ledgerAccounts.companyId, companyId),
+                inArray(ledgerAccounts.id, [debitAccountId, creditAccountId]),
+                isNull(ledgerAccounts.deletedAt)
+              )
+            );
+          if (ownedAccounts.length !== 2) {
+            throw new PostingValidationError("POSTING_TARGET_NOT_OWNED", "An account is not available in this company");
+          }
+
+          return postBalancedVoucherTx(
+            tx,
+            {
+              voucher: {
+                companyId,
+                voucherType: "Journal",
+                voucherDate,
+                totalAmount: amount,
+                description: narration,
+                currency: "USD",
+                sourceModule: "ERP",
+                optional: false,
+              },
+              entries: [
+                { ledgerAccountId: debitAccountId, debitAmount: amount, creditAmount: "0", narration: notes || null },
+                { ledgerAccountId: creditAccountId, debitAmount: "0", creditAmount: amount, narration: notes || null },
+              ],
+              source: infrastructurePostingIdentity(
+                "factory-insurance-extra-charge",
+                `${companyId}:${clientRequestId}`,
+                "journal"
+              ),
+              actor: {
+                userId: req.session.userId ?? null,
+                username: req.session.username || "unknown",
+                reason: "Add Insurance extra charge",
+              },
+            },
+            createDatabasePostingDependencies()
+          );
+        });
+
+        return res.json({
+          voucherId: result.voucher.id,
+          voucherNumber: result.voucher.voucherNumber,
+          replayed: result.replayed,
+        });
+      } catch (error: unknown) {
+        logger.error("POST /api/insurance/extra-charges error:", { error });
+        if (isCompanyIsolationError(error)) return res.status(403).json({ message: "Forbidden" });
+        if (error instanceof PostingValidationError) {
+          return res.status(error.code === "POSTING_IDEMPOTENCY_CONFLICT" ? 409 : 400).json({
+            message: error.message,
+            code: error.code,
+          });
+        }
+        return res.status(500).json({ message: errorMessage(error, "Failed to post insurance extra charge") });
+      }
+    }
+  );
+
   app.get("/api/insurance/members", requireAuth, async (req: Request, res: Response) => {
     try {
       const companyId = resolveRequestCompanyId(req);
