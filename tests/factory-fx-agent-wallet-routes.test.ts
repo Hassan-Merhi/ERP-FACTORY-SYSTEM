@@ -431,6 +431,24 @@ describe("FX agent EUR wallet lifecycle", () => {
       requestKey: `${PREFIX}-eur-wrong-target`,
     });
     expect(wrongTarget.status).toBe(400);
+
+    // The normal Payment voucher delete action must roll back BOTH native EUR
+    // balances and the historical USD book postings, not strand a paid wallet.
+    const cancelled = await agent.delete(`/api/vouchers/${posted.body.voucherId}`);
+    expect(cancelled.status, cancelled.text).toBe(200);
+    const restored = (await loadFactorySupplierLedgerViews(db, ctx.companyId, { ids: [supplierId] })).get(supplierId);
+    expect(restored?.nativeBalances.find((x) => x.currencyCode === "EUR")?.balance).toBe("1000.00");
+    const walletsAfterDelete = await agent.get("/api/factory/fx-agent-wallets");
+    const restoredWallet = walletsAfterDelete.body.wallets.find(
+      (x: { wallet: { id: number } }) => x.wallet.id === eurWalletId
+    );
+    expect(restoredWallet.state.eur).toBe("1000.000000");
+    expect(restoredWallet.synchronized).toBe(true);
+    const stillLinked = await pool.query(
+      `SELECT id FROM factory_fx_agent_wallet_operations WHERE company_id = $1 AND voucher_id = $2`,
+      [ctx.companyId, posted.body.voucherId]
+    );
+    expect(stillLinked.rows).toHaveLength(0);
   });
 
   it("refuses further operations once ordinary journals drift the agent ledger", async () => {
