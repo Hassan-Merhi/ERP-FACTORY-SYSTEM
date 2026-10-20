@@ -144,8 +144,8 @@ export function FactoryDaybookEntryRow({
             <Button
               size="icon"
               variant="ghost"
-              title="Void"
-              aria-label="Void"
+              title="Delete voucher and reverse accounting"
+              aria-label="Delete voucher and reverse accounting"
               onClick={(e) => {
                 e.stopPropagation();
                 model.setVoidEntry(entry);
