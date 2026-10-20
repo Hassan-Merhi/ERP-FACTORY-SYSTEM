@@ -183,9 +183,17 @@ export function registerFactoryProductCascadeRoutes(app: Express) {
       }
 
       // Check price input before persisting; malformed values must not be silently converted to zero.
-      for (const [field, price] of [["Cost price", productionPrice], ["Selling price", sellingPrice]] as const) {
+      for (const [field, price] of [
+        ["Cost price", productionPrice],
+        ["Selling price", sellingPrice],
+      ] as const) {
         if (price !== undefined && price !== "") {
-          if ((typeof price !== "string" && typeof price !== "number") || !Number.isFinite(Number(price)) || Number(price) < 0 || String(price).trim() === "") {
+          if (
+            (typeof price !== "string" && typeof price !== "number") ||
+            !Number.isFinite(Number(price)) ||
+            Number(price) < 0 ||
+            String(price).trim() === ""
+          ) {
             return res.status(400).json({ message: `${field} must be a valid non-negative number` });
           }
         }
@@ -202,7 +210,8 @@ export function registerFactoryProductCascadeRoutes(app: Express) {
 
       const productUpdate: Partial<typeof factoryBaleProducts.$inferInsert> = { updatedAt: new Date() };
       if (name !== undefined) productUpdate.name = name;
-      if (weightPerBaleKg !== undefined) productUpdate.weightPerBaleKg = weightPerBaleKg == null ? null : String(weightPerBaleKg);
+      if (weightPerBaleKg !== undefined)
+        productUpdate.weightPerBaleKg = weightPerBaleKg == null ? null : String(weightPerBaleKg);
       if (nextArticleCode !== undefined) productUpdate.articleCode = nextArticleCode;
       if (generatedArticleCode && nextArticleCode) {
         productUpdate.code = nextArticleCode
@@ -229,8 +238,7 @@ export function registerFactoryProductCascadeRoutes(app: Express) {
       if (
         weightPerBaleKg !== undefined &&
         weightPerBaleKg !== null &&
-        Number(weightPerBaleKg) !==
-          (existing.weightPerBaleKg == null ? null : Number(existing.weightPerBaleKg))
+        Number(weightPerBaleKg) !== (existing.weightPerBaleKg == null ? null : Number(existing.weightPerBaleKg))
       ) {
         baleUpdate.weightKg = String(weightPerBaleKg);
       }
