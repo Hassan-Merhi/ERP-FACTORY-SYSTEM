@@ -17,7 +17,7 @@ import { syncProformaReservations } from "../../_stockReservationHelper";
 import { acquireProformaCapacityTransactionLock } from "../proformaCapacityConcurrency";
 import { getProformaCapacitySnapshot } from "../proformaCapacity";
 import { buildRemainingLoadingPlan } from "../remainingLoadingPlan";
-import { mergeNewProformaArticles } from "../proformaPlan";
+import { mergeNewProformaArticles, isContinuationLoading, usesLiveMasterProforma } from "../proformaPlan";
 import { guardProformaOrderCreation } from "../proformaCapacityWriteGuards";
 import {
   factoryBales,
@@ -181,6 +181,33 @@ export function registerOrderLoadingRoutes(app: Express) {
         const bales = await tx.select().from(customerOrderBales).where(eq(customerOrderBales.orderId, orderId));
         if (bales.length === 0) throw new Error("Order has no bales scanned");
 
+        // Freeze the CURRENT master at finalization for an ordinary loading.
+        // A continuation retains its own persisted remaining-only quantities.
+        const continuation = order.proformaIdUsed
+          ? await isContinuationLoading(tx, companyId, orderId)
+          : false;
+        const usesLiveMaster = usesLiveMasterProforma(order.status, continuation);
+        if (usesLiveMaster && order.proformaIdUsed) {
+          const currentMaster = await tx.select().from(customerProformaLines)
+            .where(eq(customerProformaLines.proformaId, order.proformaIdUsed));
+          await tx.delete(customerOrderExpectedLines).where(and(
+            eq(customerOrderExpectedLines.companyId, companyId),
+            eq(customerOrderExpectedLines.orderId, orderId),
+            eq(customerOrderExpectedLines.proformaId, order.proformaIdUsed)
+          ));
+          if (currentMaster.length > 0) {
+            await tx.insert(customerOrderExpectedLines).values(currentMaster.map((line) => ({
+              companyId,
+              orderId,
+              proformaId: order.proformaIdUsed,
+              proformaLineId: line.id,
+              articleCode: line.articleCode,
+              productName: line.productName,
+              expectedQty: line.quantity,
+            })));
+          }
+        }
+
         // Use the current loading's own immutable expected plan, when present.
         // Otherwise this is the first container and the proforma is the plan.
         // In both cases only this container's bales are subtracted.
@@ -253,7 +280,9 @@ export function registerOrderLoadingRoutes(app: Express) {
             createdAt: line.createdAt,
           }));
           const plan = buildRemainingLoadingPlan(
-            mergeNewProformaArticles(existingPlan, masterPlan, true, order.createdAt),
+            usesLiveMaster
+              ? masterPlan
+              : mergeNewProformaArticles(existingPlan, masterPlan, true, order.createdAt),
             loadedByArticle
           );
           nextLoadingLines.push(...plan.lines);
