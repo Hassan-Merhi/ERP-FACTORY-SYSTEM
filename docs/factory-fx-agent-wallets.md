@@ -48,6 +48,21 @@ Net Position retains the posted USD ledger figure. If any FX operation
 exists, the baseline cannot be reset and the mismatched books require
 manual reconciliation instead. No extra SQL migration is required.
 
+## Native EUR display in Factory Accounts
+Factory → Accounts lists and search results display synchronized FX-agent ledgers
+with **EUR native** as the primary balance, and remaining native USD plus the
+historical USD book value separately. The account statement shows the same
+native EUR/USD balances and a distinct USD book balance and Settings-rate Net
+Position valuation. The original voucher journal, debit/credit totals, running
+balances, PDF and Excel exports remain historical USD and are explicitly
+labelled as such in the on-screen statement. Accounts grouping and GL reports
+still calculate in the historical USD book basis, not EUR; USD and EUR are
+never summed as if they were the same currency. For historical date cuts
+before wallet activation there is no native FX overlay; the ordinary ledger
+is shown. A ledger/wallet mismatch displays a reconciliation warning instead
+of reporting a potentially incorrect native current balance. No SQL migration
+is needed for this display-only change.
+
 ## Reversing a USD → EUR conversion
 - Apply the **20261020 reversal migration** first. The popup will explain if the migration is missing; normal conversion/settlement functionality stays available.
 - In Accounts → Edit the agent → FX popup → **USD → EUR conversions and reversals**, choose the conversion and supply a mandatory reason; confirm **Reverse to USD**.
