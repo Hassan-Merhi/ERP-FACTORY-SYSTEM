@@ -82,6 +82,10 @@ export interface PaymentReceiptTabProps {
   fxWalletsLoading?: boolean;
   fxPaymentRate?: string;
   onFxPaymentRateChange?: (value: string) => void;
+  fxPayoutCurrency?: "EUR" | "USD";
+  fxSupplierEurBalance?: number | null;
+  fxSupplierBalanceLoading?: boolean;
+  onFxPayoutCurrencyChange?: (currency: "EUR" | "USD") => void;
   voucherNumber?: string;
   onAccountPickerOpen?: () => void;
   onAccountSearchChange?: (term: string) => void;
@@ -128,6 +132,10 @@ export function PaymentReceiptTab({
   fxWalletsLoading = false,
   fxPaymentRate = "",
   onFxPaymentRateChange,
+  fxPayoutCurrency = "USD",
+  fxSupplierEurBalance = null,
+  fxSupplierBalanceLoading = false,
+  onFxPayoutCurrencyChange,
   voucherNumber,
   onAccountPickerOpen,
   onAccountSearchChange,
@@ -171,13 +179,15 @@ export function PaymentReceiptTab({
     if (isFxPayment && form.getValues("optional")) form.setValue("optional", false);
   }, [isFxPayment, form]);
   const fxRateValue = Number(fxPaymentRate);
-  const fxEurRequired = isFxPayment && total > 0 && fxRateValue > 0
-    ? total / fxRateValue
+  const directEurPayment = isFxPayment && fxPayoutCurrency === "EUR";
+  const fxEurRequired = isFxPayment && total > 0
+    ? directEurPayment ? total : fxRateValue > 0 ? total / fxRateValue : 0
     : 0;
   const fxUnsupportedEntries = isFxPayment && (
     entries.length !== 1 ||
     !["ledger", "factorySupplier"].includes(entries[0]?.accountType || "") ||
-    entries[0]?.accountId === fxWallet?.wallet.ledgerAccountId
+    entries[0]?.accountId === fxWallet?.wallet.ledgerAccountId ||
+    (directEurPayment && entries[0]?.accountType !== "factorySupplier")
   );
 
   // Tab-specific styling / labels
@@ -588,7 +598,7 @@ export function PaymentReceiptTab({
                       style={total > 0 ? { color: accentColor } : undefined}
                       data-testid="text-hero-total"
                     >
-                      {total > 0 ? formatAmount(total) : "—"}
+                      {total > 0 ? directEurPayment ? `EUR ${total.toFixed(2)}` : formatAmount(total) : "—"}
                     </span>
                     <span className="text-xs text-muted-foreground mt-0.5 tabular-nums">
                       {validEntryCount} {validEntryCount === 1 ? "line" : "lines"}
@@ -613,27 +623,57 @@ export function PaymentReceiptTab({
                 {isFxPayment && (
                   <section className="space-y-3 rounded-lg border border-primary/30 bg-muted/20 p-4" data-testid="fx-payment-voucher">
                     <div>
-                      <h4 className="text-sm font-semibold">FX agent payment — recipient gets USD</h4>
+                      <h4 className="text-sm font-semibold">{directEurPayment ? "Direct EUR supplier payment" : "FX agent payment — recipient gets USD"}</h4>
                     </div>
-                    <label className="block text-sm font-medium" htmlFor="fx-voucher-rate">Agreed payment rate — USD per 1 EUR</label>
-                    <Input
-                      id="fx-voucher-rate"
-                      type="number"
-                      min="0"
-                      step="any"
-                      placeholder="e.g. 1.14"
-                      value={fxPaymentRate}
-                      onChange={(event) => onFxPaymentRateChange?.(event.target.value)}
-                    />
-                    {fxRateValue > 0 && total > 0 && (
+                    {entries[0]?.accountType === "factorySupplier" && (
+                      <div className="flex gap-2 flex-wrap">
+                        <Button type="button" size="sm" variant={directEurPayment ? "default" : "outline"}
+                          disabled={fxSupplierBalanceLoading || !fxSupplierEurBalance}
+                          onClick={() => onFxPayoutCurrencyChange?.("EUR")} data-testid="fx-pay-eur">
+                          Pay EUR directly
+                        </Button>
+                        <Button type="button" size="sm" variant={!directEurPayment ? "default" : "outline"}
+                          onClick={() => onFxPayoutCurrencyChange?.("USD")} data-testid="fx-pay-usd">
+                          Pay USD (exchange)
+                        </Button>
+                      </div>
+                    )}
+                    {fxSupplierBalanceLoading && (
+                      <p className="text-sm text-muted-foreground">Loading supplier EUR balance…</p>
+                    )}
+                    {fxSupplierEurBalance !== null && fxSupplierEurBalance > 0 && (
+                      <p className="text-sm text-muted-foreground" data-testid="fx-supplier-eur-balance">
+                        Supplier EUR payable: EUR {fxSupplierEurBalance.toFixed(2)}
+                      </p>
+                    )}
+                    {directEurPayment ? (
+                      <p className="text-sm" data-testid="fx-direct-eur-details">
+                        Enter the EUR amount below. Both the supplier's EUR payable and the
+                        agent's EUR wallet decrease by the same amount. No exchange rate needed.
+                      </p>
+                    ) : (
+                      <>
+                        <label className="block text-sm font-medium" htmlFor="fx-voucher-rate">
+                          Agreed payment rate — USD per 1 EUR
+                        </label>
+                        <Input id="fx-voucher-rate" type="number" min="0" step="any"
+                          placeholder="e.g. 1.14" value={fxPaymentRate}
+                          onChange={(event) => onFxPaymentRateChange?.(event.target.value)} />
+                      </>
+                    )}
+                    {total > 0 && (directEurPayment || fxRateValue > 0) && (
                       <div className="grid grid-cols-2 gap-3 text-sm">
                         <div>
                           <p className="text-xs text-muted-foreground">Recipient receives</p>
-                          <p className="font-mono font-semibold">USD {total.toFixed(2)}</p>
+                          <p className="font-mono font-semibold">{fxPayoutCurrency} {total.toFixed(2)}</p>
                         </div>
                         <div>
-                          <p className="text-xs text-muted-foreground">Agent EUR deduction (estimated)</p>
-                          <p className="font-mono font-semibold">EUR {fxEurRequired.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 6})}</p>
+                          <p className="text-xs text-muted-foreground">Agent EUR deduction</p>
+                          <p className="font-mono font-semibold">
+                            EUR {fxEurRequired.toLocaleString(undefined, {
+                              minimumFractionDigits: 2, maximumFractionDigits: 6
+                            })}
+                          </p>
                         </div>
                       </div>
                     )}
@@ -642,6 +682,9 @@ export function PaymentReceiptTab({
                     )}
                     {fxEurRequired > Number(fxWallet!.state.eur) && (
                       <p className="text-sm text-destructive">Insufficient EUR held by this agent.</p>
+                    )}
+                    {directEurPayment && fxSupplierEurBalance !== null && total > fxSupplierEurBalance && (
+                      <p className="text-sm text-destructive">Amount exceeds supplier EUR balance.</p>
                     )}
                     {fxUnsupportedEntries && (
                       <p className="text-sm text-destructive">
@@ -656,6 +699,7 @@ export function PaymentReceiptTab({
 
                 {/* ── Entries table ── */}
                 <VoucherEntriesTable
+                  amountCurrencyOverride={directEurPayment ? "EUR" : undefined}
                   form={form}
                   fieldArray={fieldArray}
                   entries={entries}
@@ -814,7 +858,10 @@ export function PaymentReceiptTab({
                         className="w-full sm:w-auto"
                         disabled={
                           paymentAccountId === 0 || total === 0 || isPending || fxWalletsLoading ||
-                          (isFxPayment && (!fxWallet?.synchronized || fxRateValue <= 0 ||
+                          (isFxPayment && (!fxWallet?.synchronized || fxSupplierBalanceLoading ||
+                             (!directEurPayment && fxRateValue <= 0) ||
+                             (directEurPayment && (fxSupplierEurBalance === null ||
+                               fxSupplierEurBalance <= 0 || total > fxSupplierEurBalance)) ||
                             !Number.isFinite(fxEurRequired) || fxEurRequired > Number(fxWallet!.state.eur) ||
                             fxUnsupportedEntries))
                         }
@@ -827,7 +874,7 @@ export function PaymentReceiptTab({
                           : isEditMode
                             ? `Update Voucher${total > 0 ? ` · ${formatAmount(total)}` : ""}`
                             : isFxPayment
-                              ? `Post FX Payment · USD ${total.toFixed(2)}`
+                              ? `Post Payment · ${fxPayoutCurrency} ${total.toFixed(2)}`
                               : `Save Voucher${total > 0 ? ` · ${formatAmount(total)}` : ""}`}
                       </Button>
                       {saveHint ? (
