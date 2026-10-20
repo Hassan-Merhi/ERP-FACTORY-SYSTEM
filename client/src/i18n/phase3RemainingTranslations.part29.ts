@@ -632,4 +632,14 @@ export const phase3RemainingTranslationsPart29: readonly Phase3SharedUiEntry[] =
     ar: "رصيد اليورو غير كافٍ للعكس",
     fr: "Solde EUR insuffisant pour l'annulation",
   },
+  {
+    en: "Invalid wallet",
+    ar: "محفظة غير صالحة",
+    fr: "Portefeuille invalide",
+  },
+  {
+    en: "Request key was used for a different operation",
+    ar: "تم استخدام مفتاح الطلب في عملية أخرى",
+    fr: "La clé de requête a déjà été utilisée pour une autre opération",
+  },
 ];
