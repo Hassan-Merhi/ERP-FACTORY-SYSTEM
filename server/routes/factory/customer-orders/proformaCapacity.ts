@@ -262,6 +262,27 @@ export async function getProformaCapacitySnapshot(
   // Prefer that plan for the current order so its progress and scanner capacity
   // never reset to the original quantities (and sibling orders stay isolated).
   // A single UNION ALL query also preserves the existing 3-query read contract.
+  // Live ordinary loading quantities track the master; continuation
+  // quantities remain frozen except for truly NEW lines created afterward.
+  // Inline in this one query to preserve the scanner's three-query contract.
+  const liveMasterPlan = sql`
+    EXISTS (
+      SELECT 1 FROM customer_orders co
+      WHERE co.id = ${options.currentOrderId}
+        AND co.company_id = ${options.companyId}
+        AND co.proforma_id_used = ${options.proformaId}
+        AND co.status IN ('DRAFT', 'LOADING', 'PENDING_VERIFICATION')
+        AND co.deleted_at IS NULL
+        AND NOT EXISTS (
+          SELECT 1 FROM factory_daybook_entries event
+          WHERE event.company_id = ${options.companyId}
+            AND event.reference_table = 'customer_orders'
+            AND event.reference_id = co.id
+            AND event.tx_type = 'LOADING_CREATED'
+            AND event.description LIKE 'Continuation of loading #%'
+        )
+    )
+  `;
   const lineRows = resultRows<ProformaLineRow>(
     await executor.execute(
       options.currentOrderId == null
@@ -276,37 +297,37 @@ export async function getProformaCapacitySnapshot(
             WHERE company_id = ${options.companyId}
               AND order_id = ${options.currentOrderId}
               AND proforma_id = ${options.proformaId}
+              AND NOT (${liveMasterPlan})
             UNION ALL
             SELECT cpl.article_code AS "articleCode", cpl.quantity
             FROM customer_proforma_lines cpl
             WHERE cpl.proforma_id = ${options.proformaId}
-              AND NOT EXISTS (
-                SELECT 1 FROM customer_order_expected_lines expected
-                WHERE expected.company_id = ${options.companyId}
-                  AND expected.order_id = ${options.currentOrderId}
-                  AND expected.proforma_id = ${options.proformaId}
-                  AND LOWER(TRIM(expected.article_code)) = LOWER(TRIM(cpl.article_code))
-              )
               AND (
-                -- No saved plan: use the master proforma, as before.
-                NOT EXISTS (
+                ${liveMasterPlan}
+                OR NOT EXISTS (
                   SELECT 1 FROM customer_order_expected_lines saved
                   WHERE saved.company_id = ${options.companyId}
                     AND saved.order_id = ${options.currentOrderId}
                     AND saved.proforma_id = ${options.proformaId}
                 )
-                OR EXISTS (
-                  -- Existing plan: include only articles ADDED AFTER this
-                  -- loading was opened. A fulfilled article omitted from a
-                  -- remaining-only continuation must never return from the
-                  -- original proforma on a second/third loading.
-                  SELECT 1 FROM customer_orders co
-                  WHERE co.id = ${options.currentOrderId}
-                    AND co.company_id = ${options.companyId}
-                    AND co.proforma_id_used = ${options.proformaId}
-                    AND co.status NOT IN ('FINALIZED', 'CANCELLED')
-                    AND co.deleted_at IS NULL
-                    AND cpl.created_at > co.created_at
+                OR (
+                  NOT (${liveMasterPlan})
+                  AND NOT EXISTS (
+                    SELECT 1 FROM customer_order_expected_lines expected
+                    WHERE expected.company_id = ${options.companyId}
+                      AND expected.order_id = ${options.currentOrderId}
+                      AND expected.proforma_id = ${options.proformaId}
+                      AND LOWER(TRIM(expected.article_code)) = LOWER(TRIM(cpl.article_code))
+                  )
+                  AND EXISTS (
+                    SELECT 1 FROM customer_orders co
+                    WHERE co.id = ${options.currentOrderId}
+                      AND co.company_id = ${options.companyId}
+                      AND co.proforma_id_used = ${options.proformaId}
+                      AND co.status NOT IN ('VERIFIED', 'FINALIZED', 'CANCELLED')
+                      AND co.deleted_at IS NULL
+                      AND cpl.created_at > co.created_at
+                  )
                 )
               )
           `
