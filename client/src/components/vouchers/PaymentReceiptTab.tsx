@@ -1,5 +1,5 @@
 import { useVoucherEditCancel } from "@/pages/vouchers/VoucherPhoneActionBar";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { UseFormReturn, UseFieldArrayReturn, type SubmitHandler } from "react-hook-form";
 import { format } from "date-fns";
 import { Button } from "@/components/ui/button";
@@ -167,6 +167,9 @@ export function PaymentReceiptTab({
 
   const isPayment = activeTab === "payment";
   const isFxPayment = isPayment && !!fxWallet && !isEditMode;
+  useEffect(() => {
+    if (isFxPayment && form.getValues("optional")) form.setValue("optional", false);
+  }, [isFxPayment, form]);
   const fxRateValue = Number(fxPaymentRate);
   const fxEurRequired = isFxPayment && total > 0 && fxRateValue > 0
     ? total / fxRateValue
