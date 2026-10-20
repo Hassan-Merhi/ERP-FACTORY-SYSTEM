@@ -14,7 +14,7 @@ import {} from "../../_helpers";
 import { factoryBaleProducts } from "@shared/schema";
 import { eq, and, sql, inArray } from "drizzle-orm";
 import { resultRows } from "../../../../lib/queryResult";
-import { mergeNewProformaArticles, isContinuationLoading, usesLiveMasterProforma } from "../proformaPlan";
+import { mergeNewProformaArticles, getLoadingPlanKind, usesLiveMasterProforma } from "../proformaPlan";
 import { MoneyDecimal, type MoneyInput, plusMoney, toMoney } from "../../../../lib/money";
 
 /** `total` split into `count` decimal strings that add back to `total` exactly. */
@@ -319,13 +319,13 @@ export function registerOrderVerificationSummaryRoutes(app: Express) {
         // An already-running loading has a saved plan, but a NEW article added
         // to its master proforma must still appear in Proforma vs Loaded.
         // Preserve customized/continuation quantities and finalized history.
-        const continuation = await isContinuationLoading(db, companyId, orderId);
-        const planLines = usesLiveMasterProforma(order.status, continuation)
+        const planKind = await getLoadingPlanKind(db, companyId, orderId);
+        const planLines = usesLiveMasterProforma(order.status, planKind)
           ? proformaLines
           : mergeNewProformaArticles(
               savedPlanLines,
               proformaLines,
-              !["VERIFIED", "FINALIZED", "CANCELLED"].includes(order.status),
+              planKind === "continuation" && !["VERIFIED", "FINALIZED", "CANCELLED"].includes(order.status),
               order.createdAt
             );
 
