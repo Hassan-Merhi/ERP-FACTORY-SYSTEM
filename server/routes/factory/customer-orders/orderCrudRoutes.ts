@@ -23,6 +23,7 @@ import { eq, and, or, desc, sql, inArray, isNull, gte, lte } from "drizzle-orm";
 import { parseListPagination, setListPaginationHeaders } from "../../../lib/listPagination";
 import { resultRows } from "../../../lib/queryResult";
 import { getProformaCapacitySnapshot } from "./proformaCapacity";
+import { mergeNewProformaArticles } from "./proformaPlan";
 import { allocateRemainingProformaLines } from "./proformaCapacityEnforcement";
 import { guardProformaOrderCreation } from "./proformaCapacityWriteGuards";
 import { acquireProformaCapacityTransactionLock } from "./proformaCapacityConcurrency";
@@ -291,8 +292,7 @@ export function registerOrderCrudRoutes(app: Express) {
         const originalProformaLines = continuationProforma
           ? await db.select().from(customerProformaLines).where(eq(customerProformaLines.proformaId, orderProformaId))
           : [];
-        const proformaLines = currentExpectedLines.length
-          ? currentExpectedLines.map((line) => {
+        const savedProformaLines = currentExpectedLines.map((line) => {
               const source =
                 originalProformaLines.find((original) => original.id === line.proformaLineId) ||
                 originalProformaLines.find(
@@ -307,8 +307,12 @@ export function registerOrderCrudRoutes(app: Express) {
                 pricingMode: source?.pricingMode ?? "per_bale",
                 pricePerKg: source?.pricePerKg ?? null,
               };
-            })
-          : originalProformaLines;
+            });
+        const proformaLines = mergeNewProformaArticles(
+          savedProformaLines,
+          originalProformaLines,
+          !["FINALIZED", "CANCELLED"].includes(order.status)
+        );
         const capacity = continuationProforma
           ? await getProformaCapacitySnapshot(db, {
               companyId,
