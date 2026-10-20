@@ -8,6 +8,7 @@
 import { ArrowRight, Pencil, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { AccountsLegacyModel } from "./useAccountsLegacyModel";
+import { FxAgentNativeBalance } from "../accounts/FxAgentNativeBalance";
 
 export function AccountSearchResults({ model }: { model: AccountsLegacyModel }) {
   const { filteredAccounts, hideBalances } = model;
@@ -47,7 +48,9 @@ export function AccountSearchResults({ model }: { model: AccountsLegacyModel }) 
                   <span className="text-[11px] text-muted-foreground font-mono shrink-0">#{acc.accountId}</span>
                 )}
               </div>
-              {!hideBalances && (
+              {!hideBalances && acc.fxWallet ? (
+                <FxAgentNativeBalance wallet={acc.fxWallet} compact />
+              ) : !hideBalances && (
                 <span
                   className={cn(
                     "font-mono tabular-nums text-sm font-medium shrink-0",
