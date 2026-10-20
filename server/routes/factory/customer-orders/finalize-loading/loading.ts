@@ -229,6 +229,7 @@ export function registerOrderLoadingRoutes(app: Express) {
               articleCode: customerProformaLines.articleCode,
               productName: customerProformaLines.productName,
               quantity: customerProformaLines.quantity,
+              createdAt: customerProformaLines.createdAt,
             })
             .from(customerProformaLines)
             .where(eq(customerProformaLines.proformaId, proforma.id));
@@ -249,9 +250,10 @@ export function registerOrderLoadingRoutes(app: Express) {
             productName: line.productName,
             expectedQty: line.quantity,
             proformaLineId: line.id,
+            createdAt: line.createdAt,
           }));
           const plan = buildRemainingLoadingPlan(
-            mergeNewProformaArticles(existingPlan, masterPlan, true),
+            mergeNewProformaArticles(existingPlan, masterPlan, true, order.createdAt),
             loadedByArticle
           );
           nextLoadingLines.push(...plan.lines);
