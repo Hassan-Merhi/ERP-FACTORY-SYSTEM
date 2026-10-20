@@ -311,7 +311,8 @@ export function registerOrderCrudRoutes(app: Express) {
         const proformaLines = mergeNewProformaArticles(
           savedProformaLines,
           originalProformaLines,
-          !["FINALIZED", "CANCELLED"].includes(order.status)
+          !["FINALIZED", "CANCELLED"].includes(order.status),
+          order.createdAt
         );
         const capacity = continuationProforma
           ? await getProformaCapacitySnapshot(db, {
