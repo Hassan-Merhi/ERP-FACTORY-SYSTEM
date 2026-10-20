@@ -38,6 +38,9 @@ export function registerFactoryProductCascadeRoutes(app: Express) {
       const id = parseId(req.params.id);
 
       if (id === null) return res.status(400).json({ message: "Invalid id" });
+      if (!req.body || typeof req.body !== "object" || Array.isArray(req.body)) {
+        return res.status(400).json({ message: "A valid product update is required" });
+      }
       const {
         name,
         weightPerBaleKg,
@@ -57,7 +60,10 @@ export function registerFactoryProductCascadeRoutes(app: Express) {
 
       if (!existing) return res.status(404).json({ message: "Product not found" });
 
-      // If name is being changed, verify it isn't already taken (case-insensitive)
+      // A null/invalid name must never crash .trim() when a caller edits a price.
+      if (name !== undefined && (typeof name !== "string" || !name.trim())) {
+        return res.status(400).json({ message: "Product name must be a non-empty string" });
+      }
       if (name !== undefined && name.trim().toLowerCase() !== existing.name.toLowerCase()) {
         const [nameConflict] = await db
           .select({ id: factoryBaleProducts.id })
@@ -176,8 +182,18 @@ export function registerFactoryProductCascadeRoutes(app: Express) {
         }
       }
 
-      // Only admins/owners/developers may change the label design color
-      if (labelDesignColor !== undefined) {
+      // Check price input before persisting; malformed values must not be silently converted to zero.
+      for (const [field, price] of [["Cost price", productionPrice], ["Selling price", sellingPrice]] as const) {
+        if (price !== undefined && price !== "") {
+          if ((typeof price !== "string" && typeof price !== "number") || !Number.isFinite(Number(price)) || Number(price) < 0 || String(price).trim() === "") {
+            return res.status(400).json({ message: `${field} must be a valid non-negative number` });
+          }
+        }
+      }
+
+      // Only a genuine label-color change requires elevated permissions. A
+      // legacy edit form may resend a null color during an unrelated price edit.
+      if (labelDesignColor !== undefined && (labelDesignColor || null) !== (existing.labelDesignColor ?? null)) {
         const userRole = req.user?.role || "";
         if (!["Admin", "Owner", "Developer"].includes(userRole)) {
           return res.status(403).json({ message: "Only administrators can change the label design color" });
@@ -186,7 +202,7 @@ export function registerFactoryProductCascadeRoutes(app: Express) {
 
       const productUpdate: Partial<typeof factoryBaleProducts.$inferInsert> = { updatedAt: new Date() };
       if (name !== undefined) productUpdate.name = name;
-      if (weightPerBaleKg !== undefined) productUpdate.weightPerBaleKg = weightPerBaleKg;
+      if (weightPerBaleKg !== undefined) productUpdate.weightPerBaleKg = weightPerBaleKg == null ? null : String(weightPerBaleKg);
       if (nextArticleCode !== undefined) productUpdate.articleCode = nextArticleCode;
       if (generatedArticleCode && nextArticleCode) {
         productUpdate.code = nextArticleCode
@@ -210,8 +226,10 @@ export function registerFactoryProductCascadeRoutes(app: Express) {
 
       const baleUpdate: Partial<typeof factoryBales.$inferInsert> = {};
       if (name !== undefined && name !== existing.name) baleUpdate.productName = name;
-      if (weightPerBaleKg !== undefined && weightPerBaleKg !== existing.weightPerBaleKg)
-        baleUpdate.weightKg = weightPerBaleKg;
+      if (weightPerBaleKg !== undefined &&
+          (weightPerBaleKg == null ? null : Number(weightPerBaleKg)) !==
+            (existing.weightPerBaleKg == null ? null : Number(existing.weightPerBaleKg)))
+        baleUpdate.weightKg = weightPerBaleKg == null ? null : String(weightPerBaleKg);
       if (nextArticleCode !== undefined && nextArticleCode !== existing.articleCode)
         baleUpdate.articleCode = nextArticleCode;
       if (grade !== undefined && grade !== existingGrade) baleUpdate.grade = grade;
