@@ -75,15 +75,12 @@ export function BaleProductsDialog1({ model }: { model: Model }) {
     // An empty price input represents zero, not a null value or an instruction
     // to rewrite another field. Include prices only when their value changes.
     const cost = editForm.productionPrice.trim();
-    if (Number(cost || 0) !== Number(editingProduct.productionPrice ?? 0))
-      payload.productionPrice = cost || "0";
+    if (Number(cost || 0) !== Number(editingProduct.productionPrice ?? 0)) payload.productionPrice = cost || "0";
     const selling = editForm.sellingPrice.trim();
-    if (Number(selling || 0) !== Number(editingProduct.sellingPrice ?? 0))
-      payload.sellingPrice = selling || "0";
+    if (Number(selling || 0) !== Number(editingProduct.sellingPrice ?? 0)) payload.sellingPrice = selling || "0";
 
     const labelColor = editForm.labelDesignColor || null;
-    if (labelColor !== (editingProduct.labelDesignColor ?? null))
-      payload.labelDesignColor = labelColor;
+    if (labelColor !== (editingProduct.labelDesignColor ?? null)) payload.labelDesignColor = labelColor;
 
     // An inferred grade is display-only; never cascade it for a price edit.
     if (editForm.grade) payload.grade = editForm.grade;
