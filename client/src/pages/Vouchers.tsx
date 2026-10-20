@@ -364,6 +364,18 @@ export default function Vouchers({ posUser }: VouchersProps = {}) {
     ? fxWallets?.wallets?.find((w) => w.wallet.ledgerAccountId === paymentAccountId)
     : undefined;
 
+  // Most source pickers offer Cash/Bank only. Add active FX agent ledgers so
+  // they are selectable directly in Pay From without editing their account.
+  const paymentPayFromAccounts = useMemo(() => {
+    const walletAccounts = (fxWallets?.wallets || []).map((w) => ({
+      type: "ledger" as const, id: w.wallet.ledgerAccountId,
+      name: w.wallet.accountName + " (FX EUR)", code: "FX",
+    }));
+    const present = new Set(payFromAccounts.map((account) => account.type + ":" + account.id));
+    return [...payFromAccounts, ...walletAccounts.filter((a) => !present.has("ledger:" + a.id))]
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [payFromAccounts, fxWallets?.wallets]);
+
   const saveMutation = useMutation({
     mutationFn: async (formData: VoucherFormData) => {
       // One atomic FX settlement creates a Payment voucher and a native EUR
@@ -399,6 +411,9 @@ export default function Vouchers({ posUser }: VouchersProps = {}) {
           throw new Error("USD amount cannot be paid precisely at this rate; adjust the amount or rate");
         }
         const date = format(formData.voucherDate, "yyyy-MM-dd");
+        if (voucherEffectiveDate && voucherEffectiveDate !== date) {
+          throw new Error("FX agent Payment Voucher requires the effective date to match the voucher date");
+        }
         const fingerprint = JSON.stringify({
           walletId: selectedFxWallet.wallet.id, date, effectiveDate: voucherEffectiveDate || null,
           beneficiary: beneficiary.accountType + ":" + beneficiary.accountId,
@@ -724,7 +739,7 @@ export default function Vouchers({ posUser }: VouchersProps = {}) {
                 accountBalance={accountBalance}
                 accountCurrencyBalances={accountCurrencyBalances}
                 allAccounts={allAccounts}
-                payFromAccounts={payFromAccounts}
+                payFromAccounts={paymentPayFromAccounts}
                 sidebarAccounts={sidebarAccounts}
                 isEditMode={!!voucherIdToEdit}
                 filteredSidebarAccounts={filteredSidebarAccounts}
