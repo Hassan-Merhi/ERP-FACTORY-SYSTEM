@@ -5,21 +5,22 @@ import { usesLiveMasterProforma } from "../server/routes/factory/customer-orders
 const read = (path: string) => readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
 
 describe("open loading proforma quantity synchronization", () => {
-  it("uses current master amounts for ordinary, unfinished loadings", () => {
-    expect(usesLiveMasterProforma("LOADING", false)).toBe(true);
-    expect(usesLiveMasterProforma("DRAFT", false)).toBe(true);
-    expect(usesLiveMasterProforma("PENDING_VERIFICATION", false)).toBe(true);
+  it("uses current master amounts for ordinary active loadings only", () => {
+    expect(usesLiveMasterProforma("LOADING", "ordinary")).toBe(true);
+    expect(usesLiveMasterProforma("DRAFT", "ordinary")).toBe(false);
+    expect(usesLiveMasterProforma("LOADING", "snapshot")).toBe(false);
+    expect(usesLiveMasterProforma("PENDING_VERIFICATION", "ordinary")).toBe(true);
   });
 
   it("never substitutes master quantities for remaining-only continuations", () => {
-    expect(usesLiveMasterProforma("LOADING", true)).toBe(false);
-    expect(usesLiveMasterProforma("DRAFT", true)).toBe(false);
+    expect(usesLiveMasterProforma("LOADING", "continuation")).toBe(false);
+    expect(usesLiveMasterProforma("DRAFT", "continuation")).toBe(false);
   });
 
   it("freezes verified, finalized, and cancelled history", () => {
-    expect(usesLiveMasterProforma("VERIFIED", false)).toBe(false);
-    expect(usesLiveMasterProforma("FINALIZED", false)).toBe(false);
-    expect(usesLiveMasterProforma("CANCELLED", false)).toBe(false);
+    expect(usesLiveMasterProforma("VERIFIED", "ordinary")).toBe(false);
+    expect(usesLiveMasterProforma("FINALIZED", "ordinary")).toBe(false);
+    expect(usesLiveMasterProforma("CANCELLED", "ordinary")).toBe(false);
   });
 
   it("tracks JNAH 000 HMD10027 after master changes from 1 to 3", () => {
@@ -27,7 +28,7 @@ describe("open loading proforma quantity synchronization", () => {
     const oldExpected = 1;
     const loaded = 1;
     expect(oldExpected - loaded).toBe(0);
-    const expected = usesLiveMasterProforma("LOADING", false) ? master : oldExpected;
+    const expected = usesLiveMasterProforma("LOADING", "ordinary") ? master : oldExpected;
     expect(expected - loaded).toBe(2);
   });
 
@@ -37,8 +38,8 @@ describe("open loading proforma quantity synchronization", () => {
     const list = read("server/routes/factory/customer-orders/orderCrudRoutes.ts");
     const finalize = read("server/routes/factory/customer-orders/finalize-loading/loading.ts");
     const lines = read("server/routes/factory/customer-proformas/lines.ts");
-    expect(verify).toContain("usesLiveMasterProforma(order.status, continuation)");
-    expect(capacity).toContain("co.status IN ('DRAFT', 'LOADING', 'PENDING_VERIFICATION')");
+    expect(verify).toContain("usesLiveMasterProforma(order.status, planKind)");
+    expect(capacity).toContain("co.status IN ('LOADING', 'PENDING_VERIFICATION')");
     expect(capacity).toContain("NOT (\${liveMasterPlan})");
     expect(list).toContain("proformaExpectedBales: sql<string>\`CASE WHEN \${liveMasterPlan}");
     expect(finalize).toContain("usesLiveMasterProforma(order.status, continuation)");
