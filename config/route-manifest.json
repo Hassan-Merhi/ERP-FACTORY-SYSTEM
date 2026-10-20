@@ -928,7 +928,7 @@
     "DELETE /api/factory/label-design-colors/:slug [requireAuth > requireNonPOS > <anonymous>]",
     "POST /api/factory/label-banners/:slug [requireAuth > requireNonPOS > <anonymous>]",
     "DELETE /api/factory/label-banners/:slug [requireAuth > requireNonPOS > <anonymous>]",
-    "POST /api/insurance/extra-charges [requireAuth > <anonymous> > <anonymous>]",
+    "POST /api/insurance/extra-charges [requireAuth > requireNonPOS > <anonymous> > <anonymous>]",
     "GET /api/insurance/members [requireAuth > <anonymous>]",
     "GET /api/insurance/members/:id/entries [requireAuth > <anonymous>]",
     "POST /api/insurance/members [requireAuth > <anonymous>]",
