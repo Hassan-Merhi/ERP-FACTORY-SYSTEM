@@ -77,8 +77,16 @@ resulting USD payout rounded to cents to match the requested amount exactly.
 A single transaction creates a **Payment** voucher, deducts native EUR, and
 recognizes the realized FX difference relative to the agent's historical USD
 book basis. The voucher has a linked FX wallet operation and is protected from
-generic correction, retirement, reversal or deletion; those cannot undo the EUR
-movement. The voucher date must match any explicit effective date, and the
+**ordinary editing or stand-alone reversal**. Deleting it from Factory Daybook
+or Vouchers now uses a dedicated atomic cancellation: the voucher is retired
+(soft-deleted with its original GL lines and audit intact), its native EUR payout
+is withdrawn from active wallet movements, and the USD beneficiary posting,
+agent book value and realized FX gain/loss leave active ledger balances together.
+The EUR wallet balance, USD history, EUR statements, Daybook and Net Position
+therefore reflect the cancellation. The deleted native movement is captured
+in the audit log, not shown as an active EUR transaction. No additional SQL
+migration is necessary. Closed-period safeguards still apply. The voucher date
+must match any explicit effective date, and the
 payment must not be optional. Existing EUR settlements from the account popup
 continue to work and post Journal vouchers as before.
 
@@ -105,7 +113,7 @@ by the Accounts page. No SQL migration is required for this addition.
 
 ## Remaining follow-ups
 - Test company isolation, rate-unavailable historical snapshots and supplier statement reconciliation for a `factorySupplier` beneficiary.
-- A dedicated atomic **settlement voucher + EUR payout** reversal is still not implemented; generic edit, reversal and retirement of a settled voucher remain forbidden. The new reversal applies to **unspent denomination conversions only**.
+- A dedicated atomic **settlement voucher + EUR payout** cancellation is now available through Daybook/Vouchers deletion. Generic voucher edit, exact reversal and unlinked retirement remain forbidden. The existing **conversion reversal** applies to unspent denomination conversions only.
 - Enforce wallet-awareness in *ordinary Journal Voucher* entry/edit and voucher retirement flows, rather than relying only on discrepancy detection. The account-scoped FX popup owns payment creation; the existing generic journal editor is **not yet wallet-aware**.
 - Test opening-balance sources with unresolved legacy currency metadata before production activation.
 - Test and specify formal unrealized revaluation accounting policy; Net Position display translation must not silently post P&L.
