@@ -42,8 +42,8 @@ describe("open loading proforma quantity synchronization", () => {
     expect(capacity).toContain("co.status IN ('LOADING', 'PENDING_VERIFICATION')");
     expect(capacity).toContain("NOT (\${liveMasterPlan})");
     expect(list).toContain("proformaExpectedBales: sql<string>\`CASE WHEN \${liveMasterPlan}");
-    expect(finalize).toContain("usesLiveMasterProforma(order.status, continuation)");
+    expect(finalize).toContain("usesLiveMasterProforma(order.status, planKind)");
     expect(lines).toContain("SET expected_qty = \${updated.quantity}");
-    expect(lines).toContain("event.description LIKE 'Continuation of loading #%'");
+    expect(lines).toContain("event.description LIKE 'Loading started for customer:%'");
   });
 });
