@@ -153,6 +153,71 @@ describe("DELETE /api/insurance/members/:id", () => {
   });
 });
 
+describe("POST /api/insurance/extra-charges", () => {
+  const extraChargeBody = {
+    voucherDate: "2026-10-20",
+    amount: "25.50",
+    debitAccountId: 0,
+    creditAccountId: 0,
+    notes: "Additional October insurance expense",
+    clientRequestId: "ab5ace4f-ab23-4c88-a525-cc6a4f13217a",
+  };
+
+  it("creates a balanced Journal owned by Insurance and replays retries without another voucher", async () => {
+    const body = {
+      ...extraChargeBody,
+      debitAccountId: ctx.cashAccountId,
+      creditAccountId: ctx.salesAccountId,
+    };
+    const first = await agent.post("/api/insurance/extra-charges").send(body);
+    expect(first.status).toBe(200);
+    expect(first.body.voucherId).toBeGreaterThan(0);
+
+    const replay = await agent.post("/api/insurance/extra-charges").send(body);
+    expect(replay.status).toBe(200);
+    expect(replay.body.voucherId).toBe(first.body.voucherId);
+    expect(replay.body.replayed).toBe(true);
+
+    const rows = await pool.query<{ voucher_type: string; total_amount: string; company_id: number }>(
+      "SELECT voucher_type, total_amount, company_id FROM vouchers WHERE id = $1",
+      [first.body.voucherId]
+    );
+    expect(rows.rows[0]).toMatchObject({
+      voucher_type: "Journal",
+      company_id: ctx.companyId,
+    });
+    expect(rows.rows[0].total_amount).toBe("25.50");
+
+    const entries = await pool.query<{ ledger_account_id: number; debit_amount: string; credit_amount: string }>(
+      "SELECT ledger_account_id, debit_amount, credit_amount FROM voucher_entries WHERE voucher_id = $1",
+      [first.body.voucherId]
+    );
+    expect(entries.rows).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ ledger_account_id: ctx.cashAccountId, debit_amount: "25.50" }),
+        expect.objectContaining({ ledger_account_id: ctx.salesAccountId, credit_amount: "25.50" }),
+      ])
+    );
+  });
+
+  it("rejects invalid amounts and identical Dr/Cr accounts before writing", async () => {
+    const base = {
+      ...extraChargeBody,
+      debitAccountId: ctx.cashAccountId,
+      creditAccountId: ctx.salesAccountId,
+      clientRequestId: "12ed9280-2799-492f-9273-82c6df45e407",
+    };
+    expect((await agent.post("/api/insurance/extra-charges").send({ ...base, amount: "-5" })).status).toBe(400);
+    expect((await agent.post("/api/insurance/extra-charges").send({ ...base, amount: "1.999" })).status).toBe(400);
+    expect(
+      (await agent.post("/api/insurance/extra-charges").send({ ...base, creditAccountId: ctx.cashAccountId })).status
+    ).toBe(400);
+    expect(
+      (await agent.post("/api/insurance/extra-charges").send({ ...base, creditAccountId: 2_147_482_500 })).status
+    ).toBe(400);
+  });
+});
+
 describe("POST /api/insurance/generate", () => {
   it("refuses a period with no eligible members rather than posting an empty voucher", async () => {
     await deactivateAllMembers();
