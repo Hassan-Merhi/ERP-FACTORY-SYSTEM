@@ -189,7 +189,11 @@ export function registerAccountVoucherSidebarRoutes(app: Express) {
           .groupBy(voucherEntries.ledgerAccountId),
       ]);
       // Strip internal system-only accounts (sp_stock, sp_opnbal are isHidden=true for a reason)
-      const ledgers = ledgersRaw.filter((a) => !["sp_stock", "sp_opnbal"].includes(a.subType ?? ""));
+      // This sidebar is also a voucher account chooser; never offer group headings.
+      const groupParentIds = new Set(ledgersRaw.filter((a) => a.parentId != null).map((a) => a.parentId));
+      const ledgers = ledgersRaw.filter(
+        (a) => !["sp_stock", "sp_opnbal", "Group"].includes(a.subType ?? "") && !groupParentIds.has(a.id)
+      );
 
       // getAllSuppliers() is not company-scoped, so foreign tenants' rows have to
       // be dropped here rather than left to the isChildCompany filter below, which
