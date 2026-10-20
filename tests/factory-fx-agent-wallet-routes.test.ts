@@ -258,6 +258,10 @@ describe("FX agent EUR wallet lifecycle", () => {
     const replay = await agent.post(`/api/factory/fx-agent-wallets/${wid}/reverse-conversion`).send(reason);
     expect(replay.status).toBe(201);
     expect(replay.body).toMatchObject({ id: reversed.body.id, replayed: true });
+    const alteredReason = await agent.post(`/api/factory/fx-agent-wallets/${wid}/reverse-conversion`).send({
+      ...reason, reason: "Changed audit reason",
+    });
+    expect(alteredReason.status).toBe(400);
     const double = await agent.post(`/api/factory/fx-agent-wallets/${wid}/reverse-conversion`).send({
       ...reason,
       requestKey: `${PREFIX}-reverse-duplicate`,
