@@ -1,3 +1,7 @@
+import { sql } from "drizzle-orm";
+import { resultRows } from "../../../lib/queryResult";
+import type { ProformaCapacityExecutor } from "./proformaCapacity";
+
 /**
  * Merge proforma articles created after a loading's expected-plan snapshot.
  *
@@ -29,9 +33,6 @@ export function mergeNewProformaArticles<T extends {
 }
 
 
-import { sql } from "drizzle-orm";
-import { resultRows } from "../../../lib/queryResult";
-import type { ProformaCapacityExecutor } from "./proformaCapacity";
 
 /**
  * A continuation keeps the remaining-only plan saved when the prior loading
