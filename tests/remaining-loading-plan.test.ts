@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildRemainingLoadingPlan } from "../server/routes/factory/customer-orders/remainingLoadingPlan";
+import { mergeNewProformaArticles } from "../server/routes/factory/customer-orders/proformaPlan";
 
 const source = [
   { articleCode: "HMD-A", productName: "Product A", expectedQty: 60, proformaLineId: 11 },
@@ -28,6 +29,48 @@ describe("remaining-only continuation loading", () => {
       ],
       remainingBales: 15,
     });
+  });
+
+  it("does not resurrect completed articles in the second or third continuation", () => {
+    const original = [
+      { ...source[0], createdAt: new Date("2026-10-01T00:00:00Z") },
+      { ...source[1], createdAt: new Date("2026-10-01T00:00:00Z") },
+    ];
+    const second = buildRemainingLoadingPlan(original, new Map([["hmd-a", 60], ["hmd-b", 10]]));
+    expect(second.lines.map((line) => [line.articleCode, line.expectedQty])).toEqual([["HMD-B", 30]]);
+
+    const resumed = mergeNewProformaArticles(second.lines, original, true, "2026-10-02T00:00:00Z");
+    expect(resumed.map((line) => line.articleCode)).toEqual(["HMD-B"]);
+    const third = buildRemainingLoadingPlan(resumed, new Map([["hmd-b", 20]]));
+    expect(third.lines.map((line) => [line.articleCode, line.expectedQty])).toEqual([["HMD-B", 10]]);
+    expect(mergeNewProformaArticles(third.lines, original, true, "2026-10-03T00:00:00Z"))
+      .toHaveLength(1);
+  });
+
+  it("adds genuinely new proforma items to unfinished continuation plans", () => {
+    const original = [
+      { ...source[0], createdAt: "2026-10-01T00:00:00Z" },
+      { ...source[1], createdAt: "2026-10-01T00:00:00Z" },
+      { articleCode: "HMD-C", productName: "Added item", expectedQty: 4, proformaLineId: 13, createdAt: "2026-10-04T00:00:00Z" },
+    ];
+    const saved = [{ ...source[1], expectedQty: 8 }];
+    const merged = mergeNewProformaArticles(saved, original, true, "2026-10-03T00:00:00Z");
+    expect(merged.map((line) => [line.articleCode, line.expectedQty])).toEqual([
+      ["HMD-B", 8],
+      ["HMD-C", 4],
+    ]);
+    const next = buildRemainingLoadingPlan(merged, new Map([["hmd-b", 3]]));
+    expect(next.remainingBales).toBe(9);
+  });
+
+  it("does not revive old master articles omitted by an existing legacy continuation", () => {
+    const master = [
+      { ...source[0], created_at: "2026-10-01T00:00:00Z" },
+      { ...source[1], created_at: "2026-10-01T00:00:00Z" },
+    ];
+    const saved = [{ ...source[1], expectedQty: 10 }];
+    expect(mergeNewProformaArticles(saved, master, true, "2026-10-02T00:00:00Z"))
+      .toEqual(saved);
   });
 
   it("deduplicates case-variant article lines and clamps overloading to zero", () => {
@@ -71,6 +114,8 @@ describe("remaining-only continuation loading", () => {
     expect(finalize).toContain("buildRemainingLoadingPlan(");
     expect(capacity).toContain("SELECT article_code AS \"articleCode\", expected_qty AS quantity");
     expect(capacity).toContain("AND NOT EXISTS (");
+    expect(capacity).toContain("AND cpl.created_at > co.created_at");
+    expect(finalize).toContain("mergeNewProformaArticles(existingPlan, masterPlan, true, order.createdAt)");
     expect(dialog).toContain('data-testid="button-finalize-open-next-loading"');
   });
 });
