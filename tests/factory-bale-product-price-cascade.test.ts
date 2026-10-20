@@ -47,8 +47,10 @@ vi.mock("drizzle-orm", () => ({
 }));
 vi.mock("@shared/schema", () => ({
   factoryBaleProducts: {
-    id: "product.id", companyId: "product.companyId",
-    articleCode: "product.articleCode", name: "product.name",
+    id: "product.id",
+    companyId: "product.companyId",
+    articleCode: "product.articleCode",
+    name: "product.name",
     code: "product.code",
   },
   factoryBales: { productId: "bale.productId", companyId: "bale.companyId" },
@@ -65,8 +67,14 @@ registerFactoryProductCascadeRoutes({
 function invoke(body: unknown, role = "Worker") {
   const res: any = {
     statusCode: 200,
-    status(code: number) { this.statusCode = code; return this; },
-    json(payload: unknown) { this.body = payload; return this; },
+    status(code: number) {
+      this.statusCode = code;
+      return this;
+    },
+    json(payload: unknown) {
+      this.body = payload;
+      return this;
+    },
   };
   const req = {
     params: { id: "7" },
