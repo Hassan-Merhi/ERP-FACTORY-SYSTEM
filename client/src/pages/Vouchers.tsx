@@ -105,6 +105,9 @@ export default function Vouchers({ posUser }: VouchersProps = {}) {
   const exchangeRate = transactionRate || dailyExchangeRate;
   const [voucherEffectiveDate, setVoucherEffectiveDate] = useState<string>("");
   const [fxPaymentRate, setFxPaymentRate] = useState("");
+  const [fxCurrencyOverride, setFxCurrencyOverride] = useState<{
+    beneficiary: string; currency: "EUR" | "USD";
+  } | null>(null);
   const fxPaymentRequestRef = useRef<{ fingerprint: string; key: string } | null>(null);
   const [, setLocation] = useLocation();
   const printRef = useRef<HTMLDivElement>(null);
@@ -364,6 +367,43 @@ export default function Vouchers({ posUser }: VouchersProps = {}) {
     ? fxWallets?.wallets?.find((w) => w.wallet.ledgerAccountId === paymentAccountId)
     : undefined;
 
+  // Identify the supplier's native payable, not the USD-base total in the picker.
+  const fxSelectedBeneficiary = entries[0];
+  const fxSupplierId = selectedFxWallet && fxSelectedBeneficiary?.accountType === "factorySupplier"
+    ? fxSelectedBeneficiary.accountId : 0;
+  const {
+    data: fxSupplierBalance,
+    isPending: fxSupplierBalancePending,
+    isError: fxSupplierBalanceError,
+  } = useQuery<{
+    nativeBalances: Array<{ currencyCode: string; balance: string; legacyUnconvertedLines: number }>;
+  }>({
+    queryKey: ["/api/factory/suppliers", selectedCompany?.id, fxSupplierId, "balance", "fx-payment"],
+    queryFn: async () => {
+      const response = await fetch(`/api/factory/suppliers/${fxSupplierId}/balance`, { credentials: "include" });
+      if (!response.ok) throw new Error("Unable to load supplier currency balance");
+      return response.json();
+    },
+    enabled: !!fxSupplierId && isFactoryMode && !isPOS,
+    staleTime: 15_000,
+  });
+  const supplierEurBucket = fxSupplierBalance?.nativeBalances?.find(
+    (bucket) => bucket.currencyCode === "EUR" && bucket.legacyUnconvertedLines === 0
+  );
+  const fxSupplierEurBalance = Math.max(0, Number(supplierEurBucket?.balance || 0));
+  const fxBeneficiaryKey = `${selectedCompany?.id}:${fxSelectedBeneficiary?.accountType}:${fxSelectedBeneficiary?.accountId}`;
+  const fxPayoutCurrency: "EUR" | "USD" =
+    fxCurrencyOverride?.beneficiary === fxBeneficiaryKey
+      ? fxCurrencyOverride.currency
+      : fxSupplierId && fxSupplierEurBalance > 0 ? "EUR" : "USD";
+  const fxSupplierBalanceLoading = !!fxSupplierId && (fxSupplierBalancePending || fxSupplierBalanceError);
+  const changeFxPayoutCurrency = (currency: "EUR" | "USD") => {
+    if (currency === fxPayoutCurrency) return;
+    setFxCurrencyOverride({ beneficiary: fxBeneficiaryKey, currency });
+    // Never reuse a USD number as EUR (or vice versa).
+    form.setValue("entries.0.amount", "");
+  };
+
   // Most source pickers offer Cash/Bank only. Add active FX agent ledgers so
   // they are selectable directly in Pay From without editing their account.
   const paymentPayFromAccounts = useMemo(() => {
@@ -383,31 +423,43 @@ export default function Vouchers({ posUser }: VouchersProps = {}) {
       if (selectedFxWallet && activeTab === "payment" && !voucherIdToEdit) {
         if (!navigator.onLine) throw new Error("FX payments must be posted online");
         if (!selectedFxWallet.synchronized) throw new Error("FX agent ledger needs reconciliation");
-        if (selectedCurrency !== "USD") throw new Error("Use USD as the payout currency");
+        if (fxSupplierBalanceLoading) throw new Error("Wait until the supplier's currency balance has loaded");
+        if (fxPayoutCurrency === "USD" && selectedCurrency !== "USD") {
+          throw new Error("Select USD as the display currency before entering a USD payout");
+        }
         if (formData.optional) throw new Error("FX payments cannot be optional vouchers");
-        if (!/^\d+(?:\.\d{1,10})?$/.test(fxPaymentRate) || Number(fxPaymentRate) <= 0) {
+        if (fxPayoutCurrency === "USD" &&
+            (!/^\d+(?:\.\d{1,10})?$/.test(fxPaymentRate) || Number(fxPaymentRate) <= 0)) {
           throw new Error("Enter the negotiated USD per EUR payment rate");
         }
         if (formData.entries.length !== 1) {
-          throw new Error("FX agent payment supports one USD beneficiary per voucher");
+          throw new Error("FX agent payment supports one beneficiary per voucher");
         }
         const [beneficiary] = formData.entries;
         if (!["ledger", "factorySupplier"].includes(beneficiary.accountType)) {
-          throw new Error("Choose a factory supplier or USD ledger account as the beneficiary");
+          throw new Error("Choose a factory supplier or ledger account as the beneficiary");
         }
         if (beneficiary.accountType === "ledger" && beneficiary.accountId === selectedFxWallet.wallet.ledgerAccountId) {
           throw new Error("FX agent cannot pay itself");
         }
         if (!/^\d+(?:\.\d{1,2})?$/.test(beneficiary.amount)) {
-          throw new Error("USD payout must be positive with at most 2 decimal places");
+          throw new Error("Payment must be positive with at most 2 decimal places");
         }
         const amount = new Decimal(beneficiary.amount);
-        if (amount.lte(0)) throw new Error("USD payment must be positive");
-        const eurNeeded = amount.div(new Decimal(fxPaymentRate)).toDecimalPlaces(6);
+        if (amount.lte(0)) throw new Error("Payment must be positive");
+        if (fxPayoutCurrency === "EUR" &&
+            (beneficiary.accountType !== "factorySupplier" || fxSupplierEurBalance <= 0 ||
+              amount.gt(fxSupplierEurBalance))) {
+          throw new Error("Choose a supplier with an outstanding EUR payable and do not exceed its EUR balance");
+        }
+        const eurNeeded = fxPayoutCurrency === "EUR"
+          ? amount
+          : amount.div(new Decimal(fxPaymentRate)).toDecimalPlaces(6);
         if (eurNeeded.lte(0) || eurNeeded.gt(new Decimal(selectedFxWallet.state.eur))) {
           throw new Error("FX agent has insufficient EUR for this USD payment");
         }
-        if (!eurNeeded.times(new Decimal(fxPaymentRate)).toDecimalPlaces(2).eq(amount)) {
+        if (fxPayoutCurrency === "USD" &&
+            !eurNeeded.times(new Decimal(fxPaymentRate)).toDecimalPlaces(2).eq(amount)) {
           throw new Error("USD amount cannot be paid precisely at this rate; adjust the amount or rate");
         }
         const date = format(formData.voucherDate, "yyyy-MM-dd");
@@ -417,7 +469,8 @@ export default function Vouchers({ posUser }: VouchersProps = {}) {
         const fingerprint = JSON.stringify({
           walletId: selectedFxWallet.wallet.id, date, effectiveDate: voucherEffectiveDate || null,
           beneficiary: beneficiary.accountType + ":" + beneficiary.accountId,
-          usdAmount: amount.toFixed(2), rate: fxPaymentRate,
+          payoutCurrency: fxPayoutCurrency, amount: amount.toFixed(2),
+          rate: fxPayoutCurrency === "USD" ? fxPaymentRate : null,
           notes: formData.notes, narration: beneficiary.narration,
           paymentAccountNarration: formData.paymentAccountNarration,
         });
@@ -429,8 +482,10 @@ export default function Vouchers({ posUser }: VouchersProps = {}) {
           "/api/factory/fx-agent-wallets/" + selectedFxWallet.wallet.id + "/settle",
           {
             paymentVoucher: true,
-            usdAmount: amount.toFixed(2),
-            rateUsdPerEur: fxPaymentRate,
+            targetCurrency: fxPayoutCurrency,
+            ...(fxPayoutCurrency === "EUR"
+              ? { eurAmount: amount.toFixed(2) }
+              : { usdAmount: amount.toFixed(2), rateUsdPerEur: fxPaymentRate }),
             targetKind: beneficiary.accountType,
             targetId: beneficiary.accountId,
             date,
@@ -481,6 +536,7 @@ export default function Vouchers({ posUser }: VouchersProps = {}) {
       fxPaymentRequestRef.current = null;
       setFxPaymentRate("");
       queryClient.invalidateQueries({ queryKey: ["/api/factory/fx-agent-wallets"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/factory/suppliers"] });
       queryClient.invalidateQueries({ queryKey: ["/api/factory/net-position"] });
       queryClient.invalidateQueries({ queryKey: ["/api/accounts/all"] });
       queryClient.invalidateQueries({ queryKey: ["/api/vouchers"] });
@@ -634,26 +690,35 @@ export default function Vouchers({ posUser }: VouchersProps = {}) {
     }
     if (selectedFxWallet && activeTab === "payment" && !voucherIdToEdit) {
       const rate = Number(fxPaymentRate);
-      const usdAmount = Number(validEntries[0]?.amount || 0);
-      const eurAmount = rate > 0 ? usdAmount / rate : 0;
-      if (!Number.isFinite(eurAmount) || eurAmount <= 0 ||
-          validEntries.length !== 1 || !fxPaymentRate ||
-          !["ledger", "factorySupplier"].includes(validEntries[0].accountType)) {
+      const amount = Number(validEntries[0]?.amount || 0);
+      const directEur = fxPayoutCurrency === "EUR";
+      const eurAmount = directEur ? amount : rate > 0 ? amount / rate : 0;
+      if (fxSupplierBalanceLoading || !Number.isFinite(eurAmount) || eurAmount <= 0 ||
+          validEntries.length !== 1 || (!directEur && !fxPaymentRate) ||
+          !["ledger", "factorySupplier"].includes(validEntries[0].accountType) ||
+          (directEur && (validEntries[0].accountType !== "factorySupplier" ||
+            eurAmount > fxSupplierEurBalance))) {
         toast({
-          title: "FX payment details required",
-          description: "Choose one USD ledger/factory supplier recipient, amount, and agreed EUR rate.",
+          title: "Payment details required",
+          description: directEur
+            ? "Choose a EUR supplier payable and enter an amount within its EUR balance."
+            : "Choose one USD recipient, amount, and agreed EUR rate.",
           variant: "destructive",
         });
         return;
       }
+      const paymentDetails = directEur
+        ? "Supplier receives: EUR " + amount.toFixed(2) + "\\n" +
+          "Agent EUR deducted: EUR " + amount.toFixed(2) + "\\n" +
+          "No currency exchange or rate entry is needed."
+        : "USD recipient receives: " + amount.toFixed(2) + "\\n" +
+          "Agreed USD/EUR rate: " + fxPaymentRate + "\\n" +
+          "EUR deducted (approx.): " + eurAmount.toFixed(6) + "\\n" +
+          "FX gain/loss is booked automatically.";
       if (!window.confirm(
-        "Post FX Payment Voucher?\\n" +
-          "From: " + selectedFxWallet.wallet.accountName + "\n" +
-          "To: " + validEntries[0].accountName + "\n" +
-          "USD recipient receives: " + usdAmount.toFixed(2) + "\n" +
-          "Agreed USD/EUR rate: " + fxPaymentRate + "\n" +
-          "EUR deducted (approx.): " + eurAmount.toFixed(6) + "\n" +
-          "This posts the USD voucher, EUR wallet deduction and FX gain/loss together."
+        "Post Payment Voucher?\\n" +
+          "From: " + selectedFxWallet.wallet.accountName + "\\n" +
+          "To: " + validEntries[0].accountName + "\\n" + paymentDetails
       )) return;
     }
     saveMutation.mutate({ ...data, entries: validEntries });
@@ -794,6 +859,10 @@ export default function Vouchers({ posUser }: VouchersProps = {}) {
                 fxWalletsLoading={fxWalletsLoading && isFactoryMode}
                 fxPaymentRate={fxPaymentRate}
                 onFxPaymentRateChange={setFxPaymentRate}
+                fxPayoutCurrency={fxPayoutCurrency}
+                fxSupplierEurBalance={fxSupplierId ? fxSupplierEurBalance : null}
+                fxSupplierBalanceLoading={fxSupplierBalanceLoading}
+                onFxPayoutCurrencyChange={changeFxPayoutCurrency}
                 voucherNumber={voucherToEdit?.voucherNumber}
                 onAccountPickerOpen={() => setAccountPickersNeeded(true)}
                 onAccountSearchChange={setLiveAccountSearch}
