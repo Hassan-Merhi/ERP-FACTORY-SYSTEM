@@ -3,6 +3,7 @@ import type { SubmitHandler, UseFormReturn } from "react-hook-form";
 import type { BankAccount, InsertBankAccount, LedgerAccount, UpdateLedgerAccount } from "@shared/schema";
 
 export interface FxAgentAccountBalance {
+  wallet?: { id: number; activatedOn: string; ledgerAccountId: number };
   state: {
     usd: string;
     eur: string;
