@@ -38,7 +38,7 @@ jobs:
           fi
           printf 'prompt=%s\n' "$UPDATED_PROMPT" >> "$GITHUB_OUTPUT"
       - name: Run agent
-        uses: pullfrog/pullfrog@ad4283a862b8377cb525a0f5bf30f17c023b18ea # v0
+        uses: pullfrog/pullfrog@9a8e9d4106a7f11cabeb114978a053add388225e # v0
         with:
           prompt: ${{ steps.force-model.outputs.prompt }}
           model: openai/gpt
