@@ -13,7 +13,7 @@ import { fxAgentTablesExist } from "../../services/factory/fxAgentWalletDb";
 
 type EurRow = {
   id: number; date: string; kind: string; description: string; detail: string;
-  eurIn: string; eurOut: string; balance: string; rateUsdPerEur: string; voucherId: number | null;
+  eurIn: string; eurOut: string; balance: string; rateUsdPerEur: string; voucherId: number | null; deleted?: boolean;
 };
 type EurStatement = {
   accountName: string; activatedOn: string; fromDate: string | null; toDate: string;
@@ -45,6 +45,7 @@ async function build(req: Request): Promise<EurStatement> {
   if (!companyId || !Number.isSafeInteger(walletId) || walletId <= 0) throw new Error("Select a valid FX wallet");
   if (!(await fxAgentTablesExist())) throw new Error("FX wallet migration required");
   const { fromDate, toDate } = dates(req);
+  const showDeleted = req.query.showDeleted === "true";
   const found = await db.execute(sql`
     SELECT a.name AS "accountName", w.activated_on::text AS "activatedOn"
     FROM factory_fx_agent_wallets w JOIN ledger_accounts a ON a.id = w.ledger_account_id
@@ -90,7 +91,38 @@ async function build(req: Request): Promise<EurStatement> {
       eurIn: eurIn.toFixed(6), eurOut: eurOut.toFixed(6),
       balance: balance.toFixed(6), rateUsdPerEur: String(op.rate),
       voucherId: op.voucherId == null ? null : Number(op.voucherId),
+      deleted: false,
     });
+  }
+  // Cancelled EUR payouts have been removed from active balances. Show the
+  // immutable audit snapshot on request without replaying its cash movement.
+  if (showDeleted) {
+    const audit = await db.execute(sql`
+      SELECT changes::jsonb->'nativeSettlement'->'old' AS movement
+      FROM audit_log
+      WHERE company_id = ${companyId}
+        AND table_name = 'factory_fx_agent_wallet_operations'
+        AND action = 'delete'
+        AND changes::jsonb->'reason'->>'new' = 'fx-agent-payment-cancel'
+        AND changes::jsonb->'nativeSettlement'->'old'->>'walletId' = ${String(walletId)}
+    `);
+    for (const entry of audit.rows) {
+      const old = entry.movement as Record<string, unknown> | null;
+      if (!old) continue;
+      const date = String(old.date || "").slice(0, 10);
+      if (!isoDate.test(date) || date > toDate || (fromDate && date < fromDate)) continue;
+      const opId = Number(old.id);
+      if (!Number.isSafeInteger(opId)) continue;
+      rows.push({
+        id: opId, date, kind: "EUR_SETTLEMENT", deleted: true,
+        description: "Deleted EUR payment",
+        detail: String(old.narration || ""),
+        eurIn: "0.000000", eurOut: toMoney(String(old.eurPaid || "0")).toFixed(6),
+        balance: "", rateUsdPerEur: String(old.rateUsdPerEur || "0"),
+        voucherId: old.voucherId == null ? null : Number(old.voucherId),
+      });
+    }
+    rows.sort((a, b) => a.date.localeCompare(b.date) || a.id - b.id);
   }
   return {
     accountName: String(wallet.accountName), activatedOn: String(wallet.activatedOn).slice(0, 10),
@@ -109,44 +141,51 @@ async function pdf(s: EurStatement): Promise<Buffer> {
     doc.on("data", (chunk: Buffer) => chunks.push(chunk));
     doc.on("error", reject);
     doc.on("end", () => resolve(Buffer.concat(chunks)));
-    doc.font("Helvetica-Bold").fontSize(18).fillColor("#1e293b").text("EUR Statement");
+
+    doc.font("Helvetica-Bold").fontSize(18).fillColor("#1e293b").text("EUR Account Ledger");
     doc.moveDown(0.3).font("Helvetica").fontSize(11).text(s.accountName);
     doc.fontSize(9).fillColor("#64748b")
       .text("Period: " + (s.fromDate || s.activatedOn) + " to " + s.toDate);
-    doc.moveDown().font("Helvetica-Bold").fontSize(11).fillColor("#0f172a")
-      .text("Opening EUR " + money(s.openingEur) + "            Closing EUR " + money(s.closingEur));
+    doc.moveDown(0.6).font("Helvetica-Bold").fontSize(10).fillColor("#0f172a")
+      .text("Opening: EUR " + money(s.openingEur) + "    Closing: EUR " + money(s.closingEur));
     doc.moveDown();
-    let y = doc.y + 10;
-    const heads = [36, 110, 333, 406, 476];
-    const header = () => {
-      doc.font("Helvetica-Bold").fontSize(8).fillColor("#334155");
-      ["DATE", "TRANSACTION", "EUR IN", "EUR OUT", "EUR BALANCE"].forEach((t, i) =>
-        doc.text(t, heads[i], y, { width: [68, 215, 69, 67, 83][i], align: i > 1 ? "right" : "left" }));
-      y += 20;
-      doc.moveTo(36, y - 5).lineTo(559, y - 5).strokeColor("#cbd5e1").stroke();
+    let y = doc.y + 9;
+    const x = [36, 93, 265, 385, 443, 501];
+    const widths = [54, 167, 116, 54, 54, 58];
+    const heading = () => {
+      doc.rect(36, y - 4, 523, 20).fill("#e9eef5");
+      doc.font("Helvetica-Bold").fontSize(7.5).fillColor("#334155");
+      ["DATE", "PARTICULARS", "NOTES", "DEBIT", "CREDIT", "BALANCE"].forEach((t, i) =>
+        doc.text(t, x[i], y + 2, { width: widths[i], align: i >= 3 ? "right" : "left" }));
+      y += 24;
     };
-    header();
-    const line = (date: string, name: string, incoming: string, outgoing: string, balance: string) => {
-      if (y > 740) { doc.addPage(); y = 42; header(); }
-      doc.font("Helvetica").fontSize(8).fillColor("#1e293b");
-      [date, name.slice(0, 90), incoming, outgoing, balance].forEach((v, i) =>
-        doc.text(v, heads[i], y, { width: [68, 215, 69, 67, 83][i],
-          height: 30, ellipsis: true, align: i > 1 ? "right" : "left" }));
-      y += 35;
-      doc.moveTo(36, y - 4).lineTo(559, y - 4).strokeColor("#e2e8f0").stroke();
+    const line = (date: string, particulars: string, notes: string, debit: string, credit: string, balance: string, deleted = false) => {
+      if (y > 733) { doc.addPage(); y = 42; heading(); }
+      doc.font("Helvetica").fontSize(7.8).fillColor(deleted ? "#94a3b8" : "#1e293b");
+      [date, particulars, notes, debit, credit, balance].forEach((v, i) =>
+        doc.text(v, x[i], y, { width: widths[i], height: 30, ellipsis: true, align: i >= 3 ? "right" : "left" }));
+      y += 36;
+      doc.moveTo(36, y - 5).lineTo(559, y - 5).strokeColor("#e2e8f0").stroke();
     };
-    line(s.fromDate || s.activatedOn, "Opening EUR balance", "", "", money(s.openingEur));
-    for (const row of s.rows) line(row.date, row.description,
-      row.eurIn === "0.000000" ? "" : money(row.eurIn),
-      row.eurOut === "0.000000" ? "" : money(row.eurOut), money(row.balance));
-    if (y > 727) { doc.addPage(); y = 42; }
-    doc.font("Helvetica-Bold").fontSize(9).fillColor("#0f172a")
-      .text("TOTAL", 110, y)
-      .text(money(s.totalEurIn), 333, y, { width: 69, align: "right" })
-      .text(money(s.totalEurOut), 406, y, { width: 67, align: "right" })
-      .text(money(s.closingEur), 476, y, { width: 83, align: "right" });
+    heading();
+    line(s.fromDate || s.activatedOn, "Opening Balance", "", "", "", money(s.openingEur));
+    for (const row of s.rows) {
+      const notes = [row.detail, row.rateUsdPerEur ? "USD/EUR " + row.rateUsdPerEur : "",
+        row.voucherId ? "Voucher #" + row.voucherId : "", row.deleted ? "DELETED — excluded from balance" : ""]
+        .filter(Boolean).join(" · ");
+      line(row.date, row.description, notes,
+        row.eurIn === "0.000000" ? "" : money(row.eurIn),
+        row.eurOut === "0.000000" ? "" : money(row.eurOut),
+        row.deleted ? "—" : money(row.balance), row.deleted);
+    }
+    if (y > 732) { doc.addPage(); y = 42; heading(); }
+    doc.font("Helvetica-Bold").fontSize(8).fillColor("#0f172a");
+    doc.text("CLOSING TOTAL", 93, y)
+      .text(money(s.totalEurIn), 385, y, { width: 54, align: "right" })
+      .text(money(s.totalEurOut), 443, y, { width: 54, align: "right" })
+      .text(money(s.closingEur), 501, y, { width: 58, align: "right" });
     doc.font("Helvetica").fontSize(8).fillColor("#64748b")
-      .text("Native EUR transactions only. Historical USD vouchers are shown separately.", 36, y + 29);
+      .text("All amounts in EUR. Deleted payments (if shown) are excluded from balances. Historical USD vouchers are separate.", 36, y + 27, { width: 523 });
     doc.end();
   });
 }
@@ -154,33 +193,37 @@ async function pdf(s: EurStatement): Promise<Buffer> {
 async function xlsx(s: EurStatement): Promise<Buffer> {
   const book = new ExcelJS.Workbook();
   book.creator = "Business OS";
-  const sheet = book.addWorksheet("EUR Statement", { views: [{ state: "frozen", ySplit: 6 }] });
-  sheet.columns = [{ width: 15 }, { width: 43 }, { width: 37 }, { width: 17 },
-    { width: 17 }, { width: 19 }, { width: 19 }];
-  sheet.mergeCells("A1:G1");
-  sheet.getCell("A1").value = "EUR Account Statement";
+  const sheet = book.addWorksheet("EUR Ledger", { views: [{ state: "frozen", ySplit: 6 }] });
+  sheet.columns = [{ width: 16 }, { width: 41 }, { width: 57 }, { width: 20 }, { width: 20 }, { width: 22 }];
+  sheet.mergeCells("A1:F1");
+  sheet.getCell("A1").value = "EUR Account Ledger";
   sheet.getCell("A1").font = { bold: true, size: 17, color: { argb: "FF183153" } };
-  sheet.mergeCells("A2:G2"); sheet.getCell("A2").value = s.accountName;
-  sheet.mergeCells("A3:G3");
+  sheet.mergeCells("A2:F2"); sheet.getCell("A2").value = s.accountName;
+  sheet.mergeCells("A3:F3");
   sheet.getCell("A3").value = "Period: " + (s.fromDate || s.activatedOn) + " to " + s.toDate;
-  sheet.mergeCells("A4:G4");
+  sheet.mergeCells("A4:F4");
   sheet.getCell("A4").value = "Opening EUR: " + money(s.openingEur) + "    Closing EUR: " + money(s.closingEur);
-  const head = sheet.addRow(["Date", "Transaction", "Details", "EUR In", "EUR Out", "EUR Balance", "USD/EUR Rate"]);
+  const head = sheet.addRow(["Date", "Particulars", "Notes / Agreed Rate", "EUR Debit", "EUR Credit", "EUR Balance"]);
   head.font = { bold: true, color: { argb: "FFFFFFFF" } };
   head.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF183153" } };
-  sheet.addRow([s.fromDate || s.activatedOn, "Opening EUR balance", "", null, null, Number(s.openingEur)]);
-  for (const row of s.rows) sheet.addRow([row.date, row.description, row.detail,
-    row.eurIn === "0.000000" ? null : Number(row.eurIn),
-    row.eurOut === "0.000000" ? null : Number(row.eurOut),
-    Number(row.balance), Number(row.rateUsdPerEur)]);
-  const total = sheet.addRow(["", "TOTAL", "", Number(s.totalEurIn), Number(s.totalEurOut), Number(s.closingEur)]);
+  sheet.addRow([s.fromDate || s.activatedOn, "Opening Balance", "", null, null, Number(s.openingEur)]);
+  for (const row of s.rows) {
+    const notes = [row.detail, row.rateUsdPerEur ? "USD/EUR " + row.rateUsdPerEur : "",
+      row.voucherId ? "Voucher #" + row.voucherId : "", row.deleted ? "DELETED (not in balances)" : ""]
+      .filter(Boolean).join(" · ");
+    const record = sheet.addRow([row.date, row.description, notes,
+      row.eurIn === "0.000000" ? null : Number(row.eurIn),
+      row.eurOut === "0.000000" ? null : Number(row.eurOut),
+      row.deleted ? null : Number(row.balance)]);
+    if (row.deleted) record.font = { italic: true, color: { argb: "FF94A3B8" } };
+  }
+  const total = sheet.addRow(["", "Closing Total", "", Number(s.totalEurIn), Number(s.totalEurOut), Number(s.closingEur)]);
   total.font = { bold: true };
   total.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFEAF0F7" } };
   for (let n = 6; n <= total.number; n++) {
     for (const col of [4, 5, 6]) sheet.getRow(n).getCell(col).numFmt = "#,##0.00####";
-    sheet.getRow(n).getCell(7).numFmt = "0.000000";
   }
-  sheet.addRow(["Native EUR wallet transactions; historical USD vouchers are excluded."]);
+  sheet.addRow(["Deleted EUR rows (if displayed) are audit-only, not spendable. Historical USD vouchers are excluded."]);
   return writeWorkbook(book);
 }
 
