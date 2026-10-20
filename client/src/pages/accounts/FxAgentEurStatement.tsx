@@ -1,4 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
+import { FileDown, FileSpreadsheet } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { useCompany } from "@/contexts/CompanyContext";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Card, CardContent } from "@/components/ui/card";
@@ -85,9 +87,17 @@ export function FxAgentEurStatement({
             Native EUR movements only — starting from the first USD to EUR conversion.
           </p>
         </div>
-        <span className="text-xs text-muted-foreground">
-          {data.fromDate || data.activatedOn} — {data.toDate}
-        </span>
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-xs text-muted-foreground">
+            {data.fromDate || data.activatedOn} — {data.toDate}
+          </span>
+          <Button size="sm" variant="outline" onClick={() => window.open(fxEurStatementUrl(walletId, periodFilter, ".pdf"), "_blank")} data-testid="fx-agent-export-eur-pdf">
+            <FileDown className="w-4 h-4 mr-1" /> EUR PDF
+          </Button>
+          <Button size="sm" variant="outline" onClick={() => window.open(fxEurStatementUrl(walletId, periodFilter, ".xlsx"), "_blank")} data-testid="fx-agent-export-eur-excel">
+            <FileSpreadsheet className="w-4 h-4 mr-1" /> EUR Excel
+          </Button>
+        </div>
       </div>
       {!hideBalances && (
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4" data-testid="fx-agent-eur-summary">
