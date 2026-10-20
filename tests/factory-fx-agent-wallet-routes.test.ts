@@ -60,7 +60,9 @@ beforeAll(async () => {
   ctx = await seedTestData(PREFIX);
   await pool.query(`UPDATE companies SET company_type = 'factory' WHERE id = $1`, [ctx.companyId]);
   await pool.query(readFileSync(path.join(__dirname, "../migrations/20261019_factory_fx_agent_wallets.sql"), "utf8"));
-  await pool.query(readFileSync(path.join(__dirname, "../migrations/20261020_factory_fx_agent_conversion_reversals.sql"), "utf8"));
+  await pool.query(
+    readFileSync(path.join(__dirname, "../migrations/20261020_factory_fx_agent_conversion_reversals.sql"), "utf8")
+  );
   agent = request.agent(ctx.app) as request.SuperAgentTest;
   const login = await agent
     .post("/api/auth/login")
@@ -216,26 +218,36 @@ describe("FX agent EUR wallet lifecycle", () => {
   it("POST /api/factory/fx-agent-wallets/:id/reverse-conversion restores unused USD and refuses settled EUR", async () => {
     const reversalAccount = await ledgerAccount("REVERSAL", "FX reversal", "Asset", "1000");
     const activation = await agent.post("/api/factory/fx-agent-wallets").send({
-      ledgerAccountId: reversalAccount, confirmUsdSource: true,
+      ledgerAccountId: reversalAccount,
+      confirmUsdSource: true,
     });
     expect(activation.status, activation.text).toBe(201);
     const wid = activation.body.walletId;
     const initial = await agent.post(`/api/factory/fx-agent-wallets/${wid}/convert`).send({
-      usdAmount: "1000", rateUsdPerEur: "1.25", requestKey: `${PREFIX}-reversal-convert1`,
+      usdAmount: "1000",
+      rateUsdPerEur: "1.25",
+      requestKey: `${PREFIX}-reversal-convert1`,
     });
     expect(initial.status, initial.text).toBe(201);
     const conversions = await agent.get(`/api/factory/fx-agent-wallets/${wid}/conversions`);
     expect(conversions.status).toBe(200);
     expect(conversions.body.conversions[0]).toMatchObject({
-      id: initial.body.id, reversed: false, hasLaterSettlement: false,
+      id: initial.body.id,
+      reversed: false,
+      hasLaterSettlement: false,
     });
 
-    const reason = { conversionId: initial.body.id, reason: "Wrong conversion confirmed by agent",
-      requestKey: `${PREFIX}-reverse-convert1` };
+    const reason = {
+      conversionId: initial.body.id,
+      reason: "Wrong conversion confirmed by agent",
+      requestKey: `${PREFIX}-reverse-convert1`,
+    };
     const reversed = await agent.post(`/api/factory/fx-agent-wallets/${wid}/reverse-conversion`).send(reason);
     expect(reversed.status, reversed.text).toBe(201);
     expect(reversed.body).toMatchObject({
-      restoredUsd: "1000.000000", deductedEur: "800.000000", replayed: false,
+      restoredUsd: "1000.000000",
+      deductedEur: "800.000000",
+      replayed: false,
     });
     const current = await agent.get("/api/factory/fx-agent-wallets");
     expect(current.status).toBe(200);
@@ -247,21 +259,28 @@ describe("FX agent EUR wallet lifecycle", () => {
     expect(replay.status).toBe(201);
     expect(replay.body).toMatchObject({ id: reversed.body.id, replayed: true });
     const double = await agent.post(`/api/factory/fx-agent-wallets/${wid}/reverse-conversion`).send({
-      ...reason, requestKey: `${PREFIX}-reverse-duplicate`,
+      ...reason,
+      requestKey: `${PREFIX}-reverse-duplicate`,
     });
     expect(double.status).toBe(400);
 
     const next = await agent.post(`/api/factory/fx-agent-wallets/${wid}/convert`).send({
-      usdAmount: "500", rateUsdPerEur: "1.25", requestKey: `${PREFIX}-reversal-convert2`,
+      usdAmount: "500",
+      rateUsdPerEur: "1.25",
+      requestKey: `${PREFIX}-reversal-convert2`,
     });
     expect(next.status, next.text).toBe(201);
     const paid = await agent.post(`/api/factory/fx-agent-wallets/${wid}/settle`).send({
-      eurAmount: "100", rateUsdPerEur: "1.25", targetKind: "ledger",
-      targetId: beneficiaryId, requestKey: `${PREFIX}-reversal-settle`,
+      eurAmount: "100",
+      rateUsdPerEur: "1.25",
+      targetKind: "ledger",
+      targetId: beneficiaryId,
+      requestKey: `${PREFIX}-reversal-settle`,
     });
     expect(paid.status, paid.text).toBe(201);
     const forbidden = await agent.post(`/api/factory/fx-agent-wallets/${wid}/reverse-conversion`).send({
-      conversionId: next.body.id, reason: "Cannot undo spent EUR",
+      conversionId: next.body.id,
+      reason: "Cannot undo spent EUR",
       requestKey: `${PREFIX}-reverse-spent`,
     });
     expect(forbidden.status).toBe(400);

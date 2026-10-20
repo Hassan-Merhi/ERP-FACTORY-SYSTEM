@@ -113,7 +113,10 @@ export const factoryFxAgentWalletOperations = pgTable(
       foreignColumns: [table.id],
       name: "fx_agent_reverses_operation_fkey",
     }),
-    check("factory_fx_agent_wallet_operations_kind_check", sql`kind IN ('USD_TO_EUR', 'EUR_SETTLEMENT', 'EUR_TO_USD_REVERSAL')`),
+    check(
+      "factory_fx_agent_wallet_operations_kind_check",
+      sql`kind IN ('USD_TO_EUR', 'EUR_SETTLEMENT', 'EUR_TO_USD_REVERSAL')`
+    ),
     check("factory_fx_agent_wallet_operations_source_amount_check", sql`source_amount > 0`),
     check("factory_fx_agent_wallet_operations_target_amount_check", sql`target_amount > 0`),
     check("factory_fx_agent_wallet_operations_rate_usd_per_eur_check", sql`rate_usd_per_eur > 0`),

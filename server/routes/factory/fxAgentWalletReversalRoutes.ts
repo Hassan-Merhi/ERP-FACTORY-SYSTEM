@@ -74,13 +74,22 @@ export function registerFactoryFxAgentReversalRoutes(app: Express) {
         const conversionId = Number(req.body?.conversionId);
         const requestKey = String(req.body?.requestKey || "");
         const reason = String(req.body?.reason || "").trim();
-        if (!cid || !validId(walletId) || !validId(conversionId) ||
-            !/^[A-Za-z0-9._:-]{8,100}$/.test(requestKey) ||
-            !reason || reason.length > 500) {
-          return res.status(400).json({ message: "Select a conversion and provide a reversal reason (max 500 characters)" });
+        if (
+          !cid ||
+          !validId(walletId) ||
+          !validId(conversionId) ||
+          !/^[A-Za-z0-9._:-]{8,100}$/.test(requestKey) ||
+          !reason ||
+          reason.length > 500
+        ) {
+          return res
+            .status(400)
+            .json({ message: "Select a conversion and provide a reversal reason (max 500 characters)" });
         }
         if (!(await reversalSchemaReady())) {
-          return res.status(409).json({ code: "FX_REVERSAL_MIGRATION_REQUIRED", message: "Apply the FX reversal SQL migration first" });
+          return res
+            .status(409)
+            .json({ code: "FX_REVERSAL_MIGRATION_REQUIRED", message: "Apply the FX reversal SQL migration first" });
         }
         const saved = await db.transaction(async (tx) => {
           // The same wallet lock as conversion and settlement serializes all edits.
@@ -96,8 +105,11 @@ export function registerFactoryFxAgentReversalRoutes(app: Express) {
           `);
           if (existing.rows.length) {
             const row = existing.rows[0];
-            if (row.kind !== "EUR_TO_USD_REVERSAL" ||
-                Number(row.walletId) !== walletId || Number(row.conversionId) !== conversionId) {
+            if (
+              row.kind !== "EUR_TO_USD_REVERSAL" ||
+              Number(row.walletId) !== walletId ||
+              Number(row.conversionId) !== conversionId
+            ) {
               throw new Error("Request key was used for a different operation");
             }
             return { id: Number(row.id), replayed: true };
@@ -131,8 +143,10 @@ export function registerFactoryFxAgentReversalRoutes(app: Express) {
           if (!wallet) throw new Error("FX agent wallet not found");
           const snapshot = await getFxAgentWalletSnapshot(wallet, getClientDate(req), tx);
           if (!snapshot.synchronized) throw new Error("Agent ledger does not match wallet. Reconcile before reversing");
-          if (toMoney(String(row.eur)).gt(snapshot.state.eur) ||
-              toMoney(String(row.usd)).gt(snapshot.state.eurBookUsd)) {
+          if (
+            toMoney(String(row.eur)).gt(snapshot.state.eur) ||
+            toMoney(String(row.usd)).gt(snapshot.state.eurBookUsd)
+          ) {
             throw new Error("Insufficient native EUR or USD book basis for reversal");
           }
           const today = getClientDate(req);
@@ -150,7 +164,12 @@ export function registerFactoryFxAgentReversalRoutes(app: Express) {
               ${req.session.username || "unknown"})
             RETURNING id
           `);
-          return { id: Number(inserted.rows[0].id), replayed: false, restoredUsd: String(row.usd), deductedEur: String(row.eur) };
+          return {
+            id: Number(inserted.rows[0].id),
+            replayed: false,
+            restoredUsd: String(row.usd),
+            deductedEur: String(row.eur),
+          };
         });
         return res.status(201).json(saved);
       } catch (error) {

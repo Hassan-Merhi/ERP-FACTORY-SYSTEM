@@ -797,7 +797,6 @@ export default function FactoryNetPositionDetails() {
         Stock in Hand valued at {valuationMode === "selling" ? "Selling" : "Cost"} · Balance on Table stays at Cost
       </div>
 
-
       <Card data-testid="card-formula">
         <CardContent className="pt-5">
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 flex-wrap">

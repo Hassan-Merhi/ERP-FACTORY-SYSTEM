@@ -63,10 +63,12 @@ describe("FX agent EUR settlement and Net Position", () => {
   });
 
   it("rejects reversals when the wallet cannot return the recorded EUR or USD basis", () => {
-    expect(() => replayFxAgentWallet("1000", [
-      { kind: "USD_TO_EUR", sourceAmount: "1000", targetAmount: "900", sourceBookUsd: "1000" },
-      { kind: "EUR_TO_USD_REVERSAL", sourceAmount: "901", targetAmount: "1000", sourceBookUsd: "1000" },
-    ])).toThrow();
+    expect(() =>
+      replayFxAgentWallet("1000", [
+        { kind: "USD_TO_EUR", sourceAmount: "1000", targetAmount: "900", sourceBookUsd: "1000" },
+        { kind: "EUR_TO_USD_REVERSAL", sourceAmount: "901", targetAmount: "1000", sourceBookUsd: "1000" },
+      ])
+    ).toThrow();
   });
 
   it("rejects overspending, inconsistent book basis and non-positive rates", () => {

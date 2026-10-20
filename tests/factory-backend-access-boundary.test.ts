@@ -131,8 +131,11 @@ describe("Wave 4 Factory backend access ownership", () => {
       });
     }
     for (const path of [
-      "/fx-agent-wallets", "/fx-agent-wallets/7/convert", "/fx-agent-wallets/7/settle",
-      "/fx-agent-wallets/7/reverse-conversion", "/fx-agent-wallets/7/conversions"
+      "/fx-agent-wallets",
+      "/fx-agent-wallets/7/convert",
+      "/fx-agent-wallets/7/settle",
+      "/fx-agent-wallets/7/reverse-conversion",
+      "/fx-agent-wallets/7/conversions",
     ]) {
       expect(resolveFactoryBackendAccessRequirement(req(path, "POST"))).toEqual({
         pageKey: "factory/accounts",
