@@ -143,11 +143,13 @@ export function FactoryFxAgentWalletCard({ asOf, readOnly, scopeAccountId }: { a
             {canEdit && !active && (
               <section className="space-y-2">
                 <h4 className="text-sm font-semibold">Link an existing FX agent ledger account</h4>
+                {scopeAccountId == null && (
                 <Input
                   placeholder="Search account name or code"
                   value={accountSearch}
                   onChange={(e) => setAccountSearch(e.target.value)}
                 />
+                )}
                 <select
                   className="w-full h-10 border rounded-md bg-background px-2 text-sm"
                   value={scopeAccountId == null ? accountId : String(scopeAccountId)}
@@ -341,6 +343,72 @@ export function FactoryFxAgentWalletCard({ asOf, readOnly, scopeAccountId }: { a
                   </Button>
                 </section>
               </div>
+            )}
+            {!!active && (
+              <section className="space-y-3 rounded-lg border p-3" data-testid="fx-conversion-history">
+                <h4 className="text-sm font-semibold">USD → EUR conversions and reversals</h4>
+                {reversalHistory?.migrationRequired && (
+                  <p className="text-sm text-destructive">
+                    Apply the 20261020 FX reversal SQL migration before reversing conversions.
+                  </p>
+                )}
+                {reversalHistory?.conversions.length === 0 && (
+                  <p className="text-xs text-muted-foreground">No conversions recorded.</p>
+                )}
+                {reversalHistory?.conversions.map((item) => {
+                  const reversible = canEdit && active.synchronized &&
+                    !item.reversed && !item.hasLaterSettlement && !reversalHistory.migrationRequired;
+                  return (
+                    <div key={item.id} className="space-y-2 rounded-md border p-3">
+                      <div className="flex flex-wrap justify-between gap-2 text-sm">
+                        <div>
+                          <p className="font-medium">USD {fmt(item.usdAmount)} → EUR {fmt(item.eurAmount)}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {item.date.slice(0, 10)} · 1 EUR = USD {item.rate}
+                            {item.actor ? " · " + item.actor : ""}
+                          </p>
+                        </div>
+                        {item.reversed ? (
+                          <span className="text-xs text-muted-foreground">Reversed</span>
+                        ) : item.hasLaterSettlement ? (
+                          <span className="text-xs text-destructive">EUR used in a later payment — reversal blocked</span>
+                        ) : null}
+                      </div>
+                      {reversible && (
+                        <div className="flex flex-col gap-2 sm:flex-row">
+                          <Input
+                            placeholder="Reason for reversal (required)"
+                            aria-label={"Reason for reversal " + item.id}
+                            maxLength={500}
+                            value={reversalReason}
+                            onChange={(e) => setReversalReason(e.target.value)}
+                          />
+                          <Button
+                            type="button"
+                            variant="destructive"
+                            size="sm"
+                            disabled={write.isPending || !reversalReason.trim()}
+                            onClick={() => {
+                              if (window.confirm(
+                                "Reverse this conversion? Restore USD " + fmt(item.usdAmount) +
+                                " by deducting exactly EUR " + fmt(item.eurAmount) +
+                                ". Original entries will remain in the audit trail."
+                              )) {
+                                write.mutate({
+                                  path: "/api/factory/fx-agent-wallets/" + active.wallet.id + "/reverse-conversion",
+                                  body: { conversionId: item.id, reason: reversalReason.trim(), requestKey: crypto.randomUUID() },
+                                });
+                              }
+                            }}
+                          >
+                            Reverse to USD
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </section>
             )}
             {canEdit && !!active && (
               <Input
