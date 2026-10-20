@@ -72,9 +72,9 @@ export function FxAgentNativeBalance({
         </div>
       </div>
       <p className="text-xs text-muted-foreground">
-        EUR is the agent's actual currency balance. The journal rows, debit/credit totals,
-        running balances, PDF and Excel statements remain in historical USD for audit;
-        they are not additional USD available to spend.
+        EUR is the agent's actual currency balance. Use the EUR tab for native conversions and payments;
+        the USD tab keeps the original historical voucher ledger for audit. The historical USD book
+        value is not an additional balance available to spend.
       </p>
     </section>
   );
