@@ -67,6 +67,8 @@ export function useFactoryPendingInvoiceVerifyModel() {
       return res.json();
     },
     enabled: !!orderId,
+    // Re-check the current proforma when returning from editing its items.
+    refetchOnMount: "always",
   });
 
   const { data: orderDetail, isLoading: orderLoading } = useQuery<OrderDetail>({
