@@ -1,3 +1,7 @@
+import { sql } from "drizzle-orm";
+import { resultRows } from "../../../lib/queryResult";
+import type { ProformaCapacityExecutor } from "./proformaCapacity";
+
 /**
  * Merge proforma articles created after a loading's expected-plan snapshot.
  *
@@ -41,4 +45,31 @@ export function mergeNewProformaArticles<T extends {
     return true;
   });
   return [...savedLines, ...missing];
+}
+
+/**
+ * Continuation orders carry a remaining-only snapshot. Ordinary open loadings
+ * are editable against the master proforma. This journal event is written at
+ * the creation of every "Open a New Loading" continuation.
+ */
+export async function isContinuationLoading(
+  executor: ProformaCapacityExecutor,
+  companyId: number,
+  orderId: number
+): Promise<boolean> {
+  const rows = resultRows<{ isContinuation: boolean }>(await executor.execute(sql`
+    SELECT EXISTS (
+      SELECT 1 FROM factory_daybook_entries event
+      WHERE event.company_id = ${companyId}
+        AND event.reference_table = 'customer_orders'
+        AND event.reference_id = ${orderId}
+        AND event.tx_type = 'LOADING_CREATED'
+        AND event.description LIKE 'Continuation of loading #%'
+    ) AS "isContinuation"
+  `));
+  return rows[0]?.isContinuation === true;
+}
+
+export function usesLiveMasterProforma(status: string | null | undefined, isContinuation: boolean): boolean {
+  return !isContinuation && ["DRAFT", "LOADING", "PENDING_VERIFICATION"].includes(status || "");
 }
