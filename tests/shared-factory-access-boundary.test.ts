@@ -156,6 +156,15 @@ describe("Wave 4 shared Factory API ownership", () => {
     ]);
   });
 
+  it("keeps the generic Journal API restricted to Vouchers despite the Insurance-specific route", async () => {
+    expect(
+      await resolveSharedFactoryRequirements(req("/api/vouchers/with-entries", "POST", {
+        voucher: { voucherType: "Journal", description: "Insurance extra charge" },
+      }))
+    ).toEqual([{ pageKey: "factory/vouchers", tabKey: "hide_tab_vouchers_journal" }]);
+    expect(await resolveSharedFactoryRequirements(req("/api/insurance/extra-charges", "POST"))).toBeNull();
+  });
+
   it("keeps bulk voucher deletion on Vouchers or View Accounts", async () => {
     expect(await resolveSharedFactoryRequirements(req("/api/vouchers/bulk-delete", "POST"))).toEqual([
       { pageKey: "factory/vouchers" },
