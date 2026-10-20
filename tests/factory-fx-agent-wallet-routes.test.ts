@@ -451,6 +451,89 @@ describe("FX agent EUR wallet lifecycle", () => {
     expect(stillLinked.rows).toHaveLength(0);
   });
 
+  it("uses a broker's Parties EUR pool including OTW for direct wallet payments and reverses cleanly", async () => {
+    // The broker's EUR exposure is operational (linked OTW containers), not
+    // a posted EUR credit on the broker's own GL account.
+    const broker = await pool.query<{ id: number }>(
+      `INSERT INTO factory_suppliers (company_id, name, opening_balance, is_active, is_broker)
+       VALUES ($1, $2, '0', true, true) RETURNING id`,
+      [ctx.companyId, `${PREFIX} EUR Broker`]
+    );
+    const brokerId = broker.rows[0].id;
+    const linked = await pool.query<{ id: number }>(
+      `INSERT INTO factory_suppliers (company_id, name, parent_id, is_active)
+       VALUES ($1, $2, $3, true) RETURNING id`,
+      [ctx.companyId, `${PREFIX} Linked EUR`, brokerId]
+    );
+    await pool.query(
+      `INSERT INTO factory_containers
+        (company_id, container_number, supplier_id, currency_code, fx_rate_to_usd,
+         fx_rate_confirmed, fx_rate_source, rate_per_kg, total_kg, actual_received_kg,
+         status, arrival_date, duty_status, freight, other_charges, commission_amount)
+       VALUES ($1, $2, $3, 'EUR', '1.11', true, 'manual',
+         '1', '3000', '3000', 'IN_TRANSIT', '2026-06-08', 'NONE', '0', '0', '0')`,
+      [ctx.companyId, `${PREFIX}-EUR-OTW`, linked.rows[0].id]
+    );
+
+    const balanceResponse = await agent.get(`/api/factory/suppliers/${brokerId}/balance?fxEurPayout=true`);
+    expect(balanceResponse.status, balanceResponse.text).toBe(200);
+    expect(balanceResponse.body.nativeBalances.find((x: { currencyCode: string }) => x.currencyCode === "EUR"))
+      .toBeUndefined();
+    expect(balanceResponse.body.fxEurPayable).toMatchObject({
+      basis: "broker-statement", currencyCode: "EUR", includeOtw: true,
+      balance: "3000.00", eligible: true,
+    });
+    const before = await agent.get(`/api/factory/suppliers/${brokerId}/broker-statement?includeOtw=true`);
+    expect(before.status, before.text).toBe(200);
+    expect(before.body.currencyLedgers.find((x: { currencyCode: string }) => x.currencyCode === "EUR").netBalance)
+      .toBe("3000.00");
+
+    const agentAccount = await ledgerAccount("BROKER-EUR-AGENT", "Broker EUR payout", "Asset", "1111.50");
+    const activated = await agent.post("/api/factory/fx-agent-wallets").send({
+      ledgerAccountId: agentAccount, confirmUsdSource: true,
+    });
+    expect(activated.status, activated.text).toBe(201);
+    const agentWalletId = activated.body.walletId;
+    const converted = await agent.post(`/api/factory/fx-agent-wallets/${agentWalletId}/convert`).send({
+      usdAmount: "1111.50", rateUsdPerEur: "1.1115",
+      requestKey: `${PREFIX}-broker-eur-convert`,
+    });
+    expect(converted.status, converted.text).toBe(201);
+
+    const payload = {
+      paymentVoucher: true, targetCurrency: "EUR", eurAmount: "200.00",
+      targetKind: "factorySupplier", targetId: brokerId,
+      requestKey: `${PREFIX}-broker-eur-payment`,
+    };
+    const paid = await agent.post(`/api/factory/fx-agent-wallets/${agentWalletId}/settle`).send(payload);
+    expect(paid.status, paid.text).toBe(201);
+    expect(paid.body.quote).toMatchObject({ eur: "200.00", targetCurrency: "EUR", gainUsd: "0.000000" });
+    const after = await agent.get(`/api/factory/suppliers/${brokerId}/balance?fxEurPayout=true`);
+    expect(after.body.fxEurPayable.balance).toBe("2800.00");
+    const brokerStatement = await agent.get(`/api/factory/suppliers/${brokerId}/broker-statement?includeOtw=true`);
+    expect(brokerStatement.body.currencyLedgers.find((x: { currencyCode: string }) =>
+      x.currencyCode === "EUR").netBalance).toBe("2800.00");
+    const wallets = await agent.get("/api/factory/fx-agent-wallets");
+    const current = wallets.body.wallets.find((x: { wallet: { id: number } }) => x.wallet.id === agentWalletId);
+    expect(current.state.eur).toBe("800.000000");
+    expect(current.synchronized).toBe(true);
+
+    const exceeds = await agent.post(`/api/factory/fx-agent-wallets/${agentWalletId}/settle`).send({
+      ...payload, eurAmount: "2800.01", requestKey: `${PREFIX}-broker-eur-overpay`,
+    });
+    expect(exceeds.status).toBe(400);
+
+    const cancelled = await agent.delete(`/api/vouchers/${paid.body.voucherId}`);
+    expect(cancelled.status, cancelled.text).toBe(200);
+    const restored = await agent.get(`/api/factory/suppliers/${brokerId}/balance?fxEurPayout=true`);
+    expect(restored.body.fxEurPayable.balance).toBe("3000.00");
+    const restoredWallets = await agent.get("/api/factory/fx-agent-wallets");
+    const restoredWallet = restoredWallets.body.wallets.find((x: { wallet: { id: number } }) =>
+      x.wallet.id === agentWalletId);
+    expect(restoredWallet.state.eur).toBe("1000.000000");
+    expect(restoredWallet.synchronized).toBe(true);
+  });
+
   it("refuses further operations once ordinary journals drift the agent ledger", async () => {
     await pool.query(`UPDATE ledger_accounts SET opening_balance = '10100' WHERE id = $1`, [agentAccountId]);
     const snapshot = await walletSnapshot();
