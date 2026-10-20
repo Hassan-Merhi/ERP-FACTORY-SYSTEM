@@ -40,21 +40,57 @@ export function BaleProductsDialog1({ model }: { model: Model }) {
   const selectedGrade = editForm.grade || inferGradeFromArticleCode(editForm.articleCode);
 
   const handleSave = () => {
-    if (!editForm.name.trim()) return;
-    const payload = {
-      name: editForm.name.trim(),
-      articleCode: editForm.articleCode.trim(),
-      weightPerBaleKg: editForm.weightPerBaleKg ? parseFloat(editForm.weightPerBaleKg) : null,
-      categoryId: editForm.categoryId ? parseInt(editForm.categoryId) : null,
-      description: editForm.description.trim(),
-      productionPrice: editForm.productionPrice,
-      sellingPrice: editForm.sellingPrice,
-      labelDesignColor: editForm.labelDesignColor || null,
-      // The displayed grade may be inferred from the article-code prefix, but
-      // only an explicit selection is a grade mutation. This prevents a normal
-      // description/price edit from rewriting every historical bale grade.
-      grade: editForm.grade || undefined,
-    };
+    if (!editingProduct || !editForm.name.trim()) return;
+
+    // Price-only edits must not resend nullable catalog fields. In particular,
+    // converting the stored decimal weight ("45.00") to a JS number (45)
+    // previously made the cascade endpoint think the bale weight had changed.
+    const payload: {
+      name?: string;
+      articleCode?: string;
+      weightPerBaleKg?: number | null;
+      categoryId?: number | null;
+      description?: string;
+      productionPrice?: string;
+      sellingPrice?: string;
+      labelDesignColor?: string | null;
+      grade?: string;
+    } = {};
+    const name = editForm.name.trim();
+    if (name !== editingProduct.name) payload.name = name;
+
+    const articleCode = editForm.articleCode.trim();
+    if (articleCode !== (editingProduct.articleCode ?? "")) payload.articleCode = articleCode;
+
+    const weight = editForm.weightPerBaleKg.trim() === "" ? null : Number(editForm.weightPerBaleKg);
+    const previousWeight = editingProduct.weightPerBaleKg == null ? null : Number(editingProduct.weightPerBaleKg);
+    if (weight !== previousWeight) payload.weightPerBaleKg = weight;
+
+    const categoryId = editForm.categoryId ? Number(editForm.categoryId) : null;
+    if (categoryId !== (editingProduct.categoryId ?? null)) payload.categoryId = categoryId;
+
+    const description = editForm.description.trim();
+    if (description !== (editingProduct.description ?? "")) payload.description = description;
+
+    // An empty price input represents zero, not a null value or an instruction
+    // to rewrite another field. Include prices only when their value changes.
+    const cost = editForm.productionPrice.trim();
+    if (Number(cost || 0) !== Number(editingProduct.productionPrice ?? 0))
+      payload.productionPrice = cost || "0";
+    const selling = editForm.sellingPrice.trim();
+    if (Number(selling || 0) !== Number(editingProduct.sellingPrice ?? 0))
+      payload.sellingPrice = selling || "0";
+
+    const labelColor = editForm.labelDesignColor || null;
+    if (labelColor !== (editingProduct.labelDesignColor ?? null))
+      payload.labelDesignColor = labelColor;
+
+    // An inferred grade is display-only; never cascade it for a price edit.
+    if (editForm.grade) payload.grade = editForm.grade;
+    if (Object.keys(payload).length === 0) {
+      setEditingProduct(null);
+      return;
+    }
     editProductMutation.mutate(payload);
   };
 
