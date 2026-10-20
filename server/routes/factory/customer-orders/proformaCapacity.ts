@@ -296,14 +296,17 @@ export async function getProformaCapacitySnapshot(
                     AND saved.proforma_id = ${options.proformaId}
                 )
                 OR EXISTS (
-                  -- Existing plan: include ONLY new articles for unfinished loadings.
-                  -- Preserve historical plans and customized continuation quantities.
+                  -- Existing plan: include only articles ADDED AFTER this
+                  -- loading was opened. A fulfilled article omitted from a
+                  -- remaining-only continuation must never return from the
+                  -- original proforma on a second/third loading.
                   SELECT 1 FROM customer_orders co
                   WHERE co.id = ${options.currentOrderId}
                     AND co.company_id = ${options.companyId}
                     AND co.proforma_id_used = ${options.proformaId}
                     AND co.status NOT IN ('FINALIZED', 'CANCELLED')
                     AND co.deleted_at IS NULL
+                    AND cpl.created_at > co.created_at
                 )
               )
           `
