@@ -102,6 +102,18 @@ export function registerOrderCrudRoutes(app: Express) {
         force: req.query.profile === "summary",
       });
 
+      const liveMasterPlan = sql`(
+        ${customerOrders.status} IN ('DRAFT', 'LOADING', 'PENDING_VERIFICATION')
+        AND NOT EXISTS (
+          SELECT 1 FROM factory_daybook_entries e
+          WHERE e.company_id = ${customerOrders.companyId}
+            AND e.reference_table = 'customer_orders'
+            AND e.reference_id = ${customerOrders.id}
+            AND e.tx_type = 'LOADING_CREATED'
+            AND e.description LIKE 'Continuation of loading #%'
+        )
+      )`;
+
       const ordersQuery = db
         .select({
           id: customerOrders.id,
@@ -135,19 +147,23 @@ export function registerOrderCrudRoutes(app: Express) {
           )`,
           totalQtyBales: customerOrders.totalQtyBales,
           totalWeightKg: sql<string>`COALESCE((SELECT SUM(cob.weight) FROM customer_order_bales cob WHERE cob.order_id = ${customerOrders.id}), 0)`,
-          // A continuation uses its own frozen expected quantities. If the
-          // order has no continuation plan, retain the original reusable proforma.
-          proformaExpectedBales: sql<string>`COALESCE(
-            (SELECT SUM(expected_qty)
-             FROM customer_order_expected_lines
-             WHERE company_id = ${customerOrders.companyId}
-               AND order_id = ${customerOrders.id}
-               AND proforma_id = ${customerOrders.proformaIdUsed}),
-            (SELECT SUM(quantity)
-             FROM customer_proforma_lines
-             WHERE proforma_id = ${customerOrders.proformaIdUsed}),
-            0
-          )`,
+          // Active normal loadings follow editable master quantities. A
+          // continuation or completed order retains its saved expected plan.
+          proformaExpectedBales: sql<string>`CASE WHEN ${liveMasterPlan}
+            THEN COALESCE((
+              SELECT SUM(quantity) FROM customer_proforma_lines
+              WHERE proforma_id = ${customerOrders.proformaIdUsed}
+            ), 0)
+            ELSE COALESCE((
+              SELECT SUM(expected_qty) FROM customer_order_expected_lines
+              WHERE company_id = ${customerOrders.companyId}
+                AND order_id = ${customerOrders.id}
+                AND proforma_id = ${customerOrders.proformaIdUsed}
+            ), (
+              SELECT SUM(quantity) FROM customer_proforma_lines
+              WHERE proforma_id = ${customerOrders.proformaIdUsed}
+            ), 0)
+          END`,
           // For continuation plans, compute remaining PER ARTICLE. Subtracting
           // total bales alone can hide shortages when another article is over-loaded.
           continuationRemainingBales: sql<string | null>`(
@@ -158,6 +174,21 @@ export function registerOrderCrudRoutes(app: Express) {
               WHERE company_id = ${customerOrders.companyId}
                 AND order_id = ${customerOrders.id}
                 AND proforma_id = ${customerOrders.proformaIdUsed}
+                AND NOT ${liveMasterPlan}
+              GROUP BY LOWER(TRIM(article_code))
+              UNION ALL
+              SELECT LOWER(TRIM(article_code)) AS article, SUM(quantity)::int AS expected
+              FROM customer_proforma_lines
+              WHERE proforma_id = ${customerOrders.proformaIdUsed}
+                AND (
+                  ${liveMasterPlan}
+                  OR NOT EXISTS (
+                    SELECT 1 FROM customer_order_expected_lines saved
+                    WHERE saved.company_id = ${customerOrders.companyId}
+                      AND saved.order_id = ${customerOrders.id}
+                      AND saved.proforma_id = ${customerOrders.proformaIdUsed}
+                  )
+                )
               GROUP BY LOWER(TRIM(article_code))
             ) plan
             LEFT JOIN (
