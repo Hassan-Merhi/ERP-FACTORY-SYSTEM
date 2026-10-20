@@ -28,6 +28,7 @@ import { accountingPostingRequests, voucherEntries, vouchers } from "@shared/sch
 import type { DatabaseOrTransaction } from "../../db";
 import { writeAuditEvent } from "../audit";
 import { currentAuditActor } from "../audit/auditActorContext";
+import { isFxAgentSettlementVoucherTx, FX_AGENT_VOUCHER_LOCKED_MESSAGE } from "./fxAgentVoucherLock";
 
 export const RETIRED_VOUCHER_NUMBER_MARK = "~DEL";
 export const RETIRED_POSTING_IDENTITY_MARK = "#retired:";
@@ -97,6 +98,15 @@ export async function retireVouchersTx(
     .orderBy(vouchers.id)
     .for("update");
   if (found.length === 0) return [];
+  if (
+    await isFxAgentSettlementVoucherTx(
+      tx,
+      companyId,
+      found.map((voucher) => voucher.id)
+    )
+  ) {
+    throw new Error(FX_AGENT_VOUCHER_LOCKED_MESSAGE);
+  }
 
   const lines = await tx
     .select()
@@ -255,6 +265,18 @@ export async function retireVouchersWithClient(
       FOR UPDATE OF v`,
     [ids]
   );
+  // Raw-pg retirement flows must obey the same wallet/journal lock.
+  const walletTable = await client.query<{ name: string | null }>(
+    "SELECT to_regclass('factory_fx_agent_wallet_operations')::text AS name",
+    []
+  );
+  if (walletTable.rows[0]?.name && found.rows.length) {
+    const walletSettlement = await client.query<{ id: number }>(
+      "SELECT id FROM factory_fx_agent_wallet_operations WHERE voucher_id = ANY($1::int[]) LIMIT 1",
+      [found.rows.map((voucher) => voucher.id)]
+    );
+    if (walletSettlement.rows.length) throw new Error(FX_AGENT_VOUCHER_LOCKED_MESSAGE);
+  }
   const retired: number[] = [];
   for (const voucher of found.rows) {
     if (voucher.deleted_at && isRetiredVoucherNumber(voucher.voucher_number)) continue;

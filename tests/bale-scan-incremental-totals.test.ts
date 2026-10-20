@@ -3,8 +3,9 @@ import { recalculateOrderTotalsForScannedArticle } from "../server/routes/factor
 
 describe("single-bale scan incremental totals", () => {
   // The scanner already holds the order row FOR UPDATE, so the helper runs one
-  // statement: rebuild the scanned article's line and re-derive the totals.
-  it("uses a single statement and maps the recalculated line and totals", async () => {
+  // statement to rebuild the scanned article's line and re-derive the totals,
+  // then one more to keep the Loading Started daybook amount in step (#2381).
+  it("uses one totals statement plus the daybook sync and maps the recalculated line and totals", async () => {
     const execute = vi.fn().mockResolvedValueOnce({
       rows: [
         {
@@ -32,7 +33,7 @@ describe("single-bale scan incremental totals", () => {
 
     const result = await recalculateOrderTotalsForScannedArticle({ execute }, 42, "ART-1");
 
-    expect(execute).toHaveBeenCalledTimes(1);
+    expect(execute).toHaveBeenCalledTimes(2);
     expect(result).toEqual({
       line: {
         id: 99,
@@ -76,7 +77,7 @@ describe("single-bale scan incremental totals", () => {
 
     const result = await recalculateOrderTotalsForScannedArticle({ execute }, 7, "");
 
-    expect(execute).toHaveBeenCalledTimes(1);
+    expect(execute).toHaveBeenCalledTimes(2);
     expect(result.line).toBeNull();
     expect(result.totals).toEqual({
       subtotalBales: "0",

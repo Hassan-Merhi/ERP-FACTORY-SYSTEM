@@ -315,7 +315,7 @@
     },
     "/api/daybook": {
       "status": 200,
-      "shape": "{hasNextPage:scalar,hasPreviousPage:scalar,items:[],limit:scalar,page:scalar,total:scalar,totalPages:scalar}"
+      "shape": "{hasNextPage:scalar,hasPreviousPage:scalar,items:[],limit:scalar,page:scalar,routineViewFiltered:scalar,total:scalar,totalPages:scalar}"
     },
     "/api/deleted-items": {
       "status": 200,

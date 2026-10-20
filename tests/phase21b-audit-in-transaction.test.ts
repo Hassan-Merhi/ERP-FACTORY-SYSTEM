@@ -256,16 +256,10 @@ describe("AT1a money paths", () => {
     });
     const items = await pool.query(`SELECT quantity FROM stock_transfer_items WHERE transfer_id = $1`, [transferId]);
     expect(items.rows.map((row) => Number(row.quantity))).toEqual([4]);
-    // The header narration is derived from the transfer's locations (#2346),
-    // not taken from the request body.
-    const names = await pool.query<{ id: number; name: string }>(`SELECT id, name FROM locations WHERE id = ANY($1)`, [
-      [erp.locationId, erp.location2Id],
-    ]);
-    const nameOf = (id: number) => names.rows.find((row) => row.id === id)?.name;
+    // Typed notes take precedence over the generated location narration (#2355),
+    // and the rolled-back edit left the first edit's notes in place.
     const header = await pool.query(`SELECT description FROM vouchers WHERE id = $1`, [voucherId]);
-    expect(header.rows[0].description).toBe(
-      `Stock Transfer from "${nameOf(erp.locationId)}" to "${nameOf(erp.location2Id)}"`
-    );
+    expect(header.rows[0].description).toBe("edited");
   });
 
   it("stock transfer revision: audited in the revision's transaction; a failed audit leaves no revision", async () => {

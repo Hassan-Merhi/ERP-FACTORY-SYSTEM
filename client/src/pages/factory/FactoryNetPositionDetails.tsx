@@ -25,6 +25,7 @@ import type { AccountDisplayLayout } from "../accounts/DisplayAccountGroups";
 import { useAccountDisplayOrder } from "@/hooks/useAccountDisplayOrder";
 import { InlineOrderButtons, inlineDrag, type InlineOrderActions } from "@/components/accounts/InlineOrderButtons";
 import { useUserPreferences } from "@/hooks/use-user-preferences";
+import { FactoryFxAgentWalletCard } from "./factorynetposition/components/FactoryFxAgentWalletCard";
 
 interface AccountItem {
   id?: number;
@@ -796,6 +797,8 @@ export default function FactoryNetPositionDetails() {
       <div className="text-xs text-muted-foreground -mt-2" data-testid="text-inventory-valuation-mode">
         Stock in Hand valued at {valuationMode === "selling" ? "Selling" : "Cost"} · Balance on Table stays at Cost
       </div>
+
+      <FactoryFxAgentWalletCard asOf={asOf} readOnly={!isToday} />
 
       <Card data-testid="card-formula">
         <CardContent className="pt-5">

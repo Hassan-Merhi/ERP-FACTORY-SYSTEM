@@ -26,6 +26,7 @@ import { NotInLedgerCard } from "@/components/netposition/NotInLedgerCard";
 import { Side } from "./factorynetposition/components/Side";
 import { OrderGroup } from "./factorynetposition/components/OrderGroup";
 import { CustomNetPositionView } from "./factorynetposition/components/CustomNetPositionView";
+import { FactoryFxAgentWalletCard } from "./factorynetposition/components/FactoryFxAgentWalletCard";
 
 export default function FactoryNetPosition() {
   const [asOf, setAsOf] = useState<string>(todayStr);
@@ -171,6 +172,16 @@ export default function FactoryNetPosition() {
             Showing net position as of <strong>{formatDateLabel(asOf)}</strong>. Supplier payments, vouchers, and
             customer balances are filtered to that date. Inventory reflects current stock.
           </span>
+        </div>
+      )}
+
+      <FactoryFxAgentWalletCard asOf={asOf} readOnly={!isToday} />
+      {!!data?.fxAgentWalletWarnings?.length && (
+        <div role="alert" className="rounded-md border border-amber-300 p-3 text-sm text-amber-700 dark:text-amber-300">
+          <p className="font-semibold">FX Agent Account Reconciliation Warnings</p>
+          {data.fxAgentWalletWarnings.map((warning, index) => (
+            <p key={index}>{warning}</p>
+          ))}
         </div>
       )}
 
@@ -356,9 +367,9 @@ export default function FactoryNetPosition() {
               </div>
             </div>
             <p className="text-xs text-muted-foreground">
-              Verified and Loading orders are included in "What We Have" as projected, uninvoiced order values;
-              Pending orders are shown for reference only. This does not post customer receivables to the ledger.
-              Loading amounts update as bales are scanned.
+              Verified and Loading orders are included in "What We Have" as projected, uninvoiced order values; Pending
+              orders are shown for reference only. This does not post customer receivables to the ledger. Loading
+              amounts update as bales are scanned.
             </p>
           </CardHeader>
           <CardContent className="space-y-3">

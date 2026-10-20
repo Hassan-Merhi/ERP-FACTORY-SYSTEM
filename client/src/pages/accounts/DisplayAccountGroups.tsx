@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { ArrowDown, ArrowUp, Folder, GripVertical, Plus, Save, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowUp, Folder, GripVertical, Plus, RefreshCw, Save, Trash2 } from "lucide-react";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useAppMode } from "@/contexts/AppModeContext";
 import { useToast } from "@/hooks/use-toast";
@@ -54,12 +54,18 @@ export default function DisplayAccountGroups() {
     data: layout,
     isLoading: loadingLayout,
     error: layoutError,
+    refetch: refetchLayout,
   } = useQuery<AccountDisplayLayout>({
     queryKey: layoutKey,
     queryFn: async () => {
       const r = await fetch(layoutUrl, { credentials: "include" });
       if (!r.ok) throw new Error((await r.json().catch(() => ({}))).message || "Cannot load account groups");
-      return r.json();
+      const body = (await r.json()) as Partial<AccountDisplayLayout> | null;
+      // A successful response without a nodes list is not a layout. Treating
+      // it as an empty editable layout would let Save replace the company-wide
+      // order with the synthesized rows, so it surfaces as a load error instead.
+      if (!body || !Array.isArray(body.nodes)) throw new Error("Account groups layout could not be read");
+      return body as AccountDisplayLayout;
     },
     enabled: !!selectedCompany,
     staleTime: 30000,
@@ -78,12 +84,17 @@ export default function DisplayAccountGroups() {
     refetchOnWindowFocus: false,
   });
 
-  const ledgerOptions = useMemo(() => accounts.filter((a) => a.subType !== "Group"), [accounts]);
+  const ledgerOptions = useMemo(
+    () => (Array.isArray(accounts) ? accounts : []).filter((a) => a.subType !== "Group"),
+    [accounts]
+  );
   const accountMap = useMemo(() => new Map(ledgerOptions.map((a) => [`ledger:${a.id}`, a])), [ledgerOptions]);
 
   useEffect(() => {
     if (!layout || loadingAccounts) return;
-    const retained = layout.nodes.filter((n) => n.type === "group" || accountMap.has(n.key));
+    const retained = (Array.isArray(layout.nodes) ? layout.nodes : []).filter(
+      (n) => n.type === "group" || accountMap.has(n.key)
+    );
     const known = new Set(retained.map((n) => n.key));
     const additional = ledgerOptions
       .filter((a) => !known.has(`ledger:${a.id}`))
@@ -254,7 +265,7 @@ export default function DisplayAccountGroups() {
   };
 
   return (
-    <div className="p-4 md:p-6 space-y-4">
+    <div data-testid="account-display-groups-root" className="p-4 md:p-6 space-y-4 min-w-0 w-full">
       <div>
         <h2 className="text-lg font-semibold">Display-only Account Groups</h2>
         <p className="text-sm text-muted-foreground">
@@ -278,7 +289,26 @@ export default function DisplayAccountGroups() {
               placeholder="Group name (e.g. KAZEMBE)"
               className="max-w-sm"
             />
-            <Button variant="outline" onClick={createGroup} disabled={!newName.trim()}>
+            <Button
+              variant="outline"
+              size="sm"
+              data-testid="button-refresh-display-account-layout"
+              disabled={dirty || !selectedCompany}
+              onClick={() => {
+                void refetchLayout();
+                void queryClient.invalidateQueries({
+                  queryKey: ["/api/ledger-accounts/display-group-picker", selectedCompany?.id],
+                });
+              }}
+            >
+              <RefreshCw className="h-4 w-4 mr-1" /> Refresh Layout
+            </Button>
+            <Button
+              variant="outline"
+              data-testid="button-create-group"
+              onClick={createGroup}
+              disabled={!newName.trim()}
+            >
               <Plus className="h-4 w-4 mr-1" /> New display group
             </Button>
             <Button onClick={() => save.mutate()} disabled={!dirty || save.isPending} className="ml-auto">

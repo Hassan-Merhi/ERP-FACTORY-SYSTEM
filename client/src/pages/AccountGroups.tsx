@@ -627,10 +627,18 @@ export default function AccountGroups() {
   return (
     <div>
       <div className="flex flex-wrap gap-2 px-4 pt-4">
-        <Button variant={mode === "display" ? "default" : "outline"} onClick={() => setMode("display")}>
+        <Button
+          variant={mode === "display" ? "default" : "outline"}
+          onClick={() => setMode("display")}
+          data-testid="button-mode-display-groups"
+        >
           Display Groups (no vouchers)
         </Button>
-        <Button variant={mode === "ledger" ? "default" : "outline"} onClick={() => setMode("ledger")}>
+        <Button
+          variant={mode === "ledger" ? "default" : "outline"}
+          onClick={() => setMode("ledger")}
+          data-testid="button-mode-ledger-groups"
+        >
           Legacy Ledger Hierarchy
         </Button>
       </div>

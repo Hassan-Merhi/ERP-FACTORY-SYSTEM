@@ -55,7 +55,7 @@ const PAGES: PageCase[] = [
 
   // ERP.
   { name: "AICommandCenter", load: () => import("@/pages/AICommandCenter"), landmark: "textarea-instruction" },
-  { name: "AccountGroups", load: () => import("@/pages/AccountGroups"), landmark: "button-create-group" },
+  { name: "AccountGroups", load: () => import("@/pages/AccountGroups"), landmark: "button-mode-display-groups" },
   { name: "AccountMigration", load: () => import("@/pages/AccountMigration"), landmark: "select-source-company" },
   {
     name: "AiValidationPage",

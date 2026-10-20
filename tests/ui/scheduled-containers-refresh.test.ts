@@ -1,9 +1,10 @@
 import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
-const file = new URL(
-  "../../client/src/pages/factory/factoryshippingcontainers/components/ScheduledContainersTable.tsx",
-  import.meta.url
+const file = resolve(
+  process.cwd(),
+  "client/src/pages/factory/factoryshippingcontainers/components/ScheduledContainersTable.tsx"
 );
 const source = readFileSync(file, "utf8");
 
