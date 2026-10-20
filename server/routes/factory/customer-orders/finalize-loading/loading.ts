@@ -17,7 +17,7 @@ import { syncProformaReservations } from "../../_stockReservationHelper";
 import { acquireProformaCapacityTransactionLock } from "../proformaCapacityConcurrency";
 import { getProformaCapacitySnapshot } from "../proformaCapacity";
 import { buildRemainingLoadingPlan } from "../remainingLoadingPlan";
-import { mergeNewProformaArticles, isContinuationLoading, usesLiveMasterProforma } from "../proformaPlan";
+import { mergeNewProformaArticles, getLoadingPlanKind, usesLiveMasterProforma } from "../proformaPlan";
 import { guardProformaOrderCreation } from "../proformaCapacityWriteGuards";
 import {
   factoryBales,
@@ -183,10 +183,10 @@ export function registerOrderLoadingRoutes(app: Express) {
 
         // Freeze the CURRENT master at finalization for an ordinary loading.
         // A continuation retains its own persisted remaining-only quantities.
-        const continuation = order.proformaIdUsed
-          ? await isContinuationLoading(tx, companyId, orderId)
-          : false;
-        const usesLiveMaster = usesLiveMasterProforma(order.status, continuation);
+        const planKind = order.proformaIdUsed
+          ? await getLoadingPlanKind(tx, companyId, orderId)
+          : "snapshot";
+        const usesLiveMaster = usesLiveMasterProforma(order.status, planKind);
         if (usesLiveMaster && order.proformaIdUsed) {
           const currentMaster = await tx.select().from(customerProformaLines)
             .where(eq(customerProformaLines.proformaId, order.proformaIdUsed));
@@ -282,7 +282,7 @@ export function registerOrderLoadingRoutes(app: Express) {
           const plan = buildRemainingLoadingPlan(
             usesLiveMaster
               ? masterPlan
-              : mergeNewProformaArticles(existingPlan, masterPlan, true, order.createdAt),
+              : mergeNewProformaArticles(existingPlan, masterPlan, planKind === "continuation", order.createdAt),
             loadedByArticle
           );
           nextLoadingLines.push(...plan.lines);
