@@ -29,6 +29,25 @@ An agent holds USD on the company's behalf, then agrees to hold EUR at an agreed
 - Pay a supplier EUR 1,000 at USD/EUR 1.14: supplier USD payment 1,140, agent EUR native 7,996.851102, realized FX gain USD 28.50 at historical booked basis ~USD 1,111.50.
 - Change Settings to 1.20: EUR balance is untouched; USD report value updates independently.
 
+## Reconcile an unused wallet after USD ledger postings
+If the posted USD ledger account changes after a wallet was activated, its
+one-time opening snapshot can differ from the current USD ledger balance.
+Accounts → Edit Agent → FX Agent shows both amounts rather than silently
+treating the difference as FX gains or EUR funds.
+
+An Admin, Owner or Developer can select **Reconcile unused USD wallet** only
+when the wallet has **zero FX operations**. The confirmation requires a written
+reason, the current wallet opening and ledger balance. The server locks the
+wallet, rejects stale figures, verifies the account is active and its posted
+vouchers do not report non-USD transaction currency, and checks again that
+no FX conversion, payout or reversal exists. It restarts the wallet's USD
+opening and activation date from today's posted USD ledger, with an atomic
+audit-log entry recording the previous baseline, new baseline, date and
+reason. It never alters vouchers. For dates before the new activation,
+Net Position retains the posted USD ledger figure. If any FX operation
+exists, the baseline cannot be reset and the mismatched books require
+manual reconciliation instead. No extra SQL migration is required.
+
 ## Reversing a USD → EUR conversion
 - Apply the **20261020 reversal migration** first. The popup will explain if the migration is missing; normal conversion/settlement functionality stays available.
 - In Accounts → Edit the agent → FX popup → **USD → EUR conversions and reversals**, choose the conversion and supply a mandatory reason; confirm **Reverse to USD**.
