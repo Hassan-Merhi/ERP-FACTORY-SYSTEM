@@ -84,6 +84,7 @@ export interface PaymentReceiptTabProps {
   onFxPaymentRateChange?: (value: string) => void;
   fxPayoutCurrency?: "EUR" | "USD";
   fxSupplierEurBalance?: number | null;
+  fxSupplierEurBasis?: "broker-statement" | "native-ledger" | null;
   fxSupplierBalanceLoading?: boolean;
   onFxPayoutCurrencyChange?: (currency: "EUR" | "USD") => void;
   voucherNumber?: string;
@@ -134,6 +135,7 @@ export function PaymentReceiptTab({
   onFxPaymentRateChange,
   fxPayoutCurrency = "USD",
   fxSupplierEurBalance = null,
+  fxSupplierEurBasis = null,
   fxSupplierBalanceLoading = false,
   onFxPayoutCurrencyChange,
   voucherNumber,
@@ -643,7 +645,10 @@ export function PaymentReceiptTab({
                     )}
                     {fxSupplierEurBalance !== null && fxSupplierEurBalance > 0 && (
                       <p className="text-sm text-muted-foreground" data-testid="fx-supplier-eur-balance">
-                        Supplier EUR payable: EUR {fxSupplierEurBalance.toFixed(2)}
+                        {fxSupplierEurBasis === "broker-statement"
+                          ? "Broker EUR settlement balance (including OTW): "
+                          : "Supplier EUR payable: "}
+                        EUR {fxSupplierEurBalance.toFixed(2)}
                       </p>
                     )}
                     {directEurPayment ? (
