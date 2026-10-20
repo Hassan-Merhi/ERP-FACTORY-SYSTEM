@@ -14,6 +14,7 @@ import {} from "../../_helpers";
 import { factoryBaleProducts } from "@shared/schema";
 import { eq, and, sql, inArray } from "drizzle-orm";
 import { resultRows } from "../../../../lib/queryResult";
+import { mergeNewProformaArticles } from "../proformaPlan";
 import { MoneyDecimal, type MoneyInput, plusMoney, toMoney } from "../../../../lib/money";
 
 /** `total` split into `count` decimal strings that add back to `total` exactly. */
@@ -301,21 +302,27 @@ export function registerOrderVerificationSummaryRoutes(app: Express) {
           const code = String(line.article_code ?? line.articleCode ?? "").trim().toLowerCase();
           if (code && !originalsByCode.has(code)) originalsByCode.set(code, line);
         }
-        const planLines: RawProformaLineRow[] = expectedPlan.length
-          ? expectedPlan.map((line) => {
-              const source =
-                originalsById.get(Number(line.proforma_line_id)) ||
-                originalsByCode.get(line.article_code.trim().toLowerCase());
-              return {
-                article_code: line.article_code,
-                product_name: line.product_name ?? source?.product_name ?? source?.productName ?? line.article_code,
-                quantity: Number(line.expected_qty),
-                price_per_bale: source?.price_per_bale ?? source?.pricePerBale ?? "0",
-                pricing_mode: source?.pricing_mode ?? source?.pricingMode ?? "per_bale",
-                price_per_kg: source?.price_per_kg ?? source?.pricePerKg ?? null,
-              };
-            })
-          : proformaLines;
+        const savedPlanLines: RawProformaLineRow[] = expectedPlan.map((line) => {
+          const source =
+            originalsById.get(Number(line.proforma_line_id)) ||
+            originalsByCode.get(line.article_code.trim().toLowerCase());
+          return {
+            article_code: line.article_code,
+            product_name: line.product_name ?? source?.product_name ?? source?.productName ?? line.article_code,
+            quantity: Number(line.expected_qty),
+            price_per_bale: source?.price_per_bale ?? source?.pricePerBale ?? "0",
+            pricing_mode: source?.pricing_mode ?? source?.pricingMode ?? "per_bale",
+            price_per_kg: source?.price_per_kg ?? source?.pricePerKg ?? null,
+          };
+        });
+        // An already-running loading has a saved plan, but a NEW article added
+        // to its master proforma must still appear in Proforma vs Loaded.
+        // Preserve customized/continuation quantities and finalized history.
+        const planLines = mergeNewProformaArticles(
+          savedPlanLines,
+          proformaLines,
+          !["FINALIZED", "CANCELLED"].includes(order.status)
+        );
 
         for (const pl of planLines) {
           const articleCode = String(pl.article_code ?? pl.articleCode ?? "").trim();
