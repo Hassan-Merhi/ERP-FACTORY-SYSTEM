@@ -115,7 +115,7 @@ describe("remaining-only continuation loading", () => {
     expect(capacity).toContain("SELECT article_code AS \"articleCode\", expected_qty AS quantity");
     expect(capacity).toContain("AND NOT EXISTS (");
     expect(capacity).toContain("AND cpl.created_at > co.created_at");
-    expect(finalize).toContain("mergeNewProformaArticles(existingPlan, masterPlan, true, order.createdAt)");
+    expect(finalize).toContain("mergeNewProformaArticles(existingPlan, masterPlan, planKind === "continuation", order.createdAt)");
     expect(dialog).toContain('data-testid="button-finalize-open-next-loading"');
   });
 });
