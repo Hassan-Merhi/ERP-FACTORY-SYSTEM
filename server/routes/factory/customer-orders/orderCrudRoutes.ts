@@ -23,7 +23,7 @@ import { eq, and, or, desc, sql, inArray, isNull, gte, lte } from "drizzle-orm";
 import { parseListPagination, setListPaginationHeaders } from "../../../lib/listPagination";
 import { resultRows } from "../../../lib/queryResult";
 import { getProformaCapacitySnapshot } from "./proformaCapacity";
-import { mergeNewProformaArticles, isContinuationLoading, usesLiveMasterProforma } from "./proformaPlan";
+import { mergeNewProformaArticles, getLoadingPlanKind, usesLiveMasterProforma } from "./proformaPlan";
 import { allocateRemainingProformaLines } from "./proformaCapacityEnforcement";
 import { guardProformaOrderCreation } from "./proformaCapacityWriteGuards";
 import { acquireProformaCapacityTransactionLock } from "./proformaCapacityConcurrency";
@@ -103,14 +103,14 @@ export function registerOrderCrudRoutes(app: Express) {
       });
 
       const liveMasterPlan = sql`(
-        ${customerOrders.status} IN ('DRAFT', 'LOADING', 'PENDING_VERIFICATION')
-        AND NOT EXISTS (
+        ${customerOrders.status} IN ('LOADING', 'PENDING_VERIFICATION')
+        AND EXISTS (
           SELECT 1 FROM factory_daybook_entries e
           WHERE e.company_id = ${customerOrders.companyId}
             AND e.reference_table = 'customer_orders'
             AND e.reference_id = ${customerOrders.id}
             AND e.tx_type = 'LOADING_CREATED'
-            AND e.description LIKE 'Continuation of loading #%'
+            AND e.description LIKE 'Loading started for customer:%'
         )
       )`;
 
@@ -337,13 +337,13 @@ export function registerOrderCrudRoutes(app: Express) {
                 pricePerKg: source?.pricePerKg ?? null,
               };
             });
-        const continuation = await isContinuationLoading(db, companyId, id);
-        const proformaLines = usesLiveMasterProforma(order.status, continuation)
+        const planKind = await getLoadingPlanKind(db, companyId, id);
+        const proformaLines = usesLiveMasterProforma(order.status, planKind)
           ? originalProformaLines
           : mergeNewProformaArticles(
               savedProformaLines,
               originalProformaLines,
-              !["VERIFIED", "FINALIZED", "CANCELLED"].includes(order.status),
+              planKind === "continuation" && !["VERIFIED", "FINALIZED", "CANCELLED"].includes(order.status),
               order.createdAt
             );
         const capacity = continuationProforma
