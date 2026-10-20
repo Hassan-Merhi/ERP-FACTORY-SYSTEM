@@ -385,7 +385,7 @@ export default function Vouchers({ posUser }: VouchersProps = {}) {
         if (!selectedFxWallet.synchronized) throw new Error("FX agent ledger needs reconciliation");
         if (selectedCurrency !== "USD") throw new Error("Use USD as the payout currency");
         if (formData.optional) throw new Error("FX payments cannot be optional vouchers");
-        if (!/^\\d+(?:\\.\\d{1,10})?$/.test(fxPaymentRate) || Number(fxPaymentRate) <= 0) {
+        if (!/^\d+(?:\.\d{1,10})?$/.test(fxPaymentRate) || Number(fxPaymentRate) <= 0) {
           throw new Error("Enter the negotiated USD per EUR payment rate");
         }
         if (formData.entries.length !== 1) {
@@ -398,7 +398,7 @@ export default function Vouchers({ posUser }: VouchersProps = {}) {
         if (beneficiary.accountType === "ledger" && beneficiary.accountId === selectedFxWallet.wallet.ledgerAccountId) {
           throw new Error("FX agent cannot pay itself");
         }
-        if (!/^\\d+(?:\\.\\d{1,2})?$/.test(beneficiary.amount)) {
+        if (!/^\d+(?:\.\d{1,2})?$/.test(beneficiary.amount)) {
           throw new Error("USD payout must be positive with at most 2 decimal places");
         }
         const amount = new Decimal(beneficiary.amount);
