@@ -14,6 +14,8 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { db, pool } from "../server/db";
 import { toMoney } from "../server/lib/money";
 import { getPartyBalance } from "../server/services/accounting/balances/ledgerBalanceEngine";
+import { postFactoryVoucherTx } from "../server/services/factory/factoryVoucherPosting";
+import { loadFactorySupplierLedgerViews } from "../server/routes/factory/suppliers/balance/factorySupplierLedger";
 import { assertVoucherEditableTx } from "../server/services/accounting/voucherCorrection";
 import { retireVouchersTx } from "../server/services/accounting/voucherRetirement";
 import { FX_AGENT_VOUCHER_LOCKED_MESSAGE } from "../server/services/accounting/fxAgentVoucherLock";
@@ -62,6 +64,9 @@ beforeAll(async () => {
   await pool.query(readFileSync(path.join(__dirname, "../migrations/20261019_factory_fx_agent_wallets.sql"), "utf8"));
   await pool.query(
     readFileSync(path.join(__dirname, "../migrations/20261020_factory_fx_agent_conversion_reversals.sql"), "utf8")
+  );
+  await pool.query(
+    readFileSync(path.join(__dirname, "../migrations/20261020_fx_agent_eur_supplier_payment.sql"), "utf8")
   );
   agent = request.agent(ctx.app) as request.SuperAgentTest;
   const login = await agent
@@ -351,6 +356,81 @@ describe("FX agent EUR wallet lifecycle", () => {
     });
     expect(forbidden.status).toBe(400);
     expect(forbidden.body.message).toMatch(/paid out/i);
+  });
+
+  it("pays an existing EUR factory supplier payable directly in EUR without a negotiated rate", async () => {
+    const date = new Date().toISOString().slice(0, 10);
+    const supplier = await pool.query<{ id: number }>(
+      `INSERT INTO factory_suppliers (company_id, name, opening_balance, is_active)
+       VALUES ($1, $2, '0', true) RETURNING id`,
+      [ctx.companyId, `${PREFIX} EUR Supplier`]
+    );
+    const supplierId = supplier.rows[0].id;
+    const accrual = await ledgerAccount("EUR-ACCRUAL", "EUR accrual", "Asset", "0");
+    await db.transaction(async (tx) => {
+      await postFactoryVoucherTx(tx, {
+        companyId: ctx.companyId,
+        voucherType: "Journal",
+        voucherDate: date,
+        currency: "EUR",
+        fxRateToUsd: "1.15",
+        description: "EUR supplier payable for direct FX wallet payment test",
+        source: { sourceType: "test-fx-agent-eur-accrual", sourceId: `${PREFIX}-eur-payable` },
+        lines: [
+          { ledgerAccountId: accrual, debit: "1000.00" },
+          { factorySupplierId: supplierId, credit: "1000.00" },
+        ],
+      });
+    });
+    const payAgentAccountId = await ledgerAccount("EUR-WALLET", "Native EUR wallet", "Asset", "1111.50");
+    const activation = await agent.post("/api/factory/fx-agent-wallets").send({
+      ledgerAccountId: payAgentAccountId, confirmUsdSource: true,
+    });
+    expect(activation.status, activation.text).toBe(201);
+    const eurWalletId = activation.body.walletId;
+    const converted = await agent.post(`/api/factory/fx-agent-wallets/${eurWalletId}/convert`).send({
+      usdAmount: "1111.50", rateUsdPerEur: "1.1115",
+      requestKey: `${PREFIX}-eur-convert`,
+    });
+    expect(converted.status, converted.text).toBe(201);
+
+    const body = {
+      paymentVoucher: true, targetCurrency: "EUR",
+      eurAmount: "250.00", targetKind: "factorySupplier", targetId: supplierId,
+      requestKey: `${PREFIX}-eur-direct-payment`,
+    };
+    const posted = await agent.post(`/api/factory/fx-agent-wallets/${eurWalletId}/settle`).send(body);
+    expect(posted.status, posted.text).toBe(201);
+    expect(posted.body.quote).toMatchObject({
+      eur: "250.00", targetCurrency: "EUR", gainUsd: "0.000000",
+    });
+    const totals = await voucherTotals(posted.body.voucherId);
+    expect(toMoney(totals.debit).eq(totals.credit)).toBe(true);
+
+    const entries = await pool.query<{ transaction_currency: string; amount: string }>(
+      `SELECT transaction_currency, transaction_debit_amount::text AS amount
+       FROM voucher_entries WHERE voucher_id = $1 AND factory_supplier_id = $2`,
+      [posted.body.voucherId, supplierId]
+    );
+    expect(entries.rows).toHaveLength(1);
+    expect(entries.rows[0].transaction_currency).toBe("EUR");
+    expect(toMoney(entries.rows[0].amount).eq("250")).toBe(true);
+    const supplierView = (await loadFactorySupplierLedgerViews(db, ctx.companyId, { ids: [supplierId] })).get(supplierId);
+    expect(supplierView?.nativeBalances.find((x) => x.currencyCode === "EUR")?.balance).toBe("750.00");
+    const walletResult = await agent.get("/api/factory/fx-agent-wallets");
+    const eurWallet = walletResult.body.wallets.find((x: { wallet: { id: number } }) => x.wallet.id === eurWalletId);
+    expect(eurWallet.state.eur).toBe("750.000000");
+    expect(eurWallet.synchronized).toBe(true);
+
+    const replay = await agent.post(`/api/factory/fx-agent-wallets/${eurWalletId}/settle`).send(body);
+    expect(replay.status, replay.text).toBe(201);
+    expect(replay.body).toMatchObject({ voucherId: posted.body.voucherId, replayed: true });
+
+    const wrongTarget = await agent.post(`/api/factory/fx-agent-wallets/${eurWalletId}/settle`).send({
+      ...body, targetKind: "ledger", targetId: accrual,
+      requestKey: `${PREFIX}-eur-wrong-target`,
+    });
+    expect(wrongTarget.status).toBe(400);
   });
 
   it("refuses further operations once ordinary journals drift the agent ledger", async () => {
