@@ -9,7 +9,6 @@
  */
 import { sql } from "drizzle-orm";
 import type { DbTransaction } from "../../db";
-import { getClientDate } from "../../lib/dateUtils";
 import { writeAuditEvent } from "../audit";
 import { retireVouchersTx, type VoucherRetirementActor } from "../accounting/voucherRetirement";
 import { removeFactoryDaybookMirrorTx } from "../accounting/factoryDaybookMirrorRemoval";
