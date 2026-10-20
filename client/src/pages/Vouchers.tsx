@@ -398,6 +398,19 @@ export default function Vouchers({ posUser }: VouchersProps = {}) {
       ? fxCurrencyOverride.currency
       : fxSupplierId && fxSupplierEurBalance > 0 ? "EUR" : "USD";
   const fxSupplierBalanceLoading = !!fxSupplierId && (fxSupplierBalancePending || fxSupplierBalanceError);
+  // When an async currency lookup changes the payout from USD to EUR, never
+  // silently reinterpret an amount typed while the lookup was loading.
+  useEffect(() => {
+    if (!fxSupplierId || !fxSupplierBalance?.fxEurPayable ||
+        fxCurrencyOverride?.beneficiary === fxBeneficiaryKey) return;
+    if (Number(form.getValues("entries.0.amount") || 0) > 0) {
+      form.setValue("entries.0.amount", "");
+    }
+    setFxCurrencyOverride({
+      beneficiary: fxBeneficiaryKey,
+      currency: fxSupplierBalance.fxEurPayable.eligible ? "EUR" : "USD",
+    });
+  }, [fxSupplierId, fxSupplierBalance?.fxEurPayable, fxBeneficiaryKey, fxCurrencyOverride, form]);
   const changeFxPayoutCurrency = (currency: "EUR" | "USD") => {
     if (currency === fxPayoutCurrency) return;
     setFxCurrencyOverride({ beneficiary: fxBeneficiaryKey, currency });
@@ -536,6 +549,7 @@ export default function Vouchers({ posUser }: VouchersProps = {}) {
       discardPaymentDraft();
       fxPaymentRequestRef.current = null;
       setFxPaymentRate("");
+      setFxCurrencyOverride(null);
       queryClient.invalidateQueries({ queryKey: ["/api/factory/fx-agent-wallets"] });
       queryClient.invalidateQueries({ queryKey: ["/api/factory/suppliers"] });
       queryClient.invalidateQueries({ queryKey: ["/api/factory/net-position"] });
