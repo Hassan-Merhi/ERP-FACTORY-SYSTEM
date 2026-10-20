@@ -298,7 +298,7 @@ export function AccountStatementView({
                     onSelect: openWaRuleDialog,
                     testId: "button-wa-rule",
                   },
-                  showWhatsApp &&
+                  !isEurTab && showWhatsApp &&
                     waRule?.enabled && {
                       label: "Send statement via WhatsApp",
                       icon: Send,
@@ -355,14 +355,14 @@ export function AccountStatementView({
               <Button
                 type="button"
                 variant="outline"
-                className={showWhatsApp && waRule?.enabled ? undefined : "col-span-2"}
+                className={showWhatsApp && waRule?.enabled && !isEurTab ? undefined : "col-span-2"}
                 onClick={() => openPdf(phonePdfLanguage)}
                 data-testid="button-pdf-phone"
               >
                 <FileDown className="me-2 h-4 w-4" aria-hidden="true" />
                 {isEurTab ? "EUR PDF" : "PDF"}
               </Button>
-              {showWhatsApp && waRule?.enabled && (
+              {!isEurTab && showWhatsApp && waRule?.enabled && (
                 <Button
                   type="button"
                   variant="outline"
@@ -416,7 +416,7 @@ export function AccountStatementView({
                   >
                     <MessageCircle className={`h-4 w-4 ${waRule?.enabled ? "text-green-500" : ""}`} />
                   </Button>
-                  {waRule?.enabled && (
+                  {!isEurTab && waRule?.enabled && (
                     <Button
                       size="icon"
                       variant="ghost"
@@ -555,10 +555,8 @@ export function AccountStatementView({
           items={[
             { label: "Transactions", value: transactionCount },
             {
-              label: showNativeBalance ? "Native EUR balance" : "Closing Balance",
-              value: showNativeBalance ? (
-                <>EUR {Number(nativeWallet!.state.eur).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</>
-              ) : (
+              label: showNativeBalance ? "Historical USD closing" : "Closing Balance",
+              value: (
                 <>
                   {formatAmount(Math.abs(displayClosingBalance))}
                   <span className="ms-1 text-[11px] font-normal opacity-70">{balSide(displayClosingBalance)}</span>
@@ -596,16 +594,12 @@ export function AccountStatementView({
           <div className="rounded-lg border bg-muted/30 px-4 py-2.5 flex items-center gap-3 min-w-[160px]">
             <Scale className="w-4 h-4 text-muted-foreground shrink-0" />
             <div>
-              <p className="text-[11px] text-muted-foreground leading-none mb-0.5">{showNativeBalance ? "Native EUR closing" : "Closing Balance"}</p>
+              <p className="text-[11px] text-muted-foreground leading-none mb-0.5">{showNativeBalance ? "Historical USD closing" : "Closing Balance"}</p>
               <p className="text-base font-semibold leading-none tabular-nums">
-                {showNativeBalance ? (
-                  <>EUR {Number(nativeWallet!.state.eur).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</>
-                ) : (
-                  <>
-                    {formatAmount(Math.abs(displayClosingBalance))}
-                    <span className="ml-1 text-[11px] font-normal opacity-70">{balSide(displayClosingBalance)}</span>
-                  </>
-                )}
+                <>
+                  {formatAmount(Math.abs(displayClosingBalance))}
+                  <span className="ml-1 text-[11px] font-normal opacity-70">{balSide(displayClosingBalance)}</span>
+                </>
               </p>
             </div>
           </div>
@@ -626,7 +620,7 @@ export function AccountStatementView({
             toggleVoucherSelection={toggleVoucherSelection}
             handleOpenVoucher={handleOpenVoucher}
             formatAmount={formatAmount}
-            formatTransactionAmount={formatTransactionAmount}
+            formatTransactionAmount={hasFxTabs ? undefined : formatTransactionAmount}
             hideBalances={hideBalances}
             appMode={appMode}
             openingBalance={openingBalance}
@@ -642,7 +636,7 @@ export function AccountStatementView({
           selectedVoucherIds={selectedVoucherIds}
           handleOpenVoucher={handleOpenVoucher}
           formatAmount={formatAmount}
-          formatTransactionAmount={formatTransactionAmount}
+          formatTransactionAmount={hasFxTabs ? undefined : formatTransactionAmount}
           hideBalances={hideBalances}
           openingBalance={openingBalance}
           closingBalance={displayClosingBalance}
