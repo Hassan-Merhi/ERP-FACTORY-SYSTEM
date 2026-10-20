@@ -48,28 +48,32 @@ export function mergeNewProformaArticles<T extends {
 }
 
 /**
- * Continuation orders carry a remaining-only snapshot. Ordinary open loadings
- * are editable against the master proforma. This journal event is written at
- * the creation of every "Open a New Loading" continuation.
+ * Ordinary (direct) loadings follow master proforma edits while open.
+ * Continuations are explicitly marked by their LOADING_CREATED daybook entry.
+ * Other loadings (including V5 container allocations) own saved plans and must
+ * not be overwritten by master edits.
  */
-export async function isContinuationLoading(
+export type LoadingPlanKind = "ordinary" | "continuation" | "snapshot";
+
+export async function getLoadingPlanKind(
   executor: ProformaCapacityExecutor,
   companyId: number,
   orderId: number
-): Promise<boolean> {
-  const rows = resultRows<{ isContinuation: boolean }>(await executor.execute(sql`
-    SELECT EXISTS (
-      SELECT 1 FROM factory_daybook_entries event
-      WHERE event.company_id = ${companyId}
-        AND event.reference_table = 'customer_orders'
-        AND event.reference_id = ${orderId}
-        AND event.tx_type = 'LOADING_CREATED'
-        AND event.description LIKE 'Continuation of loading #%'
-    ) AS "isContinuation"
+): Promise<LoadingPlanKind> {
+  const rows = resultRows<{ description: string | null }>(await executor.execute(sql`
+    SELECT description FROM factory_daybook_entries
+    WHERE company_id = ${companyId}
+      AND reference_table = 'customer_orders'
+      AND reference_id = ${orderId}
+      AND tx_type = 'LOADING_CREATED'
+    ORDER BY id DESC LIMIT 1
   `));
-  return rows[0]?.isContinuation === true;
+  const description = rows[0]?.description ?? "";
+  if (description.startsWith("Continuation of loading #")) return "continuation";
+  if (description.startsWith("Loading started for customer:")) return "ordinary";
+  return "snapshot";
 }
 
-export function usesLiveMasterProforma(status: string | null | undefined, isContinuation: boolean): boolean {
-  return !isContinuation && ["DRAFT", "LOADING", "PENDING_VERIFICATION"].includes(status || "");
+export function usesLiveMasterProforma(status: string | null | undefined, planKind: LoadingPlanKind): boolean {
+  return planKind === "ordinary" && ["LOADING", "PENDING_VERIFICATION"].includes(status || "");
 }
