@@ -17,6 +17,7 @@ import { syncProformaReservations } from "../../_stockReservationHelper";
 import { acquireProformaCapacityTransactionLock } from "../proformaCapacityConcurrency";
 import { getProformaCapacitySnapshot } from "../proformaCapacity";
 import { buildRemainingLoadingPlan } from "../remainingLoadingPlan";
+import { mergeNewProformaArticles } from "../proformaPlan";
 import { guardProformaOrderCreation } from "../proformaCapacityWriteGuards";
 import {
   factoryBales,
@@ -222,17 +223,15 @@ export function registerOrderLoadingRoutes(app: Express) {
                 eq(customerOrderExpectedLines.proformaId, proforma.id)
               )
             );
-          const proformaLines = existingPlan.length
-            ? []
-            : await tx
-                .select({
-                  id: customerProformaLines.id,
-                  articleCode: customerProformaLines.articleCode,
-                  productName: customerProformaLines.productName,
-                  quantity: customerProformaLines.quantity,
-                })
-                .from(customerProformaLines)
-                .where(eq(customerProformaLines.proformaId, proforma.id));
+          const proformaLines = await tx
+            .select({
+              id: customerProformaLines.id,
+              articleCode: customerProformaLines.articleCode,
+              productName: customerProformaLines.productName,
+              quantity: customerProformaLines.quantity,
+            })
+            .from(customerProformaLines)
+            .where(eq(customerProformaLines.proformaId, proforma.id));
 
           // The shared capacity engine counts each distinct physical bale once,
           // including the article-code fallbacks used by the scan route.
@@ -245,15 +244,14 @@ export function registerOrderLoadingRoutes(app: Express) {
           const loadedByArticle = new Map(
             capacity.articles.map((article) => [article.normalizedArticleCode, article.currentOrderLoadedQty])
           );
+          const masterPlan = proformaLines.map((line) => ({
+            articleCode: line.articleCode,
+            productName: line.productName,
+            expectedQty: line.quantity,
+            proformaLineId: line.id,
+          }));
           const plan = buildRemainingLoadingPlan(
-            existingPlan.length
-              ? existingPlan
-              : proformaLines.map((line) => ({
-                  articleCode: line.articleCode,
-                  productName: line.productName,
-                  expectedQty: line.quantity,
-                  proformaLineId: line.id,
-                })),
+            mergeNewProformaArticles(existingPlan, masterPlan, true),
             loadedByArticle
           );
           nextLoadingLines.push(...plan.lines);
