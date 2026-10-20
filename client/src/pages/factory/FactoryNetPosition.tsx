@@ -26,7 +26,6 @@ import { NotInLedgerCard } from "@/components/netposition/NotInLedgerCard";
 import { Side } from "./factorynetposition/components/Side";
 import { OrderGroup } from "./factorynetposition/components/OrderGroup";
 import { CustomNetPositionView } from "./factorynetposition/components/CustomNetPositionView";
-import { FactoryFxAgentWalletCard } from "./factorynetposition/components/FactoryFxAgentWalletCard";
 
 export default function FactoryNetPosition() {
   const [asOf, setAsOf] = useState<string>(todayStr);
@@ -175,7 +174,6 @@ export default function FactoryNetPosition() {
         </div>
       )}
 
-      <FactoryFxAgentWalletCard asOf={asOf} readOnly={!isToday} />
       {!!data?.fxAgentWalletWarnings?.length && (
         <div role="alert" className="rounded-md border border-amber-300 p-3 text-sm text-amber-700 dark:text-amber-300">
           <p className="font-semibold">FX Agent Account Reconciliation Warnings</p>
