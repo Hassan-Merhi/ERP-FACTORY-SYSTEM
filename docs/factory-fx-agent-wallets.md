@@ -2,6 +2,8 @@
 
 **Schema deployment:** The original wallet feature requires `migrations/20261019_factory_fx_agent_wallets.sql` in production. Safe reversal additionally requires `migrations/20261020_factory_fx_agent_conversion_reversals.sql`, applied separately by an authorized operator. Code merges/deploys never automatically run production SQL.
 
+**Direct EUR supplier payments:** Apply `migrations/20261020_fx_agent_eur_supplier_payment.sql` after the reversal migration. This extends the wallet operation constraint so EUR settlements may credit a factory supplier's existing EUR payable. The migration is manual and required before posting the new EUR flow in production.
+
 ## Owner case: Ramadan FX
 An agent holds USD on the company's behalf, then agrees to hold EUR at an agreed historic conversion rate (e.g. USD 1.1115 per EUR). His native balance must remain EUR. Factory Net Position values outstanding EUR at the manually configured EUR-to-USD Settings rate **effective on or before the report as-of date**. A supplier payment can use a *different, explicitly entered* USD-per-EUR rate, post USD to the supplier, deduct the native EUR held by the agent, and recognize realized FX gain/loss.
 
@@ -111,3 +113,9 @@ by the Accounts page. No SQL migration is required for this addition.
 - Test and specify formal unrealized revaluation accounting policy; Net Position display translation must not silently post P&L.
 - Integrate wallet-native EUR balances in the general Accounts/Agent Ledger pages and exported statements, not just Factory Net Position.
 - Check migration registry/startup policy and get an explicit migration deployment plan. No production SQL has been run here.
+
+
+## Paying a EUR supplier directly from Factory Payment Voucher
+Choose **Factory → Vouchers → Payment**, select the activated **FX EUR agent wallet** in **Pay From**, and choose the factory supplier as the beneficiary. The form reads that supplier's posted native-currency ledger: when an outstanding EUR payable exists, it automatically selects **Pay EUR directly** and shows the EUR payable, regardless of the USD-base amount in the account picker. Enter the **EUR amount** and post; no negotiated USD payout rate and no prior FX transfer in Parties are needed. The amount debits the supplier in native EUR and credits the agent in native EUR in one balanced Payment voucher. The wallet's existing historical USD book basis is used only for accounting normalization, at the same derived rate on both sides; **no exchange conversion or realized gain/loss** is added.
+
+Direct EUR payments require a confirmed posted EUR supplier payable; payments exceeding that EUR payable, unreconciled wallet balances and missing/legacy unresolved EUR entries are blocked. **Pay USD (exchange)** remains available for actual USD recipient payouts and continues to require the negotiated payment rate. Supplier native EUR balances and the agent EUR wallet change together, with the wallet operation linked to the voucher. The agent's EUR statement records the EUR deduction; supplier ledger balances reflect the EUR debit. An FX settlement voucher remains protected against generic edits/deletion under the existing wallet-voucher lock.
