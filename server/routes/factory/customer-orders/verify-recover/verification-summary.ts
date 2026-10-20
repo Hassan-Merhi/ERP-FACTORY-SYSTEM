@@ -81,6 +81,7 @@ type RawProformaLineRow = {
   quantity?: number | null;
   price_per_bale?: string | null;
   pricePerBale?: string | null;
+  created_at?: Date | string | null;
 };
 
 type OrderComparisonRow = {
@@ -321,7 +322,8 @@ export function registerOrderVerificationSummaryRoutes(app: Express) {
         const planLines = mergeNewProformaArticles(
           savedPlanLines,
           proformaLines,
-          !["FINALIZED", "CANCELLED"].includes(order.status)
+          !["FINALIZED", "CANCELLED"].includes(order.status),
+          order.createdAt
         );
 
         for (const pl of planLines) {
