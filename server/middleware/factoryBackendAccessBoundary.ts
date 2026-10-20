@@ -300,7 +300,7 @@ export function resolveFactoryBackendAccessRequirement(req: Request): FactoryApi
   // available to users permitted on Vouchers > Payment, not every FX write.
   if (hasPrefix(path, "/fx-agent-wallets")) {
     if ((req.method === "GET" && path === "/fx-agent-wallets") ||
-        (req.method === "POST" && /^\\/fx-agent-wallets\\/\\d+\\/settle$/.test(path))) {
+        (req.method === "POST" && /^\/fx-agent-wallets\/\d+\/settle$/.test(path))) {
       return anyOf(
         requirement("factory/accounts"),
         requirement("factory/vouchers", ["hide_tab_vouchers_payment"])
