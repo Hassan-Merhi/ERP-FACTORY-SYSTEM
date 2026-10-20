@@ -240,17 +240,49 @@ describe("bale products page behavior", () => {
         "/api/factory/bale-products/1/cascade-update",
         expect.objectContaining({
           name: "Adult Shirts Premium",
-          articleCode: "HMD01000",
-          weightPerBaleKg: 45,
-          categoryId: 10,
-          productionPrice: "100",
-          sellingPrice: "125",
           labelDesignColor: null,
         })
       )
     );
     expect(harness.toast).toHaveBeenCalledWith(
       expect.objectContaining({ title: "Product updated", description: "4 bale(s) also updated" })
+    );
+  });
+
+  it("saves a cost price without resending null color, unchanged weight, category or grade", async () => {
+    render(<BaleProducts />);
+    fireEvent.click(screen.getByTestId("button-edit-product-2"));
+    expect(screen.getByTestId("input-edit-product-production-price")).toHaveValue(80);
+
+    fireEvent.change(screen.getByTestId("input-edit-product-production-price"), {
+      target: { value: "94.35" },
+    });
+    fireEvent.click(screen.getByTestId("button-save-edit-product"));
+
+    await waitFor(() =>
+      expect(harness.apiRequest).toHaveBeenCalledWith(
+        "POST",
+        "/api/factory/bale-products/2/cascade-update",
+        { productionPrice: "94.35" }
+      )
+    );
+    expect(harness.toast).toHaveBeenCalledWith(expect.objectContaining({ title: "Product updated" }));
+  });
+
+  it("clears an existing cost price to zero without changing unrelated product fields", async () => {
+    render(<BaleProducts />);
+    fireEvent.click(screen.getByTestId("button-edit-product-1"));
+    fireEvent.change(screen.getByTestId("input-edit-product-production-price"), {
+      target: { value: "" },
+    });
+    fireEvent.click(screen.getByTestId("button-save-edit-product"));
+
+    await waitFor(() =>
+      expect(harness.apiRequest).toHaveBeenCalledWith(
+        "POST",
+        "/api/factory/bale-products/1/cascade-update",
+        { productionPrice: "0" }
+      )
     );
   });
 
