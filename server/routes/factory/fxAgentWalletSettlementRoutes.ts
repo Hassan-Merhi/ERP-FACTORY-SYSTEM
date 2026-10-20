@@ -13,7 +13,7 @@ import {
 } from "../../services/factory/factoryVoucherPosting";
 import { getFxAgentWalletSnapshot, loadFxAgentWallets } from "../../services/factory/fxAgentWalletDb";
 import { settlementPreview } from "../../services/factory/fxAgentWalletState";
-import { loadFactorySupplierLedgerViews } from "./suppliers/balance/factorySupplierLedger";
+import { loadFxAgentEurSupplierPayable } from "../../services/factory/fxAgentEurSupplierPayable";
 
 /**
  * Payment out of an agent's EUR balance to a EUR factory supplier, or to a USD beneficiary.
@@ -114,19 +114,30 @@ export function registerFactoryFxAgentSettlementRoutes(app: Express) {
             destinationExtra = sql`AND is_active = true`;
           }
           const targetRows = await tx.execute(sql`
-          SELECT id, name FROM ${destinationTable}
-          WHERE company_id = ${cid} AND id = ${targetId} ${destinationExtra}`);
+          SELECT id, name,
+            ${targetKind === "factorySupplier" ? sql`is_broker AS "isBroker"` : sql`false AS "isBroker"`}
+          FROM ${destinationTable}
+          WHERE company_id = ${cid} AND id = ${targetId} ${destinationExtra}
+          ${directEurPayment ? sql`FOR UPDATE` : sql``}`);
           if (!targetRows.rows.length) throw new Error("Beneficiary is not active in this company");
           if (directEurPayment) {
-            // Only offset a supplier's actual EUR payable, not a USD balance
-            // that merely appears as its reporting/base-currency total.
-            const view = (await loadFactorySupplierLedgerViews(tx, cid, { ids: [targetId] })).get(targetId);
-            const eurPayable = view?.nativeBalances.find((b) => b.currencyCode === "EUR");
-            if (!eurPayable || eurPayable.legacyUnconvertedLines > 0 || toMoney(eurPayable.balance).lte(0)) {
-              throw new Error("This supplier has no confirmed native EUR payable to settle");
+            const payable = await loadFxAgentEurSupplierPayable(
+              tx,
+              cid,
+              { id: targetId, isBroker: targetRows.rows[0].isBroker === true },
+              true
+            );
+            if (!payable.eligible) {
+              throw new Error(
+                payable.basis === "broker-statement"
+                  ? "This broker has no positive EUR settlement balance in Parties"
+                  : "This supplier has no confirmed native EUR payable to settle"
+              );
             }
-            if (toMoney(eur).gt(eurPayable.balance)) {
-              throw new Error("EUR payment exceeds the supplier's outstanding EUR balance");
+            if (toMoney(eur).gt(payable.balance)) {
+              throw new Error(
+                `EUR payment exceeds the ${payable.basis === "broker-statement" ? "broker settlement" : "supplier"} EUR balance (${payable.balance})`
+              );
             }
           }
           // A EUR-to-EUR transfer uses the agent's remaining historical book
