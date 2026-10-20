@@ -64,7 +64,33 @@ export function registerFactoryCustomerProformaLineRoutes(app: Express) {
         }
       }
 
-      const [line] = await db.insert(customerProformaLines).values(parsed).returning();
+      // New proforma articles must also appear in the expected plan of
+      // unfinished linked loadings. The snapshot previously stayed frozen,
+      // so verification showed a scanned new article as "Not Requested".
+      // Preserve all existing per-loading quantities and finalized history.
+      const [line] = await db.transaction(async (tx) => {
+        const [inserted] = await tx.insert(customerProformaLines).values(parsed).returning();
+        await tx.execute(sql`
+          INSERT INTO customer_order_expected_lines
+            (company_id, order_id, proforma_id, proforma_line_id, article_code, product_name, expected_qty)
+          SELECT
+            ${companyId}, co.id, ${parsed.proformaId}, ${inserted.id},
+            ${inserted.articleCode}, ${inserted.productName}, ${inserted.quantity}
+          FROM customer_orders co
+          WHERE co.company_id = ${companyId}
+            AND co.proforma_id_used = ${parsed.proformaId}
+            AND co.status IN ('DRAFT', 'LOADING', 'PENDING_VERIFICATION', 'VERIFIED')
+            AND co.deleted_at IS NULL
+            AND NOT EXISTS (
+              SELECT 1 FROM customer_order_expected_lines expected
+              WHERE expected.company_id = ${companyId}
+                AND expected.order_id = co.id
+                AND LOWER(TRIM(expected.article_code)) = LOWER(TRIM(${inserted.articleCode}))
+            )
+          ON CONFLICT (order_id, article_code) DO NOTHING
+        `);
+        return [inserted];
+      });
       // Sync — new line changes reservedNotYetLoaded for this proforma
       await syncProformaReservations(db, companyId, parsed.proformaId);
 
