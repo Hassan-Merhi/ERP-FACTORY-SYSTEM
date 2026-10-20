@@ -36,6 +36,9 @@ export function registerFactoryFxAgentSettlementRoutes(app: Express) {
         const key = String(req.body?.requestKey || "");
         const date = String(req.body?.date || getClientDate(req));
         const targetKind = String(req.body?.targetKind || "");
+        const narration = String(req.body?.narration || "").slice(0, 500);
+        const sourceNarration = String(req.body?.paymentAccountNarration || "").slice(0, 500);
+        const beneficiaryNarration = String(req.body?.beneficiaryNarration || "").slice(0, 500);
         if (
           !cid ||
           !Number.isSafeInteger(walletId) ||
@@ -115,14 +118,14 @@ export function registerFactoryFxAgentSettlementRoutes(app: Express) {
               ...(targetKind === "ledger" ? { ledgerAccountId: targetId } : { factorySupplierId: targetId }),
               currency: "USD",
               debit: quote.usd,
-              narration: "USD payment from FX agent",
+              narration: beneficiaryNarration || (paymentVoucher && narration) || "USD payment from FX agent",
             },
             {
               ledgerAccountId: wallet.ledgerAccountId,
               currency: "EUR",
               fxRateToUsd: bookRate.toFixed(10),
               credit: quote.eur,
-              narration: "Deduct agent EUR at its historical USD book value",
+              narration: sourceNarration || "Deduct agent EUR at its historical USD book value",
             },
           ];
           if (!gain.isZero()) {
@@ -143,7 +146,7 @@ export function registerFactoryFxAgentSettlementRoutes(app: Express) {
             currency: "USD",
             source: { sourceType: "factory-fx-agent-settlement", sourceId: key },
             description: paymentVoucher
-              ? "FX agent payment voucher: EUR from agent to USD beneficiary"
+              ? `FX agent payment: USD ${quote.usd} to beneficiary using EUR ${quote.eur} at ${quote.rate} USD/EUR`
               : "FX agent EUR settlement to USD beneficiary",
             actor: factorySessionActor(req),
             lines,
@@ -155,7 +158,7 @@ export function registerFactoryFxAgentSettlementRoutes(app: Express) {
            request_key,narration,created_by)
           VALUES (${cid},${walletId},${date},'EUR_SETTLEMENT','EUR',${quote.eur},'USD',${quote.usd},
             ${quote.rate},${quote.bookUsd},${gain.toFixed(6)},${targetKind},${targetId},
-            ${booked.voucher.id},${key},${String(req.body?.narration || "").slice(0, 500)},
+            ${booked.voucher.id},${key},${narration},
             ${req.session.username || "unknown"})
           RETURNING id`);
           return { id: Number(inserted.rows[0].id), voucherId: booked.voucher.id, quote, replayed: booked.replayed };
