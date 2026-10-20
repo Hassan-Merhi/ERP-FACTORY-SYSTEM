@@ -4,7 +4,7 @@ import { z } from "zod";
 import { requireFactoryTabAccess } from "../../lib/factoryAccessControl";
 import { and, desc, eq, ilike, inArray, isNull, or, sql } from "drizzle-orm";
 import { db, pool, type DbTransaction } from "../../db";
-import { requireAuth, requireRole } from "../../auth";
+import { requireAuth, requireNonPOS, requireRole } from "../../auth";
 import {
   auditLog,
   insuranceMemberMonthlyAmounts,
@@ -168,6 +168,7 @@ export function registerFactoryInsuranceRoutes(app: Express) {
   app.post(
     "/api/insurance/extra-charges",
     requireAuth,
+    requireNonPOS,
     requireFactoryTabAccess("factory/payroll-hub", "hide_tab_payrollhub_insurance"),
     async (req: Request, res: Response) => {
       const parsed = insuranceExtraChargeSchema.safeParse(req.body);
