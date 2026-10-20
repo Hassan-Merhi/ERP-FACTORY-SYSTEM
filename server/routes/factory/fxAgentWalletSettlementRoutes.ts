@@ -29,7 +29,9 @@ export function registerFactoryFxAgentSettlementRoutes(app: Express) {
         const cid = Number(req.session.factoryCompanyId || req.session.currentCompanyId || 0);
         const walletId = Number(req.params.id),
           targetId = Number(req.body?.targetId);
-        const eur = String(req.body?.eurAmount || "");
+        const paymentVoucher = req.body?.paymentVoucher === true;
+        const enteredEur = String(req.body?.eurAmount || "");
+        const usdAmount = String(req.body?.usdAmount || "");
         const fx = String(req.body?.rateUsdPerEur || "");
         const key = String(req.body?.requestKey || "");
         const date = String(req.body?.date || getClientDate(req));
@@ -41,7 +43,8 @@ export function registerFactoryFxAgentSettlementRoutes(app: Express) {
           !Number.isSafeInteger(targetId) ||
           targetId < 1 ||
           !/^[A-Za-z0-9._:-]{8,100}$/.test(key) ||
-          !/^\d+(?:\.\d{1,6})?$/.test(eur) ||
+          (!paymentVoucher && !/^\d+(?:\.\d{1,6})?$/.test(enteredEur)) ||
+          (paymentVoucher && (!/^\d+(?:\.\d{1,2})?$/.test(usdAmount) || toMoney(usdAmount).lte(0))) ||
           !/^\d+(?:\.\d{1,10})?$/.test(fx) ||
           !/^\d{4}-\d{2}-\d{2}$/.test(date) ||
           date > getClientDate(req) ||
@@ -49,6 +52,12 @@ export function registerFactoryFxAgentSettlementRoutes(app: Express) {
         ) {
           return res.status(400).json({ message: "Invalid FX settlement parameters" });
         }
+        // In the Payment Voucher form, the entered amount is the USD the
+        // recipient receives. Derive EUR server-side at six-place precision.
+        const eur = paymentVoucher
+          ? toMoney(usdAmount).div(toMoney(fx)).toDecimalPlaces(6).toFixed(6)
+          : enteredEur;
+        if (toMoney(eur).lte(0)) throw new Error("EUR payment amount is too small");
         const result = await db.transaction(async (tx) => {
           const locked = await tx.execute(sql`
           SELECT id FROM factory_fx_agent_wallets WHERE id = ${walletId} AND company_id = ${cid} FOR UPDATE`);
@@ -56,8 +65,11 @@ export function registerFactoryFxAgentSettlementRoutes(app: Express) {
           const prior = await tx.execute(sql`
           SELECT id,kind,wallet_id AS "walletId",source_amount::text AS amount,
             rate_usd_per_eur::text AS rate,target_kind AS "targetKind",
-            target_id AS "targetId",voucher_id AS "voucherId"
-          FROM factory_fx_agent_wallet_operations WHERE company_id = ${cid} AND request_key = ${key}`);
+            target_id AS "targetId",op.voucher_id AS "voucherId",
+            v.voucher_type AS "voucherType"
+          FROM factory_fx_agent_wallet_operations op
+          LEFT JOIN vouchers v ON v.id = op.voucher_id
+          WHERE op.company_id = ${cid} AND op.request_key = ${key}`);
           if (prior.rows.length) {
             const p = prior.rows[0];
             if (
@@ -66,7 +78,8 @@ export function registerFactoryFxAgentSettlementRoutes(app: Express) {
               !toMoney(String(p.amount)).eq(eur) ||
               !toMoney(String(p.rate)).eq(fx) ||
               p.targetKind !== targetKind ||
-              Number(p.targetId) !== targetId
+              Number(p.targetId) !== targetId ||
+              (paymentVoucher ? p.voucherType !== "Payment" : p.voucherType !== "Journal")
             ) {
               throw new Error("Idempotency key already used for another operation");
             }
@@ -91,6 +104,9 @@ export function registerFactoryFxAgentSettlementRoutes(app: Express) {
           WHERE company_id = ${cid} AND id = ${targetId} ${destinationExtra}`);
           if (!targetRows.rows.length) throw new Error("USD beneficiary is not active in this company");
           const quote = settlementPreview(eur, fx, snapshot.state);
+          if (paymentVoucher && !toMoney(quote.usd).eq(usdAmount)) {
+            throw new Error("USD amount cannot be paid precisely at this rate. Adjust the USD amount or rate");
+          }
           const bookRate = toMoney(quote.bookUsd).div(quote.eur).toDecimalPlaces(10);
           const postedBook = toMoney(quote.eur).times(bookRate).toDecimalPlaces(6);
           const gain = toMoney(quote.usd).minus(postedBook);
@@ -122,11 +138,13 @@ export function registerFactoryFxAgentSettlementRoutes(app: Express) {
           }
           const booked = await postFactoryVoucherTx(tx, {
             companyId: cid,
-            voucherType: "Journal",
+            voucherType: paymentVoucher ? "Payment" : "Journal",
             voucherDate: date,
             currency: "USD",
             source: { sourceType: "factory-fx-agent-settlement", sourceId: key },
-            description: "FX agent EUR settlement to USD beneficiary",
+            description: paymentVoucher
+              ? "FX agent payment voucher: EUR from agent to USD beneficiary"
+              : "FX agent EUR settlement to USD beneficiary",
             actor: factorySessionActor(req),
             lines,
           });
