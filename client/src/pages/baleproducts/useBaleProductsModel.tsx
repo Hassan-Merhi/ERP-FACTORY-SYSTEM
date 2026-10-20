@@ -273,7 +273,7 @@ export function useBaleProductsModel() {
   });
 
   const editProductMutation = useMutation({
-    mutationFn: async (data: {
+    mutationFn: async (data: Partial<{
       name: string;
       weightPerBaleKg: number | null;
       articleCode: string;
@@ -282,13 +282,18 @@ export function useBaleProductsModel() {
       labelDesignColor: string | null;
       productionPrice: string;
       sellingPrice: string;
-    }) => {
+      grade: string;
+    }>) => {
+      if (!editingProduct) throw new Error("Select a product before saving changes");
       const response = await modeApiRequest(
         "POST",
-        `/api/factory/bale-products/${editingProduct!.id}/cascade-update`,
+        `/api/factory/bale-products/${editingProduct.id}/cascade-update`,
         data
       );
-      return response.json();
+      const result = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(result?.message || "Failed to update bale product");
+      if (!result?.product) throw new Error("The product update returned an invalid response");
+      return result;
     },
     onSuccess: (result: { product: FactoryBaleProduct; balesUpdated: number }) => {
       queryClient.invalidateQueries({ queryKey: ["/api/factory/bale-products"] });
