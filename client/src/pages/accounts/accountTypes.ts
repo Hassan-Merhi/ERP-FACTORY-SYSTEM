@@ -2,7 +2,23 @@ import type { Dispatch, SetStateAction } from "react";
 import type { SubmitHandler, UseFormReturn } from "react-hook-form";
 import type { BankAccount, InsertBankAccount, LedgerAccount, UpdateLedgerAccount } from "@shared/schema";
 
+export interface FxAgentAccountBalance {
+  state: {
+    usd: string;
+    eur: string;
+    eurBookUsd: string;
+    totalBookUsd: string;
+  };
+  ledgerBookUsd: string;
+  bookDifferenceUsd: string;
+  synchronized: boolean;
+  currentUsd: string | null;
+  currentRateUsdPerEur: string | null;
+}
+
 export interface Account {
+  /** Optional display-only FX projection. Never use for GL running-balance maths. */
+  fxWallet?: FxAgentAccountBalance;
   id: string;
   accountId: number;
   type: string;
