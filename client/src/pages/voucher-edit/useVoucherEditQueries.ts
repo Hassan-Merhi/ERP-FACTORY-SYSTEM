@@ -24,7 +24,7 @@ export function useVoucherEditQueries({ id, selectedCompanyId }: UseVoucherEditQ
   });
 
   const { data: ledgerAccounts = [] } = useQuery<LedgerAccount[]>({
-    queryKey: ["/api/ledger-accounts?profile=picker"],
+    queryKey: ["/api/ledger-accounts?profile=voucher-picker"],
   });
 
   const { data: suppliers = [] } = useQuery<Supplier[]>({
