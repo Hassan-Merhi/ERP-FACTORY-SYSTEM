@@ -159,12 +159,11 @@ export function registerAccountStatementRoutes(app: Express) {
           getPartyBalance(db, { companyId, kind: "customer", id: customerOwnerId, from: endDate ?? null }),
           loadCustomerNotInLedger(db, window),
         ]);
+        const held = endDate
+          ? await projectCustomerStatementLines(companyId, customerOwnerId, [], endDate, null)
+          : null;
         return res.json({
-          balance: toMoney(party?.opening).minus(
-            endDate
-              ? (await projectCustomerStatementLines(companyId, customerOwnerId, [], endDate, null)).heldBefore
-              : 0
-          ).toNumber(),
+          balance: toMoney(party?.opening).minus(held?.heldBefore ?? 0).toNumber(),
           notInLedgerBefore: endDate ? notInLedger.prePeriodTotal : "0.00",
         });
       }
@@ -429,7 +428,11 @@ export function registerAccountStatementRoutes(app: Express) {
           to: endDate ?? null,
         });
         const projected = await projectCustomerStatementLines(
-          companyId, ownedCustomerId, txRows, startDate ?? null, endDate ?? null
+          companyId,
+          ownedCustomerId,
+          txRows,
+          startDate ?? null,
+          endDate ?? null
         );
         txRows = projected.rows;
         heldBeforeExport = projected.heldBefore;
