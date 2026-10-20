@@ -99,7 +99,7 @@ export function registerFactoryFxAgentReversalRoutes(app: Express) {
           `);
           if (!lock.rows.length) throw new Error("FX agent wallet not found");
           const existing = await tx.execute(sql`
-            SELECT id, wallet_id AS "walletId", reverses_operation_id AS "conversionId", kind
+            SELECT id, wallet_id AS "walletId", reverses_operation_id AS "conversionId", kind, narration
             FROM factory_fx_agent_wallet_operations
             WHERE company_id = ${cid} AND request_key = ${requestKey}
           `);
@@ -108,7 +108,8 @@ export function registerFactoryFxAgentReversalRoutes(app: Express) {
             if (
               row.kind !== "EUR_TO_USD_REVERSAL" ||
               Number(row.walletId) !== walletId ||
-              Number(row.conversionId) !== conversionId
+              Number(row.conversionId) !== conversionId ||
+              String(row.narration || "").trim() !== reason
             ) {
               throw new Error("Request key was used for a different operation");
             }
