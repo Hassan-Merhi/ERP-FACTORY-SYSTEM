@@ -215,6 +215,13 @@ export default function Accounts() {
               Financial Statements
             </Button>
           )}
+        {showViewAccounts && !phoneStatementOpen &&
+          ["Admin","Owner","Developer"].includes(model.currentUser?.role ?? "") && (
+            <Button variant="outline" data-testid="button-analytic-cost-centers"
+              onClick={() => model.navigate(`${model.modePrefix}/accounting/cost-centers`)}>
+              Cost Centers & Budgets
+            </Button>
+          )}
         {showViewAccounts &&
           !phoneStatementOpen &&
           (model.currentUser?.role === "Admin" || model.currentUser?.role === "Developer") && (
