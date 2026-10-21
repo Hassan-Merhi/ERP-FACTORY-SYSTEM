@@ -18,6 +18,7 @@ type Domain="customer"|"supplier"|"factory_supplier";
 type Account={accountKind:"bank"|"ledger";accountId:number;name:string};
 type Rate={currency:string;baseCurrency:string;effectiveDate:string;rateBasePerUnit:string;
   rateUnitPerBase:string;source:string;rateId:number|null};
+type RateMatrix={asOfDate:string;baseCurrency:string;rates:Array<{currency:string;rate:Rate|null}>};
 type Bucket={currency:string;nativeBalance:string;historicalUsdBasis:string;
   rate:Rate|null;translatedUsd:string|null;unrealizedDifferenceUsd:string|null;
   verified:boolean;issues:string[];journalTreatment:string};
@@ -56,6 +57,11 @@ export default function MonetaryFxAccounting(){
   const [reason,setReason]=useState("");
   const target=useMemo(()=>accounts.data?.find(a=>account===`${a.accountKind}:${a.accountId}`),
     [account,accounts.data]);
+  const rates=useQuery<RateMatrix>({
+    queryKey:["/api/accounting/monetary-fx/rates",asOfDate],
+    queryFn:()=>load(`/api/accounting/monetary-fx/rates${asOfDate?"?asOfDate="+asOfDate:""}`),
+    retry:false
+  });
   const valuationUrl=target?`/api/accounting/monetary-fx/cash-bank?accountKind=${target.accountKind}&accountId=${target.accountId}${asOfDate?"&asOfDate="+asOfDate:""}`:null;
   const valuation=useQuery<Valuation>({
     queryKey:["/api/accounting/monetary-fx/cash-bank",valuationUrl],
@@ -103,9 +109,36 @@ export default function MonetaryFxAccounting(){
       </div>
       <div className="flex items-end">
         <Button variant="outline" className="w-full"
-          onClick={()=>{valuation.refetch();realized.refetch();}}>Refresh FX analysis</Button>
+          onClick={()=>{rates.refetch();valuation.refetch();realized.refetch();}}>Refresh FX analysis</Button>
       </div>
     </CardContent></Card>
+    <Card>
+      <CardHeader><CardTitle>Recorded company exchange rates</CardTitle></CardHeader>
+      <CardContent className="space-y-2">
+        <p className="text-sm text-muted-foreground">
+          Stored company rates effective on or before the selected business date.
+          A blank rate means no verified rate is recorded; no market or future
+          rates are substituted. Factory costing retains its separate rate convention.
+        </p>
+        {rates.isError&&<p className="text-sm text-destructive">{(rates.error as Error).message}</p>}
+        <div className="overflow-x-auto"><table className="w-full text-sm">
+          <thead><tr className="border-b text-left">
+            <th className="p-2">Currency</th>
+            <th className="p-2 text-right">USD per unit</th>
+            <th className="p-2 text-right">Units per USD</th>
+            <th className="p-2">Effective date</th>
+            <th className="p-2">Stored direction</th>
+          </tr></thead>
+          <tbody>{(rates.data?.rates??[]).map(row=><tr key={row.currency} className="border-b">
+            <td className="p-2 font-medium">{row.currency}</td>
+            <td className="p-2 text-right tabular-nums">{row.rate?.rateBasePerUnit??"Missing"}</td>
+            <td className="p-2 text-right tabular-nums">{row.rate?.rateUnitPerBase??"Missing"}</td>
+            <td className="p-2">{row.rate?.effectiveDate??"—"}</td>
+            <td className="p-2 text-xs text-muted-foreground">{row.rate?.source??"No recorded rate"}</td>
+          </tr>)}</tbody>
+        </table></div>
+      </CardContent>
+    </Card>
     <Card><CardHeader><CardTitle>1. Cash and Bank — dated monetary revaluation</CardTitle></CardHeader>
       <CardContent className="space-y-4">
         <p className="text-sm text-muted-foreground">
