@@ -66,15 +66,25 @@ export function CostCenterAutomationRules({ baseUrl, centers }: {baseUrl:string;
   const [form,setForm] = useState<FormState>(initialForm);
   const {data:accountData,isLoading:accountsLoading} = useQuery<{accounts:Account[]}>({
     queryKey:[baseUrl,companyId,"automation","accounts"],
-    queryFn:()=>readCostCenterApi(baseUrl+"/automation/accounts"),
+    queryFn:()=>readCostCenterApi<{accounts:Account[]}>(baseUrl+"/automation/accounts"),
     enabled:!!companyId,
     staleTime:60000,
   });
   const {data:ruleData,isLoading:rulesLoading,isError,error} = useQuery<{rules:Rule[]}>({
     queryKey:[baseUrl,companyId,"automation","rules"],
-    queryFn:()=>readCostCenterApi(baseUrl+"/automation/rules"),
+    queryFn:()=>readCostCenterApi<{rules:Rule[]}>(baseUrl+"/automation/rules"),
     enabled:!!companyId,
     staleTime:15000,
+  });
+  const {data:failureData} = useQuery<{failures:Array<{
+    id:number; sourceKind:string; sourceId:number; message:string; failureCount:number; lastSeen:string;
+  }>}>({
+    queryKey:[baseUrl,companyId,"automation","failures"],
+    queryFn:()=>readCostCenterApi<{failures:Array<{
+      id:number; sourceKind:string; sourceId:number; message:string; failureCount:number; lastSeen:string;
+    }>}>(baseUrl+"/automation/failures"),
+    enabled:!!companyId,
+    staleTime:30000,
   });
   const rules = ruleData?.rules || [];
   const grouped = useMemo(()=>{
@@ -161,6 +171,19 @@ export function CostCenterAutomationRules({ baseUrl, centers }: {baseUrl:string;
         </p>
       </CardHeader>
       <CardContent className="space-y-2">
+        {(failureData?.failures?.length || 0)>0&&
+          <div className="rounded-md border border-destructive/30 p-3 space-y-2" role="status">
+            <p className="text-sm font-semibold">Automatic allocation attention required</p>
+            <p className="text-xs text-muted-foreground">
+              Accounting postings were preserved, but these analytical assignments could not be completed.
+              An authorized user can inspect the original source and assign its cost center manually.
+            </p>
+            {failureData?.failures.slice(0,5).map(item=>
+              <p className="text-xs" key={item.id}>
+                {item.sourceKind==="VOUCHER_ENTRY"?"Voucher entry":"Factory Daybook entry"} #{item.sourceId}: {item.message}
+              </p>)}
+          </div>}
+
         {rulesLoading&&<p className="text-sm text-muted-foreground">Loading automatic rules…</p>}
         {isError&&<p role="alert" className="text-sm text-destructive">{requestError(error)}</p>}
         {!rulesLoading&&!isError&&!grouped.length&&
