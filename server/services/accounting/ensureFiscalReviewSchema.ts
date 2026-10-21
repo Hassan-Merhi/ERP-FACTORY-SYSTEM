@@ -34,6 +34,13 @@ export async function ensureFiscalReviewSchema(pool:Pool):Promise<void>{
  CREATE INDEX IF NOT EXISTS accounting_fiscal_review_history_idx
    ON accounting_fiscal_review_signoffs(company_id,period_end_date,reviewed_at DESC);
 
+ CREATE TABLE IF NOT EXISTS accounting_fiscal_review_policy(
+  company_id INTEGER PRIMARY KEY REFERENCES companies(id) ON DELETE RESTRICT,
+  enforce_reviewed_close BOOLEAN NOT NULL DEFAULT FALSE,
+  updated_by TEXT NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  reason TEXT NOT NULL
+ );
  CREATE TABLE IF NOT EXISTS accounting_fiscal_reviewed_closures(
    id BIGSERIAL PRIMARY KEY,
    company_id INTEGER NOT NULL REFERENCES companies(id) ON DELETE RESTRICT,
@@ -54,6 +61,8 @@ export async function ensureFiscalReviewSchema(pool:Pool):Promise<void>{
  CREATE INDEX IF NOT EXISTS accounting_fiscal_reviewed_closures_date_idx
    ON accounting_fiscal_reviewed_closures(company_id,certified_at DESC);
 
+ ALTER TABLE accounting_fiscal_review_policy ENABLE ROW LEVEL SECURITY;
+ ALTER TABLE accounting_fiscal_review_policy FORCE ROW LEVEL SECURITY;
  ALTER TABLE accounting_fiscal_review_signoffs ENABLE ROW LEVEL SECURITY;
  ALTER TABLE accounting_fiscal_review_signoffs FORCE ROW LEVEL SECURITY;
  ALTER TABLE accounting_fiscal_reviewed_closures ENABLE ROW LEVEL SECURITY;
@@ -62,7 +71,7 @@ export async function ensureFiscalReviewSchema(pool:Pool):Promise<void>{
  DECLARE tab TEXT;
  BEGIN
   FOREACH tab IN ARRAY ARRAY['accounting_fiscal_review_signoffs',
-    'accounting_fiscal_reviewed_closures'] LOOP
+    'accounting_fiscal_reviewed_closures','accounting_fiscal_review_policy'] LOOP
    IF NOT EXISTS(SELECT 1 FROM pg_policies
      WHERE schemaname=current_schema() AND tablename=tab
        AND policyname='fiscal_review_company_scope') THEN
