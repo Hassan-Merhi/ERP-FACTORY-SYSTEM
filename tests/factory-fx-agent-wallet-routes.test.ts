@@ -229,7 +229,10 @@ describe("FX agent EUR wallet lifecycle", () => {
       [partialVoucherId, ctx.companyId]
     );
     expect(retired.rows[0]?.deleted_at).not.toBeNull();
-    expect(await voucherTotals(partialVoucherId)).toMatchObject({ debit: expect.any(String), credit: expect.any(String) });
+    expect(await voucherTotals(partialVoucherId)).toMatchObject({
+      debit: expect.any(String),
+      credit: expect.any(String),
+    });
 
     const movement = await pool.query(
       `SELECT id FROM factory_fx_agent_wallet_operations WHERE company_id = $1 AND voucher_id = $2`,
@@ -384,25 +387,32 @@ describe("FX agent EUR wallet lifecycle", () => {
     });
     const payAgentAccountId = await ledgerAccount("EUR-WALLET", "Native EUR wallet", "Asset", "1111.50");
     const activation = await agent.post("/api/factory/fx-agent-wallets").send({
-      ledgerAccountId: payAgentAccountId, confirmUsdSource: true,
+      ledgerAccountId: payAgentAccountId,
+      confirmUsdSource: true,
     });
     expect(activation.status, activation.text).toBe(201);
     const eurWalletId = activation.body.walletId;
     const converted = await agent.post(`/api/factory/fx-agent-wallets/${eurWalletId}/convert`).send({
-      usdAmount: "1111.50", rateUsdPerEur: "1.1115",
+      usdAmount: "1111.50",
+      rateUsdPerEur: "1.1115",
       requestKey: `${PREFIX}-eur-convert`,
     });
     expect(converted.status, converted.text).toBe(201);
 
     const body = {
-      paymentVoucher: true, targetCurrency: "EUR",
-      eurAmount: "250.00", targetKind: "factorySupplier", targetId: supplierId,
+      paymentVoucher: true,
+      targetCurrency: "EUR",
+      eurAmount: "250.00",
+      targetKind: "factorySupplier",
+      targetId: supplierId,
       requestKey: `${PREFIX}-eur-direct-payment`,
     };
     const posted = await agent.post(`/api/factory/fx-agent-wallets/${eurWalletId}/settle`).send(body);
     expect(posted.status, posted.text).toBe(201);
     expect(posted.body.quote).toMatchObject({
-      eur: "250.00", targetCurrency: "EUR", gainUsd: "0.000000",
+      eur: "250.000000",
+      targetCurrency: "EUR",
+      gainUsd: "0.000000",
     });
     const totals = await voucherTotals(posted.body.voucherId);
     expect(toMoney(totals.debit).eq(totals.credit)).toBe(true);
@@ -415,7 +425,9 @@ describe("FX agent EUR wallet lifecycle", () => {
     expect(entries.rows).toHaveLength(1);
     expect(entries.rows[0].transaction_currency).toBe("EUR");
     expect(toMoney(entries.rows[0].amount).eq("250")).toBe(true);
-    const supplierView = (await loadFactorySupplierLedgerViews(db, ctx.companyId, { ids: [supplierId] })).get(supplierId);
+    const supplierView = (await loadFactorySupplierLedgerViews(db, ctx.companyId, { ids: [supplierId] })).get(
+      supplierId
+    );
     expect(supplierView?.nativeBalances.find((x) => x.currencyCode === "EUR")?.balance).toBe("750.00");
     const walletResult = await agent.get("/api/factory/fx-agent-wallets");
     const eurWallet = walletResult.body.wallets.find((x: { wallet: { id: number } }) => x.wallet.id === eurWalletId);
@@ -427,7 +439,9 @@ describe("FX agent EUR wallet lifecycle", () => {
     expect(replay.body).toMatchObject({ voucherId: posted.body.voucherId, replayed: true });
 
     const wrongTarget = await agent.post(`/api/factory/fx-agent-wallets/${eurWalletId}/settle`).send({
-      ...body, targetKind: "ledger", targetId: accrual,
+      ...body,
+      targetKind: "ledger",
+      targetId: accrual,
       requestKey: `${PREFIX}-eur-wrong-target`,
     });
     expect(wrongTarget.status).toBe(400);
@@ -477,49 +491,62 @@ describe("FX agent EUR wallet lifecycle", () => {
 
     const balanceResponse = await agent.get(`/api/factory/suppliers/${brokerId}/balance?fxEurPayout=true`);
     expect(balanceResponse.status, balanceResponse.text).toBe(200);
-    expect(balanceResponse.body.nativeBalances.find((x: { currencyCode: string }) => x.currencyCode === "EUR"))
-      .toBeUndefined();
+    expect(
+      balanceResponse.body.nativeBalances.find((x: { currencyCode: string }) => x.currencyCode === "EUR")
+    ).toBeUndefined();
     expect(balanceResponse.body.fxEurPayable).toMatchObject({
-      basis: "broker-statement", currencyCode: "EUR", includeOtw: true,
-      balance: "3000.00", eligible: true,
+      basis: "broker-statement",
+      currencyCode: "EUR",
+      includeOtw: true,
+      balance: "3000.00",
+      eligible: true,
     });
     const before = await agent.get(`/api/factory/suppliers/${brokerId}/broker-statement?includeOtw=true`);
     expect(before.status, before.text).toBe(200);
-    expect(before.body.currencyLedgers.find((x: { currencyCode: string }) => x.currencyCode === "EUR").netBalance)
-      .toBe("3000.00");
+    expect(before.body.currencyLedgers.find((x: { currencyCode: string }) => x.currencyCode === "EUR").netBalance).toBe(
+      "3000.00"
+    );
 
     const agentAccount = await ledgerAccount("BROKER-EUR-AGENT", "Broker EUR payout", "Asset", "1111.50");
     const activated = await agent.post("/api/factory/fx-agent-wallets").send({
-      ledgerAccountId: agentAccount, confirmUsdSource: true,
+      ledgerAccountId: agentAccount,
+      confirmUsdSource: true,
     });
     expect(activated.status, activated.text).toBe(201);
     const agentWalletId = activated.body.walletId;
     const converted = await agent.post(`/api/factory/fx-agent-wallets/${agentWalletId}/convert`).send({
-      usdAmount: "1111.50", rateUsdPerEur: "1.1115",
+      usdAmount: "1111.50",
+      rateUsdPerEur: "1.1115",
       requestKey: `${PREFIX}-broker-eur-convert`,
     });
     expect(converted.status, converted.text).toBe(201);
 
     const payload = {
-      paymentVoucher: true, targetCurrency: "EUR", eurAmount: "200.00",
-      targetKind: "factorySupplier", targetId: brokerId,
+      paymentVoucher: true,
+      targetCurrency: "EUR",
+      eurAmount: "200.00",
+      targetKind: "factorySupplier",
+      targetId: brokerId,
       requestKey: `${PREFIX}-broker-eur-payment`,
     };
     const paid = await agent.post(`/api/factory/fx-agent-wallets/${agentWalletId}/settle`).send(payload);
     expect(paid.status, paid.text).toBe(201);
-    expect(paid.body.quote).toMatchObject({ eur: "200.00", targetCurrency: "EUR", gainUsd: "0.000000" });
+    expect(paid.body.quote).toMatchObject({ eur: "200.000000", targetCurrency: "EUR", gainUsd: "0.000000" });
     const after = await agent.get(`/api/factory/suppliers/${brokerId}/balance?fxEurPayout=true`);
     expect(after.body.fxEurPayable.balance).toBe("2800.00");
     const brokerStatement = await agent.get(`/api/factory/suppliers/${brokerId}/broker-statement?includeOtw=true`);
-    expect(brokerStatement.body.currencyLedgers.find((x: { currencyCode: string }) =>
-      x.currencyCode === "EUR").netBalance).toBe("2800.00");
+    expect(
+      brokerStatement.body.currencyLedgers.find((x: { currencyCode: string }) => x.currencyCode === "EUR").netBalance
+    ).toBe("2800.00");
     const wallets = await agent.get("/api/factory/fx-agent-wallets");
     const current = wallets.body.wallets.find((x: { wallet: { id: number } }) => x.wallet.id === agentWalletId);
     expect(current.state.eur).toBe("800.000000");
     expect(current.synchronized).toBe(true);
 
     const exceeds = await agent.post(`/api/factory/fx-agent-wallets/${agentWalletId}/settle`).send({
-      ...payload, eurAmount: "2800.01", requestKey: `${PREFIX}-broker-eur-overpay`,
+      ...payload,
+      eurAmount: "2800.01",
+      requestKey: `${PREFIX}-broker-eur-overpay`,
     });
     expect(exceeds.status).toBe(400);
 
@@ -528,8 +555,9 @@ describe("FX agent EUR wallet lifecycle", () => {
     const restored = await agent.get(`/api/factory/suppliers/${brokerId}/balance?fxEurPayout=true`);
     expect(restored.body.fxEurPayable.balance).toBe("3000.00");
     const restoredWallets = await agent.get("/api/factory/fx-agent-wallets");
-    const restoredWallet = restoredWallets.body.wallets.find((x: { wallet: { id: number } }) =>
-      x.wallet.id === agentWalletId);
+    const restoredWallet = restoredWallets.body.wallets.find(
+      (x: { wallet: { id: number } }) => x.wallet.id === agentWalletId
+    );
     expect(restoredWallet.state.eur).toBe("1000.000000");
     expect(restoredWallet.synchronized).toBe(true);
   });
