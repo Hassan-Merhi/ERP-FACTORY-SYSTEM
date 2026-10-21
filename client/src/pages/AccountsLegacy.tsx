@@ -236,6 +236,13 @@ export default function Accounts() {
               Unified Accounting Dashboard
             </Button>
           )}
+        {showViewAccounts && !phoneStatementOpen &&
+          ["Admin","Owner","Developer"].includes(model.currentUser?.role ?? "") && (
+            <Button variant="outline" data-testid="button-unified-accounting-rollout"
+              onClick={() => model.navigate(`${model.modePrefix}/accounting/rollout`)}>
+              Unified Accounting Rollout
+            </Button>
+          )}
         {showViewAccounts &&
           !phoneStatementOpen &&
           (model.currentUser?.role === "Admin" || model.currentUser?.role === "Developer") && (
