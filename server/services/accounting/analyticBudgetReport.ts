@@ -190,7 +190,6 @@ export async function analyticBudgetActualTx(
      OR LOWER(TRIM(COALESCE(la.sub_type,''))) IN
       ('income','direct income','indirect income','expense','direct expense',
        'indirect expense','cogs'))
-   )
  )
  `;
   const assigned = resultRows<ActualRow>(

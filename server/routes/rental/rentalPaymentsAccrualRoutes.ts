@@ -155,11 +155,12 @@ export function registerRentalPaymentsAccrualRoutes(
     } catch (e: unknown) {
       if (e instanceof z.ZodError)
         return res.status(400).json({ message: e.issues.map((err) => err.message).join(", ") });
-      if ([400, 409].includes((e as { status?: number }).status ?? 0))
-        return res.status((e as { status: number }).status).json({ message: getErrorMessage(e) });
+      // The rate refusal keeps its structured body (code, currency, date).
       if (isRentalRateRequiredError(e)) {
         return res.status(409).json({ message: e.message, code: e.code, currency: e.currency, date: e.date });
       }
+      if ([400, 409].includes((e as { status?: number }).status ?? 0))
+        return res.status((e as { status: number }).status).json({ message: getErrorMessage(e) });
       logger.error(`${tag} payments:`, { error: e });
       res.status(500).json({ message: getErrorMessage(e) });
     }
