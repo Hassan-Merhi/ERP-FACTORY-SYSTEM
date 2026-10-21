@@ -71,8 +71,10 @@ export async function getHistoricalCurrencyReadiness(
       // Backfill never started → legacy mode, allow all financial endpoints
       return READY_LEGACY;
     }
-  } catch {
-    // Column doesn't exist yet in this deployment → definitely legacy mode
+  } catch (error) {
+    // Only a missing legacy column permits compatibility fallback.
+    // Connection/permission/query failures must not masquerade as FX readiness.
+    if ((error as { code?: string })?.code !== "42703") throw error;
     return READY_LEGACY;
   }
 
@@ -95,8 +97,10 @@ export async function getHistoricalCurrencyReadiness(
          AND v.optional = false
          AND v.deleted_at IS NULL
          AND COALESCE(UPPER(v.currency), 'USD') <> 'USD'
-         AND ve.base_debit_amount IS NULL
-         AND ve.base_credit_amount IS NULL
+         AND (
+           (COALESCE(ve.debit_amount,0) <> 0 AND ve.base_debit_amount IS NULL)
+           OR (COALESCE(ve.credit_amount,0) <> 0 AND ve.base_credit_amount IS NULL)
+         )
          ${dateClause}`,
       params,
     ),
