@@ -74,9 +74,15 @@ function exportedCsv(record:Package){
  const current=record.current,prior=record.comparison;
  function detail(name:string,section:Section,prev?:Section){
   const prevMap=new Map((prev?.lines??[]).map(l=>[`${l.kind}:${l.id}`,l.amountUsd]));
+  const included=new Set(section.lines.map(line=>`${line.kind}:${line.id}`));
   for(const line of section.lines){
    rows.push([name,line.code?line.code+" — "+line.name:line.name,
     line.amountUsd,prevMap.get(`${line.kind}:${line.id}`)??""]);
+  }
+  for(const line of prev?.lines??[]){
+   if(included.has(`${line.kind}:${line.id}`))continue;
+   rows.push([name,line.code?line.code+" — "+line.name:line.name,
+    "0.00",line.amountUsd]);
   }
   rows.push([name,"TOTAL",section.totalUsd,prev?.totalUsd??""]);
  }
@@ -105,7 +111,14 @@ function exportedCsv(record:Package){
   rows.push(["Cash flow",key,current.cashFlow[key],prior?.cashFlow[key]??""]);
  }
  rows.push(["","DISCLAIMER","All statements provisional; no ledger adjustment applied",""]);
- const csv=rows.map(row=>row.map(v=>'"'+String(v).replaceAll('"','""')+'"').join(",")).join("\r\n");
+ const csv=rows.map(row=>row.map(value=>{
+  const text=String(value);
+  // User-provided account and party labels must never execute as formulas
+  // when this CSV is opened in Excel.
+  const safe=/^[=+@]/.test(text)||(/^-/ .test(text)&&!/^[-]?[0-9]+(?:\\.[0-9]+)?$/.test(text))
+   ?"'"+text:text;
+  return '"'+safe.replaceAll('"','""')+'"';
+ }).join(",")).join("\r\n");
  const blob=new Blob(["\ufeff",csv],{type:"text/csv;charset=utf-8"});
  const url=URL.createObjectURL(blob);
  const a=document.createElement("a");
@@ -115,6 +128,11 @@ function exportedCsv(record:Package){
 }
 function SectionTable({title,current,previous}:{title:string;current:Section;previous?:Section}){
  const previousMap=new Map((previous?.lines??[]).map(l=>[`${l.kind}:${l.id}`,l.amountUsd]));
+ const existing=new Set(current.lines.map(l=>`${l.kind}:${l.id}`));
+ const lines=[
+  ...current.lines,...(previous?.lines??[]).filter(l=>!existing.has(`${l.kind}:${l.id}`))
+   .map(l=>({...l,amountUsd:"0.00"}))
+ ];
  return <div className="space-y-1">
   <h3 className="font-semibold text-base">{title}</h3>
   <div className="overflow-x-auto">
@@ -124,7 +142,7 @@ function SectionTable({title,current,previous}:{title:string;current:Section;pre
      <th className="p-2 text-right">Current USD</th>
      {previous&&<th className="p-2 text-right">Comparison USD</th>}
     </tr></thead>
-    <tbody>{current.lines.map((line,i)=>
+    <tbody>{lines.map((line,i)=>
      <tr key={line.kind+":"+line.id+":"+i} className="border-b">
       <td className="p-2">{line.code?line.code+" · ":""}{line.name}
        {line.openingSideAssumed&&<span className="text-xs text-muted-foreground">
