@@ -30,6 +30,7 @@ import {
   summaryFromContinuousMeta,
 } from "./_helpers";
 import { toMoney } from "../../lib/money";
+import { loadHeldChargeSnapshot } from "../factory/customers-core/heldUnfinalizedCustomerCharges";
 
 export async function runCustomerBalanceStatement(options: {
   customerId: number;
@@ -39,17 +40,22 @@ export async function runCustomerBalanceStatement(options: {
   continuous?: ContinuousWindow;
 }): Promise<StatementPage> {
   const { customerId, companyId, pagination, dates, continuous } = options;
-  // The statement lists the lines the balance engine attributes to the
-  // customer (services/accounting/balances/partyLineRules.ts), so opening +
-  // these rows equals the engine closing: the trial balance's customer row,
-  // /api/customers/stats and the voucher sidebar. Amounts not yet in the
-  // ledger come in a separate `notInLedger` section on the first page/chunk.
+  // Paginated and continuous statements must use the same display projection
+  // as Factory Parties and the non-paginated customer ledger: legacy debits
+  // posted for unfinalized orders stay in the audit GL, but not in customer
+  // receivables or their statement rows, counts, totals and running balances.
+  const held = await loadHeldChargeSnapshot(companyId, [customerId], dates.effectiveEndDate);
   const values: unknown[] = [customerId, companyId];
   const bindBase = (value: unknown): string => {
     values.push(value);
     return `$${values.length}`;
   };
   const conditions = [customerOwnedLinePredicate("ve", "$2", "$1"), liveVoucherPredicate("v", "$2")];
+  if (held.voucherIds.size) {
+    // Exclude before applying LIMIT/OFFSET or computing aggregates. Filtering
+    // after pagination would leave phantom totals and page gaps.
+    conditions.push(`ve.voucher_id <> ALL(${bindBase([...held.voucherIds])}::int[])`);
+  }
   if (dates.rawStart) {
     conditions.push(`COALESCE(v.effective_date::date, v.voucher_date::date) >= ${bindBase(dates.rawStart)}::date`);
   }
@@ -92,9 +98,18 @@ export async function runCustomerBalanceStatement(options: {
       COALESCE(SUM("creditAmount"::numeric), 0)::text AS "creditTotal"
     FROM filtered`;
 
-  // The engine's carried-forward movement before the period (0 without a start).
-  const loadPrePeriodNet = (): Promise<number> =>
-    customerLedgerNetBefore(db, companyId, customerId, dates.rawStart ?? null);
+  // A period opening must also exclude held vouchers booked before its start.
+  // Without this correction, dated statements resurrect unfinalized freight
+  // even when all displayed rows and period totals are correctly filtered.
+  const loadPrePeriodNet = async (): Promise<number> => {
+    const raw = await customerLedgerNetBefore(db, companyId, customerId, dates.rawStart ?? null);
+    if (!dates.rawStart) return raw;
+    const startMillis = Date.parse(`${dates.rawStart}T00:00:00Z`);
+    if (!Number.isFinite(startMillis)) throw new Error("invalid_factory_statement_start_date");
+    const priorDate = new Date(startMillis - 86400000).toISOString().slice(0, 10);
+    const priorHeld = await loadHeldChargeSnapshot(companyId, [customerId], priorDate);
+    return toMoney(raw).minus(priorHeld.byCustomer.get(customerId) ?? 0).toNumber();
+  };
   const loadNotInLedger = () =>
     loadCustomerNotInLedger(db, {
       companyId,
