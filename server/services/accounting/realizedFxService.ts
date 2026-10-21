@@ -25,6 +25,7 @@ interface MatchedRow extends Record<string,unknown> {
   charge_entry_id:number;settlement_entry_id:number;
   charge_voucher_id:number;settlement_voucher_id:number;
   charge_voucher:string;settlement_voucher:string;
+  charge_module:string|null;settlement_module:string|null;
   charge_deleted:string|null;settlement_deleted:string|null;
   charge_optional:boolean;settlement_optional:boolean;
   charge_date:string;settlement_date:string;
@@ -56,6 +57,7 @@ async function loadMatchTx(tx:DbTransaction,companyId:number,matchId:number){
       m.applied_on::text,m.voided_at::text,m.charge_entry_id,m.settlement_entry_id,
       ch.id AS charge_voucher_id,pv.id AS settlement_voucher_id,
       ch.voucher_number AS charge_voucher,pv.voucher_number AS settlement_voucher,
+      ch.source_module AS charge_module,pv.source_module AS settlement_module,
       ch.deleted_at::text AS charge_deleted,pv.deleted_at::text AS settlement_deleted,
       ch.optional AS charge_optional,pv.optional AS settlement_optional,
       COALESCE(ch.effective_date,ch.voucher_date)::text AS charge_date,
@@ -114,6 +116,17 @@ export async function previewRealizedFxTx(tx:DbTransaction,companyId:number,matc
       row.charge_optional || row.settlement_optional)
     return blocked("A source voucher or match is deleted, unposted, or cancelled");
   if(code==="USD")return {...base,status:"no_difference",postable:false,issue:null};
+  // An edited voucher may no longer belong to the same party as the stored
+  // open-item match. Only accept the original direct supplier/customer
+  // ownership (linked customer-ledger ownership needs manual review).
+  const chargeParty=domain==="customer"?row.charge_customer_id:
+    domain==="supplier"?row.charge_supplier_id:row.charge_factory_supplier_id;
+  const settleParty=domain==="customer"?row.settle_customer_id:
+    domain==="supplier"?row.settle_supplier_id:row.settle_factory_supplier_id;
+  if(Number(chargeParty)!==Number(row.party_id)||
+     Number(settleParty)!==Number(row.party_id) ||
+     chargeParty===null||settleParty===null)
+    return blocked("Original customer/supplier ownership changed or requires linked-ledger review");
   if(row.charge_currency===null||row.settlement_currency===null ||
      fxCurrency(row.charge_currency)!==code||fxCurrency(row.settlement_currency)!==code ||
      [row.charge_debit,row.charge_credit,row.settle_debit,row.settle_credit,
@@ -188,7 +201,7 @@ export async function recognizeRealizedFxTx(tx:DbTransaction,input:{
   const status=(await ensureSystemAccounts(tx,input.companyId,["FX-REALIZED"]))[0];
   if(!status||!["ok","created","reused_by_name"].includes(status.state))
     throw new MonetaryFxError("FX_GAIN_LOSS_ACCOUNT_UNAVAILABLE",
-      "A valid FX Revaluation Gain/Loss system account is required");
+      "A valid Realized FX Gain/Loss system account is required");
   if(!("accountId" in status))throw new MonetaryFxError("FX_GAIN_LOSS_ACCOUNT_UNAVAILABLE",
     "Cannot determine the FX gain/loss account");
   const amount=dec(fresh.realizedGainUsd);
@@ -197,10 +210,13 @@ export async function recognizeRealizedFxTx(tx:DbTransaction,input:{
   const partyLine=fresh.domain==="customer"
     ?{customerId:fresh.partyId}:{supplierId:fresh.partyId};
   const narrative=`Realized FX for matched ${fresh.nativeCurrency} invoice ${fresh.chargeVoucher}, settlement ${fresh.settlementVoucher}; match #${input.matchId}`;
+  const matchSource=await loadMatchTx(tx,input.companyId,input.matchId);
+  const origin=String(matchSource.charge_module??"").toUpperCase();
+  const sourceModule=["ERP","FACTORY","PROPERTIES"].includes(origin)?origin:"ERP";
   const gain=amount.gt(0);
   const posted=await postErpVoucherTx(tx,{
     companyId:input.companyId,voucherType:"Journal",voucherDate:bookDate,
-    description:narrative,sourceModule:"ERP",currency:"USD",
+    description:narrative,sourceModule,currency:"USD",
     source:{type:"fx-realized-open-item",id:String(input.matchId)},
     actor:{userId:input.actor.userId,username:input.actor.username,reason:input.reason.trim()},
     lines:[
