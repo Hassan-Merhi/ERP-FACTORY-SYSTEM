@@ -5,6 +5,7 @@ import {
   FileText,
   Settings,
   Layers,
+  ListTree,
   BarChart3,
   FolderPlus,
   Wallet,
@@ -92,6 +93,7 @@ export const ERP_NAV_SECTIONS: NavSection[] = [
     color: NAV_COLOR.accounting,
     items: [
       { title: "Accounts", url: "/accounts", icon: Wallet },
+      { title: "Cost Centers", url: "/cost-centers", icon: ListTree },
       { title: "Parties", url: "/parties", icon: Handshake },
       { title: "Payroll", url: "/payroll", icon: UserCheck },
     ],
