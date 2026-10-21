@@ -99,7 +99,7 @@ function ownershipPredicate(domain: OpenItemDomain, companyId: number, partyId: 
   }
   return sql`e.factory_supplier_id = ${partyId} AND ${sql.raw(higherPriorityTargetsAbsent("e", "factory_supplier_id"))}`;
 }
-interface EntryRow {
+interface EntryRow extends Record<string, unknown> {
   entry_id: number;
   voucher_id: number;
   voucher_number: string;
@@ -112,7 +112,7 @@ interface EntryRow {
   base_debit: string;
   base_credit: string;
 }
-interface AllocationRow { id: number; charge_entry_id: number; settlement_entry_id: number; amount: string; currency: string }
+interface AllocationRow extends Record<string, unknown> { id: number; charge_entry_id: number; settlement_entry_id: number; amount: string; currency: string }
 async function loadEntriesTx(tx: DbTransaction, input: PartyOpenItemTarget): Promise<EntryRow[]> {
   const { companyId, partyId, domain } = input;
   const owned = ownershipPredicate(domain, companyId, partyId);
