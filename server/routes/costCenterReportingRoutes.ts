@@ -186,7 +186,7 @@ async function unallocatedExpenses(scope:Scope,filters:Filters){
     " WHERE a.voucher_entry_id=ve.id AND a.company_id=ve.company_id) al ON TRUE",
     " WHERE ve.company_id=ANY($1::int[])",
     " AND COALESCE(v.effective_date,v.voucher_date) BETWEEN $2::date AND $3::date",
-    " AND ($4::int IS NULL OR ve.ledger_account_id=$5)",
+    " AND ($4::int IS NULL OR ve.ledger_account_id=$4)",
     " AND v.deleted_at IS NULL AND v.optional=false AND v.reversal_of_voucher_id IS NULL",
     " AND NOT EXISTS (SELECT 1 FROM vouchers rev WHERE rev.reversal_of_voucher_id=v.id",
     " AND rev.deleted_at IS NULL)",
