@@ -46,6 +46,9 @@ interface Dashboard {
   bookedStockAssetUsd:string;managementCostCandidateUsd:string|null;
   managementSellingValueUsd:null;
   managementSellingValueAvailableIn:string;
+  glToOperationalAtCost:Array<{accountCode:string;bookedGlUsd:string;
+   operationalCostUsd:string|null;differenceUsd:string|null;
+   comparable:boolean;reason:string}>;
   operationalAmountsAddedToBookedNetAssets:false;
   completeness:{factoryHistoricalValuationAvailable:boolean;
    erpHistoricalValuationAvailable:boolean;stockCostFullyValued:boolean};
@@ -289,6 +292,36 @@ export default function UnifiedAccountingDashboard(){
       Perpetual stock ledger cutover at date:
       {x.operations.perpetualStockLedgerActiveAsOf?" Active":" Not active"}.
      </p>}
+     {showOperations&&x.operations.glToOperationalAtCost.length>0&&
+      <div className="border-t pt-3 space-y-3">
+       <h3 className="font-semibold">Cost sub-ledger versus booked GL — diagnostic only</h3>
+       <p className="text-xs text-muted-foreground">
+        Only an active perpetual cutover and matching dated, complete cost
+        records make a financial GL-to-stock comparison meaningful. Blank
+        differences are intentionally not estimated.</p>
+       <div className="overflow-x-auto"><table className="w-full text-sm">
+        <thead><tr className="border-b text-left">
+         <th className="p-2">Account</th>
+         <th className="p-2 text-right">Booked GL USD</th>
+         <th className="p-2 text-right">Stock cost USD</th>
+         <th className="p-2 text-right">Difference USD</th>
+        </tr></thead>
+        <tbody>{x.operations.glToOperationalAtCost.map(line=>
+         <tr key={line.accountCode} className="border-b">
+          <td className="p-2">{line.accountCode}
+           <div className="text-xs text-muted-foreground">{line.reason}</div>
+          </td>
+          <td className="p-2 text-right tabular-nums">{money(line.bookedGlUsd)}</td>
+          <td className="p-2 text-right tabular-nums">
+           {line.operationalCostUsd===null?"—":money(line.operationalCostUsd)}</td>
+          <td className="p-2 text-right tabular-nums">
+           {line.comparable&&line.differenceUsd!==null?
+            money(line.differenceUsd):"Not comparable"}</td>
+         </tr>)}</tbody></table></div>
+       <p className="text-xs text-muted-foreground">
+        Reconciliation differences are flags for source review;
+        this dashboard never posts an adjustment or activates inventory cutover.</p>
+      </div>}
      <div className="border-t pt-3 space-y-2">
       <p className="font-semibold text-sm">Stock in Selling Value — management mode</p>
       <p className="text-sm text-muted-foreground">
