@@ -21,7 +21,8 @@ type Center={id:number;code:string;name:string;module:Module;
 type Report={fromDate:string;asOfDate:string;companyId:number;currency:"USD";
  centers:Center[];months:Array<{centerId:number;monthStart:string;categories:Categories}>;
  unallocated:Categories;totals:Categories;budgetCount:number;
- warnings:string[];semantics:Record<string,string>;certified:false};
+ warnings:string[];quality:{overallocatedSourceEntries:number;staleAllocations:number};
+ semantics:Record<string,string>;certified:false};
 type CenterBase=Pick<Center,"id"|"code"|"name"|"module"|"parent_id"|"sort_order"|"active"|"note">;
 type CenterList={centers:CenterBase[]};
 type Entry={id:number;voucherId:number;voucherNumber:string;bookedOn:string;
@@ -109,7 +110,7 @@ export default function CostCenterAccounting(){
  const budgets=useQuery<{budgets:Budget[];truncated:boolean}>({
   queryKey:[root+"/budgets",companyId,fromDate,budgetMonth],
   queryFn:()=>read(root+"/budgets?"+new URLSearchParams({
-   fromDate:fromDate||new Date().getFullYear()+"-01-01",
+   fromDate:budgetMonth.slice(0,4)+"-01-01",
    asOfDate:budgetMonth+"-01"
   })),
   enabled:!!companyId&&tab==="budgets",retry:false
@@ -272,6 +273,12 @@ export default function CostCenterAccounting(){
         {renderNumbers(report.data!.totals[cat])}</tr>)}
       </tbody></table>
     </div>
+    {(report.data.quality.overallocatedSourceEntries>0||
+       report.data.quality.staleAllocations>0)&&
+      <p role="alert" className="text-sm text-destructive">
+       Source integrity review: {report.data.quality.overallocatedSourceEntries} overallocated
+       voucher lines, {report.data.quality.staleAllocations} tags on reversed/retired sources.
+      </p>}
     {report.data.warnings.map((msg,i)=><p className="text-sm text-muted-foreground" key={i}>{msg}</p>)}
     <p className="text-sm font-semibold">Report is a provisional analytic attribution,
      not a second general ledger or a certified financial statement.</p>
