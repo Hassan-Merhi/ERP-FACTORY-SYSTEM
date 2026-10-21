@@ -340,6 +340,24 @@ export async function voidPartyOpenItemMatchTx(tx: DbTransaction,input: {
   )[0];
   if(!record)throw new OpenItemError("OPEN_ITEM_MATCH_NOT_FOUND","Match not found",404);
   if(record.voided_at)throw new OpenItemError("OPEN_ITEM_MATCH_VOIDED","Match is already voided");
+  // A realized FX voucher changes the GL party balance. Its linked
+  // allocation cannot be silently cancelled while that journal is active.
+  // First reverse the FX journal through the audited voucher reversal flow.
+  const recognized=resultRows<{voucher_id:number;reversed_id:number|null}&Record<string,unknown>>(
+    await tx.execute(sql`
+      SELECT r.voucher_id,reversal.id AS reversed_id
+        FROM accounting_fx_realizations r
+        JOIN vouchers v ON v.id=r.voucher_id AND v.company_id=r.company_id
+        LEFT JOIN vouchers reversal ON reversal.reversal_of_voucher_id=v.id
+          AND reversal.company_id=r.company_id AND reversal.deleted_at IS NULL
+       WHERE r.company_id=${input.companyId} AND r.match_id=${input.matchId}
+         AND v.deleted_at IS NULL LIMIT 1
+    `)
+  )[0];
+  if(recognized && !recognized.reversed_id)
+    throw new OpenItemError("OPEN_ITEM_REALIZED_FX_POSTED",
+      `Reverse the realized FX journal #${recognized.voucher_id} before cancelling this match`);
+
   await tx.execute(sql`SELECT erp_assert_accounting_date_open(${input.companyId},${record.applied_on}::date)`);
   await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${`open-item:${input.companyId}:${record.domain}:${record.party_id}`}))`);
   await tx.execute(sql`UPDATE accounting_open_item_matches SET
