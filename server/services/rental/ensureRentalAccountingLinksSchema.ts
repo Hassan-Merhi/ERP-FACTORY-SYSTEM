@@ -5,8 +5,8 @@
  * Allocations are base USD. Native currency and historical voucher FX remain
  * untouched; this table cannot turn one currency into another or change GL.
  */
-import type {Pool} from "pg";
-export async function ensureRentalAccountingLinksSchema(pool:Pool):Promise<void>{
+import type { Pool } from "pg";
+export async function ensureRentalAccountingLinksSchema(pool: Pool): Promise<void> {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS accounting_rental_expense_links (
       id BIGSERIAL PRIMARY KEY,

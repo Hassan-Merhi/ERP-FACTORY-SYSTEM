@@ -4,9 +4,9 @@
  * READ_ONLY is the implicit state for every company until a separately
  * reviewed Owner action explicitly permits new analytic metadata writes.
  */
-import type {Pool} from "pg";
-export async function ensureUnifiedAccountingRolloutSchema(pool:Pool):Promise<void>{
- await pool.query(`
+import type { Pool } from "pg";
+export async function ensureUnifiedAccountingRolloutSchema(pool: Pool): Promise<void> {
+  await pool.query(`
  CREATE TABLE IF NOT EXISTS accounting_unified_release_reviews (
   id BIGSERIAL PRIMARY KEY,
   company_id INTEGER NOT NULL REFERENCES companies(id) ON DELETE RESTRICT,

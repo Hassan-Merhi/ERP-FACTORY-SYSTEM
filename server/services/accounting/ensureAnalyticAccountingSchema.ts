@@ -2,9 +2,9 @@
  * Phase 12: additive analytic cost-center metadata, never a financial GL.
  * No voucher, posting, monetary rate or balance is touched by this DDL.
  */
-import type {Pool} from "pg";
-export async function ensureAnalyticAccountingSchema(pool:Pool):Promise<void>{
- await pool.query(`
+import type { Pool } from "pg";
+export async function ensureAnalyticAccountingSchema(pool: Pool): Promise<void> {
+  await pool.query(`
  CREATE TABLE IF NOT EXISTS accounting_cost_centers (
    id BIGSERIAL PRIMARY KEY,
    company_id INTEGER NOT NULL REFERENCES companies(id) ON DELETE RESTRICT,

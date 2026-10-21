@@ -20,14 +20,13 @@ export function rentalPaymentGroupIdentity(input: {
   const requestId = input.requestId?.trim() || null;
   if (!requestId) return { prefix: null, groupId: null };
   if (!REQUEST_ID_RE.test(requestId)) {
-    throw new Error("RENTAL_PAYMENT_REQUEST_ID_INVALID: clientRequestId must be 1-128 letters, numbers, dots, underscores, colons or hyphens");
+    throw new Error(
+      "RENTAL_PAYMENT_REQUEST_ID_INVALID: clientRequestId must be 1-128 letters, numbers, dots, underscores, colons or hyphens"
+    );
   }
   const scope = JSON.stringify([input.companyId, input.module, input.contractId, requestId]);
   const prefix = `PG2-${createHash("sha256").update(scope).digest("hex").slice(0, 32)}-`;
-  const payloadDigest = createHash("sha256")
-    .update(JSON.stringify(input.financialPayload))
-    .digest("hex")
-    .slice(0, 20);
+  const payloadDigest = createHash("sha256").update(JSON.stringify(input.financialPayload)).digest("hex").slice(0, 20);
   return { prefix, groupId: prefix + payloadDigest };
 }
 

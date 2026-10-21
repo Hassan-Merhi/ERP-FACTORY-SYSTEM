@@ -53,7 +53,9 @@ export async function systemAccountIdsTx(
     // Explicitly refuse those states rather than silently contaminating COGS,
     // Goods in Transit or Inventory Adjustment.
     if (status.state !== "ok" && status.state !== "created") {
-      throw new Error(`System account ${status.code} is not correctly configured (${status.state}); review the chart of accounts before inventory posting`);
+      throw new Error(
+        `System account ${status.code} is not correctly configured (${status.state}); review the chart of accounts before inventory posting`
+      );
     }
     ids.set(status.code, status.accountId);
   }

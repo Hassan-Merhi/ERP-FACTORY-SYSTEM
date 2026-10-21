@@ -4,7 +4,7 @@
  * engine writes its USD residual against the party and FX-REVALUATION.
  */
 import type { Pool } from "pg";
-export async function ensureMonetaryFxSchema(pool:Pool):Promise<void>{
+export async function ensureMonetaryFxSchema(pool: Pool): Promise<void> {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS accounting_fx_realizations (
       id BIGSERIAL PRIMARY KEY,

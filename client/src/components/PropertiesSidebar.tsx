@@ -76,9 +76,22 @@ export function PropertiesSidebar({ user, onLogout }: { user?: ShellUser; onLogo
     () =>
       PROPERTIES_NAV_SECTIONS.map((section) => ({
         ...section,
-        items: section.items.filter((item) =>
-          (!isOwner || item.url !== "/properties/analytics") &&
-          (isAdmin || isOwner || (item.url !== "/properties/accounting/open-items" && item.url !== "/properties/accounting/cash-bank" && item.url !== "/properties/accounting/monetary-fx" && item.url !== "/properties/accounting/rentals" && item.url !== "/properties/accounting/consolidation" && item.url !== "/properties/accounting/history" && item.url !== "/properties/accounting/statements" && item.url !== "/properties/accounting/cost-centers" && item.url !== "/properties/accounting/fiscal-review" && item.url !== "/properties/accounting/dashboard" && item.url !== "/properties/accounting/rollout"))
+        items: section.items.filter(
+          (item) =>
+            (!isOwner || item.url !== "/properties/analytics") &&
+            (isAdmin ||
+              isOwner ||
+              (item.url !== "/properties/accounting/open-items" &&
+                item.url !== "/properties/accounting/cash-bank" &&
+                item.url !== "/properties/accounting/monetary-fx" &&
+                item.url !== "/properties/accounting/rentals" &&
+                item.url !== "/properties/accounting/consolidation" &&
+                item.url !== "/properties/accounting/history" &&
+                item.url !== "/properties/accounting/statements" &&
+                item.url !== "/properties/accounting/cost-centers" &&
+                item.url !== "/properties/accounting/fiscal-review" &&
+                item.url !== "/properties/accounting/dashboard" &&
+                item.url !== "/properties/accounting/rollout"))
         ),
       })).filter((section) => section.items.length > 0),
     [isAdmin, isOwner]

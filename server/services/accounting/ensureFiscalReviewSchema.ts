@@ -2,9 +2,9 @@
  * Phase 13: additive fiscal review evidence. No change to fiscal closing
  * journals or production vouchers, no automatic close on schema startup.
  */
-import type {Pool} from "pg";
-export async function ensureFiscalReviewSchema(pool:Pool):Promise<void>{
- await pool.query(`
+import type { Pool } from "pg";
+export async function ensureFiscalReviewSchema(pool: Pool): Promise<void> {
+  await pool.query(`
  CREATE TABLE IF NOT EXISTS accounting_fiscal_review_signoffs(
    id BIGSERIAL PRIMARY KEY,
    company_id INTEGER NOT NULL REFERENCES companies(id) ON DELETE RESTRICT,

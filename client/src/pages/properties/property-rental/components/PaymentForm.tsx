@@ -60,9 +60,7 @@ export function PaymentForm({
         scheduleFuturePayment,
       };
       const fingerprint = JSON.stringify(payload);
-      const id = paymentRequest.current?.fingerprint === fingerprint
-        ? paymentRequest.current.id
-        : crypto.randomUUID();
+      const id = paymentRequest.current?.fingerprint === fingerprint ? paymentRequest.current.id : crypto.randomUUID();
       paymentRequest.current = { fingerprint, id };
       return apiRequest("POST", apiBase + "/payments", { ...payload, clientRequestId: id });
     },

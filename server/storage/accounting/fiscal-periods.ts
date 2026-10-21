@@ -183,15 +183,17 @@ export async function closeFiscalPeriod(
     // Company Owner can explicitly require independent dual approval for
     // ALL close entry points. Check policy under the same fiscal posting lock:
     // direct legacy API callers must not bypass reviewed-close enforcement.
-    const reviewPolicy=await tx.execute(sql`
+    const reviewPolicy = await tx.execute(sql`
       SELECT enforce_reviewed_close FROM accounting_fiscal_review_policy
       WHERE company_id=${companyId} LIMIT 1
     `);
-    const requiresReview=(reviewPolicy.rows[0] as
-      {enforce_reviewed_close?:boolean}|undefined)?.enforce_reviewed_close===true;
-    if(requiresReview&&!reviewedClose)
+    const requiresReview =
+      (reviewPolicy.rows[0] as { enforce_reviewed_close?: boolean } | undefined)?.enforce_reviewed_close === true;
+    if (requiresReview && !reviewedClose)
       throw new FiscalPeriodCloseError(
-        "This company requires two approved reviews: use the reviewed fiscal close endpoint.",409);
+        "This company requires two approved reviews: use the reviewed fiscal close endpoint.",
+        409
+      );
     // Reviewed close always validates inside the exclusive company lock,
     // even where legacy close remains permitted for compatibility.
     if (reviewedClose) await reviewedClose.beforeClose(tx);

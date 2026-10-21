@@ -425,21 +425,25 @@ export async function createRentalPaymentGroup(opts: RentalPaymentGroupOptions) 
       isSharedPayment: Boolean(isSharedPayment),
     },
   });
-  const paymentGroupId = identity.groupId ??
-    `PG-${Date.now()}-${randomUUID().replace(/-/g, "").slice(0, 10)}-${contract.id}`;
+  const paymentGroupId =
+    identity.groupId ?? `PG-${Date.now()}-${randomUUID().replace(/-/g, "").slice(0, 10)}-${contract.id}`;
 
   const { scheduledRows, postedNow, replayed } = await db.transaction(async (tx) => {
     if (identity.prefix) {
       // Lock all attempts of one client request before any inserts or posting.
-      await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${`rental-payment:${companyId}:${identity.prefix}`}))`);
+      await tx.execute(
+        sql`SELECT pg_advisory_xact_lock(hashtext(${`rental-payment:${companyId}:${identity.prefix}`}))`
+      );
       const previous = await tx
         .select()
         .from(propertyPayments)
-        .where(and(
-          eq(propertyPayments.companyId, companyId),
-          eq(propertyPayments.module, mod),
-          like(propertyPayments.paymentGroupId, `${identity.prefix}%`)
-        ))
+        .where(
+          and(
+            eq(propertyPayments.companyId, companyId),
+            eq(propertyPayments.module, mod),
+            like(propertyPayments.paymentGroupId, `${identity.prefix}%`)
+          )
+        )
         .orderBy(propertyPayments.id);
       if (previous.length > 0) {
         if (previous.some((row) => row.paymentGroupId !== paymentGroupId)) {
@@ -454,7 +458,9 @@ export async function createRentalPaymentGroup(opts: RentalPaymentGroupOptions) 
     }
     // Serializing allocation on the contract prevents two payment requests
     // from selecting the same outstanding months concurrently.
-    await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${`rental-contract:${contractCompanyId}:${contract.id}`}))`);
+    await tx.execute(
+      sql`SELECT pg_advisory_xact_lock(hashtext(${`rental-contract:${contractCompanyId}:${contract.id}`}))`
+    );
     const recordedRate = await recordedRentalPaymentRate(companyId, currency || "USD", paymentDate, tx);
     const billingDay = getRentalBillingDay(contract.startDate as string);
     const totalAmountExact = parseMoneyInput(amount) ?? 0;
@@ -529,27 +535,28 @@ export async function createRentalPaymentGroup(opts: RentalPaymentGroupOptions) 
     // Previously the inserts committed first, then voucher posting ran in a
     // second transaction. An error left scheduled payments and ledger rows
     // behind. Immediate payments now post inside this same transaction.
-    const postedNow = paymentDate <= clientDate
-      ? await postScheduledGroup(
-          companyId,
-          contractCompanyId,
-          mod,
-          contract,
-          unit,
-          paymentGroupId,
-          paymentDate,
-          clientDate,
-          cashAccountId,
-          currency,
-          recordedRate,
-          notes,
-          shopExpenseAccountName,
-          incomeAccountName,
-          isSharedPayment ?? false,
-          opts.audit,
-          tx
-        )
-      : false;
+    const postedNow =
+      paymentDate <= clientDate
+        ? await postScheduledGroup(
+            companyId,
+            contractCompanyId,
+            mod,
+            contract,
+            unit,
+            paymentGroupId,
+            paymentDate,
+            clientDate,
+            cashAccountId,
+            currency,
+            recordedRate,
+            notes,
+            shopExpenseAccountName,
+            incomeAccountName,
+            isSharedPayment ?? false,
+            opts.audit,
+            tx
+          )
+        : false;
     return { scheduledRows: created, postedNow, replayed: false };
   });
 
@@ -682,12 +689,14 @@ export async function postDueScheduledRentalPaymentsDetailed(
       const groupRows = await db
         .select()
         .from(propertyPayments)
-        .where(and(
-          eq(propertyPayments.companyId, companyId),
-          eq(propertyPayments.module, module),
-          eq(propertyPayments.paymentGroupId, row.payment_group_id),
-          eq(propertyPayments.postingStatus, "SCHEDULED")
-        ));
+        .where(
+          and(
+            eq(propertyPayments.companyId, companyId),
+            eq(propertyPayments.module, module),
+            eq(propertyPayments.paymentGroupId, row.payment_group_id),
+            eq(propertyPayments.postingStatus, "SCHEDULED")
+          )
+        );
 
       if (groupRows.length === 0) continue;
       const firstRow = groupRows[0];
@@ -695,17 +704,11 @@ export async function postDueScheduledRentalPaymentsDetailed(
       const [contract] = await db
         .select()
         .from(propertyContracts)
-        .where(and(
-          eq(propertyContracts.id, firstRow.contractId),
-          eq(propertyContracts.module, module)
-        ));
+        .where(and(eq(propertyContracts.id, firstRow.contractId), eq(propertyContracts.module, module)));
       if (!contract || (contract.companyId !== companyId && contract.linkedCompanyId !== companyId)) {
         throw new Error(`Rental payment group ${row.payment_group_id} does not belong to an accessible contract`);
       }
-      const [unit] = await db
-        .select()
-        .from(propertyUnits)
-        .where(eq(propertyUnits.id, contract.unitId));
+      const [unit] = await db.select().from(propertyUnits).where(eq(propertyUnits.id, contract.unitId));
 
       const isShared = !!contract?.linkedCompanyId;
 
@@ -784,12 +787,14 @@ async function postScheduledGroup(
     groupRows = await tx
       .select()
       .from(propertyPayments)
-      .where(and(
-        eq(propertyPayments.companyId, companyId),
-        eq(propertyPayments.module, module),
-        eq(propertyPayments.paymentGroupId, groupId),
-        sql`${propertyPayments.postingStatus} = 'SCHEDULED'`
-      ))
+      .where(
+        and(
+          eq(propertyPayments.companyId, companyId),
+          eq(propertyPayments.module, module),
+          eq(propertyPayments.paymentGroupId, groupId),
+          sql`${propertyPayments.postingStatus} = 'SCHEDULED'`
+        )
+      )
       .orderBy(propertyPayments.id)
       .for("update");
 

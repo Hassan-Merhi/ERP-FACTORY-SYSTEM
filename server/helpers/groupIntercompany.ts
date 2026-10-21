@@ -24,7 +24,12 @@
  * (the caller wraps it), so no cross-company query is needed.
  */
 import { and, eq, isNull, or } from "drizzle-orm";
-import { interCompanyTransfers, intercompanyPosConfigs, intercompanyAccountLinks, ledgerAccounts } from "@shared/schema";
+import {
+  interCompanyTransfers,
+  intercompanyPosConfigs,
+  intercompanyAccountLinks,
+  ledgerAccounts,
+} from "@shared/schema";
 
 import { db } from "../db";
 import { toMoney } from "../lib/money";
@@ -83,11 +88,18 @@ export async function loadCompanyIntercompanyAccounts(
       .where(
         or(eq(intercompanyPosConfigs.sourceCompanyId, companyId), eq(intercompanyPosConfigs.destCompanyId, companyId))
       ),
-    db.select().from(intercompanyAccountLinks).where(and(
-      eq(intercompanyAccountLinks.active, true),
-      or(eq(intercompanyAccountLinks.sourceCompanyId, companyId),
-         eq(intercompanyAccountLinks.destCompanyId, companyId))
-    )),
+    db
+      .select()
+      .from(intercompanyAccountLinks)
+      .where(
+        and(
+          eq(intercompanyAccountLinks.active, true),
+          or(
+            eq(intercompanyAccountLinks.sourceCompanyId, companyId),
+            eq(intercompanyAccountLinks.destCompanyId, companyId)
+          )
+        )
+      ),
     storage.getCompanySettings(companyId),
     db
       .select({ id: ledgerAccounts.id, name: ledgerAccounts.name, accountType: ledgerAccounts.accountType })
@@ -107,10 +119,8 @@ export async function loadCompanyIntercompanyAccounts(
   // from transfer journals and POS configuration; they must be reconciled
   // without guessing counterparties from account names.
   for (const item of explicitLinks) {
-    if (item.sourceCompanyId === companyId)
-      link(item.sourceLedgerAccountId,item.destCompanyId,"explicitLink");
-    if (item.destCompanyId === companyId)
-      link(item.destLedgerAccountId,item.sourceCompanyId,"explicitLink");
+    if (item.sourceCompanyId === companyId) link(item.sourceLedgerAccountId, item.destCompanyId, "explicitLink");
+    if (item.destCompanyId === companyId) link(item.destLedgerAccountId, item.sourceCompanyId, "explicitLink");
   }
   if (company.parentCompanyId) {
     link(Number(settings?.parentCreditAccountId) || null, company.parentCompanyId, "parentCredit");

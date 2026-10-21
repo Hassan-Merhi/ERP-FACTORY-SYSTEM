@@ -72,14 +72,16 @@ function BulkPaymentDialog({
         }));
       if (items.length === 0) throw new Error("No valid amounts entered");
       const fingerprint = JSON.stringify(items);
-      const id = bulkRequest.current?.fingerprint === fingerprint
-        ? bulkRequest.current.id
-        : crypto.randomUUID();
+      const id = bulkRequest.current?.fingerprint === fingerprint ? bulkRequest.current.id : crypto.randomUUID();
       bulkRequest.current = { fingerprint, id };
-      return apiRequest("POST", apiBase + "/payments/bulk", items.map((item, index) => ({
-        ...item,
-        clientRequestId: `${id}:${index}`,
-      })));
+      return apiRequest(
+        "POST",
+        apiBase + "/payments/bulk",
+        items.map((item, index) => ({
+          ...item,
+          clientRequestId: `${id}:${index}`,
+        }))
+      );
     },
     onSuccess: (_data) => {
       bulkRequest.current = null;

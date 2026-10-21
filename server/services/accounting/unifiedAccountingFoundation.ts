@@ -84,8 +84,7 @@ export function isRentalPostingAccountCode(code: string | null | undefined): boo
   const normalized = (code ?? "").trim().toUpperCase();
   if (!normalized) return false;
   return RENTAL_POSTING_ACCOUNT_PREFIXES.some(
-    (prefix) => normalized === prefix ||
-      (normalized.startsWith(`${prefix}-`) && normalized.length > prefix.length + 1)
+    (prefix) => normalized === prefix || (normalized.startsWith(`${prefix}-`) && normalized.length > prefix.length + 1)
   );
 }
 
@@ -106,9 +105,7 @@ export function financialStatementCategory(input: {
   const code = (input.code ?? "").trim().toUpperCase();
   const type = (input.accountType ?? "").trim().toLowerCase();
   const subType = (input.subType ?? "").trim().toLowerCase();
-  return COST_OF_SALES_CODES.has(code) || type === "cogs" || subType === "cogs"
-    ? "cost_of_sales"
-    : "expense";
+  return COST_OF_SALES_CODES.has(code) || type === "cogs" || subType === "cogs" ? "cost_of_sales" : "expense";
 }
 
 /**
@@ -138,19 +135,19 @@ export function describeAccountingPosting(input: {
 }): AccountingPostingProvenance {
   const sourceType = input.sourceType.trim();
   const sourceModule = input.sourceModule?.trim().toUpperCase() || null;
-  const isRental = sourceType.toLowerCase().startsWith("rental-") ||
-    sourceType.toLowerCase().startsWith("rent-");
-  const rentalOrigin: RentalOriginModule | null = isRental &&
-    (sourceModule === "ERP" || sourceModule === "FACTORY" || sourceModule === "PROPERTIES")
+  const isRental = sourceType.toLowerCase().startsWith("rental-") || sourceType.toLowerCase().startsWith("rent-");
+  const rentalOrigin: RentalOriginModule | null =
+    isRental && (sourceModule === "ERP" || sourceModule === "FACTORY" || sourceModule === "PROPERTIES")
       ? sourceModule
       : null;
-  const domain: AccountingDomain | "UNKNOWN" = isRental || sourceModule === "PROPERTIES"
-    ? "RENTALS"
-    : sourceModule === "FACTORY"
-      ? "FACTORY"
-      : sourceModule === "ERP"
-        ? "ERP"
-        : "UNKNOWN";
+  const domain: AccountingDomain | "UNKNOWN" =
+    isRental || sourceModule === "PROPERTIES"
+      ? "RENTALS"
+      : sourceModule === "FACTORY"
+        ? "FACTORY"
+        : sourceModule === "ERP"
+          ? "ERP"
+          : "UNKNOWN";
 
   return {
     companyId: input.companyId,

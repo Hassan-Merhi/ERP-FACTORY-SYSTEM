@@ -643,8 +643,7 @@ export async function ensureRuntimeSchema(pool: Pool): Promise<void> {
 
   // Unified accounting Phase 3 — additive reconciliation metadata only.
   // No GL entries or source-party balances are changed during initialization.
-  const { ensurePartyOpenItemSchema } =
-    await import("../services/accounting/ensurePartyOpenItemSchema");
+  const { ensurePartyOpenItemSchema } = await import("../services/accounting/ensurePartyOpenItemSchema");
   await ensurePartyOpenItemSchema(pool);
 
   // Unified Phase 4: cash/bank bank-statement reconciliation metadata only.
@@ -662,19 +661,17 @@ export async function ensureRuntimeSchema(pool: Pool): Promise<void> {
 
   // Unified Accounting Phase 12: cost centers, allocations and monthly budget metadata.
   // No production voucher or accounting balance is changed.
-  const {ensureAnalyticAccountingSchema} =
-    await import("../services/accounting/ensureAnalyticAccountingSchema");
+  const { ensureAnalyticAccountingSchema } = await import("../services/accounting/ensureAnalyticAccountingSchema");
   await ensureAnalyticAccountingSchema(pool);
 
   // Phase 13: financial review signoffs and reviewed-close audit evidence only.
   // No fiscal period is automatically closed, reopened or journal-posted.
-  const {ensureFiscalReviewSchema} =
-    await import("../services/accounting/ensureFiscalReviewSchema");
+  const { ensureFiscalReviewSchema } = await import("../services/accounting/ensureFiscalReviewSchema");
   await ensureFiscalReviewSchema(pool);
 
   // Phase 15 rollout metadata is created before accounting routes serve
   // users. Fail-closed write middleware never assumes this schema exists.
-  const {ensureUnifiedAccountingRolloutSchema} =
+  const { ensureUnifiedAccountingRolloutSchema } =
     await import("../services/accounting/ensureUnifiedAccountingRolloutSchema");
   await ensureUnifiedAccountingRolloutSchema(pool);
 

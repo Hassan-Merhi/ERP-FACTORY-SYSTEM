@@ -74,7 +74,12 @@ export function registerRentalPaymentsAccrualRoutes(
             .transform((v) => String(v))
             .optional(),
           scheduleFuturePayment: z.boolean().optional().default(false),
-          clientRequestId: z.string().min(1).max(128).regex(/^[A-Za-z0-9._:-]+$/).optional(),
+          clientRequestId: z
+            .string()
+            .min(1)
+            .max(128)
+            .regex(/^[A-Za-z0-9._:-]+$/)
+            .optional(),
         })
         .parse(req.body);
 
@@ -150,7 +155,8 @@ export function registerRentalPaymentsAccrualRoutes(
     } catch (e: unknown) {
       if (e instanceof z.ZodError)
         return res.status(400).json({ message: e.issues.map((err) => err.message).join(", ") });
-      if ([400, 409].includes((e as { status?: number }).status ?? 0)) return res.status((e as { status: number }).status).json({ message: getErrorMessage(e) });
+      if ([400, 409].includes((e as { status?: number }).status ?? 0))
+        return res.status((e as { status: number }).status).json({ message: getErrorMessage(e) });
       if (isRentalRateRequiredError(e)) {
         return res.status(409).json({ message: e.message, code: e.code, currency: e.currency, date: e.date });
       }
@@ -179,7 +185,12 @@ export function registerRentalPaymentsAccrualRoutes(
               .transform((v) => String(v))
               .optional(),
             scheduleFuturePayment: z.boolean().optional().default(false),
-            clientRequestId: z.string().min(1).max(128).regex(/^[A-Za-z0-9._:-]+$/).optional(),
+            clientRequestId: z
+              .string()
+              .min(1)
+              .max(128)
+              .regex(/^[A-Za-z0-9._:-]+$/)
+              .optional(),
           })
         )
         .min(1)

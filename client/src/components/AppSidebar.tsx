@@ -221,7 +221,24 @@ export function useErpVisibleSections(user?: SidebarUser): {
     if (item.url === "/chat") return isDeveloper;
     if (item.url === "/item-market-analysis" && selectedCompany?.companyType !== "erp") return false;
     if (item.url === "/analytics" && isOwner) return false;
-    if ((item.url === "/accounting/open-items" || item.url === "/accounting/cash-bank" || item.url === "/accounting/monetary-fx" || item.url === "/accounting/erp-inventory" || item.url === "/accounting/factory-production" || item.url === "/accounting/rentals" || item.url === "/accounting/consolidation" || item.url === "/accounting/history" || item.url === "/accounting/statements" || item.url === "/accounting/cost-centers" || item.url === "/accounting/fiscal-review" || item.url === "/accounting/dashboard" || item.url === "/accounting/rollout") && !isAdmin && !isOwner) return false;
+    if (
+      (item.url === "/accounting/open-items" ||
+        item.url === "/accounting/cash-bank" ||
+        item.url === "/accounting/monetary-fx" ||
+        item.url === "/accounting/erp-inventory" ||
+        item.url === "/accounting/factory-production" ||
+        item.url === "/accounting/rentals" ||
+        item.url === "/accounting/consolidation" ||
+        item.url === "/accounting/history" ||
+        item.url === "/accounting/statements" ||
+        item.url === "/accounting/cost-centers" ||
+        item.url === "/accounting/fiscal-review" ||
+        item.url === "/accounting/dashboard" ||
+        item.url === "/accounting/rollout") &&
+      !isAdmin &&
+      !isOwner
+    )
+      return false;
     if (item.url === "/settings" && isOwner) return false;
 
     if (isDeveloper || isAdmin || myErpPages?.fullAccess) return true;
