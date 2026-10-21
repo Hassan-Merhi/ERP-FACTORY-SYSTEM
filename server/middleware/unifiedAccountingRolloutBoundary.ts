@@ -10,7 +10,26 @@ import type {Request,Response,NextFunction} from "express";
 import {db} from "../db";
 import {currentPilotEligibilityTx} from "../services/accounting/unifiedRolloutService";
 
+/**
+ * Server-side release switch for the NEW unified financial-posting endpoints
+ * (reviewed fiscal close, realized-FX recognition). Kept false until a
+ * separate certification; the handlers check it as well as this middleware.
+ */
+export const UNIFIED_FINANCIAL_POSTING_RELEASED=false;
+export const UNIFIED_FINANCIAL_POSTING_LOCKED={
+ code:"ACCOUNTING_POSTING_NOT_CERTIFIED",
+ message:"New unified accounting financial-posting endpoints remain locked until Claude certifies and the existing posting-specific Owner controls are reviewed. Metadata pilot does not unlock voucher posting."
+} as const;
 function prefix(s:string,p:string){return s===p||s.startsWith(p+"/");}
+/**
+ * Express matches routes case-insensitively and, by default, with an optional
+ * trailing slash; normalize the same way so "/close/" or "//close" cannot slip
+ * past an exact-path comparison.
+ */
+export function normalizedAccountingPath(raw:string):string{
+ const collapsed=raw.toLowerCase().replace(/\/{2,}/g,"/");
+ return collapsed.length>1?collapsed.replace(/\/+$/,""):collapsed;
+}
 function writeClass(path:string,method:string){
  if(["GET","HEAD","OPTIONS"].includes(method))return null;
  // Preview files is POST because multipart upload is used, but it does not
@@ -36,7 +55,7 @@ function writeClass(path:string,method:string){
 export async function enforceUnifiedAccountingRollout(
  req:Request,res:Response,next:NextFunction
 ){
- const path=(req.originalUrl.split("?",1)[0]||req.path).toLowerCase();
+ const path=normalizedAccountingPath(req.originalUrl.split("?",1)[0]||req.path);
  const type=writeClass(path,req.method.toUpperCase());
  if(!type)return next();
  // Never expose an unauthenticated policy/existence oracle. Concrete endpoint
@@ -50,11 +69,8 @@ export async function enforceUnifiedAccountingRollout(
    code:"ACCOUNTING_ROLLOUT_ACCESS_DENIED",
    message:"Accounting metadata writes require the selected company's privileged accounting role"
   });
- if(type==="FINANCIAL_POSTING")
-  return res.status(423).json({
-   code:"ACCOUNTING_POSTING_NOT_CERTIFIED",
-   message:"New unified accounting financial-posting endpoints remain locked until Claude certifies and the existing posting-specific Owner controls are reviewed. Metadata pilot does not unlock voucher posting."
-  });
+ if(type==="FINANCIAL_POSTING"&&!UNIFIED_FINANCIAL_POSTING_RELEASED)
+  return res.status(423).json(UNIFIED_FINANCIAL_POSTING_LOCKED);
  const companyId=Number(req.session.currentCompanyId);
  if(!Number.isSafeInteger(companyId)||companyId<1)
   return res.status(400).json({

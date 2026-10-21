@@ -11,6 +11,7 @@ import { companyBusinessDate } from "../services/accounting/companyBusinessDate"
 import { datedMonetaryRateTx,fxDay,MonetaryFxError } from "../services/accounting/monetaryFxRates";
 import { monetaryAccountValuationTx } from "../services/accounting/monetaryFxValuation";
 import { previewRealizedFxTx,listRealizedFxTx,recognizeRealizedFxTx } from "../services/accounting/realizedFxService";
+import {UNIFIED_FINANCIAL_POSTING_LOCKED,UNIFIED_FINANCIAL_POSTING_RELEASED} from "../middleware/unifiedAccountingRolloutBoundary";
 
 const positive=z.coerce.number().int().positive();
 const date=z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional();
@@ -83,6 +84,8 @@ export function registerMonetaryFxRoutes(app:Express):void{
     }catch(e){return fail(res,e);}
   });
   app.post("/api/accounting/monetary-fx/realized/:id/recognize",...gate,async(req,res)=>{
+    // Defense in depth: never rely on the path-matching middleware alone.
+    if(!UNIFIED_FINANCIAL_POSTING_RELEASED)return res.status(423).json(UNIFIED_FINANCIAL_POSTING_LOCKED);
     try{
       const c=company(req),matchId=positive.parse(req.params.id);
       const input=z.object({reason:z.string().trim().min(3).max(1000)}).parse(req.body);

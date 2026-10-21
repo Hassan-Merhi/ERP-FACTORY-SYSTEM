@@ -14,6 +14,7 @@ import {
  fiscalReviewPolicyTx,setFiscalReviewPolicyTx
 } from "../services/accounting/fiscalReviewService";
 import {assertTransactionCompanyScope} from "../services/security/transactionCompanyScope";
+import {UNIFIED_FINANCIAL_POSTING_LOCKED,UNIFIED_FINANCIAL_POSTING_RELEASED} from "../middleware/unifiedAccountingRolloutBoundary";
 const iso=z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 const id=z.coerce.number().int().positive();
 const reviewScope=z.object({
@@ -161,6 +162,8 @@ export function registerFiscalReviewRoutes(app:Express){
   }catch(e){return failure(res,e);}
  });
  app.post("/api/accounting/fiscal-review/close",...gate,async(req:Request,res:Response)=>{
+  // Defense in depth: never rely on the path-matching middleware alone.
+  if(!UNIFIED_FINANCIAL_POSTING_RELEASED)return res.status(423).json(UNIFIED_FINANCIAL_POSTING_LOCKED);
   try{
    allowedSignoff(req,"OWNER");
    const b=close.parse(req.body),companyId=company(req),actor=person(req);
