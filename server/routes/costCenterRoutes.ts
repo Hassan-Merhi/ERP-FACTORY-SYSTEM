@@ -377,6 +377,15 @@ function registerCostCenterPrefix(app: Express, prefix: string) {
       res.json({ costCenter: result });
     } catch (e) { sendError(res, e); }
   });
+  app.get(prefix + "/:id", requireAuth, async (req, res) => {
+    try {
+      const { companyId } = await identity(req, false);
+      const id = queryId(req.params.id);
+      const client = await pool.connect();
+      try { res.json({ costCenter: await centerInCompany(client, companyId, id) }); }
+      finally { client.release(); }
+    } catch (e) { sendError(res, e); }
+  });
   app.get(prefix + "/:id/activity", requireAuth, async (req, res) => {
     try {
       const { companyId } = await identity(req, false);
