@@ -96,6 +96,7 @@ export const ERP_NAV_SECTIONS: NavSection[] = [
       { title: "Bank & Cash Reconciliation", url: "/accounting/cash-bank", icon: Calculator },
       { title: "Multi-Currency Accounting", url: "/accounting/monetary-fx", icon: Calculator },
       { title: "Inventory & COGS Accounting", url: "/accounting/erp-inventory", icon: Layers },
+      { title: "Factory Production Accounting", url: "/accounting/factory-production", icon: Layers },
       { title: "Parties", url: "/parties", icon: Handshake },
       { title: "Payroll", url: "/payroll", icon: UserCheck },
     ],
@@ -211,7 +212,7 @@ export function useErpVisibleSections(user?: SidebarUser): {
     if (item.url === "/chat") return isDeveloper;
     if (item.url === "/item-market-analysis" && selectedCompany?.companyType !== "erp") return false;
     if (item.url === "/analytics" && isOwner) return false;
-    if ((item.url === "/accounting/open-items" || item.url === "/accounting/cash-bank" || item.url === "/accounting/monetary-fx" || item.url === "/accounting/erp-inventory") && !isAdmin && !isOwner) return false;
+    if ((item.url === "/accounting/open-items" || item.url === "/accounting/cash-bank" || item.url === "/accounting/monetary-fx" || item.url === "/accounting/erp-inventory" || item.url === "/accounting/factory-production") && !isAdmin && !isOwner) return false;
     if (item.url === "/settings" && isOwner) return false;
 
     if (isDeveloper || isAdmin || myErpPages?.fullAccess) return true;
