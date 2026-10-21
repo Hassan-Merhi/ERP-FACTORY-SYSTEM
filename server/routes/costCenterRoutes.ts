@@ -244,7 +244,7 @@ function registerCostCenterPrefix(app: Express, prefix: string) {
           "AND COALESCE(v.source_module,'') <> 'SP_MIGRATION_READONLY'",
           "AND (upper(btrim(la.account_type)) IN ('EXPENSE','DIRECT EXPENSE','INDIRECT EXPENSE')",
           "OR ($3::boolean AND upper(btrim(la.account_type))='ASSET'",
-          "AND la.code IN ('FACTORY_RAW_MATERIAL_STOCK','FACTORY_WIP','FACTORY_FINISHED_GOODS')))"
+          "AND la.code IN ('FACTORY_RAW_MATERIAL_STOCK','FACTORY_WIP','FACTORY_FINISHED_GOODS')))",
           "GROUP BY ve.id,v.currency,la.id HAVING",
           "GREATEST(abs(coalesce(ve.base_debit_amount,ve.debit_amount,0)),",
           "abs(coalesce(ve.base_credit_amount,ve.credit_amount,0))) > 0",
