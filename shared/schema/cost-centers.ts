@@ -5,13 +5,14 @@
  */
 import { sql } from "drizzle-orm";
 import {
-  pgTable, serial, bigserial, integer, varchar, text, decimal, boolean,
+  pgTable, serial, bigserial, bigint, integer, varchar, text, decimal, boolean,
   timestamp, index, uniqueIndex, foreignKey, check,
 } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import { companies } from "./common";
 import { voucherEntries } from "./erp/vouchers";
+import { ledgerAccounts } from "./accounting";
 import { factoryDaybookEntries } from "./factory/daybook-fx";
 
 export const costCenters = pgTable("cost_centers", {
@@ -54,6 +55,8 @@ export const costCenterAllocations = pgTable("cost_center_allocations", {
   historicalRate: decimal("historical_rate", { precision: 20, scale: 10 }),
   rateConvention: varchar("rate_convention", { length: 30 }),
   costTreatment: varchar("cost_treatment", { length: 24 }).notNull().default("EXPENSE"),
+  allocationOrigin: varchar("allocation_origin", { length: 12 }).notNull().default("MANUAL"),
+  autoRuleId: bigint("auto_rule_id", { mode: "number" }),
   createdBy: text("created_by"),
   updatedBy: text("updated_by"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
@@ -118,3 +121,41 @@ export type CostCenter = typeof costCenters.$inferSelect;
 export type InsertCostCenter = z.infer<typeof insertCostCenterSchema>;
 export type CostCenterAllocation = typeof costCenterAllocations.$inferSelect;
 export type InsertCostCenterAllocation = z.infer<typeof insertCostCenterAllocationSchema>;
+
+/** Phase 5: opt-in, per-company automatic expense rules. */
+export const costCenterAutoRules = pgTable("cost_center_auto_rules", {
+  id: bigserial("id", { mode: "number" }).primaryKey(),
+  companyId: integer("company_id").notNull().references(() => companies.id, { onDelete: "restrict" }),
+  sourceKind: varchar("source_kind", { length: 24 }).notNull(),
+  ledgerAccountId: integer("ledger_account_id").references(() => ledgerAccounts.id, { onDelete: "restrict" }),
+  sourceModule: varchar("source_module", { length: 40 }),
+  factoryTxType: varchar("factory_tx_type", { length: 40 }),
+  costCenterId: integer("cost_center_id").notNull(),
+  allocationPercent: decimal("allocation_percent", { precision: 7, scale: 4 }).notNull().default("100"),
+  active: boolean("active").notNull().default(true),
+  createdBy: text("created_by"),
+  updatedBy: text("updated_by"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+}, t => ({
+  companyCostCenterFk: foreignKey({
+    name: "cost_center_auto_rules_center_company_fk",
+    columns: [t.companyId, t.costCenterId],
+    foreignColumns: [costCenters.companyId, costCenters.id],
+  }).onDelete("restrict"),
+  lookupIdx: index("cost_center_auto_rules_lookup_idx").on(t.companyId, t.sourceKind, t.ledgerAccountId, t.active),
+}));
+
+/** A saved user allocation, including an empty split, permanently wins over automation. */
+export const costCenterSourceOverrides = pgTable("cost_center_source_overrides", {
+  id: bigserial("id", { mode: "number" }).primaryKey(),
+  companyId: integer("company_id").notNull().references(() => companies.id, { onDelete: "restrict" }),
+  voucherEntryId: integer("voucher_entry_id").references(() => voucherEntries.id, { onDelete: "cascade" }),
+  factoryDaybookEntryId: integer("factory_daybook_entry_id").references(() => factoryDaybookEntries.id, { onDelete: "cascade" }),
+  reason: text("reason").notNull(),
+  overriddenBy: text("overridden_by"),
+  overriddenAt: timestamp("overridden_at").notNull().defaultNow(),
+}));
+
+export type CostCenterAutoRule = typeof costCenterAutoRules.$inferSelect;
+export type CostCenterSourceOverride = typeof costCenterSourceOverrides.$inferSelect;
