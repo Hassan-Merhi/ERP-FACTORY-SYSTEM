@@ -5,6 +5,7 @@ import {db} from "../db";
 import {requireAuth,requireRole} from "../auth";
 import {companyBusinessDate} from "../services/accounting/companyBusinessDate";
 import {getErrorMessage} from "../lib/httpHandlers";
+import {getHistoricalCurrencyReadiness} from "../services/accounting/historicalCurrencyReadiness";
 import {unifiedAccountingDashboardTx} from
  "../services/accounting/unifiedAccountingDashboard";
 const calendar=z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
@@ -13,6 +14,11 @@ const params=z.object({
  valuationBasis:z.enum(["cost","selling"]).default("cost"),
  includeOperational:z.enum(["true","false"]).default("false")
 });
+function validDay(s:string){
+ const d=new Date(s+"T00:00:00.000Z");
+ return /^\d{4}-\d{2}-\d{2}$/.test(s)&&
+  Number.isFinite(d.valueOf())&&d.toISOString().slice(0,10)===s;
+}
 function sessionCompany(req:Request){
  const n=Number(req.session.currentCompanyId);
  if(!Number.isSafeInteger(n)||n<1)
@@ -46,13 +52,29 @@ export function registerUnifiedAccountingDashboardRoutes(app:Express){
     const today=await companyBusinessDate(companyId);
     const asOfDate=parsed.data.asOfDate??today;
     const fromDate=parsed.data.fromDate??asOfDate.slice(0,4)+"-01-01";
+    if(!validDay(asOfDate)||!validDay(fromDate)||fromDate>asOfDate)
+     return res.status(400).json({
+      code:"UNIFIED_DASHBOARD_INVALID_DATE",
+      message:"Choose real ISO calendar dates, with the start not after the end"
+     });
     const result=await db.transaction(tx=>unifiedAccountingDashboardTx(tx,{
      companyId,asOfDate,fromDate,
      valuationBasis:parsed.data.valuationBasis,
      includeOperational:parsed.data.includeOperational==="true"
     }));
+    // This compatibility reader can return 'ready' in pure legacy mode:
+    // a passing value is never treated as independent certification.
+    const historicalFx=await getHistoricalCurrencyReadiness(companyId,asOfDate);
+    if(!historicalFx.ready){
+     result.controls.blockers.push(
+      "Historical non-USD entries/openings lack verified USD base. This dashboard is not certified.");
+    }
     res.setHeader("Cache-Control","private, no-store");
-    return res.json(result);
+    return res.json({
+     ...result,historicalFx:{...historicalFx,certified:false,
+      caveat:"Legacy compatibility-ready does not prove historical FX backfill or audited base amounts."
+     }
+    });
    }catch(error){return fail(res,error);}
   });
 }
