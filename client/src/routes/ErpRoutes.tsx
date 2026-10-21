@@ -13,6 +13,7 @@ import {
   AccountingCreate,
   AccountingOpenItems,
   CashBankReconciliation,
+  MonetaryFxAccounting,
   Accounts,
   HistoricalOpenings,
   Agents,
@@ -237,6 +238,7 @@ export function ErpRoutes({ user }: ErpRoutesProps) {
       {G("/accounts", "accounts", Accounts)}
       {R("/accounting/open-items", isAdminOwnerOrDev && canAccess("accounts"), AccountingOpenItems)}
       {R("/accounting/cash-bank", isAdminOwnerOrDev && canAccess("accounts"), CashBankReconciliation)}
+      {R("/accounting/monetary-fx", isAdminOwnerOrDev && canAccess("accounts"), MonetaryFxAccounting)}
       {canAccess("accounts") ? (
         <Route path="/ledger-monthly/:accountId" component={LedgerMonthlySummary} />
       ) : (
