@@ -183,13 +183,17 @@ async function entryTx(tx:DbTransaction,companyId:number,entryId:number,lock=fal
  if(lock){
   await tx.execute(sql`SELECT id FROM vouchers WHERE id=${info.voucher_id}
    AND company_id=${companyId} FOR UPDATE`);
+  await tx.execute(sql`SELECT id FROM voucher_entries
+    WHERE id=${entryId} AND voucher_id=${info.voucher_id} FOR UPDATE`);
   // Re-read allocation capacity after acquiring the write lock: two
   // concurrent allocations may otherwise both see the previous sum.
-  const refreshed=resultRows<{allocated:string;reversed:boolean;deleted_at:string|null;
+  const refreshed=resultRows<{allocated:string;base_signed:string;reversed:boolean;deleted_at:string|null;
    optional:boolean}&Record<string,unknown>>(await tx.execute(sql`
    SELECT (SELECT COALESCE(SUM(a.amount_usd),0)::text FROM accounting_cost_allocations a
       WHERE a.company_id=${companyId} AND a.voucher_entry_id=${entryId}
        AND a.voided_at IS NULL) AS allocated,
+     (COALESCE(e.base_debit_amount,e.debit_amount,0)-
+      COALESCE(e.base_credit_amount,e.credit_amount,0))::text AS base_signed,
      v.deleted_at::text,v.optional,
      (v.reversal_of_voucher_id IS NOT NULL OR EXISTS(SELECT 1 FROM vouchers rv WHERE rv.reversal_of_voucher_id=v.id
       AND rv.company_id=v.company_id AND rv.deleted_at IS NULL AND rv.optional=false)) AS reversed
@@ -198,6 +202,8 @@ async function entryTx(tx:DbTransaction,companyId:number,entryId:number,lock=fal
    `))[0];
   if(!refreshed||refreshed.deleted_at||refreshed.optional||refreshed.reversed)
    throw new AnalyticError("ANALYTIC_ENTRY_RETIRED","Voucher is no longer eligible");
+  if(D(refreshed.base_signed).isZero()||!D(refreshed.base_signed).eq(info.base_signed))
+   throw new AnalyticError("ANALYTIC_ENTRY_CHANGED","Source voucher line changed during attribution; reload before retrying");
   info.allocated=refreshed.allocated;
  }
  return info;
