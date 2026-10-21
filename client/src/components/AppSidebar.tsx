@@ -208,6 +208,7 @@ export function useErpVisibleSections(user?: SidebarUser): {
     if (item.url === "/chat") return isDeveloper;
     if (item.url === "/item-market-analysis" && selectedCompany?.companyType !== "erp") return false;
     if (item.url === "/analytics" && isOwner) return false;
+    if (item.url === "/accounting/open-items" && !isAdmin && !isOwner) return false;
     if (item.url === "/settings" && isOwner) return false;
 
     if (isDeveloper || isAdmin || myErpPages?.fullAccess) return true;
