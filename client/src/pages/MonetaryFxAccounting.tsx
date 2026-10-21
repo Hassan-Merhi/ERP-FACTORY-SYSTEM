@@ -30,7 +30,8 @@ type Realized={matchId:number;domain:Domain;partyId:number;nativeCurrency:string
   chargeHistoricalUsd:string;settlementHistoricalUsd:string;realizedGainUsd:string;
   status:"ready"|"no_difference"|"recognized"|"reversed"|"blocked";
   postable:boolean;issue:string|null;recognitionVoucherId:number|null};
-type RealizedList={items:Realized[];asOfDate:string;limitedToMostRecent:number};
+type RealizedList={items:Realized[];asOfDate:string;limitedToMostRecent:number;
+  recognitionStatusAsOf:boolean;asOfLimitations:string};
 async function load<T>(url:string):Promise<T>{
   const response=await fetch(url,{credentials:"include"});
   const body=await response.json().catch(()=>({}));
@@ -221,6 +222,9 @@ export default function MonetaryFxAccounting(){
         {asOfDate&&<p className="text-sm text-muted-foreground">
           Historical as-of views are read-only. Clear the as-of date to recognize
           an eligible FX difference using the company’s current business date.
+        </p>}
+        {asOfDate && realized.data && <p className="text-xs text-muted-foreground">
+          {realized.data.asOfLimitations}
         </p>}
         {realized.isError&&<p className="text-sm text-destructive">{(realized.error as Error).message}</p>}
         {realized.data&&<div className="overflow-x-auto">
