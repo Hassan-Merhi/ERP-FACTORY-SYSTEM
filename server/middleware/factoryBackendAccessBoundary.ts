@@ -366,7 +366,7 @@ export function resolveFactoryBackendAccessRequirement(req: Request): FactoryApi
     const isCatalogRead = req.method === "GET" && path === "/cost-centers";
     return isAllocation || isCatalogRead
       ? anyOf(requirement("factory/cost-centers"), requirement("factory/vouchers"), requirement("factory/daybook"))
-      : requirement("factory/cost-centers");
+      : anyOf(requirement("factory/cost-centers"), requirement("factory/accounts"));
   }
 
   // Accounting pages and their Factory-owned detail/actions.
