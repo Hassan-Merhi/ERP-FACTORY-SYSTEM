@@ -7,8 +7,6 @@
  */
 import Decimal from "decimal.js";
 import type {DbTransaction} from "../../db";
-import {sql} from "drizzle-orm";
-import {resultRows} from "../../lib/queryResult";
 import {assertTransactionCompanyScope} from "../security/transactionCompanyScope";
 import {companyBusinessDate} from "./companyBusinessDate";
 import {fxDay} from "./monetaryFxRates";
@@ -103,6 +101,10 @@ export interface UnifiedAccountingDashboard{
   managementCostCandidateUsd:string|null;
   managementSellingValueUsd:null;
   managementSellingValueAvailableIn:"EXISTING_FACTORY_NET_POSITION";
+  glToOperationalAtCost:Array<{
+   accountCode:string;bookedGlUsd:string;operationalCostUsd:string|null;
+   differenceUsd:string|null;comparable:boolean;reason:string
+  }>;
   operationalAmountsAddedToBookedNetAssets:false;
   completeness:{
    factoryHistoricalValuationAvailable:boolean;
@@ -171,6 +173,7 @@ export async function unifiedAccountingDashboardTx(tx:DbTransaction,input:{
  ];
  let erpStock:UnifiedAccountingDashboard["operations"]["erpStock"]=null;
  let factoryStock:FactoryInventory|null=null;
+ const glToOperationalAtCost:UnifiedAccountingDashboard["operations"]["glToOperationalAtCost"]=[];
  let cutover:UnifiedAccountingDashboard["operations"]["cutover"]=null;
  let ledgerActive=false;
  if(input.includeOperational){
@@ -204,6 +207,47 @@ export async function unifiedAccountingDashboardTx(tx:DbTransaction,input:{
    soldNotInvoiced:stock.soldNotInvoiced,
    basis:"CURRENT_COST_ONLY"
   };
+  // Diagnostics are only comparisons. They never insert an opening
+  // inventory voucher, and are not valid for historical Factory balances
+  // that the operational cost tables cannot replay to an as-of date.
+  const expected=new Map<string,string|null>([
+   ["INVENTORY",valuation.subLedgerTotal],
+   ["FACTORY_RAW_MATERIAL_STOCK",fmt(stock.raw)],
+   ["FACTORY_WIP",fmt(stock.wip)],
+   ["FACTORY_FINISHED_GOODS",fmt(stock.finished)],
+   ["GOODS_IN_TRANSIT",null],
+   ["FACTORY_GOODS_IN_TRANSIT",null]
+  ]);
+  for(const [accountCode,operationalCostUsd] of expected){
+   const glFromAssets=position.assets.lines.filter(l=>
+    l.kind==="ledger"&&String(l.code??"").toUpperCase()===accountCode)
+    .reduce((sum,l)=>sum.plus(D(l.amountUsd)),new Decimal(0));
+   const glFromLiabilities=position.liabilities.lines.filter(l=>
+    l.kind==="ledger"&&String(l.code??"").toUpperCase()===accountCode)
+    .reduce((sum,l)=>sum.plus(D(l.amountUsd)),new Decimal(0));
+   const book=glFromAssets.minus(glFromLiabilities);
+   const factoryCode=accountCode.startsWith("FACTORY_");
+   const comparable=operationalCostUsd!==null&&ledgerActive&&
+    (!factoryCode||asOfDate===businessDate)&&
+    (factoryCode?stock.unvalued.length===0:
+      valuation.excluded.anomalousRows===0);
+   glToOperationalAtCost.push({
+    accountCode,bookedGlUsd:fmt(book),operationalCostUsd,
+    differenceUsd:comparable?fmt(book.minus(D(operationalCostUsd))):null,
+    comparable,
+    reason:operationalCostUsd===null?
+      "No reliable matching operational Goods in Transit cost value in this report":
+      !ledgerActive?
+      "Periodic inventory: operational cost is not required to equal a perpetual GL account":
+      factoryCode&&asOfDate<businessDate?
+      "Factory cost is current only; cannot compare against historical posted GL":
+      factoryCode&&stock.unvalued.length>0?
+      "Factory stock contains unvalued cost sources":
+      !factoryCode&&valuation.excluded.anomalousRows>0?
+      "ERP inventory contains anomalous value rows":
+      "Recorded operational cost and posted stock asset as of report date"
+   });
+  }
   if(stock.unvalued.length)opWarnings.push(
    `${stock.unvalued.length} Factory cost source(s) have no recorded USD cost; management totals are incomplete and must not be used for audited valuation.`);
   if(valuation.excluded.anomalousRows)opWarnings.push(
@@ -256,6 +300,7 @@ export async function unifiedAccountingDashboardTx(tx:DbTransaction,input:{
    bookedStockAssetUsd:fmt(bookedStock),managementCostCandidateUsd:managementCandidate,
    managementSellingValueUsd:null,
    managementSellingValueAvailableIn:"EXISTING_FACTORY_NET_POSITION",
+   glToOperationalAtCost,
    operationalAmountsAddedToBookedNetAssets:false,
    completeness:{
     factoryHistoricalValuationAvailable:asOfDate===businessDate,
