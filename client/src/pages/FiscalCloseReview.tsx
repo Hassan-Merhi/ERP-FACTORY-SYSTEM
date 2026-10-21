@@ -31,6 +31,9 @@ interface Readiness{
   reviewedAt:string;note:string;current:boolean}>;
  blockers:string[];warnings:string[];certified:false
 }
+interface EquityAccounts{
+ companyId:number;accounts:Array<{id:number;code:string;name:string}>;limit:number
+}
 interface ReviewPolicy{
  companyId:number;enforceReviewedClose:boolean;updatedBy:string|null;
  updatedAt:string|null;reason:string|null;explicitlyConfigured:boolean
@@ -72,6 +75,11 @@ export default function FiscalCloseReview(){
   retainedEarningsAccountId:retainedId
  });
  const canQuery=!!companyId&&!!start&&!!end&&Number(retainedId)>0;
+ const accounts=useQuery<EquityAccounts>({
+  queryKey:[root+"/equity-accounts",companyId],
+  queryFn:()=>read(root+"/equity-accounts"),
+  enabled:!!companyId,retry:false
+ });
  const policy=useQuery<ReviewPolicy>({
   queryKey:[root+"/policy",companyId],
   queryFn:()=>read(root+"/policy"),
@@ -198,10 +206,18 @@ export default function FiscalCloseReview(){
       onChange={v=>{setStart(v.target.value);setConfirmText("");}}/></div>
      <div><Label>Period ends</Label><Input type="date" value={end}
       onChange={v=>{setEnd(v.target.value);setConfirmText("");}}/></div>
-     <div><Label>Retained Earnings account ID</Label>
-      <Input type="number" min={1} value={retainedId}
-       onChange={v=>{setRetainedId(v.target.value);setConfirmText("");}}
-       placeholder="Enter the equity ledger account ID"/></div>
+     <div><Label>Existing Retained Earnings / Equity account</Label>
+      <select className="h-10 w-full rounded-md border bg-background px-2"
+       value={retainedId}
+       onChange={e=>{setRetainedId(e.target.value);setConfirmText("");}}>
+       <option value="">Select an active Equity account</option>
+       {accounts.data?.accounts.map(a=><option key={a.id} value={a.id}>
+        {a.code} · {a.name} (#{a.id})
+       </option>)}
+      </select>
+      {accounts.isError&&<p className="text-xs text-destructive">
+       Unable to list existing Equity accounts</p>}
+     </div>
     </div>
     {data?.history.latestClosedEnd&&<p className="text-sm text-muted-foreground">
      Latest closed period ends {data.history.latestClosedEnd}.
