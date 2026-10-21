@@ -3,7 +3,7 @@
  * Reports use historical USD accounting facts; inventory cost is distinct
  * from recognized P&L expense. Does not post GL entries.
  */
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useAppMode } from "@/contexts/AppModeContext";
@@ -121,6 +121,13 @@ export function CostCenterReports({baseUrl,centers}:{
     "Inventory (separate)":Number(m.inventoryCost),
   })),[summary]);
   const budgetEntry=budgetList?.budgets.find(b=>b.costCenterId===Number(budgetCenter));
+  useEffect(()=>{
+    if(!budgetCenter||!budgetList)return;
+    const existing=budgetList.budgets.find(b=>b.costCenterId===Number(budgetCenter));
+    setBudgetAmount(existing?.amountUsd||"0");
+    setBudgetNotes(existing?.notes||"");
+  },[budgetCenter,budgetMonth,budgetList]);
+
   const budgetSave=useMutation({
     mutationFn:()=>writeCostCenterApi("PUT",
       baseUrl+"/budgets/"+budgetCenter+"/"+budgetMonth,{
