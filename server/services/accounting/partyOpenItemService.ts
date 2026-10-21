@@ -45,7 +45,8 @@ export interface PartyOpenItem {
   originalAmount: string;
   matchedAmount: string;
   outstandingAmount: string;
-  status: "open" | "partial" | "settled";
+  status: "open" | "partial" | "settled" | "inconsistent";
+  allocations: Array<{ otherEntryId: number; amount: string }>;
   currencyVerified: boolean;
 }
 export interface OpenItemSummary {
@@ -145,7 +146,10 @@ async function ensurePartyExistsTx(tx: DbTransaction, input: PartyOpenItemTarget
   if (!row) throw new OpenItemError("OPEN_ITEM_PARTY_NOT_FOUND", "Party does not belong to this company", 404);
 }
 async function loadAllocationsTx(tx: DbTransaction, input: PartyOpenItemTarget): Promise<AllocationRow[]> {
-  const asOf = input.asOfDate ? sql`AND m.applied_on <= ${input.asOfDate}::date` : sql``;
+  const asOf = input.asOfDate
+    ? sql`AND m.applied_on <= ${input.asOfDate}::date
+        AND (m.voided_at IS NULL OR m.voided_at::date > ${input.asOfDate}::date)`
+    : sql`AND m.voided_at IS NULL`;
   return resultRows<AllocationRow>(await tx.execute(sql`
     SELECT m.charge_entry_id,m.settlement_entry_id,m.amount::text,m.currency
     FROM accounting_open_item_matches m
@@ -156,7 +160,7 @@ async function loadAllocationsTx(tx: DbTransaction, input: PartyOpenItemTarget):
     JOIN vouchers pv ON pv.id=payment.voucher_id AND pv.company_id=m.company_id
       AND pv.deleted_at IS NULL AND pv.optional=false
     WHERE m.company_id=${input.companyId} AND m.domain=${input.domain}
-      AND m.party_id=${input.partyId} AND m.voided_at IS NULL ${asOf}
+      AND m.party_id=${input.partyId} ${asOf}
   `));
 }
 function rowValue(row: EntryRow): { debit: Decimal; credit: Decimal; currency: string; verified: boolean } {
@@ -169,7 +173,7 @@ function rowValue(row: EntryRow): { debit: Decimal; credit: Decimal; currency: s
   // A legacy non-USD line with no native amounts must never be matched based
   // on a guessed FX rate. Its base amount is displayed but marked unverified.
   return { debit: money(row.base_debit), credit: money(row.base_credit),
-    currency: header === "USD" ? "USD" : header, verified: header === "USD" };
+    currency: "USD", verified: header === "USD" };
 }
 export async function loadPartyOpenItemsTx(
   tx: DbTransaction, target: PartyOpenItemTarget
@@ -181,10 +185,16 @@ export async function loadPartyOpenItemsTx(
     loadEntriesTx(tx, target),loadAllocationsTx(tx, target)
   ]);
   const allocated = new Map<number, Decimal>();
+  const links = new Map<number, Array<{ otherEntryId: number; amount: string }>>();
   for (const m of allocations) {
     const amount = money(m.amount);
-    for (const id of [m.charge_entry_id,m.settlement_entry_id])
-      allocated.set(Number(id), (allocated.get(Number(id)) ?? new Decimal(0)).plus(amount));
+    for (const [id,other] of [[m.charge_entry_id,m.settlement_entry_id],
+      [m.settlement_entry_id,m.charge_entry_id]]) {
+      const entryId=Number(id);
+      allocated.set(entryId, (allocated.get(entryId) ?? new Decimal(0)).plus(amount));
+      links.set(entryId,[...(links.get(entryId)??[]),
+        {otherEntryId:Number(other),amount:fmt(amount)}]);
+    }
   }
   // Factory customer charge vouchers tied to unfinalized orders are held out
   // of operational customer balances: never offer them for invoice matching.
@@ -211,7 +221,9 @@ export async function loadPartyOpenItemsTx(
       businessDate: String(entry.booked_on), side, currency: value.currency,
       originalAmount: fmt(original), matchedAmount: fmt(matched),
       outstandingAmount: fmt(outstanding), currencyVerified: value.verified,
-      status: outstanding.isZero() ? "settled" : matched.isZero() ? "open" : "partial",
+      status: matched.gt(original) ? "inconsistent"
+        : outstanding.isZero() ? "settled" : matched.isZero() ? "open" : "partial",
+      allocations:links.get(Number(entry.entry_id))??[],
     });
     const c = currencies[value.currency] ?? {
       charges:"0.000000", settlements:"0.000000", unapplied:"0.000000", outstanding:"0.000000"
