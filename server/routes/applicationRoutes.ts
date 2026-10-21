@@ -7,6 +7,7 @@ import { registerAccountRoutes } from "./accounts";
 import { registerCostCenterRoutes } from "./costCenterRoutes";
 import { registerCostCenterReportingRoutes } from "./costCenterReportingRoutes";
 import { registerCostCenterHistoricalRoutes } from "./costCenterHistoricalRoutes";
+import { registerCostCenterReleaseReadinessRoutes } from "./costCenterReleaseReadinessRoutes";
 import { registerAdminRoutes } from "./adminRoutes";
 import { registerApprovalRoutes } from "./approvalRoutes";
 import { registerAuthRoutes } from "./authRoutes";
@@ -157,6 +158,7 @@ export async function registerApplicationRoutes(app: Express): Promise<Server> {
   registerAccountRoutes(app);
   registerCostCenterReportingRoutes(app);
   registerCostCenterHistoricalRoutes(app);
+  registerCostCenterReleaseReadinessRoutes(app);
   registerCostCenterRoutes(app);
   registerVoucherRoutes(app);
   registerVoucherEntryRoutes(app);
