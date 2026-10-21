@@ -18,7 +18,7 @@ type Account={accountKind:Kind;accountId:number;name:string};
 type Statement={id:number;currency:string;period_start:string;period_end:string;
   opening_balance:string;closing_balance:string;file_name:string;imported_at:string};
 type Line={id:number;rowNumber:number;date:string;amount:string;reference:string|null;description:string|null;
-  matchId:number|null;matchedEntryId:number|null;matchedVoucherNumber:string|null;
+  matchId:number|null;reviewCategory:string|null;reviewNote:string|null;matchedEntryId:number|null;matchedVoucherNumber:string|null;
   matchedVoucherId:number|null;status:"matched"|"unmatched"|"stale"};
 type BookEntry={entryId:number;voucherId:number;voucherNumber:string;date:string;
   amount:string;currency:string;currencyVerified:boolean;eligible:boolean;matched:boolean;matchedToStatementId:number|null};
@@ -72,6 +72,8 @@ export default function CashBankReconciliation() {
   const [selectedEntry,setSelectedEntry]=useState<number|null>(null);
   const [reason,setReason]=useState("");
   const [voidReason,setVoidReason]=useState("");
+  const [reviewCategory,setReviewCategory]=useState("");
+  const [reviewNote,setReviewNote]=useState("");
   const listUrl=current?`/api/accounting/cash-bank/statements?accountKind=${current.accountKind}&accountId=${current.accountId}`:null;
   const statements=useQuery<Statement[]>({
     queryKey:["cash-bank-statements",listUrl],queryFn:()=>json(listUrl!),enabled:!!listUrl,retry:false
@@ -118,6 +120,20 @@ export default function CashBankReconciliation() {
       await queryClient.invalidateQueries({queryKey:["cash-bank-detail"]});
     },
     onError:(error:Error)=>toast({title:"Match refused",description:error.message,variant:"destructive"})
+  });
+  const reviewMutation=useMutation({
+    mutationFn:async()=>{
+      if(!selectedLine)throw new Error("Select a statement movement first");
+      const result=await apiRequest("POST",
+        `/api/accounting/cash-bank/lines/${selectedLine}/review`,
+        {category:reviewCategory||null,note:reviewNote||null});
+      return result.json();
+    },
+    onSuccess:async()=>{
+      toast({title:"Bank transaction reviewed",description:"This classification does not post an accounting voucher"});
+      await queryClient.invalidateQueries({queryKey:["cash-bank-detail"]});
+    },
+    onError:(error:Error)=>toast({title:"Review not saved",description:error.message,variant:"destructive"})
   });
   const unmatchMutation=useMutation({
     mutationFn:async(matchId:number)=>{
@@ -236,14 +252,34 @@ export default function CashBankReconciliation() {
               <tr key={line.id} className="border-b">
                 <td className="p-2">{line.date}<div className="text-muted-foreground">{line.reference||line.description}</div></td>
                 <td className="p-2 text-right tabular-nums">{line.amount}</td>
-                <td className="p-2">{line.status}{line.matchedVoucherId&&
+                <td className="p-2">{line.status}
+                  {line.reviewCategory&&<div className="text-muted-foreground">{line.reviewCategory.replaceAll("_"," ")}</div>}{line.matchedVoucherId&&
                   <div><a className="underline" href={voucherPath(line.matchedVoucherId)}>{line.matchedVoucherNumber}</a></div>}</td>
                 <td className="p-2">{line.matchId!==null?
                   <Button variant="ghost" size="sm" disabled={!voidReason.trim()||unmatchMutation.isPending}
                     onClick={()=>unmatchMutation.mutate(line.matchId!)}>Unmatch</Button>:
                   <Button variant={selectedLine===line.id?"default":"outline"} size="sm"
-                    onClick={()=>{setSelectedLine(line.id);setSelectedEntry(null);}}>Select</Button>}</td>
+                    onClick={()=>{setSelectedLine(line.id);setSelectedEntry(null);
+                      setReviewCategory(line.reviewCategory??"");setReviewNote(line.reviewNote??"");}}>Select</Button>}</td>
               </tr>)}</tbody></table>
+          </div>
+          <div className="rounded-md border p-3 space-y-2">
+            <Label>Classify selected transaction (no accounting posting)</Label>
+            <select className="h-9 w-full rounded-md border bg-background px-2 text-sm"
+              value={reviewCategory} onChange={e=>setReviewCategory(e.target.value)}
+              disabled={!selectedLine}>
+              <option value="">Not classified</option>
+              <option value="bank_fee">Bank fee / charge</option>
+              <option value="transfer">Bank / cash transfer</option>
+              <option value="unidentified_receipt">Unidentified receipt</option>
+              <option value="unidentified_payment">Unidentified payment</option>
+              <option value="other">Other investigation</option>
+            </select>
+            <Input placeholder="Investigation note" disabled={!selectedLine}
+              value={reviewNote} onChange={e=>setReviewNote(e.target.value)}/>
+            <Button size="sm" variant="outline"
+              disabled={!selectedLine||reviewMutation.isPending}
+              onClick={()=>reviewMutation.mutate()}>Save review</Button>
           </div>
           <Label>Reason for cancelling a match (required)</Label>
           <Input value={voidReason} onChange={e=>setVoidReason(e.target.value)} placeholder="Why is the match being cancelled?"/>
