@@ -99,7 +99,7 @@ function severity(issues:string[],critical:string[]):FactoryAuditSeverity{
  if(issues.length)return "review";
  return "clear";
 }
-async function containersTx(tx:DbTransaction,companyId:number,asOf:string):Promise<FactoryContainerAudit[]>{
+async function containersTx(tx:DbTransaction,companyId:number,asOf:string,historical:boolean):Promise<FactoryContainerAudit[]>{
  const rows=resultRows<ContainerRow>(await tx.execute(sql`
   SELECT c.id,c.container_number AS number,c.status,
    COALESCE(c.currency_code,'USD') AS currency,c.fx_rate_confirmed AS rate_confirmed,
@@ -140,20 +140,18 @@ async function containersTx(tx:DbTransaction,companyId:number,asOf:string):Promi
     "Foreign container rate not confirmed","Received raw stock lacks a confirmed USD cost",
     "A receipt has no recorded USD value"];
    const native=String(r.currency).toUpperCase();
-   if(native!=="USD"&&!r.rate_confirmed)
+   if(native!=="USD"&&!r.rate_confirmed && (r.receipt_count>0 || value(r.raw_received_kg).gt(0)))
      issues.push("Foreign container rate not confirmed");
    if(r.raw_missing_rate>0)issues.push("Received raw stock lacks a confirmed USD cost");
    if(r.missing_receipt_values>0)issues.push("A receipt has no recorded USD value");
    // Receipt events can predate introduction of the receipt journal. Never
    // mistake a missing historical event for proof of no goods received.
-   if(r.receipt_count===0 && value(r.raw_received_kg).gt(0))
+   if(!historical && r.receipt_count===0 && value(r.raw_received_kg).gt(0))
      issues.push("Raw stock exists but no live receipt events appear in this period");
-   if(r.receipt_count>0 && value(r.raw_received_kg).eq(0))
+   if(!historical && r.receipt_count>0 && value(r.raw_received_kg).eq(0))
      issues.push("Receipt evidence exists but the current raw-stock source is absent");
    // The raw table is current state, not an as-of aggregate. Mismatches
    // against a historical cutoff are intentionally not financial errors.
-   const day=asOf;
-   if(r.last_receipt_date===null && day)void day;
    return {
      id:Number(r.id),number:String(r.number),status:String(r.status),
      currency:native,rateConfirmed: native==="USD"||Boolean(r.rate_confirmed),
@@ -200,13 +198,30 @@ async function invoicesTx(tx:DbTransaction,companyId:number,asOf:string,cutover:
     COUNT(*) FILTER(WHERE c.voucher_id IS NOT NULL AND v.id IS NULL)::int AS unverified,
     COUNT(*) FILTER(WHERE v.id IS NOT NULL AND co.status<>'FINALIZED')::int AS premature
    FROM customer_order_charges c
-   LEFT JOIN vouchers v ON v.id=c.voucher_id AND v.company_id=co.company_id
-      AND v.deleted_at IS NULL AND v.optional=false
+   LEFT JOIN LATERAL (
+     SELECT p.id FROM vouchers p
+     WHERE p.company_id=co.company_id AND p.deleted_at IS NULL
+       AND p.optional=false AND
+       (p.id=c.voucher_id
+         OR (c.voucher_id IS NULL AND (
+             p.voucher_number='CHARGE-PRE-'||co.id::text||'-'||c.id::text
+             OR (co.invoice_number IS NOT NULL AND p.voucher_number LIKE
+               'CHARGE-'||co.invoice_number||'-'||c.id::text||'-%')
+            ) AND EXISTS (
+              SELECT 1 FROM voucher_entries ve
+              WHERE ve.voucher_id=p.id AND ve.customer_id=co.customer_id
+               AND ABS(COALESCE(ve.debit_amount,0)-COALESCE(ve.credit_amount,0)-c.amount)<0.005
+            )))
+     ORDER BY p.id DESC LIMIT 1
+   ) v ON true
    WHERE c.order_id=co.id
   ) ch ON true
   LEFT JOIN LATERAL(
-   SELECT SUM(CASE WHEN ve.customer_id=co.customer_id AND ve.debit_amount>0
-                    THEN ve.transaction_debit_amount ELSE 0 END) AS receivable_native,
+   SELECT CASE WHEN COUNT(*) FILTER (WHERE ve.customer_id=co.customer_id
+                              AND ve.debit_amount>0 AND ve.transaction_debit_amount IS NULL)>0
+               THEN NULL
+               ELSE SUM(CASE WHEN ve.customer_id=co.customer_id AND ve.debit_amount>0
+                  THEN ve.transaction_debit_amount ELSE 0 END) END AS receivable_native,
      SUM(CASE WHEN ve.customer_id=co.customer_id
                     THEN ve.debit_amount-ve.credit_amount ELSE 0 END) AS receivable_base,
      SUM(CASE WHEN la.code='COGS' THEN ve.debit_amount-ve.credit_amount ELSE 0 END) AS cogs,
@@ -304,7 +319,7 @@ export async function factoryProductionAccountingAuditTx(tx:DbTransaction,input:
       AND deleted_at IS NULL AND optional=false LIMIT 1
  `))[0];
  const [containers,invoices]=await Promise.all([
-  containersTx(tx,companyId,day),invoicesTx(tx,companyId,day,cut?.effectiveFrom??null)
+  containersTx(tx,companyId,day,day!==now),invoicesTx(tx,companyId,day,cut?.effectiveFrom??null)
  ]);
  const warnings:string[]=[];
  if(day!==now)warnings.push(
