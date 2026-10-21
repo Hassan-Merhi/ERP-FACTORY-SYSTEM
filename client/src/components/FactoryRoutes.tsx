@@ -17,6 +17,7 @@ import {
   CashBankReconciliation,
   MonetaryFxAccounting,
   FactoryProductionAccounting,
+  UnifiedRentalAccounting,
   Agents,
   Analytics,
   BalanceRepair,
@@ -184,6 +185,7 @@ export function FactoryRoutes({ user, myAccess, factoryDefaultPage }: FactoryRou
       {isAdminOwnerOrDev && <Route path="/factory/accounting/cash-bank" component={CashBankReconciliation} />}
       {isAdminOwnerOrDev && <Route path="/factory/accounting/monetary-fx" component={MonetaryFxAccounting} />}
       {isAdminOwnerOrDev && <Route path="/factory/accounting/production" component={FactoryProductionAccounting} />}
+      {isAdminOwnerOrDev && <Route path="/factory/accounting/rentals" component={UnifiedRentalAccounting} />}
       {isAdminOwnerOrDev && <Route path="/factory/account-groups" component={AccountGroups} />}
       <Route path="/factory/agents" component={Agents} />
       <Route path="/factory/vouchers">{() => <FactoryVouchers />}</Route>
