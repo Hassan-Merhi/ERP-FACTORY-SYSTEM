@@ -47,6 +47,7 @@ export const PROPERTIES_NAV_SECTIONS: NavSection[] = [
     color: NAV_COLOR.accounting,
     items: [
       { title: "Accounts", url: "/properties/accounts", icon: Landmark },
+      { title: "Open Items", url: "/properties/accounting/open-items", icon: ClipboardList },
       { title: "Vouchers", url: "/properties/vouchers", icon: FileText },
       { title: "Analytics", url: "/properties/analytics", icon: BarChart2 },
     ],
