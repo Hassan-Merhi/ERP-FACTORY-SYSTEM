@@ -67,7 +67,11 @@ export function registerHistoricalAccountingRoutes(app: Express) {
         historicalFx: {
           ...historicalFx,
           certified: false,
-          note: "Readiness gate can permit pure legacy unbackfilled data. This is not historical FX or system-time certification.",
+          note: historicalFx.legacyCompatibilityMode
+            ? "Legacy FX compatibility mode: original USD historical conversion is not verified."
+            : historicalFx.ready
+              ? "Historical base-field completeness gate passed; original FX rates and past state remain uncertified."
+              : "Non-USD historical base values are unresolved by the selected accounting cutoff.",
         },
       });
     } catch (e) {
