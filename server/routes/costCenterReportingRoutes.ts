@@ -63,10 +63,13 @@ async function resolveScope(req:Request,write=false,consolidated=false):Promise<
   if(!consolidated) return {companyIds:[c.companyId],companyId:c.companyId,userId:c.userId,role:c.role};
   if(!WRITE.has(c.role))throw new ReportError(403,"Consolidated reports require Admin, Owner or Developer");
   const accessible=await getAccessibleCompanyIds(c.userId);
-  if(c.role==="Developer")return {
-    companyIds:[...accessible].sort((a,b)=>a-b).slice(0,150),
-    companyId:c.companyId,userId:c.userId,role:c.role,
-  };
+  if(c.role==="Developer"){
+    if(accessible.size>150)throw new ReportError(413,"Consolidated reporting exceeds 150 companies; narrow the authorized scope");
+    return {
+      companyIds:[...accessible].sort((a,b)=>a-b),
+      companyId:c.companyId,userId:c.userId,role:c.role,
+    };
+  }
   // A role in the selected company is not a license to read another company.
   // Require an authorized accounting role in each included company as well.
   const rows=await pool.query(
@@ -76,7 +79,8 @@ async function resolveScope(req:Request,write=false,consolidated=false):Promise<
   const authorized=rows.rows
     .filter((x:{company_id:number;role:string})=>WRITE.has(x.role)&&accessible.has(x.company_id))
     .map((x:{company_id:number})=>x.company_id)
-    .sort((a:number,b:number)=>a-b).slice(0,150);
+    .sort((a:number,b:number)=>a-b);
+  if(authorized.length>150)throw new ReportError(413,"Consolidated reporting exceeds 150 companies");
   return {companyIds:authorized,companyId:c.companyId,userId:c.userId,role:c.role};
 }
 function fail(res:Response,e:unknown){
@@ -127,7 +131,7 @@ const sourceCte = [
   " WHERE a.company_id=ANY($1::integer[]) AND v.deleted_at IS NULL AND v.optional=false",
   " AND v.reversal_of_voucher_id IS NULL",
   " AND NOT EXISTS (SELECT 1 FROM vouchers rev WHERE rev.reversal_of_voucher_id=v.id AND rev.deleted_at IS NULL)",
-  " AND COALESCE(v.source_module,'') NOT IN ('INTERCOMPANY','SP_MIGRATION_READONLY')",
+  " AND upper(COALESCE(v.source_module,'')) NOT LIKE 'INTERCOMPANY%' AND COALESCE(v.source_module,'') <> 'SP_MIGRATION_READONLY'",
   " AND v.voucher_number NOT LIKE 'GC-%' AND v.voucher_number NOT LIKE 'MIG-%'",
   " AND (a.cost_treatment='EXPENSE' AND upper(btrim(l.account_type)) IN",
   " ('EXPENSE','DIRECT EXPENSE','INDIRECT EXPENSE')",
@@ -186,7 +190,7 @@ async function unallocatedExpenses(scope:Scope,filters:Filters){
     " AND v.deleted_at IS NULL AND v.optional=false AND v.reversal_of_voucher_id IS NULL",
     " AND NOT EXISTS (SELECT 1 FROM vouchers rev WHERE rev.reversal_of_voucher_id=v.id",
     " AND rev.deleted_at IS NULL)",
-    " AND COALESCE(v.source_module,'') NOT IN ('INTERCOMPANY','SP_MIGRATION_READONLY')",
+    " AND upper(COALESCE(v.source_module,'')) NOT LIKE 'INTERCOMPANY%' AND COALESCE(v.source_module,'') <> 'SP_MIGRATION_READONLY'",
     " AND v.voucher_number NOT LIKE 'GC-%' AND v.voucher_number NOT LIKE 'MIG-%'",
     " AND upper(btrim(l.account_type)) IN ('EXPENSE','DIRECT EXPENSE','INDIRECT EXPENSE')",
     " UNION ALL",
@@ -236,6 +240,7 @@ async function summaryData(scope:Scope,filters:Filters){
       [scope.companyIds,filters.from,filters.to,filters.costCenterId],
     ),
   ]);
+  if(centers.rows.length>=10000)throw new ReportError(413,"Too many cost centers for one summary; narrow the authorized company scope");
   const centerRows=centers.rows as Array<{companyId:number;costCenterId:number;companyName:string;name:string;code:string;active:boolean;parentId:number|null}>;
   const b=budgets.rows as Array<{companyId:number;costCenterId:number;month:string;amountUsd:string}>;
   const rows=detail.rows as Array<{companyId:number;costCenterId:number;accountId:number|null;accountName:string;treatment:string;month:string;amountUsd:string;entryCount:number}>;
