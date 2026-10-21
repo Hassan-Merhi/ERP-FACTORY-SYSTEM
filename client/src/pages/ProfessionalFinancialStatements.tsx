@@ -24,6 +24,9 @@ interface Single {
   revenue:Section;costOfSales:Section;operatingExpenses:Section;
   grossProfitUsd:string;operatingResultUsd:string;periodNetResultUsd:string
  };
+ changesInEquity:{openingTotalEquityUsd:string;periodResultUsd:string;
+  otherBookedEquityMovementsUsd:string;closingTotalEquityUsd:string;
+  differenceUsd:string;otherMovementsRequireReview:boolean};
  cashFlow:{
   operatingUsd:string;investingUsd:string;financingUsd:string;
   unclassifiedUsd:string;recognizedCashMovementUsd:string;
@@ -87,6 +90,11 @@ function exportedCsv(record:Package){
  rows.push(["Financial position","UNEXPLAINED DIFFERENCE",
   current.financialPosition.assetsMinusLiabilitiesAndEquityUsd,
   prior?.financialPosition.assetsMinusLiabilitiesAndEquityUsd??""]);
+ for(const key of ["openingTotalEquityUsd","periodResultUsd","otherBookedEquityMovementsUsd",
+  "closingTotalEquityUsd","differenceUsd"] as const){
+  rows.push(["Changes in equity",key,current.changesInEquity[key],
+    prior?.changesInEquity[key]??""]);
+ }
  for(const key of ["operatingUsd","investingUsd","financingUsd","unclassifiedUsd",
   "actualCashMovementUsd","cashFlowClassificationDifferenceUsd","openingCashUsd","closingCashUsd"] as const){
   rows.push(["Cash flow",key,current.cashFlow[key],prior?.cashFlow[key]??""]);
@@ -147,7 +155,7 @@ export default function ProfessionalFinancialStatements(){
  const [start,setStart]=useState("");
  const [end,setEnd]=useState("");
  const [compare,setCompare]=useState(true);
- const [tab,setTab]=useState<"income"|"balance"|"cash"|"notes">("income");
+ const [tab,setTab]=useState<"income"|"balance"|"equity"|"cash"|"notes">("income");
  const params=new URLSearchParams({compare:String(compare)});
  if(start)params.set("fromDate",start);
  if(end)params.set("asOfDate",end);
@@ -219,10 +227,10 @@ export default function ProfessionalFinancialStatements(){
        <p className="font-semibold text-lg tabular-nums">{number(value)}</p></div>)}
    </div>
    <div className="flex flex-wrap gap-2 print:hidden">
-    {(["income","balance","cash","notes"] as const).map(value=>
+    {(["income","balance","equity","cash","notes"] as const).map(value=>
      <Button size="sm" key={value} variant={tab===value?"default":"outline"} onClick={()=>setTab(value)}>
-      {({income:"Income statement",balance:"Balance sheet",cash:"Cash-flow workpaper",
-        notes:"Accounting disclosures"} as const)[value]}</Button>)}
+      {({income:"Income statement",balance:"Balance sheet",equity:"Changes in equity",
+        cash:"Cash-flow workpaper",notes:"Accounting disclosures"} as const)[value]}</Button>)}
    </div>
    {tab==="income"&&<Card>
     <CardHeader><CardTitle>Income statement — profit & loss</CardTitle></CardHeader>
@@ -267,6 +275,30 @@ export default function ProfessionalFinancialStatements(){
      <p className="text-xs text-muted-foreground">
       Customer and supplier credit/debit balances appear on their actual side.
       Unknown accounts remain visible. A difference is not plugged.
+     </p>
+    </CardContent></Card>}
+   {tab==="equity"&&<Card>
+    <CardHeader><CardTitle>Statement of changes in equity</CardTitle></CardHeader>
+    <CardContent className="space-y-3">
+     <Figure label="Total equity at start of period"
+      current={now.changesInEquity.openingTotalEquityUsd}
+      previous={prior?.changesInEquity.openingTotalEquityUsd}/>
+     <Figure label="Period profit / loss"
+      current={now.changesInEquity.periodResultUsd}
+      previous={prior?.changesInEquity.periodResultUsd}/>
+     <Figure label="Other booked equity movements — allocation unverified"
+      current={now.changesInEquity.otherBookedEquityMovementsUsd}
+      previous={prior?.changesInEquity.otherBookedEquityMovementsUsd}/>
+     <Figure label="TOTAL EQUITY AT END OF PERIOD"
+      current={now.changesInEquity.closingTotalEquityUsd}
+      previous={prior?.changesInEquity.closingTotalEquityUsd}/>
+     <Figure label="Equity movement reconciliation difference"
+      current={now.changesInEquity.differenceUsd}
+      previous={prior?.changesInEquity.differenceUsd}/>
+     <p className="text-sm text-muted-foreground">
+      Other booked equity movements may include capital contributions, withdrawals,
+      retained earnings transfers or source reclassifications. They cannot be
+      certified as shareholder transactions without original voucher review.
      </p>
     </CardContent></Card>}
    {tab==="cash"&&<Card>
