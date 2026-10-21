@@ -156,7 +156,9 @@ async function sourceInCompany(client: PoolClient, companyId: number, kind: Sour
     ].join(" "),
     [sourceId, companyId],
   );
-  if (!source.rows.length) throw new ApiError(409, "Only standalone factory expense daybook entries can be allocated");
+  if (!source.rows.length || ["voucher", "vouchers", "voucher_entries", "factory_pos_sales"].includes(
+    String(source.rows[0]?.referenceTable || "").toLowerCase()
+  )) throw new ApiError(409, "Only standalone factory expense daybook entries can be allocated");
   return source.rows[0];
 }
 function sourceTreatment(row: Record<string, unknown>, kind: SourceKind): "EXPENSE" | "INVENTORY_COST" {
