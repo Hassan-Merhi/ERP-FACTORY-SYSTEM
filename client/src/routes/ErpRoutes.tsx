@@ -19,6 +19,7 @@ import {
   UnifiedRentalAccounting,
   GroupConsolidationAccounting,
   HistoricalAccounting,
+  ProfessionalFinancialStatements,
   Accounts,
   HistoricalOpenings,
   Agents,
@@ -249,6 +250,7 @@ export function ErpRoutes({ user }: ErpRoutesProps) {
       {R("/accounting/rentals", isAdminOwnerOrDev && canAccess("accounts"), UnifiedRentalAccounting)}
       {R("/accounting/consolidation", isAdminOwnerOrDev && canAccess("accounts"), GroupConsolidationAccounting)}
       {R("/accounting/history", isAdminOwnerOrDev && canAccess("accounts"), HistoricalAccounting)}
+      {R("/accounting/statements", isAdminOwnerOrDev && canAccess("accounts"), ProfessionalFinancialStatements)}
       {canAccess("accounts") ? (
         <Route path="/ledger-monthly/:accountId" component={LedgerMonthlySummary} />
       ) : (
