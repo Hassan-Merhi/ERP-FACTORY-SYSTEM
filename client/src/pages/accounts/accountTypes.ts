@@ -18,6 +18,9 @@ export interface FxAgentAccountBalance {
 }
 
 export interface Account {
+  /** Factory Parties projection for linked customer ledgers; GL values remain separate. */
+  partyBalance?: string;
+  partyBalanceSide?: "Dr" | "Cr";
   /** Optional display-only FX projection. Never use for GL running-balance maths. */
   fxWallet?: FxAgentAccountBalance;
   id: string;
