@@ -71,6 +71,16 @@ New `server/services/accounting/fiscalReviewService.ts` implements a company-sco
 - Checks for deleted P&L accounts with remaining recorded balances.
 - Uses posted voucher entries from this company through the selected date, excluding optional and retired records, to flag:
   unbalanced balanced-type vouchers, missing/other-company ledger targets, non-USD lines without recorded historical USD base, optional vouchers excluded from books and source-voucher actor provenance gaps.
+- The reviewed-close path requires a **USD functional-base company**. The
+  existing legacy fiscal close writer currently computes P&L account
+  balances using `voucher_entries.debit_amount/credit_amount`. Phase 13
+  explicitly checks those against the historic
+  `base_debit_amount/base_credit_amount` fields for relevant P&L entries.
+  A material difference is a **hard blocker**, not an automatic posting
+  correction: Claude must investigate and certify the historical
+  conversion and legacy writer before a reviewed close can proceed.
+  This protects prior periods from being silently closed at an incorrect
+  native/base FX amount.
 - Verifies enabled closed-period voucher guard, entry guard, ledger opening lock and the **full** voucher/entry/audit log trigger group, not merely one audit table trigger.
 - Produces a SHA-256 digest across period, retained-earnings account, canonical trial rows and totals, source voucher/entry contents as represented by a deterministic SQL MD5 evidence digest, current guard availability, blockers and warnings.
 - Explicitly notes unknown historic contract terms, Factory raw/WIP/bale values, unresolved intra-group profits, bank matching and missing historical FX context rather than inferring that a balanced trial balance certifies every operating source.
@@ -149,7 +159,7 @@ React Query keys are company-specific. Neither changing companies, reading the r
 4. Verify scope for `closeFiscalPeriod` now explicitly sets transaction-local `app.current_company_id` before reading the RLS-protected enforcement policy; no privileged-role bypass.
 4. Compare trial-balance amount/side and P&L categories with existing `buildTrialBalance`, fiscal closing writer and Phase 11 statements for a controlled company/date.
 5. Check first-close earliest P&L date, contiguous later periods, duplicate endings, invalid date, business timezone and period date boundary.
-6. Test balance-sheet not balanced, deleted Income/Expense accounts, legacy single-sided stock journals, line on wrong-company account, missing historic FX bases and master opening-side assumptions; verify blocking-versus-warning decisions.
+6. Test balance-sheet not balanced, deleted Income/Expense accounts, legacy single-sided stock journals, line on wrong-company account, missing historic FX bases and master opening-side assumptions; verify blocking-versus-warning decisions. Explicitly check historical USD base versus legacy fiscal close debit/credit on income/expense lines, and refuse certified closing where they materially differ. Confirm non-USD functional-base companies cannot be reviewed without proper translation.
 7. Verify the full set of voucher, entry, hash-chain and opening-balance guard triggers. Never treat a single audit trigger as complete certification.
 8. Test that a legitimate source mutation after Accounting signoff invalidates the previous hash; Owner sees it as stale and cannot close without fresh review.
 9. Test two approvals by separate user IDs, attempted same-user dual approval, simultaneous approvals, duplicate signoff conflicts, revocation and already-consumed signoff immutability.
