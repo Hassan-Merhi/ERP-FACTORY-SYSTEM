@@ -180,7 +180,9 @@ export function registerRentalPaymentsAccrualRoutes(
           })
         )
         .min(1)
-        .parse(req.body);
+        // New callers send { items } so the shared accounting middleware can
+        // attach clientRequestId; retain array+header compatibility for old callers.
+        .parse(Array.isArray(req.body) ? req.body : req.body?.items);
 
       const clientDate = getClientDate(req);
       type RentalBulkPaymentResult =
