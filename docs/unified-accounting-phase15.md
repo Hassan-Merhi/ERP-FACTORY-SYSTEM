@@ -135,6 +135,15 @@ still governs legacy closing. **The perpetual stock cutover remains
 globally disabled**, regardless of rollout mode. No historical repairs are
 invoked in this phase.
 
+The existing `client/src/pages/MonetaryFxAccounting.tsx` and
+`client/src/pages/FiscalCloseReview.tsx` financial posting controls are
+also explicitly disabled in the source with
+`UNIFIED_FINANCIAL_POSTING_CERTIFIED=false` and show a certification
+explanation. Future promotion to genuine financial voucher posting
+requires a **separate, independently reviewed code/security/accounting
+change**, not an Owner metadata pilot setting; both UI and backend
+controls must be reviewed together.
+
 ### 4. Owner and reviewer API
 
 `server/routes/unifiedAccountingRolloutRoutes.ts`:
