@@ -21,7 +21,7 @@ interface Single {
   assetsMinusLiabilitiesAndEquityUsd:string;balanced:boolean;
  };
  profitAndLoss:{
-  revenue:Section;costOfSales:Section;operatingExpenses:Section;
+  revenue:Section;otherIncome:Section;costOfSales:Section;operatingExpenses:Section;
   grossProfitUsd:string;operatingResultUsd:string;periodNetResultUsd:string
  };
  changesInEquity:{openingTotalEquityUsd:string;periodResultUsd:string;
@@ -81,6 +81,7 @@ function exportedCsv(record:Package){
   rows.push([name,"TOTAL",section.totalUsd,prev?.totalUsd??""]);
  }
  detail("Revenue",current.profitAndLoss.revenue,prior?.profitAndLoss.revenue);
+ detail("Other income",current.profitAndLoss.otherIncome,prior?.profitAndLoss.otherIncome);
  detail("Cost of sales",current.profitAndLoss.costOfSales,prior?.profitAndLoss.costOfSales);
  detail("Operating expenses",current.profitAndLoss.operatingExpenses,prior?.profitAndLoss.operatingExpenses);
  rows.push(["Profit and loss","NET RESULT",current.profitAndLoss.periodNetResultUsd,
@@ -245,6 +246,8 @@ export default function ProfessionalFinancialStatements(){
       previous={prior?.profitAndLoss.costOfSales}/>
      <Figure label="Gross profit" current={now.profitAndLoss.grossProfitUsd}
       previous={prior?.profitAndLoss.grossProfitUsd}/>
+     <SectionTable title="Other income" current={now.profitAndLoss.otherIncome}
+      previous={prior?.profitAndLoss.otherIncome}/>
      <SectionTable title="Other operating expenses" current={now.profitAndLoss.operatingExpenses}
       previous={prior?.profitAndLoss.operatingExpenses}/>
      <Figure label="Operating result" current={now.profitAndLoss.operatingResultUsd}
