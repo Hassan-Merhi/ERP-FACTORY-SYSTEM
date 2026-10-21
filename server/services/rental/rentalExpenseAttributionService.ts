@@ -56,7 +56,9 @@ async function voucherExpenseTx(tx:DbTransaction,companyId:number,voucherId:numb
    v.deleted_at::text,v.optional,
    COALESCE(SUM(
      CASE WHEN LOWER(TRIM(la.account_type)) LIKE '%expense%'
-          AND la.company_id=v.company_id THEN
+          AND la.company_id=v.company_id
+          AND COALESCE(UPPER(la.code),'') !~ '^(RENT-EXP|SHOP-RENT-EXP|FX-REALIZED)(-|$)'
+          THEN
        GREATEST(COALESCE(e.base_debit_amount,e.debit_amount,0)-
          COALESCE(e.base_credit_amount,e.credit_amount,0),0)
        ELSE 0 END),0)::text AS posted_cost_usd
