@@ -44,6 +44,8 @@ import { registerProfessionalFinancialStatementRoutes } from "./professionalFina
 import { registerAnalyticAccountingRoutes } from "./analyticAccountingRoutes";
 import { registerFiscalReviewRoutes } from "./fiscalReviewRoutes";
 import { registerUnifiedAccountingDashboardRoutes } from "./unifiedAccountingDashboardRoutes";
+import { registerUnifiedAccountingRolloutRoutes } from "./unifiedAccountingRolloutRoutes";
+import { enforceUnifiedAccountingRollout } from "../middleware/unifiedAccountingRolloutBoundary";
 import { registerPerpetualReadinessRoutes } from "./accounting-integrity/perpetualReadinessRoutes";
 import { registerImportRoutes } from "./import";
 import { registerIntercompanyNotificationRoutes } from "./intercompanyNotificationRoutes";
@@ -110,6 +112,9 @@ export async function registerApplicationRoutes(app: Express): Promise<Server> {
   // Shared ERP accounting endpoints are reused inside Factory pages. Enforce
   // their Factory page/tab ownership before any concrete route handler runs.
   app.use(enforceSharedFactoryAccess);
+  // New unified-accounting metadata writers are read-only until a
+  // company-specific, source-pinned Owner pilot. Existing voucher flows remain unchanged.
+  app.use(enforceUnifiedAccountingRollout);
   registerWhatsAppFastSendRoutes(app);
   registerBandwidthPhase3FactoryReads(app);
   registerFactoryRoutes(app, requireAuth, db);
@@ -183,6 +188,7 @@ export async function registerApplicationRoutes(app: Express): Promise<Server> {
   registerAnalyticAccountingRoutes(app);
   registerFiscalReviewRoutes(app);
   registerUnifiedAccountingDashboardRoutes(app);
+  registerUnifiedAccountingRolloutRoutes(app);
   registerPerpetualReadinessRoutes(app);
   registerDebugRoutes(app);
   registerReportsRoutes(app);
