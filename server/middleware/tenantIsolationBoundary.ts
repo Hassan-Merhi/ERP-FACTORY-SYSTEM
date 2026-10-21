@@ -85,7 +85,11 @@ function isAuthorizedCrossCompanyPath(method: string, path: string): boolean {
   if (AUTHORIZED_CROSS_COMPANY_PATHS.has(path)) return true;
   if (method.toUpperCase()==="GET" && (
     path==="/api/cost-centers/reports/consolidated" ||
-    path==="/api/factory/cost-centers/reports/consolidated"
+    path==="/api/factory/cost-centers/reports/consolidated" ||
+    path==="/api/cost-centers/reports/consolidated/activity" ||
+    path==="/api/factory/cost-centers/reports/consolidated/activity" ||
+    path==="/api/cost-centers/reports/consolidated/export" ||
+    path==="/api/factory/cost-centers/reports/consolidated/export"
   )) return true;
   if (path === "/api/purchase-orders/parent-freight-accounts") return true;
   if (/^\/api\/purchase-orders\/\d+\/sync-parent-voucher$/.test(path)) return true;
