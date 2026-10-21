@@ -34,6 +34,7 @@ import { registerImportCycleRoutes } from "./import-cycle";
 import { registerAccountingIntegrityRoutes } from "./accounting-integrity";
 import { registerAccountingOpenItemRoutes } from "./accountingOpenItemRoutes";
 import { registerCashBankReconciliationRoutes } from "./cashBankReconciliationRoutes";
+import { registerMonetaryFxRoutes } from "./monetaryFxRoutes";
 import { registerPerpetualReadinessRoutes } from "./accounting-integrity/perpetualReadinessRoutes";
 import { registerImportRoutes } from "./import";
 import { registerIntercompanyNotificationRoutes } from "./intercompanyNotificationRoutes";
@@ -163,6 +164,7 @@ export async function registerApplicationRoutes(app: Express): Promise<Server> {
   registerAccountingIntegrityRoutes(app);
   registerAccountingOpenItemRoutes(app);
   registerCashBankReconciliationRoutes(app);
+  registerMonetaryFxRoutes(app);
   registerPerpetualReadinessRoutes(app);
   registerDebugRoutes(app);
   registerReportsRoutes(app);
