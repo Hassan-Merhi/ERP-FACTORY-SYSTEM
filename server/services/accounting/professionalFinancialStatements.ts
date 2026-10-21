@@ -19,6 +19,7 @@ import {financialStatementCategory} from "./unifiedAccountingFoundation";
 type Classification="asset"|"liability"|"equity"|"income"|"cost_of_sales"|"expense"|"unknown";
 type CashSection="operating"|"investing"|"financing"|"unclassified";
 interface MetaRow extends Record<string,unknown>{id:number;sub_type:string|null;code:string}
+interface BankLinkRow extends Record<string,unknown>{linked_ledger_id:number}
 interface CashVoucher extends Record<string,unknown>{
  voucher_id:number;voucher_number:string;booked_on:string;
  cash_delta:string;cash_lines:number;other_lines:number;
@@ -102,9 +103,10 @@ function classification(row:BalanceRow,subtypes:Map<number,string|null>):Classif
  if(base==="party")return"asset"; // side resolved later, not a categorical asset assumption
  return base==="unknown"?"unknown":base;
 }
-function cashAccount(row:BalanceRow,subtypes:Map<number,string|null>){
+function cashAccount(row:BalanceRow,subtypes:Map<number,string|null>,bankLinked:Set<number>){
  if(row.kind==="bank")return true;
  if(row.kind!=="ledger")return false;
+ if(row.id!==null&&bankLinked.has(row.id))return true;
  const type=String(row.accountType??"").trim().toLowerCase();
  const sub=String(row.id===null?"":subtypes.get(row.id)??"").trim().toLowerCase();
  return type==="cash"||type==="bank"||sub==="cash"||sub==="bank";
@@ -214,14 +216,18 @@ async function sourceCashFlowTx(tx:DbTransaction,companyId:number,fromDate:strin
 async function statementTx(tx:DbTransaction,input:{companyId:number;fromDate:string;asOfDate:string}):
  Promise<SinglePeriodFinancialStatements>{
  const {companyId,fromDate,asOfDate}=input;
- const [sheetRows,pnlRows,trial,subtypeRows,sourceCash]=await Promise.all([
+ const [sheetRows,pnlRows,trial,subtypeRows,linkedBanks,sourceCash]=await Promise.all([
   loadBalanceRows(tx,{companyId,from:fromDate,asOf:asOfDate}),
   loadBalanceRows(tx,{companyId,from:fromDate,asOf:asOfDate,excludeFiscalClose:true}),
   buildTrialBalance(companyId,asOfDate,tx),
   tx.execute(sql`SELECT id,code,sub_type FROM ledger_accounts WHERE company_id=${companyId}`),
+  tx.execute(sql`SELECT linked_ledger_id FROM bank_accounts
+    WHERE company_id=${companyId} AND linked_ledger_id IS NOT NULL
+      AND deleted_at IS NULL`),
   sourceCashFlowTx(tx,companyId,fromDate,asOfDate)
  ]);
  const subtypes=new Map(resultRows<MetaRow>(subtypeRows).map(r=>[Number(r.id),r.sub_type]));
+ const bankLinked=new Set(resultRows<BankLinkRow>(linkedBanks).map(r=>Number(r.linked_ledger_id)));
  const assets=empty(),liabilities=empty(),equity=empty(),unknown=empty();
  const revenue=empty(),otherIncome=empty(),costOfSales=empty(),operatingExpenses=empty();
  const financialLine=(row:BalanceRow,category:Classification):StatementLine=>({
@@ -236,7 +242,7 @@ async function statementTx(tx:DbTransaction,input:{companyId:number;fromDate:str
   const role=classification(row,subtypes);
   if(role==="equity"||role==="income"||role==="expense"||role==="cost_of_sales")
    openingTotalEquity=openingTotalEquity.minus(brought);
-  if(cashAccount(row,subtypes)){
+  if(cashAccount(row,subtypes,bankLinked)){
    cashOpening=cashOpening.plus(row.masterOpening).plus(row.carriedForward);
    cashChange=cashChange.plus(row.periodDebit).minus(row.periodCredit);
   }
