@@ -375,11 +375,19 @@ async function auditBudget(client:PoolClient,scope:Scope,id:number,before:unknow
 }
 async function exportReport(res:Response,scope:Scope,filters:Filters,format:string,view:string){
   const data=await summaryData(scope,filters);
-  const cols=view==="activity"?
-    ["sourceDate","companyId","costCenterCode","accountName","sourceModule",
-      "voucherNumber","treatment","allocationOrigin","currency","amountNative","amountUsd"]:
-    ["companyName","code","name","expense","inventoryCost","budget","variance","entries"];
-  const items=view==="activity"?(await activityData(scope,filters,5001,0)).activity:data.centers;
+  const layouts:Record<string,string[]>={
+    activity:["sourceDate","companyId","costCenterCode","accountName","sourceModule",
+      "voucherNumber","treatment","allocationOrigin","currency","amountNative","amountUsd"],
+    summary:["companyName","code","name","expense","budget","variance","inventoryCost","entries"],
+    departments:["companyName","code","name","expense","budget","variance","inventoryCost","members"],
+    accounts:["companyId","accountName","expense","inventoryCost","entries"],
+    months:["month","expense","unallocated","budget","variance","inventoryCost"],
+  };
+  const cols=layouts[view];
+  if(!cols)throw new ReportError(400,"Invalid export view");
+  const items=view==="activity"?(await activityData(scope,filters,5001,0)).activity:
+    view==="departments"?data.departments:
+    view==="accounts"?data.accounts:view==="months"?data.months:data.centers;
   if(items.length>5000)throw new ReportError(413,"Narrow your dates or center for exports above 5,000 rows");
   const name="cost-centers-"+view+"-"+filters.from+"-"+filters.to;
   const rowData=items.map(item=>cols.map(col=>String(item[col]??"")));
@@ -413,11 +421,11 @@ async function exportReport(res:Response,scope:Scope,filters:Filters,format:stri
     pdf.fontSize(16).text("Cost Center "+(view==="activity"?"Activity":"Budget & Expense")+" Report");
     pdf.fontSize(9).text(filters.from+" to "+filters.to+" | Historical USD | Whole-month budgets");
     if(view!=="activity") {
-      pdf.text("Expense: "+data.totals.expense+" | Budget: "+data.totals.budget+
+      pdf.text("Allocated expense: "+data.totals.expense+" | Unallocated: "+data.totals.unallocated+" | Budget: "+data.totals.budget+
         " | Variance: "+data.totals.variance+" | Inventory costs (separate): "+data.totals.inventoryCost);
     }
     pdf.moveDown();
-    const widths=view==="activity"?[65,42,80,100,66,80,60,55,38,62,62]:[96,56,112,80,80,80,75,40];
+    const widths=view==="activity"?[65,42,80,100,66,80,60,55,38,62,62]:cols.map(()=>80);
     const pageW=pdf.page.width-68;
     const scale=pageW/widths.reduce((s,v)=>s+v,0);
     let y=pdf.y;
@@ -468,7 +476,7 @@ function registerPrefix(app:Express,prefix:string){
       const scope=await resolveScope(req,false,true);
       const format=req.query.format;
       const view=req.query.view??"summary";
-      if(!["csv","xlsx","pdf"].includes(String(format))||!["summary","activity"].includes(String(view)))
+      if(!["csv","xlsx","pdf"].includes(String(format))||!["summary","activity","departments","accounts","months"].includes(String(view)))
         throw new ReportError(400,"Invalid export request");
       await exportReport(res,scope,parseFilters(req),String(format),String(view));
     }catch(e){if(!res.headersSent)fail(res,e);else res.end();}
