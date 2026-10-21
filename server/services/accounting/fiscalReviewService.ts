@@ -57,7 +57,7 @@ export interface FiscalReadiness{
  certified:false;
 }
 function day(value:string){
- if(!/^\\d{4}-\\d{2}-\\d{2}$/.test(value))
+ if(!/^\d{4}-\d{2}-\d{2}$/.test(value))
   throw new FiscalReviewError("FISCAL_DATE_INVALID","Invalid ISO fiscal period date",400);
  const parsed=new Date(value+"T00:00:00.000Z");
  if(!Number.isFinite(parsed.valueOf())||parsed.toISOString().slice(0,10)!==value)
