@@ -249,6 +249,20 @@ function registerCostCenterPrefix(app: Express, prefix: string) {
     } catch (error) { sendError(res, error); }
   });
 
+  app.get(prefix + "/automation/failures", requireAuth, async (req, res) => {
+    try {
+      const { companyId } = await identity(req, false);
+      const result = await pool.query(
+        "SELECT id,source_kind AS \"sourceKind\",source_id AS \"sourceId\"," +
+        "left(last_error,200) AS \"message\",failure_count AS \"failureCount\"," +
+        "last_seen AS \"lastSeen\" FROM cost_center_auto_failures " +
+        "WHERE company_id=$1 ORDER BY last_seen DESC LIMIT 30",
+        [companyId]
+      );
+      res.json({ failures: result.rows });
+    } catch(error) { sendError(res,error); }
+  });
+
   app.get(prefix + "/automation/rules", requireAuth, async (req, res) => {
     try {
       const { companyId } = await identity(req, false);
