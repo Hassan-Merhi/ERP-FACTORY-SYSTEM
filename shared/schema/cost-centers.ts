@@ -5,7 +5,7 @@
  */
 import { sql } from "drizzle-orm";
 import {
-  pgTable, serial, bigserial, bigint, integer, varchar, text, decimal, boolean,
+  pgTable, serial, bigserial, bigint, integer, varchar, text, decimal, boolean, uuid, jsonb,
   timestamp, date, index, uniqueIndex, foreignKey, check,
 } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
@@ -200,3 +200,50 @@ export const costCenterMonthlyBudgets = pgTable("cost_center_monthly_budgets", {
   amountCheck: check("cost_center_monthly_budgets_amount_check",sql`${t.amountUsd}>=0`),
 }));
 export type CostCenterMonthlyBudget = typeof costCenterMonthlyBudgets.$inferSelect;
+
+/** Phase 7: immutable historical allocation dry-runs, not financial postings. */
+export const costCenterHistoricalBatches = pgTable("cost_center_historical_batches", {
+  id: uuid("id").primaryKey(),
+  companyId: integer("company_id").notNull().references(() => companies.id, { onDelete: "restrict" }),
+  createdBy: text("created_by").notNull(),
+  sourceKind: varchar("source_kind", { length: 24 }).notNull(),
+  requestSnapshot: jsonb("request_snapshot").notNull(),
+  sourceSnapshot: jsonb("source_snapshot").notNull(),
+  sourceHash: varchar("source_hash", { length: 64 }).notNull(),
+  candidateCount: integer("candidate_count").notNull(),
+  candidateNativeTotal: decimal("candidate_native_total", { precision: 20, scale: 6 }).notNull(),
+  candidateUsdTotal: decimal("candidate_usd_total", { precision: 20, scale: 6 }).notNull(),
+  status: varchar("status", { length: 16 }).notNull().default("PREVIEW"),
+  appliedBy: text("applied_by"),
+  appliedAt: timestamp("applied_at"),
+  expiresAt: timestamp("expires_at").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, t => ({
+  companyDateIdx: index("cost_center_historical_batches_company_date_idx").on(t.companyId,t.createdAt),
+  companyStatusIdx: index("cost_center_historical_batches_company_status_idx").on(t.companyId,t.status,t.expiresAt),
+  companyIdUnique: uniqueIndex("cost_center_historical_batches_company_id_uidx").on(t.companyId,t.id),
+}));
+
+export const costCenterHistoricalBatchItems = pgTable("cost_center_historical_batch_items", {
+  id: bigserial("id", { mode: "number" }).primaryKey(),
+  batchId: uuid("batch_id").notNull().references(() => costCenterHistoricalBatches.id, { onDelete: "restrict" }),
+  companyId: integer("company_id").notNull().references(() => companies.id, { onDelete: "restrict" }),
+  sourceKind: varchar("source_kind", { length: 24 }).notNull(),
+  sourceId: integer("source_id").notNull(),
+  sourceNative: decimal("source_native", { precision: 20, scale: 6 }).notNull(),
+  sourceUsd: decimal("source_usd", { precision: 20, scale: 6 }).notNull(),
+  allocatedNative: decimal("allocated_native", { precision: 20, scale: 6 }).notNull(),
+  allocatedUsd: decimal("allocated_usd", { precision: 20, scale: 6 }).notNull(),
+  appliedBy: text("applied_by").notNull(),
+  appliedAt: timestamp("applied_at").notNull().defaultNow(),
+}, t => ({
+  companyBatchFk: foreignKey({
+    name: "cost_center_historical_batch_items_company_batch_fk",
+    columns: [t.companyId,t.batchId],
+    foreignColumns: [costCenterHistoricalBatches.companyId,costCenterHistoricalBatches.id],
+  }).onDelete("restrict"),
+  companyBatchIdx: index("cost_center_historical_batch_items_company_batch_idx").on(t.companyId,t.batchId),
+}));
+
+export type CostCenterHistoricalBatch = typeof costCenterHistoricalBatches.$inferSelect;
+export type CostCenterHistoricalBatchItem = typeof costCenterHistoricalBatchItems.$inferSelect;
