@@ -97,7 +97,8 @@ function BulkPaymentDialog({
       bulkRequest.current = null;
       const confirmed = data.results.filter((row) => !row.error && !!row.paymentGroupId);
       const failed = data.results.filter((row) => !!row.error);
-      const incomplete = confirmed.length + failed.length !== data.results.length || data.processed !== data.results.length;
+      const incomplete =
+        confirmed.length + failed.length !== data.results.length || data.processed !== data.results.length;
 
       queryClient.invalidateQueries({ queryKey: [apiBase + "/units"] });
       queryClient.invalidateQueries({ queryKey: [apiBase + "/payments/scheduled"] });
