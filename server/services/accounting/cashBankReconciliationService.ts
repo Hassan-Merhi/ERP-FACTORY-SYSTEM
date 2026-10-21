@@ -105,6 +105,12 @@ export async function loadCashBankAccountTx(
   if(!isBank && !["bank","cash"].includes(String(row.account_type??"").trim().toLowerCase()))
     throw new CashBankError("CASH_BANK_ACCOUNT_TYPE","Select a Cash or Bank ledger account",400);
   if(!isBank) {
+    const customerOwners=resultRows<{id:number}&Record<string,unknown>>(await tx.execute(sql`
+      SELECT id FROM customers WHERE company_id=${input.companyId}
+        AND ledger_account_id=${input.accountId} LIMIT 1
+    `));
+    if(customerOwners.length)throw new CashBankError("CASH_BANK_CUSTOMER_LEDGER",
+      "A ledger linked to a customer is not an independently reconciled cash account",400);
     const links=resultRows<{id:number}&Record<string,unknown>>(await tx.execute(sql`
       SELECT id FROM bank_accounts WHERE company_id=${input.companyId}
        AND linked_ledger_id=${input.accountId} AND deleted_at IS NULL LIMIT 1
@@ -118,6 +124,8 @@ export async function loadCashBankAccountTx(
       SELECT id FROM ledger_accounts WHERE id=${linkedLedgerId}
        AND company_id=${input.companyId} AND deleted_at IS NULL
        AND LOWER(TRIM(account_type)) IN ('bank','cash')
+       AND NOT EXISTS(SELECT 1 FROM customers c WHERE c.company_id=${input.companyId}
+         AND c.ledger_account_id=ledger_accounts.id)
     `));
     if(!ref.length)throw new CashBankError("CASH_BANK_LINK_BROKEN","Bank-linked ledger is invalid for this company");
   }
@@ -138,6 +146,8 @@ export async function listCashBankAccountsTx(tx:DbTransaction,companyId:number) 
       AND l.deleted_at IS NULL AND LOWER(TRIM(l.account_type)) IN ('cash','bank')
       AND NOT EXISTS(SELECT 1 FROM bank_accounts b WHERE b.company_id=l.company_id
         AND b.linked_ledger_id=l.id AND b.deleted_at IS NULL)
+      AND NOT EXISTS(SELECT 1 FROM customers c WHERE c.company_id=l.company_id
+        AND c.ledger_account_id=l.id)
      ORDER BY l.name,l.id
   `));
   return [...bank.map(r=>({accountKind:"bank" as const,accountId:Number(r.id),name:String(r.name)})),
@@ -217,7 +227,8 @@ export async function importCashBankStatementTx(tx:DbTransaction,input:{
   if(!input.lines.length || input.lines.length>5000)
     throw new CashBankError("CASH_BANK_IMPORT_SIZE","A statement needs 1–5,000 transactions",400);
   const begin=dec(input.openingBalance),end=dec(input.closingBalance);
-  if([begin,end].some(v=>v.decimalPlaces()>6))throw new CashBankError("CASH_BANK_PRECISION","Statement balances support six decimal places",400);
+  if([begin,end].some(v=>v.decimalPlaces()>6 || v.abs().gte("100000000000000")))
+    throw new CashBankError("CASH_BANK_PRECISION","Statement balances must fit six decimals and permitted currency range",400);
   const movement=input.lines.reduce((sum,l)=>sum.plus(dec(l.signedAmount)),new Decimal(0));
   if(!begin.plus(movement).eq(end))
     throw new CashBankError("CASH_BANK_STATEMENT_UNBALANCED",
@@ -385,11 +396,14 @@ export async function matchCashBankLineTx(tx:DbTransaction,input:{
   // Serialize all matching in this account; unique active-entry index also
   // protects against entry reuse across different accounts/periods.
   await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${`bank-match:${input.companyId}:${account.accountKind}:${account.accountId}`}))`);
+  const entries=await bookTx(tx,account,line.period_end);
   if(line.id!=null){
+    const savedEntry=entries.find(r=>Number(r.entry_id)===Number(line.voucher_entry_id));
+    if(!savedEntry)throw new CashBankError("CASH_BANK_MATCH_STALE",
+      "Existing match references a retired or no-longer-eligible voucher; unmatch it first");
     if(Number(line.voucher_entry_id)===input.voucherEntryId)return {matchId:Number(line.id),replayed:true};
     throw new CashBankError("CASH_BANK_LINE_ALREADY_MATCHED","Statement line is already matched");
   }
-  const entries=await bookTx(tx,account,line.period_end);
   const entry=entries.find(r=>Number(r.entry_id)===input.voucherEntryId);
   if(!entry)throw new CashBankError("CASH_BANK_ENTRY_INELIGIBLE","Voucher entry is not a live posting to this account");
   if(entry.active_match_id!==null)throw new CashBankError("CASH_BANK_ENTRY_ALREADY_MATCHED","Voucher entry was matched to another statement");
