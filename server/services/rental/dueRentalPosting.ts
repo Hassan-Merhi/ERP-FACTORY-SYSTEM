@@ -21,6 +21,7 @@
  */
 import { logger } from "../../lib/logger";
 import { companyBusinessDate } from "../accounting/companyBusinessDate";
+import { RENTAL_MODULE_ACCOUNTS } from "../accounting/unifiedAccountingFoundation";
 import {
   companyClosedThrough,
   isDateInClosedPeriod,
@@ -30,12 +31,8 @@ import {
 import { ensureMonthlyForCompany, postRentAccrualForCompany, type RentalModule } from "../../routes/rental/shared";
 import { postDueScheduledRentalPaymentsDetailed } from "./rentalPaymentPostingService";
 
-/** The accounts each rental module posts to (as registered in the rental route modules). */
-export const RENTAL_MODULE_ACCOUNTS: Record<RentalModule, { income: string; expense: string }> = {
-  ERP: { income: "Rental Income - ERP", expense: "Rent Expense - ERP Shops" },
-  FACTORY: { income: "Rental Income - Factory", expense: "Rent Expense - Factory Shops" },
-  PROPERTIES: { income: "Rental Income - Properties", expense: "Rent Expense - Property Shops" },
-};
+/** Compatibility re-export for existing rental callers. */
+export { RENTAL_MODULE_ACCOUNTS } from "../accounting/unifiedAccountingFoundation";
 
 export interface DueRentalPostingOptions {
   trigger: "scheduler" | "manual";
