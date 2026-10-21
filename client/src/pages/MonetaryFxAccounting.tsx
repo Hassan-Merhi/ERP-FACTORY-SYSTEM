@@ -14,6 +14,8 @@ import { Card,CardContent,CardHeader,CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
+// Phase 15 source-only rollout: an independent financial release is still required.
+const UNIFIED_FINANCIAL_POSTING_CERTIFIED=false;
 type Domain="customer"|"supplier"|"factory_supplier";
 type Account={accountKind:"bank"|"ledger";accountId:number;name:string};
 type Rate={currency:string;baseCurrency:string;effectiveDate:string;rateBasePerUnit:string;
@@ -257,7 +259,7 @@ export default function MonetaryFxAccounting(){
                       Journal #{item.recognitionVoucherId}</a></div>}
                   {item.issue&&<div className="text-xs text-destructive">{item.issue}</div>}
                   {item.postable&&<div className="mt-2">
-                    <Button size="sm" disabled={true || !!asOfDate || reason.trim().length<3 || recognize.isPending}
+                    <Button size="sm" disabled={!UNIFIED_FINANCIAL_POSTING_CERTIFIED || !!asOfDate || reason.trim().length<3 || recognize.isPending}
                       onClick={()=>recognize.mutate(item.matchId)}>
                       Recognize FX
                     </Button></div>}
