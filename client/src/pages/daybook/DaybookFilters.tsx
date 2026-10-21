@@ -40,7 +40,7 @@ export function DaybookFilters({
   const { data: centerCatalog } = useQuery<CostCenterCatalog>({
     queryKey: ["/api/cost-centers", selectedCompany?.id, false],
     queryFn: () => readCostCenterApi<CostCenterCatalog>("/api/cost-centers"),
-    enabled: !!selectedCompany?.id && selectedCompany?.role !== "POS",
+    enabled: !!selectedCompany?.id && ["Admin", "Owner", "Developer", "Manager"].includes(selectedCompany?.role || ""),
     staleTime: 30000,
   });
   const centers = centerCatalog?.costCenters || [];
@@ -50,7 +50,7 @@ export function DaybookFilters({
     !!filters.minAmount ||
     !!filters.maxAmount ||
     filters.statusFilter !== "all" ||
-    filters.costCenterId !== "all";
+    (filters.costCenterId || "all") !== "all";
 
   const activeFilterCount = [
     filters.voucherType !== "all",
@@ -129,7 +129,7 @@ export function DaybookFilters({
               </SelectContent>
             </Select>
 
-            <Select value={filters.costCenterId} onValueChange={value => setFilters({...filters,costCenterId:value})}>
+            {["Admin", "Owner", "Developer", "Manager"].includes(selectedCompany?.role || "") && <Select value={filters.costCenterId || "all"} onValueChange={value => setFilters({...filters,costCenterId:value})}>
               <SelectTrigger id="cost-center-filter" data-testid="select-daybook-cost-center" className="w-full">
                 <SelectValue placeholder="All Cost Centers" />
               </SelectTrigger>
@@ -139,7 +139,7 @@ export function DaybookFilters({
                 {filters.costCenterId !== "all" && !centers.some(c => String(c.id) === filters.costCenterId) &&
                   <SelectItem value={filters.costCenterId}>Selected Cost Center #{filters.costCenterId}</SelectItem>}
               </SelectContent>
-            </Select>
+            </Select>}
 
             {layout === "inline" && searchControl}
           </CoreErpFilterGrid>
