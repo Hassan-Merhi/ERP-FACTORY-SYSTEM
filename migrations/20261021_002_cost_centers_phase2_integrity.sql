@@ -18,7 +18,7 @@ BEGIN
   END IF;
 
   IF NEW.voucher_entry_id IS NOT NULL THEN
-    SELECT la.account_type, v.voucher_number, v.source_module, v.optional, v.deleted_at
+    SELECT la.account_type, la.code AS account_code, v.voucher_number, v.source_module, v.optional, v.deleted_at
       INTO parent_voucher
     FROM voucher_entries ve
     JOIN vouchers v ON v.id=ve.voucher_id
@@ -40,8 +40,10 @@ BEGIN
         RAISE EXCEPTION 'Expense ledger lines must keep EXPENSE cost treatment';
       END IF;
     ELSIF upper(btrim(parent_voucher.account_type)) = 'ASSET' THEN
-      IF NEW.cost_treatment <> 'INVENTORY_COST' THEN
-        RAISE EXCEPTION 'Asset ledger lines must keep INVENTORY_COST treatment';
+      IF parent_voucher.account_code NOT IN (
+        'FACTORY_RAW_MATERIAL_STOCK','FACTORY_WIP','FACTORY_FINISHED_GOODS'
+      ) OR NEW.cost_treatment <> 'INVENTORY_COST' THEN
+        RAISE EXCEPTION 'Only factory inventory stock accounts may receive INVENTORY_COST treatment';
       END IF;
     ELSE
       RAISE EXCEPTION 'Only expense or asset ledger lines may have cost center allocations';
