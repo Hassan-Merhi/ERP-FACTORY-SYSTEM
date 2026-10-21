@@ -12,12 +12,12 @@ import { assertTransactionCompanyScope } from "../security/transactionCompanySco
 import { OpenItemError } from "../accounting/partyOpenItemService";
 
 type RentalOrigin = "ERP" | "FACTORY" | "PROPERTIES";
-interface ContractRow {
+interface ContractRow extends Record<string, unknown> {
   id:number; company_id:number; linked_company_id:number|null; module:RentalOrigin;
   currency:string|null; rental_amount:string; start_date:string; end_date:string|null;
 }
-interface RentMonth {id:number; year:number; month:number; expected_amount:string}
-interface RentPayment {id:number;for_year:number;for_month:number;amount:string;payment_date:string;currency:string|null}
+interface RentMonth extends Record<string, unknown> {id:number; year:number; month:number; expected_amount:string}
+interface RentPayment extends Record<string, unknown> {id:number;for_year:number;for_month:number;amount:string;payment_date:string;currency:string|null}
 const money=(value:unknown)=>new Decimal(String(value??0));
 const asMoney=(value:Decimal)=>value.toFixed(2);
 export async function loadRentalOpenItemsTx(tx:DbTransaction,input:{
