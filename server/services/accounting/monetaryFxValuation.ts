@@ -14,7 +14,7 @@ import { sql } from "drizzle-orm";
 import type { DbTransaction } from "../../db";
 import { resultRows } from "../../lib/queryResult";
 import { loadCashBankAccountTx, type CashBankKind } from "./cashBankReconciliationService";
-import { datedMonetaryRateTx, fxDay, fxCurrency, type MonetaryRate } from "./monetaryFxRates";
+import { datedMonetaryRateTx, fxDay, fxCurrency, translateMonetaryAmount, type MonetaryRate } from "./monetaryFxRates";
 
 interface AccountBalanceRow extends Record<string,unknown> {
   id:number;opening_balance:string|null;opening_balance_side:string|null;
@@ -131,7 +131,9 @@ export async function monetaryAccountValuationTx(tx:DbTransaction,input:{
     if(!rate&&code!=="UNRESOLVED")issues.push(`No company rate for USD/${code} on or before ${date}`);
     if(code==="UNRESOLVED"&&!issues.length)issues.push("Original monetary currency cannot be established");
     const verified=!!rate && issues.length===0;
-    const translated=verified?entry.native.times(rate!.rateBasePerUnit):null;
+    // Preserve the exact stored USD->foreign rate: never multiply by a
+    // presentation-rounded reciprocal for large CFA/CDF balances.
+    const translated=verified?dec(translateMonetaryAmount(entry.native.toFixed(),rate!)):null;
     result.push({currency:code,nativeBalance:fmt(entry.native),historicalUsdBasis:fmt(entry.historical),
       rate,translatedUsd:translated===null?null:fmt(translated),
       unrealizedDifferenceUsd:translated===null?null:fmt(translated.minus(entry.historical)),
