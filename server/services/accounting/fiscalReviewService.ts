@@ -13,7 +13,6 @@ import type {DbTransaction} from "../../db";
 import {resultRows} from "../../lib/queryResult";
 import {assertTransactionCompanyScope} from "../security/transactionCompanyScope";
 import {companyBusinessDate} from "./companyBusinessDate";
-import {fxDay} from "./monetaryFxRates";
 import {buildTrialBalance} from "./integrity/trialBalance";
 import {financialStatementCategory} from "./unifiedAccountingFoundation";
 import {writeAuditEvent} from "../audit";
@@ -58,10 +57,12 @@ export interface FiscalReadiness{
  certified:false;
 }
 function day(value:string){
- const out=fxDay(value);
- if(!/^\d{4}-\d{2}-\d{2}$/.test(out)||new Date(out+"T00:00:00Z").toISOString().slice(0,10)!==out)
+ if(!/^\\d{4}-\\d{2}-\\d{2}$/.test(value))
   throw new FiscalReviewError("FISCAL_DATE_INVALID","Invalid ISO fiscal period date",400);
- return out;
+ const parsed=new Date(value+"T00:00:00.000Z");
+ if(!Number.isFinite(parsed.valueOf())||parsed.toISOString().slice(0,10)!==value)
+  throw new FiscalReviewError("FISCAL_DATE_INVALID","Invalid calendar date",400);
+ return value;
 }
 function num(v:unknown){return Number(String(v??"0"));}
 function positive(v:number,name:string){
@@ -189,7 +190,14 @@ export async function fiscalReadinessTx(tx:DbTransaction,input:{
  SELECT
  COALESCE(bool_or(tgname='vouchers_closed_period_guard' AND tgenabled<>'D'),false) AS vouchers_guard,
  COALESCE(bool_or(tgname='voucher_entries_closed_period_guard' AND tgenabled<>'D'),false) AS entries_guard,
- COALESCE(bool_or(tgname='audit_log_before_insert_chain' AND tgenabled<>'D'),false) AS audit_guard,
+ (SELECT COUNT(DISTINCT tgname) FROM pg_trigger
+   WHERE NOT tgisinternal AND tgenabled<>'D'
+    AND tgname IN ('vouchers_audit_actor_columns',
+     'vouchers_audit_row_insert','vouchers_audit_row_update',
+     'vouchers_audit_row_delete','voucher_entries_audit_row_insert',
+     'voucher_entries_audit_row_update','voucher_entries_audit_row_delete',
+     'audit_log_before_insert_chain','audit_log_append_only','audit_log_no_truncate')
+  )=10 AS audit_guard,
  COALESCE(bool_or(tgname='ledger_accounts_opening_balance_lock' AND tgenabled<>'D'),false) AS opening_guard
  FROM pg_trigger WHERE NOT tgisinternal
  `)
