@@ -666,6 +666,12 @@ export async function ensureRuntimeSchema(pool: Pool): Promise<void> {
     await import("../services/accounting/ensureAnalyticAccountingSchema");
   await ensureAnalyticAccountingSchema(pool);
 
+  // Phase 13: financial review signoffs and reviewed-close audit evidence only.
+  // No fiscal period is automatically closed, reopened or journal-posted.
+  const {ensureFiscalReviewSchema} =
+    await import("../services/accounting/ensureFiscalReviewSchema");
+  await ensureFiscalReviewSchema(pool);
+
   // Wave 16 (A): the Phase 3 historical accounting repair no longer runs here.
   // It added and deleted lines of posted vouchers of every company before each
   // listen, with no audit; it is now the Owner preview/apply at
