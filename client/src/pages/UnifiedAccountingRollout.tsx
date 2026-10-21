@@ -20,6 +20,8 @@ interface Readiness {
  companyId:number;businessDate:string;deployedSha:string|null;
  releaseMode:Mode;policy:Policy;
  bookedTrial:{balanced:boolean;differenceUsd:string;assumedOpeningSides:number};
+ historicalFx:{ready:boolean;unresolvedEntryCount:number;unresolvedVoucherCount:number;
+  sampleVoucherIds:number[];certified:false;caveat:string};
  schema:{missing:string[];unprotected:string[];tables:Array<{
   name:string;exists:boolean;rls:boolean;forced:boolean
  }>};
@@ -167,6 +169,8 @@ export default function UnifiedAccountingRollout(){
       <p className="font-semibold">{d.schema.missing.length}</p></div>
      <div><p className="text-xs text-muted-foreground">Unprotected tables</p>
       <p className="font-semibold">{d.schema.unprotected.length}</p></div>
+     <div><p className="text-xs text-muted-foreground">Historical FX missing entries</p>
+      <p className="font-semibold">{d.historicalFx.unresolvedEntryCount}</p></div>
     </div>
     {d.blockers.length===0?<p className="text-sm font-medium">
      Structural checks passed. Independent CI, financial and security evidence
