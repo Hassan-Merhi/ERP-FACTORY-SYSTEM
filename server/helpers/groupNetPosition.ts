@@ -127,7 +127,7 @@ export function isGroupNetPositionCompany(company: Pick<CompanyRecord, "active" 
  * re-rooting both AsyncLocalStorage contexts, sister companies can look empty until
  * the user manually switches into them.
  */
-async function runWithGroupCompanyScope<T>(
+export async function runWithGroupCompanyScope<T>(
   companyId: number,
   allowedCompanyIds: ReadonlySet<number> | undefined,
   run: () => Promise<T>
