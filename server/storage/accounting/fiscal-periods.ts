@@ -174,9 +174,20 @@ export async function closeFiscalPeriod(
     // closedPeriodGuard), so no write can land in the period while its
     // balances are being totalled and closed.
     await tx.execute(sql`SELECT pg_advisory_xact_lock(${CLOSED_PERIOD_LOCK_NAMESPACE}, ${companyId})`);
-    // Reviewed close is opt-in: existing legacy fiscal close/reopen behavior
-    // remains unchanged. A reviewed close must validate every current source
-    // amount INSIDE this exclusive lock; not in the HTTP preflight alone.
+    // Company Owner can explicitly require independent dual approval for
+    // ALL close entry points. Check policy under the same fiscal posting lock:
+    // direct legacy API callers must not bypass reviewed-close enforcement.
+    const reviewPolicy=await tx.execute(sql`
+      SELECT enforce_reviewed_close FROM accounting_fiscal_review_policy
+      WHERE company_id=${companyId} LIMIT 1
+    `);
+    const requiresReview=(reviewPolicy.rows[0] as
+      {enforce_reviewed_close?:boolean}|undefined)?.enforce_reviewed_close===true;
+    if(requiresReview&&!reviewedClose)
+      throw new FiscalPeriodCloseError(
+        "This company requires two approved reviews: use the reviewed fiscal close endpoint.",409);
+    // Reviewed close always validates inside the exclusive company lock,
+    // even where legacy close remains permitted for compatibility.
     if (reviewedClose) await reviewedClose.beforeClose(tx);
 
     const existingClosures = await tx
