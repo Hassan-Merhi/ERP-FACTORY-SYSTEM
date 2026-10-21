@@ -21,7 +21,7 @@ import { companyStockValuation, companyStockValuationAsOf } from "../../inventor
 import { ledgerBalancesByCode, isSupplierPartnerCompany } from "./linkedJournal";
 import { fxDay } from "../monetaryFxRates";
 
-export type ErpInventorySource = "sale" | "purchase_order" | "offload" | "inventory_movement";
+export type ErpInventorySource = "sale" | "purchase_order" | "offload" | "inventory_movement" | "credit_debit_note" | "transfer";
 export type ErpInventoryAuditStatus =
   "posted" | "cost_mismatch" | "date_mismatch" | "missing" | "expected_periodic" | "review";
 export interface ErpInventoryAuditRow {
@@ -174,11 +174,61 @@ export async function erpInventoryAccountingAuditTx(tx:DbTransaction,input:{
     GROUP BY m.source_number,j.id,j.effective_date,j.voucher_date
     ORDER BY MAX(m.movement_date) DESC,m.source_number DESC LIMIT ${limit}
   `));
+  // Credit/debit notes put the Inventory contra directly on their OWN voucher,
+  // rather than a separate linked COGS or receipt voucher. Compare the exact
+  // movement captured in credit_note_items.value_moved to the original posted
+  // Inventory line; never value the return using today's average or sales price.
+  const notes=resultRows<SourceRow>(await tx.execute(sql`
+    SELECT v.id,v.voucher_number AS doc,
+      COALESCE(v.effective_date,v.voucher_date)::text AS dated,
+      (CASE WHEN v.voucher_type='Credit Note' THEN 1 ELSE -1 END*
+        COALESCE((SELECT SUM(COALESCE(n.value_moved,n.quantity*n.inventory_cost))
+           FROM credit_note_items n WHERE n.voucher_id=v.id),0))::text AS expected,
+      v.voucher_number AS journal_number,v.id AS journal_id,
+      COALESCE(v.effective_date,v.voucher_date)::text AS journal_date,
+      (SELECT COALESCE(SUM(ve.debit_amount-ve.credit_amount),0)::text
+         FROM voucher_entries ve JOIN ledger_accounts la ON la.id=ve.ledger_account_id
+         WHERE ve.voucher_id=v.id AND la.company_id=${companyId}
+           AND la.code='INVENTORY') AS posted,
+      (SELECT COUNT(*)::int FROM credit_note_items n WHERE n.voucher_id=v.id) AS lines
+    FROM vouchers v
+    WHERE v.company_id=${companyId} AND v.deleted_at IS NULL AND v.optional=false
+      AND v.voucher_type IN ('Credit Note','Debit Note')
+      AND COALESCE(v.effective_date,v.voucher_date)<=${date}::date
+    ORDER BY COALESCE(v.effective_date,v.voucher_date) DESC,v.id DESC LIMIT ${limit}
+  `));
+  // Transfers conserve cost across locations: no new company-wide Inventory
+  // or COGS journal is expected. Any shortage-settlement value is already
+  // represented by a separately audited INV-MOVE journal.
+  const transfers=resultRows<SourceRow>(await tx.execute(sql`
+    SELECT st.id,v.voucher_number AS doc,
+      COALESCE(v.effective_date,v.voucher_date)::text AS dated,
+      '0'::text AS expected,v.voucher_number AS journal_number,
+      NULL::integer AS journal_id,NULL::text AS journal_date,
+      NULL::text AS posted,
+      CASE WHEN st.inventory_applied THEN 1 ELSE 0 END AS lines
+    FROM stock_transfer_vouchers st JOIN vouchers v ON v.id=st.voucher_id
+    WHERE v.company_id=${companyId} AND v.deleted_at IS NULL AND v.optional=false
+      AND COALESCE(v.effective_date,v.voucher_date)<=${date}::date
+    ORDER BY COALESCE(v.effective_date,v.voucher_date) DESC,st.id DESC LIMIT ${limit}
+  `));
   const all=[
     ...sales.map(row=>documentStatus(row,"sale",active(row.dated))),
     ...orders.map(row=>documentStatus(row,"purchase_order",active(row.dated))),
     ...offloads.filter(row=>row.dated!==null).map(row=>documentStatus(row,"offload",active(row.dated))),
-    ...movements.map(row=>documentStatus(row,"inventory_movement",active(row.dated)))
+    ...movements.map(row=>documentStatus(row,"inventory_movement",active(row.dated))),
+    ...notes.map(row=>documentStatus(row,"credit_debit_note",true)),
+    ...transfers.map(row=>({
+      kind:"transfer" as const,sourceId:String(row.id),
+      documentNumber:row.doc,documentDate:row.dated,
+      linkedJournalNumber:"No separate COGS journal required",
+      linkedJournalId:null,linkedJournalDate:null,
+      expectedStockMovement:"0.00",postedStockMovement:null,
+      status:(Number(row.lines)===1?"posted":"review") as ErpInventoryAuditStatus,
+      note:Number(row.lines)===1
+        ?"Internal location transfer preserves company-wide cost. Shortage variance, if any, is traced as INV-MOVE."
+        :"This stock transfer does not show inventory applied; review its operational lifecycle."
+    }))
   ];
   const totals={
     sources:all.length,posted:all.filter(r=>r.status==="posted").length,
@@ -186,7 +236,7 @@ export async function erpInventoryAccountingAuditTx(tx:DbTransaction,input:{
     mismatched:all.filter(r=>["cost_mismatch","date_mismatch"].includes(r.status)).length,
     periodic:all.filter(r=>r.status==="expected_periodic").length,
     review:all.filter(r=>r.status==="review").length,
-    truncated:[sales,orders,offloads,movements].some(rows=>rows.length===limit),
+    truncated:[sales,orders,offloads,movements,notes,transfers].some(rows=>rows.length===limit),
   };
   const now=await companyBusinessDate(companyId,tx);
   const value=partner?null:date>=now?
@@ -211,7 +261,7 @@ export async function erpInventoryAccountingAuditTx(tx:DbTransaction,input:{
       cutoverActivation:"Per-company cutover remains disabled until its existing readiness gate certifies all paths",
       historicalAdjustment:"No historical journals or inventory balances are backfilled",
       transfers:"Internal location transfers move stock value between locations, not new consolidated COGS",
-      returns:"Returns and reversals must preserve the original sale-stock source and linked COGS lifecycle",
+      returns:"Credit/debit notes reconcile inventory movement at the original note voucher, with their recorded value_moved; sale COGS reversals retain their source lifecycle",
       landedCosts:"PO Goods in Transit and offload charge allocations retain their original booked source amounts"
     }};
 }
