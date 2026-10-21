@@ -404,7 +404,7 @@ async function exportReport(res:Response,scope:Scope,filters:Filters,format:stri
   if(items.length>5000)throw new ReportError(413,"Narrow your dates or center for exports above 5,000 rows");
   const name="cost-centers-"+view+"-"+filters.from+"-"+filters.to;
   const rowData=(items as unknown as Array<Record<string,unknown>>).map(item=>cols.map(col=>String(item[col]??"")));
-  const safe=(v:string)=>/^[=+\-@\t\r]/.test(v)?"'"+v:v;
+  const safe=(v:string)=>/^[=+\-@\t\r]/.test(v)&&!/^[-+]?\d+(?:\.\d+)?$/.test(v)?"'"+v:v;
   if(format==="csv"){
     const escape=(v:string)=>'"'+safe(v).replace(/"/g,'""')+'"';
     const contents="\uFEFF"+[cols,...rowData].map(c=>c.map(escape).join(",")).join("\r\n");
@@ -417,7 +417,17 @@ async function exportReport(res:Response,scope:Scope,filters:Filters,format:stri
     book.creator="ERP Cost Centers";
     const sheet=book.addWorksheet("Cost Centers",{views:[{state:"frozen",ySplit:1}]});
     sheet.addRow(cols);
-    for(const line of rowData)sheet.addRow(line.map(safe));
+    const numericColumns=new Set(["expense","inventoryCost","budget","variance","unallocated",
+      "amountNative","amountUsd","entries","members"]);
+    for(const line of rowData)sheet.addRow(line.map((value,index)=>{
+      if(numericColumns.has(cols[index])&&/^[-+]?\d+(?:\.\d+)?$/.test(value)){
+        const numberValue=Number(value);
+        // Excel stores approximately 15 significant digits; retain large
+        // 20,6 source values as exact text rather than corrupt historical FX.
+        if(Number.isFinite(numberValue)&&Math.abs(numberValue)<1e12) return numberValue;
+      }
+      return safe(value);
+    }));
     sheet.getRow(1).font={bold:true};
     sheet.columns.forEach(column=>{column.width=22;});
     sheet.autoFilter={from:"A1",to:sheet.getRow(1).getCell(cols.length).address};
