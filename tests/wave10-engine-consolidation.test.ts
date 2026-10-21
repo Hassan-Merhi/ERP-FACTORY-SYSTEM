@@ -611,3 +611,110 @@ describe("amounts not yet in the ledger", () => {
     expect(before.rows.some((row) => row.voucherNumber === "INVOICE-" + String(unpostedOrder))).toBe(false);
   });
 });
+
+describe("paginated customer balances with unfinalized container charges", () => {
+  it("reconciles 4500 held debit across full, paged, continuous and dated statements", async () => {
+    const orderId = await insertId(
+      `INSERT INTO customer_orders (company_id, customer_id, order_date, status)
+       VALUES ($1, $2, '2026-09-05', 'DRAFT') RETURNING id`,
+      [factory, fCustomer]
+    );
+    const chargeId = await insertId(
+      `INSERT INTO customer_order_charges (order_id, name, amount, charge_type)
+       VALUES ($1, 'Freight', 4500, 'FREIGHT') RETURNING id`,
+      [orderId]
+    );
+    const heldVoucherId = await voucher(
+      factory,
+      [
+        { ledger: fCustLedger, customer: fCustomer, debit: "4500.00", credit: "0.00" },
+        { ledger: fSales, debit: "0.00", credit: "4500.00" },
+      ],
+      "2026-09-06",
+      `CHARGE-PRE-${orderId}-${chargeId}`
+    );
+
+    const unpaged = await call("GET /api/accounts/ledger/:id/transactions", {
+      params: { id: String(fCustLedger) },
+      query: { endDate: "2026-09-30" },
+    });
+    expect(unpaged.statusCode).toBe(200);
+    expect(unpaged.body.customerId).toBe(fCustomer);
+    expect(unpaged.body.transactions.some((row: { voucherId: number }) => row.voucherId === heldVoucherId)).toBe(false);
+    expect(
+      unpaged.body.transactions.reduce(
+        (sum: number, row: { debitAmount: string; creditAmount: string }) =>
+          sum + Number(row.debitAmount) - Number(row.creditAmount),
+        0
+      )
+    ).toBe(240);
+
+    const dates = { effectiveEndDate: "2026-09-30", asOfDate: "2026-09-30", businessDate: "2026-10-21" };
+    const first = await runCustomerBalanceStatement({
+      customerId: fCustomer,
+      companyId: factory,
+      pagination: { page: 1, limit: 1, offset: 0 },
+      dates,
+    });
+    const second = await runCustomerBalanceStatement({
+      customerId: fCustomer,
+      companyId: factory,
+      pagination: { page: 2, limit: 1, offset: 1 },
+      dates,
+    });
+    const full = await runCustomerBalanceStatement({
+      customerId: fCustomer,
+      companyId: factory,
+      pagination: { page: 1, limit: 100, offset: 0 },
+      dates,
+    });
+    expect(full.total).toBe(3);
+    expect(full.transactions).toHaveLength(3);
+    expect(full.transactions.some((row: any) => row.voucherId === heldVoucherId)).toBe(false);
+    expect(full).toMatchObject({
+      periodDebitTotal: 340,
+      periodCreditTotal: 100,
+      closingNetBalance: 240,
+      total: 3,
+    });
+    expect(first.preNetBalance).toBe(0);
+    expect(second.preNetBalance).toBe(40);
+    expect(first.total).toBe(3);
+    expect(second.total).toBe(3);
+
+    const dated = await runCustomerBalanceStatement({
+      customerId: fCustomer,
+      companyId: factory,
+      pagination: { page: 1, limit: 100, offset: 0 },
+      dates: { ...dates, rawStart: "2026-09-07" },
+    });
+    expect(dated).toMatchObject({
+      preNetBalance: 40,
+      periodDebitTotal: 300,
+      periodCreditTotal: 100,
+      closingNetBalance: 240,
+    });
+
+    const stream = await runCustomerBalanceStatement({
+      customerId: fCustomer,
+      companyId: factory,
+      pagination: { page: 1, limit: 1, offset: 0 },
+      dates,
+      continuous: { limit: 1 },
+    });
+    expect(stream.total).toBe(3);
+    expect(stream.closingNetBalance).toBe(240);
+    expect(stream.transactions.some((row: any) => row.voucherId === heldVoucherId)).toBe(false);
+    expect(stream.nextCursor).not.toBeNull();
+
+    const [party] = (await getPartyBalances(db, { companyId: factory, kind: "customer", ids: [fCustomer], memo: true })).parties;
+    // The GL audit closing still includes the held 4500, while the
+    // receivable shown by Factory Parties is 240 ledger + 610 memo = 850.
+    expect(party.closing).toBe("4740.00");
+    expect(Number(party.memoTotal)).toBe(610);
+    const customerList = await call("GET /api/factory/customers", {
+      session: { currentCompanyId: factory, factoryCompanyId: factory },
+    });
+    expect(customerList.body.find((c: { id: number }) => c.id === fCustomer).balance).toBe(850);
+  });
+});

@@ -9,10 +9,67 @@ import { closedPeriodErrorResponse } from "../../../lib/closedPeriodError";
 import { getErrorMessage } from "../../../lib/httpHandlers";
 import { logger } from "../../../lib/logger";
 import { applyBaleRecost, BaleRecostRefusal, planBaleRecost } from "../../../services/factory/baleRecost";
+import {
+  HISTORICAL_BALE_AUDIT_GROUPS,
+  historicalBaleCostAuditPreview,
+  type HistoricalBaleAuditGroup,
+} from "../../../services/factory/historicalBaleCostAudit";
 
 const companyOf = (req: Request) => req.session.factoryCompanyId || req.session.currentCompanyId;
 
 export function registerBaleRecostRoutes(app: Express) {
+  // Screening-only historical cost audit. Does not reprice sold bales or
+  // create vouchers. Admin/Owner can review invoice-evidence cohorts safely.
+  app.get(
+    "/api/factory/bale-cost/historical-sold-audit",
+    requireAuth,
+    requireRole("Admin", "Owner"),
+    async (req: Request, res: Response) => {
+      try {
+        const companyId = companyOf(req);
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
+        const rawGroup = req.query.group;
+        if (
+          rawGroup != null &&
+          (typeof rawGroup !== "string" || !HISTORICAL_BALE_AUDIT_GROUPS.includes(rawGroup as HistoricalBaleAuditGroup))
+        ) {
+          return res.status(400).json({ message: "Unknown audit group" });
+        }
+        const limit = typeof req.query.limit === "string" ? Number(req.query.limit) : 100;
+        const offset = typeof req.query.offset === "string" ? Number(req.query.offset) : 0;
+        const orderId =
+          req.query.orderId == null
+            ? undefined
+            : typeof req.query.orderId === "string"
+              ? Number(req.query.orderId)
+              : NaN;
+        if (
+          !Number.isSafeInteger(limit) ||
+          !Number.isSafeInteger(offset) ||
+          limit < 1 ||
+          limit > 250 ||
+          offset < 0 ||
+          (orderId != null && (!Number.isSafeInteger(orderId) || orderId < 1))
+        ) {
+          return res
+            .status(400)
+            .json({ message: "limit must be 1–250; offset nonnegative; orderId a positive integer" });
+        }
+        res.json(
+          await historicalBaleCostAuditPreview(companyId, {
+            group: rawGroup as HistoricalBaleAuditGroup | undefined,
+            orderId,
+            limit,
+            offset,
+          })
+        );
+      } catch (error: unknown) {
+        logger.error("Historical factory bale costing audit failed:", { error });
+        res.status(500).json({ message: getErrorMessage(error) });
+      }
+    }
+  );
+
   // The plan: per mix and per bale the old and new USD cost, unvalued rows, totals and its hash.
   app.get(
     "/api/factory/bale-cost/recost-preview",
@@ -46,6 +103,7 @@ export function registerBaleRecostRoutes(app: Express) {
         }
         const result = await applyBaleRecost(companyId, {
           planHash,
+          confirmVerifiedSoldBales: req.body?.confirmVerifiedSoldBales === true,
           actor: {
             userId: String(req.session.userId ?? ""),
             username: req.session.username || String(req.session.userId ?? "unknown"),

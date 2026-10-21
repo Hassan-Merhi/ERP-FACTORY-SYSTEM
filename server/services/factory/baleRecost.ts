@@ -23,7 +23,10 @@
  * What is re-costed:
  *   - bales that are factory stock and not sold: in stock or reserved
  *     (RESERVED_FOR_ORDER / RESERVED_FOR_DISPATCH), not on a finalized,
- *     dispatched or sold order. SOLD bales are never re-costed;
+ *     dispatched or sold order. SOLD bales on finalized/invoiced orders are never re-costed;
+ *   - a legacy SOLD bale linked to a VERIFIED order with no invoice, finalization,
+ *     sale-ledger row, frozen invoice document, or POS sale can be re-costed:
+ *     the stock valuation still treats it as finished goods until invoiced.
  *   - a bale from a mix at weight × the mix's USD cost per kg, recomputed from
  *     the mix's sources at their USD rates now (the supplier's locked moving
  *     average, else the container's landed USD cost; an upstream batch at its
@@ -89,6 +92,7 @@ export interface RecostBaleLine {
   id: number;
   referenceNumber: string;
   status: string;
+  eligibility: "unsold-stock" | "sold-on-uninvoiced-verified-order";
   mixBatchId: number | null;
   weightKg: string;
   basis: "mix" | "production-price";
@@ -119,7 +123,7 @@ export interface BaleRecostPlan {
 
 export class BaleRecostRefusal extends Error {
   constructor(
-    readonly code: "PLAN_CHANGED" | "NOTHING_TO_APPLY",
+    readonly code: "PLAN_CHANGED" | "NOTHING_TO_APPLY" | "VERIFIED_SOLD_CONFIRM_REQUIRED",
     message: string
   ) {
     super(message);
@@ -179,12 +183,60 @@ export async function planBaleRecostTx(tx: DbTransaction, companyId: number): Pr
         FROM factory_bales b
         LEFT JOIN factory_bale_products p ON p.id = b.product_id AND p.company_id = ${companyId}
        WHERE b.company_id = ${companyId} AND b.deleted_at IS NULL
-         AND b.status IN ('IN_STOCK', 'RESERVED_FOR_ORDER', 'RESERVED_FOR_DISPATCH')
+         AND (
+           b.status IN ('IN_STOCK', 'RESERVED_FOR_ORDER', 'RESERVED_FOR_DISPATCH')
+           OR (b.status = 'SOLD'
+             -- Some legacy verification flows mark bales SOLD before the
+             -- invoice exists. Those bales remain in factory finished goods.
+             AND EXISTS (
+               SELECT 1 FROM customer_order_bales open_cob
+                 JOIN customer_orders open_co ON open_co.id = open_cob.order_id
+                WHERE open_cob.bale_id = b.id
+                  AND open_co.company_id = ${companyId}
+                  AND open_co.deleted_at IS NULL
+                  AND open_co.status = 'VERIFIED'
+                  AND open_co.invoice_number IS NULL
+                  AND open_co.finalized_at IS NULL
+                  AND NOT EXISTS (
+                    SELECT 1 FROM factory_invoice_document_snapshots ds
+                     WHERE ds.company_id = ${companyId} AND ds.order_id = open_co.id
+                  )
+                  AND NOT EXISTS (
+                    SELECT 1 FROM customer_balances cb
+                     WHERE cb.company_id = ${companyId}
+                       AND cb.reference_type = 'INVOICE'
+                       AND cb.reference_id = open_co.id
+                       AND cb.transaction_type = 'SALE'
+                  )
+             )
+             AND NOT EXISTS (
+               SELECT 1 FROM factory_pos_sale_bales psb
+                WHERE psb.company_id = ${companyId} AND psb.bale_id = b.id
+             )
+           )
+         )
+         -- Never recost a bale on any invoiced, completed, or marked-finalized
+         -- order, even if the order was subsequently moved back to VERIFIED.
          AND NOT EXISTS (
            SELECT 1 FROM customer_order_bales cob
              JOIN customer_orders co ON co.id = cob.order_id
             WHERE cob.bale_id = b.id AND co.company_id = ${companyId}
-              AND co.status IN ('FINALIZED', 'DISPATCHED', 'SOLD')
+              AND co.deleted_at IS NULL
+              AND (co.status IN ('FINALIZED', 'DISPATCHED', 'SOLD', 'INVOICED', 'COMPLETED')
+                   OR co.invoice_number IS NOT NULL OR co.finalized_at IS NOT NULL
+                   OR EXISTS (
+                     SELECT 1 FROM factory_invoice_document_snapshots ds
+                      WHERE ds.company_id = ${companyId} AND ds.order_id = co.id
+                   )
+                   -- A SALE ledger entry on any linked order is invoice evidence
+                   -- too, even when the order row itself still reads VERIFIED.
+                   OR EXISTS (
+                     SELECT 1 FROM customer_balances cb
+                      WHERE cb.company_id = ${companyId}
+                        AND cb.reference_type = 'INVOICE'
+                        AND cb.reference_id = co.id
+                        AND cb.transaction_type = 'SALE'
+                   ))
          )
        ORDER BY b.id
     `
@@ -350,6 +402,7 @@ export async function planBaleRecostTx(tx: DbTransaction, companyId: number): Pr
       id: bale.id,
       referenceNumber: bale.reference_number,
       status: bale.status,
+      eligibility: bale.status === "SOLD" ? "sold-on-uninvoiced-verified-order" : "unsold-stock",
       mixBatchId: bale.mix_batch_id,
       weightKg: toMoney(bale.weight_kg).toFixed(3),
       basis,
@@ -399,10 +452,22 @@ export interface BaleRecostResult {
  */
 export async function applyBaleRecost(
   companyId: number,
-  params: { planHash: string; actor: { userId: string; username: string } }
+  params: {
+    planHash: string;
+    confirmVerifiedSoldBales?: boolean;
+    actor: { userId: string; username: string };
+  }
 ): Promise<BaleRecostResult> {
   return db.transaction(async (tx) => {
     await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext('factory_bale_recost'), ${companyId})`);
+    // The order-finalize path locks each customer order before marking its
+    // bales SOLD. Lock VERIFIED orders first so a verified order cannot be
+    // invoiced between building the plan and applying its bale-cost changes.
+    await tx.execute(sql`
+      SELECT id FROM customer_orders
+       WHERE company_id = ${companyId} AND deleted_at IS NULL AND status = 'VERIFIED'
+       ORDER BY id FOR UPDATE
+    `);
     const date = todayUtc();
     // The revaluation is dated today: refused in a closed period, journal or not.
     await tx.execute(sql`SELECT erp_assert_accounting_date_open(${companyId}, ${date}::date)`);
@@ -412,6 +477,15 @@ export async function applyBaleRecost(
     }
     if (plan.mixes.length === 0 && plan.bales.length === 0) {
       throw new BaleRecostRefusal("NOTHING_TO_APPLY", FACTORY_BALE_RECOST_NOTHING_MESSAGE);
+    }
+    if (
+      plan.bales.some((b) => b.eligibility === "sold-on-uninvoiced-verified-order") &&
+      params.confirmVerifiedSoldBales !== true
+    ) {
+      throw new BaleRecostRefusal(
+        "VERIFIED_SOLD_CONFIRM_REQUIRED",
+        "The plan contains bales marked SOLD on uninvoiced VERIFIED orders. Review their current-catalogue cost basis and explicitly confirm these bales before applying."
+      );
     }
 
     const now = new Date();

@@ -333,6 +333,21 @@ export const wave8ReleaseTranslationsPart3: readonly Phase3SharedUiEntry[] = [
     fr: "L’empreinte du plan revu est requise",
   },
   {
+    en: "Unknown audit group",
+    ar: "مجموعة تدقيق غير معروفة",
+    fr: "Groupe d’audit inconnu",
+  },
+  {
+    en: "limit must be 1–250; offset nonnegative; orderId a positive integer",
+    ar: "يجب أن يكون الحد بين 1 و250؛ والإزاحة غير سالبة؛ ومعرّف الطلب عددًا صحيحًا موجبًا",
+    fr: "limit doit être compris entre 1 et 250 ; offset doit être positif ou nul ; orderId doit être un entier positif",
+  },
+  {
+    en: "Nominal differences are screening estimates, not approved historical cost or journal adjustments.",
+    ar: "الفروقات الاسمية تقديرات فحص أولي، وليست تكلفة تاريخية معتمدة ولا تسويات يومية.",
+    fr: "Les écarts nominaux sont des estimations de contrôle, non des coûts historiques approuvés ni des écritures de régularisation.",
+  },
+  {
     en: "Account groups layout could not be read",
     ar: "تعذّرت قراءة تخطيط مجموعات الحسابات",
     fr: "La disposition des groupes de comptes n’a pas pu être lue",
