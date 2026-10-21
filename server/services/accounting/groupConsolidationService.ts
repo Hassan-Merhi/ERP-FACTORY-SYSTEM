@@ -130,13 +130,21 @@ export async function consolidatedAccountingReport(input:{
  // while executing under a different member's transaction scope.
  for(const c of companies){
   const collected=await runWithGroupCompanyScope(c.id,input.allowedCompanyIds,async()=>{
-    const [balance,ic,readiness]=await Promise.all([
+    // The balance sheet includes period-close transfers into retained
+    // earnings. Period P&L must exclude those *same* closing journals, using
+    // the canonical engine's established excludeFiscalClose switch.
+    const [balance,incomePeriod,ic,readiness]=await Promise.all([
       loadBalanceRows(db,{companyId:c.id,from:fromDate,asOf:asOfDate}),
+      loadBalanceRows(db,{companyId:c.id,from:fromDate,asOf:asOfDate,
+        excludeFiscalClose:true}),
       loadCompanyIntercompanyAccounts(c,companies,asOfDate),
       getHistoricalCurrencyReadiness(c.id,asOfDate)
     ]);
-    return{balance,ic,readiness};
+    return{balance,incomePeriod,ic,readiness};
   });
+  const pnlByKey=new Map(collected.incomePeriod.map(r=>[
+    `${r.kind}:${r.id??"-"}`,r.periodDebit.minus(r.periodCredit)
+  ]));
   for(const record of collected.balance){
     const snapshot=toPartyBalance(record);
     const signed=decimal(snapshot.historicalBaseClosing);
@@ -147,7 +155,9 @@ export async function consolidatedAccountingReport(input:{
       financialClass:classify(record.kind,record.accountType,record.code,signed),
       openingSideAssumed:record.openingSideAssumed,
       bookedUsd:money(signed),
-      periodMovementUsd:money(record.periodDebit.minus(record.periodCredit)),
+      periodMovementUsd:money(
+        pnlByKey.get(`${record.kind}:${record.id??"-"}`)??record.periodDebit.minus(record.periodCredit)
+      ),
       eliminationUsd:"0.00",adjustedUsd:money(signed)
     });
   }
