@@ -167,6 +167,7 @@ export async function maybeRunAutoTransfer(
         // Voucher in FROM company (Payment — money leaves)
         const { voucher: fromVoucher } = await postErpVoucherTx(tx, {
           companyId,
+          sourceModule: module,
           voucherType: "Payment",
           voucherDate: transferDate,
           description: `${desc} → ${toCompany.name}`,
@@ -181,6 +182,7 @@ export async function maybeRunAutoTransfer(
         // DR destLedgerAccountId (cash/account receives money), CR toClearing (clearing settled)
         const { voucher: toVoucher } = await postErpVoucherTx(tx, {
           companyId: cfg.destCompanyId,
+          sourceModule: module,
           voucherType: "Receipt",
           voucherDate: transferDate,
           description: notes ? `Transfer from ${fromCompany.name} - ${notes}` : `Transfer from ${fromCompany.name}`,
