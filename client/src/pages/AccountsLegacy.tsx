@@ -156,7 +156,8 @@ export default function Accounts() {
   return (
     <div className="space-y-6">
       <PageHeader title="Accounts Overview" subtitle="View all accounts, balances, and transaction history">
-        {showViewAccounts && !phoneStatementOpen && (
+        {showViewAccounts && !phoneStatementOpen &&
+          ["Admin","Owner","Developer"].includes(model.currentUser?.role ?? "") && (
           <Button
             variant="outline"
             data-testid="button-open-items"
