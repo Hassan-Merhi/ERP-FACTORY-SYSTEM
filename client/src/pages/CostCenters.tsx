@@ -19,6 +19,7 @@ import type { CostCenter, CostCenterCatalog, CostCenterBalance, CostCenterActivi
 import { readCostCenterApi, writeCostCenterApi } from "@/api/costCentersApi";
 import { CostCenterAutomationRules } from "@/components/financial/CostCenterAutomationRules";
 import { CostCenterReports } from "@/components/financial/CostCenterReports";
+import { CostCenterHistorical } from "@/components/financial/CostCenterHistorical";
 
 type Form = { code: string; name: string; description: string; parentId: string };
 const emptyForm: Form = { code: "", name: "", description: "", parentId: "root" };
@@ -148,7 +149,7 @@ export default function CostCenters() {
       </div>
       <p className="text-xs text-muted-foreground">
         Cost centers group expenses for analysis. They cannot receive payments or vouchers as ledger accounts.
-        Budgets and multi-period comparisons are scheduled for Phase 6.
+        Budget reporting, historical reconciliation, and controlled allocations are available below.
       </p>
       {isError && <p role="alert" className="text-destructive text-sm">Could not load cost centers: {errorMessage(error)}. Check that the database migrations were applied.</p>}
       <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)] gap-4">
@@ -250,6 +251,7 @@ export default function CostCenters() {
         </Card>
       </div>
       <CostCenterReports baseUrl={baseUrl} centers={centers} />
+      <CostCenterHistorical baseUrl={baseUrl} centers={centers} />
       <CostCenterAutomationRules baseUrl={baseUrl} centers={centers} />
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
