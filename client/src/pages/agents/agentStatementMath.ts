@@ -17,6 +17,8 @@ export interface Account {
   openingBalance?: number;
   openingBalanceSide?: string | null;
   active: boolean;
+  partyBalance?: string;
+  partyBalanceSide?: "Dr" | "Cr";
 }
 
 export interface Transaction {
@@ -41,6 +43,58 @@ export interface GroupedVoucher {
   totalDebit: number;
   totalCredit: number;
   runningBalance?: number;
+}
+
+/** The account list carries GL values separately from Factory Parties balances. */
+export function withPartyDisplayBalance(account: Account): Account {
+  if (account.partyBalance === undefined) return account;
+  const partyBalance = Number(account.partyBalance);
+  if (!Number.isFinite(partyBalance)) return account;
+  return {
+    ...account,
+    balance: partyBalance,
+    balanceSide: account.partyBalanceSide ?? account.balanceSide,
+  };
+}
+
+/**
+ * Customer-owned ledgers have historical operational amounts (older invoices,
+ * POS credit receipts, etc.) that Factory Parties includes in its balance.
+ * The backend returns those as memo lines, not as posted voucher entries.
+ * Give each line a unique negative ID so the display can reconcile without
+ * inventing GL vouchers or mixing them into a real voucher grouping.
+ */
+export function transactionsIncludingCustomerMemo(payload: unknown): Transaction[] {
+  if (Array.isArray(payload)) return payload as Transaction[];
+  if (!payload || typeof payload !== "object") return [];
+  const data = payload as {
+    transactions?: Transaction[];
+    notInLedger?: {
+      rows?: Array<{
+        voucherNumber: string;
+        voucherDate: string;
+        voucherDescription: string;
+        debitAmount: string;
+        creditAmount: string;
+        amountUsd?: string | null;
+      }>;
+    };
+  };
+  const posted = Array.isArray(data.transactions) ? data.transactions : [];
+  const memo = (data.notInLedger?.rows ?? [])
+    .filter((row) => row.amountUsd != null && Number.isFinite(Number(row.amountUsd)))
+    .map((row, index) => ({
+      entryId: -1000000 - index,
+      voucherId: -1000000 - index,
+      voucherNumber: row.voucherNumber,
+      voucherDate: row.voucherDate,
+      voucherDescription: row.voucherDescription,
+      narration: row.voucherDescription,
+      voucherType: "Historical Factory Amount (not posted)",
+      debitAmount: row.debitAmount,
+      creditAmount: row.creditAmount,
+    }));
+  return [...posted, ...memo];
 }
 
 export function parseBalance(value: unknown): number {
@@ -87,9 +141,10 @@ export function groupTransactions(transactions: Transaction[]): GroupedVoucher[]
 export function computeOpeningBalance(
   account: Account | null,
   hasFromDate: boolean,
-  prePeriodData: { balance: number } | undefined
+  prePeriodData: { balance: number; notInLedgerBefore?: string } | undefined
 ): number {
-  if (hasFromDate && prePeriodData !== undefined) return prePeriodData.balance;
+  if (hasFromDate && prePeriodData !== undefined)
+    return prePeriodData.balance + parseBalance(prePeriodData.notInLedgerBefore);
   const raw = parseBalance(account?.openingBalance ?? 0);
   if (account?.type === "supplier") return raw;
   return account?.openingBalanceSide === "Cr" ? -raw : raw;
