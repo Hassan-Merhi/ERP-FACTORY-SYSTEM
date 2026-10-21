@@ -347,7 +347,7 @@ export default function VoucherDetail() {
               </Card>
             )}
 
-            {appMode === "erp" && <VoucherCostCenters voucherId={data.id} />}
+            {(appMode === "erp" || appMode === "factory") && <VoucherCostCenters voucherId={data.id} />}
 
             {/* Narration */}
             {data.narration && (
