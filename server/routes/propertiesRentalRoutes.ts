@@ -1,12 +1,8 @@
 import type { Express } from "express";
+import { RENTAL_MODULE_ACCOUNTS } from "../services/accounting/unifiedAccountingFoundation";
 import { registerRentalRoutes } from "./rentalRouteFactory";
 
 export function registerPropertiesRentalRoutes(app: Express) {
-  registerRentalRoutes(
-    app,
-    "PROPERTIES",
-    "/api/properties/rental",
-    "Rental Income - Properties",
-    "Rent Expense - Property Shops"
-  );
+  const { income, expense } = RENTAL_MODULE_ACCOUNTS.PROPERTIES;
+  registerRentalRoutes(app, "PROPERTIES", "/api/properties/rental", income, expense);
 }
