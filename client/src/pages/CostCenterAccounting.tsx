@@ -107,8 +107,11 @@ export default function CostCenterAccounting(){
   enabled:!!companyId&&tab==="assign",retry:false
  });
  const budgets=useQuery<{budgets:Budget[];truncated:boolean}>({
-  queryKey:[root+"/budgets",companyId,fromDate,asOfDate],
-  queryFn:()=>read(root+"/budgets?"+params),
+  queryKey:[root+"/budgets",companyId,fromDate,budgetMonth],
+  queryFn:()=>read(root+"/budgets?"+new URLSearchParams({
+   fromDate:fromDate||new Date().getFullYear()+"-01-01",
+   asOfDate:budgetMonth+"-01"
+  })),
   enabled:!!companyId&&tab==="budgets",retry:false
  });
  const ordered=useMemo(()=>centers.data?.centers??[],[centers.data]);
@@ -290,7 +293,7 @@ export default function CostCenterAccounting(){
       value={centerParent} onChange={e=>setCenterParent(e.target.value)}>
       <option value="">Root center</option>{ordered.filter(c=>c.id!==editingCenter).map(c=>
        <option value={c.id} key={c.id}>{c.code} · {c.name}</option>)}</select></div>
-     <div><Label>Sort order</Label><Input inputType="number" value={centerOrder}
+     <div><Label>Sort order</Label><Input type="number" value={centerOrder}
        onChange={e=>setCenterOrder(e.target.value)}/></div>
      <div><Label>Notes</Label><Input value={centerNote}
        onChange={e=>setCenterNote(e.target.value)}/></div>
