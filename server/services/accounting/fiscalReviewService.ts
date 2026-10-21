@@ -262,6 +262,11 @@ export async function recordFiscalReviewTx(tx:DbTransaction,input:{
  retainedEarningsAccountId:number;evidenceHash:string;
  reviewKind:ReviewKind;note:string;reviewer:Reviewer
 }){
+ await assertTransactionCompanyScope(tx,input.companyId);
+ // The two review capacities must not approve concurrently against an
+ // incomplete view of the other's actor. PostgreSQL releases the lock when
+ // this metadata transaction commits or rolls back.
+ await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${`fiscal-signoff:${input.companyId}:${input.periodEndDate}`}))`);
  const readiness=await fiscalReadinessTx(tx,input);
  if(!readiness.eligibleForSignoff)
   throw new FiscalReviewError("FISCAL_NOT_READY","Resolve readiness blockers before signing a fiscal period");
@@ -334,8 +339,21 @@ export async function ensureReviewedFiscalCloseTx(tx:DbTransaction,input:{
   throw new FiscalReviewError("FISCAL_STALE_EVIDENCE","Posted ledger or controls changed after approval; refresh and obtain new signoffs");
  if(!readiness.reviewedCloseReady)throw new FiscalReviewError("FISCAL_REVIEW_INCOMPLETE",
   readiness.blockers.join("; ")||"Separate current Accounting and Owner signoffs are required");
- const signed=await signoffRowsTx(tx,input.companyId,input.periodStartDate,input.periodEndDate,
-   input.retainedEarningsAccountId);
+ // Lock the specific current signoff records until the *same* transaction
+ // finishes posting the close and its metadata. A revocation cannot slip in
+ // after financial verification but before the closing journal is committed.
+ const signed=resultRows<Signoff>(await tx.execute(sql`
+ SELECT id,company_id,period_start_date::text,period_end_date::text,
+  retained_earnings_account_id,evidence_hash,review_kind,reviewer_id,reviewer_name,
+  reviewed_at::text,note,revoked_at::text
+ FROM accounting_fiscal_review_signoffs
+ WHERE company_id=${input.companyId}
+   AND period_start_date=${input.periodStartDate}::date
+   AND period_end_date=${input.periodEndDate}::date
+   AND retained_earnings_account_id=${input.retainedEarningsAccountId}
+   AND evidence_hash=${readiness.evidenceHash} AND revoked_at IS NULL
+ FOR UPDATE
+ `));
  const first=signed.find(x=>x.review_kind==="ACCOUNTING"&&!x.revoked_at&&x.evidence_hash===readiness.evidenceHash);
  const second=signed.find(x=>x.review_kind==="OWNER"&&!x.revoked_at&&x.evidence_hash===readiness.evidenceHash&&x.reviewer_id!==first?.reviewer_id);
  if(!first||!second)throw new FiscalReviewError("FISCAL_REVIEW_INCOMPLETE","Independent signoffs not found");
