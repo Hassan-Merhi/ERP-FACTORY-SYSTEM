@@ -94,9 +94,17 @@ export async function datedMonetaryRateTx(
     throw new MonetaryFxError("FX_RATE_CONFLICT",
       "Opposite-direction FX rates saved on the same day disagree; resolve them before reporting");
   const picked=rates[0];
+  // Preserve the stored direction and precision. Deriving the direct
+  // USD->CFA rate back from a rounded reciprocal loses precision on large
+  // amounts, even though the display rate only has ten decimal places.
+  const storedRate=decimal(picked.r.rate);
   return{currency:code,baseCurrency:base,effectiveDate:picked.r.effective_date,
-    rateBasePerUnit:picked.basePer.toDecimalPlaces(10).toFixed(10),
-    rateUnitPerBase:new Decimal(1).div(picked.basePer).toDecimalPlaces(10).toFixed(10),
+    rateBasePerUnit:picked.direct
+      ?new Decimal(1).div(storedRate).toDecimalPlaces(10).toFixed(10)
+      :storedRate.toDecimalPlaces(10).toFixed(10),
+    rateUnitPerBase:picked.direct
+      ?storedRate.toDecimalPlaces(10).toFixed(10)
+      :new Decimal(1).div(storedRate).toDecimalPlaces(10).toFixed(10),
     source:picked.direct?"DIRECT_RECORDED":"INVERSE_RECORDED",
     rateId:Number(picked.r.id)};
 }
@@ -105,5 +113,9 @@ export function translateMonetaryAmount(
 ):string{
   const n=decimal(nativeAmount);
   if(!n.isFinite())throw new MonetaryFxError("FX_AMOUNT_INVALID","Invalid original currency amount",400);
-  return n.times(rate.rateBasePerUnit).toDecimalPlaces(6,Decimal.ROUND_HALF_UP).toFixed(6);
+  // For the direct USD->foreign convention, divide by the exact recorded
+  // foreign-per-USD rate, not the rounded presentation reciprocal.
+  const usd=rate.source==="DIRECT_RECORDED"
+    ?n.div(rate.rateUnitPerBase):n.times(rate.rateBasePerUnit);
+  return usd.toDecimalPlaces(6,Decimal.ROUND_HALF_UP).toFixed(6);
 }
