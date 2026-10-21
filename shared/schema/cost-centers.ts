@@ -175,3 +175,28 @@ export const costCenterAutoFailures = pgTable("cost_center_auto_failures", {
 }));
 
 export type CostCenterAutoFailure = typeof costCenterAutoFailures.$inferSelect;
+
+/** Phase 6: fixed historical USD monthly budgets, never GL postings. */
+export const costCenterMonthlyBudgets = pgTable("cost_center_monthly_budgets", {
+  id: bigserial("id", { mode: "number" }).primaryKey(),
+  companyId: integer("company_id").notNull().references(() => companies.id, { onDelete: "restrict" }),
+  costCenterId: integer("cost_center_id").notNull(),
+  budgetMonth: date("budget_month").notNull(),
+  amountUsd: decimal("amount_usd", { precision: 20, scale: 6 }).notNull().default("0"),
+  notes: text("notes"),
+  createdBy: text("created_by"),
+  updatedBy: text("updated_by"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+}, t => ({
+  companyFk: foreignKey({
+    name: "cost_center_monthly_budgets_company_fk",
+    columns: [t.companyId,t.costCenterId],
+    foreignColumns: [costCenters.companyId,costCenters.id],
+  }).onDelete("restrict"),
+  uniqueMonth: uniqueIndex("cost_center_monthly_budgets_unique")
+    .on(t.companyId,t.costCenterId,t.budgetMonth),
+  periodIdx: index("cost_center_monthly_budgets_period_idx").on(t.companyId,t.budgetMonth,t.costCenterId),
+  amountCheck: check("cost_center_monthly_budgets_amount_check",sql`${t.amountUsd}>=0`),
+}));
+export type CostCenterMonthlyBudget = typeof costCenterMonthlyBudgets.$inferSelect;
