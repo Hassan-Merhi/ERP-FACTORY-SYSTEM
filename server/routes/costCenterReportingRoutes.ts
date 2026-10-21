@@ -173,9 +173,9 @@ async function summaryData(scope:Scope,filters:Filters){
       "SELECT c.id AS \\"costCenterId\\",c.company_id AS \\"companyId\\",c.name,c.code,c.active,"+
       " cp.name AS \\"companyName\\",c.parent_id AS \\"parentId\\""+
       " FROM cost_centers c JOIN companies cp ON cp.id=c.company_id"+
-      " WHERE c.company_id=ANY($1::int[]) AND ($2::int IS NULL OR c.id=$2)"+
+      " WHERE c.company_id=ANY($1::int[])"+
       " ORDER BY cp.name,c.code LIMIT 10000",
-      [scope.companyIds,filters.costCenterId]),
+      [scope.companyIds]),
     pool.query(
       "SELECT company_id AS \\"companyId\\",cost_center_id AS \\"costCenterId\\","+
       " budget_month::text AS month,amount_usd::text AS \\"amountUsd\\""+
@@ -236,12 +236,46 @@ async function summaryData(scope:Scope,filters:Filters){
     const m=getMonth(row.month);
     m.budget=toMoney(m.budget).plus(row.amountUsd).toFixed(6);
   }
-  const byCenter=centerRows.map(c=>{
+  const byCenter=centerRows.filter(c=>filters.costCenterId===null||
+    c.costCenterId===filters.costCenterId).map(c=>{
     const a=centerAmounts.get(key(c.companyId,c.costCenterId))||
       {expense:"0",inventoryCost:"0",budget:"0",entries:0};
     return {...c,...a,variance:toMoney(a.expense).minus(a.budget).toFixed(6),
       utilization:a.budget==="0"?null:toMoney(a.expense).div(a.budget).times(100).toFixed(2)};
   });
+  const departments=new Map<string,{
+    companyId:number;companyName:string;costCenterId:number;code:string;name:string;
+    expense:string;inventoryCost:string;budget:string;entries:number;members:number;
+  }>();
+  function rootOf(row:typeof centerRows[number]){
+    let current=row;
+    const seen=new Set<number>();
+    while(current.parentId!==null&&!seen.has(current.costCenterId)){
+      seen.add(current.costCenterId);
+      const parent=centerMap.get(key(row.companyId,current.parentId));
+      if(!parent)break;
+      current=parent;
+    }
+    return current;
+  }
+  for(const center of byCenter){
+    const node=centerMap.get(key(center.companyId,center.costCenterId));
+    if(!node)continue;
+    const root=rootOf(node), k=key(center.companyId,root.costCenterId);
+    if(!departments.has(k))departments.set(k,{
+      companyId:center.companyId,companyName:center.companyName,
+      costCenterId:root.costCenterId,code:root.code,name:root.name,
+      expense:"0",inventoryCost:"0",budget:"0",entries:0,members:0,
+    });
+    const d=departments.get(k)!;
+    d.expense=toMoney(d.expense).plus(center.expense).toFixed(6);
+    d.inventoryCost=toMoney(d.inventoryCost).plus(center.inventoryCost).toFixed(6);
+    d.budget=toMoney(d.budget).plus(center.budget).toFixed(6);
+    d.entries+=center.entries;d.members+=1;
+  }
+  const departmentRows=[...departments.values()].map(x=>({
+    ...x,variance:toMoney(x.expense).minus(x.budget).toFixed(6),
+  }));
   const byAccountRows=[...byAccount.values()].sort((a,b)=>a.accountName.localeCompare(b.accountName));
   const months=[...byMonth.values()].sort((a,b)=>a.month.localeCompare(b.month)).map(m=>({
     ...m,variance:toMoney(m.expense).minus(m.budget).toFixed(6)
@@ -249,7 +283,7 @@ async function summaryData(scope:Scope,filters:Filters){
   return {
     scope:scope.companyIds.length>1?"consolidated":"company",
     companyIds:scope.companyIds,period:{from:filters.from,to:filters.to,budgetBasis:"whole_calendar_months"},
-    currency:"USD",centers:byCenter,accounts:byAccountRows,months,
+    currency:"USD",centers:byCenter,departments:departmentRows,accounts:byAccountRows,months,
     totals:{expense:totals.expense.toFixed(6),inventoryCost:totals.inventoryCost.toFixed(6),
       budget:totals.budget.toFixed(6),variance:totals.expense.minus(totals.budget).toFixed(6),
       entries:totals.entries},
