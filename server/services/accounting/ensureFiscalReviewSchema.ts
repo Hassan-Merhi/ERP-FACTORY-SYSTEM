@@ -114,6 +114,53 @@ export async function ensureFiscalReviewSchema(pool:Pool):Promise<void>{
  CREATE INDEX IF NOT EXISTS accounting_fiscal_reviewed_closures_date_idx
    ON accounting_fiscal_reviewed_closures(company_id,certified_at DESC);
 
+ -- Immutable review evidence. Only a one-time reviewed signoff revocation
+ -- with actor/reason is permitted, and it cannot be revoked once consumed.
+ CREATE OR REPLACE FUNCTION fiscal_review_signoff_immutability()
+ RETURNS TRIGGER LANGUAGE plpgsql AS $review_signoff_lock$
+ BEGIN
+  IF TG_OP='DELETE' THEN
+   RAISE EXCEPTION 'FISCAL_SIGNOFF_DELETE_FORBIDDEN' USING ERRCODE='23514';
+  END IF;
+  IF (to_jsonb(NEW)-'revoked_at'-'revoked_by'-'revoke_reason')
+    IS DISTINCT FROM
+     (to_jsonb(OLD)-'revoked_at'-'revoked_by'-'revoke_reason')
+    OR OLD.revoked_at IS NOT NULL OR NEW.revoked_at IS NULL
+    OR NULLIF(TRIM(NEW.revoked_by),'') IS NULL
+    OR LENGTH(TRIM(COALESCE(NEW.revoke_reason,'')))<10
+    OR EXISTS(SELECT 1 FROM accounting_fiscal_reviewed_closures c
+       WHERE c.accounting_signoff_id=OLD.id OR c.owner_signoff_id=OLD.id)
+  THEN
+   RAISE EXCEPTION 'FISCAL_SIGNOFF_IMMUTABLE' USING ERRCODE='23514';
+  END IF;
+  RETURN NEW;
+ END $review_signoff_lock$;
+ DROP TRIGGER IF EXISTS fiscal_review_signoff_immutable
+  ON accounting_fiscal_review_signoffs;
+ CREATE TRIGGER fiscal_review_signoff_immutable
+ BEFORE UPDATE OR DELETE ON accounting_fiscal_review_signoffs
+ FOR EACH ROW EXECUTE FUNCTION fiscal_review_signoff_immutability();
+
+ -- A reopen drops fiscal_period_closures. FK ON DELETE SET NULL may blank
+ -- that link, but the reviewed close identity, source voucher, approvers,
+ -- fingerprint, creator and timestamp can never be rewritten/deleted.
+ CREATE OR REPLACE FUNCTION fiscal_review_close_immutability()
+ RETURNS TRIGGER LANGUAGE plpgsql AS $review_closure_lock$
+ BEGIN
+  IF TG_OP='UPDATE' AND OLD.fiscal_closure_id IS NOT NULL
+    AND NEW.fiscal_closure_id IS NULL
+    AND (to_jsonb(NEW)-'fiscal_closure_id')
+        IS NOT DISTINCT FROM (to_jsonb(OLD)-'fiscal_closure_id') THEN
+   RETURN NEW;
+  END IF;
+  RAISE EXCEPTION 'FISCAL_REVIEWED_CLOSE_IMMUTABLE' USING ERRCODE='23514';
+ END $review_closure_lock$;
+ DROP TRIGGER IF EXISTS fiscal_review_close_immutable
+  ON accounting_fiscal_reviewed_closures;
+ CREATE TRIGGER fiscal_review_close_immutable
+ BEFORE UPDATE OR DELETE ON accounting_fiscal_reviewed_closures
+ FOR EACH ROW EXECUTE FUNCTION fiscal_review_close_immutability();
+
  ALTER TABLE accounting_fiscal_review_policy ENABLE ROW LEVEL SECURITY;
  ALTER TABLE accounting_fiscal_review_policy FORCE ROW LEVEL SECURITY;
  ALTER TABLE accounting_fiscal_review_signoffs ENABLE ROW LEVEL SECURITY;
