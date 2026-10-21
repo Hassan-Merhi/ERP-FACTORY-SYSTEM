@@ -59,6 +59,7 @@ export default function UnifiedRentalAccounting(){
  const [amount,setAmount]=useState("");
  const [note,setNote]=useState("");
  const [voidReason,setVoidReason]=useState("");
+ const [requestId,setRequestId]=useState(()=>crypto.randomUUID());
  const [showPayments,setShowPayments]=useState(false);
  const list=useQuery<Contracts>({
   queryKey:["/api/accounting/rentals/contracts",companyId,mod],
@@ -77,13 +78,14 @@ export default function UnifiedRentalAccounting(){
    if(!active)throw new Error("Choose a contract");
    const r=await apiRequest("POST","/api/accounting/rentals/expense-links",{
     module:mod,contractId:selectedId,voucherId:Number(voucher),category,amountUsd:amount,
+    clientRequestKey:requestId,
     note:note.trim()||null
    });
    return r.json();
   },
   onSuccess:async()=>{
    toast({title:"Expense attributed",description:"Voucher and its ledger amounts remain unchanged"});
-   setVoucher("");setAmount("");setNote("");
+   setVoucher("");setAmount("");setNote("");setRequestId(crypto.randomUUID());
    await client.invalidateQueries({queryKey:["/api/accounting/rentals/contracts"]});
   },
   onError:(e:Error)=>toast({title:"Allocation refused",description:e.message,variant:"destructive"})
@@ -229,16 +231,16 @@ export default function UnifiedRentalAccounting(){
      </p>
      <div className="grid gap-3 sm:grid-cols-3">
       <div><Label>Posted voucher ID</Label><Input type="number" min="1"
-       value={voucher} onChange={e=>setVoucher(e.target.value)} placeholder="Voucher ID"/></div>
+       value={voucher} onChange={e=>{setVoucher(e.target.value);setRequestId(crypto.randomUUID());}} placeholder="Voucher ID"/></div>
       <div><Label>Allocated USD base amount</Label><Input value={amount}
-       onChange={e=>setAmount(e.target.value)} placeholder="e.g. 125.00"/></div>
+       onChange={e=>{setAmount(e.target.value);setRequestId(crypto.randomUUID());}} placeholder="e.g. 125.00"/></div>
       <div><Label>Expense category</Label><select value={category}
         className="h-10 w-full rounded-md border bg-background px-2 text-sm"
-        onChange={e=>setCategory(e.target.value as Category)}>
+        onChange={e=>{setCategory(e.target.value as Category);setRequestId(crypto.randomUUID());}}>
         {CATEGORIES.map(c=><option value={c} key={c}>{name(c)}</option>)}
       </select></div>
       <div className="sm:col-span-3"><Label>Explanation / property work details</Label>
-       <Input value={note} onChange={e=>setNote(e.target.value)}
+       <Input value={note} onChange={e=>{setNote(e.target.value);setRequestId(crypto.randomUUID());}}
         placeholder="Optional expense attribution note"/></div>
      </div>
      <Button disabled={!Number.isSafeInteger(Number(voucher))||Number(voucher)<1||
