@@ -656,6 +656,10 @@ export async function ensureRuntimeSchema(pool: Pool): Promise<void> {
   const { ensureMonetaryFxSchema } = await import("../services/accounting/ensureMonetaryFxSchema");
   await ensureMonetaryFxSchema(pool);
 
+  // Unified Accounting Phase 8: expense-attribution metadata only; never a GL posting.
+  const { ensureRentalAccountingLinksSchema } = await import("../services/rental/ensureRentalAccountingLinksSchema");
+  await ensureRentalAccountingLinksSchema(pool);
+
   // Wave 16 (A): the Phase 3 historical accounting repair no longer runs here.
   // It added and deleted lines of posted vouchers of every company before each
   // listen, with no audit; it is now the Owner preview/apply at
