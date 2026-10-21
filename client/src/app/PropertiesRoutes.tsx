@@ -6,6 +6,7 @@ import {
   AccountingOpenItems,
   CashBankReconciliation,
   MonetaryFxAccounting,
+  UnifiedRentalAccounting,
   Agents,
   BalanceRepair,
   ChatbotSettings,
@@ -49,6 +50,7 @@ export function PropertiesRoutes({ user }: PropertiesRoutesProps) {
       {(isAdmin || isOwner) && <Route path="/properties/accounting/open-items" component={AccountingOpenItems} />}
       {(isAdmin || isOwner) && <Route path="/properties/accounting/cash-bank" component={CashBankReconciliation} />}
       {(isAdmin || isOwner) && <Route path="/properties/accounting/monetary-fx" component={MonetaryFxAccounting} />}
+      {(isAdmin || isOwner) && <Route path="/properties/accounting/rentals" component={UnifiedRentalAccounting} />}
       <Route path="/properties/vouchers/:id/edit" component={PropertiesVoucherEdit} />
       <Route path="/properties/voucher-detail/:voucherId" component={PropertiesVoucherDetail} />
       <Route path="/properties/vouchers">{() => <PropertiesVouchers />}</Route>
