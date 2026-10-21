@@ -182,7 +182,7 @@ async function unallocatedExpenses(scope:Scope,filters:Filters){
     " WHERE a.voucher_entry_id=ve.id AND a.company_id=ve.company_id) al ON TRUE",
     " WHERE ve.company_id=ANY($1::int[])",
     " AND COALESCE(v.effective_date,v.voucher_date) BETWEEN $2::date AND $3::date",
-    " AND ($5::int IS NULL OR ve.ledger_account_id=$5)",
+    " AND ($4::int IS NULL OR ve.ledger_account_id=$5)",
     " AND v.deleted_at IS NULL AND v.optional=false AND v.reversal_of_voucher_id IS NULL",
     " AND NOT EXISTS (SELECT 1 FROM vouchers rev WHERE rev.reversal_of_voucher_id=v.id",
     " AND rev.deleted_at IS NULL)",
@@ -195,7 +195,7 @@ async function unallocatedExpenses(scope:Scope,filters:Filters){
     " FROM factory_daybook_entries f",
     " LEFT JOIN LATERAL (SELECT sum(a.amount_base) AS allocated FROM cost_center_allocations a",
     " WHERE a.factory_daybook_entry_id=f.id AND a.company_id=f.company_id) al ON TRUE",
-    " WHERE f.company_id=ANY($1::int[]) AND $5::int IS NULL",
+    " WHERE f.company_id=ANY($1::int[]) AND $4::int IS NULL",
     " AND COALESCE(f.effective_date,f.tx_date) BETWEEN $2::date AND $3::date",
     " AND f.tx_type IN ('EXPENSE','OPERATING_EXPENSE','FACTORY_EXPENSE')",
     " AND f.reference_id IS NULL AND NULLIF(btrim(COALESCE(f.reference_table,'')),'') IS NULL",
@@ -205,7 +205,7 @@ async function unallocatedExpenses(scope:Scope,filters:Filters){
     " FROM candidates WHERE source_usd>0 GROUP BY date_trunc('month',source_date)",
     " ORDER BY month",
   ].join(" ");
-  const response=await pool.query(query,[...args(scope,filters)]);
+  const response=await pool.query(query,[scope.companyIds,filters.from,filters.to,filters.accountId]);
   const months=response.rows as Array<{month:string;amount:string}>;
   const total=months.reduce((value,row)=>value.plus(row.amount),toMoney(0));
   return {amount:total.toFixed(6),months,applicable:true};
