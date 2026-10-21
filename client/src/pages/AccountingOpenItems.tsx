@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label";
 type Domain = "customer"|"supplier"|"factory_supplier"|"rentals";
 interface Allocation {matchId:number;otherEntryId:number;amount:string}
 interface OpenItem {entryId:number;voucherId:number;voucherNumber:string;voucherType:string;
-  businessDate:string;side:"charge"|"settlement";currency:string;originalAmount:string;
+  businessDate:string;dueDate:string|null;overdueDays:number|null;side:"charge"|"settlement";currency:string;originalAmount:string;
   matchedAmount:string;outstandingAmount:string;currencyVerified:boolean;
   status:string;allocations:Allocation[]}
 interface PartyView {items:OpenItem[];openingBalance:{amount:string;side:string|null;includedInMatching:false};currencies:Record<string,{
@@ -199,7 +199,11 @@ export default function AccountingOpenItems() {
                   <a className="underline" href={voucherHref(item.voucherId)}>{item.voucherNumber}</a>
                   <div className="text-xs text-muted-foreground">Entry {item.entryId}</div>
                 </td>
-                <td className="p-2">{item.businessDate}</td>
+                <td className="p-2">{item.businessDate}
+                  {item.dueDate&&<div className="text-xs text-muted-foreground">Due {item.dueDate}</div>}
+                  {item.overdueDays!==null&&item.overdueDays>0&&
+                    <div className="text-xs text-destructive">{item.overdueDays} days overdue</div>}
+                </td>
                 <td className="p-2">{item.side} · {item.voucherType}</td>
                 <td className="p-2 text-right tabular-nums">{item.originalAmount} {item.currency}
                   {!item.currencyVerified&&<div className="text-xs text-destructive">Currency unverified — USD base displayed</div>}
