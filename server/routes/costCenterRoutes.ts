@@ -161,9 +161,9 @@ async function sourceInCompany(client: PoolClient, companyId: number, kind: Sour
 }
 function sourceTreatment(row: Record<string, unknown>, kind: SourceKind): "EXPENSE" | "INVENTORY_COST" {
   if (kind === "factory_daybook") return "EXPENSE";
-  const accountType = String(row.accountType || "");
-  if (["Expense", "Indirect Expense", "Direct Expense"].includes(accountType)) return "EXPENSE";
-  if (accountType === "Asset") return "INVENTORY_COST";
+  const accountType = String(row.accountType || "").trim().toUpperCase();
+  if (["EXPENSE", "INDIRECT EXPENSE", "DIRECT EXPENSE"].includes(accountType)) return "EXPENSE";
+  if (accountType === "ASSET") return "INVENTORY_COST";
   throw new ApiError(409, "Source line is not an expense or eligible inventory asset");
 }
 async function splitList(client: PoolClient, companyId: number, kind: SourceKind, sourceId: number) {
