@@ -49,6 +49,7 @@ export const PROPERTIES_NAV_SECTIONS: NavSection[] = [
       { title: "Accounts", url: "/properties/accounts", icon: Landmark },
       { title: "Open Items", url: "/properties/accounting/open-items", icon: ClipboardList },
       { title: "Bank & Cash Reconciliation", url: "/properties/accounting/cash-bank", icon: Landmark },
+      { title: "Multi-Currency Accounting", url: "/properties/accounting/monetary-fx", icon: Landmark },
       { title: "Vouchers", url: "/properties/vouchers", icon: FileText },
       { title: "Analytics", url: "/properties/analytics", icon: BarChart2 },
     ],
@@ -69,7 +70,7 @@ export function PropertiesSidebar({ user, onLogout }: { user?: ShellUser; onLogo
         ...section,
         items: section.items.filter((item) =>
           (!isOwner || item.url !== "/properties/analytics") &&
-          (isAdmin || isOwner || (item.url !== "/properties/accounting/open-items" && item.url !== "/properties/accounting/cash-bank"))
+          (isAdmin || isOwner || (item.url !== "/properties/accounting/open-items" && item.url !== "/properties/accounting/cash-bank" && item.url !== "/properties/accounting/monetary-fx"))
         ),
       })).filter((section) => section.items.length > 0),
     [isOwner]
