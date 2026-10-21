@@ -156,6 +156,15 @@ export default function Accounts() {
   return (
     <div className="space-y-6">
       <PageHeader title="Accounts Overview" subtitle="View all accounts, balances, and transaction history">
+        {showViewAccounts && !phoneStatementOpen && (
+          <Button
+            variant="outline"
+            data-testid="button-open-items"
+            onClick={() => model.navigate(`${model.modePrefix}/accounting/open-items`)}
+          >
+            Open Items
+          </Button>
+        )}
         {showViewAccounts &&
           !phoneStatementOpen &&
           (model.currentUser?.role === "Admin" || model.currentUser?.role === "Developer") && (
