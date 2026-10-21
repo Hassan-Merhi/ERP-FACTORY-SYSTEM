@@ -390,12 +390,20 @@ async function exportReport(res:Response,scope:Scope,filters:Filters,format:stri
   };
   const cols=layouts[view];
   if(!cols)throw new ReportError(400,"Invalid export view");
+  const centerExport=view==="summary"&&data.totals.unallocatedApplicable&&
+    !toMoney(data.totals.unallocated).isZero()
+    ? [...data.centers,{
+        companyName:scope.companyIds.length>1?"Authorized companies":"Current company",
+        code:"UNALLOCATED",name:"Unallocated expense",expense:data.totals.unallocated,
+        budget:"0",variance:data.totals.unallocated,inventoryCost:"0",entries:0,
+      }]
+    : data.centers;
   const items=view==="activity"?(await activityData(scope,filters,5001,0)).activity:
     view==="departments"?data.departments:
-    view==="accounts"?data.accounts:view==="months"?data.months:data.centers;
+    view==="accounts"?data.accounts:view==="months"?data.months:centerExport;
   if(items.length>5000)throw new ReportError(413,"Narrow your dates or center for exports above 5,000 rows");
   const name="cost-centers-"+view+"-"+filters.from+"-"+filters.to;
-  const rowData=(items as Array<Record<string,unknown>>).map(item=>cols.map(col=>String(item[col]??"")));
+  const rowData=(items as unknown as Array<Record<string,unknown>>).map(item=>cols.map(col=>String(item[col]??"")));
   const safe=(v:string)=>/^[=+\-@\t\r]/.test(v)?"'"+v:v;
   if(format==="csv"){
     const escape=(v:string)=>'"'+safe(v).replace(/"/g,'""')+'"';
