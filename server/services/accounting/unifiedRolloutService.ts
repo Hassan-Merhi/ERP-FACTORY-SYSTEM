@@ -69,8 +69,11 @@ const protectedTables=[
 ] as const;
 const HEX40=/^[a-f0-9]{40,64}$/;
 export function deployedUnifiedReleaseSha():string|null{
- const value=String(process.env.UNIFIED_ACCOUNTING_RELEASE_SHA||
-  process.env.RENDER_GIT_COMMIT||process.env.GIT_COMMIT||"").trim().toLowerCase();
+ // The hosting provider source identity outranks any manually maintained
+ // fallback. A stale override may never make changed deployed code appear to
+ // be the previously certified build.
+ const value=String(process.env.RENDER_GIT_COMMIT||process.env.GIT_COMMIT||
+  process.env.UNIFIED_ACCOUNTING_RELEASE_SHA||"").trim().toLowerCase();
  return HEX40.test(value)?value:null;
 }
 function reviewerId(value:string){
