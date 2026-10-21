@@ -138,7 +138,6 @@ function asDate(v: string): string {
     throw new CashBankError("CASH_BANK_DATE_INVALID", "Invalid statement date", 400);
   }
 }
-const baseFilter = (company: number) => sql`v.company_id=${company} AND v.optional=false AND v.deleted_at IS NULL`;
 
 export async function loadCashBankAccountTx(
   tx: DbTransaction,
@@ -324,7 +323,7 @@ async function bookTx(tx: DbTransaction, account: CashBankAccount, through: stri
     FROM voucher_entries e JOIN vouchers v ON v.id=e.voucher_id
     LEFT JOIN accounting_cash_bank_matches m ON m.voucher_entry_id=e.id AND m.voided_at IS NULL
     LEFT JOIN accounting_cash_bank_statement_lines ls ON ls.id=m.statement_line_id
-    WHERE ${baseFilter(account.companyId)}
+    WHERE v.company_id=${account.companyId} AND v.optional=false AND v.deleted_at IS NULL
       AND COALESCE(v.effective_date,v.voucher_date)<=${through}::date
       AND ${owned}
     ORDER BY COALESCE(v.effective_date,v.voucher_date),e.id

@@ -159,8 +159,6 @@ async function postingsTx(tx: DbTransaction, companyId: number, asOfDate: string
   // balance). This counts distinct documents before looking at their lines.
   // created_at is wall clock, whereas posting is a company-local business day:
   // this is a warning signal, NOT proof of manipulation or historical state.
-  const conditions = sql`v.company_id=${companyId}
-   AND COALESCE(v.effective_date,v.voucher_date)<=${asOfDate}::date`;
   const counts = resultRows<CountsRow>(
     await tx.execute(sql`
  WITH docs AS (
@@ -173,7 +171,8 @@ async function postingsTx(tx: DbTransaction, companyId: number, asOfDate: string
            COALESCE(SUM(COALESCE(e.base_credit_amount,e.credit_amount,0)),0) AS cr
     FROM voucher_entries e WHERE e.voucher_id=v.id
    ) lines ON true
-   WHERE ${conditions}
+   WHERE v.company_id=${companyId}
+   AND COALESCE(v.effective_date,v.voucher_date)<=${asOfDate}::date
  )
  SELECT COUNT(*)::text AS documents,
    COUNT(*) FILTER(WHERE deleted_at IS NULL AND optional=false)::text AS currently_live,
@@ -204,7 +203,8 @@ async function postingsTx(tx: DbTransaction, companyId: number, asOfDate: string
     COALESCE(SUM(COALESCE(e.base_credit_amount,e.credit_amount,0)),0) AS cr
    FROM voucher_entries e WHERE e.voucher_id=v.id
  ) lines ON true
- WHERE ${conditions}
+ WHERE v.company_id=${companyId}
+   AND COALESCE(v.effective_date,v.voucher_date)<=${asOfDate}::date
    AND (v.created_at::date>${asOfDate}::date OR v.deleted_at IS NOT NULL OR v.optional=true)
  ORDER BY v.created_at DESC,v.id DESC LIMIT 101
  `)
