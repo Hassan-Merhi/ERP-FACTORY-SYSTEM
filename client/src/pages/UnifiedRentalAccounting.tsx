@@ -14,8 +14,9 @@ type Mod="ERP"|"FACTORY"|"PROPERTIES";
 type Contract={id:number;unitId:number;unitNumber:string;unitType:string;
   locationGroup:string;tenantName:string;status:string;currency:string;
   monthlyRent:string;startDate:string;endDate:string|null;internal:boolean;
+  perspective?:"TENANT"|"LANDLORD";
   linkedCompanyId:number|null};
-type Contracts={module:Mod;perspective:"TENANT"|"LANDLORD";contracts:Contract[];limitedTo:number};
+type Contracts={module:Mod;perspective:"MIXED_BY_CONTRACT";contracts:Contract[];limitedTo:number};
 type Period={ledgerRowId:number|null;year:number;month:number;dueDate:string;expected:string;
   paid:string;outstanding:string;overpayment:string;scheduled:string;
   accrualVoucherId:number|null;accrualStale:boolean;usedPrepaidAccount:boolean;
@@ -109,8 +110,8 @@ export default function UnifiedRentalAccounting(){
  return <div className="p-3 sm:p-5 space-y-5" data-testid="unified-rental-accounting">
   <div><h1 className="text-2xl font-semibold">Unified Rental Accounting</h1>
    <p className="text-sm text-muted-foreground">
-    {mod==="PROPERTIES"?"Landlord: rental income and amounts receivable.":
-      "Tenant: rental expenses and amounts payable."} Contract-month ledger,
+    Tenant-side shops and shared leases show rent payable; landlord-side warehouses
+    show rent receivable. Contract-month ledger,
     payments, advance rent, deposits and property expenses. Financial vouchers remain unchanged.
    </p></div>
   <Card><CardHeader><CardTitle>Rental contract</CardTitle></CardHeader>
@@ -121,7 +122,7 @@ export default function UnifiedRentalAccounting(){
       onChange={e=>setId(e.target.value)}>
       <option value="">Select contract...</option>
       {(list.data?.contracts??[]).map(c=><option value={c.id} key={c.id}>
-       #{c.id} · {c.locationGroup}/{c.unitNumber} · {c.tenantName} ({c.currency}, {c.status})
+       #{c.id} · {c.locationGroup}/{c.unitNumber} · {c.tenantName} ({c.currency}, {c.status}, {c.perspective??"lease"})
       </option>)}
      </select></div>
     <div className="space-y-1"><Label htmlFor="rent-accounting-date">As-of date</Label>
@@ -134,7 +135,7 @@ export default function UnifiedRentalAccounting(){
    </CardContent></Card>
   {detail.isError&&<p role="alert" className="text-destructive text-sm">{(detail.error as Error).message}</p>}
   {detail.data&&<><Card><CardHeader><CardTitle>
-   {detail.data.contract.locationGroup}/{detail.data.contract.unitNumber} · {detail.data.contract.tenantName}
+   {detail.data.contract.locationGroup}/{detail.data.contract.unitNumber} · {detail.data.contract.tenantName} ({detail.data.perspective==="TENANT"?"Tenant payable":"Landlord receivable"})
   </CardTitle></CardHeader>
    <CardContent className="space-y-3">
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
