@@ -672,6 +672,12 @@ export async function ensureRuntimeSchema(pool: Pool): Promise<void> {
     await import("../services/accounting/ensureFiscalReviewSchema");
   await ensureFiscalReviewSchema(pool);
 
+  // Phase 15 rollout metadata is created before accounting routes serve
+  // users. Fail-closed write middleware never assumes this schema exists.
+  const {ensureUnifiedAccountingRolloutSchema} =
+    await import("../services/accounting/ensureUnifiedAccountingRolloutSchema");
+  await ensureUnifiedAccountingRolloutSchema(pool);
+
   // Wave 16 (A): the Phase 3 historical accounting repair no longer runs here.
   // It added and deleted lines of posted vouchers of every company before each
   // listen, with no audit; it is now the Owner preview/apply at
