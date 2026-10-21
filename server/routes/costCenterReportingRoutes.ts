@@ -518,6 +518,28 @@ function registerPrefix(app:Express,prefix:string){
       res.json({budgets:result.rows});
     }catch(e){fail(res,e);}
   });
+  // Auditable budget history, scoped to the active company and selected center.
+  app.get(prefix+"/budgets/:costCenterId/:month/history",requireAuth,async(req,res)=>{
+    try{
+      const scope=await resolveScope(req);
+      const centerId=valueId(req.params.costCenterId);
+      const period=req.params.month;
+      if(!monthFormat.test(period))throw new ReportError(400,"Invalid budget month");
+      const budget=await pool.query(
+        "SELECT id FROM cost_center_monthly_budgets"+
+        " WHERE company_id=$1 AND cost_center_id=$2 AND budget_month=$3::date",
+        [scope.companyId,centerId,period+"-01"]
+      );
+      if(!budget.rows.length)return res.json({history:[]});
+      const history=await pool.query(
+        "SELECT id,username,action,changes,created_at AS \"createdAt\""+
+        " FROM audit_log WHERE company_id=$1 AND table_name='cost_center_monthly_budgets'"+
+        " AND record_id=$2 ORDER BY id DESC LIMIT 100",
+        [scope.companyId,budget.rows[0].id]
+      );
+      res.json({history:history.rows});
+    }catch(e){fail(res,e);}
+  });
   app.put(prefix+"/budgets/:costCenterId/:month",requireAuth,async(req,res)=>{
     try{
       const scope=await resolveScope(req,true);
