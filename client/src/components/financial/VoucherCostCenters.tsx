@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import Decimal from "decimal.js";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useCompany } from "@/contexts/CompanyContext";
+import { useAppMode } from "@/contexts/AppModeContext";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
@@ -26,12 +27,14 @@ function money(v: string | number, currency: string) {
 function apiError(e: unknown): string { return e instanceof Error ? e.message : "Unable to save cost-center allocation"; }
 function emptySplit(): DraftSplit { return { costCenterId: "", amountNative: "" }; }
 
-function EntryEditor({
-  entry, onClose, onSaved,
+export function CostCenterEntryEditor({
+  entry, onClose, onSaved, apiBase, sourceType = "voucher_entry",
 }: {
   entry: VoucherExpenseEntry;
   onClose: () => void;
   onSaved: () => Promise<void>;
+  apiBase: string;
+  sourceType?: "voucher_entry" | "factory_daybook";
 }) {
   const { selectedCompany } = useCompany();
   const { toast } = useToast();
@@ -41,16 +44,16 @@ function EntryEditor({
   const [draft, setDraft] = useState<DraftSplit[]>([]);
   const [reason, setReason] = useState("Allocate cost center");
   const [dirty, setDirty] = useState(false);
-  const key = ["/api/cost-centers", companyId, "voucher_entry", entry.entryId];
+  const key = [apiBase, companyId, sourceType, entry.entryId];
   const { data: source, isLoading: loadingSource, error: sourceError } = useQuery<SourceCostCenterAllocation>({
     queryKey: key,
     queryFn: () => readCostCenterApi<SourceCostCenterAllocation>(
-      "/api/cost-centers/allocations/voucher_entry/" + entry.entryId),
+      apiBase + "/allocations/" + sourceType + "/" + entry.entryId),
     enabled: !!companyId,
   });
   const { data: catalog, isLoading: loadingCatalog } = useQuery<CostCenterCatalog>({
-    queryKey: ["/api/cost-centers", companyId, true],
-    queryFn: () => readCostCenterApi<CostCenterCatalog>("/api/cost-centers?includeArchived=true"),
+    queryKey: [apiBase, companyId, true],
+    queryFn: () => readCostCenterApi<CostCenterCatalog>(apiBase + "?includeArchived=true"),
     enabled: !!companyId,
     staleTime: 30000,
   });
@@ -84,16 +87,16 @@ function EntryEditor({
       allocatedBase = allocatedBase.plus(base);
       return {
         costCenterId: Number(s.costCenterId), amountNative: native.toFixed(6),
-        amountBase: base.toFixed(6), costTreatment: "EXPENSE" as const,
+        amountBase: base.toFixed(6), costTreatment: entry.costTreatment,
       };
     });
     return { reason: reason.trim(), splits };
   }
   const save = useMutation({
     mutationFn: () => writeCostCenterApi("PUT",
-      "/api/cost-centers/allocations/voucher_entry/" + entry.entryId, toPayload()),
+      apiBase + "/allocations/" + sourceType + "/" + entry.entryId, toPayload()),
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["/api/cost-centers", companyId] });
+      await queryClient.invalidateQueries({ queryKey: [apiBase, companyId] });
       await onSaved();
       toast({ title: "Cost centers saved", description: "The posted voucher and account balances were not changed." });
       onClose();
@@ -106,7 +109,7 @@ function EntryEditor({
         <DialogHeader>
           <DialogTitle>Cost Center — {entry.accountName}</DialogTitle>
           <DialogDescription>
-            Posted expense entry #{entry.entryId}. This only tags the existing entry; it does not post another expense.
+            Analytical allocation for {entry.costTreatment === "INVENTORY_COST" ? "capitalized inventory cost" : "recognized expense"} #{entry.entryId}. This does not post another expense or alter inventory valuation.
           </DialogDescription>
         </DialogHeader>
         {loadingSource || loadingCatalog ? <p className="text-sm text-muted-foreground">Loading allocation data…</p> : sourceError ? (
@@ -190,15 +193,17 @@ function EntryEditor({
 /** Reuses the authoritative posted voucher lines in both ERP Voucher Detail and Daybook dialog. */
 export function VoucherCostCenters({ voucherId }: { voucherId: number }) {
   const { selectedCompany } = useCompany();
+  const isFactory = useAppMode() === "factory";
+  const apiBase = isFactory ? "/api/factory/cost-centers" : "/api/cost-centers";
   const companyId = selectedCompany?.id;
   const role = selectedCompany?.role || "";
   const canEdit = ["Admin", "Owner", "Developer"].includes(role);
   const canRead = canEdit || role === "Manager";
   const [selected, setSelected] = useState<VoucherExpenseEntry | null>(null);
-  const key = ["/api/cost-centers", companyId, "voucher", voucherId, "entries"];
+  const key = [apiBase, companyId, "voucher", voucherId, "entries"];
   const { data, isLoading, isError, error, refetch } = useQuery<VoucherExpenseEntries>({
     queryKey: key,
-    queryFn: () => readCostCenterApi<VoucherExpenseEntries>("/api/cost-centers/voucher/" + voucherId + "/entries"),
+    queryFn: () => readCostCenterApi<VoucherExpenseEntries>(apiBase + "/voucher/" + voucherId + "/entries"),
     enabled: canRead && !!companyId && Number.isInteger(voucherId) && voucherId > 0,
     staleTime: 30000,
   });
@@ -212,7 +217,7 @@ export function VoucherCostCenters({ voucherId }: { voucherId: number }) {
       <div className="flex flex-wrap justify-between items-center gap-2">
         <div>
           <h3 className="text-sm font-semibold flex items-center gap-2"><Layers3 className="h-4 w-4" /> Cost Centers</h3>
-          <p className="text-xs text-muted-foreground">Assigned to individual expense entries, not payment accounts.</p>
+          <p className="text-xs text-muted-foreground">Assigned to eligible posted expense entries{isFactory ? " or factory inventory-cost accounts" : ""}; never to payment accounts.</p>
         </div>
       </div>
       <div className="space-y-2">
@@ -222,6 +227,7 @@ export function VoucherCostCenters({ voucherId }: { voucherId: number }) {
             <div key={entry.entryId} className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-muted/30 p-2 text-sm">
               <div className="min-w-0 flex-1">
                 <div className="font-medium">{entry.accountName} <span className="text-xs text-muted-foreground">#{entry.entryId}</span></div>
+                {entry.costTreatment === "INVENTORY_COST" && <p className="text-xs text-muted-foreground">Inventory cost (not an operating expense)</p>}
                 <div className="text-xs text-muted-foreground">
                   {money(entry.amountNative, entry.currency)} · Unallocated {money(unallocated.toString(), entry.currency)}
                 </div>
@@ -232,7 +238,7 @@ export function VoucherCostCenters({ voucherId }: { voucherId: number }) {
           );
         })}
       </div>
-      {selected && <EntryEditor key={selected.entryId} entry={selected} onClose={() => setSelected(null)}
+      {selected && <CostCenterEntryEditor key={selected.entryId} entry={selected} apiBase={apiBase} onClose={() => setSelected(null)}
         onSaved={async () => { await refetch(); }} />}
     </section>
   );
