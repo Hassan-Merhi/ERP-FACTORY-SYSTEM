@@ -27,12 +27,22 @@ The production fiscal close engine is **not replaced**. Phase 13 builds on:
    - `ACCOUNTING` or `OWNER` capacity, reviewer ID/name, review note, review date;
    - one live signoff for each capacity and source evidence/version;
    - optional audited revocation, no silent delete or reuse of an already consumed signoff;
+   - SQL BEFORE UPDATE/DELETE immutability guard refuses rewrite/delete of
+     original reviewer, capacity, period, source hash, note or timestamp.
+     The sole permitted UPDATE is an initial revocation with actor/reason,
+     and even that is refused after use by a completed reviewed close;
    - the review cannot be used if source evidence changes.
 
 2. `accounting_fiscal_reviewed_closures`
    - exact closed fiscal-period and posted closing voucher IDs, both reviewers, fingerprint, actor and timestamp;
    - inserted **in the same transaction** as the existing closing journal and closure record;
    - retains the reviewed close voucher and evidence if the pre-existing audited reopen removes the current `fiscal_period_closures` row; the FK becomes NULL on reopen instead of blocking it;
+   - a database trigger validates source company's closing voucher, separate
+     reviewer IDs/capacities, current unrevoked approvals, identical source
+     fingerprint and retained earnings/period to the actual closure before
+     any reviewed-close evidence can be inserted;
+   - a separate immutable-close trigger rejects updates/deletes to reviewed
+     evidence (except the FK-null transition caused by audited reopen);
    - reopening does **not** make the old approval valid for another close.
 
 3. `accounting_fiscal_review_policy`
@@ -130,7 +140,13 @@ React Query keys are company-specific. Neither changing companies, reading the r
 
 1. Compile TypeScript/React, check all new imports, route order, LazyPage routing, company-session handling, POST permission and UI state changes.
 2. Check always-on schema creation idempotency, role flags, review uniqueness, all RLS policies and protected foreign keys; test forced RLS and direct cross-company ID rejection.
-3. Verify scope for `closeFiscalPeriod` now explicitly sets transaction-local `app.current_company_id` before reading the RLS-protected enforcement policy; no privileged-role bypass.
+3. Validate signoff and reviewed-close database immutability triggers:
+   attempted approval rewrite/delete; single audited revocation before use;
+   refusal to revoke a consumed signoff; cross-company signoffs; different
+   period, wrong Equity account, wrong source hash, same reviewer in both
+   capacities; verified closure after audited reopen may only null out its
+   current fiscal-closure FK.
+4. Verify scope for `closeFiscalPeriod` now explicitly sets transaction-local `app.current_company_id` before reading the RLS-protected enforcement policy; no privileged-role bypass.
 4. Compare trial-balance amount/side and P&L categories with existing `buildTrialBalance`, fiscal closing writer and Phase 11 statements for a controlled company/date.
 5. Check first-close earliest P&L date, contiguous later periods, duplicate endings, invalid date, business timezone and period date boundary.
 6. Test balance-sheet not balanced, deleted Income/Expense accounts, legacy single-sided stock journals, line on wrong-company account, missing historic FX bases and master opening-side assumptions; verify blocking-versus-warning decisions.
