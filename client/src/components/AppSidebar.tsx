@@ -92,6 +92,7 @@ export const ERP_NAV_SECTIONS: NavSection[] = [
     color: NAV_COLOR.accounting,
     items: [
       { title: "Accounts", url: "/accounts", icon: Wallet },
+      { title: "Open Items", url: "/accounting/open-items", icon: Receipt },
       { title: "Parties", url: "/parties", icon: Handshake },
       { title: "Payroll", url: "/payroll", icon: UserCheck },
     ],
