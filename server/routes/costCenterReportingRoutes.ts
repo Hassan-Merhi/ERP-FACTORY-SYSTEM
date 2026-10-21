@@ -361,6 +361,26 @@ function registerPrefix(app:Express,prefix:string){
       res.json(await summaryData(scope,parseFilters(req)));
     }catch(e){fail(res,e);}
   });
+  app.get(prefix+"/reports/consolidated/activity",requireAuth,async(req,res)=>{
+    try{
+      const scope=await resolveScope(req,false,true);
+      const limit=req.query.limit===undefined?50:valueId(req.query.limit);
+      const offset=req.query.offset===undefined?0:Number(req.query.offset);
+      if(limit>200||!Number.isSafeInteger(offset)||offset<0||offset>2000000)
+        throw new ReportError(400,"Invalid pagination");
+      res.json(await activityData(scope,parseFilters(req),limit,offset));
+    }catch(e){fail(res,e);}
+  });
+  app.get(prefix+"/reports/consolidated/export",requireAuth,async(req,res)=>{
+    try{
+      const scope=await resolveScope(req,false,true);
+      const format=req.query.format;
+      const view=req.query.view??"summary";
+      if(!["csv","xlsx","pdf"].includes(String(format))||!["summary","activity"].includes(String(view)))
+        throw new ReportError(400,"Invalid export request");
+      await exportReport(res,scope,parseFilters(req),String(format),String(view));
+    }catch(e){if(!res.headersSent)fail(res,e);else res.end();}
+  });
   app.get(prefix+"/reports/activity",requireAuth,async(req,res)=>{
     try{
       const scope=await resolveScope(req);
