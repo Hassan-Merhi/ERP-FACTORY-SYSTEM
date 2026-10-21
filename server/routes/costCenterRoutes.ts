@@ -582,7 +582,7 @@ function registerCostCenterPrefix(app: Express, prefix: string) {
             "SELECT a.id, v.id AS \"voucherId\", a.voucher_entry_id AS \"voucherEntryId\",",
             "a.factory_daybook_entry_id AS \"factoryDaybookEntryId\",",
             "a.amount_native::text AS \"amountNative\",a.amount_base::text AS \"amountBase\",",
-            "a.currency,a.cost_treatment AS \"costTreatment\",",
+            "a.currency,a.cost_treatment AS \"costTreatment\",a.allocation_origin AS \"allocationOrigin\",",
             "COALESCE(v.effective_date,v.voucher_date,f.tx_date) AS \"sourceDate\",",
             "v.voucher_number AS \"voucherNumber\",f.tx_type AS \"factoryTxType\"",
             "FROM cost_center_allocations a",
