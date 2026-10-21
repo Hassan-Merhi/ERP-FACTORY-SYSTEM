@@ -56,6 +56,7 @@ export interface OpenItemSummary {
   asOfDate: string | null;
   items: PartyOpenItem[];
   currencies: Record<string, { charges: string; settlements: string; unapplied: string; outstanding: string }>;
+  openingBalance: { amount: string; side: string | null; includedInMatching: false };
 }
 
 const DECIMAL_DP = 6;
@@ -133,17 +134,19 @@ async function loadEntriesTx(tx: DbTransaction, input: PartyOpenItemTarget): Pro
   `);
   return resultRows<EntryRow>(data);
 }
-async function ensurePartyExistsTx(tx: DbTransaction, input: PartyOpenItemTarget): Promise<void> {
+async function ensurePartyExistsTx(tx: DbTransaction, input: PartyOpenItemTarget): Promise<{ opening_balance: string | null; opening_balance_side: string | null }> {
   // Domain is an enum, so these are fixed trusted table names, never user SQL.
   const table = { customer: "customers", supplier: "suppliers", factory_supplier: "factory_suppliers" }[input.domain];
   // factory_suppliers has is_active, but no deleted_at column.
   const active = input.domain === "factory_supplier"
-    ? sql`AND is_active = true` : sql`AND deleted_at IS NULL`;
-  const row = resultRows<{ id: number }>(await tx.execute(sql`
-    SELECT id FROM ${sql.raw(table)}
+    ? sql`` : sql`AND deleted_at IS NULL`;
+  const side = input.domain === "customer" ? sql`opening_balance_side` : sql`NULL::text`;
+  const row = resultRows<{ id: number; opening_balance: string | null; opening_balance_side: string | null }>(await tx.execute(sql`
+    SELECT id, opening_balance::text, ${side} AS opening_balance_side FROM ${sql.raw(table)}
     WHERE id=${input.partyId} AND company_id=${input.companyId} ${active} LIMIT 1
   `))[0];
   if (!row) throw new OpenItemError("OPEN_ITEM_PARTY_NOT_FOUND", "Party does not belong to this company", 404);
+  return row;
 }
 async function loadAllocationsTx(tx: DbTransaction, input: PartyOpenItemTarget): Promise<AllocationRow[]> {
   const asOf = input.asOfDate
@@ -180,7 +183,7 @@ export async function loadPartyOpenItemsTx(
 ): Promise<OpenItemSummary> {
   validateOpenItemTarget(target);
   await assertTransactionCompanyScope(tx, target.companyId);
-  await ensurePartyExistsTx(tx, target);
+  const party = await ensurePartyExistsTx(tx, target);
   const [entries, allocations] = await Promise.all([
     loadEntriesTx(tx, target),loadAllocationsTx(tx, target)
   ]);
@@ -233,7 +236,11 @@ export async function loadPartyOpenItemsTx(
     currencies[value.currency]=c;
   }
   return {companyId:target.companyId,domain:target.domain,partyId:target.partyId,
-    asOfDate:target.asOfDate??null,items,currencies};
+    asOfDate:target.asOfDate??null,items,currencies,
+    // Legacy party opening balances are not individual posted documents: never
+    // invent a synthetic invoice or silently allocate a payment to them.
+    openingBalance: { amount:fmt(money(party.opening_balance)),
+      side:party.opening_balance_side, includedInMatching:false }};
 }
 
 export interface ApplyOpenItemMatch extends PartyOpenItemTarget {
