@@ -28,6 +28,7 @@ const harness = vi.hoisted(() => {
     getCustomerByLedgerId: vi.fn(),
     getPartyBalance: vi.fn(),
     loadCustomerNotInLedger: vi.fn(),
+    projectCustomerStatementLines: vi.fn(),
   };
 });
 
@@ -50,6 +51,9 @@ vi.mock("../server/services/accounting/balances/ledgerBalanceEngine", () => ({
 vi.mock("../server/services/accounting/balances/customerLedgerStatement", () => ({
   loadCustomerNotInLedger: harness.loadCustomerNotInLedger,
   loadCustomerLedgerEntryRows: vi.fn(async () => []),
+}));
+vi.mock("../server/routes/factory/customers-core/heldUnfinalizedCustomerCharges", () => ({
+  projectCustomerStatementLines: harness.projectCustomerStatementLines,
 }));
 vi.mock("../server/lib/httpHandlers", () => ({ getErrorMessage: (error: any) => error?.message || String(error) }));
 vi.mock("../server/lib/logger", () => ({ logger: { error: vi.fn() } }));
@@ -272,12 +276,15 @@ describe("account statement route behavior", () => {
     harness.getCustomerByLedgerId.mockResolvedValue({ id: 44, companyId: 4 });
     harness.getPartyBalance.mockResolvedValue({ opening: "150.00" });
     harness.loadCustomerNotInLedger.mockResolvedValue({ prePeriodTotal: "120.00", rows: [] });
+    // Held pre-finalization charges booked before the period leave the opening (#2415).
+    harness.projectCustomerStatementLines.mockResolvedValue({ rows: [], heldBefore: "25.00" });
     const res = responseHarness();
     await routes.get("GET /api/accounts/:type/:id/pre-period-balance")!(
       request({ params: { type: "ledger", id: "12" }, query: { endDate: "2026-08-01" } }),
       res
     );
-    expect(res.body).toEqual({ balance: 150, notInLedgerBefore: "120.00" });
+    expect(res.body).toEqual({ balance: 125, notInLedgerBefore: "120.00" });
+    expect(harness.projectCustomerStatementLines).toHaveBeenCalledWith(4, 44, [], "2026-08-01", null);
     expect(harness.getPartyBalance).toHaveBeenCalledWith(harness.db, {
       companyId: 4,
       kind: "customer",
