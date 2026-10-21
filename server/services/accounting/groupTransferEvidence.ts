@@ -7,6 +7,7 @@ import Decimal from "decimal.js";
 import {sql} from "drizzle-orm";
 import {db} from "../../db";
 import {resultRows} from "../../lib/queryResult";
+import {assertTransactionCompanyScope} from "../security/transactionCompanyScope";
 import {runWithGroupCompanyScope} from "../../helpers/groupNetPosition";
 type TransferSource=Record<string,unknown>&{
  id:number;from_company_id:number;to_company_id:number;
@@ -32,17 +33,21 @@ export interface TransferEvidence {
 const usd=(d:Decimal.Value)=>new Decimal(d??"0").toDecimalPlaces(2,Decimal.ROUND_HALF_UP);
 const fmt=(d:Decimal)=>d.toFixed(2);
 async function sourceTx(companyId:number,asOf:string){
- return db.transaction(async tx=>resultRows<TransferSource>(await tx.execute(sql`
+ return db.transaction(async tx=>{
+  await assertTransactionCompanyScope(tx,companyId);
+  return resultRows<TransferSource>(await tx.execute(sql`
   SELECT t.id,t.from_company_id,t.to_company_id,t.from_ledger_account_id,
     t.to_ledger_account_id,t.from_voucher_id,t.to_voucher_id,
     t.transfer_date::text,t.amount::text,t.transfer_type
    FROM inter_company_transfers t
    WHERE t.from_company_id=${companyId} AND t.transfer_date<=${asOf}::date
    ORDER BY t.transfer_date DESC,t.id DESC LIMIT 251
- `)));
+ `));
+ });
 }
 async function voucherTx(companyId:number,voucherId:number,accountId:number,asOf:string):Promise<VoucherLeg|null>{
  return db.transaction(async tx=>{
+  await assertTransactionCompanyScope(tx,companyId);
   return resultRows<VoucherLeg>(await tx.execute(sql`
    SELECT v.id,v.voucher_number,COALESCE(v.effective_date,v.voucher_date)::text AS booked_on,
      v.deleted_at::text,v.optional,v.company_id AS source_company,
