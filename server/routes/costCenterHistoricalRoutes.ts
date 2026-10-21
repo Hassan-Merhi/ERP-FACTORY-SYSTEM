@@ -174,6 +174,9 @@ function calculate(rows:Entry[],splits:PlanSplit[]){
     const native=toMoney(row.amountNative),usd=toMoney(row.amountUsd);
     if(native.lte(0)||usd.lt(0))
       throw new HistoryError(409,"Eligible source has an invalid historical amount");
+    if(!row.currency || !row.currency.trim() || row.currency.length>10 ||
+      (row.historicalRate!=null && toMoney(row.historicalRate).lte(0)))
+      throw new HistoryError(409,"Historical currency or source FX evidence is invalid; source not modified");
     const allocations=splits.map(s=>({
       costCenterId:s.costCenterId,
       amountNative:native.times(s.percent).div(100).toDecimalPlaces(6).toFixed(6),
