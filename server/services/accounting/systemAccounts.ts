@@ -204,7 +204,14 @@ export const SYSTEM_ACCOUNTS: readonly SystemAccountDefinition[] = [
     name: "FX Revaluation Gain/Loss",
     accountType: "Indirect Expense",
     required: false,
-    purpose: "Exchange differences.",
+    purpose: "Exchange differences (including legacy FX-agent settlements).",
+  },
+  {
+    code: "FX-REALIZED",
+    name: "Realized FX Gain/Loss",
+    accountType: "Indirect Expense",
+    required: false,
+    purpose: "Historical settlement exchange gain (credit) or loss (debit) recognized on an invoice/payment match.",
   },
   {
     code: "FACTORY_CHARGES_PAYABLE",
