@@ -4,7 +4,7 @@ import type { ClientErrorLike } from "@/lib/clientError";
  *
  * Extracted from PropertyRentalPage.tsx during the Phase 4 god-file split.
  */
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
@@ -57,6 +57,7 @@ function BulkPaymentDialog({
     return Object.values(amounts).reduce((sum, v) => sum + (parseFloat(v) || 0), 0);
   }, [amounts]);
 
+  const bulkRequest = useRef<{ fingerprint: string; id: string } | null>(null);
   const bulkPay = useMutation({
     mutationFn: () => {
       const items = units
@@ -70,9 +71,18 @@ function BulkPaymentDialog({
           scheduleFuturePayment,
         }));
       if (items.length === 0) throw new Error("No valid amounts entered");
-      return apiRequest("POST", apiBase + "/payments/bulk", items);
+      const fingerprint = JSON.stringify(items);
+      const id = bulkRequest.current?.fingerprint === fingerprint
+        ? bulkRequest.current.id
+        : crypto.randomUUID();
+      bulkRequest.current = { fingerprint, id };
+      return apiRequest("POST", apiBase + "/payments/bulk", items.map((item, index) => ({
+        ...item,
+        clientRequestId: `${id}:${index}`,
+      })));
     },
     onSuccess: (_data) => {
+      bulkRequest.current = null;
       const isScheduled = paymentDate > new Date().toISOString().slice(0, 10);
       toast({
         title: isScheduled ? "Payments scheduled" : "Bulk payment recorded",
