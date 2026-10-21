@@ -56,6 +56,7 @@ const MIGRATION_TAGS = [
   "20261021_004_cost_centers_phase6_budgets",
   "20261021_005_cost_centers_phase7_history",
   "20261021_006_cost_centers_phase8_hardening",
+  "20261021_007_cost_centers_historical_batch_size",
 ];
 
 /** Fully company-scoped identity; only accounting administrators may inspect deployment structure. */

@@ -22,6 +22,7 @@ const MIGRATIONS = [
   "20261021_004_cost_centers_phase6_budgets",
   "20261021_005_cost_centers_phase7_history",
   "20261021_006_cost_centers_phase8_hardening",
+  "20261021_007_cost_centers_historical_batch_size",
 ];
 const BASE = "/api/cost-centers";
 const REPORT_WINDOW = "fromDate=2026-09-01&toDate=2026-09-30";
@@ -377,6 +378,56 @@ describe("Cost centers lifecycle (migrations applied)", () => {
       .send({ confirmation: "APPLY" });
     expect(stale.status).toBe(409);
     expect(await splitsOf(third.expenseEntryId)).toHaveLength(0);
+  });
+
+  it("historical batches filter several accounts, allow 10,000 entries and apply in bulk", async () => {
+    const first = await postExpense("12.00", "History multi A");
+    const second = await postExpense("18.00", "History multi B");
+    const plan = {
+      sourceKind: "VOUCHER_ENTRY",
+      fromDate: DATE,
+      toDate: DATE,
+      // Duplicates collapse; an account with no lines simply matches nothing.
+      ledgerAccountIds: [expenseAccountId, expenseAccountId, 2147483000],
+      limit: 10000,
+      splits: [{ costCenterId: opsId, percent: "100" }],
+      reason: "Backfill several accounts",
+    };
+    const tooLarge = await agent.post(`${BASE}/historical/preview`).send({ ...plan, limit: 10001 });
+    expect(tooLarge.status).toBe(400);
+    const tooSmall = await agent.post(`${BASE}/historical/preview`).send({ ...plan, limit: 1 });
+    expect(tooSmall.status).toBe(413);
+    expect(tooSmall.body.message).toContain("Maximum entries");
+
+    const recon = await agent.get(
+      `${BASE}/historical/reconciliation?sourceKind=VOUCHER_ENTRY&fromDate=${DATE}&toDate=${DATE}` +
+        `&ledgerAccountIds=${expenseAccountId},2147483000`
+    );
+    expect(recon.status, recon.text).toBe(200);
+    expect(recon.body.sourceCount).toBeGreaterThanOrEqual(2);
+
+    const preview = await agent.post(`${BASE}/historical/preview`).send(plan);
+    expect(preview.status, preview.text).toBe(201);
+    const ids = preview.body.rows.map((row: { sourceId: number }) => row.sourceId);
+    expect(ids).toEqual(expect.arrayContaining([first.expenseEntryId, second.expenseEntryId]));
+    const originals = await lines(first.voucherId);
+    const applied = await agent
+      .post(`${BASE}/historical/${preview.body.batchId}/apply`)
+      .send({ confirmation: "APPLY" });
+    expect(applied.status, applied.text).toBe(200);
+    expect(applied.body.sourceCount).toBe(ids.length);
+    expect(await lines(first.voucherId)).toEqual(originals);
+    expect((await splitsOf(first.expenseEntryId)).map((s) => [s.cost_center_id, Number(s.amount_base)])).toEqual([
+      [opsId, 12],
+    ]);
+    expect((await splitsOf(second.expenseEntryId)).map((s) => [s.cost_center_id, Number(s.amount_base)])).toEqual([
+      [opsId, 18],
+    ]);
+    const items = await pool.query(
+      `SELECT count(*)::int AS n FROM cost_center_historical_batch_items WHERE batch_id = $1`,
+      [preview.body.batchId]
+    );
+    expect(items.rows[0].n).toBe(ids.length);
   });
 
   it("excludes reversed vouchers from allocation and reports", async () => {

@@ -42,10 +42,16 @@ these six files, in order, each in its own transaction, after a backup:
 ```sh
 for f in 20261021_001_cost_centers_phase1 20261021_002_cost_centers_phase2_integrity \
          20261021_003_cost_centers_phase5_automation 20261021_004_cost_centers_phase6_budgets \
-         20261021_005_cost_centers_phase7_history 20261021_006_cost_centers_phase8_hardening; do
+         20261021_005_cost_centers_phase7_history 20261021_006_cost_centers_phase8_hardening \
+         20261021_007_cost_centers_historical_batch_size; do
   psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -1 -f "migrations/$f.sql" || break
 done
 ```
+
+Migration 007 only widens the historical batch CHECK from 100 to 10,000
+entries (the approve step writes each batch with set-based inserts); it touches
+no accounting table. Historical previews can filter by several expense ledger
+accounts at once (`ledgerAccountIds`).
 
 Do not use `scripts/run-versioned-migrations.mjs` for this unless every other
 pending journal entry has been reviewed: it applies **all** pending entries.
@@ -119,6 +125,7 @@ Apply in a **controlled clone/staging database first**, in journal order:
 | 4 | `20261021_004_cost_centers_phase6_budgets` |
 | 5 | `20261021_005_cost_centers_phase7_history` |
 | 6 | `20261021_006_cost_centers_phase8_hardening` |
+| 7 | `20261021_007_cost_centers_historical_batch_size` |
 
 **Before production, Claude must**:
 - Sync branch with current `main` and reconcile versioned journal conflicts,

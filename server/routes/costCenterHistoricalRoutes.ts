@@ -39,7 +39,7 @@ type Plan = {
   sourceKind: SourceKind;
   fromDate: string;
   toDate: string;
-  ledgerAccountId: number | null;
+  ledgerAccountIds: number[] | null;
   limit: number;
   splits: PlanSplit[];
   reason: string;
@@ -59,14 +59,19 @@ const rolesWrite = new Set(["Admin", "Owner", "Developer"]);
 const idSchema = z.coerce.number().int().positive().max(2147483647);
 const amountPattern = /^(?:0|[1-9]\d{0,2})(?:\.\d{1,4})?$/;
 const datePattern = /^\d{4}-\d{2}-\d{2}$/;
+export const HISTORICAL_BATCH_MAX = 10000;
+const MAX_ACCOUNT_FILTERS = 500;
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const previewBody = z
   .object({
     sourceKind: z.enum(["VOUCHER_ENTRY", "FACTORY_DAYBOOK"]),
     fromDate: z.string(),
     toDate: z.string(),
+    // ledgerAccountId: single-account form kept for previews stored before
+    // multi-account filters; new requests send ledgerAccountIds.
     ledgerAccountId: idSchema.nullable().optional(),
-    limit: z.number().int().min(1).max(100).default(50),
+    ledgerAccountIds: z.array(idSchema).max(MAX_ACCOUNT_FILTERS).nullable().optional(),
+    limit: z.number().int().min(1).max(HISTORICAL_BATCH_MAX).default(50),
     splits: z
       .array(
         z
@@ -125,7 +130,8 @@ function parsePlan(raw: unknown): Plan {
   if (!parsed.success) throw new HistoryError(400, parsed.error.issues.map((i) => i.message).join("; "));
   const p = parsed.data;
   windowDates(p.fromDate, p.toDate);
-  if (p.sourceKind === "FACTORY_DAYBOOK" && p.ledgerAccountId != null)
+  const ledgerAccountIds = accountFilter(p.ledgerAccountIds, p.ledgerAccountId);
+  if (p.sourceKind === "FACTORY_DAYBOOK" && ledgerAccountIds !== null)
     throw new HistoryError(400, "Factory daybook entries do not have ledger account filters");
   if (new Set(p.splits.map((s) => s.costCenterId)).size !== p.splits.length)
     throw new HistoryError(400, "Each cost center can appear only once");
@@ -136,14 +142,19 @@ function parsePlan(raw: unknown): Plan {
     sourceKind: p.sourceKind,
     fromDate: p.fromDate,
     toDate: p.toDate,
-    ledgerAccountId: p.ledgerAccountId ?? null,
+    ledgerAccountIds,
     limit: p.limit,
     splits: p.splits.map((s) => ({ costCenterId: s.costCenterId, percent: toMoney(s.percent).toFixed(4) })),
     reason: p.reason.trim(),
   };
 }
-function queryParams(plan: Pick<Plan, "fromDate" | "toDate" | "ledgerAccountId" | "limit">, companyId: number) {
-  return [companyId, plan.fromDate, plan.toDate, plan.ledgerAccountId, plan.limit + 1];
+/** Distinct, sorted account ids; null (no filter) when none were chosen. */
+function accountFilter(ids: number[] | null | undefined, legacyId?: number | null): number[] | null {
+  const all = [...(ids ?? []), ...(legacyId != null ? [legacyId] : [])];
+  return all.length ? Array.from(new Set(all)).sort((a, b) => a - b) : null;
+}
+function queryParams(plan: Pick<Plan, "fromDate" | "toDate" | "ledgerAccountIds" | "limit">, companyId: number) {
+  return [companyId, plan.fromDate, plan.toDate, plan.ledgerAccountIds, plan.limit + 1];
 }
 function sourceSql(kind: SourceKind): string {
   if (kind === "VOUCHER_ENTRY")
@@ -171,7 +182,7 @@ function sourceSql(kind: SourceKind): string {
       " AND GREATEST(abs(COALESCE(ve.base_debit_amount,ve.debit_amount,0)),",
       " abs(COALESCE(ve.base_credit_amount,ve.credit_amount,0)))>=0",
       " AND COALESCE(v.effective_date,v.voucher_date) BETWEEN $2::date AND $3::date",
-      " AND ($4::integer IS NULL OR ve.ledger_account_id=$4)",
+      " AND ($4::integer[] IS NULL OR ve.ledger_account_id=ANY($4::integer[]))",
       " AND NOT EXISTS(SELECT 1 FROM cost_center_allocations a",
       " WHERE a.company_id=ve.company_id AND a.voucher_entry_id=ve.id)",
       " AND NOT EXISTS(SELECT 1 FROM cost_center_source_overrides o",
@@ -190,7 +201,7 @@ function sourceSql(kind: SourceKind): string {
     " AND f.tx_type IN ('EXPENSE','OPERATING_EXPENSE','FACTORY_EXPENSE')",
     " AND f.amount_currency>0 AND f.amount_usd>=0",
     " AND f.reference_id IS NULL AND NULLIF(btrim(COALESCE(f.reference_table,'')),'') IS NULL",
-    " AND COALESCE(f.effective_date,f.tx_date) BETWEEN $2::date AND $3::date AND $4::integer IS NULL",
+    " AND COALESCE(f.effective_date,f.tx_date) BETWEEN $2::date AND $3::date AND $4::integer[] IS NULL",
     " AND NOT EXISTS(SELECT 1 FROM cost_center_allocations a",
     " WHERE a.company_id=f.company_id AND a.factory_daybook_entry_id=f.id)",
     " AND NOT EXISTS(SELECT 1 FROM cost_center_source_overrides o",
@@ -299,6 +310,104 @@ async function audit(
     ]
   );
 }
+async function lockSources(client: PoolClient, companyId: number, kind: SourceKind, sources: Entry[]) {
+  const ids = sources.map((row) => row.sourceId);
+  if (kind === "VOUCHER_ENTRY") {
+    const entries = await client.query(
+      "SELECT id,voucher_id FROM voucher_entries WHERE company_id=$1 AND id=ANY($2::integer[]) ORDER BY id FOR SHARE",
+      [companyId, ids]
+    );
+    if (entries.rowCount !== ids.length) throw new HistoryError(409, "An expense source was removed");
+    const voucherIds = Array.from(new Set(entries.rows.map((row) => Number(row.voucher_id))));
+    await client.query("SELECT id FROM vouchers WHERE company_id=$1 AND id=ANY($2::integer[]) ORDER BY id FOR SHARE", [
+      companyId,
+      voucherIds,
+    ]);
+    return;
+  }
+  const lock = await client.query(
+    "SELECT id FROM factory_daybook_entries WHERE company_id=$1 AND id=ANY($2::integer[]) ORDER BY id FOR SHARE",
+    [companyId, ids]
+  );
+  if (lock.rowCount !== ids.length) throw new HistoryError(409, "A Factory expense source was removed");
+}
+type CalculatedRow = ReturnType<typeof calculate>["rows"][number];
+/**
+ * Set-based writes for an approved batch (up to HISTORICAL_BATCH_MAX sources):
+ * one statement per table instead of one per source, so large batches commit
+ * quickly. Row triggers on the analytical tables still validate every row.
+ */
+async function insertApplied(client: PoolClient, actor: Actor, batchId: string, plan: Plan, rows: CalculatedRow[]) {
+  const sourceColumn = plan.sourceKind === "VOUCHER_ENTRY" ? "voucher_entry_id" : "factory_daybook_entry_id";
+  // Claim the sources with overrides so future automatic defaults cannot
+  // later overwrite or re-create these manually approved tags.
+  await client.query(
+    "INSERT INTO cost_center_source_overrides(company_id," +
+      sourceColumn +
+      ",reason,overridden_by) SELECT $1,s,$3,$4 FROM unnest($2::integer[]) AS s",
+    [actor.companyId, rows.map((row) => row.sourceId), plan.reason, actor.userId]
+  );
+  const splits = rows.flatMap((row) => row.allocations.map((split) => ({ row, split })));
+  await client.query(
+    "INSERT INTO cost_center_allocations" +
+      "(company_id,cost_center_id," +
+      sourceColumn +
+      ",amount_native,currency,amount_base,base_currency,historical_rate," +
+      "rate_convention,cost_treatment,allocation_origin,created_by,updated_by)" +
+      " SELECT $1,x.cc,x.src,x.nat::numeric,x.cur,x.usd::numeric,'USD',x.rate::numeric,x.conv," +
+      "'EXPENSE','MANUAL',$2,$2" +
+      " FROM unnest($3::integer[],$4::integer[],$5::text[],$6::text[],$7::text[],$8::text[],$9::text[])" +
+      " AS x(cc,src,nat,cur,usd,rate,conv)",
+    [
+      actor.companyId,
+      actor.userId,
+      splits.map(({ split }) => split.costCenterId),
+      splits.map(({ row }) => row.sourceId),
+      splits.map(({ split }) => split.amountNative),
+      splits.map(({ row }) => row.currency),
+      splits.map(({ split }) => split.amountUsd),
+      splits.map(({ row }) => row.historicalRate),
+      splits.map(({ row }) => row.rateConvention),
+    ]
+  );
+  await client.query(
+    "INSERT INTO cost_center_historical_batch_items" +
+      "(batch_id,company_id,source_kind,source_id,source_native,source_usd," +
+      "allocated_native,allocated_usd,applied_by)" +
+      " SELECT $1,$2,$3,x.src,x.snat::numeric,x.susd::numeric,x.anat::numeric,x.ausd::numeric,$4" +
+      " FROM unnest($5::integer[],$6::text[],$7::text[],$8::text[],$9::text[]) AS x(src,snat,susd,anat,ausd)",
+    [
+      batchId,
+      actor.companyId,
+      plan.sourceKind,
+      actor.userId,
+      rows.map((row) => row.sourceId),
+      rows.map((row) => row.amountNative),
+      rows.map((row) => row.amountUsd),
+      rows.map((row) => sumMoney(row.allocations.map((s) => s.amountNative)).toFixed(6)),
+      rows.map((row) => sumMoney(row.allocations.map((s) => s.amountUsd)).toFixed(6)),
+    ]
+  );
+  await client.query(
+    "INSERT INTO audit_log(user_id,username,company_id,action,table_name,record_id,record_identifier,changes)" +
+      " SELECT $1,$2,$3,'create','cost_center_allocations',NULL,x.ident,x.changes::jsonb" +
+      " FROM unnest($4::text[],$5::text[]) AS x(ident,changes)",
+    [
+      actor.userId,
+      actor.username,
+      actor.companyId,
+      rows.map((row) => "history:" + batchId + ":" + plan.sourceKind + ":" + row.sourceId),
+      rows.map((row) =>
+        JSON.stringify({
+          snapshot: { old: [], new: row.allocations },
+          reason: plan.reason,
+          sourceNative: row.amountNative,
+          sourceUsd: row.amountUsd,
+        })
+      ),
+    ]
+  );
+}
 function parseUuid(value: unknown): string {
   if (typeof value !== "string" || !uuidPattern.test(value))
     throw new HistoryError(400, "Invalid historical preview ID");
@@ -308,7 +417,7 @@ function parseFilters(req: Request): {
   sourceKind: SourceKind;
   fromDate: string;
   toDate: string;
-  ledgerAccountId: number | null;
+  ledgerAccountIds: number[] | null;
 } {
   const sourceKind = req.query.sourceKind;
   if (sourceKind !== "VOUCHER_ENTRY" && sourceKind !== "FACTORY_DAYBOOK")
@@ -316,15 +425,17 @@ function parseFilters(req: Request): {
   if (typeof req.query.fromDate !== "string" || typeof req.query.toDate !== "string")
     throw new HistoryError(400, "Date range required");
   windowDates(req.query.fromDate, req.query.toDate);
-  const parsedId =
-    req.query.ledgerAccountId === undefined
-      ? ({ success: true, data: null } as const)
-      : idSchema.safeParse(req.query.ledgerAccountId);
-  if (!parsedId.success) throw new HistoryError(400, "Invalid expense account filter");
-  const ledgerAccountId = parsedId.data;
-  if (sourceKind === "FACTORY_DAYBOOK" && ledgerAccountId !== null)
+  // ?ledgerAccountIds=1,2,3 (or the older single ?ledgerAccountId=1).
+  const rawIds = [req.query.ledgerAccountIds, req.query.ledgerAccountId]
+    .filter((v) => v !== undefined)
+    .flatMap((v): unknown[] => (typeof v === "string" ? v.split(",") : [v]))
+    .filter((v) => v !== "");
+  const parsedIds = z.array(idSchema).max(MAX_ACCOUNT_FILTERS).safeParse(rawIds);
+  if (!parsedIds.success) throw new HistoryError(400, "Invalid expense account filter");
+  const ledgerAccountIds = accountFilter(parsedIds.data);
+  if (sourceKind === "FACTORY_DAYBOOK" && ledgerAccountIds !== null)
     throw new HistoryError(400, "Factory daybook cannot be filtered by account");
-  return { sourceKind, fromDate: req.query.fromDate, toDate: req.query.toDate, ledgerAccountId };
+  return { sourceKind, fromDate: req.query.fromDate, toDate: req.query.toDate, ledgerAccountIds };
 }
 
 function registerPrefix(app: Express, prefix: string) {
@@ -364,7 +475,7 @@ function registerPrefix(app: Express, prefix: string) {
             ? 'cca.voucher_entry_id=e."sourceId"'
             : 'cca.factory_daybook_entry_id=e."sourceId"') +
           ") a ON true",
-        [current.companyId, filter.fromDate, filter.toDate, filter.ledgerAccountId]
+        [current.companyId, filter.fromDate, filter.toDate, filter.ledgerAccountIds]
       );
       // Native currency controls are independent of the historical USD
       // book-value controls; amounts of different currencies are never summed.
@@ -384,7 +495,7 @@ function registerPrefix(app: Express, prefix: string) {
             ? 'cca.voucher_entry_id=e."sourceId"'
             : 'cca.factory_daybook_entry_id=e."sourceId"') +
           ") a ON true GROUP BY e.currency ORDER BY e.currency",
-        [current.companyId, filter.fromDate, filter.toDate, filter.ledgerAccountId]
+        [current.companyId, filter.fromDate, filter.toDate, filter.ledgerAccountIds]
       );
       res.json({
         kind: filter.sourceKind,
@@ -411,7 +522,7 @@ function registerPrefix(app: Express, prefix: string) {
         if (matched.length > plan.limit)
           throw new HistoryError(
             413,
-            "More eligible entries than the batch limit; narrow the dates/account before preview"
+            `More than ${plan.limit} eligible entries match; raise Maximum entries (up to ${HISTORICAL_BATCH_MAX}) or narrow the dates/accounts`
           );
         if (!matched.length)
           throw new HistoryError(404, "No unallocated eligible expense debits matched these filters");
@@ -487,25 +598,7 @@ function registerPrefix(app: Express, prefix: string) {
           throw new HistoryError(409, "Stored dry-run snapshot was altered");
         await assertActiveCenters(client, current.companyId, plan.splits);
         // Hold source and parent voucher locks before rechecking live facts.
-        for (const original of previous) {
-          if (plan.sourceKind === "VOUCHER_ENTRY") {
-            const entryLock = await client.query(
-              "SELECT id,voucher_id FROM voucher_entries WHERE company_id=$1 AND id=$2 FOR SHARE",
-              [current.companyId, original.sourceId]
-            );
-            if (!entryLock.rowCount) throw new HistoryError(409, "An expense source was removed");
-            await client.query("SELECT id FROM vouchers WHERE company_id=$1 AND id=$2 FOR SHARE", [
-              current.companyId,
-              entryLock.rows[0].voucher_id,
-            ]);
-          } else {
-            const lock = await client.query(
-              "SELECT id FROM factory_daybook_entries WHERE company_id=$1 AND id=$2 FOR SHARE",
-              [current.companyId, original.sourceId]
-            );
-            if (!lock.rowCount) throw new HistoryError(409, "A Factory expense source was removed");
-          }
-        }
+        await lockSources(client, current.companyId, plan.sourceKind, previous);
         const currentRows = await candidates(client, current.companyId, plan);
         if (currentRows.length !== previous.length || digest(currentRows) !== batch.source_hash)
           throw new HistoryError(
@@ -520,74 +613,7 @@ function registerPrefix(app: Express, prefix: string) {
           throw new HistoryError(409, "Historical source controls no longer match the preview");
         if (plan.sourceKind === "FACTORY_DAYBOOK" && prefix !== "/api/factory/cost-centers")
           throw new HistoryError(403, "Factory Daybook history is available only in Factory Mode");
-        const sourceColumn = plan.sourceKind === "VOUCHER_ENTRY" ? "voucher_entry_id" : "factory_daybook_entry_id";
-        for (const item of calculated.rows) {
-          // Claim the source with an override so future automatic defaults
-          // cannot later overwrite or re-create these manually approved tags.
-          await client.query(
-            "INSERT INTO cost_center_source_overrides(company_id," +
-              sourceColumn +
-              ",reason,overridden_by) VALUES($1,$2,$3,$4)",
-            [current.companyId, item.sourceId, plan.reason, current.userId]
-          );
-          for (const split of item.allocations) {
-            await client.query(
-              "INSERT INTO cost_center_allocations" +
-                "(company_id,cost_center_id," +
-                sourceColumn +
-                "," +
-                "amount_native,currency,amount_base,base_currency,historical_rate," +
-                "rate_convention,cost_treatment,allocation_origin,created_by,updated_by)" +
-                " VALUES($1,$2,$3,$4,$5,$6,'USD',$7,$8,'EXPENSE','MANUAL',$9,$9)",
-              [
-                current.companyId,
-                split.costCenterId,
-                item.sourceId,
-                split.amountNative,
-                item.currency,
-                split.amountUsd,
-                item.historicalRate,
-                item.rateConvention,
-                current.userId,
-              ]
-            );
-          }
-          const native = sumMoney(item.allocations.map((s) => s.amountNative)).toFixed(6);
-          const usd = sumMoney(item.allocations.map((s) => s.amountUsd)).toFixed(6);
-          await client.query(
-            "INSERT INTO cost_center_historical_batch_items" +
-              "(batch_id,company_id,source_kind,source_id,source_native,source_usd," +
-              "allocated_native,allocated_usd,applied_by) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)",
-            [
-              batchId,
-              current.companyId,
-              plan.sourceKind,
-              item.sourceId,
-              item.amountNative,
-              item.amountUsd,
-              native,
-              usd,
-              current.userId,
-            ]
-          );
-          await client.query(
-            "INSERT INTO audit_log" +
-              "(user_id,username,company_id,action,table_name,record_id,record_identifier,changes)" +
-              " VALUES($1,$2,$3,'create','cost_center_allocations',NULL,$4,$5::jsonb)",
-            [
-              current.userId,
-              current.username,
-              current.companyId,
-              "history:" + batchId + ":" + plan.sourceKind + ":" + item.sourceId,
-              JSON.stringify({
-                snapshot: { old: [], new: item.allocations },
-                reason: plan.reason,
-                sourceNative: item.amountNative,
-                sourceUsd: item.amountUsd,
-              }),
-            ]
-          );
-        }
+        await insertApplied(client, current, batchId, plan, calculated.rows);
         await client.query(
           "UPDATE cost_center_historical_batches SET status='APPLIED'," +
             "applied_by=$3,applied_at=now() WHERE company_id=$1 AND id=$2",

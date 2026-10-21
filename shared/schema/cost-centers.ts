@@ -345,7 +345,7 @@ export const costCenterHistoricalBatches = pgTable(
       sql`${t.sourceKind} IN ('VOUCHER_ENTRY','FACTORY_DAYBOOK')`
     ),
     statusCheck: check("cost_center_historical_batches_status_ck", sql`${t.status} IN ('PREVIEW','APPLIED')`),
-    countCheck: check("cost_center_historical_batches_count_ck", sql`${t.candidateCount} BETWEEN 1 AND 100`),
+    countCheck: check("cost_center_historical_batches_count_ck", sql`${t.candidateCount} BETWEEN 1 AND 10000`),
     amountsCheck: check(
       "cost_center_historical_batches_amounts_ck",
       sql`${t.candidateNativeTotal} > 0 AND ${t.candidateUsdTotal} >= 0`

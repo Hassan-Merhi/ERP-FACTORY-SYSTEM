@@ -274,6 +274,13 @@
       "when": 1792568264000,
       "tag": "20261021_006_cost_centers_phase8_hardening",
       "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1792600000000,
+      "tag": "20261021_007_cost_centers_historical_batch_size",
+      "breakpoints": true
     }
   ]
 }

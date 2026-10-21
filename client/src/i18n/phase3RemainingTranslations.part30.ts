@@ -373,9 +373,14 @@ export const phase3RemainingTranslationsPart30: readonly Phase3SharedUiEntry[] =
     fr: "Compte de charges du grand livre",
   },
   {
-    en: "Expense Ledger Account (optional)",
-    ar: "حساب دفتر المصروفات (اختياري)",
-    fr: "Compte de charges du grand livre (facultatif)",
+    en: "Expense Ledger Accounts (optional)",
+    ar: "حسابات دفتر المصروفات (اختياري)",
+    fr: "Comptes de charges du grand livre (facultatif)",
+  },
+  {
+    en: "Expense accounts",
+    ar: "حسابات المصروفات",
+    fr: "Comptes de charges",
   },
   {
     en: "Expense USD",
@@ -528,9 +533,9 @@ export const phase3RemainingTranslationsPart30: readonly Phase3SharedUiEntry[] =
     fr: "Répartition manuelle groupée",
   },
   {
-    en: "Maximum entries (1–100)",
-    ar: "الحد الأقصى للقيود (1–100)",
-    fr: "Nombre maximal d'écritures (1–100)",
+    en: "Maximum entries (1–10,000)",
+    ar: "الحد الأقصى للقيود (1–10,000)",
+    fr: "Nombre maximal d'écritures (1–10 000)",
   },
   {
     en: "Members",

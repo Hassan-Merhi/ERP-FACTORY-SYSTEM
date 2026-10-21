@@ -17,6 +17,7 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { AlertTriangle, ClipboardCheck, History, Plus, RefreshCw, Trash2 } from "lucide-react";
 import { readCostCenterApi, writeCostCenterApi, type CostCenter } from "@/api/costCentersApi";
+import { MultiSelectFilter } from "@/pages/factory/productioncomparison/components/MultiSelectFilter";
 
 type Kind = "VOUCHER_ENTRY" | "FACTORY_DAYBOOK";
 type Split = { costCenterId: string; percent: string };
@@ -77,6 +78,10 @@ type Batch = {
   request: { fromDate: string; toDate: string; reason: string };
 };
 const amountPattern = /^(?:0|[1-9]\d{0,2})(?:\.\d{1,4})?$/;
+/** Server-side batch cap (HISTORICAL_BATCH_MAX). */
+const MAX_BATCH = 10000;
+/** Rows drawn in the preview table; totals and Apply always cover the whole batch. */
+const PREVIEW_ROWS_SHOWN = 500;
 function startDate() {
   const d = new Date();
   return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-01";
@@ -101,8 +106,8 @@ export function CostCenterHistorical({ baseUrl, centers }: { baseUrl: string; ce
   const [kind, setKind] = useState<Kind>("VOUCHER_ENTRY");
   const [from, setFrom] = useState(startDate);
   const [to, setTo] = useState(dateToday);
-  const [account, setAccount] = useState("all");
-  const [limit, setLimit] = useState("50");
+  const [selectedAccounts, setSelectedAccounts] = useState<string[]>([]);
+  const [limit, setLimit] = useState(String(MAX_BATCH));
   const [splits, setSplits] = useState<Split[]>([{ costCenterId: "", percent: "100" }]);
   const [reason, setReason] = useState("Historical expense cost center assignment");
   const [preview, setPreview] = useState<Preview | null>(null);
@@ -112,9 +117,9 @@ export function CostCenterHistorical({ baseUrl, centers }: { baseUrl: string; ce
   const validWindow = from.length === 10 && to.length === 10 && from <= to;
   const queryString = useMemo(() => {
     const q = new URLSearchParams({ sourceKind: kind, fromDate: from, toDate: to });
-    if (kind === "VOUCHER_ENTRY" && account !== "all") q.set("ledgerAccountId", account);
+    if (kind === "VOUCHER_ENTRY" && selectedAccounts.length) q.set("ledgerAccountIds", selectedAccounts.join(","));
     return q.toString();
-  }, [kind, from, to, account]);
+  }, [kind, from, to, selectedAccounts]);
   const { data: accounts } = useQuery<{ accounts: Account[] }>({
     queryKey: [baseUrl, companyId, "automation", "accounts"],
     queryFn: () => readCostCenterApi(baseUrl + "/automation/accounts"),
@@ -163,7 +168,7 @@ export function CostCenterHistorical({ baseUrl, centers }: { baseUrl: string; ce
     validSplits &&
     Number.isInteger(Number(limit)) &&
     Number(limit) > 0 &&
-    Number(limit) <= 100 &&
+    Number(limit) <= MAX_BATCH &&
     reason.trim().length >= 5 &&
     reason.trim().length <= 500;
   function invalidatePreview() {
@@ -181,7 +186,7 @@ export function CostCenterHistorical({ baseUrl, centers }: { baseUrl: string; ce
         sourceKind: kind,
         fromDate: from,
         toDate: to,
-        ledgerAccountId: kind === "VOUCHER_ENTRY" && account !== "all" ? Number(account) : null,
+        ledgerAccountIds: kind === "VOUCHER_ENTRY" && selectedAccounts.length ? selectedAccounts.map(Number) : null,
         limit: Number(limit),
         reason: reason.trim(),
         splits: splits.map((s) => ({
@@ -250,7 +255,7 @@ export function CostCenterHistorical({ baseUrl, centers }: { baseUrl: string; ce
               onValueChange={(v) => {
                 invalidatePreview();
                 setKind(v as Kind);
-                setAccount("all");
+                setSelectedAccounts([]);
               }}
             >
               <SelectTrigger>
@@ -287,12 +292,12 @@ export function CostCenterHistorical({ baseUrl, centers }: { baseUrl: string; ce
             />
           </div>
           <div className="space-y-1">
-            <Label htmlFor="historical-cc-limit">Maximum entries (1–100)</Label>
+            <Label htmlFor="historical-cc-limit">Maximum entries (1–10,000)</Label>
             <Input
               id="historical-cc-limit"
               type="number"
               min={1}
-              max={100}
+              max={MAX_BATCH}
               step={1}
               value={limit}
               onChange={(e) => {
@@ -303,26 +308,23 @@ export function CostCenterHistorical({ baseUrl, centers }: { baseUrl: string; ce
           </div>
           {kind === "VOUCHER_ENTRY" && (
             <div className="space-y-1 sm:col-span-2">
-              <Label>Expense Ledger Account (optional)</Label>
-              <Select
-                value={account}
-                onValueChange={(v) => {
+              <Label>Expense Ledger Accounts (optional)</Label>
+              <MultiSelectFilter
+                className="w-full"
+                contentClassName="w-[min(28rem,90vw)]"
+                testId="historical-cc-accounts"
+                options={(accounts?.accounts || []).map((a) => ({
+                  value: String(a.id),
+                  label: a.code + " — " + a.name,
+                }))}
+                selected={selectedAccounts}
+                onChange={(next) => {
                   invalidatePreview();
-                  setAccount(v);
+                  setSelectedAccounts(next);
                 }}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="All expense accounts" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Eligible Expense Accounts</SelectItem>
-                  {(accounts?.accounts || []).map((a) => (
-                    <SelectItem key={a.id} value={String(a.id)}>
-                      {a.code} — {a.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                placeholder="Expense accounts"
+                allLabel="All Eligible Expense Accounts"
+              />
             </div>
           )}
         </div>
@@ -511,7 +513,7 @@ export function CostCenterHistorical({ baseUrl, centers }: { baseUrl: string; ce
                   </tr>
                 </thead>
                 <tbody>
-                  {preview.rows.map((row) => (
+                  {preview.rows.slice(0, PREVIEW_ROWS_SHOWN).map((row) => (
                     <tr key={row.sourceId} className="border-t">
                       <td className="p-2">
                         {row.sourceDate?.slice(0, 10)}
@@ -530,6 +532,12 @@ export function CostCenterHistorical({ baseUrl, centers }: { baseUrl: string; ce
                 </tbody>
               </table>
             </div>
+            {preview.rows.length > PREVIEW_ROWS_SHOWN && (
+              <p className="text-xs text-muted-foreground">
+                Showing the first {PREVIEW_ROWS_SHOWN} of {preview.candidateCount} entries; totals and Apply cover all
+                of them.
+              </p>
+            )}
             <div className="rounded-md border border-destructive/30 p-3 space-y-2">
               <p className="text-sm flex gap-2 items-center font-semibold">
                 <AlertTriangle className="h-4 w-4" />
