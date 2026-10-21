@@ -10,7 +10,8 @@ import {closeFiscalPeriod,FiscalPeriodCloseError} from "../storage/accounting/fi
 import {
  FiscalReviewError,fiscalReadinessTx,recordFiscalReviewTx,
  revokeFiscalReviewTx,ensureReviewedFiscalCloseTx,
- recordReviewedFiscalCloseTx,reviewedFiscalCloseHistoryTx
+ recordReviewedFiscalCloseTx,reviewedFiscalCloseHistoryTx,
+ fiscalReviewPolicyTx,setFiscalReviewPolicyTx
 } from "../services/accounting/fiscalReviewService";
 import {assertTransactionCompanyScope} from "../services/security/transactionCompanyScope";
 const iso=z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
@@ -67,6 +68,24 @@ function failure(res:Response,error:unknown){
 }
 export function registerFiscalReviewRoutes(app:Express){
  const gate=[requireAuth,requireRole("Admin","Owner","Developer")] as const;
+ app.get("/api/accounting/fiscal-review/policy",...gate,async(req:Request,res:Response)=>{
+  try{
+   const companyId=company(req);
+   const policy=await db.transaction(tx=>fiscalReviewPolicyTx(tx,companyId));
+   res.setHeader("Cache-Control","no-store");return res.json(policy);
+  }catch(e){return failure(res,e);}
+ });
+ app.post("/api/accounting/fiscal-review/policy",...gate,async(req:Request,res:Response)=>{
+  try{
+   allowedSignoff(req,"OWNER");
+   const body=z.object({enforce:z.boolean(),
+    reason:z.string().trim().min(10).max(1000)}).parse(req.body);
+   const companyId=company(req);
+   return res.json(await db.transaction(tx=>setFiscalReviewPolicyTx(tx,{
+    companyId,enforce:body.enforce,reason:body.reason,actor:person(req)
+   })));
+  }catch(e){return failure(res,e);}
+ });
  app.get("/api/accounting/fiscal-review/readiness",...gate,async(req:Request,res:Response)=>{
   try{
    const b=reviewScope.parse(req.query),companyId=company(req);
@@ -94,7 +113,7 @@ export function registerFiscalReviewRoutes(app:Express){
      FROM audit_log WHERE company_id=${companyId}
       AND table_name IN(
        'fiscal_period_closures','accounting_fiscal_review_signoffs',
-       'accounting_fiscal_reviewed_closures')
+       'accounting_fiscal_reviewed_closures','accounting_fiscal_review_policy')
      ORDER BY id DESC LIMIT 250
     `));
    });
