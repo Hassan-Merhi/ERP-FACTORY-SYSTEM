@@ -261,6 +261,7 @@ BEGIN
     -- Referenced expenses can share a voucher even when the reference table
     -- isn't literally named "vouchers"; never tag both representations.
     AND nullif(btrim(coalesce(reference_table,'')),'') IS NULL
+    AND reference_id IS NULL
     AND amount_currency>0 AND amount_usd>=0;
   IF NOT FOUND THEN RETURN; END IF;
   IF EXISTS (SELECT 1 FROM cost_center_allocations a WHERE a.factory_daybook_entry_id=p_entry_id)
