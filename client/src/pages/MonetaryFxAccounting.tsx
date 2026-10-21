@@ -219,9 +219,13 @@ export default function MonetaryFxAccounting(){
             <Input value={reason} onChange={e=>setReason(e.target.value)}
               placeholder="Why recognize this realized difference?"/></div>
         </div>
+        <p className="text-sm text-muted-foreground">
+          Phase 15 source-release control: realized-FX accounting journals are
+          locked pending independent Claude and finance certification, regardless
+          of metadata pilot status. Dated valuation and reporting remain read-only.
+        </p>
         {asOfDate&&<p className="text-sm text-muted-foreground">
-          Historical as-of views are read-only. Clear the as-of date to recognize
-          an eligible FX difference using the company’s current business date.
+          Historical as-of views are read-only and can never post an FX adjustment.
         </p>}
         {asOfDate && realized.data && <p className="text-xs text-muted-foreground">
           {realized.data.asOfLimitations}
@@ -253,7 +257,7 @@ export default function MonetaryFxAccounting(){
                       Journal #{item.recognitionVoucherId}</a></div>}
                   {item.issue&&<div className="text-xs text-destructive">{item.issue}</div>}
                   {item.postable&&<div className="mt-2">
-                    <Button size="sm" disabled={!!asOfDate||reason.trim().length<3||recognize.isPending}
+                    <Button size="sm" disabled={true || !!asOfDate || reason.trim().length<3 || recognize.isPending}
                       onClick={()=>recognize.mutate(item.matchId)}>
                       Recognize FX
                     </Button></div>}
