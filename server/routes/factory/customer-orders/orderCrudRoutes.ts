@@ -264,7 +264,7 @@ export function registerOrderCrudRoutes(app: Express) {
         invoiceNumber: r.invoice_number ?? null,
         orderDate: r.order_date,
         proformaIdUsed: r.proforma_id_used ?? null,
-        status: r.status ?? "DRAFT",
+        status: String(r.status ?? "DRAFT"),
         subtotalBales: r.subtotal_bales ?? "0",
         freightAmount: r.freight_amount ?? "0",
         otherChargesTotal: r.other_charges_total ?? "0",
@@ -344,7 +344,7 @@ export function registerOrderCrudRoutes(app: Express) {
               savedProformaLines,
               originalProformaLines,
               planKind === "continuation" && !["VERIFIED", "FINALIZED", "CANCELLED"].includes(order.status),
-              order.createdAt
+              order.createdAt as Date | string | null
             );
         const capacity = continuationProforma
           ? await getProformaCapacitySnapshot(db, {

@@ -137,6 +137,14 @@ These describe work in progress and carry live figures bound to their sources.
 | [examples.md](examples.md) | Worked examples |
 | [faq.md](faq.md) | Frequently asked questions |
 | [factory-fx-agent-wallets.md](factory-fx-agent-wallets.md) | In-progress USD/EUR FX agent wallet design and review requirements |
+| [cost-centers-phase1.md](cost-centers-phase1.md) | Cost centers: database foundation (tables, company isolation, RLS) |
+| [cost-centers-phase2.md](cost-centers-phase2.md) | Cost centers: backend APIs and allocation integrity guards |
+| [cost-centers-phase3.md](cost-centers-phase3.md) | Cost centers: ERP interface, voucher allocation and Daybook filters |
+| [cost-centers-phase4.md](cost-centers-phase4.md) | Cost centers: Factory Mode integration and standalone Daybook expenses |
+| [cost-centers-phase5.md](cost-centers-phase5.md) | Cost centers: automatic allocation rules and manual overrides |
+| [cost-centers-phase6.md](cost-centers-phase6.md) | Cost centers: reports, monthly budgets and exports |
+| [cost-centers-phase7.md](cost-centers-phase7.md) | Cost centers: historical dry-run allocation and reconciliation |
+| [cost-centers-phase8-release.md](cost-centers-phase8-release.md) | Cost centers: security hardening, migration order and release checklist |
 | [security/scorecard-review-and-exceptions.md](security/scorecard-review-and-exceptions.md) | Current security Scorecard review and documented exceptions |
 | [releases.md](releases.md) | Release notes |
 

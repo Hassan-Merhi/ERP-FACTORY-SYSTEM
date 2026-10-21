@@ -6,7 +6,7 @@
 import { sql } from "drizzle-orm";
 import {
   pgTable, serial, bigserial, bigint, integer, varchar, text, decimal, boolean, uuid, jsonb,
-  timestamp, date, index, uniqueIndex, foreignKey, check,
+  timestamp, date, index, unique, uniqueIndex, foreignKey, check,
 } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
@@ -28,8 +28,9 @@ export const costCenters = pgTable("cost_centers", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 }, (t) => ({
-  companyCodeUnique: uniqueIndex("cost_centers_company_code_unique").on(t.companyId, t.code),
-  companyIdUnique: uniqueIndex("cost_centers_company_id_unique").on(t.companyId, t.id),
+  // Table constraints (not indexes) so composite FKs can reference them in one push.
+  companyCodeUnique: unique("cost_centers_company_code_unique").on(t.companyId, t.code),
+  companyIdUnique: unique("cost_centers_company_id_unique").on(t.companyId, t.id),
   parentIdx: index("cost_centers_company_parent_idx").on(t.companyId, t.parentId),
   activeIdx: index("cost_centers_company_active_idx").on(t.companyId, t.active),
   parentCompanyFk: foreignKey({
@@ -155,7 +156,7 @@ export const costCenterSourceOverrides = pgTable("cost_center_source_overrides",
   reason: text("reason").notNull(),
   overriddenBy: text("overridden_by"),
   overriddenAt: timestamp("overridden_at").notNull().defaultNow(),
-}));
+});
 
 export type CostCenterAutoRule = typeof costCenterAutoRules.$inferSelect;
 export type CostCenterSourceOverride = typeof costCenterSourceOverrides.$inferSelect;
@@ -221,7 +222,7 @@ export const costCenterHistoricalBatches = pgTable("cost_center_historical_batch
 }, t => ({
   companyDateIdx: index("cost_center_historical_batches_company_date_idx").on(t.companyId,t.createdAt),
   companyStatusIdx: index("cost_center_historical_batches_company_status_idx").on(t.companyId,t.status,t.expiresAt),
-  companyIdUnique: uniqueIndex("cost_center_historical_batches_company_id_uidx").on(t.companyId,t.id),
+  companyIdUnique: unique("cost_center_historical_batches_company_id_uidx").on(t.companyId,t.id),
 }));
 
 export const costCenterHistoricalBatchItems = pgTable("cost_center_historical_batch_items", {
