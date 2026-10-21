@@ -43,7 +43,7 @@ const autoRuleSetBody = z.object({
   factoryTxType: z.enum(["EXPENSE","OPERATING_EXPENSE","FACTORY_EXPENSE"]).nullable().optional(),
   splits: z.array(z.object({
     costCenterId: maxId,
-    percent: z.string().regex(/^(?:0|[1-9]\\d{0,2})(?:\\.\\d{1,4})?$/),
+    percent: z.string().regex(/^(?:0|[1-9]\d{0,2})(?:\.\d{1,4})?$/),
   }).strict()).max(30),
   reason: z.string().trim().min(3).max(500),
 }).strict();
