@@ -552,6 +552,7 @@ export function registerRentalAccrualConfigRoutes(
         //   Reversal:  Dr Accrued Rent Payable  /  Cr Rent Expense
         const { voucher: v } = await postErpVoucherTx(tx, {
           companyId,
+          sourceModule: module,
           voucherType: "Journal",
           voucherDate: new Date().toISOString().slice(0, 10),
           description: narration,
