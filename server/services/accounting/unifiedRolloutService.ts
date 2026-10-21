@@ -11,6 +11,7 @@ import {resultRows} from "../../lib/queryResult";
 import {assertTransactionCompanyScope} from "../security/transactionCompanyScope";
 import {companyBusinessDate} from "./companyBusinessDate";
 import {buildTrialBalance} from "./integrity/trialBalance";
+import {getHistoricalCurrencyReadiness} from "./historicalCurrencyReadiness";
 import {PERPETUAL_INVENTORY_POSTING_READY} from "./perpetualInventory/cutover";
 import {writeAuditEvent} from "../audit";
 
@@ -132,7 +133,7 @@ export async function unifiedReleaseReadinessTx(tx:DbTransaction,companyId:numbe
  await assertTransactionCompanyScope(tx,companyId);
  const date=await companyBusinessDate(companyId,tx);
  const sha=deployedUnifiedReleaseSha();
- const [tableRows,companyRows,trial,policy,reviews]=await Promise.all([
+ const [tableRows,companyRows,trial,policy,reviews,historicalFx]=await Promise.all([
   tx.execute(sql`
    SELECT names.name,
     (c.oid IS NOT NULL) AS exists,
@@ -153,7 +154,8 @@ export async function unifiedReleaseReadinessTx(tx:DbTransaction,companyId:numbe
   tx.execute(sql`SELECT id,base_currency,active FROM companies WHERE id=${companyId}`),
   buildTrialBalance(companyId,date,tx),
   unifiedReleasePolicyTx(tx,companyId),
-  reviewsTx(tx,companyId,sha)
+  reviewsTx(tx,companyId,sha),
+  getHistoricalCurrencyReadiness(companyId,date)
  ]);
  const tables=resultRows<DbTable>(tableRows);
  const company=resultRows<{id:number;base_currency:string|null;active:boolean}&Record<string,unknown>>(companyRows)[0];
@@ -169,6 +171,8 @@ export async function unifiedReleaseReadinessTx(tx:DbTransaction,companyId:numbe
   blockers.push("Non-USD functional-base financial translation requires certified policy");
  if(!trial.balanced)
   blockers.push(`Unresolved canonical trial balance difference: USD ${trial.unexplainedDifference}`);
+ if(!historicalFx.ready)
+  blockers.push(`Unresolved historical FX base records: ${historicalFx.unresolvedEntryCount} entries and ${historicalFx.unresolvedVoucherCount} vouchers`);
  if(missing.length)blockers.push(`Missing additive accounting metadata tables: ${missing.join(", ")}`);
  if(unprotected.length)blockers.push(`Required company RLS / FORCE RLS missing: ${unprotected.join(", ")}`);
  const active=reviews.filter(v=>!v.revoked_at);
@@ -193,6 +197,8 @@ export async function unifiedReleaseReadinessTx(tx:DbTransaction,companyId:numbe
   releaseMode:policy.releaseMode,policy,
   bookedTrial:{balanced:trial.balanced,differenceUsd:trial.unexplainedDifference,
    assumedOpeningSides:trial.openingSidesAssumed},
+  historicalFx:{...historicalFx,certified:false as const,
+   caveat:"Pure legacy compatibility-ready is not independently verified historical USD base completeness."},
   schema:{missing,unprotected,tables},
   posting:{perpetualReady:PERPETUAL_INVENTORY_POSTING_READY,
    phase15CanActivateInventory:false,
