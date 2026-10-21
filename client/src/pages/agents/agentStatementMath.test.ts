@@ -12,6 +12,8 @@ import {
   computeClosingBalance,
   computePeriodTotals,
   balanceSideLabel,
+  withPartyDisplayBalance,
+  transactionsIncludingCustomerMemo,
   type Account,
   type Transaction,
 } from "./agentStatementMath";
@@ -104,6 +106,10 @@ describe("computeOpeningBalance", () => {
     expect(computeOpeningBalance(makeAccount(), true, { balance: 25 })).toBe(25);
   });
 
+  it("includes brought-forward historical Factory Parties amounts when filtering dates", () => {
+    expect(computeOpeningBalance(makeAccount(), true, { balance: 25, notInLedgerBefore: "100.25" })).toBe(125.25);
+  });
+
   it("falls back to the account opening balance without a from-date", () => {
     expect(computeOpeningBalance(makeAccount(), false, undefined)).toBe(50);
     expect(computeOpeningBalance(makeAccount(), false, { balance: 25 })).toBe(50);
@@ -162,5 +168,40 @@ describe("balanceSideLabel", () => {
   it("labels other account balances Dr when positive and Cr when negative", () => {
     expect(balanceSideLabel(10, "customer")).toBe("Dr");
     expect(balanceSideLabel(-10, "customer")).toBe("Cr");
+  });
+});
+
+describe("Factory Parties balance parity in the Agent Ledger", () => {
+  it("uses the customer\u0027s projected amount only on display, preserving the original GL account", () => {
+    const raw = makeAccount({
+      type: "ledger", balance: 1594700.16, balanceSide: "Dr",
+      partyBalance: "1594615.16", partyBalanceSide: "Dr",
+    });
+    const display = withPartyDisplayBalance(raw);
+    expect(display).toMatchObject({ balance: 1594615.16, balanceSide: "Dr" });
+    expect(raw.balance).toBe(1594700.16);
+    expect(withPartyDisplayBalance(makeAccount())).toMatchObject({ balance: 100 });
+  });
+
+  it("combines distinct historical memo amounts with real voucher lines without fabricating posted vouchers", () => {
+    const posted = makeTransaction({ debitAmount: "200.00", creditAmount: "0.00", voucherId: 8 });
+    const rows = transactionsIncludingCustomerMemo({
+      transactions: [posted],
+      notInLedger: {
+        rows: [
+          { voucherNumber: "INV-OLD", voucherDate: "2026-09-01", voucherDescription: "Older finalized invoice",
+            debitAmount: "400.00", creditAmount: "0.00", amountUsd: "400.00" },
+          { voucherNumber: "EUR-NO-RATE", voucherDate: "2026-09-02", voucherDescription: "No USD equivalent",
+            debitAmount: "100.00", creditAmount: "0.00", amountUsd: null },
+        ],
+      },
+    });
+    expect(rows).toHaveLength(2);
+    expect(rows[0]).toBe(posted);
+    expect(rows[1]).toMatchObject({
+      voucherId: -1000000, voucherType: "Historical Factory Amount (not posted)",
+      debitAmount: "400.00", creditAmount: "0.00",
+    });
+    expect(computeClosingBalance(computeRunningBalances(groupTransactions(rows), 0, "ledger"), 0)).toBe(600);
   });
 });
