@@ -13,7 +13,7 @@ import { logger } from "../../lib/logger";
 import { isClosedPeriodError } from "../../lib/closedPeriodError";
 import { writeAuditEvent } from "../audit";
 import { propertyPayments, propertyMonthlyLedger, propertyContracts, propertyUnits } from "@shared/schema";
-import { eq, and, sql, inArray } from "drizzle-orm";
+import { eq, and, sql, inArray, like } from "drizzle-orm";
 import Decimal from "decimal.js";
 import { parseMoneyInput, sumMoney, toMoney } from "../../lib/money";
 import type { RentalModule } from "../../routes/rental/shared";
@@ -22,6 +22,7 @@ import { findOrCreateLedgerAccount, maybeRunAutoTransfer } from "../../routes/re
 import { isRentalPeriodDue, getRentalBillingDay, getRentalPeriodDueDate } from "./rentalPeriodService";
 import { buildAllocationsForPayment, findEarliestOutstandingMonth } from "./rentalPaymentAllocationService";
 import { isRentalRateRequiredError, recordedRentalPaymentRate } from "./rentalPaymentRate";
+import { rentalPaymentGroupIdentity, rentalPaymentVoucherSuffix } from "./rentalPostingIdentity";
 
 export { buildAllocationsForPayment, findEarliestOutstandingMonth } from "./rentalPaymentAllocationService";
 
@@ -68,6 +69,8 @@ export interface RentalPaymentGroupOptions {
   shopExpenseAccountName: string;
   incomeAccountName: string;
   isSharedPayment?: boolean;
+  /** Stable client identity for retries; omitted by legacy callers. */
+  clientRequestId?: string | null;
   /** Phase 19 (B): the request's actor, audited with the posting. */
   audit?: { actor: { userId: string; username: string }; trigger: string };
 }
@@ -229,7 +232,7 @@ async function postGroupCore(
 
     // RENT- / ADV-REC- numbers are kept (deterministic, read by the payment
     // deletion service to find the recognition journal).
-    const voucherNum = `RENT-${paymentDate.replace(/-/g, "")}-${groupId.slice(-6)}`;
+    const voucherNum = `RENT-${paymentDate.replace(/-/g, "")}-${rentalPaymentVoucherSuffix(groupId)}`;
     const payLines: ErpVoucherLine[] = [line(cashAccountId, "credit", totalAmountStr, narration)];
     if (accrualAmt.gt(0.005)) {
       const accPayId = await findOrCreateLedgerAccount(
@@ -427,9 +430,49 @@ export async function createRentalPaymentGroup(opts: RentalPaymentGroupOptions) 
     paymentDate
   );
 
-  const paymentGroupId = `PG-${Date.now()}-${randomUUID().replace(/-/g, "").slice(0, 10)}-${contract.id}`;
+  const identity = rentalPaymentGroupIdentity({
+    companyId,
+    module: mod,
+    contractId: contract.id,
+    requestId: opts.clientRequestId,
+    financialPayload: {
+      contractCompanyId,
+      cashAccountId: cashAccountId ?? null,
+      amount: String(amount).trim(),
+      paymentDate,
+      currency: (currency || "USD").trim().toUpperCase(),
+      scheduleFuturePayment: Boolean(scheduleFuturePayment),
+      notes: notes ?? null,
+      isSharedPayment: Boolean(isSharedPayment),
+    },
+  });
+  const paymentGroupId = identity.groupId ??
+    `PG-${Date.now()}-${randomUUID().replace(/-/g, "").slice(0, 10)}-${contract.id}`;
 
-  const { scheduledRows, postedNow } = await db.transaction(async (tx) => {
+  const { scheduledRows, postedNow, replayed } = await db.transaction(async (tx) => {
+    if (identity.prefix) {
+      // Lock all attempts of one client request before any inserts or posting.
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${`rental-payment:${companyId}:${identity.prefix}`}))`);
+      const previous = await tx
+        .select()
+        .from(propertyPayments)
+        .where(and(
+          eq(propertyPayments.companyId, companyId),
+          eq(propertyPayments.module, mod),
+          like(propertyPayments.paymentGroupId, `${identity.prefix}%`)
+        ))
+        .orderBy(propertyPayments.id);
+      if (previous.length > 0) {
+        if (previous.some((row) => row.paymentGroupId !== paymentGroupId)) {
+          const error: RentalPostingError = new Error(
+            "RENTAL_PAYMENT_IDEMPOTENCY_CONFLICT: this clientRequestId was used for different payment details"
+          );
+          error.status = 409;
+          throw error;
+        }
+        return { scheduledRows: previous, postedNow: false, replayed: true };
+      }
+    }
     for (const alloc of allocations) {
       const allocDueDate = getRentalPeriodDueDate(alloc.year, alloc.month, billingDay);
       const allocIsDue = allocDueDate <= paymentDate;
@@ -511,8 +554,14 @@ export async function createRentalPaymentGroup(opts: RentalPaymentGroupOptions) 
           tx
         )
       : false;
-    return { scheduledRows: created, postedNow };
+    return { scheduledRows: created, postedNow, replayed: false };
   });
+
+  if (replayed) {
+    const posted = scheduledRows.every((row) => row.postingStatus === "POSTED");
+    // A retry must not duplicate downstream auto-transfer effects.
+    return { paymentGroupId, scheduled: !posted, payments: scheduledRows };
+  }
 
   if (paymentDate <= clientDate) {
     if (!postedNow) throw new Error("Rental payment group was not posted");
