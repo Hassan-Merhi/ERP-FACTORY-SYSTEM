@@ -97,7 +97,10 @@ New `server/services/accounting/groupConsolidationService.ts`:
   **provisional**, not silently shifted to Miscellaneous.
 - The selected date range is `fromDate` → `asOfDate`: a company's booked
   balance is through as-of; income/expense movement is the period's
-  posted activity. The display defaults to January 1 through today's date.
+  posted activity, using the canonical engine's `excludeFiscalClose`
+  treatment for income, expense and COGS. The balance sheet and trial
+  balance still **include** posted period-closing journals. The display
+  defaults to January 1 through today's date.
 - Consolidated totals include asset, liability, equity, income,
   COGS, operating expense, pre-internal-sales-elimination period result,
   and gross/adjusted trial balance debit/credit totals.
