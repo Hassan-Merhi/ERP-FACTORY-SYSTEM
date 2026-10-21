@@ -25,10 +25,6 @@ interface BudgetReportRow extends Record<string,unknown>{
  planned_usd:string;state:"DRAFT"|"APPROVED"|"ARCHIVED";
  notes:string|null;created_at:string;approved_at:string|null;
 }
-interface QualityRow extends Record<string,unknown>{
- eligible_entries:string;allocated_entries:string;allocation_records:string;
- active_source_vouchers:string;retired_allocations:string;
-}
 type MonthNumbers={actual:Decimal;approved:Decimal;draft:Decimal};
 type TotalsByCategory=Record<AnalyticCategory,MonthNumbers>;
 const categories:AnalyticCategory[]=["income","cost_of_sales","expense"];
