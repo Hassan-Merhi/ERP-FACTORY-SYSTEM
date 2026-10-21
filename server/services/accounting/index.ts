@@ -11,6 +11,22 @@
 
 export type { VoucherInsertFields, VoucherEntryInsertFields, VoucherWithEntries } from "./accountingTypes";
 
+// Unified semantic accounting foundation (non-mutating, all three modules).
+export {
+  RENTAL_MODULE_ACCOUNTS,
+  RENTAL_POSTING_ACCOUNT_PREFIXES,
+  ACCOUNTING_CONTROL_ACCOUNTS,
+  financialStatementCategory,
+  isRentalPostingAccountCode,
+  describeAccountingPosting,
+} from "./unifiedAccountingFoundation";
+export type {
+  AccountingDomain,
+  RentalOriginModule,
+  FinancialStatementCategory,
+  AccountingPostingProvenance,
+} from "./unifiedAccountingFoundation";
+
 export { insertVoucherWithEntriesTx, insertVoucherWithEntries } from "./voucherPostingService";
 
 export {
