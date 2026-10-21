@@ -72,7 +72,7 @@ export function CostCenterReports({baseUrl,centers}:{
   const [accountFilter,setAccountFilter]=useState("all");
   const [treatment,setTreatment]=useState("ALL");
   const [consolidated,setConsolidated]=useState(false);
-  const [view,setView]=useState<"centers"|"accounts"|"activity">("centers");
+  const [view,setView]=useState<"centers"|"departments"|"accounts"|"months"|"activity">("centers");
   const [offset,setOffset]=useState(0);
   const [exporting,setExporting]=useState<string|null>(null);
   const [budgetCenter,setBudgetCenter]=useState("");
@@ -218,7 +218,7 @@ export function CostCenterReports({baseUrl,centers}:{
         {isError&&<p role="alert" className="text-sm text-destructive">Cannot load report: {message(error)}</p>}
         {isLoading&&<p className="text-sm text-muted-foreground">Loading analytical report…</p>}
         {summary&&<div className="space-y-4">
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
+          <div className="grid grid-cols-2 lg:grid-cols-3 gap-2">
             {([
               ["Allocated expense (USD)",summary.totals.expense],
               ["Unallocated expense (USD)",summary.totals.unallocated],
