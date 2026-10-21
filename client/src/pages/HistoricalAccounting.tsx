@@ -5,6 +5,7 @@
 import {useMemo,useState} from "react";
 import {useLocation} from "wouter";
 import {useQuery} from "@tanstack/react-query";
+import {useCompany} from "@/contexts/CompanyContext";
 import {Button} from "@/components/ui/button";
 import {Card,CardHeader,CardTitle,CardContent} from "@/components/ui/card";
 import {Input} from "@/components/ui/input";
@@ -64,6 +65,8 @@ async function read<T>(url:string):Promise<T>{
 const prettify=(s:string)=>s.replaceAll("_"," ").replace(/\b\w/g,k=>k.toUpperCase());
 export default function HistoricalAccounting(){
  const [location]=useLocation();
+ const {selectedCompany}=useCompany();
+ const companyId=selectedCompany?.id;
  const origin=location.startsWith("/factory/")?"/factory":
   location.startsWith("/properties/")?"/properties":"";
  const [asOf,setAsOf]=useState("");
@@ -76,13 +79,14 @@ export default function HistoricalAccounting(){
  if(asOf)params.set("asOfDate",asOf);
  if(from)params.set("fromDate",from);
  const report=useQuery<Workpaper>({
-  queryKey:["/api/accounting/history/report",asOf,from],
-  queryFn:()=>read("/api/accounting/history/report?"+params.toString()),retry:false
+  queryKey:["/api/accounting/history/report",companyId,asOf,from],
+  queryFn:()=>read("/api/accounting/history/report?"+params.toString()),
+  enabled:!!companyId,retry:false
  });
  const stock=useQuery<Stock>({
-  queryKey:["/api/accounting/history/erp-stock",asOf],
+  queryKey:["/api/accounting/history/erp-stock",companyId,asOf],
   queryFn:()=>read("/api/accounting/history/erp-stock?asOfDate="+asOf),
-  enabled:section==="stock"&&!!asOf,retry:false
+  enabled:!!companyId&&section==="stock"&&!!asOf,retry:false
  });
  const selected=report.data;
  const accounts=useMemo(()=>selected?.balance.rows.filter(r=>
