@@ -187,6 +187,13 @@ export default function Accounts() {
               Factory Production Accounting
             </Button>
           )}
+        {showViewAccounts && !phoneStatementOpen &&
+          ["Admin","Owner","Developer"].includes(model.currentUser?.role ?? "") && (
+            <Button variant="outline" data-testid="button-unified-rental-accounting"
+              onClick={() => model.navigate(`${model.modePrefix}/accounting/rentals`)}>
+              Rental Accounting
+            </Button>
+          )}
         {showViewAccounts &&
           !phoneStatementOpen &&
           (model.currentUser?.role === "Admin" || model.currentUser?.role === "Developer") && (
