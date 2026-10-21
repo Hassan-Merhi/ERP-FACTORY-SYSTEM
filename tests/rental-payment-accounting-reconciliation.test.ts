@@ -152,13 +152,13 @@ describe("Rental payment accounting and reconciliation", () => {
     const res = await agent.post("/api/erp/rental/payments/bulk").send({
       clientRequestId: randomUUID(),
       items: [
-      {
-        contractId: testContractId,
-        cashAccountId: ctx.cashAccountId,
-        amount: "500",
-        paymentDate: todayStr(),
-        scheduleFuturePayment: false,
-      },
+        {
+          contractId: testContractId,
+          cashAccountId: ctx.cashAccountId,
+          amount: "500",
+          paymentDate: todayStr(),
+          scheduleFuturePayment: false,
+        },
       ],
     });
     expect(res.status).toBe(200);
@@ -220,13 +220,13 @@ describe("Rental payment accounting and reconciliation", () => {
     const res = await agent.post("/api/erp/rental/payments/bulk").send({
       clientRequestId: randomUUID(),
       items: [
-      {
-        contractId: testContractId,
-        cashAccountId: ctx.cashAccountId,
-        amount: "500",
-        paymentDate: futureDateStr(15),
-        scheduleFuturePayment: true,
-      },
+        {
+          contractId: testContractId,
+          cashAccountId: ctx.cashAccountId,
+          amount: "500",
+          paymentDate: futureDateStr(15),
+          scheduleFuturePayment: true,
+        },
       ],
     });
     expect(res.status).toBe(200);
