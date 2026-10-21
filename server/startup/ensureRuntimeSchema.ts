@@ -647,6 +647,11 @@ export async function ensureRuntimeSchema(pool: Pool): Promise<void> {
     await import("../services/accounting/ensurePartyOpenItemSchema");
   await ensurePartyOpenItemSchema(pool);
 
+  // Unified Phase 4: cash/bank bank-statement reconciliation metadata only.
+  const { ensureCashBankReconciliationSchema } =
+    await import("../services/accounting/ensureCashBankReconciliationSchema");
+  await ensureCashBankReconciliationSchema(pool);
+
   // Wave 16 (A): the Phase 3 historical accounting repair no longer runs here.
   // It added and deleted lines of posted vouchers of every company before each
   // listen, with no audit; it is now the Owner preview/apply at
