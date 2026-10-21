@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useCompany } from "@/contexts/CompanyContext";
+import { useAppMode } from "@/contexts/AppModeContext";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/queryClient";
 import { PageHeader } from "@/components/PageHeader";
@@ -49,12 +50,14 @@ function sortCenters(centers: CostCenter[]) {
 
 export default function CostCenters() {
   const { selectedCompany } = useCompany();
+  const isFactory = useAppMode() === "factory";
+  const baseUrl = isFactory ? "/api/factory/cost-centers" : "/api/cost-centers";
   const { toast } = useToast();
   const [, navigate] = useLocation();
   const companyId = selectedCompany?.id;
   const role = selectedCompany?.role || "";
   const canWrite = ["Admin", "Owner", "Developer"].includes(role);
-  const key = ["/api/cost-centers", companyId];
+  const key = [baseUrl, companyId];
   const [includeArchived, setIncludeArchived] = useState(false);
   const [filter, setFilter] = useState("");
   const [selectedId, setSelectedId] = useState<number | null>(null);
@@ -66,7 +69,7 @@ export default function CostCenters() {
   const [form, setForm] = useState<Form>(emptyForm);
   const { data, isLoading, isError, error, refetch } = useQuery<CostCenterCatalog>({
     queryKey: [...key, includeArchived],
-    queryFn: () => readCostCenterApi<CostCenterCatalog>("/api/cost-centers" + (includeArchived ? "?includeArchived=true" : "")),
+    queryFn: () => readCostCenterApi<CostCenterCatalog>(baseUrl + (includeArchived ? "?includeArchived=true" : "")),
     enabled: !!companyId,
     staleTime: 30000,
   });
@@ -76,20 +79,20 @@ export default function CostCenters() {
     [centers, filter]);
   const selected = centers.find(c => c.id === selectedId) || null;
   const { data: balance, isLoading: loadingBalance } = useQuery<CostCenterBalance>({
-    queryKey: ["/api/cost-centers", companyId, selectedId, "balance"],
-    queryFn: () => readCostCenterApi<CostCenterBalance>("/api/cost-centers/" + selectedId + "/balance"),
+    queryKey: [baseUrl, companyId, selectedId, "balance"],
+    queryFn: () => readCostCenterApi<CostCenterBalance>(baseUrl + "/" + selectedId + "/balance"),
     enabled: !!companyId && !!selectedId,
   });
   const { data: activity, isLoading: loadingActivity } = useQuery<CostCenterActivity>({
-    queryKey: ["/api/cost-centers", companyId, selectedId, "activity", activityOffset, activityFrom, activityTo],
-    queryFn: () => readCostCenterApi<CostCenterActivity>("/api/cost-centers/" + selectedId +
+    queryKey: [baseUrl, companyId, selectedId, "activity", activityOffset, activityFrom, activityTo],
+    queryFn: () => readCostCenterApi<CostCenterActivity>(baseUrl + "/" + selectedId +
       "/activity?limit=50&offset=" + activityOffset +
       (activityFrom ? "&fromDate=" + activityFrom : "") +
       (activityTo ? "&toDate=" + activityTo : "")),
     enabled: !!companyId && !!selectedId,
   });
   const invalidate = async () => {
-    await queryClient.invalidateQueries({ queryKey: ["/api/cost-centers"] });
+    await queryClient.invalidateQueries({ queryKey: [baseUrl, companyId] });
   };
   const save = useMutation({
     mutationFn: () => {
@@ -99,8 +102,8 @@ export default function CostCenters() {
         parentId: form.parentId === "root" ? null : Number(form.parentId),
       };
       return editingId == null
-        ? writeCostCenterApi("POST", "/api/cost-centers", body)
-        : writeCostCenterApi("PATCH", "/api/cost-centers/" + editingId, body);
+        ? writeCostCenterApi("POST", baseUrl, body)
+        : writeCostCenterApi("PATCH", baseUrl + "/" + editingId, body);
     },
     onSuccess: async () => {
       setDialogOpen(false); await invalidate();
@@ -109,7 +112,7 @@ export default function CostCenters() {
     onError: (e: unknown) => toast({ title: "Could not save cost center", description: errorMessage(e), variant: "destructive" }),
   });
   const archive = useMutation({
-    mutationFn: (id: number) => writeCostCenterApi("POST", "/api/cost-centers/" + id + "/archive", {}),
+    mutationFn: (id: number) => writeCostCenterApi("POST", baseUrl + "/" + id + "/archive", {}),
     onSuccess: async () => {
       await invalidate(); setSelectedId(null); toast({ title: "Cost center archived", description: "Historical allocations are preserved." });
     },
@@ -127,7 +130,7 @@ export default function CostCenters() {
   return (
     <div className="space-y-4 p-3 sm:p-5">
       <PageHeader title="Cost Centers" subtitle="Analytical expense tracking — separate from the general ledger"
-        onBack={() => navigate("/accounts")} />
+        onBack={() => navigate(isFactory ? "/factory/accounts" : "/accounts")} />
       <div className="flex flex-wrap items-center gap-2 justify-between">
         <div className="flex flex-wrap gap-2 items-center">
           <Input aria-label="Search cost centers" placeholder="Search by name or code" value={filter}
@@ -217,10 +220,15 @@ export default function CostCenters() {
                     <div>
                       {row.voucherId
                         ? <button type="button" className="font-medium text-primary hover:underline text-left"
-                            onClick={() => navigate("/voucher-detail/" + row.voucherId)}>
+                            onClick={() => navigate((isFactory ? "/factory/voucher-detail/" : "/voucher-detail/") + row.voucherId)}>
                             {row.voucherNumber || "Voucher #" + row.voucherId}
                           </button>
-                        : <p className="font-medium">{row.factoryTxType || "Entry #" + row.id}</p>}
+                        : row.factoryDaybookEntryId && isFactory
+          ? <button className="font-medium text-primary hover:underline text-left" type="button"
+              onClick={() => navigate("/factory/daybook?entryId=" + row.factoryDaybookEntryId)}>
+              {row.factoryTxType || "Factory daybook entry"} #{row.factoryDaybookEntryId}
+            </button>
+          : <p className="font-medium">{row.factoryTxType || "Entry #" + row.id}</p>}
                       <p className="text-xs text-muted-foreground">{row.sourceDate ? String(row.sourceDate).slice(0,10) : "Date unavailable"} · {row.costTreatment}</p>
                       {row.voucherEntryId && <p className="text-xs text-muted-foreground">Voucher entry #{row.voucherEntryId}</p>}
                     </div>
