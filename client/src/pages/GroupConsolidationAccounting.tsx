@@ -5,7 +5,6 @@
  */
 import {useEffect,useMemo,useState} from "react";
 import {useQuery} from "@tanstack/react-query";
-import {useLocation} from "wouter";
 import {Button} from "@/components/ui/button";
 import {Input} from "@/components/ui/input";
 import {Label} from "@/components/ui/label";
@@ -57,9 +56,6 @@ async function read<T>(url:string):Promise<T>{
 }
 const label=(s:string)=>s.replaceAll("_"," ").replace(/\b\w/g,letter=>letter.toUpperCase());
 export default function GroupConsolidationAccounting(){
- const [location]=useLocation();
- const origin=location.startsWith("/factory/")?"/factory":
-  location.startsWith("/properties/")?"/properties":"";
  const [chosen,setChosen]=useState<number[]>([]);
  const [from,setFrom]=useState("");
  const [asOf,setAsOf]=useState("");
