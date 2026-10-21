@@ -115,7 +115,8 @@ function exportedCsv(record:Package){
   const text=String(value);
   // User-provided account and party labels must never execute as formulas
   // when this CSV is opened in Excel.
-  const safe=/^[=+@]/.test(text)||(/^-/ .test(text)&&!/^[-]?[0-9]+(?:\\.[0-9]+)?$/.test(text))
+  const numeric=/^-?[0-9]+(?:\.[0-9]+)?$/.test(text);
+  const safe=/^[=+@]/.test(text)||(text.startsWith("-")&&!numeric)
    ?"'"+text:text;
   return '"'+safe.replaceAll('"','""')+'"';
  }).join(",")).join("\r\n");
