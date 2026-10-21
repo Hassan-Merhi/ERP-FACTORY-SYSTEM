@@ -37,7 +37,10 @@ export async function ensureFiscalReviewSchema(pool:Pool):Promise<void>{
  CREATE TABLE IF NOT EXISTS accounting_fiscal_reviewed_closures(
    id BIGSERIAL PRIMARY KEY,
    company_id INTEGER NOT NULL REFERENCES companies(id) ON DELETE RESTRICT,
-   fiscal_closure_id INTEGER NOT NULL REFERENCES fiscal_period_closures(id) ON DELETE RESTRICT,
+   -- Reopening intentionally deletes the current fiscal_period_closures row.
+   -- Preserve review evidence even after an audited reopen, rather than
+   -- blocking the existing valid reopen operation.
+   fiscal_closure_id INTEGER REFERENCES fiscal_period_closures(id) ON DELETE SET NULL,
    closing_voucher_id INTEGER NOT NULL REFERENCES vouchers(id) ON DELETE RESTRICT,
    accounting_signoff_id BIGINT NOT NULL REFERENCES accounting_fiscal_review_signoffs(id) ON DELETE RESTRICT,
    owner_signoff_id BIGINT NOT NULL REFERENCES accounting_fiscal_review_signoffs(id) ON DELETE RESTRICT,
