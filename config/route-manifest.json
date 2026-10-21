@@ -1,7 +1,7 @@
 {
   "formatVersion": 1,
   "description": "Ordered snapshot of every registered Express route (method, path, guard chain) and middleware mount. Regenerate with UPDATE_ROUTE_MANIFEST=1 only when a route change is intended; during a file split the manifest must not change at all.",
-  "routeCount": 2113,
+  "routeCount": 2114,
   "middlewareMountCount": 132,
   "routes": [
     "GET /api/admin/operational-monitoring [requireAuth > <anonymous> > <anonymous>]",
@@ -1377,6 +1377,7 @@
     "POST /api/inventory/silent-transfer/parse [requireAuth > requireNonPOS > multerMiddleware > <anonymous>]",
     "POST /api/inventory/silent-transfer/apply [requireAuth > requireNonPOS > <anonymous>]",
     "POST /api/inventory/silent-production [requireAuth > requireNonPOS > <anonymous>]",
+    "GET /api/factory/accounts/list [requireAuth > <anonymous> > <anonymous>]",
     "GET /api/factory/agents/accounts [requireAuth > <anonymous> > <anonymous>]",
     "GET /api/accounts/all [requireAuth > <anonymous>]",
     "GET /api/accounts/payables [requireAuth > <anonymous>]",
