@@ -80,7 +80,7 @@ async function centerTx(tx:DbTransaction,companyId:number,id:number){
  return center;
 }
 async function log(tx:DbTransaction,companyId:number,actor:AnalyticActor,
- tableName:string,recordId:number,action:"create"|"update"|"void",changes:Record<string,unknown>){
+ tableName:string,recordId:number,action:"create"|"update"|"void",changes:Record<string,{old?:unknown;new?:unknown}>){
  await writeAuditEvent({
   companyId,userId:actor.userId,username:actor.username,
   action,tableName,recordId,recordIdentifier:`${tableName}:${recordId}`,
@@ -177,8 +177,26 @@ async function entryTx(tx:DbTransaction,companyId:number,entryId:number,lock=fal
     !category(info)||D(info.base_signed).isZero())
   throw new AnalyticError("ANALYTIC_ENTRY_NOT_ELIGIBLE",
     "Choose a live unreversed, nonzero, income/COGS/expense ledger line in this company",400);
- if(lock)await tx.execute(sql`SELECT id FROM vouchers WHERE id=${info.voucher_id}
+ if(lock){
+  await tx.execute(sql`SELECT id FROM vouchers WHERE id=${info.voucher_id}
    AND company_id=${companyId} FOR UPDATE`);
+  // Re-read allocation capacity after acquiring the write lock: two
+  // concurrent allocations may otherwise both see the previous sum.
+  const refreshed=resultRows<{allocated:string;reversed:boolean;deleted_at:string|null;
+   optional:boolean}&Record<string,unknown>>(await tx.execute(sql`
+   SELECT (SELECT COALESCE(SUM(a.amount_usd),0)::text FROM accounting_cost_allocations a
+      WHERE a.company_id=${companyId} AND a.voucher_entry_id=${entryId}
+       AND a.voided_at IS NULL) AS allocated,
+     v.deleted_at::text,v.optional,
+     EXISTS(SELECT 1 FROM vouchers rv WHERE rv.reversal_of_voucher_id=v.id
+      AND rv.company_id=v.company_id AND rv.deleted_at IS NULL AND rv.optional=false) AS reversed
+   FROM voucher_entries e JOIN vouchers v ON v.id=e.voucher_id
+    WHERE e.id=${entryId} AND v.company_id=${companyId}
+   `))[0];
+  if(!refreshed||refreshed.deleted_at||refreshed.optional||refreshed.reversed)
+   throw new AnalyticError("ANALYTIC_ENTRY_RETIRED","Voucher is no longer eligible");
+  info.allocated=refreshed.allocated;
+ }
  return info;
 }
 export async function recentAnalyticEntriesTx(tx:DbTransaction,input:{
