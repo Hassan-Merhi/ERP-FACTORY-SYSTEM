@@ -22,6 +22,8 @@ export async function ensureAnalyticAccountingSchema(pool:Pool):Promise<void>{
  );
  CREATE UNIQUE INDEX IF NOT EXISTS accounting_cost_centers_code_uq
    ON accounting_cost_centers(company_id,LOWER(code));
+ CREATE UNIQUE INDEX IF NOT EXISTS accounting_cost_centers_company_id_uq
+   ON accounting_cost_centers(company_id,id);
  CREATE INDEX IF NOT EXISTS accounting_cost_centers_parent_idx
    ON accounting_cost_centers(company_id,parent_id,sort_order,id);
 
@@ -73,6 +75,27 @@ export async function ensureAnalyticAccountingSchema(pool:Pool):Promise<void>{
   WHERE state<>'ARCHIVED';
  CREATE INDEX IF NOT EXISTS accounting_cost_budgets_period_idx
   ON accounting_cost_budgets(company_id,month_start,category,state);
+
+ -- Enforce referenced center ownership at the database boundary as well
+ -- as the application boundary. Every new analytic table is company-scoped.
+ DO $analytic_fk$
+ BEGIN
+   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='analytic_parent_same_company_fk') THEN
+     ALTER TABLE accounting_cost_centers ADD CONSTRAINT analytic_parent_same_company_fk
+       FOREIGN KEY(company_id,parent_id) REFERENCES accounting_cost_centers(company_id,id)
+       ON DELETE RESTRICT;
+   END IF;
+   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='analytic_allocation_center_company_fk') THEN
+     ALTER TABLE accounting_cost_allocations ADD CONSTRAINT analytic_allocation_center_company_fk
+       FOREIGN KEY(company_id,cost_center_id) REFERENCES accounting_cost_centers(company_id,id)
+       ON DELETE RESTRICT;
+   END IF;
+   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='analytic_budget_center_company_fk') THEN
+     ALTER TABLE accounting_cost_budgets ADD CONSTRAINT analytic_budget_center_company_fk
+       FOREIGN KEY(company_id,cost_center_id) REFERENCES accounting_cost_centers(company_id,id)
+       ON DELETE RESTRICT;
+   END IF;
+ END $analytic_fk$;
 
  ALTER TABLE accounting_cost_centers ENABLE ROW LEVEL SECURITY;
  ALTER TABLE accounting_cost_centers FORCE ROW LEVEL SECURITY;
