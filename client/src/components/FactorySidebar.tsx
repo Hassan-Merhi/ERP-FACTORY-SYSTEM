@@ -82,6 +82,7 @@ const FACTORY_NAV_ICONS: Record<string, typeof Package> = {
   "factory/production-report": BarChart3,
   "factory/agents": UserRound,
   "factory/accounts": Landmark,
+  "factory/cost-centers": Layers,
   "factory/daybook": BookOpen,
   "factory/vouchers": FileText,
   "factory/stock-entry": ScanLine,
