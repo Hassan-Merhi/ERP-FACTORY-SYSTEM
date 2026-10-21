@@ -160,6 +160,57 @@ function args(scope:Scope,filters:Filters):unknown[] {
   return [scope.companyIds,filters.from,filters.to,filters.costCenterId,filters.accountId,filters.treatment];
 }
 type DetailRow = Record<string,unknown>;
+
+/**
+ * Eligible expense value not assigned to any cost center, including companies
+ * where no cost center rule exists. Keep this separate from center-level
+ * variances, but include it in company-level total expense comparisons.
+ */
+async function unallocatedExpenses(scope:Scope,filters:Filters){
+  if(filters.costCenterId!==null||filters.treatment==="INVENTORY_COST")
+    return {amount:"0",months:[] as Array<{month:string;amount:string}>,applicable:false};
+  const query=[
+    "WITH candidates AS (",
+    " SELECT COALESCE(v.effective_date,v.voucher_date) AS source_date,",
+    " GREATEST(abs(COALESCE(ve.base_debit_amount,ve.debit_amount,0)),",
+    " abs(COALESCE(ve.base_credit_amount,ve.credit_amount,0)))::numeric AS source_usd,",
+    " COALESCE(al.allocated,0)::numeric AS allocated,",
+    " CASE WHEN COALESCE(ve.credit_amount,0)>COALESCE(ve.debit_amount,0) THEN -1 ELSE 1 END AS sign",
+    " FROM voucher_entries ve JOIN vouchers v ON v.id=ve.voucher_id AND v.company_id=ve.company_id",
+    " JOIN ledger_accounts l ON l.id=ve.ledger_account_id AND l.company_id=ve.company_id",
+    " LEFT JOIN LATERAL (SELECT sum(a.amount_base) AS allocated FROM cost_center_allocations a",
+    " WHERE a.voucher_entry_id=ve.id AND a.company_id=ve.company_id) al ON TRUE",
+    " WHERE ve.company_id=ANY($1::int[])",
+    " AND COALESCE(v.effective_date,v.voucher_date) BETWEEN $2::date AND $3::date",
+    " AND ($5::int IS NULL OR ve.ledger_account_id=$5)",
+    " AND v.deleted_at IS NULL AND v.optional=false AND v.reversal_of_voucher_id IS NULL",
+    " AND NOT EXISTS (SELECT 1 FROM vouchers rev WHERE rev.reversal_of_voucher_id=v.id",
+    " AND rev.deleted_at IS NULL)",
+    " AND COALESCE(v.source_module,'') NOT IN ('INTERCOMPANY','SP_MIGRATION_READONLY')",
+    " AND v.voucher_number NOT LIKE 'GC-%' AND v.voucher_number NOT LIKE 'MIG-%'",
+    " AND upper(btrim(l.account_type)) IN ('EXPENSE','DIRECT EXPENSE','INDIRECT EXPENSE')",
+    " UNION ALL",
+    " SELECT COALESCE(f.effective_date,f.tx_date) AS source_date,",
+    " abs(f.amount_usd)::numeric AS source_usd,COALESCE(al.allocated,0)::numeric AS allocated,1 AS sign",
+    " FROM factory_daybook_entries f",
+    " LEFT JOIN LATERAL (SELECT sum(a.amount_base) AS allocated FROM cost_center_allocations a",
+    " WHERE a.factory_daybook_entry_id=f.id AND a.company_id=f.company_id) al ON TRUE",
+    " WHERE f.company_id=ANY($1::int[]) AND $5::int IS NULL",
+    " AND COALESCE(f.effective_date,f.tx_date) BETWEEN $2::date AND $3::date",
+    " AND f.tx_type IN ('EXPENSE','OPERATING_EXPENSE','FACTORY_EXPENSE')",
+    " AND f.reference_id IS NULL AND NULLIF(btrim(COALESCE(f.reference_table,'')),'') IS NULL",
+    " AND f.amount_usd>=0 AND f.amount_currency>0",
+    ") SELECT to_char(date_trunc('month',source_date),'YYYY-MM') AS month,",
+    " COALESCE(sum(sign*GREATEST(0,source_usd-allocated)),0)::text AS amount",
+    " FROM candidates WHERE source_usd>0 GROUP BY date_trunc('month',source_date)",
+    " ORDER BY month",
+  ].join(" ");
+  const response=await pool.query(query,[...args(scope,filters)]);
+  const months=response.rows as Array<{month:string;amount:string}>;
+  const total=months.reduce((value,row)=>value.plus(row.amount),toMoney(0));
+  return {amount:total.toFixed(6),months,applicable:true};
+}
+
 async function summaryData(scope:Scope,filters:Filters){
   const params=args(scope,filters);
   const [detail,centers,budgets]=await Promise.all([
@@ -193,7 +244,7 @@ async function summaryData(scope:Scope,filters:Filters){
   const centerAmounts=new Map<string,{expense:string;inventoryCost:string;budget:string;entries:number}>();
   const totals={expense:toMoney(0),inventoryCost:toMoney(0),budget:toMoney(0),entries:0};
   const byAccount=new Map<string,{companyId:number;accountId:number|null;accountName:string;expense:string;inventoryCost:string;entries:number}>();
-  const byMonth=new Map<string,{month:string;expense:string;inventoryCost:string;budget:string}>();
+  const byMonth=new Map<string,{month:string;expense:string;inventoryCost:string;budget:string;unallocated:string}>();
   function getCenter(co:number,cc:number) {
     const k=key(co,cc);
     if(!centerAmounts.has(k))centerAmounts.set(k,{expense:"0",inventoryCost:"0",budget:"0",entries:0});
@@ -201,7 +252,7 @@ async function summaryData(scope:Scope,filters:Filters){
   }
   function getMonth(month:string){
     const m=month.slice(0,7);
-    if(!byMonth.has(m))byMonth.set(m,{month:m,expense:"0",inventoryCost:"0",budget:"0"});
+    if(!byMonth.has(m))byMonth.set(m,{month:m,expense:"0",inventoryCost:"0",budget:"0",unallocated:"0"});
     return byMonth.get(m)!;
   }
   for(const row of rows){
@@ -277,15 +328,22 @@ async function summaryData(scope:Scope,filters:Filters){
     ...x,variance:toMoney(x.expense).minus(x.budget).toFixed(6),
   }));
   const byAccountRows=[...byAccount.values()].sort((a,b)=>a.accountName.localeCompare(b.accountName));
+  const unallocated=await unallocatedExpenses(scope,filters);
+  for(const item of unallocated.months){
+    const m=getMonth(item.month);
+    m.unallocated=toMoney(m.unallocated||"0").plus(item.amount).toFixed(6);
+  }
   const months=[...byMonth.values()].sort((a,b)=>a.month.localeCompare(b.month)).map(m=>({
-    ...m,variance:toMoney(m.expense).minus(m.budget).toFixed(6)
+    ...m,variance:toMoney(m.expense).plus(m.unallocated).minus(m.budget).toFixed(6)
   }));
   return {
     scope:scope.companyIds.length>1?"consolidated":"company",
     companyIds:scope.companyIds,period:{from:filters.from,to:filters.to,budgetBasis:"whole_calendar_months"},
     currency:"USD",centers:byCenter,departments:departmentRows,accounts:byAccountRows,months,
     totals:{expense:totals.expense.toFixed(6),inventoryCost:totals.inventoryCost.toFixed(6),
-      budget:totals.budget.toFixed(6),variance:totals.expense.minus(totals.budget).toFixed(6),
+      budget:totals.budget.toFixed(6),unallocated:unallocated.amount,unallocatedApplicable:unallocated.applicable,
+      recognizedExpense:totals.expense.plus(unallocated.amount).toFixed(6),
+      variance:totals.expense.plus(unallocated.amount).minus(totals.budget).toFixed(6),
       entries:totals.entries},
   };
 }
