@@ -5,6 +5,7 @@ import { requireAuth } from "../auth";
 import { db } from "../db";
 import { registerAccountRoutes } from "./accounts";
 import { registerCostCenterRoutes } from "./costCenterRoutes";
+import { registerCostCenterReportingRoutes } from "./costCenterReportingRoutes";
 import { registerAdminRoutes } from "./adminRoutes";
 import { registerApprovalRoutes } from "./approvalRoutes";
 import { registerAuthRoutes } from "./authRoutes";
@@ -153,6 +154,7 @@ export async function registerApplicationRoutes(app: Express): Promise<Server> {
   registerContainerRoutes(app);
   registerImportRoutes(app);
   registerAccountRoutes(app);
+  registerCostCenterReportingRoutes(app);
   registerCostCenterRoutes(app);
   registerVoucherRoutes(app);
   registerVoucherEntryRoutes(app);
