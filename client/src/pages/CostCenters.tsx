@@ -18,6 +18,7 @@ import { useLocation } from "wouter";
 import type { CostCenter, CostCenterCatalog, CostCenterBalance, CostCenterActivity } from "@/api/costCentersApi";
 import { readCostCenterApi, writeCostCenterApi } from "@/api/costCentersApi";
 import { CostCenterAutomationRules } from "@/components/financial/CostCenterAutomationRules";
+import { CostCenterReports } from "@/components/financial/CostCenterReports";
 
 type Form = { code: string; name: string; description: string; parentId: string };
 const emptyForm: Form = { code: "", name: "", description: "", parentId: "root" };
@@ -248,6 +249,7 @@ export default function CostCenters() {
           </CardContent>
         </Card>
       </div>
+      <CostCenterReports baseUrl={baseUrl} centers={centers} />
       <CostCenterAutomationRules baseUrl={baseUrl} centers={centers} />
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
