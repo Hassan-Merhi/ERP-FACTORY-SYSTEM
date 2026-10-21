@@ -123,7 +123,7 @@ async function sourceInCompany(client: PoolClient, companyId: number, kind: Sour
         "GREATEST(abs(coalesce(ve.transaction_debit_amount,ve.debit_amount,0)),abs(coalesce(ve.transaction_credit_amount,ve.credit_amount,0)))::text AS \"amountNative\",",
         "GREATEST(abs(coalesce(ve.base_debit_amount,ve.debit_amount,0)),abs(coalesce(ve.base_credit_amount,ve.credit_amount,0)))::text AS \"amountBase\",",
         "ve.historical_exchange_rate::text AS \"historicalRate\", ve.rate_convention AS \"rateConvention\",",
-        "la.account_type AS \"accountType\", v.voucher_number AS \"voucherNumber\",",
+        "la.account_type AS \"accountType\", la.code AS \"accountCode\", v.voucher_number AS \"voucherNumber\",",
         "v.source_module AS \"sourceModule\", v.optional",
         "FROM voucher_entries ve JOIN vouchers v ON v.id=ve.voucher_id",
         "LEFT JOIN ledger_accounts la ON la.id=ve.ledger_account_id AND la.company_id=ve.company_id",
@@ -165,7 +165,7 @@ function sourceTreatment(row: Record<string, unknown>, kind: SourceKind): "EXPEN
   if (kind === "factory_daybook") return "EXPENSE";
   const accountType = String(row.accountType || "").trim().toUpperCase();
   if (["EXPENSE", "INDIRECT EXPENSE", "DIRECT EXPENSE"].includes(accountType)) return "EXPENSE";
-  if (accountType === "ASSET") return "INVENTORY_COST";
+  if (accountType === "ASSET" && ["FACTORY_RAW_MATERIAL_STOCK", "FACTORY_WIP", "FACTORY_FINISHED_GOODS"].includes(String(row.accountCode))) return "INVENTORY_COST";
   throw new ApiError(409, "Source line is not an expense or eligible inventory asset");
 }
 async function splitList(client: PoolClient, companyId: number, kind: SourceKind, sourceId: number) {
@@ -227,6 +227,7 @@ function registerCostCenterPrefix(app: Express, prefix: string) {
         [
           "SELECT ve.id AS \"entryId\", la.name AS \"accountName\", la.code AS \"accountCode\",",
           "la.account_type AS \"accountType\",",
+          "CASE WHEN upper(btrim(la.account_type)) = 'ASSET' THEN 'INVENTORY_COST' ELSE 'EXPENSE' END AS \"costTreatment\",",
           "COALESCE(ve.transaction_currency,v.currency,'USD') AS currency,",
           "GREATEST(abs(coalesce(ve.transaction_debit_amount,ve.debit_amount,0)),",
           "abs(coalesce(ve.transaction_credit_amount,ve.credit_amount,0)))::text AS \"amountNative\",",
@@ -241,13 +242,15 @@ function registerCostCenterPrefix(app: Express, prefix: string) {
           "WHERE v.id=$1 AND v.company_id=$2 AND v.deleted_at IS NULL AND v.optional=false",
           "AND v.voucher_number NOT LIKE 'GC-%' AND v.voucher_number NOT LIKE 'MIG-%'",
           "AND COALESCE(v.source_module,'') <> 'SP_MIGRATION_READONLY'",
-          "AND upper(btrim(la.account_type)) IN ('EXPENSE','DIRECT EXPENSE','INDIRECT EXPENSE')",
+          "AND (upper(btrim(la.account_type)) IN ('EXPENSE','DIRECT EXPENSE','INDIRECT EXPENSE')",
+          "OR ($3::boolean AND upper(btrim(la.account_type))='ASSET'",
+          "AND la.code IN ('FACTORY_RAW_MATERIAL_STOCK','FACTORY_WIP','FACTORY_FINISHED_GOODS')))"
           "GROUP BY ve.id,v.currency,la.id HAVING",
           "GREATEST(abs(coalesce(ve.base_debit_amount,ve.debit_amount,0)),",
           "abs(coalesce(ve.base_credit_amount,ve.credit_amount,0))) > 0",
           "ORDER BY ve.id",
         ].join(" "),
-        [voucherId, companyId],
+        [voucherId, companyId, prefix === "/api/factory/cost-centers"],
       );
       res.json({ entries: result.rows });
     } catch (error) { sendError(res, error); }
