@@ -135,9 +135,12 @@ async function loadEntriesTx(tx: DbTransaction, input: PartyOpenItemTarget): Pro
 async function ensurePartyExistsTx(tx: DbTransaction, input: PartyOpenItemTarget): Promise<void> {
   // Domain is an enum, so these are fixed trusted table names, never user SQL.
   const table = { customer: "customers", supplier: "suppliers", factory_supplier: "factory_suppliers" }[input.domain];
+  // factory_suppliers has is_active, but no deleted_at column.
+  const active = input.domain === "factory_supplier"
+    ? sql`AND is_active = true` : sql`AND deleted_at IS NULL`;
   const row = resultRows<{ id: number }>(await tx.execute(sql`
     SELECT id FROM ${sql.raw(table)}
-    WHERE id=${input.partyId} AND company_id=${input.companyId} AND deleted_at IS NULL LIMIT 1
+    WHERE id=${input.partyId} AND company_id=${input.companyId} ${active} LIMIT 1
   `))[0];
   if (!row) throw new OpenItemError("OPEN_ITEM_PARTY_NOT_FOUND", "Party does not belong to this company", 404);
 }
