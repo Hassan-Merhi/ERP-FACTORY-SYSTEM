@@ -218,7 +218,8 @@ export function useFactoryVisibleSections(user?: FactorySidebarUser): {
           myAccess &&
           !myAccess.fullAccess &&
           myAccess.pageKeys.length > 0 &&
-          !hasFactoryPageKey(page, myAccess.pageKeys)
+          !hasFactoryPageKey(page, myAccess.pageKeys) &&
+          !(item.accessKey === "factory/cost-centers" && myAccess.pageKeys.includes("factory/accounts"))
         ) {
           return false;
         }
