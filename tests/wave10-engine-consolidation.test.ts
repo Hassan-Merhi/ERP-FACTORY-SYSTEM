@@ -594,6 +594,12 @@ describe("amounts not yet in the ledger", () => {
       balanceSide: "Dr",
       balanceBasis: "ledger",
       notInLedgerTotal: "610.00",
+      // The posted book is unchanged, while the Accounts/Agents display
+      // projects exactly the same balance as Factory Parties.
+      partyBalance: "850.00",
+      partyBalanceSide: "Dr",
+      partyBalanceBasis: "ledger+notInLedger",
+      partyLedgerBalance: "240.00",
     });
   });
 
