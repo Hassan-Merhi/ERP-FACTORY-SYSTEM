@@ -20,6 +20,7 @@ export type CostCenterBalance = {
 };
 export type VoucherExpenseEntry = {
   entryId: number; accountName: string; accountCode: string; accountType: string;
+  costTreatment: "EXPENSE" | "INVENTORY_COST";
   currency: string; amountNative: string; amountBase: string;
   allocatedNative: string; allocatedBase: string; allocationCount: number;
 };
