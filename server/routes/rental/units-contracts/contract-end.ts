@@ -93,7 +93,6 @@ export function registerRentalContractEndRoutes(app: Express, ctx: RentalRoutesC
               : await findOrCreateLedgerAccount(tx, companyId, "Tenant Deposits", "Liability", "TENANT-DEP");
             await postErpVoucherTx(tx, {
               companyId,
-              sourceModule: module,
               voucherType: tenantPays ? "Receipt" : "Payment",
               voucherDate: dateStr,
               description: narration,

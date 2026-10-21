@@ -172,9 +172,6 @@ async function postGroupCore(
       description: input.description,
       currency,
       exchangeRate: foreign ? exchangeRate : null,
-      // Rentals retains its operational origin for reporting and provenance.
-      // This is metadata only: account/amount/FX calculations are unchanged.
-      sourceModule: mod,
       lines: input.lines,
       source: { type: "rental-payment", id: `${companyId}:${groupId}`, revision: input.phase },
     });
