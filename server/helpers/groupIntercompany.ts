@@ -56,11 +56,18 @@ interface CompanyLike {
   parentCompanyId?: number | null;
 }
 
-/** The intercompany accounts of one company and their balances (run inside the company's scope). */
+/**
+ * The intercompany accounts of one company and their balances (run inside the company's scope).
+ *
+ * `includeExplicitLinks` adds intercompany_account_links relationships. Only the
+ * unified consolidation report opts in: Group Net Position keeps its original
+ * account set, so its eliminations and totals are unchanged.
+ */
 export async function loadCompanyIntercompanyAccounts(
   company: CompanyLike,
   allCompanies: readonly CompanyLike[],
-  asOfDate: string
+  asOfDate: string,
+  options: { includeExplicitLinks?: boolean } = {}
 ): Promise<IntercompanyAccount[]> {
   const companyId = company.id;
   const links = new Map<number, { counterparties: Set<number>; sources: Set<IntercompanyLinkSource> }>();
@@ -88,18 +95,20 @@ export async function loadCompanyIntercompanyAccounts(
       .where(
         or(eq(intercompanyPosConfigs.sourceCompanyId, companyId), eq(intercompanyPosConfigs.destCompanyId, companyId))
       ),
-    db
-      .select()
-      .from(intercompanyAccountLinks)
-      .where(
-        and(
-          eq(intercompanyAccountLinks.active, true),
-          or(
-            eq(intercompanyAccountLinks.sourceCompanyId, companyId),
-            eq(intercompanyAccountLinks.destCompanyId, companyId)
-          )
-        )
-      ),
+    options.includeExplicitLinks !== true
+      ? Promise.resolve([] as (typeof intercompanyAccountLinks.$inferSelect)[])
+      : db
+          .select()
+          .from(intercompanyAccountLinks)
+          .where(
+            and(
+              eq(intercompanyAccountLinks.active, true),
+              or(
+                eq(intercompanyAccountLinks.sourceCompanyId, companyId),
+                eq(intercompanyAccountLinks.destCompanyId, companyId)
+              )
+            )
+          ),
     storage.getCompanySettings(companyId),
     db
       .select({ id: ledgerAccounts.id, name: ledgerAccounts.name, accountType: ledgerAccounts.accountType })

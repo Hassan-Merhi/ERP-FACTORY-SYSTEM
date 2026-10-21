@@ -185,6 +185,17 @@ interface DbTable extends Record<string, unknown> {
   rls: boolean;
   forced: boolean;
 }
+/**
+ * Open-item, cash/bank and cost-allocation rows reference voucher_entries(id)
+ * ON DELETE RESTRICT, while existing voucher edit flows (sales update, journal
+ * and payment edits, container voucher sync, POS edits) delete and re-insert a
+ * voucher's lines. Once a metadata row exists, those established workflows
+ * would fail. Keep the pilot blocked until they are made compatible without
+ * changing any posted amount.
+ */
+export const METADATA_ENTRY_REFERENCES_COMPATIBLE = false;
+export const METADATA_ENTRY_REFERENCES_BLOCKER =
+  "Metadata matches/allocations reference voucher lines ON DELETE RESTRICT, but existing voucher edit flows replace voucher lines; certify compatibility before any metadata pilot";
 export async function unifiedReleaseReadinessTx(tx: DbTransaction, companyId: number) {
   await assertTransactionCompanyScope(tx, companyId);
   const date = await companyBusinessDate(companyId, tx);
@@ -242,6 +253,7 @@ export async function unifiedReleaseReadinessTx(tx: DbTransaction, companyId: nu
     );
   if (missing.length) blockers.push(`Missing additive accounting metadata tables: ${missing.join(", ")}`);
   if (unprotected.length) blockers.push(`Required company RLS / FORCE RLS missing: ${unprotected.join(", ")}`);
+  if (!METADATA_ENTRY_REFERENCES_COMPATIBLE) blockers.push(METADATA_ENTRY_REFERENCES_BLOCKER);
   const active = reviews.filter((v) => !v.revoked_at);
   const seen = new Set(active.map((v) => v.review_kind));
   const technical = active.find((x) => x.review_kind === "TECHNICAL");

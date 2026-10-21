@@ -226,7 +226,7 @@ export async function consolidatedAccountingReport(input: {
       const [balance, incomePeriod, ic, readiness] = await Promise.all([
         loadBalanceRows(db, { companyId: c.id, from: fromDate, asOf: asOfDate }),
         loadBalanceRows(db, { companyId: c.id, from: fromDate, asOf: asOfDate, excludeFiscalClose: true }),
-        loadCompanyIntercompanyAccounts(c, companies, asOfDate),
+        loadCompanyIntercompanyAccounts(c, companies, asOfDate, { includeExplicitLinks: true }),
         getHistoricalCurrencyReadiness(c.id, asOfDate),
       ]);
       return { balance, incomePeriod, ic, readiness };
