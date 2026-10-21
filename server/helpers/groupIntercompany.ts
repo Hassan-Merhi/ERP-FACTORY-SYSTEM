@@ -24,7 +24,7 @@
  * (the caller wraps it), so no cross-company query is needed.
  */
 import { and, eq, isNull, or } from "drizzle-orm";
-import { interCompanyTransfers, intercompanyPosConfigs, ledgerAccounts } from "@shared/schema";
+import { interCompanyTransfers, intercompanyPosConfigs, intercompanyAccountLinks, ledgerAccounts } from "@shared/schema";
 
 import { db } from "../db";
 import { toMoney } from "../lib/money";
@@ -32,7 +32,7 @@ import { canonicalAccountType } from "../services/accounting/accountClassificati
 import { getPartyBalances } from "../services/accounting/balances/ledgerBalanceEngine";
 import { storage } from "../storage";
 
-export type IntercompanyLinkSource = "transfer" | "posConfig" | "parentCredit" | "intercompanyType";
+export type IntercompanyLinkSource = "transfer" | "posConfig" | "explicitLink" | "parentCredit" | "intercompanyType";
 
 export interface IntercompanyAccount {
   companyId: number;
@@ -67,7 +67,7 @@ export async function loadCompanyIntercompanyAccounts(
     links.set(accountId, entry);
   };
 
-  const [transfers, posConfigs, settings, accounts] = await Promise.all([
+  const [transfers, posConfigs, explicitLinks, settings, accounts] = await Promise.all([
     db
       .selectDistinct({
         fromCompanyId: interCompanyTransfers.fromCompanyId,
@@ -83,6 +83,11 @@ export async function loadCompanyIntercompanyAccounts(
       .where(
         or(eq(intercompanyPosConfigs.sourceCompanyId, companyId), eq(intercompanyPosConfigs.destCompanyId, companyId))
       ),
+    db.select().from(intercompanyAccountLinks).where(and(
+      eq(intercompanyAccountLinks.active, true),
+      or(eq(intercompanyAccountLinks.sourceCompanyId, companyId),
+         eq(intercompanyAccountLinks.destCompanyId, companyId))
+    )),
     storage.getCompanySettings(companyId),
     db
       .select({ id: ledgerAccounts.id, name: ledgerAccounts.name, accountType: ledgerAccounts.accountType })
@@ -97,6 +102,15 @@ export async function loadCompanyIntercompanyAccounts(
   for (const config of posConfigs) {
     if (config.sourceCompanyId === companyId) link(config.sourceIntercoAccountId, config.destCompanyId, "posConfig");
     if (config.destCompanyId === companyId) link(config.destIntercoAccountId, config.sourceCompanyId, "posConfig");
+  }
+  // Explicit two-company account relationships are recorded independently
+  // from transfer journals and POS configuration; they must be reconciled
+  // without guessing counterparties from account names.
+  for (const item of explicitLinks) {
+    if (item.sourceCompanyId === companyId)
+      link(item.sourceLedgerAccountId,item.destCompanyId,"explicitLink");
+    if (item.destCompanyId === companyId)
+      link(item.destLedgerAccountId,item.sourceCompanyId,"explicitLink");
   }
   if (company.parentCompanyId) {
     link(Number(settings?.parentCreditAccountId) || null, company.parentCompanyId, "parentCredit");
