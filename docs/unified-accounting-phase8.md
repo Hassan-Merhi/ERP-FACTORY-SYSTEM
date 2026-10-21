@@ -9,8 +9,10 @@
 Rentals already post through the central ERP voucher engine in all three modules. Phase 8 keeps that ledger and makes it independently explorable by contract, property, unit, tenant, month and company. It does **not** introduce a second rental ledger or rewrite any historical accounting records.
 
 **Accounting perspective**:
-- **ERP and Factory** rentals are tenant-side shop/warehouse lease obligations: expense, accrued rent payable, advance/prepaid rent assets and recoverable deposits.
-- **Properties** is landlord-side rentals: rental income, operating rent receivables, deferred rental revenue and tenant-deposit liabilities.
+- **Tenant-side SHOP leases** and shared/intercompany occupancy across ERP, Factory or Properties use rent expense, accrued rent payable and advance/prepaid assets.
+- **Landlord-side WAREHOUSE/non-shop leases** across ERP, Factory or Properties use rental income, rent receivable and (where the existing workflow applies it) deferred rent revenue.
+- The existing payment writer determines direction by **unit type (SHOP)** or a **shared lease**, not simply the module name. The Phase 8 report applies that same per-contract classification.
+- Deposit assets/liabilities are shown from the actual account used by posted GUAr vouchers. A mismatch between lease perspective and a deposit account type is flagged for manual review; no historical deposit entry is rewritten.
 - Ownership and the currency of every contract are explicit. A linked/intercompany contract is **not** assumed to belong to both companies' financial statements. Linked-company settlement remains governed by its existing separate posting source.
 
 Existing posting engines retained:
@@ -29,7 +31,7 @@ Existing posting engines retained:
 
 1. Company/module-scoped selection of contracts and their specific unit number, location, tenant, rental amount, billing period, status, contract currency, internal/shared-company flag.
 2. Contract-month **expected due rent**, by the existing billing-day rule, and **effective posted payments** allocated against each month. Cached `paid_amount` is compared and flagged rather than treated as authoritative.
-3. **Operational rent AR/AP** — amount due less effective POSTED allocations. The label is landlord receivable for Properties, tenant payable for ERP/Factory. This is **not falsely represented as an individually reconstructed general-ledger AR/AP balance**, because monthly accrual journals can combine multiple contracts and advance journals use distinct control accounts.
+3. **Operational rent AR/AP** — amount due less effective POSTED allocations. The label is based on the contract's landlord/tenant role (SHOP/shared = tenant; non-shop = landlord), including within ERP and Factory. This is **not falsely represented as an individually reconstructed general-ledger AR/AP balance**, because monthly accrual journals can combine multiple contracts and advance journals use distinct control accounts.
 4. Distinct **scheduled/not-yet-posted** payments, advances allocated to future periods, overpayments on due periods and currently overdue rent.
 5. Linked monthly **accrual/recognition voucher ID**, advance/prepaid flags, deleted/orphaned accrual link warnings. A posted journal is read only if company-owned, active, nonoptional, and linked to the period.
 6. Exact payment activity with payment group, stored historical FX rate, original currency, allocated month and linked live accounting voucher. `SCHEDULED` rows are viewable even when payment date lies in the future, but **never** count as posted cash or paid rent.
@@ -114,3 +116,14 @@ Claude should independently inspect and verify:
 12. Link creation in the production runtime schema guard after Phase 3–5 tables, without data backfill or mutation.
 
 **Phase 8 is implemented and committed, but has not been built, tested, independently certified, merged, rebased, deployed or used to modify production accounting records.**
+
+### Final source-level distinction
+
+The report's tenant/landlord label follows the existing `postGroupCore`
+decision (`isSharedPayment || unitType === "SHOP"`) rather than assuming that
+all ERP/Factory contracts are expenses or all Properties contracts are income.
+A tenant-side guarantee erroneously stored as a landlord liability, or a
+landlord deposit in a tenant asset account, produces an explicit warning.
+Legacy guarantee writers themselves are unchanged by this phase; corrections
+to prior posted transactions require a separate reviewed accounting action.
+
