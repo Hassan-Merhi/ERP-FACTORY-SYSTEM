@@ -1,6 +1,7 @@
 /** Phase 4: all ERP, Factory and Rentals cash/bank statements share this API. */
 import type { Express, Request, Response } from "express";
 import { createHash } from "node:crypto";
+import Decimal from "decimal.js";
 import { z } from "zod";
 import { requireAuth, requireRole } from "../auth";
 import { db } from "../db";
@@ -8,8 +9,8 @@ import { upload } from "./_helpers";
 import { getErrorMessage } from "../lib/httpHandlers";
 import {
   CashBankError, cashBankStatementDetailTx, importCashBankStatementTx,
-  listCashBankAccountsTx, listCashBankStatementsTx,
-  matchCashBankLineTx, voidCashBankMatchTx
+  listCashBankAccountsTx, listCashBankStatementsTx, loadCashBankAccountTx,
+  matchCashBankLineTx, voidCashBankMatchTx, reviewCashBankLineTx
 } from "../services/accounting/cashBankReconciliationService";
 import {
   BankStatementParseError, parseCashBankStatement, statementDate,
@@ -75,16 +76,18 @@ export function registerCashBankReconciliationRoutes(app:Express):void {
       const parsed=await parseCashBankStatement(req.file,periodStart,periodEnd);
       // Account ownership is checked even for preview.
       await db.transaction(async tx=>{
-        const {loadCashBankAccountTx}=await import("../services/accounting/cashBankReconciliationService");
         await loadCashBankAccountTx(tx,{companyId,accountKind:input.accountKind,accountId:input.accountId});
       });
-      const Decimal=(await import("decimal.js")).default;
       const sum=parsed.reduce((total,row)=>total.plus(row.signedAmount),new Decimal(0));
-      const calculated=new Decimal(input.openingBalance).plus(sum);
+      const starting=new Decimal(input.openingBalance),closing=new Decimal(input.closingBalance);
+      if([starting,closing].some(v=>!v.isFinite()||v.decimalPlaces()>6||
+          v.abs().gte("100000000000000")))
+        throw new CashBankError("CASH_BANK_PRECISION","Enter a valid balance within six decimals",400);
+      const calculated=starting.plus(sum);
       return res.json({rowCount:parsed.length,lines:parsed.slice(0,50),
         calculatedClosing:calculated.toFixed(6),
-        suppliedClosing:new Decimal(input.closingBalance).toFixed(6),
-        balanced:calculated.eq(new Decimal(input.closingBalance)),
+        suppliedClosing:closing.toFixed(6),
+        balanced:calculated.eq(closing),
         fileFingerprint:createHash("sha256").update(req.file.buffer).digest("hex"),
         currency:input.currency.toUpperCase()});
     }catch(e){return fail(res,e);}
@@ -100,6 +103,20 @@ export function registerCashBankReconciliationRoutes(app:Express):void {
         fileName:req.file!.originalname,fileBytes:req.file!.buffer,lines,actor:actor(req)
       }));
       return res.status(data.replayed?200:201).json(data);
+    }catch(e){return fail(res,e);}
+  });
+  app.post("/api/accounting/cash-bank/lines/:id/review",...gate,async(req,res)=>{
+    try{
+      const companyId=company(req),statementLineId=positiveId.parse(req.params.id);
+      const payload=z.object({
+        category:z.enum(["bank_fee","transfer","unidentified_receipt",
+          "unidentified_payment","other"]).nullable(),
+        note:z.string().max(1500).nullable().optional(),
+      }).parse(req.body);
+      return res.json(await db.transaction(tx=>reviewCashBankLineTx(tx,{
+        companyId,statementLineId,category:payload.category,
+        note:payload.note??null,actor:actor(req)
+      })));
     }catch(e){return fail(res,e);}
   });
   app.post("/api/accounting/cash-bank/matches",...gate,async(req,res)=>{
