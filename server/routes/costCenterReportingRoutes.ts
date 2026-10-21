@@ -214,22 +214,22 @@ async function unallocatedExpenses(scope:Scope,filters:Filters){
 async function summaryData(scope:Scope,filters:Filters){
   const params=args(scope,filters);
   const [detail,centers,budgets]=await Promise.all([
-    pool.query(sourceCte+" SELECT company_id AS \\"companyId\\",cost_center_id AS \\"costCenterId\\","+
-      " account_id AS \\"accountId\\",account_name AS \\"accountName\\",cost_treatment AS \\"treatment\\","+
+    pool.query(sourceCte+" SELECT company_id AS \"companyId\",cost_center_id AS \"costCenterId\","+
+      " account_id AS \"accountId\",account_name AS \"accountName\",cost_treatment AS \"treatment\","+
       " to_char(date_trunc('month',source_date),'YYYY-MM') AS month,"+
-      " sum(signed_usd)::text AS \\"amountUsd\\",count(*)::int AS \\"entryCount\\""+
+      " sum(signed_usd)::text AS \"amountUsd\",count(*)::int AS \"entryCount\""+
       " FROM filtered GROUP BY company_id,cost_center_id,account_id,account_name,cost_treatment,date_trunc('month',source_date)"+
       " ORDER BY company_id,cost_center_id,month,account_name",params),
     pool.query(
-      "SELECT c.id AS \\"costCenterId\\",c.company_id AS \\"companyId\\",c.name,c.code,c.active,"+
-      " cp.name AS \\"companyName\\",c.parent_id AS \\"parentId\\""+
+      "SELECT c.id AS \"costCenterId\",c.company_id AS \"companyId\",c.name,c.code,c.active,"+
+      " cp.name AS \"companyName\",c.parent_id AS \"parentId\""+
       " FROM cost_centers c JOIN companies cp ON cp.id=c.company_id"+
       " WHERE c.company_id=ANY($1::int[])"+
       " ORDER BY cp.name,c.code LIMIT 10000",
       [scope.companyIds]),
     pool.query(
-      "SELECT company_id AS \\"companyId\\",cost_center_id AS \\"costCenterId\\","+
-      " budget_month::text AS month,amount_usd::text AS \\"amountUsd\\""+
+      "SELECT company_id AS \"companyId\",cost_center_id AS \"costCenterId\","+
+      " budget_month::text AS month,amount_usd::text AS \"amountUsd\""+
       " FROM cost_center_monthly_budgets WHERE company_id=ANY($1::int[])"+
       " AND budget_month BETWEEN date_trunc('month',$2::date)::date AND date_trunc('month',$3::date)::date"+
       " AND ($4::int IS NULL OR cost_center_id=$4) ORDER BY company_id,cost_center_id,budget_month",
@@ -350,15 +350,15 @@ async function summaryData(scope:Scope,filters:Filters){
 
 async function activityData(scope:Scope,filters:Filters,limit:number,offset:number){
   const sql=sourceCte+
-    " SELECT s.allocation_id AS \\"id\\",s.company_id AS \\"companyId\\","+
-    " c.name AS \\"costCenterName\\",c.code AS \\"costCenterCode\\",s.cost_center_id AS \\"costCenterId\\","+
-    " s.account_id AS \\"accountId\\",s.account_name AS \\"accountName\\","+
-    " s.voucher_id AS \\"voucherId\\",s.voucher_number AS \\"voucherNumber\\","+
-    " s.factory_daybook_entry_id AS \\"factoryDaybookEntryId\\","+
-    " s.voucher_entry_id AS \\"voucherEntryId\\",s.source_module AS \\"sourceModule\\","+
-    " s.source_date::text AS \\"sourceDate\\",s.cost_treatment AS \\"treatment\\","+
-    " s.allocation_origin AS \\"allocationOrigin\\",s.currency,"+
-    " s.signed_native::text AS \\"amountNative\\",s.signed_usd::text AS \\"amountUsd\\""+
+    " SELECT s.allocation_id AS \"id\",s.company_id AS \"companyId\","+
+    " c.name AS \"costCenterName\",c.code AS \"costCenterCode\",s.cost_center_id AS \"costCenterId\","+
+    " s.account_id AS \"accountId\",s.account_name AS \"accountName\","+
+    " s.voucher_id AS \"voucherId\",s.voucher_number AS \"voucherNumber\","+
+    " s.factory_daybook_entry_id AS \"factoryDaybookEntryId\","+
+    " s.voucher_entry_id AS \"voucherEntryId\",s.source_module AS \"sourceModule\","+
+    " s.source_date::text AS \"sourceDate\",s.cost_treatment AS \"treatment\","+
+    " s.allocation_origin AS \"allocationOrigin\",s.currency,"+
+    " s.signed_native::text AS \"amountNative\",s.signed_usd::text AS \"amountUsd\""+
     " FROM filtered s JOIN cost_centers c ON c.id=s.cost_center_id AND c.company_id=s.company_id"+
     " ORDER BY s.source_date DESC,s.allocation_id DESC,s.company_id"+
     " LIMIT $7 OFFSET $8";
@@ -506,9 +506,9 @@ function registerPrefix(app:Express,prefix:string){
       const scope=await resolveScope(req);
       const filters=parseFilters(req);
       const result=await pool.query(
-        "SELECT id,company_id AS \\"companyId\\",cost_center_id AS \\"costCenterId\\","+
-        " budget_month::text AS month,amount_usd::text AS \\"amountUsd\\",notes,"+
-        " updated_by AS \\"updatedBy\\",updated_at AS \\"updatedAt\\""+
+        "SELECT id,company_id AS \"companyId\",cost_center_id AS \"costCenterId\","+
+        " budget_month::text AS month,amount_usd::text AS \"amountUsd\",notes,"+
+        " updated_by AS \"updatedBy\",updated_at AS \"updatedAt\""+
         " FROM cost_center_monthly_budgets"+
         " WHERE company_id=$1 AND budget_month BETWEEN date_trunc('month',$2::date)::date"+
         " AND date_trunc('month',$3::date)::date"+
