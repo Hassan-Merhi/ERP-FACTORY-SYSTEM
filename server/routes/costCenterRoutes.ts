@@ -300,7 +300,7 @@ function registerCostCenterPrefix(app: Express, prefix: string) {
           );
         }
         const after = await splitList(client, actor.companyId, kind, sourceId);
-        await audit(client, actor, before.length ? "update" : "create",
+        await audit(client, actor, after.length === 0 ? "delete" : before.length ? "update" : "create",
           "cost_center_allocations", null, kind + ":" + sourceId,
           { splits: before, reason: input.reason }, { splits: after, reason: input.reason });
         return {
