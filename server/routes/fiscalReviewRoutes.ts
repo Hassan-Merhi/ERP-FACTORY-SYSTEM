@@ -86,6 +86,22 @@ export function registerFiscalReviewRoutes(app:Express){
    })));
   }catch(e){return failure(res,e);}
  });
+ app.get("/api/accounting/fiscal-review/equity-accounts",...gate,async(req:Request,res:Response)=>{
+  try{
+   const companyId=company(req);
+   const accounts=await db.transaction(async tx=>{
+    await assertTransactionCompanyScope(tx,companyId);
+    return resultRows<{id:number;code:string;name:string}&Record<string,unknown>>(await tx.execute(sql`
+     SELECT id,code,name FROM ledger_accounts WHERE company_id=${companyId}
+       AND LOWER(TRIM(account_type))='equity'
+       AND deleted_at IS NULL AND active=true
+     ORDER BY code,id LIMIT 300
+    `));
+   });
+   res.setHeader("Cache-Control","no-store");
+   return res.json({companyId,accounts,limit:300});
+  }catch(e){return failure(res,e);}
+ });
  app.get("/api/accounting/fiscal-review/readiness",...gate,async(req:Request,res:Response)=>{
   try{
    const b=reviewScope.parse(req.query),companyId=company(req);
