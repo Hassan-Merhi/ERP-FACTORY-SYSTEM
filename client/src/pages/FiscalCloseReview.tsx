@@ -13,6 +13,8 @@ import {Input} from "@/components/ui/input";
 import {Label} from "@/components/ui/label";
 import {Card,CardHeader,CardTitle,CardContent} from "@/components/ui/card";
 
+// Phase 15 never authorizes new GL posting; certification is separate.
+const UNIFIED_FINANCIAL_POSTING_CERTIFIED=false;
 type ReviewKind="ACCOUNTING"|"OWNER";
 interface Readiness{
  companyId:number;periodStartDate:string;periodEndDate:string;retainedEarningsAccountId:number;
@@ -337,7 +339,7 @@ export default function FiscalCloseReview(){
       remains disabled until independent Claude and finance certification.
       Readiness and approvals alone do not unlock voucher posting.
      </p>
-     <Button disabled={true || !data.reviewedCloseReady||
+     <Button disabled={!UNIFIED_FINANCIAL_POSTING_CERTIFIED || !data.reviewedCloseReady||
       confirmText!=="CLOSE "+data.periodEndDate||closeMutation.isPending}
       onClick={()=>closeMutation.mutate()}>Reviewed closing locked — pending certification</Button>
      <p className="text-xs text-muted-foreground">
