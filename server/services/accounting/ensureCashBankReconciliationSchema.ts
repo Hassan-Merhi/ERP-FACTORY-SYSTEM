@@ -64,5 +64,42 @@ export async function ensureCashBankReconciliationSchema(pool: Pool): Promise<vo
       ON accounting_cash_bank_matches(voucher_entry_id) WHERE voided_at IS NULL;
     CREATE INDEX IF NOT EXISTS cash_bank_match_company_idx
       ON accounting_cash_bank_matches(company_id,statement_line_id);
+    -- Enforce the same company boundary as the existing accounting tables.
+    -- Importers and readers first call assertTransactionCompanyScope(tx,...).
+    ALTER TABLE accounting_cash_bank_statements ENABLE ROW LEVEL SECURITY;
+    ALTER TABLE accounting_cash_bank_statements FORCE ROW LEVEL SECURITY;
+    ALTER TABLE accounting_cash_bank_statement_lines ENABLE ROW LEVEL SECURITY;
+    ALTER TABLE accounting_cash_bank_statement_lines FORCE ROW LEVEL SECURITY;
+    ALTER TABLE accounting_cash_bank_matches ENABLE ROW LEVEL SECURITY;
+    ALTER TABLE accounting_cash_bank_matches FORCE ROW LEVEL SECURITY;
+
+    DO $bank_rls$
+    BEGIN
+      IF NOT EXISTS (SELECT 1 FROM pg_policies
+        WHERE schemaname = current_schema()
+        AND tablename = 'accounting_cash_bank_statements'
+        AND policyname = 'cash_bank_statements_company_scope') THEN
+        CREATE POLICY cash_bank_statements_company_scope ON accounting_cash_bank_statements
+          USING (company_id = NULLIF(current_setting('app.current_company_id',true),'')::integer)
+          WITH CHECK (company_id = NULLIF(current_setting('app.current_company_id',true),'')::integer);
+      END IF;
+      IF NOT EXISTS (SELECT 1 FROM pg_policies
+        WHERE schemaname = current_schema()
+        AND tablename = 'accounting_cash_bank_statement_lines'
+        AND policyname = 'cash_bank_lines_company_scope') THEN
+        CREATE POLICY cash_bank_lines_company_scope ON accounting_cash_bank_statement_lines
+          USING (company_id = NULLIF(current_setting('app.current_company_id',true),'')::integer)
+          WITH CHECK (company_id = NULLIF(current_setting('app.current_company_id',true),'')::integer);
+      END IF;
+      IF NOT EXISTS (SELECT 1 FROM pg_policies
+        WHERE schemaname = current_schema()
+        AND tablename = 'accounting_cash_bank_matches'
+        AND policyname = 'cash_bank_matches_company_scope') THEN
+        CREATE POLICY cash_bank_matches_company_scope ON accounting_cash_bank_matches
+          USING (company_id = NULLIF(current_setting('app.current_company_id',true),'')::integer)
+          WITH CHECK (company_id = NULLIF(current_setting('app.current_company_id',true),'')::integer);
+      END IF;
+    END $bank_rls$;
+
   `);
 }
