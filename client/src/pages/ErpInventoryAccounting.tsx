@@ -9,7 +9,7 @@ import {Button} from "@/components/ui/button";
 import {Input} from "@/components/ui/input";
 import {Label} from "@/components/ui/label";
 
-type Kind="sale"|"purchase_order"|"offload"|"inventory_movement";
+type Kind="sale"|"purchase_order"|"offload"|"inventory_movement"|"credit_debit_note"|"transfer";
 type Status="posted"|"cost_mismatch"|"date_mismatch"|"missing"|"expected_periodic"|"review";
 interface Row {
   kind:Kind;sourceId:string;documentNumber:string;documentDate:string;
@@ -41,7 +41,8 @@ async function get<T>(url:string):Promise<T>{
 }
 function sourceLabel(k:Kind){
   return ({sale:"Sales / COGS",purchase_order:"Purchase / GIT",
-    offload:"Offload / stock-in",inventory_movement:"Inventory adjustment"} as const)[k];
+    offload:"Offload / stock-in",inventory_movement:"Inventory adjustment",
+    credit_debit_note:"Credit / debit note",transfer:"Stock transfer"} as const)[k];
 }
 export default function ErpInventoryAccounting(){
   const [asOf,setAsOf]=useState("");
@@ -129,7 +130,7 @@ export default function ErpInventoryAccounting(){
           <div><Label>Document kind</Label><select className="block h-9 rounded-md border bg-background px-2 text-sm"
             value={kind} onChange={e=>setKind(e.target.value as Kind|"all")}>
             <option value="all">All kinds</option>
-            {(["sale","purchase_order","offload","inventory_movement"] as Kind[]).map(k=>
+            {(["sale","purchase_order","offload","inventory_movement","credit_debit_note","transfer"] as Kind[]).map(k=>
               <option key={k} value={k}>{sourceLabel(k)}</option>)}
           </select></div>
           <div><Label>Status</Label><select className="block h-9 rounded-md border bg-background px-2 text-sm"
@@ -140,7 +141,7 @@ export default function ErpInventoryAccounting(){
           </select></div>
         </div>
         {current.summary.truncated&&<p className="text-sm text-amber-700 dark:text-amber-400">
-          The source audit is limited to the latest 250 documents per source kind.
+          The source audit is limited to the latest 250 documents per source kind, including credit/debit notes and transfers.
           Older documents are not certified by this preview.</p>}
         <div className="max-h-[650px] overflow-auto">
           <table className="w-full text-sm">
