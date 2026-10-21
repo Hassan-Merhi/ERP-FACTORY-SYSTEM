@@ -23,6 +23,7 @@ import {
   CostCenterAccounting,
   FiscalCloseReview,
   UnifiedAccountingDashboard,
+  UnifiedAccountingRollout,
   Accounts,
   HistoricalOpenings,
   Agents,
@@ -257,6 +258,7 @@ export function ErpRoutes({ user }: ErpRoutesProps) {
       {R("/accounting/cost-centers", isAdminOwnerOrDev && canAccess("accounts"), CostCenterAccounting)}
       {R("/accounting/fiscal-review", isAdminOwnerOrDev && canAccess("accounts"), FiscalCloseReview)}
       {R("/accounting/dashboard", isAdminOwnerOrDev && canAccess("accounts"), UnifiedAccountingDashboard)}
+      {R("/accounting/rollout", isAdminOwnerOrDev && canAccess("accounts"), UnifiedAccountingRollout)}
       {canAccess("accounts") ? (
         <Route path="/ledger-monthly/:accountId" component={LedgerMonthlySummary} />
       ) : (
