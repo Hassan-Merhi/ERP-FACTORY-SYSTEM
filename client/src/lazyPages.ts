@@ -17,6 +17,7 @@ export const InventoryHub = lazy(() => import("@/pages/InventoryHub"));
 export const StockHub = lazy(() => import("@/pages/StockHub"));
 export const Accounts = lazy(() => import("@/pages/Accounts"));
 export const AccountingOpenItems = lazy(() => import("@/pages/AccountingOpenItems"));
+export const CashBankReconciliation = lazy(() => import("@/pages/CashBankReconciliation"));
 export const HistoricalOpenings = lazy(() => import("@/pages/accounts/HistoricalOpenings"));
 export const Agents = lazy(() => import("@/pages/Agents"));
 export const Suppliers = lazy(() => import("@/pages/Suppliers"));
