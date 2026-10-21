@@ -2,7 +2,14 @@ import { logger } from "../../lib/logger";
 import type { Request, Response, NextFunction } from "express";
 import { db } from "../../db";
 import { storage } from "../../storage";
-import { vouchers, voucherEntries, ledgerAccounts, companies, purchaseOrders, intercompanyPosConfigs } from "@shared/schema";
+import {
+  vouchers,
+  voucherEntries,
+  ledgerAccounts,
+  companies,
+  purchaseOrders,
+  intercompanyPosConfigs,
+} from "@shared/schema";
 import { eq, and, or, sql, like, ilike, isNull, ne } from "drizzle-orm";
 import type { DatabaseOrTransaction, DbTransaction } from "../../db";
 import { postFactoryVoucherTx, usdLineAmounts } from "../../services/factory/factoryVoucherPosting";
@@ -279,10 +286,15 @@ async function syncIntercoParentVoucherOn(
     // allowed to identify one, with exact supplier, day, amount and subsidiary
     // receivable. This never creates a journal or guesses from a total alone.
     if (
-      !parentVoucher && verifiedParentCompanyId && verifiedSubsidiaryCompanyId &&
-      containerNumber && legacyPoMatch &&
-      Number.isInteger(legacyPoMatch.purchaseOrderId) && legacyPoMatch.purchaseOrderId > 0 &&
-      Number.isInteger(legacyPoMatch.supplierId) && legacyPoMatch.supplierId > 0
+      !parentVoucher &&
+      verifiedParentCompanyId &&
+      verifiedSubsidiaryCompanyId &&
+      containerNumber &&
+      legacyPoMatch &&
+      Number.isInteger(legacyPoMatch.purchaseOrderId) &&
+      legacyPoMatch.purchaseOrderId > 0 &&
+      Number.isInteger(legacyPoMatch.supplierId) &&
+      legacyPoMatch.supplierId > 0
     ) {
       const original = toMoney(legacyPoMatch.originalVoucherTotal);
       if (original.gt(0)) {
@@ -297,54 +309,67 @@ async function syncIntercoParentVoucherOn(
             .select({ id: purchaseOrders.id })
             .from(purchaseOrders)
             .innerJoin(vouchers, eq(purchaseOrders.voucherId, vouchers.id))
-            .where(and(
-              eq(purchaseOrders.companyId, verifiedSubsidiaryCompanyId),
-              ne(purchaseOrders.id, legacyPoMatch.purchaseOrderId),
-              eq(purchaseOrders.supplierId, legacyPoMatch.supplierId),
-              eq(vouchers.companyId, verifiedSubsidiaryCompanyId),
-              isNull(vouchers.deletedAt),
-              eq(vouchers.voucherDate, legacyPoMatch.originalVoucherDate),
-              eq(vouchers.totalAmount, originalAmount)
-            ))
+            .where(
+              and(
+                eq(purchaseOrders.companyId, verifiedSubsidiaryCompanyId),
+                ne(purchaseOrders.id, legacyPoMatch.purchaseOrderId),
+                eq(purchaseOrders.supplierId, legacyPoMatch.supplierId),
+                eq(vouchers.companyId, verifiedSubsidiaryCompanyId),
+                isNull(vouchers.deletedAt),
+                eq(vouchers.voucherDate, legacyPoMatch.originalVoucherDate),
+                eq(vouchers.totalAmount, originalAmount)
+              )
+            )
             .limit(1);
           if (sameValueSiblings.length) {
-            throw new Error(`Ambiguous unnamed parent journal for PO ${nums[0]}: another PO has the same supplier, date and amount.`);
+            throw new Error(
+              `Ambiguous unnamed parent journal for PO ${nums[0]}: another PO has the same supplier, date and amount.`
+            );
           }
 
           const candidates = await tx
             .select({
-              id: vouchers.id, totalAmount: vouchers.totalAmount,
+              id: vouchers.id,
+              totalAmount: vouchers.totalAmount,
               receivableAccountId: ledgerAccounts.id,
             })
             .from(vouchers)
             .innerJoin(voucherEntries, eq(voucherEntries.voucherId, vouchers.id))
             .innerJoin(ledgerAccounts, eq(ledgerAccounts.id, voucherEntries.ledgerAccountId))
-            .where(and(
-              eq(vouchers.companyId, verifiedParentCompanyId),
-              isNull(vouchers.deletedAt),
-              like(vouchers.voucherNumber, "JOURNAL-%"),
-              or(isNull(vouchers.description), eq(vouchers.description, "")),
-              eq(vouchers.voucherDate, legacyPoMatch.originalVoucherDate),
-              eq(vouchers.totalAmount, originalAmount),
-              eq(ledgerAccounts.companyId, verifiedParentCompanyId),
-              ilike(ledgerAccounts.name, `${subsidiary.name} Credit`),
-              eq(voucherEntries.debitAmount, originalAmount),
-              eq(voucherEntries.creditAmount, "0")
-            ))
+            .where(
+              and(
+                eq(vouchers.companyId, verifiedParentCompanyId),
+                isNull(vouchers.deletedAt),
+                like(vouchers.voucherNumber, "JOURNAL-%"),
+                or(isNull(vouchers.description), eq(vouchers.description, "")),
+                eq(vouchers.voucherDate, legacyPoMatch.originalVoucherDate),
+                eq(vouchers.totalAmount, originalAmount),
+                eq(ledgerAccounts.companyId, verifiedParentCompanyId),
+                ilike(ledgerAccounts.name, `${subsidiary.name} Credit`),
+                eq(voucherEntries.debitAmount, originalAmount),
+                eq(voucherEntries.creditAmount, "0")
+              )
+            )
             .limit(20);
           const verified = [] as typeof candidates;
           for (const candidate of candidates) {
-            const lines = await tx.select().from(voucherEntries)
-              .where(eq(voucherEntries.voucherId, candidate.id));
+            const lines = await tx.select().from(voucherEntries).where(eq(voucherEntries.voucherId, candidate.id));
             if (
-              lines.length === 2 && lines.every((line) => !line.narration?.trim()) &&
-              lines.some((line) =>
-                line.ledgerAccountId === candidate.receivableAccountId && !line.supplierId &&
-                toMoney(line.debitAmount).eq(original) && toMoney(line.creditAmount).isZero()
+              lines.length === 2 &&
+              lines.every((line) => !line.narration?.trim()) &&
+              lines.some(
+                (line) =>
+                  line.ledgerAccountId === candidate.receivableAccountId &&
+                  !line.supplierId &&
+                  toMoney(line.debitAmount).eq(original) &&
+                  toMoney(line.creditAmount).isZero()
               ) &&
-              lines.some((line) =>
-                line.supplierId === legacyPoMatch.supplierId && !line.ledgerAccountId &&
-                toMoney(line.creditAmount).eq(original) && toMoney(line.debitAmount).isZero()
+              lines.some(
+                (line) =>
+                  line.supplierId === legacyPoMatch.supplierId &&
+                  !line.ledgerAccountId &&
+                  toMoney(line.creditAmount).eq(original) &&
+                  toMoney(line.debitAmount).isZero()
               )
             ) {
               verified.push(candidate);
@@ -519,7 +544,13 @@ async function syncIntercoParentVoucherOn(
     const staleFreightEntries = !hasFreight
       ? parentEntries.filter((entry) => toMoney(entry.creditAmount).gt(0) && /^Freight - /i.test(entry.narration ?? ""))
       : [];
-    if (!totalMismatch && !freightEntryMissing && !freightNarrationMismatch && staleFreightEntries.length === 0 && !recoveredUnnamedLegacy) {
+    if (
+      !totalMismatch &&
+      !freightEntryMissing &&
+      !freightNarrationMismatch &&
+      staleFreightEntries.length === 0 &&
+      !recoveredUnnamedLegacy
+    ) {
       return { found: true, updated: false, voucherId: parentVoucher.id, amount: amountStr, oldAmount: oldAmountStr };
     }
 
@@ -534,7 +565,8 @@ async function syncIntercoParentVoucherOn(
       tx,
       { companyId: parentCompanyId, voucherIds: [parentVoucherId], reason: "interco-parent-voucher-resync" },
       async () => {
-        await tx.update(vouchers)
+        await tx
+          .update(vouchers)
           .set({
             totalAmount: amountStr,
             ...(recoveredUnnamedLegacy ? { description: `${containerNumber} - PO ${nums[0]}` } : {}),
@@ -542,7 +574,8 @@ async function syncIntercoParentVoucherOn(
           .where(eq(vouchers.id, parentVoucherId));
         if (recoveredUnnamedLegacy) {
           for (const entry of parentEntries) {
-            await tx.update(voucherEntries)
+            await tx
+              .update(voucherEntries)
               .set({ narration: `PO ${nums[0]} - Container ${containerNumber}` })
               .where(eq(voucherEntries.id, entry.id));
           }
