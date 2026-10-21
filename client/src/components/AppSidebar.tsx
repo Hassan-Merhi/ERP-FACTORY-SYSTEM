@@ -93,6 +93,7 @@ export const ERP_NAV_SECTIONS: NavSection[] = [
     items: [
       { title: "Accounts", url: "/accounts", icon: Wallet },
       { title: "Open Items", url: "/accounting/open-items", icon: Receipt },
+      { title: "Bank & Cash Reconciliation", url: "/accounting/cash-bank", icon: Calculator },
       { title: "Parties", url: "/parties", icon: Handshake },
       { title: "Payroll", url: "/payroll", icon: UserCheck },
     ],
@@ -208,7 +209,7 @@ export function useErpVisibleSections(user?: SidebarUser): {
     if (item.url === "/chat") return isDeveloper;
     if (item.url === "/item-market-analysis" && selectedCompany?.companyType !== "erp") return false;
     if (item.url === "/analytics" && isOwner) return false;
-    if (item.url === "/accounting/open-items" && !isAdmin && !isOwner) return false;
+    if ((item.url === "/accounting/open-items" || item.url === "/accounting/cash-bank") && !isAdmin && !isOwner) return false;
     if (item.url === "/settings" && isOwner) return false;
 
     if (isDeveloper || isAdmin || myErpPages?.fullAccess) return true;
