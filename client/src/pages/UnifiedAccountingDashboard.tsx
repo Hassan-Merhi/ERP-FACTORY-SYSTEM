@@ -58,7 +58,11 @@ interface Dashboard {
   topAssetAccounts:Line[];topLiabilities:Line[];topRevenueAccounts:Line[];
   topCostAccounts:Line[];topExpenses:Line[]
  };
- disclosures:string[];reportStatus:"PROVISIONAL_NOT_CERTIFIED"
+ disclosures:string[];reportStatus:"PROVISIONAL_NOT_CERTIFIED";
+ historicalFx:{ready:boolean;unresolvedEntryCount:number;unresolvedVoucherCount:number;
+  unresolvedLedgerOpeningCount:number;unresolvedBankOpeningCount:number;
+  unresolvedCustomerOpeningCount:number;unresolvedSupplierOpeningCount:number;
+  certified:false;caveat:string}
 }
 const money=(v:string)=>Number(v).toLocaleString(undefined,{
  minimumFractionDigits:2,maximumFractionDigits:2
@@ -344,6 +348,12 @@ export default function UnifiedAccountingDashboard(){
        value={x.performance.cashFlowClassificationDifferenceUsd}/>
       <div><p className="text-xs text-muted-foreground">Inventory posting cutover globally ready</p>
        <p className="font-semibold">{x.controls.perpetualPostingGloballyReady?"Yes":"No"}</p></div>
+      <div className="col-span-2 sm:col-span-4 text-sm">
+       Historical FX compatibility check: {x.historicalFx.ready?
+        "No tracked missing rows (not certified)":
+        x.historicalFx.unresolvedEntryCount+" source line(s) missing historical USD base"}.
+       <p className="text-xs text-muted-foreground">{x.historicalFx.caveat}</p>
+      </div>
      </div>
      {x.controls.blockers.map((w,i)=><p key={i} className="text-sm text-destructive">
       {w}</p>)}
