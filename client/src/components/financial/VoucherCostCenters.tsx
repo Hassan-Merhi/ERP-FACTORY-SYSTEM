@@ -193,15 +193,17 @@ export function VoucherCostCenters({ voucherId }: { voucherId: number }) {
   const companyId = selectedCompany?.id;
   const role = selectedCompany?.role || "";
   const canEdit = ["Admin", "Owner", "Developer"].includes(role);
+  const canRead = canEdit || role === "Manager";
   const [selected, setSelected] = useState<VoucherExpenseEntry | null>(null);
   const key = ["/api/cost-centers", companyId, "voucher", voucherId, "entries"];
   const { data, isLoading, isError, error, refetch } = useQuery<VoucherExpenseEntries>({
     queryKey: key,
     queryFn: () => readCostCenterApi<VoucherExpenseEntries>("/api/cost-centers/voucher/" + voucherId + "/entries"),
-    enabled: !!companyId && Number.isInteger(voucherId) && voucherId > 0,
+    enabled: canRead && !!companyId && Number.isInteger(voucherId) && voucherId > 0,
     staleTime: 30000,
   });
   const entries = data?.entries || [];
+  if (!canRead) return null;
   if (isLoading) return <p className="text-xs text-muted-foreground">Loading cost center allocations…</p>;
   if (isError) return <p role="alert" className="text-sm text-destructive">Cost center allocations unavailable: {apiError(error)}</p>;
   if (!entries.length) return null;
