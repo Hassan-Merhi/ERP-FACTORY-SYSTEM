@@ -226,6 +226,7 @@ export async function consolidatedAccountingReport(input:{
     if(remaining.gt("0.01"))reason="Cannot fully map paired elimination into distinct company ledger lines";
    }
   }
+  if(reason&&matched.gt(0))applied=decimal(0); // Failed pair: do not claim a partial hypothetical journal
   pairs.push({
    companyIds:pair.companyIds,companyNames:pair.companyNames,status:pair.status,
    receivables:money(decimal(pair.receivables)),payables:money(decimal(pair.payables)),
