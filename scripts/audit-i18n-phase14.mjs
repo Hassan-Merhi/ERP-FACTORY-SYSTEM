@@ -48,6 +48,7 @@ const compatibilityTranslationFiles = [
   "client/src/i18n/phase3RemainingTranslations.part27.ts",
   "client/src/i18n/phase3RemainingTranslations.part28.ts",
   "client/src/i18n/phase3RemainingTranslations.part29.ts",
+  "client/src/i18n/phase3RemainingTranslations.part30.ts",
   "client/src/i18n/supplierPartnerPhase4Translations.part1.ts",
   "client/src/i18n/supplierPartnerPhase4Translations.part2.ts",
   "client/src/i18n/supplierPartnerPhase4Translations.part3.ts",
@@ -109,6 +110,8 @@ const reviewedTechnicalValues = new Set([
   "fetchJson",
   // Retail workspaces use getJson as the same kind of local typed-request helper; it is never rendered.
   "getJson",
+  // Cost centers use readCostCenterApi<T>(...) the same way; it is never rendered.
+  "readCostCenterApi",
   // State-enum value used by ErpAccessBoundary; never rendered as user-facing copy.
   "error",
   // Prettier can split adjacent translated JSX expressions so the scanner sees closing/opening
