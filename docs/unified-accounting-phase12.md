@@ -61,7 +61,10 @@ PostgreSQL RLS including `FORCE ROW LEVEL SECURITY`:
    `cost_center_id`, company, six-decimal USD allocation, note, durable
    company-wide idempotency key, author/timestamp, soft-void timestamp,
    author and mandatory cancellation reason. Composite FK prevents linking
-   a center from another company.
+   a center from another company. A database write trigger also
+   verifies that `voucher_entries.company_id` matches the allocation's
+   company, preventing cross-company source-entry linking even when a caller
+   bypasses the application-level service.
 3. `accounting_cost_budgets`: month-start date, company and center,
    `income` / `cost_of_sales` / `expense` category, USD planned
    magnitude, `DRAFT` / `APPROVED` / `ARCHIVED` state, actual
@@ -235,7 +238,7 @@ registry.
 
 1. TypeScript, React, API and SQL build validity, route lazy-import and
    UI state transitions. Do not assume source review constitutes tests.
-2. PostgreSQL boot idempotency for all three tables, partial unique
+2. PostgreSQL boot idempotency for all three tables, the voucher-entry company ownership trigger, partial unique
    indexes, ownership composite FKs, FORCED RLS and cross-company
    selector/parent/entry/budget rejection.
 3. Parent tree from 2 to 5 levels, missing parent, deactivation, reparent
