@@ -10,6 +10,7 @@ import {
   vouchers,
 } from "@shared/schema";
 import { removeFactoryDaybookMirrorTx } from "../accounting/factoryDaybookMirrorRemoval";
+import { rentalPaymentVoucherSuffix } from "./rentalPostingIdentity";
 
 export type RentalModule = "PROPERTIES" | "ERP" | "FACTORY";
 
@@ -39,7 +40,7 @@ function hashPaymentGroupId(groupId: string): bigint {
 }
 
 function recognitionVoucherNumber(paymentDate: string, paymentGroupId: string): string {
-  return `ADV-REC-${paymentDate.replace(/-/g, "")}-${paymentGroupId.slice(-6)}`;
+  return `ADV-REC-${paymentDate.replace(/-/g, "")}-${rentalPaymentVoucherSuffix(paymentGroupId)}`;
 }
 
 export async function deleteRentalPaymentGroup(input: DeleteRentalPaymentInput): Promise<DeleteRentalPaymentResult> {
