@@ -59,7 +59,7 @@ The report uses the actual posted bank/cash account journal entries in the selec
 - Investing: single posted fixed-asset counterparty.
 - Financing: single posted loan/equity counterparty.
 - Unclassified: multiple or ambiguous counterparties, any netted transfer, unmatched provenance. The unclassified balance is part of actual cash movement; **it is never silently discarded**.
-- A separate cash-account movement is read from the **canonical bank/cash BalanceRow**'s period Dr−Cr. Its difference from voucher-level cash movement is reported and blocks certification if over USD 0.01, including cases where a source bank account is linked to an unconventional ledger account.
+- A separate cash-account movement is read from the **canonical bank/cash BalanceRow**'s period Dr−Cr, including explicit `bank_accounts.linked_ledger_id` relationships even when a linked ledger's displayed type is an ordinary asset. Its difference from voucher-level cash movement is reported and blocks certification if over USD 0.01. Neither cash account naming nor inferred labels can substitute for a verified bank link.
 - SQL aggregates across all source vouchers; only the displayed drilldown is limited to the latest 250, with clear truncation indication.
 - Currency/cash-equivalent policies, internal cash transfers, FX effects, dividends, investing capitalization, fixed-asset disposals, tax and interest categories must be independently certified before labeling the statement GAAP/IAS 7 compliant.
 
