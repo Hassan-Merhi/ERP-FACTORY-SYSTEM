@@ -104,6 +104,17 @@ describe("Factory Agent Ledger statement company scope", () => {
     expect(next).not.toHaveBeenCalled();
   });
 
+  it("requires Factory Accounts access for the factory-pinned Accounts list", () => {
+    const req = {
+      originalUrl: "/api/factory/accounts/list",
+      path: "/api/factory/accounts/list",
+      method: "GET",
+      query: {},
+      body: {},
+    } as unknown as Request;
+    expect(resolveFactoryBackendAccessRequirement(req)).toEqual({ pageKey: "factory/accounts" });
+  });
+
   it("gives every Factory Agent Ledger API an owner at the /api/factory access boundary", () => {
     for (const url of [
       "/api/factory/agents/accounts",
