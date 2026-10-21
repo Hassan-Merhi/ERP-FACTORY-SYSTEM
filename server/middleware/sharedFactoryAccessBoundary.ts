@@ -79,6 +79,10 @@ export async function resolveSharedFactoryRequirements(req: Request): Promise<Sh
 
   // Shared cash/bank reconciliation is an accounting surface even though
   // its endpoints are mounted once for ERP, Factory and Properties.
+  if (path.startsWith("/api/accounting/monetary-fx/")) {
+    return [page(ACCOUNTS_PAGE, "hide_tab_accounts_view")];
+  }
+
   if (path.startsWith("/api/accounting/cash-bank/")) {
     return [page(ACCOUNTS_PAGE, "hide_tab_accounts_view")];
   }
