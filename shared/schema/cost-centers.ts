@@ -159,3 +159,19 @@ export const costCenterSourceOverrides = pgTable("cost_center_source_overrides",
 
 export type CostCenterAutoRule = typeof costCenterAutoRules.$inferSelect;
 export type CostCenterSourceOverride = typeof costCenterSourceOverrides.$inferSelect;
+
+/** Nonblocking automatic allocation diagnostics; company-scoped by RLS. */
+export const costCenterAutoFailures = pgTable("cost_center_auto_failures", {
+  id: bigserial("id", { mode: "number" }).primaryKey(),
+  companyId: integer("company_id").notNull().references(() => companies.id, { onDelete: "restrict" }),
+  sourceKind: varchar("source_kind", { length: 24 }).notNull(),
+  sourceId: integer("source_id").notNull(),
+  lastError: text("last_error").notNull(),
+  failureCount: integer("failure_count").notNull().default(1),
+  lastSeen: timestamp("last_seen").notNull().defaultNow(),
+}, t => ({
+  companySourceUnique: uniqueIndex("cost_center_auto_failures_company_source_unique")
+    .on(t.companyId,t.sourceKind,t.sourceId),
+}));
+
+export type CostCenterAutoFailure = typeof costCenterAutoFailures.$inferSelect;
