@@ -104,8 +104,9 @@ export default function GroupConsolidationAccounting(){
    (!filter||[x.companyName,x.name,x.code,x.accountKind,x.financialClass]
      .some(s=>String(s??"").toLowerCase().includes(filter.toLowerCase()))))??[],
    [report.data,includeZero,filter]);
- const voucherLink=(id:number)=>origin==="/factory"?`/factory/voucher-detail/${id}`:
-   origin==="/properties"?`/properties/voucher-detail/${id}`:`/voucher-detail/${id}`;
+ // A voucher belongs to its own company. Opening its ID inside the user's
+ // selected company would show the wrong ledger or leak an unrelated voucher.
+ // Display reference and owner company; switch to that company to drill in.
  return <div className="space-y-5 p-3 sm:p-5" data-testid="group-accounting-consolidation">
   <div>
    <h1 className="text-2xl font-semibold">Intercompany & Consolidation</h1>
@@ -264,18 +265,20 @@ export default function GroupConsolidationAccounting(){
           <div className="text-muted-foreground">→ {companyName(t.toCompanyId)}</div></td>
          <td className="p-2 text-right tabular-nums">{t.amountSourceUsd}</td>
          <td className="p-2">{t.fromVoucherId?
-          <a href={voucherLink(t.fromVoucherId)} className="underline">
-           {t.fromVoucherNumber??"#"+t.fromVoucherId}</a>:"Missing"}
+          <span>{t.fromVoucherNumber??"#"+t.fromVoucherId}</span>:"Missing"}
           <div className="text-xs">Interco GL: {t.sourceSideUsd??"Missing"}</div></td>
          <td className="p-2">{t.toVoucherId?
-          <a href={voucherLink(t.toVoucherId)} className="underline">
-           {t.toVoucherNumber??"#"+t.toVoucherId}</a>:"Missing"}
+          <span>{t.toVoucherNumber??"#"+t.toVoucherId}</span>:"Missing"}
           <div className="text-xs">Interco GL: {t.destinationSideUsd??"Missing"}</div></td>
          <td className="p-2">{label(t.status)}<div className="text-xs text-muted-foreground">
           {t.explanation}</div></td>
         </tr>)}</tbody></table></div>
       <label className="flex items-center gap-2 text-sm"><input type="checkbox"
        checked={onlyIssues} onChange={e=>setOnlyIssues(e.target.checked)}/>Show only flagged transfers</label>
+      <p className="text-xs text-muted-foreground">
+       Voucher IDs belong to their own company. Switch to that authorized company
+       before opening its original voucher; this page never substitutes the active company's voucher.
+      </p>
       <p className="text-xs text-muted-foreground">{transfers.data.policy}</p>
      </>}
     </CardContent></Card>}
