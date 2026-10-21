@@ -85,7 +85,9 @@ export const costCenterAllocations = pgTable(
     rateConvention: varchar("rate_convention", { length: 30 }),
     costTreatment: varchar("cost_treatment", { length: 24 }).notNull().default("EXPENSE"),
     allocationOrigin: varchar("allocation_origin", { length: 12 }).notNull().default("MANUAL"),
-    autoRuleId: bigint("auto_rule_id", { mode: "number" }),
+    autoRuleId: bigint("auto_rule_id", { mode: "number" }).references(() => costCenterAutoRules.id, {
+      onDelete: "set null",
+    }),
     createdBy: text("created_by"),
     updatedBy: text("updated_by"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
@@ -125,6 +127,7 @@ export const costCenterAllocations = pgTable(
       "cost_center_allocations_rate_positive_check",
       sql`${t.historicalRate} IS NULL OR ${t.historicalRate} > 0`
     ),
+    origin: check("cost_center_allocations_origin_ck", sql`${t.allocationOrigin} IN ('AUTO','MANUAL')`),
     treatment: check(
       "cost_center_allocations_treatment_check",
       sql`${t.costTreatment} IN ('EXPENSE', 'INVENTORY_COST', 'OTHER')`
@@ -196,23 +199,58 @@ export const costCenterAutoRules = pgTable(
       foreignColumns: [costCenters.companyId, costCenters.id],
     }).onDelete("restrict"),
     lookupIdx: index("cost_center_auto_rules_lookup_idx").on(t.companyId, t.sourceKind, t.ledgerAccountId, t.active),
+    scopeCenterUnique: uniqueIndex("cost_center_auto_rules_scope_center_uidx").on(
+      t.companyId,
+      t.sourceKind,
+      sql`coalesce(${t.ledgerAccountId}, 0)`,
+      sql`coalesce(${t.sourceModule}, '')`,
+      sql`coalesce(${t.factoryTxType}, '')`,
+      t.costCenterId
+    ),
+    kindCheck: check(
+      "cost_center_auto_rules_kind_ck",
+      sql`(${t.sourceKind}='VOUCHER_ENTRY' AND ${t.ledgerAccountId} IS NOT NULL AND ${t.factoryTxType} IS NULL)
+        OR (${t.sourceKind}='FACTORY_DAYBOOK' AND ${t.ledgerAccountId} IS NULL AND ${t.sourceModule} IS NULL
+          AND ${t.factoryTxType} IN ('EXPENSE','OPERATING_EXPENSE','FACTORY_EXPENSE'))`
+    ),
+    percentCheck: check(
+      "cost_center_auto_rules_percent_ck",
+      sql`${t.allocationPercent} > 0 AND ${t.allocationPercent} <= 100`
+    ),
   })
 );
 
 /** A saved user allocation, including an empty split, permanently wins over automation. */
-export const costCenterSourceOverrides = pgTable("cost_center_source_overrides", {
-  id: bigserial("id", { mode: "number" }).primaryKey(),
-  companyId: integer("company_id")
-    .notNull()
-    .references(() => companies.id, { onDelete: "restrict" }),
-  voucherEntryId: integer("voucher_entry_id").references(() => voucherEntries.id, { onDelete: "cascade" }),
-  factoryDaybookEntryId: integer("factory_daybook_entry_id").references(() => factoryDaybookEntries.id, {
-    onDelete: "cascade",
-  }),
-  reason: text("reason").notNull(),
-  overriddenBy: text("overridden_by"),
-  overriddenAt: timestamp("overridden_at").notNull().defaultNow(),
-});
+export const costCenterSourceOverrides = pgTable(
+  "cost_center_source_overrides",
+  {
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    companyId: integer("company_id")
+      .notNull()
+      .references(() => companies.id, { onDelete: "restrict" }),
+    voucherEntryId: integer("voucher_entry_id").references(() => voucherEntries.id, { onDelete: "cascade" }),
+    factoryDaybookEntryId: integer("factory_daybook_entry_id").references(() => factoryDaybookEntries.id, {
+      onDelete: "cascade",
+    }),
+    reason: text("reason").notNull(),
+    overriddenBy: text("overridden_by"),
+    overriddenAt: timestamp("overridden_at").notNull().defaultNow(),
+  },
+  (t) => ({
+    voucherUnique: uniqueIndex("cost_center_source_overrides_voucher_uidx")
+      .on(t.companyId, t.voucherEntryId)
+      .where(sql`${t.voucherEntryId} IS NOT NULL`),
+    daybookUnique: uniqueIndex("cost_center_source_overrides_daybook_uidx")
+      .on(t.companyId, t.factoryDaybookEntryId)
+      .where(sql`${t.factoryDaybookEntryId} IS NOT NULL`),
+    oneSource: check(
+      "cost_center_source_overrides_one_source_ck",
+      sql`(${t.voucherEntryId} IS NOT NULL AND ${t.factoryDaybookEntryId} IS NULL)
+        OR (${t.voucherEntryId} IS NULL AND ${t.factoryDaybookEntryId} IS NOT NULL)`
+    ),
+    reasonCheck: check("cost_center_source_overrides_reason_ck", sql`length(btrim(${t.reason})) >= 3`),
+  })
+);
 
 export type CostCenterAutoRule = typeof costCenterAutoRules.$inferSelect;
 export type CostCenterSourceOverride = typeof costCenterSourceOverrides.$inferSelect;
@@ -232,11 +270,12 @@ export const costCenterAutoFailures = pgTable(
     lastSeen: timestamp("last_seen").notNull().defaultNow(),
   },
   (t) => ({
-    companySourceUnique: uniqueIndex("cost_center_auto_failures_company_source_unique").on(
+    companySourceUnique: unique("cost_center_auto_failures_company_source_unique").on(
       t.companyId,
       t.sourceKind,
       t.sourceId
     ),
+    kindCheck: check("cost_center_auto_failures_kind_ck", sql`${t.sourceKind} IN ('VOUCHER_ENTRY','FACTORY_DAYBOOK')`),
   })
 );
 
@@ -265,7 +304,8 @@ export const costCenterMonthlyBudgets = pgTable(
       columns: [t.companyId, t.costCenterId],
       foreignColumns: [costCenters.companyId, costCenters.id],
     }).onDelete("restrict"),
-    uniqueMonth: uniqueIndex("cost_center_monthly_budgets_unique").on(t.companyId, t.costCenterId, t.budgetMonth),
+    uniqueMonth: unique("cost_center_monthly_budgets_unique").on(t.companyId, t.costCenterId, t.budgetMonth),
+    firstDay: check("cost_center_monthly_budgets_first_day", sql`extract(day from ${t.budgetMonth}) = 1`),
     periodIdx: index("cost_center_monthly_budgets_period_idx").on(t.companyId, t.budgetMonth, t.costCenterId),
     amountCheck: check("cost_center_monthly_budgets_amount_check", sql`${t.amountUsd}>=0`),
   })
@@ -291,13 +331,30 @@ export const costCenterHistoricalBatches = pgTable(
     status: varchar("status", { length: 16 }).notNull().default("PREVIEW"),
     appliedBy: text("applied_by"),
     appliedAt: timestamp("applied_at"),
-    expiresAt: timestamp("expires_at").notNull(),
+    expiresAt: timestamp("expires_at")
+      .notNull()
+      .default(sql`(now() + interval '20 minutes')`),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
   (t) => ({
     companyDateIdx: index("cost_center_historical_batches_company_date_idx").on(t.companyId, t.createdAt),
     companyStatusIdx: index("cost_center_historical_batches_company_status_idx").on(t.companyId, t.status, t.expiresAt),
     companyIdUnique: unique("cost_center_historical_batches_company_id_uidx").on(t.companyId, t.id),
+    kindCheck: check(
+      "cost_center_historical_batches_source_kind_ck",
+      sql`${t.sourceKind} IN ('VOUCHER_ENTRY','FACTORY_DAYBOOK')`
+    ),
+    statusCheck: check("cost_center_historical_batches_status_ck", sql`${t.status} IN ('PREVIEW','APPLIED')`),
+    countCheck: check("cost_center_historical_batches_count_ck", sql`${t.candidateCount} BETWEEN 1 AND 100`),
+    amountsCheck: check(
+      "cost_center_historical_batches_amounts_ck",
+      sql`${t.candidateNativeTotal} > 0 AND ${t.candidateUsdTotal} >= 0`
+    ),
+    appliedCheck: check(
+      "cost_center_historical_batches_applied_ck",
+      sql`(${t.status}='APPLIED' AND ${t.appliedAt} IS NOT NULL AND ${t.appliedBy} IS NOT NULL)
+        OR (${t.status}='PREVIEW' AND ${t.appliedAt} IS NULL AND ${t.appliedBy} IS NULL)`
+    ),
   })
 );
 
@@ -327,6 +384,16 @@ export const costCenterHistoricalBatchItems = pgTable(
       foreignColumns: [costCenterHistoricalBatches.companyId, costCenterHistoricalBatches.id],
     }).onDelete("restrict"),
     companyBatchIdx: index("cost_center_historical_batch_items_company_batch_idx").on(t.companyId, t.batchId),
+    sourceUnique: unique("cost_center_historical_batch_items_source_unique").on(t.batchId, t.sourceKind, t.sourceId),
+    kindCheck: check(
+      "cost_center_historical_batch_items_kind_ck",
+      sql`${t.sourceKind} IN ('VOUCHER_ENTRY','FACTORY_DAYBOOK')`
+    ),
+    amountsCheck: check(
+      "cost_center_historical_batch_items_amounts_ck",
+      sql`${t.sourceNative} > 0 AND ${t.sourceUsd} >= 0 AND ${t.allocatedNative} > 0
+        AND ${t.allocatedNative} <= ${t.sourceNative} AND ${t.allocatedUsd} >= 0 AND ${t.allocatedUsd} <= ${t.sourceUsd}`
+    ),
   })
 );
 

@@ -36,6 +36,8 @@ const TRIGGERS = [
   "cost_center_auto_voucher_finalize_trg",
   "cost_center_monthly_budgets_guard_trg",
   "cost_center_historical_batch_guard_trg",
+  "cost_center_voucher_entry_delete_trg",
+  "cost_center_factory_daybook_delete_trg",
 ];
 const FUNCTIONS = [
   "cost_center_allocation_eligibility_guard",
@@ -43,6 +45,9 @@ const FUNCTIONS = [
   "cost_center_auto_apply_factory_daybook",
   "cost_center_auto_record_failure",
   "cost_center_historical_batch_guard",
+  "cost_center_voucher_in_reversal_pair",
+  "cost_center_clear_stale_source",
+  "cost_center_source_delete_notice",
 ];
 const MIGRATION_TAGS = [
   "20261021_001_cost_centers_phase1",

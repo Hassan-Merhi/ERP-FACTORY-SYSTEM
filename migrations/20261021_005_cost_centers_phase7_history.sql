@@ -62,10 +62,18 @@ CREATE INDEX IF NOT EXISTS cost_center_historical_batch_items_company_batch_idx
 -- A record from another company cannot be attached to this batch.
 CREATE UNIQUE INDEX IF NOT EXISTS cost_center_historical_batches_company_id_uidx
   ON cost_center_historical_batches(company_id,id);
-ALTER TABLE cost_center_historical_batch_items
-  ADD CONSTRAINT cost_center_historical_batch_items_company_batch_fk
-  FOREIGN KEY (company_id,batch_id)
-  REFERENCES cost_center_historical_batches(company_id,id) ON DELETE RESTRICT;
+DO $cc_history_company_fk$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname='cost_center_historical_batch_items_company_batch_fk'
+  ) THEN
+    ALTER TABLE cost_center_historical_batch_items
+      ADD CONSTRAINT cost_center_historical_batch_items_company_batch_fk
+      FOREIGN KEY (company_id,batch_id)
+      REFERENCES cost_center_historical_batches(company_id,id) ON DELETE RESTRICT;
+  END IF;
+END
+$cc_history_company_fk$;
 
 ALTER TABLE cost_center_historical_batches ENABLE ROW LEVEL SECURITY;
 ALTER TABLE cost_center_historical_batches FORCE ROW LEVEL SECURITY;

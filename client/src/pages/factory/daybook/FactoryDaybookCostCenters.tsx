@@ -17,7 +17,6 @@ import { CostCenterEntryEditor, VoucherCostCenters } from "@/components/financia
 import type { DaybookEntry } from "./types";
 
 const STANDALONE_EXPENSE_TYPES = new Set(["EXPENSE", "OPERATING_EXPENSE", "FACTORY_EXPENSE"]);
-const MIRRORED_TABLES = new Set(["voucher", "vouchers", "voucher_entries", "factory_pos_sales"]);
 const API_BASE = "/api/factory/cost-centers";
 
 export function FactoryDaybookCostCenters({ entry }: { entry: DaybookEntry }) {
@@ -29,7 +28,10 @@ export function FactoryDaybookCostCenters({ entry }: { entry: DaybookEntry }) {
   const standalone =
     entry.id > 0 &&
     STANDALONE_EXPENSE_TYPES.has(entry.txType) &&
-    !MIRRORED_TABLES.has((entry.referenceTable || "").toLowerCase());
+    // Same rule as the API and database: any reference means the expense is
+    // recognized elsewhere (voucher, POS sale, document) and is tagged there.
+    !(entry.referenceTable || "").trim() &&
+    entry.referenceId == null;
   const [editing, setEditing] = useState(false);
   const [revision, setRevision] = useState(0);
   const { data, isLoading, isError } = useQuery<SourceCostCenterAllocation>({

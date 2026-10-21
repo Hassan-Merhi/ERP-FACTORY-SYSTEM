@@ -41,6 +41,10 @@ function money(v: string | number, currency: string) {
 function apiError(e: unknown): string {
   return e instanceof Error ? e.message : "Unable to save cost-center allocation";
 }
+/** Before the reviewed cost-center migrations are applied the API answers 503. */
+function notInstalled(e: unknown): boolean {
+  return (e as { code?: unknown } | null)?.code === "COST_CENTERS_NOT_INSTALLED";
+}
 function emptySplit(): DraftSplit {
   return { costCenterId: "", amountNative: "" };
 }
@@ -354,6 +358,7 @@ export function VoucherCostCenters({ voucherId }: { voucherId: number }) {
   const entries = data?.entries || [];
   if (!canRead) return null;
   if (isLoading) return <p className="text-xs text-muted-foreground">Loading cost center allocations…</p>;
+  if (isError && notInstalled(error)) return null;
   if (isError)
     return (
       <p role="alert" className="text-sm text-destructive">

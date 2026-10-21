@@ -6,12 +6,14 @@ import type { Express, Request, Response } from "express";
 import type { PoolClient } from "pg";
 import { z } from "zod";
 import { pool } from "../db";
+import { logger } from "../lib/logger";
 import { requireAuth } from "../auth";
 import {
   ActiveCompanyPermissionContextError,
   getActiveCompanyPermissionContext,
 } from "../services/security/activeCompanyPermissionContext";
 import { toMoney, sumMoney } from "../lib/money";
+import { reversalPairSql, sourceCte } from "./costCenterReportingRoutes";
 
 const EDIT_ROLES = new Set(["Admin", "Owner", "Developer"]);
 const READ_ROLES = new Set(["Admin", "Owner", "Developer", "Manager"]);
@@ -108,11 +110,18 @@ function sendError(res: Response, error: unknown) {
   }
   if (error && typeof error === "object") {
     const code = String((error as { code?: string }).code || "");
+    if (code === "42P01") {
+      return res
+        .status(503)
+        .json({ message: "Cost centers are not installed yet", code: "COST_CENTERS_NOT_INSTALLED" });
+    }
+    if (code === "22007" || code === "22008") return res.status(400).json({ message: "Invalid date" });
     if (code === "23505") return res.status(409).json({ message: "Cost center or allocation already exists" });
     if (code === "23503" || code === "23514" || code === "P0001") {
       return res.status(409).json({ message: "Cost center hierarchy or source allocation is invalid" });
     }
   }
+  logger.error("Cost center allocation request failed", { module: "cost-centers", error });
   return res.status(500).json({ message: "Cost center operation failed" });
 }
 async function transaction<T>(run: (client: PoolClient) => Promise<T>): Promise<T> {
@@ -164,6 +173,14 @@ async function centerInCompany(client: PoolClient, companyId: number, id: number
   if (!result.rows.length) throw new ApiError(404, "Cost center not found");
   return result.rows[0] as Record<string, unknown>;
 }
+/** Standalone Factory daybook expenses and factory inventory costs exist only in Factory Mode. */
+function assertPrefixScope(prefix: string, kind: SourceKind, treatments: readonly string[] = []) {
+  if (prefix === "/api/factory/cost-centers") return;
+  if (kind === "factory_daybook")
+    throw new ApiError(403, "Factory Daybook allocations are available only in Factory Mode");
+  if (treatments.includes("INVENTORY_COST"))
+    throw new ApiError(403, "Factory inventory cost allocations are available only in Factory Mode");
+}
 function sourceColumn(kind: SourceKind) {
   return kind === "voucher_entry" ? "voucher_entry_id" : "factory_daybook_entry_id";
 }
@@ -179,8 +196,8 @@ async function sourceInCompany(client: PoolClient, companyId: number, kind: Sour
         'la.account_type AS "accountType", la.code AS "accountCode",',
         've.debit_amount::text AS "debitAmount", ve.credit_amount::text AS "creditAmount",',
         'v.voucher_number AS "voucherNumber",',
-        'v.source_module AS "sourceModule", v.optional, v.reversal_of_voucher_id AS "reversalOfVoucherId",',
-        'EXISTS (SELECT 1 FROM vouchers rev WHERE rev.reversal_of_voucher_id=v.id AND rev.deleted_at IS NULL) AS "wasReversed"',
+        'v.source_module AS "sourceModule", v.optional,',
+        reversalPairSql("v") + ' AS "inReversalPair"',
         "FROM voucher_entries ve JOIN vouchers v ON v.id=ve.voucher_id",
         "LEFT JOIN ledger_accounts la ON la.id=ve.ledger_account_id AND la.company_id=ve.company_id",
         "WHERE ve.id=$1 AND ve.company_id=$2 AND v.company_id=$2 AND v.deleted_at IS NULL",
@@ -198,8 +215,7 @@ async function sourceInCompany(client: PoolClient, companyId: number, kind: Sour
       String(row.sourceModule || "")
         .toUpperCase()
         .startsWith("INTERCOMPANY") ||
-      row.reversalOfVoucherId != null ||
-      row.wasReversed
+      row.inReversalPair
     ) {
       throw new ApiError(409, "Protected, migrated, or optional vouchers cannot be reallocated");
     }
@@ -473,8 +489,7 @@ function registerCostCenterPrefix(app: Express, prefix: string) {
           "AND v.voucher_number NOT LIKE 'GC-%' AND v.voucher_number NOT LIKE 'MIG-%'",
           "AND COALESCE(v.source_module,'') <> 'SP_MIGRATION_READONLY'",
           "AND upper(COALESCE(v.source_module,'')) NOT LIKE 'INTERCOMPANY%'",
-          "AND v.reversal_of_voucher_id IS NULL",
-          "AND NOT EXISTS (SELECT 1 FROM vouchers rev WHERE rev.reversal_of_voucher_id=v.id AND rev.deleted_at IS NULL)",
+          "AND NOT " + reversalPairSql("v"),
           "AND (upper(btrim(la.account_type)) IN ('EXPENSE','DIRECT EXPENSE','INDIRECT EXPENSE')",
           "OR ($3::boolean AND upper(btrim(la.account_type))='ASSET'",
           "AND la.code IN ('FACTORY_RAW_MATERIAL_STOCK','FACTORY_WIP','FACTORY_FINISHED_GOODS')",
@@ -495,9 +510,11 @@ function registerCostCenterPrefix(app: Express, prefix: string) {
     try {
       const { companyId } = await identity(req, false);
       const kind = parse(sourceKinds, req.params.sourceType);
+      assertPrefixScope(prefix, kind);
       const id = queryId(req.params.sourceId);
       const value = await transaction(async (client) => {
         const source = await sourceInCompany(client, companyId, kind, id);
+        sourceTreatment(source, kind);
         const splits = await splitList(client, companyId, kind, id);
         const allocatedNative = sumMoney(splits.map((x) => x.amountNative)).toFixed(6);
         const allocatedBase = sumMoney(splits.map((x) => x.amountBase)).toFixed(6);
@@ -527,6 +544,11 @@ function registerCostCenterPrefix(app: Express, prefix: string) {
       const kind = parse(sourceKinds, req.params.sourceType);
       const sourceId = queryId(req.params.sourceId);
       const input = parse(replaceBody, req.body);
+      assertPrefixScope(
+        prefix,
+        kind,
+        input.splits.map((s) => s.costTreatment)
+      );
       if (new Set(input.splits.map((s) => s.costCenterId)).size !== input.splits.length) {
         throw new ApiError(400, "Duplicate cost center in split");
       }
@@ -732,25 +754,21 @@ function registerCostCenterPrefix(app: Express, prefix: string) {
       }
       const result = await transaction(async (client) => {
         const center = await centerInCompany(client, companyId, id);
+        // Same eligibility, reversal exclusion and credit sign as the reports,
+        // so the center page reconciles with the budget/expense report.
         const entries = await client.query(
-          [
-            'SELECT a.id, v.id AS "voucherId", a.voucher_entry_id AS "voucherEntryId",',
-            'a.factory_daybook_entry_id AS "factoryDaybookEntryId",',
-            'a.amount_native::text AS "amountNative",a.amount_base::text AS "amountBase",',
-            'a.currency,a.cost_treatment AS "costTreatment",a.allocation_origin AS "allocationOrigin",',
-            'COALESCE(v.effective_date,v.voucher_date,f.tx_date) AS "sourceDate",',
-            'v.voucher_number AS "voucherNumber",f.tx_type AS "factoryTxType"',
-            "FROM cost_center_allocations a",
-            "LEFT JOIN voucher_entries ve ON ve.id=a.voucher_entry_id",
-            "LEFT JOIN vouchers v ON v.id=ve.voucher_id AND v.company_id=a.company_id",
-            "LEFT JOIN factory_daybook_entries f ON f.id=a.factory_daybook_entry_id AND f.company_id=a.company_id",
-            "WHERE a.company_id=$1 AND a.cost_center_id=$2 AND (a.voucher_entry_id IS NULL OR",
-            "(v.id IS NOT NULL AND v.deleted_at IS NULL AND v.optional=false))",
-            "AND ($5::date IS NULL OR COALESCE(v.effective_date,v.voucher_date,f.tx_date) >= $5::date)",
-            "AND ($6::date IS NULL OR COALESCE(v.effective_date,v.voucher_date,f.tx_date) <= $6::date)",
-            "ORDER BY COALESCE(v.effective_date,v.voucher_date,f.tx_date) DESC,a.id DESC LIMIT $3 OFFSET $4",
-          ].join(" "),
-          [companyId, id, limit, offset, fromDate || null, toDate || null]
+          sourceCte +
+            [
+              ' SELECT s.allocation_id AS id,s.voucher_id AS "voucherId",s.voucher_entry_id AS "voucherEntryId",',
+              's.factory_daybook_entry_id AS "factoryDaybookEntryId",',
+              's.signed_native::text AS "amountNative",s.signed_usd::text AS "amountBase",',
+              's.currency,s.cost_treatment AS "costTreatment",s.allocation_origin AS "allocationOrigin",',
+              's.source_date::text AS "sourceDate",s.voucher_number AS "voucherNumber",f.tx_type AS "factoryTxType"',
+              "FROM filtered s LEFT JOIN factory_daybook_entries f ON f.id=s.factory_daybook_entry_id",
+              "AND f.company_id=s.company_id",
+              "ORDER BY s.source_date DESC,s.allocation_id DESC LIMIT $7 OFFSET $8",
+            ].join(" "),
+          [[companyId], fromDate || "0001-01-01", toDate || "9999-12-31", id, null, "ALL", limit, offset]
         );
         return { center, activity: entries.rows };
       });
@@ -766,17 +784,10 @@ function registerCostCenterPrefix(app: Express, prefix: string) {
       const result = await transaction(async (client) => {
         const center = await centerInCompany(client, companyId, id);
         const grouped = await client.query(
-          [
-            'SELECT a.cost_treatment AS "costTreatment",',
-            'sum(a.amount_base)::text AS "amountBase",count(*)::int AS "entryCount"',
-            "FROM cost_center_allocations a",
-            "LEFT JOIN voucher_entries ve ON ve.id=a.voucher_entry_id",
-            "LEFT JOIN vouchers v ON v.id=ve.voucher_id AND v.company_id=a.company_id",
-            "WHERE a.company_id=$1 AND a.cost_center_id=$2 AND",
-            "(a.voucher_entry_id IS NULL OR (v.id IS NOT NULL AND v.deleted_at IS NULL AND v.optional=false))",
-            "GROUP BY a.cost_treatment ORDER BY a.cost_treatment",
-          ].join(" "),
-          [companyId, id]
+          sourceCte +
+            ' SELECT cost_treatment AS "costTreatment",sum(signed_usd)::text AS "amountBase",' +
+            ' count(*)::int AS "entryCount" FROM filtered GROUP BY cost_treatment ORDER BY cost_treatment',
+          [[companyId], "0001-01-01", "9999-12-31", id, null, "ALL"]
         );
         return { center, baseCurrency: "USD", byTreatment: grouped.rows };
       });

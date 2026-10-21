@@ -8,6 +8,7 @@ import type { PoolClient } from "pg";
 import PDFDocument from "pdfkit";
 import ExcelJS from "exceljs";
 import { pool } from "../db";
+import { logger } from "../lib/logger";
 import { requireAuth } from "../auth";
 import {
   getActiveCompanyPermissionContext,
@@ -101,6 +102,9 @@ function fail(res: Response, e: unknown) {
     return res.status(e.status).json({ message: e.message, code: e.code });
   if (e && typeof e === "object" && String((e as { code?: string }).code) === "23514")
     return res.status(409).json({ message: "Invalid budget amount or period" });
+  if (e && typeof e === "object" && String((e as { code?: string }).code) === "42P01")
+    return res.status(503).json({ message: "Cost centers are not installed yet", code: "COST_CENTERS_NOT_INSTALLED" });
+  logger.error("Cost center reporting request failed", { module: "cost-centers", error: e });
   return res.status(500).json({ message: "Cost center report unavailable" });
 }
 async function transactional<T>(handler: (c: PoolClient) => Promise<T>): Promise<T> {
@@ -128,7 +132,28 @@ async function transactional<T>(handler: (c: PoolClient) => Promise<T>): Promise
  * Never join or aggregate raw factory operations, unfinalized containers or
  * stock transfers as a second P&L event.
  */
-const sourceCte = [
+/**
+ * True when voucher `alias` is either half of a reversal pair. Two linkages
+ * exist: correction reversals set vouchers.reversal_of_voucher_id, while the
+ * exact-reversal endpoint links through its posting identity
+ * (accounting_posting_requests source_type 'voucher-reversal', source_id =
+ * original id). Both halves are excluded so a reversed expense nets to zero
+ * everywhere, including in cost-center attribution.
+ */
+export function reversalPairSql(alias: string): string {
+  const v = alias;
+  return [
+    "(" + v + ".reversal_of_voucher_id IS NOT NULL",
+    "OR EXISTS (SELECT 1 FROM vouchers rev WHERE rev.reversal_of_voucher_id=" + v + ".id AND rev.deleted_at IS NULL)",
+    "OR EXISTS (SELECT 1 FROM accounting_posting_requests apr WHERE apr.voucher_id=" + v + ".id",
+    "AND apr.source_type='voucher-reversal')",
+    "OR EXISTS (SELECT 1 FROM accounting_posting_requests apr JOIN vouchers rev ON rev.id=apr.voucher_id",
+    "AND rev.deleted_at IS NULL WHERE apr.company_id=" + v + ".company_id AND apr.source_type='voucher-reversal'",
+    "AND apr.source_id=" + v + ".id::text))",
+  ].join(" ");
+}
+
+export const sourceCte = [
   "WITH source_rows AS (",
   " SELECT a.company_id,a.cost_center_id,a.cost_treatment,a.allocation_origin,",
   " ve.ledger_account_id AS account_id,COALESCE(l.name,'') AS account_name,",
@@ -145,8 +170,7 @@ const sourceCte = [
   " JOIN vouchers v ON v.id=ve.voucher_id AND v.company_id=a.company_id",
   " JOIN ledger_accounts l ON l.id=ve.ledger_account_id AND l.company_id=a.company_id",
   " WHERE a.company_id=ANY($1::integer[]) AND v.deleted_at IS NULL AND v.optional=false",
-  " AND v.reversal_of_voucher_id IS NULL",
-  " AND NOT EXISTS (SELECT 1 FROM vouchers rev WHERE rev.reversal_of_voucher_id=v.id AND rev.deleted_at IS NULL)",
+  " AND NOT " + reversalPairSql("v"),
   " AND upper(COALESCE(v.source_module,'')) NOT LIKE 'INTERCOMPANY%' AND COALESCE(v.source_module,'') <> 'SP_MIGRATION_READONLY'",
   " AND v.voucher_number NOT LIKE 'GC-%' AND v.voucher_number NOT LIKE 'MIG-%'",
   " AND (a.cost_treatment='EXPENSE' AND upper(btrim(l.account_type)) IN",
@@ -203,9 +227,7 @@ async function unallocatedExpenses(scope: Scope, filters: Filters) {
     " WHERE ve.company_id=ANY($1::int[])",
     " AND COALESCE(v.effective_date,v.voucher_date) BETWEEN $2::date AND $3::date",
     " AND ($4::int IS NULL OR ve.ledger_account_id=$4)",
-    " AND v.deleted_at IS NULL AND v.optional=false AND v.reversal_of_voucher_id IS NULL",
-    " AND NOT EXISTS (SELECT 1 FROM vouchers rev WHERE rev.reversal_of_voucher_id=v.id",
-    " AND rev.deleted_at IS NULL)",
+    " AND v.deleted_at IS NULL AND v.optional=false AND NOT " + reversalPairSql("v"),
     " AND upper(COALESCE(v.source_module,'')) NOT LIKE 'INTERCOMPANY%' AND COALESCE(v.source_module,'') <> 'SP_MIGRATION_READONLY'",
     " AND v.voucher_number NOT LIKE 'GC-%' AND v.voucher_number NOT LIKE 'MIG-%'",
     " AND upper(btrim(l.account_type)) IN ('EXPENSE','DIRECT EXPENSE','INDIRECT EXPENSE')",
@@ -364,7 +386,7 @@ async function summaryData(scope: Scope, filters: Filters) {
         ...c,
         ...a,
         variance: toMoney(a.expense).minus(a.budget).toFixed(6),
-        utilization: a.budget === "0" ? null : toMoney(a.expense).div(a.budget).times(100).toFixed(2),
+        utilization: toMoney(a.budget).isZero() ? null : toMoney(a.expense).div(a.budget).times(100).toFixed(2),
       };
     });
   const departments = new Map<

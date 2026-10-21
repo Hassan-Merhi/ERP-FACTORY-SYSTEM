@@ -10,12 +10,14 @@ import type { Express, Request, Response } from "express";
 import type { PoolClient } from "pg";
 import { z } from "zod";
 import { pool } from "../db";
+import { logger } from "../lib/logger";
 import { requireAuth } from "../auth";
 import {
   getActiveCompanyPermissionContext,
   ActiveCompanyPermissionContextError,
 } from "../services/security/activeCompanyPermissionContext";
-import { sumMoney, toMoney } from "../lib/money";
+import { MoneyDecimal, sumMoney, toMoney } from "../lib/money";
+import { reversalPairSql } from "./costCenterReportingRoutes";
 
 type SourceKind = "VOUCHER_ENTRY" | "FACTORY_DAYBOOK";
 type Entry = {
@@ -97,9 +99,14 @@ function errorResponse(res: Response, e: unknown) {
     return res.status(e.status).json({ message: e.message, code: e.code });
   if (e && typeof e === "object") {
     const code = String((e as { code?: string }).code || "");
+    if (code === "42P01")
+      return res
+        .status(503)
+        .json({ message: "Cost centers are not installed yet", code: "COST_CENTERS_NOT_INSTALLED" });
     if (["23503", "23505", "23514", "P0001", "40001"].includes(code))
       return res.status(409).json({ message: "Historical allocation conflicts with a changed or protected source" });
   }
+  logger.error("Cost center historical request failed", { module: "cost-centers", error: e });
   return res.status(500).json({ message: "Historical cost center operation failed" });
 }
 function validDate(value: string): boolean {
@@ -154,9 +161,7 @@ function sourceSql(kind: SourceKind): string {
       " FROM voucher_entries ve JOIN vouchers v ON v.id=ve.voucher_id AND v.company_id=ve.company_id",
       " JOIN ledger_accounts l ON l.id=ve.ledger_account_id AND l.company_id=ve.company_id",
       " WHERE ve.company_id=$1 AND v.deleted_at IS NULL AND v.optional=false",
-      " AND v.reversal_of_voucher_id IS NULL",
-      " AND NOT EXISTS(SELECT 1 FROM vouchers rv WHERE rv.reversal_of_voucher_id=v.id",
-      " AND rv.deleted_at IS NULL)",
+      " AND NOT " + reversalPairSql("v"),
       " AND v.voucher_number NOT LIKE 'GC-%' AND v.voucher_number NOT LIKE 'MIG-%'",
       " AND upper(COALESCE(v.source_module,'')) NOT LIKE 'INTERCOMPANY%'",
       " AND COALESCE(v.source_module,'') <> 'SP_MIGRATION_READONLY'",
@@ -230,8 +235,9 @@ function calculate(rows: Entry[], splits: PlanSplit[]) {
       throw new HistoryError(409, "Historical currency or source FX evidence is invalid; source not modified");
     const allocations = splits.map((s) => ({
       costCenterId: s.costCenterId,
-      amountNative: native.times(s.percent).div(100).toDecimalPlaces(6).toFixed(6),
-      amountUsd: usd.times(s.percent).div(100).toDecimalPlaces(6).toFixed(6),
+      // Round down so the splits of a 100% plan can never exceed the source.
+      amountNative: native.times(s.percent).div(100).toDecimalPlaces(6, MoneyDecimal.ROUND_DOWN).toFixed(6),
+      amountUsd: usd.times(s.percent).div(100).toDecimalPlaces(6, MoneyDecimal.ROUND_DOWN).toFixed(6),
     }));
     if (
       allocations.some((s) => toMoney(s.amountNative).lte(0)) ||
@@ -415,8 +421,8 @@ function registerPrefix(app: Express, prefix: string) {
         await client.query(
           "INSERT INTO cost_center_historical_batches" +
             "(id,company_id,created_by,source_kind,request_snapshot,source_snapshot," +
-            "source_hash,candidate_count,candidate_native_total,candidate_usd_total)" +
-            " VALUES($1,$2,$3,$4,$5::jsonb,$6::jsonb,$7,$8,$9,$10)",
+            "source_hash,candidate_count,candidate_native_total,candidate_usd_total,expires_at)" +
+            " VALUES($1,$2,$3,$4,$5::jsonb,$6::jsonb,$7,$8,$9,$10,now() + interval '20 minutes')",
           [
             batchId,
             current.companyId,
