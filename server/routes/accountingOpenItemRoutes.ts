@@ -49,14 +49,14 @@ function respondError(res:Response,error:unknown){
   return res.status(500).json({code:"OPEN_ITEM_ERROR",message:getErrorMessage(error)});
 }
 export function registerAccountingOpenItemRoutes(app:Express):void{
-  app.get("/api/accounting/open-items",requireAuth,async(req:Request,res:Response)=>{
+  app.get("/api/accounting/open-items",requireAuth,requireRole("Admin","Owner","Developer"),async(req:Request,res:Response)=>{
     try{
       const c=company(req);
       const t=target.parse(req.query);
       return res.json(await db.transaction(tx=>loadPartyOpenItemsTx(tx,{...t,companyId:c})));
     }catch(error){return respondError(res,error);}
   });
-  app.get("/api/accounting/open-items/rentals",requireAuth,async(req:Request,res:Response)=>{
+  app.get("/api/accounting/open-items/rentals",requireAuth,requireRole("Admin","Owner","Developer"),async(req:Request,res:Response)=>{
     try{
       const c=company(req),t=rentTarget.parse(req.query);
       const asOfDate=t.asOfDate??await companyBusinessDate(c);
