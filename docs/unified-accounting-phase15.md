@@ -117,7 +117,6 @@ The gate covers only new unified-accounting metadata API mutations:
 - Phase 4 bank/cash statement import, manual review and match/cancellation.
   Multipart **preview** is allowed because it doesn't save the file.
 - Phase 8 rental expense source attribution and cancellation.
-- Phase 12 cost-center, allocation and budget metadata operations.
 - Phase 13 finance signoff/policy metadata changes.
 
 **Financial posting is NOT enabled in any Phase 15 mode.** The following
@@ -264,8 +263,10 @@ Factory inventory cost. Claude must perform all those independently.
 - Group consolidation excludes intercompany balances/transactions once
   elimination source evidence is certified — don't report single-company
   net position as consolidated group cash.
-- Cost center budgets and tagged actuals never write, duplicate or
-  revalue the original accounting voucher.
+- Phase 12 (cost centers) is provided by main's Cost Centers module
+  (`/cost-centers`, `/factory/cost-centers`); this branch's separate
+  analytic cost-center feature was removed at the owner's decision so the
+  group has one cost-center system.
 - Fiscal close, period locks and immutable audit history preserved;
   `POST /api/accounting/fiscal-review/close` remains locked in Phase 15.
 - Default no rollout row is `READ_ONLY`; tests for 401/403/423/503,

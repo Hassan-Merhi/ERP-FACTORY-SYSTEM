@@ -54,7 +54,6 @@ export const PROPERTIES_NAV_SECTIONS: NavSection[] = [
       { title: "Intercompany & Consolidation", url: "/properties/accounting/consolidation", icon: Landmark },
       { title: "Historical Accounting", url: "/properties/accounting/history", icon: Clock },
       { title: "Financial Statements", url: "/properties/accounting/statements", icon: FileText },
-      { title: "Cost Centers & Budgets", url: "/properties/accounting/cost-centers", icon: Landmark },
       { title: "Fiscal Closing & Audit", url: "/properties/accounting/fiscal-review", icon: Landmark },
       { title: "Unified Accounting Dashboard", url: "/properties/accounting/dashboard", icon: Landmark },
       { title: "Unified Accounting Rollout", url: "/properties/accounting/rollout", icon: Landmark },
@@ -88,7 +87,6 @@ export function PropertiesSidebar({ user, onLogout }: { user?: ShellUser; onLogo
                 item.url !== "/properties/accounting/consolidation" &&
                 item.url !== "/properties/accounting/history" &&
                 item.url !== "/properties/accounting/statements" &&
-                item.url !== "/properties/accounting/cost-centers" &&
                 item.url !== "/properties/accounting/fiscal-review" &&
                 item.url !== "/properties/accounting/dashboard" &&
                 item.url !== "/properties/accounting/rollout"))

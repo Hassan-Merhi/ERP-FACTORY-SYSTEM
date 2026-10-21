@@ -8,7 +8,6 @@
 import type { Express } from "express";
 
 import { registerAccountingOpenItemRoutes } from "./accountingOpenItemRoutes";
-import { registerAnalyticAccountingRoutes } from "./analyticAccountingRoutes";
 import { registerCashBankReconciliationRoutes } from "./cashBankReconciliationRoutes";
 import { registerErpInventoryAccountingRoutes } from "./erpInventoryAccountingRoutes";
 import { registerFactoryProductionAccountingRoutes } from "./factoryProductionAccountingRoutes";
@@ -31,7 +30,6 @@ export function registerUnifiedAccountingRoutes(app: Express): void {
   registerGroupConsolidationRoutes(app);
   registerHistoricalAccountingRoutes(app);
   registerProfessionalFinancialStatementRoutes(app);
-  registerAnalyticAccountingRoutes(app);
   registerFiscalReviewRoutes(app);
   registerUnifiedAccountingDashboardRoutes(app);
   registerUnifiedAccountingRolloutRoutes(app);

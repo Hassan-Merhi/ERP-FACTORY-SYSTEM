@@ -46,9 +46,6 @@ function writeClass(path: string, method: string) {
     prefix(path, "/api/accounting/cash-bank/matches") ||
     (prefix(path, "/api/accounting/cash-bank/lines") && /\/review$/.test(path)) ||
     prefix(path, "/api/accounting/rentals/expense-links") ||
-    prefix(path, "/api/accounting/analytics/centers") ||
-    prefix(path, "/api/accounting/analytics/allocations") ||
-    prefix(path, "/api/accounting/analytics/budgets") ||
     prefix(path, "/api/accounting/fiscal-review/signoffs") ||
     path === "/api/accounting/fiscal-review/policy"
   )

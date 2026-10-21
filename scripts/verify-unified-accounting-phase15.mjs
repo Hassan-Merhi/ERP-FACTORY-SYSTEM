@@ -33,7 +33,7 @@ const featureNames=[
  "AccountingOpenItems","CashBankReconciliation","MonetaryFxAccounting",
  "UnifiedRentalAccounting","GroupConsolidationAccounting",
  "HistoricalAccounting","ProfessionalFinancialStatements",
- "CostCenterAccounting","FiscalCloseReview","UnifiedAccountingDashboard",
+ "FiscalCloseReview","UnifiedAccountingDashboard",
  "UnifiedAccountingRollout"
 ];
 for(const file of Object.values(routes))has(file,featureNames);
@@ -42,7 +42,7 @@ has(routes.erp,[
  "/accounting/erp-inventory","/accounting/factory-production",
  "/accounting/rentals","/accounting/consolidation",
  "/accounting/history","/accounting/statements",
- "/accounting/cost-centers","/accounting/fiscal-review",
+ "/accounting/fiscal-review",
  "/accounting/dashboard","/accounting/rollout"
 ]);
 has(routes.factory,[
@@ -50,14 +50,14 @@ has(routes.factory,[
  "/factory/accounting/monetary-fx","/factory/accounting/production",
  "/factory/accounting/rentals","/factory/accounting/consolidation",
  "/factory/accounting/history","/factory/accounting/statements",
- "/factory/accounting/cost-centers","/factory/accounting/fiscal-review",
+ "/factory/accounting/fiscal-review",
  "/factory/accounting/dashboard","/factory/accounting/rollout"
 ]);
 has(routes.properties,[
  "/properties/accounting/open-items","/properties/accounting/cash-bank",
  "/properties/accounting/monetary-fx","/properties/accounting/rentals",
  "/properties/accounting/consolidation","/properties/accounting/history",
- "/properties/accounting/statements","/properties/accounting/cost-centers",
+ "/properties/accounting/statements",
  "/properties/accounting/fiscal-review","/properties/accounting/dashboard",
  "/properties/accounting/rollout"
 ]);
@@ -75,14 +75,13 @@ has("server/routes/unifiedAccountingRoutes.ts",[
  "registerGroupConsolidationRoutes(app)",
  "registerHistoricalAccountingRoutes(app)",
  "registerProfessionalFinancialStatementRoutes(app)",
- "registerAnalyticAccountingRoutes(app)",
  "registerFiscalReviewRoutes(app)",
  "registerUnifiedAccountingDashboardRoutes(app)",
  "registerUnifiedAccountingRolloutRoutes(app)"
 ]);
 has("server/middleware/sharedFactoryAccessBoundary.ts",[
  "/api/accounting/rollout/","/api/accounting/unified-dashboard",
- "/api/accounting/analytics/","/api/accounting/fiscal-review/"
+ "/api/accounting/fiscal-review/"
 ]);
 has("shared/factoryAccessRegistry.ts",[
  "/factory/accounting/rollout","/factory/accounting/dashboard",
@@ -108,14 +107,16 @@ has("server/services/accounting/perpetualInventory/cutover.ts",[
 has("server/startup/ensureRuntimeSchema.ts",[
  "ensurePartyOpenItemSchema","ensureCashBankReconciliationSchema",
  "ensureMonetaryFxSchema","ensureRentalAccountingLinksSchema",
- "ensureAnalyticAccountingSchema","ensureFiscalReviewSchema",
+ "ensureFiscalReviewSchema",
  "ensureUnifiedAccountingRolloutSchema"
 ]);
 has("client/src/lazyPages.ts",[
  "UnifiedAccountingDashboard","UnifiedAccountingRollout",
- "FiscalCloseReview","CostCenterAccounting","ProfessionalFinancialStatements"
+ "FiscalCloseReview","ProfessionalFinancialStatements"
 ]);
+// Phase 12 (cost centers) is main's Cost Centers module; it has no handoff here.
 for(let phase=6;phase<=15;phase++){
+ if(phase===12)continue;
  const file=`docs/unified-accounting-phase${phase}.md`;
  assert.ok(existsSync(resolve(root,file)),`Missing Phase ${phase} handoff: ${file}`);
 }

@@ -234,7 +234,6 @@ export function useErpVisibleSections(user?: SidebarUser): {
         item.url === "/accounting/consolidation" ||
         item.url === "/accounting/history" ||
         item.url === "/accounting/statements" ||
-        item.url === "/accounting/cost-centers" ||
         item.url === "/accounting/fiscal-review" ||
         item.url === "/accounting/dashboard" ||
         item.url === "/accounting/rollout") &&

@@ -659,11 +659,6 @@ export async function ensureRuntimeSchema(pool: Pool): Promise<void> {
   const { ensureRentalAccountingLinksSchema } = await import("../services/rental/ensureRentalAccountingLinksSchema");
   await ensureRentalAccountingLinksSchema(pool);
 
-  // Unified Accounting Phase 12: cost centers, allocations and monthly budget metadata.
-  // No production voucher or accounting balance is changed.
-  const { ensureAnalyticAccountingSchema } = await import("../services/accounting/ensureAnalyticAccountingSchema");
-  await ensureAnalyticAccountingSchema(pool);
-
   // Phase 13: financial review signoffs and reviewed-close audit evidence only.
   // No fiscal period is automatically closed, reopened or journal-posted.
   const { ensureFiscalReviewSchema } = await import("../services/accounting/ensureFiscalReviewSchema");

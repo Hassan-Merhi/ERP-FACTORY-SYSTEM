@@ -421,9 +421,6 @@ export default function UnifiedAccountingDashboard() {
                 <Details title="Largest recorded COGS accounts" rows={x.drilldown.topCostAccounts} />
                 <Details title="Largest recorded expense accounts" rows={x.drilldown.topExpenses} />
                 <div className="flex flex-wrap gap-2">
-                  <Button variant="outline" onClick={() => nav("/accounting/cost-centers")}>
-                    Cost centers & budgets
-                  </Button>
                   <Button variant="outline" onClick={() => nav("/accounting/statements")}>
                     Full profit & loss
                   </Button>

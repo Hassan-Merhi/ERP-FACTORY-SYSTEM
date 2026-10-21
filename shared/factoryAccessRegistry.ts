@@ -58,7 +58,6 @@ export const FACTORY_ACCESS_REGISTRY: readonly FactoryPageDefinition[] = [
       "/factory/accounting/consolidation",
       "/factory/accounting/history",
       "/factory/accounting/statements",
-      "/factory/accounting/cost-centers",
       "/factory/accounting/fiscal-review",
       "/factory/accounting/dashboard",
       "/factory/accounting/rollout",
