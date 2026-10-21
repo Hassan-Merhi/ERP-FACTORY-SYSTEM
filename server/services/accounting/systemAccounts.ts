@@ -25,6 +25,7 @@ import { getErrorMessage } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
 import { runWithDatabaseMaintenanceScope } from "../security/databaseScopeRuntimeContext";
 import { runInCompanyPostingScope } from "./scheduledPostingScope";
+import { isRentalPostingAccountCode } from "./unifiedAccountingFoundation";
 
 export interface SystemAccountDefinition {
   code: string;
@@ -332,7 +333,7 @@ const CODE_RESOLVED_OUTSIDE_REGISTRY: ReadonlySet<string> = new Set([
 export function isSystemResolvedAccountCode(code: string | null | undefined): boolean {
   const normalized = (code ?? "").trim().toUpperCase();
   if (!normalized) return false;
-  return BY_CODE.has(normalized) || normalized.startsWith("RETAIL-") || CODE_RESOLVED_OUTSIDE_REGISTRY.has(normalized);
+  return BY_CODE.has(normalized) || normalized.startsWith("RETAIL-") || CODE_RESOLVED_OUTSIDE_REGISTRY.has(normalized) || isRentalPostingAccountCode(normalized);
 }
 
 type Executor = typeof db | DbTransaction;
