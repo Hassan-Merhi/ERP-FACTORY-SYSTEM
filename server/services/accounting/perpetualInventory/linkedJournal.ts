@@ -48,8 +48,12 @@ export async function systemAccountIdsTx(
 ): Promise<Map<string, number>> {
   const ids = new Map<string, number>();
   for (const status of await ensureSystemAccounts(tx, companyId, codes)) {
-    if (status.state === "missing" || status.state === "deleted") {
-      throw new Error("A required system account is not available");
+    // Perpetual inventory journals must never hit an account that happens to
+    // share a name with a registry account, or one retyped to a wrong class.
+    // Explicitly refuse those states rather than silently contaminating COGS,
+    // Goods in Transit or Inventory Adjustment.
+    if (status.state !== "ok" && status.state !== "created") {
+      throw new Error(`System account ${status.code} is not correctly configured (${status.state}); review the chart of accounts before inventory posting`);
     }
     ids.set(status.code, status.accountId);
   }
