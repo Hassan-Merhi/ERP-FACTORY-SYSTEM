@@ -334,6 +334,7 @@ const SENSITIVE_WRITE_ROUTES = [
   "POST /api/golden-coast/accounting/phase1/setup-accounts",
   "POST /api/insurance/admin/clear-all",
   "POST /api/insurance/admin/journal-direction/apply",
+  "POST /api/insurance/extra-charges",
   "POST /api/insurance/generate",
   "POST /api/insurance/import/apply",
   "POST /api/insurance/import/preview",
