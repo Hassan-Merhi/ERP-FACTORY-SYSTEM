@@ -218,7 +218,8 @@ export async function rentalContractAccountingTx(tx:DbTransaction,input:{
  const received=periods.reduce((sum,p)=>sum.plus(p.paid),new Decimal(0));
  const outstanding=periods.reduce((sum,p)=>sum.plus(p.outstanding),new Decimal(0));
  const scheduledPending=Array.from(scheduled.values()).reduce((a,b)=>a.plus(b),new Decimal(0));
- const allocated=expenses.reduce((sum,e)=>sum.plus(d(e.allocated_usd)),new Decimal(0));
+ const allocated=expenses.filter(e=>e.source_status==="active")
+   .reduce((sum,e)=>sum.plus(d(e.allocated_usd)),new Decimal(0));
  const depositSigned=deposits.reduce((sum,p)=>{
   const code=String(p.account_code||"").toUpperCase();
   const liability=code==="TENANT-DEP"||code.startsWith("TENANT-DEP-");
@@ -229,6 +230,9 @@ export async function rentalContractAccountingTx(tx:DbTransaction,input:{
   `${postedWithoutVoucher} posted payment allocation(s) reference missing or retired vouchers; review their underlying posting.`);
  if(foreignCurrencyRows)warnings.push(
   `${foreignCurrencyRows} payment row(s) have a different currency from the contract and are excluded from native-currency rent totals.`);
+ if(expenses.some(e=>e.source_status!=="active"))warnings.push(
+  "Some expense attribution vouchers were retired, reversed or made optional; their amounts are not included in the current maintenance total."
+ );
  if(periods.some(p=>p.accrualStale))warnings.push(
   "At least one period has an accrual link to a missing or retired voucher.");
  if(periods.some(p=>p.cacheDifference!==null&&!d(p.cacheDifference).isZero()))warnings.push(
@@ -276,7 +280,8 @@ export async function rentalContractAccountingTx(tx:DbTransaction,input:{
    ledgerEvidenceUsd:fixed(depositSigned),vouchers:depositEvidence},
   expenses:expenses.map(e=>({
    id:Number(e.id),voucherId:Number(e.voucher_id),voucherNumber:e.voucher_number,
-   category:e.category,amountUsd:fixed(d(e.allocated_usd)),note:e.note
+   category:e.category,amountUsd:fixed(d(e.allocated_usd)),note:e.note,
+   sourceStatus:e.source_status??"active"
   })),
   warnings,
   limitations:{
