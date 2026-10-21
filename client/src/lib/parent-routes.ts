@@ -125,6 +125,7 @@ export function getParentRoute(pathname: string): string | null {
   if (/^\/voucher-detail\//.test(cleanPath)) return "/vouchers";
   if (/^\/vouchers\/\d+\/edit/.test(cleanPath)) return "/vouchers";
   if (cleanPath === "/account-groups") return "/accounts";
+  if (cleanPath === "/cost-centers") return "/accounts";
   if (cleanPath === "/account-transfer") return "/accounts";
 
   // ERP — stock / inventory.
