@@ -11,6 +11,7 @@ import {
   HistoricalAccounting,
   ProfessionalFinancialStatements,
   CostCenterAccounting,
+  FiscalCloseReview,
   Agents,
   BalanceRepair,
   ChatbotSettings,
@@ -59,6 +60,7 @@ export function PropertiesRoutes({ user }: PropertiesRoutesProps) {
       {(isAdmin || isOwner) && <Route path="/properties/accounting/history" component={HistoricalAccounting} />}
       {(isAdmin || isOwner) && <Route path="/properties/accounting/statements" component={ProfessionalFinancialStatements} />}
       {(isAdmin || isOwner) && <Route path="/properties/accounting/cost-centers" component={CostCenterAccounting} />}
+      {(isAdmin || isOwner) && <Route path="/properties/accounting/fiscal-review" component={FiscalCloseReview} />}
       <Route path="/properties/vouchers/:id/edit" component={PropertiesVoucherEdit} />
       <Route path="/properties/voucher-detail/:voucherId" component={PropertiesVoucherDetail} />
       <Route path="/properties/vouchers">{() => <PropertiesVouchers />}</Route>
