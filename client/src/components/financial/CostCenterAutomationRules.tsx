@@ -118,7 +118,7 @@ export function CostCenterAutomationRules({ baseUrl, centers }: { baseUrl: strin
     enabled: !!companyId,
     staleTime: 30000,
   });
-  const rules = ruleData?.rules || [];
+  const rules = useMemo(() => ruleData?.rules ?? [], [ruleData]);
   const grouped = useMemo(() => {
     const result = new Map<string, Rule[]>();
     for (const item of rules) {

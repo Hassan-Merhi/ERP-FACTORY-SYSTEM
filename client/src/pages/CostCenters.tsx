@@ -81,7 +81,7 @@ export default function CostCenters() {
     enabled: !!companyId,
     staleTime: 30000,
   });
-  const centers = data?.costCenters || [];
+  const centers = useMemo(() => data?.costCenters ?? [], [data]);
   const rows = useMemo(
     () =>
       sortCenters(centers).filter(({ center }) =>
