@@ -363,7 +363,8 @@ export function resolveFactoryBackendAccessRequirement(req: Request): FactoryApi
   if (hasPrefix(path, "/cost-centers")) {
     const isAllocation = hasPrefix(path, "/cost-centers/allocations/") ||
       hasPrefix(path, "/cost-centers/voucher/");
-    return isAllocation
+    const isCatalogRead = req.method === "GET" && path === "/cost-centers";
+    return isAllocation || isCatalogRead
       ? anyOf(requirement("factory/cost-centers"), requirement("factory/vouchers"), requirement("factory/daybook"))
       : requirement("factory/cost-centers");
   }
