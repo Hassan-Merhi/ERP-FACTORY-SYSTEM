@@ -23,6 +23,7 @@ export const ErpInventoryAccounting = lazy(() => import("@/pages/ErpInventoryAcc
 export const FactoryProductionAccounting = lazy(() => import("@/pages/FactoryProductionAccounting"));
 export const UnifiedRentalAccounting = lazy(() => import("@/pages/UnifiedRentalAccounting"));
 export const GroupConsolidationAccounting = lazy(() => import("@/pages/GroupConsolidationAccounting"));
+export const HistoricalAccounting = lazy(() => import("@/pages/HistoricalAccounting"));
 export const HistoricalOpenings = lazy(() => import("@/pages/accounts/HistoricalOpenings"));
 export const Agents = lazy(() => import("@/pages/Agents"));
 export const Suppliers = lazy(() => import("@/pages/Suppliers"));
