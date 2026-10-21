@@ -20,6 +20,7 @@ import {
   UnifiedRentalAccounting,
   GroupConsolidationAccounting,
   HistoricalAccounting,
+  ProfessionalFinancialStatements,
   Agents,
   Analytics,
   BalanceRepair,
@@ -190,6 +191,7 @@ export function FactoryRoutes({ user, myAccess, factoryDefaultPage }: FactoryRou
       {isAdminOwnerOrDev && <Route path="/factory/accounting/rentals" component={UnifiedRentalAccounting} />}
       {isAdminOwnerOrDev && <Route path="/factory/accounting/consolidation" component={GroupConsolidationAccounting} />}
       {isAdminOwnerOrDev && <Route path="/factory/accounting/history" component={HistoricalAccounting} />}
+      {isAdminOwnerOrDev && <Route path="/factory/accounting/statements" component={ProfessionalFinancialStatements} />}
       {isAdminOwnerOrDev && <Route path="/factory/account-groups" component={AccountGroups} />}
       <Route path="/factory/agents" component={Agents} />
       <Route path="/factory/vouchers">{() => <FactoryVouchers />}</Route>
