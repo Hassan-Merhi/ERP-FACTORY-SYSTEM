@@ -39,6 +39,7 @@ import { registerErpInventoryAccountingRoutes } from "./erpInventoryAccountingRo
 import { registerFactoryProductionAccountingRoutes } from "./factoryProductionAccountingRoutes";
 import { registerUnifiedRentalAccountingRoutes } from "./unifiedRentalAccountingRoutes";
 import { registerGroupConsolidationRoutes } from "./groupConsolidationRoutes";
+import { registerHistoricalAccountingRoutes } from "./historicalAccountingRoutes";
 import { registerPerpetualReadinessRoutes } from "./accounting-integrity/perpetualReadinessRoutes";
 import { registerImportRoutes } from "./import";
 import { registerIntercompanyNotificationRoutes } from "./intercompanyNotificationRoutes";
@@ -173,6 +174,7 @@ export async function registerApplicationRoutes(app: Express): Promise<Server> {
   registerFactoryProductionAccountingRoutes(app);
   registerUnifiedRentalAccountingRoutes(app);
   registerGroupConsolidationRoutes(app);
+  registerHistoricalAccountingRoutes(app);
   registerPerpetualReadinessRoutes(app);
   registerDebugRoutes(app);
   registerReportsRoutes(app);
