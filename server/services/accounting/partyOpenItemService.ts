@@ -262,6 +262,8 @@ export async function applyPartyOpenItemMatchTx(tx: DbTransaction, input: ApplyO
   if (!/^[A-Za-z0-9._:-]{1,191}$/.test(input.idempotencyKey))
     throw new OpenItemError("OPEN_ITEM_KEY_INVALID","Invalid idempotency key",400);
   const appliedOn=await companyBusinessDate(input.companyId,tx);
+  // Matching is dated accounting metadata: do not change it inside closed books.
+  await tx.execute(sql`SELECT erp_assert_accounting_date_open(${input.companyId},${appliedOn}::date)`);
   // All allocations for one party serialize to avoid matching the same
   // available payment twice. The idempotency lookup and inserts share this tx.
   await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${`open-item:${input.companyId}:${input.domain}:${input.partyId}`}))`);
@@ -318,12 +320,13 @@ export async function voidPartyOpenItemMatchTx(tx: DbTransaction,input: {
   positiveId(input.companyId,"companyId"); positiveId(input.matchId,"matchId");
   if (!input.reason.trim()) throw new OpenItemError("OPEN_ITEM_REASON_REQUIRED","Reason is required",400);
   await assertTransactionCompanyScope(tx,input.companyId);
-  const record=resultRows<{id:number;domain:OpenItemDomain;party_id:number;voided_at:string|null}>(
-    await tx.execute(sql`SELECT id,domain,party_id,voided_at::text FROM accounting_open_item_matches
+  const record=resultRows<{id:number;domain:OpenItemDomain;party_id:number;voided_at:string|null;applied_on:string}>(
+    await tx.execute(sql`SELECT id,domain,party_id,voided_at::text,applied_on::text FROM accounting_open_item_matches
       WHERE id=${input.matchId} AND company_id=${input.companyId} FOR UPDATE`)
   )[0];
   if(!record)throw new OpenItemError("OPEN_ITEM_MATCH_NOT_FOUND","Match not found",404);
   if(record.voided_at)throw new OpenItemError("OPEN_ITEM_MATCH_VOIDED","Match is already voided");
+  await tx.execute(sql`SELECT erp_assert_accounting_date_open(${input.companyId},${record.applied_on}::date)`);
   await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${`open-item:${input.companyId}:${record.domain}:${record.party_id}`}))`);
   await tx.execute(sql`UPDATE accounting_open_item_matches SET
     voided_at=NOW(),voided_by=${input.actor.userId},void_reason=${input.reason}
