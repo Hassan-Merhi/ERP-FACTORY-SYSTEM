@@ -34,6 +34,8 @@ export async function ensureFiscalReviewSchema(pool:Pool):Promise<void>{
  CREATE INDEX IF NOT EXISTS accounting_fiscal_review_history_idx
    ON accounting_fiscal_review_signoffs(company_id,period_end_date,reviewed_at DESC);
 
+ CREATE UNIQUE INDEX IF NOT EXISTS accounting_fiscal_review_signoffs_company_id_uq
+   ON accounting_fiscal_review_signoffs(company_id,id);
  CREATE TABLE IF NOT EXISTS accounting_fiscal_review_policy(
   company_id INTEGER PRIMARY KEY REFERENCES companies(id) ON DELETE RESTRICT,
   enforce_reviewed_close BOOLEAN NOT NULL DEFAULT FALSE,
@@ -58,6 +60,57 @@ export async function ensureFiscalReviewSchema(pool:Pool):Promise<void>{
     CHECK(accounting_signoff_id<>owner_signoff_id),
    CONSTRAINT fiscal_reviewed_closure_unique UNIQUE(company_id,fiscal_closure_id)
  );
+ -- Do not permit evidence from another company's signoffs to be used.
+ DO $review_fk$
+ BEGIN
+  IF NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conname='fiscal_review_accounting_company_fk') THEN
+   ALTER TABLE accounting_fiscal_reviewed_closures
+    ADD CONSTRAINT fiscal_review_accounting_company_fk
+    FOREIGN KEY(company_id,accounting_signoff_id)
+    REFERENCES accounting_fiscal_review_signoffs(company_id,id) ON DELETE RESTRICT;
+  END IF;
+  IF NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conname='fiscal_review_owner_company_fk') THEN
+   ALTER TABLE accounting_fiscal_reviewed_closures
+    ADD CONSTRAINT fiscal_review_owner_company_fk
+    FOREIGN KEY(company_id,owner_signoff_id)
+    REFERENCES accounting_fiscal_review_signoffs(company_id,id) ON DELETE RESTRICT;
+  END IF;
+ END $review_fk$;
+
+ -- The original closure is mutable through audited reopen; the reviewed
+ -- evidence is immutable, and a closure can only be attested once.
+ CREATE OR REPLACE FUNCTION fiscal_review_assert_evidence()
+ RETURNS TRIGGER LANGUAGE plpgsql AS $review_evidence$
+ DECLARE a RECORD; o RECORD; c RECORD; v RECORD;
+ BEGIN
+  SELECT * INTO a FROM accounting_fiscal_review_signoffs
+   WHERE id=NEW.accounting_signoff_id AND company_id=NEW.company_id;
+  SELECT * INTO o FROM accounting_fiscal_review_signoffs
+   WHERE id=NEW.owner_signoff_id AND company_id=NEW.company_id;
+  SELECT * INTO c FROM fiscal_period_closures
+   WHERE id=NEW.fiscal_closure_id AND company_id=NEW.company_id;
+  SELECT * INTO v FROM vouchers
+   WHERE id=NEW.closing_voucher_id AND company_id=NEW.company_id;
+  IF a.id IS NULL OR o.id IS NULL OR c.id IS NULL OR v.id IS NULL
+     OR a.review_kind<>'ACCOUNTING' OR o.review_kind<>'OWNER'
+     OR a.reviewer_id=o.reviewer_id
+     OR a.revoked_at IS NOT NULL OR o.revoked_at IS NOT NULL
+     OR a.evidence_hash<>NEW.evidence_hash OR o.evidence_hash<>NEW.evidence_hash
+     OR a.period_start_date<>c.period_start_date OR o.period_start_date<>c.period_start_date
+     OR a.period_end_date<>c.period_end_date OR o.period_end_date<>c.period_end_date
+     OR a.retained_earnings_account_id<>c.retained_earnings_account_id
+     OR o.retained_earnings_account_id<>c.retained_earnings_account_id
+     OR c.closing_voucher_id<>NEW.closing_voucher_id THEN
+    RAISE EXCEPTION 'FISCAL_REVIEW_EVIDENCE_MISMATCH' USING ERRCODE='23514';
+  END IF;
+  RETURN NEW;
+ END $review_evidence$;
+ DROP TRIGGER IF EXISTS fiscal_review_evidence_guard
+   ON accounting_fiscal_reviewed_closures;
+ CREATE TRIGGER fiscal_review_evidence_guard
+ BEFORE INSERT ON accounting_fiscal_reviewed_closures
+ FOR EACH ROW EXECUTE FUNCTION fiscal_review_assert_evidence();
+
  CREATE INDEX IF NOT EXISTS accounting_fiscal_reviewed_closures_date_idx
    ON accounting_fiscal_reviewed_closures(company_id,certified_at DESC);
 
