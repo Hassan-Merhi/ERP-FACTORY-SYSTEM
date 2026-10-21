@@ -31,6 +31,10 @@ interface Readiness{
   reviewedAt:string;note:string;current:boolean}>;
  blockers:string[];warnings:string[];certified:false
 }
+interface ReviewPolicy{
+ companyId:number;enforceReviewedClose:boolean;updatedBy:string|null;
+ updatedAt:string|null;reason:string|null;explicitlyConfigured:boolean
+}
 interface CloseHistory{
  reviewedClosures:Array<{id:number;fiscal_closure_id:number|null;closing_voucher_id:number;
   evidence_hash:string;certified_at:string;reviewed_by:string;
@@ -61,11 +65,18 @@ export default function FiscalCloseReview(){
  const [closeNote,setCloseNote]=useState("");
  const [confirmText,setConfirmText]=useState("");
  const [tab,setTab]=useState<"readiness"|"signoffs"|"history"|"audit">("readiness");
+ const [policyReason,setPolicyReason]=useState("");
+ const [policyConfirm,setPolicyConfirm]=useState("");
  const params=new URLSearchParams({
   periodStartDate:start,periodEndDate:end,
   retainedEarningsAccountId:retainedId
  });
  const canQuery=!!companyId&&!!start&&!!end&&Number(retainedId)>0;
+ const policy=useQuery<ReviewPolicy>({
+  queryKey:[root+"/policy",companyId],
+  queryFn:()=>read(root+"/policy"),
+  enabled:!!companyId,retry:false
+ });
  const readiness=useQuery<Readiness>({
   queryKey:[root+"/readiness",companyId,start,end,retainedId],
   queryFn:()=>read(root+"/readiness?"+params.toString()),
@@ -90,9 +101,21 @@ export default function FiscalCloseReview(){
   await Promise.all([
    client.invalidateQueries({queryKey:[root+"/readiness"]}),
    client.invalidateQueries({queryKey:[root+"/history"]}),
-   client.invalidateQueries({queryKey:[root+"/audit"]})
+   client.invalidateQueries({queryKey:[root+"/audit"]}),
+   client.invalidateQueries({queryKey:[root+"/policy"]})
   ]);
  };
+ const changePolicy=useMutation({
+  mutationFn:async(enforce:boolean)=>{
+   const response=await apiRequest("POST",root+"/policy",{
+    enforce,reason:policyReason
+   });return response.json();
+  },
+  onSuccess:async()=>{
+   toast({title:"Fiscal review requirement updated and audited"});
+   setPolicyReason("");setPolicyConfirm("");await refresh();
+  },onError
+ });
  const signoff=useMutation({
   mutationFn:async()=>{
    const response=await apiRequest("POST",root+"/signoffs",{
@@ -135,6 +158,39 @@ export default function FiscalCloseReview(){
     financial audit controls and reviewed close. This screen does not edit old vouchers.
    </p>
   </div>
+  <Card><CardHeader><CardTitle>Reviewed-close enforcement (Owner only)</CardTitle></CardHeader>
+   <CardContent className="space-y-3">
+    {policy.isError&&<p className="text-destructive text-sm">
+     {(policy.error as Error).message}</p>}
+    {policy.data&&<>
+     <p className="font-medium text-sm">
+      {policy.data.enforceReviewedClose?
+       "Required: every new close must use the dual-reviewed path":
+       "Compatibility mode: the original close endpoint is still permitted"}
+     </p>
+     <p className="text-xs text-muted-foreground">
+      Defaults to compatibility mode for existing companies.
+      A signed Owner change is audited. Reopening remains a separate,
+      reason-required Admin action.</p>
+     <div className="grid sm:grid-cols-2 gap-3">
+      <div><Label>Owner reason for policy change</Label>
+       <Input value={policyReason} onChange={e=>setPolicyReason(e.target.value)}
+        placeholder="Explain why the fiscal-close requirement changes"/></div>
+      <div><Label>Type POLICY CHANGE to confirm</Label>
+       <Input value={policyConfirm} onChange={e=>setPolicyConfirm(e.target.value)}
+        placeholder="POLICY CHANGE"/></div>
+     </div>
+     <Button variant="outline" disabled={policyReason.trim().length<10||
+       policyConfirm!=="POLICY CHANGE"||changePolicy.isPending}
+       onClick={()=>changePolicy.mutate(!policy.data!.enforceReviewedClose)}>
+       {policy.data.enforceReviewedClose?
+        "Disable mandatory reviewed-close (Owner)":
+        "Require independent reviewed-close (Owner)"}
+     </Button>
+     {policy.data.updatedAt&&<p className="text-xs text-muted-foreground">
+      Last change: {policy.data.updatedAt} · {policy.data.reason}</p>}
+    </>}
+   </CardContent></Card>
   <Card><CardHeader><CardTitle>Period and retained earnings</CardTitle></CardHeader>
    <CardContent className="space-y-3">
     <div className="grid gap-3 sm:grid-cols-3">
