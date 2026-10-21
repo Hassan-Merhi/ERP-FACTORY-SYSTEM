@@ -67,6 +67,13 @@ The report uses the actual posted bank/cash account journal entries in the selec
 
 - If comparison enabled, the report calculates an **immediately preceding period of equal number of calendar days** to the selected inclusive date range.
 - Each period is derived from the canonical booked ledger, with its own period beginning, ending, fiscal-close and equity carry-forward treatment.
+- The comparison account breakdown uses the **union** of current and
+  previous-period accounts. Accounts that existed only in the comparison
+  period are not hidden from the table/CSV just because their current
+  movement or balance is zero.
+- CSV export quotes every field and prefixes formula-like **text labels**
+  to prevent spreadsheet formula execution; ordinary negative numeric USD
+  values remain numbers.
 - Comparison column is labelled *comparison*, not automatically a matching prior fiscal year.
 - Past-day results use current surviving voucher/master history (a **retrospective** view), not a complete immutable system-time snapshot. Phase 10's historical caveats continue to apply.
 
