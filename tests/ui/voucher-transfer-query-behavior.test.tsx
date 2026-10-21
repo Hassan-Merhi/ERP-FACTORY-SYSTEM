@@ -51,7 +51,9 @@ describe("voucher stock-transfer query behavior", () => {
     render(<HookHarness activeTab="transfer" />);
 
     expect(optionFor("/api/bank-accounts")?.enabled).toBe(false);
-    expect(optionFor("/api/ledger-accounts?includeHidden=true&companyId=4")?.enabled).toBe(false);
+    expect(optionFor("/api/ledger-accounts?profile=voucher-picker&includeHidden=true&companyId=4")?.enabled).toBe(
+      false
+    );
     expect(optionFor("/api/suppliers")?.enabled).toBe(false);
     expect(optionFor("/api/customers")?.enabled).toBe(false);
     expect(optionFor("/api/employees")?.enabled).toBe(false);

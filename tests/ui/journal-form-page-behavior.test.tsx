@@ -16,7 +16,7 @@ vi.mock("@tanstack/react-query", () => ({
   useQuery: ({ queryKey }: any) => {
     const root = queryKey?.[0];
     if (root === "/api/bank-accounts") return { data: [], isFetched: true };
-    if (root === "/api/ledger-accounts") {
+    if (root === "/api/ledger-accounts?profile=voucher-picker") {
       return {
         data: [
           { id: 1, name: "Cash", code: "CASH" },
