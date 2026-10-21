@@ -430,11 +430,20 @@ function registerCostCenterPrefix(app: Express, prefix: string) {
       const id = queryId(req.params.id);
       const limit = pageQuery(req.query.limit, 50, 100);
       const offset = pageQuery(req.query.offset, 0, 1000000);
+      const datePattern = /^\d{4}-\d{2}-\d{2}$/;
+      const fromDate = req.query.fromDate;
+      const toDate = req.query.toDate;
+      if (fromDate !== undefined && (typeof fromDate !== "string" || !datePattern.test(fromDate))) {
+        throw new ApiError(400, "Invalid activity start date");
+      }
+      if (toDate !== undefined && (typeof toDate !== "string" || !datePattern.test(toDate))) {
+        throw new ApiError(400, "Invalid activity end date");
+      }
       const result = await transaction(async (client) => {
         const center = await centerInCompany(client, companyId, id);
         const entries = await client.query(
           [
-            "SELECT a.id, a.voucher_entry_id AS \"voucherEntryId\",",
+            "SELECT a.id, v.id AS \"voucherId\", a.voucher_entry_id AS \"voucherEntryId\",",
             "a.factory_daybook_entry_id AS \"factoryDaybookEntryId\",",
             "a.amount_native::text AS \"amountNative\",a.amount_base::text AS \"amountBase\",",
             "a.currency,a.cost_treatment AS \"costTreatment\",",
@@ -446,8 +455,10 @@ function registerCostCenterPrefix(app: Express, prefix: string) {
             "LEFT JOIN factory_daybook_entries f ON f.id=a.factory_daybook_entry_id AND f.company_id=a.company_id",
             "WHERE a.company_id=$1 AND a.cost_center_id=$2 AND (a.voucher_entry_id IS NULL OR",
             "(v.id IS NOT NULL AND v.deleted_at IS NULL AND v.optional=false))",
+            "AND ($5::date IS NULL OR COALESCE(v.effective_date,v.voucher_date,f.tx_date) >= $5::date)",
+            "AND ($6::date IS NULL OR COALESCE(v.effective_date,v.voucher_date,f.tx_date) <= $6::date)",
             "ORDER BY COALESCE(v.effective_date,v.voucher_date,f.tx_date) DESC,a.id DESC LIMIT $3 OFFSET $4",
-          ].join(" "), [companyId, id, limit, offset],
+          ].join(" "), [companyId, id, limit, offset, fromDate || null, toDate || null],
         );
         return { center, activity: entries.rows };
       });
