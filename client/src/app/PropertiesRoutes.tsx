@@ -44,7 +44,7 @@ export function PropertiesRoutes({ user }: PropertiesRoutesProps) {
     <Switch>
       <Route path="/properties/dashboard" component={PropertiesDashboard} />
       <Route path="/properties/accounts" component={PropertiesAccounts} />
-      <Route path="/properties/accounting/open-items" component={AccountingOpenItems} />
+      {(isAdmin || isOwner) && <Route path="/properties/accounting/open-items" component={AccountingOpenItems} />}
       <Route path="/properties/vouchers/:id/edit" component={PropertiesVoucherEdit} />
       <Route path="/properties/voucher-detail/:voucherId" component={PropertiesVoucherDetail} />
       <Route path="/properties/vouchers">{() => <PropertiesVouchers />}</Route>
