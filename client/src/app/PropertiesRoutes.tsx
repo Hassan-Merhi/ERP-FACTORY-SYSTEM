@@ -9,6 +9,7 @@ import {
   UnifiedRentalAccounting,
   GroupConsolidationAccounting,
   HistoricalAccounting,
+  ProfessionalFinancialStatements,
   Agents,
   BalanceRepair,
   ChatbotSettings,
@@ -55,6 +56,7 @@ export function PropertiesRoutes({ user }: PropertiesRoutesProps) {
       {(isAdmin || isOwner) && <Route path="/properties/accounting/rentals" component={UnifiedRentalAccounting} />}
       {(isAdmin || isOwner) && <Route path="/properties/accounting/consolidation" component={GroupConsolidationAccounting} />}
       {(isAdmin || isOwner) && <Route path="/properties/accounting/history" component={HistoricalAccounting} />}
+      {(isAdmin || isOwner) && <Route path="/properties/accounting/statements" component={ProfessionalFinancialStatements} />}
       <Route path="/properties/vouchers/:id/edit" component={PropertiesVoucherEdit} />
       <Route path="/properties/voucher-detail/:voucherId" component={PropertiesVoucherDetail} />
       <Route path="/properties/vouchers">{() => <PropertiesVouchers />}</Route>
