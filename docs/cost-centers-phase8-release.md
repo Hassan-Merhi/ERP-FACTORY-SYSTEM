@@ -1,5 +1,58 @@
 # Cost Centers — Phase 8: Integration & Release Handoff
 
+## Claude certification review (2026-10-21)
+
+Reviewed on `feature/cost-centers-phase1-foundation` after the `main` merge.
+Corrections committed on the same branch (no history rewrite):
+
+- **Build blockers**: `shared/schema/cost-centers.ts` had a syntax error that
+  broke type-check, lint and build; composite FKs referenced unique *indexes*
+  that `drizzle-kit push` creates after the FKs. Uniques are now table
+  constraints, and the Drizzle declaration carries every CHECK/UNIQUE/default
+  the migrations create (CI/staging schemas now match production).
+- **Accounting edits are never blocked**: the Phase 2 guards raised an error
+  on any later change to an allocated voucher, voucher line or Factory daybook
+  row — container freight/landed-cost sync, FX repair, account migration and
+  voucher edits would have failed once a line was tagged. Phase 8 replaces
+  them with fail-open AFTER triggers (clear stale splits, re-run rules, list
+  removed manual work in automation diagnostics). Deleting a source with
+  manual splits leaves a diagnostic notice.
+- **Exact reversals**: `POST /api/vouchers/:id/exact-reversal` links the pair
+  through `accounting_posting_requests` (`source_type='voucher-reversal'`), not
+  `reversal_of_voucher_id`. Both linkages are now treated as a reversal pair in
+  the database guard, automation, reports, history and allocation API.
+- **Reconciliation**: the center balance/activity endpoints use the report CTE
+  (eligibility, credit sign, reversal exclusion), so every view agrees.
+- **Robustness**: 503 `COST_CENTERS_NOT_INSTALLED` before migrations (voucher
+  pages hide the panel), Phase 7 FK made idempotent, historical splits round
+  down, preview sets `expires_at`, ERP mode cannot reach Factory daybook or
+  inventory-cost sources, automation skips companies without active rules.
+- **i18n**: all new UI/API copy translated (en/ar/fr).
+- **Tests**: `tests/cost-centers-lifecycle.test.ts` applies all six migrations
+  and covers the full lifecycle, reconciliation, reversals, non-blocking source
+  changes, Factory daybook eligibility, readiness and RLS (non-bypass role).
+
+### Applying the migrations (requires owner approval)
+
+The six files were applied in order to a production-like database (all other
+tables present, no cost-center tables), re-applied to prove idempotency, and
+applied on top of a Drizzle-pushed CI database. For production, apply exactly
+these six files, in order, each in its own transaction, after a backup:
+
+```sh
+for f in 20261021_001_cost_centers_phase1 20261021_002_cost_centers_phase2_integrity \
+         20261021_003_cost_centers_phase5_automation 20261021_004_cost_centers_phase6_budgets \
+         20261021_005_cost_centers_phase7_history 20261021_006_cost_centers_phase8_hardening; do
+  psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -1 -f "migrations/$f.sql" || break
+done
+```
+
+Do not use `scripts/run-versioned-migrations.mjs` for this unless every other
+pending journal entry has been reviewed: it applies **all** pending entries.
+The files only create the eight cost-center tables, their RLS policies,
+functions and triggers; they write no accounting rows. Afterwards
+`GET /api/cost-centers/release-readiness` must report `structuralReady: true`.
+
 ## Release classification
 
 **Source implementation and integration hardening: COMMITTED.**
@@ -42,7 +95,7 @@ pull request or deploying may start CI; owner requested Claude to control checks
    `GET /api/factory/cost-centers/release-readiness`.
    Requires the current company's Admin/Owner/Developer accounting role.
    Reports presence of all eight cost-center tables, mandatory FORCE RLS,
-   fourteen expected enabled triggers, and essential stored procedures.
+   sixteen expected enabled triggers, and essential stored procedures.
    **structuralReady=true is NOT a passing test result.**
 5. **ERP and Factory UI**:
    `CostCenterReleaseReadiness` is displayed to authorized administrators in

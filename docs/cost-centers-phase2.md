@@ -13,8 +13,9 @@ automatic allocations, production postings or P&L changes are introduced here.
   - prevents archived centers from receiving new allocations
   - enforces the financial source's expense vs asset treatment
   - forbids duplicated Factory daybook journal/payment/sale mirrors
-  - prevents amount/currency/date/company/source changes on allocated entries
-    without removing the analytical allocation first
+  - originally rejected amount/currency/date/company/source changes on
+    allocated entries; **superseded by Phase 8** (see below), because a cost
+    center tag must never block an accounting edit
   - keeps parents with active children from being archived
 - Migration registered in `migrations/meta/_journal.json`.
 - Both migrations are additive and do **not** backfill or modify posted rows.
@@ -67,9 +68,13 @@ the server**, not the request. A split never posts a financial journal.
 - Allocation writes replace the complete split set inside one transaction,
   use advisory locks to serialize cost-center allocation writers, and record
   before/after snapshots in `audit_log`.
-- Once a source has cost center splits, protected monetary fields cannot be
-  changed without clearing those splits first; source soft deletion is excluded
-  from analytical activity. Physical source deletion cascades the analytical rows.
+- Accounting always wins over analytics (Phase 8 lifecycle): when an allocated
+  source's amount, currency, company or voucher changes, the stale splits are
+  cleared after the change, automatic rules re-tag the source, and removed
+  manual work is listed under automation diagnostics. Rate-only changes and
+  account moves that keep every split eligible keep the splits. Source soft
+  deletion is excluded from analytical activity; physical source deletion
+  cascades the analytical rows and lists removed manual splits.
 - The `/:id/balance` endpoint is an **analytical allocation total**, not a
   general-ledger, supplier, cash/bank, P&L or net-position balance.
 
