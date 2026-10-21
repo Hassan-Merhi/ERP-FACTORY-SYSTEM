@@ -169,6 +169,9 @@ async function postGroupCore(
       description: input.description,
       currency,
       exchangeRate: foreign ? exchangeRate : null,
+      // Rentals retains its operational origin for reporting and provenance.
+      // This is metadata only: account/amount/FX calculations are unchanged.
+      sourceModule: mod,
       lines: input.lines,
       source: { type: "rental-payment", id: `${companyId}:${groupId}`, revision: input.phase },
     });
@@ -426,7 +429,7 @@ export async function createRentalPaymentGroup(opts: RentalPaymentGroupOptions) 
 
   const paymentGroupId = `PG-${Date.now()}-${randomUUID().replace(/-/g, "").slice(0, 10)}-${contract.id}`;
 
-  const scheduledRows = await db.transaction(async (tx) => {
+  const { scheduledRows, postedNow } = await db.transaction(async (tx) => {
     for (const alloc of allocations) {
       const allocDueDate = getRentalPeriodDueDate(alloc.year, alloc.month, billingDay);
       const allocIsDue = allocDueDate <= paymentDate;
@@ -484,28 +487,55 @@ export async function createRentalPaymentGroup(opts: RentalPaymentGroupOptions) 
         .returning();
       created.push(p);
     }
-    return created;
+    // Previously the inserts committed first, then voucher posting ran in a
+    // second transaction. An error left scheduled payments and ledger rows
+    // behind. Immediate payments now post inside this same transaction.
+    const postedNow = paymentDate <= clientDate
+      ? await postScheduledGroup(
+          companyId,
+          contractCompanyId,
+          mod,
+          contract,
+          unit,
+          paymentGroupId,
+          paymentDate,
+          clientDate,
+          cashAccountId,
+          currency,
+          recordedRate,
+          notes,
+          shopExpenseAccountName,
+          incomeAccountName,
+          isSharedPayment ?? false,
+          opts.audit,
+          tx
+        )
+      : false;
+    return { scheduledRows: created, postedNow };
   });
 
   if (paymentDate <= clientDate) {
-    await postScheduledGroup(
-      companyId,
-      contractCompanyId,
-      mod,
-      contract,
-      unit,
-      paymentGroupId,
-      paymentDate,
-      clientDate,
-      cashAccountId,
-      currency,
-      recordedRate,
-      notes,
-      shopExpenseAccountName,
-      incomeAccountName,
-      isSharedPayment ?? false,
-      opts.audit
-    );
+    if (!postedNow) throw new Error("Rental payment group was not posted");
+    // The cross-company auto-transfer is a distinct optional business action
+    // and must never fire inside a transaction that might later roll back.
+    try {
+      if (cashAccountId && unit && scheduledRows.length > 0) {
+        await maybeRunAutoTransfer(
+          companyId,
+          mod,
+          cashAccountId,
+          sumMoney(scheduledRows.map((row) => row.amount as string)).toFixed(2),
+          paymentDate,
+          `${unit.locationGroup}/${unit.unitNumber}`,
+          scheduledRows[0].id,
+          notes ?? undefined
+        );
+      }
+    } catch (error: unknown) {
+      logger.warn("[rentalPostingService] auto-transfer failed:", {
+        error: getErrorMessage(error).split("\\n")[0],
+      });
+    }
 
     const posted = await db
       .select()
@@ -681,18 +711,28 @@ async function postScheduledGroup(
   shopExpenseAccountName: string,
   incomeAccountName: string,
   isSharedPayment: boolean,
-  audit?: { actor: { userId: string; username: string }; trigger: string }
+  audit?: { actor: { userId: string; username: string }; trigger: string },
+  existingTx?: Parameters<Parameters<typeof db.transaction>[0]>[0]
 ): Promise<boolean> {
   const lockKey = hashGroupId(groupId);
   let groupRows: (typeof propertyPayments.$inferSelect)[] = [];
 
-  await db.transaction(async (tx) => {
+  // Immediate payments use their caller's transaction so payment rows, monthly
+  // balances, and accounting entries commit or roll back together.
+  const applyPosting = async (tx: Parameters<Parameters<typeof db.transaction>[0]>[0]) => {
     await tx.execute(sql`SELECT pg_advisory_xact_lock(${lockKey})`);
 
     groupRows = await tx
       .select()
       .from(propertyPayments)
-      .where(and(eq(propertyPayments.paymentGroupId, groupId), sql`${propertyPayments.postingStatus} = 'SCHEDULED'`));
+      .where(and(
+        eq(propertyPayments.companyId, companyId),
+        eq(propertyPayments.module, module),
+        eq(propertyPayments.paymentGroupId, groupId),
+        sql`${propertyPayments.postingStatus} = 'SCHEDULED'`
+      ))
+      .orderBy(propertyPayments.id)
+      .for("update");
 
     if (groupRows.length === 0) return;
 
@@ -778,9 +818,18 @@ async function postScheduledGroup(
         tx
       );
     }
-  });
+  };
+
+  if (existingTx) {
+    await applyPosting(existingTx);
+  } else {
+    await db.transaction(applyPosting);
+  }
 
   if (groupRows.length === 0) return false;
+  // An outer transaction has not committed yet. Its caller performs the
+  // optional cross-company auto-transfer only *after* successful commit.
+  if (existingTx) return true;
 
   try {
     const firstRow = groupRows[0];
