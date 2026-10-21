@@ -13,7 +13,6 @@ import {companyBusinessDate} from "./companyBusinessDate";
 import {fxDay} from "./monetaryFxRates";
 import {loadBalanceRows,type BalanceRow,type BalanceRowKind} from "./balances/ledgerBalanceEngine";
 import {buildTrialBalance} from "./integrity/trialBalance";
-import {classifyAccountType} from "./accountClassification";
 import {financialStatementCategory} from "./unifiedAccountingFoundation";
 
 type Classification="asset"|"liability"|"equity"|"income"|"cost_of_sales"|"expense"|"unknown";
@@ -47,6 +46,11 @@ export interface SinglePeriodFinancialStatements{
   grossProfitUsd:string;operatingResultUsd:string;
   periodNetResultUsd:string;
   priorPeriodClosingJournalsExcluded:true;
+ };
+ changesInEquity:{
+  openingTotalEquityUsd:string;periodResultUsd:string;
+  otherBookedEquityMovementsUsd:string;closingTotalEquityUsd:string;
+  differenceUsd:string;otherMovementsRequireReview:true;
  };
  cashFlow:{
   operatingUsd:string;investingUsd:string;financingUsd:string;
@@ -83,7 +87,6 @@ export interface ProfessionalFinancialPackage {
 const ZERO=new Decimal(0);
 const dec=(x:unknown)=>new Decimal(String(x??"0"));
 const fmt=(n:Decimal)=>n.toDecimalPlaces(2,Decimal.ROUND_HALF_UP).toFixed(2);
-const key=(r:Pick<BalanceRow,"kind"|"id">)=>`${r.kind}:${r.id??"-"}`;
 function empty():StatementSection{return{lines:[],totalUsd:"0.00"};}
 function append(section:StatementSection,line:StatementLine,total:Decimal){
  section.lines.push({...line,amountUsd:fmt(total)});
@@ -225,10 +228,13 @@ async function statementTx(tx:DbTransaction,input:{companyId:number;fromDate:str
   accountType:row.accountType,category,amountUsd:"0.00",
   openingSideAssumed:row.openingSideAssumed,currentSourceIsMutable:true
  });
- let earnings=ZERO,cashOpening=ZERO,cashChange=ZERO;
+ let earnings=ZERO,openingTotalEquity=ZERO,cashOpening=ZERO,cashChange=ZERO;
  for(const row of sheetRows){
   const closing=signedSheet(row);
+  const brought=row.masterOpening.plus(row.carriedForward);
   const role=classification(row,subtypes);
+  if(role==="equity"||role==="income"||role==="expense"||role==="cost_of_sales")
+   openingTotalEquity=openingTotalEquity.minus(brought);
   if(cashAccount(row,subtypes)){
    cashOpening=cashOpening.plus(row.masterOpening).plus(row.carriedForward);
    cashChange=cashChange.plus(row.periodDebit).minus(row.periodCredit);
@@ -261,6 +267,9 @@ async function statementTx(tx:DbTransaction,input:{companyId:number;fromDate:str
  const gross=dec(revenue.totalUsd).minus(costOfSales.totalUsd);
  const result=gross.minus(operatingExpenses.totalUsd);
  const adjEquity=dec(equity.totalUsd).plus(earnings);
+ const otherEquityMovements=adjEquity.minus(openingTotalEquity).minus(result);
+ const equityBridgeDifference=openingTotalEquity.plus(result)
+  .plus(otherEquityMovements).minus(adjEquity);
  const mismatch=dec(assets.totalUsd).minus(liabilities.totalUsd)
    .minus(adjEquity).minus(unknown.totalUsd);
  const classifiedSum=sourceCash.operating.plus(sourceCash.investing)
@@ -298,6 +307,14 @@ async function statementTx(tx:DbTransaction,input:{companyId:number;fromDate:str
    revenue,costOfSales,operatingExpenses,grossProfitUsd:fmt(gross),
    operatingResultUsd:fmt(result),periodNetResultUsd:fmt(result),
    priorPeriodClosingJournalsExcluded:true
+  },
+  changesInEquity:{
+   openingTotalEquityUsd:fmt(openingTotalEquity),
+   periodResultUsd:fmt(result),
+   otherBookedEquityMovementsUsd:fmt(otherEquityMovements),
+   closingTotalEquityUsd:fmt(adjEquity),
+   differenceUsd:fmt(equityBridgeDifference),
+   otherMovementsRequireReview:true
   },
   cashFlow:{
    operatingUsd:fmt(sourceCash.operating),
