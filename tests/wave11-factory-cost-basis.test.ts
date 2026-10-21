@@ -34,6 +34,7 @@ vi.mock("../server/auth", async (importOriginal) => {
 
 import { db, pool } from "../server/db";
 import { deleteAuditLogRowsForTests } from "./helpers/auditLogCleanup";
+import { createFakeRouteApp } from "./helpers/fakeRouteApp";
 import { factoryStockValuation } from "../server/services/accounting/perpetualInventory/factoryValuation";
 import { syncFactoryStockJournalTx } from "../server/services/accounting/perpetualInventory/factoryStockJournal";
 import { cascadeContainerCostChange } from "../server/services/factory/rawStockCostCascade";
@@ -51,18 +52,8 @@ import { registerEmployeeNetPositionRoutes } from "../server/routes/factory/empl
 const PREFIX = "w11fcb";
 const today = new Date().toISOString().slice(0, 10);
 
-type Handler = (req: unknown, res: unknown, next?: () => unknown) => Promise<unknown> | unknown;
-const routes = new Map<string, Handler[]>();
-const fakeApp = new Proxy(
-  {},
-  {
-    get:
-      (_target, method: string) =>
-      (path: unknown, ...handlers: Handler[]) => {
-        if (typeof path === "string") routes.set(`${method.toUpperCase()} ${path}`, handlers);
-      },
-  }
-) as never;
+// Route harness: the fake app records handlers; call() runs them with this fixture's session.
+const { app: fakeApp, call } = createFakeRouteApp(() => ({ companyId, today }));
 
 let companyId: number;
 let locationId: number;
@@ -72,54 +63,6 @@ let audNoRateContainer: number;
 let usdContainer: number;
 let customerId: number;
 let supervisorId: string;
-
-async function call(route: string, req: Record<string, any>) {
-  const handlers = routes.get(route);
-  if (!handlers) throw new Error(`route not registered: ${route}`);
-  const [method, path] = route.split(" ");
-  let statusCode = 200;
-  let body: any;
-  const res: Record<string, any> = {
-    status(code: number) {
-      statusCode = code;
-      return res;
-    },
-    json(value: unknown) {
-      body = value;
-      return res;
-    },
-    set: () => res,
-    setHeader: () => res,
-  };
-  const headers: Record<string, string> = { "x-client-date": today, ...(req.headers ?? {}) };
-  const request = {
-    method,
-    path,
-    params: {},
-    query: {},
-    body: {},
-    get: (name: string) => headers[name.toLowerCase()],
-    header: (name: string) => headers[name.toLowerCase()],
-    ...req,
-    headers,
-    session: {
-      factoryCompanyId: companyId,
-      currentCompanyId: companyId,
-      userId: "1",
-      username: "owner",
-      ...req.session,
-    },
-  };
-  // Middleware (requireRole) then the handler.
-  for (const [index, handler] of handlers.entries()) {
-    let next = false;
-    await handler(request, res, () => {
-      next = true;
-    });
-    if (index < handlers.length - 1 && !next) break;
-  }
-  return { statusCode, body };
-}
 
 const one = async <T = any>(text: string, values: unknown[] = []) => (await pool.query(text, values)).rows[0] as T;
 const all = async <T = any>(text: string, values: unknown[] = []) => (await pool.query(text, values)).rows as T[];

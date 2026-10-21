@@ -891,14 +891,4 @@ export const wave8ReleaseTranslationsPart3: readonly Phase3SharedUiEntry[] = [
     ar: "هذا السند هو أحد طرفي تحويل بين الشركات. لا يمكن تعديله هنا: احذف التحويل (يُحذف سندا الشركتين معاً) ثم سجّله من جديد.",
     fr: "Ce bon est l’un des côtés d’un transfert intersociétés. Il ne peut pas être modifié ici : supprimez le transfert (les bons des deux sociétés sont supprimés ensemble) puis enregistrez-le à nouveau.",
   },
-  {
-    en: "txDate must be a YYYY-MM-DD date",
-    ar: "يجب أن يكون txDate تاريخاً بصيغة YYYY-MM-DD",
-    fr: "txDate doit être une date au format AAAA-MM-JJ",
-  },
-  {
-    en: "ids must be bale ids",
-    ar: "يجب أن تكون المعرّفات معرّفات بالات",
-    fr: "les identifiants doivent être des identifiants de balles",
-  },
 ];

@@ -96,7 +96,7 @@ async function balanceWithVoucherPayment(row: Record<string, unknown>) {
   harness.queue = [[supplier], [], [], [{ factorySupplierId: 5, optional: false, ...row }], [], []];
   let body: { operationalMemo: { outstandingUsd: string } } | undefined;
   await balanceHandler()(
-    { session: { factoryCompanyId: 7 }, params: { id: "5" } },
+    { session: { factoryCompanyId: 7 }, params: { id: "5" }, query: {} },
     { set: () => undefined, status: () => ({ json: () => undefined }), json: (b: typeof body) => (body = b) }
   );
   return Number(body!.operationalMemo.outstandingUsd);

@@ -9,7 +9,13 @@ const source = [
 
 describe("remaining-only continuation loading", () => {
   it("shows only the unscanned quantities by article, never the full original proforma", () => {
-    const next = buildRemainingLoadingPlan(source, new Map([["hmd-a", 45], ["hmd-b", 20]]));
+    const next = buildRemainingLoadingPlan(
+      source,
+      new Map([
+        ["hmd-a", 45],
+        ["hmd-b", 20],
+      ])
+    );
     expect(next).toEqual({
       lines: [
         { articleCode: "HMD-A", productName: "Product A", expectedQty: 15, proformaLineId: 11 },
@@ -20,8 +26,20 @@ describe("remaining-only continuation loading", () => {
   });
 
   it("keeps reducing the saved remaining-only plan through several containers", () => {
-    const second = buildRemainingLoadingPlan(source, new Map([["hmd-a", 45], ["hmd-b", 20]]));
-    const third = buildRemainingLoadingPlan(second.lines, new Map([["hmd-a", 10], ["hmd-b", 10]]));
+    const second = buildRemainingLoadingPlan(
+      source,
+      new Map([
+        ["hmd-a", 45],
+        ["hmd-b", 20],
+      ])
+    );
+    const third = buildRemainingLoadingPlan(
+      second.lines,
+      new Map([
+        ["hmd-a", 10],
+        ["hmd-b", 10],
+      ])
+    );
     expect(third).toEqual({
       lines: [
         { articleCode: "HMD-A", productName: "Product A", expectedQty: 5, proformaLineId: 11 },
@@ -36,22 +54,33 @@ describe("remaining-only continuation loading", () => {
       { ...source[0], createdAt: new Date("2026-10-01T00:00:00Z") },
       { ...source[1], createdAt: new Date("2026-10-01T00:00:00Z") },
     ];
-    const second = buildRemainingLoadingPlan(original, new Map([["hmd-a", 60], ["hmd-b", 10]]));
+    const second = buildRemainingLoadingPlan(
+      original,
+      new Map([
+        ["hmd-a", 60],
+        ["hmd-b", 10],
+      ])
+    );
     expect(second.lines.map((line) => [line.articleCode, line.expectedQty])).toEqual([["HMD-B", 30]]);
 
     const resumed = mergeNewProformaArticles(second.lines, original, true, "2026-10-02T00:00:00Z");
     expect(resumed.map((line) => line.articleCode)).toEqual(["HMD-B"]);
     const third = buildRemainingLoadingPlan(resumed, new Map([["hmd-b", 20]]));
     expect(third.lines.map((line) => [line.articleCode, line.expectedQty])).toEqual([["HMD-B", 10]]);
-    expect(mergeNewProformaArticles(third.lines, original, true, "2026-10-03T00:00:00Z"))
-      .toHaveLength(1);
+    expect(mergeNewProformaArticles(third.lines, original, true, "2026-10-03T00:00:00Z")).toHaveLength(1);
   });
 
   it("adds genuinely new proforma items to unfinished continuation plans", () => {
     const original = [
       { ...source[0], createdAt: "2026-10-01T00:00:00Z" },
       { ...source[1], createdAt: "2026-10-01T00:00:00Z" },
-      { articleCode: "HMD-C", productName: "Added item", expectedQty: 4, proformaLineId: 13, createdAt: "2026-10-04T00:00:00Z" },
+      {
+        articleCode: "HMD-C",
+        productName: "Added item",
+        expectedQty: 4,
+        proformaLineId: 13,
+        createdAt: "2026-10-04T00:00:00Z",
+      },
     ];
     const saved = [{ ...source[1], expectedQty: 8 }];
     const merged = mergeNewProformaArticles(saved, original, true, "2026-10-03T00:00:00Z");
@@ -69,8 +98,7 @@ describe("remaining-only continuation loading", () => {
       { ...source[1], created_at: "2026-10-01T00:00:00Z" },
     ];
     const saved = [{ ...source[1], expectedQty: 10 }];
-    expect(mergeNewProformaArticles(saved, master, true, "2026-10-02T00:00:00Z"))
-      .toEqual(saved);
+    expect(mergeNewProformaArticles(saved, master, true, "2026-10-02T00:00:00Z")).toEqual(saved);
   });
 
   it("deduplicates case-variant article lines and clamps overloading to zero", () => {
@@ -89,18 +117,22 @@ describe("remaining-only continuation loading", () => {
   });
 
   it("returns no continuation when nothing is missing", () => {
-    const result = buildRemainingLoadingPlan(source, new Map([["hmd-a", 60], ["hmd-b", 45]]));
+    const result = buildRemainingLoadingPlan(
+      source,
+      new Map([
+        ["hmd-a", 60],
+        ["hmd-b", 45],
+      ])
+    );
     expect(result.lines).toEqual([]);
     expect(result.remainingBales).toBe(0);
   });
 
   it("refuses corrupt or fractional quantities rather than silently losing bales", () => {
-    expect(() =>
-      buildRemainingLoadingPlan([{ ...source[0], expectedQty: -1 }], new Map())
-    ).toThrow("Invalid expected quantity");
-    expect(() =>
-      buildRemainingLoadingPlan(source, new Map([["hmd-a", 0.5]]))
-    ).toThrow("Invalid loaded quantity");
+    expect(() => buildRemainingLoadingPlan([{ ...source[0], expectedQty: -1 }], new Map())).toThrow(
+      "Invalid expected quantity"
+    );
+    expect(() => buildRemainingLoadingPlan(source, new Map([["hmd-a", 0.5]]))).toThrow("Invalid loaded quantity");
   });
 
   it("keeps one proforma reference and uses an empty new order before any scanning", () => {
@@ -109,13 +141,15 @@ describe("remaining-only continuation loading", () => {
     const dialog = requireText("client/src/pages/factory/factorycontainerloadingscan/FinalizeLoadingDialog.tsx");
 
     expect(finalize).toContain("nextLoadingLines.map((line)");
-    expect(finalize).toContain("status: \"LOADING\"");
+    expect(finalize).toContain('status: "LOADING"');
     expect(finalize).toContain("proformaIdUsed: order.proformaIdUsed");
     expect(finalize).toContain("buildRemainingLoadingPlan(");
-    expect(capacity).toContain("SELECT article_code AS \"articleCode\", expected_qty AS quantity");
+    expect(capacity).toContain('SELECT article_code AS "articleCode", expected_qty AS quantity');
     expect(capacity).toContain("AND NOT EXISTS (");
     expect(capacity).toContain("AND cpl.created_at > co.created_at");
-    expect(finalize).toContain("mergeNewProformaArticles(existingPlan, masterPlan, planKind === "continuation", order.createdAt)");
+    expect(finalize).toContain(
+      'mergeNewProformaArticles(existingPlan, masterPlan, planKind === "continuation", order.createdAt)'
+    );
     expect(dialog).toContain('data-testid="button-finalize-open-next-loading"');
   });
 });

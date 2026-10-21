@@ -57,6 +57,9 @@ vi.mock("../server/db", async () => {
       },
     }),
   };
+  // Raw reads (the FX wallet voucher lock probes its tables first): no FX
+  // wallet tables in this fixture, so the void is not wallet-locked.
+  db.execute = async () => ({ rows: [] });
   db.transaction = async (fn: any) => fn(db);
   return { db };
 });

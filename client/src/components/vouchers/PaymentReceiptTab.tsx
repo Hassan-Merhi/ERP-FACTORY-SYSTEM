@@ -28,7 +28,6 @@ import {
   ArrowDownCircle,
   AlertCircle,
   BookOpen,
-  Search,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AccountAutocomplete } from "@/components/AccountAutocomplete";
@@ -37,6 +36,12 @@ import AccountSidebar, { Account } from "@/components/AccountSidebar";
 import { VoucherEntriesTable, type VoucherEntry } from "@/components/vouchers/VoucherEntriesTable";
 import type { VoucherFormData } from "@/pages/vouchers/voucherTypes";
 import { VoucherSourceCard } from "@/components/vouchers/VoucherSourceCard";
+import {
+  FxWalletPaymentSection,
+  FxWalletSourceCard,
+  type FxWalletSummary,
+} from "@/components/vouchers/FxWalletPayment";
+import { PayFromAccountSheet } from "@/components/vouchers/PayFromAccountSheet";
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
 
 export interface PaymentReceiptTabProps {
@@ -74,11 +79,7 @@ export interface PaymentReceiptTabProps {
   isEditMode?: boolean;
   originalTotal?: number;
   isPending?: boolean;
-  fxWallet?: {
-    wallet: { id: number; ledgerAccountId: number; accountName: string };
-    state: { eur: string; usd: string; totalBookUsd: string };
-    synchronized: boolean;
-  };
+  fxWallet?: FxWalletSummary;
   fxWalletsLoading?: boolean;
   fxPaymentRate?: string;
   onFxPaymentRateChange?: (value: string) => void;
@@ -182,15 +183,14 @@ export function PaymentReceiptTab({
   }, [isFxPayment, form]);
   const fxRateValue = Number(fxPaymentRate);
   const directEurPayment = isFxPayment && fxPayoutCurrency === "EUR";
-  const fxEurRequired = isFxPayment && total > 0
-    ? directEurPayment ? total : fxRateValue > 0 ? total / fxRateValue : 0
-    : 0;
-  const fxUnsupportedEntries = isFxPayment && (
-    entries.length !== 1 ||
-    !["ledger", "factorySupplier"].includes(entries[0]?.accountType || "") ||
-    entries[0]?.accountId === fxWallet?.wallet.ledgerAccountId ||
-    (directEurPayment && entries[0]?.accountType !== "factorySupplier")
-  );
+  const fxEurRequired =
+    isFxPayment && total > 0 ? (directEurPayment ? total : fxRateValue > 0 ? total / fxRateValue : 0) : 0;
+  const fxUnsupportedEntries =
+    isFxPayment &&
+    (entries.length !== 1 ||
+      !["ledger", "factorySupplier"].includes(entries[0]?.accountType || "") ||
+      entries[0]?.accountId === fxWallet?.wallet.ledgerAccountId ||
+      (directEurPayment && entries[0]?.accountType !== "factorySupplier"));
 
   // Tab-specific styling / labels
   const Icon = isPayment ? ArrowUpCircle : ArrowDownCircle;
@@ -511,13 +511,11 @@ export function PaymentReceiptTab({
                   )}
 
                   {isFxPayment && paymentAccountId > 0 && !editingSource && (
-                    <div className="rounded-lg border bg-muted/20 px-4 py-3 space-y-1" data-testid="fx-payment-source">
-                      <div className="flex items-center justify-between gap-2">
-                        <p className="text-sm font-semibold">Pay from {paymentAccountName} (EUR wallet)</p>
-                        <Button type="button" variant="outline" size="sm" onClick={() => setEditingSource(true)}>Change</Button>
-                      </div>
-                      <p className="font-mono text-sm">EUR {Number(fxWallet!.state.eur).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} available</p>
-                    </div>
+                    <FxWalletSourceCard
+                      accountName={paymentAccountName}
+                      eurAvailable={fxWallet!.state.eur}
+                      onChange={() => setEditingSource(true)}
+                    />
                   )}
 
                   {/* Account picker — shown until an account is chosen, or on "Change" */}
@@ -600,7 +598,7 @@ export function PaymentReceiptTab({
                       style={total > 0 ? { color: accentColor } : undefined}
                       data-testid="text-hero-total"
                     >
-                      {total > 0 ? directEurPayment ? `EUR ${total.toFixed(2)}` : formatAmount(total) : "—"}
+                      {total > 0 ? (directEurPayment ? `EUR ${total.toFixed(2)}` : formatAmount(total)) : "—"}
                     </span>
                     <span className="text-xs text-muted-foreground mt-0.5 tabular-nums">
                       {validEntryCount} {validEntryCount === 1 ? "line" : "lines"}
@@ -623,80 +621,22 @@ export function PaymentReceiptTab({
                 />
 
                 {isFxPayment && (
-                  <section className="space-y-3 rounded-lg border border-primary/30 bg-muted/20 p-4" data-testid="fx-payment-voucher">
-                    <div>
-                      <h4 className="text-sm font-semibold">{directEurPayment ? "Direct EUR supplier payment" : "FX agent payment — recipient gets USD"}</h4>
-                    </div>
-                    {entries[0]?.accountType === "factorySupplier" && (
-                      <div className="flex gap-2 flex-wrap">
-                        <Button type="button" size="sm" variant={directEurPayment ? "default" : "outline"}
-                          disabled={fxSupplierBalanceLoading || !fxSupplierEurBalance}
-                          onClick={() => onFxPayoutCurrencyChange?.("EUR")} data-testid="fx-pay-eur">
-                          Pay EUR directly
-                        </Button>
-                        <Button type="button" size="sm" variant={!directEurPayment ? "default" : "outline"}
-                          onClick={() => onFxPayoutCurrencyChange?.("USD")} data-testid="fx-pay-usd">
-                          Pay USD (exchange)
-                        </Button>
-                      </div>
-                    )}
-                    {fxSupplierBalanceLoading && (
-                      <p className="text-sm text-muted-foreground">Loading supplier EUR balance…</p>
-                    )}
-                    {fxSupplierEurBalance !== null && fxSupplierEurBalance > 0 && (
-                      <p className="text-sm text-muted-foreground" data-testid="fx-supplier-eur-balance">
-                        {fxSupplierEurBasis === "broker-statement"
-                          ? "Broker EUR settlement balance (including OTW): "
-                          : "Supplier EUR payable: "}
-                        EUR {fxSupplierEurBalance.toFixed(2)}
-                      </p>
-                    )}
-                    {directEurPayment ? (
-                      <p className="text-sm" data-testid="fx-direct-eur-details">
-                        Enter the EUR amount below. Both the supplier's EUR payable and the
-                        agent's EUR wallet decrease by the same amount. No exchange rate needed.
-                      </p>
-                    ) : (
-                      <>
-                        <label className="block text-sm font-medium" htmlFor="fx-voucher-rate">
-                          Agreed payment rate — USD per 1 EUR
-                        </label>
-                        <Input id="fx-voucher-rate" type="number" min="0" step="any"
-                          placeholder="e.g. 1.14" value={fxPaymentRate}
-                          onChange={(event) => onFxPaymentRateChange?.(event.target.value)} />
-                      </>
-                    )}
-                    {total > 0 && (directEurPayment || fxRateValue > 0) && (
-                      <div className="grid grid-cols-2 gap-3 text-sm">
-                        <div>
-                          <p className="text-xs text-muted-foreground">Recipient receives</p>
-                          <p className="font-mono font-semibold">{fxPayoutCurrency} {total.toFixed(2)}</p>
-                        </div>
-                        <div>
-                          <p className="text-xs text-muted-foreground">Agent EUR deduction</p>
-                          <p className="font-mono font-semibold">
-                            EUR {fxEurRequired.toLocaleString(undefined, {
-                              minimumFractionDigits: 2, maximumFractionDigits: 6
-                            })}
-                          </p>
-                        </div>
-                      </div>
-                    )}
-                    {!fxWallet?.synchronized && (
-                      <p className="text-sm text-destructive">Ledger mismatch: reconcile the FX wallet before paying.</p>
-                    )}
-                    {fxEurRequired > Number(fxWallet!.state.eur) && (
-                      <p className="text-sm text-destructive">Insufficient EUR held by this agent.</p>
-                    )}
-                    {directEurPayment && fxSupplierEurBalance !== null && total > fxSupplierEurBalance && (
-                      <p className="text-sm text-destructive">Amount exceeds supplier EUR balance.</p>
-                    )}
-                    {fxUnsupportedEntries && (
-                      <p className="text-sm text-destructive">
-                        Use one factory supplier or USD ledger recipient (not the FX agent itself) per payment.
-                      </p>
-                    )}
-                  </section>
+                  <FxWalletPaymentSection
+                    fxWallet={fxWallet!}
+                    directEurPayment={directEurPayment}
+                    showPayoutToggle={entries[0]?.accountType === "factorySupplier"}
+                    fxPayoutCurrency={fxPayoutCurrency}
+                    fxPaymentRate={fxPaymentRate}
+                    fxRateValue={fxRateValue}
+                    fxEurRequired={fxEurRequired}
+                    fxSupplierEurBalance={fxSupplierEurBalance ?? null}
+                    fxSupplierEurBasis={fxSupplierEurBasis}
+                    fxSupplierBalanceLoading={fxSupplierBalanceLoading}
+                    fxUnsupportedEntries={fxUnsupportedEntries}
+                    total={total}
+                    onFxPaymentRateChange={onFxPaymentRateChange}
+                    onFxPayoutCurrencyChange={onFxPayoutCurrencyChange}
+                  />
                 )}
                 {isPayment && fxWalletsLoading && (
                   <p className="text-xs text-muted-foreground">Loading FX wallet status before payment…</p>
@@ -862,13 +802,21 @@ export function PaymentReceiptTab({
                         size="default"
                         className="w-full sm:w-auto"
                         disabled={
-                          paymentAccountId === 0 || total === 0 || isPending || fxWalletsLoading ||
-                          (isFxPayment && (!fxWallet?.synchronized || fxSupplierBalanceLoading ||
-                             (!directEurPayment && fxRateValue <= 0) ||
-                             (directEurPayment && (fxSupplierEurBalance === null ||
-                               fxSupplierEurBalance <= 0 || total > fxSupplierEurBalance)) ||
-                            !Number.isFinite(fxEurRequired) || fxEurRequired > Number(fxWallet!.state.eur) ||
-                            fxUnsupportedEntries))
+                          paymentAccountId === 0 ||
+                          total === 0 ||
+                          isPending ||
+                          fxWalletsLoading ||
+                          (isFxPayment &&
+                            (!fxWallet?.synchronized ||
+                              fxSupplierBalanceLoading ||
+                              (!directEurPayment && fxRateValue <= 0) ||
+                              (directEurPayment &&
+                                (fxSupplierEurBalance === null ||
+                                  fxSupplierEurBalance <= 0 ||
+                                  total > fxSupplierEurBalance)) ||
+                              !Number.isFinite(fxEurRequired) ||
+                              fxEurRequired > Number(fxWallet!.state.eur) ||
+                              fxUnsupportedEntries))
                         }
                         data-testid="button-save-voucher"
                       >
@@ -924,83 +872,29 @@ export function PaymentReceiptTab({
       </Sheet>
 
       {/* ── Mobile Pay From / Receive Into Sheet ── */}
-      <Sheet
+      <PayFromAccountSheet
         open={payFromSheetOpen}
         onOpenChange={(isOpen) => {
           setPayFromSheetOpen(isOpen);
           if (!isOpen) setPayFromSearch("");
         }}
-      >
-        <SheetContent side="bottom" className="flex flex-col p-0" style={{ height: "auto", maxHeight: "88vh" }}>
-          <SheetHeader className="px-4 pt-4 pb-3 border-b shrink-0">
-            <SheetTitle className="text-base">{accountLabel}</SheetTitle>
-            <div className="relative mt-2">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
-              <Input
-                autoFocus
-                placeholder={`Search ${accountLabel.toLowerCase()}...`}
-                value={payFromSearch}
-                onChange={(e) => setPayFromSearch(e.target.value)}
-                className="pl-9"
-                data-testid="input-pay-from-mobile-search"
-              />
-            </div>
-          </SheetHeader>
-          <div className="flex-1 overflow-y-auto min-h-0">
-            {(() => {
-              const search = payFromSearch.toLowerCase().replace(/[\s.-]/g, "");
-              const filtered = sidebarAccounts.filter((a) => {
-                // Only show cash / bank / loan eligible accounts in the Pay From sheet
-                if (!payFromKeys.has(`${a.type}:${a.id}`)) return false;
-                if (!payFromSearch) return true;
-                return a.name
-                  .toLowerCase()
-                  .replace(/[\s.-]/g, "")
-                  .includes(search);
-              });
-              if (filtered.length === 0) {
-                return (
-                  <div className="px-4 py-8 text-center text-sm text-muted-foreground">
-                    {payFromSearch ? "No accounts match your search" : "No accounts available"}
-                  </div>
-                );
-              }
-              return filtered.slice(0, 40).map((account) => {
-                const isSelected = account.id === paymentAccountId && account.type === paymentAccountType;
-                const bal =
-                  typeof account.balance === "string" ? parseFloat(account.balance) : (account.balance ?? null);
-                return (
-                  <button
-                    key={`${account.type}-${account.id}`}
-                    type="button"
-                    className={cn(
-                      "w-full text-left px-4 py-3 border-b border-muted/40 flex items-center justify-between gap-3 active-elevate-2",
-                      isSelected && "bg-accent"
-                    )}
-                    onClick={() => {
-                      form.setValue("paymentAccountType", account.type);
-                      form.setValue("paymentAccountId", account.id);
-                      form.setValue("paymentAccountName", account.name);
-                      setEditingSource(false);
-                      setPayFromTouched(true);
-                      setPayFromSheetOpen(false);
-                    }}
-                    data-testid={`pay-from-mobile-option-${account.id}`}
-                  >
-                    <div className="flex-1 min-w-0">
-                      <div className="text-sm font-medium truncate">{account.name}</div>
-                      {bal != null && (
-                        <div className="text-xs text-muted-foreground font-mono mt-0.5">{formatAmount(bal)}</div>
-                      )}
-                    </div>
-                    {isSelected && <div className="h-2 w-2 rounded-full bg-primary shrink-0" />}
-                  </button>
-                );
-              });
-            })()}
-          </div>
-        </SheetContent>
-      </Sheet>
+        accountLabel={accountLabel}
+        payFromSearch={payFromSearch}
+        setPayFromSearch={setPayFromSearch}
+        sidebarAccounts={sidebarAccounts}
+        payFromKeys={payFromKeys}
+        paymentAccountId={paymentAccountId}
+        paymentAccountType={paymentAccountType}
+        formatAmount={formatAmount}
+        onSelect={(account) => {
+          form.setValue("paymentAccountType", account.type);
+          form.setValue("paymentAccountId", account.id);
+          form.setValue("paymentAccountName", account.name);
+          setEditingSource(false);
+          setPayFromTouched(true);
+          setPayFromSheetOpen(false);
+        }}
+      />
     </div>
   );
 }

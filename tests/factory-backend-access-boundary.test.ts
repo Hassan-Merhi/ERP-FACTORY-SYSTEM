@@ -133,7 +133,6 @@ describe("Wave 4 Factory backend access ownership", () => {
     for (const path of [
       "/fx-agent-wallets",
       "/fx-agent-wallets/7/convert",
-      "/fx-agent-wallets/7/settle",
       "/fx-agent-wallets/7/reverse-conversion",
       "/fx-agent-wallets/7/conversions",
     ]) {
@@ -141,6 +140,13 @@ describe("Wave 4 Factory backend access ownership", () => {
         pageKey: "factory/accounts",
       });
     }
+    // Paying from a wallet is also open to Vouchers > Payment users (b0de355).
+    expect(resolveFactoryBackendAccessRequirement(req("/fx-agent-wallets/7/settle", "POST"))).toEqual({
+      alternatives: [
+        { pageKey: "factory/accounts" },
+        { pageKey: "factory/vouchers", tabs: ["hide_tab_vouchers_payment"] },
+      ],
+    });
   });
 
   it("maps raw-stock adjustments and repair children to Raw Materials", () => {

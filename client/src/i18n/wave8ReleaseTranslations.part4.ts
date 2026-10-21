@@ -2,6 +2,16 @@ import type { Phase3SharedUiEntry } from "./sharedUiPhase3TranslationTypes";
 
 // Wave 8 release closeout, continued from part 3 (which reached the 900-line limit).
 export const wave8ReleaseTranslationsPart4: readonly Phase3SharedUiEntry[] = [
+  {
+    en: "txDate must be a YYYY-MM-DD date",
+    ar: "يجب أن يكون txDate تاريخاً بصيغة YYYY-MM-DD",
+    fr: "txDate doit être une date au format AAAA-MM-JJ",
+  },
+  {
+    en: "ids must be bale ids",
+    ar: "يجب أن تكون المعرّفات معرّفات بالات",
+    fr: "les identifiants doivent être des identifiants de balles",
+  },
   // Phase 22 A: correction policy, engine rounding and numbering.
   {
     en: "Voucher number counter could not be created",

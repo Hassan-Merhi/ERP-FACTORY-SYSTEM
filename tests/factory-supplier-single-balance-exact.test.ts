@@ -47,7 +47,7 @@ describe("factory supplier single balance", () => {
     harness.queue = [[supplier], [], payments, [], [], []];
     let body: { balance: number; outstandingUsd: number; operationalMemo: { outstandingUsd: string } } | undefined;
     await balanceHandler()(
-      { session: { factoryCompanyId: 7 }, params: { id: "5" } },
+      { session: { factoryCompanyId: 7 }, params: { id: "5" }, query: {} },
       { set: () => undefined, status: () => ({ json: () => undefined }), json: (b: typeof body) => (body = b) }
     );
 
