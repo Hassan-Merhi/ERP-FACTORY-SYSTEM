@@ -139,7 +139,7 @@ async function sourceInCompany(client: PoolClient, companyId: number, kind: Sour
         "ve.debit_amount::text AS \"debitAmount\", ve.credit_amount::text AS \"creditAmount\",",
         "v.voucher_number AS \"voucherNumber\",",
         "v.source_module AS \"sourceModule\", v.optional, v.reversal_of_voucher_id AS \"reversalOfVoucherId\",",
-        "EXISTS (SELECT 1 FROM vouchers rev WHERE rev.reversal_of_voucher_id=v.id AND rev.deleted_at IS NULL) AS \"wasReversed\""
+        "EXISTS (SELECT 1 FROM vouchers rev WHERE rev.reversal_of_voucher_id=v.id AND rev.deleted_at IS NULL) AS \"wasReversed\"",
         "FROM voucher_entries ve JOIN vouchers v ON v.id=ve.voucher_id",
         "LEFT JOIN ledger_accounts la ON la.id=ve.ledger_account_id AND la.company_id=ve.company_id",
         "WHERE ve.id=$1 AND ve.company_id=$2 AND v.company_id=$2 AND v.deleted_at IS NULL",
