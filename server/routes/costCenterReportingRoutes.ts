@@ -165,7 +165,7 @@ async function summaryData(scope:Scope,filters:Filters){
   const [detail,centers,budgets]=await Promise.all([
     pool.query(sourceCte+" SELECT company_id AS \\"companyId\\",cost_center_id AS \\"costCenterId\\","+
       " account_id AS \\"accountId\\",account_name AS \\"accountName\\",cost_treatment AS \\"treatment\\","+
-      " date_trunc('month',source_date)::date AS month,"+
+      " to_char(date_trunc('month',source_date),'YYYY-MM') AS month,"+
       " sum(signed_usd)::text AS \\"amountUsd\\",count(*)::int AS \\"entryCount\\""+
       " FROM filtered GROUP BY company_id,cost_center_id,account_id,account_name,cost_treatment,date_trunc('month',source_date)"+
       " ORDER BY company_id,cost_center_id,month,account_name",params),
