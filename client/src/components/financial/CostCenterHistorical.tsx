@@ -38,6 +38,10 @@ type Reconciliation = {
   kind:Kind;basis:string;sourceCount:number;postedUsd:string;
   allocatedUsd:string;unallocatedUsd:string;allocatedSources:number;
   overallocatedSources:number;
+  nativeCurrencies:Array<{
+    currency:string;sourceCount:number;sourceNative:string;
+    allocatedNative:string;unallocatedNative:string;overallocatedSources:number;
+  }>;
 };
 type Account = {id:number;code:string;name:string};
 type Batch = {
@@ -223,9 +227,29 @@ export function CostCenterHistorical({
           <div><p className="text-xs text-muted-foreground">Unallocated USD</p>
             <p className="font-mono font-semibold">{fmt(reconciliation.unallocatedUsd)}</p></div>
           {reconciliation.overallocatedSources>0&&<p role="alert" className="text-sm text-destructive col-span-full">
-            {reconciliation.overallocatedSources} source allocations exceed their book value; resolve before approving a new batch.
+            {reconciliation.overallocatedSources} source allocations exceed their USD book value; resolve before approving a new batch.
           </p>}
         </div>}
+        {reconciliation&&reconciliation.nativeCurrencies.length>0&&
+          <div className="overflow-x-auto border rounded-md">
+            <p className="px-2 pt-2 text-xs font-semibold">Original-currency control totals (no FX revaluation)</p>
+            <table className="text-xs w-full min-w-[480px]">
+              <thead><tr className="text-left">
+                <th className="p-2">Currency</th><th className="p-2 text-right">Source</th>
+                <th className="p-2 text-right">Assigned</th><th className="p-2 text-right">Unallocated</th>
+              </tr></thead>
+              <tbody>{reconciliation.nativeCurrencies.map(row=>
+                <tr key={row.currency} className="border-t">
+                  <td className="p-2">{row.currency}</td>
+                  <td className="p-2 text-right font-mono">{fmt(row.sourceNative)}</td>
+                  <td className="p-2 text-right font-mono">{fmt(row.allocatedNative)}</td>
+                  <td className="p-2 text-right font-mono">{fmt(row.unallocatedNative)}
+                    {row.overallocatedSources>0&&
+                      <span className="block text-destructive">Overallocated: {row.overallocatedSources}</span>}
+                  </td>
+                </tr>)}</tbody>
+            </table>
+          </div>}
       </div>
       {canWrite&&<div className="rounded-md border p-3 space-y-3">
         <h3 className="text-sm font-semibold">Manual Bulk Allocation</h3>
