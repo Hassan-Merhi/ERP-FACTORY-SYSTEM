@@ -173,6 +173,13 @@ export default function Accounts() {
               Cash & Bank Reconciliation
             </Button>
           )}
+        {showViewAccounts && !phoneStatementOpen &&
+          ["Admin","Owner","Developer"].includes(model.currentUser?.role ?? "") && (
+            <Button variant="outline" data-testid="button-monetary-fx"
+              onClick={() => model.navigate(`${model.modePrefix}/accounting/monetary-fx`)}>
+              Multi-Currency Accounting
+            </Button>
+          )}
         {showViewAccounts &&
           !phoneStatementOpen &&
           (model.currentUser?.role === "Admin" || model.currentUser?.role === "Developer") && (
