@@ -46,7 +46,7 @@ export interface PartyOpenItem {
   matchedAmount: string;
   outstandingAmount: string;
   status: "open" | "partial" | "settled" | "inconsistent";
-  allocations: Array<{ otherEntryId: number; amount: string }>;
+  allocations: Array<{ matchId: number; otherEntryId: number; amount: string }>;
   currencyVerified: boolean;
 }
 export interface OpenItemSummary {
@@ -109,7 +109,7 @@ interface EntryRow {
   base_debit: string;
   base_credit: string;
 }
-interface AllocationRow { charge_entry_id: number; settlement_entry_id: number; amount: string; currency: string }
+interface AllocationRow { id: number; charge_entry_id: number; settlement_entry_id: number; amount: string; currency: string }
 async function loadEntriesTx(tx: DbTransaction, input: PartyOpenItemTarget): Promise<EntryRow[]> {
   const { companyId, partyId, domain } = input;
   const owned = ownershipPredicate(domain, companyId, partyId);
@@ -151,7 +151,7 @@ async function loadAllocationsTx(tx: DbTransaction, input: PartyOpenItemTarget):
         AND (m.voided_at IS NULL OR m.voided_at::date > ${input.asOfDate}::date)`
     : sql`AND m.voided_at IS NULL`;
   return resultRows<AllocationRow>(await tx.execute(sql`
-    SELECT m.charge_entry_id,m.settlement_entry_id,m.amount::text,m.currency
+    SELECT m.id,m.charge_entry_id,m.settlement_entry_id,m.amount::text,m.currency
     FROM accounting_open_item_matches m
     JOIN voucher_entries charge ON charge.id=m.charge_entry_id
     JOIN vouchers cv ON cv.id=charge.voucher_id AND cv.company_id=m.company_id
@@ -185,7 +185,7 @@ export async function loadPartyOpenItemsTx(
     loadEntriesTx(tx, target),loadAllocationsTx(tx, target)
   ]);
   const allocated = new Map<number, Decimal>();
-  const links = new Map<number, Array<{ otherEntryId: number; amount: string }>>();
+  const links = new Map<number, Array<{ matchId: number; otherEntryId: number; amount: string }>>();
   for (const m of allocations) {
     const amount = money(m.amount);
     for (const [id,other] of [[m.charge_entry_id,m.settlement_entry_id],
@@ -193,7 +193,7 @@ export async function loadPartyOpenItemsTx(
       const entryId=Number(id);
       allocated.set(entryId, (allocated.get(entryId) ?? new Decimal(0)).plus(amount));
       links.set(entryId,[...(links.get(entryId)??[]),
-        {otherEntryId:Number(other),amount:fmt(amount)}]);
+        {matchId:Number(m.id),otherEntryId:Number(other),amount:fmt(amount)}]);
     }
   }
   // Factory customer charge vouchers tied to unfinalized orders are held out
