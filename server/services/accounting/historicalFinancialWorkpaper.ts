@@ -208,13 +208,48 @@ export async function historicalFinancialWorkpaperTx(tx:DbTransaction,input:{
  await assertTransactionCompanyScope(tx,input.companyId);
  const businessDate=await companyBusinessDate(input.companyId,tx);
  if(asOfDate>businessDate)throw new Error("HISTORICAL_FUTURE_DATE_REFUSED");
- const [trial,period,postings,matches]=await Promise.all([
+ const [trial,periodBalances,period,postings,matches]=await Promise.all([
   buildTrialBalance(input.companyId,asOfDate,tx),
+  loadBalanceRows(tx,{companyId:input.companyId,
+    from:fromDate,asOf:asOfDate}),
   loadBalanceRows(tx,{companyId:input.companyId,
     from:fromDate,asOf:asOfDate,excludeFiscalClose:true}),
   postingsTx(tx,input.companyId,asOfDate),
   matchingEvidenceTx(tx,input.companyId,asOfDate)
  ]);
+ // The existing trial balance's movement columns start at company inception.
+ // This Phase 10 view explicitly uses the requested period instead: opening
+ // at the day before fromDate (master + prior movements), movement inside
+ // [fromDate,asOfDate], and closing at asOfDate. Never change its canonical
+ // unexplained-difference calculation or fabricate a balancing journal.
+ const trialRows=[] as HistoricalFinancialWorkpaper["balance"]["rows"];
+ const sums={
+  openingDebit:new Decimal(0),openingCredit:new Decimal(0),
+  periodDebit:new Decimal(0),periodCredit:new Decimal(0),
+  closingDebit:new Decimal(0),closingCredit:new Decimal(0)
+ };
+ for(const row of periodBalances){
+  const brought=row.masterOpening.plus(row.carriedForward);
+  const closing=brought.plus(row.periodDebit).minus(row.periodCredit);
+  if(brought.isZero()&&row.periodDebit.isZero()&&row.periodCredit.isZero()&&closing.isZero())continue;
+  const od=Decimal.max(brought,0),oc=Decimal.max(brought.negated(),0);
+  const cd=Decimal.max(closing,0),cc=Decimal.max(closing.negated(),0);
+  sums.openingDebit=sums.openingDebit.plus(od);
+  sums.openingCredit=sums.openingCredit.plus(oc);
+  sums.periodDebit=sums.periodDebit.plus(row.periodDebit);
+  sums.periodCredit=sums.periodCredit.plus(row.periodCredit);
+  sums.closingDebit=sums.closingDebit.plus(cd);
+  sums.closingCredit=sums.closingCredit.plus(cc);
+  trialRows.push({
+   kind:row.kind,id:row.id,code:row.code,name:row.name,
+   accountType:row.accountType,deleted:row.deleted,
+   openingDebit:fmt(od),openingCredit:fmt(oc),
+   periodDebit:fmt(row.periodDebit),periodCredit:fmt(row.periodCredit),
+   closingDebit:fmt(cd),closingCredit:fmt(cc)
+  });
+ }
+ trialRows.sort((a,b)=>a.kind.localeCompare(b.kind)||
+   (a.code??a.name).localeCompare(b.code??b.name));
  let income=new Decimal(0),cogs=new Decimal(0),expenses=new Decimal(0);
  for(const row of period){
   const role=financialStatementCategory({code:row.code,
@@ -254,8 +289,12 @@ export async function historicalFinancialWorkpaperTx(tx:DbTransaction,input:{
   basis:"RETROSPECTIVE_POSTED_LEDGER",
   balance:{
    balanced:trial.balanced,unexplainedDifferenceUsd:trial.unexplainedDifference,
-   totals:trial.totals,differenceComponents:trial.differenceComponents,
-   openingSidesAssumed:trial.openingSidesAssumed,rows:trial.rows
+   totals:{
+    openingDebit:fmt(sums.openingDebit),openingCredit:fmt(sums.openingCredit),
+    periodDebit:fmt(sums.periodDebit),periodCredit:fmt(sums.periodCredit),
+    closingDebit:fmt(sums.closingDebit),closingCredit:fmt(sums.closingCredit)
+   },differenceComponents:trial.differenceComponents,
+   openingSidesAssumed:trial.openingSidesAssumed,rows:trialRows
   },
   pnl:{
    incomeUsd:fmt(income),costOfSalesUsd:fmt(cogs),
