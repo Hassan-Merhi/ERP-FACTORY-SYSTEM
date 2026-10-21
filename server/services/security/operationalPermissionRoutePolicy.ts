@@ -282,6 +282,7 @@ export const OPERATIONAL_ROUTE_PERMISSIONS: Readonly<Record<OperationalPermissio
     "GET /api/accounts/:type/:id/statement-pdf",
     "GET /api/pos/temp-pdf/:id",
     "GET /api/pos/invoice/:voucherId/pdf",
+    "GET /api/factory/fx-agent-wallets/:id/statement.pdf",
   ],
   print: ["POST /api/factory/pressing/create-and-print"],
   excelExport: [
@@ -322,6 +323,12 @@ export const OPERATIONAL_ROUTE_PERMISSIONS: Readonly<Record<OperationalPermissio
     "GET /api/stats/group-net-position-excel",
     "GET /api/reports/net-profit-excel",
     "GET /api/reports/net-position-monthly-excel",
+    "GET /api/factory/fx-agent-wallets/:id/statement.xlsx",
+    // Cost-center report exports (one endpoint serves CSV, XLSX and PDF).
+    "GET /api/cost-centers/reports/export",
+    "GET /api/cost-centers/reports/consolidated/export",
+    "GET /api/factory/cost-centers/reports/export",
+    "GET /api/factory/cost-centers/reports/consolidated/export",
     "GET /api/sp/sales-form/export",
     "GET /api/sp/sales-form/export-v2",
     // Missed by the old URL rules (.xlsx / .csv suffix).
