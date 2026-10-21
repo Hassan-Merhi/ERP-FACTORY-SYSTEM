@@ -332,9 +332,14 @@ export default function FiscalCloseReview(){
      <div><Label>Type CLOSE {data.periodEndDate} to confirm</Label>
       <Input value={confirmText} onChange={e=>setConfirmText(e.target.value)}
        placeholder={"CLOSE "+data.periodEndDate}/></div>
-     <Button disabled={!data.reviewedCloseReady||
+     <p className="text-sm text-destructive">
+      Phase 15 safety lock: this new reviewed fiscal journal-posting path
+      remains disabled until independent Claude and finance certification.
+      Readiness and approvals alone do not unlock voucher posting.
+     </p>
+     <Button disabled={true || !data.reviewedCloseReady||
       confirmText!=="CLOSE "+data.periodEndDate||closeMutation.isPending}
-      onClick={()=>closeMutation.mutate()}>Post reviewed period close</Button>
+      onClick={()=>closeMutation.mutate()}>Reviewed closing locked — pending certification</Button>
      <p className="text-xs text-muted-foreground">
       This reviewed path does not reopen closed periods and does not replace
       the separately authorized legacy fiscal close/reopen screens.</p>
