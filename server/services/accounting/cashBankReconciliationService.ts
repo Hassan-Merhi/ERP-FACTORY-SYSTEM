@@ -44,6 +44,7 @@ interface BookRow extends Record<string,unknown>{
 interface StatementRow extends Record<string,unknown>{
   id:number;row_number:number;transaction_date:string;amount:string;
   reference:string|null;description:string|null;running_balance:string|null;
+  review_category:string|null;review_note:string|null;
   match_id:number|null;matched_entry_id:number|null;matched_voucher_id:number|null;
   matched_voucher_number:string|null;match_is_live:boolean|null;
 }
@@ -310,7 +311,7 @@ export async function cashBankStatementDetailTx(tx:DbTransaction,companyId:numbe
   const account=await loadCashBankAccountTx(tx,{companyId,accountKind:head.account_kind,accountId:Number(head.account_id)});
   const lines=resultRows<StatementRow>(await tx.execute(sql`
     SELECT l.id,l.row_number,l.transaction_date::text,l.amount::text,
-      l.reference,l.description,l.running_balance::text,
+      l.reference,l.description,l.running_balance::text,l.review_category,l.review_note,
       m.id AS match_id,m.voucher_entry_id AS matched_entry_id,
       v.id AS matched_voucher_id,v.voucher_number AS matched_voucher_number,
       (v.id IS NOT NULL AND v.deleted_at IS NULL AND v.optional=false) AS match_is_live
@@ -350,6 +351,7 @@ export async function cashBankStatementDetailTx(tx:DbTransaction,companyId:numbe
     linkedLedgerId:account.linkedLedgerId},lines:lines.map(r=>({
       id:Number(r.id),rowNumber:Number(r.row_number),date:r.transaction_date,
       amount:r.amount,reference:r.reference,description:r.description,
+      reviewCategory:r.review_category,reviewNote:r.review_note,
       matchId:r.match_id===null?null:Number(r.match_id),
       matchedEntryId:r.matched_entry_id===null?null:Number(r.matched_entry_id),
       matchedVoucherId:r.matched_voucher_id===null?null:Number(r.matched_voucher_id),
@@ -454,4 +456,44 @@ export async function voidCashBankMatchTx(tx:DbTransaction,input:{
     changes:{voided:{old:false,new:true},reason:{new:input.reason.trim()}}
   },tx);
   return {matchId:input.matchId,voided:true};
+}
+
+/** Categorize unmatched statement evidence without posting an accounting entry. */
+export async function reviewCashBankLineTx(tx:DbTransaction,input:{
+  companyId:number;statementLineId:number;
+  category:"bank_fee"|"transfer"|"unidentified_receipt"|"unidentified_payment"|"other"|null;
+  note:string|null;actor:{userId:string;username:string}
+}) {
+  id(input.companyId,"companyId");id(input.statementLineId,"statementLineId");
+  await assertTransactionCompanyScope(tx,input.companyId);
+  const record=resultRows<{id:number;amount:string;review_category:string|null;review_note:string|null}&Record<string,unknown>>(
+    await tx.execute(sql`
+      SELECT id,amount::text,review_category,review_note
+      FROM accounting_cash_bank_statement_lines WHERE id=${input.statementLineId}
+      AND company_id=${input.companyId} FOR UPDATE
+    `)
+  )[0];
+  if(!record)throw new CashBankError("CASH_BANK_LINE_NOT_FOUND","Statement line not found",404);
+  if(input.category==="unidentified_receipt" && dec(record.amount).lte(0))
+    throw new CashBankError("CASH_BANK_CATEGORY_INVALID","Unidentified receipts must be positive",400);
+  if(input.category==="unidentified_payment" && dec(record.amount).gte(0))
+    throw new CashBankError("CASH_BANK_CATEGORY_INVALID","Unidentified payments must be negative",400);
+  if(input.note && input.note.length>1500)
+    throw new CashBankError("CASH_BANK_NOTE_TOO_LONG","Review notes have a 1,500 character limit",400);
+  if(record.review_category===input.category && (record.review_note??null)===(input.note??null))
+    return {lineId:input.statementLineId,unchanged:true};
+  const today=await companyBusinessDate(input.companyId,tx);
+  await tx.execute(sql`SELECT erp_assert_accounting_date_open(${input.companyId},${today}::date)`);
+  await tx.execute(sql`UPDATE accounting_cash_bank_statement_lines
+    SET review_category=${input.category},review_note=${input.note??null},
+      reviewed_by=${input.actor.userId},reviewed_at=NOW()
+    WHERE id=${input.statementLineId} AND company_id=${input.companyId}`);
+  await writeAuditEvent({companyId:input.companyId,userId:input.actor.userId,
+    username:input.actor.username,action:"update",
+    tableName:"accounting_cash_bank_statement_lines",
+    recordId:input.statementLineId,recordIdentifier:`bank-line:${input.statementLineId}`,
+    changes:{category:{old:record.review_category,new:input.category},
+      note:{old:record.review_note,new:input.note}}
+  },tx);
+  return {lineId:input.statementLineId,unchanged:false};
 }
