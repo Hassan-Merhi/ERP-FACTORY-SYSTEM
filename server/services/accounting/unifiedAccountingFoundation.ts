@@ -36,19 +36,20 @@ export const RENTAL_MODULE_ACCOUNTS: Readonly<
  * then resolves accounts by NAME. Do not treat a prefix as a fixed ledger code,
  * create one in every company or consolidate accounts using that prefix.
  */
-export const RENTAL_POSTING_ACCOUNT_PREFIXES: readonly string[] = Object.freeze([
-  "SHOP-RENT-EXP",
-  "RENT-EXP",
-  "RENT-INC",
-  "ACCR-RENT-PAY",
-  "ACC-RENT-PAY",
-  "ADV-RENT-PAID",
-  "PREP-RENT",
-  "PREPAID-RENT",
-  "DEF-RENT-REV",
-  "SEC-DEP-PAID",
-  "TENANT-DEP",
-]);
+export const RENTAL_ACCOUNT_PREFIXES_BY_ROLE = Object.freeze({
+  rentIncome: Object.freeze(["RENT-INC"]),
+  rentExpense: Object.freeze(["SHOP-RENT-EXP", "RENT-EXP"]),
+  accruedRentPayable: Object.freeze(["ACCR-RENT-PAY", "ACC-RENT-PAY"]),
+  advanceRentPaid: Object.freeze(["ADV-RENT-PAID"]),
+  prepaidRent: Object.freeze(["PREP-RENT", "PREPAID-RENT"]),
+  deferredRentRevenue: Object.freeze(["DEF-RENT-REV"]),
+  tenantDepositLiability: Object.freeze(["TENANT-DEP"]),
+  securityDepositAsset: Object.freeze(["SEC-DEP-PAID"]),
+});
+
+export const RENTAL_POSTING_ACCOUNT_PREFIXES: readonly string[] = Object.freeze(
+  Object.values(RENTAL_ACCOUNT_PREFIXES_BY_ROLE).flat()
+);
 
 /**
  * Semantic account roles. ERP/Factory values are fixed ledger codes; Rental
@@ -71,15 +72,7 @@ export const ACCOUNTING_CONTROL_ACCOUNTS = Object.freeze({
     baleSalesIncome: "FACTORY_BALE_SALES_INCOME",
     productionVariance: "PRODUCTION_VARIANCE",
   }),
-  RENTALS: Object.freeze({
-    rentIncomePrefix: "RENT-INC",
-    rentExpensePrefix: "SHOP-RENT-EXP",
-    accruedRentPayablePrefix: "ACCR-RENT-PAY",
-    advanceRentPaidPrefix: "ADV-RENT-PAID",
-    deferredRentRevenuePrefix: "DEF-RENT-REV",
-    tenantDepositLiabilityPrefix: "TENANT-DEP",
-    securityDepositAssetPrefix: "SEC-DEP-PAID",
-  }),
+  RENTALS: RENTAL_ACCOUNT_PREFIXES_BY_ROLE,
 });
 
 /**
