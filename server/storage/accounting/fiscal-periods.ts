@@ -8,6 +8,7 @@ import { db, type DbTransaction } from "../../db";
 import { softDeleteVoucherTx } from "../../services/accounting/voucherSoftDelete";
 import * as schema from "@shared/schema";
 import { CLOSED_PERIOD_LOCK_NAMESPACE } from "../../services/accounting/closedPeriodGuard";
+import { assertTransactionCompanyScope } from "../../services/security/transactionCompanyScope";
 import { accountTypeNamesOf, classifyAccountType } from "../../services/accounting/accountClassification";
 import { signedMasterOpening } from "../../services/accounting/balances/openingSide";
 import { writeAuditEvent } from "../../services/audit/auditService";
@@ -174,6 +175,11 @@ export async function closeFiscalPeriod(
     // closedPeriodGuard), so no write can land in the period while its
     // balances are being totalled and closed.
     await tx.execute(sql`SELECT pg_advisory_xact_lock(${CLOSED_PERIOD_LOCK_NAMESPACE}, ${companyId})`);
+    // The policy table is protected by FORCE ROW LEVEL SECURITY; the fiscal
+    // writer must set the selected, membership-authorized company on THIS
+    // transaction before reading policy, otherwise RLS would return no row
+    // and a mandatory review could appear disabled.
+    await assertTransactionCompanyScope(tx, companyId);
     // Company Owner can explicitly require independent dual approval for
     // ALL close entry points. Check policy under the same fiscal posting lock:
     // direct legacy API callers must not bypass reviewed-close enforcement.
