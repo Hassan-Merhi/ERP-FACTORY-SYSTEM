@@ -440,19 +440,17 @@ export function useAccountsLegacyModel() {
   // Show customer-linked balances exactly as Factory Parties does, including
   // held pre-finalization charges and legacy operational amounts. Keep the
   // server's GL book balance unchanged for other accounting consumers.
-  const allAccounts: Account[] = useMemo(
-    () =>
-      (accountsResponse?.accounts ?? []).map((account) =>
-        account.partyBalance !== undefined
-          ? {
-              ...account,
-              balance: Number(account.partyBalance),
-              balanceSide: account.partyBalanceSide ?? account.balanceSide,
-            }
-          : account
-      ),
-    [accountsResponse?.accounts]
-  );
+  const allAccounts: Account[] = useMemo(() => {
+    const accounts = accountsResponse?.accounts ?? [];
+    return accounts.map((account) => {
+      if (account.partyBalance === undefined) return account;
+      return {
+        ...account,
+        balance: Number(account.partyBalance),
+        balanceSide: account.partyBalanceSide ?? account.balanceSide,
+      };
+    });
+  }, [accountsResponse?.accounts]);
 
   // Auto-select account when navigated here from ledger monthly summary (or any deep-link with ?accountId=)
   useEffect(() => {
