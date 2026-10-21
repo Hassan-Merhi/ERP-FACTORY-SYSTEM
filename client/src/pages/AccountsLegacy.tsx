@@ -229,6 +229,13 @@ export default function Accounts() {
               Fiscal Closing & Audit
             </Button>
           )}
+        {showViewAccounts && !phoneStatementOpen &&
+          ["Admin","Owner","Developer"].includes(model.currentUser?.role ?? "") && (
+            <Button variant="outline" data-testid="button-unified-accounting-dashboard"
+              onClick={() => model.navigate(`${model.modePrefix}/accounting/dashboard`)}>
+              Unified Accounting Dashboard
+            </Button>
+          )}
         {showViewAccounts &&
           !phoneStatementOpen &&
           (model.currentUser?.role === "Admin" || model.currentUser?.role === "Developer") && (
