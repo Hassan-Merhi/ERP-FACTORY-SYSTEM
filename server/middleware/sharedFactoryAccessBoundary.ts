@@ -83,6 +83,10 @@ export async function resolveSharedFactoryRequirements(req: Request): Promise<Sh
     return [page(ACCOUNTS_PAGE, "hide_tab_accounts_view")];
   }
 
+  if (path.startsWith("/api/accounting/unified-dashboard")) {
+    return [page(ACCOUNTS_PAGE, "hide_tab_accounts_view")];
+  }
+
   if (path.startsWith("/api/accounting/fiscal-review/")) {
     return [page(ACCOUNTS_PAGE, "hide_tab_accounts_view")];
   }
