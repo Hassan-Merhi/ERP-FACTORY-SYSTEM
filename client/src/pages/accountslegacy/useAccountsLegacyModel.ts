@@ -92,6 +92,7 @@ export function useAccountsLegacyModel() {
   const { data: myErpPages } = useQuery<{ hiddenErpCostFields?: string[] }>({ queryKey: ["/api/my-erp-pages"] });
   const hideBalances = (myErpPages?.hiddenErpCostFields ?? []).includes("accounts_balances");
   const appMode = useAppMode();
+  const accountsListUrl = appMode === "factory" ? "/api/factory/accounts/list" : "/api/accounts/all";
   const modePrefix = useModePrefix();
   const modeApiRequest = getApiRequest(appMode);
   const [, navigate] = useLocation();
@@ -215,7 +216,7 @@ export function useAccountsLegacyModel() {
       toast({ title: "Account deleted" });
       setAlterSelectedAccount(null);
       editForm.reset();
-      queryClient.invalidateQueries({ queryKey: ["/api/accounts/all"] });
+      queryClient.invalidateQueries({ queryKey: [accountsListUrl] });
       queryClient.invalidateQueries({ queryKey: ["/api/ledger-accounts"] });
     },
     onError: (err: ClientErrorLike) => {
@@ -239,7 +240,7 @@ export function useAccountsLegacyModel() {
     },
     onSuccess: () => {
       toast({ title: "Account updated successfully" });
-      queryClient.invalidateQueries({ queryKey: ["/api/accounts/all"] });
+      queryClient.invalidateQueries({ queryKey: [accountsListUrl] });
     },
     onError: (err: ClientErrorLike) => {
       toast({ title: "Update failed", description: err?.message ?? "Unknown error", variant: "destructive" });
@@ -261,7 +262,7 @@ export function useAccountsLegacyModel() {
       setBankToEdit(null);
       bankForm.reset();
       queryClient.invalidateQueries({ queryKey: ["/api/bank-accounts"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/accounts/all"] });
+      queryClient.invalidateQueries({ queryKey: [accountsListUrl] });
     },
     onError: (err: ClientErrorLike) => {
       toast({ title: "Update failed", description: err?.message ?? "Unknown error", variant: "destructive" });
@@ -282,7 +283,7 @@ export function useAccountsLegacyModel() {
       setBankToEdit(null);
       bankForm.reset();
       queryClient.invalidateQueries({ queryKey: ["/api/bank-accounts"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/accounts/all"] });
+      queryClient.invalidateQueries({ queryKey: [accountsListUrl] });
     },
     onError: (err: ClientErrorLike) => {
       toast({ title: "Delete failed", description: err?.message ?? "Unknown error", variant: "destructive" });
@@ -306,7 +307,7 @@ export function useAccountsLegacyModel() {
       setBankToEdit(null);
       bankForm.reset();
       queryClient.invalidateQueries({ queryKey: ["/api/bank-accounts"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/accounts/all"] });
+      queryClient.invalidateQueries({ queryKey: [accountsListUrl] });
     },
     onError: (err: ClientErrorLike) => {
       toast({ title: "Create failed", description: err?.message ?? "Unknown error", variant: "destructive" });
@@ -423,11 +424,11 @@ export function useAccountsLegacyModel() {
     accounts: Account[];
     asOfDate: string;
   }>({
-    queryKey: ["/api/accounts/all", selectedCompany?.id, periodFilter.toDate || null],
+    queryKey: [accountsListUrl, selectedCompany?.id, periodFilter.toDate || null],
     queryFn: async () => {
       const params = new URLSearchParams();
       if (periodFilter.toDate) params.set("endDate", periodFilter.toDate);
-      const res = await fetch(`/api/accounts/all?${params.toString()}`, { credentials: "include" });
+      const res = await fetch(`${accountsListUrl}?${params.toString()}`, { credentials: "include" });
       if (!res.ok) {
         const body = await res.json().catch(() => null);
         throw new Error(body?.message || `Failed to load accounts (${res.status})`);
