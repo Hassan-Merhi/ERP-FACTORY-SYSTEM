@@ -14,7 +14,7 @@ import {fxDay} from "./monetaryFxRates";
 import {companyBusinessDate} from "./companyBusinessDate";
 import {financialStatementCategory} from "./unifiedAccountingFoundation";
 import {notFiscalClosingVoucher} from "./balances/periodReportRules";
-import {listAnalyticCentersTx,type AnalyticCategory,type AnalyticError} from "./analyticAccountingService";
+import {listAnalyticCentersTx,type AnalyticCategory} from "./analyticAccountingService";
 
 interface ActualRow extends Record<string,unknown>{
  account_id:number;code:string;account_type:string;sub_type:string|null;
@@ -127,7 +127,13 @@ export async function analyticBudgetActualTx(tx:DbTransaction,input:{
  // but eligibility and unallocated value are calculated per ENTRY first.
  // Undo/cancelled source journals are excluded from budget performance
  // only when the reversal is effective no later than this report's as-of.
- const base=sql`
+ const eligibleCte=sql`
+ eligible AS(
+ SELECT e.id AS entry_id,e.ledger_account_id AS account_id,
+  la.code,la.account_type,la.sub_type,v.company_id,
+  DATE_TRUNC('month',COALESCE(v.effective_date,v.voucher_date))::date AS month_start,
+  (COALESCE(e.base_debit_amount,e.debit_amount,0)-
+   COALESCE(e.base_credit_amount,e.credit_amount,0)) AS signed
  FROM voucher_entries e JOIN vouchers v ON v.id=e.voucher_id
  JOIN ledger_accounts la ON la.id=e.ledger_account_id AND la.company_id=v.company_id
  WHERE v.company_id=${companyId} AND v.deleted_at IS NULL AND v.optional=false
@@ -144,39 +150,33 @@ export async function analyticBudgetActualTx(tx:DbTransaction,input:{
        'direct expense','indirect expense','government taxes','cogs')
      OR LOWER(TRIM(COALESCE(la.sub_type,''))) IN
       ('income','direct income','indirect income','expense','direct expense',
-       'indirect expense','cogs')
+       'indirect expense','cogs'))
    )
- `;
- // Aggregated direct cost-center tagged portion, grouped by date/account.
- const assigned=resultRows<ActualRow>(await tx.execute(sql`
- SELECT e.ledger_account_id AS account_id,la.code,la.account_type,la.sub_type,
-  DATE_TRUNC('month',COALESCE(v.effective_date,v.voucher_date))::date::text AS month_start,
-  a.cost_center_id,COALESCE(SUM(a.amount_usd * CASE
-   WHEN COALESCE(e.base_debit_amount,e.debit_amount,0)-
-        COALESCE(e.base_credit_amount,e.credit_amount,0)>=0 THEN 1 ELSE -1 END),0)::text
-    AS value_signed
- ${base}
- JOIN accounting_cost_allocations a ON a.voucher_entry_id=e.id AND a.company_id=v.company_id
-   AND a.voided_at IS NULL
- GROUP BY e.ledger_account_id,la.code,la.account_type,la.sub_type,
-  DATE_TRUNC('month',COALESCE(v.effective_date,v.voucher_date)),a.cost_center_id
- `));
- // Unallocated amount is net SOURCE value minus all active allocations per
- // entry; never sum a joined voucher twice for two assigned centers.
- const unassigned=resultRows<ActualRow>(await tx.execute(sql`
- WITH lines AS(
- SELECT e.id,e.ledger_account_id AS account_id,la.code,la.account_type,la.sub_type,
-  DATE_TRUNC('month',COALESCE(v.effective_date,v.voucher_date))::date::text AS month_start,
-  (COALESCE(e.base_debit_amount,e.debit_amount,0)-
-   COALESCE(e.base_credit_amount,e.credit_amount,0)) AS signed,
-  COALESCE(a.assigned,0) AS assigned
- ${base}
- LEFT JOIN LATERAL(
-  SELECT SUM(x.amount_usd) AS assigned FROM accounting_cost_allocations x
-   WHERE x.company_id=v.company_id AND x.voucher_entry_id=e.id AND x.voided_at IS NULL
- ) a ON true
  )
- SELECT account_id,code,account_type,sub_type,month_start,
+ `;
+ const assigned=resultRows<ActualRow>(await tx.execute(sql`
+ WITH ${eligibleCte}
+ SELECT q.account_id,q.code,q.account_type,q.sub_type,
+  q.month_start::text AS month_start,a.cost_center_id,
+  COALESCE(SUM(a.amount_usd * CASE WHEN q.signed>=0 THEN 1 ELSE -1 END),0)::text
+    AS value_signed
+ FROM eligible q JOIN accounting_cost_allocations a
+   ON a.voucher_entry_id=q.entry_id AND a.company_id=q.company_id
+   AND a.voided_at IS NULL
+ GROUP BY q.account_id,q.code,q.account_type,q.sub_type,q.month_start,a.cost_center_id
+ `));
+ const unassigned=resultRows<ActualRow>(await tx.execute(sql`
+ WITH ${eligibleCte}, lines AS(
+  SELECT q.account_id,q.code,q.account_type,q.sub_type,q.month_start,
+   q.signed,COALESCE(a.assigned,0) AS assigned
+  FROM eligible q
+  LEFT JOIN LATERAL (
+   SELECT SUM(x.amount_usd) AS assigned FROM accounting_cost_allocations x
+   WHERE x.company_id=q.company_id AND x.voucher_entry_id=q.entry_id
+     AND x.voided_at IS NULL
+  ) a ON true
+ )
+ SELECT account_id,code,account_type,sub_type,month_start::text AS month_start,
   NULL::bigint AS cost_center_id,
   COALESCE(SUM(CASE WHEN signed>=0 THEN 1 ELSE -1 END *
     GREATEST(ABS(signed)-assigned,0)),0)::text AS value_signed
