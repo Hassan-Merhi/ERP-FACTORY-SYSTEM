@@ -19,6 +19,7 @@ import type { CostCenter, CostCenterCatalog, CostCenterBalance, CostCenterActivi
 import { readCostCenterApi, writeCostCenterApi } from "@/api/costCentersApi";
 import { CostCenterAutomationRules } from "@/components/financial/CostCenterAutomationRules";
 import { CostCenterReports } from "@/components/financial/CostCenterReports";
+import { CostCenterReleaseReadiness } from "@/components/financial/CostCenterReleaseReadiness";
 import { CostCenterHistorical } from "@/components/financial/CostCenterHistorical";
 
 type Form = { code: string; name: string; description: string; parentId: string };
@@ -250,6 +251,7 @@ export default function CostCenters() {
           </CardContent>
         </Card>
       </div>
+      <CostCenterReleaseReadiness baseUrl={baseUrl} />
       <CostCenterReports baseUrl={baseUrl} centers={centers} />
       <CostCenterHistorical baseUrl={baseUrl} centers={centers} />
       <CostCenterAutomationRules baseUrl={baseUrl} centers={centers} />
