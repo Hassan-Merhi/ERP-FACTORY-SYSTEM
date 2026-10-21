@@ -279,8 +279,27 @@ function registerPrefix(app:Express,prefix:string){
         ") a ON true",
         [current.companyId,filter.fromDate,filter.toDate,filter.ledgerAccountId]
       );
+      // Native currency controls are independent of the historical USD
+      // book-value controls; amounts of different currencies are never summed.
+      const native=await pool.query(
+        "WITH eligible AS ("+sql+") SELECT e.currency,"+
+        "count(*)::int AS \"sourceCount\","+
+        "COALESCE(sum(e.\"amountNative\"::numeric),0)::text AS \"sourceNative\","+
+        "COALESCE(sum(COALESCE(a.allocated_native,0)),0)::text AS \"allocatedNative\","+
+        "COALESCE(sum(GREATEST(e.\"amountNative\"::numeric-COALESCE(a.allocated_native,0),0)),0)::text AS \"unallocatedNative\","+
+        "count(*) FILTER (WHERE COALESCE(a.allocated_native,0)>e.\"amountNative\"::numeric)::int AS \"overallocatedSources\""+
+        " FROM eligible e LEFT JOIN LATERAL ("+
+        " SELECT sum(cca.amount_native) AS allocated_native FROM cost_center_allocations cca"+
+        " WHERE cca.company_id=$1 AND "+
+        (filter.sourceKind==="VOUCHER_ENTRY"?
+         "cca.voucher_entry_id=e.\"sourceId\"":
+         "cca.factory_daybook_entry_id=e.\"sourceId\"")+
+        ") a ON true GROUP BY e.currency ORDER BY e.currency",
+        [current.companyId,filter.fromDate,filter.toDate,filter.ledgerAccountId]
+      );
       res.json({kind:filter.sourceKind,period:filter,
-        basis:"eligible_posted_expense_debits_only",...response.rows[0]});
+        basis:"eligible_posted_expense_debits_only",...response.rows[0],
+        nativeCurrencies:native.rows});
     }catch(e){errorResponse(res,e);}
   });
 
