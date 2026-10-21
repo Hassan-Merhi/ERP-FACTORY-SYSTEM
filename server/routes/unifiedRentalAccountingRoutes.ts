@@ -55,13 +55,14 @@ export function registerUnifiedRentalAccountingRoutes(app:Express):void{
    const c=company(req);
    const b=z.object({
     module:moduleName,contractId:positive,voucherId:positive,
-    category,amountUsd:z.string().min(1).max(32),
+    category,amountUsd:z.string().regex(/^[0-9]+(?:\.[0-9]{1,6})?$/),
+    clientRequestKey:z.string().min(8).max(128),
     note:z.string().max(1000).nullable().optional()
    }).parse(req.body);
    const response=await db.transaction(tx=>linkRentalExpenseTx(tx,{
     ...b,companyId:c,actor:actor(req)
    }));
-   return res.status(201).json(response);
+   return res.status(response.replayed?200:201).json(response);
   }catch(e){return fail(res,e);}
  });
  app.post("/api/accounting/rentals/expense-links/:id/void",...gate,async(req,res)=>{
