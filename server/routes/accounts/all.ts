@@ -401,6 +401,14 @@ export async function serveAccountListForCompany(req: Request, res: Response, co
 }
 
 export function registerAccountListRoutes(app: Express) {
+  // Factory Accounts must use the Factory-pinned company, which may differ
+  // from the ERP selection in another tab. Authorization stays on Accounts.
+  app.get("/api/factory/accounts/list", requireAuth, requireFactoryPageAccess("factory/accounts"), async (req, res) => {
+    const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
+    if (!companyId) return res.status(400).json({ message: "No company selected" });
+    return serveAccountListForCompany(req, res, companyId);
+  });
+
   // Factory Agent Ledger must use the Factory-pinned company, not the ERP
   // company selected by another tab. The existing ERP endpoint is unchanged.
   app.get("/api/factory/agents/accounts", requireAuth, requireFactoryPageAccess("factory/agents"), async (req, res) => {
