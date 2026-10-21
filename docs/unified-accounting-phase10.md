@@ -106,6 +106,25 @@ pure-legacy compatibility mode, no completed historical FX backfill can
 still be reported as 'ready' for compatibility reasons. The historical
 workpaper makes this distinction explicit.
 
+#### Phase 10 FX-readiness hardening (subsequent source review)
+
+- The FX diagnostic now applies the same accounting date used in trial
+  balances: `COALESCE(v.effective_date, v.voucher_date)`, including the
+  live-voucher migration check and the supplier-linked evidence check.
+  A later-created voucher backdated by effective date therefore appears in
+  the historical FX gate rather than escaping it on its original voucher date.
+- The diagnostic reports `legacyCompatibilityMode` separately from `ready`.
+  Pure legacy mode remains compatible with pre-backfill reporting but is not
+  evidence that historical currency conversion or opening balances are correct.
+  The historical route and UI distinguish this from a checked FX basis.
+- An entry with a nonzero debit or credit requires its corresponding
+  historical base field; partially populated entries no longer escape the
+  unresolved-value count. A missing legacy database column may still enter
+  compatibility mode, but other database errors are propagated rather than
+  silently presented as readiness.
+- All changes are source-only, nonposting and do not update historic vouchers,
+  currency rates, master openings or production records.
+
 ### D. ERP inventory cost replay
 
 `historicalErpStockAtCostTx` delegates to the established
