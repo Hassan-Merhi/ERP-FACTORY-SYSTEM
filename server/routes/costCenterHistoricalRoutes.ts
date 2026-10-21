@@ -135,7 +135,7 @@ function sourceSql(kind:SourceKind):string {
   ].join(" ");
   return [
     "SELECT f.id AS \"sourceId\",NULL::integer AS \"voucherId\",",
-    " NULL::varchar AS \"voucherNumber\",f.tx_date::text AS \"sourceDate\",",
+    " NULL::varchar AS \"voucherNumber\",COALESCE(f.effective_date,f.tx_date)::text AS \"sourceDate\",",
     " f.currency_code AS currency,abs(f.amount_currency)::text AS \"amountNative\",",
     " abs(f.amount_usd)::text AS \"amountUsd\",f.fx_rate_to_usd::text AS \"historicalRate\",",
     " 'BASE_PER_TRANSACTION'::text AS \"rateConvention\",",
@@ -145,12 +145,12 @@ function sourceSql(kind:SourceKind):string {
     " AND f.tx_type IN ('EXPENSE','OPERATING_EXPENSE','FACTORY_EXPENSE')",
     " AND f.amount_currency>0 AND f.amount_usd>=0",
     " AND f.reference_id IS NULL AND NULLIF(btrim(COALESCE(f.reference_table,'')),'') IS NULL",
-    " AND f.tx_date BETWEEN $2::date AND $3::date AND $4::integer IS NULL",
+    " AND COALESCE(f.effective_date,f.tx_date) BETWEEN $2::date AND $3::date AND $4::integer IS NULL",
     " AND NOT EXISTS(SELECT 1 FROM cost_center_allocations a",
     " WHERE a.company_id=f.company_id AND a.factory_daybook_entry_id=f.id)",
     " AND NOT EXISTS(SELECT 1 FROM cost_center_source_overrides o",
     " WHERE o.company_id=f.company_id AND o.factory_daybook_entry_id=f.id)",
-    " ORDER BY f.tx_date,f.id LIMIT $5",
+    " ORDER BY COALESCE(f.effective_date,f.tx_date),f.id LIMIT $5",
   ].join(" ");
 }
 async function candidates(
@@ -254,7 +254,8 @@ function registerPrefix(app:Express,prefix:string){
     try{
       const current=await actor(req);
       const filter=parseFilters(req);
-      const plan:Plan={...filter,limit:100,splits:[],reason:""};
+      if(filter.sourceKind==="FACTORY_DAYBOOK" && prefix!=="/api/factory/cost-centers")
+        throw new HistoryError(403,"Factory Daybook history is available only in Factory Mode");
       const sql=sourceSql(filter.sourceKind)
         .replace(" AND NOT EXISTS(SELECT 1 FROM cost_center_allocations a"+
           (filter.sourceKind==="VOUCHER_ENTRY"?
@@ -289,6 +290,8 @@ function registerPrefix(app:Express,prefix:string){
     try{
       const current=await actor(req,true);
       const plan=parsePlan(req.body);
+      if(plan.sourceKind==="FACTORY_DAYBOOK" && prefix!=="/api/factory/cost-centers")
+        throw new HistoryError(403,"Factory Daybook history is available only in Factory Mode");
       const preview=await inTransaction(async client=>{
         await client.query("SELECT pg_advisory_xact_lock(721031,$1)",[current.companyId]);
         await assertActiveCenters(client,current.companyId,plan.splits);
@@ -378,6 +381,8 @@ function registerPrefix(app:Express,prefix:string){
         if(!toMoney(calculated.sourceNativeTotal).eq(batch.candidate_native_total)||
           !toMoney(calculated.sourceUsdTotal).eq(batch.candidate_usd_total))
           throw new HistoryError(409,"Historical source controls no longer match the preview");
+        if(plan.sourceKind==="FACTORY_DAYBOOK" && prefix!=="/api/factory/cost-centers")
+          throw new HistoryError(403,"Factory Daybook history is available only in Factory Mode");
         const sourceColumn=plan.sourceKind==="VOUCHER_ENTRY"?"voucher_entry_id":"factory_daybook_entry_id";
         for(const item of calculated.rows){
           // Claim the source with an override so future automatic defaults
