@@ -12,7 +12,7 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
-import { Plus, Pencil, Archive, Search, RefreshCw, ChevronRight, Wallet } from "lucide-react";
+import { Plus, Pencil, Archive, RefreshCw, ChevronRight } from "lucide-react";
 import { useLocation } from "wouter";
 import type { CostCenter, CostCenterCatalog, CostCenterBalance, CostCenterActivity } from "@/api/costCentersApi";
 import { readCostCenterApi, writeCostCenterApi } from "@/api/costCentersApi";
@@ -59,6 +59,9 @@ export default function CostCenters() {
   const [filter, setFilter] = useState("");
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [editingId, setEditingId] = useState<number | null>(null);
+  const [activityOffset, setActivityOffset] = useState(0);
+  const [activityFrom, setActivityFrom] = useState("");
+  const [activityTo, setActivityTo] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [form, setForm] = useState<Form>(emptyForm);
   const { data, isLoading, isError, error, refetch } = useQuery<CostCenterCatalog>({
@@ -78,8 +81,11 @@ export default function CostCenters() {
     enabled: !!companyId && !!selectedId,
   });
   const { data: activity, isLoading: loadingActivity } = useQuery<CostCenterActivity>({
-    queryKey: ["/api/cost-centers", companyId, selectedId, "activity"],
-    queryFn: () => readCostCenterApi<CostCenterActivity>("/api/cost-centers/" + selectedId + "/activity?limit=50"),
+    queryKey: ["/api/cost-centers", companyId, selectedId, "activity", activityOffset, activityFrom, activityTo],
+    queryFn: () => readCostCenterApi<CostCenterActivity>("/api/cost-centers/" + selectedId +
+      "/activity?limit=50&offset=" + activityOffset +
+      (activityFrom ? "&fromDate=" + activityFrom : "") +
+      (activityTo ? "&toDate=" + activityTo : "")),
     enabled: !!companyId && !!selectedId,
   });
   const invalidate = async () => {
@@ -151,7 +157,7 @@ export default function CostCenters() {
               <div key={center.id} className={"flex flex-wrap items-center gap-1 rounded-md border p-2 " +
                 (selectedId === center.id ? "border-primary bg-muted/40" : "")}>
                 <button type="button" className="text-left flex-1 min-w-0 flex items-center gap-2"
-                  onClick={() => setSelectedId(center.id)} aria-label={"View " + center.name}>
+                  onClick={() => { setSelectedId(center.id); setActivityOffset(0); }} aria-label={"View " + center.name}>
                   <span style={{ marginLeft: Math.min(depth, 4) * 12 }} className="shrink-0"><ChevronRight className="h-3 w-3 text-muted-foreground"/></span>
                   <span className="min-w-0">
                     <span className="block text-sm font-medium break-words">{center.name}</span>
@@ -193,18 +199,41 @@ export default function CostCenters() {
               </div>
               {loadingBalance && <p className="text-xs text-muted-foreground">Loading totals…</p>}
               {loadingActivity && <p className="text-xs text-muted-foreground">Loading activity…</p>}
+              <div className="flex flex-wrap gap-2 items-center">
+                <div className="space-y-1 flex-1 min-w-[125px]">
+                  <Label htmlFor="cost-center-from-date">From</Label>
+                  <Input id="cost-center-from-date" type="date" value={activityFrom}
+                    onChange={e => {setActivityFrom(e.target.value);setActivityOffset(0);}} />
+                </div>
+                <div className="space-y-1 flex-1 min-w-[125px]">
+                  <Label htmlFor="cost-center-to-date">To</Label>
+                  <Input id="cost-center-to-date" type="date" value={activityTo}
+                    onChange={e => {setActivityTo(e.target.value);setActivityOffset(0);}} />
+                </div>
+              </div>
               <div className="space-y-1">
                 {(activity?.activity || []).map(row => (
                   <div key={row.id} className="border-b py-2 flex items-start justify-between gap-2 text-sm">
                     <div>
-                      <p className="font-medium">{row.voucherNumber || row.factoryTxType || "Entry #" + row.id}</p>
+                      {row.voucherId
+                        ? <button type="button" className="font-medium text-primary hover:underline text-left"
+                            onClick={() => navigate("/voucher-detail/" + row.voucherId)}>
+                            {row.voucherNumber || "Voucher #" + row.voucherId}
+                          </button>
+                        : <p className="font-medium">{row.factoryTxType || "Entry #" + row.id}</p>}
                       <p className="text-xs text-muted-foreground">{row.sourceDate ? String(row.sourceDate).slice(0,10) : "Date unavailable"} · {row.costTreatment}</p>
                       {row.voucherEntryId && <p className="text-xs text-muted-foreground">Voucher entry #{row.voucherEntryId}</p>}
                     </div>
                     <span className="font-mono shrink-0">USD {Number(row.amountBase).toFixed(2)}</span>
                   </div>
                 ))}
-                {!loadingActivity && activity?.activity?.length === 0 && <p className="text-sm text-muted-foreground">No allocated transactions yet.</p>}
+                {!loadingActivity && activity?.activity?.length === 0 && <p className="text-sm text-muted-foreground">No allocated transactions in this date range.</p>}
+              </div>
+              <div className="flex justify-between gap-2">
+                <Button variant="outline" size="sm" disabled={!activityOffset || loadingActivity}
+                  onClick={() => setActivityOffset(v => Math.max(0, v - 50))}>Previous</Button>
+                <Button variant="outline" size="sm" disabled={loadingActivity || (activity?.activity?.length || 0) < 50}
+                  onClick={() => setActivityOffset(v => v + 50)}>Next</Button>
               </div>
             </>}
           </CardContent>
