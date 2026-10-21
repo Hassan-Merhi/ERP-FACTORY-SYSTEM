@@ -19,6 +19,16 @@ import { fmtMoney, fmtMoneyCurrency } from "../utils";
 import { useApiBase } from "../shared";
 import { AccountSearchSelect } from "./AccountSearchSelect";
 
+type BulkPaymentResponse = {
+  processed: number;
+  results: Array<{
+    contractId: number;
+    paymentGroupId?: string;
+    scheduled?: boolean;
+    error?: string;
+  }>;
+};
+
 export // ──────────────────────────────────────────────────────────
 // BULK PAYMENT DIALOG
 // ──────────────────────────────────────────────────────────
@@ -58,7 +68,7 @@ function BulkPaymentDialog({
   }, [amounts]);
 
   const bulkPay = useMutation({
-    mutationFn: () => {
+    mutationFn: async (): Promise<BulkPaymentResponse> => {
       const items = units
         .filter((u) => u.contract && parseFloat(amounts[u.contract.id] || "0") > 0)
         .map((u) => ({
@@ -70,18 +80,44 @@ function BulkPaymentDialog({
           scheduleFuturePayment,
         }));
       if (items.length === 0) throw new Error("No valid amounts entered");
-      return apiRequest("POST", apiBase + "/payments/bulk", items);
+      // The voucher-path guard requires a JSON object to attach its stable
+      // clientRequestId. Sending a bare array made the server reject the write.
+      const response = await apiRequest("POST", apiBase + "/payments/bulk", { items });
+      return (await response.json()) as BulkPaymentResponse;
     },
-    onSuccess: (_data) => {
-      const isScheduled = paymentDate > new Date().toISOString().slice(0, 10);
+    onSuccess: (data) => {
+      const confirmed = data.results.filter((row) => !row.error && !!row.paymentGroupId);
+      const failed = data.results.filter((row) => !!row.error);
+      const incomplete = confirmed.length + failed.length !== data.results.length || data.processed !== data.results.length;
+
+      queryClient.invalidateQueries({ queryKey: [apiBase + "/units"] });
+      queryClient.invalidateQueries({ queryKey: [apiBase + "/payments/scheduled"] });
+
+      if (failed.length > 0 || incomplete) {
+        // A bulk call may partially succeed. Never resend already-posted
+        // contracts when the operator retries the remaining failed items.
+        setAmounts((previous) => {
+          const next = { ...previous };
+          for (const row of confirmed) next[row.contractId] = "";
+          return next;
+        });
+        toast({
+          title: `${confirmed.length} processed; some payments need attention`,
+          description: failed.length
+            ? `Contract ${failed[0].contractId}: ${failed[0].error}`
+            : "Not all payment results were confirmed. Review before retrying.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      const isScheduled = confirmed.every((row) => row.scheduled);
       toast({
         title: isScheduled ? "Payments scheduled" : "Bulk payment recorded",
         description: isScheduled
-          ? `Payments of ${units.length} tenant(s) scheduled for ${paymentDate}`
-          : `${units.length} tenant(s) paid`,
+          ? `${confirmed.length} tenant(s) scheduled for ${paymentDate}`
+          : `${confirmed.length} tenant(s) paid`,
       });
-      queryClient.invalidateQueries({ queryKey: [apiBase + "/units"] });
-      queryClient.invalidateQueries({ queryKey: [apiBase + "/payments/scheduled"] });
       onSuccess();
       onClose();
     },
