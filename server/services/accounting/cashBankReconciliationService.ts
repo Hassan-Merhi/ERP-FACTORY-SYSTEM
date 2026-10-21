@@ -9,7 +9,7 @@
  */
 import { createHash } from "node:crypto";
 import Decimal from "decimal.js";
-import { sql, type SQL } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 import type { DbTransaction } from "../../db";
 import { resultRows } from "../../lib/queryResult";
 import { assertTransactionCompanyScope } from "../security/transactionCompanyScope";
@@ -371,7 +371,7 @@ export async function matchCashBankLineTx(tx:DbTransaction,input:{
   await assertTransactionCompanyScope(tx,input.companyId);
   const fetched=resultRows<MatchRow>(await tx.execute(sql`
     SELECT l.id AS statement_line_id,l.amount::text,m.id,m.voided_at::text,
-      s.id AS company_id,s.account_kind,s.account_id,s.period_end::text,s.currency,
+      s.company_id AS company_id,s.account_kind,s.account_id,s.period_end::text,s.currency,
       m.voucher_entry_id
     FROM accounting_cash_bank_statement_lines l
     JOIN accounting_cash_bank_statements s ON s.id=l.statement_id AND s.company_id=l.company_id
