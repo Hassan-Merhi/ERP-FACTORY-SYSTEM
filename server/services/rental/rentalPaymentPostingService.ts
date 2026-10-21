@@ -637,16 +637,30 @@ export async function postDueScheduledRentalPaymentsDetailed(
       const groupRows = await db
         .select()
         .from(propertyPayments)
-        .where(eq(propertyPayments.paymentGroupId, row.payment_group_id));
+        .where(and(
+          eq(propertyPayments.companyId, companyId),
+          eq(propertyPayments.module, module),
+          eq(propertyPayments.paymentGroupId, row.payment_group_id),
+          eq(propertyPayments.postingStatus, "SCHEDULED")
+        ));
 
       if (groupRows.length === 0) continue;
       const firstRow = groupRows[0];
 
-      const [contract] = await db.select().from(propertyContracts).where(eq(propertyContracts.id, firstRow.contractId));
-
-      const [unit] = contract
-        ? await db.select().from(propertyUnits).where(eq(propertyUnits.id, contract.unitId))
-        : [null];
+      const [contract] = await db
+        .select()
+        .from(propertyContracts)
+        .where(and(
+          eq(propertyContracts.id, firstRow.contractId),
+          eq(propertyContracts.module, module)
+        ));
+      if (!contract || (contract.companyId !== companyId && contract.linkedCompanyId !== companyId)) {
+        throw new Error(`Rental payment group ${row.payment_group_id} does not belong to an accessible contract`);
+      }
+      const [unit] = await db
+        .select()
+        .from(propertyUnits)
+        .where(eq(propertyUnits.id, contract.unitId));
 
       const isShared = !!contract?.linkedCompanyId;
 
