@@ -370,6 +370,7 @@ export async function cashBankStatementDetailTx(tx:DbTransaction,companyId:numbe
       residual:possible?fmt(dec(head.closing_balance).minus(adjusted)):null,
       matched:matchedEntries.size,
       unmatchedStatementCount:unmatchedStatement.length,unclearedBookCount:uncleared.length,
+      openingVerified:opened.verified,
       unverifiedEntries:unverified.length,otherCurrencyEntries:otherCurrency.length,
       reconcilable:possible && unmatchedStatement.length===0 && uncleared.length===0 &&
          dec(head.closing_balance).eq(bookedEnd),
