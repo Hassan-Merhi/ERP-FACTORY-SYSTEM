@@ -222,6 +222,13 @@ export default function Accounts() {
               Cost Centers & Budgets
             </Button>
           )}
+        {showViewAccounts && !phoneStatementOpen &&
+          ["Admin","Owner","Developer"].includes(model.currentUser?.role ?? "") && (
+            <Button variant="outline" data-testid="button-fiscal-review"
+              onClick={() => model.navigate(`${model.modePrefix}/accounting/fiscal-review`)}>
+              Fiscal Closing & Audit
+            </Button>
+          )}
         {showViewAccounts &&
           !phoneStatementOpen &&
           (model.currentUser?.role === "Admin" || model.currentUser?.role === "Developer") && (
