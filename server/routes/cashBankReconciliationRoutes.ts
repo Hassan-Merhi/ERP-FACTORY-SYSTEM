@@ -22,8 +22,8 @@ const selector=z.object({accountKind:kind,accountId:positiveId});
 const postImport=z.object({
  accountKind:kind,accountId:positiveId,currency:z.string().length(3),
  periodStart:date,periodEnd:date,
- openingBalance:z.string().regex(/^-?\\d+(?:\\.\\d{1,6})?$/),
- closingBalance:z.string().regex(/^-?\\d+(?:\\.\\d{1,6})?$/),
+ openingBalance:z.string().regex(/^-?\d+(?:\.\d{1,6})?$/),
+ closingBalance:z.string().regex(/^-?\d+(?:\.\d{1,6})?$/),
 });
 const postMatch=z.object({
  statementLineId:positiveId,voucherEntryId:positiveId,
