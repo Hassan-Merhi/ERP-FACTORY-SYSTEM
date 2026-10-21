@@ -234,7 +234,7 @@ export function ErpRoutes({ user }: ErpRoutesProps) {
 
       {R("/accounts/historical-openings", isAdminOwnerOrDev && canAccess("accounts"), HistoricalOpenings)}
       {G("/accounts", "accounts", Accounts)}
-      {R("/cost-centers", isAdminOwnerOrDev && canAccess("accounts") || (effectiveRole === "Manager" && canAccess("accounts")), CostCenters)}
+      {R("/cost-centers", (isAdminOwnerOrDev || effectiveRole === "Manager") && canAccess("accounts"), CostCenters)}
       {canAccess("accounts") ? (
         <Route path="/ledger-monthly/:accountId" component={LedgerMonthlySummary} />
       ) : (
