@@ -27,6 +27,7 @@ export type VoucherExpenseEntry = {
 export type VoucherExpenseEntries = { entries: VoucherExpenseEntry[] };
 export type CostCenterSplit = {
   id: number; costCenterId: number; costCenterCode: string; costCenterName: string;
+  allocationOrigin?: "AUTO" | "MANUAL"; autoRuleId?: number | null;
   amountNative: string; amountBase: string; currency: string; costTreatment: "EXPENSE" | "INVENTORY_COST" | "OTHER";
 };
 export type SourceCostCenterAllocation = {
