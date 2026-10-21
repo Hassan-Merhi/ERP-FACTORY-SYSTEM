@@ -53,6 +53,7 @@ export const PROPERTIES_NAV_SECTIONS: NavSection[] = [
       { title: "Rental Accounting", url: "/properties/accounting/rentals", icon: ClipboardList },
       { title: "Intercompany & Consolidation", url: "/properties/accounting/consolidation", icon: Landmark },
       { title: "Historical Accounting", url: "/properties/accounting/history", icon: Clock },
+      { title: "Financial Statements", url: "/properties/accounting/statements", icon: FileText },
       { title: "Vouchers", url: "/properties/vouchers", icon: FileText },
       { title: "Analytics", url: "/properties/analytics", icon: BarChart2 },
     ],
@@ -73,7 +74,7 @@ export function PropertiesSidebar({ user, onLogout }: { user?: ShellUser; onLogo
         ...section,
         items: section.items.filter((item) =>
           (!isOwner || item.url !== "/properties/analytics") &&
-          (isAdmin || isOwner || (item.url !== "/properties/accounting/open-items" && item.url !== "/properties/accounting/cash-bank" && item.url !== "/properties/accounting/monetary-fx" && item.url !== "/properties/accounting/rentals" && item.url !== "/properties/accounting/consolidation" && item.url !== "/properties/accounting/history"))
+          (isAdmin || isOwner || (item.url !== "/properties/accounting/open-items" && item.url !== "/properties/accounting/cash-bank" && item.url !== "/properties/accounting/monetary-fx" && item.url !== "/properties/accounting/rentals" && item.url !== "/properties/accounting/consolidation" && item.url !== "/properties/accounting/history" && item.url !== "/properties/accounting/statements"))
         ),
       })).filter((section) => section.items.length > 0),
     [isOwner]
