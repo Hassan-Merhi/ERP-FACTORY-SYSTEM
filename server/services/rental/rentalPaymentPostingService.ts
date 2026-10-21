@@ -272,7 +272,7 @@ async function postGroupCore(
       );
       const advId = await findOrCreateLedgerAccount(tx, companyId, "Advance Rent Paid", "Asset", "ADV-RENT-PAID");
       const rv = await post({
-        voucherNumber: `ADV-REC-${paymentDate.replace(/-/g, "")}-${groupId.slice(-6)}`,
+        voucherNumber: `ADV-REC-${paymentDate.replace(/-/g, "")}-${rentalPaymentVoucherSuffix(groupId)}`,
         voucherType: "Journal",
         description: recNarr,
         phase: "advance-recognition",
@@ -319,7 +319,7 @@ async function postGroupCore(
     );
 
     if (mod === "PROPERTIES") {
-      const voucherNum = `RENT-${paymentDate.replace(/-/g, "")}-${groupId.slice(-6)}`;
+      const voucherNum = `RENT-${paymentDate.replace(/-/g, "")}-${rentalPaymentVoucherSuffix(groupId)}`;
       const v = await post({
         voucherNumber: voucherNum,
         voucherType: "Receipt",
@@ -350,7 +350,7 @@ async function postGroupCore(
     const deferredChunk = sumMoney(futureAllocs.map((a) => a.chunk));
     const earnedChunk = toMoney(totalAmountStr).minus(deferredChunk);
 
-    const voucherNum = `RENT-${paymentDate.replace(/-/g, "")}-${groupId.slice(-6)}`;
+    const voucherNum = `RENT-${paymentDate.replace(/-/g, "")}-${rentalPaymentVoucherSuffix(groupId)}`;
     const lLines: ErpVoucherLine[] = [line(cashAccountId, "debit", totalAmountStr, narration)];
     if (earnedChunk.gt("0.005")) lLines.push(line(incomeAccountId, "credit", earnedChunk.toFixed(2), narration));
     if (deferredChunk.gt("0.005")) {
