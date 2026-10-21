@@ -634,6 +634,21 @@ describe("paginated customer balances with unfinalized container charges", () =>
       `CHARGE-PRE-${orderId}-${chargeId}`
     );
 
+    const unpaged = await call("GET /api/accounts/ledger/:id/transactions", {
+      params: { id: String(fCustLedger) },
+      query: { endDate: "2026-09-30" },
+    });
+    expect(unpaged.statusCode).toBe(200);
+    expect(unpaged.body.customerId).toBe(fCustomer);
+    expect(unpaged.body.transactions.some((row: { voucherId: number }) => row.voucherId === heldVoucherId)).toBe(false);
+    expect(
+      unpaged.body.transactions.reduce(
+        (sum: number, row: { debitAmount: string; creditAmount: string }) =>
+          sum + Number(row.debitAmount) - Number(row.creditAmount),
+        0
+      )
+    ).toBe(240);
+
     const dates = { effectiveEndDate: "2026-09-30", asOfDate: "2026-09-30", businessDate: "2026-10-21" };
     const first = await runCustomerBalanceStatement({
       customerId: fCustomer,
