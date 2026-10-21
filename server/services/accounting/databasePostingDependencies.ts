@@ -311,12 +311,23 @@ export function createDatabasePostingDependencies(): CentralPostingDependencies 
             // markers after the retry-stable fingerprint change.
             allowFingerprintMismatch: SERVER_NUMBERED_RETRY_SOURCES.has(source.sourceType),
           });
-          return loadVoucherWithEntries({
+          const existing = await loadVoucherWithEntries({
             tx,
             companyId,
             voucherId: Number(marker.voucherId),
             idempotencyKey: source.idempotencyKey,
           });
+          // A soft-deleted voucher is not a successful replay. A properly
+          // retired voucher releases its canonical identity; a remaining
+          // canonical marker points to an inconsistent/deactivated posting.
+          // Refuse rather than silently returning a deleted voucher.
+          if (existing.voucher.deletedAt) {
+            throw new PostingValidationError(
+              "POSTING_IDEMPOTENCY_INACTIVE",
+              `Posting identity ${source.idempotencyKey} points to a deleted voucher; retire or reconcile that identity before retrying`
+            );
+          }
+          return existing;
         }
 
         const [legacyMarker] = await tx
@@ -360,7 +371,13 @@ export function createDatabasePostingDependencies(): CentralPostingDependencies 
         // releases the canonical marker); its legacy audit marker must not bring
         // the identity back, or a deliberate re-post after a rebuild would
         // "replay" the deleted voucher and post nothing.
-        if (existing.voucher.deletedAt && isRetiredVoucherNumber(existing.voucher.voucherNumber)) return null;
+        if (existing.voucher.deletedAt) {
+          if (isRetiredVoucherNumber(existing.voucher.voucherNumber)) return null;
+          throw new PostingValidationError(
+            "POSTING_IDEMPOTENCY_INACTIVE",
+            `Legacy identity ${source.idempotencyKey} points to a deleted voucher without a retired posting identity`
+          );
+        }
 
         await tx.insert(accountingPostingRequests).values({
           companyId,
