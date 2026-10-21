@@ -5,6 +5,7 @@ import {db} from "../db";
 import {requireAuth,requireRole} from "../auth";
 import {getErrorMessage} from "../lib/httpHandlers";
 import {companyBusinessDate} from "../services/accounting/companyBusinessDate";
+import {getHistoricalCurrencyReadiness} from "../services/accounting/historicalCurrencyReadiness";
 import {professionalFinancialStatementsTx} from
  "../services/accounting/professionalFinancialStatements";
 
@@ -40,8 +41,20 @@ export function registerProfessionalFinancialStatementRoutes(app:Express){
    const result=await db.transaction(tx=>professionalFinancialStatementsTx(tx,{
     companyId,asOfDate,fromDate,compare:parsed.data.compare==="true"
    }));
+   // FX readiness is a separate, read-only compatibility guard. Even
+   // readiness=true may mean pure-legacy mode, not backfilled historical FX.
+   const historicalFx=await getHistoricalCurrencyReadiness(companyId,asOfDate);
+   if(!historicalFx.ready){
+    result.current.controls.blockers.push(
+     "Historical currency data is incomplete; financial statement amounts require review");
+    if(result.comparison)result.comparison.controls.blockers.push(
+     "Historical FX readiness of the comparison period has not been independently certified");
+   }
    res.setHeader("Cache-Control","no-store");
-   return res.json(result);
+   return res.json({...result,historicalFx:{
+    ...historicalFx,certified:false,
+    caveat:"Compatibility-ready in pure legacy mode does not prove complete historical USD conversion."
+   }});
   }catch(e){
    const status=errorStatus(e);
    return res.status(status).json({
