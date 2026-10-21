@@ -130,6 +130,35 @@ DROP TRIGGER IF EXISTS cost_center_auto_rules_guard_trg ON cost_center_auto_rule
 CREATE TRIGGER cost_center_auto_rules_guard_trg BEFORE INSERT OR UPDATE
 ON cost_center_auto_rules FOR EACH ROW EXECUTE FUNCTION cost_center_auto_rules_guard();
 
+-- Company isolation for deliberate manual overrides, including clear-all.
+CREATE OR REPLACE FUNCTION cost_center_source_override_guard()
+RETURNS trigger LANGUAGE plpgsql AS $cc_override$
+DECLARE
+  source_company INTEGER;
+BEGIN
+  IF TG_OP='UPDATE' AND (
+    NEW.company_id IS DISTINCT FROM OLD.company_id
+    OR NEW.voucher_entry_id IS DISTINCT FROM OLD.voucher_entry_id
+    OR NEW.factory_daybook_entry_id IS DISTINCT FROM OLD.factory_daybook_entry_id
+  ) THEN RAISE EXCEPTION 'Cannot change the company or source of a manual override'; END IF;
+  IF NEW.voucher_entry_id IS NOT NULL AND NEW.factory_daybook_entry_id IS NULL THEN
+    SELECT company_id INTO source_company FROM voucher_entries WHERE id=NEW.voucher_entry_id;
+  ELSIF NEW.factory_daybook_entry_id IS NOT NULL AND NEW.voucher_entry_id IS NULL THEN
+    SELECT company_id INTO source_company FROM factory_daybook_entries
+    WHERE id=NEW.factory_daybook_entry_id;
+  ELSE
+    RAISE EXCEPTION 'Manual override must reference exactly one financial source';
+  END IF;
+  IF source_company IS DISTINCT FROM NEW.company_id THEN
+    RAISE EXCEPTION 'Manual override must refer to a source in the same company';
+  END IF;
+  RETURN NEW;
+END
+$cc_override$;
+DROP TRIGGER IF EXISTS cost_center_source_override_guard_trg ON cost_center_source_overrides;
+CREATE TRIGGER cost_center_source_override_guard_trg BEFORE INSERT OR UPDATE
+  ON cost_center_source_overrides FOR EACH ROW EXECUTE FUNCTION cost_center_source_override_guard();
+
 -- The auto engine does not backfill; it runs only after newly inserted source
 -- entries. Constraint triggers are deferred so an accounting transaction can
 -- finish its FX normalization and optional voucher-finalization updates first.
@@ -228,8 +257,10 @@ BEGIN
   SELECT * INTO src FROM factory_daybook_entries
   WHERE id=p_entry_id
     AND tx_type IN ('EXPENSE','OPERATING_EXPENSE','FACTORY_EXPENSE')
-    AND lower(coalesce(reference_table,'')) NOT IN
-      ('voucher','vouchers','voucher_entries','factory_pos_sales')
+    -- An independent event must have no accounting/document reference.
+    -- Referenced expenses can share a voucher even when the reference table
+    -- isn't literally named "vouchers"; never tag both representations.
+    AND nullif(btrim(coalesce(reference_table,'')),'') IS NULL
     AND amount_currency>0 AND amount_usd>=0;
   IF NOT FOUND THEN RETURN; END IF;
   IF EXISTS (SELECT 1 FROM cost_center_allocations a WHERE a.factory_daybook_entry_id=p_entry_id)
