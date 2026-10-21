@@ -25,7 +25,7 @@ import { getErrorMessage } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
 import { runWithDatabaseMaintenanceScope } from "../security/databaseScopeRuntimeContext";
 import { runInCompanyPostingScope } from "./scheduledPostingScope";
-import { isRentalPostingAccountCode } from "./unifiedAccountingFoundation";
+import { ACCOUNTING_CONTROL_ACCOUNTS, isRentalPostingAccountCode } from "./unifiedAccountingFoundation";
 
 export interface SystemAccountDefinition {
   code: string;
@@ -64,7 +64,7 @@ export const SYSTEM_ACCOUNTS: readonly SystemAccountDefinition[] = [
     purpose: "Base-currency rounding remainder of vouchers converted line by line (a credit balance is a gain).",
   },
   {
-    code: "PURCHASES",
+    code: ACCOUNTING_CONTROL_ACCOUNTS.ERP.purchases,
     name: "Purchases",
     accountType: "Direct Expense",
     required: false,
@@ -78,21 +78,21 @@ export const SYSTEM_ACCOUNTS: readonly SystemAccountDefinition[] = [
     purpose: "Import charges on purchases.",
   },
   {
-    code: "COGS",
+    code: ACCOUNTING_CONTROL_ACCOUNTS.ERP.costOfSales,
     name: "Cost of Goods Sold",
     accountType: "Direct Expense",
     required: false,
     purpose: "Cost of goods sold.",
   },
   {
-    code: "INVENTORY",
+    code: ACCOUNTING_CONTROL_ACCOUNTS.ERP.inventory,
     name: "Inventory",
     accountType: "Asset",
     required: false,
     purpose: "Inventory control account.",
   },
   {
-    code: "GOODS_IN_TRANSIT",
+    code: ACCOUNTING_CONTROL_ACCOUNTS.ERP.goodsInTransit,
     name: "Goods in Transit",
     accountType: "Asset",
     required: false,
@@ -100,7 +100,7 @@ export const SYSTEM_ACCOUNTS: readonly SystemAccountDefinition[] = [
   },
   // Wave 17 B: factory containers expensed before the cut-over and received after it.
   {
-    code: "FACTORY_GOODS_IN_TRANSIT",
+    code: ACCOUNTING_CONTROL_ACCOUNTS.FACTORY.goodsInTransit,
     name: "Factory Goods in Transit",
     accountType: "Asset",
     required: false,
@@ -108,28 +108,28 @@ export const SYSTEM_ACCOUNTS: readonly SystemAccountDefinition[] = [
       "Expensed cost of factory containers not yet received at the perpetual-inventory cut-over, cleared by their receipts.",
   },
   {
-    code: "FACTORY_RAW_MATERIAL_STOCK",
+    code: ACCOUNTING_CONTROL_ACCOUNTS.FACTORY.rawMaterials,
     name: "Factory Raw Material Stock",
     accountType: "Asset",
     required: false,
     purpose: "Factory raw material on hand at landed cost (perpetual inventory).",
   },
   {
-    code: "FACTORY_WIP",
+    code: ACCOUNTING_CONTROL_ACCOUNTS.FACTORY.workInProgress,
     name: "Factory Work in Progress",
     accountType: "Asset",
     required: false,
     purpose: "Raw material in open mix batches and bales awaiting pressing (perpetual inventory).",
   },
   {
-    code: "FACTORY_FINISHED_GOODS",
+    code: ACCOUNTING_CONTROL_ACCOUNTS.FACTORY.finishedGoods,
     name: "Factory Finished Goods",
     accountType: "Asset",
     required: false,
     purpose: "Bales in stock at their recorded cost (perpetual inventory).",
   },
   {
-    code: "PRODUCTION_VARIANCE",
+    code: ACCOUNTING_CONTROL_ACCOUNTS.FACTORY.productionVariance,
     name: "Production Cost Variance",
     accountType: "Direct Expense",
     required: false,
@@ -185,7 +185,7 @@ export const SYSTEM_ACCOUNTS: readonly SystemAccountDefinition[] = [
       "Profit-and-loss side of cost corrections and re-pricing of stock on hand (perpetual inventory). A credit balance is a gain.",
   },
   {
-    code: "FACTORY_BALE_SALES_INCOME",
+    code: ACCOUNTING_CONTROL_ACCOUNTS.FACTORY.baleSalesIncome,
     name: "Factory Bale Sales Income",
     accountType: "Income",
     required: false,
