@@ -108,7 +108,7 @@ async function paymentsTx(tx:DbTransaction,companyId:number,module:RentalOriginM
   LEFT JOIN vouchers v ON v.id=p.voucher_id AND v.company_id=p.company_id
     AND v.deleted_at IS NULL AND v.optional=false
   WHERE p.company_id=${companyId} AND p.module=${module}
-    AND p.contract_id=${contractId} AND p.payment_date<=${asOf}::date
+    AND p.contract_id=${contractId} AND (p.payment_date<=${asOf}::date OR p.posting_status='SCHEDULED')
   ORDER BY p.payment_date,p.id LIMIT 3000
  `));
 }
@@ -176,8 +176,8 @@ export async function rentalContractAccountingTx(tx:DbTransaction,input:{
   const c=String(p.currency||"USD").trim().toUpperCase();
   if(c!==native){foreignCurrencyRows++;continue;}
   const k=key(p.for_year,p.for_month);
-  if(p.posting_status==="POSTED"){
-    if(p.voucher_id!==null && p.actual_voucher_id===null)postedWithoutVoucher++;
+  if(p.posting_status==="POSTED" && p.payment_date<=date){
+    if(p.actual_voucher_id===null)postedWithoutVoucher++;
     posted.set(k,(posted.get(k)??new Decimal(0)).plus(d(p.amount)));
     paymentIds.set(k,[...(paymentIds.get(k)??[]),Number(p.id)]);
   }else if(p.posting_status==="SCHEDULED"){
