@@ -641,6 +641,12 @@ export async function ensureRuntimeSchema(pool: Pool): Promise<void> {
   // always-on pre-listen schema guard.
   await ensureScheduledWhatsAppDeliveryTrackingSchema(pool);
 
+  // Unified accounting Phase 3 — additive reconciliation metadata only.
+  // No GL entries or source-party balances are changed during initialization.
+  const { ensurePartyOpenItemSchema } =
+    await import("../services/accounting/ensurePartyOpenItemSchema");
+  await ensurePartyOpenItemSchema(pool);
+
   // Wave 16 (A): the Phase 3 historical accounting repair no longer runs here.
   // It added and deleted lines of posted vouchers of every company before each
   // listen, with no audit; it is now the Owner preview/apply at
