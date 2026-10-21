@@ -34,6 +34,24 @@ function fail(res:Response,e:unknown){
 }
 export function registerMonetaryFxRoutes(app:Express):void{
   const gate=[requireAuth,requireRole("Admin","Owner","Developer")] as const;
+  // Core ERP/Factory/Rental currency set. Never manufacture a rate for
+  // dates without an actual company exchange-rate record.
+  app.get("/api/accounting/monetary-fx/rates",...gate,async(req,res)=>{
+    try{
+      const input=z.object({asOfDate:date}).parse(req.query),c=company(req);
+      const asOfDate=fxDay(input.asOfDate??await companyBusinessDate(c));
+      const currencies=["USD","EUR","AUD","GBP","CDF","CFA"];
+      const rates=await db.transaction(async tx=>{
+        const rows=[];
+        for(const code of currencies){
+          const rate=await datedMonetaryRateTx(tx,c,code,asOfDate);
+          rows.push({currency:code,rate});
+        }
+        return rows;
+      });
+      return res.json({asOfDate,baseCurrency:"USD",rates});
+    }catch(e){return fail(res,e);}
+  });
   app.get("/api/accounting/monetary-fx/rate",...gate,async(req,res)=>{
     try{
       const input=z.object({currency:z.string().min(3).max(3),asOfDate:date}).parse(req.query);
