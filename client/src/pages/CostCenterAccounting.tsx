@@ -116,7 +116,7 @@ export default function CostCenterAccounting(){
   enabled:!!companyId&&tab==="budgets",retry:false
  });
  const ordered=useMemo(()=>centers.data?.centers??[],[centers.data]);
- const centerNameById=(id:number)=>ordered.find(c=>Number(c.id)===id)?.name??"Unknown center";
+ const centerNameById=(id:number|string)=>ordered.find(c=>Number(c.id)===Number(id))?.name??"Unknown center";
  const centerValue=Number(selectedCenter);
  const centerSelected=Number.isSafeInteger(centerValue)&&centerValue>0;
  const invalidRead=report.error as Error|null;
@@ -298,7 +298,7 @@ export default function CostCenterAccounting(){
        <option value={k} key={k}>{k}</option>)}</select></div>
      <div><Label>Parent center</Label><select className="h-10 w-full border rounded-md bg-background px-2"
       value={centerParent} onChange={e=>setCenterParent(e.target.value)}>
-      <option value="">Root center</option>{ordered.filter(c=>c.id!==editingCenter).map(c=>
+      <option value="">Root center</option>{ordered.filter(c=>Number(c.id)!==editingCenter).map(c=>
        <option value={c.id} key={c.id}>{c.code} · {c.name}</option>)}</select></div>
      <div><Label>Sort order</Label><Input type="number" value={centerOrder}
        onChange={e=>setCenterOrder(e.target.value)}/></div>
@@ -327,7 +327,7 @@ export default function CostCenterAccounting(){
        <td className="p-2">{c.parent_id?centerNameById(Number(c.parent_id)):"—"}</td>
        <td className="p-2">{c.active?"Active":"Inactive"}</td>
        <td className="p-2"><Button size="sm" variant="outline" onClick={()=>{
-        setEditingCenter(c.id);setCenterCode(c.code);setCenterName(c.name);
+        setEditingCenter(Number(c.id));setCenterCode(c.code);setCenterName(c.name);
         setCenterModule(c.module);setCenterParent(c.parent_id?String(c.parent_id):"");
         setCenterOrder(String(c.sort_order));setCenterNote(c.note??"");
         setCenterActive(c.active);
