@@ -180,7 +180,7 @@ export default function Accounts() {
               Multi-Currency Accounting
             </Button>
           )}
-        {showViewAccounts && !phoneStatementOpen &&
+        {showViewAccounts && !phoneStatementOpen && model.modePrefix !== "/properties" &&
           ["Admin","Owner","Developer"].includes(model.currentUser?.role ?? "") && (
             <Button variant="outline" data-testid="button-factory-production-accounting"
               onClick={() => model.navigate(`${model.modePrefix}/accounting/${model.modePrefix==="/factory"?"production":"factory-production"}`)}>
