@@ -7,7 +7,6 @@ CREATE OR REPLACE FUNCTION cost_center_allocation_eligibility_guard()
 RETURNS trigger LANGUAGE plpgsql AS $cc_eligibility$
 DECLARE
   active_center BOOLEAN;
-  account_kind TEXT;
   parent_voucher RECORD;
   daybook_type TEXT;
 BEGIN
@@ -19,12 +18,15 @@ BEGIN
 
   IF NEW.voucher_entry_id IS NOT NULL THEN
     SELECT la.account_type, v.voucher_number, v.source_module, v.optional, v.deleted_at
-      INTO account_kind, parent_voucher
+      INTO parent_voucher
     FROM voucher_entries ve
     JOIN vouchers v ON v.id=ve.voucher_id
     LEFT JOIN ledger_accounts la ON la.id=ve.ledger_account_id AND la.company_id=ve.company_id
     WHERE ve.id=NEW.voucher_entry_id AND ve.company_id=NEW.company_id
       AND v.company_id=NEW.company_id;
+    IF NOT FOUND THEN
+      RAISE EXCEPTION 'Voucher entry is unavailable for cost allocation';
+    END IF;
     IF parent_voucher.voucher_number IS NULL OR parent_voucher.deleted_at IS NOT NULL
        OR parent_voucher.optional = TRUE
        OR parent_voucher.voucher_number LIKE 'GC-%'
@@ -32,11 +34,11 @@ BEGIN
        OR parent_voucher.source_module = 'SP_MIGRATION_READONLY' THEN
       RAISE EXCEPTION 'Protected, optional, deleted or migrated vouchers cannot be allocated';
     END IF;
-    IF account_kind IN ('Expense','Direct Expense','Indirect Expense') THEN
+    IF parent_voucher.account_type IN ('Expense','Direct Expense','Indirect Expense') THEN
       IF NEW.cost_treatment <> 'EXPENSE' THEN
         RAISE EXCEPTION 'Expense ledger lines must keep EXPENSE cost treatment';
       END IF;
-    ELSIF account_kind = 'Asset' THEN
+    ELSIF parent_voucher.account_type = 'Asset' THEN
       IF NEW.cost_treatment <> 'INVENTORY_COST' THEN
         RAISE EXCEPTION 'Asset ledger lines must keep INVENTORY_COST treatment';
       END IF;
