@@ -26,6 +26,7 @@ import { resultRows } from "../../lib/queryResult";
 import { isSystemOnlyLedgerAccount } from "../../lib/systemOnlyLedgerAccounts";
 import type Decimal from "decimal.js";
 import { MoneyDecimal, toMoney } from "../../lib/money";
+import { getCustomerLedgerAndMemo, splitBalanceFields } from "../factory/customers-core/customerLedgerSplit";
 
 export async function serveAccountListForCompany(req: Request, res: Response, companyId: number) {
   try {
@@ -139,6 +140,17 @@ export async function serveAccountListForCompany(req: Request, res: Response, co
         .map((party) => [party.linkedLedgerAccountId as number, party])
     );
 
+    // The Accounts/Agent Ledger customer display must use the same projected
+    // total as Factory Parties, which holds premature freight charges and
+    // includes historical operational memo amounts. Keep the regular ledger
+    // balance untouched for accounting and analytics consumers.
+    const linkedCustomerIds = customerParties.parties
+      .filter((party) => party.id !== null && party.linkedLedgerAccountId !== null)
+      .map((party) => party.id as number);
+    const displayedCustomerFigures = !analyticsProfile && linkedCustomerIds.length
+      ? await getCustomerLedgerAndMemo(companyId, linkedCustomerIds, effectiveEndDate)
+      : null;
+
     // Wave 18 C: ledger, bank, fixed-asset and employee balances are the
     // balance engine's rows (one scan of the company's lines): each line
     // counted once by the engine's ownership (a line naming a ledger and a
@@ -187,6 +199,8 @@ export async function serveAccountListForCompany(req: Request, res: Response, co
         if (customerParty) {
           const closing = toMoney(customerParty.closing);
           const opening = toMoney(balStartDate ? customerParty.opening : customerParty.masterOpening);
+          const partyFigures = displayedCustomerFigures?.get(customerParty.id as number);
+          const partySplit = partyFigures ? splitBalanceFields(partyFigures) : null;
           return {
             id: `ledger-${account.id}`,
             accountId: account.id,
@@ -204,6 +218,15 @@ export async function serveAccountListForCompany(req: Request, res: Response, co
             customerId: customerParty.id,
             balanceBasis: "ledger" as const,
             notInLedgerTotal: customerParty.memoTotal,
+            // Optional display-only Parties amount; do not replace the GL book
+            // fields used by other reports, vouchers or financial calculations.
+            ...(partySplit ? {
+              partyBalance: partySplit.balance.toFixed(2),
+              partyBalanceSide: partySplit.balanceSide,
+              partyBalanceBasis: partySplit.balanceBasis,
+              partyLedgerBalance: partySplit.ledgerBalance.toFixed(2),
+              heldUnfinalizedCharges: partySplit.heldUnfinalizedCharges,
+            } : {}),
           };
         }
 
