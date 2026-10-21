@@ -24,6 +24,7 @@ import {
   CostCenterAccounting,
   FiscalCloseReview,
   UnifiedAccountingDashboard,
+  UnifiedAccountingRollout,
   Agents,
   Analytics,
   BalanceRepair,
@@ -198,6 +199,7 @@ export function FactoryRoutes({ user, myAccess, factoryDefaultPage }: FactoryRou
       {isAdminOwnerOrDev && <Route path="/factory/accounting/cost-centers" component={CostCenterAccounting} />}
       {isAdminOwnerOrDev && <Route path="/factory/accounting/fiscal-review" component={FiscalCloseReview} />}
       {isAdminOwnerOrDev && <Route path="/factory/accounting/dashboard" component={UnifiedAccountingDashboard} />}
+      {isAdminOwnerOrDev && <Route path="/factory/accounting/rollout" component={UnifiedAccountingRollout} />}
       {isAdminOwnerOrDev && <Route path="/factory/account-groups" component={AccountGroups} />}
       <Route path="/factory/agents" component={Agents} />
       <Route path="/factory/vouchers">{() => <FactoryVouchers />}</Route>
