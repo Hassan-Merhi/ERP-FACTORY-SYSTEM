@@ -20,6 +20,7 @@ export async function ensureRentalAccountingLinksSchema(pool:Pool):Promise<void>
       allocated_usd NUMERIC(20,6) NOT NULL CHECK(allocated_usd>0),
       note TEXT,
       tagged_by TEXT NOT NULL,
+      client_request_key VARCHAR(128),
       tagged_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       voided_at TIMESTAMPTZ,
       voided_by TEXT,
@@ -35,6 +36,11 @@ export async function ensureRentalAccountingLinksSchema(pool:Pool):Promise<void>
     CREATE INDEX IF NOT EXISTS accounting_rental_expense_links_contract_idx
       ON accounting_rental_expense_links(company_id,module,contract_id)
       WHERE voided_at IS NULL;
+    ALTER TABLE accounting_rental_expense_links
+      ADD COLUMN IF NOT EXISTS client_request_key VARCHAR(128);
+    CREATE UNIQUE INDEX IF NOT EXISTS accounting_rental_expense_link_request_uq
+      ON accounting_rental_expense_links(company_id,client_request_key)
+      WHERE client_request_key IS NOT NULL;
     CREATE INDEX IF NOT EXISTS accounting_rental_expense_links_voucher_idx
       ON accounting_rental_expense_links(company_id,voucher_id)
       WHERE voided_at IS NULL;
