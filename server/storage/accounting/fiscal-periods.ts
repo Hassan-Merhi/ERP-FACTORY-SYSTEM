@@ -161,13 +161,23 @@ export async function closeFiscalPeriod(
   retainedEarningsAccountId: number,
   closedByUserId: string,
   notes?: string,
-  actor?: { username: string }
+  actor?: { username: string },
+  reviewedClose?: {
+    /** Executed AFTER acquiring the exclusive company period lock. */
+    beforeClose: (tx: DbTransaction) => Promise<void>;
+    /** Atomically attach audit evidence to the exact closing journal. */
+    afterClose: (tx: DbTransaction, closure: schema.FiscalPeriodClosure) => Promise<void>;
+  }
 ): Promise<schema.FiscalPeriodClosure> {
   return await db.transaction(async (tx) => {
     // Exclusive per-company lock: voucher writes hold the shared side (see
     // closedPeriodGuard), so no write can land in the period while its
     // balances are being totalled and closed.
     await tx.execute(sql`SELECT pg_advisory_xact_lock(${CLOSED_PERIOD_LOCK_NAMESPACE}, ${companyId})`);
+    // Reviewed close is opt-in: existing legacy fiscal close/reopen behavior
+    // remains unchanged. A reviewed close must validate every current source
+    // amount INSIDE this exclusive lock; not in the HTTP preflight alone.
+    if (reviewedClose) await reviewedClose.beforeClose(tx);
 
     const existingClosures = await tx
       .select()
@@ -353,6 +363,7 @@ export async function closeFiscalPeriod(
       tx
     );
 
+    if (reviewedClose) await reviewedClose.afterClose(tx, closure);
     return closure;
   });
 }
