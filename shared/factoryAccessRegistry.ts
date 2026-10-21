@@ -51,6 +51,14 @@ export const FACTORY_ACCESS_REGISTRY: readonly FactoryPageDefinition[] = [
     landing: true,
   },
   {
+    key: "factory/cost-centers",
+    label: "Cost Centers",
+    group: "Finance",
+    route: "/factory/cost-centers",
+    sidebar: true,
+    landing: false,
+  },
+  {
     key: "factory/daybook",
     label: "Daybook",
     group: "Finance",
