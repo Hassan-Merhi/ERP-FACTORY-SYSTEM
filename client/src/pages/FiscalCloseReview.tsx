@@ -21,7 +21,7 @@ interface Readiness{
   singleSidedStockDifferenceUsd:string;otherDifferenceUsd:string;assumedOpeningSides:number};
  source:{postedVouchers:number;postedVoucherLines:number;sourceDigest:string;
   balancedVoucherErrors:number;missingLedgerTargets:number;
-  nonUsdUntranslatedLines:number;optionalVouchers:number;
+  nonUsdUntranslatedLines:number;pnlBaseAmountMismatchLines:number;optionalVouchers:number;
   postingsWithoutActor:number};
  history:{latestClosedEnd:string|null;expectedNextStart:string|null;
   closedPeriods:Array<{id:number;from:string;to:string;voucherId:number;netIncomeUsd:string}>};
@@ -260,6 +260,7 @@ export default function FiscalCloseReview(){
       ["Source voucher imbalance",data.source.balancedVoucherErrors],
       ["Missing cross-company account target",data.source.missingLedgerTargets],
       ["Untranslated FX lines",data.source.nonUsdUntranslatedLines],
+      ["P&L historical-base mismatch",data.source.pnlBaseAmountMismatchLines],
       ["Creator identity unavailable",data.source.postingsWithoutActor]
      ] as Array<[string,string|number]>).map(([k,v])=>
       <div key={k}><p className="text-xs text-muted-foreground">{k}</p>
