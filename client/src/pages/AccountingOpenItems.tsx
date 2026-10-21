@@ -14,7 +14,7 @@ interface OpenItem {entryId:number;voucherId:number;voucherNumber:string;voucher
   businessDate:string;side:"charge"|"settlement";currency:string;originalAmount:string;
   matchedAmount:string;outstandingAmount:string;currencyVerified:boolean;
   status:string;allocations:Allocation[]}
-interface PartyView {items:OpenItem[];currencies:Record<string,{
+interface PartyView {items:OpenItem[];openingBalance:{amount:string;side:string|null;includedInMatching:false};currencies:Record<string,{
   charges:string;settlements:string;unapplied:string;outstanding:string}>}
 interface RentalView {currency:string;items:Array<{year:number;month:number;dueDate:string;
   expectedAmount:string;paidAmount:string;outstandingAmount:string;status:string;paymentIds:number[]}>;
@@ -168,6 +168,12 @@ export default function AccountingOpenItems() {
       </CardContent>
     </Card>}
     {party&&<>
+      <p className="text-xs text-muted-foreground">
+        Original party opening balance: {party.openingBalance.amount}
+        {party.openingBalance.side ? " ("+party.openingBalance.side+")" : ""}.
+        Opening balances are displayed separately and are not automatically
+        converted into invoices or included in the matching totals.
+      </p>
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {Object.entries(party.currencies).flatMap(([currency,totals])=>[
           <Card key={currency+"-outstanding"}><CardContent className="pt-4">
