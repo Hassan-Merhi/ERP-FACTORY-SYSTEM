@@ -17,6 +17,7 @@ import { Plus, Pencil, Archive, RefreshCw, ChevronRight } from "lucide-react";
 import { useLocation } from "wouter";
 import type { CostCenter, CostCenterCatalog, CostCenterBalance, CostCenterActivity } from "@/api/costCentersApi";
 import { readCostCenterApi, writeCostCenterApi } from "@/api/costCentersApi";
+import { CostCenterAutomationRules } from "@/components/financial/CostCenterAutomationRules";
 
 type Form = { code: string; name: string; description: string; parentId: string };
 const emptyForm: Form = { code: "", name: "", description: "", parentId: "root" };
@@ -247,6 +248,7 @@ export default function CostCenters() {
           </CardContent>
         </Card>
       </div>
+      <CostCenterAutomationRules baseUrl={baseUrl} centers={centers} />
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader><DialogTitle>{editingId ? "Edit Cost Center" : "New Cost Center"}</DialogTitle></DialogHeader>
