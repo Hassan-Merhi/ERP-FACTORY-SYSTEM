@@ -21,16 +21,17 @@ import { LineChart, Line, CartesianGrid, XAxis, YAxis, Tooltip, Legend, Responsi
 import { Download, RefreshCw, BarChart3 } from "lucide-react";
 
 type AmountRow = {expense:string;inventoryCost:string;budget:string;variance:string;entries?:number};
+type TotalRow = AmountRow & {unallocated:string;recognizedExpense:string;unallocatedApplicable:boolean};
 type CenterRow = AmountRow & {
   companyId:number;companyName:string;costCenterId:number;code:string;name:string;
   active:boolean;utilization:string|null;
 };
 type AccountRow = {companyId:number;accountId:number|null;accountName:string;expense:string;inventoryCost:string;entries:number};
-type MonthRow = {month:string;expense:string;inventoryCost:string;budget:string;variance:string};
+type MonthRow = {month:string;expense:string;unallocated:string;inventoryCost:string;budget:string;variance:string};
 type Summary = {
   currency:string;scope:string;companyIds:number[];
   period:{from:string;to:string;budgetBasis:string};
-  totals:AmountRow;centers:CenterRow[];accounts:AccountRow[];months:MonthRow[];
+  totals:TotalRow;centers:CenterRow[];departments:Array<CenterRow & {members:number}>;accounts:AccountRow[];months:MonthRow[];
 };
 type Activity = {
   id:number;companyId:number;costCenterId:number;costCenterName:string;costCenterCode:string;
@@ -115,6 +116,7 @@ export function CostCenterReports({baseUrl,centers}:{
   const chart=useMemo(()=>(summary?.months||[]).map(m=>({
     month:m.month,
     Expense:Number(m.expense),
+    Unallocated:Number(m.unallocated),
     Budget:Number(m.budget),
     "Inventory (separate)":Number(m.inventoryCost),
   })),[summary]);
@@ -136,7 +138,7 @@ export function CostCenterReports({baseUrl,centers}:{
     try{
       const base=baseUrl+(consolidated?"/reports/consolidated/export":"/reports/export");
       const response=await fetch(base+"?"+params+"&format="+format+"&view="+
-        (detail?"activity":"summary"),{credentials:"include"});
+        (detail?"activity":view==="centers"?"summary":view),{credentials:"include"});
       if(!response.ok){
         const err=await response.json().catch(()=>null) as {message?:string}|null;
         throw new Error(err?.message||"Export unavailable");
@@ -145,7 +147,7 @@ export function CostCenterReports({baseUrl,centers}:{
       const url=URL.createObjectURL(blob);
       const a=document.createElement("a");
       a.href=url;
-      a.download="cost-centers-"+(detail?"activity":"summary")+"-"+from+"-"+to+"."+format;
+      a.download="cost-centers-"+(detail?"activity":view)+"-"+from+"-"+to+"."+format;
       document.body.appendChild(a);a.click();a.remove();
       setTimeout(()=>URL.revokeObjectURL(url),3000);
     }catch(e){toast({title:"Export failed",description:message(e),variant:"destructive"});}
@@ -218,7 +220,9 @@ export function CostCenterReports({baseUrl,centers}:{
         {summary&&<div className="space-y-4">
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
             {([
-              ["Expense (USD)",summary.totals.expense],
+              ["Allocated expense (USD)",summary.totals.expense],
+              ["Unallocated expense (USD)",summary.totals.unallocated],
+              ["Total recognized expense",summary.totals.recognizedExpense],
               ["Budget (USD)",summary.totals.budget],
               ["Variance: over/(under)",summary.totals.variance],
               ["Inventory cost — separate",summary.totals.inventoryCost],
@@ -243,6 +247,7 @@ export function CostCenterReports({baseUrl,centers}:{
                   <Legend />
                   <Line type="monotone" dataKey="Expense" stroke="#2463af" dot={false} strokeWidth={2}/>
                   <Line type="monotone" dataKey="Budget" stroke="#c68624" dot={false} strokeWidth={2}/>
+                  {summary.totals.unallocatedApplicable&&<Line type="monotone" dataKey="Unallocated" stroke="#b74c55" dot={false} strokeWidth={1}/>}
                   {treatment!=="EXPENSE"&&<Line type="monotone" dataKey="Inventory (separate)" stroke="#72768a" dot={false} strokeWidth={1}/>}
                 </LineChart>
               </ResponsiveContainer>
@@ -250,10 +255,10 @@ export function CostCenterReports({baseUrl,centers}:{
           </div>}
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex gap-1 flex-wrap">
-              {(["centers","accounts","activity"] as const).map(tab=>
+              {(["centers","departments","accounts","months","activity"] as const).map(tab=>
                 <Button key={tab} size="sm" variant={view===tab?"default":"outline"}
                   onClick={()=>{setView(tab);setOffset(0);}}>
-                  {tab==="centers"?"By Cost Center":tab==="accounts"?"By Expense Account":"Source Drill-down"}
+                  {tab==="centers"?"By Cost Center":tab==="departments"?"Departments":tab==="accounts"?"By Expense Account":tab==="months"?"Monthly":"Source Drill-down"}
                 </Button>)}
             </div>
             <div className="flex flex-wrap gap-1">
@@ -282,6 +287,41 @@ export function CostCenterReports({baseUrl,centers}:{
                 <td className="p-2 text-right">{x.entries}</td>
               </tr>)}</tbody>
             </table>}
+            {view==="departments"&&<table className="w-full text-sm min-w-[640px]">
+              <thead className="bg-muted/40"><tr className="text-left">
+                <th className="p-2">Department / Parent Center</th>
+                <th className="p-2 text-right">Members</th>
+                <th className="p-2 text-right">Expense USD</th>
+                <th className="p-2 text-right">Budget USD</th>
+                <th className="p-2 text-right">Variance USD</th>
+                <th className="p-2 text-right">Inventory USD</th>
+              </tr></thead>
+              <tbody>{summary.departments.map(x=>
+                <tr className="border-t" key={x.companyId+":"+x.costCenterId}>
+                  <td className="p-2">{x.code} — {x.name}
+                    <span className="text-xs text-muted-foreground block">{x.companyName}</span></td>
+                  <td className="p-2 text-right">{x.members}</td>
+                  <td className="p-2 text-right font-mono">{fmt(x.expense)}</td>
+                  <td className="p-2 text-right font-mono">{fmt(x.budget)}</td>
+                  <td className="p-2 text-right font-mono">{fmt(x.variance)}</td>
+                  <td className="p-2 text-right font-mono">{fmt(x.inventoryCost)}</td>
+                </tr>)}</tbody></table>}
+            {view==="months"&&<table className="w-full text-sm min-w-[640px]">
+              <thead className="bg-muted/40"><tr className="text-left">
+                <th className="p-2">Month</th><th className="p-2 text-right">Allocated expense</th>
+                <th className="p-2 text-right">Unallocated</th>
+                <th className="p-2 text-right">Budget</th>
+                <th className="p-2 text-right">Variance</th>
+                <th className="p-2 text-right">Inventory costs</th>
+              </tr></thead>
+              <tbody>{summary.months.map(x=><tr key={x.month} className="border-t">
+                <td className="p-2">{x.month}</td>
+                <td className="p-2 text-right font-mono">{fmt(x.expense)}</td>
+                <td className="p-2 text-right font-mono">{fmt(x.unallocated)}</td>
+                <td className="p-2 text-right font-mono">{fmt(x.budget)}</td>
+                <td className="p-2 text-right font-mono">{fmt(x.variance)}</td>
+                <td className="p-2 text-right font-mono">{fmt(x.inventoryCost)}</td>
+              </tr>)}</tbody></table>}
             {view==="accounts"&&<table className="w-full text-sm min-w-[500px]">
               <thead className="bg-muted/40"><tr className="text-left">
                 <th className="p-2">Account</th><th className="p-2 text-right">Expense USD</th>
