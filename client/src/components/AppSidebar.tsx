@@ -101,6 +101,7 @@ export const ERP_NAV_SECTIONS: NavSection[] = [
       { title: "Rental Accounting", url: "/accounting/rentals", icon: Calculator },
       { title: "Intercompany & Consolidation", url: "/accounting/consolidation", icon: Layers },
       { title: "Historical Accounting", url: "/accounting/history", icon: CalendarDays },
+      { title: "Financial Statements", url: "/accounting/statements", icon: FileText },
       { title: "Parties", url: "/parties", icon: Handshake },
       { title: "Payroll", url: "/payroll", icon: UserCheck },
     ],
@@ -216,7 +217,7 @@ export function useErpVisibleSections(user?: SidebarUser): {
     if (item.url === "/chat") return isDeveloper;
     if (item.url === "/item-market-analysis" && selectedCompany?.companyType !== "erp") return false;
     if (item.url === "/analytics" && isOwner) return false;
-    if ((item.url === "/accounting/open-items" || item.url === "/accounting/cash-bank" || item.url === "/accounting/monetary-fx" || item.url === "/accounting/erp-inventory" || item.url === "/accounting/factory-production" || item.url === "/accounting/rentals" || item.url === "/accounting/consolidation" || item.url === "/accounting/history") && !isAdmin && !isOwner) return false;
+    if ((item.url === "/accounting/open-items" || item.url === "/accounting/cash-bank" || item.url === "/accounting/monetary-fx" || item.url === "/accounting/erp-inventory" || item.url === "/accounting/factory-production" || item.url === "/accounting/rentals" || item.url === "/accounting/consolidation" || item.url === "/accounting/history" || item.url === "/accounting/statements") && !isAdmin && !isOwner) return false;
     if (item.url === "/settings" && isOwner) return false;
 
     if (isDeveloper || isAdmin || myErpPages?.fullAccess) return true;
