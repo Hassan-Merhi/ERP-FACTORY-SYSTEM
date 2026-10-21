@@ -458,7 +458,7 @@ export async function createRentalPaymentGroup(opts: RentalPaymentGroupOptions) 
     // Serializing allocation on the contract prevents two payment requests
     // from selecting the same outstanding months concurrently.
     await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${`rental-contract:${contractCompanyId}:${contract.id}`}))`);
-    const recordedRate = await recordedRentalPaymentRate(companyId, currency || "USD", paymentDate);
+    const recordedRate = await recordedRentalPaymentRate(companyId, currency || "USD", paymentDate, tx);
     const billingDay = getRentalBillingDay(contract.startDate as string);
     const totalAmountExact = parseMoneyInput(amount) ?? 0;
     const { year: startY, month: startM } = await findEarliestOutstandingMonth(contract.id, billingDay, paymentDate);
