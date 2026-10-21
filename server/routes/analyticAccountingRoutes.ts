@@ -4,6 +4,7 @@ import {z} from "zod";
 import {db} from "../db";
 import {requireAuth,requireRole} from "../auth";
 import {companyBusinessDate} from "../services/accounting/companyBusinessDate";
+import {MonetaryFxError} from "../services/accounting/monetaryFxRates";
 import {getErrorMessage} from "../lib/httpHandlers";
 import {
  AnalyticError,listAnalyticCentersTx,upsertAnalyticCenterTx,
@@ -49,6 +50,20 @@ function failure(res:Response,error:unknown){
  });
  if(error instanceof AnalyticError)return res.status(error.status).json({
   code:error.code,message:error.message
+ });
+ if(error instanceof MonetaryFxError)return res.status(error.status).json({
+  code:error.code,message:error.message
+ });
+ // Durable unique constraints arbitrate concurrent inserts that both passed
+ // the frontend validation (same cost-center code, budget month or request key).
+ const sqlState=(error as {code?:string;constraint?:string})?.code;
+ if(sqlState==="23505")return res.status(409).json({
+  code:"ANALYTIC_CONFLICT",
+  message:"A cost center, active monthly budget or allocation request with this identity already exists"
+ });
+ if(sqlState==="23503"||sqlState==="23514")return res.status(400).json({
+  code:"ANALYTIC_SOURCE_INVALID",
+  message:"The cost center, parent or original voucher entry is not valid for the selected company"
  });
  const msg=getErrorMessage(error);
  const bad=msg==="ANALYTIC_PERIOD_INVALID"||msg==="ANALYTIC_FUTURE_DATE"||
