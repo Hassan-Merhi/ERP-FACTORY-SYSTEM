@@ -159,6 +159,46 @@ DROP TRIGGER IF EXISTS cost_center_source_override_guard_trg ON cost_center_sour
 CREATE TRIGGER cost_center_source_override_guard_trg BEFORE INSERT OR UPDATE
   ON cost_center_source_overrides FOR EACH ROW EXECUTE FUNCTION cost_center_source_override_guard();
 
+-- Auto-tag failures are non-blocking and visible to accounting administrators.
+CREATE TABLE IF NOT EXISTS cost_center_auto_failures (
+  id BIGSERIAL PRIMARY KEY,
+  company_id INTEGER NOT NULL REFERENCES companies(id) ON DELETE RESTRICT,
+  source_kind VARCHAR(24) NOT NULL,
+  source_id INTEGER NOT NULL,
+  last_error TEXT NOT NULL,
+  failure_count INTEGER NOT NULL DEFAULT 1,
+  last_seen TIMESTAMP NOT NULL DEFAULT now(),
+  CONSTRAINT cost_center_auto_failures_kind_ck CHECK (
+    source_kind IN ('VOUCHER_ENTRY','FACTORY_DAYBOOK')
+  ),
+  CONSTRAINT cost_center_auto_failures_company_source_unique
+    UNIQUE (company_id,source_kind,source_id)
+);
+ALTER TABLE cost_center_auto_failures ENABLE ROW LEVEL SECURITY;
+ALTER TABLE cost_center_auto_failures FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS cost_center_auto_failures_company_scope_policy ON cost_center_auto_failures;
+CREATE POLICY cost_center_auto_failures_company_scope_policy ON cost_center_auto_failures
+  USING (erp_company_scope_matches(company_id))
+  WITH CHECK (erp_company_scope_matches(company_id));
+
+-- Failure logging must also fail open; financial documents always win.
+CREATE OR REPLACE FUNCTION cost_center_auto_record_failure(
+  p_company_id INTEGER,p_source_kind VARCHAR,p_source_id INTEGER,p_error TEXT
+) RETURNS VOID LANGUAGE plpgsql AS $cc_failure$
+BEGIN
+  BEGIN
+    INSERT INTO cost_center_auto_failures(company_id,source_kind,source_id,last_error)
+      VALUES(p_company_id,p_source_kind,p_source_id,left(p_error,1000))
+    ON CONFLICT (company_id,source_kind,source_id)
+      DO UPDATE SET last_error=excluded.last_error,last_seen=now(),
+                    failure_count=cost_center_auto_failures.failure_count+1;
+  EXCEPTION WHEN OTHERS THEN
+    RAISE WARNING 'Cannot record cost center allocation diagnostic for source %: %',
+      p_source_id,SQLERRM;
+  END;
+END
+$cc_failure$;
+
 -- The auto engine does not backfill; it runs only after newly inserted source
 -- entries. Constraint triggers are deferred so an accounting transaction can
 -- finish its FX normalization and optional voucher-finalization updates first.
@@ -300,6 +340,7 @@ BEGIN
   BEGIN
     PERFORM cost_center_auto_apply_voucher_entry(NEW.id);
   EXCEPTION WHEN OTHERS THEN
+    PERFORM cost_center_auto_record_failure(NEW.company_id,'VOUCHER_ENTRY',NEW.id,SQLERRM);
     RAISE WARNING 'Cost center auto allocation skipped voucher entry %: %',NEW.id,SQLERRM;
   END;
   RETURN NULL;
@@ -316,6 +357,7 @@ BEGIN
   BEGIN
     PERFORM cost_center_auto_apply_factory_daybook(NEW.id);
   EXCEPTION WHEN OTHERS THEN
+    PERFORM cost_center_auto_record_failure(NEW.company_id,'FACTORY_DAYBOOK',NEW.id,SQLERRM);
     RAISE WARNING 'Cost center auto allocation skipped factory daybook entry %: %',NEW.id,SQLERRM;
   END;
   RETURN NULL;
@@ -342,6 +384,7 @@ BEGIN
     BEGIN
       PERFORM cost_center_auto_apply_voucher_entry(item.id);
     EXCEPTION WHEN OTHERS THEN
+      PERFORM cost_center_auto_record_failure(NEW.company_id,'VOUCHER_ENTRY',item.id,SQLERRM);
       RAISE WARNING 'Cost center auto tagging skipped finalized voucher %, entry %: %',
         NEW.id,item.id,SQLERRM;
     END;
