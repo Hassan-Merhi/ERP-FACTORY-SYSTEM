@@ -63,6 +63,7 @@ export function CostCenterEntryEditor({
       costCenterId: String(s.costCenterId), amountNative: s.amountNative,
     })));
   }, [source, dirty]);
+  const hasAutoSplits = source?.splits.some(s => s.allocationOrigin === "AUTO") ?? false;
   const nativeTotal = d(source?.totalNative || entry.amountNative);
   const baseTotal = d(source?.totalBase || entry.amountBase);
   const usedNative = useMemo(() => draft.reduce((sum, split) => sum.plus(d(split.amountNative)), new Decimal(0)), [draft]);
@@ -122,6 +123,9 @@ export function CostCenterEntryEditor({
               <div><div className="text-muted-foreground">Historical USD amount</div>
                 <div className="font-semibold">{money(baseTotal.toString(), "USD")}</div></div>
             </div>
+            {hasAutoSplits && <p className="text-xs text-muted-foreground">
+              These splits were assigned automatically. Saving any manual change overrides automation for this entry, including clearing all splits.
+            </p>}
             {draft.map((split, index) => (
               <div key={index} className="flex flex-col sm:flex-row gap-2 items-end rounded-md border p-3">
                 <div className="space-y-1.5 flex-1 w-full min-w-0">
