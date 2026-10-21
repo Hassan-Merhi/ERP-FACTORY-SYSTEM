@@ -9,7 +9,7 @@ export type CostCenterCatalog = { costCenters: CostCenter[] };
 export type CostCenterActivity = {
   center: CostCenter;
   activity: Array<{
-    id: number; voucherEntryId: number | null; factoryDaybookEntryId: number | null;
+    id: number; voucherId: number | null; voucherEntryId: number | null; factoryDaybookEntryId: number | null;
     amountNative: string; amountBase: string; currency: string; costTreatment: string;
     sourceDate: string | null; voucherNumber: string | null; factoryTxType: string | null;
   }>;
