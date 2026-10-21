@@ -221,17 +221,23 @@ export function CostCenterReports({baseUrl,centers}:{
           <div className="grid grid-cols-2 lg:grid-cols-3 gap-2">
             {([
               ["Allocated expense (USD)",summary.totals.expense],
-              ["Unallocated expense (USD)",summary.totals.unallocated],
-              ["Total recognized expense",summary.totals.recognizedExpense],
+              ["Unallocated expense (USD)",summary.totals.unallocatedApplicable?summary.totals.unallocated:"—"],
+              ["Recognized expense in scope",summary.totals.recognizedExpense],
               ["Budget (USD)",summary.totals.budget],
               ["Variance: over/(under)",summary.totals.variance],
               ["Inventory cost — separate",summary.totals.inventoryCost],
             ] as Array<[string,string]>).map(([label,value])=>
               <div key={label} className="rounded-md border p-3 min-w-0">
                 <p className="text-xs text-muted-foreground">{label}</p>
-                <p className="font-semibold font-mono break-all">{fmt(value)}</p>
+                <p className="font-semibold font-mono break-all">{value==="—"?"—":fmt(value)}</p>
               </div>)}
           </div>
+          {accountFilter!=="all"&&<p className="text-xs text-muted-foreground">
+            Account filters do not proportionally divide cost-center budgets; budget comparison is omitted for this filtered view.
+          </p>}
+          {centerFilter!=="all"&&<p className="text-xs text-muted-foreground">
+            Unallocated source spending cannot be attributed to a specific center and is excluded from this selected-center view.
+          </p>}
           {consolidated&&<p className="text-xs text-muted-foreground">
             Consolidated from {summary.companyIds.length} companies with approved accounting access.
             This is an analytical view: no intercompany vouchers are recreated.
