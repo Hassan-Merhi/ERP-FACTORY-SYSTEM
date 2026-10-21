@@ -7,6 +7,7 @@ export interface ErpFeatureAccess {
 
 export const ERP_COMPOSITE_ROUTE_FEATURES: Record<string, readonly FeatureKey[]> = {
   "/financial-overview": ["dashboard"],
+  "/cost-centers": ["accounts"],
   "/inventory": ["location_inventory", "stock_otw", "containers"],
   "/stock": ["stock_items", "stock_query"],
   "/parties": ["suppliers", "customers"],
