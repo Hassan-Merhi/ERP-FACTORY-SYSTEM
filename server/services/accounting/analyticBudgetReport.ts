@@ -159,6 +159,12 @@ export async function analyticBudgetActualTx(tx:DbTransaction,input:{
  FROM eligible q JOIN accounting_cost_allocations a
    ON a.voucher_entry_id=q.entry_id AND a.company_id=q.company_id
    AND a.voided_at IS NULL
+ JOIN LATERAL (
+   SELECT COALESCE(SUM(t.amount_usd),0) AS assigned
+   FROM accounting_cost_allocations t
+   WHERE t.company_id=q.company_id AND t.voucher_entry_id=q.entry_id
+     AND t.voided_at IS NULL
+ ) capacity ON capacity.assigned<=ABS(q.signed)
  GROUP BY q.account_id,q.code,q.account_type,q.sub_type,q.month_start,a.cost_center_id
  `));
  const unassigned=resultRows<ActualRow>(await tx.execute(sql`
@@ -175,9 +181,38 @@ export async function analyticBudgetActualTx(tx:DbTransaction,input:{
  SELECT account_id,code,account_type,sub_type,month_start::text AS month_start,
   NULL::bigint AS cost_center_id,
   COALESCE(SUM(CASE WHEN signed>=0 THEN 1 ELSE -1 END *
-    GREATEST(ABS(signed)-assigned,0)),0)::text AS value_signed
+    CASE WHEN assigned>ABS(signed) THEN ABS(signed)
+      ELSE GREATEST(ABS(signed)-assigned,0) END),0)::text AS value_signed
  FROM lines GROUP BY account_id,code,account_type,sub_type,month_start
  `));
+ const drift=resultRows<{overallocated:string;unpriced:string}&Record<string,unknown>>(await tx.execute(sql`
+ WITH ${eligibleCte}
+ SELECT COUNT(*) FILTER(WHERE a.assigned>ABS(q.signed))::text AS overallocated,
+  COUNT(*) FILTER(WHERE ABS(q.signed)=0 AND a.assigned>0)::text AS unpriced
+ FROM eligible q JOIN LATERAL(
+   SELECT COALESCE(SUM(x.amount_usd),0) AS assigned
+   FROM accounting_cost_allocations x
+   WHERE x.company_id=q.company_id AND x.voucher_entry_id=q.entry_id
+    AND x.voided_at IS NULL
+ ) a ON true
+ `))[0];
+ const stale=resultRows<{count:string}&Record<string,unknown>>(await tx.execute(sql`
+ SELECT COUNT(*)::text AS count
+ FROM accounting_cost_allocations a
+ JOIN voucher_entries e ON e.id=a.voucher_entry_id
+ JOIN vouchers v ON v.id=e.voucher_id AND v.company_id=a.company_id
+ WHERE a.company_id=${companyId} AND a.voided_at IS NULL AND
+   (v.deleted_at IS NOT NULL OR v.optional=true
+    OR v.reversal_of_voucher_id IS NOT NULL
+    OR EXISTS (SELECT 1 FROM vouchers rv WHERE rv.reversal_of_voucher_id=v.id
+      AND rv.company_id=v.company_id AND rv.deleted_at IS NULL AND rv.optional=false))
+ `))[0];
+ const driftCount=Number(drift?.overallocated??0);
+ const staleCount=Number(stale?.count??0);
+ if(driftCount)warnings.push(
+  `${driftCount} source entry or entries have analytic tags exceeding their current booked USD amount; their entire source amount is reported as unallocated until repaired. No false actual is allocated to a cost center.`);
+ if(staleCount)warnings.push(
+  `${staleCount} active analytic allocation(s) refer to reversed/retired voucher source. They are excluded from current eligible actuals; review and void the stale tags.`);
  const approvedBudgets=resultRows<BudgetReportRow>(await tx.execute(sql`
  SELECT id,cost_center_id,month_start::text,category,planned_usd::text,state,
    notes,created_at::text,approved_at::text FROM accounting_cost_budgets
@@ -253,6 +288,7 @@ export async function analyticBudgetActualTx(tx:DbTransaction,input:{
   months:monthList,
   unallocated:final(pending),totals:final(companyTotals),
   budgetCount:approvedBudgets.length,
+  quality:{overallocatedSourceEntries:driftCount,staleAllocations:staleCount},
   warnings,
   semantics:{
    actual:"Actual = signed historical booked USD from eligible posted income/COGS/expense voucher ENTRY allocations. Income uses credit positive, expenses use debit positive.",
