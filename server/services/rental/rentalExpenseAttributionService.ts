@@ -34,6 +34,7 @@ interface LinkRow extends Record<string,unknown>{
  id:number;company_id:number;module:RentalOriginModule;contract_id:number;unit_id:number;
  voucher_id:number;category:ExpenseCategory;allocated_usd:string;note:string|null;
  tagged_at:string;voided_at:string|null;voucher_number:string|null;
+ source_status?:"active"|"retired"|"optional"|"reversed";
 }
 async function verifyContract(tx:DbTransaction,input:{
  companyId:number;module:RentalOriginModule;contractId:number
@@ -82,14 +83,22 @@ export async function listRentalExpenseLinksTx(tx:DbTransaction,input:{
  return resultRows<LinkRow>(await tx.execute(sql`
   SELECT l.id,l.company_id,l.module,l.contract_id,l.unit_id,l.voucher_id,l.category,
    l.allocated_usd::text,l.note,l.tagged_at::text,l.voided_at::text,
-   v.voucher_number
+   v.voucher_number,
+   CASE WHEN v.deleted_at IS NOT NULL AND v.deleted_at::date<=${date}::date THEN 'retired'
+        WHEN COALESCE(v.optional,false)=true THEN 'optional'
+        WHEN EXISTS (
+          SELECT 1 FROM vouchers reversal
+          WHERE reversal.company_id=v.company_id AND reversal.reversal_of_voucher_id=v.id
+           AND reversal.deleted_at IS NULL AND reversal.optional=false
+           AND COALESCE(reversal.effective_date,reversal.voucher_date)<=${date}::date
+        ) THEN 'reversed'
+        ELSE 'active' END AS source_status
   FROM accounting_rental_expense_links l
   JOIN vouchers v ON v.id=l.voucher_id AND v.company_id=l.company_id
   WHERE l.company_id=${input.companyId} AND l.module=${input.module}
     AND l.contract_id=${input.contractId}
     AND l.tagged_at::date<=${date}::date
     AND (l.voided_at IS NULL OR l.voided_at::date>${date}::date)
-    AND v.deleted_at IS NULL AND v.optional=false
     AND COALESCE(v.effective_date,v.voucher_date)<=${date}::date
   ORDER BY l.id DESC LIMIT 500
  `));
@@ -137,6 +146,13 @@ export async function linkRentalExpenseTx(tx:DbTransaction,input:{
   return{id:Number(previous.id),amountUsd:fmt(amount),replayed:true};
  }
  const voucher=await voucherExpenseTx(tx,input.companyId,input.voucherId);
+ const reversal=resultRows<{id:number}&Record<string,unknown>>(await tx.execute(sql`
+   SELECT id FROM vouchers WHERE company_id=${input.companyId}
+    AND reversal_of_voucher_id=${input.voucherId} AND deleted_at IS NULL
+    AND optional=false LIMIT 1
+ `))[0];
+ if(reversal)throw new RentalAccountingError("RENTAL_VOUCHER_REVERSED",
+   "A reversed expense voucher cannot receive new property expense allocations",409);
  const effective=fxDay(voucher.effective_on);
  const today=await companyBusinessDate(input.companyId,tx);
  if(effective>today)throw new RentalAccountingError("RENTAL_VOUCHER_FUTURE",
