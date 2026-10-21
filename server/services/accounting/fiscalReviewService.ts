@@ -17,6 +17,7 @@ import {fxDay} from "./monetaryFxRates";
 import {buildTrialBalance} from "./integrity/trialBalance";
 import {financialStatementCategory} from "./unifiedAccountingFoundation";
 import {writeAuditEvent} from "../audit";
+import {CLOSED_PERIOD_LOCK_NAMESPACE} from "./closedPeriodGuard";
 
 export type ReviewKind="ACCOUNTING"|"OWNER";
 export interface Reviewer{userId:string;username:string}
@@ -393,4 +394,51 @@ export async function reviewedFiscalCloseHistoryTx(tx:DbTransaction,companyId:nu
  WHERE e.company_id=${companyId}
  ORDER BY e.certified_at DESC LIMIT 100
  `));
+}
+
+/**
+ * Per-company adoption of mandatory independent reviews. Default false,
+ * so enabling this rule cannot silently change legacy companies.
+ * Owner can toggle with an audited reason. The same fiscal advisory lock
+ * serializes it against a close already in progress.
+ */
+export async function fiscalReviewPolicyTx(tx:DbTransaction,companyId:number){
+ await assertTransactionCompanyScope(tx,companyId);
+ const row=resultRows<{enforce_reviewed_close:boolean;updated_by:string;updated_at:string;reason:string}&Row>(
+  await tx.execute(sql`
+   SELECT enforce_reviewed_close,updated_by,updated_at::text,reason
+   FROM accounting_fiscal_review_policy WHERE company_id=${companyId}
+   LIMIT 1
+  `))[0];
+ return{
+  companyId,enforceReviewedClose:row?.enforce_reviewed_close??false,
+  updatedBy:row?.updated_by??null,updatedAt:row?.updated_at??null,
+  reason:row?.reason??null,explicitlyConfigured:!!row
+ };
+}
+export async function setFiscalReviewPolicyTx(tx:DbTransaction,input:{
+ companyId:number;enforce:boolean;reason:string;actor:Reviewer
+}){
+ const {companyId,actor}=input;
+ await assertTransactionCompanyScope(tx,companyId);
+ const reason=input.reason.trim();
+ if(reason.length<10||reason.length>1000)
+  throw new FiscalReviewError("FISCAL_POLICY_REASON_REQUIRED","A 10–1,000 character reason is required",400);
+ await tx.execute(sql`SELECT pg_advisory_xact_lock(${CLOSED_PERIOD_LOCK_NAMESPACE},${companyId})`);
+ const before=await fiscalReviewPolicyTx(tx,companyId);
+ await tx.execute(sql`
+ INSERT INTO accounting_fiscal_review_policy(company_id,enforce_reviewed_close,
+  updated_by,reason) VALUES(${companyId},${input.enforce},${actor.userId},${reason})
+ ON CONFLICT(company_id) DO UPDATE SET
+  enforce_reviewed_close=EXCLUDED.enforce_reviewed_close,
+  updated_by=EXCLUDED.updated_by,reason=EXCLUDED.reason,updated_at=NOW()
+ `);
+ await writeAuditEvent({
+  companyId,userId:actor.userId,username:actor.username,
+  action:"settings_change",tableName:"accounting_fiscal_review_policy",
+  recordIdentifier:`company:${companyId}:reviewed-close`,
+  changes:{enforceReviewedClose:{old:before.enforceReviewedClose,new:input.enforce},
+   reason:{new:reason}}
+ },tx);
+ return fiscalReviewPolicyTx(tx,companyId);
 }
