@@ -28,7 +28,7 @@ type Guarantee={contractPledgeNative:string;statementFlag:boolean;
   statedPostedNative:string|null;ledgerEvidenceUsd:string;
   vouchers:Array<{voucherId:number;voucherNumber:string;date:string;accountCode:string|null;signedUsd:string}>};
 type Expense={id:number;voucherId:number;voucherNumber:string|null;category:string;
-  amountUsd:string;note:string|null};
+  amountUsd:string;note:string|null;sourceStatus:"active"|"reversed"|"retired"|"optional"};
 type Detail={module:Mod;perspective:"TENANT"|"LANDLORD";asOfDate:string;contract:Contract;
  totals:{expectedDue:string;postedAgainstDue:string;outstanding:string;advanceFuturePeriods:string;
   scheduledNotPosted:string;maintenanceExpensesBaseUsd:string;
@@ -253,6 +253,8 @@ export default function UnifiedRentalAccounting(){
         <span>{name(e.category)}</span><a href={voucherLink(e.voucherId)}
           className="underline">{e.voucherNumber||"#"+e.voucherId}</a>
         <span className="tabular-nums">{e.amountUsd} USD</span>
+        {e.sourceStatus!=="active"&&<span className="text-destructive text-xs">
+          Source voucher {e.sourceStatus} — excluded from current expense total</span>}
         {e.note&&<span className="text-muted-foreground">{e.note}</span>}
         <Button size="sm" variant="outline" disabled={!voidReason.trim()||
          voidLink.isPending||!!asOf} onClick={()=>voidLink.mutate(e.id)}>
