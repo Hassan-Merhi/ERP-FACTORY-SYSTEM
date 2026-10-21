@@ -1,0 +1,74 @@
+/**
+ * Phase 15: fail-closed gate for NEW accounting metadata writes only.
+ *
+ * Does NOT intercept existing ERP vouchers/POS/Factory/rent posting APIs;
+ * these stay with their established permissions and posting guards.
+ * Neither a metadata pilot nor its Owner approval enables real FX vouchers,
+ * new reviewed fiscal posting, inventory cutover, or historical repairs.
+ */
+import type {Request,Response,NextFunction} from "express";
+import {db} from "../db";
+import {currentPilotEligibilityTx} from "../services/accounting/unifiedRolloutService";
+
+function prefix(s:string,p:string){return s===p||s.startsWith(p+"/");}
+function writeClass(path:string,method:string){
+ if(["GET","HEAD","OPTIONS"].includes(method))return null;
+ // Preview files is POST because multipart upload is used, but it does not
+ // persist a bank reconciliation or change the source voucher.
+ if(path==="/api/accounting/cash-bank/preview")return null;
+ if(prefix(path,"/api/accounting/monetary-fx/realized")&&
+    /\/recognize$/.test(path))return "FINANCIAL_POSTING";
+ if(path==="/api/accounting/fiscal-review/close")
+  return "FINANCIAL_POSTING";
+ if(prefix(path,"/api/accounting/open-items/matches")||
+    prefix(path,"/api/accounting/cash-bank/import")||
+    prefix(path,"/api/accounting/cash-bank/matches")||
+    (prefix(path,"/api/accounting/cash-bank/lines")&&/\/review$/.test(path))||
+    prefix(path,"/api/accounting/rentals/expense-links")||
+    prefix(path,"/api/accounting/analytics/centers")||
+    prefix(path,"/api/accounting/analytics/allocations")||
+    prefix(path,"/api/accounting/analytics/budgets")||
+    prefix(path,"/api/accounting/fiscal-review/signoffs")||
+    path==="/api/accounting/fiscal-review/policy")
+  return "METADATA";
+ return null;
+}
+export async function enforceUnifiedAccountingRollout(
+ req:Request,res:Response,next:NextFunction
+){
+ const path=(req.originalUrl.split("?",1)[0]||req.path).toLowerCase();
+ const type=writeClass(path,req.method.toUpperCase());
+ if(!type)return next();
+ // Never expose an unauthenticated policy/existence oracle. Concrete endpoint
+ // role and Factory page gates also remain authoritative after this check.
+ if(!req.session?.userId||!req.session?.currentCompanyId)
+  return res.status(401).json({code:"ACCOUNTING_ROLLOUT_AUTH_REQUIRED",
+   message:"Sign in and select a company"});
+ if(type==="FINANCIAL_POSTING")
+  return res.status(423).json({
+   code:"ACCOUNTING_POSTING_NOT_CERTIFIED",
+   message:"New unified accounting financial-posting endpoints remain locked until Claude certifies and the existing posting-specific Owner controls are reviewed. Metadata pilot does not unlock voucher posting."
+  });
+ const companyId=Number(req.session.currentCompanyId);
+ if(!Number.isSafeInteger(companyId)||companyId<1)
+  return res.status(400).json({
+   code:"ACCOUNTING_COMPANY_REQUIRED",message:"Select an authorized company"
+  });
+ try{
+  const result=await db.transaction(tx=>currentPilotEligibilityTx(tx,companyId));
+  if(!result.allowed)return res.status(423).json({
+   code:"ACCOUNTING_READ_ONLY_ROLLOUT",
+   message:result.reason,
+   releaseMode:result.policy.releaseMode,
+   help:"An Owner can enable a company-specific metadata pilot in Accounting → Rollout after technical, security and finance source reviews."
+  });
+  return next();
+ }catch{
+  // A missing schema, company scope rejection or database problem must NEVER
+  // unlock an uncertified accounting metadata writer.
+  return res.status(503).json({
+   code:"ACCOUNTING_ROLLOUT_CHECK_UNAVAILABLE",
+   message:"Accounting rollout verification unavailable; new metadata writes remain locked"
+  });
+ }
+}
