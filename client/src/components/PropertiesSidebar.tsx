@@ -66,7 +66,10 @@ export function PropertiesSidebar({ user, onLogout }: { user?: ShellUser; onLogo
     () =>
       PROPERTIES_NAV_SECTIONS.map((section) => ({
         ...section,
-        items: section.items.filter((item) => !isOwner || item.url !== "/properties/analytics"),
+        items: section.items.filter((item) =>
+          (!isOwner || item.url !== "/properties/analytics") &&
+          (isAdmin || isOwner || item.url !== "/properties/accounting/open-items")
+        ),
       })).filter((section) => section.items.length > 0),
     [isOwner]
   );
