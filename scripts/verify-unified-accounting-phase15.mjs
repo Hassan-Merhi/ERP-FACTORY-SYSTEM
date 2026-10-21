@@ -63,6 +63,9 @@ has(routes.properties,[
 ]);
 has("server/routes/applicationRoutes.ts",[
  "enforceSharedFactoryAccess","enforceUnifiedAccountingRollout",
+ "registerUnifiedAccountingRoutes(app)"
+]);
+has("server/routes/unifiedAccountingRoutes.ts",[
  "registerAccountingOpenItemRoutes(app)",
  "registerCashBankReconciliationRoutes(app)",
  "registerMonetaryFxRoutes(app)",
