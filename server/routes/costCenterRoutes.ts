@@ -138,7 +138,8 @@ async function sourceInCompany(client: PoolClient, companyId: number, kind: Sour
         "la.account_type AS \"accountType\", la.code AS \"accountCode\",",
         "ve.debit_amount::text AS \"debitAmount\", ve.credit_amount::text AS \"creditAmount\",",
         "v.voucher_number AS \"voucherNumber\",",
-        "v.source_module AS \"sourceModule\", v.optional",
+        "v.source_module AS \"sourceModule\", v.optional, v.reversal_of_voucher_id AS \"reversalOfVoucherId\",",
+        "EXISTS (SELECT 1 FROM vouchers rev WHERE rev.reversal_of_voucher_id=v.id AND rev.deleted_at IS NULL) AS \"wasReversed\""
         "FROM voucher_entries ve JOIN vouchers v ON v.id=ve.voucher_id",
         "LEFT JOIN ledger_accounts la ON la.id=ve.ledger_account_id AND la.company_id=ve.company_id",
         "WHERE ve.id=$1 AND ve.company_id=$2 AND v.company_id=$2 AND v.deleted_at IS NULL",
@@ -150,7 +151,9 @@ async function sourceInCompany(client: PoolClient, companyId: number, kind: Sour
     const row = source.rows[0];
     if (row.optional || String(row.voucherNumber).startsWith("GC-") ||
       String(row.voucherNumber).startsWith("MIG-") ||
-      row.sourceModule === "SP_MIGRATION_READONLY") {
+      row.sourceModule === "SP_MIGRATION_READONLY" ||
+      String(row.sourceModule||"").toUpperCase().startsWith("INTERCOMPANY") ||
+      row.reversalOfVoucherId != null || row.wasReversed) {
       throw new ApiError(409, "Protected, migrated, or optional vouchers cannot be reallocated");
     }
     if (!row.accountType) throw new ApiError(409, "Only ledger account expense or inventory lines can be allocated");
@@ -163,16 +166,16 @@ async function sourceInCompany(client: PoolClient, companyId: number, kind: Sour
       "SELECT id, company_id AS \"companyId\", currency_code AS currency,",
       "abs(amount_currency)::text AS \"amountNative\", abs(amount_usd)::text AS \"amountBase\",",
       "fx_rate_to_usd::text AS \"historicalRate\", tx_type AS \"txType\",",
-      "reference_table AS \"referenceTable\"",
+      "reference_table AS \"referenceTable\", reference_id AS \"referenceId\"",
       "FROM factory_daybook_entries",
       "WHERE id=$1 AND company_id=$2 AND tx_type IN ('EXPENSE','OPERATING_EXPENSE','FACTORY_EXPENSE')",
+      "AND reference_id IS NULL AND NULLIF(btrim(COALESCE(reference_table,'')),'') IS NULL",
+      "AND amount_currency>0 AND amount_usd>=0",
       "FOR SHARE",
     ].join(" "),
     [sourceId, companyId],
   );
-  if (!source.rows.length || ["voucher", "vouchers", "voucher_entries", "factory_pos_sales"].includes(
-    String(source.rows[0]?.referenceTable || "").toLowerCase()
-  )) throw new ApiError(409, "Only standalone factory expense daybook entries can be allocated");
+  if (!source.rows.length) throw new ApiError(409, "Only truly standalone, unreferenced factory expense daybook entries can be allocated");
   return source.rows[0];
 }
 function sourceTreatment(row: Record<string, unknown>, kind: SourceKind): "EXPENSE" | "INVENTORY_COST" {
@@ -376,6 +379,9 @@ function registerCostCenterPrefix(app: Express, prefix: string) {
           "WHERE v.id=$1 AND v.company_id=$2 AND v.deleted_at IS NULL AND v.optional=false",
           "AND v.voucher_number NOT LIKE 'GC-%' AND v.voucher_number NOT LIKE 'MIG-%'",
           "AND COALESCE(v.source_module,'') <> 'SP_MIGRATION_READONLY'",
+          "AND upper(COALESCE(v.source_module,'')) NOT LIKE 'INTERCOMPANY%'",
+          "AND v.reversal_of_voucher_id IS NULL",
+          "AND NOT EXISTS (SELECT 1 FROM vouchers rev WHERE rev.reversal_of_voucher_id=v.id AND rev.deleted_at IS NULL)",
           "AND (upper(btrim(la.account_type)) IN ('EXPENSE','DIRECT EXPENSE','INDIRECT EXPENSE')",
           "OR ($3::boolean AND upper(btrim(la.account_type))='ASSET'",
           "AND la.code IN ('FACTORY_RAW_MATERIAL_STOCK','FACTORY_WIP','FACTORY_FINISHED_GOODS')",
