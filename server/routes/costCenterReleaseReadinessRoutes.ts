@@ -54,63 +54,69 @@ const MIGRATION_TAGS = [
 ];
 
 /** Fully company-scoped identity; only accounting administrators may inspect deployment structure. */
-function register(app:Express,prefix:string):void{
-  app.get(prefix+"/release-readiness",requireAuth,async(req,res)=>{
-    try{
-      const context=await getActiveCompanyPermissionContext(req);
-      if(!["Admin","Owner","Developer"].includes(context.role))
-        return res.status(403).json({message:"Accounting administrator access required"});
-      const tables=await pool.query(
-        "SELECT c.relname AS name,c.relrowsecurity AS rls,c.relforcerowsecurity AS forced"+
-        " FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace"+
-        " WHERE n.nspname='public' AND c.relkind IN ('r','p')"+
-        " AND c.relname=ANY($1::text[])",
-        [TABLES],
+function register(app: Express, prefix: string): void {
+  app.get(prefix + "/release-readiness", requireAuth, async (req, res) => {
+    try {
+      const context = await getActiveCompanyPermissionContext(req);
+      if (!["Admin", "Owner", "Developer"].includes(context.role))
+        return res.status(403).json({ message: "Accounting administrator access required" });
+      const tables = await pool.query(
+        "SELECT c.relname AS name,c.relrowsecurity AS rls,c.relforcerowsecurity AS forced" +
+          " FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace" +
+          " WHERE n.nspname='public' AND c.relkind IN ('r','p')" +
+          " AND c.relname=ANY($1::text[])",
+        [TABLES]
       );
-      const triggers=await pool.query(
-        "SELECT t.tgname AS name FROM pg_trigger t"+
-        " JOIN pg_class c ON c.oid=t.tgrelid"+
-        " JOIN pg_namespace n ON n.oid=c.relnamespace"+
-        " WHERE n.nspname='public' AND NOT t.tgisinternal"+
-        " AND t.tgenabled<>'D' AND t.tgname=ANY($1::text[])",
-        [TRIGGERS],
+      const triggers = await pool.query(
+        "SELECT t.tgname AS name FROM pg_trigger t" +
+          " JOIN pg_class c ON c.oid=t.tgrelid" +
+          " JOIN pg_namespace n ON n.oid=c.relnamespace" +
+          " WHERE n.nspname='public' AND NOT t.tgisinternal" +
+          " AND t.tgenabled<>'D' AND t.tgname=ANY($1::text[])",
+        [TRIGGERS]
       );
-      const functions=await pool.query(
-        "SELECT p.proname AS name FROM pg_proc p"+
-        " JOIN pg_namespace n ON n.oid=p.pronamespace"+
-        " WHERE n.nspname='public' AND p.proname=ANY($1::text[])",
-        [FUNCTIONS],
+      const functions = await pool.query(
+        "SELECT p.proname AS name FROM pg_proc p" +
+          " JOIN pg_namespace n ON n.oid=p.pronamespace" +
+          " WHERE n.nspname='public' AND p.proname=ANY($1::text[])",
+        [FUNCTIONS]
       );
-      const tableRows=new Map<string,{name:string;rls:boolean;forced:boolean}>(
-        tables.rows.map(x=>[x.name,x]),
+      const tableRows = new Map<string, { name: string; rls: boolean; forced: boolean }>(
+        tables.rows.map((x) => [x.name, x])
       );
-      const presentTriggers=new Set<string>(triggers.rows.map(x=>x.name));
-      const presentFunctions=new Set<string>(functions.rows.map(x=>x.name));
-      const tableChecks=TABLES.map(name=>({
-        name,exists:tableRows.has(name),
-        rlsEnabled:tableRows.get(name)?.rls??false,
-        forceRls:tableRows.get(name)?.forced??false,
+      const presentTriggers = new Set<string>(triggers.rows.map((x) => x.name));
+      const presentFunctions = new Set<string>(functions.rows.map((x) => x.name));
+      const tableChecks = TABLES.map((name) => ({
+        name,
+        exists: tableRows.has(name),
+        rlsEnabled: tableRows.get(name)?.rls ?? false,
+        forceRls: tableRows.get(name)?.forced ?? false,
       }));
-      const missingTriggers=TRIGGERS.filter(name=>!presentTriggers.has(name));
-      const missingFunctions=FUNCTIONS.filter(name=>!presentFunctions.has(name));
-      const complete=tableChecks.every(t=>t.exists&&t.rlsEnabled&&t.forceRls)&&
-        missingTriggers.length===0&&missingFunctions.length===0;
+      const missingTriggers = TRIGGERS.filter((name) => !presentTriggers.has(name));
+      const missingFunctions = FUNCTIONS.filter((name) => !presentFunctions.has(name));
+      const complete =
+        tableChecks.every((t) => t.exists && t.rlsEnabled && t.forceRls) &&
+        missingTriggers.length === 0 &&
+        missingFunctions.length === 0;
       return res.json({
-        structuralReady:complete,companyId:context.companyId,
-        migrationTagsInRequiredOrder:MIGRATION_TAGS,
-        tables:tableChecks,missingTriggers,missingFunctions,
-        warning:complete
+        structuralReady: complete,
+        companyId: context.companyId,
+        migrationTagsInRequiredOrder: MIGRATION_TAGS,
+        tables: tableChecks,
+        missingTriggers,
+        missingFunctions,
+        warning: complete
           ? "Structural prerequisites detected. Functional, permission, FX and accounting regression certification is still required before release."
           : "Database structure incomplete. Do not enable automated cost centers or historical assignments until Claude validates and applies migrations.",
       });
-    }catch(error){
-      if(error instanceof ActiveCompanyPermissionContextError)
-        return res.status(error.status).json({message:error.message,code:error.code});
-      return res.status(500).json({message:"Cost center readiness inspection failed"});
+    } catch (error) {
+      if (error instanceof ActiveCompanyPermissionContextError)
+        return res.status(error.status).json({ message: error.message, code: error.code });
+      return res.status(500).json({ message: "Cost center readiness inspection failed" });
     }
   });
 }
-export function registerCostCenterReleaseReadinessRoutes(app:Express):void{
-  register(app,"/api/cost-centers");
-  register(app,"/api/factory/cost-centers");
+export function registerCostCenterReleaseReadinessRoutes(app: Express): void {
+  register(app, "/api/cost-centers");
+  register(app, "/api/factory/cost-centers");
 }

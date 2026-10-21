@@ -299,12 +299,11 @@ export function resolveFactoryBackendAccessRequirement(req: Request): FactoryApi
   // wallet for Pay From and posting a USD-beneficiary settlement are also
   // available to users permitted on Vouchers > Payment, not every FX write.
   if (hasPrefix(path, "/fx-agent-wallets")) {
-    if ((req.method === "GET" && path === "/fx-agent-wallets") ||
-        (req.method === "POST" && /^\/fx-agent-wallets\/\d+\/settle$/.test(path))) {
-      return anyOf(
-        requirement("factory/accounts"),
-        requirement("factory/vouchers", ["hide_tab_vouchers_payment"])
-      );
+    if (
+      (req.method === "GET" && path === "/fx-agent-wallets") ||
+      (req.method === "POST" && /^\/fx-agent-wallets\/\d+\/settle$/.test(path))
+    ) {
+      return anyOf(requirement("factory/accounts"), requirement("factory/vouchers", ["hide_tab_vouchers_payment"]));
     }
     return requirement("factory/accounts");
   }
@@ -361,8 +360,7 @@ export function resolveFactoryBackendAccessRequirement(req: Request): FactoryApi
   // Voucher-backed expense tagging can also originate from an authorized
   // Vouchers page; standalone daybook expense tagging from Daybook.
   if (hasPrefix(path, "/cost-centers")) {
-    const isAllocation = hasPrefix(path, "/cost-centers/allocations/") ||
-      hasPrefix(path, "/cost-centers/voucher/");
+    const isAllocation = hasPrefix(path, "/cost-centers/allocations/") || hasPrefix(path, "/cost-centers/voucher/");
     // Historical reconciliation and previews can be inspected from Finance.
     // Apply/preview still require privileged company accounting roles in API.
     const isHistorical = hasPrefix(path, "/cost-centers/historical/");

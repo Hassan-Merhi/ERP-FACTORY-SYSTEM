@@ -178,9 +178,17 @@ export function FactoryRoutes({ user, myAccess, factoryDefaultPage }: FactoryRou
       <Route path="/factory/contacts" component={FactoryContacts} />
       <Route path="/factory/accounts" component={FactoryAccounts} />
       <Route path="/factory/cost-centers">
-        {() => (isAdminOwnerOrDev || user?.role === "Manager")
-          && (!myAccess || myAccess.fullAccess || myAccess.pageKeys?.includes("factory/cost-centers") || myAccess.pageKeys?.includes("factory/accounts"))
-          ? <CostCenters /> : <Redirect replace to={factoryDefaultPage} />}
+        {() =>
+          (isAdminOwnerOrDev || user?.role === "Manager") &&
+          (!myAccess ||
+            myAccess.fullAccess ||
+            myAccess.pageKeys?.includes("factory/cost-centers") ||
+            myAccess.pageKeys?.includes("factory/accounts")) ? (
+            <CostCenters />
+          ) : (
+            <Redirect replace to={factoryDefaultPage} />
+          )
+        }
       </Route>
       {isAdminOwnerOrDev && <Route path="/factory/account-groups" component={AccountGroups} />}
       <Route path="/factory/agents" component={Agents} />

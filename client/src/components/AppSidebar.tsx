@@ -194,7 +194,8 @@ export function useErpVisibleSections(user?: SidebarUser): {
 
     if (selectedCompany?.companyType === "retail" && RETAIL_HIDDEN_ERP_ROUTES.has(item.url)) return false;
     if (item.url === "/tracking") return !isPOSUser;
-    if (item.url === "/cost-centers" && !["Admin", "Owner", "Developer", "Manager"].includes(effectiveRole)) return false;
+    if (item.url === "/cost-centers" && !["Admin", "Owner", "Developer", "Manager"].includes(effectiveRole))
+      return false;
     if (isPOSUser && item.url === "/pos-item-replacement") return false;
 
     if (

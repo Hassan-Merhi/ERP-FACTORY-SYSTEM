@@ -129,17 +129,27 @@ export function DaybookFilters({
               </SelectContent>
             </Select>
 
-            {["Admin", "Owner", "Developer", "Manager"].includes(selectedCompany?.role || "") && <Select value={filters.costCenterId || "all"} onValueChange={value => setFilters({...filters,costCenterId:value})}>
-              <SelectTrigger id="cost-center-filter" data-testid="select-daybook-cost-center" className="w-full">
-                <SelectValue placeholder="All Cost Centers" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Cost Centers</SelectItem>
-                {centers.map(center => <SelectItem key={center.id} value={String(center.id)}>{center.code} — {center.name}</SelectItem>)}
-                {filters.costCenterId !== "all" && !centers.some(c => String(c.id) === filters.costCenterId) &&
-                  <SelectItem value={filters.costCenterId}>Selected Cost Center #{filters.costCenterId}</SelectItem>}
-              </SelectContent>
-            </Select>}
+            {["Admin", "Owner", "Developer", "Manager"].includes(selectedCompany?.role || "") && (
+              <Select
+                value={filters.costCenterId || "all"}
+                onValueChange={(value) => setFilters({ ...filters, costCenterId: value })}
+              >
+                <SelectTrigger id="cost-center-filter" data-testid="select-daybook-cost-center" className="w-full">
+                  <SelectValue placeholder="All Cost Centers" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Cost Centers</SelectItem>
+                  {centers.map((center) => (
+                    <SelectItem key={center.id} value={String(center.id)}>
+                      {center.code} — {center.name}
+                    </SelectItem>
+                  ))}
+                  {filters.costCenterId !== "all" && !centers.some((c) => String(c.id) === filters.costCenterId) && (
+                    <SelectItem value={filters.costCenterId}>Selected Cost Center #{filters.costCenterId}</SelectItem>
+                  )}
+                </SelectContent>
+              </Select>
+            )}
 
             {layout === "inline" && searchControl}
           </CoreErpFilterGrid>
@@ -164,9 +174,12 @@ export function DaybookFilters({
             </Badge>
           )}
           {filters.costCenterId !== "all" && (
-            <Badge variant="secondary" className="shrink-0 cursor-pointer gap-1 text-xs"
-              onClick={() => setFilters({...filters, costCenterId: "all"})}>
-              Cost center: {centers.find(c => String(c.id) === filters.costCenterId)?.name || filters.costCenterId}
+            <Badge
+              variant="secondary"
+              className="shrink-0 cursor-pointer gap-1 text-xs"
+              onClick={() => setFilters({ ...filters, costCenterId: "all" })}
+            >
+              Cost center: {centers.find((c) => String(c.id) === filters.costCenterId)?.name || filters.costCenterId}
               <X className="h-3 w-3" />
             </Badge>
           )}

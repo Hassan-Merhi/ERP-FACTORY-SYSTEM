@@ -9,7 +9,10 @@ import { userLocations, vouchers } from "@shared/schema";
 import { parseMoneyInput } from "../../lib/money";
 import { parsePositiveInt } from "../../lib/listPagination";
 import { withStockTransferNarrations } from "../../services/inventory/stockTransferNarration";
-import { filterRoutineCorrection, ROUTINE_CORRECTION_VOUCHER_ID } from "../../services/accounting/operationalCorrectionVisibility";
+import {
+  filterRoutineCorrection,
+  ROUTINE_CORRECTION_VOUCHER_ID,
+} from "../../services/accounting/operationalCorrectionVisibility";
 
 const DEFAULT_PAGE_SIZE = 100;
 const MAX_PAGE_SIZE = 250;

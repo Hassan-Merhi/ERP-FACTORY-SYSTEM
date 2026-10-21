@@ -12,11 +12,7 @@ import { useCompany } from "@/contexts/CompanyContext";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Layers3 } from "lucide-react";
-import {
-  readCostCenterApi,
-  type SourceCostCenterAllocation,
-  type VoucherExpenseEntry,
-} from "@/api/costCentersApi";
+import { readCostCenterApi, type SourceCostCenterAllocation, type VoucherExpenseEntry } from "@/api/costCentersApi";
 import { CostCenterEntryEditor, VoucherCostCenters } from "@/components/financial/VoucherCostCenters";
 import type { DaybookEntry } from "./types";
 
@@ -30,14 +26,15 @@ export function FactoryDaybookCostCenters({ entry }: { entry: DaybookEntry }) {
   const canRead = ["Admin", "Owner", "Developer", "Manager"].includes(role);
   const canWrite = ["Admin", "Owner", "Developer"].includes(role);
   const voucherBacked = entry.referenceTable?.toLowerCase() === "vouchers" && Number(entry.referenceId) > 0;
-  const standalone = entry.id > 0 && STANDALONE_EXPENSE_TYPES.has(entry.txType) &&
+  const standalone =
+    entry.id > 0 &&
+    STANDALONE_EXPENSE_TYPES.has(entry.txType) &&
     !MIRRORED_TABLES.has((entry.referenceTable || "").toLowerCase());
   const [editing, setEditing] = useState(false);
   const [revision, setRevision] = useState(0);
   const { data, isLoading, isError } = useQuery<SourceCostCenterAllocation>({
     queryKey: [API_BASE, selectedCompany?.id, "factory_daybook", entry.id, revision],
-    queryFn: () => readCostCenterApi<SourceCostCenterAllocation>(
-      API_BASE + "/allocations/factory_daybook/" + entry.id),
+    queryFn: () => readCostCenterApi<SourceCostCenterAllocation>(API_BASE + "/allocations/factory_daybook/" + entry.id),
     enabled: canRead && standalone && !!selectedCompany?.id,
     staleTime: 30000,
   });
@@ -75,14 +72,16 @@ export function FactoryDaybookCostCenters({ entry }: { entry: DaybookEntry }) {
         {source.allocationCount > 0 && <Badge variant="secondary">{source.allocationCount} assigned</Badge>}
       </div>
       {isLoading && <p className="text-xs text-muted-foreground">Loading allocations…</p>}
-      {isError && <p role="alert" className="text-sm text-destructive">
-        This entry is not available for independent cost-center allocation.
-      </p>}
+      {isError && (
+        <p role="alert" className="text-sm text-destructive">
+          This entry is not available for independent cost-center allocation.
+        </p>
+      )}
       {data && (
         <div className="flex flex-wrap gap-3 justify-between items-center">
           <div className="text-xs text-muted-foreground">
-            {entry.currencyCode} {Number(source.allocatedNative).toLocaleString()} allocated ·
-            {" "}{entry.currencyCode} {Number(data.unallocatedNative).toLocaleString()} unallocated
+            {entry.currencyCode} {Number(source.allocatedNative).toLocaleString()} allocated · {entry.currencyCode}{" "}
+            {Number(data.unallocatedNative).toLocaleString()} unallocated
           </div>
           <Button size="sm" variant="outline" onClick={() => setEditing(true)}>
             {canWrite ? "Assign / Split" : "View Allocations"}
@@ -90,10 +89,16 @@ export function FactoryDaybookCostCenters({ entry }: { entry: DaybookEntry }) {
         </div>
       )}
       {data && editing && (
-        <CostCenterEntryEditor key={entry.id} entry={source} apiBase={API_BASE}
+        <CostCenterEntryEditor
+          key={entry.id}
+          entry={source}
+          apiBase={API_BASE}
           sourceType="factory_daybook"
           onClose={() => setEditing(false)}
-          onSaved={async () => { setRevision(n => n + 1); }} />
+          onSaved={async () => {
+            setRevision((n) => n + 1);
+          }}
+        />
       )}
     </section>
   );

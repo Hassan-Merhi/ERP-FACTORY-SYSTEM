@@ -77,18 +77,12 @@ export function usePaginatedDaybookVouchers(options: UsePaginatedDaybookVouchers
       options.filters.maxAmount,
       options.filters.costCenterId,
       debouncedSearch,
-    ],
+    ]
   );
   const queryUrl = useMemo(() => canonicalApiUrl("/api/vouchers", queryParams), [queryParams]);
 
   const query = useQuery<PaginatedVoucherResponse | Voucher[]>({
-    queryKey: paginatedCompanyDataKey(
-      queryUrl,
-      options.companyId,
-      options.page,
-      options.pageSize,
-      "daybook-vouchers",
-    ),
+    queryKey: paginatedCompanyDataKey(queryUrl, options.companyId, options.page, options.pageSize, "daybook-vouchers"),
     queryFn: async ({ signal }) => {
       const response = await fetch(queryUrl, { credentials: "include", signal });
       if (!response.ok) {
@@ -107,7 +101,7 @@ export function usePaginatedDaybookVouchers(options: UsePaginatedDaybookVouchers
   // instead of silently rendering zero rows when the envelope is missing.
   const page = useMemo(
     () => unwrapPage<Voucher>(query.data, { page: options.page, pageSize: options.pageSize }),
-    [query.data, options.page, options.pageSize],
+    [query.data, options.page, options.pageSize]
   );
 
   const loadAllVouchers = async (): Promise<Voucher[]> => {
@@ -117,11 +111,14 @@ export function usePaginatedDaybookVouchers(options: UsePaginatedDaybookVouchers
       const items: Voucher[] = [];
       for (let pageNumber = 1; pageNumber <= 1000; pageNumber++) {
         const url = canonicalApiUrl("/api/vouchers", {
-          ...queryParams, profile: "page", page: pageNumber, pageSize: 250,
+          ...queryParams,
+          profile: "page",
+          page: pageNumber,
+          pageSize: 250,
         });
         const response = await fetch(url, { credentials: "include" });
         if (!response.ok) throw new Error("Failed to export cost-center vouchers");
-        const batch = await response.json() as {items: Voucher[]; totalPages: number};
+        const batch = (await response.json()) as { items: Voucher[]; totalPages: number };
         if (!Array.isArray(batch.items)) throw new Error("Invalid voucher export result");
         items.push(...batch.items);
         if (pageNumber >= batch.totalPages) return items;
