@@ -256,16 +256,14 @@ function registerPrefix(app:Express,prefix:string){
       const filter=parseFilters(req);
       if(filter.sourceKind==="FACTORY_DAYBOOK" && prefix!=="/api/factory/cost-centers")
         throw new HistoryError(403,"Factory Daybook history is available only in Factory Mode");
+      // Keep ALL eligible sources for reconciliation, including assigned and
+      // manually cleared ones. Candidate discovery deliberately excludes them;
+      // a reconciliation must not. The source SQL is joined with arbitrary
+      // whitespace, so match the full predicate rather than raw substrings.
       const sql=sourceSql(filter.sourceKind)
-        .replace(" AND NOT EXISTS(SELECT 1 FROM cost_center_allocations a"+
-          (filter.sourceKind==="VOUCHER_ENTRY"?
-            " WHERE a.company_id=ve.company_id AND a.voucher_entry_id=ve.id)":
-            " WHERE a.company_id=f.company_id AND a.factory_daybook_entry_id=f.id)"),"")
-        .replace(" AND NOT EXISTS(SELECT 1 FROM cost_center_source_overrides o"+
-          (filter.sourceKind==="VOUCHER_ENTRY"?
-            " WHERE o.company_id=ve.company_id AND o.voucher_entry_id=ve.id)":
-            " WHERE o.company_id=f.company_id AND o.factory_daybook_entry_id=f.id)"),"")
-        .replace(" LIMIT $5","");
+        .replace(/\s+AND NOT EXISTS\(SELECT 1 FROM cost_center_allocations a\s+WHERE a\.company_id=(?:ve|f)\.company_id AND a\.(?:voucher_entry_id=ve\.id|factory_daybook_entry_id=f\.id)\)/,"")
+        .replace(/\s+AND NOT EXISTS\(SELECT 1 FROM cost_center_source_overrides o\s+WHERE o\.company_id=(?:ve|f)\.company_id AND o\.(?:voucher_entry_id=ve\.id|factory_daybook_entry_id=f\.id)\)/,"")
+        .replace(/\s+LIMIT \$5\s*$/,"");
       const response=await pool.query(
         "WITH eligible AS ("+sql+
         ") SELECT count(*)::int AS \"sourceCount\",COALESCE(sum(e.\"amountUsd\"::numeric),0)::text AS \"postedUsd\", "+
