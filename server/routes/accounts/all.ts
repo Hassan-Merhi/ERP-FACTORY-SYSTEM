@@ -147,9 +147,10 @@ export async function serveAccountListForCompany(req: Request, res: Response, co
     const linkedCustomerIds = customerParties.parties
       .filter((party) => party.id !== null && party.linkedLedgerAccountId !== null)
       .map((party) => party.id as number);
-    const displayedCustomerFigures = !analyticsProfile && linkedCustomerIds.length
-      ? await getCustomerLedgerAndMemo(companyId, linkedCustomerIds, effectiveEndDate)
-      : null;
+    const displayedCustomerFigures =
+      !analyticsProfile && linkedCustomerIds.length
+        ? await getCustomerLedgerAndMemo(companyId, linkedCustomerIds, effectiveEndDate)
+        : null;
 
     // Wave 18 C: ledger, bank, fixed-asset and employee balances are the
     // balance engine's rows (one scan of the company's lines): each line
@@ -220,13 +221,15 @@ export async function serveAccountListForCompany(req: Request, res: Response, co
             notInLedgerTotal: customerParty.memoTotal,
             // Optional display-only Parties amount; do not replace the GL book
             // fields used by other reports, vouchers or financial calculations.
-            ...(partySplit ? {
-              partyBalance: partySplit.balance.toFixed(2),
-              partyBalanceSide: partySplit.balanceSide,
-              partyBalanceBasis: partySplit.balanceBasis,
-              partyLedgerBalance: partySplit.ledgerBalance.toFixed(2),
-              heldUnfinalizedCharges: partySplit.heldUnfinalizedCharges,
-            } : {}),
+            ...(partySplit
+              ? {
+                  partyBalance: partySplit.balance.toFixed(2),
+                  partyBalanceSide: partySplit.balanceSide,
+                  partyBalanceBasis: partySplit.balanceBasis,
+                  partyLedgerBalance: partySplit.ledgerBalance.toFixed(2),
+                  heldUnfinalizedCharges: partySplit.heldUnfinalizedCharges,
+                }
+              : {}),
           };
         }
 
