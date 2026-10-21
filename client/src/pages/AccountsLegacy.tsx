@@ -194,6 +194,13 @@ export default function Accounts() {
               Rental Accounting
             </Button>
           )}
+        {showViewAccounts && !phoneStatementOpen &&
+          ["Admin","Owner","Developer"].includes(model.currentUser?.role ?? "") && (
+            <Button variant="outline" data-testid="button-group-consolidation"
+              onClick={() => model.navigate(`${model.modePrefix}/accounting/consolidation`)}>
+              Intercompany & Consolidation
+            </Button>
+          )}
         {showViewAccounts &&
           !phoneStatementOpen &&
           (model.currentUser?.role === "Admin" || model.currentUser?.role === "Developer") && (
