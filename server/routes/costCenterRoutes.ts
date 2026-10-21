@@ -216,6 +216,42 @@ function registerCostCenterPrefix(app: Express, prefix: string) {
       res.status(201).json({ costCenter: created });
     } catch (e) { sendError(res, e); }
   });
+  // Read-only eligibility and current allocations for posted voucher expense lines.
+  // This is intentionally source-of-truth based: no client supplied amounts,
+  // company IDs, or inferred voucher totals.
+  app.get(prefix + "/voucher/:voucherId/entries", requireAuth, async (req, res) => {
+    try {
+      const { companyId } = await identity(req, false);
+      const voucherId = queryId(req.params.voucherId);
+      const result = await pool.query(
+        [
+          "SELECT ve.id AS \"entryId\", la.name AS \"accountName\", la.code AS \"accountCode\",",
+          "la.account_type AS \"accountType\",",
+          "COALESCE(ve.transaction_currency,v.currency,'USD') AS currency,",
+          "GREATEST(abs(coalesce(ve.transaction_debit_amount,ve.debit_amount,0)),",
+          "abs(coalesce(ve.transaction_credit_amount,ve.credit_amount,0)))::text AS \"amountNative\",",
+          "GREATEST(abs(coalesce(ve.base_debit_amount,ve.debit_amount,0)),",
+          "abs(coalesce(ve.base_credit_amount,ve.credit_amount,0)))::text AS \"amountBase\",",
+          "COALESCE(sum(a.amount_native),0)::text AS \"allocatedNative\",",
+          "COALESCE(sum(a.amount_base),0)::text AS \"allocatedBase\",",
+          "count(a.id)::int AS \"allocationCount\"",
+          "FROM vouchers v JOIN voucher_entries ve ON ve.voucher_id=v.id AND ve.company_id=v.company_id",
+          "JOIN ledger_accounts la ON la.id=ve.ledger_account_id AND la.company_id=v.company_id",
+          "LEFT JOIN cost_center_allocations a ON a.voucher_entry_id=ve.id AND a.company_id=v.company_id",
+          "WHERE v.id=$1 AND v.company_id=$2 AND v.deleted_at IS NULL AND v.optional=false",
+          "AND v.voucher_number NOT LIKE 'GC-%' AND v.voucher_number NOT LIKE 'MIG-%'",
+          "AND COALESCE(v.source_module,'') <> 'SP_MIGRATION_READONLY'",
+          "AND upper(btrim(la.account_type)) IN ('EXPENSE','DIRECT EXPENSE','INDIRECT EXPENSE')",
+          "GROUP BY ve.id,v.currency,la.id HAVING",
+          "GREATEST(abs(coalesce(ve.base_debit_amount,ve.debit_amount,0)),",
+          "abs(coalesce(ve.base_credit_amount,ve.credit_amount,0))) > 0",
+          "ORDER BY ve.id",
+        ].join(" "),
+        [voucherId, companyId],
+      );
+      res.json({ entries: result.rows });
+    } catch (error) { sendError(res, error); }
+  });
   app.get(prefix + "/allocations/:sourceType/:sourceId", requireAuth, async (req, res) => {
     try {
       const { companyId } = await identity(req, false);
