@@ -119,7 +119,7 @@ export async function loadCashBankAccountTx(
     if(links.length)throw new CashBankError("CASH_BANK_LEDGER_LINKED",
       "This ledger belongs to a bank master: reconcile through that bank account",400);
   }
-  let linkedLedgerId=row.linked_ledger_id===null?null:Number(row.linked_ledger_id);
+  const linkedLedgerId=row.linked_ledger_id===null?null:Number(row.linked_ledger_id);
   if(linkedLedgerId!==null) {
     const ref=resultRows<{id:number}&Record<string,unknown>>(await tx.execute(sql`
       SELECT id FROM ledger_accounts WHERE id=${linkedLedgerId}

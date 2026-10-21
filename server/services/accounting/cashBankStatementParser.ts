@@ -79,7 +79,7 @@ function csvRows(buffer: Buffer): unknown[][] {
   row.push(cell); if(row.some(x=>x.trim()!==""))rows.push(row);
   return rows;
 }
-function key(k:string):string {return k.toLowerCase().replace(/[\s_\-]/g,"").trim();}
+function key(k:string):string {return k.toLowerCase().replace(/[\s_-]/g,"").trim();}
 function csvObjects(data: unknown[][]): Array<Record<string,unknown>> {
   if(data.length<2)throw new BankStatementParseError("Statement requires a header and at least one data row");
   const headers=data[0].map(h=>String(h??""));

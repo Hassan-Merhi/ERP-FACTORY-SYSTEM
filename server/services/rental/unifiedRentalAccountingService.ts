@@ -15,7 +15,7 @@ import {resultRows} from "../../lib/queryResult";
 import {assertTransactionCompanyScope} from "../security/transactionCompanyScope";
 import {companyBusinessDate} from "../accounting/companyBusinessDate";
 import {fxDay} from "../accounting/monetaryFxRates";
-import {getDuePeriods,getRentalBillingDay,getRentalPeriodDueDate} from "./rentalPeriodService";
+import {getDuePeriods,getRentalBillingDay} from "./rentalPeriodService";
 import {listRentalExpenseLinksTx} from "./rentalExpenseAttributionService";
 import {RentalAccountingError} from "./rentalExpenseAttributionService";
 import type {RentalOriginModule} from "../accounting/unifiedAccountingFoundation";

@@ -56,7 +56,7 @@ function documentStatus(row:SourceRow,kind:ErpInventorySource,
   const expected=row.expected===null?null:number(row.expected);
   const posted=row.posted===null?null:number(row.posted);
   let status:ErpInventoryAuditStatus;
-  let note="";
+  let note:string;
   if(!active){
     status="expected_periodic";note="Periodic inventory: no linked perpetual journal required before cutover";
     if(row.journal_id!==null){status="review";note="Unexpected live linked journal on a pre-cutover document";}

@@ -34,7 +34,7 @@ type Detail={module:Mod;perspective:"TENANT"|"LANDLORD";asOfDate:string;contract
  totals:{expectedDue:string;postedAgainstDue:string;outstanding:string;advanceFuturePeriods:string;
   scheduledNotPosted:string;maintenanceExpensesBaseUsd:string;
   depositPledgeNative:string;depositBalanceEvidenceUsd:string};
- periods:Period[];payments:Payment[];guarantee:Guarante;expenses:Expense[];
+ periods:Period[];payments:Payment[];guarantee:Guarantee;expenses:Expense[];
  warnings:string[];limitations:Record<string,string>};
 type Category="maintenance"|"repairs"|"utilities"|"insurance"|"property_tax"|"other_property_cost";
 const CATEGORIES:Category[]=["maintenance","repairs","utilities","insurance","property_tax","other_property_cost"];

@@ -42,7 +42,6 @@ interface BudgetRow extends Record<string,unknown>{
 }
 const D=(v:unknown)=>new Decimal(String(v??"0"));
 const six=(v:Decimal)=>v.toFixed(6);
-const zero=new Decimal(0);
 const validId=(v:number)=>Number.isSafeInteger(v)&&v>0;
 function amount(value:string,allowZero=false){
  if(!/^\d+(?:\.\d{1,6})?$/.test(value))

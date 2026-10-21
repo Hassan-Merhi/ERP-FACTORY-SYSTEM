@@ -120,10 +120,10 @@ export async function monetaryAccountValuationTx(tx:DbTransaction,input:{
     }
     const code=complete?original!:"USD";
     const b=buckets.get(code)??{native:new Decimal(0),historical:new Decimal(0),issues:[]};
-    const native=complete?dec(e.native_debit).minus(e.native_credit):
-      dec(e.legacy_debit).minus(e.legacy_credit);
-    const historical=complete?dec(e.base_debit).minus(e.base_credit):
-      dec(e.legacy_debit).minus(e.legacy_credit);
+    const native=complete?dec(e.native_debit).minus(dec(e.native_credit)):
+      dec(e.legacy_debit).minus(dec(e.legacy_credit));
+    const historical=complete?dec(e.base_debit).minus(dec(e.base_credit)):
+      dec(e.legacy_debit).minus(dec(e.legacy_credit));
     b.native=b.native.plus(native);b.historical=b.historical.plus(historical);
     buckets.set(code,b);
   }

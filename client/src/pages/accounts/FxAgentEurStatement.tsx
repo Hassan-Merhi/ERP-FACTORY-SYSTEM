@@ -120,7 +120,7 @@ export function FxAgentEurStatement({
           deleted++;
         } catch (error) {
           const message = error instanceof Error ? error.message : "Unknown error";
-          throw new Error(deleted + " of " + voucherIds.length + " payment(s) deleted. " + message);
+          throw new Error(deleted + " of " + voucherIds.length + " payment(s) deleted. " + message, { cause: error });
         }
       }
       return deleted;
