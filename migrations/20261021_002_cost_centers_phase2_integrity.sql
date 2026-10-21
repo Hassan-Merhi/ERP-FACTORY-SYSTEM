@@ -9,6 +9,7 @@ DECLARE
   active_center BOOLEAN;
   parent_voucher RECORD;
   daybook_type TEXT;
+  daybook_reference TEXT;
 BEGIN
   SELECT active INTO active_center FROM cost_centers
     WHERE id=NEW.cost_center_id AND company_id=NEW.company_id;
@@ -34,11 +35,11 @@ BEGIN
        OR parent_voucher.source_module = 'SP_MIGRATION_READONLY' THEN
       RAISE EXCEPTION 'Protected, optional, deleted or migrated vouchers cannot be allocated';
     END IF;
-    IF parent_voucher.account_type IN ('Expense','Direct Expense','Indirect Expense') THEN
+    IF upper(btrim(parent_voucher.account_type)) IN ('EXPENSE','DIRECT EXPENSE','INDIRECT EXPENSE') THEN
       IF NEW.cost_treatment <> 'EXPENSE' THEN
         RAISE EXCEPTION 'Expense ledger lines must keep EXPENSE cost treatment';
       END IF;
-    ELSIF parent_voucher.account_type = 'Asset' THEN
+    ELSIF upper(btrim(parent_voucher.account_type)) = 'ASSET' THEN
       IF NEW.cost_treatment <> 'INVENTORY_COST' THEN
         RAISE EXCEPTION 'Asset ledger lines must keep INVENTORY_COST treatment';
       END IF;
@@ -46,12 +47,13 @@ BEGIN
       RAISE EXCEPTION 'Only expense or asset ledger lines may have cost center allocations';
     END IF;
   ELSE
-    SELECT tx_type INTO daybook_type FROM factory_daybook_entries
+    SELECT tx_type, reference_table INTO daybook_type, daybook_reference FROM factory_daybook_entries
     WHERE id=NEW.factory_daybook_entry_id AND company_id=NEW.company_id;
     -- No double-counting of Factory payment, journal, sale, or POS expense
     -- daybook mirrors. Future supported standalone expense types are explicit.
     IF daybook_type IS NULL OR daybook_type NOT IN
        ('EXPENSE', 'OPERATING_EXPENSE', 'FACTORY_EXPENSE')
+       OR lower(coalesce(daybook_reference,'')) IN ('vouchers','voucher','voucher_entries','factory_pos_sales')
        OR NEW.cost_treatment <> 'EXPENSE' THEN
       RAISE EXCEPTION 'Factory daybook source is not a standalone expense';
     END IF;
