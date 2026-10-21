@@ -12,6 +12,7 @@ import {
   ProfessionalFinancialStatements,
   CostCenterAccounting,
   FiscalCloseReview,
+  UnifiedAccountingDashboard,
   Agents,
   BalanceRepair,
   ChatbotSettings,
@@ -61,6 +62,7 @@ export function PropertiesRoutes({ user }: PropertiesRoutesProps) {
       {(isAdmin || isOwner) && <Route path="/properties/accounting/statements" component={ProfessionalFinancialStatements} />}
       {(isAdmin || isOwner) && <Route path="/properties/accounting/cost-centers" component={CostCenterAccounting} />}
       {(isAdmin || isOwner) && <Route path="/properties/accounting/fiscal-review" component={FiscalCloseReview} />}
+      {(isAdmin || isOwner) && <Route path="/properties/accounting/dashboard" component={UnifiedAccountingDashboard} />}
       <Route path="/properties/vouchers/:id/edit" component={PropertiesVoucherEdit} />
       <Route path="/properties/voucher-detail/:voucherId" component={PropertiesVoucherDetail} />
       <Route path="/properties/vouchers">{() => <PropertiesVouchers />}</Route>
