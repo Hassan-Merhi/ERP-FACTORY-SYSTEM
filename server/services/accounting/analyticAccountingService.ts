@@ -162,9 +162,9 @@ async function entryTx(tx:DbTransaction,companyId:number,entryId:number,lock=fal
       COALESCE(e.base_credit_amount,e.credit_amount,0))::text AS base_signed,
     la.code,la.account_type,la.sub_type,e.ledger_account_id,
     v.deleted_at::text,v.optional,
-    EXISTS(SELECT 1 FROM vouchers reversal
+    (v.reversal_of_voucher_id IS NOT NULL OR EXISTS(SELECT 1 FROM vouchers reversal
       WHERE reversal.reversal_of_voucher_id=v.id AND reversal.company_id=v.company_id
-       AND reversal.deleted_at IS NULL AND reversal.optional=false) AS reversed,
+       AND reversal.deleted_at IS NULL AND reversal.optional=false)) AS reversed,
     (SELECT COALESCE(SUM(a.amount_usd),0)::text FROM accounting_cost_allocations a
      WHERE a.company_id=${companyId} AND a.voucher_entry_id=e.id
        AND a.voided_at IS NULL) AS allocated
@@ -188,8 +188,8 @@ async function entryTx(tx:DbTransaction,companyId:number,entryId:number,lock=fal
       WHERE a.company_id=${companyId} AND a.voucher_entry_id=${entryId}
        AND a.voided_at IS NULL) AS allocated,
      v.deleted_at::text,v.optional,
-     EXISTS(SELECT 1 FROM vouchers rv WHERE rv.reversal_of_voucher_id=v.id
-      AND rv.company_id=v.company_id AND rv.deleted_at IS NULL AND rv.optional=false) AS reversed
+     (v.reversal_of_voucher_id IS NOT NULL OR EXISTS(SELECT 1 FROM vouchers rv WHERE rv.reversal_of_voucher_id=v.id
+      AND rv.company_id=v.company_id AND rv.deleted_at IS NULL AND rv.optional=false)) AS reversed
    FROM voucher_entries e JOIN vouchers v ON v.id=e.voucher_id
     WHERE e.id=${entryId} AND v.company_id=${companyId}
    `))[0];
