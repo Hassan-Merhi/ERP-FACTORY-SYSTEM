@@ -280,7 +280,6 @@ async function syncIntercoParentVoucherOn(
       }
     }
 
-
     // A subset of historic manual parent journals have no PO/container
     // description or entry narration. Only the original child voucher is
     // allowed to identify one, with exact supplier, day, amount and subsidiary
