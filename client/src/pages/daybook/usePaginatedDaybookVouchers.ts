@@ -18,6 +18,7 @@ interface DaybookFilterState {
   minAmount: string;
   maxAmount: string;
   statusFilter: "all" | "active" | "optional";
+  costCenterId: string;
 }
 
 interface UsePaginatedDaybookVouchersOptions {
@@ -59,6 +60,7 @@ export function usePaginatedDaybookVouchers(options: UsePaginatedDaybookVouchers
       search: debouncedSearch.trim() || undefined,
       minAmount: options.filters.minAmount || undefined,
       maxAmount: options.filters.maxAmount || undefined,
+      costCenterId: options.filters.costCenterId !== "all" ? options.filters.costCenterId : undefined,
     }),
     [
       options.page,
@@ -70,6 +72,7 @@ export function usePaginatedDaybookVouchers(options: UsePaginatedDaybookVouchers
       options.filters.sortOrder,
       options.filters.minAmount,
       options.filters.maxAmount,
+      options.filters.costCenterId,
       debouncedSearch,
     ],
   );
