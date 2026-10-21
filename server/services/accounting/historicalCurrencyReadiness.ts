@@ -2,6 +2,8 @@ import { pool } from "../../db";
 
 export interface HistoricalCurrencyReadiness {
   ready: boolean;
+  /** Legacy report compatibility, NOT proof of historical base-currency precision. */
+  legacyCompatibilityMode: boolean;
   unresolvedEntryCount: number;
   unresolvedVoucherCount: number;
   unresolvedLedgerOpeningCount: number;
@@ -25,6 +27,7 @@ export async function getHistoricalCurrencyReadiness(
 ): Promise<HistoricalCurrencyReadiness> {
   const READY_LEGACY: HistoricalCurrencyReadiness = {
     ready: true,
+    legacyCompatibilityMode: true,
     unresolvedEntryCount: 0,
     unresolvedVoucherCount: 0,
     unresolvedLedgerOpeningCount: 0,
@@ -36,6 +39,13 @@ export async function getHistoricalCurrencyReadiness(
     sampleVoucherIds: [],
     asOfDate: asOfDate || null,
   };
+
+  // Match the canonical ledger's booked-on cutoff, including backdated vouchers.
+  const dateClause = asOfDate
+    ? "AND COALESCE(v.effective_date, v.voucher_date) <= $2::date"
+    : "";
+  const params: Array<number | string> = [companyId];
+  if (asOfDate) params.push(asOfDate);
 
   // ── Phase-gate: only enforce multi-currency completeness once the backfill
   // has actually been started for this company.  If the column does not exist
@@ -49,9 +59,12 @@ export async function getHistoricalCurrencyReadiness(
          SELECT 1 FROM voucher_entries ve
          JOIN vouchers v ON ve.voucher_id = v.id
          WHERE v.company_id = $1
-           AND ve.base_debit_amount IS NOT NULL
+           AND v.deleted_at IS NULL
+           AND v.optional = false
+           ${dateClause}
+           AND (ve.base_debit_amount IS NOT NULL OR ve.base_credit_amount IS NOT NULL)
        ) AS has_migrated`,
-      [companyId],
+      params,
     );
     const hasMigrated = migratedCheck.rows[0]?.has_migrated === true;
     if (!hasMigrated) {
@@ -62,10 +75,6 @@ export async function getHistoricalCurrencyReadiness(
     // Column doesn't exist yet in this deployment → definitely legacy mode
     return READY_LEGACY;
   }
-
-  const params: Array<number | string> = [companyId];
-  const dateClause = asOfDate ? "AND v.voucher_date <= $2" : "";
-  if (asOfDate) params.push(asOfDate);
 
   const [entryResult, openingResult] = await Promise.all([
     pool.query<{
@@ -147,6 +156,8 @@ export async function getHistoricalCurrencyReadiness(
                 WHERE ve.supplier_id = s.id
                   AND v.company_id = $1
                   AND v.deleted_at IS NULL
+                  AND v.optional = false
+                  AND ($2::date IS NULL OR COALESCE(v.effective_date, v.voucher_date) <= $2::date)
              )
          )::text AS unresolved_supplier_openings,
          (SELECT COUNT(*)
@@ -166,7 +177,7 @@ export async function getHistoricalCurrencyReadiness(
              AND COALESCE(UPPER(fa.purchase_currency), 'USD') <> 'USD'
              AND fa.purchase_base_amount IS NULL
          )::text AS unresolved_fixed_assets`,
-      [companyId],
+      [companyId, asOfDate ?? null],
     ),
   ]);
 
@@ -186,6 +197,7 @@ export async function getHistoricalCurrencyReadiness(
     Number.parseInt(openingResult.rows[0]?.unresolved_fixed_assets || "0", 10) || 0;
 
   return {
+    legacyCompatibilityMode: false,
     ready:
       unresolvedEntryCount === 0 &&
       unresolvedLedgerOpeningCount === 0 &&
