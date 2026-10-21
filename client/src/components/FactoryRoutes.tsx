@@ -22,6 +22,7 @@ import {
   HistoricalAccounting,
   ProfessionalFinancialStatements,
   CostCenterAccounting,
+  FiscalCloseReview,
   Agents,
   Analytics,
   BalanceRepair,
@@ -194,6 +195,7 @@ export function FactoryRoutes({ user, myAccess, factoryDefaultPage }: FactoryRou
       {isAdminOwnerOrDev && <Route path="/factory/accounting/history" component={HistoricalAccounting} />}
       {isAdminOwnerOrDev && <Route path="/factory/accounting/statements" component={ProfessionalFinancialStatements} />}
       {isAdminOwnerOrDev && <Route path="/factory/accounting/cost-centers" component={CostCenterAccounting} />}
+      {isAdminOwnerOrDev && <Route path="/factory/accounting/fiscal-review" component={FiscalCloseReview} />}
       {isAdminOwnerOrDev && <Route path="/factory/account-groups" component={AccountGroups} />}
       <Route path="/factory/agents" component={Agents} />
       <Route path="/factory/vouchers">{() => <FactoryVouchers />}</Route>
