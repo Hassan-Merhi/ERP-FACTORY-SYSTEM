@@ -357,6 +357,12 @@ export function resolveFactoryBackendAccessRequirement(req: Request): FactoryApi
     return requirement("factory/production-report");
   }
 
+  // Cost centers belong to the Factory Accounts accounting surface.
+  // The route still enforces an active-company Owner/Admin/Developer role for writes.
+  if (hasPrefix(path, "/cost-centers")) {
+    return requirement("factory/accounts");
+  }
+
   // Accounting pages and their Factory-owned detail/actions.
   if (hasPrefix(path, "/accounts") || hasPrefix(path, "/ledger-monthly") || hasPrefix(path, "/ledger-vouchers")) {
     return requirement("factory/accounts");
