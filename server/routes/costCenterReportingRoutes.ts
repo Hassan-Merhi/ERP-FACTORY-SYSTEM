@@ -390,7 +390,7 @@ async function exportReport(res:Response,scope:Scope,filters:Filters,format:stri
     view==="accounts"?data.accounts:view==="months"?data.months:data.centers;
   if(items.length>5000)throw new ReportError(413,"Narrow your dates or center for exports above 5,000 rows");
   const name="cost-centers-"+view+"-"+filters.from+"-"+filters.to;
-  const rowData=items.map(item=>cols.map(col=>String(item[col]??"")));
+  const rowData=(items as Array<Record<string,unknown>>).map(item=>cols.map(col=>String(item[col]??"")));
   const safe=(v:string)=>/^[=+\-@\t\r]/.test(v)?"'"+v:v;
   if(format==="csv"){
     const escape=(v:string)=>'"'+safe(v).replace(/"/g,'""')+'"';
