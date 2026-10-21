@@ -112,6 +112,21 @@ export function registerVoucherPaginationRoutes(app: Express): void {
         );
       }
 
+      // Filter in SQL before counting/pagination, never filter one client page.
+      const ccRaw = req.query.costCenterId;
+      if (ccRaw !== undefined) {
+        const ccId = Number(ccRaw);
+        if (typeof ccRaw !== "string" || !Number.isSafeInteger(ccId) || ccId < 1) {
+          return res.status(400).json({ message: "Invalid cost center filter" });
+        }
+        conditions.push(sql`EXISTS (
+          SELECT 1 FROM voucher_entries ve_cc
+          JOIN cost_center_allocations cca ON cca.voucher_entry_id=ve_cc.id
+          WHERE ve_cc.voucher_id=${vouchers.id}
+            AND cca.company_id=${companyId} AND cca.cost_center_id=${ccId}
+        )`);
+      }
+
       const minAmount = parseMoneyInput(String(req.query.minAmount ?? ""))?.toNumber() ?? NaN;
       const maxAmount = parseMoneyInput(String(req.query.maxAmount ?? ""))?.toNumber() ?? NaN;
       if (Number.isFinite(minAmount)) {
