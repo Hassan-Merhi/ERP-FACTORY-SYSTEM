@@ -8,6 +8,7 @@ import { queryClient } from "@/lib/queryClient";
 import { useAppMode } from "@/contexts/AppModeContext";
 import { selectAccountsArray, type AccountsAllPayload } from "@/lib/accountsAllPayload";
 import type { PeriodFilterValue } from "@/components/ui/period-filter";
+import { transactionsIncludingCustomerMemo } from "./agentStatementMath";
 import type { Account, Transaction } from "./agentStatementMath";
 
 /** The toast callable shape used by the mutation callbacks. */
@@ -72,13 +73,13 @@ export function useAgentLedger(
       const url = `${statementPrefix}/${accountTypeUrl}/${selectedAccount.accountId}/transactions${params.toString() ? `?${params.toString()}` : ""}`;
       const res = await fetch(url, { credentials: "include" });
       if (!res.ok) throw new Error("Failed to fetch transactions");
-      const data = await res.json();
-      return Array.isArray(data) ? data : (data.transactions ?? []);
+      const data: unknown = await res.json();
+      return transactionsIncludingCustomerMemo(data);
     },
     enabled: !!selectedAccount,
   });
 
-  const { data: prePeriodData } = useQuery<{ balance: number }>({
+  const { data: prePeriodData } = useQuery<{ balance: number; notInLedgerBefore?: string }>({
     queryKey:
       selectedAccount && periodFilter.fromDate
         ? [
