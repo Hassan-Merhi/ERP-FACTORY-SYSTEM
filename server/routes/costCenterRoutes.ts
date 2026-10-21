@@ -35,6 +35,18 @@ const replaceBody = z.object({
   reason: z.string().trim().min(3).max(500),
 }).strict();
 const sourceKinds = z.enum(["voucher_entry", "factory_daybook"]);
+const autoSourceKinds = z.enum(["VOUCHER_ENTRY", "FACTORY_DAYBOOK"]);
+const autoRuleSetBody = z.object({
+  sourceKind: autoSourceKinds,
+  ledgerAccountId: maxId.nullable().optional(),
+  sourceModule: z.enum(["ERP", "FACTORY"]).nullable().optional(),
+  factoryTxType: z.enum(["EXPENSE","OPERATING_EXPENSE","FACTORY_EXPENSE"]).nullable().optional(),
+  splits: z.array(z.object({
+    costCenterId: maxId,
+    percent: z.string().regex(/^(?:0|[1-9]\\d{0,2})(?:\\.\\d{1,4})?$/),
+  }).strict()).max(30),
+  reason: z.string().trim().min(3).max(500),
+}).strict();
 type SourceKind = z.infer<typeof sourceKinds>;
 
 class ApiError extends Error {
@@ -177,6 +189,7 @@ async function splitList(client: PoolClient, companyId: number, kind: SourceKind
       "c.name AS \"costCenterName\",a.amount_native::text AS \"amountNative\",a.amount_base::text AS \"amountBase\"," +
       "a.currency,a.base_currency AS \"baseCurrency\",a.historical_rate::text AS \"historicalRate\"," +
       "a.rate_convention AS \"rateConvention\",a.cost_treatment AS \"costTreatment\",a.created_by AS \"createdBy\"," +
+      "a.allocation_origin AS \"allocationOrigin\",a.auto_rule_id AS \"autoRuleId\"," +
       "a.updated_by AS \"updatedBy\",a.created_at AS \"createdAt\",a.updated_at AS \"updatedAt\"" +
       " FROM cost_center_allocations a JOIN cost_centers c ON c.id=a.cost_center_id AND c.company_id=a.company_id" +
       " WHERE a.company_id=$1 AND a." + column + "=$2 ORDER BY c.code",
@@ -221,6 +234,111 @@ function registerCostCenterPrefix(app: Express, prefix: string) {
   // Read-only eligibility and current allocations for posted voucher expense lines.
   // This is intentionally source-of-truth based: no client supplied amounts,
   // company IDs, or inferred voucher totals.
+
+  app.get(prefix + "/automation/accounts", requireAuth, async (req, res) => {
+    try {
+      const { companyId } = await identity(req, false);
+      const result = await pool.query(
+        "SELECT id,code,name,account_type AS \"accountType\" FROM ledger_accounts " +
+        "WHERE company_id=$1 AND active=true AND deleted_at IS NULL " +
+        "AND upper(btrim(account_type)) IN ('EXPENSE','DIRECT EXPENSE','INDIRECT EXPENSE') " +
+        "ORDER BY name,code LIMIT 3000",
+        [companyId]
+      );
+      res.json({ accounts: result.rows });
+    } catch (error) { sendError(res, error); }
+  });
+
+  app.get(prefix + "/automation/rules", requireAuth, async (req, res) => {
+    try {
+      const { companyId } = await identity(req, false);
+      const result = await pool.query(
+        [
+          "SELECT r.id,r.source_kind AS \"sourceKind\",r.ledger_account_id AS \"ledgerAccountId\",",
+          "r.source_module AS \"sourceModule\",r.factory_tx_type AS \"factoryTxType\",",
+          "r.cost_center_id AS \"costCenterId\",c.code AS \"costCenterCode\",",
+          "c.name AS \"costCenterName\",l.code AS \"ledgerAccountCode\",l.name AS \"ledgerAccountName\",",
+          "r.allocation_percent::text AS \"percent\",r.active,r.created_at AS \"createdAt\"",
+          "FROM cost_center_auto_rules r",
+          "JOIN cost_centers c ON c.id=r.cost_center_id AND c.company_id=r.company_id",
+          "LEFT JOIN ledger_accounts l ON l.id=r.ledger_account_id AND l.company_id=r.company_id",
+          "WHERE r.company_id=$1 ORDER BY r.source_kind,l.name,r.factory_tx_type,r.source_module,r.id",
+        ].join(" "),
+        [companyId]
+      );
+      res.json({ rules: result.rows });
+    } catch (error) { sendError(res, error); }
+  });
+
+  // Replace one exact account/source combination atomically. A NULL module is
+  // the fallback mapping; source-specific mappings override fallback mappings.
+  // Does not re-tag existing transactions, even if the rule is edited.
+  app.put(prefix + "/automation/rules", requireAuth, async (req, res) => {
+    try {
+      const actor = await identity(req, true);
+      const value = parse(autoRuleSetBody, req.body);
+      const isFactory = prefix === "/api/factory/cost-centers";
+      if (value.sourceKind === "FACTORY_DAYBOOK" && !isFactory) {
+        throw new ApiError(403, "Standalone Factory rules require Factory Mode");
+      }
+      const accountId = value.sourceKind === "VOUCHER_ENTRY" ? value.ledgerAccountId ?? null : null;
+      const factoryType = value.sourceKind === "FACTORY_DAYBOOK" ? value.factoryTxType ?? null : null;
+      const moduleName = value.sourceKind === "VOUCHER_ENTRY" ? value.sourceModule ?? null : null;
+      if ((value.sourceKind === "VOUCHER_ENTRY" && (!accountId || value.factoryTxType != null)) ||
+          (value.sourceKind === "FACTORY_DAYBOOK" && (!factoryType || value.ledgerAccountId != null || value.sourceModule != null))) {
+        throw new ApiError(400, "Invalid source definition for automatic rule");
+      }
+      if (new Set(value.splits.map(s => s.costCenterId)).size !== value.splits.length) {
+        throw new ApiError(400, "Duplicate cost center in automatic split");
+      }
+      const percent = sumMoney(value.splits.map(s => s.percent));
+      if (percent.gt(100) || value.splits.some(s => toMoney(s.percent).lte(0))) {
+        throw new ApiError(400, "Split percentages must total at most 100%");
+      }
+      const updated = await transaction(async client => {
+        await client.query("SELECT pg_advisory_xact_lock(721032,$1)", [actor.companyId]);
+        if (accountId !== null) {
+          const account = await client.query(
+            "SELECT id FROM ledger_accounts WHERE id=$1 AND company_id=$2 AND active=true AND deleted_at IS NULL " +
+            "AND upper(btrim(account_type)) IN ('EXPENSE','DIRECT EXPENSE','INDIRECT EXPENSE') FOR SHARE",
+            [accountId, actor.companyId]
+          );
+          if (!account.rows.length) throw new ApiError(409, "Select an active expense ledger account in the same company");
+        }
+        if (value.splits.length) {
+          const centers = await client.query(
+            "SELECT id FROM cost_centers WHERE company_id=$1 AND id=ANY($2::int[]) AND active=true FOR SHARE",
+            [actor.companyId, value.splits.map(s => s.costCenterId)]
+          );
+          if (centers.rows.length !== value.splits.length) {
+            throw new ApiError(409, "One or more cost centers are archived or belong to another company");
+          }
+        }
+        const where = "company_id=$1 AND source_kind=$2 AND ledger_account_id IS NOT DISTINCT FROM $3::integer " +
+          "AND source_module IS NOT DISTINCT FROM $4::varchar " +
+          "AND factory_tx_type IS NOT DISTINCT FROM $5::varchar";
+        const params = [actor.companyId,value.sourceKind,accountId,moduleName,factoryType];
+        const before = await client.query("SELECT * FROM cost_center_auto_rules WHERE " + where,params);
+        await client.query("DELETE FROM cost_center_auto_rules WHERE " + where,params);
+        for (const split of value.splits) {
+          await client.query(
+            "INSERT INTO cost_center_auto_rules(company_id,source_kind,ledger_account_id,source_module," +
+            "factory_tx_type,cost_center_id,allocation_percent,created_by,updated_by) " +
+            "VALUES($1,$2,$3,$4,$5,$6,$7,$8,$8)",
+            [actor.companyId,value.sourceKind,accountId,moduleName,factoryType,
+              split.costCenterId,toMoney(split.percent).toFixed(4),actor.userId]
+          );
+        }
+        const after = await client.query("SELECT * FROM cost_center_auto_rules WHERE " + where,params);
+        await audit(client,actor,before.rows.length ? "update" : "create",
+          "cost_center_auto_rules",null,
+          value.sourceKind + ":" + (accountId ?? factoryType) + ":" + (moduleName ?? "*"),
+          { rules:before.rows,reason:value.reason },{ rules:after.rows,reason:value.reason });
+        return after.rows.length;
+      });
+      res.json({saved:updated,scope:"future_entries_only"});
+    } catch(error) { sendError(res,error); }
+  });
   app.get(prefix + "/voucher/:voucherId/entries", requireAuth, async (req, res) => {
     try {
       const { companyId } = await identity(req, false);
@@ -324,6 +442,18 @@ function registerCostCenterPrefix(app: Express, prefix: string) {
           );
           if (selected.rows.length !== ids.length) throw new ApiError(409, "A split uses a missing or archived cost center");
         }
+        // Explicit user changes, including CLEAR ALL, permanently take priority
+        // over the deferred auto-allocation trigger.
+        const overrideCol = sourceColumn(kind);
+        await client.query(
+          "DELETE FROM cost_center_source_overrides WHERE company_id=$1 AND " + overrideCol + "=$2",
+          [actor.companyId, sourceId],
+        );
+        await client.query(
+          "INSERT INTO cost_center_source_overrides(company_id," + overrideCol +
+          ",reason,overridden_by) VALUES($1,$2,$3,$4)",
+          [actor.companyId, sourceId, input.reason, actor.userId],
+        );
         const before = await splitList(client, actor.companyId, kind, sourceId);
         const column = sourceColumn(kind);
         await client.query(
