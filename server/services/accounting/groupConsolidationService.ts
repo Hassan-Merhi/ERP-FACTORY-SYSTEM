@@ -156,7 +156,7 @@ export async function consolidatedAccountingReport(input:{
       openingSideAssumed:record.openingSideAssumed,
       bookedUsd:money(signed),
       periodMovementUsd:money(
-        pnlByKey.get(`${record.kind}:${record.id??"-"}`)??record.periodDebit.minus(record.periodCredit)
+        pnlByKey.get(`${record.kind}:${record.id??"-"}`)??decimal(0)
       ),
       eliminationUsd:"0.00",adjustedUsd:money(signed)
     });
