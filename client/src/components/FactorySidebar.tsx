@@ -203,6 +203,8 @@ export function useFactoryVisibleSections(user?: FactorySidebarUser): {
       items: s.items.filter((item) => {
         if (item.developerOnly && !isDeveloper) return false;
         if (item.adminOnly && !isAdmin) return false;
+        if (item.accessKey === "factory/cost-centers" &&
+            !["Admin", "Owner", "Developer", "Manager"].includes(user?.role || "")) return false;
         if (item.featureFlag) {
           if (item.featureFlagDefaultOn) {
             if (settings && settings[item.featureFlag] === false) return false;
