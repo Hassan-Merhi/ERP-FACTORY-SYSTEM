@@ -5,6 +5,7 @@ import {
   FileText,
   Settings,
   Layers,
+  ListTree,
   BarChart3,
   FolderPlus,
   Wallet,
@@ -102,10 +103,10 @@ export const ERP_NAV_SECTIONS: NavSection[] = [
       { title: "Intercompany & Consolidation", url: "/accounting/consolidation", icon: Layers },
       { title: "Historical Accounting", url: "/accounting/history", icon: CalendarDays },
       { title: "Financial Statements", url: "/accounting/statements", icon: FileText },
-      { title: "Cost Centers & Budgets", url: "/accounting/cost-centers", icon: Calculator },
       { title: "Fiscal Closing & Audit", url: "/accounting/fiscal-review", icon: ShieldCheck },
       { title: "Unified Accounting Dashboard", url: "/accounting/dashboard", icon: LayoutDashboard },
       { title: "Unified Accounting Rollout", url: "/accounting/rollout", icon: ShieldCheck },
+      { title: "Cost Centers", url: "/cost-centers", icon: ListTree },
       { title: "Parties", url: "/parties", icon: Handshake },
       { title: "Payroll", url: "/payroll", icon: UserCheck },
     ],
@@ -206,6 +207,8 @@ export function useErpVisibleSections(user?: SidebarUser): {
 
     if (selectedCompany?.companyType === "retail" && RETAIL_HIDDEN_ERP_ROUTES.has(item.url)) return false;
     if (item.url === "/tracking") return !isPOSUser;
+    if (item.url === "/cost-centers" && !["Admin", "Owner", "Developer", "Manager"].includes(effectiveRole))
+      return false;
     if (isPOSUser && item.url === "/pos-item-replacement") return false;
 
     if (

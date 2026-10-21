@@ -20,11 +20,11 @@ import {
   GroupConsolidationAccounting,
   HistoricalAccounting,
   ProfessionalFinancialStatements,
-  CostCenterAccounting,
   FiscalCloseReview,
   UnifiedAccountingDashboard,
   UnifiedAccountingRollout,
   Accounts,
+  CostCenters,
   HistoricalOpenings,
   Agents,
   AiValidationPage,
@@ -255,10 +255,10 @@ export function ErpRoutes({ user }: ErpRoutesProps) {
       {R("/accounting/consolidation", isAdminOwnerOrDev && canAccess("accounts"), GroupConsolidationAccounting)}
       {R("/accounting/history", isAdminOwnerOrDev && canAccess("accounts"), HistoricalAccounting)}
       {R("/accounting/statements", isAdminOwnerOrDev && canAccess("accounts"), ProfessionalFinancialStatements)}
-      {R("/accounting/cost-centers", isAdminOwnerOrDev && canAccess("accounts"), CostCenterAccounting)}
       {R("/accounting/fiscal-review", isAdminOwnerOrDev && canAccess("accounts"), FiscalCloseReview)}
       {R("/accounting/dashboard", isAdminOwnerOrDev && canAccess("accounts"), UnifiedAccountingDashboard)}
       {R("/accounting/rollout", isAdminOwnerOrDev && canAccess("accounts"), UnifiedAccountingRollout)}
+      {R("/cost-centers", (isAdminOwnerOrDev || effectiveRole === "Manager") && canAccess("accounts"), CostCenters)}
       {canAccess("accounts") ? (
         <Route path="/ledger-monthly/:accountId" component={LedgerMonthlySummary} />
       ) : (

@@ -34,6 +34,7 @@ vi.mock("../server/auth", async (importOriginal) => {
 
 import { db, pool } from "../server/db";
 import { deleteAuditLogRowsForTests } from "./helpers/auditLogCleanup";
+import { createFakeRouteApp } from "./helpers/fakeRouteApp";
 import { factoryStockValuation } from "../server/services/accounting/perpetualInventory/factoryValuation";
 import { syncFactoryStockJournalTx } from "../server/services/accounting/perpetualInventory/factoryStockJournal";
 import { cascadeContainerCostChange } from "../server/services/factory/rawStockCostCascade";
@@ -51,18 +52,8 @@ import { registerEmployeeNetPositionRoutes } from "../server/routes/factory/empl
 const PREFIX = "w11fcb";
 const today = new Date().toISOString().slice(0, 10);
 
-type Handler = (req: unknown, res: unknown, next?: () => unknown) => Promise<unknown> | unknown;
-const routes = new Map<string, Handler[]>();
-const fakeApp = new Proxy(
-  {},
-  {
-    get:
-      (_target, method: string) =>
-      (path: unknown, ...handlers: Handler[]) => {
-        if (typeof path === "string") routes.set(`${method.toUpperCase()} ${path}`, handlers);
-      },
-  }
-) as never;
+// Route harness: the fake app records handlers; call() runs them with this fixture's session.
+const { app: fakeApp, call } = createFakeRouteApp(() => ({ companyId, today }));
 
 let companyId: number;
 let locationId: number;
@@ -72,54 +63,6 @@ let audNoRateContainer: number;
 let usdContainer: number;
 let customerId: number;
 let supervisorId: string;
-
-async function call(route: string, req: Record<string, any>) {
-  const handlers = routes.get(route);
-  if (!handlers) throw new Error(`route not registered: ${route}`);
-  const [method, path] = route.split(" ");
-  let statusCode = 200;
-  let body: any;
-  const res: Record<string, any> = {
-    status(code: number) {
-      statusCode = code;
-      return res;
-    },
-    json(value: unknown) {
-      body = value;
-      return res;
-    },
-    set: () => res,
-    setHeader: () => res,
-  };
-  const headers: Record<string, string> = { "x-client-date": today, ...(req.headers ?? {}) };
-  const request = {
-    method,
-    path,
-    params: {},
-    query: {},
-    body: {},
-    get: (name: string) => headers[name.toLowerCase()],
-    header: (name: string) => headers[name.toLowerCase()],
-    ...req,
-    headers,
-    session: {
-      factoryCompanyId: companyId,
-      currentCompanyId: companyId,
-      userId: "1",
-      username: "owner",
-      ...req.session,
-    },
-  };
-  // Middleware (requireRole) then the handler.
-  for (const [index, handler] of handlers.entries()) {
-    let next = false;
-    await handler(request, res, () => {
-      next = true;
-    });
-    if (index < handlers.length - 1 && !next) break;
-  }
-  return { statusCode, body };
-}
 
 const one = async <T = any>(text: string, values: unknown[] = []) => (await pool.query(text, values)).rows[0] as T;
 const all = async <T = any>(text: string, values: unknown[] = []) => (await pool.query(text, values)).rows as T[];
@@ -673,6 +616,146 @@ describe("the reviewed bale re-cost", () => {
       [companyId, applied.body.runId]
     );
     expect(audit).toHaveLength(1);
+  });
+
+  it("reviews SOLD bales on genuinely uninvoiced VERIFIED orders, but refuses invoiced or finalized orders", async () => {
+    const unbilled = await bale({ status: "SOLD", weight: "25", costPerKg: "40", totalCost: "1000" });
+    const invoiceMarked = await bale({ status: "SOLD", weight: "25", costPerKg: "40", totalCost: "1000" });
+    const finalized = await bale({ status: "SOLD", weight: "25", costPerKg: "40", totalCost: "1000" });
+
+    const link = async (baleId: number, status: string, invoiced: boolean) => {
+      const rec = await one<{ reference_number: string }>("SELECT reference_number FROM factory_bales WHERE id = $1", [
+        baleId,
+      ]);
+      const order = await one<{ id: number }>(
+        `INSERT INTO customer_orders
+          (company_id, customer_id, order_date, status, invoice_number, finalized_at)
+         VALUES ($1,$2,$3,$4,$5,$6) RETURNING id`,
+        [companyId, customerId, today, status, invoiced ? `INV-${baleId}` : null, invoiced ? new Date() : null]
+      );
+      await pool.query(
+        `INSERT INTO customer_order_bales
+          (order_id, bale_id, bale_reference, location_id, weight, price_used)
+         VALUES ($1,$2,$3,$4,25,60)`,
+        [order.id, baleId, rec.reference_number, locationId]
+      );
+      return order.id;
+    };
+
+    const unbilledOrder = await link(unbilled, "VERIFIED", false);
+    await link(invoiceMarked, "VERIFIED", true);
+    await link(finalized, "FINALIZED", true);
+
+    // A bale on two VERIFIED orders: one clean, one whose SALE ledger entry
+    // exists even though the order row never received an invoice number.
+    const saleLedgerBacked = await bale({ status: "SOLD", weight: "25", costPerKg: "40", totalCost: "1000" });
+    await link(saleLedgerBacked, "VERIFIED", false);
+    const saleLedgerOrder = await link(saleLedgerBacked, "VERIFIED", false);
+    await pool.query(
+      `INSERT INTO customer_balances
+        (company_id, customer_id, transaction_date, transaction_type, reference_type, reference_id,
+         debit_amount, credit_amount, balance, description)
+       VALUES ($1,$2,$3,'SALE','INVOICE',$4,60,0,60,'historical sale')`,
+      [companyId, customerId, today, saleLedgerOrder]
+    );
+
+    const preview = await call("GET /api/factory/bale-cost/recost-preview", { user: { role: "Owner" } });
+    expect(preview.statusCode).toBe(200);
+    expect(preview.body.bales.some((r: { id: number }) => r.id === saleLedgerBacked)).toBe(false);
+
+    // The read-only audit ranks the SALE-ledger order above the clean one, so
+    // the bale reports as invoice evidence rather than as an open order.
+    const evidence = await call("GET /api/factory/bale-cost/historical-sold-audit", {
+      query: { group: "VERIFIED_WITH_INVOICE_EVIDENCE", limit: "50", offset: "0" },
+      user: { role: "Owner" },
+    });
+    expect(evidence.statusCode).toBe(200);
+    expect(evidence.body.details.find((r: { id: number }) => r.id === saleLedgerBacked)).toMatchObject({
+      order_id: saleLedgerOrder,
+      sale_balance_exists: true,
+      review_group: "VERIFIED_WITH_INVOICE_EVIDENCE",
+    });
+    expect(preview.body.bales.find((r: { id: number }) => r.id === unbilled)).toMatchObject({
+      status: "SOLD",
+      eligibility: "sold-on-uninvoiced-verified-order",
+      oldTotalCost: "1000.0000000",
+      newTotalCost: "40.0000000",
+    });
+    expect(preview.body.bales.some((r: { id: number }) => r.id === invoiceMarked)).toBe(false);
+    expect(preview.body.bales.some((r: { id: number }) => r.id === finalized)).toBe(false);
+
+    // A separate explicit Owner approval is required when SOLD bales remain
+    // part of stock because their orders have not yet been invoiced.
+    const noSecondConfirmation = await call("POST /api/factory/bale-cost/recost-apply", {
+      user: { role: "Owner" },
+      body: { confirm: true, planHash: preview.body.planHash },
+    });
+    expect(noSecondConfirmation).toMatchObject({
+      statusCode: 409,
+      body: { code: "VERIFIED_SOLD_CONFIRM_REQUIRED" },
+    });
+
+    // Even without changing the stored SOLD status, an invoice issued between
+    // preview and apply must invalidate the previously reviewed plan hash.
+    await pool.query("UPDATE customer_orders SET invoice_number=$1, finalized_at=NOW() WHERE id=$2", [
+      `INV-${unbilledOrder}`,
+      unbilledOrder,
+    ]);
+    const refused = await call("POST /api/factory/bale-cost/recost-apply", {
+      user: { role: "Owner" },
+      body: { confirm: true, confirmVerifiedSoldBales: true, planHash: preview.body.planHash },
+    });
+    expect(refused).toMatchObject({ statusCode: 409, body: { code: "PLAN_CHANGED" } });
+    expect((await baleCost(unbilled)).total_cost).toBe("1000.0000000");
+    expect((await baleCost(invoiceMarked)).total_cost).toBe("1000.0000000");
+    expect((await baleCost(finalized)).total_cost).toBe("1000.0000000");
+    expect((await baleCost(saleLedgerBacked)).total_cost).toBe("1000.0000000");
+  });
+
+  it("includes uninvoiced VERIFIED-order SOLD bales in book stock and changes their value only after both approvals", async () => {
+    const preinvoiceSold = await bale({ status: "SOLD", weight: "25", costPerKg: "40", totalCost: "1000" });
+    const rec = await one<{ reference_number: string }>("SELECT reference_number FROM factory_bales WHERE id=$1", [
+      preinvoiceSold,
+    ]);
+    const order = await one<{ id: number }>(
+      "INSERT INTO customer_orders (company_id, customer_id, order_date, status) VALUES ($1,$2,$3,'VERIFIED') RETURNING id",
+      [companyId, customerId, today]
+    );
+    await pool.query(
+      "INSERT INTO customer_order_bales (order_id,bale_id,bale_reference,location_id,weight,price_used) VALUES ($1,$2,$3,$4,25,60)",
+      [order.id, preinvoiceSold, rec.reference_number, locationId]
+    );
+    const before = await factoryStockValuation(db, companyId);
+    const preview = await call("GET /api/factory/bale-cost/recost-preview", { user: { role: "Owner" } });
+    expect(preview.statusCode).toBe(200);
+    expect(preview.body.bales.some((r: { id: number }) => r.id === preinvoiceSold)).toBe(true);
+
+    const applied = await call("POST /api/factory/bale-cost/recost-apply", {
+      user: { role: "Owner" },
+      body: { confirm: true, confirmVerifiedSoldBales: true, planHash: preview.body.planHash },
+    });
+    expect(applied.statusCode).toBe(200);
+    expect(applied.body.voucherId).toBeNull(); // No perpetual-inventory cutover in test.
+    expect(await baleCost(preinvoiceSold)).toMatchObject({
+      status: "SOLD",
+      total_cost: "40.0000000",
+      cost_per_kg: "1.6000000",
+    });
+    const after = await factoryStockValuation(db, companyId);
+    // The per-bale cost change reduces finished goods; it does not restore
+    // or duplicate a physical bale, and the order stays VERIFIED.
+    expect(Number(before.soldNotInvoiced.cost) - Number(after.soldNotInvoiced.cost)).toBeCloseTo(960, 2);
+    expect((await one<{ status: string }>("SELECT status FROM customer_orders WHERE id=$1", [order.id])).status).toBe(
+      "VERIFIED"
+    );
+
+    const audit = await call("GET /api/factory/bale-cost/historical-sold-audit", {
+      query: { group: "OPEN_VERIFIED_UNINVOICED", limit: "10", offset: "0" },
+      user: { role: "Owner" },
+    });
+    expect(audit.statusCode).toBe(200);
+    expect(audit.body.readOnly).toBe(true);
+    expect(audit.body.valuationBasis).toBe("current-catalogue-only-NOT-historical-price-at-sale");
   });
 
   it("posts the value change to Factory Stock Revaluation after the cut-over", async () => {

@@ -10,7 +10,6 @@ import {
   GroupConsolidationAccounting,
   HistoricalAccounting,
   ProfessionalFinancialStatements,
-  CostCenterAccounting,
   FiscalCloseReview,
   UnifiedAccountingDashboard,
   UnifiedAccountingRollout,
@@ -65,7 +64,6 @@ export function PropertiesRoutes({ user }: PropertiesRoutesProps) {
       {(isAdmin || isOwner) && (
         <Route path="/properties/accounting/statements" component={ProfessionalFinancialStatements} />
       )}
-      {(isAdmin || isOwner) && <Route path="/properties/accounting/cost-centers" component={CostCenterAccounting} />}
       {(isAdmin || isOwner) && <Route path="/properties/accounting/fiscal-review" component={FiscalCloseReview} />}
       {(isAdmin || isOwner) && <Route path="/properties/accounting/dashboard" component={UnifiedAccountingDashboard} />}
       {(isAdmin || isOwner) && <Route path="/properties/accounting/rollout" component={UnifiedAccountingRollout} />}

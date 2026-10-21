@@ -19,6 +19,7 @@ export function MultiSelectFilter({
   placeholder,
   allLabel,
   className,
+  contentClassName,
   testId,
 }: {
   options: MultiSelectOption[];
@@ -27,6 +28,8 @@ export function MultiSelectFilter({
   placeholder: string;
   allLabel: string;
   className?: string;
+  /** Overrides the default dropdown width (w-52). */
+  contentClassName?: string;
   testId?: string;
 }) {
   const [open, setOpen] = useState(false);
@@ -80,7 +83,7 @@ export function MultiSelectFilter({
           </div>
         </button>
       </PopoverTrigger>
-      <PopoverContent className="w-52 p-0" align="start">
+      <PopoverContent className={cn("w-52 p-0", contentClassName)} align="start">
         <Command>
           <CommandInput placeholder={`Search ${placeholder.toLowerCase()}…`} />
           <CommandList>

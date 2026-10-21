@@ -34,6 +34,30 @@ const priceItems = [
     costPrice: "8",
     offloadingCost: "1",
   },
+  {
+    stockItemId: 103,
+    code: "A103",
+    name: "Green Shirt",
+    stockGroupName: "Clothes",
+    sellingPrice: "30",
+    baseSellingPrice: "22",
+    hasCustomPrice: true,
+    quantity: "0",
+    costPrice: "12",
+    offloadingCost: "2",
+  },
+  {
+    stockItemId: 104,
+    code: "A104",
+    name: "Black Shirt",
+    stockGroupName: "Clothes",
+    sellingPrice: "28",
+    baseSellingPrice: "28",
+    hasCustomPrice: false,
+    quantity: "0",
+    costPrice: "11",
+    offloadingCost: "1",
+  },
 ];
 const mastersData = {
   masters: [
@@ -190,12 +214,12 @@ describe("POS price list page behavior", () => {
     expect(screen.getByTestId("price-stock-movement-dialog")).toHaveAttribute("data-location-id", "11");
     expect(screen.getByTestId("price-stock-movement-dialog")).toHaveAttribute("data-location-name", "Main");
     expect(screen.getByTestId("row-price-102")).toHaveTextContent("Red Shirt");
-    expect(screen.getByTestId("text-item-count")).toHaveTextContent("Showing 2 of 2 items");
+    expect(screen.getByTestId("text-item-count")).toHaveTextContent("Showing 4 of 4 items");
 
     fireEvent.click(screen.getByTestId("button-hide-zero-qty"));
     expect(screen.queryByTestId("row-price-102")).not.toBeInTheDocument();
     expect(screen.getByTestId("row-price-101")).toBeInTheDocument();
-    expect(screen.getByTestId("text-item-count")).toHaveTextContent("Showing 1 of 2 items");
+    expect(screen.getByTestId("text-item-count")).toHaveTextContent("Showing 1 of 4 items");
     fireEvent.click(screen.getByTestId("button-hide-zero-qty"));
     expect(screen.getByTestId("row-price-102")).toBeInTheDocument();
 
@@ -274,7 +298,22 @@ describe("POS price list page behavior", () => {
     expect(screen.queryByTestId("button-location-all")).not.toBeInTheDocument();
     expect(screen.queryByTestId("button-show-unpriced")).not.toBeInTheDocument();
     expect(screen.queryByTestId("button-hide-zero-qty")).not.toBeInTheDocument();
+    const showZero = screen.getByTestId("button-show-zero-qty");
+    expect(showZero).toHaveTextContent("Show 0 Qty");
+    expect(showZero).toHaveTextContent("2");
+    expect(showZero).toHaveAttribute("aria-pressed", "false");
+    fireEvent.click(showZero);
+    expect(screen.getByTestId("button-show-zero-qty")).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByTestId("row-price-103")).toHaveTextContent("$30.00");
+    expect(screen.getByTestId("row-price-104")).toHaveTextContent("$28.00");
+    expect(screen.queryByTestId("row-price-102")).not.toBeInTheDocument();
+    expect(screen.getByTestId("text-item-count")).toHaveTextContent("Showing 3 of 3 items");
+    fireEvent.click(screen.getByTestId("button-show-zero-qty"));
+    expect(screen.queryByTestId("row-price-103")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("row-price-104")).not.toBeInTheDocument();
+    expect(screen.getByTestId("text-item-count")).toHaveTextContent("Showing 1 of 1 items");
     fireEvent.click(screen.getByTestId("cell-price-101"));
     expect(screen.queryByTestId("input-price-101")).not.toBeInTheDocument();
+    expect(harness.apiRequest).not.toHaveBeenCalled();
   });
 });

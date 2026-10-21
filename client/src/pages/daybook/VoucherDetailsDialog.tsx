@@ -7,6 +7,8 @@
  * the profit filter chips and the footer actions.
  */
 import { Edit } from "lucide-react";
+import { useAppMode } from "@/contexts/AppModeContext";
+import { VoucherCostCenters } from "@/components/financial/VoucherCostCenters";
 import { useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import {
@@ -108,6 +110,7 @@ export function VoucherDetailsDialog({
   ledgerAccounts = [],
   bankAccounts = [],
 }: VoucherDetailsDialogProps) {
+  const appMode = useAppMode();
   const isStockTransferType =
     selectedVoucher?.voucherType === "Stock Transfer" ||
     selectedVoucher?.voucherType === "StockTransfer" ||
@@ -264,6 +267,8 @@ export function VoucherDetailsDialog({
                 )}
               </div>
             )}
+
+            {appMode === "erp" && <VoucherCostCenters voucherId={selectedVoucher.id} />}
 
             {isStockTransferVoucher && (
               <VoucherRevisionHistory

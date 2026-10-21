@@ -275,7 +275,11 @@ export async function applyPurchaseOrderItemsUpdate(
       // historical PO link. Never modify or resurrect that deleted accounting row.
       const [linkedVoucher] = existingPO.voucherId
         ? await tx
-            .select({ deletedAt: vouchers.deletedAt })
+            .select({
+              deletedAt: vouchers.deletedAt,
+              voucherDate: vouchers.voucherDate,
+              totalAmount: vouchers.totalAmount,
+            })
             .from(vouchers)
             .where(and(eq(vouchers.id, existingPO.voucherId), eq(vouchers.companyId, existingPO.companyId)))
             .limit(1)
@@ -357,7 +361,15 @@ export async function applyPurchaseOrderItemsUpdate(
                 }
               : undefined,
             _b1ParentId,
-            existingPO.companyId
+            existingPO.companyId,
+            existingPO.supplierId && linkedVoucher?.voucherDate && linkedVoucher?.totalAmount
+              ? {
+                  purchaseOrderId: id,
+                  supplierId: existingPO.supplierId,
+                  originalVoucherDate: linkedVoucher.voucherDate,
+                  originalVoucherTotal: linkedVoucher.totalAmount,
+                }
+              : undefined
           );
           if (!_b1Sync.found) {
             throw new HttpError(

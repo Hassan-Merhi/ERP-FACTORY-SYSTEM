@@ -38,6 +38,7 @@ export function getParentRoute(pathname: string): string | null {
       if (match) return `/factory/ledger-monthly/${match[1]}`;
     }
     if (/^\/factory\/ledger-monthly\//.test(cleanPath)) return "/factory/accounts";
+    if (cleanPath === "/factory/cost-centers") return "/factory/accounts";
     if (/^\/factory\/voucher-detail\//.test(cleanPath)) return "/factory/vouchers";
     if (/^\/factory\/vouchers\/\d+\/edit/.test(cleanPath)) return "/factory/vouchers";
 
@@ -125,6 +126,7 @@ export function getParentRoute(pathname: string): string | null {
   if (/^\/voucher-detail\//.test(cleanPath)) return "/vouchers";
   if (/^\/vouchers\/\d+\/edit/.test(cleanPath)) return "/vouchers";
   if (cleanPath === "/account-groups") return "/accounts";
+  if (cleanPath === "/cost-centers") return "/accounts";
   if (cleanPath === "/account-transfer") return "/accounts";
 
   // ERP — stock / inventory.

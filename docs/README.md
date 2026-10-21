@@ -41,10 +41,10 @@ failure, so a correct document cannot quietly become undiscoverable.
 | [unified-accounting-phase9.md](unified-accounting-phase9.md) | Unified accounting (ERP, Factory, Rentals): Phase 9: Intercompany and Consolidation |
 | [unified-accounting-phase10.md](unified-accounting-phase10.md) | Unified accounting (ERP, Factory, Rentals): Phase 10: Historical Accounting and As-of Dates |
 | [unified-accounting-phase11.md](unified-accounting-phase11.md) | Unified accounting (ERP, Factory, Rentals): Phase 11: Professional Financial Statements |
-| [unified-accounting-phase12.md](unified-accounting-phase12.md) | Unified accounting (ERP, Factory, Rentals): Phase 12: Cost Centers, Analytic Accounting & Budgets |
 | [unified-accounting-phase13.md](unified-accounting-phase13.md) | Unified accounting (ERP, Factory, Rentals): Phase 13: Fiscal Period Closing & Audit Controls |
 | [unified-accounting-phase14.md](unified-accounting-phase14.md) | Unified accounting (ERP, Factory, Rentals): Phase 14: Unified Net Position & Accounting Dashboard |
 | [unified-accounting-phase15.md](unified-accounting-phase15.md) | Unified accounting (ERP, Factory, Rentals): Phase 15: Integration, Permissions & Controlled Rollout |
+| [audits/historical-sold-bale-cost-reconciliation-review.md](audits/historical-sold-bale-cost-reconciliation-review.md) | Review-only reconciliation of historical sold-bale costs and the guarded pre-invoice recost |
 | [inventory-flow.md](inventory-flow.md) | Stock data model and cost calculation |
 | [inventory-cost-memory-policy.md](inventory-cost-memory-policy.md) | Cost-memory rules for the current implementation |
 | [historical-sales-cogs-transfer-revision-findings.md](historical-sales-cogs-transfer-revision-findings.md) | Historical sales COGS repair: evidence findings and remaining blockers |
@@ -151,6 +151,14 @@ These describe work in progress and carry live figures bound to their sources.
 | [examples.md](examples.md) | Worked examples |
 | [faq.md](faq.md) | Frequently asked questions |
 | [factory-fx-agent-wallets.md](factory-fx-agent-wallets.md) | In-progress USD/EUR FX agent wallet design and review requirements |
+| [cost-centers-phase1.md](cost-centers-phase1.md) | Cost centers: database foundation (tables, company isolation, RLS) |
+| [cost-centers-phase2.md](cost-centers-phase2.md) | Cost centers: backend APIs and allocation integrity guards |
+| [cost-centers-phase3.md](cost-centers-phase3.md) | Cost centers: ERP interface, voucher allocation and Daybook filters |
+| [cost-centers-phase4.md](cost-centers-phase4.md) | Cost centers: Factory Mode integration and standalone Daybook expenses |
+| [cost-centers-phase5.md](cost-centers-phase5.md) | Cost centers: automatic allocation rules and manual overrides |
+| [cost-centers-phase6.md](cost-centers-phase6.md) | Cost centers: reports, monthly budgets and exports |
+| [cost-centers-phase7.md](cost-centers-phase7.md) | Cost centers: historical dry-run allocation and reconciliation |
+| [cost-centers-phase8-release.md](cost-centers-phase8-release.md) | Cost centers: security hardening, migration order and release checklist |
 | [security/scorecard-review-and-exceptions.md](security/scorecard-review-and-exceptions.md) | Current security Scorecard review and documented exceptions |
 | [releases.md](releases.md) | Release notes |
 

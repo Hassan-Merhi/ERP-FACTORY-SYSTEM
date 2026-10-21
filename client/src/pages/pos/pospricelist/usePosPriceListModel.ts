@@ -49,6 +49,7 @@ export function usePosPriceListModel({ posUser }: POSPriceListProps) {
   );
   const [showUnpriced, setShowUnpriced] = useState(false);
   const [hideZeroQty, setHideZeroQty] = useState(false);
+  const [showZeroQty, setShowZeroQty] = useState(false);
   const [hiddenUnpricedGroups, setHiddenUnpricedGroups] = useState<Set<string>>(new Set());
   const [hiddenLocations, setHiddenLocations] = useState<Set<number>>(new Set());
   const inputRef = useRef<HTMLInputElement>(null);
@@ -145,10 +146,21 @@ export function usePosPriceListModel({ posUser }: POSPriceListProps) {
   const locationPricedList = useMemo<PriceListRow[]>(() => {
     if (isAllMode) return masterItems;
     if (!posUser) return priceList;
-    return priceList.filter(
-      (item) => item.hasCustomPrice && item.sellingPrice !== null && parseFloat(item.quantity) > 0
-    );
-  }, [priceList, masterItems, posUser, isAllMode]);
+    return priceList.filter((item) => {
+      // Keep the usual POS view limited to stocked items with a custom price.
+      if (item.hasCustomPrice && item.sellingPrice !== null && parseFloat(item.quantity) > 0) {
+        return true;
+      }
+      // "Show 0 Qty" also exposes priced items with no stock at this location.
+      // The base-price fallback is valid here; unpriced items remain hidden.
+      return (
+        showZeroQty &&
+        Number(item.quantity) === 0 &&
+        item.sellingPrice !== null &&
+        Number(item.sellingPrice) > 0
+      );
+    });
+  }, [priceList, masterItems, posUser, isAllMode, showZeroQty]);
 
   const stockGroups = useMemo(() => {
     const groups = new Set<string>();
@@ -203,10 +215,18 @@ export function usePosPriceListModel({ posUser }: POSPriceListProps) {
     [isAllMode]
   );
 
-  const zeroQtyCount = useMemo(
-    () => locationPricedList.filter((item) => itemQty(item) === 0).length,
-    [itemQty, locationPricedList]
-  );
+  const zeroQtyCount = useMemo(() => {
+    if (posUser && !isAllMode) {
+      // Count the additional zero-stock, priced rows even before they are shown.
+      return priceList.filter(
+        (item) =>
+          Number(item.quantity) === 0 &&
+          item.sellingPrice !== null &&
+          Number(item.sellingPrice) > 0
+      ).length;
+    }
+    return locationPricedList.filter((item) => itemQty(item) === 0).length;
+  }, [itemQty, locationPricedList, priceList, posUser, isAllMode]);
 
   const filteredItems = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -614,6 +634,7 @@ export function usePosPriceListModel({ posUser }: POSPriceListProps) {
     setGroupFilter("all");
     setEditingItem(null);
     setShowUnpriced(false);
+    setShowZeroQty(false);
     setHiddenUnpricedGroups(new Set());
   };
 
@@ -622,6 +643,7 @@ export function usePosPriceListModel({ posUser }: POSPriceListProps) {
     setGroupFilter("all");
     setShowUnpriced(false);
     setHideZeroQty(false);
+    setShowZeroQty(false);
     setHiddenUnpricedGroups(new Set());
   };
 
@@ -684,6 +706,8 @@ export function usePosPriceListModel({ posUser }: POSPriceListProps) {
     toggleUnpriced,
     hideZeroQty,
     setHideZeroQty,
+    showZeroQty,
+    setShowZeroQty,
     zeroQtyCount,
     hiddenUnpricedGroups,
     setHiddenUnpricedGroups,

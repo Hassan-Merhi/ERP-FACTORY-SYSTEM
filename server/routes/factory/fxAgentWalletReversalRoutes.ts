@@ -57,7 +57,9 @@ export function registerFactoryFxAgentReversalRoutes(app: Express) {
         WHERE op.company_id = ${cid} AND op.wallet_id = ${walletId} AND op.kind = 'USD_TO_EUR'
         ORDER BY op.effective_date DESC, op.id DESC LIMIT 100
       `);
-      return res.json({ migrationRequired: false, conversions: result.rows });
+      // BIGINT ids arrive as strings from pg; the client and the reversal route use numbers.
+      const conversions = result.rows.map((row) => ({ ...row, id: Number(row.id) }));
+      return res.json({ migrationRequired: false, conversions });
     } catch (error) {
       return res.status(400).json({ message: getErrorMessage(error) });
     }

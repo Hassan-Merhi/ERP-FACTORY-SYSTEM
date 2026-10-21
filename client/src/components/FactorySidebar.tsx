@@ -82,6 +82,7 @@ const FACTORY_NAV_ICONS: Record<string, typeof Package> = {
   "factory/production-report": BarChart3,
   "factory/agents": UserRound,
   "factory/accounts": Landmark,
+  "factory/cost-centers": Layers,
   "factory/daybook": BookOpen,
   "factory/vouchers": FileText,
   "factory/stock-entry": ScanLine,
@@ -202,6 +203,11 @@ export function useFactoryVisibleSections(user?: FactorySidebarUser): {
       items: s.items.filter((item) => {
         if (item.developerOnly && !isDeveloper) return false;
         if (item.adminOnly && !isAdmin) return false;
+        if (
+          item.accessKey === "factory/cost-centers" &&
+          !["Admin", "Owner", "Developer", "Manager"].includes(user?.role || "")
+        )
+          return false;
         if (item.featureFlag) {
           if (item.featureFlagDefaultOn) {
             if (settings && settings[item.featureFlag] === false) return false;
@@ -215,7 +221,8 @@ export function useFactoryVisibleSections(user?: FactorySidebarUser): {
           myAccess &&
           !myAccess.fullAccess &&
           myAccess.pageKeys.length > 0 &&
-          !hasFactoryPageKey(page, myAccess.pageKeys)
+          !hasFactoryPageKey(page, myAccess.pageKeys) &&
+          !(item.accessKey === "factory/cost-centers" && myAccess.pageKeys.includes("factory/accounts"))
         ) {
           return false;
         }

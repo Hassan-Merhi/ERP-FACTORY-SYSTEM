@@ -1,4 +1,7 @@
 import { Search, X } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { useCompany } from "@/contexts/CompanyContext";
+import { readCostCenterApi, type CostCenterCatalog } from "@/api/costCentersApi";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { CoreErpFilterGrid } from "@/components/ui/core-erp-mobile";
@@ -33,16 +36,26 @@ export function DaybookFilters({
   hasActiveFilters,
   onResetFilters,
 }: DaybookFiltersProps) {
+  const { selectedCompany } = useCompany();
+  const { data: centerCatalog } = useQuery<CostCenterCatalog>({
+    queryKey: ["/api/cost-centers", selectedCompany?.id, false],
+    queryFn: () => readCostCenterApi<CostCenterCatalog>("/api/cost-centers"),
+    enabled: !!selectedCompany?.id && ["Admin", "Owner", "Developer", "Manager"].includes(selectedCompany?.role || ""),
+    staleTime: 30000,
+  });
+  const centers = centerCatalog?.costCenters || [];
   const hasActiveNonPeriodFilters =
     filters.voucherType !== "all" ||
     !!filters.searchQuery ||
     !!filters.minAmount ||
     !!filters.maxAmount ||
-    filters.statusFilter !== "all";
+    filters.statusFilter !== "all" ||
+    (filters.costCenterId || "all") !== "all";
 
   const activeFilterCount = [
     filters.voucherType !== "all",
     filters.statusFilter !== "all",
+    filters.costCenterId !== "all",
     !!filters.minAmount,
     !!filters.maxAmount,
   ].filter(Boolean).length;
@@ -116,6 +129,28 @@ export function DaybookFilters({
               </SelectContent>
             </Select>
 
+            {["Admin", "Owner", "Developer", "Manager"].includes(selectedCompany?.role || "") && (
+              <Select
+                value={filters.costCenterId || "all"}
+                onValueChange={(value) => setFilters({ ...filters, costCenterId: value })}
+              >
+                <SelectTrigger id="cost-center-filter" data-testid="select-daybook-cost-center" className="w-full">
+                  <SelectValue placeholder="All Cost Centers" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Cost Centers</SelectItem>
+                  {centers.map((center) => (
+                    <SelectItem key={center.id} value={String(center.id)}>
+                      {center.code} — {center.name}
+                    </SelectItem>
+                  ))}
+                  {filters.costCenterId !== "all" && !centers.some((c) => String(c.id) === filters.costCenterId) && (
+                    <SelectItem value={filters.costCenterId}>Selected Cost Center #{filters.costCenterId}</SelectItem>
+                  )}
+                </SelectContent>
+              </Select>
+            )}
+
             {layout === "inline" && searchControl}
           </CoreErpFilterGrid>
         )}
@@ -135,6 +170,16 @@ export function DaybookFilters({
               data-testid="chip-type"
             >
               {filters.voucherType}
+              <X className="h-3 w-3" />
+            </Badge>
+          )}
+          {filters.costCenterId !== "all" && (
+            <Badge
+              variant="secondary"
+              className="shrink-0 cursor-pointer gap-1 text-xs"
+              onClick={() => setFilters({ ...filters, costCenterId: "all" })}
+            >
+              Cost center: {centers.find((c) => String(c.id) === filters.costCenterId)?.name || filters.costCenterId}
               <X className="h-3 w-3" />
             </Badge>
           )}

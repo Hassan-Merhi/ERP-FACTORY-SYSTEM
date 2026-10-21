@@ -83,6 +83,16 @@ const AUTHORIZED_CROSS_COMPANY_PATHS = new Set(["/api/payroll/bonus-locations", 
 
 function isAuthorizedCrossCompanyPath(method: string, path: string): boolean {
   if (AUTHORIZED_CROSS_COMPANY_PATHS.has(path)) return true;
+  if (
+    method.toUpperCase() === "GET" &&
+    (path === "/api/cost-centers/reports/consolidated" ||
+      path === "/api/factory/cost-centers/reports/consolidated" ||
+      path === "/api/cost-centers/reports/consolidated/activity" ||
+      path === "/api/factory/cost-centers/reports/consolidated/activity" ||
+      path === "/api/cost-centers/reports/consolidated/export" ||
+      path === "/api/factory/cost-centers/reports/consolidated/export")
+  )
+    return true;
   if (path === "/api/purchase-orders/parent-freight-accounts") return true;
   if (/^\/api\/purchase-orders\/\d+\/sync-parent-voucher$/.test(path)) return true;
   if (method.toUpperCase() === "PATCH" && /^\/api\/purchase-orders\/\d+$/.test(path)) return true;
@@ -321,8 +331,7 @@ export async function tenantIsolationBoundary(req: Request, res: Response, next:
     // the route path rather than query/body. Authorize only that explicit
     // company for Developer; the route-level user/location ownership guards
     // still validate the target user, locations, and cash accounts.
-    const userLocationRoute =
-      context.role === "Developer" ? classifyUserLocationConfigurationRoute(req.path) : null;
+    const userLocationRoute = context.role === "Developer" ? classifyUserLocationConfigurationRoute(req.path) : null;
     if (userLocationRoute && userLocationRoute.companyId !== context.companyId) {
       await assertCompaniesAccess(context.userId, [userLocationRoute.companyId]);
       explicitAuthorizedCompanyId = userLocationRoute.companyId;
@@ -391,8 +400,7 @@ export async function tenantCompanyParamBoundary(req: Request, res: Response, ne
     if (!companyId) {
       return res.status(400).json({ code: "COMPANY_ID_INVALID", message: "Invalid companyId in request path." });
     }
-    const userLocationRoute =
-      context.role === "Developer" ? classifyUserLocationConfigurationRoute(req.path) : null;
+    const userLocationRoute = context.role === "Developer" ? classifyUserLocationConfigurationRoute(req.path) : null;
     if (userLocationRoute?.companyId === companyId) {
       await assertCompaniesAccess(context.userId, [companyId]);
       return next();

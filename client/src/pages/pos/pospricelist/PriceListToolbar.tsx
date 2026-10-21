@@ -145,7 +145,7 @@ export function PriceListLocationVisibility({ model }: { model: PosPriceListMode
 }
 
 export function PriceListSearchRow({ model }: { model: PosPriceListModel }) {
-  const { selectedLocationId, stockGroups, showUnpriced, canEdit, unpricedCount, hideZeroQty, zeroQtyCount } = model;
+  const { selectedLocationId, stockGroups, showUnpriced, canEdit, unpricedCount, hideZeroQty, showZeroQty, zeroQtyCount } = model;
   if (!selectedLocationId) return null;
   return (
     <div className="flex flex-wrap items-center gap-2 px-4 py-2.5 border-b shrink-0">
@@ -173,6 +173,33 @@ export function PriceListSearchRow({ model }: { model: PosPriceListModel }) {
             ))}
           </SelectContent>
         </Select>
+      )}
+      {!!model.posUser && (
+        <button
+          type="button"
+          data-testid="button-show-zero-qty"
+          aria-pressed={showZeroQty}
+          onClick={() => model.setShowZeroQty(!showZeroQty)}
+          className={cn(
+            "inline-flex items-center gap-2 h-9 px-3 rounded-md text-sm font-medium border transition-colors shrink-0",
+            showZeroQty
+              ? "bg-primary text-primary-foreground border-primary"
+              : "bg-muted/60 text-foreground border-transparent hover-elevate"
+          )}
+        >
+          {showZeroQty ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+          {showZeroQty ? "Hide 0 Qty" : "Show 0 Qty"}
+          {zeroQtyCount > 0 && (
+            <span
+              className={cn(
+                "inline-flex items-center justify-center min-w-5 h-5 px-1 rounded-sm text-[11px] font-semibold",
+                showZeroQty ? "bg-primary-foreground/20 text-primary-foreground" : "bg-foreground/10 text-foreground"
+              )}
+            >
+              {zeroQtyCount}
+            </span>
+          )}
+        </button>
       )}
       {canEdit && (
         <button

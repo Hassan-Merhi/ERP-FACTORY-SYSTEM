@@ -13,6 +13,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { useAppMode } from "@/contexts/AppModeContext";
+import { VoucherCostCenters } from "@/components/financial/VoucherCostCenters";
 
 interface VoucherItem {
   id: number;
@@ -345,6 +346,8 @@ export default function VoucherDetail() {
                 </CardContent>
               </Card>
             )}
+
+            {(appMode === "erp" || appMode === "factory") && <VoucherCostCenters voucherId={data.id} />}
 
             {/* Narration */}
             {data.narration && (

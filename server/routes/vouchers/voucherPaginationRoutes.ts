@@ -2,13 +2,17 @@ import type { Express, NextFunction, Request, Response } from "express";
 import { punctuationInsensitiveSearch } from "../../lib/searchNormalization";
 import { and, asc, desc, eq, inArray, isNull, or, sql, type SQL } from "drizzle-orm";
 import { requireAuth } from "../../auth";
+import { getActiveCompanyPermissionContext } from "../../services/security/activeCompanyPermissionContext";
 import { db } from "../../db";
 import { getErrorMessage } from "../../lib/httpHandlers";
 import { userLocations, vouchers } from "@shared/schema";
 import { parseMoneyInput } from "../../lib/money";
 import { parsePositiveInt } from "../../lib/listPagination";
 import { withStockTransferNarrations } from "../../services/inventory/stockTransferNarration";
-import { filterRoutineCorrection, ROUTINE_CORRECTION_VOUCHER_ID } from "../../services/accounting/operationalCorrectionVisibility";
+import {
+  filterRoutineCorrection,
+  ROUTINE_CORRECTION_VOUCHER_ID,
+} from "../../services/accounting/operationalCorrectionVisibility";
 
 const DEFAULT_PAGE_SIZE = 100;
 const MAX_PAGE_SIZE = 250;
@@ -110,6 +114,25 @@ export function registerVoucherPaginationRoutes(app: Express): void {
             punctuationInsensitiveSearch(vouchers.description, search)
           )
         );
+      }
+
+      // Filter in SQL before counting/pagination, never filter one client page.
+      const ccRaw = req.query.costCenterId;
+      if (ccRaw !== undefined) {
+        const current = await getActiveCompanyPermissionContext(req);
+        if (!["Admin", "Owner", "Developer", "Manager"].includes(current.role)) {
+          return res.status(403).json({ message: "Cost center access required" });
+        }
+        const ccId = Number(ccRaw);
+        if (typeof ccRaw !== "string" || !Number.isSafeInteger(ccId) || ccId < 1) {
+          return res.status(400).json({ message: "Invalid cost center filter" });
+        }
+        conditions.push(sql`EXISTS (
+          SELECT 1 FROM voucher_entries ve_cc
+          JOIN cost_center_allocations cca ON cca.voucher_entry_id=ve_cc.id
+          WHERE ve_cc.voucher_id=${vouchers.id}
+            AND cca.company_id=${companyId} AND cca.cost_center_id=${ccId}
+        )`);
       }
 
       const minAmount = parseMoneyInput(String(req.query.minAmount ?? ""))?.toNumber() ?? NaN;

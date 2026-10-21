@@ -9,6 +9,7 @@ export type DaybookFiltersState = {
     minAmount: string;
     maxAmount: string;
     statusFilter: "all" | "active" | "optional";
+    costCenterId: string;
   };
 };
 
@@ -22,6 +23,7 @@ export function createDaybookFilters(): DaybookFiltersState {
       minAmount: "",
       maxAmount: "",
       statusFilter: "all",
+      costCenterId: "all",
     },
   };
 }

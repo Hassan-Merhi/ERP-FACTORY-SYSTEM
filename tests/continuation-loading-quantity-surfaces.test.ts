@@ -11,7 +11,7 @@ describe("continuation loading quantities across screens", () => {
     expect(source).toContain("FROM customer_order_expected_lines");
     expect(source).toContain("AND order_id = ${orderId}");
     expect(source).toContain("AND proforma_id = ${order.proformaIdUsed}");
-    expect(source).toContain("expectedPlan.length");
+    expect(source).toContain("expectedPlan.map(");
     expect(source).toContain("expected_qty");
     expect(source).toContain("originalsById.get");
     expect(source).toContain("proformaLinesWithStock");
@@ -27,16 +27,20 @@ describe("continuation loading quantities across screens", () => {
   });
 
   it("uses 179 instead of the original 273 for a new empty continuation", () => {
-    expect(getRemainingBales({
-      proformaExpectedBales: "179",
-      totalQtyBales: 0,
-      continuationRemainingBales: "179",
-    })).toBe(179);
-    expect(getRemainingBales({
-      proformaExpectedBales: "273",
-      totalQtyBales: 0,
-      continuationRemainingBales: "179",
-    })).toBe(179);
+    expect(
+      getRemainingBales({
+        proformaExpectedBales: "179",
+        totalQtyBales: 0,
+        continuationRemainingBales: "179",
+      })
+    ).toBe(179);
+    expect(
+      getRemainingBales({
+        proformaExpectedBales: "273",
+        totalQtyBales: 0,
+        continuationRemainingBales: "179",
+      })
+    ).toBe(179);
   });
 
   it("does not show lost-bale recovery warnings for an empty loading still in progress", () => {

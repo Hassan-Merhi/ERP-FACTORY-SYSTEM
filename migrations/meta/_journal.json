@@ -232,6 +232,55 @@
       "when": 1792141200000,
       "tag": "20261016_001_sp_container_invoice_charges",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1792561020000,
+      "tag": "20261021_001_cost_centers_phase1",
+      "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1792561560000,
+      "tag": "20261021_002_cost_centers_phase2_integrity",
+      "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1792564301000,
+      "tag": "20261021_003_cost_centers_phase5_automation",
+      "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1792565352000,
+      "tag": "20261021_004_cost_centers_phase6_budgets",
+      "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1792567037000,
+      "tag": "20261021_005_cost_centers_phase7_history",
+      "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1792568264000,
+      "tag": "20261021_006_cost_centers_phase8_hardening",
+      "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1792600000000,
+      "tag": "20261021_007_cost_centers_historical_batch_size",
+      "breakpoints": true
     }
   ]
 }

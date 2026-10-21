@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { randomUUID } from "node:crypto";
 import request from "supertest";
 import { pool } from "../server/db";
 import { runRentalReconciliation } from "../server/services/rental/rentalReconciliationService";
@@ -148,15 +149,18 @@ describe("Rental payment accounting and reconciliation", () => {
   });
 
   it("posts bulk immediate payments", async () => {
-    const res = await agent.post("/api/erp/rental/payments/bulk").send([
-      {
-        contractId: testContractId,
-        cashAccountId: ctx.cashAccountId,
-        amount: "500",
-        paymentDate: todayStr(),
-        scheduleFuturePayment: false,
-      },
-    ]);
+    const res = await agent.post("/api/erp/rental/payments/bulk").send({
+      clientRequestId: randomUUID(),
+      items: [
+        {
+          contractId: testContractId,
+          cashAccountId: ctx.cashAccountId,
+          amount: "500",
+          paymentDate: todayStr(),
+          scheduleFuturePayment: false,
+        },
+      ],
+    });
     expect(res.status).toBe(200);
     expect(res.body.results[0]?.scheduled).toBeFalsy();
 
@@ -165,16 +169,66 @@ describe("Rental payment accounting and reconciliation", () => {
     payments.forEach((payment: any) => expect(payment.posting_status).toBe("POSTED"));
   });
 
-  it("keeps bulk future payments scheduled", async () => {
-    const res = await agent.post("/api/erp/rental/payments/bulk").send([
-      {
-        contractId: testContractId,
-        cashAccountId: ctx.cashAccountId,
-        amount: "500",
-        paymentDate: futureDateStr(15),
-        scheduleFuturePayment: true,
-      },
+  it("replays a protected bulk rent payment without posting it twice", async () => {
+    const body = {
+      clientRequestId: randomUUID(),
+      items: [
+        {
+          contractId: testContractId,
+          cashAccountId: ctx.cashAccountId,
+          amount: "500",
+          paymentDate: todayStr(),
+          scheduleFuturePayment: false,
+        },
+      ],
+    };
+    const first = await agent.post("/api/erp/rental/payments/bulk").send(body);
+    expect(first.status).toBe(200);
+    expect(first.body.results[0]?.paymentGroupId).toBeTruthy();
+
+    const beforeRetry = await q("SELECT COUNT(*)::int AS count FROM property_payments WHERE contract_id = $1", [
+      testContractId,
     ]);
+    const replay = await agent.post("/api/erp/rental/payments/bulk").send(body);
+    expect(replay.status).toBe(200);
+    expect(replay.body).toEqual(first.body);
+
+    const afterRetry = await q("SELECT COUNT(*)::int AS count FROM property_payments WHERE contract_id = $1", [
+      testContractId,
+    ]);
+    expect(afterRetry[0].count).toBe(beforeRetry[0].count);
+  });
+
+  it("supports legacy bulk arrays when the caller supplies an idempotency header", async () => {
+    const res = await agent
+      .post("/api/erp/rental/payments/bulk")
+      .set("X-Idempotency-Key", randomUUID())
+      .send([
+        {
+          contractId: testContractId,
+          cashAccountId: ctx.cashAccountId,
+          amount: "500",
+          paymentDate: todayStr(),
+          scheduleFuturePayment: false,
+        },
+      ]);
+    expect(res.status).toBe(200);
+    expect(res.body.results[0]?.paymentGroupId).toBeTruthy();
+  });
+
+  it("keeps bulk future payments scheduled", async () => {
+    const res = await agent.post("/api/erp/rental/payments/bulk").send({
+      clientRequestId: randomUUID(),
+      items: [
+        {
+          contractId: testContractId,
+          cashAccountId: ctx.cashAccountId,
+          amount: "500",
+          paymentDate: futureDateStr(15),
+          scheduleFuturePayment: true,
+        },
+      ],
+    });
     expect(res.status).toBe(200);
     expect(res.body.results[0]?.scheduled).toBe(true);
   });

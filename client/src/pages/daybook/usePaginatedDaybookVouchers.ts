@@ -18,6 +18,7 @@ interface DaybookFilterState {
   minAmount: string;
   maxAmount: string;
   statusFilter: "all" | "active" | "optional";
+  costCenterId: string;
 }
 
 interface UsePaginatedDaybookVouchersOptions {
@@ -54,11 +55,15 @@ export function usePaginatedDaybookVouchers(options: UsePaginatedDaybookVouchers
       startDate: options.fromDate,
       endDate: options.toDate,
       sort: options.filters.sortOrder,
+      sortOrder: options.filters.sortOrder,
       type: options.filters.voucherType !== "all" ? options.filters.voucherType : undefined,
+      voucherType: options.filters.voucherType !== "all" ? options.filters.voucherType : undefined,
       status: options.filters.statusFilter !== "all" ? options.filters.statusFilter : undefined,
+      statusFilter: options.filters.statusFilter !== "all" ? options.filters.statusFilter : undefined,
       search: debouncedSearch.trim() || undefined,
       minAmount: options.filters.minAmount || undefined,
       maxAmount: options.filters.maxAmount || undefined,
+      costCenterId: options.filters.costCenterId !== "all" ? options.filters.costCenterId : undefined,
     }),
     [
       options.page,
@@ -70,19 +75,14 @@ export function usePaginatedDaybookVouchers(options: UsePaginatedDaybookVouchers
       options.filters.sortOrder,
       options.filters.minAmount,
       options.filters.maxAmount,
+      options.filters.costCenterId,
       debouncedSearch,
-    ],
+    ]
   );
   const queryUrl = useMemo(() => canonicalApiUrl("/api/vouchers", queryParams), [queryParams]);
 
   const query = useQuery<PaginatedVoucherResponse | Voucher[]>({
-    queryKey: paginatedCompanyDataKey(
-      queryUrl,
-      options.companyId,
-      options.page,
-      options.pageSize,
-      "daybook-vouchers",
-    ),
+    queryKey: paginatedCompanyDataKey(queryUrl, options.companyId, options.page, options.pageSize, "daybook-vouchers"),
     queryFn: async ({ signal }) => {
       const response = await fetch(queryUrl, { credentials: "include", signal });
       if (!response.ok) {
@@ -101,10 +101,30 @@ export function usePaginatedDaybookVouchers(options: UsePaginatedDaybookVouchers
   // instead of silently rendering zero rows when the envelope is missing.
   const page = useMemo(
     () => unwrapPage<Voucher>(query.data, { page: options.page, pageSize: options.pageSize }),
-    [query.data, options.page, options.pageSize],
+    [query.data, options.page, options.pageSize]
   );
 
   const loadAllVouchers = async (): Promise<Voucher[]> => {
+    // A filtered export must be drawn from the same SQL predicate as Daybook's
+    // paged list. The legacy unpaged endpoint does not implement cost-center filtering.
+    if (options.filters.costCenterId && options.filters.costCenterId !== "all") {
+      const items: Voucher[] = [];
+      for (let pageNumber = 1; pageNumber <= 1000; pageNumber++) {
+        const url = canonicalApiUrl("/api/vouchers", {
+          ...queryParams,
+          profile: "page",
+          page: pageNumber,
+          pageSize: 250,
+        });
+        const response = await fetch(url, { credentials: "include" });
+        if (!response.ok) throw new Error("Failed to export cost-center vouchers");
+        const batch = (await response.json()) as { items: Voucher[]; totalPages: number };
+        if (!Array.isArray(batch.items)) throw new Error("Invalid voucher export result");
+        items.push(...batch.items);
+        if (pageNumber >= batch.totalPages) return items;
+      }
+      throw new Error("Too many matching vouchers to export at once; narrow the date range");
+    }
     const exportUrl = canonicalApiUrl("/api/vouchers", {
       ...queryParams,
       profile: undefined,

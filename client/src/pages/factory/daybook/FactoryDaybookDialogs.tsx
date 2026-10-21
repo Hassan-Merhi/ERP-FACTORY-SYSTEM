@@ -26,6 +26,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { formatNumber } from "@/lib/formatNumber";
 import { formatDaybookDescription } from "./daybookUtils";
 import { ViewEntryModal } from "./ViewEntryModal";
+import { FactoryDaybookCostCenters } from "./FactoryDaybookCostCenters";
 import type { FactoryDaybookModel } from "./useFactoryDaybookModel";
 
 const COST_EDIT_TX_LABELS: Record<string, string> = {
@@ -250,12 +251,15 @@ export function FactoryDaybookDialogs({ model }: { model: FactoryDaybookModel })
           data-testid="dialog-view-entry"
         >
           {viewEntry && (
-            <ViewEntryModal
-              entry={viewEntry}
-              onClose={() => model.setViewEntry(null)}
-              onNavigate={model.navigate}
-              formatDisplayDate={model.formatDisplayDate}
-            />
+            <div className="space-y-4">
+              <ViewEntryModal
+                entry={viewEntry}
+                onClose={() => model.setViewEntry(null)}
+                onNavigate={model.navigate}
+                formatDisplayDate={model.formatDisplayDate}
+              />
+              <FactoryDaybookCostCenters entry={viewEntry} />
+            </div>
           )}
         </DialogContent>
       </Dialog>
