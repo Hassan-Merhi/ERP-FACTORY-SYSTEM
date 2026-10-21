@@ -401,4 +401,9 @@ export const phase3RemainingTranslationsPart33: readonly Phase3SharedUiEntry[] =
     ar: "يجب أن يكون fromDate وasOfDate بصيغة YYYY-MM-DD؛ ويجب أن تكون compare صحيحة أو خاطئة",
     fr: "fromDate et asOfDate doivent être au format AAAA-MM-JJ ; compare doit valoir true ou false",
   },
+  {
+    en: "Unified Accounting",
+    ar: "المحاسبة الموحدة",
+    fr: "Comptabilité unifiée",
+  },
 ];

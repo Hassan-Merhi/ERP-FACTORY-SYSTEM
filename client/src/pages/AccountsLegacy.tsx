@@ -9,7 +9,13 @@
  */
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Layers, Plus, Search, X } from "lucide-react";
+import { ChevronDown, Layers, Plus, Search, X } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -153,134 +159,53 @@ export default function Accounts() {
     );
   };
 
+  const unifiedAccountingLinks = [
+    { testId: "button-open-items", label: "Open Items", path: "open-items" },
+    { testId: "button-cash-bank-reconciliation", label: "Cash & Bank Reconciliation", path: "cash-bank" },
+    { testId: "button-monetary-fx", label: "Multi-Currency Accounting", path: "monetary-fx" },
+    ...(model.modePrefix !== "/properties"
+      ? [
+          {
+            testId: "button-factory-production-accounting",
+            label: "Factory Production Accounting",
+            path: model.modePrefix === "/factory" ? "production" : "factory-production",
+          },
+        ]
+      : []),
+    { testId: "button-unified-rental-accounting", label: "Rental Accounting", path: "rentals" },
+    { testId: "button-group-consolidation", label: "Intercompany & Consolidation", path: "consolidation" },
+    { testId: "button-historical-accounting", label: "Historical Accounting", path: "history" },
+    { testId: "button-professional-financial-statements", label: "Financial Statements", path: "statements" },
+    { testId: "button-fiscal-review", label: "Fiscal Closing & Audit", path: "fiscal-review" },
+    { testId: "button-unified-accounting-dashboard", label: "Unified Accounting Dashboard", path: "dashboard" },
+    { testId: "button-unified-accounting-rollout", label: "Unified Accounting Rollout", path: "rollout" },
+  ];
+
   return (
     <div className="space-y-6">
       <PageHeader title="Accounts Overview" subtitle="View all accounts, balances, and transaction history">
         {showViewAccounts &&
           !phoneStatementOpen &&
           ["Admin", "Owner", "Developer"].includes(model.currentUser?.role ?? "") && (
-            <Button
-              variant="outline"
-              data-testid="button-open-items"
-              onClick={() => model.navigate(`${model.modePrefix}/accounting/open-items`)}
-            >
-              Open Items
-            </Button>
-          )}
-        {showViewAccounts &&
-          !phoneStatementOpen &&
-          ["Admin", "Owner", "Developer"].includes(model.currentUser?.role ?? "") && (
-            <Button
-              variant="outline"
-              data-testid="button-cash-bank-reconciliation"
-              onClick={() => model.navigate(`${model.modePrefix}/accounting/cash-bank`)}
-            >
-              Cash & Bank Reconciliation
-            </Button>
-          )}
-        {showViewAccounts &&
-          !phoneStatementOpen &&
-          ["Admin", "Owner", "Developer"].includes(model.currentUser?.role ?? "") && (
-            <Button
-              variant="outline"
-              data-testid="button-monetary-fx"
-              onClick={() => model.navigate(`${model.modePrefix}/accounting/monetary-fx`)}
-            >
-              Multi-Currency Accounting
-            </Button>
-          )}
-        {showViewAccounts &&
-          !phoneStatementOpen &&
-          model.modePrefix !== "/properties" &&
-          ["Admin", "Owner", "Developer"].includes(model.currentUser?.role ?? "") && (
-            <Button
-              variant="outline"
-              data-testid="button-factory-production-accounting"
-              onClick={() =>
-                model.navigate(
-                  `${model.modePrefix}/accounting/${model.modePrefix === "/factory" ? "production" : "factory-production"}`
-                )
-              }
-            >
-              Factory Production Accounting
-            </Button>
-          )}
-        {showViewAccounts &&
-          !phoneStatementOpen &&
-          ["Admin", "Owner", "Developer"].includes(model.currentUser?.role ?? "") && (
-            <Button
-              variant="outline"
-              data-testid="button-unified-rental-accounting"
-              onClick={() => model.navigate(`${model.modePrefix}/accounting/rentals`)}
-            >
-              Rental Accounting
-            </Button>
-          )}
-        {showViewAccounts &&
-          !phoneStatementOpen &&
-          ["Admin", "Owner", "Developer"].includes(model.currentUser?.role ?? "") && (
-            <Button
-              variant="outline"
-              data-testid="button-group-consolidation"
-              onClick={() => model.navigate(`${model.modePrefix}/accounting/consolidation`)}
-            >
-              Intercompany & Consolidation
-            </Button>
-          )}
-        {showViewAccounts &&
-          !phoneStatementOpen &&
-          ["Admin", "Owner", "Developer"].includes(model.currentUser?.role ?? "") && (
-            <Button
-              variant="outline"
-              data-testid="button-historical-accounting"
-              onClick={() => model.navigate(`${model.modePrefix}/accounting/history`)}
-            >
-              Historical Accounting
-            </Button>
-          )}
-        {showViewAccounts &&
-          !phoneStatementOpen &&
-          ["Admin", "Owner", "Developer"].includes(model.currentUser?.role ?? "") && (
-            <Button
-              variant="outline"
-              data-testid="button-professional-financial-statements"
-              onClick={() => model.navigate(`${model.modePrefix}/accounting/statements`)}
-            >
-              Financial Statements
-            </Button>
-          )}
-        {showViewAccounts &&
-          !phoneStatementOpen &&
-          ["Admin", "Owner", "Developer"].includes(model.currentUser?.role ?? "") && (
-            <Button
-              variant="outline"
-              data-testid="button-fiscal-review"
-              onClick={() => model.navigate(`${model.modePrefix}/accounting/fiscal-review`)}
-            >
-              Fiscal Closing & Audit
-            </Button>
-          )}
-        {showViewAccounts &&
-          !phoneStatementOpen &&
-          ["Admin", "Owner", "Developer"].includes(model.currentUser?.role ?? "") && (
-            <Button
-              variant="outline"
-              data-testid="button-unified-accounting-dashboard"
-              onClick={() => model.navigate(`${model.modePrefix}/accounting/dashboard`)}
-            >
-              Unified Accounting Dashboard
-            </Button>
-          )}
-        {showViewAccounts &&
-          !phoneStatementOpen &&
-          ["Admin", "Owner", "Developer"].includes(model.currentUser?.role ?? "") && (
-            <Button
-              variant="outline"
-              data-testid="button-unified-accounting-rollout"
-              onClick={() => model.navigate(`${model.modePrefix}/accounting/rollout`)}
-            >
-              Unified Accounting Rollout
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" data-testid="button-unified-accounting-menu">
+                  Unified Accounting
+                  <ChevronDown className="ml-1 h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                {unifiedAccountingLinks.map((link) => (
+                  <DropdownMenuItem
+                    key={link.testId}
+                    data-testid={link.testId}
+                    onSelect={() => model.navigate(`${model.modePrefix}/accounting/${link.path}`)}
+                  >
+                    {link.label}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
           )}
         {showViewAccounts &&
           !phoneStatementOpen &&
