@@ -260,6 +260,13 @@
       "when": 1792565352000,
       "tag": "20261021_004_cost_centers_phase6_budgets",
       "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1792567037000,
+      "tag": "20261021_005_cost_centers_phase7_history",
+      "breakpoints": true
     }
   ]
 }
