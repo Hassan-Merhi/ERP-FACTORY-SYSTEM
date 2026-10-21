@@ -25,6 +25,7 @@ import {
   computeRunningBalances,
   computeClosingBalance,
   computePeriodTotals,
+  withPartyDisplayBalance,
   type Account,
 } from "./agents/agentStatementMath";
 import { buildAgentStatementExcelRows, exportAgentStatementExcel } from "./agents/agentStatementExcel";
@@ -87,13 +88,17 @@ export default function Agents() {
 
   const agentIds = useMemo(() => new Set(agentAccountRows.map((a) => a.accountId)), [agentAccountRows]);
 
+  // Keep historical GL amounts on the server. Only these customer-linked
+  // display cards use the same operational balance as Factory Parties.
+  const displayAccounts = useMemo(() => allAccounts.map(withPartyDisplayBalance), [allAccounts]);
+
   const agentAccounts = useMemo(() => {
-    return allAccounts.filter((a) => agentIds.has(a.id) && searchAny(agentSearch, a.name, a.code));
-  }, [allAccounts, agentIds, agentSearch]);
+    return displayAccounts.filter((a) => agentIds.has(a.id) && searchAny(agentSearch, a.name, a.code));
+  }, [displayAccounts, agentIds, agentSearch]);
 
   const availableAccounts = useMemo(() => {
-    return allAccounts.filter((a) => !agentIds.has(a.id) && searchAny(addSearch, a.name, a.code, a.type));
-  }, [allAccounts, agentIds, addSearch]);
+    return displayAccounts.filter((a) => !agentIds.has(a.id) && searchAny(addSearch, a.name, a.code, a.type));
+  }, [displayAccounts, agentIds, addSearch]);
 
   const groupedVouchers = groupTransactions(transactions);
 
