@@ -49,6 +49,10 @@ interface Package {
  current:Single;comparison:Single|null;
  comparisonPeriod:{fromDate:string;asOfDate:string}|null;
  reportStatus:"PROVISIONAL_NOT_CERTIFIED";
+ historicalFx:{ready:boolean;unresolvedEntryCount:number;unresolvedVoucherCount:number;
+  unresolvedLedgerOpeningCount:number;unresolvedBankOpeningCount:number;
+  unresolvedCustomerOpeningCount:number;unresolvedSupplierOpeningCount:number;
+  certified:false;caveat:string};
  disclosure:Record<string,string>
 }
 async function get(url:string):Promise<Package>{
@@ -349,6 +353,11 @@ export default function ProfessionalFinancialStatements(){
     <CardHeader><CardTitle>Financial statement controls and disclosures</CardTitle></CardHeader>
     <CardContent className="space-y-3">
      <p className="text-sm font-semibold">Financial certification has not been granted.</p>
+     <p className="text-sm">Historical FX compatibility gate:
+      {pkg.historicalFx.ready?" passed (not certification)":" unresolved records detected"}.
+      {" "}Entries flagged: {pkg.historicalFx.unresolvedEntryCount},
+      vouchers flagged: {pkg.historicalFx.unresolvedVoucherCount}.</p>
+     <p className="text-xs text-muted-foreground">{pkg.historicalFx.caveat}</p>
      {now.controls.blockers.map((text,i)=><p key={i} className="text-sm text-destructive">
       {text}</p>)}
      {now.controls.warnings.map((text,i)=><p key={i} className="text-sm">{text}</p>)}
