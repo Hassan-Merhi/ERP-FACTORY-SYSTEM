@@ -201,6 +201,13 @@ export default function Accounts() {
               Intercompany & Consolidation
             </Button>
           )}
+        {showViewAccounts && !phoneStatementOpen &&
+          ["Admin","Owner","Developer"].includes(model.currentUser?.role ?? "") && (
+            <Button variant="outline" data-testid="button-historical-accounting"
+              onClick={() => model.navigate(`${model.modePrefix}/accounting/history`)}>
+              Historical Accounting
+            </Button>
+          )}
         {showViewAccounts &&
           !phoneStatementOpen &&
           (model.currentUser?.role === "Admin" || model.currentUser?.role === "Developer") && (
