@@ -324,3 +324,32 @@ DROP TRIGGER IF EXISTS cost_center_auto_daybook_insert_trg ON factory_daybook_en
 CREATE CONSTRAINT TRIGGER cost_center_auto_daybook_insert_trg
   AFTER INSERT ON factory_daybook_entries DEFERRABLE INITIALLY DEFERRED
   FOR EACH ROW EXECUTE FUNCTION cost_center_auto_after_daybook_insert();
+
+
+-- Optional/draft vouchers receive no automatic allocations until finalized.
+-- This trigger handles the later finalize transition in the SAME voucher
+-- transaction, without assigning draft lines or modifying financial postings.
+CREATE OR REPLACE FUNCTION cost_center_auto_after_voucher_finalize()
+RETURNS trigger LANGUAGE plpgsql AS $cc_finalize$
+DECLARE
+  item RECORD;
+BEGIN
+  IF OLD.optional IS DISTINCT FROM TRUE OR NEW.optional IS DISTINCT FROM FALSE
+    OR NEW.deleted_at IS NOT NULL THEN RETURN NULL; END IF;
+  FOR item IN SELECT id FROM voucher_entries WHERE voucher_id=NEW.id AND company_id=NEW.company_id
+  LOOP
+    BEGIN
+      PERFORM cost_center_auto_apply_voucher_entry(item.id);
+    EXCEPTION WHEN OTHERS THEN
+      RAISE WARNING 'Cost center auto tagging skipped finalized voucher %, entry %: %',
+        NEW.id,item.id,SQLERRM;
+    END;
+  END LOOP;
+  RETURN NULL;
+END
+$cc_finalize$;
+DROP TRIGGER IF EXISTS cost_center_auto_voucher_finalize_trg ON vouchers;
+CREATE CONSTRAINT TRIGGER cost_center_auto_voucher_finalize_trg
+  AFTER UPDATE OF optional ON vouchers DEFERRABLE INITIALLY DEFERRED
+  FOR EACH ROW WHEN (OLD.optional = true AND NEW.optional = false)
+  EXECUTE FUNCTION cost_center_auto_after_voucher_finalize();
