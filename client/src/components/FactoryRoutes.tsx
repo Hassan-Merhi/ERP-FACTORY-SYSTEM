@@ -177,7 +177,7 @@ export function FactoryRoutes({ user, myAccess, factoryDefaultPage }: FactoryRou
       <Route path="/factory/stock-query" component={StockQuery} />
       <Route path="/factory/contacts" component={FactoryContacts} />
       <Route path="/factory/accounts" component={FactoryAccounts} />
-      <Route path="/factory/accounting/open-items" component={AccountingOpenItems} />
+      {isAdminOwnerOrDev && <Route path="/factory/accounting/open-items" component={AccountingOpenItems} />}
       {isAdminOwnerOrDev && <Route path="/factory/account-groups" component={AccountGroups} />}
       <Route path="/factory/agents" component={Agents} />
       <Route path="/factory/vouchers">{() => <FactoryVouchers />}</Route>
