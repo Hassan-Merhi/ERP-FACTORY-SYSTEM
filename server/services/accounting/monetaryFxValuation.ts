@@ -109,7 +109,10 @@ export async function monetaryAccountValuationTx(tx:DbTransaction,input:{
     const voucher=fxCurrency(e.voucher_currency||"USD");
     const complete=e.native_debit!==null&&e.native_credit!==null &&
        e.base_debit!==null&&e.base_credit!==null&&!!original;
-    if(!complete && voucher!=="USD"){
+    // A USD voucher header is not sufficient evidence for a partially
+    // populated foreign-currency line. Mark it unresolved rather than
+    // silently treating mixed columns as a historical USD transaction.
+    if(!complete && (voucher!=="USD" || (original!==null && original!=="USD"))){
       const b=buckets.get("UNRESOLVED")??{
         native:new Decimal(0),historical:new Decimal(0),issues:[]};
       b.issues.push(`Voucher ${e.voucher_number} (#${e.voucher_id}) lacks verified currency/base columns`);
