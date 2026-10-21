@@ -176,7 +176,9 @@ export async function listRealizedFxTx(tx:DbTransaction,input:{
   for(const record of matches)items.push(await previewRealizedFxTx(tx,input.companyId,Number(record.id)));
   return{companyId:input.companyId,asOfDate:date,
     accountingMode:"RECORDED_NATIVE_AND_HISTORIC_BASE_ONLY",
-    items,limitedToMostRecent:300};
+    items,limitedToMostRecent:300,
+    recognitionStatusAsOf:false,
+    asOfLimitations:"Matches are selected by applied date. Recognition/reversal status is current; historical recognition event reconstruction belongs to Phase 10."};
 }
 export async function recognizeRealizedFxTx(tx:DbTransaction,input:{
   companyId:number;matchId:number;actor:{userId:string;username:string};reason:string;
