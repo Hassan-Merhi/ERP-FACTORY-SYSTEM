@@ -185,7 +185,7 @@ export async function recognizeRealizedFxTx(tx:DbTransaction,input:{
     "This match has changed and can no longer be recognized");
   const bookDate=await companyBusinessDate(input.companyId,tx);
   await tx.execute(sql`SELECT erp_assert_accounting_date_open(${input.companyId},${bookDate}::date)`);
-  const status=(await ensureSystemAccounts(tx,input.companyId,["FX-REVALUATION"]))[0];
+  const status=(await ensureSystemAccounts(tx,input.companyId,["FX-REALIZED"]))[0];
   if(!status||!["ok","created","reused_by_name"].includes(status.state))
     throw new MonetaryFxError("FX_GAIN_LOSS_ACCOUNT_UNAVAILABLE",
       "A valid FX Revaluation Gain/Loss system account is required");
