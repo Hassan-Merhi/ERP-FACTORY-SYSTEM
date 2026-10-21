@@ -41,6 +41,22 @@ export async function ensureCashBankReconciliationSchema(pool: Pool): Promise<vo
     );
     CREATE INDEX IF NOT EXISTS accounting_cash_bank_statement_lines_statement_idx
       ON accounting_cash_bank_statement_lines(company_id,statement_id,transaction_date);
+    ALTER TABLE accounting_cash_bank_statement_lines
+      ADD COLUMN IF NOT EXISTS review_category VARCHAR(32),
+      ADD COLUMN IF NOT EXISTS review_note TEXT,
+      ADD COLUMN IF NOT EXISTS reviewed_by TEXT,
+      ADD COLUMN IF NOT EXISTS reviewed_at TIMESTAMPTZ;
+    DO $review_check$
+    BEGIN
+      IF NOT EXISTS(SELECT 1 FROM pg_constraint
+          WHERE conname='cash_bank_line_review_category_check') THEN
+        ALTER TABLE accounting_cash_bank_statement_lines
+          ADD CONSTRAINT cash_bank_line_review_category_check
+          CHECK(review_category IS NULL OR review_category IN (
+            'bank_fee','transfer','unidentified_receipt','unidentified_payment','other'
+          ));
+      END IF;
+    END $review_check$;
     CREATE TABLE IF NOT EXISTS accounting_cash_bank_matches (
       id BIGSERIAL PRIMARY KEY,
       company_id INTEGER NOT NULL REFERENCES companies(id) ON DELETE RESTRICT,
