@@ -208,6 +208,13 @@ export default function Accounts() {
               Historical Accounting
             </Button>
           )}
+        {showViewAccounts && !phoneStatementOpen &&
+          ["Admin","Owner","Developer"].includes(model.currentUser?.role ?? "") && (
+            <Button variant="outline" data-testid="button-professional-financial-statements"
+              onClick={() => model.navigate(`${model.modePrefix}/accounting/statements`)}>
+              Financial Statements
+            </Button>
+          )}
         {showViewAccounts &&
           !phoneStatementOpen &&
           (model.currentUser?.role === "Admin" || model.currentUser?.role === "Developer") && (
