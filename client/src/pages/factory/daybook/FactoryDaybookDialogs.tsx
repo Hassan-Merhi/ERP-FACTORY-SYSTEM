@@ -251,13 +251,15 @@ export function FactoryDaybookDialogs({ model }: { model: FactoryDaybookModel })
           data-testid="dialog-view-entry"
         >
           {viewEntry && (
-            <ViewEntryModal
-              entry={viewEntry}
-              onClose={() => model.setViewEntry(null)}
-              onNavigate={model.navigate}
-              formatDisplayDate={model.formatDisplayDate}
-            />
-            <FactoryDaybookCostCenters entry={viewEntry} />
+            <div className="space-y-4">
+              <ViewEntryModal
+                entry={viewEntry}
+                onClose={() => model.setViewEntry(null)}
+                onNavigate={model.navigate}
+                formatDisplayDate={model.formatDisplayDate}
+              />
+              <FactoryDaybookCostCenters entry={viewEntry} />
+            </div>
           )}
         </DialogContent>
       </Dialog>
