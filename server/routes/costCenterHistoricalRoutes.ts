@@ -160,7 +160,14 @@ async function candidates(
   return result.rows as Entry[];
 }
 function digest(rows:Entry[]):string{
-  return createHash("sha256").update(JSON.stringify(rows)).digest("hex");
+  // PG JSONB reorders object keys; use a fixed, ordered evidence tuple so a
+  // stored preview hashes identically to the live source read at apply time.
+  const tuples=rows.map(row=>[
+    row.sourceId,row.voucherId,row.voucherNumber,row.sourceDate,row.currency,
+    row.amountNative,row.amountUsd,row.historicalRate,row.rateConvention,
+    row.accountName,row.accountCode,row.sourceModule,
+  ]);
+  return createHash("sha256").update(JSON.stringify(tuples)).digest("hex");
 }
 function calculate(rows:Entry[],splits:PlanSplit[]){
   const detail=rows.map(row=>{
@@ -231,7 +238,10 @@ function parseFilters(req:Request):{
   if(typeof req.query.fromDate!=="string"||typeof req.query.toDate!=="string")
     throw new HistoryError(400,"Date range required");
   windowDates(req.query.fromDate,req.query.toDate);
-  const ledgerAccountId=req.query.ledgerAccountId===undefined?null:idSchema.parse(req.query.ledgerAccountId);
+  const parsedId=req.query.ledgerAccountId===undefined
+    ? {success:true,data:null} as const : idSchema.safeParse(req.query.ledgerAccountId);
+  if(!parsedId.success)throw new HistoryError(400,"Invalid expense account filter");
+  const ledgerAccountId=parsedId.data;
   if(sourceKind==="FACTORY_DAYBOOK"&&ledgerAccountId!==null)
     throw new HistoryError(400,"Factory daybook cannot be filtered by account");
   return {sourceKind,fromDate:req.query.fromDate,toDate:req.query.toDate,ledgerAccountId};
@@ -365,8 +375,8 @@ function registerPrefix(app:Express,prefix:string){
         if(currentRows.length!==previous.length||digest(currentRows)!==batch.source_hash)
           throw new HistoryError(409,"A source, amount, date or allocation changed since preview; start another dry run");
         const calculated=calculate(currentRows,plan.splits);
-        if(calculated.sourceNativeTotal!==String(batch.candidate_native_total)||
-          calculated.sourceUsdTotal!==String(batch.candidate_usd_total))
+        if(!toMoney(calculated.sourceNativeTotal).eq(batch.candidate_native_total)||
+          !toMoney(calculated.sourceUsdTotal).eq(batch.candidate_usd_total))
           throw new HistoryError(409,"Historical source controls no longer match the preview");
         const sourceColumn=plan.sourceKind==="VOUCHER_ENTRY"?"voucher_entry_id":"factory_daybook_entry_id";
         for(const item of calculated.rows){
