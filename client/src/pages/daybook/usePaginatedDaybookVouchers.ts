@@ -108,6 +108,23 @@ export function usePaginatedDaybookVouchers(options: UsePaginatedDaybookVouchers
   );
 
   const loadAllVouchers = async (): Promise<Voucher[]> => {
+    // A filtered export must be drawn from the same SQL predicate as Daybook's
+    // paged list. The legacy unpaged endpoint does not implement cost-center filtering.
+    if (options.filters.costCenterId && options.filters.costCenterId !== "all") {
+      const items: Voucher[] = [];
+      for (let pageNumber = 1; pageNumber <= 1000; pageNumber++) {
+        const url = canonicalApiUrl("/api/vouchers", {
+          ...queryParams, profile: "page", page: pageNumber, pageSize: 250,
+        });
+        const response = await fetch(url, { credentials: "include" });
+        if (!response.ok) throw new Error("Failed to export cost-center vouchers");
+        const batch = await response.json() as {items: Voucher[]; totalPages: number};
+        if (!Array.isArray(batch.items)) throw new Error("Invalid voucher export result");
+        items.push(...batch.items);
+        if (pageNumber >= batch.totalPages) return items;
+      }
+      throw new Error("Too many matching vouchers to export at once; narrow the date range");
+    }
     const exportUrl = canonicalApiUrl("/api/vouchers", {
       ...queryParams,
       profile: undefined,
