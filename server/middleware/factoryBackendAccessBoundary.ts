@@ -357,10 +357,15 @@ export function resolveFactoryBackendAccessRequirement(req: Request): FactoryApi
     return requirement("factory/production-report");
   }
 
-  // Cost centers belong to the Factory Accounts accounting surface.
-  // The route still enforces an active-company Owner/Admin/Developer role for writes.
+  // Factory cost-center management is its own permissioned Finance page.
+  // Voucher-backed expense tagging can also originate from an authorized
+  // Vouchers page; standalone daybook expense tagging from Daybook.
   if (hasPrefix(path, "/cost-centers")) {
-    return requirement("factory/accounts");
+    const isAllocation = hasPrefix(path, "/cost-centers/allocations/") ||
+      hasPrefix(path, "/cost-centers/voucher/");
+    return isAllocation
+      ? anyOf(requirement("factory/cost-centers"), requirement("factory/vouchers"), requirement("factory/daybook"))
+      : requirement("factory/cost-centers");
   }
 
   // Accounting pages and their Factory-owned detail/actions.
