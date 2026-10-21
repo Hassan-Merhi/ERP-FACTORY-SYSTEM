@@ -99,6 +99,8 @@ export const OPERATIONAL_ROUTE_PERMISSIONS: Readonly<Record<OperationalPermissio
     "GET /api/credit-sales-import/template",
   ],
   import: [
+    // Unified accounting bank-statement upload (metadata only; also locked by the rollout gate).
+    "POST /api/accounting/cash-bank/import",
     "POST /api/stock-items/import-opening-balances",
     "POST /api/bales/import",
     "POST /api/factory/workers/import-excel",
@@ -282,6 +284,7 @@ export const OPERATIONAL_ROUTE_PERMISSIONS: Readonly<Record<OperationalPermissio
     "GET /api/accounts/:type/:id/statement-pdf",
     "GET /api/pos/temp-pdf/:id",
     "GET /api/pos/invoice/:voucherId/pdf",
+    "GET /api/factory/fx-agent-wallets/:id/statement.pdf",
   ],
   print: ["POST /api/factory/pressing/create-and-print"],
   excelExport: [
@@ -322,6 +325,7 @@ export const OPERATIONAL_ROUTE_PERMISSIONS: Readonly<Record<OperationalPermissio
     "GET /api/stats/group-net-position-excel",
     "GET /api/reports/net-profit-excel",
     "GET /api/reports/net-position-monthly-excel",
+    "GET /api/factory/fx-agent-wallets/:id/statement.xlsx",
     "GET /api/sp/sales-form/export",
     "GET /api/sp/sales-form/export-v2",
     // Missed by the old URL rules (.xlsx / .csv suffix).
