@@ -96,8 +96,9 @@ export default function HistoricalAccounting(){
   ["Bank / cash FX",origin+"/accounting/monetary-fx"],
   ["Rental accounting",origin+"/accounting/rentals"],
   ["Intercompany",origin+"/accounting/consolidation"],
-  ["ERP inventory audit",origin+"/accounting/erp-inventory"],
-  ["Factory production audit",origin==="/factory"?origin+"/accounting/production":"/accounting/factory-production"]
+  ...(origin===""?[["ERP inventory audit","/accounting/erp-inventory"],
+    ["Factory production audit","/accounting/factory-production"]]:[]),
+  ...(origin==="/factory"?[["Factory production audit","/factory/accounting/production"]]:[])
  ];
  return <div className="space-y-5 p-3 sm:p-5" data-testid="historical-accounting">
   <div>
@@ -292,8 +293,7 @@ export default function HistoricalAccounting(){
        <span className="font-medium">{prettify(name)}</span>
        <span className="text-muted-foreground">{prettify(state)}</span></div>)}</div>
      <div className="flex flex-wrap gap-2">
-      {links.filter(([label])=>origin!=="/properties"||!label.includes("inventory"))
-       .map(([title,href])=><a key={title} className="underline text-sm" href={href}>
+      {links.map(([title,href])=><a key={title} className="underline text-sm" href={href}>
         {title}</a>)}
      </div>
     </CardContent></Card>}
