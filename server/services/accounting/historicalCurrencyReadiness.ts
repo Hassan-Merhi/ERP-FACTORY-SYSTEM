@@ -23,7 +23,7 @@ export interface HistoricalCurrencyReadiness {
  */
 export async function getHistoricalCurrencyReadiness(
   companyId: number,
-  asOfDate?: string | null,
+  asOfDate?: string | null
 ): Promise<HistoricalCurrencyReadiness> {
   const READY_LEGACY: HistoricalCurrencyReadiness = {
     ready: true,
@@ -41,9 +41,7 @@ export async function getHistoricalCurrencyReadiness(
   };
 
   // Match the canonical ledger's booked-on cutoff, including backdated vouchers.
-  const dateClause = asOfDate
-    ? "AND COALESCE(v.effective_date, v.voucher_date) <= $2::date"
-    : "";
+  const dateClause = asOfDate ? "AND COALESCE(v.effective_date, v.voucher_date) <= $2::date" : "";
   const params: Array<number | string> = [companyId];
   if (asOfDate) params.push(asOfDate);
 
@@ -64,7 +62,7 @@ export async function getHistoricalCurrencyReadiness(
            ${dateClause}
            AND (ve.base_debit_amount IS NOT NULL OR ve.base_credit_amount IS NOT NULL)
        ) AS has_migrated`,
-      params,
+      params
     );
     const hasMigrated = migratedCheck.rows[0]?.has_migrated === true;
     if (!hasMigrated) {
@@ -102,7 +100,7 @@ export async function getHistoricalCurrencyReadiness(
            OR (COALESCE(ve.credit_amount,0) <> 0 AND ve.base_credit_amount IS NULL)
          )
          ${dateClause}`,
-      params,
+      params
     ),
     pool.query<{
       unresolved_ledger_openings: string;
@@ -181,7 +179,7 @@ export async function getHistoricalCurrencyReadiness(
              AND COALESCE(UPPER(fa.purchase_currency), 'USD') <> 'USD'
              AND fa.purchase_base_amount IS NULL
          )::text AS unresolved_fixed_assets`,
-      [companyId, asOfDate ?? null],
+      [companyId, asOfDate ?? null]
     ),
   ]);
 
@@ -189,16 +187,14 @@ export async function getHistoricalCurrencyReadiness(
   const unresolvedVoucherCount = Number.parseInt(entryResult.rows[0]?.unresolved_voucher_count || "0", 10) || 0;
   const unresolvedLedgerOpeningCount =
     Number.parseInt(openingResult.rows[0]?.unresolved_ledger_openings || "0", 10) || 0;
-  const unresolvedBankOpeningCount =
-    Number.parseInt(openingResult.rows[0]?.unresolved_bank_openings || "0", 10) || 0;
+  const unresolvedBankOpeningCount = Number.parseInt(openingResult.rows[0]?.unresolved_bank_openings || "0", 10) || 0;
   const unresolvedCustomerOpeningCount =
     Number.parseInt(openingResult.rows[0]?.unresolved_customer_openings || "0", 10) || 0;
   const unresolvedSupplierOpeningCount =
     Number.parseInt(openingResult.rows[0]?.unresolved_supplier_openings || "0", 10) || 0;
   const unresolvedEmployeeOpeningCount =
     Number.parseInt(openingResult.rows[0]?.unresolved_employee_openings || "0", 10) || 0;
-  const unresolvedFixedAssetCount =
-    Number.parseInt(openingResult.rows[0]?.unresolved_fixed_assets || "0", 10) || 0;
+  const unresolvedFixedAssetCount = Number.parseInt(openingResult.rows[0]?.unresolved_fixed_assets || "0", 10) || 0;
 
   return {
     legacyCompatibilityMode: false,
