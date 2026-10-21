@@ -158,6 +158,26 @@ describe("Voucher path review phases 5-8", () => {
     releasePhase5VoucherRequestIdentity("POST", "/api/credit-notes", distinctRequest, true);
   });
 
+  it("attaches a retry-stable identity to ERP, Properties, and Factory bulk rental envelopes", () => {
+    installMemoryStorage();
+    for (const module of ["erp", "properties", "factory"]) {
+      const path = `/api/${module}/rental/payments/bulk`;
+      const payload = {
+        items: [{ contractId: 1, cashAccountId: 2, amount: "125", paymentDate: "2026-10-21" }],
+      };
+      expect(isPhase5OperationalVoucherRequest("POST", path)).toBe(true);
+      const first = attachPhase5VoucherRequestIdentity("POST", path, payload) as typeof payload & {
+        clientRequestId: string;
+      };
+      const retry = attachPhase5VoucherRequestIdentity("POST", path, payload) as typeof payload & {
+        clientRequestId: string;
+      };
+      expect(first.clientRequestId).toBeTruthy();
+      expect(retry.clientRequestId).toBe(first.clientRequestId);
+      releasePhase5VoucherRequestIdentity("POST", path, first, true);
+    }
+  });
+
   it("retains Phase 5 identity across lost/uncertain responses", () => {
     installMemoryStorage();
     const payload = { receivedKg: "500", containerId: 42 };
