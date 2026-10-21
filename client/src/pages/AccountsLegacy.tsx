@@ -166,6 +166,13 @@ export default function Accounts() {
             Open Items
           </Button>
         )}
+        {showViewAccounts && !phoneStatementOpen &&
+          ["Admin","Owner","Developer"].includes(model.currentUser?.role ?? "") && (
+            <Button variant="outline" data-testid="button-cash-bank-reconciliation"
+              onClick={() => model.navigate(`${model.modePrefix}/accounting/cash-bank`)}>
+              Cash & Bank Reconciliation
+            </Button>
+          )}
         {showViewAccounts &&
           !phoneStatementOpen &&
           (model.currentUser?.role === "Admin" || model.currentUser?.role === "Developer") && (
