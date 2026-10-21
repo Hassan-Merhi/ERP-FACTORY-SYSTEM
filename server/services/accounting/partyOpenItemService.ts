@@ -132,6 +132,15 @@ async function loadEntriesTx(tx: DbTransaction, input: PartyOpenItemTarget): Pro
       FROM voucher_entries e JOIN vouchers v ON v.id=e.voucher_id
      WHERE v.company_id=${companyId} AND v.optional=false AND v.deleted_at IS NULL
        AND (${owned}) ${asOf}
+       -- An explicitly recognized FX difference closes the USD residual of
+       -- an already matched native-currency charge and payment. The matching
+       -- report must not turn the FX journal/reversal into a fresh invoice or
+       -- unallocated payment. Both remain fully posted in the GL.
+       AND NOT EXISTS (
+         SELECT 1 FROM accounting_fx_realizations fx
+          WHERE fx.company_id=v.company_id
+            AND (fx.voucher_id=v.id OR fx.voucher_id=v.reversal_of_voucher_id)
+       )
      ORDER BY COALESCE(v.effective_date,v.voucher_date),v.id,e.id
   `);
   return resultRows<EntryRow>(data);
