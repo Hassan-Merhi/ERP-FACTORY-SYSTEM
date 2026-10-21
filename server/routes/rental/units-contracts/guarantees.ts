@@ -106,6 +106,7 @@ export function registerRentalGuaranteeRoutes(app: Express, ctx: RentalRoutesCon
             const narration = `Guarantee paid - ${unitLabel}`;
             await postErpVoucherTx(tx, {
               companyId,
+              sourceModule: module,
               voucherType: "Payment",
               voucherDate: dateStr,
               description: narration,
@@ -130,6 +131,7 @@ export function registerRentalGuaranteeRoutes(app: Express, ctx: RentalRoutesCon
             const narration = `Guarantee deposit - ${unitLabel}`;
             await postErpVoucherTx(tx, {
               companyId,
+              sourceModule: module,
               voucherType: "Receipt",
               voucherDate: dateStr,
               description: narration,
@@ -235,6 +237,7 @@ export function registerRentalGuaranteeRoutes(app: Express, ctx: RentalRoutesCon
           : await findOrCreateLedgerAccount(tx, companyId, "Tenant Deposits", "Liability", "TENANT-DEP");
         const posted = await postErpVoucherTx(tx, {
           companyId,
+          sourceModule: module,
           voucherType: "Journal",
           voucherDate: dateStr,
           description: narration,
@@ -385,6 +388,7 @@ export function registerRentalGuaranteeRoutes(app: Express, ctx: RentalRoutesCon
           );
           const { voucher: v } = await postErpVoucherTx(tx, {
             companyId,
+            sourceModule: module,
             voucherType: "Journal",
             voucherDate: paymentDate,
             description: narration,
@@ -416,6 +420,7 @@ export function registerRentalGuaranteeRoutes(app: Express, ctx: RentalRoutesCon
           );
           const { voucher: v } = await postErpVoucherTx(tx, {
             companyId,
+            sourceModule: module,
             voucherType: "Journal",
             voucherDate: paymentDate,
             description: narration,
@@ -448,6 +453,7 @@ export function registerRentalGuaranteeRoutes(app: Express, ctx: RentalRoutesCon
           );
           const { voucher: v } = await postErpVoucherTx(tx, {
             companyId,
+            sourceModule: module,
             voucherType: "Journal",
             voucherDate: paymentDate,
             description: narration,
