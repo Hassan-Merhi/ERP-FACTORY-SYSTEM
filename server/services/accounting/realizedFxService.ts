@@ -199,7 +199,7 @@ export async function recognizeRealizedFxTx(tx:DbTransaction,input:{
   const bookDate=await companyBusinessDate(input.companyId,tx);
   await tx.execute(sql`SELECT erp_assert_accounting_date_open(${input.companyId},${bookDate}::date)`);
   const status=(await ensureSystemAccounts(tx,input.companyId,["FX-REALIZED"]))[0];
-  if(!status||!["ok","created","reused_by_name"].includes(status.state))
+  if(!status||!["ok","created"].includes(status.state))
     throw new MonetaryFxError("FX_GAIN_LOSS_ACCOUNT_UNAVAILABLE",
       "A valid Realized FX Gain/Loss system account is required");
   if(!("accountId" in status))throw new MonetaryFxError("FX_GAIN_LOSS_ACCOUNT_UNAVAILABLE",
