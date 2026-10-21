@@ -40,6 +40,8 @@ export interface PartyOpenItem {
   voucherNumber: string;
   voucherType: string;
   businessDate: string;
+  dueDate: string | null;
+  overdueDays: number | null;
   side: "charge" | "settlement";
   currency: string;
   originalAmount: string;
@@ -134,15 +136,17 @@ async function loadEntriesTx(tx: DbTransaction, input: PartyOpenItemTarget): Pro
   `);
   return resultRows<EntryRow>(data);
 }
-async function ensurePartyExistsTx(tx: DbTransaction, input: PartyOpenItemTarget): Promise<{ opening_balance: string | null; opening_balance_side: string | null }> {
+async function ensurePartyExistsTx(tx: DbTransaction, input: PartyOpenItemTarget): Promise<{ opening_balance: string | null; opening_balance_side: string | null; payment_terms_days: number | null }> {
   // Domain is an enum, so these are fixed trusted table names, never user SQL.
   const table = { customer: "customers", supplier: "suppliers", factory_supplier: "factory_suppliers" }[input.domain];
   // factory_suppliers has is_active, but no deleted_at column.
   const active = input.domain === "factory_supplier"
     ? sql`` : sql`AND deleted_at IS NULL`;
   const side = input.domain === "customer" ? sql`opening_balance_side` : sql`NULL::text`;
-  const row = resultRows<{ id: number; opening_balance: string | null; opening_balance_side: string | null }>(await tx.execute(sql`
-    SELECT id, opening_balance::text, ${side} AS opening_balance_side FROM ${sql.raw(table)}
+  const terms = input.domain === "customer" ? sql`payment_terms_days` : sql`NULL::integer`;
+  const row = resultRows<{ id: number; opening_balance: string | null; opening_balance_side: string | null; payment_terms_days: number | null }>(await tx.execute(sql`
+    SELECT id, opening_balance::text, ${side} AS opening_balance_side,
+      ${terms} AS payment_terms_days FROM ${sql.raw(table)}
     WHERE id=${input.partyId} AND company_id=${input.companyId} ${active} LIMIT 1
   `))[0];
   if (!row) throw new OpenItemError("OPEN_ITEM_PARTY_NOT_FOUND", "Party does not belong to this company", 404);
@@ -205,6 +209,7 @@ export async function loadPartyOpenItemsTx(
     ? (await loadHeldChargeSnapshot(target.companyId, [target.partyId], target.asOfDate)).voucherIds
     : new Set<number>();
   const currencies: OpenItemSummary["currencies"] = {};
+  const asOfBusinessDate=target.asOfDate??await companyBusinessDate(target.companyId,tx);
   const items: PartyOpenItem[] = [];
   for (const entry of entries) {
     if (held.has(Number(entry.voucher_id))) continue;
@@ -218,10 +223,19 @@ export async function loadPartyOpenItemsTx(
     const matched = allocated.get(Number(entry.entry_id)) ?? new Decimal(0);
     const outstanding = Decimal.max(new Decimal(0), original.minus(matched));
     const side = isCharge ? "charge" : "settlement";
+    const days = Number(party.payment_terms_days);
+    const invoiceLike = /^(sales?|invoice)$/i.test(String(entry.voucher_type).trim());
+    const dueDate = isCharge && target.domain === "customer" && invoiceLike &&
+      party.payment_terms_days !== null && Number.isInteger(days) && days >= 0 && days <= 3650
+        ? new Date(Date.parse(String(entry.booked_on).slice(0,10)+"T00:00:00Z")+
+            days*86400000).toISOString().slice(0,10) : null;
+    const overdueDays = dueDate && outstanding.gt(0) && dueDate<asOfBusinessDate
+      ? Math.max(0,Math.round((Date.parse(asOfBusinessDate+"T00:00:00Z")-
+          Date.parse(dueDate+"T00:00:00Z"))/86400000)) : null;
     items.push({
       entryId: Number(entry.entry_id), voucherId: Number(entry.voucher_id),
       voucherNumber: String(entry.voucher_number), voucherType: String(entry.voucher_type),
-      businessDate: String(entry.booked_on), side, currency: value.currency,
+      businessDate: String(entry.booked_on), dueDate, overdueDays, side, currency: value.currency,
       originalAmount: fmt(original), matchedAmount: fmt(matched),
       outstandingAmount: fmt(outstanding), currencyVerified: value.verified,
       status: matched.gt(original) ? "inconsistent"
