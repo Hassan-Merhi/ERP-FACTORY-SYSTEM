@@ -13,6 +13,7 @@ import {companyBusinessDate} from "./companyBusinessDate";
 import {fxDay} from "./monetaryFxRates";
 import {loadBalanceRows,type BalanceRow,type BalanceRowKind} from "./balances/ledgerBalanceEngine";
 import {buildTrialBalance} from "./integrity/trialBalance";
+import {isIndirectIncome} from "./accountClassification";
 import {financialStatementCategory} from "./unifiedAccountingFoundation";
 
 type Classification="asset"|"liability"|"equity"|"income"|"cost_of_sales"|"expense"|"unknown";
@@ -41,7 +42,7 @@ export interface SinglePeriodFinancialStatements{
   assetsMinusLiabilitiesAndEquityUsd:string;balanced:boolean;
  };
  profitAndLoss:{
-  revenue:StatementSection;costOfSales:StatementSection;
+  revenue:StatementSection;otherIncome:StatementSection;costOfSales:StatementSection;
   operatingExpenses:StatementSection;
   grossProfitUsd:string;operatingResultUsd:string;
   periodNetResultUsd:string;
@@ -222,7 +223,7 @@ async function statementTx(tx:DbTransaction,input:{companyId:number;fromDate:str
  ]);
  const subtypes=new Map(resultRows<MetaRow>(subtypeRows).map(r=>[Number(r.id),r.sub_type]));
  const assets=empty(),liabilities=empty(),equity=empty(),unknown=empty();
- const revenue=empty(),costOfSales=empty(),operatingExpenses=empty();
+ const revenue=empty(),otherIncome=empty(),costOfSales=empty(),operatingExpenses=empty();
  const financialLine=(row:BalanceRow,category:Classification):StatementLine=>({
   kind:row.kind,id:row.id,code:row.code,name:row.name,
   accountType:row.accountType,category,amountUsd:"0.00",
@@ -260,12 +261,18 @@ async function statementTx(tx:DbTransaction,input:{companyId:number;fromDate:str
   const movement=row.periodDebit.minus(row.periodCredit);
   if(movement.isZero())continue;
   const item=financialLine(row,role);
-  if(role==="income")append(revenue,item,movement.negated());
+  if(role==="income"){
+   const code=String(row.code??"").toUpperCase();
+   const other=isIndirectIncome(row.accountType,row.id===null?null:subtypes.get(row.id))||
+     code==="OTHER_INCOME"||code.startsWith("OTHER_INCOME-")||
+     code==="FX-REALIZED"||code.startsWith("FX-REALIZED-");
+   append(other?otherIncome:revenue,item,movement.negated());
+  }
   else if(role==="cost_of_sales")append(costOfSales,item,movement);
   else if(role==="expense")append(operatingExpenses,item,movement);
  }
  const gross=dec(revenue.totalUsd).minus(costOfSales.totalUsd);
- const result=gross.minus(operatingExpenses.totalUsd);
+ const result=gross.plus(otherIncome.totalUsd).minus(operatingExpenses.totalUsd);
  const adjEquity=dec(equity.totalUsd).plus(earnings);
  const otherEquityMovements=adjEquity.minus(openingTotalEquity).minus(result);
  const equityBridgeDifference=openingTotalEquity.plus(result)
@@ -304,7 +311,7 @@ async function statementTx(tx:DbTransaction,input:{companyId:number;fromDate:str
    balanced:trial.balanced&&mismatch.abs().lte("0.01")
   },
   profitAndLoss:{
-   revenue,costOfSales,operatingExpenses,grossProfitUsd:fmt(gross),
+   revenue,otherIncome,costOfSales,operatingExpenses,grossProfitUsd:fmt(gross),
    operatingResultUsd:fmt(result),periodNetResultUsd:fmt(result),
    priorPeriodClosingJournalsExcluded:true
   },
