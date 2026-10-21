@@ -107,6 +107,9 @@ export async function upsertAnalyticCenterTx(tx:DbTransaction,input:{
   throw new AnalyticError("ANALYTIC_MODULE_INVALID","Invalid module",400);
  const today=await companyBusinessDate(companyId,tx);
  await openDayTx(tx,companyId,today);
+ // Serialize hierarchy writes to make parent-chain checks stable under
+ // simultaneous creation/reparenting.
+ await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${`cost-center-tree:${companyId}`}))`);
  if(input.parentId){
   const parent=await centerTx(tx,companyId,input.parentId);
   if(!parent.active)throw new AnalyticError("ANALYTIC_PARENT_INACTIVE","Parent cost center is inactive");
