@@ -28,7 +28,7 @@ export class FiscalReviewError extends Error{
 type Row=Record<string,unknown>;
 type EvidenceRow=Row&{posted_vouchers:string;posted_lines:string;lines_digest:string;
  missing_ledger_targets:string;unbalanced_balanced_type:string;
- non_usd_untranslated:string;optional_vouchers:string;
+ non_usd_untranslated:string;pnl_base_mismatch:string;optional_vouchers:string;
  latest_entry_id:string|null;postings_without_actor:string;
 };
 type ClosureRow=Row&{id:number;period_start_date:string;period_end_date:string;closing_voucher_id:number;
@@ -44,7 +44,7 @@ export interface FiscalReadiness{
   singleSidedStockDifferenceUsd:string;otherDifferenceUsd:string;assumedOpeningSides:number};
  source:{postedVouchers:number;postedVoucherLines:number;sourceDigest:string;
   balancedVoucherErrors:number;missingLedgerTargets:number;
-  nonUsdUntranslatedLines:number;optionalVouchers:number;
+  nonUsdUntranslatedLines:number;pnlBaseAmountMismatchLines:number;optionalVouchers:number;
   postingsWithoutActor:number};
  history:{latestClosedEnd:string|null;expectedNextStart:string|null;
   closedPeriods:Array<{id:number;from:string;to:string;voucherId:number;netIncomeUsd:string}>;
@@ -95,6 +95,11 @@ export async function fiscalReadinessTx(tx:DbTransaction,input:{
  if(start>end)throw new FiscalReviewError("FISCAL_PERIOD_INVALID","End date must be on or after start date",400);
  const today=await companyBusinessDate(companyId,tx);
  const blockers:string[]=[],warnings:string[]=[];
+ const books=resultRows<Row&{base_currency:string|null}>(await tx.execute(sql`
+  SELECT base_currency FROM companies WHERE id=${companyId}
+ `))[0];
+ if(!books||String(books.base_currency??"USD").trim().toUpperCase()!=="USD")
+  blockers.push("Reviewed close requires a USD functional company; foreign functional currencies need a certified translation policy");
  if(end>=today)blockers.push("Period close requires an ended accounting period before today's company-local business date");
  // Every close candidate is checked against the company-only chart account,
  // and the existing writer retains its own independent equity-side validation.
@@ -181,6 +186,16 @@ export async function fiscalReadinessTx(tx:DbTransaction,input:{
   (SELECT COUNT(*)::text FROM live_lines
     WHERE UPPER(COALESCE(currency,'USD'))<>'USD'
       AND base_debit_amount IS NULL AND base_credit_amount IS NULL) AS non_usd_untranslated,
+  (SELECT COUNT(*)::text FROM live_lines l
+    JOIN ledger_accounts la ON la.id=l.ledger_account_id AND la.company_id=${companyId}
+    WHERE LOWER(TRIM(la.account_type)) IN
+     ('income','revenue','direct income','indirect income',
+      'expense','direct expense','indirect expense','government taxes','cogs')
+      AND (ABS(COALESCE(l.base_debit_amount,l.debit_amount,0)-
+          COALESCE(l.debit_amount,0))>0.01
+        OR ABS(COALESCE(l.base_credit_amount,l.credit_amount,0)-
+          COALESCE(l.credit_amount,0))>0.01)
+  ) AS pnl_base_mismatch,
   (SELECT COUNT(*)::text FROM active_vouchers WHERE optional=true) AS optional_vouchers,
   (SELECT MAX(entry_id)::text FROM live_lines) AS latest_entry_id,
   (SELECT COUNT(DISTINCT voucher_id)::text FROM live_lines
@@ -210,6 +225,7 @@ export async function fiscalReadinessTx(tx:DbTransaction,input:{
   balancedVoucherErrors:num(e?.unbalanced_balanced_type),
   missingLedgerTargets:num(e?.missing_ledger_targets),
   nonUsdUntranslatedLines:num(e?.non_usd_untranslated),
+  pnlBaseAmountMismatchLines:num(e?.pnl_base_mismatch),
   optionalVouchers:num(e?.optional_vouchers),
   postingsWithoutActor:num(e?.postings_without_actor)
  };
@@ -222,6 +238,8 @@ export async function fiscalReadinessTx(tx:DbTransaction,input:{
  if(source.balancedVoucherErrors)blockers.push(`${source.balancedVoucherErrors} live voucher(s) of balanced types have unequal debit and credit`);
  if(source.missingLedgerTargets)blockers.push(`${source.missingLedgerTargets} posted line(s) target another company's or a missing ledger account`);
  if(source.nonUsdUntranslatedLines)blockers.push(`${source.nonUsdUntranslatedLines} foreign-currency lines lack historical USD base amounts`);
+ if(source.pnlBaseAmountMismatchLines)blockers.push(
+  `${source.pnlBaseAmountMismatchLines} income/expense lines have historical USD base amounts different from legacy debit/credit; the existing close writer must be reviewed before certification`);
  if(!protections.voucherDateGuardInstalled||!protections.entryDateGuardInstalled||
     !protections.auditChainInstalled||!protections.openingBalanceGuardInstalled)
   blockers.push("A required closed-period, opening-balance or audit-hash database trigger is missing/disabled");
