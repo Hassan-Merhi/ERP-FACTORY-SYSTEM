@@ -113,6 +113,20 @@ export default function UnifiedAccountingRollout(){
  const d=readiness.data;
  const selectedMode=policy.data?.releaseMode??"READ_ONLY";
  const hasReview=(kind:Kind)=>d?.releaseReviews.some(x=>x.kind===kind&&!x.revoked);
+ const pageForPhase=(phase:number,erpPath:string):string|null=>{
+  if(prefix==="/factory"){
+   if(phase===2)return"/factory/vouchers";
+   if(phase===6)return null; // ERP stock audit has no Factory route
+   if(phase===7)return"/factory/accounting/production";
+   return "/factory"+erpPath;
+  }
+  if(prefix==="/properties"){
+   if(phase===2)return"/properties/vouchers";
+   if(phase===6||phase===7)return null; // no Property-mode stock page
+   return "/properties"+erpPath;
+  }
+  return erpPath;
+ };
  const launchReady=!!d?.eligibleForExternalReview&&
   !!d.reviewsComplete&&!!d.deployedSha;
  return <div className="p-3 sm:p-5 space-y-5" data-testid="unified-accounting-rollout">
@@ -290,8 +304,12 @@ export default function UnifiedAccountingRollout(){
       className="flex flex-wrap gap-2 items-center justify-between border-b py-2 text-sm">
       <div><span className="font-semibold">Phase {entry.phase}</span> · {entry.title}
        <p className="text-xs text-muted-foreground">Source committed · pending verification</p></div>
-      <Button size="sm" variant="outline"
-       onClick={()=>go(prefix+entry.erpPath)}>Open page</Button>
+      {pageForPhase(entry.phase,entry.erpPath)?
+       <Button size="sm" variant="outline"
+        onClick={()=>go(pageForPhase(entry.phase,entry.erpPath)!)}>
+        Open page
+       </Button>:
+       <span className="text-xs text-muted-foreground">Available in ERP accounting</span>}
      </div>)}
    </CardContent></Card>}
  </div>;
