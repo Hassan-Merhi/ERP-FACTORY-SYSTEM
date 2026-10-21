@@ -67,8 +67,12 @@ async function contractTx(tx:DbTransaction,companyId:number,module:RentalOriginM
   "Rental contract not found in the selected company/module",404);
  return row;
 }
-function perspective(module:RentalOriginModule){
- return module==="PROPERTIES"?"LANDLORD" as const:"TENANT" as const;
+// Mirror the EXISTING payment writer: shop or shared leases pay rent (tenant),
+// warehouse/non-shop leases collect rent (landlord). The module alone does
+// not decide the direction: ERP and Factory also rent out warehouses.
+function perspective(contract:Pick<RentalContractRecord,"unit_type"|"linked_company_id">){
+ return contract.unit_type==="SHOP"||contract.linked_company_id!==null
+  ?"TENANT" as const:"LANDLORD" as const;
 }
 export async function listRentalAccountingContractsTx(tx:DbTransaction,input:{
  companyId:number;module:RentalOriginModule
@@ -88,8 +92,9 @@ export async function listRentalAccountingContractsTx(tx:DbTransaction,input:{
  LIMIT 500
  `));
  return {
-  companyId:input.companyId,module:input.module,perspective:perspective(input.module),
+  companyId:input.companyId,module:input.module,perspective:"MIXED_BY_CONTRACT" as const,
   limitedTo:500,contracts:rows.map(c=>({
+   perspective:perspective(c),
    id:Number(c.id),unitId:Number(c.unit_id),unitNumber:c.unit_number,
    unitType:c.unit_type,locationGroup:c.location_group,
    tenantName:c.tenant_name,status:c.status,currency:String(c.currency??"USD").toUpperCase(),
@@ -241,6 +246,14 @@ export async function rentalContractAccountingTx(tx:DbTransaction,input:{
   "The contract's current rent, unit ownership and status are not historical snapshots. Posted payments are date-filtered; past contract terms may differ.");
  if(contract.linked_company_id)warnings.push(
   "Shared/intercompany rental: this report covers only the owning company's postings. Linked-company cash/accrual entries must be reconciled separately.");
+ if(perspective(contract)==="TENANT" && deposits.some(row=>{
+   const code=String(row.account_code??"").toUpperCase();
+   return code==="TENANT-DEP"||code.startsWith("TENANT-DEP-");
+ }))warnings.push("This tenant-side lease has deposit postings to a landlord liability account; review the original guarantee accounting before relying on the balance.");
+ if(perspective(contract)==="LANDLORD" && deposits.some(row=>{
+   const code=String(row.account_code??"").toUpperCase();
+   return code==="SEC-DEP-PAID"||code.startsWith("SEC-DEP-PAID-");
+ }))warnings.push("This landlord-side lease has deposit postings to a tenant deposit-asset account; review the original guarantee accounting before relying on the balance.");
  const depositPledge=fixed(d(contract.guarantee_amount));
  const depositEvidence=deposits.map(e=>({
    voucherId:Number(e.id),voucherNumber:e.voucher_number,date:e.booked_on,
@@ -257,7 +270,7 @@ export async function rentalContractAccountingTx(tx:DbTransaction,input:{
   ledgerRowId:p.ledger_row_id
  }));
  return{
-  companyId:input.companyId,module:input.module,perspective:perspective(input.module),
+  companyId:input.companyId,module:input.module,perspective:perspective(contract),
   asOfDate:date,contract:{
    id:Number(contract.id),unitId:Number(contract.unit_id),unitNumber:contract.unit_number,
    unitType:contract.unit_type,locationGroup:contract.location_group,
@@ -285,7 +298,7 @@ export async function rentalContractAccountingTx(tx:DbTransaction,input:{
   })),
   warnings,
   limitations:{
-    outstandingType:perspective(input.module)==="LANDLORD"?"OPERATING_RENT_AR":"OPERATING_RENT_AP",
+    outstandingType:perspective(contract)==="LANDLORD"?"OPERATING_RENT_AR":"OPERATING_RENT_AP",
     notAGlBalance:"Outstanding rent is contract-month expected less POSTED rent payment allocations, not a reconstructed per-contract general-ledger balance. Shared accrual vouchers are linked to periods but may aggregate contracts.",
     deposit:"Deposit balance evidence is from contract-scoped GUAR vouchers on deposit asset/liability accounts. Native pledge and USD book balance are displayed separately; do not sum across currencies.",
     maintenance:"Maintenance/expense links are references to USD base debits on live posted vouchers, not extra expenses or a second accounting journal.",
