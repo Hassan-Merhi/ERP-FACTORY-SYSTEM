@@ -165,7 +165,7 @@ async function containersTx(tx:DbTransaction,companyId:number,asOf:string,histor
    };
  });
 }
-async function invoicesTx(tx:DbTransaction,companyId:number,asOf:string,cutover:string|null):Promise<FactoryInvoiceAudit[]>{
+async function invoicesTx(tx:DbTransaction,companyId:number,asOf:string,cutover:string|null,historical:boolean):Promise<FactoryInvoiceAudit[]>{
  const rows=resultRows<InvoiceRow>(await tx.execute(sql`
   SELECT co.id,co.status,co.invoice_number,co.container_number,
    COALESCE(co.finalized_at,co.created_at)::date::text AS invoice_date,
@@ -175,12 +175,14 @@ async function invoicesTx(tx:DbTransaction,companyId:number,asOf:string,cutover:
    COALESCE(ch.unverified,0)::int AS unverified_charges,
    COALESCE(ch.premature,0)::int AS premature_charge_vouchers,
    iv.id AS journal_id,COALESCE(iv.effective_date,iv.voucher_date)::text AS journal_date,
-   gl.receivable_native::text AS posted_receivable_native,
+   (CASE WHEN COALESCE(UPPER(b.currency),'USD')='USD' THEN gl.receivable_base
+         ELSE gl.receivable_native END)::text AS posted_receivable_native,
    gl.receivable_base::text AS posted_receivable_base,
    gl.cogs::text AS posted_cogs,gl.finished_credit::text AS posted_finished_credit,
    COALESCE(ba.cost,0)::text AS cost,COALESCE(ba.unvalued,0)::int AS unvalued_bales,
    COALESCE(ba.bales,0)::int AS bales
   FROM customer_orders co
+  LEFT JOIN customer_dispatch_batches b ON b.id=co.dispatch_batch_id AND b.company_id=co.company_id
   LEFT JOIN vouchers iv ON iv.company_id=co.company_id
     AND iv.voucher_number='INV-GL-' || co.company_id::text || '-' || co.id::text
     AND iv.deleted_at IS NULL AND iv.optional=false
@@ -218,10 +220,12 @@ async function invoicesTx(tx:DbTransaction,companyId:number,asOf:string,cutover:
   ) ch ON true
   LEFT JOIN LATERAL(
    SELECT CASE WHEN COUNT(*) FILTER (WHERE ve.customer_id=co.customer_id
-                              AND ve.debit_amount>0 AND ve.transaction_debit_amount IS NULL)>0
-               THEN NULL
-               ELSE SUM(CASE WHEN ve.customer_id=co.customer_id AND ve.debit_amount>0
-                  THEN ve.transaction_debit_amount ELSE 0 END) END AS receivable_native,
+       AND (ve.debit_amount>0 OR ve.credit_amount>0)
+       AND (ve.transaction_debit_amount IS NULL OR ve.transaction_credit_amount IS NULL))>0
+      THEN NULL
+      ELSE SUM(CASE WHEN ve.customer_id=co.customer_id THEN
+        COALESCE(ve.transaction_debit_amount,0)-COALESCE(ve.transaction_credit_amount,0)
+      ELSE 0 END) END AS receivable_native,
      SUM(CASE WHEN ve.customer_id=co.customer_id
                     THEN ve.debit_amount-ve.credit_amount ELSE 0 END) AS receivable_base,
      SUM(CASE WHEN la.code='COGS' THEN ve.debit_amount-ve.credit_amount ELSE 0 END) AS cogs,
@@ -243,24 +247,25 @@ async function invoicesTx(tx:DbTransaction,companyId:number,asOf:string,cutover:
    const cutoverCost=isFinal&&!!cutover&&dated>=cutover;
    const nativeExpected=value(r.grand_total).minus(r.verified_charges);
    const cost=value(r.cost);
-   if(!isFinal && hasInvoice)issues.push("Unfinalized order has an active customer invoice voucher");
-   if(!isFinal && r.premature_charge_vouchers>0)
+   if(historical)issues.push("Historical order status, postings and bale cost are not reconstructed; inspect current state only");
+   if(!historical && !isFinal && hasInvoice)issues.push("Unfinalized order has an active customer invoice voucher");
+   if(!historical && !isFinal && r.premature_charge_vouchers>0)
      issues.push("Unfinalized order has posted customer charge voucher(s)");
-   if(isFinal && !hasInvoice && (value(r.grand_total).abs().gt(0)||cost.gt(0)))
+   if(!historical && isFinal && !hasInvoice && (value(r.grand_total).abs().gt(0)||cost.gt(0)))
      issues.push("Finalized invoice is missing a live accounting voucher");
-   if(isFinal && r.unverified_charges>0)
+   if(!historical && isFinal && r.unverified_charges>0)
      issues.push("Finalized charge voucher link is missing or inactive");
-   if(isFinal && hasInvoice && r.journal_date!==dated)
+   if(!historical && isFinal && hasInvoice && r.journal_date!==dated)
      issues.push("Invoice journal date differs from finalization business date");
-   if(cutoverCost && r.unvalued_bales>0)
+   if(!historical && cutoverCost && r.unvalued_bales>0)
      issues.push("Finalized bales include unvalued material cost");
-   if(cutoverCost && hasInvoice &&
+   if(!historical && cutoverCost && hasInvoice &&
      (absDiff(r.posted_cogs,cost).gt("0.01")||
       absDiff(r.posted_finished_credit,cost).gt("0.01")))
      issues.push("COGS or Finished Goods credit differs from recorded bale cost");
-   if(isFinal && hasInvoice && r.posted_receivable_native===null)
+   if(!historical && isFinal && hasInvoice && r.posted_receivable_native===null)
      issues.push("Invoice customer receivable has no original currency evidence");
-   if(isFinal && hasInvoice && r.posted_receivable_native!==null &&
+   if(!historical && isFinal && hasInvoice && r.posted_receivable_native!==null &&
        r.unverified_charges===0 && absDiff(r.posted_receivable_native,nativeExpected).gt("0.01"))
      issues.push("Invoice receivable differs from order less vouchered charges (verify native FX)");
    const critical=[
@@ -319,11 +324,11 @@ export async function factoryProductionAccountingAuditTx(tx:DbTransaction,input:
       AND deleted_at IS NULL AND optional=false LIMIT 1
  `))[0];
  const [containers,invoices]=await Promise.all([
-  containersTx(tx,companyId,day,day!==now),invoicesTx(tx,companyId,day,cut?.effectiveFrom??null)
+  containersTx(tx,companyId,day,day!==now),invoicesTx(tx,companyId,day,cut?.effectiveFrom??null,day!==now)
  ]);
  const warnings:string[]=[];
  if(day!==now)warnings.push(
-  "Factory raw, WIP and finished-goods costing is current, NOT an as-of valuation. Historical GL-to-cost comparison withheld."
+  "Factory costs, order statuses and voucher lifecycle are current, NOT reconstructed as of the selected date. Financial discrepancies and historical GL-to-cost comparison are withheld."
  );
  if(!cut)warnings.push("Perpetual inventory cutover is not applied. Factory daily stock journal not required.");
  if(!PERPETUAL_INVENTORY_POSTING_READY)
