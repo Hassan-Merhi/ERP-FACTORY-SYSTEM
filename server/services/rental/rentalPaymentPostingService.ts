@@ -409,26 +409,8 @@ export async function createRentalPaymentGroup(opts: RentalPaymentGroupOptions) 
     err.status = 400;
     throw err;
   }
-  // Phase 19 (B), PE2: the recorded dated rate, never the client's (it was
-  // defaulted to "1"); `exchangeRate` from the request is not used.
+  // The client-supplied FX rate is never trusted; a dated recorded rate is used.
   void exchangeRate;
-  const recordedRate = await recordedRentalPaymentRate(companyId, currency || "USD", paymentDate);
-
-  const billingDay = getRentalBillingDay(contract.startDate as string);
-  // A non-numeric amount allocates nothing (the caller refuses an empty allocation).
-  const totalAmountExact = parseMoneyInput(amount) ?? 0;
-
-  const { year: startY, month: startM } = await findEarliestOutstandingMonth(contract.id, billingDay, paymentDate);
-
-  const allocations = await buildAllocationsForPayment(
-    contract.id,
-    startY,
-    startM,
-    totalAmountExact,
-    contract.rentalAmount as string,
-    billingDay,
-    paymentDate
-  );
 
   const identity = rentalPaymentGroupIdentity({
     companyId,
@@ -473,6 +455,23 @@ export async function createRentalPaymentGroup(opts: RentalPaymentGroupOptions) 
         return { scheduledRows: previous, postedNow: false, replayed: true };
       }
     }
+    // Serializing allocation on the contract prevents two payment requests
+    // from selecting the same outstanding months concurrently.
+    await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${`rental-contract:${contractCompanyId}:${contract.id}`}))`);
+    const recordedRate = await recordedRentalPaymentRate(companyId, currency || "USD", paymentDate);
+    const billingDay = getRentalBillingDay(contract.startDate as string);
+    const totalAmountExact = parseMoneyInput(amount) ?? 0;
+    const { year: startY, month: startM } = await findEarliestOutstandingMonth(contract.id, billingDay, paymentDate);
+    const allocations = await buildAllocationsForPayment(
+      contract.id,
+      startY,
+      startM,
+      totalAmountExact,
+      contract.rentalAmount as string,
+      billingDay,
+      paymentDate
+    );
+
     for (const alloc of allocations) {
       const allocDueDate = getRentalPeriodDueDate(alloc.year, alloc.month, billingDay);
       const allocIsDue = allocDueDate <= paymentDate;
