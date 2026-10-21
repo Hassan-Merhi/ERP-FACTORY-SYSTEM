@@ -97,6 +97,27 @@ export async function ensureAnalyticAccountingSchema(pool:Pool):Promise<void>{
    END IF;
  END $analytic_fk$;
 
+ -- A company-scoped analytic record must not reference another
+ -- company's voucher line, even through direct SQL rather than the API.
+ CREATE OR REPLACE FUNCTION analytic_validate_entry_company()
+ RETURNS TRIGGER LANGUAGE plpgsql AS $analytic_entry_company$
+ DECLARE original_company INTEGER;
+ BEGIN
+  SELECT company_id INTO original_company
+  FROM voucher_entries WHERE id=NEW.voucher_entry_id;
+  IF NOT FOUND OR original_company IS DISTINCT FROM NEW.company_id THEN
+    RAISE EXCEPTION 'ANALYTIC_VOUCHER_ENTRY_COMPANY_MISMATCH'
+      USING ERRCODE='23514';
+  END IF;
+  RETURN NEW;
+ END $analytic_entry_company$;
+ DROP TRIGGER IF EXISTS analytic_entry_company_guard
+   ON accounting_cost_allocations;
+ CREATE TRIGGER analytic_entry_company_guard
+   BEFORE INSERT OR UPDATE OF company_id,voucher_entry_id
+   ON accounting_cost_allocations FOR EACH ROW
+   EXECUTE FUNCTION analytic_validate_entry_company();
+
  ALTER TABLE accounting_cost_centers ENABLE ROW LEVEL SECURITY;
  ALTER TABLE accounting_cost_centers FORCE ROW LEVEL SECURITY;
  ALTER TABLE accounting_cost_allocations ENABLE ROW LEVEL SECURITY;
