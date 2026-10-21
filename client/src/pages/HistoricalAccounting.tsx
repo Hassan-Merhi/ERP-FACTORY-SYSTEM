@@ -109,6 +109,7 @@ type Workpaper = {
   };
   historicalFx: {
     ready: boolean;
+    legacyCompatibilityMode: boolean;
     unresolvedEntryCount: number;
     unresolvedVoucherCount: number;
     unresolvedLedgerOpeningCount: number;
@@ -478,9 +479,11 @@ export default function HistoricalAccounting() {
                 </div>
                 <p className="text-sm">
                   Historical currency readiness:{" "}
-                  {selected.historicalFx.ready
-                    ? "Existing compatibility gate passed (not certification)"
-                    : "Unresolved entries detected"}
+                  {selected.historicalFx.legacyCompatibilityMode
+                    ? "Legacy compatibility mode — historical USD conversion unverified"
+                    : selected.historicalFx.ready
+                      ? "Historical base-field completeness passed (not certification)"
+                      : "Unresolved historical non-USD entries or openings detected"}
                   .
                 </p>
                 <p className="text-xs text-muted-foreground">{selected.historicalFx.note}</p>
