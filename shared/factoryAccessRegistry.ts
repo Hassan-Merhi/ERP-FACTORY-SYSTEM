@@ -46,7 +46,7 @@ export const FACTORY_ACCESS_REGISTRY: readonly FactoryPageDefinition[] = [
     label: "Accounts",
     group: "Finance",
     route: "/factory/accounts",
-    aliases: ["/factory/ledger-monthly", "/factory/ledger-vouchers", "/factory/create"],
+    aliases: ["/factory/ledger-monthly", "/factory/ledger-vouchers", "/factory/create", "/factory/accounting/open-items"],
     pinned: true,
     landing: true,
   },
