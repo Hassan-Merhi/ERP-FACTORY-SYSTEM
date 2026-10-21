@@ -44,6 +44,12 @@ export async function enforceUnifiedAccountingRollout(
  if(!req.session?.userId||!req.session?.currentCompanyId)
   return res.status(401).json({code:"ACCOUNTING_ROLLOUT_AUTH_REQUIRED",
    message:"Sign in and select a company"});
+ const role=String(req.session.currentRole??req.user?.role??"");
+ if(!["Admin","Owner","Developer"].includes(role))
+  return res.status(403).json({
+   code:"ACCOUNTING_ROLLOUT_ACCESS_DENIED",
+   message:"Accounting metadata writes require the selected company's privileged accounting role"
+  });
  if(type==="FINANCIAL_POSTING")
   return res.status(423).json({
    code:"ACCOUNTING_POSTING_NOT_CERTIFIED",
