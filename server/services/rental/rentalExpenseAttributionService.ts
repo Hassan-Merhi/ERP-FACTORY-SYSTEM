@@ -84,7 +84,9 @@ export async function listRentalExpenseLinksTx(tx:DbTransaction,input:{
   FROM accounting_rental_expense_links l
   JOIN vouchers v ON v.id=l.voucher_id AND v.company_id=l.company_id
   WHERE l.company_id=${input.companyId} AND l.module=${input.module}
-    AND l.contract_id=${input.contractId} AND l.voided_at IS NULL
+    AND l.contract_id=${input.contractId}
+    AND l.tagged_at::date<=${date}::date
+    AND (l.voided_at IS NULL OR l.voided_at::date>${date}::date)
     AND v.deleted_at IS NULL AND v.optional=false
     AND COALESCE(v.effective_date,v.voucher_date)<=${date}::date
   ORDER BY l.id DESC LIMIT 500
@@ -93,9 +95,13 @@ export async function listRentalExpenseLinksTx(tx:DbTransaction,input:{
 export async function linkRentalExpenseTx(tx:DbTransaction,input:{
  companyId:number;module:RentalOriginModule;contractId:number;voucherId:number;
  category:ExpenseCategory;amountUsd:string;note?:string|null;
+ clientRequestKey:string;
  actor:{userId:string;username:string}
 }){
  validId(input.voucherId,"voucherId");
+ if(!/^[A-Za-z0-9._:-]{8,128}$/.test(input.clientRequestKey))
+  throw new RentalAccountingError("RENTAL_REQUEST_KEY_INVALID",
+    "Provide a stable 8–128 character request ID for retries",400);
  if(!RENTAL_EXPENSE_CATEGORIES.includes(input.category))
   throw new RentalAccountingError("RENTAL_CATEGORY_INVALID","Invalid property expense category",400);
  const amount=money(input.amountUsd);
@@ -111,6 +117,23 @@ export async function linkRentalExpenseTx(tx:DbTransaction,input:{
  await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${`rental-voucher-allocation:${input.companyId}:${input.voucherId}`}))`);
  await tx.execute(sql`SELECT id FROM vouchers WHERE company_id=${input.companyId}
    AND id=${input.voucherId} FOR UPDATE`);
+ const previous=resultRows<{id:number;contract_id:number;voucher_id:number;
+  module:string;category:string;allocated_usd:string;note:string|null;voided_at:string|null}&Record<string,unknown>>(
+  await tx.execute(sql`
+    SELECT id,contract_id,voucher_id,module,category,allocated_usd::text,note,voided_at::text
+    FROM accounting_rental_expense_links WHERE company_id=${input.companyId}
+      AND client_request_key=${input.clientRequestKey} LIMIT 1
+  `)
+ )[0];
+ if(previous){
+  if(previous.voided_at || Number(previous.contract_id)!==input.contractId ||
+    Number(previous.voucher_id)!==input.voucherId||previous.module!==input.module ||
+    previous.category!==input.category||!money(previous.allocated_usd).eq(amount) ||
+    (previous.note??null)!==(input.note??null))
+    throw new RentalAccountingError("RENTAL_REQUEST_CONFLICT",
+      "The request ID already belongs to a different or cancelled attribution",409);
+  return{id:Number(previous.id),amountUsd:fmt(amount),replayed:true};
+ }
  const voucher=await voucherExpenseTx(tx,input.companyId,input.voucherId);
  const effective=fxDay(voucher.effective_on);
  const today=await companyBusinessDate(input.companyId,tx);
@@ -130,10 +153,10 @@ export async function linkRentalExpenseTx(tx:DbTransaction,input:{
      `Expense allocation exceeds this voucher's available expense debit USD (${capacity.minus(allocated).toFixed(6)} remaining)`,409);
  const inserted=resultRows<{id:number}&Record<string,unknown>>(await tx.execute(sql`
   INSERT INTO accounting_rental_expense_links
-   (company_id,module,contract_id,unit_id,voucher_id,category,allocated_usd,note,tagged_by)
+   (company_id,module,contract_id,unit_id,voucher_id,category,allocated_usd,note,tagged_by,client_request_key)
   VALUES(${input.companyId},${input.module},${input.contractId},${contract.unit_id},
    ${input.voucherId},${input.category},${fmt(amount)}::numeric,
-   ${input.note??null},${input.actor.userId})
+   ${input.note??null},${input.actor.userId},${input.clientRequestKey})
   RETURNING id
  `))[0];
  if(!inserted)throw new RentalAccountingError("RENTAL_LINK_FAILED","Property expense was not linked");
@@ -143,7 +166,7 @@ export async function linkRentalExpenseTx(tx:DbTransaction,input:{
   changes:{contractId:{new:input.contractId},voucherId:{new:input.voucherId},
    category:{new:input.category},allocatedUsd:{new:fmt(amount)},note:{new:input.note??null}}
  },tx);
- return{id:Number(inserted.id),amountUsd:fmt(amount)};
+ return{id:Number(inserted.id),amountUsd:fmt(amount),replayed:false};
 }
 export async function voidRentalExpenseLinkTx(tx:DbTransaction,input:{
  companyId:number;linkId:number;reason:string;actor:{userId:string;username:string}
