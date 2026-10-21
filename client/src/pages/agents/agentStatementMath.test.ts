@@ -172,10 +172,13 @@ describe("balanceSideLabel", () => {
 });
 
 describe("Factory Parties balance parity in the Agent Ledger", () => {
-  it("uses the customer\u0027s projected amount only on display, preserving the original GL account", () => {
+  it("uses the customer's projected amount only on display, preserving the original GL account", () => {
     const raw = makeAccount({
-      type: "ledger", balance: 1594700.16, balanceSide: "Dr",
-      partyBalance: "1594615.16", partyBalanceSide: "Dr",
+      type: "ledger",
+      balance: 1594700.16,
+      balanceSide: "Dr",
+      partyBalance: "1594615.16",
+      partyBalanceSide: "Dr",
     });
     const display = withPartyDisplayBalance(raw);
     expect(display).toMatchObject({ balance: 1594615.16, balanceSide: "Dr" });
@@ -189,18 +192,32 @@ describe("Factory Parties balance parity in the Agent Ledger", () => {
       transactions: [posted],
       notInLedger: {
         rows: [
-          { voucherNumber: "INV-OLD", voucherDate: "2026-09-01", voucherDescription: "Older finalized invoice",
-            debitAmount: "400.00", creditAmount: "0.00", amountUsd: "400.00" },
-          { voucherNumber: "EUR-NO-RATE", voucherDate: "2026-09-02", voucherDescription: "No USD equivalent",
-            debitAmount: "100.00", creditAmount: "0.00", amountUsd: null },
+          {
+            voucherNumber: "INV-OLD",
+            voucherDate: "2026-09-01",
+            voucherDescription: "Older finalized invoice",
+            debitAmount: "400.00",
+            creditAmount: "0.00",
+            amountUsd: "400.00",
+          },
+          {
+            voucherNumber: "EUR-NO-RATE",
+            voucherDate: "2026-09-02",
+            voucherDescription: "No USD equivalent",
+            debitAmount: "100.00",
+            creditAmount: "0.00",
+            amountUsd: null,
+          },
         ],
       },
     });
     expect(rows).toHaveLength(2);
     expect(rows[0]).toBe(posted);
     expect(rows[1]).toMatchObject({
-      voucherId: -1000000, voucherType: "Historical Factory Amount (not posted)",
-      debitAmount: "400.00", creditAmount: "0.00",
+      voucherId: -1000000,
+      voucherType: "Historical Factory Amount (not posted)",
+      debitAmount: "400.00",
+      creditAmount: "0.00",
     });
     expect(computeClosingBalance(computeRunningBalances(groupTransactions(rows), 0, "ledger"), 0)).toBe(600);
   });
