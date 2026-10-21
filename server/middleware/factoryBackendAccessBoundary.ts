@@ -363,8 +363,11 @@ export function resolveFactoryBackendAccessRequirement(req: Request): FactoryApi
   if (hasPrefix(path, "/cost-centers")) {
     const isAllocation = hasPrefix(path, "/cost-centers/allocations/") ||
       hasPrefix(path, "/cost-centers/voucher/");
+    // Historical reconciliation and previews can be inspected from Finance.
+    // Apply/preview still require privileged company accounting roles in API.
+    const isHistorical = hasPrefix(path, "/cost-centers/historical/");
     const isCatalogRead = req.method === "GET" && path === "/cost-centers";
-    return isAllocation || isCatalogRead
+    return isAllocation || isCatalogRead || isHistorical
       ? anyOf(requirement("factory/cost-centers"), requirement("factory/vouchers"), requirement("factory/daybook"))
       : anyOf(requirement("factory/cost-centers"), requirement("factory/accounts"));
   }
