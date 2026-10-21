@@ -230,7 +230,7 @@ export default function CostCenters() {
               {row.factoryTxType || "Factory daybook entry"} #{row.factoryDaybookEntryId}
             </button>
           : <p className="font-medium">{row.factoryTxType || "Entry #" + row.id}</p>}
-                      <p className="text-xs text-muted-foreground">{row.sourceDate ? String(row.sourceDate).slice(0,10) : "Date unavailable"} · {row.costTreatment}</p>
+                      <p className="text-xs text-muted-foreground">{row.sourceDate ? String(row.sourceDate).slice(0,10) : "Date unavailable"} · {row.costTreatment} · {row.allocationOrigin === "AUTO" ? "Automatic" : "Manual"}</p>
                       {row.voucherEntryId && <p className="text-xs text-muted-foreground">Voucher entry #{row.voucherEntryId}</p>}
                     </div>
                     <span className="font-mono shrink-0">USD {Number(row.amountBase).toFixed(2)}</span>
