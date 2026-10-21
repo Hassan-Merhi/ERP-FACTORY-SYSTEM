@@ -26,7 +26,7 @@ type Balances={currency:string;statementOpening:string;statementClosing:string;s
   bookOpening:string|null;bookClosing:string|null;bookVsStatementDifference:string|null;
   unclearedBook:string;unmatchedStatement:string;adjustedBook:string|null;
   residual:string|null;matched:number;unmatchedStatementCount:number;unclearedBookCount:number;
-  unverifiedEntries:number;otherCurrencyEntries:number;reconcilable:boolean};
+  openingVerified:boolean;unverifiedEntries:number;otherCurrencyEntries:number;reconcilable:boolean};
 type Detail={statement:Statement;account:{name:string;kind:Kind;id:number;linkedLedgerId:number|null};
   lines:Line[];bookEntries:BookEntry[];balances:Balances};
 type Preview={rowCount:number;calculatedClosing:string;suppliedClosing:string;balanced:boolean;
@@ -237,8 +237,8 @@ export default function CashBankReconciliation() {
         <p className="text-sm">{detail.data.balances.reconcilable
           ?"All listed statement movements are matched to posted vouchers and balances agree."
           :"Outstanding or unmatched movements remain. This view makes no automatic accounting adjustment."}</p>
-        {(detail.data.balances.unverifiedEntries>0||detail.data.balances.otherCurrencyEntries>0)&&
-          <p role="alert" className="text-sm text-destructive">Ledger closing balance is withheld: {detail.data.balances.unverifiedEntries} unverified-currency entries and {detail.data.balances.otherCurrencyEntries} entries in other currencies. Reconciliation cannot be certified from mixed or missing currency evidence.</p>}
+        {(!detail.data.balances.openingVerified||detail.data.balances.unverifiedEntries>0||detail.data.balances.otherCurrencyEntries>0)&&
+          <p role="alert" className="text-sm text-destructive">Ledger closing balance is withheld: opening currency verified = {String(detail.data.balances.openingVerified)}; {detail.data.balances.unverifiedEntries} unverified-currency entries and {detail.data.balances.otherCurrencyEntries} entries in other currencies. Reconciliation cannot be certified from mixed or missing currency evidence.</p>}
       </CardContent>
     </Card>
     <div className="grid gap-4 xl:grid-cols-2">
