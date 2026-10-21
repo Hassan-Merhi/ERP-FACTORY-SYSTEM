@@ -6,7 +6,7 @@
 import { sql } from "drizzle-orm";
 import {
   pgTable, serial, bigserial, bigint, integer, varchar, text, decimal, boolean,
-  timestamp, index, uniqueIndex, foreignKey, check,
+  timestamp, date, index, uniqueIndex, foreignKey, check,
 } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
