@@ -193,6 +193,7 @@ export function useErpVisibleSections(user?: SidebarUser): {
     const featureKeys = getErpRouteFeatureKeys(item.url);
 
     if (selectedCompany?.companyType === "retail" && RETAIL_HIDDEN_ERP_ROUTES.has(item.url)) return false;
+    if (effectiveRole === "ERP Tester" && item.url === "/transaction-journal") return false;
     if (item.url === "/tracking") return !isPOSUser;
     if (item.url === "/cost-centers" && !["Admin", "Owner", "Developer", "Manager"].includes(effectiveRole))
       return false;
