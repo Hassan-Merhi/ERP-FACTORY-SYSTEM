@@ -318,4 +318,59 @@ export const phase3RemainingTranslationsPart34: readonly Phase3SharedUiEntry[] =
     ar: "سجل تدقيق الاعتماد والإقفال المالي",
     fr: "Piste d'audit des approbations et clôtures",
   },
+  {
+    en: "Cost center budgets & analytical spending — Phase 12",
+    ar: "ميزانيات مراكز التكلفة والإنفاق التحليلي — المرحلة 12",
+    fr: "Budgets des centres de coûts et dépenses analytiques — Phase 12",
+  },
+  {
+    en: "Open Cost Centers & budgets",
+    ar: "فتح مراكز التكلفة والميزانيات",
+    fr: "Ouvrir les centres de coûts et budgets",
+  },
+  {
+    en: "Refresh analytical report",
+    ar: "تحديث التقرير التحليلي",
+    fr: "Actualiser le rapport analytique",
+  },
+  {
+    en: "Loading company cost-center budget…",
+    ar: "جارٍ تحميل ميزانية مراكز التكلفة للشركة…",
+    fr: "Chargement du budget des centres de coûts de la société…",
+  },
+  {
+    en: "Cost center",
+    ar: "مركز التكلفة",
+    fr: "Centre de coûts",
+  },
+  {
+    en: "No cost centers have been configured for this company.",
+    ar: "لم يتم إعداد أي مراكز تكلفة لهذه الشركة.",
+    fr: "Aucun centre de coûts n'a été configuré pour cette société.",
+  },
+  {
+    en: "Monthly analytical spend against budgets",
+    ar: "الإنفاق التحليلي الشهري مقابل الميزانيات",
+    fr: "Dépenses analytiques mensuelles par rapport aux budgets",
+  },
+  {
+    en: "Allocated expense USD",
+    ar: "المصروف الموزع بالدولار الأمريكي",
+    fr: "Charges affectées en USD",
+  },
+  {
+    en: "Unallocated expense USD",
+    ar: "المصروف غير الموزع بالدولار الأمريكي",
+    fr: "Charges non affectées en USD",
+  },
+  {
+    en: "Returned company, currency or accounting dates do not match this dashboard. Analytical totals are withheld.",
+    ar: "الشركة أو العملة أو التواريخ المحاسبية المُعادة لا تطابق لوحة المعلومات هذه. تم حجب الإجماليات التحليلية.",
+    fr: "La société, la devise ou les dates comptables renvoyées ne correspondent pas à ce tableau de bord. Les totaux analytiques sont retenus.",
+  },
+  {
+    en: "Cost-center allocation, not a reconciliation of all company GL expenses",
+    ar: "توزيع على مراكز التكلفة، وليس تسوية لجميع مصروفات دفتر الأستاذ العام للشركة",
+    fr: "Affectation par centre de coûts, et non rapprochement de toutes les charges du grand livre de la société",
+  },
 ];

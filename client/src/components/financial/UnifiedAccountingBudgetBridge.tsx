@@ -97,20 +97,24 @@ export function UnifiedAccountingBudgetBridge({
       </CardHeader>
       <CardContent className="space-y-4">
         <p className="text-sm text-muted-foreground">
-          This is the existing Cost Centers analytical report, not an extra accounting ledger.
-          Expense allocations and whole-month USD budgets are compared separately from posted
-          Profit & Loss. Inventory-capitalized allocations are not operating expenses.
+          This is the existing Cost Centers analytical report, not an extra accounting ledger. Expense allocations and
+          whole-month USD budgets are compared separately from posted Profit & Loss. Inventory-capitalized allocations
+          are not operating expenses.
         </p>
         {!supported ? (
           <p className="text-sm text-muted-foreground">
-            Properties/Rentals does not have a native cost-center workspace.
-            No ERP or Factory budgets are shown for this shell or copied into rental accounts.
+            Properties/Rentals does not have a native cost-center workspace. No ERP or Factory budgets are shown for
+            this shell or copied into rental accounts.
           </p>
         ) : (
           <>
             <div className="flex flex-wrap gap-2">
-              <Button variant="outline" onClick={onOpenCostCenters}>Open Cost Centers & budgets</Button>
-              <Button variant="outline" onClick={() => refetch()} disabled={isLoading}>Refresh analytical report</Button>
+              <Button variant="outline" onClick={onOpenCostCenters}>
+                Open Cost Centers & budgets
+              </Button>
+              <Button variant="outline" onClick={() => refetch()} disabled={isLoading}>
+                Refresh analytical report
+              </Button>
             </div>
             {isLoading && <p className="text-sm text-muted-foreground">Loading company cost-center budget…</p>}
             {isError && (
@@ -120,15 +124,16 @@ export function UnifiedAccountingBudgetBridge({
             )}
             {data && !validScope && (
               <p role="alert" className="text-sm text-destructive">
-                Returned company, currency or accounting dates do not match this dashboard. Analytical totals are withheld.
+                Returned company, currency or accounting dates do not match this dashboard. Analytical totals are
+                withheld.
               </p>
             )}
             {data && validScope && (
               <>
                 <p className="text-xs text-muted-foreground">
-                  Posted eligible source dates: {data.period.from} – {data.period.to}. Budgets include
-                  each full calendar month touched by this range, without prorating partial months.
-                  Variance = recognized analytical expense (including unallocated) minus budget.
+                  Posted eligible source dates: {data.period.from} – {data.period.to}. Budgets include each full
+                  calendar month touched by this range, without prorating partial months. Variance = recognized
+                  analytical expense (including unallocated) minus budget.
                 </p>
                 <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
                   <Metric label="Allocated recognized expense" value={data.totals.expense} />
@@ -145,11 +150,21 @@ export function UnifiedAccountingBudgetBridge({
                     </caption>
                     <thead>
                       <tr className="border-b text-left">
-                        <th scope="col" className="p-2">Cost center</th>
-                        <th scope="col" className="p-2 text-right">Expense USD</th>
-                        <th scope="col" className="p-2 text-right">Budget USD</th>
-                        <th scope="col" className="p-2 text-right">Variance USD</th>
-                        <th scope="col" className="p-2 text-right">Utilization</th>
+                        <th scope="col" className="p-2">
+                          Cost center
+                        </th>
+                        <th scope="col" className="p-2 text-right">
+                          Expense USD
+                        </th>
+                        <th scope="col" className="p-2 text-right">
+                          Budget USD
+                        </th>
+                        <th scope="col" className="p-2 text-right">
+                          Variance USD
+                        </th>
+                        <th scope="col" className="p-2 text-right">
+                          Utilization
+                        </th>
                       </tr>
                     </thead>
                     <tbody>
@@ -169,7 +184,9 @@ export function UnifiedAccountingBudgetBridge({
                     </tbody>
                   </table>
                   {centers.length === 0 && (
-                    <p className="text-sm text-muted-foreground">No cost centers have been configured for this company.</p>
+                    <p className="text-sm text-muted-foreground">
+                      No cost centers have been configured for this company.
+                    </p>
                   )}
                   {centers.length > 12 && (
                     <p className="text-xs text-muted-foreground">
@@ -181,17 +198,31 @@ export function UnifiedAccountingBudgetBridge({
                   <div className="overflow-x-auto">
                     <p className="font-medium text-sm mb-2">Monthly analytical spend against budgets</p>
                     <table className="w-full text-sm">
-                      <thead><tr className="border-b text-left">
-                        <th scope="col" className="p-2">Month</th>
-                        <th scope="col" className="p-2 text-right">Allocated expense USD</th>
-                        <th scope="col" className="p-2 text-right">Unallocated expense USD</th>
-                        <th scope="col" className="p-2 text-right">Budget USD</th>
-                        <th scope="col" className="p-2 text-right">Variance USD</th>
-                      </tr></thead>
+                      <thead>
+                        <tr className="border-b text-left">
+                          <th scope="col" className="p-2">
+                            Month
+                          </th>
+                          <th scope="col" className="p-2 text-right">
+                            Allocated expense USD
+                          </th>
+                          <th scope="col" className="p-2 text-right">
+                            Unallocated expense USD
+                          </th>
+                          <th scope="col" className="p-2 text-right">
+                            Budget USD
+                          </th>
+                          <th scope="col" className="p-2 text-right">
+                            Variance USD
+                          </th>
+                        </tr>
+                      </thead>
                       <tbody>
                         {data.months.map((month) => (
                           <tr key={month.month} className="border-b">
-                            <th scope="row" className="p-2 text-left font-normal">{month.month}</th>
+                            <th scope="row" className="p-2 text-left font-normal">
+                              {month.month}
+                            </th>
                             <td className="p-2 text-right tabular-nums">{displayMoney(month.expense)}</td>
                             <td className="p-2 text-right tabular-nums">{displayMoney(month.unallocated)}</td>
                             <td className="p-2 text-right tabular-nums">{displayMoney(month.budget)}</td>
@@ -203,10 +234,9 @@ export function UnifiedAccountingBudgetBridge({
                   </div>
                 )}
                 <p className="text-xs text-muted-foreground">
-                  This tab is read-only. Budgets never post vouchers, create inventory assets,
-                  revalue stock or change the booked net position. Unallocated source expense
-                  may not be comparable to financial-statement operating expenses without a
-                  separate independent mapping of journal types and fiscal exclusions.
+                  This tab is read-only. Budgets never post vouchers, create inventory assets, revalue stock or change
+                  the booked net position. Unallocated source expense may not be comparable to financial-statement
+                  operating expenses without a separate independent mapping of journal types and fiscal exclusions.
                 </p>
               </>
             )}
