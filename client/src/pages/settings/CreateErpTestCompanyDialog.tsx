@@ -2,7 +2,14 @@ import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -35,7 +42,10 @@ export function CreateErpTestCompanyDialog() {
       queryClient.invalidateQueries({ queryKey: ["/api/companies"] });
       queryClient.invalidateQueries({ queryKey: ["/api/user/companies"] });
       queryClient.invalidateQueries({ queryKey: ["/api/users"] });
-      toast({ title: "Test company created", description: "The ERP tester has data access without administrative Settings." });
+      toast({
+        title: "Test company created",
+        description: "The ERP tester has data access without administrative Settings.",
+      });
     },
     onError: (error: Error) => {
       toast({ title: "Unable to create test company", description: error.message, variant: "destructive" });
@@ -77,21 +87,41 @@ export function CreateErpTestCompanyDialog() {
         {created ? (
           <div className="space-y-4">
             <div className="rounded-md border bg-muted/30 p-3 space-y-2 text-sm">
-              <p><strong>Company:</strong> {created.company.name} ({created.company.code})</p>
-              <p><strong>Username:</strong> {created.tester.username}</p>
-              <p className="break-all"><strong>One-time password:</strong> <code data-testid="erp-test-password">{created.password}</code></p>
-              <p><strong>Access:</strong> ERP data entry, no administrative Settings</p>
+              <p>
+                <strong>Company:</strong> {created.company.name} ({created.company.code})
+              </p>
+              <p>
+                <strong>Username:</strong> {created.tester.username}
+              </p>
+              <p className="break-all">
+                <strong>One-time password:</strong> <code data-testid="erp-test-password">{created.password}</code>
+              </p>
+              <p>
+                <strong>Access:</strong> ERP data entry, no administrative Settings
+              </p>
             </div>
-            <Button type="button" variant="outline" className="w-full" onClick={() => {
-              navigator.clipboard.writeText(credentials).then(
-                () => toast({ title: "Credentials copied" }),
-                () => toast({ title: "Copy failed", description: "Select and copy the credentials shown above.", variant: "destructive" }),
-              );
-            }}>
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full"
+              onClick={() => {
+                navigator.clipboard.writeText(credentials).then(
+                  () => toast({ title: "Credentials copied" }),
+                  () =>
+                    toast({
+                      title: "Copy failed",
+                      description: "Select and copy the credentials shown above.",
+                      variant: "destructive",
+                    })
+                );
+              }}
+            >
               <Copy className="h-4 w-4 mr-2" />
               Copy Credentials
             </Button>
-            <Button type="button" className="w-full" onClick={() => onOpenChange(false)}>Done</Button>
+            <Button type="button" className="w-full" onClick={() => onOpenChange(false)}>
+              Done
+            </Button>
           </div>
         ) : (
           <form
@@ -103,19 +133,33 @@ export function CreateErpTestCompanyDialog() {
           >
             <div className="space-y-1.5">
               <Label htmlFor="erp-test-company-name">Company name</Label>
-              <Input id="erp-test-company-name" value={companyName} maxLength={120}
-                onChange={(event) => setCompanyName(event.target.value)} required minLength={2} />
+              <Input
+                id="erp-test-company-name"
+                value={companyName}
+                maxLength={120}
+                onChange={(event) => setCompanyName(event.target.value)}
+                required
+                minLength={2}
+              />
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="erp-test-username">Username (optional)</Label>
-              <Input id="erp-test-username" value={username} maxLength={48}
+              <Input
+                id="erp-test-username"
+                value={username}
+                maxLength={48}
                 onChange={(event) => setUsername(event.target.value)}
-                placeholder="Leave blank to generate a unique username" />
+                placeholder="Leave blank to generate a unique username"
+              />
               <p className="text-xs text-muted-foreground">
                 Letters, numbers, dots, underscores, and dashes. The password is generated securely.
               </p>
             </div>
-            <Button type="submit" className="w-full" disabled={createMutation.isPending || companyName.trim().length < 2}>
+            <Button
+              type="submit"
+              className="w-full"
+              disabled={createMutation.isPending || companyName.trim().length < 2}
+            >
               {createMutation.isPending ? "Creating..." : "Create Test Company & User"}
             </Button>
           </form>

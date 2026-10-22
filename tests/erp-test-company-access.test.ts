@@ -11,8 +11,9 @@ describe("ERP test company access policy", () => {
     expect(ERP_TESTER_PAGE_KEYS).not.toContain("settings");
     expect(ERP_TESTER_PAGE_KEYS).not.toContain("factory_production");
     expect(new Set(ERP_TESTER_PAGE_KEYS).size).toBe(ERP_TESTER_PAGE_KEYS.length);
-    expect([...FEATURE_KEYS].filter((key) => key !== "settings" && key !== "factory_production"))
-      .toEqual(ERP_TESTER_PAGE_KEYS);
+    expect([...FEATURE_KEYS].filter((key) => key !== "settings" && key !== "factory_production")).toEqual(
+      ERP_TESTER_PAGE_KEYS
+    );
   });
 
   it("explicitly denies administrative Settings and non-ERP modules", () => {

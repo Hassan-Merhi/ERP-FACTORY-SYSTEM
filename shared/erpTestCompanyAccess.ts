@@ -5,9 +5,7 @@ import { FEATURE_KEYS } from "./schema";
  * administrative Settings screen. The company is standalone and empty, so this
  * access policy cannot alter the role permissions of an existing company.
  */
-export const ERP_TESTER_PAGE_KEYS = FEATURE_KEYS.filter(
-  (key) => key !== "settings" && key !== "factory_production"
-);
+export const ERP_TESTER_PAGE_KEYS = FEATURE_KEYS.filter((key) => key !== "settings" && key !== "factory_production");
 
 export const ERP_TESTER_ROLE_PERMISSIONS = [
   { featureKey: "mod_erp", enabled: true },

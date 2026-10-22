@@ -219,14 +219,25 @@ export function registerCompanyAccessRoutes(app: Express) {
   // Provision a fresh standalone ERP company and a non-admin tester atomically.
   // No fixtures, ledger entries, stock, or production records are created.
   app.post("/api/companies/erp-test", requireAuth, requireRole("Admin"), async (req, res) => {
-    const inputSchema = z.object({
-      companyName: z.string().trim().min(2).max(120).default("ERP Test Company"),
-      username: z.string().trim().regex(/^[a-zA-Z0-9._-]{3,48}$/).optional(),
-    }).strict();
+    const inputSchema = z
+      .object({
+        companyName: z.string().trim().min(2).max(120).default("ERP Test Company"),
+        username: z
+          .string()
+          .trim()
+          .regex(/^[a-zA-Z0-9._-]{3,48}$/)
+          .optional(),
+      })
+      .strict();
 
     const parsed = inputSchema.safeParse(req.body ?? {});
     if (!parsed.success) {
-      return res.status(400).json({ message: "Enter a valid company name and tester username (3–48 letters, numbers, dots, underscores, or dashes)." });
+      return res
+        .status(400)
+        .json({
+          message:
+            "Enter a valid company name and tester username (3–48 letters, numbers, dots, underscores, or dashes).",
+        });
     }
     if (!req.user) return res.status(401).json({ message: "Unauthorized" });
 
@@ -239,20 +250,26 @@ export function registerCompanyAccessRoutes(app: Express) {
     try {
       const passwordHash = await hashPassword(password);
       const created = await db.transaction(async (tx) => {
-        const [company] = await tx.insert(companies).values({
-          code,
-          name: parsed.data.companyName,
-          companyType: "erp",
-          parentCompanyId: null,
-          baseCurrency: "USD",
-          active: true,
-        }).returning({ id: companies.id, name: companies.name, code: companies.code });
+        const [company] = await tx
+          .insert(companies)
+          .values({
+            code,
+            name: parsed.data.companyName,
+            companyType: "erp",
+            parentCompanyId: null,
+            baseCurrency: "USD",
+            active: true,
+          })
+          .returning({ id: companies.id, name: companies.name, code: companies.code });
 
-        const [tester] = await tx.insert(users).values({
-          username,
-          password: passwordHash,
-          active: true,
-        }).returning({ id: users.id, username: users.username });
+        const [tester] = await tx
+          .insert(users)
+          .values({
+            username,
+            password: passwordHash,
+            active: true,
+          })
+          .returning({ id: users.id, username: users.username });
 
         await tx.insert(userCompanyRoles).values({
           userId: tester.id,
@@ -302,7 +319,9 @@ export function registerCompanyAccessRoutes(app: Express) {
       });
     } catch (error: unknown) {
       if (typeof error === "object" && error !== null && "code" in error && error.code === "23505") {
-        return res.status(409).json({ message: "Company code or tester username already exists. Try again with a different username." });
+        return res
+          .status(409)
+          .json({ message: "Company code or tester username already exists. Try again with a different username." });
       }
       logger.error("Failed to provision ERP test company", { error });
       res.status(500).json({ message: "Failed to provision ERP test company; no partial data was saved." });
