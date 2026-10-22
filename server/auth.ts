@@ -8,6 +8,7 @@ import { enforceRuntimeSession } from "./services/security/sessionEnforcementAda
 import { hydrateActiveCredentialVersion } from "./services/security/credentialVersionService";
 import { CompanyIsolationError, assertRequestCompanyMatchesSession } from "./services/security/companyIsolationPolicy";
 import { decideExplicitCompanyScope } from "./services/security/companyRequestScopePolicy";
+import { isErpTesterForbiddenApiPath } from "@shared/erpTestCompanyAccess";
 
 const EXPECTED_ANONYMOUS_SESSION_REASONS = new Set(["SESSION_REQUIRED", "SESSION_USER_REQUIRED"]);
 
@@ -489,20 +490,7 @@ function isViewOnlyPassiveLifecycleWrite(req: Request): boolean {
  */
 export function blockErpTesterSettings(req: Request, res: Response, next: NextFunction) {
   if (req.session?.currentRole !== "ERP Tester" || !req.path.startsWith("/api/")) return next();
-  const path = req.path.toLowerCase();
-  const denied = [
-    "/api/settings",
-    "/api/admin",
-    "/api/users",
-    "/api/user-company-roles",
-    "/api/role-permissions",
-    "/api/company-settings",
-    "/api/factory",
-    "/api/properties",
-    "/api/sp",
-    "/api/companies/erp-test",
-  ];
-  if (denied.some((prefix) => path === prefix || path.startsWith(prefix + "/"))) {
+  if (isErpTesterForbiddenApiPath(req.path)) {
     return res.status(403).json({ message: "ERP Tester accounts cannot access system settings or other modules" });
   }
   return next();
