@@ -55,8 +55,22 @@ export function resolveAuthenticatedAppRoute({
 
   let decision: AuthenticatedAppRouteDecision = { kind: "continue" };
 
-  if (userRole === "ERP Tester" && (currentLocation === "/settings" || currentLocation === "/my-settings")) {
-    decision = { kind: "redirect", to: "/tracking" };
+  // Settings are unavailable to ERP Tester in every company shell, including
+  // nested Factory/Properties pages and the unprefixed personal settings route.
+  if (
+    userRole === "ERP Tester" &&
+    /(?:^|[\\/_-])(?:settings|configuration)(?=$|[\\/_-])/.test(currentLocation.toLowerCase())
+  ) {
+    const fallback = isPropertiesCompany
+      ? "/properties/daybook"
+      : isFactoryCompany
+        ? factoryDefaultPage === "/my-settings"
+          ? "/factory/production-report"
+          : factoryDefaultPage
+        : isSupplierPartnerCompany
+          ? "/sp"
+          : "/tracking";
+    decision = { kind: "redirect", to: fallback };
   } else if (isPropertiesCompany && currentLocation === "/my-settings") {
     decision = { kind: "redirect", to: "/properties/my-settings" };
   } else if (isPropertiesCompany && currentLocation === "/balance-repair") {
