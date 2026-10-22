@@ -39,6 +39,7 @@ interface Dashboard {
     liabilitiesUsd: string;
     netAssetsUsd: string;
     equityIncludingEarningsUsd: string;
+    reportedBalanceSheetDifferenceUsd: string;
     unexplainedDifferenceUsd: string;
     trialBalanceDifferenceUsd: string;
     cashAndBanksUsd: string;
@@ -76,6 +77,7 @@ interface Dashboard {
       subLedgerSignedUsd: string;
       asOfBasis: "as-of" | "current";
       shortageValueUsd: string;
+      unitemizedMovementValueUsd: string;
       anomalousRows: number;
       locations: number;
     } | null;
@@ -92,6 +94,7 @@ interface Dashboard {
     } | null;
     bookedStockAssetUsd: string;
     managementCostCandidateUsd: string | null;
+    managementCostCandidateBasis: "CURRENT_COST_MEMO" | "WITHHELD_MIXED_DATES" | "WITHHELD_INCOMPLETE_COST" | "NOT_LOADED";
     managementSellingValueUsd: null;
     managementSellingValueAvailableIn: string;
     glToOperationalAtCost: Array<{
@@ -121,6 +124,7 @@ interface Dashboard {
   reportStatus: "PROVISIONAL_NOT_CERTIFIED";
   historicalFx: {
     ready: boolean;
+    legacyCompatibilityMode: boolean;
     unresolvedEntryCount: number;
     unresolvedVoucherCount: number;
     unresolvedLedgerOpeningCount: number;
@@ -229,7 +233,14 @@ export default function UnifiedAccountingDashboard() {
     enabled: !!companyId,
     retry: false,
   });
-  const x = data.data;
+  // Never render a response for a different company or book basis, including
+  // when a session company switches while a previous request is in flight.
+  const x =
+    data.data?.companyId === Number(companyId) &&
+    data.data.currency === "USD" &&
+    data.data.presentation === "STANDALONE_BOOKED_NOT_GROUP_CONSOLIDATED"
+      ? data.data
+      : undefined;
   const nav = (url: string) => go(prefix + url);
   const csv = () => {
     if (!x) return;
@@ -244,7 +255,9 @@ export default function UnifiedAccountingDashboard() {
       ["Booked liabilities", x.financialPosition.liabilitiesUsd],
       ["Booked net assets", x.financialPosition.netAssetsUsd],
       ["Equity incl. unclosed earnings", x.financialPosition.equityIncludingEarningsUsd],
-      ["Unexplained accounting difference", x.financialPosition.unexplainedDifferenceUsd],
+      ["Assets less liabilities and equity (before unclassified)", x.financialPosition.reportedBalanceSheetDifferenceUsd],
+      ["Unclassified account net balance", x.financialPosition.unclassifiedUsd],
+      ["Ledger residual after unclassified", x.financialPosition.unexplainedDifferenceUsd],
       ["Sales revenue", x.performance.salesRevenueUsd],
       ["Cost of sales", x.performance.costOfSalesUsd],
       ["Gross profit", x.performance.grossProfitUsd],
@@ -252,7 +265,11 @@ export default function UnifiedAccountingDashboard() {
       ["Operating expenses", x.performance.operatingExpensesUsd],
       ["Net profit", x.performance.netProfitUsd],
       ["ERP operational cost (separate memo)", x.operations.erpStock?.costUsd ?? "NOT_LOADED"],
-      ["Factory operational cost (separate memo)", x.operations.factoryStock?.totalUsd ?? "NOT_LOADED"],
+      ["ERP operational cost date basis", x.operations.erpStock?.asOfBasis ?? "NOT_LOADED"],
+      ["ERP unattributed historical movement USD", x.operations.erpStock?.unitemizedMovementValueUsd ?? "NOT_LOADED"],
+      ["Factory operational cost (CURRENT ONLY; separate memo)", x.operations.factoryStock?.totalUsd ?? "NOT_LOADED"],
+      ["Combined ERP and Factory cost memorandum", x.operations.managementCostCandidateUsd ?? "WITHHELD"],
+      ["Combined memorandum date/completeness policy", x.operations.managementCostCandidateBasis],
       ["Operational cost added to booked net assets", "NO"],
       ["Valuation", "Selling value not included in accounting book amounts"],
       ["Control status", "PROVISIONAL - NOT CERTIFIED"],
@@ -321,6 +338,11 @@ export default function UnifiedAccountingDashboard() {
           {(data.error as Error).message}
         </p>
       )}
+      {data.data && !x && (
+        <p role="alert" className="text-destructive text-sm">
+          Dashboard company or accounting basis does not match the selected company. Figures have been withheld.
+        </p>
+      )}
       {x && (
         <>
           <div className="space-y-1">
@@ -383,12 +405,16 @@ export default function UnifiedAccountingDashboard() {
                     <span className="tabular-nums">{money(x.financialPosition.equityIncludingEarningsUsd)}</span>
                   </div>
                   <div className="flex justify-between text-sm gap-3 text-destructive">
-                    <span>Unexplained reconciliation difference</span>
-                    <strong className="tabular-nums">{money(x.financialPosition.unexplainedDifferenceUsd)}</strong>
+                    <span>Assets − liabilities − equity (before unclassified)</span>
+                    <strong className="tabular-nums">{money(x.financialPosition.reportedBalanceSheetDifferenceUsd)}</strong>
                   </div>
                   <div className="flex justify-between text-sm gap-3">
-                    <span>Unclassified posted accounts</span>
+                    <span>Unclassified posted accounts (signed net, not assigned to equity)</span>
                     <span className="tabular-nums">{money(x.financialPosition.unclassifiedUsd)}</span>
+                  </div>
+                  <div className="flex justify-between text-sm gap-3">
+                    <span>Residual after separately displaying unclassified accounts</span>
+                    <strong className="tabular-nums">{money(x.financialPosition.unexplainedDifferenceUsd)}</strong>
                   </div>
                 </div>
                 <p className="text-xs text-muted-foreground">
@@ -457,17 +483,34 @@ export default function UnifiedAccountingDashboard() {
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
                   <Value label="Stock accounts already recognized in ledger" value={x.operations.bookedStockAssetUsd} />
                   {x.operations.erpStock && (
-                    <Value label="ERP stock at recorded operational cost" value={x.operations.erpStock.costUsd} />
+                    <Value
+                      label={x.operations.erpStock.asOfBasis === "as-of" ? "ERP stock at replayed historical cost" : "ERP stock at current recorded cost"}
+                      value={x.operations.erpStock.costUsd}
+                    />
                   )}
                   {x.operations.factoryStock && (
                     <>
                       <Value label="Factory raw stock cost" value={x.operations.factoryStock.rawUsd} />
                       <Value label="Factory work-in-progress cost" value={x.operations.factoryStock.wipUsd} />
                       <Value label="Factory finished bales cost" value={x.operations.factoryStock.finishedUsd} />
-                      <Value label="Factory stock cost total" value={x.operations.factoryStock.totalUsd} />
+                      <Value label="Factory stock cost total (current only)" value={x.operations.factoryStock.totalUsd} />
                     </>
                   )}
+                  {x.operations.managementCostCandidateUsd !== null && (
+                    <Value label="ERP + Factory operational cost (current-date memo only)" value={x.operations.managementCostCandidateUsd} />
+                  )}
                 </div>
+                {x.operations.managementCostCandidateBasis === "WITHHELD_MIXED_DATES" && (
+                  <p className="text-sm text-destructive">
+                    Combined management stock cost withheld: the ERP value is historical, but the Factory value is current.
+                    They cannot form a valid total for the selected accounting date.
+                  </p>
+                )}
+                {x.operations.managementCostCandidateBasis === "WITHHELD_INCOMPLETE_COST" && (
+                  <p className="text-sm text-destructive">
+                    Combined management stock cost withheld because ERP or Factory cost evidence is incomplete.
+                  </p>
+                )}
                 {x.operations.factoryStock && (
                   <p className="text-sm text-muted-foreground">
                     {x.operations.factoryStock.reservedForOrders.bales} reserved/open-order bales and{" "}
@@ -570,7 +613,8 @@ export default function UnifiedAccountingDashboard() {
               <CardContent className="space-y-5">
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                   <Value label="Trial balance difference" value={x.financialPosition.trialBalanceDifferenceUsd} />
-                  <Value label="Assets vs equity difference" value={x.financialPosition.unexplainedDifferenceUsd} />
+                  <Value label="Assets − liabilities − equity (before unclassified)" value={x.financialPosition.reportedBalanceSheetDifferenceUsd} />
+                  <Value label="Remaining ledger residual" value={x.financialPosition.unexplainedDifferenceUsd} />
                   <Value
                     label="Cash-flow classification difference"
                     value={x.performance.cashFlowClassificationDifferenceUsd}
@@ -581,9 +625,11 @@ export default function UnifiedAccountingDashboard() {
                   </div>
                   <div className="col-span-2 sm:col-span-4 text-sm">
                     Historical FX compatibility check:{" "}
-                    {x.historicalFx.ready
-                      ? "No tracked missing rows (not certified)"
-                      : x.historicalFx.unresolvedEntryCount + " source line(s) missing historical USD base"}
+                    {x.historicalFx.legacyCompatibilityMode
+                      ? "Legacy compatibility only — historical USD conversion is NOT verified"
+                      : x.historicalFx.ready
+                        ? "No tracked missing rows (not certified)"
+                        : x.historicalFx.unresolvedEntryCount + " source line(s) missing historical USD base"}
                     .<p className="text-xs text-muted-foreground">{x.historicalFx.caveat}</p>
                   </div>
                 </div>
