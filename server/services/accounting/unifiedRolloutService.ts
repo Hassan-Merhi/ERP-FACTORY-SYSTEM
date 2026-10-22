@@ -448,8 +448,11 @@ export async function revokeUnifiedReleaseReviewTx(
   await tx.execute(sql`UPDATE accounting_unified_release_reviews SET
    revoked_at=NOW(),revoked_by=${input.actor.userId},revoke_reason=${why}
    WHERE company_id=${input.companyId} AND id=${input.reviewId}`);
-  // Current pilot eligibility immediately fails because revoked reviews
-  // are checked under the same company lock on every affected metadata write.
+  // A revoked review invalidates future authorizations. The route's pilot
+  // check is currently in a separate transaction from its metadata writer,
+  // so this is NOT an atomic check-and-write guarantee against a concurrent
+  // revocation. Keep METADATA_ENTRY_REFERENCES_COMPATIBLE=false until Claude
+  // certifies source lifecycle compatibility AND transactional authorization.
   await audit(tx, input.companyId, input.actor, "accounting_unified_release_reviews", input.reviewId, "void", {
     reason: { new: why },
   });
