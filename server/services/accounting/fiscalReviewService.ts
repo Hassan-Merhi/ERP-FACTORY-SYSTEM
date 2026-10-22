@@ -431,7 +431,9 @@ export async function fiscalReadinessTx(
   if (source.missingLedgerTargets)
     blockers.push(`${source.missingLedgerTargets} posted line(s) target another company's or a missing ledger account`);
   if (source.nonUsdUntranslatedLines)
-    blockers.push(`${source.nonUsdUntranslatedLines} foreign-currency lines lack a historical USD base on a nonzero debit/credit side`);
+    blockers.push(
+      `${source.nonUsdUntranslatedLines} foreign-currency lines lack a historical USD base on a nonzero debit/credit side`
+    );
   if (source.pnlBaseAmountMismatchLines)
     blockers.push(
       `${source.pnlBaseAmountMismatchLines} income/expense lines have historical USD base amounts different from legacy debit/credit; the existing close writer must be reviewed before certification`
@@ -442,9 +444,13 @@ export async function fiscalReadinessTx(
     !protections.auditChainInstalled ||
     !protections.openingBalanceGuardInstalled
   )
-    blockers.push("A required closed-period, master-opening or audit-hash trigger is missing, disabled or on the wrong table");
+    blockers.push(
+      "A required closed-period, master-opening or audit-hash trigger is missing, disabled or on the wrong table"
+    );
   if (!protections.reviewMetadataCompanyRlsInstalled)
-    blockers.push("Fiscal approval tables require ENABLE and FORCE RLS with company-scope policies before independent review");
+    blockers.push(
+      "Fiscal approval tables require ENABLE and FORCE RLS with company-scope policies before independent review"
+    );
   if (source.optionalVouchers)
     warnings.push(
       `${source.optionalVouchers} optional vouchers dated through the period end are excluded from posted books`
