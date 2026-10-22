@@ -218,12 +218,20 @@ async function rawMaterialAt(companyId: number, scope: FactoryNetPositionAsOf) {
     recorded_at: string;
     stable_id: number;
     kg: string;
+    owner_conflict: boolean;
   }>(
     await db.execute(sql`
-    SELECT CASE WHEN COALESCE(ms.inventory_supplier_id, ms.supplier_id, fc.supplier_id) IS NOT NULL
-                THEN 's' || COALESCE(ms.inventory_supplier_id, ms.supplier_id, fc.supplier_id)::text
+    -- A container source draws down that container's own stock, which is
+    -- where today's report (factory_raw_stock.used_kg) counts it; a recorded
+    -- owner that disagrees with the container's supplier is flagged, not
+    -- allowed to move the consumption onto a supplier with no such stock.
+    SELECT CASE WHEN COALESCE(fc.supplier_id, ms.inventory_supplier_id, ms.supplier_id) IS NOT NULL
+                THEN 's' || COALESCE(fc.supplier_id, ms.inventory_supplier_id, ms.supplier_id)::text
                 WHEN ms.container_id IS NOT NULL THEN 'u' || ms.container_id::text
                 ELSE NULL END AS key,
+           (fc.supplier_id IS NOT NULL
+             AND COALESCE(ms.inventory_supplier_id, ms.supplier_id) IS NOT NULL
+             AND fc.supplier_id <> COALESCE(ms.inventory_supplier_id, ms.supplier_id)) AS owner_conflict,
            -- Never earlier than the source row was recorded: a top-up added
            -- later to an older batch consumes stock from when it was entered.
            GREATEST(COALESCE(mb.batch_date, mb.created_at::date), ms.created_at::date)::text AS day,
@@ -324,6 +332,7 @@ async function rawMaterialAt(companyId: number, scope: FactoryNetPositionAsOf) {
   if (valued.rateUnversioned) warnings.add("HISTORICAL_RAW_LOCKED_RATE_UNVERSIONED");
   if (receipts.some((r) => r.fallback)) warnings.add("HISTORICAL_RAW_LEGACY_RECEIPT_FALLBACK");
   if (sources.some((r) => r.key == null)) warnings.add("HISTORICAL_RAW_SOURCE_OWNER_UNKNOWN");
+  if (sources.some((r) => r.owner_conflict)) warnings.add("HISTORICAL_RAW_SOURCE_OWNER_CONFLICT");
   if (adjustments.some((r) => r.type === "DEDUCT" && fallbackKeys.has(r.key))) {
     warnings.add("HISTORICAL_RAW_LEGACY_DEDUCT_MUTATED_RECEIPT");
   }
