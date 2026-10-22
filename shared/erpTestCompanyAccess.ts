@@ -26,6 +26,7 @@ const ERP_TESTER_FORBIDDEN_API_PREFIXES = [
 
 export const isErpTesterForbiddenApiPath = (urlPath: string): boolean => {
   const path = urlPath.toLowerCase();
+  if (/(^|\/)(settings|configuration)(\/|$)/.test(path)) return true;
   return ERP_TESTER_FORBIDDEN_API_PREFIXES.some((prefix) => path === prefix || path.startsWith(`${prefix}/`));
 };
 
