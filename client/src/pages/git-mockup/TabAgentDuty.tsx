@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { authenticatedUserQueryOptions } from "@/contracts/sessionQueryContracts";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { AlertTriangle, FileX, Building2 } from "lucide-react";
@@ -16,6 +17,8 @@ import type {
 const CONF_RANK: Record<AgentDutySummary["matchConfidence"], number> = { exact: 0, fuzzy: 1, unmapped: 2 };
 
 export function TabAgentDuty() {
+  const { data: viewer } = useQuery(authenticatedUserQueryOptions());
+  const isTester = (viewer?.currentRole ?? viewer?.role) === "ERP Tester";
   const [companyMode, setCompanyMode] = useState<CompanyViewMode>("session");
 
   const queryUrl =
@@ -29,6 +32,7 @@ export function TabAgentDuty() {
 
   const { data: waSettings } = useQuery<AgentDutyWaSettings>({
     queryKey: ["/api/git/agent-duty-wa-settings"],
+    enabled: !isTester,
     staleTime: 120_000,
   });
 
@@ -145,7 +149,8 @@ export function TabAgentDuty() {
       >
         My Company
       </Button>
-      <Button
+      {!isTester && (
+        <Button
         size="sm"
         variant={companyMode === "all" ? "default" : "outline"}
         className="text-xs gap-1.5"
@@ -154,6 +159,7 @@ export function TabAgentDuty() {
       >
         All Accessible Companies
       </Button>
+      )}
     </div>
   );
 
@@ -242,9 +248,9 @@ export function TabAgentDuty() {
                   agent={agent}
                   companyId={section.companyId}
                   waGroupChatId={
-                    waSettings?.groups?.[agent.agentName] ||
+                    !isTester ? (waSettings?.groups?.[agent.agentName] ||
                     waSettings?.groups?.[agent.agentName.toUpperCase()] ||
-                    undefined
+                    undefined) : undefined
                   }
                 />
               ))
