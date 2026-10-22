@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { FEATURE_KEYS, insertRoleFeaturePermissionSchema, insertUserCompanyRoleSchema } from "../shared/schema";
+import { canAccessModule, canAccessPage } from "../server/lib/permissionHelpers";
 import {
   ERP_TESTER_PAGE_KEYS,
   ERP_TESTER_ROLE,
@@ -26,6 +27,9 @@ describe("ERP test company access policy", () => {
       "/api/settings",
       "/api/settings/role-permissions",
       "/api/pos/settings",
+      "/api/pos/retail-settings",
+      "/api/company-settings",
+      "/api/factory/notification-settings",
       "/api/my-settings",
       "/api/admin/reset-company-data",
       "/api/users",
@@ -35,10 +39,32 @@ describe("ERP test company access policy", () => {
     for (const path of denied) expect(isErpTesterForbiddenApiPath(path)).toBe(true);
 
     const allowed = [
-      "/api/vouchers", "/api/stock-items", "/api/companies", "/api/user/change-password",
-      "/api/factory/stock", "/api/properties/units", "/api/sp/reports",
+      "/api/vouchers",
+      "/api/stock-items",
+      "/api/companies",
+      "/api/user/change-password",
+      "/api/factory/stock",
+      "/api/properties/units",
+      "/api/sp/reports",
     ];
     for (const path of allowed) expect(isErpTesterForbiddenApiPath(path)).toBe(false);
+  });
+
+  it("never grants Settings, even with a configured allow, while permitting normal modules", () => {
+    const forceEnabled = new Map([
+      ["page_settings", true],
+      ["mod_settings", true],
+      ["settings", true],
+      ["mod_erp", true],
+      ["mod_factory", true],
+      ["mod_properties", true],
+    ]);
+    expect(canAccessPage(ERP_TESTER_ROLE, "settings", forceEnabled)).toBe(false);
+    expect(canAccessPage(ERP_TESTER_ROLE, "page_settings", forceEnabled)).toBe(false);
+    expect(canAccessModule(ERP_TESTER_ROLE, "mod_settings", forceEnabled)).toBe(false);
+    expect(canAccessModule(ERP_TESTER_ROLE, "mod_erp", forceEnabled)).toBe(true);
+    expect(canAccessModule(ERP_TESTER_ROLE, "mod_factory", forceEnabled)).toBe(true);
+    expect(canAccessModule(ERP_TESTER_ROLE, "mod_properties", forceEnabled)).toBe(true);
   });
 
   it("grants ERP pages in any assigned company but never administrative settings", () => {
