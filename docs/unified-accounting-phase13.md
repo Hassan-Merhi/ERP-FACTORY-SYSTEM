@@ -101,7 +101,7 @@ The current continuation strengthens the read-only preflight and its fingerprint
 Claude must independently verify these newly hardened failure cases:
 
 1. A foreign-currency posted entry with nonzero debit but missing only its base debit, and the equivalent credit-side case; both must report an FX completeness blocker even if the opposite-side base field is present.
-2. Missing, disabled or misplaced voucher/entry/fiscal guard triggers, every one of the seven master-opening triggers and all ten audit triggers; readiness must fail closed, not accept a matching name from an unrelated table.
+2. Missing, disabled or misplaced voucher/entry/fiscal guard triggers, every one of the seven master-opening triggers and all ten audit triggers; readiness must fail closed, not accept a matching name from an unrelated table. All three fiscal-review metadata tables must also have both ENABLE/FORCE row-level security and the required `fiscal_review_company_scope` policy in the current schema; absence of any protection is a hard blocker.
 3. A changed posting type/creator (or changed/null source field) must produce a new source digest and approval hash. Existing signoffs must become stale; a signed hash can never be quietly re-used.
 4. Legitimate fully populated USD and historical non-USD base entries must not be classified as untranslated solely because the unused debit/credit side has a null base.
 5. Full SQL/TypeScript compilation, PostgreSQL transactional locking, concurrent voucher writes versus closing, review revocation versus close, tenant isolation, route permissions, financial posting locks and replay/reopen behavior are **not** established by these source changes.
