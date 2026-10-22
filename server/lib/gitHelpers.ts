@@ -69,9 +69,11 @@ export async function resolveGitCompanyScope(
     const rawId = typeof query.companyId === "string" ? query.companyId.trim() : "";
     const activeCompanyId = parsePositiveCompanyId(sessionCompanyId, "activeCompanyId");
     const accessible = await getMembershipCompanyIds(userId);
+    // Testers may read GIT reports only for companies they are assigned to.
+    const canReadAssignedCompanies = isPrivilegedRole(role) || role === "ERP Tester";
 
     if (wantsAll) {
-      if (!isPrivilegedRole(role)) {
+      if (!canReadAssignedCompanies) {
         return {
           error: "Cross-company access requires a privileged role",
           status: 403,
@@ -83,7 +85,7 @@ export async function resolveGitCompanyScope(
 
     if (rawId) {
       const requestedId = parsePositiveCompanyId(rawId, "requestedCompanyId");
-      if (requestedId !== activeCompanyId && !isPrivilegedRole(role)) {
+      if (requestedId !== activeCompanyId && !canReadAssignedCompanies) {
         return {
           error: "Cross-company access requires a privileged role",
           status: 403,
