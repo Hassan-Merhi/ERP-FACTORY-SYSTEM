@@ -112,7 +112,7 @@ export default function GITContainers({ embedded = false }: { embedded?: boolean
   }
   const otwHiddenCount = OTW_COLS.filter((c) => !colVis[c.id]).length;
 
-  const allowedRoles = ["Admin", "Developer", "Owner"];
+  const allowedRoles = ["Admin", "Developer", "Owner", "ERP Tester"];
   const effectiveRole = user?.currentRole ?? user?.role ?? "";
   const isAllowed = allowedRoles.includes(effectiveRole);
 
@@ -487,6 +487,7 @@ export default function GITContainers({ embedded = false }: { embedded?: boolean
           </Popover>
 
           <ContainerBulkActions
+            allowPrivilegedActions={effectiveRole !== "ERP Tester"}
             className="max-sm:col-span-2 max-sm:*:flex-1"
             waSending={waSending}
             onImportClick={() => fileInputRef.current?.click()}
