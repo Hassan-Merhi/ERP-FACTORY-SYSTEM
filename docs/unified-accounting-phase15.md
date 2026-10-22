@@ -263,10 +263,18 @@ Factory inventory cost. Claude must perform all those independently.
 - Group consolidation excludes intercompany balances/transactions once
   elimination source evidence is certified — don't report single-company
   net position as consolidated group cash.
-- Phase 12 (cost centers) is provided by main's Cost Centers module
-  (`/cost-centers`, `/factory/cost-centers`); this branch's separate
-  analytic cost-center feature was removed at the owner's decision so the
-  group has one cost-center system.
+- Phase 12 (cost centers and monthly budgets) reuses the existing Cost
+  Centers module (`/cost-centers`, `/factory/cost-centers`), **without a
+  second budget table or allocation writer**. The unified dashboard's
+  read-only `Cost centers & budgets` tab reads the existing company-scoped
+  expense/budget summary with matching company, historical USD and accounting
+  dates. Unallocated expense and capitalized inventory remain separate,
+  budget months are not prorated, and budget variance is **not** certified
+  as an exact match to booked P&L. Properties/Rentals has no native
+  cost-center workspace and must not reuse another shell's company data.
+  See `docs/unified-accounting-phase12.md`. Claude must verify this
+  integration and review Cost Centers' independently versioned migration
+  readiness before any rollout.
 - Fiscal close, period locks and immutable audit history preserved;
   `POST /api/accounting/fiscal-review/close` remains locked in Phase 15.
 - Default no rollout row is `READ_ONLY`; tests for 401/403/423/503,
