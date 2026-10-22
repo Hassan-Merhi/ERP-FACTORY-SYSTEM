@@ -662,8 +662,8 @@ export default function ProfessionalFinancialStatements() {
                     ? " legacy compatibility only (not validated)"
                     : pkg.historicalFx.ready
                       ? " ready (not certification)"
-                      : " unresolved records detected"}.
-                  Entries flagged: {pkg.historicalFx.unresolvedEntryCount}, vouchers flagged:{" "}
+                      : " unresolved records detected"}
+                  . Entries flagged: {pkg.historicalFx.unresolvedEntryCount}, vouchers flagged:{" "}
                   {pkg.historicalFx.unresolvedVoucherCount}.
                 </p>
                 <p className="text-xs text-muted-foreground">{pkg.historicalFx.caveat}</p>
@@ -675,8 +675,8 @@ export default function ProfessionalFinancialStatements() {
                         ? " legacy compatibility only (not validated)"
                         : pkg.comparisonHistoricalFx.ready
                           ? " ready (not certification)"
-                          : " unresolved records detected"}.
-                      Entries flagged: {pkg.comparisonHistoricalFx.unresolvedEntryCount}, vouchers flagged:{" "}
+                          : " unresolved records detected"}
+                      . Entries flagged: {pkg.comparisonHistoricalFx.unresolvedEntryCount}, vouchers flagged:{" "}
                       {pkg.comparisonHistoricalFx.unresolvedVoucherCount}.
                     </p>
                     <p className="text-xs text-muted-foreground">{pkg.comparisonHistoricalFx.caveat}</p>
