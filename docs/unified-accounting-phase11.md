@@ -42,6 +42,7 @@ All report numbers are denominated in the company's **functional USD book curren
 - Ledger equity is credit-positive. Income and expense closing balances (including retained amounts not yet closed in a fiscal year) are grouped once as **unclosed earnings** and included in total equity only once.
 - Rows with unknown ownership/type are visibly **unclassified**, not moved to arbitrary retained earnings or Miscellaneous. The difference remains explicit.
 - If the original trial balance is unbalanced, the statement remains unbalanced; no balancing correction is posted. The original unexplained amount and opening-side assumptions are disclosed.
+- The report now exposes **two separate differences**: reported assets − liabilities − equity **before** unclassified accounts, and the remaining canonical ledger difference **after** displaying the signed net of unclassified accounts. An unclassified account prevents the balance sheet's `balanced` flag from passing even when those unknown balances offset to zero. Phase 14 retains the second (ledger residual) value as its existing `unexplainedDifferenceUsd` compatibility field; the Phase 11 screen and CSV show both differences.
 
 ### Statement of changes in equity
 
@@ -53,7 +54,7 @@ All report numbers are denominated in the company's **functional USD book curren
 
 ### Cash-flow workpaper: source verification and conservatism
 
-The report uses the actual posted bank/cash account journal entries in the selected period. It classifies a voucher to operating/investing/financing **only when it has exactly one noncash counterparty line**, a nonzero signed cash delta, and that counterparty belongs to an unambiguous recognized class. Other vouchers — including mixed journals, multi-purpose payments, bank-to-bank transfers, asset accounts with unclear purpose and shared-group transactions — remain **unclassified**.
+The report uses the actual posted bank/cash account journal entries in the selected period. It classifies a voucher to operating/investing/financing **only when it has exactly one noncash counterparty line**, a nonzero signed cash delta, and that counterparty belongs to an unambiguous recognized class. Other vouchers — including mixed journals, multi-purpose payments, bank-to-bank transfers, asset accounts with unclear purpose and shared-group transactions — remain **unclassified**. A classified voucher must have **exactly one cash line and exactly one noncash line**, to prevent two-bank-line journals from receiving a false simple-counterparty label.
 
 - Operating: simple posted income/expense/customer/supplier/payroll/inventory and similar operating counterparties.
 - Investing: single posted fixed-asset counterparty.
@@ -85,7 +86,7 @@ New services/routes/UI:
 - `server/routes/professionalFinancialStatementRoutes.ts`:
   `GET /api/accounting/statements/professional?fromDate=YYYY-MM-DD&asOfDate=YYYY-MM-DD&compare=true|false`.
   Protected by Admin/Owner/Developer, the company selected in the authenticated session and a **transaction-level company scope check**. Dates are calendar-validated, fromDate must not exceed asOfDate, and future dates beyond the company's business day are rejected.
-- Read-only historical FX readiness is attached to the response. Its existing pure-legacy compatibility mode is **not** proof that historical USD base amounts are fully verified; the report says so explicitly.
+- Read-only historical FX readiness is attached to the response **separately for the current and comparison accounting cutoffs** (`historicalFx` and `comparisonHistoricalFx`, the latter `null` when comparison is disabled). Its existing pure-legacy compatibility mode is **not** proof that historical USD base amounts are fully verified; each period's warning/blocker and notes say so explicitly.
 - `client/src/pages/ProfessionalFinancialStatements.tsx`: responsive 4-section financial report, comparative account lines, controls/disclosures, optional prior period, CSV export of complete returned account lines, and printable report view. Export is browser-side only; no financial record modifications.
 - Registered `registerProfessionalFinancialStatementRoutes` in `server/routes/applicationRoutes.ts`, with Factory Accounts/View gate in `server/middleware/sharedFactoryAccessBoundary.ts`.
 - Linked from the shared Accounts page, ERP and Properties accounting navigation, plus Factory's authorized Accounts route registry.
@@ -121,13 +122,14 @@ These statements are **PROVISIONAL_NOT_CERTIFIED**. They cannot become formally 
 5. Test fiscal-close periods for P&L and balance sheet: closing journals excluded from current P&L but included in retained earnings and original trial balance.
 6. Confirm sales revenue excludes Indirect Income and realized FX when calculating gross profit, COGS is not all Direct Expense, and accounting profit equals the stated categories.
 7. Confirm equity bridge reconciles when capital contributions, drawings, retained-earnings transfer and income-statement closing journals coexist; label residual correctly.
-8. Cash-flow reconciliation: single receipt/payment; multiple counterparties; voucher with two bank lines; bank linked to ledger; fixed-asset purchase; loan principal; source entries with missing book currency; invalid FX and unusual reversal postings.
+8. Cash-flow reconciliation: single receipt/payment; multiple counterparties; **one noncash line plus two cash/bank lines must be unclassified**; bank linked to ledger; fixed-asset purchase; loan principal; source entries with missing book currency; invalid FX and unusual reversal postings.
 9. Ensure aggregate cash-flow totals cover all vouchers when sample is capped at 250; no double-counted bank and cash master openings.
-10. Verify source `base_debit/base_credit` for migrated non-USD postings and that pure-legacy compatibility readiness isn't misread as verified historical conversion.
+10. Verify source `base_debit/base_credit` for migrated non-USD postings; current and immediately preceding periods must use **their own historical FX readiness cutoff**, with comparison warnings/blockers visible, and pure-legacy compatibility must never be presented as verified conversion.
 11. Confirm month-end/year-end, leap year, partial periods, comparative period boundaries and company business-date cutoff.
 12. Compare ERP and Factory production/cost controls, finalized-only invoice/charge posting, rental tenant/landlord, and company-separated intercompany loans to avoid duplicate asset/revenue recognition.
 13. Print layout and Excel-friendly CSV export, including Unicode and negative values.
 14. Confirm that **NO GET** path, print or export posts/edits any production financial voucher, cash/bank balance, inventory quantity, FX rate, fiscal close or source record.
-15. Full CI/test/build and eventual source and accounting certification are left explicitly to Claude; do not merge/deploy before signoff.
+15. For unclassified financial-position accounts (one debit, one credit, net zero, and both nonzero), verify the two displayed differences, report/CSV values and `balanced=false`; Phase 14 must continue to read the existing ledger-residual field without changing its contract.
+16. Full CI/test/build and eventual source and accounting certification are left explicitly to Claude; do not merge/deploy before signoff.
 
-**Phase 11 implementation has been committed on the existing feature branch, but remains untested, uncertified, unmerged and undeployed.**
+**Phase 11 implementation and the subsequent conservative cash-flow, balance-sheet disclosure and comparative FX hardening have been committed on the existing feature branch.** They have **not** been compiled, tested, independently financially certified, merged or deployed. Claude remains the required certification owner; no financial voucher, inventory, cash/bank or historical source record was changed by these source-only commits.
