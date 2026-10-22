@@ -5,6 +5,11 @@ import { FEATURE_KEYS } from "./schema";
  * administrative Settings screen. The company is standalone and empty, so this
  * access policy cannot alter the role permissions of an existing company.
  */
+export const ERP_TESTER_ROLE = "ERP Tester" as const;
+
+export const isErpTestCompanyCode = (code: string | null | undefined): boolean =>
+  typeof code === "string" && /^ERPTEST-[A-F0-9]{10}$/.test(code);
+
 export const ERP_TESTER_PAGE_KEYS = FEATURE_KEYS.filter((key) => key !== "settings" && key !== "factory_production");
 
 export const ERP_TESTER_ROLE_PERMISSIONS = [
