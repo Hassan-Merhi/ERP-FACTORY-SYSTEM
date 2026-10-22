@@ -115,7 +115,8 @@ const ENDPOINTS: PinnedEndpoint[] = [
     fixture: "factory",
     method: "GET",
     path: "/api/factory/net-position",
-    query: `asOf=2030-12-31`,
+    // Today's report. A future asOf is now refused (400), and a past one is a
+    // known-at-cutoff snapshot; the fixture's rows are all dated by today.
   },
   {
     sourceModule: "server/routes/factory/suppliers/supplierStatementRoutes.ts",
@@ -242,6 +243,10 @@ const VOLATILE_KEYS = new Set([
   // standing between an extraction and a silent change to a money figure —
   // strictness is worth more here than a rule that pre-empts the next one.
   "offloadedAt",
+  // Factory Net Position's live report is dated "today" in the company's
+  // timezone, so both change with the calendar day of the run.
+  "asOf",
+  "businessToday",
   // Phase 17 reports which cash/bank ledger accounts were FX-translated. The
   // values are raw ledger account ids from the seeded fixture, so they differ on
   // every capture and would make this pin unsettleable. The translation figures

@@ -50,6 +50,12 @@ import type { DatabaseOrTransaction } from "../../../db";
 import { MoneyDecimal, toMoney } from "../../../lib/money";
 import { defaultOpeningSide } from "./openingSide";
 import { customerLinksBody, intLiteral, noNonCustomerTarget } from "./partyLineRules";
+import type { FactoryNetPositionAsOf } from "@shared/factoryNetPositionAsOf";
+import {
+  netPositionKnownTransactionThrough,
+  netPositionRecordedThrough,
+  netPositionVoucherEntryKnown,
+} from "../../factory/netPositionAsOf";
 import { loadPartyMemoLines, memoTotal, type PartyBalanceMemoLine, type MemoPartyKind } from "./unpostedMemo";
 import { notFiscalClosingVoucher } from "./periodReportRules";
 
@@ -87,6 +93,8 @@ function customerLinksCte(companyId: number): SQL {
 }
 
 export interface BalanceScope {
+  /** Opt-in historical-knowledge cutoff for Factory Net Position; does not change normal statements. */
+  knownAt?: FactoryNetPositionAsOf;
   companyId: number;
   /** Inclusive end of the period (as-of date); null/undefined for everything posted. */
   asOf?: string | null;
@@ -172,6 +180,12 @@ async function loadLines(executor: DatabaseOrTransaction, scope: BalanceScope) {
   const beforeFrom = from ? sql`a.booked_on < ${from}::date` : sql`FALSE`;
   const inPeriod = from ? sql`a.booked_on >= ${from}::date` : sql`TRUE`;
   const closingJournalFilter = scope.excludeFiscalClose ? sql` AND ${notFiscalClosingVoucher("v")}` : sql``;
+  const postedCut = scope.knownAt
+    ? sql`v.company_id = ${companyId} AND v.optional = false
+           AND ${netPositionKnownTransactionThrough(VOUCHER_BOOKED_ON, sql`v.created_at`, scope.knownAt, "utc-naive-timestamp")}
+           AND ${netPositionVoucherEntryKnown(sql`ve.created_at`, sql`ve.voucher_id`, scope.knownAt)}
+           AND (v.deleted_at IS NULL OR NOT ${netPositionRecordedThrough(sql`v.deleted_at`, scope.knownAt, "utc-naive-timestamp")})`
+    : liveVouchersOf(companyId, scope.asOf);
   const result = await executor.execute<RawLineRow & Record<string, unknown>>(sql`
     WITH ${customerLinksCte(companyId)},
     posted AS (
@@ -183,7 +197,7 @@ async function loadLines(executor: DatabaseOrTransaction, scope: BalanceScope) {
              ${VOUCHER_BOOKED_ON} AS booked_on
         FROM voucher_entries ve
         JOIN vouchers v ON v.id = ve.voucher_id
-       WHERE ${liveVouchersOf(companyId, scope.asOf)}${closingJournalFilter}
+       WHERE ${postedCut}${closingJournalFilter}
     ), attributed AS (
       SELECT
         CASE
@@ -248,6 +262,12 @@ async function loadOpenings(executor: DatabaseOrTransaction, scope: BalanceScope
       SELECT 'employee', e.id, e.code, TRIM(CONCAT(e.first_name, ' ', e.last_name)), 'Employee',
              (e.deleted_at IS NOT NULL), NULL, e.opening_balance::text, e.opening_balance_side::text
         FROM employees e WHERE e.company_id = ${companyId}
+          ${
+            scope.knownAt
+              ? sql`AND e.join_date <= ${scope.knownAt.asOf}::date
+          AND ${netPositionRecordedThrough(sql`e.created_at`, scope.knownAt, "utc-naive-timestamp")}`
+              : sql``
+          }
       UNION ALL
       SELECT 'factorySupplier', fs.id, NULL, fs.name, 'Factory Supplier', false, NULL, fs.opening_balance::text, NULL
         FROM factory_suppliers fs WHERE fs.company_id = ${companyId}
@@ -257,6 +277,7 @@ async function loadOpenings(executor: DatabaseOrTransaction, scope: BalanceScope
              (SELECT cl.ledger_account_id FROM customer_links cl WHERE cl.customer_id = c.id LIMIT 1),
              c.opening_balance::text, c.opening_balance_side::text
         FROM customers c WHERE c.company_id = ${companyId}
+          ${scope.knownAt ? sql`AND ${netPositionRecordedThrough(sql`c.created_at`, scope.knownAt, "utc-naive-timestamp")}` : sql``}
     )
     SELECT * FROM masters m WHERE ${scopeFilter(scope, sql`m.kind`, sql`m.id`)}
   `);
@@ -364,6 +385,7 @@ export interface PartyBalance {
 }
 
 export interface PartyBalanceQuery {
+  knownAt?: FactoryNetPositionAsOf;
   companyId: number;
   kind: PartyBalanceKind;
   ids?: readonly number[];
@@ -446,7 +468,13 @@ async function attachMemoLines(
   parties: PartyBalance[]
 ): Promise<void> {
   const ids = parties.map((party) => party.id).filter((id): id is number => id !== null);
-  const memo = await loadPartyMemoLines(executor, { companyId: query.companyId, kind, ids, asOf: query.asOf });
+  const memo = await loadPartyMemoLines(executor, {
+    companyId: query.companyId,
+    kind,
+    ids,
+    asOf: query.asOf,
+    knownAt: query.knownAt,
+  });
   for (const party of parties) {
     const lines = party.id === null ? [] : (memo.get(party.id) ?? []);
     party.memoLines = lines;

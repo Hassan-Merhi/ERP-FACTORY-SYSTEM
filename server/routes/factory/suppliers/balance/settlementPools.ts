@@ -19,6 +19,12 @@ import {
   voucherEntries,
 } from "@shared/schema";
 import { db } from "../../../../db";
+import type { FactoryNetPositionAsOf } from "@shared/factoryNetPositionAsOf";
+import {
+  netPositionKnownTransactionThrough,
+  netPositionRecordedThrough,
+  netPositionVoucherEntryKnown,
+} from "../../../../services/factory/netPositionAsOf";
 import { MoneyDecimal, sumMoney, toMoney } from "../../../../lib/money";
 import { resolveStoredFxRate } from "../../../../services/factory/currencyConversion";
 import { entryNativeAmounts, voucherEntryCurrencyColumns } from "../../../../services/factory/voucherEntryCurrency";
@@ -325,21 +331,43 @@ export interface SupplierSettlementBalance extends SupplierUsdEquivalent {
  */
 export async function loadSupplierSettlementBalances(
   companyId: number,
-  options: { includeOtw: boolean; asOf?: string | null; configuredFxRates: Readonly<Record<string, number>> }
+  options: {
+    includeOtw: boolean;
+    asOf?: string | null;
+    knownAt?: FactoryNetPositionAsOf;
+    configuredFxRates: Readonly<Record<string, number>>;
+  }
 ): Promise<Map<number, SupplierSettlementBalance>> {
-  const { includeOtw, asOf, configuredFxRates } = options;
+  const { includeOtw, asOf, knownAt, configuredFxRates } = options;
+  const seen = (column: typeof factoryContainers.createdAt) =>
+    knownAt
+      ? netPositionRecordedThrough(sql`${column}`, knownAt, "utc-naive-timestamp")
+      : asOf
+        ? sql`DATE(${column}) <= ${asOf}::date`
+        : sql`TRUE`;
   const result = new Map<number, SupplierSettlementBalance>();
-  const suppliersQuery = db.select().from(factorySuppliers).where(eq(factorySuppliers.companyId, companyId));
+  const suppliersQuery = db
+    .select()
+    .from(factorySuppliers)
+    .where(
+      and(
+        eq(factorySuppliers.companyId, companyId),
+        knownAt
+          ? netPositionRecordedThrough(sql`${factorySuppliers.createdAt}`, knownAt, "utc-naive-timestamp")
+          : sql`TRUE`
+      )
+    );
 
-  const containerDate = (column: typeof factoryContainers.createdAt) =>
-    asOf ? sql`DATE(${column}) <= ${asOf}::date` : sql`TRUE`;
+  const containerDate = (column: typeof factoryContainers.createdAt) => seen(column);
   const containersQuery = db
     .select()
     .from(factoryContainers)
     .where(
       and(
         eq(factoryContainers.companyId, companyId),
-        isNull(factoryContainers.deletedAt),
+        knownAt
+          ? sql`(${factoryContainers.deletedAt} IS NULL OR NOT ${netPositionRecordedThrough(sql`${factoryContainers.deletedAt}`, knownAt, "utc-naive-timestamp")})`
+          : isNull(factoryContainers.deletedAt),
         includeOtw ? sql`TRUE` : sql`${factoryContainers.status} NOT IN ('PENDING', 'IN_TRANSIT')`,
         containerDate(factoryContainers.createdAt)
       )
@@ -347,7 +375,14 @@ export async function loadSupplierSettlementBalances(
   const commissionsQuery = db
     .select()
     .from(factoryContainerCommissions)
-    .where(eq(factoryContainerCommissions.companyId, companyId));
+    .where(
+      and(
+        eq(factoryContainerCommissions.companyId, companyId),
+        knownAt
+          ? netPositionRecordedThrough(sql`${factoryContainerCommissions.createdAt}`, knownAt, "utc-naive-timestamp")
+          : sql`TRUE`
+      )
+    );
   // The statement treats an ARRIVED container with raw stock as OFFLOADED; the
   // status only labels rows, it never changes an amount, so it is not loaded here.
   const offloadChargesQuery = db
@@ -361,7 +396,15 @@ export async function loadSupplierSettlementBalances(
       and(
         eq(factoryOffloadAdditionalCharges.companyId, companyId),
         sql`${factoryOffloadAdditionalCharges.supplierId} IS NOT NULL`,
-        asOf ? sql`DATE(${factoryOffloadAdditionalCharges.createdAt}) <= ${asOf}::date` : sql`TRUE`
+        knownAt
+          ? netPositionRecordedThrough(
+              sql`${factoryOffloadAdditionalCharges.createdAt}`,
+              knownAt,
+              "utc-naive-timestamp"
+            )
+          : asOf
+            ? sql`DATE(${factoryOffloadAdditionalCharges.createdAt}) <= ${asOf}::date`
+            : sql`TRUE`
       )
     );
   // Same as the statement: container-column other charges are attributed by
@@ -379,7 +422,9 @@ export async function loadSupplierSettlementBalances(
         eq(factoryContainers.companyId, companyId),
         sql`${factoryContainers.otherChargesSupplierId} IS NOT NULL`,
         sql`${factoryContainers.otherCharges}::numeric > 0`,
-        isNull(factoryContainers.deletedAt),
+        knownAt
+          ? sql`(${factoryContainers.deletedAt} IS NULL OR NOT ${netPositionRecordedThrough(sql`${factoryContainers.deletedAt}`, knownAt, "utc-naive-timestamp")})`
+          : isNull(factoryContainers.deletedAt),
         containerDate(factoryContainers.createdAt)
       )
     );
@@ -389,7 +434,10 @@ export async function loadSupplierSettlementBalances(
     .where(
       and(
         eq(factorySupplierPayments.companyId, companyId),
-        asOf ? sql`${factorySupplierPayments.date} <= ${asOf}` : sql`TRUE`
+        asOf ? sql`${factorySupplierPayments.date} <= ${asOf}` : sql`TRUE`,
+        knownAt
+          ? netPositionRecordedThrough(sql`${factorySupplierPayments.createdAt}`, knownAt, "utc-naive-timestamp")
+          : sql`TRUE`
       )
     );
   const voucherPaymentsQuery = db
@@ -410,8 +458,22 @@ export async function loadSupplierSettlementBalances(
         sql`${vouchers.voucherNumber} NOT LIKE 'FACTORY-PAYABLE-RECLASS-%'`,
         sql`${vouchers.voucherNumber} NOT LIKE 'FACTORY-CORRECTION-%'`,
         eq(vouchers.companyId, companyId),
-        isNull(vouchers.deletedAt),
-        asOf ? sql`COALESCE(${vouchers.effectiveDate}, ${vouchers.voucherDate}) <= ${asOf}` : sql`TRUE`
+        knownAt
+          ? sql`(${vouchers.deletedAt} IS NULL OR NOT ${netPositionRecordedThrough(sql`${vouchers.deletedAt}`, knownAt, "utc-naive-timestamp")})`
+          : isNull(vouchers.deletedAt),
+        knownAt
+          ? netPositionKnownTransactionThrough(
+              sql`COALESCE(${vouchers.effectiveDate}, ${vouchers.voucherDate})`,
+              sql`${vouchers.createdAt}`,
+              knownAt,
+              "utc-naive-timestamp"
+            )
+          : asOf
+            ? sql`COALESCE(${vouchers.effectiveDate}, ${vouchers.voucherDate}) <= ${asOf}`
+            : sql`TRUE`,
+        knownAt
+          ? netPositionVoucherEntryKnown(sql`${voucherEntries.createdAt}`, sql`${voucherEntries.voucherId}`, knownAt)
+          : sql`TRUE`
       )
     );
   const fxTransfersQuery = db
@@ -420,7 +482,10 @@ export async function loadSupplierSettlementBalances(
     .where(
       and(
         eq(factorySupplierFxTransfers.companyId, companyId),
-        asOf ? sql`${factorySupplierFxTransfers.date} <= ${asOf}` : sql`TRUE`
+        asOf ? sql`${factorySupplierFxTransfers.date} <= ${asOf}` : sql`TRUE`,
+        knownAt
+          ? netPositionRecordedThrough(sql`${factorySupplierFxTransfers.createdAt}`, knownAt, "utc-naive-timestamp")
+          : sql`TRUE`
       )
     );
 

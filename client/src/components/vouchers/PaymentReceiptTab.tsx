@@ -10,17 +10,8 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import {
-  Printer,
-  FileDown,
   ChevronDown,
   ChevronUp,
   ChevronRight,
@@ -42,6 +33,7 @@ import {
   type FxWalletSummary,
 } from "@/components/vouchers/FxWalletPayment";
 import { PayFromAccountSheet } from "@/components/vouchers/PayFromAccountSheet";
+import { PaymentReceiptHeaderActions } from "@/components/vouchers/PaymentReceiptHeaderActions";
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
 
 export interface PaymentReceiptTabProps {
@@ -408,71 +400,15 @@ export function PaymentReceiptTab({
                     </Button>
                   ))}
 
-                {/* Print */}
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <span className={!canPrint ? "cursor-not-allowed" : ""}>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        disabled={!canPrint}
-                        onClick={handlePrint}
-                        data-testid="button-print"
-                        className={cn("h-8 text-muted-foreground", !canPrint && "pointer-events-none")}
-                      >
-                        <Printer className="h-4 w-4" />
-                        <span className="hidden sm:inline ml-1.5">Print</span>
-                      </Button>
-                    </span>
-                  </TooltipTrigger>
-                  {!canPrint && (
-                    <TooltipContent side="bottom" className="max-w-xs text-center">
-                      {printDisabledReason}
-                    </TooltipContent>
-                  )}
-                </Tooltip>
-
-                {/* Export */}
-                {hasExport && (
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <span className={!canExport ? "cursor-not-allowed" : ""}>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="sm"
-                              disabled={!canExport}
-                              data-testid="button-export"
-                              className={cn("h-8 text-muted-foreground", !canExport && "pointer-events-none")}
-                            >
-                              <FileDown className="h-4 w-4" />
-                              <span className="hidden sm:inline ml-1.5">Export</span>
-                              <ChevronDown className="h-3.5 w-3.5 ml-1" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => handleExportVoucher?.(false)} data-testid="export-summary">
-                              <FileDown className="h-4 w-4 mr-2" />
-                              Summary
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => handleExportVoucher?.(true)} data-testid="export-detailed">
-                              <FileDown className="h-4 w-4 mr-2" />
-                              Detailed
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </span>
-                    </TooltipTrigger>
-                    {!canExport && (
-                      <TooltipContent side="bottom" className="max-w-xs text-center">
-                        {printDisabledReason}
-                      </TooltipContent>
-                    )}
-                  </Tooltip>
-                )}
+                {/* Print + Export */}
+                <PaymentReceiptHeaderActions
+                  canPrint={canPrint}
+                  canExport={canExport}
+                  hasExport={hasExport}
+                  printDisabledReason={printDisabledReason}
+                  handlePrint={handlePrint}
+                  handleExportVoucher={handleExportVoucher}
+                />
 
                 {/* Mobile accounts drawer trigger — hidden on sm+ */}
                 <Button

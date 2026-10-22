@@ -65,6 +65,8 @@ import { lte, sql } from "drizzle-orm";
 import type Decimal from "decimal.js";
 
 import type { DatabaseOrTransaction } from "../../../db";
+import type { FactoryNetPositionAsOf } from "@shared/factoryNetPositionAsOf";
+import { netPositionKnownTransactionThrough, netPositionRecordedThrough } from "../../factory/netPositionAsOf";
 import { MoneyDecimal, toMoney } from "../../../lib/money";
 import { resolveStoredFxRate } from "../../factory/currencyConversion";
 
@@ -118,6 +120,7 @@ export interface PartyBalanceMemoLine {
 }
 
 export interface MemoQuery {
+  knownAt?: FactoryNetPositionAsOf;
   companyId: number;
   kind: MemoPartyKind;
   ids: readonly number[];
@@ -146,7 +149,14 @@ function dateCut(column: ReturnType<typeof sql>, asOf: string | null | undefined
  * before `asOf` — in the ledger at that date (wave 17 A). Without `asOf`,
  * every posted voucher counts.
  */
-function bookedBy(alias: "mv" | "cv" | "rv", asOf: string | null | undefined) {
+function bookedBy(alias: "mv" | "cv" | "rv", asOf: string | null | undefined, knownAt?: FactoryNetPositionAsOf) {
+  if (knownAt)
+    return sql` AND ${netPositionKnownTransactionThrough(
+      sql.raw(`COALESCE(${alias}.effective_date, ${alias}.voucher_date)`),
+      sql.raw(`${alias}.created_at`),
+      knownAt,
+      "utc-naive-timestamp"
+    )}`;
   if (!asOf) return sql``;
   return sql` AND ${lte(sql.raw(`COALESCE(${alias}.effective_date, ${alias}.voucher_date)`), asOf)}`;
 }
@@ -160,12 +170,16 @@ function bookedBy(alias: "mv" | "cv" | "rv", asOf: string | null | undefined) {
 function liveVoucherExists(
   numberCondition: ReturnType<typeof sql>,
   companyColumn: ReturnType<typeof sql>,
-  asOf: string | null | undefined
+  asOf: string | null | undefined,
+  knownAt?: FactoryNetPositionAsOf
 ) {
+  const deleted = knownAt
+    ? sql`(mv.deleted_at IS NULL OR NOT ${netPositionRecordedThrough(sql`mv.deleted_at`, knownAt, "utc-naive-timestamp")})`
+    : sql`mv.deleted_at IS NULL`;
   return sql`EXISTS (
     SELECT 1 FROM vouchers mv
-     WHERE mv.company_id = ${companyColumn} AND mv.deleted_at IS NULL AND mv.optional = false
-       AND ${numberCondition}${bookedBy("mv", asOf)}
+     WHERE mv.company_id = ${companyColumn} AND ${deleted} AND mv.optional = false
+       AND ${numberCondition}${bookedBy("mv", asOf, knownAt)}
   )`;
 }
 
@@ -181,7 +195,22 @@ interface CustomerMemoRow {
 }
 
 async function customerMemoRows(executor: Executor, query: MemoQuery): Promise<CustomerMemoRow[]> {
-  const { companyId, ids, asOf } = query;
+  const { companyId, ids, asOf, knownAt } = query;
+  // The invoice exists from its finalization, by the company-local cutoff
+  // (the business-date cut below uses the UTC date of the same timestamp).
+  const invoiceCreated = knownAt
+    ? sql`AND ${netPositionRecordedThrough(sql`co.created_at`, knownAt, "utc-naive-timestamp")}
+          AND (co.finalized_at IS NULL OR ${netPositionRecordedThrough(sql`co.finalized_at`, knownAt, "utc-naive-timestamp")})`
+    : sql``;
+  const cacheCreated = knownAt
+    ? sql`AND ${netPositionRecordedThrough(sql`cb.created_at`, knownAt, "utc-naive-timestamp")}`
+    : sql``;
+  const invoiceNotDeleted = knownAt
+    ? sql`(co.deleted_at IS NULL OR NOT ${netPositionRecordedThrough(sql`co.deleted_at`, knownAt, "utc-naive-timestamp")})`
+    : sql`co.deleted_at IS NULL`;
+  const cvNotDeleted = knownAt
+    ? sql`(cv.deleted_at IS NULL OR NOT ${netPositionRecordedThrough(sql`cv.deleted_at`, knownAt, "utc-naive-timestamp")})`
+    : sql`cv.deleted_at IS NULL`;
   const invoiceDate = sql`COALESCE(co.finalized_at, co.created_at)::date`;
   const invoices = rowsOf<CustomerMemoRow>(
     executor,
@@ -192,7 +221,7 @@ async function customerMemoRows(executor: Executor, query: MemoQuery): Promise<C
              (COALESCE(co.grand_total, 0) - COALESCE((
                 SELECT SUM(ch.amount) FROM customer_order_charges ch
                   JOIN vouchers cv ON cv.company_id = co.company_id
-                                  AND cv.deleted_at IS NULL AND cv.optional = false${bookedBy("cv", asOf)}
+                                  AND ${cvNotDeleted} AND cv.optional = false${bookedBy("cv", asOf, knownAt)}
                                   AND (
                                     cv.id = ch.voucher_id
                                     OR (
@@ -215,12 +244,14 @@ async function customerMemoRows(executor: Executor, query: MemoQuery): Promise<C
              co.grand_total::text AS extra
         FROM customer_orders co
         LEFT JOIN customer_dispatch_batches b ON b.id = co.dispatch_batch_id AND b.company_id = co.company_id
-       WHERE co.company_id = ${companyId} AND co.status = 'FINALIZED' AND co.deleted_at IS NULL
+       WHERE co.company_id = ${companyId} AND co.status = 'FINALIZED' AND ${invoiceNotDeleted}
          AND co.customer_id IN (${idList(ids)})
+         ${invoiceCreated}
          AND NOT ${liveVoucherExists(
            sql`mv.voucher_number = 'INV-GL-' || co.company_id::text || '-' || co.id::text`,
            sql`co.company_id`,
-           asOf
+           asOf,
+           knownAt
          )}
          ${dateCut(invoiceDate, asOf)}
     `
@@ -244,6 +275,7 @@ async function customerMemoRows(executor: Executor, query: MemoQuery): Promise<C
              cb.description AS extra
         FROM customer_balances cb
        WHERE cb.company_id = ${companyId} AND cb.customer_id IN (${idList(ids)})
+         ${cacheCreated}
          -- NULL-safe: a legacy row with no reference type is still a cache-only row.
          AND NOT (cb.reference_type IS NOT DISTINCT FROM 'INVOICE' AND cb.transaction_type IS NOT DISTINCT FROM 'SALE')
          AND cb.reference_type IS DISTINCT FROM 'CONTAINER_SALE'
@@ -253,12 +285,13 @@ async function customerMemoRows(executor: Executor, query: MemoQuery): Promise<C
                   AND (ps.status = 'VOIDED' OR ${liveVoucherExists(
                     sql`mv.voucher_number = 'FPOS-RCPT-' || ps.id::text`,
                     sql`ps.company_id`,
-                    asOf
+                    asOf,
+                    knownAt
                   )})))
          AND NOT (cb.reference_type = 'voucher' AND EXISTS (
                SELECT 1 FROM vouchers rv
                 WHERE rv.id = cb.reference_id AND rv.company_id = cb.company_id
-                  AND rv.deleted_at IS NULL AND rv.optional = false${bookedBy("rv", asOf)}))
+                  AND ${knownAt ? sql`(rv.deleted_at IS NULL OR NOT ${netPositionRecordedThrough(sql`rv.deleted_at`, knownAt, "utc-naive-timestamp")})` : sql`rv.deleted_at IS NULL`} AND rv.optional = false${bookedBy("rv", asOf, knownAt)}))
          ${dateCut(sql`cb.transaction_date::date`, asOf)}
     `
   );

@@ -25,9 +25,11 @@ import {
   MessageSquareText,
   LayoutPanelLeft,
   Printer,
+  Clock,
 } from "lucide-react";
 
 import { FxRatesCard } from "./settings/FxRatesCard";
+import { CompanyTimezoneCard } from "./settings/CompanyTimezoneCard";
 import { CompaniesTab } from "./settings/CompaniesTab";
 import { SystemToolsTab } from "./settings/SystemToolsTab";
 import { PreferencesTab } from "./settings/PreferencesTab";
@@ -107,6 +109,8 @@ export default function Settings() {
 
   const showSupplierTrackingDefaults = appMode === "erp" && selectedCompany?.companyType !== "supplier_partner";
 
+  const canManageCompanyTimezone = ["Admin", "Owner", "Developer"].includes(currentUser?.role ?? "");
+
   const sidebarGroups = [
     {
       label: "General",
@@ -159,6 +163,9 @@ export default function Settings() {
           ? [
               { key: "automatic-priority-printing", label: "Automatic Priority Printing", icon: Printer },
               { key: "fx-rates", label: "FX Rates", icon: TrendingUp },
+              ...(canManageCompanyTimezone
+                ? [{ key: "company-timezone", label: "Company Timezone", icon: Clock }]
+                : []),
             ]
           : [],
     },
@@ -315,6 +322,11 @@ export default function Settings() {
           {activeSection === "fx-rates" && appMode === "factory" && (
             <div className="space-y-5 max-w-2xl">
               <FxRatesCard />
+            </div>
+          )}
+          {activeSection === "company-timezone" && appMode === "factory" && canManageCompanyTimezone && (
+            <div className="space-y-5 max-w-2xl">
+              <CompanyTimezoneCard />
             </div>
           )}
           {activeSection === "files-export" && <FileStorageAndExport />}

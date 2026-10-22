@@ -7,6 +7,7 @@ import { phase3RemainingTranslationsPart05 } from "../client/src/i18n/phase3Rema
 import { phase3RemainingTranslationsPart06 } from "../client/src/i18n/phase3RemainingTranslations.part06";
 import { phase3RemainingTranslationsPart07 } from "../client/src/i18n/phase3RemainingTranslations.part07";
 import { phase3RemainingTranslationsPart08 } from "../client/src/i18n/phase3RemainingTranslations.part08";
+import { phase3RemainingTranslationsPart31 } from "../client/src/i18n/phase3RemainingTranslations.part31";
 import { phase3RemainingTranslationsPart09 } from "../client/src/i18n/phase3RemainingTranslations.part09";
 import { phase3RemainingTranslationsPart10 } from "../client/src/i18n/phase3RemainingTranslations.part10";
 import { phase3RemainingTranslationsPart11 } from "../client/src/i18n/phase3RemainingTranslations.part11";
@@ -32,6 +33,7 @@ const entries = [
   ...phase3RemainingTranslationsPart06,
   ...phase3RemainingTranslationsPart07,
   ...phase3RemainingTranslationsPart08,
+  ...phase3RemainingTranslationsPart31,
   ...phase3RemainingTranslationsPart09,
   ...phase3RemainingTranslationsPart10,
   ...phase3RemainingTranslationsPart11,
@@ -51,8 +53,9 @@ const entries = [
 
 describe("Phase 3 translation completion", () => {
   it("keeps the complete generated translation inventory", () => {
-    // 8208 -> 8221 with the phrases added by the 2026-10-16 feature merges (#2298-#2326).
-    expect(entries).toHaveLength(8221);
+    // 8208 -> 8221 with the phrases added by the 2026-10-16 feature merges (#2298-#2326);
+    // 8238 with the Factory Net Position historical-date phrases (#2424).
+    expect(entries).toHaveLength(8238);
     expect(new Set(entries.map((entry) => entry.en)).size).toBe(entries.length);
   });
 

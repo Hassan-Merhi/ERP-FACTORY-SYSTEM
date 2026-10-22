@@ -28,10 +28,12 @@ function getNamePrefix(name: string): string | null {
 
 export /* ── Custom Net Position View ─────────────────────────────────────────────── */
 const NP_CUSTOM_VIEW_HIDDEN_KEY = "netpos_custom_view_hidden";
+const customHiddenKey = (companyId?: number) => `${NP_CUSTOM_VIEW_HIDDEN_KEY}:${companyId ?? "no-company"}`;
 
-export function loadCustomViewHidden(): Set<string> {
+export function loadCustomViewHidden(companyId?: number): Set<string> {
   try {
-    const raw = localStorage.getItem(NP_CUSTOM_VIEW_HIDDEN_KEY);
+    // Fall back once to the pre-company key so existing choices survive.
+    const raw = localStorage.getItem(customHiddenKey(companyId)) ?? localStorage.getItem(NP_CUSTOM_VIEW_HIDDEN_KEY);
     if (!raw) return new Set();
     return new Set(JSON.parse(raw) as string[]);
   } catch {
@@ -39,8 +41,12 @@ export function loadCustomViewHidden(): Set<string> {
   }
 }
 
-export function saveCustomViewHidden(keys: Set<string>) {
-  localStorage.setItem(NP_CUSTOM_VIEW_HIDDEN_KEY, JSON.stringify(Array.from(keys)));
+export function saveCustomViewHidden(keys: Set<string>, companyId?: number) {
+  try {
+    localStorage.setItem(customHiddenKey(companyId), JSON.stringify(Array.from(keys)));
+  } catch {
+    // View-only preference. Private browsing must never crash the report.
+  }
 }
 
 export function todayStr() {

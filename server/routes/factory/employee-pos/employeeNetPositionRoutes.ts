@@ -1,4 +1,16 @@
-import { getClientDate } from "../../../lib/dateUtils";
+import { FactoryNetPositionDateError } from "@shared/factoryNetPositionAsOf";
+import {
+  resolveFactoryNetPositionAsOf,
+  netPositionKnownTransactionThrough,
+  netPositionRecordedThrough,
+  netPositionVoucherEntryKnown,
+} from "../../../services/factory/netPositionAsOf";
+import { loadFactoryNetPositionEmployees } from "../../../services/factory/netPositionEmployees";
+import { loadHistoricalFactoryPipeline } from "../../../services/factory/netPositionHistoricalPipeline";
+import { computeHistoricalFactoryAssetLiabilityOperations } from "../../../services/factory/netPositionHistoricalAssets";
+import { loadFactoryHistoricalCoverage } from "../../../services/factory/netPositionHistoryCoverage";
+import { finishFactoryNetPosition } from "./netPositionHistoricalResponse";
+import { computeLiveFactoryPrepaidRent } from "./netPositionLiveRent";
 import {
   fxAgentTablesExist,
   loadFxAgentWallets,
@@ -6,8 +18,6 @@ import {
 } from "../../../services/factory/fxAgentWalletDb";
 import { getErrorMessage } from "../../../lib/httpHandlers";
 import { logger } from "../../../lib/logger";
-import { getRentalBillingDay, getRentalPeriodDueDate } from "../../../services/rental/rentalPeriodService";
-import { pool } from "../../../db";
 import type { Express, Request, Response } from "express";
 import { db } from "../../../db";
 import { requireAuth } from "../../../auth";
@@ -18,18 +28,7 @@ import {
   type AccountLike,
 } from "../../../netPositionHelper";
 
-import {
-  customerOrders,
-  customers,
-  ledgerAccounts,
-  voucherEntries,
-  companies,
-  employees,
-  vouchers,
-  propertyContracts,
-  propertyMonthlyLedger,
-  propertyUnits,
-} from "@shared/schema";
+import { customerOrders, customers, ledgerAccounts, voucherEntries, companies, vouchers } from "@shared/schema";
 import { eq, and, desc, sql, inArray, isNull, lte } from "drizzle-orm";
 import { getCustomerLedgerAndMemo } from "../customers-core/customerLedgerSplit";
 import { loadHeldChargeSnapshot } from "../customers-core/heldUnfinalizedCustomerCharges";
@@ -42,6 +41,9 @@ import { ledgerCarriesStock } from "../../../services/accounting/perpetualInvent
 
 export function registerEmployeeNetPositionRoutes(app: Express) {
   app.get("/api/factory/net-position", requireAuth, async (req: Request, res: Response) => {
+    // Set once the date resolves: any later failure of a past date is a
+    // structured 503, never a partial or current-day figure.
+    let historicalRequest = false;
     try {
       // Resolve factory company ID the same way my-access does:
       // 1. pinned factoryCompanyId (if it's a factory-type company)
@@ -76,12 +78,20 @@ export function registerEmployeeNetPositionRoutes(app: Express) {
       // Pin it for subsequent requests this session
       req.session.factoryCompanyId = companyId;
 
-      // ── As-of date ────────────────────────────────────────────────────────────
-      // All date-sensitive queries are filtered to data created/dated on or before asOf.
-      const asOf: string =
-        typeof req.query.asOf === "string" && /^\d{4}-\d{2}-\d{2}$/.test(req.query.asOf)
-          ? req.query.asOf
-          : getClientDate(req);
+      // Resolve one company-local cutoff for ALL downstream components.
+      // Each category will adopt the effective+recorded predicate in Phases 3–6.
+      const asOfContext = await resolveFactoryNetPositionAsOf(companyId, req.query.asOf);
+      const asOf = asOfContext.asOf;
+      historicalRequest = asOfContext.isHistorical;
+      // Perform a read-only prerequisite and evidence check BEFORE invoking
+      // any reconstruction query that refers to trigger-added scan timestamps.
+      const historyCoverage = asOfContext.isHistorical
+        ? await loadFactoryHistoricalCoverage(companyId, asOfContext)
+        : null;
+      const employeeBalances = await loadFactoryNetPositionEmployees(companyId, asOfContext);
+      const historicalAssets = asOfContext.isHistorical
+        ? await computeHistoricalFactoryAssetLiabilityOperations(companyId, asOfContext)
+        : null;
 
       const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
 
@@ -90,16 +100,25 @@ export function registerEmployeeNetPositionRoutes(app: Express) {
         SELECT DISTINCT ON (currency_code) currency_code, rate_to_usd
         FROM factory_fx_rates
         WHERE company_id = ${companyId} AND source = 'manual' AND effective_date <= ${asOf}::date
-        ORDER BY currency_code, effective_date DESC
+          ${
+            asOfContext.isHistorical
+              ? sql`AND ${netPositionRecordedThrough(sql`created_at`, asOfContext, "utc-naive-timestamp")}`
+              : sql``
+          }
+        ORDER BY currency_code, effective_date DESC, created_at DESC, id DESC
       `);
       const configFxRates: Record<string, number> = {};
       for (const row of fxRateRows.rows) {
-        configFxRates[row.currency_code as string] = toMoney(row.rate_to_usd as string).toNumber();
+        const currency = String(row.currency_code ?? "")
+          .trim()
+          .toUpperCase();
+        if (currency) configFxRates[currency] = toMoney(row.rate_to_usd as string).toNumber();
       }
       // Only use manually configured rates — no hardcoded fallbacks
       const getConfigFx = (cc: string): number => {
-        if (cc.toUpperCase() === "USD") return 1;
-        const rate = configFxRates[cc];
+        const currency = cc.trim().toUpperCase();
+        if (currency === "USD") return 1;
+        const rate = configFxRates[currency];
         if (!rate || !Number.isFinite(rate) || rate <= 0)
           throw new Error(`Missing confirmed USD exchange rate for ${cc}`);
         return rate;
@@ -115,13 +134,45 @@ export function registerEmployeeNetPositionRoutes(app: Express) {
         supplierItems,
         totalSupplierLiabilities,
         totalSupplierOverpayments,
-      } = await computeNetPositionSupplierBalances({ companyId, asOf, round2, getConfigFx });
+      } = await computeNetPositionSupplierBalances({
+        companyId,
+        asOf,
+        knownAt: asOfContext.isHistorical ? asOfContext : undefined,
+        round2,
+        getConfigFx,
+      });
 
       // ── 2. ERP ledger account balances for the factory company ──────────
       const factoryAccounts = await db
         .select()
         .from(ledgerAccounts)
-        .where(and(eq(ledgerAccounts.companyId, companyId), isNull(ledgerAccounts.deletedAt)));
+        .where(
+          and(
+            eq(ledgerAccounts.companyId, companyId),
+            asOfContext.isHistorical
+              ? sql`(${ledgerAccounts.deletedAt} IS NULL OR NOT ${netPositionRecordedThrough(sql`${ledgerAccounts.deletedAt}`, asOfContext, "utc-naive-timestamp")})`
+              : isNull(ledgerAccounts.deletedAt),
+            asOfContext.isHistorical
+              ? netPositionRecordedThrough(sql`${ledgerAccounts.createdAt}`, asOfContext, "utc-naive-timestamp")
+              : sql`TRUE`
+          )
+        );
+
+      // Ledger lines on legacy EMP-<code> accounts also mutate the employee
+      // cached balance. For historic snapshots their voucher movement belongs
+      // on the employee row exactly once; retain any ledger ACCOUNT OPENING.
+      // Exact match, as netPositionEmployees and employeeBalancePosting map them.
+      const historicalEmployeeCodes = new Set(employeeBalances.map((e) => `EMP-${e.code}`));
+      const legacyEmployeeLedgerIds = new Set(
+        asOfContext.isHistorical
+          ? factoryAccounts.filter((a) => a.code && historicalEmployeeCodes.has(a.code)).map((a) => a.id)
+          : []
+      );
+      const countedAsEmployee = (e: { ledgerAccountId: number | null; employeeId: number | null }) =>
+        asOfContext.isHistorical &&
+        e.employeeId == null &&
+        e.ledgerAccountId != null &&
+        legacyEmployeeLedgerIds.has(e.ledgerAccountId);
 
       const factoryVouchers = await db
         .select({ id: vouchers.id })
@@ -130,20 +181,43 @@ export function registerEmployeeNetPositionRoutes(app: Express) {
           and(
             eq(vouchers.companyId, companyId),
             eq(vouchers.optional, false),
-            isNull(vouchers.deletedAt),
-            sql`COALESCE(${vouchers.effectiveDate}, ${vouchers.voucherDate}) <= ${asOf}`
+            asOfContext.isHistorical
+              ? sql`(${vouchers.deletedAt} IS NULL OR NOT ${netPositionRecordedThrough(sql`${vouchers.deletedAt}`, asOfContext, "utc-naive-timestamp")})`
+              : isNull(vouchers.deletedAt),
+            asOfContext.isHistorical
+              ? netPositionKnownTransactionThrough(
+                  sql`COALESCE(${vouchers.effectiveDate}, ${vouchers.voucherDate})`,
+                  sql`${vouchers.createdAt}`,
+                  asOfContext,
+                  "utc-naive-timestamp"
+                )
+              : sql`COALESCE(${vouchers.effectiveDate}, ${vouchers.voucherDate}) <= ${asOf}`
           )
         );
 
       const fVoucherIds = factoryVouchers.map((v) => v.id);
       const factoryEntries =
         fVoucherIds.length > 0
-          ? await db.select().from(voucherEntries).where(inArray(voucherEntries.voucherId, fVoucherIds))
+          ? await db
+              .select()
+              .from(voucherEntries)
+              .where(
+                and(
+                  inArray(voucherEntries.voucherId, fVoucherIds),
+                  asOfContext.isHistorical
+                    ? netPositionVoucherEntryKnown(
+                        sql`${voucherEntries.createdAt}`,
+                        sql`${voucherEntries.voucherId}`,
+                        asOfContext
+                      )
+                    : sql`TRUE`
+                )
+              )
           : [];
 
       const exactBalances = new Map<number, { debit: Decimal; credit: Decimal }>();
       for (const e of factoryEntries) {
-        if (!e.ledgerAccountId) continue;
+        if (!e.ledgerAccountId || countedAsEmployee(e)) continue;
         const cur = exactBalances.get(e.ledgerAccountId);
         exactBalances.set(e.ledgerAccountId, {
           debit: toMoney(e.debitAmount).plus(cur?.debit ?? 0),
@@ -182,7 +256,17 @@ export function registerEmployeeNetPositionRoutes(app: Express) {
       const allCustomersForNP = await db
         .select()
         .from(customers)
-        .where(and(eq(customers.companyId, companyId), isNull(customers.deletedAt)));
+        .where(
+          and(
+            eq(customers.companyId, companyId),
+            asOfContext.isHistorical
+              ? sql`(${customers.deletedAt} IS NULL OR NOT ${netPositionRecordedThrough(sql`${customers.deletedAt}`, asOfContext, "utc-naive-timestamp")})`
+              : isNull(customers.deletedAt),
+            asOfContext.isHistorical
+              ? netPositionRecordedThrough(sql`${customers.createdAt}`, asOfContext, "utc-naive-timestamp")
+              : sql`TRUE`
+          )
+        );
 
       // The previous code hid pre-finalization customer debits in the statement
       // while keeping them on Parties AND in the net-position account totals.
@@ -191,13 +275,15 @@ export function registerEmployeeNetPositionRoutes(app: Express) {
       const heldSnapshot = await loadHeldChargeSnapshot(
         companyId,
         allCustomersForNP.map((c) => c.id),
-        asOf
+        asOf,
+        asOfContext.isHistorical ? asOfContext : undefined
       );
       let projectedAccountBalances = accBalances;
       if (heldSnapshot.voucherIds.size > 0) {
         const netByAccount = new Map<number, { debit: Decimal; credit: Decimal }>();
         for (const entry of factoryEntries) {
-          if (!entry.ledgerAccountId || heldSnapshot.voucherIds.has(entry.voucherId)) continue;
+          if (!entry.ledgerAccountId || heldSnapshot.voucherIds.has(entry.voucherId) || countedAsEmployee(entry))
+            continue;
           const current = netByAccount.get(entry.ledgerAccountId);
           netByAccount.set(entry.ledgerAccountId, {
             debit: toMoney(entry.debitAmount).plus(current?.debit ?? 0),
@@ -314,7 +400,8 @@ export function registerEmployeeNetPositionRoutes(app: Express) {
         const figures = await getCustomerLedgerAndMemo(
           companyId,
           allCustomersForNP.map((c) => c.id),
-          asOf
+          asOf,
+          asOfContext.isHistorical ? asOfContext : undefined
         );
         for (const c of allCustomersForNP) {
           const f = figures.get(c.id);
@@ -337,7 +424,7 @@ export function registerEmployeeNetPositionRoutes(app: Express) {
         inventorySellValue: computedInventorySellValue,
         inventorySellingValue,
         rawMaterialStockValue: computedRawMaterialStockValue,
-        stockOtwValue,
+        stockOtwValue: computedStockOtwValue,
         balanceOnTableValue: computedBalanceOnTableValue,
       } = await computeNetPositionInventory({
         companyId,
@@ -347,6 +434,14 @@ export function registerEmployeeNetPositionRoutes(app: Express) {
         supplierLockedRateMapNp,
         allContainersF,
       });
+
+      // Only the historical report reconstructs OTW and scan/verification
+      // lifecycle from dated events. The live/current Net Position keeps its
+      // existing accepted behavior; no source orders or containers are edited.
+      const historicalPipeline = asOfContext.isHistorical
+        ? await loadHistoricalFactoryPipeline(companyId, asOfContext, getConfigFx)
+        : null;
+      const stockOtwValue = historicalPipeline?.stockOtwValue ?? computedStockOtwValue;
 
       // From the cut-over the ledger's factory stock accounts replace the computed
       // values (the selling-price view keeps its bale value, in place of the
@@ -364,26 +459,28 @@ export function registerEmployeeNetPositionRoutes(app: Express) {
       // Allocated bales are excluded from Stock In Hand by
       // computeNetPositionInventory, including bales still marked IN_STOCK,
       // so an order's allocated stock is not also valued as available inventory.
-      const pendingVerifiedRows = await db
-        .select({
-          id: customerOrders.id,
-          status: customerOrders.status,
-          orderDate: customerOrders.orderDate,
-          grandTotal: customerOrders.grandTotal,
-          totalQtyBales: customerOrders.totalQtyBales,
-          customerId: customerOrders.customerId,
-          customerName: customers.legalName,
-        })
-        .from(customerOrders)
-        .innerJoin(customers, eq(customerOrders.customerId, customers.id))
-        .where(
-          and(
-            eq(customerOrders.companyId, companyId),
-            inArray(customerOrders.status, ["PENDING_VERIFICATION", "VERIFIED", "LOADING"]),
-            lte(customerOrders.orderDate, asOf)
-          )
-        )
-        .orderBy(desc(customerOrders.orderDate));
+      const pendingVerifiedRows = historicalPipeline
+        ? []
+        : await db
+            .select({
+              id: customerOrders.id,
+              status: customerOrders.status,
+              orderDate: customerOrders.orderDate,
+              grandTotal: customerOrders.grandTotal,
+              totalQtyBales: customerOrders.totalQtyBales,
+              customerId: customerOrders.customerId,
+              customerName: customers.legalName,
+            })
+            .from(customerOrders)
+            .innerJoin(customers, eq(customerOrders.customerId, customers.id))
+            .where(
+              and(
+                eq(customerOrders.companyId, companyId),
+                inArray(customerOrders.status, ["PENDING_VERIFICATION", "VERIFIED", "LOADING"]),
+                lte(customerOrders.orderDate, asOf)
+              )
+            )
+            .orderBy(desc(customerOrders.orderDate));
 
       const mapOrder = (r: (typeof pendingVerifiedRows)[number]) => ({
         id: r.id,
@@ -393,13 +490,20 @@ export function registerEmployeeNetPositionRoutes(app: Express) {
         totalQtyBales: r.totalQtyBales ?? 0,
       });
 
-      const pendingOrders = pendingVerifiedRows.filter((r) => r.status === "PENDING_VERIFICATION").map(mapOrder);
-      const verifiedOrders = pendingVerifiedRows.filter((r) => r.status === "VERIFIED").map(mapOrder);
-      const loadingOrders = pendingVerifiedRows.filter((r) => r.status === "LOADING").map(mapOrder);
+      const pendingOrders =
+        historicalPipeline?.pendingOrders ??
+        pendingVerifiedRows.filter((r) => r.status === "PENDING_VERIFICATION").map(mapOrder);
+      const verifiedOrders =
+        historicalPipeline?.verifiedOrders ?? pendingVerifiedRows.filter((r) => r.status === "VERIFIED").map(mapOrder);
+      const loadingOrders =
+        historicalPipeline?.loadingOrders ?? pendingVerifiedRows.filter((r) => r.status === "LOADING").map(mapOrder);
 
-      const pendingTotal = round2(pendingOrders.reduce((s, o) => s + o.grandTotal, 0));
-      const verifiedTotal = round2(verifiedOrders.reduce((s, o) => s + o.grandTotal, 0));
-      const loadingTotal = round2(loadingOrders.reduce((s, o) => s + o.grandTotal, 0));
+      const pendingTotal =
+        historicalPipeline?.pendingTotal ?? round2(pendingOrders.reduce((s, o) => s + o.grandTotal, 0));
+      const verifiedTotal =
+        historicalPipeline?.verifiedTotal ?? round2(verifiedOrders.reduce((s, o) => s + o.grandTotal, 0));
+      const loadingTotal =
+        historicalPipeline?.loadingTotal ?? round2(loadingOrders.reduce((s, o) => s + o.grandTotal, 0));
 
       // ── 5. Combine and return ────────────────────────────────────────────
       // Rename for clarity — these are the two factory-specific values.
@@ -439,14 +543,18 @@ export function registerEmployeeNetPositionRoutes(app: Express) {
       // WHERE remaining_balance > 0 (see GET /api/factory/workers), so the two figures
       // always match instead of drifting from the stale "Factory Worker Advances" ledger
       // account balance (advance repayments aren't always posted back to that account).
-      const workerAdvRes = await db.execute(sql`
-        SELECT COALESCE(SUM(remaining_balance::numeric), 0) AS total
-        FROM   factory_worker_advances
-        WHERE  company_id = ${companyId}
-          AND  remaining_balance > 0
-      `);
-      const workerAdvRow = resultRows(workerAdvRes)[0] ?? {};
-      const workerAdvancesValue = round2(toMoney(String(workerAdvRow.total ?? "0")).toNumber());
+      let workerAdvancesValue: number;
+      if (historicalAssets) {
+        workerAdvancesValue = historicalAssets.workerAdvancesValue;
+      } else {
+        const workerAdvRes = await db.execute(sql`
+          SELECT COALESCE(SUM(remaining_balance::numeric), 0) AS total
+          FROM factory_worker_advances
+          WHERE company_id = ${companyId} AND remaining_balance > 0
+        `);
+        const workerAdvRow = resultRows(workerAdvRes)[0] ?? {};
+        workerAdvancesValue = round2(toMoney(String(workerAdvRow.total ?? "0")).toNumber());
+      }
 
       // ── Split customer items into DR (asset) and CR (liability) ──────────────
       const customerDrItems = customerItems.filter((c) => c.balanceUsd > 0);
@@ -461,122 +569,25 @@ export function registerEmployeeNetPositionRoutes(app: Express) {
       // CREDIT  = tenants paid MORE than expected → advance money we hold (asset)
       // OUTSTANDING = tenants still OWE us → receivable (asset)
       // Prepaid Rent = CREDIT + OUTSTANDING  (both are "What We Have")
-      let prepaidRent = 0;
-      const rentPayable = 0;
-      {
-        // All FACTORY units owned by this company
-        const rentalUnitsRows = await db
-          .select({ id: propertyUnits.id })
-          .from(propertyUnits)
-          .where(
-            and(
-              eq(propertyUnits.companyId, companyId),
-              eq(propertyUnits.module, "FACTORY"),
-              eq(propertyUnits.active, true)
-            )
-          );
+      const prepaidRent = historicalAssets?.prepaidRent ?? (await computeLiveFactoryPrepaidRent(companyId, asOf));
+      const rentPayable = historicalAssets?.rentPayable ?? 0;
 
-        if (rentalUnitsRows.length > 0) {
-          const unitIds = rentalUnitsRows.map((u) => u.id);
-          const activeContracts = await db
-            .select()
-            .from(propertyContracts)
-            .where(
-              and(
-                eq(propertyContracts.companyId, companyId),
-                eq(propertyContracts.module, "FACTORY"),
-                inArray(propertyContracts.unitId, unitIds),
-                eq(propertyContracts.status, "ACTIVE")
-              )
-            );
-
-          if (activeContracts.length > 0) {
-            const contractIds = activeContracts.map((c) => c.id);
-
-            // Billing-day-aware expected (same logic as rentalUnitsContractsRoutes)
-            const ledgerRows = await db
-              .select({
-                contractId: propertyMonthlyLedger.contractId,
-                year: propertyMonthlyLedger.year,
-                month: propertyMonthlyLedger.month,
-                expectedAmount: propertyMonthlyLedger.expectedAmount,
-              })
-              .from(propertyMonthlyLedger)
-              .where(inArray(propertyMonthlyLedger.contractId, contractIds));
-
-            const ledgerByContract = new Map<number, typeof ledgerRows>();
-            for (const row of ledgerRows) {
-              const arr = ledgerByContract.get(row.contractId) ?? [];
-              arr.push(row);
-              ledgerByContract.set(row.contractId, arr);
-            }
-
-            const expectedAsOfByContract = new Map<number, Decimal>();
-            for (const c of activeContracts) {
-              const billingDay = getRentalBillingDay(c.startDate as string);
-              const rows = ledgerByContract.get(c.id) ?? [];
-              let expected = new MoneyDecimal(0);
-              for (const row of rows) {
-                const billingDate = getRentalPeriodDueDate(row.year, row.month, billingDay);
-                if (billingDate <= asOf) expected = expected.plus(toMoney(row.expectedAmount as string));
-              }
-              expectedAsOfByContract.set(c.id, expected);
-            }
-
-            // POSTED payments only — same authoritative source as the dashboard
-            const { rows: postedRows } = await pool.query<{ contract_id: string; paid: string }>(
-              `SELECT contract_id, COALESCE(SUM(amount::numeric), 0) AS paid
-               FROM property_payments
-               WHERE contract_id = ANY($1) AND posting_status = 'POSTED' AND payment_date <= $2
-               GROUP BY contract_id`,
-              [contractIds, asOf]
-            );
-            const paidAsOfByContract = new Map<number, Decimal>();
-            postedRows.forEach((r) => paidAsOfByContract.set(parseInt(r.contract_id), toMoney(r.paid)));
-
-            // Positive = tenant still owes (outstanding receivable); negative =
-            // tenant overpaid (advance credit we hold). Both count at their size.
-            let rentTotal = new MoneyDecimal(prepaidRent);
-            for (const c of activeContracts) {
-              const expected = expectedAsOfByContract.get(c.id) ?? new MoneyDecimal(0);
-              rentTotal = rentTotal.plus(expected.minus(paidAsOfByContract.get(c.id) ?? 0).abs());
-            }
-            prepaidRent = round2(rentTotal.toNumber());
-          }
-        }
-      }
-
-      // ── Employee Salaries Payable / Receivables — directly from employees.currentBalance ──
-      // Employee balances are tracked via employees.currentBalance (not through a
-      // "Payroll Payable" ledger account), so we inject them here explicitly.
-      // A negative currentBalance means the employee owes the company (e.g. an unpaid
-      // advance/FX debit) — that's a receivable and belongs in "What We Have", not a
-      // liability. Previously these were dropped entirely (only bal > 0 was summed).
-      const allEmployeesForNP = await db
-        .select({
-          firstName: employees.firstName,
-          lastName: employees.lastName,
-          currentBalance: employees.currentBalance,
-        })
-        .from(employees)
-        .where(
-          and(
-            eq(employees.companyId, companyId),
-            eq(employees.employeeType, "Employee"),
-            eq(employees.active, true),
-            isNull(employees.deletedAt)
-          )
-        );
+      // One signed, dated Employee projection shared with payroll-breakdown.
+      // Today preserves employees.current_balance; historical dates replay
+      // opening + recorded vouchers and do not subtract from today's cache.
       let salariesPayableExact = new MoneyDecimal(0);
       let receivablesExact = new MoneyDecimal(0);
       const employeeReceivableItems: { name: string; balanceUsd: number }[] = [];
-      for (const emp of allEmployeesForNP) {
-        const bal = toMoney(emp.currentBalance);
+      for (const employee of employeeBalances) {
+        const bal = toMoney(employee.balance);
         if (bal.greaterThan(0)) salariesPayableExact = salariesPayableExact.plus(bal);
         else if (bal.lessThan(0)) {
           receivablesExact = receivablesExact.plus(bal.abs());
-          const empName = [emp.firstName, emp.lastName].filter(Boolean).join(" ").trim();
-          if (empName) employeeReceivableItems.push({ name: empName, balanceUsd: bal.abs().toNumber() });
+          if (employee.name)
+            employeeReceivableItems.push({
+              name: employee.name,
+              balanceUsd: bal.abs().toNumber(),
+            });
         }
       }
       const employeeSalariesPayable = round2(salariesPayableExact.toNumber());
@@ -773,7 +784,7 @@ export function registerEmployeeNetPositionRoutes(app: Express) {
         ...(rentPayable > 0 ? [{ name: "Rent Payable", value: rentPayable }] : []),
       ];
 
-      res.json({
+      const responseBody = {
         asOf,
         fxAgentWallets,
         fxAgentWalletWarnings,
@@ -785,6 +796,7 @@ export function registerEmployeeNetPositionRoutes(app: Express) {
         onUs: { total: onUsTotal, breakdown: onUsBreakdown, accounts: onUsAccounts },
         supplierLiabilities: round2(totalSupplierLiabilities),
         supplierOverpayments: round2(totalSupplierOverpayments),
+        stockOtwValue,
         inventoryValue: baleInventoryValue,
         rawMaterialValue: rawMaterialStockValue,
         balanceOnTableValue: selectedBalanceOnTableValue,
@@ -798,9 +810,33 @@ export function registerEmployeeNetPositionRoutes(app: Express) {
         loadingTotal,
         ledgerLiabilities: round2(ledgerOnUsTotal),
         payrollPayable: employeeSalariesPayable,
-      });
+      };
+
+      res.json(
+        await finishFactoryNetPosition({
+          companyId,
+          scope: asOfContext,
+          body: responseBody,
+          valuationMode,
+          historyCoverage,
+          pipelineWarnings: historicalPipeline?.warnings ?? [],
+          assetWarnings: historicalAssets?.warnings ?? [],
+        })
+      );
     } catch (error: unknown) {
+      if (error instanceof FactoryNetPositionDateError) {
+        return res.status(error.status).json({ code: error.code, message: error.message });
+      }
       logger.error("Factory net-position error:", { error: error });
+      if (historicalRequest || (error instanceof Error && error.message.startsWith("HISTORICAL_"))) {
+        const fxMissing = error instanceof Error && error.message.startsWith("Missing confirmed USD exchange rate");
+        return res.status(503).json({
+          code: "HISTORICAL_NET_POSITION_UNAVAILABLE",
+          message:
+            "The historical snapshot could not be constructed. No current-day balance was substituted." +
+            (fxMissing ? ` ${(error as Error).message} known by the selected date.` : ""),
+        });
+      }
       res.status(500).json({ message: getErrorMessage(error) });
     }
   });

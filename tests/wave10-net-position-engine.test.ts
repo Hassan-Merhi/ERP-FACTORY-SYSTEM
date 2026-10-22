@@ -367,6 +367,26 @@ describe("net position party lines equal the engine", () => {
 
 describe("the factory net position", () => {
   it("takes customers at their operational balance and factory suppliers from the engine, orders apart", async () => {
+    // A past asOf is a known-at-cutoff snapshot: only rows RECORDED by the end
+    // of AS_OF count. The scenario's documents were entered by then; the
+    // legacy container (created_at left at now, as before) was not.
+    const recordedBy = `${AS_OF} 12:00`;
+    for (const table of [
+      "ledger_accounts",
+      "customers",
+      "customer_orders",
+      "customer_balances",
+      "vouchers",
+      "factory_suppliers",
+    ]) {
+      await pool.query(`UPDATE ${table} SET created_at = $2 WHERE company_id = $1`, [factory, recordedBy]);
+    }
+    // The pending order was last changed then too (its status is proven by it).
+    await pool.query(`UPDATE customer_orders SET updated_at = $2 WHERE company_id = $1`, [factory, recordedBy]);
+    await pool.query(
+      `UPDATE voucher_entries SET created_at = $2 WHERE voucher_id IN (SELECT id FROM vouchers WHERE company_id = $1)`,
+      [factory, recordedBy]
+    );
     const { statusCode, body } = await call("GET /api/factory/net-position", {
       session: { factoryCompanyId: factory, currentCompanyId: factory },
       query: { asOf: AS_OF },

@@ -4,7 +4,6 @@ import { registerEmployeeAdvancesBonusRoutes } from "./employeeAdvancesBonusRout
 import { registerEmployeeLedgerWasteRoutes } from "./employeeLedgerWasteRoutes";
 import { registerWasteDispatchBandwidthRoutes } from "./wasteDispatchBandwidthRoutes";
 import { registerEmployeePosFinancialRoutes } from "./pos-financial";
-import { registerNetPositionHistoricalCorrection } from "./netPositionHistoricalCorrection";
 import { registerEmployeeNetPositionRoutes } from "./employeeNetPositionRoutes";
 import { registerEmployeeAttendanceRoutes } from "./employeeAttendanceRoutes";
 
@@ -14,7 +13,6 @@ export function registerFactoryEmployeesPosRoutes(app: Express) {
   registerWasteDispatchBandwidthRoutes(app);
   registerEmployeeLedgerWasteRoutes(app);
   registerEmployeePosFinancialRoutes(app);
-  registerNetPositionHistoricalCorrection(app);
   registerEmployeeNetPositionRoutes(app);
   registerEmployeeAttendanceRoutes(app);
 }

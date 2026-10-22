@@ -3,14 +3,14 @@
  *
  * Extracted from FactoryNetPosition.tsx during the Phase 4 god-file split.
  */
-import {useState} from "react";
-import {Badge} from "@/components/ui/badge";
-import {ChevronDown, ChevronRight} from "lucide-react";
+import { useState } from "react";
+import { Badge } from "@/components/ui/badge";
+import { ChevronDown, ChevronRight } from "lucide-react";
 
-import type {AccountItem} from "../types";
-import {fmt, getNamePrefix} from "../utils";
-import {SupplierRow} from "./SupplierRow";
-import {PrefixGroup} from "./PrefixGroup";
+import type { AccountItem } from "../types";
+import { fmt, getNamePrefix } from "../utils";
+import { SupplierRow } from "./SupplierRow";
+import { PrefixGroup } from "./PrefixGroup";
 
 export function CategoryGroup({
   title,
@@ -75,7 +75,12 @@ export function CategoryGroup({
             <PrefixGroup key={prefix} prefix={prefix} accounts={accs} accentClass={accentClass} startIndex={gi * 100} />
           ))}
           {plainAccounts.map((acc, i) => (
-            <SupplierRow key={acc.name} acc={acc} accentClass={accentClass} index={i} />
+            <SupplierRow
+              key={acc.id != null ? `ledger:${acc.id}` : `${acc.code}:${acc.name}:${i}`}
+              acc={acc}
+              accentClass={accentClass}
+              index={i}
+            />
           ))}
         </div>
       )}

@@ -6,6 +6,8 @@ import { db } from "../../../db";
 import { buildBrokerStatement } from "../suppliers/broker";
 import { loadSupplierSettlementBalances } from "../suppliers/balance/settlementPools";
 import { MoneyDecimal, toMoney } from "../../../lib/money";
+import type { FactoryNetPositionAsOf } from "@shared/factoryNetPositionAsOf";
+import { netPositionRecordedThrough } from "../../../services/factory/netPositionAsOf";
 
 /**
  * Section 1 of the factory net-position report: what the company owes its
@@ -26,6 +28,7 @@ import { MoneyDecimal, toMoney } from "../../../lib/money";
 export interface NetPositionSupplierContext {
   companyId: number;
   asOf: string;
+  knownAt?: FactoryNetPositionAsOf;
   round2: (n: number) => number;
   getConfigFx: (cc: string) => number;
   /**
@@ -52,7 +55,14 @@ export async function computeNetPositionSupplierBalances(
   const suppliersList = await db
     .select()
     .from(factorySuppliers)
-    .where(eq(factorySuppliers.companyId, ctx.companyId))
+    .where(
+      and(
+        eq(factorySuppliers.companyId, ctx.companyId),
+        ctx.knownAt
+          ? netPositionRecordedThrough(sql`${factorySuppliers.createdAt}`, ctx.knownAt, "utc-naive-timestamp")
+          : sql`TRUE`
+      )
+    )
     .orderBy(factorySuppliers.name);
 
   // Authoritative locked rate (USD) per supplier — same map rawStockReceiptRoutes.ts
@@ -76,8 +86,12 @@ export async function computeNetPositionSupplierBalances(
     .where(
       and(
         eq(factoryContainers.companyId, ctx.companyId),
-        isNull(factoryContainers.deletedAt),
-        sql`DATE(${factoryContainers.createdAt}) <= ${ctx.asOf}::date`
+        ctx.knownAt
+          ? sql`(${factoryContainers.deletedAt} IS NULL OR NOT ${netPositionRecordedThrough(sql`${factoryContainers.deletedAt}`, ctx.knownAt, "utc-naive-timestamp")})`
+          : isNull(factoryContainers.deletedAt),
+        ctx.knownAt
+          ? netPositionRecordedThrough(sql`${factoryContainers.createdAt}`, ctx.knownAt, "utc-naive-timestamp")
+          : sql`DATE(${factoryContainers.createdAt}) <= ${ctx.asOf}::date`
       )
     );
 
@@ -97,6 +111,7 @@ export async function computeNetPositionSupplierBalances(
   const settlementBySupplier = await loadSupplierSettlementBalances(ctx.companyId, {
     includeOtw: true,
     asOf: ctx.asOf,
+    knownAt: ctx.knownAt,
     configuredFxRates: {},
   });
 
@@ -130,7 +145,7 @@ export async function computeNetPositionSupplierBalances(
     // Brokers: use buildBrokerStatement (same function as Suppliers page) for exact parity
     if (brokerIds.has(s.id) && !processedBrokers.has(s.id)) {
       processedBrokers.add(s.id);
-      const stmt = await buildBrokerStatement(s.id, ctx.companyId, true, { asOf: ctx.asOf });
+      const stmt = await buildBrokerStatement(s.id, ctx.companyId, true, { asOf: ctx.asOf, knownAt: ctx.knownAt });
       if (!stmt) continue;
       let brokerUsd = new MoneyDecimal(0);
       for (const ledger of stmt.currencyLedgers) {

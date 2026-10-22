@@ -19,6 +19,7 @@ import type Decimal from "decimal.js";
 import { db } from "../../../db";
 import { MoneyDecimal, toMoney } from "../../../lib/money";
 import { getPartyBalances, type PartyBalanceMemoLine } from "../../../services/accounting/balances/ledgerBalanceEngine";
+import type { FactoryNetPositionAsOf } from "@shared/factoryNetPositionAsOf";
 import { heldUnfinalizedCustomerCharges, customerStatementLedgerBalance } from "./heldUnfinalizedCustomerCharges";
 
 export interface CustomerLedgerAndMemo {
@@ -41,13 +42,14 @@ const ZERO = new MoneyDecimal(0);
 export async function getCustomerLedgerAndMemo(
   companyId: number,
   ids: readonly number[],
-  asOf?: string | null
+  asOf?: string | null,
+  knownAt?: FactoryNetPositionAsOf
 ): Promise<Map<number, CustomerLedgerAndMemo>> {
   const out = new Map<number, CustomerLedgerAndMemo>();
   if (ids.length === 0) return out;
   const [{ parties }, heldByCustomer] = await Promise.all([
-    getPartyBalances(db, { companyId, kind: "customer", ids, asOf, memo: true }),
-    heldUnfinalizedCustomerCharges(companyId, ids, asOf),
+    getPartyBalances(db, { companyId, kind: "customer", ids, asOf, memo: true, knownAt }),
+    heldUnfinalizedCustomerCharges(companyId, ids, asOf, knownAt),
   ]);
   for (const party of parties) {
     if (party.id === null) continue;

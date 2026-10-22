@@ -1,5 +1,5 @@
-import { useState, useCallback, useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { PageHeader } from "@/components/PageHeader";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -14,9 +14,6 @@ import {
   ChevronRight,
   ChevronLeft,
   RefreshCw,
-  Eye,
-  EyeOff,
-  RotateCcw,
   ExternalLink,
   CalendarDays,
 } from "lucide-react";
@@ -25,33 +22,11 @@ import type { AccountDisplayLayout } from "../accounts/DisplayAccountGroups";
 import { useAccountDisplayOrder } from "@/hooks/useAccountDisplayOrder";
 import { InlineOrderButtons, inlineDrag, type InlineOrderActions } from "@/components/accounts/InlineOrderButtons";
 import { useUserPreferences } from "@/hooks/use-user-preferences";
-
-interface AccountItem {
-  id?: number;
-  name: string;
-  code: string;
-  value: number;
-  category: string;
-}
-
-interface BreakdownItem {
-  name: string;
-  value: number;
-}
-
-interface FactoryNetPositionData {
-  forUsTotal: number;
-  onUsTotal: number;
-  netPosition: number;
-  netPositionLabel: string;
-  forUs: { total: number; breakdown: BreakdownItem[]; accounts: AccountItem[] };
-  onUs: { total: number; breakdown: BreakdownItem[]; accounts: AccountItem[] };
-  supplierLiabilities: number;
-  inventoryValue: number;
-  rawMaterialValue: number;
-  ledgerAssets: number;
-  ledgerLiabilities: number;
-}
+import { getAppDate } from "@/lib/queryClient";
+import { useCompany } from "@/contexts/CompanyContext";
+import { companyQueryKey } from "@/lib/companyQueryScope";
+import type { AccountItem, FactoryNetPositionData } from "./factorynetposition/detailsTypes";
+import { CustomNetPositionView } from "./factorynetposition/components/DetailsCustomNetPositionView";
 
 function InsuranceSubGroup({
   accounts,
@@ -63,7 +38,7 @@ function InsuranceSubGroup({
   formatAmount: (n: number) => string;
 }) {
   const [open, setOpen] = useState(false);
-  const total = accounts.reduce((s, a) => s + Math.abs(a.value), 0);
+  const total = accounts.reduce((s, a) => s + a.value, 0);
 
   return (
     <>
@@ -108,7 +83,7 @@ function InsuranceSubGroup({
               <span className="font-medium text-foreground">{acc.name.replace(/^Insurance\s*[-–]\s*/i, "")}</span>
             )}
             <span className={`shrink-0 whitespace-nowrap font-mono tabular-nums ${amountColor}`}>
-              {formatAmount(Math.abs(acc.value))}
+              {formatAmount(acc.value)}
             </span>
           </div>
         ))}
@@ -136,7 +111,7 @@ function CategoryGroup({
   actions?: InlineOrderActions;
 }) {
   const [open, setOpen] = useState(true);
-  const total = accounts.reduce((s, a) => s + Math.abs(a.value), 0);
+  const total = accounts.reduce((s, a) => s + a.value, 0);
 
   const insuranceAccounts = accounts.filter((a) => /^Insurance\s*[-–]/i.test(a.name));
   const otherAccounts = accounts.filter((a) => !/^Insurance\s*[-–]/i.test(a.name));
@@ -196,7 +171,7 @@ function CategoryGroup({
                   actions={actions}
                 />
                 <span className={`shrink-0 whitespace-nowrap font-mono tabular-nums ${amountColor}`}>
-                  {formatAmount(Math.abs(acc.value))}
+                  {formatAmount(acc.value)}
                 </span>
               </div>
             </div>
@@ -270,7 +245,7 @@ function CollapsibleSection({
       if (ai != null && bi != null) return ai - bi;
       if (ai != null) return -1;
       if (bi != null) return 1;
-      return b.reduce((s, x) => s + Math.abs(x.value), 0) - a.reduce((s, x) => s + Math.abs(x.value), 0);
+      return b.reduce((s, x) => s + x.value, 0) - a.reduce((s, x) => s + x.value, 0);
     });
 
   const groupKeys = sortedCategories.filter(([key]) => labels.has(key)).map(([key]) => key.slice("display:".length));
@@ -329,9 +304,6 @@ function CollapsibleSection({
   );
 }
 
-function todayStr() {
-  return new Date().toISOString().slice(0, 10);
-}
 function shiftDate(date: string, days: number): string {
   const d = new Date(date + "T12:00:00Z");
   d.setUTCDate(d.getUTCDate() + days);
@@ -342,283 +314,9 @@ function formatDateLabel(date: string): string {
   return d.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric", timeZone: "UTC" });
 }
 
-const STORAGE_KEY = "netpos_details_custom_view_hidden";
-
-interface PayrollEmployee {
-  id: number;
-  name: string;
-  code: string;
-  balance: number;
-}
-
-function CustomNetPositionView({
-  data,
-  formatAmount,
-  asOf,
-}: {
-  data: FactoryNetPositionData;
-  formatAmount: (n: number) => string;
-  asOf: string;
-}) {
-  const [hiddenKeys, setHiddenKeys] = useState<Set<string>>(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      return saved ? new Set(JSON.parse(saved)) : new Set();
-    } catch {
-      return new Set();
-    }
-  });
-
-  // Fetch per-employee payroll breakdown
-  const { data: payrollData } = useQuery<{ employees: PayrollEmployee[] }>({
-    queryKey: ["/api/factory/net-position/payroll-breakdown", asOf],
-    queryFn: async () => {
-      const res = await fetch(`/api/factory/net-position/payroll-breakdown?asOf=${asOf}`, { credentials: "include" });
-      if (!res.ok) throw new Error(await res.text());
-      return res.json();
-    },
-    staleTime: 30_000,
-  });
-
-  const payrollEmployees = useMemo(() => payrollData?.employees ?? [], [payrollData?.employees]);
-
-  const toggleKey = useCallback((key: string) => {
-    setHiddenKeys((prev) => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify([...next]));
-      } catch {
-        // Storage is unavailable in private mode and can throw on quota; the value is a convenience, not state we need.
-      }
-      return next;
-    });
-  }, []);
-
-  const showAll = useCallback(() => {
-    setHiddenKeys(new Set());
-    try {
-      localStorage.removeItem(STORAGE_KEY);
-    } catch {
-      // Storage is unavailable in private mode and can throw on quota; the value is a convenience, not state we need.
-    }
-  }, []);
-
-  const forUsAccounts = useMemo(
-    () => (data.forUs.accounts || []).map((a) => ({ ...a, side: "forUs" as const })),
-    [data]
-  );
-
-  // Exclude the aggregated "Payroll Payable" row — rendered as individual employee rows instead
-  const onUsAccounts = useMemo(
-    () =>
-      (data.onUs.accounts || [])
-        .filter((a) => a.name !== "Payroll Payable")
-        .map((a) => ({ ...a, side: "onUs" as const })),
-    [data]
-  );
-
-  const visibleForUs = useMemo(
-    () => forUsAccounts.filter((a) => !hiddenKeys.has(`forUs:${a.name}`)),
-    [forUsAccounts, hiddenKeys]
-  );
-  const visibleOnUs = useMemo(
-    () => onUsAccounts.filter((a) => !hiddenKeys.has(`onUs:${a.name}`)),
-    [onUsAccounts, hiddenKeys]
-  );
-  const visiblePayrollTotal = useMemo(
-    () => payrollEmployees.filter((e) => !hiddenKeys.has(`payroll:${e.id}`)).reduce((s, e) => s + e.balance, 0),
-    [payrollEmployees, hiddenKeys]
-  );
-
-  const visibleForUsTotal = visibleForUs.reduce((s, a) => s + Math.abs(a.value), 0);
-  const visibleOnUsTotal = visibleOnUs.reduce((s, a) => s + Math.abs(a.value), 0) + visiblePayrollTotal;
-  const customNet = visibleForUsTotal - visibleOnUsTotal;
-  const isPositive = customNet >= 0;
-
-  return (
-    <Card data-testid="card-custom-net-position">
-      <CardHeader className="pb-3">
-        <div className="flex items-center justify-between flex-wrap gap-2">
-          <div>
-            <CardTitle className="text-base">Custom Net Position View</CardTitle>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              Hide accounts to see an adjusted subtotal — does not affect the real Net Position
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            {hiddenKeys.size > 0 && (
-              <Button size="sm" variant="outline" onClick={showAll} data-testid="button-show-all-accounts">
-                <RotateCcw className="h-3.5 w-3.5 mr-1.5" />
-                Show all ({hiddenKeys.size} hidden)
-              </Button>
-            )}
-            <div
-              className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-bold font-mono ${isPositive ? "bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300" : "bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300"}`}
-            >
-              <Equal className="h-3.5 w-3.5" />
-              {formatAmount(customNet)}
-            </div>
-          </div>
-        </div>
-      </CardHeader>
-      <CardContent className="pt-0">
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-          {/* What We Have */}
-          <div className="space-y-1">
-            <div className="flex items-center gap-1.5 mb-2">
-              <Plus className="h-3.5 w-3.5 text-green-600 shrink-0" />
-              <span className="text-xs font-semibold text-green-600 uppercase tracking-wide">What We Have</span>
-            </div>
-            {forUsAccounts.map((a) => {
-              const key = `forUs:${a.name}`;
-              const hidden = hiddenKeys.has(key);
-              return (
-                <button
-                  key={key}
-                  type="button"
-                  onClick={() => toggleKey(key)}
-                  data-testid={`button-toggle-${key}`}
-                  className={`w-full flex items-center justify-between px-3 py-2 rounded-md text-sm hover-elevate transition-opacity ${hidden ? "opacity-40" : ""}`}
-                >
-                  <div className="flex items-center gap-2 min-w-0">
-                    {hidden ? (
-                      <EyeOff className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                    ) : (
-                      <Eye className="h-3.5 w-3.5 text-green-500 shrink-0" />
-                    )}
-                    <span className={hidden ? "text-muted-foreground line-through" : "text-foreground"}>{a.name}</span>
-                    {a.id && (
-                      <span
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          window.open(`/factory/ledger-monthly/${a.id}`, "_blank");
-                        }}
-                        className="text-muted-foreground hover:text-foreground shrink-0"
-                        data-testid={`link-ledger-forus-${a.id}`}
-                      >
-                        <ExternalLink className="h-3 w-3" />
-                      </span>
-                    )}
-                  </div>
-                  <span
-                    className={`shrink-0 whitespace-nowrap font-mono tabular-nums ${hidden ? "text-muted-foreground" : "text-green-600"}`}
-                  >
-                    {formatAmount(Math.abs(a.value))}
-                  </span>
-                </button>
-              );
-            })}
-            <div className="flex justify-between items-center px-3 py-2 rounded-md bg-green-50 dark:bg-green-950/30 mt-1">
-              <span className="text-xs font-semibold text-green-700 dark:text-green-300">Visible subtotal</span>
-              <span className="shrink-0 whitespace-nowrap font-mono font-bold text-green-600">
-                {formatAmount(visibleForUsTotal)}
-              </span>
-            </div>
-          </div>
-
-          {/* What We Owe */}
-          <div className="space-y-1">
-            <div className="flex items-center gap-1.5 mb-2">
-              <Minus className="h-3.5 w-3.5 text-red-600 shrink-0" />
-              <span className="text-xs font-semibold text-red-600 uppercase tracking-wide">What We Owe</span>
-            </div>
-
-            {/* Regular onUs account rows */}
-            {onUsAccounts.map((a) => {
-              const key = `onUs:${a.name}`;
-              const hidden = hiddenKeys.has(key);
-              return (
-                <button
-                  key={key}
-                  type="button"
-                  onClick={() => toggleKey(key)}
-                  data-testid={`button-toggle-${key}`}
-                  className={`w-full flex items-center justify-between px-3 py-2 rounded-md text-sm hover-elevate transition-opacity ${hidden ? "opacity-40" : ""}`}
-                >
-                  <div className="flex items-center gap-2 min-w-0">
-                    {hidden ? (
-                      <EyeOff className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                    ) : (
-                      <Eye className="h-3.5 w-3.5 text-red-500 shrink-0" />
-                    )}
-                    <span className={hidden ? "text-muted-foreground line-through" : "text-foreground"}>{a.name}</span>
-                    {a.id && (
-                      <span
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          window.open(`/factory/ledger-monthly/${a.id}`, "_blank");
-                        }}
-                        className="text-muted-foreground hover:text-foreground shrink-0"
-                        data-testid={`link-ledger-onus-${a.id}`}
-                      >
-                        <ExternalLink className="h-3 w-3" />
-                      </span>
-                    )}
-                  </div>
-                  <span
-                    className={`shrink-0 whitespace-nowrap font-mono tabular-nums ${hidden ? "text-muted-foreground" : "text-red-600"}`}
-                  >
-                    {formatAmount(Math.abs(a.value))}
-                  </span>
-                </button>
-              );
-            })}
-
-            {/* Payroll Payable — broken into per-employee rows */}
-            {payrollEmployees.length > 0 && (
-              <>
-                <div className="flex items-center justify-between px-3 py-2 text-sm">
-                  <span className="font-medium text-foreground">Payroll Payable</span>
-                </div>
-                {payrollEmployees.map((emp) => {
-                  const key = `payroll:${emp.id}`;
-                  const hidden = hiddenKeys.has(key);
-                  return (
-                    <button
-                      key={key}
-                      type="button"
-                      onClick={() => toggleKey(key)}
-                      data-testid={`button-toggle-${key}`}
-                      className={`w-full flex items-center justify-between pl-6 pr-3 py-2 rounded-md text-sm hover-elevate transition-opacity ${hidden ? "opacity-40" : ""}`}
-                    >
-                      <div className="flex items-center gap-2">
-                        {hidden ? (
-                          <EyeOff className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                        ) : (
-                          <Eye className="h-3.5 w-3.5 text-red-500 shrink-0" />
-                        )}
-                        <span className={hidden ? "text-muted-foreground line-through" : "text-foreground"}>
-                          {emp.name}
-                        </span>
-                      </div>
-                      <span
-                        className={`shrink-0 whitespace-nowrap font-mono tabular-nums ${hidden ? "text-muted-foreground" : "text-red-600"}`}
-                      >
-                        {formatAmount(emp.balance)}
-                      </span>
-                    </button>
-                  );
-                })}
-              </>
-            )}
-
-            <div className="flex justify-between items-center px-3 py-2 rounded-md bg-red-50 dark:bg-red-950/30 mt-1">
-              <span className="text-xs font-semibold text-red-700 dark:text-red-300">Visible subtotal</span>
-              <span className="shrink-0 whitespace-nowrap font-mono font-bold text-red-600">
-                {formatAmount(visibleOnUsTotal)}
-              </span>
-            </div>
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
 export default function FactoryNetPositionDetails() {
   const { formatAmount } = useCurrencyContext();
+  const { selectedCompany } = useCompany();
   const accountOrder = useAccountDisplayOrder();
   const displayLayout = accountOrder.layout;
   const orderActions: InlineOrderActions = {
@@ -628,15 +326,19 @@ export default function FactoryNetPositionDetails() {
     swap: accountOrder.swap,
     move: accountOrder.move,
   };
-  const [asOf, setAsOf] = useState<string>(todayStr);
-  const isToday = asOf === todayStr();
+  // Empty selection means "company business today" resolved by the API.
+  // A browser in a different timezone must not pick the accounting cutoff.
+  const [asOf, setAsOf] = useState<string>("");
+  const queryClient = useQueryClient();
+  const isToday = !asOf;
   const { prefs, updatePref, isPending: isSavingValuationMode } = useUserPreferences();
   const valuationMode = prefs?.factoryNetPositionValuationMode === "selling" ? "selling" : "cost";
 
   const { data, isLoading, error, refetch, isFetching } = useQuery<FactoryNetPositionData>({
-    queryKey: ["/api/factory/net-position", asOf, valuationMode],
+    queryKey: companyQueryKey("/api/factory/net-position", selectedCompany?.id, asOf || "company-today", valuationMode),
     queryFn: async () => {
-      const params = new URLSearchParams({ asOf, valuationMode });
+      const params = new URLSearchParams({ valuationMode });
+      if (asOf) params.set("asOf", asOf);
       const res = await fetch(`/api/factory/net-position?${params.toString()}`, { credentials: "include" });
       if (!res.ok) {
         const text = await res.text();
@@ -651,13 +353,17 @@ export default function FactoryNetPositionDetails() {
       }
       return res.json();
     },
-    staleTime: isToday ? 60_000 : Infinity,
+    // Historical data can change after audited late entry/backfill.
+    staleTime: 60_000,
     refetchOnWindowFocus: false,
     // Auto-retry when the concurrency guard fires (max 3 attempts, 6 s apart)
     retry: (failureCount, err: unknown) =>
       (err as { code?: string } | null)?.code === "ENDPOINT_BUSY" ? failureCount < 3 : false,
     retryDelay: (_, err: unknown) => ((err as { code?: string } | null)?.code === "ENDPOINT_BUSY" ? 6_000 : 0),
   });
+
+  const displayAsOf = asOf || data?.asOf || getAppDate();
+  const companyToday = data?.businessToday || getAppDate();
 
   if (isLoading) {
     return (
@@ -697,6 +403,15 @@ export default function FactoryNetPositionDetails() {
                 Try again
               </button>
             )}
+            {asOf && (
+              <button
+                className="mt-3 ml-4 text-sm underline text-muted-foreground"
+                onClick={() => setAsOf("")}
+                data-testid="button-error-back-today"
+              >
+                Back to today
+              </button>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -715,7 +430,7 @@ export default function FactoryNetPositionDetails() {
             subtitle={
               isToday
                 ? "Current factory financial standing — what we have vs what we owe"
-                : `Historical snapshot — as of ${formatDateLabel(asOf)}`
+                : `Historical snapshot — as of ${formatDateLabel(displayAsOf)}`
             }
           />
         </div>
@@ -745,7 +460,7 @@ export default function FactoryNetPositionDetails() {
             <Button
               variant="ghost"
               size="icon"
-              onClick={() => setAsOf(shiftDate(asOf, -1))}
+              onClick={() => setAsOf(shiftDate(displayAsOf, -1))}
               data-testid="button-date-prev"
               title="Previous day"
             >
@@ -755,9 +470,9 @@ export default function FactoryNetPositionDetails() {
               <CalendarDays className="h-3.5 w-3.5 text-muted-foreground" />
               <input
                 type="date"
-                value={asOf}
-                max={todayStr()}
-                onChange={(e) => e.target.value && setAsOf(e.target.value)}
+                value={displayAsOf}
+                max={companyToday}
+                onChange={(e) => e.target.value && setAsOf(e.target.value >= companyToday ? "" : e.target.value)}
                 className="text-sm bg-transparent border-none outline-hidden cursor-pointer w-[120px]"
                 data-testid="input-as-of-date"
               />
@@ -765,7 +480,10 @@ export default function FactoryNetPositionDetails() {
             <Button
               variant="ghost"
               size="icon"
-              onClick={() => setAsOf(shiftDate(asOf, 1))}
+              onClick={() => {
+                const next = shiftDate(displayAsOf, 1);
+                setAsOf(next >= companyToday ? "" : next);
+              }}
               disabled={isToday}
               data-testid="button-date-next"
               title="Next day"
@@ -774,25 +492,47 @@ export default function FactoryNetPositionDetails() {
             </Button>
           </div>
           {!isToday && (
-            <Button variant="outline" size="sm" onClick={() => setAsOf(todayStr())} data-testid="button-date-today">
+            <Button variant="outline" size="sm" onClick={() => setAsOf("")} data-testid="button-date-today">
               Today
             </Button>
           )}
-          {isToday && (
-            <Button
-              variant="outline"
-              size="default"
-              onClick={() => refetch()}
-              disabled={isFetching}
-              data-testid="button-refresh"
-            >
-              <RefreshCw className={`h-4 w-4 mr-2 ${isFetching ? "animate-spin" : ""}`} />
-              Refresh
-            </Button>
-          )}
+          <Button
+            variant="outline"
+            size="default"
+            onClick={() => {
+              // The payroll breakdown must refresh with its parent total.
+              void queryClient.invalidateQueries({ queryKey: ["/api/factory/net-position/payroll-breakdown"] });
+              void refetch();
+            }}
+            disabled={isFetching}
+            data-testid="button-refresh"
+          >
+            <RefreshCw className={`h-4 w-4 mr-2 ${isFetching ? "animate-spin" : ""}`} />
+            Refresh
+          </Button>
         </div>
       </div>
 
+      {data?.historyCompleteness === "partial" && (
+        <div role="status" className="text-sm text-amber-700 dark:text-amber-300" data-testid="historical-data-warning">
+          <p>
+            {data.historyWarnings?.[0] ||
+              "Historical reconstruction is incomplete; some values may still reflect current state."}
+          </p>
+          {!!data.historyWarnings?.slice(1).length && (
+            <details className="mt-1">
+              <summary className="cursor-pointer">
+                Historical data limitations ({data.historyWarnings.length - 1})
+              </summary>
+              <ul className="list-disc pl-5 mt-1 space-y-1">
+                {data.historyWarnings.slice(1).map((warning, index) => (
+                  <li key={index}>{warning}</li>
+                ))}
+              </ul>
+            </details>
+          )}
+        </div>
+      )}
       <div className="text-xs text-muted-foreground -mt-2" data-testid="text-inventory-valuation-mode">
         Stock in Hand valued at {valuationMode === "selling" ? "Selling" : "Cost"} · Balance on Table stays at Cost
       </div>
@@ -886,7 +626,14 @@ export default function FactoryNetPositionDetails() {
         />
       </div>
 
-      {data && <CustomNetPositionView data={data} formatAmount={formatAmount} asOf={asOf} />}
+      {data && (
+        <CustomNetPositionView
+          key={data.companyId ?? "no-company"}
+          data={data}
+          formatAmount={formatAmount}
+          asOf={displayAsOf}
+        />
+      )}
     </div>
   );
 }

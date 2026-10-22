@@ -477,8 +477,13 @@ afterAll(() => {
  * cleanup: the shadowed copies that wrote inline were removed, and the
  * registrations that always served these paths hand their writes to the
  * migration services and the immutable revision lifecycle.
+ *
+ * POST /api/factory/fx-agent-wallets/:id/reverse-conversion (#2392) moves FX
+ * wallet money by appending a reversal row to factory_fx_agent_wallet_operations,
+ * a table the coverage audit does not list as sensitive, so it is swept here.
  */
 const DELEGATED_WRITE_ROUTES = [
+  "POST /api/factory/fx-agent-wallets/:id/reverse-conversion",
   "DELETE /api/factory/v3/loads/:id/bales/:baleId",
   "PATCH /api/factory/v3/loads/:id/cancel",
   "PATCH /api/factory/v3/loads/:id/start",

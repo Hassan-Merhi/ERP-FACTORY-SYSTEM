@@ -25,12 +25,18 @@ describe("factory customer statement / Parties / Net Position reconciliation", (
     harness.partyBalances.mockResolvedValue({
       parties: [
         {
-          id: 42, closing: "2900.00", masterOpening: "0.00",
-          memoTotal: "0.00", memoLines: [],
+          id: 42,
+          closing: "2900.00",
+          masterOpening: "0.00",
+          memoTotal: "0.00",
+          memoLines: [],
         },
         {
-          id: 43, closing: "120.00", masterOpening: "0.00",
-          memoTotal: "0.00", memoLines: [],
+          id: 43,
+          closing: "120.00",
+          masterOpening: "0.00",
+          memoTotal: "0.00",
+          memoLines: [],
         },
       ],
     });
@@ -55,7 +61,8 @@ describe("factory customer statement / Parties / Net Position reconciliation", (
       ledgerBalance: 120,
       heldUnfinalizedCharges: 0,
     });
-    expect(harness.heldCharges).toHaveBeenCalledWith(12, [42, 43], "2026-10-16");
+    // No known-at cutoff: the live/date-only path, unchanged.
+    expect(harness.heldCharges).toHaveBeenCalledWith(12, [42, 43], "2026-10-16", undefined);
   });
 
   it("does not subtract any amount if no charge voucher is held", async () => {

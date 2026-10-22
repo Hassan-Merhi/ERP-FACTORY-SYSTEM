@@ -1,4 +1,7 @@
 import { visibleTabInterval } from "@/lib/queryPolicies";
+import { getAppDate } from "@/lib/queryClient";
+import { useCompany } from "@/contexts/CompanyContext";
+import { companyQueryKey } from "@/lib/companyQueryScope";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useUserPreferences } from "@/hooks/use-user-preferences";
@@ -21,15 +24,16 @@ import {
 } from "lucide-react";
 
 import type { NetPositionData } from "./factorynetposition/types";
-import { fmt, formatDateLabel, shiftDate, todayStr } from "./factorynetposition/utils";
+import { fmt, formatDateLabel, shiftDate } from "./factorynetposition/utils";
 import { NotInLedgerCard } from "@/components/netposition/NotInLedgerCard";
 import { Side } from "./factorynetposition/components/Side";
 import { OrderGroup } from "./factorynetposition/components/OrderGroup";
 import { CustomNetPositionView } from "./factorynetposition/components/CustomNetPositionView";
 
 export default function FactoryNetPosition() {
-  const [asOf, setAsOf] = useState<string>(todayStr);
-  const isToday = asOf === todayStr();
+  const { selectedCompany } = useCompany();
+  const [asOf, setAsOf] = useState<string>("");
+  const isToday = !asOf;
   const { prefs, updatePref, isPending: isSavingValuationMode } = useUserPreferences();
   const valuationMode = prefs?.factoryNetPositionValuationMode === "selling" ? "selling" : "cost";
 
@@ -40,14 +44,15 @@ export default function FactoryNetPosition() {
     refetch,
     isFetching,
   } = useQuery<NetPositionData>({
-    queryKey: ["/api/factory/net-position", asOf, valuationMode],
+    queryKey: companyQueryKey("/api/factory/net-position", selectedCompany?.id, asOf || "company-today", valuationMode),
     queryFn: async () => {
-      const params = new URLSearchParams({ asOf, valuationMode });
+      const params = new URLSearchParams({ valuationMode });
+      if (asOf) params.set("asOf", asOf);
       const res = await fetch(`/api/factory/net-position?${params.toString()}`, { credentials: "include" });
       if (!res.ok) throw new Error(await res.text());
       return res.json();
     },
-    staleTime: isToday ? 30_000 : Infinity,
+    staleTime: isToday ? 30_000 : 60_000,
     refetchInterval: isToday ? visibleTabInterval(120_000) : false,
   });
 
@@ -55,6 +60,8 @@ export default function FactoryNetPosition() {
   // engine; the page no longer swaps in the Suppliers-page formula for today
   // (that re-mixed operational container amounts into the totals).
   const data = rawData;
+  const displayAsOf = asOf || data?.asOf || getAppDate();
+  const companyToday = data?.businessToday || getAppDate();
 
   const isPositive = (data?.netPosition ?? 0) >= 0;
   const hasPendingVerified =
@@ -65,8 +72,23 @@ export default function FactoryNetPosition() {
       <div className="p-6">
         <div className="flex items-center gap-2 text-destructive">
           <AlertCircle className="h-5 w-5" />
-          <p>Failed to load net position data.</p>
+          <p>
+            {isToday
+              ? "Failed to load net position data."
+              : `The snapshot for ${formatDateLabel(asOf)} could not be built. No current balance was substituted.`}
+          </p>
         </div>
+        {!isToday && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="mt-3"
+            onClick={() => setAsOf("")}
+            data-testid="button-error-back-today"
+          >
+            Back to today
+          </Button>
+        )}
       </div>
     );
   }
@@ -81,7 +103,7 @@ export default function FactoryNetPosition() {
             subtitle={
               isToday
                 ? "What we have vs what we owe — current standing"
-                : `Historical snapshot — as of ${formatDateLabel(asOf)}`
+                : `Historical snapshot — as of ${formatDateLabel(displayAsOf)}`
             }
           />
         </div>
@@ -111,7 +133,8 @@ export default function FactoryNetPosition() {
             <Button
               variant="ghost"
               size="icon"
-              onClick={() => setAsOf(shiftDate(asOf, -1))}
+              onClick={() => setAsOf(shiftDate(displayAsOf, -1))}
+              disabled={!data?.businessToday}
               data-testid="button-date-prev"
               title="Previous day"
             >
@@ -121,9 +144,10 @@ export default function FactoryNetPosition() {
               <CalendarDays className="h-3.5 w-3.5 text-muted-foreground" />
               <input
                 type="date"
-                value={asOf}
-                max={todayStr()}
-                onChange={(e) => e.target.value && setAsOf(e.target.value)}
+                value={displayAsOf}
+                max={companyToday}
+                disabled={!data?.businessToday}
+                onChange={(e) => e.target.value && setAsOf(e.target.value >= companyToday ? "" : e.target.value)}
                 className="text-sm bg-transparent border-none outline-hidden cursor-pointer w-[120px]"
                 data-testid="input-as-of-date"
               />
@@ -131,8 +155,11 @@ export default function FactoryNetPosition() {
             <Button
               variant="ghost"
               size="icon"
-              onClick={() => setAsOf(shiftDate(asOf, 1))}
-              disabled={isToday}
+              onClick={() => {
+                const next = shiftDate(displayAsOf, 1);
+                setAsOf(next >= companyToday ? "" : next);
+              }}
+              disabled={isToday || !data?.businessToday}
               data-testid="button-date-next"
               title="Next day"
             >
@@ -140,22 +167,20 @@ export default function FactoryNetPosition() {
             </Button>
           </div>
           {!isToday && (
-            <Button variant="outline" size="sm" onClick={() => setAsOf(todayStr())} data-testid="button-date-today">
+            <Button variant="outline" size="sm" onClick={() => setAsOf("")} data-testid="button-date-today">
               Today
             </Button>
           )}
-          {isToday && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => refetch()}
-              disabled={isFetching}
-              data-testid="button-refresh"
-            >
-              <RefreshCw className={`h-4 w-4 mr-2 ${isFetching ? "animate-spin" : ""}`} />
-              Refresh
-            </Button>
-          )}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => refetch()}
+            disabled={isFetching}
+            data-testid="button-refresh"
+          >
+            <RefreshCw className={`h-4 w-4 mr-2 ${isFetching ? "animate-spin" : ""}`} />
+            Refresh
+          </Button>
         </div>
       </div>
 
@@ -167,10 +192,22 @@ export default function FactoryNetPosition() {
       {!isToday && (
         <div className="flex items-center gap-2 px-4 py-2 rounded-md bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-200 text-sm">
           <CalendarDays className="h-4 w-4 shrink-0" />
-          <span>
-            Showing net position as of <strong>{formatDateLabel(asOf)}</strong>. Supplier payments, vouchers, and
-            customer balances are filtered to that date. Inventory reflects current stock.
-          </span>
+          <div>
+            Showing net position as of <strong>{formatDateLabel(displayAsOf)}</strong>.{" "}
+            {data?.historyWarnings?.[0] || "Historical reconstruction is in progress; current-state values may remain."}
+            {!!data?.historyWarnings?.slice(1).length && (
+              <details className="mt-1">
+                <summary className="cursor-pointer">
+                  Historical data limitations ({data.historyWarnings.length - 1})
+                </summary>
+                <ul className="list-disc pl-5 mt-1 space-y-1">
+                  {data.historyWarnings.slice(1).map((warning, index) => (
+                    <li key={index}>{warning}</li>
+                  ))}
+                </ul>
+              </details>
+            )}
+          </div>
         </div>
       )}
 
@@ -267,7 +304,7 @@ export default function FactoryNetPosition() {
       {!isLoading && <NotInLedgerCard section={data?.notInLedger} formatAmount={fmt} />}
 
       {/* Custom Net Position View — view-only, user-configurable account visibility */}
-      {!isLoading && data && <CustomNetPositionView data={data} />}
+      {!isLoading && data && <CustomNetPositionView key={data.companyId ?? "no-company"} data={data} />}
 
       {/* Broker Balance Breakdown */}
       {!isLoading && (data?.onUs.accounts ?? []).some((a) => a.code === "SUPPLIER" && a.breakdown?.length) && (

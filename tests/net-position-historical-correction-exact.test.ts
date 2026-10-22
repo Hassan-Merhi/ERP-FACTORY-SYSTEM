@@ -1,36 +1,35 @@
 /**
- * The historical net-position correction values stock left on the table as
- * kg x blended cost, rounded half up to cents from the exact product: 10 kg
- * mixed for 3.50 with 3.3 kg baled leaves 6.7 kg at 0.35/kg, which is 2.345
- * and shows 2.35. The float product 2.3449999999999998 showed 2.34 even with
- * the EPSILON nudge. Raw material is rebuilt the same way.
+ * Phase 4 replaced the old current-raw-balance +/- future transaction
+ * correction with a replay of original dated movements.
+ * Keep this regression assertion on the exact half-cent money boundary.
+ * This test is authored, not executed, per owner request.
  */
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
+import { replayHistoricalRawEvents } from "../server/services/factory/netPositionHistoricalInventory";
 
-const rows: Record<string, string>[] = [];
-vi.mock("../server/auth", () => ({ requireAuth: () => undefined }));
-vi.mock("../server/db", () => ({ db: { execute: async () => ({ rows: [rows.shift() ?? {}] }) } }));
-
-import { computeHistoricalOperationalValues } from "../server/routes/factory/employee-pos/netPositionHistoricalCorrection";
-
-describe("historical net-position correction", () => {
-  it("rounds balance on table and raw material from exact values", async () => {
-    rows.push(
-      { total_cost: "10.005", total_selling: "20.00" },
-      { total_mix_kg: "10.000", total_mix_cost: "3.50" },
-      { total_kg: "3.300" },
-      { value_after: "0.1" },
-      { value_after: "0.2" },
-      { value_after: "0" }
-    );
-
-    const values = await computeHistoricalOperationalValues(7, "2026-09-01", 4.475, "cost");
-
-    expect(values).toEqual({
-      inventoryValue: 10.01,
-      balanceOnTableValue: 2.35,
-      // 4.475 + 0.1 - 0.2 = 4.375, half up to 4.38 (the float sum gave 4.37)
-      rawMaterialValue: 4.38,
-    });
+describe("historical Net Position exact-money correction", () => {
+  it("rounds 10 kg @ $0.35 less 3.3 consumed kg to $2.35, not $2.34", () => {
+    expect(
+      replayHistoricalRawEvents([
+        {
+          key: "s1",
+          kind: "RECEIPT",
+          day: "2026-09-01",
+          recordedAt: "2026-09-01T08:00:00",
+          stableId: 1,
+          kg: "10",
+          usdRate: "0.35",
+        },
+        {
+          key: "s1",
+          kind: "CONSUME",
+          day: "2026-09-01",
+          recordedAt: "2026-09-01T10:00:00",
+          stableId: 2,
+          kg: "3.3",
+          usdRate: null,
+        },
+      ]).value
+    ).toBe(2.35);
   });
 });

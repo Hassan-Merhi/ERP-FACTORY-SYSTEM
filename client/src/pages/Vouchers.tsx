@@ -5,7 +5,6 @@ import { useForm, useFieldArray, useWatch } from "react-hook-form";
 import { zodResolver } from "@/lib/form-resolver";
 import { format } from "date-fns";
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
-import { ExchangeRateInput } from "@/components/ExchangeRateInput";
 import { useReactToPrint } from "react-to-print";
 import { useLocation } from "wouter";
 import { useCompany } from "@/contexts/CompanyContext";
@@ -34,17 +33,6 @@ import type { WhatsAppPromptState } from "@/lib/whatsapp-prompt";
 import { getApiRequest } from "@/lib/factoryApi";
 import type { AuthMe, FactoryMyAccess } from "@shared/apiTypes";
 import { useFormDraft } from "@/hooks/useFormDraft";
-import { DraftRestorePrompt } from "@/components/DraftRestorePrompt";
-import {
-  ArrowDownCircle,
-  ArrowUpCircle,
-  BookOpen,
-  ArrowLeftRight,
-  SlidersHorizontal,
-  FileText,
-  ClipboardList,
-} from "lucide-react";
-import type { LucideIcon } from "lucide-react";
 import StockTransferOrder from "@/pages/StockTransferOrder.tsx";
 import { PrintTemplate } from "@/components/vouchers/PrintTemplate";
 import { StockTransferForm } from "@/pages/vouchers/StockTransferForm";
@@ -57,6 +45,9 @@ import { useVoucherHandlers } from "@/pages/vouchers/useVoucherHandlers";
 import { useSidebarSync } from "@/pages/vouchers/useSidebarSync";
 import { useAccountBalance } from "@/pages/vouchers/useAccountBalance";
 import { useVoucherHydration } from "@/pages/vouchers/useVoucherHydration";
+import { PaymentDraftAndRateBar } from "@/pages/vouchers/PaymentDraftAndRateBar";
+import { buildVoucherSidebarGroups } from "@/pages/vouchers/voucherSidebarGroups";
+import type { VoucherSidebarGroup } from "@/pages/vouchers/voucherSidebarGroups";
 import { exportVoucherHelper } from "@/pages/vouchers/voucherActions";
 import { voucherFormSchema } from "@/pages/vouchers/voucherTypes";
 import type { VoucherFormData } from "@/pages/vouchers/voucherTypes";
@@ -109,27 +100,7 @@ export default function Vouchers({ posUser }: VouchersProps = {}) {
   const isPOS = !!posUser;
   const posLocationId = posUser?.assignedLocationId;
 
-  const sidebarGroups: { label: string; color: string; items: { key: string; label: string; icon: LucideIcon }[] }[] = [
-    {
-      label: "Financial",
-      color: "#3b82f6",
-      items: [
-        { key: "payment", label: "Payment", icon: ArrowDownCircle },
-        { key: "receipt", label: "Receipt", icon: ArrowUpCircle },
-        { key: "journal", label: "Journal", icon: BookOpen },
-      ],
-    },
-    {
-      label: "Adjustments",
-      color: "#f59e0b",
-      items: [
-        { key: "transfer", label: "Stock Transfer", icon: ArrowLeftRight },
-        { key: "transferorder", label: "Transfer Order", icon: ClipboardList },
-        { key: "adjustment", label: "Adjustment", icon: SlidersHorizontal },
-        { key: "creditnote", label: "Credit Note", icon: FileText },
-      ],
-    },
-  ];
+  const sidebarGroups: VoucherSidebarGroup[] = buildVoucherSidebarGroups();
 
   const searchParams = new URLSearchParams(window.location.search);
   const editParam = searchParams.get("edit");
@@ -534,6 +505,16 @@ export default function Vouchers({ posUser }: VouchersProps = {}) {
     }
   }, [watchedEntries, activeRowIndex]);
 
+  const restorePaymentDraft = () => {
+    if (paymentDraft?.data) {
+      const d = paymentDraft.data as unknown as object & { voucherDate: unknown } & {
+        voucherDate: string | number | Date;
+      };
+      form.reset({ ...d, voucherDate: d.voucherDate ? new Date(d.voucherDate) : new Date() });
+    }
+    discardPaymentDraft();
+  };
+
   const handlePrint = useReactToPrint({
     contentRef: printRef,
     documentTitle: `${activeTab === "payment" ? "Payment" : "Receipt"}-Voucher-${format(form.watch("voucherDate"), "yyyy-MM-dd")}`,
@@ -638,32 +619,15 @@ export default function Vouchers({ posUser }: VouchersProps = {}) {
           )}
           {!isPOS && canShowVoucherTab("payment") && activeTab === "payment" && (
             <div className="space-y-4">
-              {hasPaymentDraft && !voucherIdToEdit && paymentDraftAge && (
-                <DraftRestorePrompt
-                  draftAge={paymentDraftAge}
-                  label="Unsaved payment draft found"
-                  onRestore={() => {
-                    if (paymentDraft?.data) {
-                      const d = paymentDraft.data as unknown as object & { voucherDate: unknown } & {
-                        voucherDate: string | number | Date;
-                      };
-                      form.reset({ ...d, voucherDate: d.voucherDate ? new Date(d.voucherDate) : new Date() });
-                    }
-                    discardPaymentDraft();
-                  }}
-                  onDiscard={discardPaymentDraft}
-                />
-              )}
-              {selectedCurrency === "CFA" && (
-                <div className="flex flex-wrap items-center gap-2 sm:gap-4 p-3 bg-muted/30 rounded-md">
-                  <span className="text-sm text-muted-foreground">Transaction Rate:</span>
-                  <ExchangeRateInput
-                    value={transactionRate}
-                    onChange={setTransactionRate}
-                    selectedCurrency={selectedCurrency}
-                  />
-                </div>
-              )}
+              <PaymentDraftAndRateBar
+                draftAge={hasPaymentDraft && !voucherIdToEdit ? paymentDraftAge : null}
+                draftLabel="Unsaved payment draft found"
+                onRestoreDraft={restorePaymentDraft}
+                onDiscardDraft={discardPaymentDraft}
+                selectedCurrency={selectedCurrency}
+                transactionRate={transactionRate}
+                setTransactionRate={setTransactionRate}
+              />
               <PaymentVoucherTab
                 form={form}
                 fieldArray={fieldArray}
@@ -719,32 +683,15 @@ export default function Vouchers({ posUser }: VouchersProps = {}) {
 
           {!isPOS && canShowVoucherTab("receipt") && activeTab === "receipt" && (
             <div className="space-y-4">
-              {hasPaymentDraft && !voucherIdToEdit && paymentDraftAge && (
-                <DraftRestorePrompt
-                  draftAge={paymentDraftAge}
-                  label="Unsaved receipt draft found"
-                  onRestore={() => {
-                    if (paymentDraft?.data) {
-                      const d = paymentDraft.data as unknown as object & { voucherDate: unknown } & {
-                        voucherDate: string | number | Date;
-                      };
-                      form.reset({ ...d, voucherDate: d.voucherDate ? new Date(d.voucherDate) : new Date() });
-                    }
-                    discardPaymentDraft();
-                  }}
-                  onDiscard={discardPaymentDraft}
-                />
-              )}
-              {selectedCurrency === "CFA" && (
-                <div className="flex flex-wrap items-center gap-2 sm:gap-4 p-3 bg-muted/30 rounded-md">
-                  <span className="text-sm text-muted-foreground">Transaction Rate:</span>
-                  <ExchangeRateInput
-                    value={transactionRate}
-                    onChange={setTransactionRate}
-                    selectedCurrency={selectedCurrency}
-                  />
-                </div>
-              )}
+              <PaymentDraftAndRateBar
+                draftAge={hasPaymentDraft && !voucherIdToEdit ? paymentDraftAge : null}
+                draftLabel="Unsaved receipt draft found"
+                onRestoreDraft={restorePaymentDraft}
+                onDiscardDraft={discardPaymentDraft}
+                selectedCurrency={selectedCurrency}
+                transactionRate={transactionRate}
+                setTransactionRate={setTransactionRate}
+              />
               <ReceiptVoucherTab
                 form={form}
                 fieldArray={fieldArray}

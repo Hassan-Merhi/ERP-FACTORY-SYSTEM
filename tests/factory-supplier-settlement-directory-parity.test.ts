@@ -87,7 +87,9 @@ describe("supplier settlement directory parity", () => {
     expect(statement).toContain("computeSettlementCurrencyGroups({");
     expect(route).toContain("loadSupplierSettlementBalances(companyId, { includeOtw, configuredFxRates })");
     expect(netPosition).toContain("includeOtw: true,");
-    expect(netPosition).toContain("buildBrokerStatement(s.id, ctx.companyId, true, { asOf: ctx.asOf })");
+    expect(netPosition).toContain(
+      "buildBrokerStatement(s.id, ctx.companyId, true, { asOf: ctx.asOf, knownAt: ctx.knownAt })"
+    );
     // No supplier-specific branches remain on the card or the route.
     expect(directory).not.toMatch(/supplier\.id === \d+/);
     expect(route).not.toMatch(/s\.id === \d+/);

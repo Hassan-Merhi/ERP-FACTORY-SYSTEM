@@ -3,9 +3,12 @@ import { logger } from "../../../lib/logger";
 import type { Express, Request, Response } from "express";
 import { db } from "../../../db";
 import { requireAuth } from "../../../auth";
+import { FactoryNetPositionDateError } from "@shared/factoryNetPositionAsOf";
+import { resolveFactoryNetPositionAsOf } from "../../../services/factory/netPositionAsOf";
+import { loadFactoryNetPositionEmployees } from "../../../services/factory/netPositionEmployees";
 
 import { factoryWorkers, employees } from "@shared/schema";
-import { eq, and, sql, isNull } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm";
 import { sqlArray } from "../../../lib/sqlArray";
 import { resultRows } from "../../../lib/queryResult";
 import { MoneyDecimal, sumMoney, toMoney } from "../../../lib/money";
@@ -16,39 +19,26 @@ export function registerEmployeeAttendanceRoutes(app: Express) {
       const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });
 
-      const rows = await db
-        .select({
-          id: employees.id,
-          firstName: employees.firstName,
-          lastName: employees.lastName,
-          code: employees.code,
-          currentBalance: employees.currentBalance,
-        })
-        .from(employees)
-        .where(
-          and(
-            eq(employees.companyId, companyId),
-            eq(employees.employeeType, "Employee"),
-            eq(employees.active, true),
-            isNull(employees.deletedAt)
-          )
-        )
-        .orderBy(employees.firstName, employees.lastName);
-
+      const scope = await resolveFactoryNetPositionAsOf(Number(companyId), req.query.asOf);
+      const rows = await loadFactoryNetPositionEmployees(Number(companyId), scope);
       const result = rows
-        .map((r) => ({
-          id: r.id,
-          name: `${r.firstName} ${r.lastName}`.trim(),
-          code: r.code ?? "",
-          balance: toMoney(r.currentBalance).toNumber(),
-        }))
-        // Only show employees the company owes money to (positive balance = payroll payable).
-        // Negative-balance employees owe the company — they appear on the "What We Have"
-        // side as receivables and must NOT appear here too.
-        .filter((r) => r.balance > 0);
-
-      res.json({ employees: result });
+        .filter((employee) => employee.balance > 0)
+        .map((employee) => ({
+          id: employee.id,
+          name: employee.name,
+          code: employee.code ?? "",
+          balance: employee.balance,
+        }));
+      res.json({
+        employees: result,
+        companyId: Number(companyId),
+        asOf: scope.asOf,
+        historyCompleteness: scope.isHistorical ? "partial" : "current",
+      });
     } catch (error: unknown) {
+      if (error instanceof FactoryNetPositionDateError) {
+        return res.status(error.status).json({ code: error.code, message: error.message });
+      }
       logger.error("Payroll breakdown error:", { error: error });
       res.status(500).json({ message: getErrorMessage(error) });
     }

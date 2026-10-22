@@ -22,6 +22,11 @@ vi.mock("../server/services/accounting/voucherRetirement", () => ({
   },
   sessionRetirementActor: () => ({ userId: 1, username: "1" }),
 }));
+// #2401: an FX agent EUR payment voucher is cancelled with its wallet payout;
+// the repayment voucher here is not one, so the ordinary void runs.
+vi.mock("../server/services/factory/fxAgentSettlementCancellation", () => ({
+  cancelFxAgentSettlementVoucherTx: async () => false,
+}));
 vi.mock("../server/db", async () => {
   const { getTableName } = await import("drizzle-orm");
   const chain = (value: () => unknown) => {

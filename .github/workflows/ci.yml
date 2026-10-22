@@ -485,6 +485,14 @@ jobs:
           path: ${{ runner.temp }}/startup-migrations-verify.txt
           if-no-files-found: warn
           retention-days: 7
+      # Production boots through server/startupPreload.mjs, whose scan-audit
+      # bridge skips itself under NODE_ENV=test. Install the same schema here so
+      # tests that read customer_order_bales.scanned_at do not depend on order.
+      - name: Install production scan-audit schema
+        id: scan_audit_schema
+        if: always() && steps.runtime_migrations.outcome == 'success'
+        run: |
+          node --input-type=module -e "const { ensureCustomerOrderBaleScanAudit } = await import('./server/customerOrderBaleScanAuditBridge.mjs'); await ensureCustomerOrderBaleScanAudit();"
       - name: Backend tests and coverage thresholds
         id: backend_coverage
         if: always() && steps.runtime_migrations.outcome == 'success'

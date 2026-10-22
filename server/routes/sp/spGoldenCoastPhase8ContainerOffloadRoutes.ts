@@ -11,11 +11,9 @@ import {
   spStockMovements,
   stockItems,
   voucherEntries,
-  vouchers,
 } from "@shared/schema";
 import { requireAuth } from "../../auth";
 import { db } from "../../db";
-import { releaseDebtEnglish } from "../../i18n/finalCloseoutEnglish";
 import { getErrorMessage } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
 import { resultRows } from "../../lib/queryResult";
@@ -25,13 +23,7 @@ import {
   privilegedReadRateLimit,
   privilegedRequestBudget,
 } from "../../middleware/privilegedEndpointSecurity";
-import {
-  PostingValidationError,
-  postBalancedVoucherTx,
-  type CentralPostingResult,
-  type PostingActor,
-} from "../../services/accounting/centralPostingEngine";
-import { createDatabasePostingDependencies } from "../../services/accounting/databasePostingDependencies";
+import { postBalancedVoucherTx } from "../../services/accounting/centralPostingEngine";
 import {
   getGoldenCoastAccountDefinition,
   type GoldenCoastAccountRole,
@@ -40,8 +32,6 @@ import {
   GOLDEN_COAST_PHASE8_OFFLOAD_FIFO_SOURCE,
   GOLDEN_COAST_PHASE8_SOURCE_TYPE,
   GOLDEN_COAST_FRESH_START_EXCEL_FUNDING_MARKER,
-  buildGoldenCoastFreshStartExcelFundingPosting,
-  GoldenCoastPhase8Error,
   buildGoldenCoastPhase8FundingPosting,
   buildGoldenCoastPhase8OffloadPosting,
   parseGoldenCoastPhase8ContainerInput,
@@ -57,10 +47,20 @@ import { adjustSpInventoryAtomic, respondToSpInventoryIntegrityError } from "../
 import { isGoldenCoastCompany, type DbLike } from "./spGoldenCoastPhase4CutoverFifoRoutes";
 import { requireSpCompany } from "./spHelpers";
 import { FRESH_START_OTW_SOURCE_NAME } from "@shared/goldenCoastOtwSource";
+import {
+  handleFreshStartExcelImport,
+  type GoldenCoastPhase8FreshStartGuards,
+} from "./spGoldenCoastPhase8FreshStartImportRoute";
+import {
+  GoldenCoastPhase8RouteError,
+  PHASE8_MAX_LINES,
+  actorFromRequest,
+  postingDependencies,
+  respondKnownError,
+  type PersistedPostingResult,
+} from "./spGoldenCoastPhase8RouteSupport";
 
-const postingDependencies = createDatabasePostingDependencies();
 const phase8RequestBudget = privilegedRequestBudget({ maxBodyBytes: 64 * 1024, maxCollectionItems: 100 });
-const PHASE8_MAX_LINES = 100;
 const PHASE8_MAX_CHARGES = 50;
 const PHASE8_ROLES = [
   "stock_otw",
@@ -71,28 +71,6 @@ const PHASE8_ROLES = [
 ] as const satisfies readonly GoldenCoastAccountRole[];
 
 type DatabaseTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
-
-type PersistedPostingResult = CentralPostingResult<typeof vouchers.$inferSelect, typeof voucherEntries.$inferSelect>;
-
-class GoldenCoastPhase8RouteError extends Error {
-  readonly code: string;
-  readonly status: number;
-
-  constructor(message: string, code = "GC_PHASE8_INVALID", status = 400) {
-    super(releaseDebtEnglish(message));
-    this.name = "GoldenCoastPhase8RouteError";
-    this.code = code;
-    this.status = status;
-  }
-}
-
-function actorFromRequest(req: Request): PostingActor {
-  return {
-    userId: req.user?.id ?? req.session.userId ?? null,
-    username: req.session.username ?? null,
-    reason: "Golden Coast Phase 8 container/offload",
-  };
-}
 
 async function resolveCanonicalRoleAccount(
   conn: DbLike,
@@ -322,7 +300,10 @@ async function loadFundedContainer(
   `);
   const markers = resultRows(markerResult);
   let origin: GoldenCoastPhase8ContainerOrigin;
-  if (markers.length === 1 && String(markers[0].source_id ?? "").endsWith(`:${GOLDEN_COAST_FRESH_START_EXCEL_FUNDING_MARKER}`)) {
+  if (
+    markers.length === 1 &&
+    String(markers[0].source_id ?? "").endsWith(`:${GOLDEN_COAST_FRESH_START_EXCEL_FUNDING_MARKER}`)
+  ) {
     origin = "fresh_start_excel";
   } else if (markers.length === 1 && String(markers[0].source_id ?? "").endsWith(":fund")) {
     origin = "phase8";
@@ -399,28 +380,37 @@ async function loadFundedContainer(
   if (origin === "phase8") {
     await validateFundingAccount(tx, companyId, fundingAccount);
   } else if (origin === "fresh_start_excel") {
-    const clearingRows = await tx.select({ id: ledgerAccounts.id }).from(ledgerAccounts).where(and(
-      eq(ledgerAccounts.companyId, companyId),
-      eq(ledgerAccounts.subType, "sp_otw_clearing"),
-      eq(ledgerAccounts.active, true),
-      isNull(ledgerAccounts.deletedAt),
-    )).limit(2);
+    const clearingRows = await tx
+      .select({ id: ledgerAccounts.id })
+      .from(ledgerAccounts)
+      .where(
+        and(
+          eq(ledgerAccounts.companyId, companyId),
+          eq(ledgerAccounts.subType, "sp_otw_clearing"),
+          eq(ledgerAccounts.active, true),
+          isNull(ledgerAccounts.deletedAt)
+        )
+      )
+      .limit(2);
     if (clearingRows.length !== 1 || fundingAccount.kind !== "ledger" || fundingAccount.id !== clearingRows[0].id) {
       throw new GoldenCoastPhase8RouteError(
         "Fresh Start invoice funding must credit exactly this company's Goods OTW Clearing",
-        "GC_PHASE8_FUNDING_CORRUPT", 409,
+        "GC_PHASE8_FUNDING_CORRUPT",
+        409
       );
     }
     if (container.supplierId != null || container.supplierName !== FRESH_START_OTW_SOURCE_NAME) {
       throw new GoldenCoastPhase8RouteError(
         "Fresh Start invoice has an unexpected supplier link",
-        "GC_PHASE8_FUNDING_CORRUPT", 409,
+        "GC_PHASE8_FUNDING_CORRUPT",
+        409
       );
     }
     if (toMoney(container.invoiceTotalUsd).minus(toMoney(stockEntry[0].debitAmount)).abs().greaterThan("0.005")) {
       throw new GoldenCoastPhase8RouteError(
         "Fresh Start invoice total differs from Goods OTW voucher",
-        "GC_PHASE8_FUNDING_CORRUPT", 409,
+        "GC_PHASE8_FUNDING_CORRUPT",
+        409
       );
     }
   }
@@ -476,24 +466,6 @@ async function loadFundedContainer(
     fundingAccount,
     lines,
   };
-}
-
-function respondKnownError(res: Response, error: unknown): boolean {
-  if (error instanceof GoldenCoastPhase8RouteError) {
-    res.status(error.status).json({ code: error.code, message: error.message });
-    return true;
-  }
-  if (error instanceof GoldenCoastPhase8Error) {
-    const status = error.code === "GC_PHASE8_RESERVE_EXCEEDED" || error.code === "GC_PHASE8_SCOPE_MISMATCH" ? 409 : 400;
-    res.status(status).json({ code: error.code, message: error.message });
-    return true;
-  }
-  if (error instanceof PostingValidationError) {
-    const status = error.code.includes("IDEMPOTENCY") ? 409 : 400;
-    res.status(status).json({ code: error.code, message: error.message });
-    return true;
-  }
-  return false;
 }
 
 async function handleReadiness(req: Request, res: Response): Promise<void> {
@@ -614,165 +586,6 @@ async function handleCreateContainer(req: Request, res: Response): Promise<void>
   } catch (error) {
     if (respondKnownError(res, error)) return;
     logger.error("Golden Coast Phase 8 container funding failed", { companyId, error });
-    res.status(500).json({ message: getErrorMessage(error) });
-  }
-}
-
-
-/**
- * The ERP-style Excel preview posts Fresh Start stock through Golden Coast's
- * supported Phase 8 central-posting path, not retired POST /api/sp/containers.
- * Supplier links are deliberately NULL and the clearing is internal to GC.
- * This is a separate mode from cash-funded Phase 8 containers.
- */
-async function handleFreshStartExcelImport(req: Request, res: Response): Promise<void> {
-  let companyId: number | null = null;
-  try {
-    companyId = await requireSpCompany(req, res);
-    if (!companyId) return;
-    const selectedCompany = companyId;
-    const raw = (req.body ?? {}) as Record<string, unknown>;
-    if (raw.importSource !== "excel") {
-      throw new GoldenCoastPhase8RouteError("This endpoint only accepts a parsed Excel container");
-    }
-    if (raw.supplierId != null && raw.supplierId !== "" && raw.supplierId !== 0) {
-      throw new GoldenCoastPhase8RouteError("Fresh Start imports must not have a supplier account");
-    }
-    const idempotencyKey = req.get("X-Idempotency-Key") || "";
-    const actor = actorFromRequest(req);
-
-    const result = await db.transaction(async (tx) => {
-      await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${`golden-coast-phase8:${selectedCompany}`}))`);
-      await assertPhase8Ready(tx, selectedCompany);
-      const accounts = await resolveRoleAccounts(tx, selectedCompany);
-      const clearingRows = await tx.select({ id: ledgerAccounts.id }).from(ledgerAccounts)
-        .where(and(
-          eq(ledgerAccounts.companyId, selectedCompany),
-          eq(ledgerAccounts.subType, "sp_otw_clearing"),
-          eq(ledgerAccounts.active, true),
-          isNull(ledgerAccounts.deletedAt),
-        )).limit(2);
-      if (clearingRows.length !== 1) {
-        throw new GoldenCoastPhase8RouteError(
-          "Exactly one active GC Goods OTW Clearing account must be configured",
-          "GC_PHASE8_ROLES_INVALID", 409,
-        );
-      }
-
-      // Use Phase 8's stock-item scope, date, quantity, rate, source and
-      // idempotency validation. Funding account is constructed by the SERVER.
-      const containerInput = parseGoldenCoastPhase8ContainerInput({
-        companyId: selectedCompany,
-        maxLines: PHASE8_MAX_LINES,
-        body: {
-          clientRequestId: idempotencyKey,
-          supplierId: null,
-          supplierName: FRESH_START_OTW_SOURCE_NAME,
-          containerNumber: raw.containerNumber,
-          invoiceNumber: raw.invoiceNumber,
-          invoiceDate: raw.invoiceDate,
-          reserveUsd: "0",
-          fundingAccount: { kind: "ledger", id: clearingRows[0].id },
-          notes: raw.notes,
-          lines: raw.lines,
-        },
-      });
-      await validateStockItems(tx, selectedCompany, containerInput.lines.map((line) => line.stockItemId));
-      const netInvoice = toMoney(String(raw.invoiceTotalUsd ?? "0"));
-      const pct = toMoney(String(raw.discountPct ?? "0"));
-      if (pct.lessThan(0) || pct.greaterThan(100) || netInvoice.lessThanOrEqualTo(0)) {
-        throw new GoldenCoastPhase8RouteError("Invalid invoice total or discount percentage");
-      }
-      const gross = sumMoney(containerInput.lines.map(
-        (line) => toMoney(line.qty).times(line.unitRateUsd),
-      ));
-      const chargeFields = ["freightEstimateUsd", "surchargeUsd", "fumigationUsd", "documentChargesUsd"] as const;
-      const fees = chargeFields.map((field) => toMoney(String(raw[field] ?? "0")));
-      if (fees.some((fee) => fee.lessThan(0))) {
-        throw new GoldenCoastPhase8RouteError("Invoice fees cannot be negative");
-      }
-      const expected = gross.minus(gross.times(pct).div(100)).plus(sumMoney(fees));
-      const tolerance = toMoney("0.03").plus(gross.times("0.0000005"))
-        .plus(toMoney(containerInput.lines.length).times("0.005"));
-      if (netInvoice.minus(expected).abs().greaterThan(tolerance)) {
-        throw new GoldenCoastPhase8RouteError(
-          "Invoice total does not reconcile with item rates, discount and charges",
-          "GC_PHASE8_INVOICE_TOTAL_MISMATCH", 409,
-        );
-      }
-      const existingByNumber = containerInput.containerNumber
-        ? await tx.select({ id: spContainers.id, goodsOtwVoucherId: spContainers.goodsOtwVoucherId })
-          .from(spContainers)
-          .where(and(
-            eq(spContainers.companyId, selectedCompany),
-            sql`upper(trim(${spContainers.containerNumber})) = upper(${containerInput.containerNumber})`,
-            sql`${spContainers.status} <> 'cancelled'`,
-          )).limit(1)
-        : [];
-
-      const postingRequest = buildGoldenCoastFreshStartExcelFundingPosting({
-        container: containerInput,
-        invoiceTotalUsd: netInvoice.toDecimalPlaces(2).toFixed(2),
-        otwClearingAccountId: clearingRows[0].id,
-        stockOtwAccountId: accounts.stockOtwAccountId,
-        actor,
-      });
-      const posted = (await postBalancedVoucherTx(tx, postingRequest, postingDependencies)) as PersistedPostingResult;
-      const [existingSource] = await tx.select().from(spContainers)
-        .where(and(eq(spContainers.companyId, selectedCompany),
-          eq(spContainers.goodsOtwVoucherId, Number(posted.voucher.id)))).limit(1);
-      if (existingSource) {
-        const existingLines = await tx.select().from(spContainerLines)
-          .where(and(eq(spContainerLines.companyId, selectedCompany),
-            eq(spContainerLines.containerId, existingSource.id)));
-        return { container: existingSource, lines: existingLines, posting: posted, replayed: true };
-      }
-      if (posted.replayed) {
-        throw new GoldenCoastPhase8RouteError(
-          "Fresh Start funding replay exists without its container source document",
-          "GC_PHASE8_IDEMPOTENCY_CORRUPT", 409,
-        );
-      }
-      if (existingByNumber.length > 0) {
-        throw new GoldenCoastPhase8RouteError(
-          "Container already imported into this company",
-          "GC_PHASE8_DUPLICATE_CONTAINER", 409,
-        );
-      }
-      const [container] = await tx.insert(spContainers).values({
-        companyId: selectedCompany,
-        supplierId: null,
-        supplierName: FRESH_START_OTW_SOURCE_NAME,
-        containerNumber: containerInput.containerNumber,
-        invoiceNumber: containerInput.invoiceNumber,
-        invoiceDate: containerInput.invoiceDate,
-        invoiceTotalUsd: netInvoice.toDecimalPlaces(2).toFixed(2),
-        discountPct: pct.toFixed(4),
-        freightEstimateUsd: fees[0].toFixed(2),
-        surchargeUsd: fees[1].toFixed(2),
-        fumigationUsd: fees[2].toFixed(2),
-        documentChargesUsd: fees[3].toFixed(2),
-        status: "open",
-        goodsOtwVoucherId: Number(posted.voucher.id),
-        notes: containerInput.notes,
-      }).returning();
-      const lines = await tx.insert(spContainerLines).values(
-        containerInput.lines.map((line) => ({
-          containerId: container.id,
-          companyId: selectedCompany,
-          stockItemId: line.stockItemId,
-          articleCode: line.articleCode,
-          description: line.description,
-          qty: line.qty,
-          unitRateUsd: line.unitRateUsd,
-        })),
-      ).returning();
-      return { container, lines, posting: posted, replayed: false };
-    });
-    res.json(result);
-  } catch (error) {
-    if (respondKnownError(res, error)) return;
-    logger.error("Golden Coast Fresh Start Excel import failed", { companyId, error });
     res.status(500).json({ message: getErrorMessage(error) });
   }
 }
@@ -946,6 +759,12 @@ async function handleOffload(req: Request, res: Response): Promise<void> {
   }
 }
 
+const freshStartGuards: GoldenCoastPhase8FreshStartGuards = {
+  assertPhase8Ready,
+  resolveRoleAccounts,
+  validateStockItems,
+};
+
 export function registerSpGoldenCoastPhase8ContainerOffloadRoutes(app: Express): void {
   app.get(
     "/api/sp/golden-coast/phase8/container-offload/readiness",
@@ -965,7 +784,7 @@ export function registerSpGoldenCoastPhase8ContainerOffloadRoutes(app: Express):
     privilegedMutationRateLimit,
     phase8RequestBudget,
     requireAuth,
-    (req, res) => void handleFreshStartExcelImport(req, res),
+    (req, res) => void handleFreshStartExcelImport(req, res, freshStartGuards)
   );
   app.post(
     "/api/sp/golden-coast/phase8/offload",

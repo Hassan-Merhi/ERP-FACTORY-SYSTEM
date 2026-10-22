@@ -295,7 +295,7 @@ export function registerOrderCrudRoutes(app: Express) {
         loadingStartedAt: r.loading_started_at ?? null,
         loadingFinalizedAt: r.loading_finalized_at ?? null,
         locationId: r.location_id ?? null,
-        createdAt: r.created_at,
+        createdAt: r.created_at as Date | string,
         updatedAt: r.updated_at ?? r.created_at,
         customerName: r.customer_name ?? null,
         customerCode: r.customer_code ?? null,

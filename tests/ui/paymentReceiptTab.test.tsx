@@ -36,6 +36,8 @@ vi.mock("@/contexts/DateFormatContext", () => ({
 type HarnessProps = {
   paymentAccountId?: number;
   entries?: { accountType: string; accountId: number; accountName: string; amount: string }[];
+  /** Any further PaymentReceiptTab props (receipt tab, edit mode, FX payment). */
+  extra?: Record<string, unknown>;
 };
 
 const ACCOUNTS = [
@@ -45,7 +47,7 @@ const ACCOUNTS = [
 ];
 
 /** Mounts the tab with a real react-hook-form instance behind it. */
-function Harness({ paymentAccountId = 0, entries = [] }: HarnessProps) {
+function Harness({ paymentAccountId = 0, entries = [], extra = {} }: HarnessProps) {
   const rows = entries.length > 0 ? entries : [{ accountType: "ledger", accountId: 0, accountName: "", amount: "" }];
   const form = useForm<any>({
     defaultValues: {
@@ -98,6 +100,7 @@ function Harness({ paymentAccountId = 0, entries = [] }: HarnessProps) {
         activeTab="payment"
         activeRowIndex={null}
         setActiveRowIndex={vi.fn()}
+        {...extra}
       />
     </TooltipProvider>
   );
@@ -230,5 +233,120 @@ describe("PaymentReceiptTab — save affordance", () => {
     );
     expect(await screen.findByTestId("button-save-voucher")).toBeEnabled();
     expect(screen.queryByTestId("text-save-hint")).not.toBeInTheDocument();
+  });
+});
+
+const LINE = { accountType: "ledger", accountId: 12, accountName: "Accrued Rent Payable", amount: "100" };
+const SUPPLIER_LINE = { accountType: "factorySupplier", accountId: 21, accountName: "EUR Supplier", amount: "100" };
+const FX_WALLET = {
+  wallet: { id: 4, ledgerAccountId: 13, accountName: "Access Cash" },
+  state: { eur: "500", usd: "550", totalBookUsd: "550" },
+  synchronized: true,
+};
+const fxProps = (overrides: Record<string, unknown> = {}) => ({
+  fxWallet: FX_WALLET,
+  fxPaymentRate: "1.10",
+  fxPayoutCurrency: "USD",
+  onFxPaymentRateChange: vi.fn(),
+  onFxPayoutCurrencyChange: vi.fn(),
+  ...overrides,
+});
+
+describe("PaymentReceiptTab — receipt, edit and pending states", () => {
+  it("labels the receipt tab and its Receive Into account", async () => {
+    renderWithProviders(<Harness paymentAccountId={13} entries={[LINE]} extra={{ activeTab: "receipt" }} />);
+    expect(await screen.findByText("Receipt Voucher")).toBeInTheDocument();
+    expect(screen.getByTestId("card-selected-source")).toHaveTextContent("Receive Into");
+    expect(screen.getByTestId("button-save-voucher")).toHaveTextContent("Save Voucher · $100.00");
+  });
+
+  it("offers Update in edit mode and says so while it is pending", async () => {
+    const { rerender } = renderWithProviders(
+      <Harness paymentAccountId={13} entries={[LINE]} extra={{ isEditMode: true, originalTotal: 40 }} />
+    );
+    expect(await screen.findByTestId("button-save-voucher")).toHaveTextContent("Update Voucher · $100.00");
+    rerender(
+      <Harness
+        paymentAccountId={13}
+        entries={[LINE]}
+        extra={{ isEditMode: true, originalTotal: 40, isPending: true }}
+      />
+    );
+    expect(screen.getByTestId("button-save-voucher")).toHaveTextContent("Updating…");
+    expect(screen.getByTestId("button-save-voucher")).toBeDisabled();
+  });
+
+  it("says Saving while a new voucher is pending", async () => {
+    renderWithProviders(<Harness paymentAccountId={13} entries={[LINE]} extra={{ isPending: true }} />);
+    expect(await screen.findByTestId("button-save-voucher")).toHaveTextContent("Saving…");
+  });
+
+  it("saves with Ctrl+Enter only when the voucher can be saved", async () => {
+    const onSubmit = vi.fn();
+    renderWithProviders(<Harness paymentAccountId={13} entries={[LINE]} extra={{ onSubmit }} />);
+    const form = (await screen.findByTestId("button-save-voucher")).closest("form")!;
+    fireEvent.keyDown(form, { key: "Enter", ctrlKey: true });
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+
+    const blocked = vi.fn();
+    renderWithProviders(<Harness paymentAccountId={0} entries={[LINE]} extra={{ onSubmit: blocked }} />);
+    const forms = screen.getAllByTestId("button-save-voucher").map((button) => button.closest("form")!);
+    fireEvent.keyDown(forms[forms.length - 1], { key: "Enter", metaKey: true });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(blocked).not.toHaveBeenCalled();
+  });
+});
+
+describe("PaymentReceiptTab — FX agent payments", () => {
+  it("posts a USD payout from the wallet at the agreed rate", async () => {
+    renderWithProviders(<Harness paymentAccountId={13} entries={[LINE]} extra={fxProps()} />);
+    const save = await screen.findByTestId("button-save-voucher");
+    expect(save).toHaveTextContent("Post Payment · USD 100.00");
+    expect(save).toBeEnabled();
+  });
+
+  it("refuses a USD payout without a rate, beyond the wallet's EUR, or from an unsynchronized wallet", async () => {
+    const cases = [
+      fxProps({ fxPaymentRate: "0" }),
+      fxProps({ fxPaymentRate: "0.10" }), // needs 1,000 EUR; the wallet holds 500
+      fxProps({ fxWallet: { ...FX_WALLET, synchronized: false } }),
+    ];
+    for (const extra of cases) {
+      const view = renderWithProviders(<Harness paymentAccountId={13} entries={[LINE]} extra={extra} />);
+      expect(await screen.findByTestId("button-save-voucher")).toBeDisabled();
+      view.unmount();
+    }
+  });
+
+  it("refuses FX lines it cannot settle: several lines, or a payment back into the wallet itself", async () => {
+    const cases = [[LINE, { ...LINE, accountId: 11 }], [{ ...LINE, accountId: FX_WALLET.wallet.ledgerAccountId }]];
+    for (const entries of cases) {
+      const view = renderWithProviders(<Harness paymentAccountId={13} entries={entries} extra={fxProps()} />);
+      expect(await screen.findByTestId("button-save-voucher")).toBeDisabled();
+      view.unmount();
+    }
+  });
+
+  it("pays a factory supplier directly in EUR only up to its EUR payable", async () => {
+    const direct = (fxSupplierEurBalance: number | null) =>
+      fxProps({ fxPayoutCurrency: "EUR", fxSupplierEurBalance, fxSupplierEurBasis: "native-ledger" });
+
+    let view = renderWithProviders(<Harness paymentAccountId={13} entries={[SUPPLIER_LINE]} extra={direct(250)} />);
+    const save = await screen.findByTestId("button-save-voucher");
+    expect(save).toHaveTextContent("Post Payment · EUR 100.00");
+    expect(save).toBeEnabled();
+    view.unmount();
+
+    for (const [balance, entries] of [
+      [50, [SUPPLIER_LINE]],
+      [null, [SUPPLIER_LINE]],
+      [250, [LINE]],
+    ] as const) {
+      view = renderWithProviders(
+        <Harness paymentAccountId={13} entries={[...entries]} extra={direct(balance as number | null)} />
+      );
+      expect(await screen.findByTestId("button-save-voucher")).toBeDisabled();
+      view.unmount();
+    }
   });
 });

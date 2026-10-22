@@ -15,6 +15,7 @@ import { phase3RemainingTranslationsPart05 } from "./phase3RemainingTranslations
 import { phase3RemainingTranslationsPart06 } from "./phase3RemainingTranslations.part06";
 import { phase3RemainingTranslationsPart07 } from "./phase3RemainingTranslations.part07";
 import { phase3RemainingTranslationsPart08 } from "./phase3RemainingTranslations.part08";
+import { phase3RemainingTranslationsPart31 } from "./phase3RemainingTranslations.part31";
 import { phase3RemainingTranslationsPart09 } from "./phase3RemainingTranslations.part09";
 import { phase3RemainingTranslationsPart10 } from "./phase3RemainingTranslations.part10";
 import { phase3RemainingTranslationsPart11 } from "./phase3RemainingTranslations.part11";
@@ -37,7 +38,7 @@ import { phase3RemainingTranslationsPart27 } from "./phase3RemainingTranslations
 import { phase3RemainingTranslationsPart28 } from "./phase3RemainingTranslations.part28";
 import { phase3RemainingTranslationsPart29 } from "./phase3RemainingTranslations.part29";
 import { phase3RemainingTranslationsPart30 } from "./phase3RemainingTranslations.part30";
-import { phase3RemainingTranslationsPart31 } from "./phase3RemainingTranslations.part31";
+import { phase3RemainingTranslationsPart34 } from "./phase3RemainingTranslations.part34";
 import { phase3RemainingTranslationsPart32 } from "./phase3RemainingTranslations.part32";
 import { phase3RemainingTranslationsPart33 } from "./phase3RemainingTranslations.part33";
 import { createPhase3TemplateTranslator } from "./phase3TemplateTranslationRuntime";
@@ -58,6 +59,7 @@ export const phase3SharedUiTranslations: readonly Phase3SharedUiEntry[] = [
   ...phase3RemainingTranslationsPart06,
   ...phase3RemainingTranslationsPart07,
   ...phase3RemainingTranslationsPart08,
+  ...phase3RemainingTranslationsPart31,
   ...phase3RemainingTranslationsPart09,
   ...phase3RemainingTranslationsPart10,
   ...phase3RemainingTranslationsPart11,
@@ -80,7 +82,7 @@ export const phase3SharedUiTranslations: readonly Phase3SharedUiEntry[] = [
   ...phase3RemainingTranslationsPart28,
   ...phase3RemainingTranslationsPart29,
   ...phase3RemainingTranslationsPart30,
-  ...phase3RemainingTranslationsPart31,
+  ...phase3RemainingTranslationsPart34,
   ...phase3RemainingTranslationsPart32,
   ...phase3RemainingTranslationsPart33,
 ];
