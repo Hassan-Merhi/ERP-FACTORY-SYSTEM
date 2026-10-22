@@ -23,7 +23,7 @@ The legacy `GET /api/factory/net-position` resolver can pin a `factoryCompanyId`
 - Calls `professionalFinancialStatementsTx(tx,{companyId,fromDate,asOfDate,compare:false})` — **reuses** the Phase 11 booked financial position, income statement and cash-flow source reconciliations, rather than creating a parallel Net Position formula or new voucher query.
 - Uses `assertTransactionCompanyScope` under one selected-company transaction.
 - As-of dates and reporting period use the company's business date and must be valid calendar days not in the future.
-- Calculates **net assets = posted assets − posted liabilities** and compares them with **recorded equity including unclosed earnings**, leaving the actual reported difference unchanged.
+- Calculates **net assets = posted assets − posted liabilities** and compares them with **recorded equity including unclosed earnings**. The dashboard now shows both the **raw reported assets − liabilities − equity gap** and the **remaining canonical ledger residual after separately displaying unclassified account net balances**. These are not interchangeable: unknown accounts cannot be silently treated as verified equity, even when their debits and credits net to zero. The existing residual field remains available for Phase 14 compatibility.
 - Shows posted assets/liabilities by cash/bank, linked customer/party, recognized stock, fixed assets and other categories. This is a **presentation split** of accounts already in the booked balance, not additional book entries. A negative party/customer payable remains on the liability side according to the canonical ledger engine; a supplier advance appears on the asset side.
 - Shows only **recognized** P&L: revenue, other/FX income, cost of goods sold, operating expenses, gross profit and period net result. Factory unfinalized orders/freight and expected Properties rent are not posted by this dashboard.
 - Shows recognized cash/bank movements and the existing provisional cash-flow classification discrepancy, unclassified accounts and trial-balance imbalance, if any.
@@ -35,18 +35,18 @@ The route defaults to `includeOperational=false`. When explicitly loaded:
 
 - Reads the same `companyStockValuation` and `companyStockValuationAsOf` functions used by existing ERP stock valuation, based on stored `inventory.total_value`. Signed ERP cost subledger is kept separate from displayable positive-stock valuation and the short/negative stock anomalies are reported.
 - Reads the original Factory `factoryStockValuation` for current raw material at landed cost, WIP/mix/bales awaiting pressing and held finished bales. Open order reserved bales and sold-not-invoiced bales remain Factory inventory at recorded cost until their invoice finalization.
-- **Factory current cost is not replayable historically.** For any earlier `asOfDate`, current Factory cost is shown as current-only, and every historical GL-to-Factory stock comparison is marked **not comparable**; the dashboard never invents old stock or retroactive rates.
+- **Factory current cost is not replayable historically.** For any earlier `asOfDate`, current Factory cost is shown as current-only, and every historical GL-to-Factory stock comparison is marked **not comparable**; the dashboard never invents old stock or retroactive rates. A combined ERP-plus-Factory cost memorandum is now **withheld** for such a past date; mixing dated ERP replay with today's Factory stock cannot produce a valid past management net-position total.
 - Recognized inventory balances are computed **from the same posted balance-sheet lines**. ERP and Factory operational values are *separate management memoranda* and are **never added** to the already booked Assets or Net Assets.
 - The existing `gl_inventory_cutovers` record and `PERPETUAL_INVENTORY_POSTING_READY` are shown read-only. **The global gate remains `false`; Phase 14 does not change it.**
 - GL-to-cost comparisons are listed by inventory control account: `INVENTORY`, `FACTORY_RAW_MATERIAL_STOCK`, `FACTORY_WIP`, `FACTORY_FINISHED_GOODS`, plus `GOODS_IN_TRANSIT` and `FACTORY_GOODS_IN_TRANSIT` as explicitly **unavailable/non-comparable** when a valid operational matching basis is absent.
-- A displayed difference is computed **only if** the company cutover is active at that date, both bases have matching dates, and required cost sources are available without recorded anomalies. Periodic inventory, missing Factory costs, stale historical costing or unproven Goods in Transit do **not** become false "reconciliation errors."
-- The displayed operational aggregate is not a formally certified inventory asset, an adjustment voucher, a second value of inventory or an accepted current-market/selling valuation.
+- A displayed difference is computed **only if** the company cutover is active at that date, both bases have matching dates, and required cost sources are available without recorded anomalies. Periodic inventory, missing Factory costs, stale historical costing or unproven Goods in Transit do **not** become false "reconciliation errors." ERP historical replay that includes **unitemized post-date movement values** (missing source stock-item attribution) is also marked **not comparable**, rather than claiming an exact GL-to-stock match.
+- The displayed operational aggregate is not a formally certified inventory asset, an adjustment voucher, a second value of inventory or an accepted current-market/selling valuation. It is returned **only** as a same-current-date cost memorandum when both ERP and Factory are loaded with no unvalued Factory sources or anomalous ERP rows. Otherwise the candidate is `null` with `managementCostCandidateBasis` indicating `NOT_LOADED`, `WITHHELD_MIXED_DATES` or `WITHHELD_INCOMPLETE_COST`. The separate original source values are still visible with warnings; no estimate or plug is substituted.
 - The existing Factory cost/selling management toggle remains on the Factory Net Position page. Neither the new API nor its CSV export claims a selling amount it cannot prove for the requested company/date. `managementSellingValueUsd:null` is **intentional**.
 - The report explicitly exposes `operationalAmountsAddedToBookedNetAssets:false` and `certified:false`.
 
 ### FX and historical source disclosures
 
-- The endpoint also returns the existing `getHistoricalCurrencyReadiness(companyId,asOfDate)` information, with `certified:false`. Unresolved non-USD historical base entries trigger a dashboard accounting blocker.
+- The endpoint also returns the existing `getHistoricalCurrencyReadiness(companyId,asOfDate)` information, with `certified:false`. Unresolved non-USD historical base entries trigger a dashboard accounting blocker; when the reader is in pure-legacy compatibility mode it adds an explicit **warning** that a ready response is not certification of historical USD conversion.
 - The existing FX readiness reader may allow a pure-legacy company as compatibility-ready even though original USD rates have not been individually verified. A passing check is **not** an external audit or complete historical FX certification.
 - All historical revenue, expense, purchase cost, profit and voucher values stay in the previously posted **historical USD base**, never multiplied by today's EUR/AUD/CDF/CFA/GBP rate.
 - Open master balances and operational cost history are retrospective and not guaranteed to reproduce immutable, point-in-time knowledge. Disclose this limitation; do not generate a plug to conceal it.
@@ -66,12 +66,13 @@ The route defaults to `includeOperational=false`. When explicitly loaded:
 
 ## UI and navigation
 
-`client/src/pages/UnifiedAccountingDashboard.tsx` has four sections:
+`client/src/pages/UnifiedAccountingDashboard.tsx` has five sections (Phase 12 uses the existing Cost Centers module rather than introducing a duplicate):
 
 1. **Booked Net Position:** Assets, liabilities, net assets, equity, unclassified accounts, exact unexplained difference, composition of booked balances.
 2. **Income & Costs:** Booked sales revenue, actual posted COGS, gross profit, other income, expenses and net result, plus source account drill-down.
-3. **Stock & Management Bridge:** Opt-in ERP and Factory recorded cost, live/historical basis disclosure, missing Factory cost controls and only valid perpetual cost-to-GL comparisons. The Factory management selling mode is reached by a separate navigation link.
-4. **Controls & Source Detail:** Trial and balance-sheet mismatch, historical FX readiness limitations, provisional cash movement discrepancy, source account samples, and navigation to fiscal close, historical accounting, Phase 11 financial statements and Phase 9 consolidation.
+3. **Cost Centers & Budgets (Phase 12):** Read-only existing ERP/Factory analytical expense-versus-budget reports, with unallocated spend, monthly views and capitalized cost separated; Properties/Rentals has no borrowed cross-shell budget.
+4. **Stock & Management Bridge:** Opt-in ERP and Factory recorded cost, live/historical basis disclosure, missing Factory cost controls, and **withheld mixed-date or incomplete aggregate values**. The Factory management selling mode is reached by a separate navigation link.
+5. **Controls & Source Detail:** Explicit raw balance-sheet gap and remaining ledger residual, historical FX readiness limitations, provisional cash movement discrepancy, source account samples, and navigation to fiscal close, historical accounting, Phase 11 financial statements and Phase 9 consolidation.
 
 Features include selected-company-scoped React Query cache, start/end date selectors, source warnings, mobile-responsive financial cards/tables, refresh and Excel-compatible CSV export. No client preference is changed, no stock type valuation is written.
 
@@ -98,19 +99,19 @@ The new page is also linked from the shared Accounts UI and the ERP/Properties A
 1. Compile TypeScript and React, validate imports, transaction typing, return types and source dashboard view. Confirm all page routes, shared lazy imports and sidebar icons exist.
 2. Verify admin/owner/developer and Factory View Accounts restrictions; switch session companies and ensure none of the dashboard's GL, stock, rates or source references leak between companies.
 3. Compare booked Assets, Liabilities, Net Assets, Equity and period result against Phase 11 `/api/accounting/statements/professional` for identical company/date; prove equality to the cent, without legacy management net-position substitutions.
-4. Test orphaned/missing account targets, supplier customer advances on unusual debit/credit side, unclassified account balances and opening-side assumptions. Do not plug balance-sheet differences.
+4. Test orphaned/missing account targets, supplier/customer advances on unusual debit/credit side, unclassified account balances and opening-side assumptions. Verify raw assets-minus-liabilities-minus-equity **and** the separately remaining ledger residual, including net-zero but nonempty unknown lines. Do not plug balance-sheet differences.
 5. Check cash-bank values and realized cash movements against canonical balance sheet/cash flow reader, preserving classification caveats.
 6. Test fiscal closing month and reopening: closing journal stays in balance sheet/equity, is excluded from current period P&L, and as-of report uses effective date.
 7. ERP stock: stored `total_value`, negative/short stock, mirror bales, current vs replayed historical cost; count only in-scope locations once.
 8. Factory stock: RAW, WIP, pending pressing, produced held bales, reserved and sold-but-uninvoiced bales, zero-cost sources. No COGS before finalized invoice.
 9. Perpetual cutover active/inactive/as-of-before-cutover and default global gate disabled. Reconciliation only for supported account, date and cost basis; never add stock to booked net assets.
 10. Goods in Transit: unavailable operational matching basis must remain **not comparable**. Never translate unknown freight/source dates into booked values.
-11. Past date Factory stock: compare GL as-of with **current cost-only** memo, and suppress GL-vs-cost difference instead of falsely reporting a mismatch.
-12. Historical non-USD currency completeness and pure-legacy compatibility, with warning/blocker behavior. Confirm no current rate is applied to booked profit or inventory.
-13. Check company switch, date range, leap dates, future dates, default business date, opt-in expensive stock fetch, offline/failed API behavior, print/CSV formula injection safeguards and mobile layout.
+11. Past date Factory stock: compare GL as-of with **current cost-only** memo, suppress GL-vs-cost difference and **withhold the combined ERP-plus-Factory memorandum**. For current dates, require complete ERP/Factory costs before returning a combined amount; test anomalous ERP and unvalued Factory rows.
+12. Historical non-USD currency completeness and pure-legacy compatibility, with explicit warning/blocker behavior and UI disclosure. Confirm no current rate is applied to booked profit or inventory. Historical ERP unitemized movement values must prevent exact GL-to-ERP cost comparability.
+13. Check company switch (including an in-flight previous-company response), date range, leap dates, future dates, default business date, opt-in expensive stock fetch, offline/failed API behavior, print/CSV formula injection safeguards and mobile layout. Verify the response UI and CSV label operational date bases, `managementCostCandidateBasis`, raw accounting difference and residual correctly.
 14. Ensure the management Factory source's pinned company independence is not treated as proof of matching company ID. Verify link to existing Factory Net Position retains cost/selling preference.
 15. Verify route registration once, Factory Access Registry and navigation links for ERP/Factory/Properties.
 16. Confirm **zero accounting mutations** from new GET, dashboard refresh, changing tabs, opt-in stock valuation or CSV export.
 17. Run CI, tests and financial certification only during the independent Claude verification stage. Do not merge/rebase/deploy before its review.
 
-**Phase 14 source implementation has been committed to the existing feature branch, with accounting/test/deployment certification left to Claude.**
+**Phase 14 original implementation and subsequent reporting-integrity hardening are committed on the existing feature branch.** They remain **not compiled, CI-tested, security-verified, financially certified, merged or deployed** by this phase. Claude owns independent source, financial, cross-company and posting-safety certification; no financial voucher, cash, inventory, historical FX, Factory production or rental record was modified.
