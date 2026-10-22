@@ -41,6 +41,7 @@ failure, so a correct document cannot quietly become undiscoverable.
 | [unified-accounting-phase9.md](unified-accounting-phase9.md) | Unified accounting (ERP, Factory, Rentals): Phase 9: Intercompany and Consolidation |
 | [unified-accounting-phase10.md](unified-accounting-phase10.md) | Unified accounting (ERP, Factory, Rentals): Phase 10: Historical Accounting and As-of Dates |
 | [unified-accounting-phase11.md](unified-accounting-phase11.md) | Unified accounting (ERP, Factory, Rentals): Phase 11: Professional Financial Statements |
+| [unified-accounting-phase12.md](unified-accounting-phase12.md) | Unified accounting: Phase 12: Existing Cost Centers, Budgets & Read-Only Dashboard Bridge |
 | [unified-accounting-phase13.md](unified-accounting-phase13.md) | Unified accounting (ERP, Factory, Rentals): Phase 13: Fiscal Period Closing & Audit Controls |
 | [unified-accounting-phase14.md](unified-accounting-phase14.md) | Unified accounting (ERP, Factory, Rentals): Phase 14: Unified Net Position & Accounting Dashboard |
 | [unified-accounting-phase15.md](unified-accounting-phase15.md) | Unified accounting (ERP, Factory, Rentals): Phase 15: Integration, Permissions & Controlled Rollout |
