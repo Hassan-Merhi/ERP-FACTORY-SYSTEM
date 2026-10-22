@@ -172,8 +172,11 @@ export default function UnifiedAccountingRollout() {
     },
     onError,
   });
-  const d = readiness.data;
-  const selectedMode = policy.data?.releaseMode ?? "READ_ONLY";
+  // Do not display or authorize controls from an in-flight response for a
+  // previously selected company, even if a cache/browser boundary regresses.
+  const d = readiness.data?.companyId === Number(companyId) ? readiness.data : undefined;
+  const selectedPolicy = policy.data?.companyId === Number(companyId) ? policy.data : undefined;
+  const selectedMode = selectedPolicy?.releaseMode ?? "READ_ONLY";
   const hasReview = (kind: Kind) => d?.releaseReviews.some((x) => x.kind === kind && !x.revoked);
   const pageForPhase = (phase: number, erpPath: string): string | null => {
     if (prefix === "/factory") {
@@ -184,7 +187,7 @@ export default function UnifiedAccountingRollout() {
     }
     if (prefix === "/properties") {
       if (phase === 2) return "/properties/vouchers";
-      if (phase === 6 || phase === 7) return null; // no Property-mode stock page
+      if (phase === 6 || phase === 7 || phase === 12) return null; // no native Property-mode stock/cost-center page
       return "/properties" + erpPath;
     }
     return erpPath;
@@ -450,8 +453,8 @@ export default function UnifiedAccountingRollout() {
               new financial GL posting, FX realization, inventory cutover, historical repairs or reviewed fiscal closing.
             </p>
             <p className="text-sm text-muted-foreground">
-              Approved source revision: {policy.data?.releaseSha ?? "None"}. Last decision:{" "}
-              {policy.data?.updatedAt ?? "Not configured"}.
+              Approved source revision: {selectedPolicy?.releaseSha ?? "None"}. Last decision:{" "}
+              {selectedPolicy?.updatedAt ?? "Not configured"}.
             </p>
             <div>
               <Label>Owner's rollout decision and reason (10–1,000 characters)</Label>
