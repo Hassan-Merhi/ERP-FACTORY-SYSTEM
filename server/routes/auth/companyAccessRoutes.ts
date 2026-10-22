@@ -2,7 +2,7 @@ import type { Express, Request } from "express";
 import { randomBytes } from "node:crypto";
 import { z } from "zod";
 import { hashPassword } from "../helpers/passwordHelpers";
-import { ERP_TESTER_PAGE_KEYS, ERP_TESTER_ROLE_PERMISSIONS } from "@shared/erpTestCompanyAccess";
+import { ERP_TESTER_PAGE_KEYS, ERP_TESTER_ROLE_PERMISSIONS, ERP_TESTER_ROLE } from "@shared/erpTestCompanyAccess";
 
 import { requireAuth, requireRole } from "../../auth";
 import { db, pool } from "../../db";
@@ -274,7 +274,7 @@ export function registerCompanyAccessRoutes(app: Express) {
         await tx.insert(userCompanyRoles).values({
           userId: tester.id,
           companyId: company.id,
-          role: "Manager",
+          role: ERP_TESTER_ROLE,
           canAccessCustomers: true,
           canDeleteRecords: true,
           daybookEditDays: 3650,
@@ -301,7 +301,7 @@ export function registerCompanyAccessRoutes(app: Express) {
         await tx.insert(roleFeaturePermissions).values(
           ERP_TESTER_ROLE_PERMISSIONS.map(({ featureKey, enabled }) => ({
             companyId: company.id,
-            role: "Manager",
+            role: ERP_TESTER_ROLE,
             featureKey,
             enabled,
           }))
@@ -313,7 +313,7 @@ export function registerCompanyAccessRoutes(app: Express) {
       res.setHeader("Cache-Control", "no-store");
       res.status(201).json({
         company: created.company,
-        tester: { username: created.tester.username, role: "Manager" },
+        tester: { username: created.tester.username, role: ERP_TESTER_ROLE },
         password,
         settingsAccess: false,
       });
