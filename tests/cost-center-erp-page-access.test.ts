@@ -36,7 +36,7 @@ async function check(path: string, role: string, grants: string[]) {
   pageAssignments.mockResolvedValue(grants);
   const req = { method: "GET", originalUrl: path } as Request;
   const response = makeResponse();
-  const next = vi.fn() as NextFunction;
+  const next = vi.fn() as unknown as NextFunction;
   await enforceCostCenterErpPageAccess(req, response, next);
   return { response, next };
 }
