@@ -82,6 +82,11 @@ export function registerUnifiedAccountingDashboardRoutes(app: Express) {
             "Historical non-USD entries/openings lack verified USD base. This dashboard is not certified."
           );
         }
+        if (historicalFx.legacyCompatibilityMode) {
+          result.controls.warnings.push(
+            "Historical FX is in legacy compatibility mode. No missing-row finding is NOT proof that older transactions had the correct original USD book values."
+          );
+        }
         res.setHeader("Cache-Control", "private, no-store");
         return res.json({
           ...result,
