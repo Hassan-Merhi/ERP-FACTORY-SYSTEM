@@ -21,7 +21,7 @@ describe("ERP test company access policy", () => {
     expect(isErpTestCompanyCode("ERPTEST-anything")).toBe(false);
   });
 
-  it("blocks configuration and other modules but allows ERP operational APIs", () => {
+  it("blocks all system settings but permits normal company operational APIs", () => {
     const denied = [
       "/api/settings",
       "/api/settings/role-permissions",
@@ -30,29 +30,28 @@ describe("ERP test company access policy", () => {
       "/api/admin/reset-company-data",
       "/api/users",
       "/api/user-company-roles",
-      "/api/factory/stock",
       "/api/companies/erp-test",
     ];
     for (const path of denied) expect(isErpTesterForbiddenApiPath(path)).toBe(true);
 
-    const allowed = ["/api/vouchers", "/api/stock-items", "/api/companies", "/api/user/change-password"];
+    const allowed = [
+      "/api/vouchers", "/api/stock-items", "/api/companies", "/api/user/change-password",
+      "/api/factory/stock", "/api/properties/units", "/api/sp/reports",
+    ];
     for (const path of allowed) expect(isErpTesterForbiddenApiPath(path)).toBe(false);
   });
 
-  it("grants all operational ERP pages but never administrative settings or Factory production", () => {
+  it("grants ERP pages in any assigned company but never administrative settings", () => {
     expect(ERP_TESTER_PAGE_KEYS).toContain("dashboard");
     expect(ERP_TESTER_PAGE_KEYS).toContain("vouchers");
     expect(ERP_TESTER_PAGE_KEYS).toContain("create");
     expect(ERP_TESTER_PAGE_KEYS).toContain("stock_items");
     expect(ERP_TESTER_PAGE_KEYS).not.toContain("settings");
-    expect(ERP_TESTER_PAGE_KEYS).not.toContain("factory_production");
     expect(new Set(ERP_TESTER_PAGE_KEYS).size).toBe(ERP_TESTER_PAGE_KEYS.length);
-    expect([...FEATURE_KEYS].filter((key) => key !== "settings" && key !== "factory_production")).toEqual(
-      ERP_TESTER_PAGE_KEYS
-    );
+    expect([...FEATURE_KEYS].filter((key) => key !== "settings")).toEqual(ERP_TESTER_PAGE_KEYS);
   });
 
-  it("explicitly denies administrative Settings and non-ERP modules", () => {
+  it("retains the extra restrictions of the optional standalone test-company creator", () => {
     const permissions = new Map(ERP_TESTER_ROLE_PERMISSIONS.map(({ featureKey, enabled }) => [featureKey, enabled]));
     expect(permissions.get("mod_erp")).toBe(true);
     expect(permissions.get("mod_settings")).toBe(false);
