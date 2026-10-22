@@ -61,8 +61,7 @@ assets, production, cost accounting or existing fiscal closing journals.
 - Presence of new accounting metadata tables for open-item matching,
   bank/cash reconciliation, FX realization, rental expense links, cost
   centers/budgets, fiscal signoffs and final rollout records.
-- Tenant security: `ENABLE` and `FORCE` RLS on new accounting metadata
-  tables; a missing or unprotected required table is a hard blocker.
+- Tenant security: `ENABLE` and `FORCE` RLS plus the **presence of at least one RLS policy** on required metadata tables. A missing/unprotected/policy-less table blocks readiness; the policy-presence check is a necessary structural signal, **not** proof that its expressions actually isolate tenants. Claude must inspect policy semantics and perform cross-company tests. Required rows now explicitly include the **existing Phase 12** `cost_centers`, `cost_center_allocations` and `cost_center_monthly_budgets` tables.
 - Historical currency readiness via the existing FX reader, with explicit
   **pure-legacy compatibility-is-not-certification** caveat. Known missing
   historical USD entries block a pilot. Uncertain legacy historical
@@ -89,23 +88,14 @@ full **deployed** source SHA and currently unrevoked approvals.
 - **Default `READ_ONLY`:** new accounting report GET endpoints remain
   readable to their authorized roles. New metadata writes are denied
   with HTTP 423 `ACCOUNTING_READ_ONLY_ROLLOUT`.
-- **`METADATA_PILOT`:** an Owner can enable only after all hard readiness
-  checks pass and the current source SHA carries TECHNICAL, SECURITY and
-  FINANCE reviews. The Owner must be a **different user from the
-  technical reviewer**. The owner selects the company and provides an
-  explicit written reason.
-- **Revision / evidence invalidation:** if the deployed full source SHA
-  differs from the approved one, a reviewer withdraws evidence, a required
-  review is missing, or rollout data cannot be read, the writer **fails
-  closed**. A missing rollout schema or database failure responds 503,
-  not a permissive fallback.
+- **`METADATA_PILOT` remains structurally blocked in the current source**: `METADATA_ENTRY_REFERENCES_COMPATIBLE=false`. New reconciliation metadata references voucher entries with `ON DELETE RESTRICT`, while existing voucher-edit flows replace those entries. Allowing the new metadata writers before that lifecycle is made compatible risks breaking established accounting edits. This hard blocker is now enforced by **both** the Owner promotion readiness check **and** `currentPilotEligibilityTx` on every new metadata write, including when a `METADATA_PILOT` row already exists from an older revision. The UI shows **pilot configured — writers locked**, not an active pilot, whenever source guards fail.
+- **Future `METADATA_PILOT` activation (not yet possible):** after Claude confirms safe source-entry lifecycle and transaction-level authorization, an Owner may enable one company only when all blockers clear and the source SHA carries independent TECHNICAL, SECURITY and FINANCE reviews. The Owner must differ from the technical reviewer and provide an audited reason. Merely setting a database row, adding external reference links or changing an environment variable **cannot** remove the source blocker.
+- **Revision / evidence invalidation:** if the deployed full source SHA differs from the approved one, a reviewer withdraws evidence, a required review is missing, or rollout data cannot be read, the writer **fails closed** on its authorization check. A missing rollout schema or database failure responds 503, not a permissive fallback. Future activation must also place authorization and metadata mutation in a **single transaction or equivalent lock/guard**: today the middleware's authorization transaction finishes before the downstream writer, so a review revocation between those operations could race. This is another independent Claude security prerequisite. The current hard-coded source blocker keeps the writers disabled until it is addressed.
 - **Return to read-only:** Owner may explicitly return a company to
   `READ_ONLY` with an audited reason. This prevents further new
   metadata writes; it does **not** delete previously recorded legitimate
   reconciliation metadata.
-- **Unauthenticated / nonprivileged calls:** denied before returning
-  policy information; existing role and company authorization continues
-  to apply inside the original accounting route.
+- **Unauthenticated / nonprivileged calls:** denied before returning policy information; both the rollout controllers and metadata gate require the **selected company's `currentRole`**, never a fallback account-global role. Existing role and company authorization continues to apply inside the original accounting route.
 - **Legacy accounting activities:** the gate does **not** intercept
   normal ERP voucher creation, POS sales, Factory production, supplier
   payments, rentals charge/payment posting or existing legacy bank
@@ -166,14 +156,11 @@ satisfy the route's explicit Owner promotion requirement.
 
 - Source SHA, selected company and stage (`READ_ONLY` /
   `METADATA_PILOT`).
-- Current canonical trial balance, missing/unprotected SQL metadata tables
-  and incomplete historical FX base blockers.
+- Current canonical trial balance, missing/unprotected/**policy-less** SQL metadata tables, explicit voucher-entry foreign-key incompatibility and incomplete historical FX base blockers.
 - External review references, reviewer identities and auditable revocation.
 - Owner confirmation to approve metadata pilot or revert to read-only,
   with separate human-readable reason and exact typed confirmation.
-- Fifteen-phase implementation catalog. Links respect the current
-  ERP/Factory/Properties shell: module-specific routes only, with
-  module-unavailable sections visibly marked.
+- Fifteen-phase implementation catalog. Links respect the current ERP/Factory/Properties shell: module-specific routes only, with module-unavailable sections visibly marked. In particular Phase 12 Cost Centers appears in ERP/Factory, **not** as a non-existent `/properties/cost-centers` route. Readiness/policy views are refused on the client if their returned company ID does not match the selected company.
 - The page says **source-level implementation ≠ verified CI ≠ accounting
   certification ≠ deployed**.
 
@@ -229,10 +216,7 @@ Factory inventory cost. Claude must perform all those independently.
    commit SHA** from Render's immutable environment identity (or supported
    exact-revision override in staging) and attach actual CI, accounting and
    permission-review evidence to the company-specific review screen.
-8. The Owner may then opt into **metadata-only pilot** for **one company**.
-   Monitor the audit log, missing/non-comparable accounting source data,
-   latency, financial comparisons and user access. **Do not activate new
-   journal-posting features or perpetual inventory** through this pilot.
+8. **Not yet authorized or technically available:** Claude must first fix and verify the `ON DELETE RESTRICT` voucher-line lifecycle collision, certify that policy/review authorization cannot race the subsequent metadata mutation, and update `METADATA_ENTRY_REFERENCES_COMPATIBLE` only with independent technical/security/accounting evidence. Then the Owner may separately opt into a **metadata-only pilot** for **one company** after current source-pinned signoffs. Monitor audit, missing/non-comparable financial sources, latency and tenant access. **Do not activate new journal-posting features or perpetual inventory** through this pilot.
 9. If a pilot causes a problem, Owner immediately changes it back to
    `READ_ONLY`. The gate must stop new metadata writes; already posted
    legitimate accounting vouchers and existing metadata must **not** be
@@ -277,9 +261,10 @@ Factory inventory cost. Claude must perform all those independently.
   readiness before any rollout.
 - Fiscal close, period locks and immutable audit history preserved;
   `POST /api/accounting/fiscal-review/close` remains locked in Phase 15.
-- Default no rollout row is `READ_ONLY`; tests for 401/403/423/503,
-  company mismatch, reviewer separation, review revocation, source SHA
-  mismatch, Owner-only promotion and rollback.
+- Default no rollout row is `READ_ONLY`; tests for 401/403/423/503, company mismatch, reviewer separation, review revocation, source SHA mismatch, Owner-only promotion and rollback.
+- **Current Phase 15 blocking prerequisite:** attempt a new metadata mutation with a manually present `METADATA_PILOT` row and all three reviews; assert HTTP 423 while `METADATA_ENTRY_REFERENCES_COMPATIBLE=false`. Confirm `pilotOperational=false` even if a pilot row is stored. Owner promotion remains blocked; the existing accounting voucher line-update/delete workflow must never be broken by new metadata.
+- When the compatibility flag is ever considered for a later change, require a **transactional authorization/write test** racing review revocation and source version change. A read-only middleware guard that commits its transaction before a metadata handler runs is not sufficient for atomic authorization.
+- Require RLS **policy presence** and FORCE RLS across Phase 3–15 metadata, including the reused Cost Centers directory, allocations and monthly budget table. Verify actual policy predicates, non-bypass test roles, selected-company role isolation and forbidden cross-company reads/writes.
 - SHA source must favor deployed provider identity over any stale manual
   fallback. A new deployed release must require new review.
 - Read-only reports and CSV exports never mutate vouchers, stock,
@@ -287,7 +272,4 @@ Factory inventory cost. Claude must perform all those independently.
 - Check the static Phase 15 contract **and** actual TS/SQL/security/runtime
   separately; the contract is insufficient for certification.
 
-**Final state at this handoff: source-complete pending independent
-verification. Unmerged, undeployed, uncertified, all companies remain
-read-only for newly introduced unified accounting metadata write APIs
-until after an authorized later rollout.**
+**Final state of this Phase 15 continuation: source-level rollout controls strengthened and committed, still pending independent Claude verification. No TypeScript compilation, CI, database test, migration, merge or deployment was executed as part of this continuation. The new metadata write gates remain source-locked (even if an older pilot policy row exists); journal posting, reviewed fiscal closing and perpetual inventory cutover remain explicitly disabled.**
