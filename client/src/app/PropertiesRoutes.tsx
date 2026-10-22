@@ -77,7 +77,7 @@ export function PropertiesRoutes({ user }: PropertiesRoutesProps) {
       {isAdmin && <Route path="/properties/company-data-reset" component={CompanyDataReset} />}
       {isAdmin && <Route path="/properties/account-groups" component={AccountGroups} />}
       {isAdmin && <Route path="/properties/balance-repair" component={BalanceRepair} />}
-      <Route path="/properties/my-settings" component={MySettings} />
+      {user.role !== "ERP Tester" && <Route path="/properties/my-settings" component={MySettings} />}
 
       <Route>
         <Redirect replace to="/properties/daybook" />
