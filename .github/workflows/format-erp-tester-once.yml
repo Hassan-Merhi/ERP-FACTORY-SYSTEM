@@ -1,0 +1,33 @@
+name: Format ERP Tester Once
+
+on:
+  push:
+    branches:
+      - feature/erp-tester-role-20261022
+
+permissions:
+  contents: write
+
+jobs:
+  format:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/erp-tester-role-20261022
+          persist-credentials: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - name: Format changed source and remove one-time workflow
+        run: |
+          npx prettier --write             shared/schema/users.ts             shared/erpTestCompanyAccess.ts             server/auth.ts             server/index.ts             server/lib/permissionHelpers.ts             server/middleware/companyResourceScope.ts             server/routes/auth/companyAccessRoutes.ts             server/routes/auth/userAdministrationRoutes.ts             server/routes/admin/companySettingsRoutes.ts             client/src/pages/settings/CreateErpTestCompanyDialog.tsx             client/src/pages/settings/users/InlineRoleEditor.tsx             client/src/pages/settings/users/PermissionSummaryCard.tsx             client/src/pages/settings/users/RoleSummaryRow.tsx             client/src/pages/settings/users/UserListTable.tsx             client/src/routes/ErpRoutes.tsx             client/src/components/AppSidebar.tsx             client/src/app/authenticatedAppRouteGuard.ts             client/src/i18n/phase3RemainingTranslations.part01.ts             tests/erp-test-company-access.test.ts
+          rm -f .github/workflows/format-erp-tester-once.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'style: format ERP Tester role implementation' || exit 0
+          git push origin HEAD:feature/erp-tester-role-20261022
