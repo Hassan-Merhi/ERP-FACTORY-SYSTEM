@@ -55,7 +55,11 @@ export function resolveAuthenticatedAppRoute({
 
   let decision: AuthenticatedAppRouteDecision = { kind: "continue" };
 
-  // Settings are unavailable to ERP Tester in every company shell, including
+  // All Daybook is intentionally unavailable to ERP Tester, including direct links.
+  if (userRole === "ERP Tester" && (currentLocation === "/transaction-journal" || currentLocation.startsWith("/transaction-journal/"))) {
+    decision = { kind: "redirect", to: "/daybook" };
+  } else if (
+    // Settings are unavailable to ERP Tester in every company shell, including
   // nested Factory/Properties pages and the unprefixed personal settings route.
   if (
     userRole === "ERP Tester" &&
