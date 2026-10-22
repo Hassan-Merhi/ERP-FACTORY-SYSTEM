@@ -371,7 +371,7 @@ export function canModifyDate(dateField: string = "voucherDate") {
       return next();
     }
 
-    if (role === "Manager" || role === "Owner") {
+    if (role === "Manager" || role === "Owner" || role === "ERP Tester") {
       if (recordDate === today) return next();
       const editDays = req.session.daybookEditDays ?? 0;
       if (editDays === 0) {
@@ -491,7 +491,7 @@ function isViewOnlyPassiveLifecycleWrite(req: Request): boolean {
 export function blockErpTesterSettings(req: Request, res: Response, next: NextFunction) {
   if (req.session?.currentRole !== "ERP Tester" || !req.path.startsWith("/api/")) return next();
   if (isErpTesterForbiddenApiPath(req.path)) {
-    return res.status(403).json({ message: "ERP Tester accounts cannot access system settings or other modules" });
+    return res.status(403).json({ message: "ERP Tester accounts cannot access system settings or user administration" });
   }
   return next();
 }
