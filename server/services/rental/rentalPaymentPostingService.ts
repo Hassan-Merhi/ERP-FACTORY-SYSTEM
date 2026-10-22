@@ -464,7 +464,12 @@ export async function createRentalPaymentGroup(opts: RentalPaymentGroupOptions) 
     const recordedRate = await recordedRentalPaymentRate(companyId, currency || "USD", paymentDate, tx);
     const billingDay = getRentalBillingDay(contract.startDate as string);
     const totalAmountExact = parseMoneyInput(amount) ?? 0;
-    const { year: startY, month: startM } = await findEarliestOutstandingMonth(contract.id, billingDay, paymentDate);
+    const { year: startY, month: startM } = await findEarliestOutstandingMonth(
+      contract.id,
+      billingDay,
+      paymentDate,
+      tx
+    );
     const allocations = await buildAllocationsForPayment(
       contract.id,
       startY,
@@ -472,7 +477,8 @@ export async function createRentalPaymentGroup(opts: RentalPaymentGroupOptions) 
       totalAmountExact,
       contract.rentalAmount as string,
       billingDay,
-      paymentDate
+      paymentDate,
+      tx
     );
 
     for (const alloc of allocations) {

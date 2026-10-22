@@ -37,5 +37,21 @@ export async function ensurePartyOpenItemSchema(pool: Pool): Promise<void> {
       ON accounting_open_item_matches(company_id,settlement_entry_id) WHERE voided_at IS NULL;
     CREATE INDEX IF NOT EXISTS accounting_open_item_matches_party_idx
       ON accounting_open_item_matches(company_id,domain,party_id,applied_on);
+
+    -- Company isolation in the database, as for the other unified-accounting
+    -- metadata tables; every reader runs in a company-scoped transaction.
+    ALTER TABLE accounting_open_item_matches ENABLE ROW LEVEL SECURITY;
+    ALTER TABLE accounting_open_item_matches FORCE ROW LEVEL SECURITY;
+    DO $open_item_rls$
+    BEGIN
+      IF NOT EXISTS (SELECT 1 FROM pg_policies
+        WHERE schemaname = current_schema()
+        AND tablename = 'accounting_open_item_matches'
+        AND policyname = 'open_item_matches_company_scope') THEN
+        CREATE POLICY open_item_matches_company_scope ON accounting_open_item_matches
+          USING (company_id = NULLIF(current_setting('app.current_company_id',true),'')::integer)
+          WITH CHECK (company_id = NULLIF(current_setting('app.current_company_id',true),'')::integer);
+      END IF;
+    END $open_item_rls$;
   `);
 }

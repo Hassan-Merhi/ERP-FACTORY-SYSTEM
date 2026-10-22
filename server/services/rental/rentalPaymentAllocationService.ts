@@ -1,10 +1,36 @@
 import type Decimal from "decimal.js";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { propertyContracts, propertyMonthlyLedger } from "@shared/schema";
 
-import { db, pool } from "../../db";
+import { db, pool, type DbTransaction } from "../../db";
+import { resultRows } from "../../lib/queryResult";
 import { MoneyDecimal, toMoney, type MoneyInput } from "../../lib/money";
 import { clampRentalPeriodToContractStart, getRentalPeriodDueDate } from "./rentalPeriodService";
+
+type PostedMonthTotal = { for_year: string; for_month: string; paid_total: string };
+
+/**
+ * POSTED payment totals per month. Inside a posting transaction the read runs
+ * on that transaction: borrowing a second pool connection while the first is
+ * held deadlocks a one-connection pool and can exhaust a larger one.
+ */
+async function postedTotalsByMonth(contractId: number, tx?: DbTransaction): Promise<PostedMonthTotal[]> {
+  if (tx)
+    return resultRows<PostedMonthTotal>(
+      await tx.execute(sql`SELECT for_year, for_month, COALESCE(SUM(amount::numeric), 0) AS paid_total
+     FROM property_payments
+     WHERE contract_id = ${contractId} AND posting_status = 'POSTED'
+     GROUP BY for_year, for_month`)
+    );
+  const { rows } = await pool.query<PostedMonthTotal>(
+    `SELECT for_year, for_month, COALESCE(SUM(amount::numeric), 0) AS paid_total
+     FROM property_payments
+     WHERE contract_id = $1 AND posting_status = 'POSTED'
+     GROUP BY for_year, for_month`,
+    [contractId]
+  );
+  return rows;
+}
 
 /**
  * Billing-day-aware "earliest outstanding month" finder.
@@ -21,16 +47,18 @@ import { clampRentalPeriodToContractStart, getRentalPeriodDueDate } from "./rent
 export async function findEarliestOutstandingMonth(
   contractId: number,
   billingDay: number,
-  paymentDate: string
+  paymentDate: string,
+  tx?: DbTransaction
 ): Promise<{ year: number; month: number }> {
-  const [contractRow] = await db
+  const runner = tx ?? db;
+  const [contractRow] = await runner
     .select({ startDate: propertyContracts.startDate })
     .from(propertyContracts)
     .where(eq(propertyContracts.id, contractId));
 
   const contractStartDate = contractRow?.startDate as string | Date | undefined;
 
-  const ledgerRows = await db
+  const ledgerRows = await runner
     .select({
       year: propertyMonthlyLedger.year,
       month: propertyMonthlyLedger.month,
@@ -40,17 +68,7 @@ export async function findEarliestOutstandingMonth(
     .where(eq(propertyMonthlyLedger.contractId, contractId))
     .orderBy(propertyMonthlyLedger.year, propertyMonthlyLedger.month);
 
-  const { rows: postedRows } = await pool.query<{
-    for_year: string;
-    for_month: string;
-    paid_total: string;
-  }>(
-    `SELECT for_year, for_month, COALESCE(SUM(amount::numeric), 0) AS paid_total
-     FROM property_payments
-     WHERE contract_id = $1 AND posting_status = 'POSTED'
-     GROUP BY for_year, for_month`,
-    [contractId]
-  );
+  const postedRows = await postedTotalsByMonth(contractId, tx);
 
   const postedByMonth = new Map<string, Decimal>();
   for (const r of postedRows) {
@@ -91,9 +109,10 @@ export async function buildAllocationsForPayment(
   totalAmount: MoneyInput,
   rentalAmountInput: MoneyInput,
   billingDay: number,
-  paymentDate: string
+  paymentDate: string,
+  tx?: DbTransaction
 ): Promise<Array<{ year: number; month: number; chunk: string }>> {
-  const ledgerRows = await db
+  const ledgerRows = await (tx ?? db)
     .select({
       year: propertyMonthlyLedger.year,
       month: propertyMonthlyLedger.month,
@@ -111,17 +130,7 @@ export async function buildAllocationsForPayment(
     ledgerMap.set(`${r.year}-${r.month}`, expected.isZero() ? rentalAmount : expected);
   }
 
-  const { rows: postedRows } = await pool.query<{
-    for_year: string;
-    for_month: string;
-    paid_total: string;
-  }>(
-    `SELECT for_year, for_month, COALESCE(SUM(amount::numeric), 0) AS paid_total
-     FROM property_payments
-     WHERE contract_id = $1 AND posting_status = 'POSTED'
-     GROUP BY for_year, for_month`,
-    [contractId]
-  );
+  const postedRows = await postedTotalsByMonth(contractId, tx);
   const postedByMonth = new Map<string, Decimal>();
   for (const r of postedRows) {
     postedByMonth.set(`${r.for_year}-${r.for_month}`, toMoney(r.paid_total));

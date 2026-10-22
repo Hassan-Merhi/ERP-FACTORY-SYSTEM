@@ -99,7 +99,8 @@ has("server/services/accounting/fiscalReviewService.ts",[
  "accounting_fiscal_review_signoffs",
  "fiscal_review_company_scope",
  "reviewMetadataCompanyRlsInstalled",
- "customers_opening_balance_lock",
+ "OPENING_BALANCE_LOCK_TABLES",
+ "openingBalanceLockTriggerName",
  "voucher_entries_audit_row_delete"
 ]);
 has("client/src/pages/FiscalCloseReview.tsx",[
