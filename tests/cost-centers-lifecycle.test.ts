@@ -224,6 +224,22 @@ describe("Cost centers lifecycle (migrations applied)", () => {
     expect(csv.text).toContain("UNALLOCATED");
   });
 
+  it("exports all current-company report tabs using the same views as consolidated reports", async () => {
+    for (const view of ["summary", "activity", "departments", "accounts", "months"]) {
+      const csv = await agent.get(`${BASE}/reports/export?${REPORT_WINDOW}&format=csv&view=${view}`);
+      expect(csv.status, csv.text).toBe(200);
+      expect(csv.headers["content-type"]).toContain("text/csv");
+      expect(csv.headers["content-disposition"]).toContain(`cost-centers-${view}`);
+    }
+    for (const format of ["xlsx", "pdf"]) {
+      const download = await agent.get(`${BASE}/reports/export?${REPORT_WINDOW}&format=${format}&view=months`);
+      expect(download.status, download.text).toBe(200);
+      expect(download.headers["content-disposition"]).toContain(`.${format}`);
+    }
+    const invalid = await agent.get(`${BASE}/reports/export?${REPORT_WINDOW}&format=csv&view=unsupported`);
+    expect(invalid.status).toBe(400);
+  });
+
   it("budgets are analytical and drive variance only", async () => {
     const before = await voucherCount();
     const saved = await agent
