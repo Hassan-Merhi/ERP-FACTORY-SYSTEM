@@ -81,8 +81,9 @@ New `server/services/accounting/fiscalReviewService.ts` implements a company-sco
   conversion and legacy writer before a reviewed close can proceed.
   This protects prior periods from being silently closed at an incorrect
   native/base FX amount.
-- Verifies enabled closed-period voucher guard, entry guard, ledger opening lock and the **full** voucher/entry/audit log trigger group, not merely one audit table trigger.
-- Produces a SHA-256 digest across period, retained-earnings account, canonical trial rows and totals, source voucher/entry contents as represented by a deterministic SQL MD5 evidence digest, current guard availability, blockers and warnings.
+- Verifies enabled closed-period voucher and voucher-entry guards **on their exact tables**, all **seven** per-master opening-balance locks (ledger, customers, suppliers, banks, employees, Factory suppliers, fixed assets), and all **ten** voucher/entry/audit-log triggers on their intended tables and within the current schema. Checking trigger names alone could have accepted a same-named trigger on an unrelated table.
+- Historical foreign-currency translation requires a recorded `base_debit_amount` for each nonzero native debit, and `base_credit_amount` for each nonzero native credit. The original combined-both-null check could miss a partially translated entry with one side missing; such entries now block independent financial signoff.
+- Produces a SHA-256 digest across period, retained-earnings account, canonical trial rows and totals, source voucher/entry contents as represented by a deterministic SQL MD5 evidence digest, current guard availability, blockers and warnings. The per-entry digest now serializes a positional JSONB array (retaining the distinction between `NULL` and present values) and includes voucher posting type and creator identity in addition to effective date and original/native book values. This avoids `CONCAT_WS` null-field collisions and invalidates an old approval when such evidence changes.
 - Explicitly notes unknown historic contract terms, Factory raw/WIP/bale values, unresolved intra-group profits, bank matching and missing historical FX context rather than inferring that a balanced trial balance certifies every operating source.
 
 Readiness carries `certified:false`, independent blockers and warnings. A preview **never** writes a voucher, freezes the books or approves the period.
@@ -91,7 +92,19 @@ Readiness carries `certified:false`, independent blockers and warnings. A previe
 
 The preview's `evidenceHash` must match the hash checked when Accounting or Owner approves. The reviewed-close route checks it **again under the original fiscal closing writer's exclusive company advisory lock**. If any source amount, posted voucher state, master opening, account classification, period closure or material safety control changes before posting, the stale approval is refused.
 
-The fingerprint is a source-integrity safeguard, **not** a cryptographic proof of what every historical record looked like at the original calendar date. Phase 10's immutable-history caveats remain valid. Large company ledgers should be performance-reviewed by Claude because the source entry digest deliberately covers all posted lines through the period end.
+The fingerprint is a source-integrity safeguard, **not** a cryptographic proof of what every historical record looked like at the original calendar date. Phase 10's immutable-history caveats remain valid. The fingerprint algorithm change deliberately invalidates prior Phase 13 unconsumed approvals: reviewers must regenerate a new evidence preview and sign it again; no existing approval is rewritten. Large company ledgers should be performance-reviewed by Claude because the source entry digest deliberately covers all posted lines through the period end.
+
+### Phase 13 hardening on the existing unified-accounting feature branch
+
+The current continuation strengthens the read-only preflight and its fingerprint, without replacing the original fiscal-close writer, automatically enabling reviewed financial posting or activating the `enforce_reviewed_close` policy. It neither modifies production books nor executes a migration.
+
+Claude must independently verify these newly hardened failure cases:
+
+1. A foreign-currency posted entry with nonzero debit but missing only its base debit, and the equivalent credit-side case; both must report an FX completeness blocker even if the opposite-side base field is present.
+2. Missing, disabled or misplaced voucher/entry/fiscal guard triggers, every one of the seven master-opening triggers and all ten audit triggers; readiness must fail closed, not accept a matching name from an unrelated table.
+3. A changed posting type/creator (or changed/null source field) must produce a new source digest and approval hash. Existing signoffs must become stale; a signed hash can never be quietly re-used.
+4. Legitimate fully populated USD and historical non-USD base entries must not be classified as untranslated solely because the unused debit/credit side has a null base.
+5. Full SQL/TypeScript compilation, PostgreSQL transactional locking, concurrent voucher writes versus closing, review revocation versus close, tenant isolation, route permissions, financial posting locks and replay/reopen behavior are **not** established by these source changes.
 
 ## Independent review and posted-close workflow
 
