@@ -73,7 +73,7 @@ export function UnifiedAccountingBudgetBridge({
   const query = new URLSearchParams({
     fromDate,
     toDate: asOfDate,
-    treatment: "EXPENSE",
+    treatment: "ALL",
   });
   const { data, isLoading, isError, error, refetch } = useQuery<BudgetSummary>({
     queryKey: ["unified-accounting", "phase12", mode, companyId, fromDate, asOfDate],
