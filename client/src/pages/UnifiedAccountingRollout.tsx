@@ -54,6 +54,7 @@ interface Readiness {
       exists: boolean;
       rls: boolean;
       forced: boolean;
+      hasPolicy: boolean;
     }>;
   };
   posting: {
@@ -69,6 +70,7 @@ interface Readiness {
   warnings: string[];
   eligibleForExternalReview: boolean;
   pilotOperational: boolean;
+  metadataEntryReferencesCompatible: boolean;
   certified: false;
   status: "PROVISIONAL_NOT_CERTIFIED";
 }
@@ -187,7 +189,11 @@ export default function UnifiedAccountingRollout() {
     }
     return erpPath;
   };
-  const launchReady = !!d?.eligibleForExternalReview && !!d.reviewsComplete && !!d.deployedSha;
+  const launchReady =
+    !!d?.eligibleForExternalReview &&
+    !!d.reviewsComplete &&
+    !!d.deployedSha &&
+    d.metadataEntryReferencesCompatible;
   return (
     <div className="p-3 sm:p-5 space-y-5" data-testid="unified-accounting-rollout">
       <div>
@@ -202,7 +208,11 @@ export default function UnifiedAccountingRollout() {
           <div className="flex flex-wrap gap-3 items-center justify-between">
             <p className="font-semibold">
               Release mode:{" "}
-              {selectedMode === "READ_ONLY" ? "Read-only (new financial writers locked)" : "Metadata-only pilot"}
+              {selectedMode === "READ_ONLY"
+                ? "Read-only (new financial writers locked)"
+                : d?.pilotOperational
+                  ? "Metadata-only pilot active"
+                  : "Metadata pilot configured — writers locked"}
             </p>
             <Button variant="outline" disabled={readiness.isFetching} onClick={() => void refresh()}>
               Refresh release readiness
@@ -210,8 +220,8 @@ export default function UnifiedAccountingRollout() {
           </div>
           <p className="text-sm text-muted-foreground">
             {d?.pilotOperational
-              ? "Pilot gates satisfied for this source revision"
-              : "New unified accounting metadata writes remain locked unless current independent approvals and the exact deployed revision are present."}
+              ? "Current metadata write eligibility passed (not an accounting or security certification)"
+              : "New unified accounting metadata writes remain locked. Stored pilot settings and review references alone do not authorize an operation."}
           </p>
           <p className="text-xs text-muted-foreground break-all">
             Deployed revision: {d?.deployedSha ?? "Not available — source signoff cannot be granted"}
@@ -269,12 +279,18 @@ export default function UnifiedAccountingRollout() {
                 <p className="font-semibold">{d.schema.missing.length}</p>
               </div>
               <div>
-                <p className="text-xs text-muted-foreground">Unprotected tables</p>
+                <p className="text-xs text-muted-foreground">Unprotected / policy-less tables</p>
                 <p className="font-semibold">{d.schema.unprotected.length}</p>
               </div>
               <div>
                 <p className="text-xs text-muted-foreground">Historical FX missing entries</p>
                 <p className="font-semibold">{d.historicalFx.unresolvedEntryCount}</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Voucher-edit / metadata FK compatibility</p>
+                <p className="font-semibold">
+                  {d.metadataEntryReferencesCompatible ? "Source gate cleared — review required" : "Blocked"}
+                </p>
               </div>
             </div>
             {d.blockers.length === 0 ? (
@@ -306,6 +322,7 @@ export default function UnifiedAccountingRollout() {
                     <th className="p-2">Exists</th>
                     <th className="p-2">RLS</th>
                     <th className="p-2">FORCE RLS</th>
+                    <th className="p-2">Policy exists</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -315,6 +332,7 @@ export default function UnifiedAccountingRollout() {
                       <td className="p-2">{t.exists ? "Yes" : "Missing"}</td>
                       <td className="p-2">{t.rls ? "Yes" : "No"}</td>
                       <td className="p-2">{t.forced ? "Yes" : "No"}</td>
+                      <td className="p-2">{t.hasPolicy ? "Yes" : "No"}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -426,9 +444,10 @@ export default function UnifiedAccountingRollout() {
           </CardHeader>
           <CardContent className="space-y-4">
             <p className="text-sm">
-              A pilot only enables the newly added accounting matching, reconciliation, attribution and budget metadata
-              writers. It does not authorize new financial GL posting, FX realization, inventory cutover, historical
-              repairs or reviewed fiscal closing.
+              A metadata pilot would authorize only newly introduced matching, reconciliation, attribution and
+              fiscal-review metadata routes after separate compatibility certification. The existing Cost Centers
+              budget/attribution editors retain their own permissions and rollout controls. No setting here authorizes
+              new financial GL posting, FX realization, inventory cutover, historical repairs or reviewed fiscal closing.
             </p>
             <p className="text-sm text-muted-foreground">
               Approved source revision: {policy.data?.releaseSha ?? "None"}. Last decision:{" "}
@@ -477,8 +496,14 @@ export default function UnifiedAccountingRollout() {
               </Button>
             </div>
             <p className="text-xs text-muted-foreground">
+              Phase 15 deliberately keeps the new metadata writers locked until existing voucher-line replacement
+              flows and metadata foreign keys are made compatible and independently certified. A pilot policy row
+              cannot bypass this source-level safety gate. A future activation requires review of transaction-level
+              approval-revocation races, not just a UI acknowledgement.
+            </p>
+            <p className="text-xs text-muted-foreground">
               If the deployed source SHA changes or any approval is revoked, the pilot writer gate fails closed
-              automatically. Returning to read-only does not undo legitimate previously recorded metadata. Existing
+              at its next authorization check. Returning to read-only does not undo legitimate metadata. Existing
               ERP/Factory vouchers and other legacy business transactions continue under their normal posting and
               permissions.
             </p>
