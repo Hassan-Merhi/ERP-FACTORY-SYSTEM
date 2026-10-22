@@ -285,7 +285,13 @@ export function requireRole(...roles: string[]) {
       return res.status(401).json({ message: "Unauthorized" });
     }
 
-    if (req.user.role === "Developer" || roles.includes(req.user.role)) {
+    // ERP Tester can exercise Manager-level operational routes, but never Admin/Owner/Developer routes.
+    // Settings and administrative APIs are independently blocked by blockErpTesterSettings.
+    if (
+      req.user.role === "Developer" ||
+      roles.includes(req.user.role) ||
+      (req.user.role === "ERP Tester" && roles.includes("Manager"))
+    ) {
       return next();
     }
 
