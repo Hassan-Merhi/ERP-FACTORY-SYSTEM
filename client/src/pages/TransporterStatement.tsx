@@ -2,6 +2,7 @@ import type { ClientErrorLike } from "@/lib/clientError";
 import { getErrorDetails } from "@shared/errorUtils";
 import { useState, useMemo, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { authenticatedUserQueryOptions } from "@/contracts/sessionQueryContracts";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useDateFormat } from "@/contexts/DateFormatContext";
@@ -25,6 +26,8 @@ import { SettingsPopover } from "./transporterstatement/components/SettingsPopov
 
 export default function TransporterStatement({ embedded }: { embedded?: boolean }) {
   const { toast } = useToast();
+  const { data: viewer } = useQuery(authenticatedUserQueryOptions());
+  const isTester = (viewer?.currentRole ?? viewer?.role) === "ERP Tester";
   const queryClient = useQueryClient();
   const { formatDisplayDate: formatDate } = useDateFormat();
 
@@ -502,7 +505,7 @@ export default function TransporterStatement({ embedded }: { embedded?: boolean 
                 </Button>
               </>
             )}
-            {selectedAccountId && statement && (
+            {selectedAccountId && statement && !isTester && (
               <SettingsPopover
                 accountId={parseInt(selectedAccountId)}
                 paymentTermsDays={statement.paymentTermsDays}
