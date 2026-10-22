@@ -147,6 +147,32 @@ has("server/routes/applicationRoutes.ts",["registerCostCenterReportingRoutes(app
 has("server/routes/costCenterReportingRoutes.ts",[
  '"/reports/summary"', '"/budgets"'
 ]);
+// Phase 14: the financial-position gap is displayed before and after
+// unclassified account balances. Past-date ERP/Factory stock must never
+// form a mixed-date management total or masquerade as booked GL assets.
+has("server/services/accounting/professionalFinancialStatements.ts",[
+ "reportedBalanceSheetDifferenceUsd"
+]);
+has("server/services/accounting/unifiedAccountingDashboard.ts",[
+ "position.reportedBalanceSheetDifferenceUsd",
+ "managementCostCandidateBasis",
+ "WITHHELD_MIXED_DATES",
+ "WITHHELD_INCOMPLETE_COST",
+ "unitemizedMovementValueUsd",
+ "unitemizedHistoricalErpMovements",
+ "operationalAmountsAddedToBookedNetAssets: false"
+]);
+has("client/src/pages/UnifiedAccountingDashboard.tsx",[
+ "reportedBalanceSheetDifferenceUsd",
+ "managementCostCandidateBasis",
+ "WITHHELD_MIXED_DATES",
+ "WITHHELD_INCOMPLETE_COST",
+ "Legacy compatibility only"
+]);
+has("server/routes/unifiedAccountingDashboardRoutes.ts",[
+ "legacyCompatibilityMode",
+ '"private, no-store"'
+]);
 for(let phase=6;phase<=15;phase++){
  const file=`docs/unified-accounting-phase${phase}.md`;
  assert.ok(existsSync(resolve(root,file)),`Missing Phase ${phase} handoff: ${file}`);
