@@ -81,6 +81,9 @@ export interface UnifiedAccountingDashboard {
     liabilitiesUsd: string;
     netAssetsUsd: string;
     equityIncludingEarningsUsd: string;
+    // Assets - liabilities - recognized equity, before unresolved accounts.
+    reportedBalanceSheetDifferenceUsd: string;
+    // The remaining ledger difference after separately disclosing unknown rows.
     unexplainedDifferenceUsd: string;
     trialBalanceDifferenceUsd: string;
     cashAndBanksUsd: string;
@@ -122,12 +125,16 @@ export interface UnifiedAccountingDashboard {
       subLedgerSignedUsd: string;
       asOfBasis: "as-of" | "current";
       shortageValueUsd: string;
+      unitemizedMovementValueUsd: string;
       anomalousRows: number;
       locations: number;
     } | null;
     factoryStock: FactoryInventory | null;
     bookedStockAssetUsd: string;
+    // Null on past dates: current Factory cost cannot be combined with ERP
+    // historic cost and labeled a common-date management valuation.
     managementCostCandidateUsd: string | null;
+    managementCostCandidateBasis: "CURRENT_COST_MEMO" | "WITHHELD_MIXED_DATES" | "NOT_LOADED";
     managementSellingValueUsd: null;
     managementSellingValueAvailableIn: "EXISTING_FACTORY_NET_POSITION";
     glToOperationalAtCost: Array<{
@@ -239,6 +246,7 @@ export async function unifiedAccountingDashboardTx(
       subLedgerSignedUsd: valuation.subLedgerTotal,
       asOfBasis: asOfDate === businessDate ? "current" : "as-of",
       shortageValueUsd: valuation.excluded.shortageValue,
+      unitemizedMovementValueUsd: valuation.excluded.unitemizedMovementValue,
       anomalousRows: valuation.excluded.anomalousRows,
       locations: valuation.locations.length,
     };
@@ -279,9 +287,14 @@ export async function unifiedAccountingDashboardTx(
         .reduce((sum, l) => sum.plus(D(l.amountUsd)), new Decimal(0));
       const book = glFromAssets.minus(glFromLiabilities);
       const factoryCode = accountCode.startsWith("FACTORY_");
+      const unitemizedHistoricalErpMovements =
+        !factoryCode &&
+        asOfDate < businessDate &&
+        !D(valuation.excluded.unitemizedMovementValue).isZero();
       const comparable =
         operationalCostUsd !== null &&
         ledgerActive &&
+        !unitemizedHistoricalErpMovements &&
         (!factoryCode || asOfDate === businessDate) &&
         (factoryCode ? stock.unvalued.length === 0 : valuation.excluded.anomalousRows === 0);
       glToOperationalAtCost.push({
@@ -301,7 +314,9 @@ export async function unifiedAccountingDashboardTx(
                   ? "Factory stock contains unvalued cost sources"
                   : !factoryCode && valuation.excluded.anomalousRows > 0
                     ? "ERP inventory contains anomalous value rows"
-                    : "Recorded operational cost and posted stock asset as of report date",
+                    : unitemizedHistoricalErpMovements
+                      ? "Historical ERP movements lack stock-item attribution; exact reconciliation withheld"
+                      : "Recorded operational cost and posted stock asset as of report date",
       });
     }
     if (stock.unvalued.length)
@@ -312,9 +327,13 @@ export async function unifiedAccountingDashboardTx(
       opWarnings.push(
         `${valuation.excluded.anomalousRows} ERP inventory row(s) violate the recorded cost valuation policy.`
       );
+    if (asOfDate < businessDate && !D(valuation.excluded.unitemizedMovementValue).isZero())
+      opWarnings.push(
+        `ERP historical inventory replay contains USD ${valuation.excluded.unitemizedMovementValue} of movements without stock-item attribution; GL-to-ERP cost reconciliation is withheld.`
+      );
     if (asOfDate < businessDate)
       opWarnings.push(
-        "Factory stock cost is today's current valuation, NOT the selected historical accounting date. Historical Factory management net position cannot be reconstructed reliably from this valuation."
+        "Factory stock cost is today's current valuation, NOT the selected historical accounting date. Historical Factory management net position cannot be reconstructed reliably from this valuation. No combined ERP-plus-Factory historical management total is provided."
       );
     if (ledgerActive)
       opWarnings.push(
@@ -328,8 +347,22 @@ export async function unifiedAccountingDashboardTx(
     opWarnings.push(
       "Operational stock comparison not loaded; select 'Load operational stock comparison' to fetch it separately from the booked ledger."
     );
-  const stockCostComplete = !!factoryStock && factoryStock.unvaluedCount === 0 && (erpStock?.anomalousRows ?? 0) === 0;
-  const managementCandidate = erpStock && factoryStock ? fmt(D(erpStock.costUsd).plus(D(factoryStock.totalUsd))) : null;
+  const stockCostComplete =
+    asOfDate === businessDate &&
+    !!factoryStock &&
+    !!erpStock &&
+    factoryStock.unvaluedCount === 0 &&
+    erpStock.anomalousRows === 0;
+  const managementCandidate =
+    asOfDate === businessDate && erpStock && factoryStock
+      ? fmt(D(erpStock.costUsd).plus(D(factoryStock.totalUsd)))
+      : null;
+  const managementCandidateBasis =
+    !input.includeOperational
+      ? "NOT_LOADED" as const
+      : asOfDate < businessDate
+        ? "WITHHELD_MIXED_DATES" as const
+        : "CURRENT_COST_MEMO" as const;
   const classAssets = breakdown(position.assets);
   const classLiabilities = breakdown(position.liabilities);
   return {
@@ -344,6 +377,7 @@ export async function unifiedAccountingDashboardTx(
       liabilitiesUsd: position.liabilities.totalUsd,
       netAssetsUsd: fmt(net),
       equityIncludingEarningsUsd: fmt(equity),
+      reportedBalanceSheetDifferenceUsd: position.reportedBalanceSheetDifferenceUsd,
       unexplainedDifferenceUsd: position.assetsMinusLiabilitiesAndEquityUsd,
       trialBalanceDifferenceUsd: statement.controls.trialBalanceDifferenceUsd,
       cashAndBanksUsd: fmt(D(classAssets.cash_and_banks).minus(D(classLiabilities.cash_and_banks))),
@@ -375,6 +409,7 @@ export async function unifiedAccountingDashboardTx(
       factoryStock,
       bookedStockAssetUsd: fmt(bookedStock),
       managementCostCandidateUsd: managementCandidate,
+      managementCostCandidateBasis,
       managementSellingValueUsd: null,
       managementSellingValueAvailableIn: "EXISTING_FACTORY_NET_POSITION",
       glToOperationalAtCost,
