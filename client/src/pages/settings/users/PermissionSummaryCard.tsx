@@ -39,9 +39,9 @@ function getPermissions(
       break;
 
     case "ERP Tester":
-      perms.push({ label: "ERP test-company data entry only", dangerous: false });
-      perms.push({ label: "No Settings, Factory, or production company access", dangerous: false });
-      if (flags.canDeleteRecords) perms.push({ label: "Delete test-company records", dangerous: true });
+      perms.push({ label: "Operational data entry in assigned companies", dangerous: false });
+      perms.push({ label: "No system Settings or user administration access", dangerous: false });
+      if (flags.canDeleteRecords) perms.push({ label: "Delete assigned-company records", dangerous: true });
       break;
 
     case "Normal User":
