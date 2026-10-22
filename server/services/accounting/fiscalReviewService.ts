@@ -107,6 +107,7 @@ export interface FiscalReadiness {
     entryDateGuardInstalled: boolean;
     auditChainInstalled: boolean;
     openingBalanceGuardInstalled: boolean;
+    reviewMetadataCompanyRlsInstalled: boolean;
   };
   signoffs: Array<{
     id: number;
@@ -372,12 +373,40 @@ export async function fiscalReadinessTx(
        AND t.tgname=required.trigger_name
        AND NOT t.tgisinternal AND t.tgenabled IN ('O','A')
    )
- ) AS opening_guard
+ ) AS opening_guard,
+ -- FORCE RLS and the expected company-scoping policy must be installed
+ -- on all three review tables before any new independent signoff is valid.
+ (
+   SELECT COUNT(*)=3 FROM pg_class cl
+   JOIN pg_namespace ns ON ns.oid=cl.relnamespace
+   WHERE ns.nspname=current_schema()
+     AND cl.relname IN (
+       'accounting_fiscal_review_signoffs',
+       'accounting_fiscal_reviewed_closures',
+       'accounting_fiscal_review_policy'
+     )
+     AND cl.relrowsecurity AND cl.relforcerowsecurity
+ ) AND (
+   SELECT COUNT(*)=3 FROM pg_policies p
+   WHERE p.schemaname=current_schema()
+     AND p.tablename IN (
+       'accounting_fiscal_review_signoffs',
+       'accounting_fiscal_reviewed_closures',
+       'accounting_fiscal_review_policy'
+     )
+     AND p.policyname='fiscal_review_company_scope'
+ ) AS review_rls_guard
  `),
   ]);
   const e = resultRows<EvidenceRow>(totals)[0];
   const g = resultRows<
-    Row & { vouchers_guard: boolean; entries_guard: boolean; audit_guard: boolean; opening_guard: boolean }
+    Row & {
+      vouchers_guard: boolean;
+      entries_guard: boolean;
+      audit_guard: boolean;
+      opening_guard: boolean;
+      review_rls_guard: boolean;
+    }
   >(protection)[0];
   const source = {
     postedVouchers: num(e?.posted_vouchers),
@@ -395,6 +424,7 @@ export async function fiscalReadinessTx(
     entryDateGuardInstalled: g?.entries_guard === true,
     auditChainInstalled: g?.audit_guard === true,
     openingBalanceGuardInstalled: g?.opening_guard === true,
+    reviewMetadataCompanyRlsInstalled: g?.review_rls_guard === true,
   };
   if (source.balancedVoucherErrors)
     blockers.push(`${source.balancedVoucherErrors} live voucher(s) of balanced types have unequal debit and credit`);
@@ -412,7 +442,9 @@ export async function fiscalReadinessTx(
     !protections.auditChainInstalled ||
     !protections.openingBalanceGuardInstalled
   )
-    blockers.push("A required closed-period, opening-balance or audit-hash database trigger is missing/disabled");
+    blockers.push("A required closed-period, master-opening or audit-hash trigger is missing, disabled or on the wrong table");
+  if (!protections.reviewMetadataCompanyRlsInstalled)
+    blockers.push("Fiscal approval tables require ENABLE and FORCE RLS with company-scope policies before independent review");
   if (source.optionalVouchers)
     warnings.push(
       `${source.optionalVouchers} optional vouchers dated through the period end are excluded from posted books`
