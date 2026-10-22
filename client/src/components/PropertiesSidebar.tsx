@@ -133,12 +133,14 @@ export function PropertiesSidebar({ user, onLogout }: { user?: ShellUser; onLogo
         )}
 
         <div className="mt-4 pt-3 border-t border-sidebar-border/60 space-y-0.5">
-          <SidebarFlatLink
-            href="/properties/my-settings"
-            icon={KeyRound}
-            label="My Settings"
-            testId="link-properties-my-settings"
-          />
+          {user?.role !== "ERP Tester" && (
+            <SidebarFlatLink
+              href="/properties/my-settings"
+              icon={KeyRound}
+              label="My Settings"
+              testId="link-properties-my-settings"
+            />
+          )}
           {isAdmin && (
             <SidebarFlatLink
               href="/properties/settings"
