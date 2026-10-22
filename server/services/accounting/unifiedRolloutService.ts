@@ -78,6 +78,9 @@ const requiredTables = [
   "accounting_fiscal_review_policy",
   "accounting_unified_release_reviews",
   "accounting_unified_rollout_policy",
+  "cost_centers",
+  "cost_center_allocations",
+  "cost_center_monthly_budgets",
 ] as const;
 const protectedTables = [
   "accounting_open_item_matches",
@@ -90,6 +93,9 @@ const protectedTables = [
   "accounting_fiscal_review_policy",
   "accounting_unified_release_reviews",
   "accounting_unified_rollout_policy",
+  "cost_centers",
+  "cost_center_allocations",
+  "cost_center_monthly_budgets",
 ] as const;
 const HEX40 = /^[a-f0-9]{40,64}$/;
 export function deployedUnifiedReleaseSha(): string | null {
@@ -151,6 +157,18 @@ export async function unifiedReleasePolicyTx(tx: DbTransaction, companyId: numbe
 export async function currentPilotEligibilityTx(tx: DbTransaction, companyId: number) {
   const policy = await unifiedReleasePolicyTx(tx, companyId);
   const deployedSha = deployedUnifiedReleaseSha();
+  // DO NOT mistake a manually stored pilot row for permission to mutate
+  // voucher-linked metadata. This explicitly mirrors the hard readiness gate:
+  // existing voucher editors replace line IDs; Phase 15 has NOT certified
+  // safe coexistence with metadata FK references that RESTRICT those deletes.
+  // This protection applies even to pilot rows created by an older revision.
+  if (!METADATA_ENTRY_REFERENCES_COMPATIBLE)
+    return {
+      allowed: false,
+      policy,
+      deployedSha,
+      reason: METADATA_ENTRY_REFERENCES_BLOCKER,
+    };
   if (policy.releaseMode !== "METADATA_PILOT" || !deployedSha || policy.releaseSha !== deployedSha)
     return {
       allowed: false,
@@ -158,6 +176,16 @@ export async function currentPilotEligibilityTx(tx: DbTransaction, companyId: nu
       deployedSha,
       reason:
         "New accounting metadata writers remain read-only until Owner pilot approval for the exact deployed revision",
+    };
+  // A future certified compatibility change must still honor *all* readiness
+  // blockers, not just the existence of three review rows.
+  const readiness = await unifiedReleaseReadinessTx(tx, companyId);
+  if (readiness.blockers.length)
+    return {
+      allowed: false,
+      policy,
+      deployedSha,
+      reason: "Accounting metadata pilot readiness is blocked: " + readiness.blockers.join("; "),
     };
   const active = (await reviewsTx(tx, companyId, deployedSha)).filter((x) => !x.revoked_at);
   const kinds = new Set(active.map((x) => x.review_kind));
@@ -178,6 +206,9 @@ interface DbTable extends Record<string, unknown> {
   exists: boolean;
   rls: boolean;
   forced: boolean;
+  // Existence of a real RLS policy is necessary but not sufficient proof of
+  // company isolation. External penetration tests still own certification.
+  hasPolicy: boolean;
 }
 /**
  * Open-item, cash/bank and cost-allocation rows reference voucher_entries(id)
@@ -199,14 +230,19 @@ export async function unifiedReleaseReadinessTx(tx: DbTransaction, companyId: nu
    SELECT names.name,
     (c.oid IS NOT NULL) AS exists,
     COALESCE(c.relrowsecurity,false) AS rls,
-    COALESCE(c.relforcerowsecurity,false) AS forced
+    COALESCE(c.relforcerowsecurity,false) AS forced,
+    EXISTS(
+      SELECT 1 FROM pg_policies p
+      WHERE p.schemaname=current_schema() AND p.tablename=names.name
+    ) AS "hasPolicy"
    FROM UNNEST(ARRAY[
     'accounting_open_item_matches','accounting_cash_bank_statements',
     'accounting_cash_bank_matches','accounting_fx_realizations',
     'accounting_rental_expense_links',
     'accounting_fiscal_review_signoffs','accounting_fiscal_reviewed_closures',
     'accounting_fiscal_review_policy','accounting_unified_release_reviews',
-    'accounting_unified_rollout_policy'
+    'accounting_unified_rollout_policy',
+    'cost_centers','cost_center_allocations','cost_center_monthly_budgets'
    ]::text[]) AS names(name)
    LEFT JOIN pg_class c ON c.relname=names.name AND
     c.relnamespace=(SELECT oid FROM pg_namespace WHERE nspname=current_schema())
@@ -224,7 +260,7 @@ export async function unifiedReleaseReadinessTx(tx: DbTransaction, companyId: nu
   const byName = new Map(tables.map((x) => [x.name, x]));
   const missing = requiredTables.filter((t) => !byName.get(t)?.exists);
   const unprotected = protectedTables.filter(
-    (t) => !!byName.get(t)?.exists && (!byName.get(t)?.rls || !byName.get(t)?.forced)
+    (t) => !!byName.get(t)?.exists && (!byName.get(t)?.rls || !byName.get(t)?.forced || !byName.get(t)?.hasPolicy)
   );
   const blockers: string[] = [];
   if (!sha)
@@ -245,7 +281,8 @@ export async function unifiedReleaseReadinessTx(tx: DbTransaction, companyId: nu
       `Unresolved historical FX base records: ${historicalFx.unresolvedEntryCount} entries and ${historicalFx.unresolvedVoucherCount} vouchers`
     );
   if (missing.length) blockers.push(`Missing additive accounting metadata tables: ${missing.join(", ")}`);
-  if (unprotected.length) blockers.push(`Required company RLS / FORCE RLS missing: ${unprotected.join(", ")}`);
+  if (unprotected.length)
+    blockers.push(`Required RLS, FORCE RLS or company policy is missing: ${unprotected.join(", ")}`);
   if (!METADATA_ENTRY_REFERENCES_COMPATIBLE) blockers.push(METADATA_ENTRY_REFERENCES_BLOCKER);
   const active = reviews.filter((v) => !v.revoked_at);
   const seen = new Set(active.map((v) => v.review_kind));
@@ -299,6 +336,7 @@ export async function unifiedReleaseReadinessTx(tx: DbTransaction, companyId: nu
       implementation: "COMMITTED_AWAITING_INDEPENDENT_VERIFICATION",
     })),
     releaseReviews: signoffs,
+    metadataEntryReferencesCompatible: METADATA_ENTRY_REFERENCES_COMPATIBLE,
     reviewsComplete:
       seen.has("TECHNICAL") &&
       seen.has("SECURITY") &&
@@ -309,7 +347,10 @@ export async function unifiedReleaseReadinessTx(tx: DbTransaction, companyId: nu
     warnings,
     eligibleForExternalReview: !blockers.length,
     pilotOperational:
+      METADATA_ENTRY_REFERENCES_COMPATIBLE &&
+      blockers.length === 0 &&
       policy.releaseMode === "METADATA_PILOT" &&
+      !!sha &&
       policy.releaseSha === sha &&
       !!technical &&
       technical.reviewer_id !== policy.updatedBy &&
