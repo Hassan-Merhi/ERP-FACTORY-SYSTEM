@@ -51,12 +51,28 @@ export function registerProfessionalFinancialStatementRoutes(app: Express) {
       const historicalFx = await getHistoricalCurrencyReadiness(companyId, asOfDate);
       if (!historicalFx.ready) {
         result.current.controls.blockers.push(
-          "Historical currency data is incomplete; financial statement amounts require review"
+          "Current-period historical currency data is incomplete; financial statement amounts require review"
         );
-        if (result.comparison)
-          result.comparison.controls.blockers.push(
-            "Historical FX readiness of the comparison period has not been independently certified"
-          );
+      }
+      if (historicalFx.legacyCompatibilityMode) {
+        result.current.controls.warnings.push(
+          "Current-period historical FX uses legacy compatibility mode; ready does not mean certified conversion."
+        );
+      }
+      // The prior period must be assessed at its own accounting cutoff.
+      // Never copy current-period FX readiness to the comparison column.
+      const comparisonHistoricalFx = result.comparisonPeriod
+        ? await getHistoricalCurrencyReadiness(companyId, result.comparisonPeriod.asOfDate)
+        : null;
+      if (result.comparison && comparisonHistoricalFx && !comparisonHistoricalFx.ready) {
+        result.comparison.controls.blockers.push(
+          "Comparison-period historical currency data is incomplete; comparison amounts require review"
+        );
+      }
+      if (result.comparison && comparisonHistoricalFx?.legacyCompatibilityMode) {
+        result.comparison.controls.warnings.push(
+          "Comparison-period historical FX uses legacy compatibility mode; ready does not mean certified conversion."
+        );
       }
       res.setHeader("Cache-Control", "no-store");
       return res.json({
@@ -66,6 +82,13 @@ export function registerProfessionalFinancialStatementRoutes(app: Express) {
           certified: false,
           caveat: "Compatibility-ready in pure legacy mode does not prove complete historical USD conversion.",
         },
+        comparisonHistoricalFx: comparisonHistoricalFx
+          ? {
+              ...comparisonHistoricalFx,
+              certified: false,
+              caveat: "Comparison-period compatibility is not independent certification of historical FX.",
+            }
+          : null,
       });
     } catch (e) {
       const status = errorStatus(e);
