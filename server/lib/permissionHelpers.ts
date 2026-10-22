@@ -7,7 +7,7 @@
  *   Developer / Admin     → always allowed (cannot be restricted via this system)
  *   Owner / Manager / POS → allowed by default; enabled=false in DB = restricted
  *   Normal User           → denied by default; enabled=true in DB = explicitly allowed
- *   ERP Tester            → operational access within sandbox; Settings and non-ERP modules always denied
+ *   ERP Tester            → Manager-style operational permissions, with Settings always denied
  *
  * Usage pattern:
  *   const permissions = await storage.getRoleFeaturePermissions(companyId);
@@ -42,12 +42,10 @@ function isAllowed(role: string, featureKey: string, permMap: Map<string, boolea
   // Developer and Admin are always allowed — cannot be restricted
   if (role === "Developer" || role === "Admin") return true;
 
-  // A sandbox tester cannot be granted Settings or non-ERP access through configurable permissions.
+  // Settings access cannot be enabled for the ERP Tester role in any company.
   if (
     role === "ERP Tester" &&
-    ["settings", "page_settings", "mod_settings", "factory_production", "mod_factory", "mod_properties"].includes(
-      featureKey
-    )
+    ["settings", "page_settings", "mod_settings"].includes(featureKey)
   ) {
     return false;
   }
