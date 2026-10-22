@@ -928,44 +928,16 @@ export const phase3RemainingTranslationsPart01: readonly Phase3SharedUiEntry[] =
   { en: "Company Management", ar: "إدارة الشركات", fr: "Gestion des sociétés" },
   { en: "Admin access required", ar: "يلزم وصول المسؤول", fr: "Accès administrateur requis" },
   { en: "ERP Tester", ar: "مستخدم اختبار ERP", fr: "Testeur ERP" },
-  {
-    en: "ERP Tester can only be assigned to a standalone ERP Test Company",
-    ar: "يمكن إسناد دور مستخدم اختبار ERP إلى شركة اختبار ERP مستقلة فقط",
-    fr: "Le rôle Testeur ERP ne peut être attribué qu’à une société de test ERP autonome",
-  },
-  {
-    en: "ERP Tester accounts cannot access system settings or other modules",
-    ar: "لا يمكن لمستخدمي اختبار ERP الوصول إلى إعدادات النظام أو الوحدات الأخرى",
-    fr: "Les comptes Testeur ERP ne peuvent pas accéder aux paramètres système ni aux autres modules",
-  },
-  {
-    en: "Select an ERP Test Company to continue.",
-    ar: "اختر شركة اختبار ERP للمتابعة.",
-    fr: "Sélectionnez une société de test ERP pour continuer.",
-  },
+  { en: "ERP Tester can be assigned to any company", ar: "يمكن تعيين مستخدم اختبار ERP في أي شركة", fr: "Le rôle Testeur ERP peut être attribué à n’importe quelle société" },
+  { en: "ERP Tester accounts cannot access system settings or user administration", ar: "لا يمكن لمستخدم اختبار ERP الوصول إلى إعدادات النظام أو إدارة المستخدمين", fr: "Les comptes Testeur ERP ne peuvent pas accéder aux paramètres système ni à la gestion des utilisateurs" },
+  { en: "ERP Tester can be assigned to any company. This user can enter operational data in assigned companies but has no access to Settings or user administration.", ar: "يمكن تعيين مستخدم اختبار ERP في أي شركة، ويمكنه إدخال بيانات التشغيل في الشركات المخصصة له دون الوصول إلى الإعدادات أو إدارة المستخدمين.", fr: "Le Testeur ERP peut être attribué à toute société et saisir des données opérationnelles dans les sociétés attribuées, sans accéder aux paramètres ni à la gestion des utilisateurs." },
   {
     en: "When enabled, this user can delete, void, and archive records within their assigned company.",
     ar: "عند التفعيل، يمكن لهذا المستخدم حذف السجلات وإلغاؤها وأرشفتها ضمن الشركة المخصصة له.",
     fr: "Une fois activé, cet utilisateur peut supprimer, annuler et archiver des enregistrements dans la société qui lui est attribuée.",
   },
-  {
-    en: "ERP test-company data entry only",
-    ar: "إدخال البيانات في شركة اختبار ERP فقط",
-    fr: "Saisie de données réservée à la société de test ERP",
-  },
-  {
-    en: "No Settings, Factory, or production company access",
-    ar: "لا وصول إلى الإعدادات أو المصنع أو الشركات الإنتاجية",
-    fr: "Aucun accès aux paramètres, à l’usine ni aux sociétés en production",
-  },
-  {
-    en: "Delete test-company records",
-    ar: "حذف سجلات شركة الاختبار",
-    fr: "Supprimer les enregistrements de la société de test",
-  },
-  {
-    en: "ERP Tester works only in a standalone ERP Test Company. It can enter test data but cannot access Settings, Factory, or production companies. Create a test company under Settings → Companies first.",
-    ar: "يعمل مستخدم اختبار ERP ضمن شركة اختبار مستقلة فقط؛ يمكنه إدخال البيانات دون الوصول إلى الإعدادات أو المصنع أو شركات الإنتاج. أنشئ شركة اختبار من الإعدادات أولاً.",
-    fr: "Le Testeur ERP fonctionne seulement dans une société de test autonome. Il peut saisir des données sans accéder aux paramètres, à l’usine ou aux sociétés en production. Créez d’abord une société de test dans Paramètres.",
-  },
+  { en: "Manager-level operational access in assigned companies", ar: "صلاحيات تشغيلية بمستوى المدير في الشركات المخصصة", fr: "Accès opérationnel de niveau gestionnaire dans les sociétés attribuées" },
+  { en: "No system Settings or user administration access", ar: "لا يمكن الوصول إلى إعدادات النظام أو إدارة المستخدمين", fr: "Aucun accès aux paramètres système ni à la gestion des utilisateurs" },
+  { en: "Delete assigned-company records", ar: "حذف سجلات الشركة المخصصة", fr: "Supprimer les enregistrements des sociétés attribuées" },
+  { en: "ERP Tester can be assigned to any company. This user can enter operational data in assigned companies but has no access to Settings or user administration.", ar: "يمكن تعيين مستخدم اختبار ERP في أي شركة، ويمكنه إدخال بيانات التشغيل في الشركات المخصصة له دون الوصول إلى الإعدادات أو إدارة المستخدمين.", fr: "Le Testeur ERP peut être attribué à toute société et saisir des données opérationnelles dans les sociétés attribuées, sans accéder aux paramètres ni à la gestion des utilisateurs." },
 ];
