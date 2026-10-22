@@ -11,7 +11,6 @@ import { Check, X, Zap } from "lucide-react";
 import { ConfirmPasswordDialog, PermissionSummaryCard } from "./InlineRoleEditorSections";
 import { PosLocationManager } from "./PosLocationManager";
 import type { Company, LedgerAccount, Location, UserCompanyRole } from "@shared/schema";
-import { isErpTestCompanyCode } from "@shared/erpTestCompanyAccess";
 
 const ROLE_OPTIONS = ["Admin", "Owner", "Manager", "POS", "Normal User", "View Only", "ERP Tester"];
 
@@ -66,13 +65,6 @@ export function InlineRoleEditor({ userId, companies, editingRole, onClose, onSa
 
   const isPOS = role === "POS";
   const isTester = role === "ERP Tester";
-  const selectedCompany = companies.find((company) => company.id === companyId);
-  const isTesterCompany =
-    !!selectedCompany &&
-    selectedCompany.companyType === "erp" &&
-    selectedCompany.parentCompanyId == null &&
-    isErpTestCompanyCode(selectedCompany.code);
-
   // Determine if the current save action needs password re-confirmation
   const isDangerousSave = role === "Admin" || canDeleteRecords;
 
@@ -282,11 +274,8 @@ export function InlineRoleEditor({ userId, companies, editingRole, onClose, onSa
 
       {isTester && (
         <p className="text-xs text-muted-foreground">
-          ERP Tester works only in a standalone ERP Test Company. It can enter test data but cannot access Settings,
-          Factory, or production companies. Create a test company under Settings → Companies first.
-          {!isTesterCompany && (
-            <span className="block font-medium text-destructive">Select an ERP Test Company to continue.</span>
-          )}
+          ERP Tester can be assigned to any company. This user can enter operational data in assigned companies
+          but has no access to Settings or user administration.
         </p>
       )}
 
@@ -454,8 +443,7 @@ export function InlineRoleEditor({ userId, companies, editingRole, onClose, onSa
           onClick={handleSave}
           disabled={
             saveMutation.isPending ||
-            (isPOS && selectedLocationIds.length === 0 && !posViewOnly) ||
-            (isTester && !isTesterCompany)
+            (isPOS && selectedLocationIds.length === 0 && !posViewOnly)
           }
           data-testid="button-save-role"
         >
