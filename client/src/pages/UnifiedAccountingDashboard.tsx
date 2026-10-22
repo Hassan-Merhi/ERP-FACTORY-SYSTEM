@@ -7,6 +7,7 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { UnifiedAccountingBudgetBridge } from "@/components/financial/UnifiedAccountingBudgetBridge";
 
 interface Line {
   kind: string;
@@ -215,7 +216,7 @@ export default function UnifiedAccountingDashboard() {
   const [fromDate, setFromDate] = useState("");
   const [asOfDate, setAsOfDate] = useState("");
   const [showOperations, setShowOperations] = useState(false);
-  const [tab, setTab] = useState<"position" | "profit" | "stock" | "controls">("position");
+  const [tab, setTab] = useState<"position" | "profit" | "budgets" | "stock" | "controls">("position");
   const params = new URLSearchParams({
     valuationBasis: "cost",
     includeOperational: String(showOperations),
@@ -346,13 +347,14 @@ export default function UnifiedAccountingDashboard() {
             <Value label="Cash movement (posted)" value={x.performance.recognizedCashMovementUsd} />
           </div>
           <div className="flex flex-wrap gap-2">
-            {(["position", "profit", "stock", "controls"] as const).map((k) => (
+            {(["position", "profit", "budgets", "stock", "controls"] as const).map((k) => (
               <Button size="sm" key={k} variant={tab === k ? "default" : "outline"} onClick={() => setTab(k)}>
                 {
                   (
                     {
                       position: "Booked net position",
                       profit: "Income & costs",
+                      budgets: "Cost centers & budgets",
                       stock: "Stock & management bridge",
                       controls: "Controls & source detail",
                     } as const
@@ -427,6 +429,15 @@ export default function UnifiedAccountingDashboard() {
                 </div>
               </CardContent>
             </Card>
+          )}
+          {tab === "budgets" && (
+            <UnifiedAccountingBudgetBridge
+              companyId={x.companyId}
+              fromDate={x.fromDate}
+              asOfDate={x.asOfDate}
+              mode={prefix === "/factory" ? "factory" : prefix === "/properties" ? "properties" : "erp"}
+              onOpenCostCenters={() => go(prefix === "/factory" ? "/factory/cost-centers" : "/cost-centers")}
+            />
           )}
           {tab === "stock" && (
             <Card>
