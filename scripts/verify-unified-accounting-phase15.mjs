@@ -92,6 +92,25 @@ has("server/middleware/unifiedAccountingRolloutBoundary.ts",[
  "currentPilotEligibilityTx","/api/accounting/monetary-fx/realized",
  "/api/accounting/fiscal-review/close"
 ]);
+has("server/services/accounting/fiscalReviewService.ts",[
+ "jsonb_build_array(voucher_id",
+ "base_debit_amount IS NULL",
+ "base_credit_amount IS NULL",
+ "accounting_fiscal_review_signoffs",
+ "fiscal_review_company_scope",
+ "reviewMetadataCompanyRlsInstalled",
+ "customers_opening_balance_lock",
+ "voucher_entries_audit_row_delete"
+]);
+has("client/src/pages/FiscalCloseReview.tsx",[
+ "UNIFIED_FINANCIAL_POSTING_CERTIFIED = false",
+ "reviewMetadataCompanyRlsInstalled"
+]);
+has("server/routes/fiscalReviewRoutes.ts",[
+ "UNIFIED_FINANCIAL_POSTING_RELEASED",
+ "ensureReviewedFiscalCloseTx",
+ "recordReviewedFiscalCloseTx"
+]);
 has("server/services/accounting/ensureUnifiedAccountingRolloutSchema.ts",[
  "accounting_unified_rollout_policy","accounting_unified_release_reviews",
  "FORCE ROW LEVEL SECURITY","unified_release_review_immutable"
