@@ -303,7 +303,7 @@ export function ErpRoutes({ user }: ErpRoutesProps) {
           <Redirect replace to="/tracking" />
         </Route>
       )}
-      {G("/transaction-journal", "daybook", TransactionJournal)}
+      {R("/transaction-journal", effectiveRole !== "ERP Tester" && canAccess("daybook"), TransactionJournal)}
       {G("/payroll", "payroll", Payroll)}
       {G("/create", "create", AccountingCreate)}
 
