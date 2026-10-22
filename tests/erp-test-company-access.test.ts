@@ -1,8 +1,43 @@
 import { describe, expect, it } from "vitest";
-import { FEATURE_KEYS } from "../shared/schema";
-import { ERP_TESTER_PAGE_KEYS, ERP_TESTER_ROLE_PERMISSIONS } from "../shared/erpTestCompanyAccess";
+import { FEATURE_KEYS, insertRoleFeaturePermissionSchema, insertUserCompanyRoleSchema } from "../shared/schema";
+import {
+  ERP_TESTER_PAGE_KEYS,
+  ERP_TESTER_ROLE,
+  ERP_TESTER_ROLE_PERMISSIONS,
+  isErpTestCompanyCode,
+  isErpTesterForbiddenApiPath,
+} from "../shared/erpTestCompanyAccess";
 
 describe("ERP test company access policy", () => {
+  it("stores ERP Tester as an independent user role", () => {
+    expect(ERP_TESTER_ROLE).toBe("ERP Tester");
+    expect(insertUserCompanyRoleSchema.shape.role.safeParse(ERP_TESTER_ROLE).success).toBe(true);
+    expect(insertRoleFeaturePermissionSchema.shape.role.safeParse(ERP_TESTER_ROLE).success).toBe(true);
+  });
+
+  it("recognizes only generated ERP test company codes", () => {
+    expect(isErpTestCompanyCode("ERPTEST-ABCDEF1234")).toBe(true);
+    expect(isErpTestCompanyCode("ERP")).toBe(false);
+    expect(isErpTestCompanyCode("ERPTEST-anything")).toBe(false);
+  });
+
+  it("blocks configuration and other modules but allows ERP operational APIs", () => {
+    const denied = [
+      "/api/settings",
+      "/api/settings/role-permissions",
+      "/api/my-settings",
+      "/api/admin/reset-company-data",
+      "/api/users",
+      "/api/user-company-roles",
+      "/api/factory/stock",
+      "/api/companies/erp-test",
+    ];
+    for (const path of denied) expect(isErpTesterForbiddenApiPath(path)).toBe(true);
+
+    const allowed = ["/api/vouchers", "/api/stock-items", "/api/companies", "/api/user/change-password"];
+    for (const path of allowed) expect(isErpTesterForbiddenApiPath(path)).toBe(false);
+  });
+
   it("grants all operational ERP pages but never administrative settings or Factory production", () => {
     expect(ERP_TESTER_PAGE_KEYS).toContain("dashboard");
     expect(ERP_TESTER_PAGE_KEYS).toContain("vouchers");
