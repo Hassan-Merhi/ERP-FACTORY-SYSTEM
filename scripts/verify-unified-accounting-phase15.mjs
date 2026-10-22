@@ -114,9 +114,21 @@ has("client/src/lazyPages.ts",[
  "UnifiedAccountingDashboard","UnifiedAccountingRollout",
  "FiscalCloseReview","ProfessionalFinancialStatements"
 ]);
-// Phase 12 (cost centers) is main's Cost Centers module; it has no handoff here.
+// Phase 12 preserves the existing Cost Centers implementation and connects
+// to its per-company analytical report without a second GL or budget writer.
+has("client/src/pages/UnifiedAccountingDashboard.tsx",[
+ "UnifiedAccountingBudgetBridge","tab === \"budgets\""
+]);
+has("client/src/components/financial/UnifiedAccountingBudgetBridge.tsx",[
+ "/api/factory/cost-centers","/api/cost-centers",
+ "/reports/summary","scope === \"company\"",
+ 'mode !== "properties"'
+]);
+has("server/routes/applicationRoutes.ts",["registerCostCenterReportingRoutes(app)"]);
+has("server/routes/costCenterReportingRoutes.ts",[
+ '"/reports/summary"', '"/budgets"'
+]);
 for(let phase=6;phase<=15;phase++){
- if(phase===12)continue;
  const file=`docs/unified-accounting-phase${phase}.md`;
  assert.ok(existsSync(resolve(root,file)),`Missing Phase ${phase} handoff: ${file}`);
 }
