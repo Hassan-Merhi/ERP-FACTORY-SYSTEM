@@ -118,8 +118,35 @@ has("server/services/accounting/ensureUnifiedAccountingRolloutSchema.ts",[
 has("server/services/accounting/unifiedRolloutService.ts",[
  "buildTrialBalance","getHistoricalCurrencyReadiness",
  "eligibleForExternalReview","PERPETUAL_INVENTORY_POSTING_READY",
- "deployedUnifiedReleaseSha","phaseCatalog"
-].filter(x=>x!=="phaseCatalog"));
+ "deployedUnifiedReleaseSha",
+ "METADATA_ENTRY_REFERENCES_COMPATIBLE = false",
+ "if (!METADATA_ENTRY_REFERENCES_COMPATIBLE)",
+ "reviewMetadataCompanyRlsInstalled" // retained independently by fiscal review stage
+].filter(x=>x!=="reviewMetadataCompanyRlsInstalled"));
+has("server/services/accounting/unifiedRolloutService.ts",[
+ "accounting_unified_rollout_policy",
+ "cost_centers",
+ "cost_center_allocations",
+ "cost_center_monthly_budgets",
+ 'AS "hasPolicy"',
+ "pilotOperational:",
+ "blockers.length === 0"
+]);
+has("server/middleware/unifiedAccountingRolloutBoundary.ts",[
+ 'String(req.session.currentRole ?? "")',
+ "ACCOUNTING_ROLLOUT_CHECK_UNAVAILABLE",
+ "UNIFIED_FINANCIAL_POSTING_RELEASED = false"
+]);
+has("server/routes/unifiedAccountingRolloutRoutes.ts",[
+ 'String(req.session.currentRole ?? "")'
+]);
+has("client/src/pages/UnifiedAccountingRollout.tsx",[
+ "metadataEntryReferencesCompatible",
+ "Metadata pilot configured",
+ "hasPolicy",
+ "phase === 6 || phase === 7 || phase === 12",
+ "d = readiness.data?.companyId === Number(companyId)"
+]);
 has("server/services/accounting/perpetualInventory/cutover.ts",[
  "export const PERPETUAL_INVENTORY_POSTING_READY = false"
 ]);
