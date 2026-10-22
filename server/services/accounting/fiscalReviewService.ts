@@ -278,9 +278,12 @@ export async function fiscalReadinessTx(
  SELECT
   (SELECT COUNT(*)::text FROM active_vouchers WHERE optional=false AND deleted_at IS NULL) AS posted_vouchers,
   (SELECT COUNT(*)::text FROM live_lines) AS posted_lines,
+  -- JSON keeps NULL positions distinct (CONCAT_WS skips NULLs) and includes
+  -- posting type/actor. A materially changed voucher cannot inherit approval.
   (SELECT MD5(COALESCE(STRING_AGG(MD5(
-    CONCAT_WS('|',voucher_id,voucher_number,booked_on,entry_id,ledger_account_id,
-     debit_amount,credit_amount,base_debit_amount,base_credit_amount,currency,account_owner)),
+    jsonb_build_array(voucher_id,voucher_number,voucher_type,booked_on,
+      created_by,entry_id,ledger_account_id,debit_amount,credit_amount,
+      base_debit_amount,base_credit_amount,currency,account_owner)::text),
     '' ORDER BY voucher_id,entry_id),''))
     FROM live_lines) AS lines_digest,
   (SELECT COUNT(*)::text FROM live_lines
@@ -291,8 +294,11 @@ export async function fiscalReadinessTx(
       AND LOWER(TRIM(voucher_type)) NOT IN
         ('stock transfer','consumption','stock adjustment')) AS unbalanced_balanced_type,
   (SELECT COUNT(*)::text FROM live_lines
-    WHERE UPPER(COALESCE(currency,'USD'))<>'USD'
-      AND base_debit_amount IS NULL AND base_credit_amount IS NULL) AS non_usd_untranslated,
+    WHERE UPPER(TRIM(COALESCE(currency,'USD')))<>'USD'
+      AND (
+        (COALESCE(debit_amount,0)<>0 AND base_debit_amount IS NULL)
+        OR (COALESCE(credit_amount,0)<>0 AND base_credit_amount IS NULL)
+      )) AS non_usd_untranslated,
   (SELECT COUNT(*)::text FROM live_lines l
     JOIN ledger_accounts la ON la.id=l.ledger_account_id AND la.company_id=${companyId}
     WHERE LOWER(TRIM(la.account_type)) IN
@@ -310,18 +316,63 @@ export async function fiscalReadinessTx(
   `),
     tx.execute(sql`
  SELECT
- COALESCE(bool_or(tgname='vouchers_closed_period_guard' AND tgenabled<>'D'),false) AS vouchers_guard,
- COALESCE(bool_or(tgname='voucher_entries_closed_period_guard' AND tgenabled<>'D'),false) AS entries_guard,
- (SELECT COUNT(DISTINCT tgname) FROM pg_trigger
-   WHERE NOT tgisinternal AND tgenabled<>'D'
-    AND tgname IN ('vouchers_audit_actor_columns',
-     'vouchers_audit_row_insert','vouchers_audit_row_update',
-     'vouchers_audit_row_delete','voucher_entries_audit_row_insert',
-     'voucher_entries_audit_row_update','voucher_entries_audit_row_delete',
-     'audit_log_before_insert_chain','audit_log_append_only','audit_log_no_truncate')
-  )=10 AS audit_guard,
- COALESCE(bool_or(tgname='ledger_accounts_opening_balance_lock' AND tgenabled<>'D'),false) AS opening_guard
- FROM pg_trigger WHERE NOT tgisinternal
+ EXISTS(
+   SELECT 1 FROM pg_trigger t
+   WHERE t.tgrelid='vouchers'::regclass
+     AND t.tgname='vouchers_closed_period_guard'
+     AND NOT t.tgisinternal AND t.tgenabled IN ('O','A')
+ ) AS vouchers_guard,
+ EXISTS(
+   SELECT 1 FROM pg_trigger t
+   WHERE t.tgrelid='voucher_entries'::regclass
+     AND t.tgname='voucher_entries_closed_period_guard'
+     AND NOT t.tgisinternal AND t.tgenabled IN ('O','A')
+ ) AS entries_guard,
+ NOT EXISTS(
+   SELECT 1 FROM (VALUES
+     ('vouchers','vouchers_audit_actor_columns'),
+     ('vouchers','vouchers_audit_row_insert'),
+     ('vouchers','vouchers_audit_row_update'),
+     ('vouchers','vouchers_audit_row_delete'),
+     ('voucher_entries','voucher_entries_audit_row_insert'),
+     ('voucher_entries','voucher_entries_audit_row_update'),
+     ('voucher_entries','voucher_entries_audit_row_delete'),
+     ('audit_log','audit_log_before_insert_chain'),
+     ('audit_log','audit_log_append_only'),
+     ('audit_log','audit_log_no_truncate')
+   ) AS required(table_name,trigger_name)
+   WHERE NOT EXISTS(
+     SELECT 1 FROM pg_trigger t
+     JOIN pg_class target ON target.oid=t.tgrelid
+     JOIN pg_namespace ns ON ns.oid=target.relnamespace
+     WHERE ns.nspname=current_schema()
+       AND target.relname=required.table_name
+       AND t.tgname=required.trigger_name
+       AND NOT t.tgisinternal AND t.tgenabled IN ('O','A')
+   )
+ ) AS audit_guard,
+ -- The fiscal closing journal depends on ALL seven opening sources, not
+ -- merely the ledger-account master. A missing master lock blocks approval.
+ NOT EXISTS(
+   SELECT 1 FROM (VALUES
+     ('ledger_accounts','ledger_accounts_opening_balance_lock'),
+     ('customers','customers_opening_balance_lock'),
+     ('suppliers','suppliers_opening_balance_lock'),
+     ('bank_accounts','bank_accounts_opening_balance_lock'),
+     ('employees','employees_opening_balance_lock'),
+     ('factory_suppliers','factory_suppliers_opening_balance_lock'),
+     ('fixed_assets','fixed_assets_opening_balance_lock')
+   ) AS required(table_name,trigger_name)
+   WHERE NOT EXISTS(
+     SELECT 1 FROM pg_trigger t
+     JOIN pg_class target ON target.oid=t.tgrelid
+     JOIN pg_namespace ns ON ns.oid=target.relnamespace
+     WHERE ns.nspname=current_schema()
+       AND target.relname=required.table_name
+       AND t.tgname=required.trigger_name
+       AND NOT t.tgisinternal AND t.tgenabled IN ('O','A')
+   )
+ ) AS opening_guard
  `),
   ]);
   const e = resultRows<EvidenceRow>(totals)[0];
@@ -350,7 +401,7 @@ export async function fiscalReadinessTx(
   if (source.missingLedgerTargets)
     blockers.push(`${source.missingLedgerTargets} posted line(s) target another company's or a missing ledger account`);
   if (source.nonUsdUntranslatedLines)
-    blockers.push(`${source.nonUsdUntranslatedLines} foreign-currency lines lack historical USD base amounts`);
+    blockers.push(`${source.nonUsdUntranslatedLines} foreign-currency lines lack a historical USD base on a nonzero debit/credit side`);
   if (source.pnlBaseAmountMismatchLines)
     blockers.push(
       `${source.pnlBaseAmountMismatchLines} income/expense lines have historical USD base amounts different from legacy debit/credit; the existing close writer must be reviewed before certification`
