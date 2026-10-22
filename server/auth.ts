@@ -482,6 +482,32 @@ function isViewOnlyPassiveLifecycleWrite(req: Request): boolean {
   );
 }
 
+/**
+ * Sandbox testers can post ordinary ERP test data, but must never reach
+ * configuration, maintenance, user management, or non-ERP APIs.
+ * This is a server enforcement boundary, not only a hidden Settings link.
+ */
+export function blockErpTesterSettings(req: Request, res: Response, next: NextFunction) {
+  if (req.session?.currentRole !== "ERP Tester" || !req.path.startsWith("/api/")) return next();
+  const path = req.path.toLowerCase();
+  const denied = [
+    "/api/settings",
+    "/api/admin",
+    "/api/users",
+    "/api/user-company-roles",
+    "/api/role-permissions",
+    "/api/company-settings",
+    "/api/factory",
+    "/api/properties",
+    "/api/sp",
+    "/api/companies/erp-test",
+  ];
+  if (denied.some((prefix) => path === prefix || path.startsWith(prefix + "/"))) {
+    return res.status(403).json({ message: "ERP Tester accounts cannot access system settings or other modules" });
+  }
+  return next();
+}
+
 export function blockViewOnlyWrites(req: Request, res: Response, next: NextFunction) {
   const method = req.method.toUpperCase();
   if (method === "GET" || method === "HEAD" || method === "OPTIONS") return next();
