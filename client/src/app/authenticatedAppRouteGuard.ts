@@ -59,7 +59,7 @@ export function resolveAuthenticatedAppRoute({
   // nested Factory/Properties pages and the unprefixed personal settings route.
   if (
     userRole === "ERP Tester" &&
-    /(?:^|[\\/_-])(?:settings|configuration)(?=$|[\\/_-])/.test(currentLocation.toLowerCase())
+    /(?:^|[\\/_-])(?:settings|configuration|setup)(?=$|[\\/_-])/.test(currentLocation.toLowerCase())
   ) {
     const fallback = isPropertiesCompany
       ? "/properties/daybook"
