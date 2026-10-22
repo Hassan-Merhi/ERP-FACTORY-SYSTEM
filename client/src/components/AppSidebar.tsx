@@ -179,7 +179,7 @@ export function useErpVisibleSections(user?: SidebarUser): {
   const { data: companySettings } = useQuery<SidebarCompanySettings>({
     queryKey: companyQueryKey("/api/company-settings", selectedCompany?.id),
     ...stableSettingsQueryPolicy,
-    enabled: !!selectedCompany?.id,
+    enabled: !!selectedCompany?.id && (user?.currentRole ?? user?.role) !== "ERP Tester",
   });
 
   const allowedPages = new Set<string>(myErpPages?.pageKeys || []);
