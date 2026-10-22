@@ -731,7 +731,10 @@ function registerPrefix(app: Express, prefix: string) {
       const scope = await resolveScope(req);
       const format = req.query.format;
       const view = req.query.view ?? "summary";
-      if (!["csv", "xlsx", "pdf"].includes(String(format)) || !["summary", "activity"].includes(String(view)))
+      if (
+        !["csv", "xlsx", "pdf"].includes(String(format)) ||
+        !["summary", "activity", "departments", "accounts", "months"].includes(String(view))
+      )
         throw new ReportError(400, "Invalid export request");
       await exportReport(res, scope, parseFilters(req), String(format), String(view));
     } catch (e) {
