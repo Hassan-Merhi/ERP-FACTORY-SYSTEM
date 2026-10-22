@@ -5,6 +5,7 @@ import { requireAuth } from "../auth";
 import { db } from "../db";
 import { registerAccountRoutes } from "./accounts";
 import { registerCostCenterRoutes } from "./costCenterRoutes";
+import { enforceCostCenterErpPageAccess } from "../middleware/costCenterErpPageAccess";
 import { registerCostCenterReportingRoutes } from "./costCenterReportingRoutes";
 import { registerCostCenterHistoricalRoutes } from "./costCenterHistoricalRoutes";
 import { registerCostCenterReleaseReadinessRoutes } from "./costCenterReleaseReadinessRoutes";
@@ -102,6 +103,9 @@ export async function registerApplicationRoutes(app: Express): Promise<Server> {
   // Shared ERP accounting endpoints are reused inside Factory pages. Enforce
   // their Factory page/tab ownership before any concrete route handler runs.
   app.use(enforceSharedFactoryAccess);
+  // Verify ERP page permissions before any of the shared Cost Center routers.
+  // Factory Cost Centers remain governed by their separate Factory boundary.
+  app.use("/api/cost-centers", requireAuth, enforceCostCenterErpPageAccess);
   registerWhatsAppFastSendRoutes(app);
   registerBandwidthPhase3FactoryReads(app);
   registerFactoryRoutes(app, requireAuth, db);
