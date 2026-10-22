@@ -66,7 +66,7 @@ const defaultPinnedItems: NavItem[] = [
   { title: "Vouchers", url: "/vouchers", icon: Receipt },
 ];
 
-export const SETTINGS_HIDDEN_ROLES = new Set(["Admin", "Developer"]);
+export const SETTINGS_HIDDEN_ROLES = new Set(["Admin", "Developer", "ERP Tester"]);
 
 export const ERP_NAV_SECTIONS: NavSection[] = [
   {
