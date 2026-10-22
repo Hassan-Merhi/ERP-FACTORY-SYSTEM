@@ -361,74 +361,76 @@ async function finishedStockAt(companyId: number, scope: FactoryNetPositionAsOf,
     priced: string;
   }>(
     await db.execute(sql`
-    WITH candidate AS (
+    WITH allocated AS MATERIALIZED (
+      -- Each rule is computed once as a set of bale ids and joined below: as
+      -- per-bale EXISTS probes inside one OR the planner ran every probe for
+      -- every bale (and the history table has no bale_id index).
+      SELECT cob.bale_id FROM customer_order_bales cob
+        JOIN customer_orders co ON co.id = cob.order_id AND co.company_id = ${companyId}
+       WHERE cob.scanned_at IS NOT NULL
+         AND ${netPositionRecordedThrough(sql`cob.scanned_at`, scope, "timestamptz")}
+         AND ${orderLiveThen}
+         AND NOT EXISTS (
+            -- A restored row may reuse the original scanned_at.
+            -- If cancelled before cutoff but restoration was undated,
+            -- it cannot be treated as a known allocation.
+            SELECT 1 FROM customer_order_bales_history prior
+             WHERE prior.order_id = cob.order_id
+               AND prior.bale_id = cob.bale_id
+               AND ${netPositionRecordedThrough(sql`prior.cancelled_at`, scope, "timestamptz")}
+         )
+      UNION
+      -- A scan cancelled after the selected day was still allocated
+      -- on the selected day; archived history retains that interval.
+      SELECT coh.bale_id FROM customer_order_bales_history coh
+        JOIN customer_orders co ON co.id = coh.order_id AND co.company_id = ${companyId}
+       WHERE coh.scanned_at IS NOT NULL
+         AND ${netPositionRecordedThrough(sql`coh.scanned_at`, scope, "timestamptz")}
+         AND NOT ${netPositionRecordedThrough(sql`coh.cancelled_at`, scope, "timestamptz")}
+         AND ${orderLiveThen}
+      UNION
+      SELECT cob.bale_id FROM customer_order_bales cob
+        JOIN customer_orders co ON co.id = cob.order_id AND co.company_id = ${companyId}
+       WHERE ${netPositionLegacyScanKnown("cob", "co", companyId, scope)}
+         AND ${orderLiveThen}
+      UNION
+      -- Legacy scan without a time: allocated then only when its
+      -- order row (whose totals every scan rewrites) is itself
+      -- unchanged since the cutoff and in today's allocating statuses.
+      SELECT cob.bale_id FROM customer_order_bales cob
+        JOIN customer_orders co ON co.id = cob.order_id AND co.company_id = ${companyId}
+       WHERE cob.scanned_at IS NULL
+         AND ${nextCutoff(scope, "co.updated_at")}
+         AND co.deleted_at IS NULL
+         AND co.status IN ('LOADING','PENDING_VERIFICATION','VERIFIED','FINALIZED','DISPATCHED','SOLD')
+    ), missing_scan AS MATERIALIZED (
+      SELECT cob.bale_id FROM customer_order_bales cob
+        JOIN customer_orders co ON co.id = cob.order_id AND co.company_id = ${companyId}
+       WHERE cob.scanned_at IS NULL
+      UNION
+      SELECT coh.bale_id FROM customer_order_bales_history coh
+        JOIN customer_orders co ON co.id = coh.order_id AND co.company_id = ${companyId}
+       WHERE coh.scanned_at IS NULL
+         AND NOT ${netPositionRecordedThrough(sql`coh.cancelled_at`, scope, "timestamptz")}
+    ), candidate AS MATERIALIZED (
       SELECT b.id, b.status,
              COALESCE(p.production_price::numeric, 0) AS catalog_cost,
              COALESCE(p.selling_price::numeric, 0) AS catalog_selling,
              ${nextCutoff(scope, "b.updated_at")} AS unchanged,
              b.finalized_at IS NULL AS legacy_entry,
              (b.finalized_at IS NOT NULL AND ${nextCutoff(scope, "b.finalized_at")}) AS finalized_before,
-             (EXISTS (
-                SELECT 1 FROM customer_order_bales cob
-                JOIN customer_orders co ON co.id = cob.order_id AND co.company_id = ${companyId}
-                WHERE cob.bale_id = b.id
-                  AND cob.scanned_at IS NOT NULL
-                  AND ${netPositionRecordedThrough(sql`cob.scanned_at`, scope, "timestamptz")}
-                  AND ${orderLiveThen}
-                  AND NOT EXISTS (
-                     -- A restored row may reuse the original scanned_at.
-                     -- If cancelled before cutoff but restoration was undated,
-                     -- it cannot be treated as a known allocation.
-                     SELECT 1 FROM customer_order_bales_history prior
-                      WHERE prior.order_id = cob.order_id
-                        AND prior.bale_id = cob.bale_id
-                        AND ${netPositionRecordedThrough(sql`prior.cancelled_at`, scope, "timestamptz")}
-                  )
-             ) OR EXISTS (
-                -- A scan cancelled after the selected day was still allocated
-                -- on the selected day; archived history retains that interval.
-                SELECT 1 FROM customer_order_bales_history coh
-                JOIN customer_orders co ON co.id = coh.order_id AND co.company_id = ${companyId}
-                WHERE coh.bale_id = b.id
-                  AND coh.scanned_at IS NOT NULL
-                  AND ${netPositionRecordedThrough(sql`coh.scanned_at`, scope, "timestamptz")}
-                  AND NOT ${netPositionRecordedThrough(sql`coh.cancelled_at`, scope, "timestamptz")}
-                  AND ${orderLiveThen}
-             ) OR EXISTS (
-                SELECT 1 FROM customer_order_bales cob
-                JOIN customer_orders co ON co.id = cob.order_id AND co.company_id = ${companyId}
-                WHERE cob.bale_id = b.id
-                  AND ${netPositionLegacyScanKnown("cob", "co", companyId, scope)}
-                  AND ${orderLiveThen}
-             ) OR EXISTS (
-                -- Legacy scan without a time: allocated then only when its
-                -- order row (whose totals every scan rewrites) is itself
-                -- unchanged since the cutoff and in today's allocating statuses.
-                SELECT 1 FROM customer_order_bales cob
-                JOIN customer_orders co ON co.id = cob.order_id AND co.company_id = ${companyId}
-                WHERE cob.bale_id = b.id AND cob.scanned_at IS NULL
-                  AND ${nextCutoff(scope, "co.updated_at")}
-                  AND co.deleted_at IS NULL
-                  AND co.status IN ('LOADING','PENDING_VERIFICATION','VERIFIED','FINALIZED','DISPATCHED','SOLD')
-             )) AS allocated_then,
+             (allocated.bale_id IS NOT NULL) AS allocated_then,
              (b.waste_dispatch_id IS NOT NULL AND EXISTS (
                 SELECT 1 FROM factory_bale_waste_dispatches wd
                  WHERE wd.id = b.waste_dispatch_id
                    AND wd.dispatch_date <= ${scope.asOf}::date
                    AND ${nextCutoff(scope, "wd.created_at")}
              )) AS dispatched_then,
-             (EXISTS (
-                SELECT 1 FROM customer_order_bales cob
-                JOIN customer_orders co ON co.id = cob.order_id AND co.company_id = ${companyId}
-                WHERE cob.bale_id = b.id AND cob.scanned_at IS NULL
-             ) OR EXISTS (
-                SELECT 1 FROM customer_order_bales_history coh
-                JOIN customer_orders co ON co.id = coh.order_id AND co.company_id = ${companyId}
-                WHERE coh.bale_id = b.id AND coh.scanned_at IS NULL
-                  AND NOT ${netPositionRecordedThrough(sql`coh.cancelled_at`, scope, "timestamptz")}
-             )) AS missing_scan_time
+             (missing_scan.bale_id IS NOT NULL) AS missing_scan_time
         FROM factory_bales b
         LEFT JOIN factory_bale_products p ON p.id = b.product_id AND p.company_id = ${companyId}
+        LEFT JOIN allocated ON allocated.bale_id = b.id
+        LEFT JOIN missing_scan ON missing_scan.bale_id = b.id
        WHERE b.company_id = ${companyId}
          AND ${nextCutoff(scope, "b.created_at")}
          AND COALESCE(b.stock_entry_date, b.finalized_at::date, b.pressed_at::date, b.created_at::date) <= ${scope.asOf}::date
