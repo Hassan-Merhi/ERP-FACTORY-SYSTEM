@@ -134,7 +134,8 @@ export interface UnifiedAccountingDashboard {
     // Null on past dates: current Factory cost cannot be combined with ERP
     // historic cost and labeled a common-date management valuation.
     managementCostCandidateUsd: string | null;
-    managementCostCandidateBasis: "CURRENT_COST_MEMO" | "WITHHELD_MIXED_DATES" | "WITHHELD_INCOMPLETE_COST" | "NOT_LOADED";
+    managementCostCandidateBasis:
+      "CURRENT_COST_MEMO" | "WITHHELD_MIXED_DATES" | "WITHHELD_INCOMPLETE_COST" | "NOT_LOADED";
     managementSellingValueUsd: null;
     managementSellingValueAvailableIn: "EXISTING_FACTORY_NET_POSITION";
     glToOperationalAtCost: Array<{
@@ -288,9 +289,7 @@ export async function unifiedAccountingDashboardTx(
       const book = glFromAssets.minus(glFromLiabilities);
       const factoryCode = accountCode.startsWith("FACTORY_");
       const unitemizedHistoricalErpMovements =
-        !factoryCode &&
-        asOfDate < businessDate &&
-        !D(valuation.excluded.unitemizedMovementValue).isZero();
+        !factoryCode && asOfDate < businessDate && !D(valuation.excluded.unitemizedMovementValue).isZero();
       const comparable =
         operationalCostUsd !== null &&
         ledgerActive &&
@@ -354,17 +353,14 @@ export async function unifiedAccountingDashboardTx(
     factoryStock.unvaluedCount === 0 &&
     erpStock.anomalousRows === 0;
   const managementCandidate =
-    stockCostComplete && erpStock && factoryStock
-      ? fmt(D(erpStock.costUsd).plus(D(factoryStock.totalUsd)))
-      : null;
-  const managementCandidateBasis =
-    !input.includeOperational
-      ? "NOT_LOADED" as const
-      : asOfDate < businessDate
-        ? "WITHHELD_MIXED_DATES" as const
-        : !stockCostComplete
-          ? "WITHHELD_INCOMPLETE_COST" as const
-          : "CURRENT_COST_MEMO" as const;
+    stockCostComplete && erpStock && factoryStock ? fmt(D(erpStock.costUsd).plus(D(factoryStock.totalUsd))) : null;
+  const managementCandidateBasis = !input.includeOperational
+    ? ("NOT_LOADED" as const)
+    : asOfDate < businessDate
+      ? ("WITHHELD_MIXED_DATES" as const)
+      : !stockCostComplete
+        ? ("WITHHELD_INCOMPLETE_COST" as const)
+        : ("CURRENT_COST_MEMO" as const);
   const classAssets = breakdown(position.assets);
   const classLiabilities = breakdown(position.liabilities);
   return {
@@ -411,7 +407,7 @@ export async function unifiedAccountingDashboardTx(
       factoryStock,
       bookedStockAssetUsd: fmt(bookedStock),
       managementCostCandidateUsd: managementCandidate,
-      managementCostCandidateBasis,
+      managementCostCandidateBasis: managementCandidateBasis,
       managementSellingValueUsd: null,
       managementSellingValueAvailableIn: "EXISTING_FACTORY_NET_POSITION",
       glToOperationalAtCost,

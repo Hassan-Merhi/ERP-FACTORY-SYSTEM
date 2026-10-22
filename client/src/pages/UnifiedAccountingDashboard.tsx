@@ -94,7 +94,8 @@ interface Dashboard {
     } | null;
     bookedStockAssetUsd: string;
     managementCostCandidateUsd: string | null;
-    managementCostCandidateBasis: "CURRENT_COST_MEMO" | "WITHHELD_MIXED_DATES" | "WITHHELD_INCOMPLETE_COST" | "NOT_LOADED";
+    managementCostCandidateBasis:
+      "CURRENT_COST_MEMO" | "WITHHELD_MIXED_DATES" | "WITHHELD_INCOMPLETE_COST" | "NOT_LOADED";
     managementSellingValueUsd: null;
     managementSellingValueAvailableIn: string;
     glToOperationalAtCost: Array<{
@@ -255,7 +256,10 @@ export default function UnifiedAccountingDashboard() {
       ["Booked liabilities", x.financialPosition.liabilitiesUsd],
       ["Booked net assets", x.financialPosition.netAssetsUsd],
       ["Equity incl. unclosed earnings", x.financialPosition.equityIncludingEarningsUsd],
-      ["Assets less liabilities and equity (before unclassified)", x.financialPosition.reportedBalanceSheetDifferenceUsd],
+      [
+        "Assets less liabilities and equity (before unclassified)",
+        x.financialPosition.reportedBalanceSheetDifferenceUsd,
+      ],
       ["Unclassified account net balance", x.financialPosition.unclassifiedUsd],
       ["Ledger residual after unclassified", x.financialPosition.unexplainedDifferenceUsd],
       ["Sales revenue", x.performance.salesRevenueUsd],
@@ -406,7 +410,9 @@ export default function UnifiedAccountingDashboard() {
                   </div>
                   <div className="flex justify-between text-sm gap-3 text-destructive">
                     <span>Assets − liabilities − equity (before unclassified)</span>
-                    <strong className="tabular-nums">{money(x.financialPosition.reportedBalanceSheetDifferenceUsd)}</strong>
+                    <strong className="tabular-nums">
+                      {money(x.financialPosition.reportedBalanceSheetDifferenceUsd)}
+                    </strong>
                   </div>
                   <div className="flex justify-between text-sm gap-3">
                     <span>Unclassified posted accounts (signed net, not assigned to equity)</span>
@@ -484,7 +490,11 @@ export default function UnifiedAccountingDashboard() {
                   <Value label="Stock accounts already recognized in ledger" value={x.operations.bookedStockAssetUsd} />
                   {x.operations.erpStock && (
                     <Value
-                      label={x.operations.erpStock.asOfBasis === "as-of" ? "ERP stock at replayed historical cost" : "ERP stock at current recorded cost"}
+                      label={
+                        x.operations.erpStock.asOfBasis === "as-of"
+                          ? "ERP stock at replayed historical cost"
+                          : "ERP stock at current recorded cost"
+                      }
                       value={x.operations.erpStock.costUsd}
                     />
                   )}
@@ -493,17 +503,23 @@ export default function UnifiedAccountingDashboard() {
                       <Value label="Factory raw stock cost" value={x.operations.factoryStock.rawUsd} />
                       <Value label="Factory work-in-progress cost" value={x.operations.factoryStock.wipUsd} />
                       <Value label="Factory finished bales cost" value={x.operations.factoryStock.finishedUsd} />
-                      <Value label="Factory stock cost total (current only)" value={x.operations.factoryStock.totalUsd} />
+                      <Value
+                        label="Factory stock cost total (current only)"
+                        value={x.operations.factoryStock.totalUsd}
+                      />
                     </>
                   )}
                   {x.operations.managementCostCandidateUsd !== null && (
-                    <Value label="ERP + Factory operational cost (current-date memo only)" value={x.operations.managementCostCandidateUsd} />
+                    <Value
+                      label="ERP + Factory operational cost (current-date memo only)"
+                      value={x.operations.managementCostCandidateUsd}
+                    />
                   )}
                 </div>
                 {x.operations.managementCostCandidateBasis === "WITHHELD_MIXED_DATES" && (
                   <p className="text-sm text-destructive">
-                    Combined management stock cost withheld: the ERP value is historical, but the Factory value is current.
-                    They cannot form a valid total for the selected accounting date.
+                    Combined management stock cost withheld: the ERP value is historical, but the Factory value is
+                    current. They cannot form a valid total for the selected accounting date.
                   </p>
                 )}
                 {x.operations.managementCostCandidateBasis === "WITHHELD_INCOMPLETE_COST" && (
@@ -580,8 +596,8 @@ export default function UnifiedAccountingDashboard() {
                   <p className="text-sm text-muted-foreground">
                     Selling valuation is available in the existing Factory Net Position report, with its persisted
                     Cost/Selling selection. It is not inserted into book value, financial net assets or historical COGS
-                    here. The original management screen may use a separately selected or pinned Factory company;
-                    never compare its totals to this dashboard without independently verifying company ownership.
+                    here. The original management screen may use a separately selected or pinned Factory company; never
+                    compare its totals to this dashboard without independently verifying company ownership.
                   </p>
                   <Button
                     variant="outline"
@@ -614,7 +630,10 @@ export default function UnifiedAccountingDashboard() {
               <CardContent className="space-y-5">
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                   <Value label="Trial balance difference" value={x.financialPosition.trialBalanceDifferenceUsd} />
-                  <Value label="Assets − liabilities − equity (before unclassified)" value={x.financialPosition.reportedBalanceSheetDifferenceUsd} />
+                  <Value
+                    label="Assets − liabilities − equity (before unclassified)"
+                    value={x.financialPosition.reportedBalanceSheetDifferenceUsd}
+                  />
                   <Value label="Remaining ledger residual" value={x.financialPosition.unexplainedDifferenceUsd} />
                   <Value
                     label="Cash-flow classification difference"

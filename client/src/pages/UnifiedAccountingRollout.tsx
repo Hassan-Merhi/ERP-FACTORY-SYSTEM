@@ -193,10 +193,7 @@ export default function UnifiedAccountingRollout() {
     return erpPath;
   };
   const launchReady =
-    !!d?.eligibleForExternalReview &&
-    !!d.reviewsComplete &&
-    !!d.deployedSha &&
-    d.metadataEntryReferencesCompatible;
+    !!d?.eligibleForExternalReview && !!d.reviewsComplete && !!d.deployedSha && d.metadataEntryReferencesCompatible;
   return (
     <div className="p-3 sm:p-5 space-y-5" data-testid="unified-accounting-rollout">
       <div>
@@ -450,7 +447,8 @@ export default function UnifiedAccountingRollout() {
               A metadata pilot would authorize only newly introduced matching, reconciliation, attribution and
               fiscal-review metadata routes after separate compatibility certification. The existing Cost Centers
               budget/attribution editors retain their own permissions and rollout controls. No setting here authorizes
-              new financial GL posting, FX realization, inventory cutover, historical repairs or reviewed fiscal closing.
+              new financial GL posting, FX realization, inventory cutover, historical repairs or reviewed fiscal
+              closing.
             </p>
             <p className="text-sm text-muted-foreground">
               Approved source revision: {selectedPolicy?.releaseSha ?? "None"}. Last decision:{" "}
@@ -499,16 +497,15 @@ export default function UnifiedAccountingRollout() {
               </Button>
             </div>
             <p className="text-xs text-muted-foreground">
-              Phase 15 deliberately keeps the new metadata writers locked until existing voucher-line replacement
-              flows and metadata foreign keys are made compatible and independently certified. A pilot policy row
-              cannot bypass this source-level safety gate. A future activation requires review of transaction-level
+              Phase 15 deliberately keeps the new metadata writers locked until existing voucher-line replacement flows
+              and metadata foreign keys are made compatible and independently certified. A pilot policy row cannot
+              bypass this source-level safety gate. A future activation requires review of transaction-level
               approval-revocation races, not just a UI acknowledgement.
             </p>
             <p className="text-xs text-muted-foreground">
-              If the deployed source SHA changes or any approval is revoked, the pilot writer gate fails closed
-              at its next authorization check. Returning to read-only does not undo legitimate metadata. Existing
-              ERP/Factory vouchers and other legacy business transactions continue under their normal posting and
-              permissions.
+              If the deployed source SHA changes or any approval is revoked, the pilot writer gate fails closed at its
+              next authorization check. Returning to read-only does not undo legitimate metadata. Existing ERP/Factory
+              vouchers and other legacy business transactions continue under their normal posting and permissions.
             </p>
           </CardContent>
         </Card>

@@ -373,4 +373,39 @@ export const phase3RemainingTranslationsPart34: readonly Phase3SharedUiEntry[] =
     ar: "توزيع على مراكز التكلفة، وليس تسوية لجميع مصروفات دفتر الأستاذ العام للشركة",
     fr: "Affectation par centre de coûts, et non rapprochement de toutes les charges du grand livre de la société",
   },
+  {
+    en: "Unclassified posted accounts (signed net, not assigned to equity)",
+    ar: "حسابات مرحّلة غير مصنفة (صافي بإشارة، غير مخصص لحقوق الملكية)",
+    fr: "Comptes comptabilisés non classés (net signé, non affecté aux capitaux propres)",
+  },
+  {
+    en: "Residual after separately displaying unclassified accounts",
+    ar: "المتبقي بعد عرض الحسابات غير المصنفة بشكل منفصل",
+    fr: "Résiduel après affichage séparé des comptes non classés",
+  },
+  {
+    en: "Dashboard company or accounting basis does not match the selected company. Figures have been withheld.",
+    ar: "شركة لوحة المعلومات أو الأساس المحاسبي لا يطابق الشركة المحددة. تم حجب الأرقام.",
+    fr: "La société du tableau de bord ou la base comptable ne correspond pas à la société sélectionnée. Les montants ont été retenus.",
+  },
+  {
+    en: "Combined management stock cost withheld because ERP or Factory cost evidence is incomplete.",
+    ar: "تم حجب تكلفة المخزون الإدارية المجمعة لأن أدلة تكلفة ERP أو المصنع غير مكتملة.",
+    fr: "Coût de stock de gestion combiné retenu car les justificatifs de coût ERP ou Usine sont incomplets.",
+  },
+  {
+    en: "Unprotected / policy-less tables",
+    ar: "جداول غير محمية / بدون سياسة",
+    fr: "Tables non protégées / sans politique",
+  },
+  {
+    en: "Voucher-edit / metadata FK compatibility",
+    ar: "توافق تعديل القسائم / المفاتيح الأجنبية للبيانات الوصفية",
+    fr: "Compatibilité modification de pièces / clés étrangères des métadonnées",
+  },
+  {
+    en: "Policy exists",
+    ar: "السياسة موجودة",
+    fr: "Politique existante",
+  },
 ];
