@@ -8,7 +8,13 @@ import {
   replacePasswordAndRevokeSessions,
 } from "../../services/security/userPasswordChangeService";
 import { storage } from "../../storage";
-import { companies, erpUserPageAccess, insertUserCompanyRoleSchema, insertUserSchema, userCompanyRoles } from "@shared/schema";
+import {
+  companies,
+  erpUserPageAccess,
+  insertUserCompanyRoleSchema,
+  insertUserSchema,
+  userCompanyRoles,
+} from "@shared/schema";
 import { ERP_TESTER_PAGE_KEYS, ERP_TESTER_ROLE, isErpTestCompanyCode } from "@shared/erpTestCompanyAccess";
 import { and, eq, sql } from "drizzle-orm";
 import { hashPassword, logAudit, verifyPassword } from "../_helpers";
@@ -189,13 +195,16 @@ export function registerUserAdministrationRoutes(app: Express) {
       const role = await db.transaction(async (tx) => {
         const created = await storage.createUserCompanyRole(parsed, tx);
         if (parsed.role === ERP_TESTER_ROLE) {
-          await tx.insert(erpUserPageAccess).values(
-            ERP_TESTER_PAGE_KEYS.map((pageKey) => ({
-              userId: parsed.userId,
-              companyId: parsed.companyId,
-              pageKey,
-            }))
-          ).onConflictDoNothing();
+          await tx
+            .insert(erpUserPageAccess)
+            .values(
+              ERP_TESTER_PAGE_KEYS.map((pageKey) => ({
+                userId: parsed.userId,
+                companyId: parsed.companyId,
+                pageKey,
+              }))
+            )
+            .onConflictDoNothing();
         }
         await logAudit(
           {
@@ -237,9 +246,14 @@ export function registerUserAdministrationRoutes(app: Express) {
       const role = await db.transaction(async (tx) => {
         const updatedRole = await storage.updateUserCompanyRole(id, parsed, tx);
         if (effectiveRole === ERP_TESTER_ROLE) {
-          await tx.delete(erpUserPageAccess).where(
-            and(eq(erpUserPageAccess.userId, updatedRole.userId), eq(erpUserPageAccess.companyId, updatedRole.companyId))
-          );
+          await tx
+            .delete(erpUserPageAccess)
+            .where(
+              and(
+                eq(erpUserPageAccess.userId, updatedRole.userId),
+                eq(erpUserPageAccess.companyId, updatedRole.companyId)
+              )
+            );
           await tx.insert(erpUserPageAccess).values(
             ERP_TESTER_PAGE_KEYS.map((pageKey) => ({
               userId: updatedRole.userId,

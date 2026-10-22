@@ -232,12 +232,10 @@ export function registerCompanyAccessRoutes(app: Express) {
 
     const parsed = inputSchema.safeParse(req.body ?? {});
     if (!parsed.success) {
-      return res
-        .status(400)
-        .json({
-          message:
-            "Enter a valid company name and tester username (3–48 letters, numbers, dots, underscores, or dashes).",
-        });
+      return res.status(400).json({
+        message:
+          "Enter a valid company name and tester username (3–48 letters, numbers, dots, underscores, or dashes).",
+      });
     }
     if (!req.user) return res.status(401).json({ message: "Unauthorized" });
 

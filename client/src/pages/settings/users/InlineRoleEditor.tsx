@@ -284,7 +284,9 @@ export function InlineRoleEditor({ userId, companies, editingRole, onClose, onSa
         <p className="text-xs text-muted-foreground">
           ERP Tester works only in a standalone ERP Test Company. It can enter test data but cannot access Settings,
           Factory, or production companies. Create a test company under Settings → Companies first.
-          {!isTesterCompany && <span className="block font-medium text-destructive">Select an ERP Test Company to continue.</span>}
+          {!isTesterCompany && (
+            <span className="block font-medium text-destructive">Select an ERP Test Company to continue.</span>
+          )}
         </p>
       )}
 
@@ -450,7 +452,11 @@ export function InlineRoleEditor({ userId, companies, editingRole, onClose, onSa
           type="button"
           size="sm"
           onClick={handleSave}
-          disabled={saveMutation.isPending || (isPOS && selectedLocationIds.length === 0 && !posViewOnly) || (isTester && !isTesterCompany)}
+          disabled={
+            saveMutation.isPending ||
+            (isPOS && selectedLocationIds.length === 0 && !posViewOnly) ||
+            (isTester && !isTesterCompany)
+          }
           data-testid="button-save-role"
         >
           <Check className="h-3.5 w-3.5 mr-1" />
