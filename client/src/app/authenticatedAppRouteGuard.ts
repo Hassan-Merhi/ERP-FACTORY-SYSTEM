@@ -55,7 +55,9 @@ export function resolveAuthenticatedAppRoute({
 
   let decision: AuthenticatedAppRouteDecision = { kind: "continue" };
 
-  if (isPropertiesCompany && currentLocation === "/my-settings") {
+  if (userRole === "ERP Tester" && (currentLocation === "/settings" || currentLocation === "/my-settings")) {
+    decision = { kind: "redirect", to: "/tracking" };
+  } else if (isPropertiesCompany && currentLocation === "/my-settings") {
     decision = { kind: "redirect", to: "/properties/my-settings" };
   } else if (isPropertiesCompany && currentLocation === "/balance-repair") {
     decision = { kind: "redirect", to: "/properties/balance-repair" };
