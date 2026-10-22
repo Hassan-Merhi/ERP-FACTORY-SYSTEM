@@ -54,6 +54,7 @@ interface Readiness {
     entryDateGuardInstalled: boolean;
     auditChainInstalled: boolean;
     openingBalanceGuardInstalled: boolean;
+    reviewMetadataCompanyRlsInstalled: boolean;
   };
   signoffs: Array<{
     id: number;
@@ -448,8 +449,9 @@ export default function FiscalCloseReview() {
             <div className="grid sm:grid-cols-2 gap-2 text-sm">
               <div>Voucher-date lock: {yes(data.protections.voucherDateGuardInstalled)}</div>
               <div>Voucher-line date lock: {yes(data.protections.entryDateGuardInstalled)}</div>
-              <div>Audit hash-chain: {yes(data.protections.auditChainInstalled)}</div>
-              <div>Master opening-balance lock: {yes(data.protections.openingBalanceGuardInstalled)}</div>
+              <div>All 10 table-bound audit triggers: {yes(data.protections.auditChainInstalled)}</div>
+              <div>All 7 master opening-balance locks: {yes(data.protections.openingBalanceGuardInstalled)}</div>
+              <div>Fiscal review metadata FORCE RLS: {yes(data.protections.reviewMetadataCompanyRlsInstalled)}</div>
             </div>
             {data.blockers.map((x, i) => (
               <p key={i} className="text-sm text-destructive">
