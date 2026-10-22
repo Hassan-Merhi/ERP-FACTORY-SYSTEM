@@ -33,6 +33,7 @@ interface Single {
     unclassified: Section;
     unclosedEarningsUsd: string;
     totalEquityIncludingEarningsUsd: string;
+    reportedBalanceSheetDifferenceUsd: string;
     assetsMinusLiabilitiesAndEquityUsd: string;
     balanced: boolean;
   };
@@ -96,6 +97,7 @@ interface Package {
   reportStatus: "PROVISIONAL_NOT_CERTIFIED";
   historicalFx: {
     ready: boolean;
+    legacyCompatibilityMode: boolean;
     unresolvedEntryCount: number;
     unresolvedVoucherCount: number;
     unresolvedLedgerOpeningCount: number;
@@ -105,6 +107,7 @@ interface Package {
     certified: false;
     caveat: string;
   };
+  comparisonHistoricalFx: Package["historicalFx"] | null;
   disclosure: Record<string, string>;
 }
 async function get(url: string): Promise<Package> {
@@ -168,7 +171,13 @@ function exportedCsv(record: Package) {
   ]);
   rows.push([
     "Financial position",
-    "UNEXPLAINED DIFFERENCE",
+    "ASSETS MINUS LIABILITIES AND EQUITY",
+    current.financialPosition.reportedBalanceSheetDifferenceUsd,
+    prior?.financialPosition.reportedBalanceSheetDifferenceUsd ?? "",
+  ]);
+  rows.push([
+    "Financial position",
+    "RESIDUAL AFTER UNCLASSIFIED",
     current.financialPosition.assetsMinusLiabilitiesAndEquityUsd,
     prior?.financialPosition.assetsMinusLiabilitiesAndEquityUsd ?? "",
   ]);
@@ -302,7 +311,10 @@ export default function ProfessionalFinancialStatements() {
   const pkg = data.data,
     now = pkg?.current,
     prior = pkg?.comparison;
-  const status = useMemo(() => now?.controls.blockers.length ?? 0, [now]);
+  const status = useMemo(
+    () => (now?.controls.blockers.length ?? 0) + (prior?.controls.blockers.length ?? 0),
+    [now, prior]
+  );
   return (
     <div className="space-y-5 p-3 sm:p-5 print:p-0" data-testid="professional-financial-statements">
       <div>
@@ -369,7 +381,7 @@ export default function ProfessionalFinancialStatements() {
               </p>
             )}
             <p className="text-sm font-semibold text-destructive">
-              PROVISIONAL — NOT CERTIFIED. {status} financial control blocker(s).
+              PROVISIONAL — NOT CERTIFIED. {status} current/comparison financial control blocker(s).
             </p>
           </div>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -382,7 +394,7 @@ export default function ProfessionalFinancialStatements() {
                 ["Liabilities", now.financialPosition.liabilities.totalUsd],
                 ["Equity including unclosed earnings", now.financialPosition.totalEquityIncludingEarningsUsd],
                 ["Actual cash movement", now.cashFlow.actualCashMovementUsd],
-                ["Balance-sheet difference", now.financialPosition.assetsMinusLiabilitiesAndEquityUsd],
+                ["Reported balance-sheet difference", now.financialPosition.reportedBalanceSheetDifferenceUsd],
               ] as Array<[string, string]>
             ).map(([label, value]) => (
               <div key={label}>
@@ -498,7 +510,12 @@ export default function ProfessionalFinancialStatements() {
                   previous={prior?.financialPosition.unclassified}
                 />
                 <Figure
-                  label="Assets − liabilities − equity − unclassified"
+                  label="Assets − liabilities − equity (before unclassified)"
+                  current={now.financialPosition.reportedBalanceSheetDifferenceUsd}
+                  previous={prior?.financialPosition.reportedBalanceSheetDifferenceUsd}
+                />
+                <Figure
+                  label="Residual after separately disclosed unclassified accounts"
                   current={now.financialPosition.assetsMinusLiabilitiesAndEquityUsd}
                   previous={prior?.financialPosition.assetsMinusLiabilitiesAndEquityUsd}
                 />
@@ -640,12 +657,31 @@ export default function ProfessionalFinancialStatements() {
               <CardContent className="space-y-3">
                 <p className="text-sm font-semibold">Financial certification has not been granted.</p>
                 <p className="text-sm">
-                  Historical FX compatibility gate:
-                  {pkg.historicalFx.ready ? " passed (not certification)" : " unresolved records detected"}. Entries
-                  flagged: {pkg.historicalFx.unresolvedEntryCount}, vouchers flagged:{" "}
+                  Current-period historical FX:
+                  {pkg.historicalFx.legacyCompatibilityMode
+                    ? " legacy compatibility only (not validated)"
+                    : pkg.historicalFx.ready
+                      ? " ready (not certification)"
+                      : " unresolved records detected"}.
+                  Entries flagged: {pkg.historicalFx.unresolvedEntryCount}, vouchers flagged:{" "}
                   {pkg.historicalFx.unresolvedVoucherCount}.
                 </p>
                 <p className="text-xs text-muted-foreground">{pkg.historicalFx.caveat}</p>
+                {pkg.comparisonHistoricalFx && (
+                  <>
+                    <p className="text-sm">
+                      Comparison-period historical FX:
+                      {pkg.comparisonHistoricalFx.legacyCompatibilityMode
+                        ? " legacy compatibility only (not validated)"
+                        : pkg.comparisonHistoricalFx.ready
+                          ? " ready (not certification)"
+                          : " unresolved records detected"}.
+                      Entries flagged: {pkg.comparisonHistoricalFx.unresolvedEntryCount}, vouchers flagged:{" "}
+                      {pkg.comparisonHistoricalFx.unresolvedVoucherCount}.
+                    </p>
+                    <p className="text-xs text-muted-foreground">{pkg.comparisonHistoricalFx.caveat}</p>
+                  </>
+                )}
                 {now.controls.blockers.map((text, i) => (
                   <p key={i} className="text-sm text-destructive">
                     {text}
@@ -654,6 +690,16 @@ export default function ProfessionalFinancialStatements() {
                 {now.controls.warnings.map((text, i) => (
                   <p key={i} className="text-sm">
                     {text}
+                  </p>
+                ))}
+                {prior?.controls.blockers.map((text, i) => (
+                  <p key={`comparison-blocker-${i}`} className="text-sm text-destructive">
+                    Comparison: {text}
+                  </p>
+                ))}
+                {prior?.controls.warnings.map((text, i) => (
+                  <p key={`comparison-warning-${i}`} className="text-sm">
+                    Comparison: {text}
                   </p>
                 ))}
                 {Object.entries(pkg.disclosure).map(([key, value]) => (
