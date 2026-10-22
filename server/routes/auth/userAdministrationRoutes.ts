@@ -9,24 +9,14 @@ import {
 } from "../../services/security/userPasswordChangeService";
 import { storage } from "../../storage";
 import {
-  companies,
   erpUserPageAccess,
   insertUserCompanyRoleSchema,
   insertUserSchema,
   userCompanyRoles,
 } from "@shared/schema";
-import { ERP_TESTER_PAGE_KEYS, ERP_TESTER_ROLE, isErpTestCompanyCode } from "@shared/erpTestCompanyAccess";
+import { ERP_TESTER_PAGE_KEYS, ERP_TESTER_ROLE } from "@shared/erpTestCompanyAccess";
 import { and, eq, sql } from "drizzle-orm";
 import { hashPassword, logAudit, verifyPassword } from "../_helpers";
-
-async function isErpTestCompany(companyId: number): Promise<boolean> {
-  const [company] = await db
-    .select({ code: companies.code, type: companies.companyType, parentId: companies.parentCompanyId })
-    .from(companies)
-    .where(eq(companies.id, companyId))
-    .limit(1);
-  return !!company && company.type === "erp" && company.parentId === null && isErpTestCompanyCode(company.code);
-}
 
 async function invalidateUserSessions(userId: string) {
   try {
@@ -178,9 +168,6 @@ export function registerUserAdministrationRoutes(app: Express) {
       if (parsed.role === "POS" && !parsed.assignedLocationId) {
         return res.status(400).json({ message: "POS role requires an assigned location" });
       }
-      if (parsed.role === ERP_TESTER_ROLE && !(await isErpTestCompany(parsed.companyId))) {
-        return res.status(400).json({ message: "ERP Tester can only be assigned to a standalone ERP Test Company" });
-      }
       const existing = await db
         .select({ id: userCompanyRoles.id })
         .from(userCompanyRoles)
@@ -237,10 +224,6 @@ export function registerUserAdministrationRoutes(app: Express) {
       const [oldRecord] = await db.select().from(userCompanyRoles).where(eq(userCompanyRoles.id, id)).limit(1);
       if (!oldRecord) return res.status(404).json({ message: "Role assignment not found" });
       const effectiveRole = parsed.role ?? oldRecord.role;
-      const effectiveCompanyId = parsed.companyId ?? oldRecord.companyId;
-      if (effectiveRole === ERP_TESTER_ROLE && !(await isErpTestCompany(effectiveCompanyId))) {
-        return res.status(400).json({ message: "ERP Tester can only be assigned to a standalone ERP Test Company" });
-      }
       // Phase 21 (B): the role change and its audit row commit together; the
       // sessions are invalidated after commit, as before.
       const role = await db.transaction(async (tx) => {
