@@ -69,6 +69,9 @@ export interface SinglePeriodFinancialStatements {
     unclassified: StatementSection;
     unclosedEarningsUsd: string;
     totalEquityIncludingEarningsUsd: string;
+    // Reported assets minus liabilities minus equity, before unresolved accounts.
+    reportedBalanceSheetDifferenceUsd: string;
+    // Remaining ledger difference after explicitly displaying unclassified rows.
     assetsMinusLiabilitiesAndEquityUsd: string;
     balanced: boolean;
   };
@@ -247,7 +250,7 @@ async function sourceCashFlowTx(tx: DbTransaction, companyId: number, fromDate: 
  ),
  categorized AS(
  SELECT voucher_id,voucher_number,booked_on,cash_delta,cash_lines,other_lines,
-   CASE WHEN cash_delta<>0 AND other_lines=1 AND counter_class IN('operating','investing','financing')
+   CASE WHEN cash_delta<>0 AND cash_lines=1 AND other_lines=1 AND counter_class IN('operating','investing','financing')
      THEN counter_class ELSE 'unclassified' END AS counter_class
  FROM vouchers_grouped
  ),
@@ -378,7 +381,10 @@ async function statementTx(
   const adjEquity = dec(equity.totalUsd).plus(earnings);
   const otherEquityMovements = adjEquity.minus(openingTotalEquity).minus(result);
   const equityBridgeDifference = openingTotalEquity.plus(result).plus(otherEquityMovements).minus(adjEquity);
-  const mismatch = dec(assets.totalUsd).minus(liabilities.totalUsd).minus(adjEquity).minus(unknown.totalUsd);
+  const reportedDifference = dec(assets.totalUsd).minus(liabilities.totalUsd).minus(adjEquity);
+  // Unclassified credit-positive amounts explain part of the reported balance
+  // sheet difference, but must never make an incomplete statement look balanced.
+  const mismatch = reportedDifference.minus(unknown.totalUsd);
   const classifiedSum = sourceCash.operating
     .plus(sourceCash.investing)
     .plus(sourceCash.financing)
@@ -421,8 +427,9 @@ async function statementTx(
       unclassified: unknown,
       unclosedEarningsUsd: fmt(earnings),
       totalEquityIncludingEarningsUsd: fmt(adjEquity),
+      reportedBalanceSheetDifferenceUsd: fmt(reportedDifference),
       assetsMinusLiabilitiesAndEquityUsd: fmt(mismatch),
-      balanced: trial.balanced && mismatch.abs().lte("0.01"),
+      balanced: trial.balanced && mismatch.abs().lte("0.01") && unknown.lines.length === 0,
     },
     profitAndLoss: {
       revenue,
