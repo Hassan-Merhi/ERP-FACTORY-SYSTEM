@@ -58,7 +58,7 @@ export function registerGitReportRoutes(app: Express) {
    * Returns per-agent FIFO balance allocation for the Agent/Duty report.
    *
    * Access:
-   *   Admin / Owner / Developer → explicitly assigned companies only
+   *   Admin / Owner / Developer / ERP Tester → explicitly assigned companies only
    *   Owner              → only companies in user_company_roles
    *   Manager / POS / Normal User → 403
    *
@@ -73,7 +73,7 @@ export function registerGitReportRoutes(app: Express) {
    *
    * Read-only. No vouchers, containers, or accounting records are modified.
    */
-  app.get("/api/git/agent-duty-summary", requireAuth, requireRole("Admin", "Owner"), async (req, res) => {
+  app.get("/api/git/agent-duty-summary", requireAuth, requireRole("Admin", "Owner", "ERP Tester"), async (req, res) => {
     try {
       const userId = String((req.user as { id: unknown }).id);
       const role = String(req.session?.currentRole ?? (req.user as { role: unknown }).role ?? "");
@@ -264,7 +264,7 @@ export function registerGitReportRoutes(app: Express) {
    * All active containers (OTW / Sea / At Port / Left Dar / At Border /
    * In Transit / Arrived) with computed fields attached.
    *
-   * Access: Admin / Owner / Developer, restricted to explicit company memberships
+   * Access: Admin / Owner / Developer / ERP Tester, restricted to explicit company memberships
    * Query:  companyId, allCompanies, status, transporter, agent, location,
    *         search/q, docsReady, delayed, overdue
    *
@@ -279,9 +279,9 @@ export function registerGitReportRoutes(app: Express) {
    *
    * Read-only. No mutations.
    */
-  app.get("/api/git/containers", requireAuth, requireRole("Admin", "Owner"), (req, res) => handleGitListing(req, res));
+  app.get("/api/git/containers", requireAuth, requireRole("Admin", "Owner", "ERP Tester"), (req, res) => handleGitListing(req, res));
 
-  app.get("/api/git/containers/:id", requireAuth, requireRole("Admin", "Owner"), async (req, res, next) => {
+  app.get("/api/git/containers/:id", requireAuth, requireRole("Admin", "Owner", "ERP Tester"), async (req, res, next) => {
     // Pass through literal sub-paths (e.g. import-template.xlsx) to later handlers.
     if (!/^-?\d+$/.test(req.params.id)) return next();
     try {
@@ -330,7 +330,7 @@ export function registerGitReportRoutes(app: Express) {
    *
    * Read-only. No mutations.
    */
-  app.get("/api/git/summary", requireAuth, requireRole("Admin", "Owner"), async (req, res) => {
+  app.get("/api/git/summary", requireAuth, requireRole("Admin", "Owner", "ERP Tester"), async (req, res) => {
     try {
       const userId: string = (req.user as { id: string }).id;
       const role = String(req.session?.currentRole ?? (req.user as { role: unknown }).role ?? "");
@@ -395,7 +395,7 @@ export function registerGitReportRoutes(app: Express) {
    *
    * Read-only. No mutations.
    */
-  app.get("/api/git/at-port", requireAuth, requireRole("Admin", "Owner"), (req, res) =>
+  app.get("/api/git/at-port", requireAuth, requireRole("Admin", "Owner", "ERP Tester"), (req, res) =>
     handleGitListing(req, res, (rows) => rows.filter((r) => r.status === "At Port"))
   );
 
@@ -408,7 +408,7 @@ export function registerGitReportRoutes(app: Express) {
    *
    * Read-only. No mutations.
    */
-  app.get("/api/git/truck-location", requireAuth, requireRole("Admin", "Owner"), (req, res) =>
+  app.get("/api/git/truck-location", requireAuth, requireRole("Admin", "Owner", "ERP Tester"), (req, res) =>
     handleGitListing(req, res, (rows) => rows.filter((r) => !!(r.numberPlate ?? "").trim()))
   );
 }
