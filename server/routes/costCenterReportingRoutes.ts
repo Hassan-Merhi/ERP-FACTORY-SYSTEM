@@ -19,6 +19,11 @@ import { toMoney } from "../lib/money";
 
 const READ = new Set(["Developer", "Owner", "Admin", "Manager"]);
 const WRITE = new Set(["Developer", "Owner", "Admin"]);
+// Keep both current-company and consolidated exports aligned with the report tabs.
+export const COST_CENTER_EXPORT_VIEWS = ["summary", "activity", "departments", "accounts", "months"] as const;
+export function isCostCenterExportView(value: unknown): boolean {
+  return COST_CENTER_EXPORT_VIEWS.includes(value as (typeof COST_CENTER_EXPORT_VIEWS)[number]);
+}
 const dateFormat = /^\d{4}-\d{2}-\d{2}$/;
 const monthFormat = /^\d{4}-(?:0[1-9]|1[0-2])$/;
 const decimalFormat = /^(?:0|[1-9]\d{0,13})(?:\.\d{1,6})?$/;
@@ -705,7 +710,7 @@ function registerPrefix(app: Express, prefix: string) {
       const view = req.query.view ?? "summary";
       if (
         !["csv", "xlsx", "pdf"].includes(String(format)) ||
-        !["summary", "activity", "departments", "accounts", "months"].includes(String(view))
+        !isCostCenterExportView(view)
       )
         throw new ReportError(400, "Invalid export request");
       await exportReport(res, scope, parseFilters(req), String(format), String(view));
@@ -733,7 +738,7 @@ function registerPrefix(app: Express, prefix: string) {
       const view = req.query.view ?? "summary";
       if (
         !["csv", "xlsx", "pdf"].includes(String(format)) ||
-        !["summary", "activity", "departments", "accounts", "months"].includes(String(view))
+        !isCostCenterExportView(view)
       )
         throw new ReportError(400, "Invalid export request");
       await exportReport(res, scope, parseFilters(req), String(format), String(view));
