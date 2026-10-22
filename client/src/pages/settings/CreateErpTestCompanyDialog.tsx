@@ -80,7 +80,7 @@ export function CreateErpTestCompanyDialog() {
           <DialogDescription>
             {created
               ? "Copy these credentials now. The password cannot be viewed again after closing."
-              : "Creates an empty, standalone ERP company and a Manager tester. The tester can enter and remove test data but cannot access administrative Settings or another company."}
+              : "Creates an empty, standalone ERP company and a dedicated ERP Tester user. The tester can enter and remove test data but cannot access administrative Settings or another company."}
           </DialogDescription>
         </DialogHeader>
 

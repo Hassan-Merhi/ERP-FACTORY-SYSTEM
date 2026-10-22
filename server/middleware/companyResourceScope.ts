@@ -6,7 +6,16 @@ import { CompanyIsolationError, authorizeCompanyScopedResourceTx } from "../serv
 import { createDatabaseCompanyIsolationAdapter } from "../services/security/databaseCompanyIsolationAdapter";
 import { classifyCompanyOwnedRoute } from "../services/security/companyResourceRoutePolicy";
 
-const AUTHENTICATED_ROLES = ["Developer", "Admin", "Owner", "Manager", "POS", "Normal User", "View Only"] as const;
+const AUTHENTICATED_ROLES = [
+  "Developer",
+  "Admin",
+  "Owner",
+  "Manager",
+  "POS",
+  "Normal User",
+  "View Only",
+  "ERP Tester",
+] as const;
 
 const adapter = createDatabaseCompanyIsolationAdapter();
 

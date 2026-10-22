@@ -293,7 +293,7 @@ export function FactoryRoutes({ user, myAccess, factoryDefaultPage }: FactoryRou
       {isDeveloper && <Route path="/factory/chat" component={Chat} />}
       <Route path="/factory/conflicts" component={ConflictCenter} />
       {isAdminOwnerOrDev && <Route path="/factory/settings" component={Settings} />}
-      <Route path="/my-settings" component={MySettings} />
+      {user?.role !== "ERP Tester" && <Route path="/my-settings" component={MySettings} />}
       <Route path="/intercompany-requests" component={IntercompanyRequests} />
       <Route path="/intercompany-links" component={IntercompanyLinks} />
       {isAdminOwnerOrDev && <Route path="/factory/deleted-items" component={DeletedItems} />}

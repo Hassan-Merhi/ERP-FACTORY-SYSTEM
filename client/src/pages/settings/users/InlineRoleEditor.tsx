@@ -12,7 +12,7 @@ import { ConfirmPasswordDialog, PermissionSummaryCard } from "./InlineRoleEditor
 import { PosLocationManager } from "./PosLocationManager";
 import type { Company, LedgerAccount, Location, UserCompanyRole } from "@shared/schema";
 
-const ROLE_OPTIONS = ["Admin", "Owner", "Manager", "POS", "Normal User", "View Only"];
+const ROLE_OPTIONS = ["Admin", "Owner", "Manager", "POS", "Normal User", "View Only", "ERP Tester"];
 
 interface RolePreset {
   label: string;
@@ -64,7 +64,7 @@ export function InlineRoleEditor({ userId, companies, editingRole, onClose, onSa
   const [confirmPasswordOpen, setConfirmPasswordOpen] = useState(false);
 
   const isPOS = role === "POS";
-
+  const isTester = role === "ERP Tester";
   // Determine if the current save action needs password re-confirmation
   const isDangerousSave = role === "Admin" || canDeleteRecords;
 
@@ -192,7 +192,7 @@ export function InlineRoleEditor({ userId, companies, editingRole, onClose, onSa
         cashAccountId: undefined,
         canSellNegativeStock: canSellNegativeStock,
         posViewOnly: isPOS ? posViewOnly : false,
-        canDeleteRecords: role === "Manager" ? canDeleteRecords : false,
+        canDeleteRecords: role === "Manager" || isTester ? canDeleteRecords : false,
       };
 
       if (isEditing) {
@@ -271,6 +271,13 @@ export function InlineRoleEditor({ userId, companies, editingRole, onClose, onSa
           </Select>
         </div>
       </div>
+
+      {isTester && (
+        <p className="text-xs text-muted-foreground">
+          ERP Tester can be assigned to any company. This user can enter operational data in assigned companies but has
+          no access to Settings or user administration.
+        </p>
+      )}
 
       {/* Group 2: POS Settings */}
       {isPOS && (
@@ -368,7 +375,7 @@ export function InlineRoleEditor({ userId, companies, editingRole, onClose, onSa
       )}
 
       {/* Manager-only: allow delete/void/archive */}
-      {role === "Manager" && (
+      {(role === "Manager" || isTester) && (
         <div className="flex items-center gap-3 rounded-md border border-border/60 bg-background px-3 py-2">
           <Switch
             checked={canDeleteRecords}
@@ -378,7 +385,7 @@ export function InlineRoleEditor({ userId, companies, editingRole, onClose, onSa
           <div className="space-y-0.5">
             <Label className="text-xs cursor-pointer">Allow Delete / Void / Archive</Label>
             <p className="text-xs text-muted-foreground">
-              When enabled, this Manager can delete, void, and archive records.
+              When enabled, this user can delete, void, and archive records within their assigned company.
             </p>
           </div>
         </div>

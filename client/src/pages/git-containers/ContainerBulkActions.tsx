@@ -11,6 +11,7 @@ import {
 
 interface ContainerBulkActionsProps {
   className?: string;
+  allowPrivilegedActions?: boolean;
   waSending: boolean;
   onImportClick: () => void;
   onSendWhatsApp: () => void;
@@ -19,6 +20,7 @@ interface ContainerBulkActionsProps {
 
 export function ContainerBulkActions({
   waSending,
+  allowPrivilegedActions = true,
   onImportClick,
   onSendWhatsApp,
   onPrint,
@@ -34,21 +36,21 @@ export function ContainerBulkActions({
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
-          <DropdownMenuItem onClick={onImportClick} data-testid="menu-import-excel">
+          {allowPrivilegedActions && <DropdownMenuItem onClick={onImportClick} data-testid="menu-import-excel">
             <Upload className="h-4 w-4 mr-2" />
             Import Tracking Excel
-          </DropdownMenuItem>
-          <DropdownMenuItem asChild data-testid="menu-download-template">
+          </DropdownMenuItem>}
+          {allowPrivilegedActions && <DropdownMenuItem asChild data-testid="menu-download-template">
             <a href="/api/git/containers/import-template.xlsx" target="_blank">
               <Download className="h-4 w-4 mr-2" />
               Download Excel Template
             </a>
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={onSendWhatsApp} disabled={waSending} data-testid="menu-send-whatsapp">
+          </DropdownMenuItem>}
+          {allowPrivilegedActions && <DropdownMenuSeparator />}
+          {allowPrivilegedActions && <DropdownMenuItem onClick={onSendWhatsApp} disabled={waSending} data-testid="menu-send-whatsapp">
             {waSending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <MessageCircle className="h-4 w-4 mr-2" />}
             Send to WhatsApp Group
-          </DropdownMenuItem>
+          </DropdownMenuItem>}
           <DropdownMenuItem onClick={onPrint} data-testid="menu-print-pdf">
             <FileSpreadsheet className="h-4 w-4 mr-2" />
             Export PDF / Print

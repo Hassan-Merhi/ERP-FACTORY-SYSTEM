@@ -1,6 +1,7 @@
 import { searchAny } from "@shared/searchNormalization";
 import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { authenticatedUserQueryOptions } from "@/contracts/sessionQueryContracts";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -12,6 +13,8 @@ import { WorkbookLegend, RealWorkbookBlock } from "./WorkbookBlock";
 import type { GitContainersResponse, EnrichedContainerApi, CompanyViewMode } from "./types";
 
 export function TabDetail() {
+  const { data: viewer } = useQuery(authenticatedUserQueryOptions());
+  const isTester = (viewer?.currentRole ?? viewer?.role) === "ERP Tester";
   const [companyMode, setCompanyMode] = useState<CompanyViewMode>("session");
   const [view, setView] = useState<"workbook" | "flat">("workbook");
   const [search, setSearch] = useState("");
@@ -67,7 +70,8 @@ export function TabDetail() {
       >
         My Company
       </Button>
-      <Button
+      {!isTester && (
+        <Button
         size="sm"
         variant={companyMode === "all" ? "default" : "outline"}
         className="text-xs gap-1.5"
@@ -76,6 +80,7 @@ export function TabDetail() {
       >
         All Accessible Companies
       </Button>
+      )}
     </div>
   );
 
