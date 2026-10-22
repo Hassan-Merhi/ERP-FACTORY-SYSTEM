@@ -183,7 +183,8 @@ export function UnifiedAccountingBudgetBridge({
                     <table className="w-full text-sm">
                       <thead><tr className="border-b text-left">
                         <th scope="col" className="p-2">Month</th>
-                        <th scope="col" className="p-2 text-right">Expense + unallocated USD</th>
+                        <th scope="col" className="p-2 text-right">Allocated expense USD</th>
+                        <th scope="col" className="p-2 text-right">Unallocated expense USD</th>
                         <th scope="col" className="p-2 text-right">Budget USD</th>
                         <th scope="col" className="p-2 text-right">Variance USD</th>
                       </tr></thead>
@@ -191,9 +192,8 @@ export function UnifiedAccountingBudgetBridge({
                         {data.months.map((month) => (
                           <tr key={month.month} className="border-b">
                             <th scope="row" className="p-2 text-left font-normal">{month.month}</th>
-                            <td className="p-2 text-right tabular-nums">
-                              {displayMoney(String(Number(month.expense) + Number(month.unallocated)))}
-                            </td>
+                            <td className="p-2 text-right tabular-nums">{displayMoney(month.expense)}</td>
+                            <td className="p-2 text-right tabular-nums">{displayMoney(month.unallocated)}</td>
                             <td className="p-2 text-right tabular-nums">{displayMoney(month.budget)}</td>
                             <td className="p-2 text-right tabular-nums">{displayMoney(month.variance)}</td>
                           </tr>
