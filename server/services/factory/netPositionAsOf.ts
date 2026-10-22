@@ -102,15 +102,15 @@ export function netPositionLegacyScanKnown(
 ): SQL {
   const scan = sql.raw(scanAlias);
   const order = sql.raw(orderAlias);
+  // Uncorrelated scalar subquery: PostgreSQL evaluates it once per query
+  // (an InitPlan), not once per scan row.
+  const started = sql`(SELECT MIN(first_cob.scanned_at)
+                         FROM customer_order_bales first_cob
+                         JOIN customer_orders first_co ON first_co.id = first_cob.order_id
+                        WHERE first_co.company_id = ${companyId})`;
   return sql`(${scan}.scanned_at IS NULL
     AND NOT EXISTS (SELECT 1 FROM customer_order_bales_history legacy_h
                      WHERE legacy_h.order_id = ${scan}.order_id AND legacy_h.bale_id = ${scan}.bale_id)
-    AND EXISTS (SELECT 1 FROM (
-                  SELECT MIN(first_cob.scanned_at) AS started
-                    FROM customer_order_bales first_cob
-                    JOIN customer_orders first_co ON first_co.id = first_cob.order_id
-                   WHERE first_co.company_id = ${companyId}) tracking
-                 WHERE tracking.started IS NOT NULL
-                   AND ${netPositionRecordedThrough(sql`tracking.started`, scope, "timestamptz")}
-                   AND ${order}.created_at < (tracking.started AT TIME ZONE 'UTC')))`;
+    AND ${netPositionRecordedThrough(started, scope, "timestamptz")}
+    AND ${order}.created_at < (${started} AT TIME ZONE 'UTC'))`;
 }

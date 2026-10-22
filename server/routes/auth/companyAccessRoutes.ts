@@ -1,4 +1,8 @@
 import type { Express, Request } from "express";
+import { randomBytes } from "node:crypto";
+import { z } from "zod";
+import { hashPassword } from "../helpers/passwordHelpers";
+import { ERP_TESTER_PAGE_KEYS, ERP_TESTER_ROLE_PERMISSIONS } from "@shared/erpTestCompanyAccess";
 
 import { requireAuth, requireRole } from "../../auth";
 import { db, pool } from "../../db";
@@ -16,7 +20,7 @@ import {
 } from "../../services/security/databaseScopeRuntimeContext";
 import { storage } from "../../storage";
 import { CompanyHasHistoryError } from "../../storage/company-deletion";
-import { companies } from "@shared/schema";
+import { companies, users, userCompanyRoles, erpUserPageAccess, roleFeaturePermissions } from "@shared/schema";
 import { eq } from "drizzle-orm";
 
 declare module "express-session" {
@@ -209,6 +213,118 @@ export function registerCompanyAccessRoutes(app: Express) {
       res.json(rows);
     } catch (error: unknown) {
       res.status(500).json({ message: getErrorMessage(error) });
+    }
+  });
+
+  // Provision a fresh standalone ERP company and a non-admin tester atomically.
+  // No fixtures, ledger entries, stock, or production records are created.
+  app.post("/api/companies/erp-test", requireAuth, requireRole("Admin"), async (req, res) => {
+    const inputSchema = z
+      .object({
+        companyName: z.string().trim().min(2).max(120).default("ERP Test Company"),
+        username: z
+          .string()
+          .trim()
+          .regex(/^[a-zA-Z0-9._-]{3,48}$/)
+          .optional(),
+      })
+      .strict();
+
+    const parsed = inputSchema.safeParse(req.body ?? {});
+    if (!parsed.success) {
+      return res
+        .status(400)
+        .json({
+          message:
+            "Enter a valid company name and tester username (3–48 letters, numbers, dots, underscores, or dashes).",
+        });
+    }
+    if (!req.user) return res.status(401).json({ message: "Unauthorized" });
+
+    const suffix = randomBytes(5).toString("hex");
+    const code = `ERPTEST-${suffix.toUpperCase()}`;
+    const username = parsed.data.username || `erp_tester_${suffix}`;
+    // No default or checked-in password. Show this value once to the administrator.
+    const password = randomBytes(24).toString("base64url");
+
+    try {
+      const passwordHash = await hashPassword(password);
+      const created = await db.transaction(async (tx) => {
+        const [company] = await tx
+          .insert(companies)
+          .values({
+            code,
+            name: parsed.data.companyName,
+            companyType: "erp",
+            parentCompanyId: null,
+            baseCurrency: "USD",
+            active: true,
+          })
+          .returning({ id: companies.id, name: companies.name, code: companies.code });
+
+        const [tester] = await tx
+          .insert(users)
+          .values({
+            username,
+            password: passwordHash,
+            active: true,
+          })
+          .returning({ id: users.id, username: users.username });
+
+        await tx.insert(userCompanyRoles).values({
+          userId: tester.id,
+          companyId: company.id,
+          role: "Manager",
+          canAccessCustomers: true,
+          canDeleteRecords: true,
+          daybookEditDays: 3650,
+        });
+
+        // An Admin provisioning the sandbox must be able to switch into it to
+        // administer the tester. Developer already has global company access.
+        if (req.user!.role !== "Developer") {
+          await tx.insert(userCompanyRoles).values({
+            userId: req.user!.id,
+            companyId: company.id,
+            role: "Admin",
+          });
+        }
+
+        await tx.insert(erpUserPageAccess).values(
+          ERP_TESTER_PAGE_KEYS.map((pageKey) => ({
+            companyId: company.id,
+            userId: tester.id,
+            pageKey,
+          }))
+        );
+
+        await tx.insert(roleFeaturePermissions).values(
+          ERP_TESTER_ROLE_PERMISSIONS.map(({ featureKey, enabled }) => ({
+            companyId: company.id,
+            role: "Manager",
+            featureKey,
+            enabled,
+          }))
+        );
+
+        return { company, tester };
+      });
+
+      res.setHeader("Cache-Control", "no-store");
+      res.status(201).json({
+        company: created.company,
+        tester: { username: created.tester.username, role: "Manager" },
+        password,
+        settingsAccess: false,
+      });
+    } catch (error: unknown) {
+      if (typeof error === "object" && error !== null && "code" in error && error.code === "23505") {
+        return res
+          .status(409)
+          .json({ message: "Company code or tester username already exists. Try again with a different username." });
+      }
+      logger.error("Failed to provision ERP test company", { error });
+      res.status(500).json({ message: "Failed to provision ERP test company; no partial data was saved." });
     }
   });
 

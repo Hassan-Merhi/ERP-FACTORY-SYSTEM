@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ParentCreditAccountSelect } from "./ParentCreditAccountSelect";
+import { CreateErpTestCompanyDialog } from "./CreateErpTestCompanyDialog";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -161,6 +162,7 @@ export function CompaniesTab() {
             {companies.length} {companies.length === 1 ? "company" : "companies"} configured
           </p>
         </div>
+        <CreateErpTestCompanyDialog />
         <Dialog
           open={isCompanyDialogOpen}
           onOpenChange={(open) => {
