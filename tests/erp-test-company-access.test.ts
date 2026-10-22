@@ -25,6 +25,7 @@ describe("ERP test company access policy", () => {
     const denied = [
       "/api/settings",
       "/api/settings/role-permissions",
+      "/api/pos/settings",
       "/api/my-settings",
       "/api/admin/reset-company-data",
       "/api/users",
