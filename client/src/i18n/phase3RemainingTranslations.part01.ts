@@ -948,7 +948,19 @@ export const phase3RemainingTranslationsPart01: readonly Phase3SharedUiEntry[] =
     ar: "عند التفعيل، يمكن لهذا المستخدم حذف السجلات وإلغاؤها وأرشفتها ضمن الشركة المخصصة له.",
     fr: "Une fois activé, cet utilisateur peut supprimer, annuler et archiver des enregistrements dans la société qui lui est attribuée.",
   },
-  { en: "Manager-level operational access in assigned companies", ar: "صلاحيات تشغيلية بمستوى المدير في الشركات المخصصة", fr: "Accès opérationnel de niveau gestionnaire dans les sociétés attribuées" },
-  { en: "No system Settings or user administration access", ar: "لا يمكن الوصول إلى إعدادات النظام أو إدارة المستخدمين", fr: "Aucun accès aux paramètres système ni à la gestion des utilisateurs" },
-  { en: "Delete assigned-company records", ar: "حذف سجلات الشركة المخصصة", fr: "Supprimer les enregistrements des sociétés attribuées" },
+  {
+    en: "Manager-level operational access in assigned companies",
+    ar: "صلاحيات تشغيلية بمستوى المدير في الشركات المخصصة",
+    fr: "Accès opérationnel de niveau gestionnaire dans les sociétés attribuées",
+  },
+  {
+    en: "No system Settings or user administration access",
+    ar: "لا يمكن الوصول إلى إعدادات النظام أو إدارة المستخدمين",
+    fr: "Aucun accès aux paramètres système ni à la gestion des utilisateurs",
+  },
+  {
+    en: "Delete assigned-company records",
+    ar: "حذف سجلات الشركة المخصصة",
+    fr: "Supprimer les enregistrements des sociétés attribuées",
+  },
 ];

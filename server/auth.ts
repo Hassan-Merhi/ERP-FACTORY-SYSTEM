@@ -497,7 +497,9 @@ function isViewOnlyPassiveLifecycleWrite(req: Request): boolean {
 export function blockErpTesterSettings(req: Request, res: Response, next: NextFunction) {
   if (req.session?.currentRole !== "ERP Tester" || !req.path.startsWith("/api/")) return next();
   if (isErpTesterForbiddenApiPath(req.path)) {
-    return res.status(403).json({ message: "ERP Tester accounts cannot access system settings or user administration" });
+    return res
+      .status(403)
+      .json({ message: "ERP Tester accounts cannot access system settings or user administration" });
   }
   return next();
 }

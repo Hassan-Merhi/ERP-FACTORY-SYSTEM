@@ -43,10 +43,7 @@ function isAllowed(role: string, featureKey: string, permMap: Map<string, boolea
   if (role === "Developer" || role === "Admin") return true;
 
   // Settings access cannot be enabled for the ERP Tester role in any company.
-  if (
-    role === "ERP Tester" &&
-    ["settings", "page_settings", "mod_settings"].includes(featureKey)
-  ) {
+  if (role === "ERP Tester" && ["settings", "page_settings", "mod_settings"].includes(featureKey)) {
     return false;
   }
 

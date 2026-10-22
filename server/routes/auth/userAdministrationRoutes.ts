@@ -8,12 +8,7 @@ import {
   replacePasswordAndRevokeSessions,
 } from "../../services/security/userPasswordChangeService";
 import { storage } from "../../storage";
-import {
-  erpUserPageAccess,
-  insertUserCompanyRoleSchema,
-  insertUserSchema,
-  userCompanyRoles,
-} from "@shared/schema";
+import { erpUserPageAccess, insertUserCompanyRoleSchema, insertUserSchema, userCompanyRoles } from "@shared/schema";
 import { ERP_TESTER_PAGE_KEYS, ERP_TESTER_ROLE } from "@shared/erpTestCompanyAccess";
 import { and, eq, sql } from "drizzle-orm";
 import { hashPassword, logAudit, verifyPassword } from "../_helpers";

@@ -274,8 +274,8 @@ export function InlineRoleEditor({ userId, companies, editingRole, onClose, onSa
 
       {isTester && (
         <p className="text-xs text-muted-foreground">
-          ERP Tester can be assigned to any company. This user can enter operational data in assigned companies
-          but has no access to Settings or user administration.
+          ERP Tester can be assigned to any company. This user can enter operational data in assigned companies but has
+          no access to Settings or user administration.
         </p>
       )}
 
@@ -441,10 +441,7 @@ export function InlineRoleEditor({ userId, companies, editingRole, onClose, onSa
           type="button"
           size="sm"
           onClick={handleSave}
-          disabled={
-            saveMutation.isPending ||
-            (isPOS && selectedLocationIds.length === 0 && !posViewOnly)
-          }
+          disabled={saveMutation.isPending || (isPOS && selectedLocationIds.length === 0 && !posViewOnly)}
           data-testid="button-save-role"
         >
           <Check className="h-3.5 w-3.5 mr-1" />
