@@ -43,12 +43,7 @@ describe("Phase 3 factory bootstrap isolation", () => {
         userRole: "ERP Tester",
         myAccess: fullFactoryAccess,
       });
-      if (item.companyType === "supplier_partner") {
-        // Supplier Partner setup is a configuration page and must be gated below.
-        expect(forbidden.decision).toEqual({ kind: "redirect", to: item.fallback });
-      } else {
-        expect(forbidden.decision).toEqual({ kind: "redirect", to: item.fallback });
-      }
+      expect(forbidden.decision).toEqual({ kind: "redirect", to: item.fallback });
 
       const allowed = resolveAuthenticatedAppRoute({
         ...baseGuardInput,
