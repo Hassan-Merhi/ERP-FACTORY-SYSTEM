@@ -36,7 +36,7 @@ It uses the existing **non-consolidated** `GET /api/cost-centers/reports/summary
 
 - company identity from authenticated selected company, not a caller-supplied `companyId` query;
 - accounting date range supplied by the loaded unified dashboard response, matching its actual `fromDate` and `asOfDate` rather than the browser's current month;
-- expense treatment requested explicitly as `EXPENSE`;
+- `treatment=ALL` to obtain both recognized expense and separately classified inventory-capitalized allocations (the service still computes budgets/variance on expense only);
 - a client-side read guard requiring `scope=company`, exactly one returned `companyIds` value matching the dashboard's company, equal dates and USD before displaying any amounts;
 - separate allocated recognized expense, unallocated expense, recognized analytical total, whole-month budget and expense-minus-budget variance;
 - explicit separate capitalization/inventory cost, per-center expense/budget/variance/utilization and monthly trend with distinct allocated/unallocated columns;
@@ -70,7 +70,7 @@ Claude must perform all independent checks and fix findings on the **same featur
 1. TypeScript compile, lint/format, frontend UI rendering, route and lazy import binding, React Query cache/company invalidation; ensure existing Phase 11, 13, 14, 15 screens still work.
 2. Correct context path and permissions for ERP/Factory/Properties, switch active companies and ensure the query key, API authorization and returned company guard all hold. Try unauthorized users and different Factory Accounts/View privileges.
 3. Verify consolidated reports cannot leak through the new Phase 12 panel. Test a response with two company IDs, mismatched dates, incorrect USD currency, missing schema/503, 401/403 and empty centers: the panel must refuse values or show an explicit error.
-4. Compare Phase 12 totals against the pre-existing Cost Centers reports for identical authenticated company, date window and expense treatment. Test positive/negative expenses and reversals, unallocated items, auto/manual splits, archived centers, zero-budget utilization and parent/child department rollups.
+4. Compare Phase 12 totals against the pre-existing Cost Centers reports for identical authenticated company, date window and `treatment=ALL` (expense and capitalized inventory separate). Test positive/negative expenses and reversals, unallocated items, auto/manual splits, archived centers, zero-budget utilization and parent/child department rollups.
 5. Test month-end, leap-year, cross-year and partial-month windows. Whole-calendar-month budgets must never be labeled a prorated daily budget or reconciled as if the cutoff were equal.
 6. Confirm cost capitalized to Factory/ERP inventory is not expense, booked equity, asset or historic COGS a second time. Test mixed inventory-plus-expense source documents and pending/unfinalized Factory operations.
 7. Check original source currency and booked historical USD; no conversion from today's FX, no JS-based monetary sum, no source mutation from refetch, tab change or navigation.
