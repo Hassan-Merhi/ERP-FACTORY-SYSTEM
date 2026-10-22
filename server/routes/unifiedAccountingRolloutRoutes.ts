@@ -38,7 +38,9 @@ function actor(req: Request) {
   return { userId: id, username: String(req.session.username ?? id) };
 }
 function role(req: Request) {
-  return String(req.session.currentRole ?? req.user?.role ?? "");
+  // Rollout approval and review capacities are tied to the selected company,
+  // not a global user role that could grant access to another company's data.
+  return String(req.session.currentRole ?? "");
 }
 function owner(req: Request) {
   if (role(req) !== "Owner")
