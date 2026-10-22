@@ -115,6 +115,7 @@ export default function GITContainers({ embedded = false }: { embedded?: boolean
   const allowedRoles = ["Admin", "Developer", "Owner", "ERP Tester"];
   const effectiveRole = user?.currentRole ?? user?.role ?? "";
   const isAllowed = allowedRoles.includes(effectiveRole);
+  const isTester = effectiveRole === "ERP Tester";
 
   const { data, isLoading, isError, error, refetch, loadContainerDetail } = usePaginatedGITContainers({
     companyIdentity: allCompanies ? `all:${user?.id ?? "unknown"}` : (selectedCompany?.id ?? "no-company"),
@@ -321,7 +322,8 @@ export default function GITContainers({ embedded = false }: { embedded?: boolean
             <Building2 className="h-3.5 w-3.5" />
             My Company
           </button>
-          <button
+          {!isTester && (
+        <button
             onClick={() => {
               setAllCompanies(true);
               setCompanyFilter("ALL");
@@ -337,6 +339,7 @@ export default function GITContainers({ embedded = false }: { embedded?: boolean
             <Globe className="h-3.5 w-3.5" />
             All Accessible Companies
           </button>
+      )}
           {data && (
             <span className="text-xs text-muted-foreground ml-1 max-sm:col-span-2 max-sm:ml-0">
               {data.total} active container{data.total !== 1 ? "s" : ""}
