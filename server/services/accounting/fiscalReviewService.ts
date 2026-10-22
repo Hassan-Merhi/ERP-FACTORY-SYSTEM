@@ -17,6 +17,7 @@ import { buildTrialBalance } from "./integrity/trialBalance";
 import { financialStatementCategory } from "./unifiedAccountingFoundation";
 import { writeAuditEvent } from "../audit";
 import { CLOSED_PERIOD_LOCK_NAMESPACE } from "./closedPeriodGuard";
+import { OPENING_BALANCE_LOCK_TABLES, openingBalanceLockTriggerName } from "./openingBalanceLock";
 
 export type ReviewKind = "ACCOUNTING" | "OWNER";
 export interface Reviewer {
@@ -153,6 +154,48 @@ async function signoffRowsTx(tx: DbTransaction, companyId: number, start: string
  ORDER BY reviewed_at DESC,id DESC LIMIT 100
  `)
   );
+}
+type RequiredTrigger = { table_name: string; trigger_name: string };
+const CLOSED_VOUCHER_GUARD: RequiredTrigger[] = [
+  { table_name: "vouchers", trigger_name: "vouchers_closed_period_guard" },
+];
+const CLOSED_ENTRY_GUARD: RequiredTrigger[] = [
+  { table_name: "voucher_entries", trigger_name: "voucher_entries_closed_period_guard" },
+];
+const AUDIT_CHAIN_TRIGGERS: RequiredTrigger[] = [
+  ["vouchers", "vouchers_audit_actor_columns"],
+  ["vouchers", "vouchers_audit_row_insert"],
+  ["vouchers", "vouchers_audit_row_update"],
+  ["vouchers", "vouchers_audit_row_delete"],
+  ["voucher_entries", "voucher_entries_audit_row_insert"],
+  ["voucher_entries", "voucher_entries_audit_row_update"],
+  ["voucher_entries", "voucher_entries_audit_row_delete"],
+  ["audit_log", "audit_log_before_insert_chain"],
+  ["audit_log", "audit_log_append_only"],
+  ["audit_log", "audit_log_no_truncate"],
+].map(([table_name, trigger_name]) => ({ table_name, trigger_name }));
+const OPENING_BALANCE_TRIGGERS: RequiredTrigger[] = OPENING_BALANCE_LOCK_TABLES.map((table) => ({
+  table_name: table,
+  trigger_name: openingBalanceLockTriggerName(table),
+}));
+/**
+ * True when every named trigger is enabled on its own table in the current
+ * schema; a same-named trigger on another table does not count. The names
+ * are bound as one JSON parameter: this reads pg_catalog only, never rows.
+ */
+function triggersEnabledSql(required: RequiredTrigger[]) {
+  return sql`NOT EXISTS(
+   SELECT 1 FROM jsonb_to_recordset(${JSON.stringify(required)}::jsonb) AS required(table_name text, trigger_name text)
+   WHERE NOT EXISTS(
+     SELECT 1 FROM pg_trigger t
+     JOIN pg_class target ON target.oid=t.tgrelid
+     JOIN pg_namespace ns ON ns.oid=target.relnamespace
+     WHERE ns.nspname=current_schema()
+       AND target.relname=required.table_name
+       AND t.tgname=required.trigger_name
+       AND NOT t.tgisinternal AND t.tgenabled IN ('O','A')
+   )
+ )`;
 }
 export async function fiscalReadinessTx(
   tx: DbTransaction,
@@ -317,63 +360,12 @@ export async function fiscalReadinessTx(
   `),
     tx.execute(sql`
  SELECT
- EXISTS(
-   SELECT 1 FROM pg_trigger t
-   WHERE t.tgrelid='vouchers'::regclass
-     AND t.tgname='vouchers_closed_period_guard'
-     AND NOT t.tgisinternal AND t.tgenabled IN ('O','A')
- ) AS vouchers_guard,
- EXISTS(
-   SELECT 1 FROM pg_trigger t
-   WHERE t.tgrelid='voucher_entries'::regclass
-     AND t.tgname='voucher_entries_closed_period_guard'
-     AND NOT t.tgisinternal AND t.tgenabled IN ('O','A')
- ) AS entries_guard,
- NOT EXISTS(
-   SELECT 1 FROM (VALUES
-     ('vouchers','vouchers_audit_actor_columns'),
-     ('vouchers','vouchers_audit_row_insert'),
-     ('vouchers','vouchers_audit_row_update'),
-     ('vouchers','vouchers_audit_row_delete'),
-     ('voucher_entries','voucher_entries_audit_row_insert'),
-     ('voucher_entries','voucher_entries_audit_row_update'),
-     ('voucher_entries','voucher_entries_audit_row_delete'),
-     ('audit_log','audit_log_before_insert_chain'),
-     ('audit_log','audit_log_append_only'),
-     ('audit_log','audit_log_no_truncate')
-   ) AS required(table_name,trigger_name)
-   WHERE NOT EXISTS(
-     SELECT 1 FROM pg_trigger t
-     JOIN pg_class target ON target.oid=t.tgrelid
-     JOIN pg_namespace ns ON ns.oid=target.relnamespace
-     WHERE ns.nspname=current_schema()
-       AND target.relname=required.table_name
-       AND t.tgname=required.trigger_name
-       AND NOT t.tgisinternal AND t.tgenabled IN ('O','A')
-   )
- ) AS audit_guard,
+ ${triggersEnabledSql(CLOSED_VOUCHER_GUARD)} AS vouchers_guard,
+ ${triggersEnabledSql(CLOSED_ENTRY_GUARD)} AS entries_guard,
+ ${triggersEnabledSql(AUDIT_CHAIN_TRIGGERS)} AS audit_guard,
  -- The fiscal closing journal depends on ALL seven opening sources, not
  -- merely the ledger-account master. A missing master lock blocks approval.
- NOT EXISTS(
-   SELECT 1 FROM (VALUES
-     ('ledger_accounts','ledger_accounts_opening_balance_lock'),
-     ('customers','customers_opening_balance_lock'),
-     ('suppliers','suppliers_opening_balance_lock'),
-     ('bank_accounts','bank_accounts_opening_balance_lock'),
-     ('employees','employees_opening_balance_lock'),
-     ('factory_suppliers','factory_suppliers_opening_balance_lock'),
-     ('fixed_assets','fixed_assets_opening_balance_lock')
-   ) AS required(table_name,trigger_name)
-   WHERE NOT EXISTS(
-     SELECT 1 FROM pg_trigger t
-     JOIN pg_class target ON target.oid=t.tgrelid
-     JOIN pg_namespace ns ON ns.oid=target.relnamespace
-     WHERE ns.nspname=current_schema()
-       AND target.relname=required.table_name
-       AND t.tgname=required.trigger_name
-       AND NOT t.tgisinternal AND t.tgenabled IN ('O','A')
-   )
- ) AS opening_guard,
+ ${triggersEnabledSql(OPENING_BALANCE_TRIGGERS)} AS opening_guard,
  -- FORCE RLS and the expected company-scoping policy must be installed
  -- on all three review tables before any new independent signoff is valid.
  (
