@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { FEATURE_KEYS, insertRoleFeaturePermissionSchema, insertUserCompanyRoleSchema } from "../shared/schema";
 import { canAccessModule, canAccessPage } from "../server/lib/permissionHelpers";
+import { resolveAuthenticatedAppRoute } from "../client/src/app/authenticatedAppRouteGuard";
 import {
   ERP_TESTER_PAGE_KEYS,
   ERP_TESTER_ROLE,
@@ -75,6 +76,23 @@ describe("ERP test company access policy", () => {
     expect(ERP_TESTER_PAGE_KEYS).not.toContain("settings");
     expect(new Set(ERP_TESTER_PAGE_KEYS).size).toBe(ERP_TESTER_PAGE_KEYS.length);
     expect([...FEATURE_KEYS].filter((key) => key !== "settings")).toEqual(ERP_TESTER_PAGE_KEYS);
+  });
+
+  it("hides All Daybook for ERP Tester without blocking ordinary Daybook", () => {
+    const decide = (currentLocation: string, userRole = ERP_TESTER_ROLE) =>
+      resolveAuthenticatedAppRoute({
+        currentLocation,
+        companyType: "erp",
+        userRole,
+        isAdminOwner: false,
+        myAccessLoading: false,
+        myAccessError: false,
+      }).decision;
+
+    expect(decide("/transaction-journal")).toEqual({ kind: "redirect", to: "/daybook" });
+    expect(decide("/transaction-journal/")).toEqual({ kind: "redirect", to: "/daybook" });
+    expect(decide("/daybook")).toEqual({ kind: "continue" });
+    expect(decide("/transaction-journal", "Manager")).toEqual({ kind: "continue" });
   });
 
   it("retains the extra restrictions of the optional standalone test-company creator", () => {
