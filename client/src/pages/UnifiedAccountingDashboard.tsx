@@ -580,7 +580,8 @@ export default function UnifiedAccountingDashboard() {
                   <p className="text-sm text-muted-foreground">
                     Selling valuation is available in the existing Factory Net Position report, with its persisted
                     Cost/Selling selection. It is not inserted into book value, financial net assets or historical COGS
-                    here.
+                    here. The original management screen may use a separately selected or pinned Factory company;
+                    never compare its totals to this dashboard without independently verifying company ownership.
                   </p>
                   <Button
                     variant="outline"
