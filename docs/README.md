@@ -111,6 +111,7 @@ failure, so a correct document cannot quietly become undiscoverable.
 | [permissions-security.md](permissions-security.md) | Roles and permission model |
 | [security-privacy.md](security-privacy.md) | Authentication, sessions, data handling |
 | [security-company-isolation-wave3.md](security-company-isolation-wave3.md) | Company isolation, RLS, and privileged maintenance boundaries |
+| [erp-test-company.md](erp-test-company.md) | Isolated ERP test company and its no-settings tester account |
 | [program-8b-approval-exception-workflows.md](program-8b-approval-exception-workflows.md) | Control model for high-risk actions |
 | [audit-framework.md](audit-framework.md) | Server-side audit foundation |
 | [security/scorecard-review-and-exceptions.md](security/scorecard-review-and-exceptions.md) | Security scorecard review and documented exceptions |

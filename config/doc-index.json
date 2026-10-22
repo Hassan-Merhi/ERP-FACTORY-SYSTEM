@@ -446,6 +446,7 @@
     "docs/archive/factory-net-position-phase7-ui-reconciliation.md": "record",
     "docs/archive/factory-net-position-phase8-history-integrity.md": "record",
     "docs/archive/factory-net-position-phase9-handoff.md": "record",
-    "docs/factory-net-position-historical.md": "reference"
+    "docs/factory-net-position-historical.md": "reference",
+    "docs/erp-test-company.md": "reference"
   }
 }
