@@ -60,7 +60,9 @@ export async function enforceUnifiedAccountingRollout(req: Request, res: Respons
   // role and Factory page gates also remain authoritative after this check.
   if (!req.session?.userId || !req.session?.currentCompanyId)
     return res.status(401).json({ code: "ACCOUNTING_ROLLOUT_AUTH_REQUIRED", message: "Sign in and select a company" });
-  const role = String(req.session.currentRole ?? req.user?.role ?? "");
+  // Never fall back to an account's global role when authorizing a
+  // selected-company accounting mutation.
+  const role = String(req.session.currentRole ?? "");
   if (!["Admin", "Owner", "Developer"].includes(role))
     return res.status(403).json({
       code: "ACCOUNTING_ROLLOUT_ACCESS_DENIED",
