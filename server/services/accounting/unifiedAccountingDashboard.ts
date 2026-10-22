@@ -134,7 +134,7 @@ export interface UnifiedAccountingDashboard {
     // Null on past dates: current Factory cost cannot be combined with ERP
     // historic cost and labeled a common-date management valuation.
     managementCostCandidateUsd: string | null;
-    managementCostCandidateBasis: "CURRENT_COST_MEMO" | "WITHHELD_MIXED_DATES" | "NOT_LOADED";
+    managementCostCandidateBasis: "CURRENT_COST_MEMO" | "WITHHELD_MIXED_DATES" | "WITHHELD_INCOMPLETE_COST" | "NOT_LOADED";
     managementSellingValueUsd: null;
     managementSellingValueAvailableIn: "EXISTING_FACTORY_NET_POSITION";
     glToOperationalAtCost: Array<{
@@ -354,7 +354,7 @@ export async function unifiedAccountingDashboardTx(
     factoryStock.unvaluedCount === 0 &&
     erpStock.anomalousRows === 0;
   const managementCandidate =
-    asOfDate === businessDate && erpStock && factoryStock
+    stockCostComplete && erpStock && factoryStock
       ? fmt(D(erpStock.costUsd).plus(D(factoryStock.totalUsd)))
       : null;
   const managementCandidateBasis =
@@ -362,7 +362,9 @@ export async function unifiedAccountingDashboardTx(
       ? "NOT_LOADED" as const
       : asOfDate < businessDate
         ? "WITHHELD_MIXED_DATES" as const
-        : "CURRENT_COST_MEMO" as const;
+        : !stockCostComplete
+          ? "WITHHELD_INCOMPLETE_COST" as const
+          : "CURRENT_COST_MEMO" as const;
   const classAssets = breakdown(position.assets);
   const classLiabilities = breakdown(position.liabilities);
   return {
