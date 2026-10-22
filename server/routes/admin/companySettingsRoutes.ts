@@ -625,7 +625,7 @@ export function registerCompanySettingsRoutes(app: Express) {
 
   app.get("/api/admin/deployment-diagnostics", requireAuth, requireRole("Admin", "Developer"), async (_req, res) => {
     try {
-      const VALID_ROLES = `'Developer','Admin','Owner','Manager','POS','Normal User'`;
+      const VALID_ROLES = `'Developer','Admin','Owner','Manager','POS','Normal User','View Only','ERP Tester'`;
       const OLD_POS_ROLES = `'POS1','POS2','POS3','POS4','POS5','POS6'`;
 
       const [
