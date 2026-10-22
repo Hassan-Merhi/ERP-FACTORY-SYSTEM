@@ -38,6 +38,12 @@ function getPermissions(
       }
       break;
 
+    case "ERP Tester":
+      perms.push({ label: "ERP test-company data entry only", dangerous: false });
+      perms.push({ label: "No Settings, Factory, or production company access", dangerous: false });
+      if (flags.canDeleteRecords) perms.push({ label: "Delete test-company records", dangerous: true });
+      break;
+
     case "Normal User":
       perms.push({ label: "View-only access (no posting)", dangerous: false });
       break;
