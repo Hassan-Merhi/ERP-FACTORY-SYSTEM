@@ -861,7 +861,6 @@ export const phase3RemainingTranslationsPart01: readonly Phase3SharedUiEntry[] =
     ar: "ينشئ شركة ERP مستقلة وفارغة وحساب اختبار بصلاحية مدير. يمكن للمستخدم إدخال بيانات الاختبار وحذفها دون الوصول إلى إعدادات الإدارة أو الشركات الأخرى.",
     fr: "Crée une société ERP autonome et vide ainsi qu'un compte testeur de niveau gestionnaire. Le testeur peut saisir et supprimer des données d'essai sans accéder aux paramètres d'administration ni aux autres sociétés.",
   },
-  { en: "Company:", ar: "الشركة:", fr: "Société :" },
   { en: "Username:", ar: "اسم المستخدم:", fr: "Nom d'utilisateur :" },
   { en: "One-time password:", ar: "كلمة المرور لمرة واحدة:", fr: "Mot de passe à usage unique :" },
   { en: "Access:", ar: "الصلاحيات:", fr: "Accès :" },
@@ -926,5 +925,4 @@ export const phase3RemainingTranslationsPart01: readonly Phase3SharedUiEntry[] =
   },
   { en: "ERP Test Company", ar: "شركة اختبار ERP", fr: "Société de test ERP" },
   { en: "Company Management", ar: "إدارة الشركات", fr: "Gestion des sociétés" },
-  { en: "Admin access required", ar: "يلزم وصول المسؤول", fr: "Accès administrateur requis" },
 ];
