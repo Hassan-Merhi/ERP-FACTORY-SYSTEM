@@ -353,6 +353,11 @@ export const phase3RemainingTranslationsPart30: readonly Phase3SharedUiEntry[] =
     fr: "Aperçu de simulation enregistré",
   },
   {
+    en: "ERP Accounts page access is required for Cost Centers",
+    ar: "يلزم الوصول إلى صفحة الحسابات في نظام ERP لاستخدام مراكز التكلفة",
+    fr: "L'accès à la page Comptes de l'ERP est requis pour les centres de coûts",
+  },
+  {
     en: "Eligible sources",
     ar: "المصادر المؤهلة",
     fr: "Sources éligibles",
@@ -756,6 +761,11 @@ export const phase3RemainingTranslationsPart30: readonly Phase3SharedUiEntry[] =
     en: "Type APPLY to confirm",
     ar: "اكتب APPLY للتأكيد",
     fr: "Saisissez APPLY pour confirmer",
+  },
+  {
+    en: "Unable to verify Cost Center page access",
+    ar: "تعذر التحقق من صلاحية الوصول إلى صفحة مراكز التكلفة",
+    fr: "Impossible de vérifier l'accès à la page des centres de coûts",
   },
   {
     en: "Unable to save cost-center allocation",

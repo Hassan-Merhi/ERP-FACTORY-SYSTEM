@@ -162,6 +162,7 @@ These describe work in progress and carry live figures bound to their sources.
 | [cost-centers-phase6.md](cost-centers-phase6.md) | Cost centers: reports, monthly budgets and exports |
 | [cost-centers-phase7.md](cost-centers-phase7.md) | Cost centers: historical dry-run allocation and reconciliation |
 | [cost-centers-phase8-release.md](cost-centers-phase8-release.md) | Cost centers: security hardening, migration order and release checklist |
+| [cost-centers-followup-permissions-20261022.md](cost-centers-followup-permissions-20261022.md) | Cost centers: ERP Accounts / Factory source page permissions and report export views |
 | [security/scorecard-review-and-exceptions.md](security/scorecard-review-and-exceptions.md) | Current security Scorecard review and documented exceptions |
 | [releases.md](releases.md) | Release notes |
 
