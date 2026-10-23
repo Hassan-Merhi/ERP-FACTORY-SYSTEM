@@ -63,7 +63,7 @@ export function useAuthenticatedAppData({
   const { data: companySettings } = useQuery<CompanySettings>({
     queryKey: companyQueryKey("/api/company-settings", selectedCompanyId),
     ...stableSettingsQueryPolicy,
-    enabled: userPresent && !!selectedCompanyId,
+    enabled: userPresent && !!selectedCompanyId && userRole !== "ERP Tester",
   });
 
   useEffect(() => {

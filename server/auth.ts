@@ -8,6 +8,7 @@ import { enforceRuntimeSession } from "./services/security/sessionEnforcementAda
 import { hydrateActiveCredentialVersion } from "./services/security/credentialVersionService";
 import { CompanyIsolationError, assertRequestCompanyMatchesSession } from "./services/security/companyIsolationPolicy";
 import { decideExplicitCompanyScope } from "./services/security/companyRequestScopePolicy";
+import { isErpTesterForbiddenApiPath } from "@shared/erpTestCompanyAccess";
 
 const EXPECTED_ANONYMOUS_SESSION_REASONS = new Set(["SESSION_REQUIRED", "SESSION_USER_REQUIRED"]);
 
@@ -284,7 +285,13 @@ export function requireRole(...roles: string[]) {
       return res.status(401).json({ message: "Unauthorized" });
     }
 
-    if (req.user.role === "Developer" || roles.includes(req.user.role)) {
+    // ERP Tester can exercise Manager-level operational routes, but never Admin/Owner/Developer routes.
+    // Settings and administrative APIs are independently blocked by blockErpTesterSettings.
+    if (
+      req.user.role === "Developer" ||
+      roles.includes(req.user.role) ||
+      (req.user.role === "ERP Tester" && roles.includes("Manager"))
+    ) {
       return next();
     }
 
@@ -370,7 +377,7 @@ export function canModifyDate(dateField: string = "voucherDate") {
       return next();
     }
 
-    if (role === "Manager" || role === "Owner") {
+    if (role === "Manager" || role === "Owner" || role === "ERP Tester") {
       if (recordDate === today) return next();
       const editDays = req.session.daybookEditDays ?? 0;
       if (editDays === 0) {
@@ -480,6 +487,21 @@ function isViewOnlyPassiveLifecycleWrite(req: Request): boolean {
     /^\/api\/screen-feed\/control\/sessions\/[^/]+\/keyboard-commands\/[^/]+\/result$/.test(path) ||
     /^\/api\/screen-feed\/control\/sessions\/[^/]+\/stop$/.test(path)
   );
+}
+
+/**
+ * Sandbox testers can post ordinary ERP test data, but must never reach
+ * configuration, maintenance, user management, or non-ERP APIs.
+ * This is a server enforcement boundary, not only a hidden Settings link.
+ */
+export function blockErpTesterSettings(req: Request, res: Response, next: NextFunction) {
+  if (req.session?.currentRole !== "ERP Tester" || !req.path.startsWith("/api/")) return next();
+  if (isErpTesterForbiddenApiPath(req.path)) {
+    return res
+      .status(403)
+      .json({ message: "ERP Tester accounts cannot access system settings or user administration" });
+  }
+  return next();
 }
 
 export function blockViewOnlyWrites(req: Request, res: Response, next: NextFunction) {

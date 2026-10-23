@@ -1,6 +1,7 @@
 import { getErrorDetails } from "@shared/errorUtils";
 import { useState, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { authenticatedUserQueryOptions } from "@/contracts/sessionQueryContracts";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { AlertCircle, Truck, Loader2, MessageCircle } from "lucide-react";
@@ -14,6 +15,8 @@ import { useErpPhoneLayout } from "@/hooks/use-erp-phone-layout";
 import { ErpMobileRecordCard, ErpMobileRecordList } from "@/components/ui/erp-mobile-records";
 
 export function TabTruckLocation() {
+  const { data: viewer } = useQuery(authenticatedUserQueryOptions());
+  const isTester = (viewer?.currentRole ?? viewer?.role) === "ERP Tester";
   const [companyMode, setCompanyMode] = useState<CompanyViewMode>("session");
   const [waSending, setWaSending] = useState(false);
   const printRef = useRef<HTMLDivElement>(null);
@@ -127,7 +130,8 @@ export function TabTruckLocation() {
       >
         My Company
       </Button>
-      <Button
+      {!isTester && (
+        <Button
         size="sm"
         variant={companyMode === "all" ? "default" : "outline"}
         onClick={() => setCompanyMode("all")}
@@ -135,6 +139,7 @@ export function TabTruckLocation() {
       >
         All Accessible Companies
       </Button>
+      )}
     </div>
   );
 
@@ -164,6 +169,7 @@ export function TabTruckLocation() {
     <div className="space-y-3">
       <div className="flex items-center gap-2 flex-wrap justify-between">
         {modeSelector}
+        {!isTester && (
         <Button
           variant="outline"
           size="sm"
@@ -178,6 +184,7 @@ export function TabTruckLocation() {
           )}
           {waSending ? "Sending…" : "Send to WhatsApp"}
         </Button>
+      )}
       </div>
 
       <div className="flex gap-4 flex-wrap p-3 rounded-md border bg-muted/30 text-sm">

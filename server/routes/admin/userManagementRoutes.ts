@@ -629,7 +629,12 @@ export function registerUserManagementRoutes(app: Express) {
         return res.json({ pageKeys: [...FEATURE_KEYS], fullAccess: true, hiddenErpCostFields: [] });
       }
       const pageKeys = await storage.getErpUserPageAccess(companyId, userId);
-      const visiblePageKeys = role === "Owner" ? pageKeys.filter((key) => key !== "analytics") : pageKeys;
+      const visiblePageKeys =
+        role === "Owner"
+          ? pageKeys.filter((key) => key !== "analytics")
+          : role === "ERP Tester"
+            ? pageKeys.filter((key) => key !== "settings")
+            : pageKeys;
       res.json({ pageKeys: visiblePageKeys, fullAccess: false, hiddenErpCostFields });
     } catch (error: unknown) {
       res.status(500).json({ message: getErrorMessage(error) });

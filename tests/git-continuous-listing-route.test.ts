@@ -2,13 +2,17 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const harness = vi.hoisted(() => ({
   handlers: new Map<string, (...args: unknown[]) => unknown>(),
+  allowedRoles: [] as string[][],
   fetchActiveContainers: vi.fn(),
   loadCompanyNames: vi.fn(),
 }));
 
 vi.mock("../server/auth", () => ({
   requireAuth: (_req: unknown, _res: unknown, next: () => void) => next(),
-  requireRole: () => (_req: unknown, _res: unknown, next: () => void) => next(),
+  requireRole: (...roles: string[]) => {
+    harness.allowedRoles.push(roles);
+    return (_req: unknown, _res: unknown, next: () => void) => next();
+  },
 }));
 vi.mock("../server/lib/logger", () => ({ logger: { error: vi.fn() } }));
 vi.mock("../server/lib/gitHelpers", () => ({
@@ -42,6 +46,7 @@ describe("GIT continuous listing route", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     harness.handlers.clear();
+    harness.allowedRoles.length = 0;
     resetGitContinuousSnapshotsForTests();
     process.env.NODE_ENV = "test";
     process.env.CONTINUOUS_CURSOR_SECRET = "git-route-wave-two-secret-1234";
@@ -59,6 +64,13 @@ describe("GIT continuous listing route", () => {
     process.env.NODE_ENV = previousNodeEnv;
     if (previousSecret === undefined) delete process.env.CONTINUOUS_CURSOR_SECRET;
     else process.env.CONTINUOUS_CURSOR_SECRET = previousSecret;
+  });
+
+  it("permits ERP Tester on read-only GIT reporting routes", () => {
+    expect(harness.allowedRoles).toHaveLength(6);
+    expect(harness.allowedRoles.every((roles) => roles.includes("ERP Tester"))).toBe(true);
+    expect(harness.handlers.has("/api/git/containers")).toBe(true);
+    expect(harness.handlers.has("/api/git/agent-duty-summary")).toBe(true);
   });
 
   it("does the full fetch/enrich pipeline once and slices later chunks from the snapshot", async () => {

@@ -363,7 +363,7 @@ export function FactorySidebar({
               </Badge>
             </a>
           )}
-          {!["Admin", "Developer"].includes(user?.role ?? "") && (
+          {!["Admin", "Developer", "ERP Tester"].includes(user?.role ?? "") && (
             <SidebarFlatLink
               href="/my-settings"
               icon={KeyRound}

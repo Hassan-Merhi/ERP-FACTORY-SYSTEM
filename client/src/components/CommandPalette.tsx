@@ -525,10 +525,10 @@ export function CommandPalette({
   const propertiesPages = useMemo(
     () =>
       buildEntries(PROPERTIES_NAV_SECTIONS, [
-        ...PROPERTIES_EXTRAS,
+        ...PROPERTIES_EXTRAS.filter((entry) => user?.role !== "ERP Tester" || entry.path !== "/my-settings"),
         ...(canSeeAdminCommands ? PROPERTIES_ADMIN_EXTRAS : []),
       ]).filter((page) => !isOwner || page.path !== "/properties/analytics"),
-    [canSeeAdminCommands, isOwner]
+    [canSeeAdminCommands, isOwner, user?.role]
   );
 
   const showErp = !isPOS && hasErpAccess;

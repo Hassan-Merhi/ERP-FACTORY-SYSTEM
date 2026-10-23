@@ -260,8 +260,17 @@ databaseDescribe("Factory Net Position historical date filter (database)", () =>
     ids.batch =
       await one(sql`INSERT INTO factory_mix_batches (company_id, batch_code, batch_date, total_weight_kg, total_cost, cost_per_kg, status, created_at, updated_at)
       VALUES (${companyId}, ${"MB" + suffix}, '2026-10-20', 250, 125, 0.5, 'OPEN', '2026-10-20 10:00', '2026-10-20 10:00') RETURNING id`);
-    await db.execute(sql`INSERT INTO factory_mix_batch_sources (mix_batch_id, container_id, supplier_id, inventory_supplier_id, weight_kg, cost_per_kg, total_cost, created_at)
-      VALUES (${ids.batch}, ${ids.containerA}, ${ids.supplier}, ${ids.supplier}, 250, 0.5, 125, '2026-10-20 10:00')`);
+    // Legacy rows like this one name a different supplier than the container
+    // they drew from (the owner trigger now refuses new ones). The 250 kg
+    // still left container A, so it is consumed from container A's supplier.
+    ids.otherSupplier = await one(sql`INSERT INTO factory_suppliers (company_id, name, created_at)
+      VALUES (${companyId}, ${"Other supplier " + suffix}, '2026-10-01 00:00') RETURNING id`);
+    await db.transaction(async (tx) => {
+      await tx.execute(sql`ALTER TABLE factory_mix_batch_sources DISABLE TRIGGER USER`);
+      await tx.execute(sql`INSERT INTO factory_mix_batch_sources (mix_batch_id, container_id, supplier_id, inventory_supplier_id, weight_kg, cost_per_kg, total_cost, created_at)
+        VALUES (${ids.batch}, ${ids.containerA}, ${ids.otherSupplier}, ${ids.otherSupplier}, 250, 0.5, 125, '2026-10-20 10:00')`);
+      await tx.execute(sql`ALTER TABLE factory_mix_batch_sources ENABLE TRIGGER USER`);
+    });
 
     ids.product =
       await one(sql`INSERT INTO factory_bale_products (company_id, code, name, production_price, selling_price)
@@ -424,6 +433,7 @@ databaseDescribe("Factory Net Position historical date filter (database)", () =>
       (4000 - 250) * 0.5,
       (10000 - 250) * 0.5,
     ]);
+    expect(d21.inventoryHistoryWarnings).toContain("HISTORICAL_RAW_SOURCE_OWNER_CONFLICT");
 
     // Balance on Table: 250 kg mixed Oct 20; 100 kg pressed out Oct 21.
     expect([d19.balanceOnTableValue, d20.balanceOnTableValue, d21.balanceOnTableValue]).toEqual([0, 125, 75]);
