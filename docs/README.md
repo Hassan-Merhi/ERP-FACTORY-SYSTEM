@@ -55,7 +55,6 @@ failure, so a correct document cannot quietly become undiscoverable.
 | [factory-flow.md](factory-flow.md) | Bales, production, payroll, raw materials |
 | [factory-container-planner.md](factory-container-planner.md) | Stock Allocation V5 container planning, saved drafts, and live reconciliation |
 | [factory-net-position-historical.md](factory-net-position-historical.md) | Factory Net Position as-of dates: known-at-cutoff rules, verification and history limits |
-| [factory-net-position-fx-wallet-known-at-fix-20261023.md](factory-net-position-fx-wallet-known-at-fix-20261023.md) | Factory Net Position FX wallet known-at cutoffs and historical raw-stock supplier ownership |
 | [erp-test-company.md](erp-test-company.md) | Provisioning an isolated ERP test company and its limited tester account |
 | [automatic-priority-print-loading.md](automatic-priority-print-loading.md) | Automatic Priority Printing & Loading: company switch, automatic loading allocation, priority-colored labels, physical bale deletion and Priority #1 recovery |
 | [priority-scan-fixed-palette-color-block.md](priority-scan-fixed-palette-color-block.md) | Priority Scan fixed 11-color palette, solid color-box priority labels, legacy-color moves and saved-color print/reprint checks |
