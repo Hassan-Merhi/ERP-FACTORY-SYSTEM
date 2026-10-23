@@ -20,6 +20,8 @@ const HISTORICAL_WARNING_TEXT: Record<string, string> = {
     "A legacy raw-material deduction changed a cumulative receipt; its earlier quantity needs audit reconstruction.",
   HISTORICAL_RAW_SOURCE_OWNER_UNKNOWN:
     "Some historic mix materials cannot be assigned reliably to their original supplier.",
+  HISTORICAL_RAW_SOURCE_OWNER_CONFLICT:
+    "Some legacy mixes name a different material supplier than the container actually drawn down; historical raw stock follows the container source.",
   HISTORICAL_RAW_LOCKED_RATE_UNVERSIONED:
     "A supplier's locked raw-material rate changed after the selected date; its earlier stock is valued at the replayed moving-average cost.",
   HISTORICAL_RAW_NEGATIVE_MOVEMENT: "An invalid negative material movement needs historical review.",
