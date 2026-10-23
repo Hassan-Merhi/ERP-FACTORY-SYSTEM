@@ -8,11 +8,8 @@ import {
   postRentAccrualForCompany,
   type RentalModule,
 } from "./shared";
-import {
-  postDueScheduledRentalPaymentsDetailed,
-  createRentalPaymentGroup,
-  isRentalRateRequiredError,
-} from "../../services/rental/rentalPaymentPostingService";
+import { createRentalPaymentGroup, isRentalRateRequiredError } from "../../services/rental/rentalPaymentPostingService";
+import { postDueScheduledRentalPaymentsDetailed } from "../../services/rental/rentalDueScheduledPaymentService";
 import { companyBusinessDate } from "../../services/accounting/companyBusinessDate";
 import {
   companyClosedThrough,

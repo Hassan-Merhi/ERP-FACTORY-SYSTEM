@@ -29,7 +29,7 @@ import {
   type ScheduledPostingSkip,
 } from "../accounting/scheduledPostingScope";
 import { ensureMonthlyForCompany, postRentAccrualForCompany, type RentalModule } from "../../routes/rental/shared";
-import { postDueScheduledRentalPaymentsDetailed } from "./rentalPaymentPostingService";
+import { postDueScheduledRentalPaymentsDetailed } from "./rentalDueScheduledPaymentService";
 
 /** Compatibility re-export for existing rental callers. */
 export { RENTAL_MODULE_ACCOUNTS } from "../accounting/unifiedAccountingFoundation";
