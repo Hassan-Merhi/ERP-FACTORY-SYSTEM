@@ -102,7 +102,7 @@ export async function saveFactoryFxRate(actor: RateActor, input: FactoryRateInpu
       eq(factoryFxRates.source, "manual")
     )).orderBy(asc(factoryFxRates.id)).for("update");
     const latest = sameDay[sameDay.length - 1];
-    if (sameDay.length === 1 && String(latest.rateToUsd) === Number(input.rateToUsd).toFixed(8)) {
+    if (sameDay.length === 1 && latest && String(latest.rateToUsd) === Number(input.rateToUsd).toFixed(8)) {
       return latest; // Repeated save of an identical rate is idempotent.
     }
     if (sameDay.length > 0) {
