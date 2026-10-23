@@ -94,6 +94,15 @@ export const ERP_NAV_SECTIONS: NavSection[] = [
     color: NAV_COLOR.accounting,
     items: [
       { title: "Accounts", url: "/accounts", icon: Wallet },
+      { title: "Cost Centers", url: "/cost-centers", icon: ListTree },
+      { title: "Parties", url: "/parties", icon: Handshake },
+      { title: "Payroll", url: "/payroll", icon: UserCheck },
+    ],
+  },
+  {
+    label: "Accounting Reconciliation",
+    color: NAV_COLOR.accounting,
+    items: [
       { title: "Open Items", url: "/accounting/open-items", icon: Receipt },
       { title: "Bank & Cash Reconciliation", url: "/accounting/cash-bank", icon: Calculator },
       { title: "Multi-Currency Accounting", url: "/accounting/monetary-fx", icon: Calculator },
@@ -106,9 +115,6 @@ export const ERP_NAV_SECTIONS: NavSection[] = [
       { title: "Fiscal Closing & Audit", url: "/accounting/fiscal-review", icon: ShieldCheck },
       { title: "Unified Accounting Dashboard", url: "/accounting/dashboard", icon: LayoutDashboard },
       { title: "Unified Accounting Rollout", url: "/accounting/rollout", icon: ShieldCheck },
-      { title: "Cost Centers", url: "/cost-centers", icon: ListTree },
-      { title: "Parties", url: "/parties", icon: Handshake },
-      { title: "Payroll", url: "/payroll", icon: UserCheck },
     ],
   },
   {
@@ -238,8 +244,7 @@ export function useErpVisibleSections(user?: SidebarUser): {
         item.url === "/accounting/fiscal-review" ||
         item.url === "/accounting/dashboard" ||
         item.url === "/accounting/rollout") &&
-      !isAdmin &&
-      !isOwner
+      !isDeveloper
     )
       return false;
     if (item.url === "/settings" && isOwner) return false;

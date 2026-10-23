@@ -52,8 +52,38 @@ function writeClass(path: string, method: string) {
     return "METADATA";
   return null;
 }
+/**
+ * Owner decision (2026-10-23): every unified-accounting page and API (Phases
+ * 3-15) is Developer-only. Admin, Owner and all other roles are refused here,
+ * before any route-level role check, until the Owner widens access.
+ */
+const DEVELOPER_ONLY_PREFIXES = [
+  "/api/accounting/open-items",
+  "/api/accounting/cash-bank",
+  "/api/accounting/monetary-fx",
+  "/api/accounting/erp-inventory",
+  "/api/accounting/factory-production",
+  "/api/accounting/rentals",
+  "/api/accounting/consolidation",
+  "/api/accounting/history",
+  "/api/accounting/statements",
+  "/api/accounting/fiscal-review",
+  "/api/accounting/unified-dashboard",
+  "/api/accounting/rollout",
+] as const;
+export function isDeveloperOnlyAccountingPath(path: string): boolean {
+  return DEVELOPER_ONLY_PREFIXES.some((p) => prefix(path, p));
+}
 export async function enforceUnifiedAccountingRollout(req: Request, res: Response, next: NextFunction) {
   const path = normalizedAccountingPath(req.originalUrl.split("?", 1)[0] || req.path);
+  if (isDeveloperOnlyAccountingPath(path)) {
+    if (!req.session?.userId) return res.status(401).json({ message: "Unauthorized" });
+    if (String(req.session.currentRole ?? "") !== "Developer")
+      return res.status(403).json({
+        code: "ACCOUNTING_DEVELOPER_ONLY",
+        message: "Unified accounting is available to Developers only",
+      });
+  }
   const type = writeClass(path, req.method.toUpperCase());
   if (!type) return next();
   // Never expose an unauthenticated policy/existence oracle. Concrete endpoint

@@ -121,6 +121,11 @@ beforeAll(async () => {
   await ensureVoucherAuditTrigger(pool);
   await ensureAuditLogAppendOnlyGuard(pool);
   await ensureFiscalReviewSchema(pool);
+  // Unified accounting is Developer-only; promote the seeded Admin.
+  await pool.query(`UPDATE user_company_roles SET role = 'Developer' WHERE user_id = $1 AND company_id = $2`, [
+    ctx.userId,
+    ctx.companyId,
+  ]);
   admin = request.agent(ctx.app);
   expect(
     (await admin.post("/api/auth/login").send({ username: `${PREFIX}_testuser`, password: "testpassword123" })).status

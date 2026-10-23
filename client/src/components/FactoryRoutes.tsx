@@ -188,17 +188,17 @@ export function FactoryRoutes({ user, myAccess, factoryDefaultPage }: FactoryRou
       <Route path="/factory/stock-query" component={StockQuery} />
       <Route path="/factory/contacts" component={FactoryContacts} />
       <Route path="/factory/accounts" component={FactoryAccounts} />
-      {isAdminOwnerOrDev && <Route path="/factory/accounting/open-items" component={AccountingOpenItems} />}
-      {isAdminOwnerOrDev && <Route path="/factory/accounting/cash-bank" component={CashBankReconciliation} />}
-      {isAdminOwnerOrDev && <Route path="/factory/accounting/monetary-fx" component={MonetaryFxAccounting} />}
-      {isAdminOwnerOrDev && <Route path="/factory/accounting/production" component={FactoryProductionAccounting} />}
-      {isAdminOwnerOrDev && <Route path="/factory/accounting/rentals" component={UnifiedRentalAccounting} />}
-      {isAdminOwnerOrDev && <Route path="/factory/accounting/consolidation" component={GroupConsolidationAccounting} />}
-      {isAdminOwnerOrDev && <Route path="/factory/accounting/history" component={HistoricalAccounting} />}
-      {isAdminOwnerOrDev && <Route path="/factory/accounting/statements" component={ProfessionalFinancialStatements} />}
-      {isAdminOwnerOrDev && <Route path="/factory/accounting/fiscal-review" component={FiscalCloseReview} />}
-      {isAdminOwnerOrDev && <Route path="/factory/accounting/dashboard" component={UnifiedAccountingDashboard} />}
-      {isAdminOwnerOrDev && <Route path="/factory/accounting/rollout" component={UnifiedAccountingRollout} />}
+      {isDeveloper && <Route path="/factory/accounting/open-items" component={AccountingOpenItems} />}
+      {isDeveloper && <Route path="/factory/accounting/cash-bank" component={CashBankReconciliation} />}
+      {isDeveloper && <Route path="/factory/accounting/monetary-fx" component={MonetaryFxAccounting} />}
+      {isDeveloper && <Route path="/factory/accounting/production" component={FactoryProductionAccounting} />}
+      {isDeveloper && <Route path="/factory/accounting/rentals" component={UnifiedRentalAccounting} />}
+      {isDeveloper && <Route path="/factory/accounting/consolidation" component={GroupConsolidationAccounting} />}
+      {isDeveloper && <Route path="/factory/accounting/history" component={HistoricalAccounting} />}
+      {isDeveloper && <Route path="/factory/accounting/statements" component={ProfessionalFinancialStatements} />}
+      {isDeveloper && <Route path="/factory/accounting/fiscal-review" component={FiscalCloseReview} />}
+      {isDeveloper && <Route path="/factory/accounting/dashboard" component={UnifiedAccountingDashboard} />}
+      {isDeveloper && <Route path="/factory/accounting/rollout" component={UnifiedAccountingRollout} />}
       <Route path="/factory/cost-centers">
         {() =>
           (isAdminOwnerOrDev || user?.role === "Manager") &&

@@ -48,25 +48,22 @@ interface PropertiesRoutesProps {
 export function PropertiesRoutes({ user }: PropertiesRoutesProps) {
   const isAdmin = user.role === "Admin" || user.role === "Developer";
   const isOwner = user.role === "Owner";
+  const isDeveloper = user.role === "Developer";
 
   return (
     <Switch>
       <Route path="/properties/dashboard" component={PropertiesDashboard} />
       <Route path="/properties/accounts" component={PropertiesAccounts} />
-      {(isAdmin || isOwner) && <Route path="/properties/accounting/open-items" component={AccountingOpenItems} />}
-      {(isAdmin || isOwner) && <Route path="/properties/accounting/cash-bank" component={CashBankReconciliation} />}
-      {(isAdmin || isOwner) && <Route path="/properties/accounting/monetary-fx" component={MonetaryFxAccounting} />}
-      {(isAdmin || isOwner) && <Route path="/properties/accounting/rentals" component={UnifiedRentalAccounting} />}
-      {(isAdmin || isOwner) && (
-        <Route path="/properties/accounting/consolidation" component={GroupConsolidationAccounting} />
-      )}
-      {(isAdmin || isOwner) && <Route path="/properties/accounting/history" component={HistoricalAccounting} />}
-      {(isAdmin || isOwner) && (
-        <Route path="/properties/accounting/statements" component={ProfessionalFinancialStatements} />
-      )}
-      {(isAdmin || isOwner) && <Route path="/properties/accounting/fiscal-review" component={FiscalCloseReview} />}
-      {(isAdmin || isOwner) && <Route path="/properties/accounting/dashboard" component={UnifiedAccountingDashboard} />}
-      {(isAdmin || isOwner) && <Route path="/properties/accounting/rollout" component={UnifiedAccountingRollout} />}
+      {isDeveloper && <Route path="/properties/accounting/open-items" component={AccountingOpenItems} />}
+      {isDeveloper && <Route path="/properties/accounting/cash-bank" component={CashBankReconciliation} />}
+      {isDeveloper && <Route path="/properties/accounting/monetary-fx" component={MonetaryFxAccounting} />}
+      {isDeveloper && <Route path="/properties/accounting/rentals" component={UnifiedRentalAccounting} />}
+      {isDeveloper && <Route path="/properties/accounting/consolidation" component={GroupConsolidationAccounting} />}
+      {isDeveloper && <Route path="/properties/accounting/history" component={HistoricalAccounting} />}
+      {isDeveloper && <Route path="/properties/accounting/statements" component={ProfessionalFinancialStatements} />}
+      {isDeveloper && <Route path="/properties/accounting/fiscal-review" component={FiscalCloseReview} />}
+      {isDeveloper && <Route path="/properties/accounting/dashboard" component={UnifiedAccountingDashboard} />}
+      {isDeveloper && <Route path="/properties/accounting/rollout" component={UnifiedAccountingRollout} />}
       <Route path="/properties/vouchers/:id/edit" component={PropertiesVoucherEdit} />
       <Route path="/properties/voucher-detail/:voucherId" component={PropertiesVoucherDetail} />
       <Route path="/properties/vouchers">{() => <PropertiesVouchers />}</Route>

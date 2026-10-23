@@ -246,18 +246,18 @@ export function ErpRoutes({ user }: ErpRoutesProps) {
 
       {R("/accounts/historical-openings", isAdminOwnerOrDev && canAccess("accounts"), HistoricalOpenings)}
       {G("/accounts", "accounts", Accounts)}
-      {R("/accounting/open-items", isAdminOwnerOrDev && canAccess("accounts"), AccountingOpenItems)}
-      {R("/accounting/cash-bank", isAdminOwnerOrDev && canAccess("accounts"), CashBankReconciliation)}
-      {R("/accounting/monetary-fx", isAdminOwnerOrDev && canAccess("accounts"), MonetaryFxAccounting)}
-      {R("/accounting/erp-inventory", isAdminOwnerOrDev && canAccess("accounts"), ErpInventoryAccounting)}
-      {R("/accounting/factory-production", isAdminOwnerOrDev && canAccess("accounts"), FactoryProductionAccounting)}
-      {R("/accounting/rentals", isAdminOwnerOrDev && canAccess("accounts"), UnifiedRentalAccounting)}
-      {R("/accounting/consolidation", isAdminOwnerOrDev && canAccess("accounts"), GroupConsolidationAccounting)}
-      {R("/accounting/history", isAdminOwnerOrDev && canAccess("accounts"), HistoricalAccounting)}
-      {R("/accounting/statements", isAdminOwnerOrDev && canAccess("accounts"), ProfessionalFinancialStatements)}
-      {R("/accounting/fiscal-review", isAdminOwnerOrDev && canAccess("accounts"), FiscalCloseReview)}
-      {R("/accounting/dashboard", isAdminOwnerOrDev && canAccess("accounts"), UnifiedAccountingDashboard)}
-      {R("/accounting/rollout", isAdminOwnerOrDev && canAccess("accounts"), UnifiedAccountingRollout)}
+      {R("/accounting/open-items", isDeveloper, AccountingOpenItems)}
+      {R("/accounting/cash-bank", isDeveloper, CashBankReconciliation)}
+      {R("/accounting/monetary-fx", isDeveloper, MonetaryFxAccounting)}
+      {R("/accounting/erp-inventory", isDeveloper, ErpInventoryAccounting)}
+      {R("/accounting/factory-production", isDeveloper, FactoryProductionAccounting)}
+      {R("/accounting/rentals", isDeveloper, UnifiedRentalAccounting)}
+      {R("/accounting/consolidation", isDeveloper, GroupConsolidationAccounting)}
+      {R("/accounting/history", isDeveloper, HistoricalAccounting)}
+      {R("/accounting/statements", isDeveloper, ProfessionalFinancialStatements)}
+      {R("/accounting/fiscal-review", isDeveloper, FiscalCloseReview)}
+      {R("/accounting/dashboard", isDeveloper, UnifiedAccountingDashboard)}
+      {R("/accounting/rollout", isDeveloper, UnifiedAccountingRollout)}
       {R("/cost-centers", (isAdminOwnerOrDev || effectiveRole === "Manager") && canAccess("accounts"), CostCenters)}
       {canAccess("accounts") ? (
         <Route path="/ledger-monthly/:accountId" component={LedgerMonthlySummary} />

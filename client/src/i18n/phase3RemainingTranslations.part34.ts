@@ -408,4 +408,9 @@ export const phase3RemainingTranslationsPart34: readonly Phase3SharedUiEntry[] =
     ar: "السياسة موجودة",
     fr: "Politique existante",
   },
+  {
+    en: "Accounting Reconciliation",
+    ar: "التسوية المحاسبية",
+    fr: "Rapprochement comptable",
+  },
 ];

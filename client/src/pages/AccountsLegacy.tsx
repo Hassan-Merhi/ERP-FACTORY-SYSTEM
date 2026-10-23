@@ -184,29 +184,27 @@ export default function Accounts() {
   return (
     <div className="space-y-6">
       <PageHeader title="Accounts Overview" subtitle="View all accounts, balances, and transaction history">
-        {showViewAccounts &&
-          !phoneStatementOpen &&
-          ["Admin", "Owner", "Developer"].includes(model.currentUser?.role ?? "") && (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline" data-testid="button-unified-accounting-menu">
-                  Unified Accounting
-                  <ChevronDown className="ml-1 h-4 w-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                {unifiedAccountingLinks.map((link) => (
-                  <DropdownMenuItem
-                    key={link.testId}
-                    data-testid={link.testId}
-                    onSelect={() => model.navigate(`${model.modePrefix}/accounting/${link.path}`)}
-                  >
-                    {link.label}
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          )}
+        {showViewAccounts && !phoneStatementOpen && model.currentUser?.role === "Developer" && (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" data-testid="button-unified-accounting-menu">
+                Unified Accounting
+                <ChevronDown className="ml-1 h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              {unifiedAccountingLinks.map((link) => (
+                <DropdownMenuItem
+                  key={link.testId}
+                  data-testid={link.testId}
+                  onSelect={() => model.navigate(`${model.modePrefix}/accounting/${link.path}`)}
+                >
+                  {link.label}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
         {showViewAccounts &&
           !phoneStatementOpen &&
           (model.currentUser?.role === "Admin" || model.currentUser?.role === "Developer") && (

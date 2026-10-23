@@ -37,6 +37,7 @@ let ctx: TestContext;
 let other: TestContext;
 let admin: request.SuperAgentTest;
 let viewer: request.SuperAgentTest;
+let plainAdmin: request.SuperAgentTest;
 let customerId: number;
 let bankId: number;
 
@@ -127,6 +128,11 @@ async function login(prefix: string, companyId: number) {
 beforeAll(async () => {
   other = await seedTestData(OTHER_PREFIX);
   ctx = await seedTestData(PREFIX);
+  // Unified accounting is Developer-only; promote the seeded Admin.
+  await pool.query(`UPDATE user_company_roles SET role = 'Developer' WHERE user_id = $1 AND company_id = $2`, [
+    ctx.userId,
+    ctx.companyId,
+  ]);
   admin = await login(PREFIX, ctx.companyId);
 
   // An ordinary-role member of the same company.
@@ -140,6 +146,17 @@ beforeAll(async () => {
     ctx.companyId,
   ]);
   viewer = await login(`${PREFIX}v`, ctx.companyId);
+
+  // A company Admin: Owner decision 2026-10-23 keeps unified accounting Developer-only.
+  const companyAdmin = await pool.query<{ id: string }>(
+    `INSERT INTO users (username, password) VALUES ($1, $2) RETURNING id`,
+    [`${PREFIX}a_testuser`, await bcrypt.hash("testpassword123", 10)]
+  );
+  await pool.query(`INSERT INTO user_company_roles (user_id, company_id, role) VALUES ($1, $2, 'Admin')`, [
+    companyAdmin.rows[0].id,
+    ctx.companyId,
+  ]);
+  plainAdmin = await login(`${PREFIX}a`, ctx.companyId);
 
   const receivable = await pool.query<{ id: number }>(
     `INSERT INTO ledger_accounts (company_id, code, name, account_type) VALUES ($1, $2, 'Receivable', 'Asset') RETURNING id`,
@@ -252,6 +269,13 @@ describe("new accounting reads never change existing financial rows", () => {
     for (const url of reads) {
       const res = await viewer.get(url);
       expect([401, 403], `${url} answered ${res.status}`).toContain(res.status);
+    }
+  });
+
+  it("keeps a company Admin out of every new accounting read (Developer only)", async () => {
+    for (const url of reads) {
+      const res = await plainAdmin.get(url);
+      expect(res.status, `${url} answered ${res.status}`).toBe(403);
     }
   });
 });
