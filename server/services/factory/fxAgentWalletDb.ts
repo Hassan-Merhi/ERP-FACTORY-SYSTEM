@@ -123,7 +123,7 @@ export async function getFxAgentWalletSnapshot(
   // The Factory historical report already reconstructs ledger entries using
   // both business and recorded-at dates. getPartyBalance(asOf) alone does not
   // enforce recorded-at, and would compare the wallet against a future edit.
-  let book;
+  let book: ReturnType<typeof toMoney>;
   if (historical?.scope.isHistorical) {
     if (historical.scope.asOf !== asOf) throw new Error("HISTORICAL_FX_WALLET_DATE_MISMATCH");
     book = toMoney(historical.ledgerBookUsd);
