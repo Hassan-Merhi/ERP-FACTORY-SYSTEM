@@ -13,7 +13,11 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Layers3 } from "lucide-react";
 import { readCostCenterApi, type SourceCostCenterAllocation, type VoucherExpenseEntry } from "@/api/costCentersApi";
-import { CostCenterEntryEditor, VoucherCostCenters } from "@/components/financial/VoucherCostCenters";
+import {
+  CostCenterEntryEditor,
+  VoucherCostCenters,
+  costCenterAccessDenied,
+} from "@/components/financial/VoucherCostCenters";
 import type { DaybookEntry } from "./types";
 
 const STANDALONE_EXPENSE_TYPES = new Set(["EXPENSE", "OPERATING_EXPENSE", "FACTORY_EXPENSE"]);
@@ -34,7 +38,7 @@ export function FactoryDaybookCostCenters({ entry }: { entry: DaybookEntry }) {
     entry.referenceId == null;
   const [editing, setEditing] = useState(false);
   const [revision, setRevision] = useState(0);
-  const { data, isLoading, isError } = useQuery<SourceCostCenterAllocation>({
+  const { data, isLoading, isError, error } = useQuery<SourceCostCenterAllocation>({
     queryKey: [API_BASE, selectedCompany?.id, "factory_daybook", entry.id, revision],
     queryFn: () => readCostCenterApi<SourceCostCenterAllocation>(API_BASE + "/allocations/factory_daybook/" + entry.id),
     enabled: canRead && standalone && !!selectedCompany?.id,
@@ -44,8 +48,13 @@ export function FactoryDaybookCostCenters({ entry }: { entry: DaybookEntry }) {
 
   // A Factory daybook voucher is a projection of the posted voucher, not
   // a second accounting event. It must not create a second analytical charge.
+  // Its allocations belong to Vouchers; a Daybook-only viewer gets a 403 there
+  // and VoucherCostCenters renders nothing.
   if (voucherBacked) return <VoucherCostCenters voucherId={Number(entry.referenceId)} />;
   if (!standalone) return null;
+  // Standalone allocations belong to Daybook/Finance; hide the panel silently
+  // rather than reporting the entry as ineligible when the page is not granted.
+  if (isError && costCenterAccessDenied(error)) return null;
 
   const source: VoucherExpenseEntry = {
     entryId: entry.id,

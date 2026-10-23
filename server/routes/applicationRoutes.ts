@@ -5,6 +5,7 @@ import { requireAuth } from "../auth";
 import { db } from "../db";
 import { registerAccountRoutes } from "./accounts";
 import { registerCostCenterRoutes } from "./costCenterRoutes";
+import { enforceCostCenterErpPageAccess } from "../middleware/costCenterErpPageAccess";
 import { registerCostCenterReportingRoutes } from "./costCenterReportingRoutes";
 import { registerCostCenterHistoricalRoutes } from "./costCenterHistoricalRoutes";
 import { registerCostCenterReleaseReadinessRoutes } from "./costCenterReleaseReadinessRoutes";
@@ -104,6 +105,7 @@ export async function registerApplicationRoutes(app: Express): Promise<Server> {
   // Shared ERP accounting endpoints are reused inside Factory pages. Enforce
   // their Factory page/tab ownership before any concrete route handler runs.
   app.use(enforceSharedFactoryAccess);
+  app.use("/api/cost-centers", requireAuth, enforceCostCenterErpPageAccess);
   // New unified-accounting metadata writers are read-only until a
   // company-specific, source-pinned Owner pilot. Existing voucher flows remain unchanged.
   app.use(enforceUnifiedAccountingRollout);
