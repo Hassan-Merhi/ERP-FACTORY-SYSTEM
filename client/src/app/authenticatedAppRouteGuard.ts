@@ -55,7 +55,24 @@ export function resolveAuthenticatedAppRoute({
 
   let decision: AuthenticatedAppRouteDecision = { kind: "continue" };
 
-  if (isPropertiesCompany && currentLocation === "/my-settings") {
+  // All Daybook is intentionally unavailable to ERP Tester, including direct links.
+  if (userRole === "ERP Tester" && (currentLocation === "/transaction-journal" || currentLocation.startsWith("/transaction-journal/"))) {
+    decision = { kind: "redirect", to: "/daybook" };
+  } else if (
+    userRole === "ERP Tester" &&
+    /(?:^|[\\/_-])(?:settings|configuration|setup)(?=$|[\\/_-])/.test(currentLocation.toLowerCase())
+  ) {
+    const fallback = isPropertiesCompany
+      ? "/properties/daybook"
+      : isFactoryCompany
+        ? factoryDefaultPage === "/my-settings"
+          ? "/factory/production-report"
+          : factoryDefaultPage
+        : isSupplierPartnerCompany
+          ? "/sp"
+          : "/tracking";
+    decision = { kind: "redirect", to: fallback };
+  } else if (isPropertiesCompany && currentLocation === "/my-settings") {
     decision = { kind: "redirect", to: "/properties/my-settings" };
   } else if (isPropertiesCompany && currentLocation === "/balance-repair") {
     decision = { kind: "redirect", to: "/properties/balance-repair" };

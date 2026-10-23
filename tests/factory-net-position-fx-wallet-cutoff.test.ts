@@ -25,9 +25,13 @@ const date: FactoryNetPositionAsOf = {
 };
 
 const wallet: FxAgentWalletRow = {
-  id: 77, companyId: 12, ledgerAccountId: 87,
-  accountName: "Agent wallet", accountCode: "FXAGENT",
-  openingUsd: "100", activatedOn: "2026-10-01",
+  id: 77,
+  companyId: 12,
+  ledgerAccountId: 87,
+  accountName: "Agent wallet",
+  accountCode: "FXAGENT",
+  openingUsd: "100",
+  activatedOn: "2026-10-01",
 };
 
 function fakeRead(...batches: Array<Record<string, unknown>[]>) {
@@ -97,19 +101,21 @@ describe("FX-agent wallet known-at-cutoff Net Position reads", () => {
 
   it("rejects accidental mixing of a report date and a different history scope", async () => {
     const mock = fakeRead();
-    await expect(loadFxAgentWalletState(wallet, "2026-10-20", mock.executor, date))
-      .rejects.toThrow("HISTORICAL_FX_WALLET_DATE_MISMATCH");
+    await expect(loadFxAgentWalletState(wallet, "2026-10-20", mock.executor, date)).rejects.toThrow(
+      "HISTORICAL_FX_WALLET_DATE_MISMATCH"
+    );
     expect(mock.sqlStatements).toHaveLength(0);
   });
 
   it("flags future-recorded backdated operations and activations, never certifies them", () => {
     const gaps = summarizeFxWalletHistoryGaps({ lateActivations: "1", lateOperations: "3" });
-    expect(gaps.map(g => [g.code, g.records])).toEqual([
+    expect(gaps.map((g) => [g.code, g.records])).toEqual([
       ["HISTORICAL_FX_WALLET_BACKDATED_ACTIVATION", 1],
       ["HISTORICAL_FX_WALLET_BACKDATED_OPERATION", 3],
     ]);
     expect(summarizeFxWalletHistoryGaps({ lateActivations: "0", lateOperations: "0" })).toEqual([]);
-    expect(() => summarizeFxWalletHistoryGaps({ lateActivations: null, lateOperations: "0" }))
-      .toThrow("HISTORICAL_FX_WALLET_COVERAGE_INVALID");
+    expect(() => summarizeFxWalletHistoryGaps({ lateActivations: null, lateOperations: "0" })).toThrow(
+      "HISTORICAL_FX_WALLET_COVERAGE_INVALID"
+    );
   });
 });

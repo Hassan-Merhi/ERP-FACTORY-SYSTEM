@@ -55,12 +55,14 @@ export async function loadFxAgentWallets(
       w.activated_on::text AS "activatedOn"
     FROM factory_fx_agent_wallets w JOIN ledger_accounts a ON a.id = w.ledger_account_id
     WHERE w.company_id = ${companyId} AND a.company_id = ${companyId}
-      ${knownAt?.isHistorical
-        ? sql`AND (a.deleted_at IS NULL
+      ${
+        knownAt?.isHistorical
+          ? sql`AND (a.deleted_at IS NULL
                    OR NOT ${netPositionRecordedThrough(sql`a.deleted_at`, knownAt, "utc-naive-timestamp")})
                AND ${netPositionRecordedThrough(sql`a.created_at`, knownAt, "utc-naive-timestamp")}
                AND ${netPositionRecordedThrough(sql`w.created_at`, knownAt, "timestamptz")}`
-        : sql`AND a.deleted_at IS NULL`}
+          : sql`AND a.deleted_at IS NULL`
+      }
       ${asOf ? sql`AND w.activated_on <= ${asOf}::date` : sql``}
     ORDER BY a.name, w.id
   `);
@@ -90,9 +92,7 @@ export async function loadFxAgentWalletState(
     FROM factory_fx_agent_wallet_operations
     WHERE company_id = ${wallet.companyId} AND wallet_id = ${wallet.id}
       AND effective_date <= ${asOf}::date
-      ${knownAt?.isHistorical
-        ? sql`AND ${netPositionRecordedThrough(sql`created_at`, knownAt, "timestamptz")}`
-        : sql``}
+      ${knownAt?.isHistorical ? sql`AND ${netPositionRecordedThrough(sql`created_at`, knownAt, "timestamptz")}` : sql``}
     ORDER BY effective_date, id
   `);
   const events = result.rows.map((row: QueryRow) => ({
@@ -118,7 +118,10 @@ export async function getFxAgentWalletSnapshot(
   historical?: { scope: FactoryNetPositionAsOf; ledgerBookUsd: string }
 ): Promise<FxAgentWalletSnapshot> {
   const { state, latestOperationDate, hasOperations } = await loadFxAgentWalletState(
-    wallet, asOf, executor, historical?.scope
+    wallet,
+    asOf,
+    executor,
+    historical?.scope
   );
   // The Factory historical report already reconstructs ledger entries using
   // both business and recorded-at dates. getPartyBalance(asOf) alone does not

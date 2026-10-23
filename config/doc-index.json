@@ -356,6 +356,7 @@
     "docs/development-checklist.md": "reference",
     "docs/erp-90-phases-3-6.md": "reference",
     "docs/erp-mobile-program.md": "reference",
+    "docs/erp-test-company.md": "reference",
     "docs/erp-navigation-registry.md": "reference",
     "docs/examples.md": "reference",
     "docs/factory-container-planner.md": "reference",
@@ -447,6 +448,6 @@
     "docs/archive/factory-net-position-phase8-history-integrity.md": "record",
     "docs/archive/factory-net-position-phase9-handoff.md": "record",
     "docs/factory-net-position-historical.md": "reference",
-    "docs/erp-test-company.md": "reference"
+    "docs/factory-net-position-fx-wallet-known-at-fix-20261023.md": "reference"
   }
 }

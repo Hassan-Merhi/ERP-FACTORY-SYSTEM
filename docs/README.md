@@ -55,6 +55,8 @@ failure, so a correct document cannot quietly become undiscoverable.
 | [factory-flow.md](factory-flow.md) | Bales, production, payroll, raw materials |
 | [factory-container-planner.md](factory-container-planner.md) | Stock Allocation V5 container planning, saved drafts, and live reconciliation |
 | [factory-net-position-historical.md](factory-net-position-historical.md) | Factory Net Position as-of dates: known-at-cutoff rules, verification and history limits |
+| [factory-net-position-fx-wallet-known-at-fix-20261023.md](factory-net-position-fx-wallet-known-at-fix-20261023.md) | Factory Net Position FX wallet known-at cutoffs and historical raw-stock supplier ownership |
+| [erp-test-company.md](erp-test-company.md) | Provisioning an isolated ERP test company and its limited tester account |
 | [automatic-priority-print-loading.md](automatic-priority-print-loading.md) | Automatic Priority Printing & Loading: company switch, automatic loading allocation, priority-colored labels, physical bale deletion and Priority #1 recovery |
 | [priority-scan-fixed-palette-color-block.md](priority-scan-fixed-palette-color-block.md) | Priority Scan fixed 11-color palette, solid color-box priority labels, legacy-color moves and saved-color print/reprint checks |
 | [pos-flow.md](pos-flow.md) | Point of sale, including offline |
@@ -111,7 +113,6 @@ failure, so a correct document cannot quietly become undiscoverable.
 | [permissions-security.md](permissions-security.md) | Roles and permission model |
 | [security-privacy.md](security-privacy.md) | Authentication, sessions, data handling |
 | [security-company-isolation-wave3.md](security-company-isolation-wave3.md) | Company isolation, RLS, and privileged maintenance boundaries |
-| [erp-test-company.md](erp-test-company.md) | Isolated ERP test company and its no-settings tester account |
 | [program-8b-approval-exception-workflows.md](program-8b-approval-exception-workflows.md) | Control model for high-risk actions |
 | [audit-framework.md](audit-framework.md) | Server-side audit foundation |
 | [security/scorecard-review-and-exceptions.md](security/scorecard-review-and-exceptions.md) | Security scorecard review and documented exceptions |

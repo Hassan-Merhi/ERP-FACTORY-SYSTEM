@@ -34,7 +34,8 @@ export function summarizeFxWalletHistoryGaps(counts: FxWalletHistoryCounts): His
       category: "FX Agent Wallet / Ledger",
       severity: "review",
       records: activations,
-      explanation: "Wallets were activated on or before this day but created later. They are excluded until actually recorded.",
+      explanation:
+        "Wallets were activated on or before this day but created later. They are excluded until actually recorded.",
     });
   }
   if (operations > 0) {
@@ -43,7 +44,8 @@ export function summarizeFxWalletHistoryGaps(counts: FxWalletHistoryCounts): His
       category: "FX Agent Wallet / Ledger",
       severity: "review",
       records: operations,
-      explanation: "Wallet movements have an earlier effective date but were entered later. They do not change this day's wallet or Net Position.",
+      explanation:
+        "Wallet movements have an earlier effective date but were entered later. They do not change this day's wallet or Net Position.",
     });
   }
   return gaps;
@@ -54,8 +56,7 @@ export async function loadFxWalletHistoryGaps(
   scope: FactoryNetPositionAsOf
 ): Promise<HistoryEvidenceGap[]> {
   if (!scope.isHistorical) return [];
-  const cutoff = (column: ReturnType<typeof sql>) =>
-    netPositionRecordedThrough(column, scope, "timestamptz");
+  const cutoff = (column: ReturnType<typeof sql>) => netPositionRecordedThrough(column, scope, "timestamptz");
   const rows = resultRows<{ late_activations: string; late_operations: string }>(
     await db.execute(sql`
       SELECT

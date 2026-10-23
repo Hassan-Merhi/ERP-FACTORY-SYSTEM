@@ -327,7 +327,7 @@ export function ErpRoutes({ user }: ErpRoutesProps) {
           <Redirect replace to="/tracking" />
         </Route>
       )}
-      {G("/transaction-journal", "daybook", TransactionJournal)}
+      {R("/transaction-journal", effectiveRole !== "ERP Tester" && canAccess("daybook"), TransactionJournal)}
       {G("/payroll", "payroll", Payroll)}
       {G("/create", "create", AccountingCreate)}
 
@@ -461,7 +461,7 @@ export function ErpRoutes({ user }: ErpRoutesProps) {
       {R("/company-data-reset", isAdminOrDev, CompanyDataReset)}
       {R("/account-migration", isAdminOrDev, AccountMigration)}
       {R("/account-transfer", isAdminOrDev, AccountTransfer)}
-      <Route path="/my-settings" component={MySettings} />
+      {R("/my-settings", effectiveRole !== "ERP Tester", MySettings)}
 
       <Route path="/sp" component={SpOverview} />
       <Route path="/sp/opening-stock" component={SpOpeningStock} />

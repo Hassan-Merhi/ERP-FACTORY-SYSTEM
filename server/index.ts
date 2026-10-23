@@ -17,7 +17,7 @@ import { securityHeadersMiddleware } from "./security/securityHeaders";
 import { registerRoutes } from "./routes";
 import { markStartupMigrationsComplete } from "./startupMigrationReport";
 import { registerDbHealthRoute } from "./health/dbHealthRoute";
-import { blockViewOnlyWrites } from "./auth";
+import { blockErpTesterSettings, blockViewOnlyWrites } from "./auth";
 import { registerWebSocketHttpFallback, setupWS } from "./wsServer";
 import { startScheduler } from "./services/scheduler";
 import { pool } from "./db";
@@ -140,6 +140,7 @@ app.use(sessionMiddleware);
 // Globally block all mutation requests (POST/PUT/PATCH/DELETE) for View Only role.
 // Must run after session middleware so req.session.currentRole is populated.
 app.use(blockViewOnlyWrites);
+app.use(blockErpTesterSettings);
 
 // Add build version header to all responses for cache tracking
 app.use(buildVersionHeader(BUILD_VERSION));

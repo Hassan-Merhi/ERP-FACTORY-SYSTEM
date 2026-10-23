@@ -7,6 +7,7 @@
  *   Developer / Admin     → always allowed (cannot be restricted via this system)
  *   Owner / Manager / POS → allowed by default; enabled=false in DB = restricted
  *   Normal User           → denied by default; enabled=true in DB = explicitly allowed
+ *   ERP Tester            → Manager-style operational permissions, with Settings always denied
  *
  * Usage pattern:
  *   const permissions = await storage.getRoleFeaturePermissions(companyId);
@@ -40,6 +41,11 @@ export function buildPermissionMap(permissions: PermissionRow[], role: string): 
 function isAllowed(role: string, featureKey: string, permMap: Map<string, boolean>): boolean {
   // Developer and Admin are always allowed — cannot be restricted
   if (role === "Developer" || role === "Admin") return true;
+
+  // Settings access cannot be enabled for the ERP Tester role in any company.
+  if (role === "ERP Tester" && ["settings", "page_settings", "mod_settings"].includes(featureKey)) {
+    return false;
+  }
 
   const stored = permMap.get(featureKey);
 

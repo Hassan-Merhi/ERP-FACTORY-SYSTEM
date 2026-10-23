@@ -102,6 +102,9 @@ const compatibilityTranslationFiles = [
 ];
 
 const reviewedTechnicalValues = new Set([
+  "HISTORICAL_FX_WALLET_DATE_MISMATCH",
+  "HISTORICAL_FX_WALLET_COVERAGE_INVALID",
+  "HISTORICAL_FX_WALLET_COVERAGE_EMPTY",
   // Unified accounting: machine error codes thrown internally and mapped to translated
   // responses by their routes, the PostgreSQL term FORCE RLS, and the literal phrase an
   // Owner must type to confirm a policy change. None is translatable display text.

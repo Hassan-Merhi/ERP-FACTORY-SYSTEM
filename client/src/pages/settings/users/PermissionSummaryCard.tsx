@@ -38,6 +38,12 @@ function getPermissions(
       }
       break;
 
+    case "ERP Tester":
+      perms.push({ label: "Manager-level operational access in assigned companies", dangerous: false });
+      perms.push({ label: "No system Settings or user administration access", dangerous: false });
+      if (flags.canDeleteRecords) perms.push({ label: "Delete assigned-company records", dangerous: true });
+      break;
+
     case "Normal User":
       perms.push({ label: "View-only access (no posting)", dangerous: false });
       break;

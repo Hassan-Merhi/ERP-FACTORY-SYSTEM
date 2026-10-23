@@ -16,6 +16,57 @@ const fullFactoryAccess = {
 };
 
 describe("Phase 3 factory bootstrap isolation", () => {
+  it("blocks Settings for ERP Tester across all company types without blocking regular operations", () => {
+    const cases = [
+      { companyType: "erp", settings: "/settings", normal: "/tracking", fallback: "/tracking" },
+      { companyType: "retail", settings: "/my-settings", normal: "/retail/pos", fallback: "/tracking" },
+      {
+        companyType: "factory",
+        settings: "/factory/intelligence/settings",
+        normal: "/factory/production-report",
+        fallback: "/factory/production-report",
+      },
+      {
+        companyType: "properties",
+        settings: "/properties/my-settings",
+        normal: "/properties/daybook",
+        fallback: "/properties/daybook",
+      },
+      { companyType: "supplier_partner", settings: "/sp/setup", normal: "/sp", fallback: "/sp" },
+    ] as const;
+
+    for (const item of cases) {
+      const forbidden = resolveAuthenticatedAppRoute({
+        ...baseGuardInput,
+        currentLocation: item.settings,
+        companyType: item.companyType,
+        userRole: "ERP Tester",
+        myAccess: fullFactoryAccess,
+      });
+      expect(forbidden.decision).toEqual({ kind: "redirect", to: item.fallback });
+
+      const allowed = resolveAuthenticatedAppRoute({
+        ...baseGuardInput,
+        currentLocation: item.normal,
+        companyType: item.companyType,
+        userRole: "ERP Tester",
+        myAccess: fullFactoryAccess,
+      });
+      expect(allowed.decision).toEqual({ kind: "continue" });
+    }
+  });
+
+  it("keeps Factory and Properties personal Settings hidden in the navigation and route tree", () => {
+    const factoryNav = readFileSync("client/src/components/FactorySidebar.tsx", "utf8");
+    const factoryRoutes = readFileSync("client/src/components/FactoryRoutes.tsx", "utf8");
+    const propertiesNav = readFileSync("client/src/components/PropertiesSidebar.tsx", "utf8");
+    const propertiesRoutes = readFileSync("client/src/app/PropertiesRoutes.tsx", "utf8");
+    expect(factoryNav).toContain('"Developer", "ERP Tester"');
+    expect(factoryRoutes).toContain('user?.role !== "ERP Tester" && <Route path="/my-settings"');
+    expect(propertiesNav).toContain('user?.role !== "ERP Tester"');
+    expect(propertiesRoutes).toContain('user.role !== "ERP Tester" && <Route path="/properties/my-settings"');
+  });
+
   it("does not let Factory access loading gate a normal ERP company", () => {
     const result = resolveAuthenticatedAppRoute({
       ...baseGuardInput,
