@@ -9,6 +9,7 @@ import { loadFactoryNetPositionEmployees } from "../../../services/factory/netPo
 import { loadHistoricalFactoryPipeline } from "../../../services/factory/netPositionHistoricalPipeline";
 import { computeHistoricalFactoryAssetLiabilityOperations } from "../../../services/factory/netPositionHistoricalAssets";
 import { loadFactoryHistoricalCoverage } from "../../../services/factory/netPositionHistoryCoverage";
+import { loadFxWalletHistoryGaps } from "../../../services/factory/netPositionFxWalletCoverage";
 import { finishFactoryNetPosition } from "./netPositionHistoricalResponse";
 import { computeLiveFactoryPrepaidRent } from "./netPositionLiveRent";
 import {
@@ -313,6 +314,9 @@ export function registerEmployeeNetPositionRoutes(app: Express) {
       }> = [];
       const fxAgentWalletWarnings: string[] = [];
       if (await fxAgentTablesExist()) {
+        if (historyCoverage && asOfContext.isHistorical) {
+          historyCoverage.gaps.push(...await loadFxWalletHistoryGaps(companyId, asOfContext));
+        }
         const wallets = await loadFxAgentWallets(companyId, asOf, db, asOfContext.isHistorical ? asOfContext : undefined);
         projectedAccountBalances = new Map(projectedAccountBalances);
         for (const wallet of wallets) {
