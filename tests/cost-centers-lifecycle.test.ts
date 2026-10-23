@@ -7,6 +7,7 @@
  */
 import { readFileSync } from "node:fs";
 import path from "node:path";
+import ExcelJS from "exceljs";
 import request from "supertest";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
@@ -86,6 +87,30 @@ async function summary(extra = "") {
     centers: Array<{ costCenterId: number; expense: string; budget: string; variance: string }>;
     totals: { expense: string; unallocated: string; recognizedExpense: string; budget: string };
   };
+}
+
+function parseCsv(text: string): string[][] {
+  return text
+    .replace(/^\uFEFF/, "")
+    .split("\r\n")
+    .filter(Boolean)
+    .map((line) =>
+      line
+        .slice(1, -1)
+        .split('","')
+        .map((cell) => cell.replace(/""/g, '"'))
+    );
+}
+
+async function binary(url: string) {
+  return agent
+    .get(url)
+    .buffer(true)
+    .parse((res, done) => {
+      const chunks: Buffer[] = [];
+      res.on("data", (chunk: Buffer) => chunks.push(chunk));
+      res.on("end", () => done(null, Buffer.concat(chunks)));
+    });
 }
 
 function center(report: Awaited<ReturnType<typeof summary>>, id: number) {
@@ -222,6 +247,97 @@ describe("Cost centers lifecycle (migrations applied)", () => {
     expect(csv.status).toBe(200);
     expect(csv.headers["content-type"]).toContain("text/csv");
     expect(csv.text).toContain("UNALLOCATED");
+  });
+
+  it("exports every report tab in CSV, XLSX and PDF for company and consolidated scope", async () => {
+    // Fixture at this point (historical USD, September 2026): HR 200 + OPS 100
+    // allocated from "Office expense", 50 unallocated, no budgets yet.
+    const headers: Record<string, string[]> = {
+      summary: ["companyName", "code", "name", "expense", "budget", "variance", "inventoryCost", "entries"],
+      activity: [
+        "sourceDate",
+        "companyId",
+        "costCenterCode",
+        "accountName",
+        "sourceModule",
+        "voucherNumber",
+        "treatment",
+        "allocationOrigin",
+        "currency",
+        "amountNative",
+        "amountUsd",
+      ],
+      departments: ["companyName", "code", "name", "expense", "budget", "variance", "inventoryCost", "members"],
+      accounts: ["companyId", "accountName", "expense", "inventoryCost", "entries"],
+      months: ["month", "expense", "unallocated", "budget", "variance", "inventoryCost"],
+    };
+    const rowsOf = (table: string[][], key: string, value: string) => {
+      const index = table[0].indexOf(key);
+      return table.slice(1).filter((row) => row[index] === value);
+    };
+    const field = (table: string[][], row: string[], key: string) => row[table[0].indexOf(key)];
+    for (const path of ["/reports/export", "/reports/consolidated/export"]) {
+      for (const view of Object.keys(headers)) {
+        const csv = await agent.get(`${BASE}${path}?${REPORT_WINDOW}&format=csv&view=${view}`);
+        expect(csv.status, `${path} ${view}: ${csv.text}`).toBe(200);
+        expect(csv.headers["content-type"]).toContain("text/csv");
+        expect(csv.headers["content-disposition"]).toContain(`cost-centers-${view}-2026-09-01-2026-09-30.csv`);
+        const table = parseCsv(csv.text);
+        expect(table[0]).toEqual(headers[view]);
+        if (view === "summary") {
+          expect(Number(field(table, rowsOf(table, "code", "ADMIN-HR")[0], "expense"))).toBe(200);
+          expect(Number(field(table, rowsOf(table, "code", "OPS")[0], "expense"))).toBe(100);
+          expect(Number(field(table, rowsOf(table, "code", "UNALLOCATED")[0], "expense"))).toBe(50);
+        }
+        if (view === "activity") {
+          const amounts = table.slice(1).map((row) => Number(field(table, row, "amountUsd")));
+          expect(amounts.sort((a, b) => a - b)).toEqual([100, 200]);
+          expect(rowsOf(table, "currency", "USD")).toHaveLength(2);
+          expect(rowsOf(table, "sourceDate", DATE)).toHaveLength(2);
+        }
+        if (view === "departments") {
+          const admin = rowsOf(table, "code", "ADMIN")[0];
+          expect(Number(field(table, admin, "expense"))).toBe(200);
+          expect(Number(field(table, admin, "members"))).toBe(2);
+          expect(Number(field(table, rowsOf(table, "code", "OPS")[0], "expense"))).toBe(100);
+        }
+        if (view === "accounts") {
+          const office = rowsOf(table, "accountName", "Office expense")[0];
+          expect(Number(field(table, office, "expense"))).toBe(300);
+          expect(Number(field(table, office, "companyId"))).toBe(ctx.companyId);
+        }
+        if (view === "months") {
+          const month = rowsOf(table, "month", "2026-09")[0];
+          expect(Number(field(table, month, "expense"))).toBe(300);
+          expect(Number(field(table, month, "unallocated"))).toBe(50);
+          expect(Number(field(table, month, "variance"))).toBe(350);
+        }
+
+        const xlsx = await binary(`${BASE}${path}?${REPORT_WINDOW}&format=xlsx&view=${view}`);
+        expect(xlsx.status, `${path} ${view} xlsx`).toBe(200);
+        expect(xlsx.headers["content-type"]).toContain("spreadsheetml");
+        expect(xlsx.headers["content-disposition"]).toContain(`cost-centers-${view}-2026-09-01-2026-09-30.xlsx`);
+        const book = new ExcelJS.Workbook();
+        await book.xlsx.load(xlsx.body);
+        const sheet = book.getWorksheet("Cost Centers")!;
+        expect((sheet.getRow(1).values as unknown[]).slice(1)).toEqual(headers[view]);
+        expect(sheet.rowCount).toBe(table.length);
+
+        const pdf = await binary(`${BASE}${path}?${REPORT_WINDOW}&format=pdf&view=${view}`);
+        expect(pdf.status, `${path} ${view} pdf`).toBe(200);
+        expect(pdf.headers["content-type"]).toContain("application/pdf");
+        expect(pdf.headers["content-disposition"]).toContain(`cost-centers-${view}-2026-09-01-2026-09-30.pdf`);
+        expect(pdf.body.subarray(0, 5).toString()).toBe("%PDF-");
+      }
+      // Date filters apply to every export: nothing was allocated in October.
+      const october = await agent.get(`${BASE}${path}?fromDate=2026-10-01&toDate=2026-10-31&format=csv&view=activity`);
+      expect(october.status, october.text).toBe(200);
+      expect(parseCsv(october.text)).toHaveLength(1);
+      for (const query of ["format=csv&view=unsupported", "format=csv&view=centers", "format=docx&view=summary"]) {
+        const invalid = await agent.get(`${BASE}${path}?${REPORT_WINDOW}&${query}`);
+        expect(invalid.status, `${path} ${query}`).toBe(400);
+      }
+    }
   });
 
   it("budgets are analytical and drive variance only", async () => {
@@ -498,6 +614,134 @@ describe("Cost centers lifecycle (migrations applied)", () => {
     expect(readiness.body.missingTriggers).toEqual([]);
     expect(readiness.body.missingFunctions).toEqual([]);
     expect(readiness.body.structuralReady).toBe(true);
+  });
+
+  it("enforces the per-company ERP Accounts page grant on every Cost Center API", async () => {
+    const setRole = (companyId: number, role: string) =>
+      pool.query("UPDATE user_company_roles SET role = $3 WHERE user_id = $1 AND company_id = $2", [
+        ctx.userId,
+        companyId,
+        role,
+      ]);
+    const grantAccounts = (companyId: number) =>
+      pool.query("INSERT INTO erp_user_page_access (company_id, user_id, page_key) VALUES ($1, $2, 'accounts')", [
+        companyId,
+        ctx.userId,
+      ]);
+    const revokeAll = () => pool.query("DELETE FROM erp_user_page_access WHERE user_id = $1", [ctx.userId]);
+    const { voucherId, expenseEntryId } = await postExpense("10.00", "Permission probe");
+    const vouchersBefore = await voucherCount();
+    const allocationsBefore = await splitsOf(expenseEntryId);
+    const second = await pool.query<{ id: number }>(
+      "INSERT INTO companies (code, name, company_type, base_currency) VALUES ($1, $2, 'erp', 'USD') RETURNING id",
+      [`${PREFIX.toUpperCase()}-B`, `${PREFIX}_SecondCompany`]
+    );
+    const secondId = second.rows[0].id;
+    await pool.query("INSERT INTO user_company_roles (user_id, company_id, role) VALUES ($1, $2, 'Owner')", [
+      ctx.userId,
+      secondId,
+    ]);
+    type Probe = [method: "get" | "post" | "put", url: string, body?: object];
+    const probes: Probe[] = [
+      ["get", BASE],
+      ["post", BASE, { code: "DENIED", name: "Denied" }],
+      ["get", `${BASE}/${hrId}`],
+      ["get", `${BASE}/${hrId}/activity`],
+      ["get", `${BASE}/${hrId}/balance`],
+      ["get", `${BASE}/voucher/${voucherId}/entries`],
+      ["get", `${BASE}/allocations/voucher_entry/${expenseEntryId}`],
+      ["get", `${BASE}/allocations/voucher_entry/${expenseEntryId}/history`],
+      [
+        "put",
+        `${BASE}/allocations/voucher_entry/${expenseEntryId}`,
+        {
+          reason: "Bypass attempt",
+          splits: [{ costCenterId: opsId, amountNative: "10", amountBase: "10", costTreatment: "EXPENSE" }],
+        },
+      ],
+      ["get", `${BASE}/automation/rules`],
+      ["get", `${BASE}/reports/summary?${REPORT_WINDOW}`],
+      ["get", `${BASE}/reports/activity?${REPORT_WINDOW}`],
+      ["get", `${BASE}/reports/consolidated?${REPORT_WINDOW}`],
+      ["get", `${BASE}/reports/export?${REPORT_WINDOW}&format=csv&view=accounts`],
+      ["get", `${BASE}/reports/consolidated/export?${REPORT_WINDOW}&format=pdf&view=months`],
+      ["get", `${BASE}/budgets?month=2026-09`],
+      ["get", `${BASE}/historical/reconciliation?${REPORT_WINDOW}`],
+      ["get", `${BASE}/historical/batches`],
+      ["post", `${BASE}/historical/preview`, {}],
+      ["get", `${BASE}/release-readiness`],
+      // A trailing slash reaches the same catalog handler.
+      ["get", `${BASE}/`],
+      // Allocation membership through the Daybook voucher list.
+      ["get", `/api/vouchers?page=1&limit=10&startDate=2026-09-01&endDate=2026-09-30&costCenterId=${hrId}`],
+    ];
+    const send = ([method, url, body]: Probe) => (body ? agent[method](url).send(body) : agent[method](url));
+    try {
+      await revokeAll();
+      for (const role of ["Owner", "Manager"]) {
+        await setRole(ctx.companyId, role);
+        for (const probe of probes) {
+          const response = await send(probe);
+          expect(response.status, `${role} ${probe[0]} ${probe[1]}: ${response.text}`).toBe(403);
+        }
+        // The Daybook itself stays available without the cost-center filter.
+        const daybook = await agent.get("/api/vouchers?page=1&limit=10&startDate=2026-09-01&endDate=2026-09-30");
+        expect(daybook.status, daybook.text).toBe(200);
+      }
+      // A grant in ANOTHER company is not a grant in the selected company.
+      await grantAccounts(secondId);
+      expect((await agent.get(`${BASE}/reports/summary?${REPORT_WINDOW}`)).status).toBe(403);
+
+      // With the grant in the selected company, reads work for Owner and Manager.
+      await grantAccounts(ctx.companyId);
+      for (const role of ["Manager", "Owner"]) {
+        await setRole(ctx.companyId, role);
+        for (const url of [
+          BASE,
+          `${BASE}/reports/summary?${REPORT_WINDOW}`,
+          `${BASE}/reports/export?${REPORT_WINDOW}&format=csv&view=departments`,
+          `${BASE}/allocations/voucher_entry/${expenseEntryId}`,
+          `/api/vouchers?page=1&limit=10&startDate=2026-09-01&endDate=2026-09-30&costCenterId=${hrId}`,
+        ]) {
+          const response = await agent.get(url);
+          expect(response.status, `${role} ${url}: ${response.text}`).toBe(200);
+        }
+      }
+
+      // Consolidation only includes companies whose Accounts page is granted.
+      const consolidated = async () => {
+        const response = await agent.get(`${BASE}/reports/consolidated?${REPORT_WINDOW}`);
+        expect(response.status, response.text).toBe(200);
+        return response.body.companyIds as number[];
+      };
+      await pool.query("DELETE FROM erp_user_page_access WHERE user_id = $1 AND company_id = $2", [
+        ctx.userId,
+        secondId,
+      ]);
+      expect(await consolidated()).toEqual([ctx.companyId]);
+      await grantAccounts(secondId);
+      expect(await consolidated()).toEqual([ctx.companyId, secondId].sort((a, b) => a - b));
+      // Admin in a company keeps full ERP access there without a page row.
+      await pool.query("DELETE FROM erp_user_page_access WHERE user_id = $1 AND company_id = $2", [
+        ctx.userId,
+        secondId,
+      ]);
+      await setRole(secondId, "Admin");
+      expect(await consolidated()).toEqual([ctx.companyId, secondId].sort((a, b) => a - b));
+
+      // Admin needs no page row in the selected company either.
+      await revokeAll();
+      await setRole(ctx.companyId, "Admin");
+      expect((await agent.get(`${BASE}/reports/summary?${REPORT_WINDOW}`)).status).toBe(200);
+    } finally {
+      await revokeAll();
+      await setRole(ctx.companyId, "Admin");
+      await pool.query("DELETE FROM user_company_roles WHERE user_id = $1 AND company_id = $2", [ctx.userId, secondId]);
+      await pool.query("DELETE FROM companies WHERE id = $1", [secondId]);
+    }
+    // Denied requests changed nothing.
+    expect(await voucherCount()).toBe(vouchersBefore);
+    expect(await splitsOf(expenseEntryId)).toEqual(allocationsBefore);
   });
 
   it("row-level security isolates companies for a non-bypass application role", async () => {

@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "description": "Ordered snapshot of every registered Express route (method, path, guard chain) and middleware mount. Regenerate with UPDATE_ROUTE_MANIFEST=1 only when a route change is intended; during a file split the manifest must not change at all.",
   "routeCount": 2228,
-  "middlewareMountCount": 134,
+  "middlewareMountCount": 136,
   "routes": [
     "GET /api/admin/operational-monitoring [requireAuth > <anonymous> > <anonymous>]",
     "POST /api/vouchers/bulk-delete [protectCorrectionBulkDelete]",
@@ -2288,6 +2288,8 @@
     "USE /api/stats/net-position-excel [<anonymous>]",
     "USE /api/accounts/:type/:id/statement-pdf [<anonymous>]",
     "USE / [enforceSharedFactoryAccess]",
+    "USE /api/cost-centers [requireAuth]",
+    "USE /api/cost-centers [enforceCostCenterErpPageAccess]",
     "USE / [enforceUnifiedAccountingRollout]",
     "USE /api/factory/bale-ledger [requireAuth]",
     "USE /api/factory/bale-ledger [<anonymous>]",

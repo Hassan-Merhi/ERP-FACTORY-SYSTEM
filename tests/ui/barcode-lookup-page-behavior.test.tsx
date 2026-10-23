@@ -8,6 +8,7 @@ const harness = vi.hoisted(() => ({
 }));
 
 vi.mock("@tanstack/react-query", () => ({
+  useQueryClient: () => ({ invalidateQueries: vi.fn() }),
   useQuery: ({ queryKey }: any) => {
     if (queryKey?.[0] === "/api/auth/me") return { data: { role: "Admin" } };
     if (queryKey?.[0] === "/api/factory/bale-products") {
