@@ -47,11 +47,15 @@ const EXPECTED_TRIGGERS = {
     "CREATE TRIGGER vouchers_sync_entry_company_id AFTER UPDATE OF company_id ON public.vouchers FOR EACH ROW EXECUTE FUNCTION erp_sync_voucher_entry_company_from_voucher()",
 };
 
-function migrationFunctionBodies(migrationSql) {
-  const bodies = new Map();
-  const pattern = /CREATE OR REPLACE FUNCTION (\w+)\([\s\S]*?\bAS \$(\w*)\$([\s\S]*?)\$\2\$/g;
-  for (const match of migrationSql.matchAll(pattern)) bodies.set(match[1], match[3]);
-  return bodies;
+// Each function 0016 defines, as PostgreSQL reports it once installed.
+function migrationFunctions(migrationSql) {
+  const functions = new Map();
+  const pattern =
+    /CREATE OR REPLACE FUNCTION (\w+)\(([^)]*)\)\s+RETURNS (\S+)\s+LANGUAGE (\w+)\s+(?:(STABLE|IMMUTABLE|VOLATILE)\s+)?AS \$(\w*)\$([\s\S]*?)\$\6\$/g;
+  for (const [, name, args, result, language, volatility = "VOLATILE", , body] of migrationSql.matchAll(pattern)) {
+    functions.set(name, { args, result, language, volatility: volatility[0].toLowerCase(), body });
+  }
+  return functions;
 }
 
 // Read-only: what migration 0016 would still change. Its policy, trigger and
@@ -61,15 +65,31 @@ function migrationFunctionBodies(migrationSql) {
 // missing, so the migration still runs whenever in doubt.
 async function missingRlsReadiness(client, migrationSql) {
   const missing = [];
-  const bodies = migrationFunctionBodies(migrationSql);
+  const expected = migrationFunctions(migrationSql);
   const functions = await client.query(
-    `SELECT p.proname, p.prosrc FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+    `SELECT p.proname, p.prosrc, pg_get_function_arguments(p.oid) AS args, pg_get_function_result(p.oid) AS result,
+            l.lanname AS language, p.provolatile AS volatility,
+            (NOT p.prosecdef AND NOT p.proisstrict AND NOT p.proleakproof AND p.proconfig IS NULL) AS plain
+       FROM pg_proc p
+       JOIN pg_namespace n ON n.oid = p.pronamespace
+       JOIN pg_language l ON l.oid = p.prolang
       WHERE n.nspname = 'public' AND p.proname = ANY($1::text[])`,
-    [[...bodies.keys()]]
+    [[...expected.keys()]]
   );
-  for (const [name, body] of bodies) {
+  for (const [name, want] of expected) {
     const installed = functions.rows.filter((row) => row.proname === name);
-    if (installed.length !== 1 || installed[0].prosrc !== body) missing.push(`function ${name}`);
+    const row = installed[0];
+    if (
+      installed.length !== 1 ||
+      row.prosrc !== want.body ||
+      row.args !== want.args ||
+      row.result !== want.result ||
+      row.language !== want.language ||
+      row.volatility !== want.volatility ||
+      row.plain !== true
+    ) {
+      missing.push(`function ${name}`);
+    }
   }
 
   const tables = await client.query(
@@ -114,6 +134,10 @@ async function missingRlsReadiness(client, migrationSql) {
   for (const [name, definition] of Object.entries(EXPECTED_TRIGGERS)) {
     if (state.triggers?.[name] !== definition) missing.push(`trigger ${name}`);
   }
+
+  // The backfill probe reads voucher_entries.company_id, which a fresh or
+  // partly migrated database may not have yet; the migration runs regardless.
+  if (missing.length > 0) return missing;
 
   await client.query("SELECT set_config('app.company_scope_maintenance', 'on', true)");
   const unsynced = await client.query(`
