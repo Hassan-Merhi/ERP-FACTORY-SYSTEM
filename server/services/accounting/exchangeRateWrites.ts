@@ -255,6 +255,83 @@ export async function deleteFactoryFxRates(
   });
 }
 
+/**
+ * Removes exactly one settings row. Rates that may have priced an existing
+ * document are retained in the database as archived evidence instead of
+ * being destroyed. Archived rows are not candidates for new FX lookups or
+ * the editable settings list. No posted voucher, sale or daybook is changed.
+ *
+ * The legacy currency-wide delete is deliberately left unchanged for older
+ * callers. The settings UI uses only this ID-based endpoint.
+ */
+export async function removeFactoryFxRateById(
+  actor: RateActor,
+  rateId: number
+): Promise<{ id: number; currencyCode: string; effectiveDate: string; archived: boolean } | null> {
+  return db.transaction(async (tx) => {
+    const [candidate] = await tx.select().from(factoryFxRates).where(
+      and(
+        eq(factoryFxRates.id, rateId),
+        eq(factoryFxRates.companyId, actor.companyId),
+        eq(factoryFxRates.source, "manual")
+      )
+    ).limit(1);
+    if (!candidate) return null;
+
+    // Coordinate with inserts, currency deletes and other single-row removals.
+    await tx.execute(
+      sql`SELECT pg_advisory_xact_lock(hashtext(${`factory_fx_rates:${actor.companyId}:${candidate.currencyCode}`}))`
+    );
+    const [row] = await tx.select().from(factoryFxRates).where(
+      and(
+        eq(factoryFxRates.id, rateId),
+        eq(factoryFxRates.companyId, actor.companyId),
+        eq(factoryFxRates.source, "manual")
+      )
+    ).for("update").limit(1);
+    if (!row) return null;
+
+    const manualDates = await tx.select({ effectiveDate: factoryFxRates.effectiveDate })
+      .from(factoryFxRates)
+      .where(and(
+        eq(factoryFxRates.companyId, actor.companyId),
+        eq(factoryFxRates.currencyCode, row.currencyCode),
+        eq(factoryFxRates.source, "manual")
+      )).orderBy(asc(factoryFxRates.effectiveDate));
+    const date = String(row.effectiveDate);
+    const next = manualDates.map((r) => String(r.effectiveDate)).find((d) => d > date);
+    // Treat same-day duplicates conservatively: an older ID could have priced
+    // a document before a newer rate was created on the same date.
+    const documentDates = await documentDatesForCurrency(tx, actor.companyId, row.currencyCode);
+    const used = documentDates.some((d) => d >= date && (!next || d < next));
+
+    if (used) {
+      await tx.update(factoryFxRates).set({ source: "archived" })
+        .where(and(eq(factoryFxRates.id, rateId), eq(factoryFxRates.companyId, actor.companyId)));
+    } else {
+      await tx.delete(factoryFxRates)
+        .where(and(eq(factoryFxRates.id, rateId), eq(factoryFxRates.companyId, actor.companyId)));
+    }
+
+    await writeAuditEvent(
+      {
+        ...actor,
+        action: used ? "update" : "delete",
+        tableName: "factory_fx_rates",
+        recordId: row.id,
+        recordIdentifier: `${row.currencyCode} ${date} #${row.id}`,
+        changes: {
+          source: { old: "manual", new: used ? "archived" : null },
+          rateToUsd: { old: String(row.rateToUsd), new: used ? String(row.rateToUsd) : null },
+          reason: { new: used ? "archived_rate_with_document_history" : "removed_unused_settings_rate" },
+        },
+      },
+      tx
+    );
+    return { id: row.id, currencyCode: row.currencyCode, effectiveDate: date, archived: used };
+  });
+}
+
 export interface FetchedFactoryRateInput {
   currencyCode: string;
   effectiveDate: string;
