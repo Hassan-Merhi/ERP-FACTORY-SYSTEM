@@ -21,6 +21,22 @@ const isBefore = (
   kind: "timestamptz" | "utc-naive-timestamp" = "utc-naive-timestamp"
 ) => netPositionRecordedThrough(sql.raw(fragment), scope, kind);
 
+/**
+ * A voucher of the order's company numbered `number` was in the ledger by the
+ * cutoff: under that number then, or retired after it (renamed
+ * `{number}~DEL{id}`, original_voucher_number kept). Two EXISTS, not one OR
+ * across both columns, so the number index is used.
+ */
+const voucherKnownBy = (scope: FactoryNetPositionAsOf, number: string) => {
+  const known = (alias: string) =>
+    sql.raw(`${alias}.company_id = o.company_id`).append(sql`
+       AND ${isBefore(scope, `${alias}.created_at`)}
+       AND (${sql.raw(`${alias}.deleted_at`)} IS NULL OR NOT ${isBefore(scope, `${alias}.deleted_at`)})`);
+  return sql`(EXISTS (SELECT 1 FROM vouchers nv WHERE nv.voucher_number = ${sql.raw(number)} AND ${known("nv")})
+    OR EXISTS (SELECT 1 FROM vouchers rv WHERE rv.voucher_number LIKE '%~DEL%'
+                AND rv.original_voucher_number = ${sql.raw(number)} AND ${known("rv")}))`;
+};
+
 export type DatedPipelineOrder = {
   id: number;
   customerName: string;
@@ -369,12 +385,7 @@ async function getHistoricalOrders(
            -- voucher was in the ledger then.
            (COALESCE(${isBefore(scope, "o.finalized_at")},false)
              AND (o.status NOT IN ('PENDING_VERIFICATION', 'VERIFIED', 'LOADING')
-               OR EXISTS (SELECT 1 FROM vouchers iv
-                           WHERE iv.company_id = o.company_id
-                             AND (iv.voucher_number = 'INV-GL-' || o.company_id::text || '-' || o.id::text
-                               OR iv.original_voucher_number = 'INV-GL-' || o.company_id::text || '-' || o.id::text)
-                             AND ${isBefore(scope, "iv.created_at")}
-                             AND (iv.deleted_at IS NULL OR NOT ${isBefore(scope, "iv.deleted_at")})))) AS finalized_before,
+               OR ${voucherKnownBy(scope, `'INV-GL-' || o.company_id::text || '-' || o.id::text`)})) AS finalized_before,
            -- The order row was last written before the cutoff and no scan was
            -- added or cancelled since: its stored totals ARE its value that day.
            (COALESCE(${isBefore(scope, "o.updated_at")},false)
@@ -392,14 +403,12 @@ async function getHistoricalOrders(
            -- (CHARGE-PRE-{order}-{charge} before invoicing) is known from it.
            COALESCE((SELECT SUM(ch.amount::numeric) FROM customer_order_charges ch
                       WHERE ch.order_id = o.id
-                        AND EXISTS (SELECT 1 FROM vouchers cv
-                                     WHERE cv.company_id = o.company_id
-                                       AND (cv.id = ch.voucher_id
-                                         OR (ch.voucher_id IS NULL
-                                           AND (cv.voucher_number = 'CHARGE-PRE-' || o.id::text || '-' || ch.id::text
-                                             OR cv.original_voucher_number = 'CHARGE-PRE-' || o.id::text || '-' || ch.id::text)))
+                        AND (EXISTS (SELECT 1 FROM vouchers cv
+                                     WHERE cv.id = ch.voucher_id AND cv.company_id = o.company_id
                                        AND ${isBefore(scope, "cv.created_at")}
-                                       AND (cv.deleted_at IS NULL OR NOT ${isBefore(scope, "cv.deleted_at")}))), 0)::text AS known_charges,
+                                       AND (cv.deleted_at IS NULL OR NOT ${isBefore(scope, "cv.deleted_at")}))
+                          OR (ch.voucher_id IS NULL
+                            AND ${voucherKnownBy(scope, `'CHARGE-PRE-' || o.id::text || '-' || ch.id::text`)}))), 0)::text AS known_charges,
            (SELECT COUNT(*)::text FROM customer_order_bales cob
              WHERE cob.order_id = o.id AND cob.scanned_at IS NULL
                AND NOT ${netPositionLegacyScanKnown("cob", "o", companyId, scope)}) AS unknown_scans,

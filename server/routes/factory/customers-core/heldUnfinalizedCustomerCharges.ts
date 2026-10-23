@@ -71,27 +71,37 @@ export async function loadHeldChargeSnapshot(
        WHERE company_id = ${companyId} AND ${unfinishedThen}
          ${orderRecorded}
          AND customer_id IN (${idList})
-    ), eligible_vouchers AS (
+    ), eligible_vouchers AS MATERIALIZED (
       SELECT v.id, v.voucher_number, v.description
         FROM vouchers v
        WHERE v.company_id = ${companyId} AND ${visibleVoucher}
          AND v.optional = false AND LOWER(v.voucher_type) = 'journal'
          ${dateCut}
+    ), pre_vouchers AS (
+      -- The order of every CHARGE-PRE-{order}-{charge} voucher, parsed once
+      -- and joined by equality rather than matched per order.
+      SELECT v.id, (regexp_match(v.voucher_number, '^CHARGE-PRE-([0-9]+)-[0-9]+$'))[1]::int AS order_id
+        FROM eligible_vouchers v
+       WHERE v.voucher_number LIKE 'CHARGE-PRE-%'
+    ), single_order_containers AS (
+      SELECT UPPER(BTRIM(COALESCE(container_number, ''))) AS container_number
+        FROM customer_orders
+       WHERE company_id = ${companyId}
+       GROUP BY 1
+      HAVING COUNT(*) = 1
     ), matched AS (
       -- Charges linked to their voucher, including legacy invoices using a
       -- non-PRE voucher number (one voucher counts once, not once per charge).
       SELECT o.customer_id, v.id AS voucher_id
         FROM unfinalized_orders o
         JOIN customer_order_charges ch ON ch.order_id = o.id
-        JOIN eligible_vouchers v
-          ON v.id = ch.voucher_id
-          OR v.voucher_number = 'CHARGE-PRE-' || o.id::text || '-' || ch.id::text
+        JOIN eligible_vouchers v ON v.id = ch.voucher_id
       UNION
-      -- Older PRE vouchers can lack their charge FK or charge record.
-      SELECT o.customer_id, v.id
+      -- Every PRE voucher of the order, including older ones that lack their
+      -- charge FK or charge record.
+      SELECT o.customer_id, p.id
         FROM unfinalized_orders o
-        JOIN eligible_vouchers v
-          ON v.voucher_number ~ ('^CHARGE-PRE-' || o.id::text || '-[0-9]+$')
+        JOIN pre_vouchers p ON p.order_id = o.id
       UNION
       -- Legacy manual freight/clearance vouchers: only a uniquely identified
       -- container qualifies. Do not guess where the container is ambiguous.
@@ -110,10 +120,8 @@ export async function loadHeldChargeSnapshot(
              AND COALESCE(ve.credit_amount, 0) = 0
              AND (ve.narration ILIKE '%container%' OR v.description ILIKE '%container%')
         ) m ON m.container_number = o.container_number
+        JOIN single_order_containers uc ON uc.container_number = o.container_number
        WHERE o.container_number <> ''
-         AND (SELECT COUNT(*) FROM customer_orders all_orders
-               WHERE all_orders.company_id = ${companyId}
-                 AND UPPER(BTRIM(COALESCE(all_orders.container_number, ''))) = o.container_number) = 1
     )
     SELECT m.customer_id, m.voucher_id,
            COALESCE(SUM(COALESCE(ve.debit_amount,0) - COALESCE(ve.credit_amount,0)), 0)::text AS amount
