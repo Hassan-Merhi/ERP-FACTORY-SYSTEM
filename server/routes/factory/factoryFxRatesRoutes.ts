@@ -82,7 +82,11 @@ export function registerFactoryFxRatesRoutes(app: Express) {
       if (!ISO_DATE.test(dateISO)) {
         return res.status(400).json({ message: "Date must be YYYY-MM-DD format" });
       }
-      res.json(rateResponse(await resolveFactoryFxRateToUsd(companyId, currency, dateISO)));
+      try {
+        res.json(rateResponse(await resolveFactoryFxRateToUsd(companyId, currency, dateISO)));
+      } catch (err: unknown) {
+        res.status(404).json({ message: getErrorMessage(err) });
+      }
     } catch (error: unknown) {
       res.status(500).json({ message: getErrorMessage(error) });
     }
