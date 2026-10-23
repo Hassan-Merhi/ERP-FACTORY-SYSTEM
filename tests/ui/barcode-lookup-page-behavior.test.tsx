@@ -31,6 +31,7 @@ vi.mock("@tanstack/react-query", () => ({
     };
     return mutation;
   },
+  useQueryClient: () => ({ invalidateQueries: vi.fn() }),
 }));
 vi.mock("@/hooks/use-toast", () => ({ useToast: () => ({ toast: harness.toast }) }));
 vi.mock("@/contexts/AppModeContext", () => ({ useAppMode: () => "factory" }));
@@ -244,7 +245,7 @@ describe("barcode lookup page behavior", () => {
     expect(card).not.toHaveTextContent("Booking Info");
   });
 
-    it("loads a reference supplied in the URL query string automatically", async () => {
+  it("loads a reference supplied in the URL query string automatically", async () => {
     window.history.replaceState({}, "", "/barcode-lookup?ref=REF001");
     render(<BarcodeLookup />);
 
