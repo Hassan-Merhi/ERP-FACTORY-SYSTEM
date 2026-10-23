@@ -376,9 +376,9 @@ export function BarcodeAdminDialogs({ model }: { model: BarcodeLookupModel }) {
                 )}
                 {releasingOpenLoading && (
                   <p className="text-sm text-muted-foreground" data-testid="return-open-loading-info">
-                    This bale will be removed from the current container loading and returned to available stock.
-                    The loading's bale count, weight and totals will update. You can scan the same reference
-                    on another loading immediately, even when this was the last bale in the current loading.
+                    This bale will be removed from the current container loading and returned to available stock. The
+                    loading's bale count, weight and totals will update. You can scan the same reference on another
+                    loading immediately, even when this was the last bale in the current loading.
                   </p>
                 )}
                 {model.returnToStockOrderInfo.status === "FINALIZED" &&
@@ -392,8 +392,9 @@ export function BarcodeAdminDialogs({ model }: { model: BarcodeLookupModel }) {
                       </p>
                     </div>
                   )}
-                {model.returnToStockOrderInfo.status !== "FINALIZED" && !releasingOpenLoading &&
-                   model.returnToStockOrderInfo.totalBalesInOrder > 1 && (
+                {model.returnToStockOrderInfo.status !== "FINALIZED" &&
+                  !releasingOpenLoading &&
+                  model.returnToStockOrderInfo.totalBalesInOrder > 1 && (
                     <p className="text-sm text-muted-foreground">
                       The bale will be removed from this order and returned to stock. Order totals will be recalculated.
                     </p>
