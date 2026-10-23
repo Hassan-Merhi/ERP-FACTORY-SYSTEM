@@ -280,7 +280,8 @@ export function useBarcodeLookupModel() {
         ["/api/factory/customer-orders/loading-list/priority-scan-configs"],
         ["/api/factory/location-inventory"],
         ["/api/factory/v5/location-summary"],
-      ]) queryClient.invalidateQueries({ queryKey: key });
+      ])
+        queryClient.invalidateQueries({ queryKey: key });
       const referenceNumber = referenceResult?.labelPrint?.referenceNumber;
       if (referenceNumber) referenceLookup.mutate(referenceNumber);
       const invoiceMessage = data.invoiceNumber

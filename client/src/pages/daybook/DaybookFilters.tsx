@@ -2,6 +2,7 @@ import { Search, X } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useCompany } from "@/contexts/CompanyContext";
 import { readCostCenterApi, type CostCenterCatalog } from "@/api/costCentersApi";
+import { canAccessErpFeature, type ErpFeatureAccess } from "@/app/erpAccess";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { CoreErpFilterGrid } from "@/components/ui/core-erp-mobile";
@@ -37,10 +38,17 @@ export function DaybookFilters({
   onResetFilters,
 }: DaybookFiltersProps) {
   const { selectedCompany } = useCompany();
+  // The cost-center filter reveals allocations, so it follows the same ERP
+  // Accounts grant the server enforces on /api/cost-centers and ?costCenterId.
+  const { data: erpAccess } = useQuery<ErpFeatureAccess>({ queryKey: ["/api/my-erp-pages"], staleTime: 30000 });
+  const canFilterByCostCenter =
+    ["Admin", "Owner", "Developer", "Manager"].includes(selectedCompany?.role || "") &&
+    !!erpAccess &&
+    canAccessErpFeature(erpAccess, "accounts");
   const { data: centerCatalog } = useQuery<CostCenterCatalog>({
     queryKey: ["/api/cost-centers", selectedCompany?.id, false],
     queryFn: () => readCostCenterApi<CostCenterCatalog>("/api/cost-centers"),
-    enabled: !!selectedCompany?.id && ["Admin", "Owner", "Developer", "Manager"].includes(selectedCompany?.role || ""),
+    enabled: !!selectedCompany?.id && canFilterByCostCenter,
     staleTime: 30000,
   });
   const centers = centerCatalog?.costCenters || [];
@@ -129,7 +137,7 @@ export function DaybookFilters({
               </SelectContent>
             </Select>
 
-            {["Admin", "Owner", "Developer", "Manager"].includes(selectedCompany?.role || "") && (
+            {canFilterByCostCenter && (
               <Select
                 value={filters.costCenterId || "all"}
                 onValueChange={(value) => setFilters({ ...filters, costCenterId: value })}

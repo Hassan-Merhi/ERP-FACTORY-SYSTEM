@@ -17,6 +17,79 @@ function req(
   } as unknown as Request;
 }
 
+describe("Cost Center Factory source-owned permissions", () => {
+  function owningPages(path: string, method = "GET") {
+    return resolveFactoryBackendAccessRequirement(req(path, method))?.alternatives?.map((a) => a.pageKey);
+  }
+
+  it("allows Voucher APIs only through Finance or Vouchers, never Daybook-only", () => {
+    for (const method of ["GET", "PUT"]) {
+      expect(owningPages("/cost-centers/allocations/voucher_entry/42", method)).toEqual([
+        "factory/cost-centers",
+        "factory/accounts",
+        "factory/vouchers",
+      ]);
+    }
+    expect(owningPages("/cost-centers/voucher/42/entries")).toEqual([
+      "factory/cost-centers",
+      "factory/accounts",
+      "factory/vouchers",
+    ]);
+  });
+
+  it("covers allocation history and does not depend on path case", () => {
+    expect(owningPages("/cost-centers/allocations/voucher_entry/42/history")).toEqual([
+      "factory/cost-centers",
+      "factory/accounts",
+      "factory/vouchers",
+    ]);
+    expect(owningPages("/cost-centers/allocations/factory_daybook/42/history")).toEqual([
+      "factory/cost-centers",
+      "factory/accounts",
+      "factory/daybook",
+    ]);
+    expect(owningPages("/Cost-Centers/Allocations/Factory_Daybook/42")).toEqual([
+      "factory/cost-centers",
+      "factory/accounts",
+      "factory/daybook",
+    ]);
+    // A look-alike source name never inherits the Voucher or Daybook grant.
+    expect(owningPages("/cost-centers/allocations/voucher_entryx/42")).toEqual([
+      "factory/cost-centers",
+      "factory/accounts",
+    ]);
+  });
+
+  it("allows standalone Factory Daybook allocations only through Finance or Daybook", () => {
+    for (const method of ["GET", "PUT"]) {
+      expect(owningPages("/cost-centers/allocations/factory_daybook/42", method)).toEqual([
+        "factory/cost-centers",
+        "factory/accounts",
+        "factory/daybook",
+      ]);
+    }
+  });
+
+  it("permits the shared picker while restricting reports, historical and management to Finance", () => {
+    expect(owningPages("/cost-centers")).toEqual([
+      "factory/cost-centers",
+      "factory/accounts",
+      "factory/vouchers",
+      "factory/daybook",
+    ]);
+    for (const path of [
+      "/cost-centers/historical/reconciliation",
+      "/cost-centers/historical/preview",
+      "/cost-centers/reports/summary",
+      "/cost-centers/automation/rules",
+      "/cost-centers/allocations/other/42",
+    ]) {
+      expect(owningPages(path)).toEqual(["factory/cost-centers", "factory/accounts"]);
+    }
+    expect(owningPages("/cost-centers", "POST")).toEqual(["factory/cost-centers", "factory/accounts"]);
+  });
+});
+
 describe("Wave 4 Factory backend access ownership", () => {
   it("maps Factory account actions to Accounts", () => {
     expect(resolveFactoryBackendAccessRequirement(req("/accounts/12/whatsapp-rule"))).toMatchObject({

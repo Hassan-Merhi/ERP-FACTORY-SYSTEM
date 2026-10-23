@@ -237,6 +237,7 @@ const SENSITIVE_WRITE_ROUTES = [
   "POST /api/factory/bale-products/bulk-update-prices",
   "POST /api/factory/bale-products/import-excel",
   "POST /api/factory/bale-products/merge",
+  "POST /api/factory/bales/:id/release-from-loading",
   "POST /api/factory/bales/:id/repack",
   "POST /api/factory/bales/:id/restore-to-stock",
   "POST /api/factory/bales/:id/return-to-stock",
