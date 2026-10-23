@@ -1,65 +1,78 @@
-# Cost Centers follow-up — ERP page grants, Factory source access, report exports
+# Cost Centers — page permissions and report exports
 
-Branch: `fix/cost-centers-permissions-exports-20261022` (based on current `main`).
-Findings: three unresolved automated review comments made after PR #2416 was merged.
+Follow-up to PR #2416 (Phases 1–8). Cost Centers stay analytical only: none of
+the rules below post, delete or revalue a voucher, balance, FX rate, container
+cost, inventory valuation or Factory production cost. No migration is involved.
 
-## Source changes (committed; CI/testing deliberately NOT executed)
+## ERP: the Accounts page owns Cost Centers
 
-1. **ERP permission bypass** — `server/middleware/costCenterErpPageAccess.ts`,
-   registered from `server/routes/applicationRoutes.ts` before **all** ERP
-   Cost Center API routes. The middleware uses the canonical active-company
-   context and the same ERP Accounts page grant as `/api/my-erp-pages`.
-   Admin/Developer retain their existing full-access exception; Owner/Manager
-   must have explicit `accounts` for that active company. The middleware
-   fails closed on errors and returns HTTP 403 on missing permission.
-   Factory prefixed routes are intentionally not covered.
+`server/middleware/costCenterErpPageAccess.ts` is mounted in
+`server/routes/applicationRoutes.ts` on `/api/cost-centers` ahead of every ERP
+Cost Center router (management, allocations, automation, reports, exports,
+budgets, historical batches, release readiness).
 
-2. **Factory Voucher/Daybook source separation** —
-   `server/middleware/factoryBackendAccessBoundary.ts`:
-   - Voucher-backed allocations and voucher entries: Cost Centers, Accounts,
-     or Vouchers page access; Daybook alone is NOT sufficient.
-   - Standalone Factory Daybook allocation: Cost Centers, Accounts, or Daybook
-     page access; Vouchers alone is NOT sufficient.
-   - Basic cost-center catalog GET remains readable from authorized Vouchers
-     or Daybook page pickers, since it exposes no source amounts.
-   - Center management, reports, automation, and historical bulk operations
-     continue to require the authorized Cost Centers or Accounts finance page.
-   - Existing API role gates still determine which of those roles may write.
+- The rule is the one `/api/my-erp-pages` applies, evaluated for the active
+  company from canonical `user_company_roles` (not the cached session role):
+  Admin and Developer have full ERP access; every other role needs an
+  `accounts` row in `erp_user_page_access` for that company.
+- Missing grant → HTTP 403. Missing company context → 401/403 from the active
+  company resolver. Lookup failure → 500 (fails closed).
+- A grant in another company does not count; switching company re-evaluates
+  against the newly selected company.
+- Consolidated ERP reports include only companies where the user holds an
+  Admin/Owner/Developer role **and** (Admin/Developer there, or an `accounts`
+  grant there).
+- `GET /api/vouchers?costCenterId=…` (Daybook cost-center filter) reveals
+  allocation membership, so it requires the same grant. The Daybook itself,
+  without that filter, is unaffected. The filter is hidden in the UI unless
+  `/api/my-erp-pages` grants `accounts`.
+- Route handlers keep their own role gates (read: Admin/Owner/Developer/
+  Manager; write: Admin/Owner/Developer).
 
-3. **Current-company exports** —
-   `server/routes/costCenterReportingRoutes.ts`: both normal and consolidated
-   report export endpoints use the same explicit list of supported report
-   views: `summary`, `activity`, `departments`, `accounts`, `months`.
-   The format whitelist remains `csv`, `xlsx`, `pdf`; existing operational
-   export-permission requirements remain in force.
+`/api/factory/cost-centers` is not covered by this middleware: Factory Mode
+uses its own boundary below.
 
-## New test coverage (written, not executed)
+## Factory: source-owned allocation access
 
-- `tests/cost-center-erp-page-access.test.ts`: Owner/Manager denied when no
-  per-company Accounts grant (multiple endpoints), allowed with grant,
-  Admin/Developer bypass, and fail-closed on lookup errors.
-- `tests/factory-backend-access-boundary.test.ts`: Voucher and standalone
-  Daybook source-specific policy, catalog allowance, finance-only APIs.
-- `tests/cost-centers-lifecycle.test.ts`: CSV exports from every current
-  company tab, XLSX/PDF for monthly tab, unknown view returns 400.
+`server/middleware/factoryBackendAccessBoundary.ts`:
 
-## Claude validation / integration instructions
+| Path under `/api/factory/cost-centers` | Factory page required (any one) |
+| --- | --- |
+| `/voucher/:id/entries`, `/allocations/voucher_entry/…` | Cost Centers, Accounts, Vouchers |
+| `/allocations/factory_daybook/…` | Cost Centers, Accounts, Daybook |
+| `GET /` (catalog for pickers) | Cost Centers, Accounts, Vouchers, Daybook |
+| everything else (management, reports, exports, budgets, automation, historical) | Cost Centers, Accounts |
 
-- Run TypeScript, lint, security and backend/frontend tests, including the
-  tests above. No CI checks were invoked when these commits were prepared.
-- Confirm ERP Owner/Manager with `accounts` revoked cannot call ANY ERP Cost
-  Center endpoint directly, including historical apply, report exports,
-  management writes, or release readiness; then test after granting access.
-- Confirm a Factory Manager assigned *only* Daybook cannot read voucher source
-  allocations, and a Voucher-only Manager cannot read standalone Daybook
-  allocations. Confirm legitimate full-finance roles still function.
-- Verify the Factory Daybook UI degrades gracefully when its viewer cannot
-  open Voucher Cost Center allocations, without exposing the restricted data.
-- Verify all three export formats, all five supported views, and existing
-  `exp_excel` authorization / invalid-view behavior.
-- These fixes must not change source transactions, GL balances, FX snapshots,
-  inventory valuation, Factory production, or customer/supplier balances.
-- Do not merge/deploy until owner authorizes; no production database migration
-  is introduced by this follow-up.
+Vouchers-only users cannot read standalone Daybook allocations and Daybook-only
+users cannot read voucher allocations. Existing Factory role restrictions per
+page and the API role gates still apply.
 
-Status: **Source implemented and committed. Not tested or merged.**
+In the UI, `VoucherCostCenters` and `FactoryDaybookCostCenters` render nothing
+when the server answers 403, so a Daybook-only viewer opening a voucher-backed
+Daybook row sees no allocation panel and no error.
+
+## Report exports
+
+`GET …/reports/export` and `GET …/reports/consolidated/export` accept the same
+views — `summary`, `activity`, `departments`, `accounts`, `months` — in `csv`,
+`xlsx` and `pdf`. Anything else is HTTP 400. Amounts are historical USD;
+`fromDate`/`toDate` filter every view; the existing `exp_excel` operational
+permission still applies to both endpoints.
+
+| View | Columns |
+| --- | --- |
+| summary | companyName, code, name, expense, budget, variance, inventoryCost, entries (+ UNALLOCATED row) |
+| activity | sourceDate, companyId, costCenterCode, accountName, sourceModule, voucherNumber, treatment, allocationOrigin, currency, amountNative, amountUsd |
+| departments | companyName, code, name, expense, budget, variance, inventoryCost, members |
+| accounts | companyId, accountName, expense, inventoryCost, entries |
+| months | month, expense, unallocated, budget, variance, inventoryCost |
+
+## Tests
+
+- `tests/cost-center-erp-page-access.test.ts` — middleware decisions.
+- `tests/cost-centers-lifecycle.test.ts` — real PostgreSQL: every ERP route
+  family denied for Owner/Manager without `accounts`, allowed with it, grants
+  are per company, consolidated scope, voucher filter, and every export view ×
+  format × scope with column and value checks.
+- `tests/factory-backend-access-boundary.test.ts` — Factory source ownership.
+- `tests/ui/cost-center-permission-denied.test.tsx` — panels hide on 403.

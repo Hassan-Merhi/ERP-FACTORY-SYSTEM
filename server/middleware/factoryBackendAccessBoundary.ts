@@ -363,14 +363,23 @@ export function resolveFactoryBackendAccessRequirement(req: Request): FactoryApi
   const costCenterPath = path.toLowerCase();
   if (hasPrefix(costCenterPath, "/cost-centers")) {
     const finance = anyOf(requirement("factory/cost-centers"), requirement("factory/accounts"));
+    // hasPrefix() appends the separator itself; these prefixes must not end in "/".
     const isVoucherSource =
-      hasPrefix(costCenterPath, "/cost-centers/voucher/") ||
-      hasPrefix(costCenterPath, "/cost-centers/allocations/voucher_entry/");
+      hasPrefix(costCenterPath, "/cost-centers/voucher") ||
+      hasPrefix(costCenterPath, "/cost-centers/allocations/voucher_entry");
     if (isVoucherSource) {
-      return anyOf(requirement("factory/cost-centers"), requirement("factory/accounts"), requirement("factory/vouchers"));
+      return anyOf(
+        requirement("factory/cost-centers"),
+        requirement("factory/accounts"),
+        requirement("factory/vouchers")
+      );
     }
-    if (hasPrefix(costCenterPath, "/cost-centers/allocations/factory_daybook/")) {
-      return anyOf(requirement("factory/cost-centers"), requirement("factory/accounts"), requirement("factory/daybook"));
+    if (hasPrefix(costCenterPath, "/cost-centers/allocations/factory_daybook")) {
+      return anyOf(
+        requirement("factory/cost-centers"),
+        requirement("factory/accounts"),
+        requirement("factory/daybook")
+      );
     }
     // Cost-center names are used by the authorized Voucher and Daybook
     // pickers. A catalog GET contains no per-source expense amounts.

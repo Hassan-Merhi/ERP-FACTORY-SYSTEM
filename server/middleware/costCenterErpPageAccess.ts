@@ -12,21 +12,25 @@ import {
 } from "../services/security/activeCompanyPermissionContext";
 import { logger } from "../lib/logger";
 
-export async function enforceCostCenterErpPageAccess(
-  req: Request,
-  res: Response,
-  next: NextFunction
-): Promise<void> {
+/** ERP page grant that owns Cost Centers (see ERP_COMPOSITE_ROUTE_FEATURES). */
+export const COST_CENTER_ERP_PAGE_KEY = "accounts";
+
+/**
+ * Mirrors /api/my-erp-pages for one company: Admin/Developer have full ERP
+ * access, every other role needs an explicit accounts assignment there.
+ */
+export async function hasCostCenterErpPageAccess(companyId: number, userId: string, role: string): Promise<boolean> {
+  if (role === "Admin" || role === "Developer") return true;
+  const pages = await getErpUserPageAccess(companyId, userId);
+  return pages.includes(COST_CENTER_ERP_PAGE_KEY);
+}
+
+export async function enforceCostCenterErpPageAccess(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const ctx = await getActiveCompanyPermissionContext(req);
-    // Mirrors /api/my-erp-pages: Admin/Developer have full ERP access,
-    // Owner/Manager need an explicit accounts feature assignment.
-    if (ctx.role !== "Admin" && ctx.role !== "Developer") {
-      const pages = await getErpUserPageAccess(ctx.companyId, ctx.userId);
-      if (!pages.includes("accounts")) {
-        res.status(403).json({ message: "ERP Accounts page access is required for Cost Centers" });
-        return;
-      }
+    if (!(await hasCostCenterErpPageAccess(ctx.companyId, ctx.userId, ctx.role))) {
+      res.status(403).json({ message: "ERP Accounts page access is required for Cost Centers" });
+      return;
     }
     next();
   } catch (error) {
