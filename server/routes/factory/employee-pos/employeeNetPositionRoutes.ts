@@ -9,6 +9,7 @@ import { loadFactoryNetPositionEmployees } from "../../../services/factory/netPo
 import { loadHistoricalFactoryPipeline } from "../../../services/factory/netPositionHistoricalPipeline";
 import { computeHistoricalFactoryAssetLiabilityOperations } from "../../../services/factory/netPositionHistoricalAssets";
 import { loadFactoryHistoricalCoverage } from "../../../services/factory/netPositionHistoryCoverage";
+import { loadFxWalletHistoryGaps } from "../../../services/factory/netPositionFxWalletCoverage";
 import { finishFactoryNetPosition } from "./netPositionHistoricalResponse";
 import { computeLiveFactoryPrepaidRent } from "./netPositionLiveRent";
 import {
@@ -313,14 +314,28 @@ export function registerEmployeeNetPositionRoutes(app: Express) {
       }> = [];
       const fxAgentWalletWarnings: string[] = [];
       if (await fxAgentTablesExist()) {
-        const wallets = await loadFxAgentWallets(companyId, asOf);
+        if (historyCoverage && asOfContext.isHistorical) {
+          historyCoverage.gaps.push(...(await loadFxWalletHistoryGaps(companyId, asOfContext)));
+        }
+        const wallets = await loadFxAgentWallets(
+          companyId,
+          asOf,
+          db,
+          asOfContext.isHistorical ? asOfContext : undefined
+        );
         projectedAccountBalances = new Map(projectedAccountBalances);
         for (const wallet of wallets) {
           const account = factoryAccounts.find((a) => a.id === wallet.ledgerAccountId);
           if (!account) continue;
           const rate = configFxRates.EUR ? String(configFxRates.EUR) : null;
-          const snapshot = await getFxAgentWalletSnapshot(wallet, asOf, db, rate);
           const projectedBook = toMoney(getAccountNetBalance(account as AccountLike, projectedAccountBalances));
+          const snapshot = await getFxAgentWalletSnapshot(
+            wallet,
+            asOf,
+            db,
+            rate,
+            asOfContext.isHistorical ? { scope: asOfContext, ledgerBookUsd: projectedBook.toFixed(6) } : undefined
+          );
           const matching = snapshot.synchronized && projectedBook.minus(snapshot.state.totalBookUsd).abs().lte("0.01");
           fxAgentWallets.push({
             accountId: account.id,

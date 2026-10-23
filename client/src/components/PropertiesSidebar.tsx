@@ -47,6 +47,16 @@ export const PROPERTIES_NAV_SECTIONS: NavSection[] = [
     color: NAV_COLOR.accounting,
     items: [
       { title: "Accounts", url: "/properties/accounts", icon: Landmark },
+      { title: "Open Items", url: "/properties/accounting/open-items", icon: ClipboardList },
+      { title: "Bank & Cash Reconciliation", url: "/properties/accounting/cash-bank", icon: Landmark },
+      { title: "Multi-Currency Accounting", url: "/properties/accounting/monetary-fx", icon: Landmark },
+      { title: "Rental Accounting", url: "/properties/accounting/rentals", icon: ClipboardList },
+      { title: "Intercompany & Consolidation", url: "/properties/accounting/consolidation", icon: Landmark },
+      { title: "Historical Accounting", url: "/properties/accounting/history", icon: Clock },
+      { title: "Financial Statements", url: "/properties/accounting/statements", icon: FileText },
+      { title: "Fiscal Closing & Audit", url: "/properties/accounting/fiscal-review", icon: Landmark },
+      { title: "Unified Accounting Dashboard", url: "/properties/accounting/dashboard", icon: Landmark },
+      { title: "Unified Accounting Rollout", url: "/properties/accounting/rollout", icon: Landmark },
       { title: "Vouchers", url: "/properties/vouchers", icon: FileText },
       { title: "Analytics", url: "/properties/analytics", icon: BarChart2 },
     ],
@@ -65,9 +75,24 @@ export function PropertiesSidebar({ user, onLogout }: { user?: ShellUser; onLogo
     () =>
       PROPERTIES_NAV_SECTIONS.map((section) => ({
         ...section,
-        items: section.items.filter((item) => !isOwner || item.url !== "/properties/analytics"),
+        items: section.items.filter(
+          (item) =>
+            (!isOwner || item.url !== "/properties/analytics") &&
+            (isAdmin ||
+              isOwner ||
+              (item.url !== "/properties/accounting/open-items" &&
+                item.url !== "/properties/accounting/cash-bank" &&
+                item.url !== "/properties/accounting/monetary-fx" &&
+                item.url !== "/properties/accounting/rentals" &&
+                item.url !== "/properties/accounting/consolidation" &&
+                item.url !== "/properties/accounting/history" &&
+                item.url !== "/properties/accounting/statements" &&
+                item.url !== "/properties/accounting/fiscal-review" &&
+                item.url !== "/properties/accounting/dashboard" &&
+                item.url !== "/properties/accounting/rollout"))
+        ),
       })).filter((section) => section.items.length > 0),
-    [isOwner]
+    [isAdmin, isOwner]
   );
 
   const { items: pinnedItems, reorder: reorderPinned } = usePinnedOrder(

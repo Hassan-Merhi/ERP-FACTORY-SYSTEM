@@ -9,7 +9,13 @@
  */
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Layers, Plus, Search, X } from "lucide-react";
+import { ChevronDown, Layers, Plus, Search, X } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -153,9 +159,54 @@ export default function Accounts() {
     );
   };
 
+  const unifiedAccountingLinks = [
+    { testId: "button-open-items", label: "Open Items", path: "open-items" },
+    { testId: "button-cash-bank-reconciliation", label: "Cash & Bank Reconciliation", path: "cash-bank" },
+    { testId: "button-monetary-fx", label: "Multi-Currency Accounting", path: "monetary-fx" },
+    ...(model.modePrefix !== "/properties"
+      ? [
+          {
+            testId: "button-factory-production-accounting",
+            label: "Factory Production Accounting",
+            path: model.modePrefix === "/factory" ? "production" : "factory-production",
+          },
+        ]
+      : []),
+    { testId: "button-unified-rental-accounting", label: "Rental Accounting", path: "rentals" },
+    { testId: "button-group-consolidation", label: "Intercompany & Consolidation", path: "consolidation" },
+    { testId: "button-historical-accounting", label: "Historical Accounting", path: "history" },
+    { testId: "button-professional-financial-statements", label: "Financial Statements", path: "statements" },
+    { testId: "button-fiscal-review", label: "Fiscal Closing & Audit", path: "fiscal-review" },
+    { testId: "button-unified-accounting-dashboard", label: "Unified Accounting Dashboard", path: "dashboard" },
+    { testId: "button-unified-accounting-rollout", label: "Unified Accounting Rollout", path: "rollout" },
+  ];
+
   return (
     <div className="space-y-6">
       <PageHeader title="Accounts Overview" subtitle="View all accounts, balances, and transaction history">
+        {showViewAccounts &&
+          !phoneStatementOpen &&
+          ["Admin", "Owner", "Developer"].includes(model.currentUser?.role ?? "") && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" data-testid="button-unified-accounting-menu">
+                  Unified Accounting
+                  <ChevronDown className="ml-1 h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                {unifiedAccountingLinks.map((link) => (
+                  <DropdownMenuItem
+                    key={link.testId}
+                    data-testid={link.testId}
+                    onSelect={() => model.navigate(`${model.modePrefix}/accounting/${link.path}`)}
+                  >
+                    {link.label}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
         {showViewAccounts &&
           !phoneStatementOpen &&
           (model.currentUser?.role === "Admin" || model.currentUser?.role === "Developer") && (

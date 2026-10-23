@@ -15,6 +15,7 @@ import {
   PieChart,
   Ship,
   Calculator,
+  CalendarDays,
   MessageCircle,
   TableProperties,
   ExternalLink,
@@ -93,6 +94,18 @@ export const ERP_NAV_SECTIONS: NavSection[] = [
     color: NAV_COLOR.accounting,
     items: [
       { title: "Accounts", url: "/accounts", icon: Wallet },
+      { title: "Open Items", url: "/accounting/open-items", icon: Receipt },
+      { title: "Bank & Cash Reconciliation", url: "/accounting/cash-bank", icon: Calculator },
+      { title: "Multi-Currency Accounting", url: "/accounting/monetary-fx", icon: Calculator },
+      { title: "Inventory & COGS Accounting", url: "/accounting/erp-inventory", icon: Layers },
+      { title: "Factory Production Accounting", url: "/accounting/factory-production", icon: Layers },
+      { title: "Rental Accounting", url: "/accounting/rentals", icon: Calculator },
+      { title: "Intercompany & Consolidation", url: "/accounting/consolidation", icon: Layers },
+      { title: "Historical Accounting", url: "/accounting/history", icon: CalendarDays },
+      { title: "Financial Statements", url: "/accounting/statements", icon: FileText },
+      { title: "Fiscal Closing & Audit", url: "/accounting/fiscal-review", icon: ShieldCheck },
+      { title: "Unified Accounting Dashboard", url: "/accounting/dashboard", icon: LayoutDashboard },
+      { title: "Unified Accounting Rollout", url: "/accounting/rollout", icon: ShieldCheck },
       { title: "Cost Centers", url: "/cost-centers", icon: ListTree },
       { title: "Parties", url: "/parties", icon: Handshake },
       { title: "Payroll", url: "/payroll", icon: UserCheck },
@@ -212,6 +225,23 @@ export function useErpVisibleSections(user?: SidebarUser): {
     if (item.url === "/chat") return isDeveloper;
     if (item.url === "/item-market-analysis" && selectedCompany?.companyType !== "erp") return false;
     if (item.url === "/analytics" && isOwner) return false;
+    if (
+      (item.url === "/accounting/open-items" ||
+        item.url === "/accounting/cash-bank" ||
+        item.url === "/accounting/monetary-fx" ||
+        item.url === "/accounting/erp-inventory" ||
+        item.url === "/accounting/factory-production" ||
+        item.url === "/accounting/rentals" ||
+        item.url === "/accounting/consolidation" ||
+        item.url === "/accounting/history" ||
+        item.url === "/accounting/statements" ||
+        item.url === "/accounting/fiscal-review" ||
+        item.url === "/accounting/dashboard" ||
+        item.url === "/accounting/rollout") &&
+      !isAdmin &&
+      !isOwner
+    )
+      return false;
     if (item.url === "/settings" && isOwner) return false;
 
     if (isDeveloper || isAdmin || myErpPages?.fullAccess) return true;

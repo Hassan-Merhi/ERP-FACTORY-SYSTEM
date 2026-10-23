@@ -4,7 +4,7 @@ import type { ClientErrorLike } from "@/lib/clientError";
  *
  * Extracted from PropertyRentalPage.tsx during the Phase 4 god-file split.
  */
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
@@ -43,10 +43,13 @@ export function PaymentForm({
     exchangeRate: "1",
   });
   const [scheduleFuturePayment, setScheduleFuturePayment] = useState(false);
+  // Keep the same request ID for a retry of unchanged form data (for example
+  // after a lost HTTP response). A changed form produces a new request ID.
+  const paymentRequest = useRef<{ fingerprint: string; id: string } | null>(null);
 
   const pay = useMutation({
-    mutationFn: () =>
-      apiRequest("POST", apiBase + "/payments", {
+    mutationFn: () => {
+      const payload = {
         contractId: contract.id,
         cashAccountId: form.cashAccountId ? parseInt(form.cashAccountId) : null,
         amount: form.amount,
@@ -55,8 +58,14 @@ export function PaymentForm({
         currency: form.currency,
         exchangeRate: form.exchangeRate,
         scheduleFuturePayment,
-      }),
+      };
+      const fingerprint = JSON.stringify(payload);
+      const id = paymentRequest.current?.fingerprint === fingerprint ? paymentRequest.current.id : crypto.randomUUID();
+      paymentRequest.current = { fingerprint, id };
+      return apiRequest("POST", apiBase + "/payments", { ...payload, clientRequestId: id });
+    },
     onSuccess: async (res) => {
+      paymentRequest.current = null;
       const data = (await res.json()) as { scheduled?: boolean };
       if (data?.scheduled) {
         toast({

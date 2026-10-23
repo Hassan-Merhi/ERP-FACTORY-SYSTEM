@@ -641,6 +641,35 @@ export async function ensureRuntimeSchema(pool: Pool): Promise<void> {
   // always-on pre-listen schema guard.
   await ensureScheduledWhatsAppDeliveryTrackingSchema(pool);
 
+  // Unified accounting Phase 3 — additive reconciliation metadata only.
+  // No GL entries or source-party balances are changed during initialization.
+  const { ensurePartyOpenItemSchema } = await import("../services/accounting/ensurePartyOpenItemSchema");
+  await ensurePartyOpenItemSchema(pool);
+
+  // Unified Phase 4: cash/bank bank-statement reconciliation metadata only.
+  const { ensureCashBankReconciliationSchema } =
+    await import("../services/accounting/ensureCashBankReconciliationSchema");
+  await ensureCashBankReconciliationSchema(pool);
+
+  // Phase 5: opt-in realized FX journal evidence only; no historical backfill.
+  const { ensureMonetaryFxSchema } = await import("../services/accounting/ensureMonetaryFxSchema");
+  await ensureMonetaryFxSchema(pool);
+
+  // Unified Accounting Phase 8: expense-attribution metadata only; never a GL posting.
+  const { ensureRentalAccountingLinksSchema } = await import("../services/rental/ensureRentalAccountingLinksSchema");
+  await ensureRentalAccountingLinksSchema(pool);
+
+  // Phase 13: financial review signoffs and reviewed-close audit evidence only.
+  // No fiscal period is automatically closed, reopened or journal-posted.
+  const { ensureFiscalReviewSchema } = await import("../services/accounting/ensureFiscalReviewSchema");
+  await ensureFiscalReviewSchema(pool);
+
+  // Phase 15 rollout metadata is created before accounting routes serve
+  // users. Fail-closed write middleware never assumes this schema exists.
+  const { ensureUnifiedAccountingRolloutSchema } =
+    await import("../services/accounting/ensureUnifiedAccountingRolloutSchema");
+  await ensureUnifiedAccountingRolloutSchema(pool);
+
   // Wave 16 (A): the Phase 3 historical accounting repair no longer runs here.
   // It added and deleted lines of posted vouchers of every company before each
   // listen, with no audit; it is now the Owner preview/apply at

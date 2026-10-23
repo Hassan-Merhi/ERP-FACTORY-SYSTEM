@@ -3,6 +3,16 @@ import PropertiesRentalsHub from "@/pages/properties/PropertiesRentalsHub";
 import type { AuthenticatedUser } from "@/contracts/sessionContracts";
 import {
   AccountGroups,
+  AccountingOpenItems,
+  CashBankReconciliation,
+  MonetaryFxAccounting,
+  UnifiedRentalAccounting,
+  GroupConsolidationAccounting,
+  HistoricalAccounting,
+  ProfessionalFinancialStatements,
+  FiscalCloseReview,
+  UnifiedAccountingDashboard,
+  UnifiedAccountingRollout,
   Agents,
   BalanceRepair,
   ChatbotSettings,
@@ -43,6 +53,20 @@ export function PropertiesRoutes({ user }: PropertiesRoutesProps) {
     <Switch>
       <Route path="/properties/dashboard" component={PropertiesDashboard} />
       <Route path="/properties/accounts" component={PropertiesAccounts} />
+      {(isAdmin || isOwner) && <Route path="/properties/accounting/open-items" component={AccountingOpenItems} />}
+      {(isAdmin || isOwner) && <Route path="/properties/accounting/cash-bank" component={CashBankReconciliation} />}
+      {(isAdmin || isOwner) && <Route path="/properties/accounting/monetary-fx" component={MonetaryFxAccounting} />}
+      {(isAdmin || isOwner) && <Route path="/properties/accounting/rentals" component={UnifiedRentalAccounting} />}
+      {(isAdmin || isOwner) && (
+        <Route path="/properties/accounting/consolidation" component={GroupConsolidationAccounting} />
+      )}
+      {(isAdmin || isOwner) && <Route path="/properties/accounting/history" component={HistoricalAccounting} />}
+      {(isAdmin || isOwner) && (
+        <Route path="/properties/accounting/statements" component={ProfessionalFinancialStatements} />
+      )}
+      {(isAdmin || isOwner) && <Route path="/properties/accounting/fiscal-review" component={FiscalCloseReview} />}
+      {(isAdmin || isOwner) && <Route path="/properties/accounting/dashboard" component={UnifiedAccountingDashboard} />}
+      {(isAdmin || isOwner) && <Route path="/properties/accounting/rollout" component={UnifiedAccountingRollout} />}
       <Route path="/properties/vouchers/:id/edit" component={PropertiesVoucherEdit} />
       <Route path="/properties/voucher-detail/:voucherId" component={PropertiesVoucherDetail} />
       <Route path="/properties/vouchers">{() => <PropertiesVouchers />}</Route>

@@ -2,6 +2,8 @@ import { pool } from "../../db";
 
 export interface HistoricalCurrencyReadiness {
   ready: boolean;
+  /** Legacy report compatibility, NOT proof of historical base-currency precision. */
+  legacyCompatibilityMode: boolean;
   unresolvedEntryCount: number;
   unresolvedVoucherCount: number;
   unresolvedLedgerOpeningCount: number;
@@ -21,10 +23,11 @@ export interface HistoricalCurrencyReadiness {
  */
 export async function getHistoricalCurrencyReadiness(
   companyId: number,
-  asOfDate?: string | null,
+  asOfDate?: string | null
 ): Promise<HistoricalCurrencyReadiness> {
   const READY_LEGACY: HistoricalCurrencyReadiness = {
     ready: true,
+    legacyCompatibilityMode: true,
     unresolvedEntryCount: 0,
     unresolvedVoucherCount: 0,
     unresolvedLedgerOpeningCount: 0,
@@ -36,6 +39,11 @@ export async function getHistoricalCurrencyReadiness(
     sampleVoucherIds: [],
     asOfDate: asOfDate || null,
   };
+
+  // Match the canonical ledger's booked-on cutoff, including backdated vouchers.
+  const dateClause = asOfDate ? "AND COALESCE(v.effective_date, v.voucher_date) <= $2::date" : "";
+  const params: Array<number | string> = [companyId];
+  if (asOfDate) params.push(asOfDate);
 
   // ── Phase-gate: only enforce multi-currency completeness once the backfill
   // has actually been started for this company.  If the column does not exist
@@ -49,23 +57,24 @@ export async function getHistoricalCurrencyReadiness(
          SELECT 1 FROM voucher_entries ve
          JOIN vouchers v ON ve.voucher_id = v.id
          WHERE v.company_id = $1
-           AND ve.base_debit_amount IS NOT NULL
+           AND v.deleted_at IS NULL
+           AND v.optional = false
+           ${dateClause}
+           AND (ve.base_debit_amount IS NOT NULL OR ve.base_credit_amount IS NOT NULL)
        ) AS has_migrated`,
-      [companyId],
+      params
     );
     const hasMigrated = migratedCheck.rows[0]?.has_migrated === true;
     if (!hasMigrated) {
       // Backfill never started → legacy mode, allow all financial endpoints
       return READY_LEGACY;
     }
-  } catch {
-    // Column doesn't exist yet in this deployment → definitely legacy mode
+  } catch (error) {
+    // Only a missing legacy column permits compatibility fallback.
+    // Connection/permission/query failures must not masquerade as FX readiness.
+    if ((error as { code?: string })?.code !== "42703") throw error;
     return READY_LEGACY;
   }
-
-  const params: Array<number | string> = [companyId];
-  const dateClause = asOfDate ? "AND v.voucher_date <= $2" : "";
-  if (asOfDate) params.push(asOfDate);
 
   const [entryResult, openingResult] = await Promise.all([
     pool.query<{
@@ -86,10 +95,12 @@ export async function getHistoricalCurrencyReadiness(
          AND v.optional = false
          AND v.deleted_at IS NULL
          AND COALESCE(UPPER(v.currency), 'USD') <> 'USD'
-         AND ve.base_debit_amount IS NULL
-         AND ve.base_credit_amount IS NULL
+         AND (
+           (COALESCE(ve.debit_amount,0) <> 0 AND ve.base_debit_amount IS NULL)
+           OR (COALESCE(ve.credit_amount,0) <> 0 AND ve.base_credit_amount IS NULL)
+         )
          ${dateClause}`,
-      params,
+      params
     ),
     pool.query<{
       unresolved_ledger_openings: string;
@@ -147,6 +158,8 @@ export async function getHistoricalCurrencyReadiness(
                 WHERE ve.supplier_id = s.id
                   AND v.company_id = $1
                   AND v.deleted_at IS NULL
+                  AND v.optional = false
+                  AND ($2::date IS NULL OR COALESCE(v.effective_date, v.voucher_date) <= $2::date)
              )
          )::text AS unresolved_supplier_openings,
          (SELECT COUNT(*)
@@ -166,7 +179,7 @@ export async function getHistoricalCurrencyReadiness(
              AND COALESCE(UPPER(fa.purchase_currency), 'USD') <> 'USD'
              AND fa.purchase_base_amount IS NULL
          )::text AS unresolved_fixed_assets`,
-      [companyId],
+      [companyId, asOfDate ?? null]
     ),
   ]);
 
@@ -174,18 +187,17 @@ export async function getHistoricalCurrencyReadiness(
   const unresolvedVoucherCount = Number.parseInt(entryResult.rows[0]?.unresolved_voucher_count || "0", 10) || 0;
   const unresolvedLedgerOpeningCount =
     Number.parseInt(openingResult.rows[0]?.unresolved_ledger_openings || "0", 10) || 0;
-  const unresolvedBankOpeningCount =
-    Number.parseInt(openingResult.rows[0]?.unresolved_bank_openings || "0", 10) || 0;
+  const unresolvedBankOpeningCount = Number.parseInt(openingResult.rows[0]?.unresolved_bank_openings || "0", 10) || 0;
   const unresolvedCustomerOpeningCount =
     Number.parseInt(openingResult.rows[0]?.unresolved_customer_openings || "0", 10) || 0;
   const unresolvedSupplierOpeningCount =
     Number.parseInt(openingResult.rows[0]?.unresolved_supplier_openings || "0", 10) || 0;
   const unresolvedEmployeeOpeningCount =
     Number.parseInt(openingResult.rows[0]?.unresolved_employee_openings || "0", 10) || 0;
-  const unresolvedFixedAssetCount =
-    Number.parseInt(openingResult.rows[0]?.unresolved_fixed_assets || "0", 10) || 0;
+  const unresolvedFixedAssetCount = Number.parseInt(openingResult.rows[0]?.unresolved_fixed_assets || "0", 10) || 0;
 
   return {
+    legacyCompatibilityMode: false,
     ready:
       unresolvedEntryCount === 0 &&
       unresolvedLedgerOpeningCount === 0 &&

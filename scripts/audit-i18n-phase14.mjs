@@ -50,6 +50,9 @@ const compatibilityTranslationFiles = [
   "client/src/i18n/phase3RemainingTranslations.part29.ts",
   "client/src/i18n/phase3RemainingTranslations.part30.ts",
   "client/src/i18n/phase3RemainingTranslations.part31.ts",
+  "client/src/i18n/phase3RemainingTranslations.part32.ts",
+  "client/src/i18n/phase3RemainingTranslations.part33.ts",
+  "client/src/i18n/phase3RemainingTranslations.part34.ts",
   "client/src/i18n/supplierPartnerPhase4Translations.part1.ts",
   "client/src/i18n/supplierPartnerPhase4Translations.part2.ts",
   "client/src/i18n/supplierPartnerPhase4Translations.part3.ts",
@@ -99,6 +102,28 @@ const compatibilityTranslationFiles = [
 ];
 
 const reviewedTechnicalValues = new Set([
+  "HISTORICAL_FX_WALLET_DATE_MISMATCH",
+  "HISTORICAL_FX_WALLET_COVERAGE_INVALID",
+  "HISTORICAL_FX_WALLET_COVERAGE_EMPTY",
+  // Unified accounting: machine error codes thrown internally and mapped to translated
+  // responses by their routes, the PostgreSQL term FORCE RLS, and the literal phrase an
+  // Owner must type to confirm a policy change. None is translatable display text.
+  "COMPANY_REQUIRED",
+  "DASHBOARD_COMPANY_INVALID",
+  "DASHBOARD_DATE_INVALID",
+  "DASHBOARD_PERIOD_INVALID",
+  "FACTORY_ACCOUNTING_INVALID_COMPANY",
+  "FINANCIAL_BASE_CURRENCY_UNSUPPORTED",
+  "FINANCIAL_COMPANY_INVALID",
+  "FINANCIAL_FUTURE_DATE_INVALID",
+  "FINANCIAL_PERIOD_INVALID",
+  "HISTORICAL_COMPANY_INVALID",
+  "HISTORICAL_DATE_INVALID",
+  "HISTORICAL_FUTURE_DATE_REFUSED",
+  "HISTORICAL_PERIOD_INVALID",
+  "INVENTORY_AUDIT_INVALID_COMPANY",
+  "FORCE RLS",
+  "POLICY CHANGE",
   // Scheduled WhatsApp placeholders: an example group chat ID and an IANA timezone
   // identifier. Both are literal technical formats the user must type as-is.
   "120363012345678901@g.us",
