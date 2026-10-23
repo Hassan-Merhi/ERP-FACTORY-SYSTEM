@@ -43,6 +43,11 @@ export function BarcodeReferenceResults({ model }: { model: BarcodeLookupModel }
   }
 
   const { labelPrint, baleInfo } = result;
+  // V5 stores the bale as IN_STOCK until finalization, but a live order
+  // assignment makes its effective status LOADING in Bale Explorer.
+  const isOpenLoading = ["DRAFT", "LOADING"].includes(result.loadedOnOrder?.status ?? "");
+  const canReturnToStock = isOpenLoading ||
+    ["RESERVED_FOR_ORDER", "RESERVED", "SOLD"].includes(baleInfo?.status ?? "");
   const openSwap = () => {
     model.setSwapRef("");
     model.setSwapPreview(null);
@@ -80,21 +85,21 @@ export function BarcodeReferenceResults({ model }: { model: BarcodeLookupModel }
               {(baleInfo?.status === "RESERVED_FOR_ORDER" ||
                 baleInfo?.status === "RESERVED" ||
                 baleInfo?.status === "SOLD") && (
-                <>
-                  <Button size="sm" variant="outline" onClick={openSwap} data-testid="button-swap-bale">
-                    <ArrowLeftRight className="h-3.5 w-3.5 mr-1 text-amber-500" />
-                    Swap Bale
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => model.setShowReturnToStockDialog(true)}
-                    data-testid="button-return-to-stock"
-                  >
-                    <Undo2 className="h-3.5 w-3.5 mr-1 text-blue-500" />
-                    Return to Stock
-                  </Button>
-                </>
+                <Button size="sm" variant="outline" onClick={openSwap} data-testid="button-swap-bale">
+                  <ArrowLeftRight className="h-3.5 w-3.5 mr-1 text-amber-500" />
+                  Swap Bale
+                </Button>
+              )}
+              {baleInfo && canReturnToStock && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => model.setShowReturnToStockDialog(true)}
+                  data-testid="button-return-to-stock"
+                >
+                  <Undo2 className="h-3.5 w-3.5 mr-1 text-blue-500" />
+                  Return to Stock
+                </Button>
               )}
               <Button size="sm" variant="outline" onClick={openProductChange} data-testid="button-change-product">
                 <Pencil className="h-3.5 w-3.5 mr-1" />

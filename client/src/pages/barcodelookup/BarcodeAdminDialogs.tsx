@@ -17,6 +17,7 @@ type BarcodeLookupModel = ReturnType<typeof useBarcodeLookupModel>;
 
 export function BarcodeAdminDialogs({ model }: { model: BarcodeLookupModel }) {
   const referenceNumber = model.referenceResult?.labelPrint?.referenceNumber;
+  const releasingOpenLoading = ["DRAFT", "LOADING"].includes(model.returnToStockOrderInfo?.status ?? "");
 
   return (
     <>
@@ -367,11 +368,18 @@ export function BarcodeAdminDialogs({ model }: { model: BarcodeLookupModel }) {
                     <span>{model.returnToStockOrderInfo.totalBalesInOrder}</span>
                   </div>
                 </div>
-                {model.returnToStockOrderInfo.totalBalesInOrder <= 1 && (
+                {model.returnToStockOrderInfo.totalBalesInOrder <= 1 && !releasingOpenLoading && (
                   <div className="flex items-start gap-2 p-3 rounded-md bg-destructive/10 text-destructive text-sm">
                     <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
                     <p>This is the last bale in the order. You must cancel the entire order instead.</p>
                   </div>
+                )}
+                {releasingOpenLoading && (
+                  <p className="text-sm text-muted-foreground" data-testid="return-open-loading-info">
+                    This bale will be removed from the current container loading and returned to available stock.
+                    The loading's bale count, weight and totals will update. You can scan the same reference
+                    on another loading immediately, even when this was the last bale in the current loading.
+                  </p>
                 )}
                 {model.returnToStockOrderInfo.status === "FINALIZED" &&
                   model.returnToStockOrderInfo.totalBalesInOrder > 1 && (
@@ -384,8 +392,8 @@ export function BarcodeAdminDialogs({ model }: { model: BarcodeLookupModel }) {
                       </p>
                     </div>
                   )}
-                {model.returnToStockOrderInfo.status !== "FINALIZED" &&
-                  model.returnToStockOrderInfo.totalBalesInOrder > 1 && (
+                {model.returnToStockOrderInfo.status !== "FINALIZED" && !releasingOpenLoading &&
+                   model.returnToStockOrderInfo.totalBalesInOrder > 1 && (
                     <p className="text-sm text-muted-foreground">
                       The bale will be removed from this order and returned to stock. Order totals will be recalculated.
                     </p>
@@ -409,7 +417,7 @@ export function BarcodeAdminDialogs({ model }: { model: BarcodeLookupModel }) {
               disabled={
                 model.returnToStockMutation.isPending ||
                 model.orderInfoLoading ||
-                (model.returnToStockOrderInfo?.totalBalesInOrder ?? 0) <= 1
+                (!releasingOpenLoading && (model.returnToStockOrderInfo?.totalBalesInOrder ?? 0) <= 1)
               }
               onClick={() => {
                 const baleId = model.referenceResult?.baleInfo?.id;

@@ -1,6 +1,6 @@
 import { searchAny } from "@shared/searchNormalization";
 import { useEffect, useState } from "react";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { useAppMode } from "@/contexts/AppModeContext";
 import { getApiRequest } from "@/lib/factoryApi";
@@ -53,6 +53,7 @@ export function useBarcodeLookupModel() {
   const [weightEditBale, setWeightEditBale] = useState<WeightEditBale | null>(null);
 
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const appMode = useAppMode();
   const modeApiRequest = getApiRequest(appMode);
   const { wrapAdminAction, AdminDialog } = useAdminOverride();
@@ -240,9 +241,11 @@ export function useBarcodeLookupModel() {
     },
   });
 
+  const isOpenLoading = ["DRAFT", "LOADING"].includes(referenceResult?.loadedOnOrder?.status ?? "");
   const returnableBaleId = (() => {
     const status = referenceResult?.baleInfo?.status;
-    return (status === "RESERVED_FOR_ORDER" || status === "RESERVED" || status === "SOLD") && showReturnToStockDialog
+    return (isOpenLoading || status === "RESERVED_FOR_ORDER" || status === "RESERVED" || status === "SOLD") &&
+      showReturnToStockDialog
       ? referenceResult?.baleInfo?.id
       : null;
   })();
@@ -259,12 +262,25 @@ export function useBarcodeLookupModel() {
 
   const returnToStockMutation = useMutation({
     mutationFn: async (baleId: number): Promise<ReturnToStockResult> => {
-      const response = await modeApiRequest("POST", `/api/factory/bales/${baleId}/return-to-stock`, {});
+      // An open V5 loading keeps the physical bale IN_STOCK; detach its active
+      // container assignment instead of using the legacy reserved/sold endpoint.
+      const endpoint = isOpenLoading ? "release-from-loading" : "return-to-stock";
+      const response = await modeApiRequest("POST", `/api/factory/bales/${baleId}/${endpoint}`, {});
       if (!response.ok) throw await readError(response, "Failed to return bale to stock");
       return (await response.json()) as ReturnToStockResult;
     },
     onSuccess: (data) => {
       setShowReturnToStockDialog(false);
+      // Invalidate loading and inventory views so the released bale can be
+      // immediately scanned onto another outbound container.
+      for (const key of [
+        ["/api/factory/bales"],
+        ["/api/factory/customer-orders"],
+        ["/api/factory/customer-orders/loading-list"],
+        ["/api/factory/customer-orders/loading-list/priority-scan-configs"],
+        ["/api/factory/location-inventory"],
+        ["/api/factory/v5/location-summary"],
+      ]) queryClient.invalidateQueries({ queryKey: key });
       const referenceNumber = referenceResult?.labelPrint?.referenceNumber;
       if (referenceNumber) referenceLookup.mutate(referenceNumber);
       const invoiceMessage = data.invoiceNumber
