@@ -256,6 +256,28 @@ describe("deleting a factory currency keeps the rates documents used (decision 2
   });
 });
 
+describe("same-day factory FX settings saves", () => {
+  it("keeps only one active rate, archives the superseded rate and is idempotent", async () => {
+    await setRole("Admin");
+    const data = { currencyCode: "KRW", rateToUsd: "0.00123", effectiveDate: "2026-10-23" };
+    const first = await agent.post("/api/factory/fx-rates").send(data);
+    expect(first.status).toBe(200);
+    const second = await agent.post("/api/factory/fx-rates").send({ ...data, rateToUsd: "0.00124" });
+    expect(second.status).toBe(200);
+    expect(second.body.id).not.toBe(first.body.id);
+    const same = await agent.post("/api/factory/fx-rates").send({ ...data, rateToUsd: "0.00124" });
+    expect(same.status).toBe(200);
+    expect(same.body.id).toBe(second.body.id);
+    expect(await factoryRates("KRW")).toEqual([
+      { currency_code: "KRW", rate: "0.00123000", date: data.effectiveDate, source: "archived" },
+      { currency_code: "KRW", rate: "0.00124000", date: data.effectiveDate, source: "manual" },
+    ]);
+    const visible = await agent.get("/api/factory/fx-rates");
+    expect(visible.status).toBe(200);
+    expect(visible.body.filter((r: { currencyCode: string }) => r.currencyCode === "KRW")).toHaveLength(1);
+  });
+});
+
 describe("individual factory FX settings rate removal", () => {
   it("removes the selected row only and archives rates referenced by documents", async () => {
     await setRole("Admin");
