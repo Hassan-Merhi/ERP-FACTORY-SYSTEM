@@ -92,6 +92,25 @@ export async function saveFactoryFxRate(actor: RateActor, input: FactoryRateInpu
       input.effectiveDate,
       "manual"
     );
+    // Keep one active manual rate per currency and effective date. Previous
+    // same-day revisions remain archived evidence rather than being overwritten
+    // or deleted (documents may have used their exact original value).
+    const sameDay = await tx.select().from(factoryFxRates).where(and(
+      eq(factoryFxRates.companyId, actor.companyId),
+      eq(factoryFxRates.currencyCode, input.currencyCode),
+      eq(factoryFxRates.effectiveDate, input.effectiveDate),
+      eq(factoryFxRates.source, "manual")
+    )).orderBy(asc(factoryFxRates.id)).for("update");
+    const latest = sameDay[sameDay.length - 1];
+    if (sameDay.length === 1 && String(latest.rateToUsd) === Number(input.rateToUsd).toFixed(8)) {
+      return latest; // Repeated save of an identical rate is idempotent.
+    }
+    if (sameDay.length > 0) {
+      await tx.update(factoryFxRates).set({ source: "archived" }).where(and(
+        eq(factoryFxRates.companyId, actor.companyId),
+        inArray(factoryFxRates.id, sameDay.map((row) => row.id))
+      ));
+    }
     const [saved] = await tx
       .insert(factoryFxRates)
       .values({ ...input, companyId: actor.companyId, source: "manual" })
@@ -108,6 +127,7 @@ export async function saveFactoryFxRate(actor: RateActor, input: FactoryRateInpu
             old: previous ? { rate: previous.rate, effectiveDate: previous.effectiveDate } : null,
             new: { rate: String(saved.rateToUsd), effectiveDate: String(saved.effectiveDate) },
           },
+          archivedSameDay: { old: sameDay.map((row) => ({ id: row.id, rate: String(row.rateToUsd) })), new: [] },
         },
       },
       tx
@@ -117,7 +137,7 @@ export async function saveFactoryFxRate(actor: RateActor, input: FactoryRateInpu
 }
 
 /** Why a factory rate row was kept by a currency delete. */
-export type KeptFactoryFxRateReason = "used_by_document" | "recorded_auto_rate";
+export type KeptFactoryFxRateReason = "used_by_document" | "recorded_auto_rate" | "archived_rate";
 
 export interface KeptFactoryFxRate {
   id: number;
@@ -208,7 +228,7 @@ export async function deleteFactoryFxRates(
       const date = String(row.effectiveDate);
       const shape = { id: row.id, rate: String(row.rateToUsd), effectiveDate: date, source: row.source };
       if (row.source !== "manual") {
-        kept.push({ ...shape, reason: "recorded_auto_rate" });
+        kept.push({ ...shape, reason: row.source === "archived" ? "archived_rate" : "recorded_auto_rate" });
         continue;
       }
       const next = manualDates.find((candidate) => candidate > date);
@@ -288,7 +308,7 @@ export async function removeFactoryFxRateById(
         eq(factoryFxRates.companyId, actor.companyId),
         eq(factoryFxRates.source, "manual")
       )
-    ).for("update").limit(1);
+    ).limit(1).for("update");
     if (!row) return null;
 
     const manualDates = await tx.select({ effectiveDate: factoryFxRates.effectiveDate })
