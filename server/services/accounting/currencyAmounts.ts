@@ -87,6 +87,7 @@ const KNOWN_CURRENCIES = new Set([
   "XOF", // West African CFA Franc (ISO 4217)
   "CFA", // Non-standard alias used in this project for XOF; accepted here
   "EUR",
+  "AUD",
   "GBP",
   "CNY",
   "NGN",

@@ -77,6 +77,48 @@ export async function resolveSharedFactoryRequirements(req: Request): Promise<Sh
   const path = (req.originalUrl.split("?", 1)[0] || req.path).toLowerCase();
   const method = req.method.toUpperCase();
 
+  // Shared cash/bank reconciliation is an accounting surface even though
+  // its endpoints are mounted once for ERP, Factory and Properties.
+  if (path.startsWith("/api/accounting/factory-production/")) {
+    return [page(ACCOUNTS_PAGE, "hide_tab_accounts_view")];
+  }
+
+  if (path.startsWith("/api/accounting/rollout/")) {
+    return [page(ACCOUNTS_PAGE, "hide_tab_accounts_view")];
+  }
+
+  if (path.startsWith("/api/accounting/unified-dashboard")) {
+    return [page(ACCOUNTS_PAGE, "hide_tab_accounts_view")];
+  }
+
+  if (path.startsWith("/api/accounting/fiscal-review/")) {
+    return [page(ACCOUNTS_PAGE, "hide_tab_accounts_view")];
+  }
+
+  if (path.startsWith("/api/accounting/statements/")) {
+    return [page(ACCOUNTS_PAGE, "hide_tab_accounts_view")];
+  }
+
+  if (path.startsWith("/api/accounting/history/")) {
+    return [page(ACCOUNTS_PAGE, "hide_tab_accounts_view")];
+  }
+
+  if (path.startsWith("/api/accounting/consolidation/")) {
+    return [page(ACCOUNTS_PAGE, "hide_tab_accounts_view")];
+  }
+
+  if (path.startsWith("/api/accounting/rentals/")) {
+    return [page(ACCOUNTS_PAGE, "hide_tab_accounts_view")];
+  }
+
+  if (path.startsWith("/api/accounting/monetary-fx/")) {
+    return [page(ACCOUNTS_PAGE, "hide_tab_accounts_view")];
+  }
+
+  if (path.startsWith("/api/accounting/cash-bank/")) {
+    return [page(ACCOUNTS_PAGE, "hide_tab_accounts_view")];
+  }
+
   if (
     path === "/api/accounts" ||
     path.startsWith("/api/accounts/") ||

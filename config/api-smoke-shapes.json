@@ -75,7 +75,7 @@
     },
     "/api/accounts/multi-currency/readiness": {
       "status": 200,
-      "shape": "{asOfDate:scalar,ready:scalar,sampleVoucherIds:[],unresolvedBankOpeningCount:scalar,unresolvedCustomerOpeningCount:scalar,unresolvedEmployeeOpeningCount:scalar,unresolvedEntryCount:scalar,unresolvedFixedAssetCount:scalar,unresolvedLedgerOpeningCount:scalar,unresolvedSupplierOpeningCount:scalar,unresolvedVoucherCount:scalar}"
+      "shape": "{asOfDate:scalar,legacyCompatibilityMode:scalar,ready:scalar,sampleVoucherIds:[],unresolvedBankOpeningCount:scalar,unresolvedCustomerOpeningCount:scalar,unresolvedEmployeeOpeningCount:scalar,unresolvedEntryCount:scalar,unresolvedFixedAssetCount:scalar,unresolvedLedgerOpeningCount:scalar,unresolvedSupplierOpeningCount:scalar,unresolvedVoucherCount:scalar}"
     },
     "/api/accounts/multi-currency/unresolved-openings": {
       "status": 200,

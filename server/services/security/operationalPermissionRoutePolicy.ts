@@ -99,6 +99,8 @@ export const OPERATIONAL_ROUTE_PERMISSIONS: Readonly<Record<OperationalPermissio
     "GET /api/credit-sales-import/template",
   ],
   import: [
+    // Unified accounting bank-statement upload (metadata only; also locked by the rollout gate).
+    "POST /api/accounting/cash-bank/import",
     "POST /api/stock-items/import-opening-balances",
     "POST /api/bales/import",
     "POST /api/factory/workers/import-excel",

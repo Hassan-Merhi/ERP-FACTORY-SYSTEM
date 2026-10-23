@@ -4,7 +4,7 @@ import type { ClientErrorLike } from "@/lib/clientError";
  *
  * Extracted from PropertyRentalPage.tsx during the Phase 4 god-file split.
  */
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
@@ -67,6 +67,7 @@ function BulkPaymentDialog({
     return Object.values(amounts).reduce((sum, v) => sum + (parseFloat(v) || 0), 0);
   }, [amounts]);
 
+  const bulkRequest = useRef<{ fingerprint: string; id: string } | null>(null);
   const bulkPay = useMutation({
     mutationFn: async (): Promise<BulkPaymentResponse> => {
       const items = units
@@ -80,15 +81,24 @@ function BulkPaymentDialog({
           scheduleFuturePayment,
         }));
       if (items.length === 0) throw new Error("No valid amounts entered");
+      // Same request id for a retry of unchanged items, so a lost response
+      // replays the original payment groups instead of posting them twice.
+      const fingerprint = JSON.stringify(items);
+      const id = bulkRequest.current?.fingerprint === fingerprint ? bulkRequest.current.id : crypto.randomUUID();
+      bulkRequest.current = { fingerprint, id };
       // The voucher-path guard requires a JSON object to attach its stable
       // clientRequestId. Sending a bare array made the server reject the write.
-      const response = await apiRequest("POST", apiBase + "/payments/bulk", { items });
+      const response = await apiRequest("POST", apiBase + "/payments/bulk", {
+        items: items.map((item, index) => ({ ...item, clientRequestId: `${id}:${index}` })),
+      });
       return (await response.json()) as BulkPaymentResponse;
     },
     onSuccess: (data) => {
+      bulkRequest.current = null;
       const confirmed = data.results.filter((row) => !row.error && !!row.paymentGroupId);
       const failed = data.results.filter((row) => !!row.error);
-      const incomplete = confirmed.length + failed.length !== data.results.length || data.processed !== data.results.length;
+      const incomplete =
+        confirmed.length + failed.length !== data.results.length || data.processed !== data.results.length;
 
       queryClient.invalidateQueries({ queryKey: [apiBase + "/units"] });
       queryClient.invalidateQueries({ queryKey: [apiBase + "/payments/scheduled"] });

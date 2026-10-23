@@ -8,6 +8,7 @@ import { db, type DbTransaction } from "../../db";
 import { softDeleteVoucherTx } from "../../services/accounting/voucherSoftDelete";
 import * as schema from "@shared/schema";
 import { CLOSED_PERIOD_LOCK_NAMESPACE } from "../../services/accounting/closedPeriodGuard";
+import { assertTransactionCompanyScope } from "../../services/security/transactionCompanyScope";
 import { accountTypeNamesOf, classifyAccountType } from "../../services/accounting/accountClassification";
 import { signedMasterOpening } from "../../services/accounting/balances/openingSide";
 import { writeAuditEvent } from "../../services/audit/auditService";
@@ -161,13 +162,41 @@ export async function closeFiscalPeriod(
   retainedEarningsAccountId: number,
   closedByUserId: string,
   notes?: string,
-  actor?: { username: string }
+  actor?: { username: string },
+  reviewedClose?: {
+    /** Executed AFTER acquiring the exclusive company period lock. */
+    beforeClose: (tx: DbTransaction) => Promise<void>;
+    /** Atomically attach audit evidence to the exact closing journal. */
+    afterClose: (tx: DbTransaction, closure: schema.FiscalPeriodClosure) => Promise<void>;
+  }
 ): Promise<schema.FiscalPeriodClosure> {
   return await db.transaction(async (tx) => {
     // Exclusive per-company lock: voucher writes hold the shared side (see
     // closedPeriodGuard), so no write can land in the period while its
     // balances are being totalled and closed.
     await tx.execute(sql`SELECT pg_advisory_xact_lock(${CLOSED_PERIOD_LOCK_NAMESPACE}, ${companyId})`);
+    // The policy table is protected by FORCE ROW LEVEL SECURITY; the fiscal
+    // writer must set the selected, membership-authorized company on THIS
+    // transaction before reading policy, otherwise RLS would return no row
+    // and a mandatory review could appear disabled.
+    await assertTransactionCompanyScope(tx, companyId);
+    // Company Owner can explicitly require independent dual approval for
+    // ALL close entry points. Check policy under the same fiscal posting lock:
+    // direct legacy API callers must not bypass reviewed-close enforcement.
+    const reviewPolicy = await tx.execute(sql`
+      SELECT enforce_reviewed_close FROM accounting_fiscal_review_policy
+      WHERE company_id=${companyId} LIMIT 1
+    `);
+    const requiresReview =
+      (reviewPolicy.rows[0] as { enforce_reviewed_close?: boolean } | undefined)?.enforce_reviewed_close === true;
+    if (requiresReview && !reviewedClose)
+      throw new FiscalPeriodCloseError(
+        "This company requires two approved reviews: use the reviewed fiscal close endpoint.",
+        409
+      );
+    // Reviewed close always validates inside the exclusive company lock,
+    // even where legacy close remains permitted for compatibility.
+    if (reviewedClose) await reviewedClose.beforeClose(tx);
 
     const existingClosures = await tx
       .select()
@@ -353,6 +382,7 @@ export async function closeFiscalPeriod(
       tx
     );
 
+    if (reviewedClose) await reviewedClose.afterClose(tx, closure);
     return closure;
   });
 }

@@ -10,6 +10,7 @@ import {
   vouchers,
 } from "@shared/schema";
 import { removeFactoryDaybookMirrorTx } from "../accounting/factoryDaybookMirrorRemoval";
+import { rentalPaymentVoucherSuffix } from "./rentalPostingIdentity";
 
 export type RentalModule = "PROPERTIES" | "ERP" | "FACTORY";
 
@@ -39,7 +40,7 @@ function hashPaymentGroupId(groupId: string): bigint {
 }
 
 function recognitionVoucherNumber(paymentDate: string, paymentGroupId: string): string {
-  return `ADV-REC-${paymentDate.replace(/-/g, "")}-${paymentGroupId.slice(-6)}`;
+  return `ADV-REC-${paymentDate.replace(/-/g, "")}-${rentalPaymentVoucherSuffix(paymentGroupId)}`;
 }
 
 export async function deleteRentalPaymentGroup(input: DeleteRentalPaymentInput): Promise<DeleteRentalPaymentResult> {
@@ -151,18 +152,38 @@ export async function deleteRentalPaymentGroup(input: DeleteRentalPaymentInput):
             .limit(1);
 
           if (!outsideReference) {
-            await tx.update(vouchers).set({ deletedAt: new Date() }).where(eq(vouchers.id, voucherId));
+            // Retire, do not merely set deleted_at: the source must be able to
+            // post again without an old voucher number or idempotency marker
+            // claiming the replacement. All effects stay in this transaction.
+            await retireVouchersTx(tx, {
+              companyId: input.companyId,
+              voucherIds: [voucherId],
+              reason: "rental-payment-delete",
+              actor: input.actor,
+            });
             await removeFactoryDaybookMirrorTx({ tx, companyId: input.companyId, voucherId });
-            await tx
-              .update(vouchers)
-              .set({ deletedAt: new Date() })
+            const clearing = await tx
+              .select({ id: vouchers.id })
+              .from(vouchers)
               .where(
                 and(
                   eq(vouchers.companyId, input.companyId),
                   eq(vouchers.voucherNumber, `AP-CLEAR-${voucherId}`),
                   isNull(vouchers.deletedAt)
                 )
-              );
+              )
+              .for("update");
+            if (clearing.length > 0) {
+              await retireVouchersTx(tx, {
+                companyId: input.companyId,
+                voucherIds: clearing.map((row) => row.id),
+                reason: "rental-payment-delete-advance-clearing",
+                actor: input.actor,
+              });
+              for (const row of clearing) {
+                await removeFactoryDaybookMirrorTx({ tx, companyId: input.companyId, voucherId: row.id });
+              }
+            }
           }
         }
 
@@ -181,7 +202,13 @@ export async function deleteRentalPaymentGroup(input: DeleteRentalPaymentInput):
             .for("update");
 
           for (const recognition of recognitionRows) {
-            await tx.update(vouchers).set({ deletedAt: new Date() }).where(eq(vouchers.id, recognition.id));
+            await retireVouchersTx(tx, {
+              companyId: input.companyId,
+              voucherIds: [recognition.id],
+              reason: "rental-payment-delete-advance-recognition",
+              actor: input.actor,
+            });
+            await removeFactoryDaybookMirrorTx({ tx, companyId: input.companyId, voucherId: recognition.id });
             if (ledgerRowIds.length > 0) {
               await tx
                 .update(propertyMonthlyLedger)
@@ -233,7 +260,12 @@ export async function deleteRentalPaymentGroup(input: DeleteRentalPaymentInput):
 
           const legacyVoucherIds = legacyRepairVouchers.map((voucher) => voucher.id);
           for (const legacyVoucherId of legacyVoucherIds) {
-            await tx.update(vouchers).set({ deletedAt: new Date() }).where(eq(vouchers.id, legacyVoucherId));
+            await retireVouchersTx(tx, {
+              companyId: input.companyId,
+              voucherIds: [legacyVoucherId],
+              reason: "rental-payment-delete-prepaid-repair",
+              actor: input.actor,
+            });
             await removeFactoryDaybookMirrorTx({ tx, companyId: input.companyId, voucherId: legacyVoucherId });
           }
 

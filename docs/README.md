@@ -30,6 +30,21 @@ failure, so a correct document cannot quietly become undiscoverable.
 |---|---|
 | [accounting-flow.md](accounting-flow.md) | Voucher types, posting, the ledger |
 | [accounting-audit-2026-10.md](accounting-audit-2026-10.md) | Accounting audit findings, production evidence and remediation waves |
+| [unified-accounting-phase1.md](unified-accounting-phase1.md) | Unified accounting (ERP, Factory, Rentals): Phase 1: Foundation |
+| [unified-accounting-phase2.md](unified-accounting-phase2.md) | Unified accounting (ERP, Factory, Rentals): Phase 2: Posting and Voucher Lifecycle |
+| [unified-accounting-phase3.md](unified-accounting-phase3.md) | Unified accounting (ERP, Factory, Rentals): Phase 3: Customer, Supplier and Tenant Open-Item Reconciliation |
+| [unified-accounting-phase4.md](unified-accounting-phase4.md) | Unified accounting (ERP, Factory, Rentals): Phase 4: Cash and Bank Reconciliation |
+| [unified-accounting-phase5.md](unified-accounting-phase5.md) | Unified accounting (ERP, Factory, Rentals): Phase 5: Advanced Multi-Currency Accounting |
+| [unified-accounting-phase6.md](unified-accounting-phase6.md) | Unified accounting (ERP, Factory, Rentals): Phase 6: ERP Inventory and Cost of Goods Sold |
+| [unified-accounting-phase7.md](unified-accounting-phase7.md) | Unified accounting (ERP, Factory, Rentals): Phase 7: Factory Production and Container Accounting |
+| [unified-accounting-phase8.md](unified-accounting-phase8.md) | Unified accounting (ERP, Factory, Rentals): Phase 8: Full Rentals Accounting |
+| [unified-accounting-phase9.md](unified-accounting-phase9.md) | Unified accounting (ERP, Factory, Rentals): Phase 9: Intercompany and Consolidation |
+| [unified-accounting-phase10.md](unified-accounting-phase10.md) | Unified accounting (ERP, Factory, Rentals): Phase 10: Historical Accounting and As-of Dates |
+| [unified-accounting-phase11.md](unified-accounting-phase11.md) | Unified accounting (ERP, Factory, Rentals): Phase 11: Professional Financial Statements |
+| [unified-accounting-phase12.md](unified-accounting-phase12.md) | Unified accounting: Phase 12: Existing Cost Centers, Budgets & Read-Only Dashboard Bridge |
+| [unified-accounting-phase13.md](unified-accounting-phase13.md) | Unified accounting (ERP, Factory, Rentals): Phase 13: Fiscal Period Closing & Audit Controls |
+| [unified-accounting-phase14.md](unified-accounting-phase14.md) | Unified accounting (ERP, Factory, Rentals): Phase 14: Unified Net Position & Accounting Dashboard |
+| [unified-accounting-phase15.md](unified-accounting-phase15.md) | Unified accounting (ERP, Factory, Rentals): Phase 15: Integration, Permissions & Controlled Rollout |
 | [audits/historical-sold-bale-cost-reconciliation-review.md](audits/historical-sold-bale-cost-reconciliation-review.md) | Review-only reconciliation of historical sold-bale costs and the guarded pre-invoice recost |
 | [inventory-flow.md](inventory-flow.md) | Stock data model and cost calculation |
 | [inventory-cost-memory-policy.md](inventory-cost-memory-policy.md) | Cost-memory rules for the current implementation |

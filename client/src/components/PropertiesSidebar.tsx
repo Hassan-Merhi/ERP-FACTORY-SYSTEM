@@ -51,6 +51,22 @@ export const PROPERTIES_NAV_SECTIONS: NavSection[] = [
       { title: "Analytics", url: "/properties/analytics", icon: BarChart2 },
     ],
   },
+  {
+    label: "Accounting Reconciliation",
+    color: NAV_COLOR.accounting,
+    items: [
+      { title: "Open Items", url: "/properties/accounting/open-items", icon: ClipboardList },
+      { title: "Bank & Cash Reconciliation", url: "/properties/accounting/cash-bank", icon: Landmark },
+      { title: "Multi-Currency Accounting", url: "/properties/accounting/monetary-fx", icon: Landmark },
+      { title: "Rental Accounting", url: "/properties/accounting/rentals", icon: ClipboardList },
+      { title: "Intercompany & Consolidation", url: "/properties/accounting/consolidation", icon: Landmark },
+      { title: "Historical Accounting", url: "/properties/accounting/history", icon: Clock },
+      { title: "Financial Statements", url: "/properties/accounting/statements", icon: FileText },
+      { title: "Fiscal Closing & Audit", url: "/properties/accounting/fiscal-review", icon: Landmark },
+      { title: "Unified Accounting Dashboard", url: "/properties/accounting/dashboard", icon: Landmark },
+      { title: "Unified Accounting Rollout", url: "/properties/accounting/rollout", icon: Landmark },
+    ],
+  },
 ];
 
 const PROPERTIES_PINNED_DEFAULTS: NavItem[] = [
@@ -61,13 +77,28 @@ const PROPERTIES_PINNED_DEFAULTS: NavItem[] = [
 export function PropertiesSidebar({ user, onLogout }: { user?: ShellUser; onLogout: () => void | Promise<void> }) {
   const isAdmin = user?.role === "Admin" || user?.role === "Developer";
   const isOwner = user?.role === "Owner";
+  const isDeveloper = user?.role === "Developer";
   const visibleSections = useMemo(
     () =>
       PROPERTIES_NAV_SECTIONS.map((section) => ({
         ...section,
-        items: section.items.filter((item) => !isOwner || item.url !== "/properties/analytics"),
+        items: section.items.filter(
+          (item) =>
+            (!isOwner || item.url !== "/properties/analytics") &&
+            (isDeveloper ||
+              (item.url !== "/properties/accounting/open-items" &&
+                item.url !== "/properties/accounting/cash-bank" &&
+                item.url !== "/properties/accounting/monetary-fx" &&
+                item.url !== "/properties/accounting/rentals" &&
+                item.url !== "/properties/accounting/consolidation" &&
+                item.url !== "/properties/accounting/history" &&
+                item.url !== "/properties/accounting/statements" &&
+                item.url !== "/properties/accounting/fiscal-review" &&
+                item.url !== "/properties/accounting/dashboard" &&
+                item.url !== "/properties/accounting/rollout"))
+        ),
       })).filter((section) => section.items.length > 0),
-    [isOwner]
+    [isDeveloper, isOwner]
   );
 
   const { items: pinnedItems, reorder: reorderPinned } = usePinnedOrder(
