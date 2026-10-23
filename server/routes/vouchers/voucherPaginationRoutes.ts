@@ -3,6 +3,7 @@ import { punctuationInsensitiveSearch } from "../../lib/searchNormalization";
 import { and, asc, desc, eq, inArray, isNull, or, sql, type SQL } from "drizzle-orm";
 import { requireAuth } from "../../auth";
 import { getActiveCompanyPermissionContext } from "../../services/security/activeCompanyPermissionContext";
+import { hasCostCenterErpPageAccess } from "../../middleware/costCenterErpPageAccess";
 import { db } from "../../db";
 import { getErrorMessage } from "../../lib/httpHandlers";
 import { userLocations, vouchers } from "@shared/schema";
@@ -120,7 +121,12 @@ export function registerVoucherPaginationRoutes(app: Express): void {
       const ccRaw = req.query.costCenterId;
       if (ccRaw !== undefined) {
         const current = await getActiveCompanyPermissionContext(req);
-        if (!["Admin", "Owner", "Developer", "Manager"].includes(current.role)) {
+        // Allocation membership is Cost Center data: same Accounts page grant
+        // as the /api/cost-centers routes, not just the Daybook/Vouchers page.
+        if (
+          !["Admin", "Owner", "Developer", "Manager"].includes(current.role) ||
+          !(await hasCostCenterErpPageAccess(current.companyId, current.userId, current.role))
+        ) {
           return res.status(403).json({ message: "Cost center access required" });
         }
         const ccId = Number(ccRaw);
