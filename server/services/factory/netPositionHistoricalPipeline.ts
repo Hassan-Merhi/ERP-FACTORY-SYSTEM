@@ -287,6 +287,7 @@ type OrderRow = {
   state_known_before: boolean;
   scanned_qty: string;
   scanned_value: string;
+  known_charges: string;
   unknown_scans: string;
   had_charges: boolean;
   had_unknown_restores: boolean;
@@ -362,7 +363,18 @@ async function getHistoricalOrders(
              AND (COALESCE(${isBefore(scope, "o.verified_at")},false)
                OR COALESCE(${isBefore(scope, "o.loading_finalized_at")},false))
              AND NOT COALESCE(${isBefore(scope, "o.updated_at")},false)) AS unproven_verification,
-           COALESCE(${isBefore(scope, "o.finalized_at")},false) AS finalized_before,
+           -- finalized_at survives an invoice reversal (and was written
+           -- before verification on some legacy orders): an order back in a
+           -- pre-invoice status was invoiced that day only if its invoice
+           -- voucher was in the ledger then.
+           (COALESCE(${isBefore(scope, "o.finalized_at")},false)
+             AND (o.status NOT IN ('PENDING_VERIFICATION', 'VERIFIED', 'LOADING')
+               OR EXISTS (SELECT 1 FROM vouchers iv
+                           WHERE iv.company_id = o.company_id
+                             AND (iv.voucher_number = 'INV-GL-' || o.company_id::text || '-' || o.id::text
+                               OR iv.original_voucher_number = 'INV-GL-' || o.company_id::text || '-' || o.id::text)
+                             AND ${isBefore(scope, "iv.created_at")}
+                             AND (iv.deleted_at IS NULL OR NOT ${isBefore(scope, "iv.deleted_at")})))) AS finalized_before,
            -- The order row was last written before the cutoff and no scan was
            -- added or cancelled since: its stored totals ARE its value that day.
            (COALESCE(${isBefore(scope, "o.updated_at")},false)
@@ -376,6 +388,18 @@ async function getHistoricalOrders(
            ) AS unchanged_since_cutoff,
            COALESCE(t.qty, '0') AS scanned_qty,
            COALESCE(t.scanned_value, '0') AS scanned_value,
+           -- Charges carry no timestamp of their own; one posted to a voucher
+           -- (CHARGE-PRE-{order}-{charge} before invoicing) is known from it.
+           COALESCE((SELECT SUM(ch.amount::numeric) FROM customer_order_charges ch
+                      WHERE ch.order_id = o.id
+                        AND EXISTS (SELECT 1 FROM vouchers cv
+                                     WHERE cv.company_id = o.company_id
+                                       AND (cv.id = ch.voucher_id
+                                         OR (ch.voucher_id IS NULL
+                                           AND (cv.voucher_number = 'CHARGE-PRE-' || o.id::text || '-' || ch.id::text
+                                             OR cv.original_voucher_number = 'CHARGE-PRE-' || o.id::text || '-' || ch.id::text)))
+                                       AND ${isBefore(scope, "cv.created_at")}
+                                       AND (cv.deleted_at IS NULL OR NOT ${isBefore(scope, "cv.deleted_at")}))), 0)::text AS known_charges,
            (SELECT COUNT(*)::text FROM customer_order_bales cob
              WHERE cob.order_id = o.id AND cob.scanned_at IS NULL
                AND NOT ${netPositionLegacyScanKnown("cob", "o", companyId, scope)}) AS unknown_scans,
@@ -406,6 +430,7 @@ async function getHistoricalOrders(
        AND o.order_date <= ${scope.asOf}::date
        AND ${isBefore(scope, "o.created_at")}
        AND (o.deleted_at IS NULL OR NOT ${isBefore(scope, "o.deleted_at")})
+     ORDER BY o.order_date DESC, o.id
   `)
   );
   const pendingOrders: DatedPipelineOrder[] = [];
@@ -443,8 +468,9 @@ async function getHistoricalOrders(
     if (Number(r.unknown_scans) > 0) warnings.add("HISTORICAL_ORDER_SCAN_TIME_MISSING");
     // An order untouched since the cutoff keeps today's valuation rule
     // (grand_total incl. freight/charges and per-kg pricing). Otherwise the
-    // historic subtotal is the individually recorded bale scans, never
-    // today's mutable grand_total / total_qty_bales.
+    // historic subtotal is the individually recorded bale scans plus the
+    // charges posted by then, never today's mutable grand_total /
+    // total_qty_bales.
     const exact = Boolean(r.unchanged_since_cutoff);
     if (!exact) {
       if (r.had_charges) warnings.add("HISTORICAL_ORDER_CHARGES_UNVERSIONED");
@@ -454,7 +480,7 @@ async function getHistoricalOrders(
       id: Number(r.id),
       customerName: r.customer_name,
       orderDate: r.order_date,
-      grandTotal: cents(decimal(exact ? r.grand_total : r.scanned_value)),
+      grandTotal: cents(exact ? decimal(r.grand_total) : decimal(r.scanned_value).plus(decimal(r.known_charges))),
       totalQtyBales: exact ? Number(r.total_qty_bales ?? 0) : Number(r.scanned_qty),
     };
     if (stage === "VERIFIED") verifiedOrders.push(item);

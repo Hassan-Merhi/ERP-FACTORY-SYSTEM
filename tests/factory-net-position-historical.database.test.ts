@@ -351,6 +351,20 @@ databaseDescribe("Factory Net Position historical date filter (database)", () =>
     await db.execute(sql`UPDATE vouchers SET voucher_number = ${`${invoiceNumber}~DEL${retired}`},
         original_voucher_number = ${invoiceNumber}, deleted_at = '2026-10-21 10:00' WHERE id = ${retired}`);
     await invoiceVoucher("2026-10-21 10:00");
+    // O5 carries a stray finalized_at from before its Oct 18 verification but
+    // was never invoiced; its only value is a 25 charge posted on Oct 18. The
+    // row was rewritten on Oct 21, so the charge is dated by its voucher.
+    ids.order5 =
+      await one(sql`INSERT INTO customer_orders (company_id, customer_id, order_date, status, grand_total, total_qty_bales,
+        loading_started_at, verified_at, finalized_at, created_at, updated_at)
+      VALUES (${companyId}, ${ids.customer}, '2026-10-16', 'VERIFIED', 25, 0, '2026-10-16 08:00', '2026-10-18 09:00', '2026-10-17 08:00',
+        '2026-10-16 08:00', '2026-10-21 11:00') RETURNING id`);
+    const chargeId = await one(sql`INSERT INTO customer_order_charges (order_id, name, amount, charge_type)
+      VALUES (${ids.order5}, 'Freight', 25, 'FREIGHT') RETURNING id`);
+    await db.execute(sql`INSERT INTO vouchers (company_id, voucher_number, voucher_type, voucher_date, total_amount, optional, created_at)
+      VALUES (${companyId}, ${`CHARGE-PRE-${ids.order5}-${chargeId}`}, 'Journal', '2026-10-18', 0, false, '2026-10-18 09:00')`);
+    await db.execute(sql`INSERT INTO factory_daybook_entries (company_id, tx_date, tx_type, description, reference_id, reference_table, created_at)
+      VALUES (${companyId}, '2026-10-18', 'ORDER_VERIFIED', 'Order verified', ${ids.order5}, 'customer_orders', '2026-10-18 09:00')`);
     await db.execute(sql`INSERT INTO factory_daybook_entries (company_id, tx_date, tx_type, description, reference_id, reference_table, created_at) VALUES
       (${companyId}, '2026-10-07', 'ORDER_VERIFIED', 'Order verified', ${ids.order3}, 'customer_orders', '2026-10-07 08:00'),
       (${companyId}, '2026-10-19', 'LOADING_SUBMITTED', 'Loading submitted', ${ids.order2}, 'customer_orders', '2026-10-21 17:00'),
@@ -367,6 +381,9 @@ databaseDescribe("Factory Net Position historical date filter (database)", () =>
       sql`DELETE FROM factory_mix_batch_sources WHERE mix_batch_id IN (SELECT id FROM factory_mix_batches WHERE company_id = ${companyId})`
     );
     await db.execute(sql`DELETE FROM factory_mix_batches WHERE company_id = ${companyId}`);
+    await db.execute(
+      sql`DELETE FROM customer_order_charges WHERE order_id IN (SELECT id FROM customer_orders WHERE company_id = ${companyId})`
+    );
     for (const table of [
       "factory_daybook_entries",
       "customer_orders",
@@ -470,7 +487,7 @@ databaseDescribe("Factory Net Position historical date filter (database)", () =>
     // O2 was submitted (verified) only on Oct 21, although dated Oct 19:
     // it is a loading order before then, valued by its recorded scans.
     // O3 is verified until its Oct 21 invoice, valued by its legacy scan.
-    expect([d19.verifiedTotal, d20.verifiedTotal, d21.verifiedTotal]).toEqual([90, 90, 70]);
+    expect([d19.verifiedTotal, d20.verifiedTotal, d21.verifiedTotal]).toEqual([90 + 25, 90 + 25, 70 + 25]);
     expect([d19.loadingTotal, d20.loadingTotal, d21.loadingTotal]).toEqual([70, 70, 60]);
 
     // The 500 payment entered Oct 21 lowers the supplier only from Oct 21,
