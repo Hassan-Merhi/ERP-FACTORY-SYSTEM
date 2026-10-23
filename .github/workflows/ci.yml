@@ -175,7 +175,7 @@ jobs:
       - name: Set up Node.js 24.22.0
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
-          node-version: "24.22.0"
+          node-version: "24.22.1"
           cache: npm
       - name: Install dependencies
         id: install
@@ -236,7 +236,7 @@ jobs:
       - name: Set up Node.js 24.22.0
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
-          node-version: "24.22.0"
+          node-version: "24.22.1"
           cache: npm
       - name: Install dependencies
         id: install
@@ -276,7 +276,7 @@ jobs:
       - name: Set up Node.js 24.22.0
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
-          node-version: "24.22.0"
+          node-version: "24.22.1"
           cache: npm
       - name: Install dependencies
         id: install
@@ -343,7 +343,7 @@ jobs:
       - name: Set up Node.js 24.22.0
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
-          node-version: "24.22.0"
+          node-version: "24.22.1"
           cache: npm
       - name: Install dependencies
         id: install
@@ -403,7 +403,7 @@ jobs:
       - name: Set up Node.js 24.22.0
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
-          node-version: "24.22.0"
+          node-version: "24.22.1"
           cache: npm
       - name: Install dependencies
         id: install
@@ -536,7 +536,7 @@ jobs:
       - name: Set up Node.js 24.22.0
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
-          node-version: "24.22.0"
+          node-version: "24.22.1"
           cache: npm
       - name: Install dependencies
         id: install
@@ -592,7 +592,7 @@ jobs:
       - name: Set up Node.js 24.22.0
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
-          node-version: "24.22.0"
+          node-version: "24.22.1"
           cache: npm
       - name: Install dependencies
         run: npm ci --no-audit --bin-links=true
