@@ -45,6 +45,13 @@ function apiError(e: unknown): string {
 function notInstalled(e: unknown): boolean {
   return (e as { code?: unknown } | null)?.code === "COST_CENTERS_NOT_INSTALLED";
 }
+/**
+ * The server owns page permissions (ERP Accounts grant, Factory Voucher vs
+ * Daybook ownership). A denial means this viewer may not see the panel at all.
+ */
+export function costCenterAccessDenied(e: unknown): boolean {
+  return (e as { status?: unknown } | null)?.status === 403;
+}
 function emptySplit(): DraftSplit {
   return { costCenterId: "", amountNative: "" };
 }
@@ -358,7 +365,7 @@ export function VoucherCostCenters({ voucherId }: { voucherId: number }) {
   const entries = data?.entries || [];
   if (!canRead) return null;
   if (isLoading) return <p className="text-xs text-muted-foreground">Loading cost center allocations…</p>;
-  if (isError && notInstalled(error)) return null;
+  if (isError && (notInstalled(error) || costCenterAccessDenied(error))) return null;
   if (isError)
     return (
       <p role="alert" className="text-sm text-destructive">

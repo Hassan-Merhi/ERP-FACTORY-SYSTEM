@@ -46,8 +46,7 @@ export function BarcodeReferenceResults({ model }: { model: BarcodeLookupModel }
   // V5 stores the bale as IN_STOCK until finalization, but a live order
   // assignment makes its effective status LOADING in Bale Explorer.
   const isOpenLoading = ["DRAFT", "LOADING"].includes(result.loadedOnOrder?.status ?? "");
-  const canReturnToStock = isOpenLoading ||
-    ["RESERVED_FOR_ORDER", "RESERVED", "SOLD"].includes(baleInfo?.status ?? "");
+  const canReturnToStock = isOpenLoading || ["RESERVED_FOR_ORDER", "RESERVED", "SOLD"].includes(baleInfo?.status ?? "");
   const openSwap = () => {
     model.setSwapRef("");
     model.setSwapPreview(null);

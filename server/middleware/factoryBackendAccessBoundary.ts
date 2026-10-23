@@ -356,18 +356,45 @@ export function resolveFactoryBackendAccessRequirement(req: Request): FactoryApi
     return requirement("factory/production-report");
   }
 
-  // Factory cost-center management is its own permissioned Finance page.
-  // Voucher-backed expense tagging can also originate from an authorized
-  // Vouchers page; standalone daybook expense tagging from Daybook.
-  if (hasPrefix(path, "/cost-centers")) {
-    const isAllocation = hasPrefix(path, "/cost-centers/allocations/") || hasPrefix(path, "/cost-centers/voucher/");
-    // Historical reconciliation and previews can be inspected from Finance.
-    // Apply/preview still require privileged company accounting roles in API.
-    const isHistorical = hasPrefix(path, "/cost-centers/historical/");
-    const isCatalogRead = req.method === "GET" && path === "/cost-centers";
-    return isAllocation || isCatalogRead || isHistorical
-      ? anyOf(requirement("factory/cost-centers"), requirement("factory/vouchers"), requirement("factory/daybook"))
-      : anyOf(requirement("factory/cost-centers"), requirement("factory/accounts"));
+  // Cost Centers has three distinct data owners. A Voucher-only user may
+  // inspect voucher-backed allocations but NOT independent Factory Daybook
+  // expenses; Daybook-only access cannot inspect arbitrary voucher sources.
+  // The Finance workspace (Cost Centers or Accounts) can inspect both.
+  const costCenterPath = path.toLowerCase();
+  if (hasPrefix(costCenterPath, "/cost-centers")) {
+    const finance = anyOf(requirement("factory/cost-centers"), requirement("factory/accounts"));
+    // hasPrefix() appends the separator itself; these prefixes must not end in "/".
+    const isVoucherSource =
+      hasPrefix(costCenterPath, "/cost-centers/voucher") ||
+      hasPrefix(costCenterPath, "/cost-centers/allocations/voucher_entry");
+    if (isVoucherSource) {
+      return anyOf(
+        requirement("factory/cost-centers"),
+        requirement("factory/accounts"),
+        requirement("factory/vouchers")
+      );
+    }
+    if (hasPrefix(costCenterPath, "/cost-centers/allocations/factory_daybook")) {
+      return anyOf(
+        requirement("factory/cost-centers"),
+        requirement("factory/accounts"),
+        requirement("factory/daybook")
+      );
+    }
+    // Cost-center names are used by the authorized Voucher and Daybook
+    // pickers. A catalog GET contains no per-source expense amounts.
+    if (req.method.toUpperCase() === "GET" && costCenterPath === "/cost-centers") {
+      return anyOf(
+        requirement("factory/cost-centers"),
+        requirement("factory/accounts"),
+        requirement("factory/vouchers"),
+        requirement("factory/daybook")
+      );
+    }
+    // Historical previews/applications, expense reports, automation and
+    // center management require Finance page access, not a voucher/daybook
+    // page alone.
+    return finance;
   }
 
   // Accounting pages and their Factory-owned detail/actions.

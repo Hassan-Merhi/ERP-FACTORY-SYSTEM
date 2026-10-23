@@ -8,6 +8,7 @@ const harness = vi.hoisted(() => ({
 }));
 
 vi.mock("@tanstack/react-query", () => ({
+  useQueryClient: () => ({ invalidateQueries: vi.fn() }),
   useQuery: ({ queryKey }: any) => {
     if (queryKey?.[0] === "/api/auth/me") return { data: { role: "Admin" } };
     if (queryKey?.[0] === "/api/factory/bale-products") {
@@ -244,7 +245,7 @@ describe("barcode lookup page behavior", () => {
     expect(card).not.toHaveTextContent("Booking Info");
   });
 
-    it("loads a reference supplied in the URL query string automatically", async () => {
+  it("loads a reference supplied in the URL query string automatically", async () => {
     window.history.replaceState({}, "", "/barcode-lookup?ref=REF001");
     render(<BarcodeLookup />);
 

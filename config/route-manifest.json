@@ -1,8 +1,8 @@
 {
   "formatVersion": 1,
   "description": "Ordered snapshot of every registered Express route (method, path, guard chain) and middleware mount. Regenerate with UPDATE_ROUTE_MANIFEST=1 only when a route change is intended; during a file split the manifest must not change at all.",
-  "routeCount": 2227,
-  "middlewareMountCount": 134,
+  "routeCount": 2228,
+  "middlewareMountCount": 136,
   "routes": [
     "GET /api/admin/operational-monitoring [requireAuth > <anonymous> > <anonymous>]",
     "POST /api/vouchers/bulk-delete [protectCorrectionBulkDelete]",
@@ -352,6 +352,7 @@
     "POST /api/factory/customer-orders/:id/bales/bulk-import [requireAuth > <anonymous>]",
     "POST /api/factory/customer-orders/:id/bales/empty [requireAuth > <anonymous> > <anonymous>]",
     "DELETE /api/factory/customer-orders/:id/bales/:baleId [requireAuth > <anonymous>]",
+    "POST /api/factory/bales/:id/release-from-loading [requireAuth > <anonymous> > <anonymous>]",
     "POST /api/factory/bales/:id/return-to-stock [requireAuth > <anonymous>]",
     "GET /api/factory/bales/:id/order-info [requireAuth > <anonymous>]",
     "POST /api/factory/bales/swap [requireAuth > <anonymous>]",
@@ -2287,6 +2288,8 @@
     "USE /api/stats/net-position-excel [<anonymous>]",
     "USE /api/accounts/:type/:id/statement-pdf [<anonymous>]",
     "USE / [enforceSharedFactoryAccess]",
+    "USE /api/cost-centers [requireAuth]",
+    "USE /api/cost-centers [enforceCostCenterErpPageAccess]",
     "USE / [enforceUnifiedAccountingRollout]",
     "USE /api/factory/bale-ledger [requireAuth]",
     "USE /api/factory/bale-ledger [<anonymous>]",

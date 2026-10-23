@@ -15,10 +15,16 @@ import {
   ActiveCompanyPermissionContextError,
 } from "../services/security/activeCompanyPermissionContext";
 import { getAccessibleCompanyIds } from "../security/companyAccessBoundary";
+import { COST_CENTER_ERP_PAGE_KEY } from "../middleware/costCenterErpPageAccess";
 import { toMoney } from "../lib/money";
 
 const READ = new Set(["Developer", "Owner", "Admin", "Manager"]);
 const WRITE = new Set(["Developer", "Owner", "Admin"]);
+// Keep both current-company and consolidated exports aligned with the report tabs.
+export const COST_CENTER_EXPORT_VIEWS = ["summary", "activity", "departments", "accounts", "months"] as const;
+export function isCostCenterExportView(value: unknown): boolean {
+  return COST_CENTER_EXPORT_VIEWS.includes(value as (typeof COST_CENTER_EXPORT_VIEWS)[number]);
+}
 const dateFormat = /^\d{4}-\d{2}-\d{2}$/;
 const monthFormat = /^\d{4}-(?:0[1-9]|1[0-2])$/;
 const decimalFormat = /^(?:0|[1-9]\d{0,13})(?:\.\d{1,6})?$/;
@@ -70,7 +76,8 @@ function parseFilters(req: Request): Filters {
   if (t !== "ALL" && t !== "EXPENSE" && t !== "INVENTORY_COST") throw new ReportError(400, "Invalid cost treatment");
   return { from, to, costCenterId, accountId, treatment: t };
 }
-async function resolveScope(req: Request, write = false, consolidated = false): Promise<Scope> {
+const ERP_PREFIX = "/api/cost-centers";
+async function resolveScope(req: Request, write = false, consolidated = false, erpPages = false): Promise<Scope> {
   const c = await getActiveCompanyPermissionContext(req);
   if (!(write ? WRITE : READ).has(c.role)) throw new ReportError(403, "Cost center accounting permission required");
   if (!consolidated) return { companyIds: [c.companyId], companyId: c.companyId, userId: c.userId, role: c.role };
@@ -89,8 +96,26 @@ async function resolveScope(req: Request, write = false, consolidated = false): 
   // A role in the selected company is not a license to read another company.
   // Require an authorized accounting role in each included company as well.
   const rows = await pool.query("SELECT company_id,role FROM user_company_roles WHERE user_id=$1", [c.userId]);
+  // ERP Cost Centers is owned by the per-company Accounts page (same rule as
+  // /api/my-erp-pages), so an Owner cannot consolidate a company where that
+  // page was not assigned. Factory consolidation keeps its own boundary.
+  const accountsGranted = erpPages
+    ? new Set(
+        (
+          await pool.query("SELECT company_id FROM erp_user_page_access WHERE user_id=$1 AND page_key=$2", [
+            c.userId,
+            COST_CENTER_ERP_PAGE_KEY,
+          ])
+        ).rows.map((x: { company_id: number }) => Number(x.company_id))
+      )
+    : null;
   const authorized = rows.rows
-    .filter((x: { company_id: number; role: string }) => WRITE.has(x.role) && accessible.has(x.company_id))
+    .filter(
+      (x: { company_id: number; role: string }) =>
+        WRITE.has(x.role) &&
+        accessible.has(x.company_id) &&
+        (!accountsGranted || x.role === "Admin" || x.role === "Developer" || accountsGranted.has(x.company_id))
+    )
     .map((x: { company_id: number }) => x.company_id)
     .sort((a: number, b: number) => a - b);
   if (authorized.length > 150) throw new ReportError(413, "Consolidated reporting exceeds 150 companies");
@@ -625,7 +650,14 @@ async function exportReport(res: Response, scope: Scope, filters: Filters, forma
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader("Content-Disposition", 'attachment; filename="' + name + '.pdf"');
     pdf.pipe(res);
-    pdf.fontSize(16).text("Cost Center " + (view === "activity" ? "Activity" : "Budget & Expense") + " Report");
+    const viewTitle: Record<string, string> = {
+      summary: "Budget & Expense Report",
+      activity: "Activity Report",
+      departments: "Budget & Expense Report by Department",
+      accounts: "Expense Report by Account",
+      months: "Budget & Expense Report by Month",
+    };
+    pdf.fontSize(16).text("Cost Center " + viewTitle[view]);
     pdf.fontSize(9).text(filters.from + " to " + filters.to + " | Historical USD | Whole-month budgets");
     if (view !== "activity") {
       pdf.text(
@@ -680,7 +712,7 @@ function registerPrefix(app: Express, prefix: string) {
   });
   app.get(prefix + "/reports/consolidated", requireAuth, async (req, res) => {
     try {
-      const scope = await resolveScope(req, false, true);
+      const scope = await resolveScope(req, false, true, prefix === ERP_PREFIX);
       res.json(await summaryData(scope, parseFilters(req)));
     } catch (e) {
       fail(res, e);
@@ -688,7 +720,7 @@ function registerPrefix(app: Express, prefix: string) {
   });
   app.get(prefix + "/reports/consolidated/activity", requireAuth, async (req, res) => {
     try {
-      const scope = await resolveScope(req, false, true);
+      const scope = await resolveScope(req, false, true, prefix === ERP_PREFIX);
       const limit = req.query.limit === undefined ? 50 : valueId(req.query.limit);
       const offset = req.query.offset === undefined ? 0 : Number(req.query.offset);
       if (limit > 200 || !Number.isSafeInteger(offset) || offset < 0 || offset > 2000000)
@@ -700,13 +732,10 @@ function registerPrefix(app: Express, prefix: string) {
   });
   app.get(prefix + "/reports/consolidated/export", requireAuth, async (req, res) => {
     try {
-      const scope = await resolveScope(req, false, true);
+      const scope = await resolveScope(req, false, true, prefix === ERP_PREFIX);
       const format = req.query.format;
       const view = req.query.view ?? "summary";
-      if (
-        !["csv", "xlsx", "pdf"].includes(String(format)) ||
-        !["summary", "activity", "departments", "accounts", "months"].includes(String(view))
-      )
+      if (!["csv", "xlsx", "pdf"].includes(String(format)) || !isCostCenterExportView(view))
         throw new ReportError(400, "Invalid export request");
       await exportReport(res, scope, parseFilters(req), String(format), String(view));
     } catch (e) {
@@ -731,7 +760,7 @@ function registerPrefix(app: Express, prefix: string) {
       const scope = await resolveScope(req);
       const format = req.query.format;
       const view = req.query.view ?? "summary";
-      if (!["csv", "xlsx", "pdf"].includes(String(format)) || !["summary", "activity"].includes(String(view)))
+      if (!["csv", "xlsx", "pdf"].includes(String(format)) || !isCostCenterExportView(view))
         throw new ReportError(400, "Invalid export request");
       await exportReport(res, scope, parseFilters(req), String(format), String(view));
     } catch (e) {
@@ -829,6 +858,6 @@ function registerPrefix(app: Express, prefix: string) {
   });
 }
 export function registerCostCenterReportingRoutes(app: Express): void {
-  registerPrefix(app, "/api/cost-centers");
+  registerPrefix(app, ERP_PREFIX);
   registerPrefix(app, "/api/factory/cost-centers");
 }
