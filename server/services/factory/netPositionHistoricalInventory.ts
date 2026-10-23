@@ -218,12 +218,20 @@ async function rawMaterialAt(companyId: number, scope: FactoryNetPositionAsOf) {
     recorded_at: string;
     stable_id: number;
     kg: string;
+    owner_conflict: boolean;
   }>(
     await db.execute(sql`
-    SELECT CASE WHEN COALESCE(ms.inventory_supplier_id, ms.supplier_id, fc.supplier_id) IS NOT NULL
-                THEN 's' || COALESCE(ms.inventory_supplier_id, ms.supplier_id, fc.supplier_id)::text
+    -- A source whose container has a raw-stock row drew down that row's
+    -- used_kg, which is where today's report counts it: it consumes the
+    -- container supplier's stock even when the row names another owner
+    -- (flagged). A container kept only as provenance changes nothing.
+    SELECT CASE WHEN COALESCE(drawn.supplier_id, ms.inventory_supplier_id, ms.supplier_id, fc.supplier_id) IS NOT NULL
+                THEN 's' || COALESCE(drawn.supplier_id, ms.inventory_supplier_id, ms.supplier_id, fc.supplier_id)::text
                 WHEN ms.container_id IS NOT NULL THEN 'u' || ms.container_id::text
                 ELSE NULL END AS key,
+           (drawn.supplier_id IS NOT NULL
+             AND COALESCE(ms.inventory_supplier_id, ms.supplier_id) IS NOT NULL
+             AND drawn.supplier_id <> COALESCE(ms.inventory_supplier_id, ms.supplier_id)) AS owner_conflict,
            -- Never earlier than the source row was recorded: a top-up added
            -- later to an older batch consumes stock from when it was entered.
            GREATEST(COALESCE(mb.batch_date, mb.created_at::date), ms.created_at::date)::text AS day,
@@ -233,6 +241,12 @@ async function rawMaterialAt(companyId: number, scope: FactoryNetPositionAsOf) {
       JOIN factory_mix_batches mb ON mb.id = ms.mix_batch_id
        AND mb.company_id = ${companyId}
       LEFT JOIN factory_containers fc ON fc.id = ms.container_id AND fc.company_id = ${companyId}
+      LEFT JOIN LATERAL (
+        SELECT fc.supplier_id
+         WHERE fc.supplier_id IS NOT NULL
+           AND EXISTS (SELECT 1 FROM factory_raw_stock drawn_rs
+                        WHERE drawn_rs.container_id = ms.container_id AND drawn_rs.company_id = ${companyId})
+      ) drawn ON true
      WHERE ms.source_batch_id IS NULL
        AND UPPER(COALESCE(ms.source_type,'')) <> 'BATCH'
        AND COALESCE(mb.batch_date, mb.created_at::date) <= ${scope.asOf}::date
@@ -324,6 +338,7 @@ async function rawMaterialAt(companyId: number, scope: FactoryNetPositionAsOf) {
   if (valued.rateUnversioned) warnings.add("HISTORICAL_RAW_LOCKED_RATE_UNVERSIONED");
   if (receipts.some((r) => r.fallback)) warnings.add("HISTORICAL_RAW_LEGACY_RECEIPT_FALLBACK");
   if (sources.some((r) => r.key == null)) warnings.add("HISTORICAL_RAW_SOURCE_OWNER_UNKNOWN");
+  if (sources.some((r) => r.owner_conflict)) warnings.add("HISTORICAL_RAW_SOURCE_OWNER_CONFLICT");
   if (adjustments.some((r) => r.type === "DEDUCT" && fallbackKeys.has(r.key))) {
     warnings.add("HISTORICAL_RAW_LEGACY_DEDUCT_MUTATED_RECEIPT");
   }
