@@ -20,7 +20,7 @@ export function FxRatesCard() {
   const canEdit = canEditExchangeRates(currentUser?.role);
 
   const { data: rates = [], isLoading } = useQuery<
-    { currencyCode: string; rateToUsd: string; effectiveDate: string }[]
+    { id: number; currencyCode: string; rateToUsd: string; effectiveDate: string }[]
   >({
     queryKey: ["/api/factory/fx-rates"],
   });
@@ -58,15 +58,16 @@ export function FxRatesCard() {
   });
 
   const deleteMutation = useMutation({
-    mutationFn: async (currency: string) => {
-      const res = await apiRequest("DELETE", `/api/factory/fx-rates/${currency}`);
-      return res.json() as Promise<{ removed: number; kept: unknown[] }>;
+    mutationFn: async (rateId: number) => {
+      const res = await apiRequest("DELETE", `/api/factory/fx-rates/row/${rateId}`);
+      return res.json() as Promise<{ id: number; archived: boolean }>;
     },
     onSuccess: (data) => {
-      // Rates a document used and recorded market rates are kept by the server.
       toast({
-        title: data.removed > 0 ? "Rate removed" : "No rate removed",
-        description: data.kept?.length > 0 ? "Rates used by documents and recorded market rates were kept." : undefined,
+        title: "Rate removed from settings",
+        description: data.archived
+          ? "This rate was used by documents, so its historical record was archived. New transactions will not use it."
+          : "Unused rate deleted.",
       });
       queryClient.invalidateQueries({ queryKey: ["/api/factory/fx-rates"] });
       queryClient.invalidateQueries({ queryKey: ["/api/factory/suppliers/with-balances"] });
@@ -114,7 +115,7 @@ export function FxRatesCard() {
             </TableHeader>
             <TableBody>
               {rates.map((r) => (
-                <TableRow key={r.currencyCode} data-testid={`row-fxrate-${r.currencyCode}`}>
+                <TableRow key={r.id} data-testid={`row-fxrate-${r.id}`}>
                   <TableCell className="font-mono font-semibold">{r.currencyCode}</TableCell>
                   <TableCell className="font-mono">{parseFloat(r.rateToUsd).toFixed(4)}</TableCell>
                   <TableCell className="text-muted-foreground text-sm">{r.effectiveDate}</TableCell>
@@ -123,9 +124,14 @@ export function FxRatesCard() {
                       <Button
                         size="icon"
                         variant="ghost"
-                        onClick={() => deleteMutation.mutate(r.currencyCode)}
+                        onClick={() => {
+                          if (window.confirm(`Remove ${r.currencyCode} rate ${parseFloat(r.rateToUsd).toFixed(4)} dated ${r.effectiveDate}? Historical document rates will be preserved, but new FX calculations may use a different rate.`)) {
+                            deleteMutation.mutate(r.id);
+                          }
+                        }
                         disabled={deleteMutation.isPending}
-                        data-testid={`button-delete-fxrate-${r.currencyCode}`}
+                        aria-label={`Remove ${r.currencyCode} rate dated ${r.effectiveDate}`}
+                        data-testid={`button-delete-fxrate-${r.id}`}
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>
