@@ -48,7 +48,9 @@ function EntityFormWrapper({
       const payload = {
         ...data,
         companyId: selectedCompany.id,
-        ...(entityType === "stockGroup" ? { code: String(data.name || "").trim() } : {}),
+        ...(entityType === "stockGroup"
+          ? { name: String(data.name || "").trim(), code: String(data.name || "").trim() }
+          : {}),
         ...(entityType === "stockItem"
           ? { openingQty: "0", openingRate: "0", openingValue: "0", reorderLevel: "0" }
           : {}),
