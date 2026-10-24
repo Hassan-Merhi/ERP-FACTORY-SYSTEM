@@ -31,7 +31,7 @@ import { AUDIT_ACTOR_SETTINGS, UNKNOWN_AUDIT_ACTOR } from "./auditActorContext";
  * is left for the next boot. History is evidence, not a write guard, so a
  * failure is logged and the server starts.
  */
-export const FACTORY_ROW_HISTORY_VERSION = "2026-10-factory-row-history-v4-utc";
+export const FACTORY_ROW_HISTORY_VERSION = "2026-10-factory-row-history-v5-rental-units";
 
 /** Tracked tables and, for each, column-name prefixes whose changes alone are noise. */
 export const FACTORY_ROW_HISTORY_TABLES: ReadonlyArray<readonly [table: string, noisePrefixes: readonly string[]]> = [
@@ -50,6 +50,7 @@ export const FACTORY_ROW_HISTORY_TABLES: ReadonlyArray<readonly [table: string, 
   ["factory_worker_advances", []],
   ["factory_advance_repayments", []],
   ["factory_payrolls", []],
+  ["property_units", []],
   ["property_contracts", []],
   ["property_monthly_ledger", []],
   ["property_payments", []],
