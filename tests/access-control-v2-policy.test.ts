@@ -11,6 +11,7 @@ const base = (overrides: Partial<AccessControlEvaluationInput> = {}): AccessCont
   role: CREATE_ONLY_ROLE,
   companyId: 10,
   isAssignedToCompany: true,
+  routeVerified: true,
   resource: "erp.vouchers",
   action: "view",
   ...overrides,
@@ -24,6 +25,15 @@ describe("Permissions Control Center V2 phase 1 policy (not yet wired)", () => {
     expect(evaluateAccessControl(base({ resource: "factory.mix_batches", action: "create" })).allowed).toBe(true);
     expect(evaluateAccessControl(base({ resource: "erp.analytics", action: "create" })).allowed).toBe(false);
     expect(evaluateAccessControl(base({ resource: "erp.analytics", action: "create", userDecision: "allow" })).reason).toBe("create_only_not_creatable");
+  });
+
+  it("never promotes candidate-only routes into live grants", () => {
+    expect(evaluateAccessControl(base({
+      routeVerified: false, action: "create", roleDecision: "allow", userDecision: "allow",
+    }))).toEqual({ allowed: false, reason: "route_not_verified" });
+    expect(evaluateAccessControl(base({
+      routeVerified: undefined, action: "view", roleDecision: "allow", userDecision: "allow",
+    })).allowed).toBe(false);
   });
 
   it("denies immutable business actions despite role and user 'allow' overrides", () => {
