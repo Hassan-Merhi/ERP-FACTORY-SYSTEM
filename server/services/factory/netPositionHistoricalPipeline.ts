@@ -7,11 +7,13 @@
  */
 import { sql } from "drizzle-orm";
 import type Decimal from "decimal.js";
-import type { FactoryNetPositionAsOf } from "@shared/factoryNetPositionAsOf";
+import { netPositionBusinessDay, type FactoryNetPositionAsOf } from "@shared/factoryNetPositionAsOf";
 import { db } from "../../db";
 import { resultRows } from "../../lib/queryResult";
 import { MoneyDecimal, toMoney } from "../../lib/money";
 import { netPositionLegacyScanKnown, netPositionRecordedThrough } from "./netPositionAsOf";
+import { loadFactoryRowsKnownAt, type HistoricalRow } from "./netPositionRowHistoryReader";
+import { sqlArray } from "../../lib/sqlArray";
 
 const decimal = (v: unknown): Decimal => toMoney(v as string | number | null | undefined);
 const cents = (v: Decimal): number => v.toDecimalPlaces(2, MoneyDecimal.ROUND_HALF_UP).toNumber();
@@ -205,11 +207,90 @@ type ContainerRow = {
   updated_after_cutoff: boolean;
 };
 
+// The live container master, receipts and cumulative raw stock are mutable.
+// Once ALL three source baselines exist, derive the OTW stage and amounts
+// from their recorded row versions, including subsequently deleted rows.
+// Earlier dates still use the existing legacy reconstruction and warnings.
+async function recordedOtwAt(
+  companyId: number,
+  scope: FactoryNetPositionAsOf,
+  getConfigFx: (currency: string) => number
+): Promise<{ value: number; warnings: string[] } | null> {
+  const [containers, receipts, stock] = await Promise.all([
+    loadFactoryRowsKnownAt("factory_containers", companyId, scope),
+    loadFactoryRowsKnownAt("factory_container_receipts", companyId, scope),
+    loadFactoryRowsKnownAt("factory_raw_stock", companyId, scope),
+  ]);
+  if (!containers.ready || !receipts.ready || !stock.ready) return null;
+  const text = (row: HistoricalRow, key: string, fallback = ""): string =>
+    row[key] == null ? fallback : String(row[key]);
+  const onDate = (value: unknown) => typeof value === "string" && value.slice(0, 10) <= scope.asOf;
+  const validReceiptContainers = new Set<number>();
+  const rawContainers = new Set<number>();
+  for (const r of receipts.rows.values()) {
+    if (onDate(r.receipt_date) && !r.deleted_at) validReceiptContainers.add(Number(r.container_id));
+  }
+  for (const r of stock.rows.values()) {
+    const rawTimestamp = r.offloaded_at ?? r.created_at;
+    if (rawTimestamp == null || r.deleted_at) continue;
+    // factory_raw_stock.offloaded_at is a UTC-naive timestamp, not a
+    // company-local DATE. Do not use its UTC string prefix as business date.
+    const iso = String(rawTimestamp).trim();
+    const asInstant = new Date(/[zZ]$|[+-][0-9]{2}:?[0-9]{2}$/.test(iso) ? iso : iso.replace(" ", "T") + "Z");
+    if (Number.isNaN(asInstant.getTime())) {
+      throw new Error("HISTORICAL_RAW_OFFLOAD_TIMESTAMP_INVALID");
+    }
+    if (netPositionBusinessDay(asInstant, scope.timeZone) <= scope.asOf) {
+      rawContainers.add(Number(r.container_id));
+    }
+  }
+  const buckets = new Map<string, Decimal>();
+  const warnings = new Set<string>();
+  for (const c of containers.rows.values()) {
+    if (c.deleted_at) continue;
+    const id = Number(c.id);
+    const valued = historicalContainerOtw({
+      status: text(c, "status"),
+      preOffloadStatus: c.pre_offload_status == null ? null : text(c, "pre_offload_status"),
+      receivedByCutoff: validReceiptContainers.has(id) || rawContainers.has(id),
+      updatedAfterCutoff: false,
+      currencyCode: text(c, "currency_code", "USD"),
+      totalKg: text(c, "total_kg", "0"),
+      ratePerKg: text(c, "rate_per_kg", "0"),
+      finalPayable: text(c, "final_payable_amount", "0"),
+      freight: text(c, "freight", "0"),
+      freightCurrencyCode: text(c, "freight_currency_code") || text(c, "currency_code", "USD"),
+      commission: text(c, "commission_amount", "0"),
+      commissionCurrencyCode: text(c, "commission_currency_code", "USD"),
+      otherCharges: text(c, "other_charges", "0"),
+      preOffloadFreight: c.pre_offload_freight == null ? null : text(c, "pre_offload_freight"),
+      preOffloadFreightCurrencyCode:
+        c.pre_offload_freight_currency_code == null ? null : text(c, "pre_offload_freight_currency_code"),
+      preOffloadCommission: c.pre_offload_commission_amount == null ? null : text(c, "pre_offload_commission_amount"),
+      preOffloadCommissionCurrencyCode:
+        c.pre_offload_commission_currency_code == null ? null : text(c, "pre_offload_commission_currency_code"),
+      preOffloadOtherCharges: c.pre_offload_other_charges == null ? null : text(c, "pre_offload_other_charges"),
+    });
+    if (!valued) continue;
+    valued.warnings.forEach((warning) => warnings.add(warning));
+    for (const { currency, amount } of valued.amounts) {
+      buckets.set(currency, (buckets.get(currency) ?? new MoneyDecimal(0)).plus(amount));
+    }
+  }
+  let total: Decimal = new MoneyDecimal(0);
+  for (const [currency, amount] of buckets) {
+    total = total.plus(amount.times(currency === "USD" ? 1 : getConfigFx(currency)));
+  }
+  return { value: cents(total), warnings: [...warnings] };
+}
+
 async function getHistoricalOtw(
   companyId: number,
   scope: FactoryNetPositionAsOf,
   getConfigFx: (currency: string) => number
 ): Promise<{ value: number; warnings: string[] }> {
+  const recorded = await recordedOtwAt(companyId, scope, getConfigFx);
+  if (recorded) return recorded;
   const receiptKnown = sql`r.receipt_date <= ${scope.asOf}::date
                 AND ${isBefore(scope, "r.created_at")}
                 AND (r.deleted_at IS NULL OR NOT ${isBefore(scope, "r.deleted_at")})`;
@@ -311,6 +392,70 @@ type OrderRow = {
   unchanged_since_cutoff: boolean;
 };
 
+// On and after the baseline, a recorded order image is a better source than
+// inferring yesterday's stage from today's mutable flags and old daybook events.
+// It also restores orders subsequently hard-deleted or rewritten. grand_total
+// and total_qty_bales come from the same recorded version, avoiding today's
+// revised charges and scan prices in an earlier date.
+async function recordedOrdersAt(
+  companyId: number,
+  scope: FactoryNetPositionAsOf
+): Promise<{
+  pendingOrders: DatedPipelineOrder[];
+  verifiedOrders: DatedPipelineOrder[];
+  loadingOrders: DatedPipelineOrder[];
+  warnings: string[];
+} | null> {
+  const snapshot = await loadFactoryRowsKnownAt("customer_orders", companyId, scope);
+  if (!snapshot.ready) return null;
+  const orders = [...snapshot.rows.values()]
+    .filter(
+      (row) => row.deleted_at == null && typeof row.order_date === "string" && row.order_date.slice(0, 10) <= scope.asOf
+    )
+    .sort((a, b) => String(b.order_date).localeCompare(String(a.order_date)) || Number(b.id) - Number(a.id));
+  const customerIds = [
+    ...new Set(orders.map((row) => Number(row.customer_id)).filter((id) => Number.isSafeInteger(id) && id > 0)),
+  ];
+  const customerNames = new Map<number, string>();
+  if (customerIds.length) {
+    const names = resultRows<{ id: number; legal_name: string | null }>(
+      await db.execute(sql`SELECT id, legal_name FROM customers
+        WHERE company_id = ${companyId} AND id = ANY(${sqlArray(customerIds)})`)
+    );
+    for (const c of names) if (c.legal_name) customerNames.set(Number(c.id), c.legal_name);
+  }
+  const pendingOrders: DatedPipelineOrder[] = [];
+  const verifiedOrders: DatedPipelineOrder[] = [];
+  const loadingOrders: DatedPipelineOrder[] = [];
+  const warnings = new Set<string>();
+  for (const row of orders) {
+    const status = String(row.status ?? "").toUpperCase();
+    if (!["PENDING_VERIFICATION", "VERIFIED", "LOADING"].includes(status)) {
+      if (!["FINALIZED", "DISPATCHED", "SOLD", "CANCELLED", "DELETED"].includes(status)) {
+        warnings.add("HISTORICAL_ORDER_LIFECYCLE_UNVERSIONED");
+      }
+      continue;
+    }
+    const id = Number(row.id);
+    if (!Number.isSafeInteger(id) || id <= 0) throw new Error("HISTORICAL_ORDER_ROW_HISTORY_INVALID");
+    const customerId = Number(row.customer_id);
+    const item: DatedPipelineOrder = {
+      id,
+      customerName: customerNames.get(customerId) ?? `Customer #${customerId}`,
+      orderDate: String(row.order_date).slice(0, 10),
+      grandTotal: cents(decimal(row.grand_total)),
+      totalQtyBales: Number(row.total_qty_bales ?? 0),
+    };
+    if (!Number.isSafeInteger(item.totalQtyBales) || item.totalQtyBales < 0) {
+      throw new Error("HISTORICAL_ORDER_ROW_HISTORY_QUANTITY_INVALID");
+    }
+    if (status === "VERIFIED") verifiedOrders.push(item);
+    else if (status === "LOADING") loadingOrders.push(item);
+    else pendingOrders.push(item);
+  }
+  return { pendingOrders, verifiedOrders, loadingOrders, warnings: [...warnings] };
+}
+
 async function getHistoricalOrders(
   companyId: number,
   scope: FactoryNetPositionAsOf
@@ -320,6 +465,8 @@ async function getHistoricalOrders(
   loadingOrders: DatedPipelineOrder[];
   warnings: string[];
 }> {
+  const recorded = await recordedOrdersAt(companyId, scope);
+  if (recorded) return recorded;
   const rows = resultRows<OrderRow>(
     await db.execute(sql`
     WITH scan_events AS (

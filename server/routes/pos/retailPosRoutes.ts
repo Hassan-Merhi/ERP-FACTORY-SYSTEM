@@ -19,7 +19,7 @@ import { db } from "../../db";
 import { getErrorMessage } from "../../lib/httpHandlers";
 import { retailLocationRefusal } from "./retailLocationAccess";
 import { resolveRetailSaleCustomer, retailReturnRefusal } from "./retailCheckoutPolicy";
-import { currentUserId, ensureCompanyLocation, requireRetailCompany } from "./retailPosContext";
+import { currentUserId, ensureCompanyLocation, requireRetailCompany, toNumber } from "./retailPosContext";
 import {
   addMovement,
   lockInventoryRow,
@@ -154,11 +154,6 @@ const adjustmentSchema = z.object({
   reason: z.string().trim().min(1).max(500),
   reference: z.string().trim().max(191).optional(),
 });
-
-function toNumber(value: string | number | null | undefined): number {
-  const parsed = Number(value ?? 0);
-  return Number.isFinite(parsed) ? parsed : 0;
-}
 
 export function registerRetailPosRoutes(app: Express): void {
   app.get("/api/pos/retail/items", requireAuth, async (req, res) => {

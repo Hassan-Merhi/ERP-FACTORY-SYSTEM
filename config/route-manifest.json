@@ -1,7 +1,7 @@
 {
   "formatVersion": 1,
   "description": "Ordered snapshot of every registered Express route (method, path, guard chain) and middleware mount. Regenerate with UPDATE_ROUTE_MANIFEST=1 only when a route change is intended; during a file split the manifest must not change at all.",
-  "routeCount": 2239,
+  "routeCount": 2242,
   "middlewareMountCount": 137,
   "routes": [
     "GET /api/admin/operational-monitoring [requireAuth > <anonymous> > <anonymous>]",
@@ -1288,6 +1288,7 @@
     "PATCH /api/retail/products/:id [requireAuth > requireNonPOS > <anonymous>]",
     "POST /api/retail/import [requireAuth > requireNonPOS > <anonymous>]",
     "GET /api/retail/media/:id [requireAuth > <anonymous>]",
+    "GET /api/retail/catalog-navigation [requireAuth > requireNonPOS > <anonymous>]",
     "GET /api/retail/catalog-facets [requireAuth > requireNonPOS > <anonymous>]",
     "GET /api/retail/products-page [requireAuth > requireNonPOS > <anonymous>]",
     "GET /api/retail/reporting/dashboard [requireAuth > requireNonPOS > <anonymous>]",
@@ -1305,6 +1306,7 @@
     "GET /api/retail/financial/settings [requireAuth > requireNonPOS > <anonymous>]",
     "PUT /api/retail/financial/settings [requireAuth > requireNonPOS > <anonymous>]",
     "GET /api/retail/financial/reconciliation [requireAuth > requireNonPOS > <anonymous>]",
+    "GET /api/pos/retail/shift-ledger-balance [requireAuth > <anonymous>]",
     "GET /api/pos/retail/shifts/:id/summary [requireAuth > <anonymous>]",
     "POST /api/pos/retail/shifts/:id/cash-movements [requireAuth > <anonymous>]",
     "GET /api/retail/financial/cash-reasons [requireAuth > <anonymous>]",
@@ -1567,6 +1569,7 @@
     "GET /api/pos/retail/barcodes/:barcode [requireAuth > <anonymous>]",
     "POST /api/pos/retail/sales [requireAuth > <anonymous>]",
     "GET /api/pos/retail/sales [requireAuth > <anonymous>]",
+    "GET /api/pos/retail/payment-accounts [requireAuth > <anonymous>]",
     "POST /api/pos/retail/sales/:saleId/returns [requireAuth > <anonymous>]",
     "POST /api/pos/retail/transfers [requireAuth > <anonymous>]",
     "POST /api/pos/retail/adjustments [requireAuth > <anonymous>]",

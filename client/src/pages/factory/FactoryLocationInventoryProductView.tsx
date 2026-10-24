@@ -49,11 +49,12 @@ type BreakdownStatCardProps = {
 
 function BreakdownStatCard({ icon, label, total, regular, special, unit, accent }: BreakdownStatCardProps) {
   return (
-    <div className="min-w-0 rounded-xl border bg-card/40 shadow-xs">
+    <div
+      className="min-w-0 rounded-xl border bg-card/40 shadow-xs"
+      data-testid={`stat-${label.replace(/\s+/g, "-").toLowerCase()}`}
+    >
       <div className="flex items-start gap-3 px-3.5 py-3">
-        <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${accent}`}>
-          {icon}
-        </div>
+        <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${accent}`}>{icon}</div>
         <div className="min-w-0 flex-1">
           <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{label}</div>
           <div className="text-xl font-bold leading-tight tracking-tight tabular-nums">{total}</div>
@@ -132,10 +133,8 @@ export function FactoryLocationInventoryProductView({ inventory }: { inventory: 
     spTotalSellValue,
     regularBales,
     regularKg,
-    regularProductCount,
     specialBales,
     specialKg,
-    specialProductCount,
     statsCostValue,
     statsSellValue,
     toggleCol,
@@ -385,7 +384,11 @@ export function FactoryLocationInventoryProductView({ inventory }: { inventory: 
             />
           </div>
           <div className="flex items-center gap-2 flex-wrap">
-            <Popover onOpenChange={(open) => { if (!open) setCategorySearch(""); }}>
+            <Popover
+              onOpenChange={(open) => {
+                if (!open) setCategorySearch("");
+              }}
+            >
               <PopoverTrigger asChild>
                 <Button variant="outline" size="sm" className="gap-1.5 h-8" data-testid="button-category-filter">
                   <ListFilter className="h-3.5 w-3.5" />
