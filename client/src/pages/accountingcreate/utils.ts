@@ -17,7 +17,7 @@ export const entityConfig = {
   location: {
     label: "Location",
     endpoint: "/api/locations",
-    schema: insertLocationSchema,
+    schema: insertLocationSchema.omit({ companyId: true }),
   },
   ledger: {
     label: "Ledger Account",
@@ -37,7 +37,8 @@ export const entityConfig = {
   stockGroup: {
     label: "Stock Group",
     endpoint: "/api/stock-groups",
-    schema: insertStockGroupSchema.omit({ companyId: true }),
+    // Code is derived from the entered name on submit; it is not a second user input.
+    schema: insertStockGroupSchema.omit({ companyId: true, code: true }),
   },
   stockItem: {
     label: "Stock Item",
@@ -84,11 +85,8 @@ const getDefaultValues = (entityType: EntityType) => {
       return {
         name: "",
         uom: "",
-        openingQty: "0",
-        openingRate: "0",
-        openingValue: "0",
+        // New stock records have no opening stock. Quantities come from actual receipts.
         sellingPrice: "0",
-        reorderLevel: "0",
         active: true,
       };
     default:
