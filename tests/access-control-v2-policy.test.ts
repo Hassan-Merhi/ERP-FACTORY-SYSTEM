@@ -39,15 +39,24 @@ describe("Permissions Control Center V2 phase 1 policy (not yet wired)", () => {
     expect(ACCESS_CONTROL_ACTIONS).toContain("create");
   });
 
-  it("treats create-looking POSTs that change existing records as immutable", () => {
+  it("blocks create-looking POSTs that actually edit existing documents", () => {
     expect(
       evaluateAccessControl(base({
         action: "create",
-        touchesExistingRecord: true,
+        isExistingRecordEdit: true,
         roleDecision: "allow",
         userDecision: "allow",
       }))
     ).toEqual({ allowed: false, reason: "immutable_existing_record" });
+  });
+
+  it("allows automatic stock/ledger postings from a brand-new business transaction", () => {
+    expect(evaluateAccessControl(base({
+      resource: "erp.sales", action: "create", isExistingRecordEdit: false,
+    })).allowed).toBe(true);
+    expect(evaluateAccessControl(base({
+      resource: "factory.production", action: "create", isExistingRecordEdit: false,
+    })).allowed).toBe(true);
   });
 
   it("never permits Create Only system settings, users or maintenance", () => {
