@@ -176,8 +176,14 @@ function normalizePayments(total: Decimal, requested?: RetailPaymentInput[]): No
       }
     }
     sum = sum.plus(amount);
-    normalized.push({ method: payment.method, amount, tenderedAmount: tendered, reference: payment.reference,
-      ledgerAccountId: payment.ledgerAccountId, bankAccountId: payment.bankAccountId });
+    normalized.push({
+      method: payment.method,
+      amount,
+      tenderedAmount: tendered,
+      reference: payment.reference,
+      ledgerAccountId: payment.ledgerAccountId,
+      bankAccountId: payment.bankAccountId,
+    });
   }
   if (sum.minus(total).abs().greaterThan(EPSILON)) {
     throw new Error(`Retail payments (${sum.toFixed(2)}) must equal sale total (${total.toFixed(2)})`);
@@ -263,11 +269,15 @@ export async function settleRetailSaleTx(
     if (payment.method === "credit" && explicitAccount) {
       throw new Error("Customer credit must post to the selected customer's ledger");
     }
-    const target = explicitAccount
-      ? await resolveRetailPaymentAccountTx(tx, input.companyId, payment)
-      : paymentTarget(settings, payment.method, shift?.cashAccountId ?? null);
-    if (explicitAccount && payment.method !== (target as { method: string }).method) {
-      throw new Error("Selected Retail account does not match the payment type");
+    let target: { ledgerAccountId: number | null; bankAccountId: number | null };
+    if (explicitAccount) {
+      const account = await resolveRetailPaymentAccountTx(tx, input.companyId, payment);
+      if (payment.method !== account.method) {
+        throw new Error("Selected Retail account does not match the payment type");
+      }
+      target = account;
+    } else {
+      target = paymentTarget(settings, payment.method, shift?.cashAccountId ?? null);
     }
     const amount = payment.amount;
     const tendered = payment.tenderedAmount;
@@ -413,11 +423,11 @@ export async function refundRetailPaymentsTx(
 ): Promise<RetailResolvedPayment[]> {
   let remaining = exactMoney(input.refundAmount, "Retail refund amount");
   if (remaining.lessThanOrEqualTo(0)) return [];
-  const refundTarget = input.destination === "account"
-    ? await resolveRetailPaymentAccountTx(tx, input.companyId, input.refundAccount ?? {})
-    : null;
-  if (input.destination !== "account" &&
-      (input.refundAccount?.ledgerAccountId || input.refundAccount?.bankAccountId)) {
+  const refundTarget =
+    input.destination === "account"
+      ? await resolveRetailPaymentAccountTx(tx, input.companyId, input.refundAccount ?? {})
+      : null;
+  if (input.destination !== "account" && (input.refundAccount?.ledgerAccountId || input.refundAccount?.bankAccountId)) {
     throw new Error("Manual refund account requires account refund destination");
   }
   if (input.destination === "customer_credit") {
@@ -544,10 +554,18 @@ export async function refundRetailPaymentsTx(
           refundMethod === "store_credit"
             ? `Customer credit from payment #${original.id}`
             : `Refund for payment #${original.id}`,
-        ledgerAccountId: refundMethod === "store_credit"
-          ? null : original.method === "credit" ? null : refundTarget?.ledgerAccountId ?? original.ledgerAccountId,
-        bankAccountId: refundMethod === "store_credit"
-          ? null : original.method === "credit" ? null : refundTarget?.bankAccountId ?? original.bankAccountId,
+        ledgerAccountId:
+          refundMethod === "store_credit"
+            ? null
+            : original.method === "credit"
+              ? null
+              : (refundTarget?.ledgerAccountId ?? original.ledgerAccountId),
+        bankAccountId:
+          refundMethod === "store_credit"
+            ? null
+            : original.method === "credit"
+              ? null
+              : (refundTarget?.bankAccountId ?? original.bankAccountId),
         relatedPaymentId: original.id,
         idempotencyKey: key,
         createdBy: input.userId,
