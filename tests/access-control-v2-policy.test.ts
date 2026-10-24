@@ -23,6 +23,7 @@ describe("Permissions Control Center V2 phase 1 policy (not yet wired)", () => {
     expect(evaluateAccessControl(base({ action: "export" })).allowed).toBe(true);
     expect(evaluateAccessControl(base({ resource: "factory.mix_batches", action: "create" })).allowed).toBe(true);
     expect(evaluateAccessControl(base({ resource: "erp.analytics", action: "create" })).allowed).toBe(false);
+    expect(evaluateAccessControl(base({ resource: "erp.analytics", action: "create", userDecision: "allow" })).reason).toBe("create_only_not_creatable");
   });
 
   it("denies immutable business actions despite role and user 'allow' overrides", () => {
@@ -88,6 +89,17 @@ describe("Permissions Control Center V2 phase 1 policy (not yet wired)", () => {
       userDecision: "inherit",
       roleDecision: "deny",
     }))).toEqual({ allowed: false, reason: "role_override" });
+  });
+
+  it("preserves an explicitly approved Developer support-company bypass", () => {
+    expect(evaluateAccessControl(base({
+      role: "Developer", isAssignedToCompany: false,
+      developerSupportBypass: true, legacyAllowed: true,
+    }))).toEqual({ allowed: true, reason: "legacy_policy" });
+    expect(evaluateAccessControl(base({
+      role: "Manager", isAssignedToCompany: false,
+      developerSupportBypass: true, legacyAllowed: true,
+    })).allowed).toBe(false);
   });
 
   it("does not alter existing role semantics in shadow mode", () => {
