@@ -23,3 +23,4 @@ export * from "./container-planner";
 export * from "./ais-vessel-tracking";
 export * from "./ais-position-history";
 export * from "./cost-basis";
+export * from "./row-history";

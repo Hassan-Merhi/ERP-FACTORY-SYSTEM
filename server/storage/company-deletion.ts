@@ -51,9 +51,11 @@ const RESTRICTIVE_DELETE_ACTIONS = new Set(["a", "r"]); // NO ACTION / RESTRICT
  * Tables company deletion never touches. audit_log is append-only (wave 12,
  * owner decision 3): the company's audit rows, including the row recording
  * this deletion, outlive the company and keep its id as a retained reference
- * (audit_log.company_id has no foreign key).
+ * (audit_log.company_id has no foreign key). factory_row_history is append-only
+ * for the same reason (server/services/audit/factoryRowHistory.ts) and records
+ * the deleted rows themselves.
  */
-const RETAINED_TABLES: ReadonlySet<string> = new Set(["audit_log"]);
+const RETAINED_TABLES: ReadonlySet<string> = new Set(["audit_log", "factory_row_history"]);
 
 /**
  * Wave 12 (owner decision 4): a company with accounting history can never be
