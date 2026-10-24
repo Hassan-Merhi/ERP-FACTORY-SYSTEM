@@ -1,11 +1,8 @@
-import { ArrowRightLeft, Minus, Percent, Plus, Printer, Repeat, RotateCcw, Trash2 } from "lucide-react";
+import { Minus, Percent, Plus, Printer, Repeat, RotateCcw, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { RetailItemImage } from "./RetailScanFeedback";
-import { RetailPhotoGallery } from "@/pages/retail/RetailProductImage";
-import { money, type CartLine, type Location, type RetailPosItem, type RetailSale } from "./retailPosTypes";
+import { money, type CartLine, type RetailSale } from "./retailPosTypes";
 
 /** One cart line: exact variant, availability, line adjustment and quantity controls. */
 export function RetailCartLineRow({
@@ -213,118 +210,6 @@ export function RetailRecentSalesCard({
         {!isLoading && !sales.length && (
           <div className="text-sm text-muted-foreground">No retail sales at this location yet.</div>
         )}
-      </CardContent>
-    </Card>
-  );
-}
-
-/** Back-office transfer of one exact variant to another location. */
-export function RetailVariantTransferCard({
-  items,
-  destinations,
-  variantId,
-  toLocationId,
-  quantity,
-  pending,
-  onVariantChange,
-  onDestinationChange,
-  onQuantityChange,
-  onSubmit,
-}: {
-  items: RetailPosItem[];
-  destinations: Location[];
-  variantId: number | "";
-  toLocationId: number | "";
-  quantity: number;
-  pending: boolean;
-  onVariantChange: (value: number | "") => void;
-  onDestinationChange: (value: number | "") => void;
-  onQuantityChange: (value: number) => void;
-  onSubmit: () => void;
-}) {
-  const selected = items.find((item) => item.variantId === variantId);
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-lg">
-          <ArrowRightLeft className="h-5 w-5" /> Exact-variant transfer
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-3">
-        <div>
-          <Label>Variant (Color · Size)</Label>
-          <select
-            value={variantId}
-            onChange={(event) => onVariantChange(event.target.value ? Number(event.target.value) : "")}
-            className="mt-1 h-10 w-full rounded-md border bg-background px-3 text-sm"
-          >
-            <option value="">Choose exact product + color + size</option>
-            {items.map((item) => (
-              <option key={item.variantId} value={item.variantId}>
-                {item.name} · {item.brand} · {item.color} · {item.size} · Qty {item.quantity}
-              </option>
-            ))}
-          </select>
-          {selected && (
-            <div className="mt-2 flex items-center gap-3 rounded-md border p-2">
-              <RetailPhotoGallery
-                images={selected.imageUrls}
-                title={`${selected.brand} · ${selected.name} · ${selected.color} / ${selected.size}`}
-                imageClassName="h-16 w-16 rounded-md border"
-              />
-              <div className="min-w-0 text-sm">
-                <div className="font-semibold">
-                  {selected.brand} · {selected.name}
-                </div>
-                <div>
-                  {selected.color} / {selected.size}
-                </div>
-                <div className="font-mono text-xs text-muted-foreground">{selected.barcode}</div>
-                <div className="text-xs">Source stock: {selected.quantity}</div>
-              </div>
-            </div>
-          )}
-        </div>
-        <div>
-          <Label>Destination</Label>
-          <select
-            value={toLocationId}
-            onChange={(event) => onDestinationChange(event.target.value ? Number(event.target.value) : "")}
-            className="mt-1 h-10 w-full rounded-md border bg-background px-3 text-sm"
-          >
-            <option value="">Choose destination</option>
-            {destinations.map((location) => (
-              <option key={location.id} value={location.id}>
-                {location.name}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <Label htmlFor="retail-transfer-qty">Quantity</Label>
-          <Input
-            id="retail-transfer-qty"
-            type="number"
-            min="0.000001"
-            step="1"
-            value={quantity}
-            onChange={(event) => onQuantityChange(Number(event.target.value))}
-          />
-        </div>
-        <Button
-          variant="outline"
-          className="w-full"
-          disabled={pending || !variantId || !toLocationId}
-          onClick={onSubmit}
-        >
-          {pending ? "Transferring…" : "Transfer exact variant"}
-        </Button>
-        <a
-          href="/retail/stock?mode=transfer"
-          className="block text-center text-sm font-medium text-primary underline-offset-4 hover:underline"
-        >
-          Open photo-based stock transfers, dispatch and receive
-        </a>
       </CardContent>
     </Card>
   );
