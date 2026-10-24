@@ -82,7 +82,6 @@ export async function loadFactoryRowsKnownAt(
   if (!FACTORY_ROW_HISTORY_TABLES.some(([name]) => name === table)) {
     throw new Error("HISTORICAL_ROW_HISTORY_TABLE_NOT_ALLOWED");
   }
-  if (recordIds?.length === 0) return { ready: true, baselineAt: "", rows: new Map() };
   if (recordIds?.some((id) => !Number.isSafeInteger(id) || id <= 0)) {
     throw new Error("HISTORICAL_ROW_HISTORY_INVALID_ID");
   }
@@ -118,6 +117,8 @@ export async function loadFactoryRowsKnownAt(
   if (!metadata.at_or_after_baseline) {
     return { ready: false, reason: "HISTORICAL_ROW_HISTORY_PRE_BASELINE" };
   }
+
+  if (recordIds?.length === 0) return { ready: true, baselineAt: metadata.baseline_at, rows: new Map() };
 
   const rows = resultRows<HistoricalChange>(
     await db.execute(sql`

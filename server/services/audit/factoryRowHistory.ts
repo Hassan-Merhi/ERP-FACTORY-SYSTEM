@@ -31,7 +31,7 @@ import { AUDIT_ACTOR_SETTINGS, UNKNOWN_AUDIT_ACTOR } from "./auditActorContext";
  * is left for the next boot. History is evidence, not a write guard, so a
  * failure is logged and the server starts.
  */
-export const FACTORY_ROW_HISTORY_VERSION = "2026-10-factory-row-history-v4-tenanted";
+export const FACTORY_ROW_HISTORY_VERSION = "2026-10-factory-row-history-v6-rental-units";
 
 /** Tracked tables and, for each, column-name prefixes whose changes alone are noise. */
 export const FACTORY_ROW_HISTORY_TABLES: ReadonlyArray<readonly [table: string, noisePrefixes: readonly string[]]> = [
@@ -50,6 +50,7 @@ export const FACTORY_ROW_HISTORY_TABLES: ReadonlyArray<readonly [table: string, 
   ["factory_worker_advances", []],
   ["factory_advance_repayments", []],
   ["factory_payrolls", []],
+  ["property_units", []],
   ["property_contracts", []],
   ["property_monthly_ledger", []],
   ["property_payments", []],
@@ -68,13 +69,13 @@ export const FACTORY_ROW_HISTORY_DDL: readonly string[] = [
      record_id bigint NOT NULL,
      company_id integer,
      op varchar(1) NOT NULL,
-     recorded_at timestamp NOT NULL DEFAULT clock_timestamp(),
+     recorded_at timestamp NOT NULL DEFAULT (clock_timestamp() AT TIME ZONE 'UTC'),
      actor text,
      old_values jsonb,
      new_values jsonb
    )`,
   // Stamped when the change is written, not when its transaction began (now()).
-  `ALTER TABLE factory_row_history ALTER COLUMN recorded_at SET DEFAULT clock_timestamp()`,
+  `ALTER TABLE factory_row_history ALTER COLUMN recorded_at SET DEFAULT (clock_timestamp() AT TIME ZONE 'UTC')`,
   `CREATE INDEX IF NOT EXISTS factory_row_history_record_idx ON factory_row_history (table_name, record_id, id)`,
   `CREATE INDEX IF NOT EXISTS factory_row_history_recorded_idx ON factory_row_history (table_name, recorded_at)`,
   `CREATE TABLE IF NOT EXISTS factory_row_history_baselines (
@@ -126,11 +127,11 @@ export const FACTORY_ROW_HISTORY_DDL: readonly string[] = [
    BEGIN
      IF TG_OP = 'INSERT' THEN
        INSERT INTO factory_row_history (table_name, record_id, company_id, op, recorded_at, actor, new_values)
-       SELECT TG_TABLE_NAME, (img->>'id')::bigint, erp_factory_row_history_company_id(TG_TABLE_NAME,img), 'I', clock_timestamp(), v_actor, img
+       SELECT TG_TABLE_NAME, (img->>'id')::bigint, erp_factory_row_history_company_id(TG_TABLE_NAME,img), 'I', (clock_timestamp() AT TIME ZONE 'UTC'), v_actor, img
          FROM (SELECT to_jsonb(n) AS img FROM history_new n) AS rows;
      ELSIF TG_OP = 'UPDATE' THEN
        INSERT INTO factory_row_history (table_name, record_id, company_id, op, recorded_at, actor, old_values, new_values)
-       SELECT TG_TABLE_NAME, (rows.after->>'id')::bigint, erp_factory_row_history_company_id(TG_TABLE_NAME,rows.after), 'U', clock_timestamp(), v_actor,
+       SELECT TG_TABLE_NAME, (rows.after->>'id')::bigint, erp_factory_row_history_company_id(TG_TABLE_NAME,rows.after), 'U', (clock_timestamp() AT TIME ZONE 'UTC'), v_actor,
               diff.old_values, diff.new_values
          FROM (SELECT to_jsonb(o) AS before, to_jsonb(n) AS after
                  FROM history_old o JOIN history_new n ON n.id = o.id) AS rows
@@ -145,7 +146,7 @@ export const FACTORY_ROW_HISTORY_DDL: readonly string[] = [
         WHERE diff.material;
      ELSE
        INSERT INTO factory_row_history (table_name, record_id, company_id, op, recorded_at, actor, old_values)
-       SELECT TG_TABLE_NAME, (img->>'id')::bigint, erp_factory_row_history_company_id(TG_TABLE_NAME,img), 'D', clock_timestamp(), v_actor, img
+       SELECT TG_TABLE_NAME, (img->>'id')::bigint, erp_factory_row_history_company_id(TG_TABLE_NAME,img), 'D', (clock_timestamp() AT TIME ZONE 'UTC'), v_actor, img
          FROM (SELECT to_jsonb(o) AS img FROM history_old o) AS rows;
      END IF;
      RETURN NULL;
@@ -259,8 +260,8 @@ async function installTable(client: PoolClient, table: string, noisePrefixes: re
     await client.query(`LOCK TABLE ${table} IN SHARE ROW EXCLUSIVE MODE`);
     // Taken after the lock: no write recorded before this instant is missing from the snapshot,
     // and every later write waits for this commit and is stamped after it.
-    const baselineAt = (await client.query<{ at: string }>(`SELECT clock_timestamp()::timestamp::text AS at`)).rows[0]
-      .at;
+    const baselineAt = (await client.query<{ at: string }>(`SELECT (clock_timestamp() AT TIME ZONE 'UTC')::text AS at`))
+      .rows[0].at;
     const existing = await client.query(`SELECT 1 FROM factory_row_history_baselines WHERE table_name = $1`, [table]);
     if (existing.rowCount === 0) {
       const snapshot = await client.query(

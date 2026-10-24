@@ -21,7 +21,7 @@ export const factoryRowHistory = pgTable(
     op: varchar("op", { length: 1 }).notNull(),
     recordedAt: timestamp("recorded_at")
       .notNull()
-      .default(sql`clock_timestamp()`),
+      .default(sql`clock_timestamp() AT TIME ZONE 'UTC'`),
     actor: text("actor"),
     oldValues: jsonb("old_values"),
     newValues: jsonb("new_values"),

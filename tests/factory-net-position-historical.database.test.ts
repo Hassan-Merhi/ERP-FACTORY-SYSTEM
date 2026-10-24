@@ -86,6 +86,7 @@ const METADATA = [
   "timeZone",
   "historyBasis",
   "historyCoverage",
+  "rowHistoryCoverage",
   "historyCompleteness",
   "historyWarnings",
   "inventoryHistoryWarnings",
