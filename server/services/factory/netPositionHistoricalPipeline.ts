@@ -238,7 +238,7 @@ async function recordedOtwAt(
     // company-local DATE. Do not use its UTC string prefix as business date.
     const iso = String(rawTimestamp).trim();
     const asInstant = new Date(
-      /[zZ]$|[+-]\\d{2}:?\\d{2}$/.test(iso)
+      /[zZ]$|[+-][0-9]{2}:?[0-9]{2}$/.test(iso)
         ? iso
         : iso.replace(" ", "T") + "Z"
     );
