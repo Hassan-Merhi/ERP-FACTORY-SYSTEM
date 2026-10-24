@@ -21,6 +21,7 @@ import { db } from "../../db";
 import { MoneyDecimal, toMoney } from "../../lib/money";
 import { getRentalBillingDay, getRentalPeriodDueDate } from "../rental/rentalPeriodService";
 import { netPositionRecordedThrough } from "./netPositionAsOf";
+import { loadFactoryRowsKnownAt } from "./netPositionRowHistoryReader";
 
 const value = (v: string | number | null | undefined) => toMoney(v);
 const cents = (v: InstanceType<typeof MoneyDecimal>) => v.toDecimalPlaces(2, MoneyDecimal.ROUND_HALF_UP).toNumber();
@@ -93,7 +94,64 @@ export function replayWorkerAdvances(
   return cents(total);
 }
 
+
+/**
+ * Restore advance amounts, repayments and payroll deductions as actually
+ * recorded at the selected day. Used only after ALL three baselines exist.
+ * Prior dates retain the original event-date replay and explicit limitation.
+ */
+async function recordedWorkerAdvancesAsOf(
+  companyId: number,
+  scope: FactoryNetPositionAsOf
+): Promise<{ value: number; warnings: string[] } | null> {
+  const [advances, repayments, payrolls] = await Promise.all([
+    loadFactoryRowsKnownAt("factory_worker_advances", companyId, scope),
+    loadFactoryRowsKnownAt("factory_advance_repayments", companyId, scope),
+    loadFactoryRowsKnownAt("factory_payrolls", companyId, scope),
+  ]);
+  if (!advances.ready || !repayments.ready || !payrolls.ready) return null;
+  const selected = [...advances.rows.values()]
+    .filter((r) => r.deleted_at == null && String(r.advance_date ?? "").slice(0, 10) <= scope.asOf)
+    .map((r) => ({
+      id: Number(r.id),
+      workerId: Number(r.worker_id),
+      amount: String(r.amount ?? "0"),
+      advanceDate: String(r.advance_date).slice(0, 10),
+      repaymentType: String(r.repayment_type ?? ""),
+    }));
+  if (selected.some((r) => !Number.isSafeInteger(r.id) || !Number.isSafeInteger(r.workerId))) {
+    throw new Error("HISTORICAL_WORKER_ADVANCE_ROW_INVALID");
+  }
+  const activeIds = new Set(selected.map((r) => r.id));
+  const workers = new Set(selected.map((r) => r.workerId));
+  const byAdvance = new Map<number, string[]>();
+  const payrollsWithRepayments = new Set<number>();
+  for (const r of repayments.rows.values()) {
+    if (r.deleted_at != null || String(r.repayment_date ?? "").slice(0, 10) > scope.asOf) continue;
+    const payrollId = Number(r.payroll_id);
+    if (Number.isSafeInteger(payrollId) && payrollId > 0) payrollsWithRepayments.add(payrollId);
+    const id = Number(r.advance_id);
+    if (!activeIds.has(id)) continue;
+    const bucket = byAdvance.get(id) ?? [];
+    bucket.push(String(r.amount ?? "0"));
+    byAdvance.set(id, bucket);
+  }
+  const deductions = new Map<number, string>();
+  for (const r of payrolls.rows.values()) {
+    const id = Number(r.id);
+    const workerId = Number(r.worker_id);
+    if (r.deleted_at != null || !workers.has(workerId) || payrollsWithRepayments.has(id) ||
+        String(r.period_start ?? "").slice(0, 10) > scope.asOf) continue;
+    const deduction = value(r.advances as string | number | null | undefined);
+    if (deduction.lte(0)) continue;
+    deductions.set(workerId, value(deductions.get(workerId) ?? "0").plus(deduction).toFixed());
+  }
+  return { value: replayWorkerAdvances(selected, byAdvance, deductions), warnings: [] };
+}
+
 async function factoryWorkerAdvancesAsOf(companyId: number, scope: FactoryNetPositionAsOf) {
+  const recordedAdvances = await recordedWorkerAdvancesAsOf(companyId, scope);
+  if (recordedAdvances) return recordedAdvances;
   const advances = await db
     .select({
       id: factoryWorkerAdvances.id,
