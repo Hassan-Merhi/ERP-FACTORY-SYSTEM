@@ -5,6 +5,7 @@ import { useForm, useFieldArray, useWatch } from "react-hook-form";
 import { zodResolver } from "@/lib/form-resolver";
 import { format } from "date-fns";
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
+import { useZmwVoucherRate } from "@/hooks/useZmwVoucherRate";
 import { useReactToPrint } from "react-to-print";
 import { useLocation } from "wouter";
 import { useCompany } from "@/contexts/CompanyContext";
@@ -53,6 +54,7 @@ import { voucherFormSchema } from "@/pages/vouchers/voucherTypes";
 import type { VoucherFormData } from "@/pages/vouchers/voucherTypes";
 import { ErrorState } from "@/components/ui/page-state";
 import { useHubQueryState } from "@/hooks/use-hub-query-state";
+import { isRetailManualVoucherTabHidden, isRetailManualVoucherTypeHidden } from "@/lib/retailVoucherPolicy";
 
 type VoucherTab = "payment" | "receipt" | "journal" | "transfer" | "transferorder" | "adjustment" | "creditnote";
 
@@ -85,6 +87,7 @@ export default function Vouchers({ posUser }: VouchersProps = {}) {
   const appMode = useAppMode();
   const modeApiRequest = getApiRequest(appMode);
   const isFactoryCompany = selectedCompany?.companyType === "factory";
+  const isRetailCompany = selectedCompany?.companyType === "retail";
   const isPropertiesCompany = selectedCompany?.companyType === "properties";
   const [isAutoCreating, setIsAutoCreating] = useState(false);
   const {
@@ -117,20 +120,24 @@ export default function Vouchers({ posUser }: VouchersProps = {}) {
     enabled: isFactoryMode && !isPOS,
   });
   const factoryHiddenTabs = factoryAccess?.hiddenCostFields ?? [];
-  const visibleSidebarGroups = isFactoryMode
-    ? sidebarGroups
-        .map((group) => ({
-          ...group,
-          items: group.items.filter(
-            (item) => !factoryHiddenTabs.includes(FACTORY_VOUCHER_HIDDEN_KEYS[item.key as VoucherTab])
-          ),
-        }))
-        .filter((group) => group.items.length > 0)
-    : sidebarGroups;
+  // Retail is an ERP company: only hide manual entry types, not posted journals,
+  // receipt/payment vouchers, stock movements, or automatic Retail accounting.
+  // Filtering the source groups updates both mobile and desktop navigation.
+  const visibleSidebarGroups = sidebarGroups
+    .map((group) => ({
+      ...group,
+      items: group.items.filter(
+        (item) =>
+          (!isFactoryMode || !factoryHiddenTabs.includes(FACTORY_VOUCHER_HIDDEN_KEYS[item.key as VoucherTab])) &&
+          (!isRetailCompany || !isRetailManualVoucherTabHidden(item.key))
+      ),
+    }))
+    .filter((group) => group.items.length > 0);
   const visibleVoucherTabs = visibleSidebarGroups.flatMap((group) => group.items.map((item) => item.key as VoucherTab));
   const fallbackVoucherTab = visibleVoucherTabs[0] ?? null;
-  const canShowVoucherTab = (tab: VoucherTab) => !isFactoryMode || visibleVoucherTabs.includes(tab);
-  const allowedVoucherTabs = isFactoryMode && !isPOS ? visibleVoucherTabs : ALL_VOUCHER_TABS;
+  const canShowVoucherTab = (tab: VoucherTab) =>
+    isPOS || (!isFactoryMode && !isRetailCompany) || visibleVoucherTabs.includes(tab);
+  const allowedVoucherTabs = (isFactoryMode || isRetailCompany) && !isPOS ? visibleVoucherTabs : ALL_VOUCHER_TABS;
   const [activeTab, setActiveTab] = useHubQueryState<VoucherTab>({
     key: "tab",
     allowedValues: allowedVoucherTabs,
@@ -185,6 +192,22 @@ export default function Vouchers({ posUser }: VouchersProps = {}) {
     posLocationId,
   });
 
+  // Stale Daybook "edit" deep links must not reopen system-generated Retail
+  // journals/credit notes in a generic write dialog. Keep the audit detail
+  // available instead.
+  useEffect(() => {
+    if (
+      isRetailCompany &&
+      voucherIdToEdit &&
+      voucherToEdit &&
+      isRetailManualVoucherTypeHidden(voucherToEdit.voucherType)
+    ) {
+      setEditVoucherId(null);
+      setEditDialogOpen(false);
+      setLocation(`/voucher-detail/${voucherIdToEdit}`);
+    }
+  }, [isRetailCompany, voucherIdToEdit, voucherToEdit, setLocation]);
+
   useEffect(() => {
     if (voucherIdToEdit) setAccountPickersNeeded(true);
   }, [voucherIdToEdit]);
@@ -212,6 +235,25 @@ export default function Vouchers({ posUser }: VouchersProps = {}) {
   const fieldArray = useFieldArray({ control: form.control, name: "entries" });
   const { append } = fieldArray;
   const entries = form.watch("entries");
+  const paymentVoucherDate = format(form.watch("voucherDate") ?? new Date(), "yyyy-MM-dd");
+  const { rate: dateSpecificZmwRate } = useZmwVoucherRate(paymentVoucherDate);
+  const priorZmwRate = Number(voucherToEdit?.exchangeRate);
+  const isEditingZmw = !!voucherIdToEdit && voucherToEdit?.currency === "ZMW";
+  // Editing a historical document keeps its original native currency,
+  // independently of the current user's currency-toggle preference.
+  const paymentPostingCurrency =
+    voucherIdToEdit &&
+    (voucherToEdit?.currency === "ZMW" || voucherToEdit?.currency === "CFA" || voucherToEdit?.currency === "USD")
+      ? voucherToEdit.currency
+      : selectedCurrency;
+  const paymentPostingRate =
+    paymentPostingCurrency === "ZMW"
+      ? isEditingZmw
+        ? Number.isFinite(priorZmwRate) && priorZmwRate > 0
+          ? priorZmwRate
+          : null
+        : dateSpecificZmwRate
+      : exchangeRate;
   const watchedEntries = useWatch({ control: form.control, name: "entries" });
   const total = entries.reduce((sum, entry) => sum + (parseFloat(entry.amount) || 0), 0);
 
@@ -360,8 +402,8 @@ export default function Vouchers({ posUser }: VouchersProps = {}) {
         entries: formData.entries,
         notes: autoDesc,
         optional: formData.optional,
-        currency: selectedCurrency,
-        exchangeRate: exchangeRate ? exchangeRate.toString() : undefined,
+        currency: paymentPostingCurrency,
+        exchangeRate: paymentPostingRate ? paymentPostingRate.toString() : undefined,
         effectiveDate: voucherEffectiveDate || null,
       };
       if (isEditMode) {
@@ -524,6 +566,14 @@ export default function Vouchers({ posUser }: VouchersProps = {}) {
     exportVoucherHelper({ formData: form.getValues(), activeTab, toast, detailed });
 
   const onSubmit = async (data: VoucherFormData) => {
+    if (paymentPostingCurrency === "ZMW" && (!paymentPostingRate || paymentPostingRate <= 0)) {
+      toast({
+        title: "Approved USD/ZMW rate required",
+        description: "Enter a company exchange rate effective on the voucher date before posting.",
+        variant: "destructive",
+      });
+      return;
+    }
     const validEntries = data.entries.filter((entry) => entry.accountId > 0 && parseFloat(entry.amount || "0") > 0);
     if (validEntries.length === 0) {
       toast({
@@ -624,8 +674,8 @@ export default function Vouchers({ posUser }: VouchersProps = {}) {
                 draftLabel="Unsaved payment draft found"
                 onRestoreDraft={restorePaymentDraft}
                 onDiscardDraft={discardPaymentDraft}
-                selectedCurrency={selectedCurrency}
-                transactionRate={transactionRate}
+                selectedCurrency={paymentPostingCurrency}
+                transactionRate={paymentPostingCurrency === "ZMW" ? paymentPostingRate : transactionRate}
                 setTransactionRate={setTransactionRate}
               />
               <PaymentVoucherTab
@@ -772,7 +822,7 @@ export default function Vouchers({ posUser }: VouchersProps = {}) {
 
       <VoucherEditDialog
         voucherId={editVoucherId}
-        open={editDialogOpen}
+        open={editDialogOpen && !(isRetailCompany && isRetailManualVoucherTypeHidden(voucherToEdit?.voucherType))}
         onOpenChange={(open) => {
           setEditDialogOpen(open);
           if (!open) setEditVoucherId(null);

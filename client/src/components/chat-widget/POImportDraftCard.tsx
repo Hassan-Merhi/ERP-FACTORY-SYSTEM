@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { POImportDraft, POImportResult, PODraftLine } from "./chatWidgetTypes";
+import { useCompany } from "@/contexts/CompanyContext";
 
 export function POImportDraftCard({
   draft,
@@ -23,6 +24,12 @@ export function POImportDraftCard({
   importError: string | null;
 }) {
   const [, setLocation] = useLocation();
+  const { selectedCompany } = useCompany();
+  // A USD-base / ZMW-display company must confirm the invoice currency; the
+  // parsed draft defaults to USD and must never silently book Kwacha as dollars.
+  const requiresCurrencyConfirmation = selectedCompany?.displayCurrency?.toUpperCase() === "ZMW";
+  const [currency, setCurrency] = useState(draft.currency);
+  const [currencyConfirmed, setCurrencyConfirmed] = useState(false);
   const fmt = (n: number | string) =>
     parseFloat(String(n)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -56,14 +63,20 @@ export function POImportDraftCard({
   const grandTotal = itemsTotal + chargesTotal;
 
   const unresolvedCount = lines.filter((l) => !l.stockItemId).length;
-  const canImport = supplierId && poNumber && containerNumber && unresolvedCount === 0;
+  const canImport =
+    supplierId &&
+    poNumber &&
+    containerNumber &&
+    unresolvedCount === 0 &&
+    (!requiresCurrencyConfirmation || currencyConfirmed);
 
   const handleImport = () => {
     onConfirm({
       poNumber,
       containerNumber,
       importDate,
-      currency: draft.currency,
+      currency,
+      ...(requiresCurrencyConfirmation ? { currencyConfirmed: true } : {}),
       supplierId,
       lines: lines.map((l) => ({ ...l, itemName: l.itemName || l.rawName })),
       charges,
@@ -209,6 +222,28 @@ export function POImportDraftCard({
                 data-testid="input-import-date"
               />
             </div>
+            {requiresCurrencyConfirmation && (
+              <div>
+                <p className="text-[11px] text-muted-foreground mb-0.5">
+                  Invoice Currency {!currencyConfirmed && <span className="text-orange-500">(confirm)</span>}
+                </p>
+                <Select
+                  value={currencyConfirmed ? currency : ""}
+                  onValueChange={(v) => {
+                    setCurrency(v === "ZMW" ? "ZMW" : "USD");
+                    setCurrencyConfirmed(true);
+                  }}
+                >
+                  <SelectTrigger className="h-7 text-xs" data-testid="select-po-draft-currency">
+                    <SelectValue placeholder={`Sheet says ${draft.currency}; confirm USD or ZMW`} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="USD">USD — dollars</SelectItem>
+                    <SelectItem value="ZMW">ZMW — Kwacha (K)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
             <div>
               <p className="text-[11px] text-muted-foreground mb-0.5">
                 Supplier {draft.unresolvedSupplier && <span className="text-orange-500">(not matched)</span>}
@@ -329,7 +364,7 @@ export function POImportDraftCard({
             <div className="flex items-center justify-between text-sm font-semibold mt-1 mb-2">
               <span>Grand Total</span>
               <span>
-                {draft.currency} {fmt(grandTotal)}
+                {currency} {fmt(grandTotal)}
               </span>
             </div>
             {unresolvedCount > 0 && (

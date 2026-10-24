@@ -54,6 +54,7 @@ import {
 } from "../../accounting/voucherCorrection";
 import type { VoucherAuditState } from "../../../routes/helpers/voucherAuditTrail";
 import { rebalanceVoucherRoundingTx } from "../../accounting/engineRounding";
+import { PosZmwRateError, assertZmwImportPrices } from "../posZmwRatePolicy";
 
 function err(result: HandlerErrorResult): { status: number; body: PosSaleUpdateResponseBody } {
   // HandlerErrorResult bodies are plain JSON message objects; the response
@@ -124,6 +125,56 @@ export async function applyPosSaleUpdateTx(
 
   if (!lockedVoucher || lockedVoucher.deletedAt) {
     return { error: { status: 404, body: { message: "Voucher not found" } } };
+  }
+  if (lockedVoucher.currency === "ZMW") {
+    // Preserve the original sale's currency and historical rate. A re-date
+    // could otherwise make a new financial date silently reuse the old rate.
+    if (typeof voucherDate === "string" && voucherDate !== String(lockedVoucher.voucherDate)) {
+      return {
+        error: {
+          status: 409,
+          body: {
+            code: "POS_ZMW_REDATE_REQUIRES_REVERSAL",
+            message: "Reverse and rebook a Kwacha sale to change its date and rate.",
+          },
+        },
+      };
+    }
+    const requestedCurrency = (body as { currency?: unknown }).currency;
+    if (requestedCurrency !== undefined && requestedCurrency !== "ZMW") {
+      return {
+        error: {
+          status: 409,
+          body: {
+            code: "POS_ZMW_CURRENCY_LOCKED",
+            message: "The original ZMW sale currency cannot be changed during an edit.",
+          },
+        },
+      };
+    }
+    // Edited Kwacha lines are re-priced in USD by the client at the voucher's
+    // LOCKED rate; every original Kwacha price supplied must agree with it.
+    const editedLines = items as Array<{ rate: unknown; originalCurrencyRate?: unknown }>;
+    if (
+      editedLines.some(
+        (line) =>
+          line.originalCurrencyRate !== undefined &&
+          line.originalCurrencyRate !== null &&
+          line.originalCurrencyRate !== ""
+      )
+    ) {
+      try {
+        assertZmwImportPrices(editedLines, {
+          currency: "ZMW",
+          exchangeRate: lockedVoucher.exchangeRate ? String(lockedVoucher.exchangeRate) : null,
+        });
+      } catch (error) {
+        if (error instanceof PosZmwRateError) {
+          return { error: { status: error.statusCode, body: { code: error.code, message: error.message } } };
+        }
+        throw error;
+      }
+    }
   }
   if (lockedVoucher.voucherType !== "Sales") {
     return {

@@ -40,6 +40,7 @@ interface POImportItem {
   quantity: string | number;
   rate: string | number;
   lineTotal: string | number;
+  currency?: string;
 }
 
 interface POImportCharges {
@@ -74,6 +75,9 @@ type POImportPayload = POImportPreview & {
   containerNumber: string;
   supplierId: number;
   importDate: string;
+  exchangeRate?: string;
+  /** Explicit invoice currency for a USD/ZMW company; absent elsewhere. */
+  currency?: "USD" | "ZMW";
   freightPaidBy: "supplier" | "parent";
   freightParentAccountId: number | null;
 };
@@ -152,6 +156,15 @@ function ErpPOImport() {
   const [importDate, setImportDate] = useState<string>(new Date().toLocaleDateString("en-CA"));
   const [freightPaidBy, setFreightPaidBy] = useState<"supplier" | "parent">("supplier");
   const [freightParentAccountId, setFreightParentAccountId] = useState<string>("");
+  // A USD-base / ZMW-display company must state its invoice currency; a sheet
+  // without a Currency column is otherwise read as USD and Kwacha prices would
+  // be posted as dollars. Mali and other companies keep the sheet's labels.
+  const requiresImportCurrency = selectedCompany?.displayCurrency?.toUpperCase() === "ZMW";
+  const [importCurrency, setImportCurrency] = useState<"" | "USD" | "ZMW">("");
+  useEffect(() => {
+    setImportCurrency("");
+    setValidationResult(null);
+  }, [selectedCompany?.id]);
 
   const {
     data: suppliers = [],
@@ -287,6 +300,23 @@ function ErpPOImport() {
   };
 
   const selectedContainer = preview?.preview?.find((c: POImportContainer) => c.containerNumber === containerNumber);
+  const isNativeZmw = requiresImportCurrency
+    ? importCurrency === "ZMW"
+    : Boolean(selectedContainer?.items.some((item) => item.currency?.toUpperCase() === "ZMW"));
+  const priceSymbol = isNativeZmw ? "K" : "$";
+  const { data: approvedRate, isLoading: rateLoading } = useQuery<{ rate: string } | null>({
+    queryKey: ["/api/exchange-rates/latest", selectedCompany?.id, "USD", "ZMW", importDate],
+    enabled: isNativeZmw && Boolean(selectedCompany?.id) && Boolean(importDate),
+    queryFn: async () => {
+      const response = await fetch(`/api/exchange-rates/latest?fromCurrency=USD&toCurrency=ZMW&asOf=${importDate}`, {
+        credentials: "include",
+      });
+      if (!response.ok) throw new Error("Unable to load the approved historical USD/ZMW rate");
+      return response.json();
+    },
+  });
+  useEffect(() => setValidationResult(null), [approvedRate?.rate, isNativeZmw]);
+  const lockedRate = isNativeZmw ? (approvedRate?.rate ?? "") : undefined;
   const hasValidationErrors = Boolean(validationResult?.errors?.length);
   const isValidated = validationResult !== null;
 
@@ -297,11 +327,23 @@ function ErpPOImport() {
       containerNumber,
       supplierId: Number.parseInt(selectedSupplier, 10),
       importDate,
+      exchangeRate: lockedRate,
+      currency: requiresImportCurrency ? importCurrency || undefined : undefined,
       preview: preview!.preview,
       freightPaidBy,
       freightParentAccountId: freightParentAccountId ? Number.parseInt(freightParentAccountId, 10) : null,
     }),
-    [preview, containerNumber, selectedSupplier, importDate, freightPaidBy, freightParentAccountId]
+    [
+      preview,
+      containerNumber,
+      selectedSupplier,
+      importDate,
+      lockedRate,
+      requiresImportCurrency,
+      importCurrency,
+      freightPaidBy,
+      freightParentAccountId,
+    ]
   );
 
   useEffect(() => {
@@ -320,6 +362,22 @@ function ErpPOImport() {
   }, [preview, validationResult, stockItemsUpdatedAt, validatedAgainstStockItemsAt, validateMutation, buildPayload]);
 
   const checkRequiredFields = () => {
+    if (requiresImportCurrency && !importCurrency) {
+      toast({
+        title: "Invoice currency required",
+        description: "Choose whether this purchase invoice is in USD or Kwacha (ZMW) before validating.",
+        variant: "destructive",
+      });
+      return false;
+    }
+    if (isNativeZmw && !lockedRate) {
+      toast({
+        title: "Historical rate required",
+        description: "Approve the USD/ZMW company rate for the import date before validating.",
+        variant: "destructive",
+      });
+      return false;
+    }
     if (!selectedCompany?.id) {
       toast({ title: "Company required", description: "Please select a company first", variant: "destructive" });
       return false;
@@ -475,10 +533,50 @@ function ErpPOImport() {
                     id="import-date"
                     type="date"
                     value={importDate}
-                    onChange={(e) => setImportDate(e.target.value)}
+                    onChange={(e) => {
+                      setImportDate(e.target.value);
+                      setValidationResult(null);
+                    }}
                     data-testid="input-import-date"
                   />
                 </div>
+                {requiresImportCurrency && (
+                  <div className="space-y-2">
+                    <Label htmlFor="import-currency">Invoice Currency *</Label>
+                    <Select
+                      value={importCurrency}
+                      onValueChange={(value) => {
+                        setImportCurrency(value === "ZMW" ? "ZMW" : "USD");
+                        setValidationResult(null);
+                      }}
+                    >
+                      <SelectTrigger id="import-currency" data-testid="select-import-currency">
+                        <SelectValue placeholder="Select USD or ZMW" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="USD">USD — invoice prices in dollars</SelectItem>
+                        <SelectItem value="ZMW">ZMW — invoice prices in Kwacha (K)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground">
+                      Applies to every line of this import. The spreadsheet must not state a different currency.
+                    </p>
+                  </div>
+                )}
+                {isNativeZmw && (
+                  <div className="space-y-2">
+                    <Label>Historical USD/ZMW rate (ZMW per USD)</Label>
+                    <Input
+                      readOnly
+                      value={rateLoading ? "Loading approved rate..." : lockedRate || "No approved rate"}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Original invoice prices remain ZMW; inventory, freight, goods-in-transit and parent postings use
+                      the locked USD base.
+                      {!lockedRate && !rateLoading ? " An approved company rate for the import date is required." : ""}
+                    </p>
+                  </div>
+                )}
               </div>
 
               {Number(selectedContainer?.charges?.freight || 0) > 0 && parentFreightAccounts.length > 0 && (
@@ -594,9 +692,13 @@ function ErpPOImport() {
                           <TableCell>{item.poNumber}</TableCell>
                           <TableCell>{item.itemName}</TableCell>
                           <TableCell className="text-right">{formatCurrency(Number(item.quantity))}</TableCell>
-                          <TableCell className="text-right">${formatCurrency(Number(item.rate))}</TableCell>
+                          <TableCell className="text-right">
+                            {priceSymbol}
+                            {formatCurrency(Number(item.rate))}
+                          </TableCell>
                           <TableCell className="text-right font-medium">
-                            ${formatCurrency(Number(item.lineTotal))}
+                            {priceSymbol}
+                            {formatCurrency(Number(item.lineTotal))}
                           </TableCell>
                         </TableRow>
                       ))}
@@ -607,31 +709,44 @@ function ErpPOImport() {
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-4 p-4 bg-muted rounded-md">
                   <div>
                     <p className="text-sm text-muted-foreground">Items Total</p>
-                    <p className="text-lg font-semibold">${formatCurrency(Number(container.itemsTotal))}</p>
+                    <p className="text-lg font-semibold">
+                      {priceSymbol}
+                      {formatCurrency(Number(container.itemsTotal))}
+                    </p>
                   </div>
                   {Number(container.charges.freight) > 0 && (
                     <div>
                       <p className="text-sm text-muted-foreground">Freight</p>
-                      <p className="text-lg font-semibold">${formatCurrency(Number(container.charges.freight))}</p>
+                      <p className="text-lg font-semibold">
+                        {priceSymbol}
+                        {formatCurrency(Number(container.charges.freight))}
+                      </p>
                     </div>
                   )}
                   {Number(container.charges.surcharge) > 0 && (
                     <div>
                       <p className="text-sm text-muted-foreground">Surcharge</p>
-                      <p className="text-lg font-semibold">${formatCurrency(Number(container.charges.surcharge))}</p>
+                      <p className="text-lg font-semibold">
+                        {priceSymbol}
+                        {formatCurrency(Number(container.charges.surcharge))}
+                      </p>
                     </div>
                   )}
                   {Number(container.charges.fumigation) > 0 && (
                     <div>
                       <p className="text-sm text-muted-foreground">Fumigation</p>
-                      <p className="text-lg font-semibold">${formatCurrency(Number(container.charges.fumigation))}</p>
+                      <p className="text-lg font-semibold">
+                        {priceSymbol}
+                        {formatCurrency(Number(container.charges.fumigation))}
+                      </p>
                     </div>
                   )}
                   {Number(container.charges.discount) > 0 && (
                     <div>
                       <p className="text-sm text-muted-foreground">Discount</p>
                       <p className="text-lg font-semibold text-red-500">
-                        -${formatCurrency(Number(container.charges.discount))}
+                        -{priceSymbol}
+                        {formatCurrency(Number(container.charges.discount))}
                       </p>
                     </div>
                   )}
@@ -639,13 +754,17 @@ function ErpPOImport() {
                     <div>
                       <p className="text-sm text-muted-foreground">Document Charges</p>
                       <p className="text-lg font-semibold">
-                        ${formatCurrency(Number(container.charges.documentCharges))}
+                        {priceSymbol}
+                        {formatCurrency(Number(container.charges.documentCharges))}
                       </p>
                     </div>
                   )}
                   <div className="col-span-full border-t pt-2">
                     <p className="text-sm text-muted-foreground">Grand Total</p>
-                    <p className="text-xl font-bold">${formatCurrency(Number(container.grandTotal))}</p>
+                    <p className="text-xl font-bold">
+                      {priceSymbol}
+                      {formatCurrency(Number(container.grandTotal))}
+                    </p>
                   </div>
                 </div>
               </div>
@@ -662,7 +781,8 @@ function ErpPOImport() {
                   suppliersLoading ||
                   suppliersError ||
                   !selectedSupplier ||
-                  !containerNumber
+                  !containerNumber ||
+                  (requiresImportCurrency && !importCurrency)
                 }
                 variant={isValidated && !hasValidationErrors ? "secondary" : "default"}
                 data-testid="button-validate"

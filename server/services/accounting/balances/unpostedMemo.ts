@@ -161,6 +161,20 @@ function bookedBy(alias: "mv" | "cv" | "rv", asOf: string | null | undefined, kn
   return sql` AND ${lte(sql.raw(`COALESCE(${alias}.effective_date, ${alias}.voucher_date)`), asOf)}`;
 }
 
+type NumberCondition = (voucherNumber: ReturnType<typeof sql>) => ReturnType<typeof sql>;
+
+/**
+ * The voucher's number matches. A voucher retired after the cutoff was renamed
+ * `{number}~DEL{id}` then, so as of the cutoff it still carried the number in
+ * original_voucher_number; today's report only sees live numbers. Kept as two
+ * separate conditions: one OR across both columns defeats the number index.
+ */
+function numberMatches(alias: "mv" | "cv", matches: NumberCondition, retired: boolean) {
+  return retired
+    ? sql`${sql.raw(`${alias}.voucher_number`)} LIKE '%~DEL%' AND ${matches(sql.raw(`${alias}.original_voucher_number`))}`
+    : matches(sql.raw(`${alias}.voucher_number`));
+}
+
 /**
  * A live voucher of the company whose number matches `pattern` (SQL LIKE or
  * equality), booked on or before `asOf` (wave 17 A): an invoice whose voucher
@@ -168,7 +182,7 @@ function bookedBy(alias: "mv" | "cv" | "rv", asOf: string | null | undefined, kn
  * is a memo line of that date's balance.
  */
 function liveVoucherExists(
-  numberCondition: ReturnType<typeof sql>,
+  matches: NumberCondition,
   companyColumn: ReturnType<typeof sql>,
   asOf: string | null | undefined,
   knownAt?: FactoryNetPositionAsOf
@@ -176,11 +190,12 @@ function liveVoucherExists(
   const deleted = knownAt
     ? sql`(mv.deleted_at IS NULL OR NOT ${netPositionRecordedThrough(sql`mv.deleted_at`, knownAt, "utc-naive-timestamp")})`
     : sql`mv.deleted_at IS NULL`;
-  return sql`EXISTS (
+  const exists = (retired: boolean) => sql`EXISTS (
     SELECT 1 FROM vouchers mv
      WHERE mv.company_id = ${companyColumn} AND ${deleted} AND mv.optional = false
-       AND ${numberCondition}${bookedBy("mv", asOf, knownAt)}
+       AND ${numberMatches("mv", matches, retired)}${bookedBy("mv", asOf, knownAt)}
   )`;
+  return knownAt ? sql`(${exists(false)} OR ${exists(true)})` : exists(false);
 }
 
 interface CustomerMemoRow {
@@ -211,6 +226,11 @@ async function customerMemoRows(executor: Executor, query: MemoQuery): Promise<C
   const cvNotDeleted = knownAt
     ? sql`(cv.deleted_at IS NULL OR NOT ${netPositionRecordedThrough(sql`cv.deleted_at`, knownAt, "utc-naive-timestamp")})`
     : sql`cv.deleted_at IS NULL`;
+  const chargeNumber: NumberCondition = (n) => sql`(${n} = 'CHARGE-PRE-' || co.id::text || '-' || ch.id::text
+    OR ${n} LIKE 'CHARGE-' || co.invoice_number || '-' || ch.id::text || '-%')`;
+  const chargeNumberMatches = knownAt
+    ? sql`(${numberMatches("cv", chargeNumber, false)} OR (${numberMatches("cv", chargeNumber, true)}))`
+    : numberMatches("cv", chargeNumber, false);
   const invoiceDate = sql`COALESCE(co.finalized_at, co.created_at)::date`;
   const invoices = rowsOf<CustomerMemoRow>(
     executor,
@@ -227,8 +247,7 @@ async function customerMemoRows(executor: Executor, query: MemoQuery): Promise<C
                                     OR (
                                       ch.voucher_id IS NULL
                                       AND (
-                                        cv.voucher_number = 'CHARGE-PRE-' || co.id::text || '-' || ch.id::text
-                                        OR cv.voucher_number LIKE 'CHARGE-' || co.invoice_number || '-' || ch.id::text || '-%'
+                                        ${chargeNumberMatches}
                                       )
                                       AND EXISTS (
                                         SELECT 1 FROM voucher_entries ve
@@ -248,7 +267,7 @@ async function customerMemoRows(executor: Executor, query: MemoQuery): Promise<C
          AND co.customer_id IN (${idList(ids)})
          ${invoiceCreated}
          AND NOT ${liveVoucherExists(
-           sql`mv.voucher_number = 'INV-GL-' || co.company_id::text || '-' || co.id::text`,
+           (n) => sql`${n} = 'INV-GL-' || co.company_id::text || '-' || co.id::text`,
            sql`co.company_id`,
            asOf,
            knownAt
@@ -283,7 +302,7 @@ async function customerMemoRows(executor: Executor, query: MemoQuery): Promise<C
                SELECT 1 FROM factory_pos_sales ps
                 WHERE ps.id = cb.reference_id AND ps.company_id = cb.company_id
                   AND (ps.status = 'VOIDED' OR ${liveVoucherExists(
-                    sql`mv.voucher_number = 'FPOS-RCPT-' || ps.id::text`,
+                    (n) => sql`${n} = 'FPOS-RCPT-' || ps.id::text`,
                     sql`ps.company_id`,
                     asOf,
                     knownAt
@@ -392,7 +411,7 @@ function heldCommissionRows(executor: Executor, query: MemoQuery) {
          AND COALESCE(rs.commission_amount, 0) > 0 AND COALESCE(fc.commission_amount, 0) <= 0
          AND COALESCE(rs.commission_supplier_id, fc.supplier_id) IN (${idList(ids)})
          AND NOT ${liveVoucherExists(
-           sql`(mv.voucher_number = 'FACTORY-COMM-' || fc.id::text OR mv.voucher_number LIKE 'FACTORY-COMM-' || fc.id::text || '-%')`,
+           (n) => sql`(${n} = 'FACTORY-COMM-' || fc.id::text OR ${n} LIKE 'FACTORY-COMM-' || fc.id::text || '-%')`,
            sql`fc.company_id`,
            asOf
          )}
@@ -420,12 +439,24 @@ async function factorySupplierMemoLines(executor: Executor, query: MemoQuery) {
   const containers = await rowsOf<ContainerMemoRow>(
     executor,
     sql`
+      -- The container of every FACTORY-IMPORT/FREIGHT/COMM-{container}[-…]
+      -- voucher, parsed once: a per-container LIKE on a computed prefix scans
+      -- every voucher of the company for each container and posting kind.
+      WITH container_vouchers AS MATERIALIZED (
+        SELECT m[1] AS kind, m[2]::int AS container_id, m[3] <> '' AS suffixed
+          FROM (SELECT regexp_match(mv.voucher_number, '^FACTORY-(IMPORT|FREIGHT|COMM)-([0-9]+)((?:-.*)?)$') AS m
+                  FROM vouchers mv
+                 WHERE mv.company_id = ${companyId} AND mv.deleted_at IS NULL AND mv.optional = false
+                   AND mv.voucher_number LIKE 'FACTORY-%'${bookedBy("mv", asOf)}) parsed
+         WHERE m IS NOT NULL
+      )
       SELECT fc.id, fc.container_number, fc.supplier_id,
              COALESCE(fc.commission_supplier_id, fc.supplier_id) AS commission_party_id,
              ${day}::text AS date, fc.status,
              fc.currency_code, fc.fx_rate_to_usd::text AS fx_rate_to_usd, fc.fx_rate_confirmed,
              (COALESCE(fc.total_kg, 0) * COALESCE(fc.rate_per_kg, 0))::text AS goods,
-             ${liveVoucherExists(sql`mv.voucher_number LIKE 'FACTORY-IMPORT-' || fc.id::text || '-%'`, sql`fc.company_id`, asOf)} AS goods_posted,
+             EXISTS (SELECT 1 FROM container_vouchers cv
+                      WHERE cv.container_id = fc.id AND cv.kind = 'IMPORT' AND cv.suffixed) AS goods_posted,
              (
                UPPER(COALESCE(fc.status, '')) = 'OPENING_BALANCE'
                AND UPPER(COALESCE(fc.currency_code, 'USD')) = 'USD'
@@ -444,18 +475,12 @@ async function factorySupplierMemoLines(executor: Executor, query: MemoQuery) {
              ) AS opening_already_in_supplier_master,
              fc.freight::text AS freight, fc.freight_currency_code, fc.freight_fx_rate_to_usd::text AS freight_fx_rate_to_usd,
              fc.freight_fx_rate_confirmed, fc.freight_paid_by, fc.freight_supplier_id,
-             ${liveVoucherExists(
-               sql`(mv.voucher_number = 'FACTORY-FREIGHT-' || fc.id::text OR mv.voucher_number LIKE 'FACTORY-FREIGHT-' || fc.id::text || '-%')`,
-               sql`fc.company_id`,
-               asOf
-             )} AS freight_posted,
+             EXISTS (SELECT 1 FROM container_vouchers cv
+                      WHERE cv.container_id = fc.id AND cv.kind = 'FREIGHT') AS freight_posted,
              fc.commission_amount::text AS commission_amount, fc.commission_currency_code,
              fc.commission_fx_rate_to_usd::text AS commission_fx_rate_to_usd, fc.commission_fx_rate_confirmed,
-             ${liveVoucherExists(
-               sql`(mv.voucher_number = 'FACTORY-COMM-' || fc.id::text OR mv.voucher_number LIKE 'FACTORY-COMM-' || fc.id::text || '-%')`,
-               sql`fc.company_id`,
-               asOf
-             )} AS commission_posted
+             EXISTS (SELECT 1 FROM container_vouchers cv
+                      WHERE cv.container_id = fc.id AND cv.kind = 'COMM') AS commission_posted
         FROM factory_containers fc
        WHERE fc.company_id = ${companyId} AND fc.deleted_at IS NULL
          AND (fc.supplier_id IN (${idList(ids)}) OR fc.commission_supplier_id IN (${idList(ids)}))

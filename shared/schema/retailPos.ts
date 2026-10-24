@@ -198,6 +198,8 @@ export const retailPosReturnItems = pgTable(
     unitCost: decimal("unit_cost", { precision: 20, scale: 6 }).notNull().default("0"),
     grossUnitPrice: decimal("gross_unit_price", { precision: 20, scale: 6 }).notNull().default("0"),
     taxAmount: decimal("tax_amount", { precision: 20, scale: 6 }).notNull().default("0"),
+    /** False for damaged/non-sellable returns; inventory remains unchanged. */
+    restocked: boolean("restocked").notNull().default(true),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
   (t) => ({
@@ -207,7 +209,9 @@ export const retailPosReturnItems = pgTable(
   })
 );
 
-export const RETAIL_PAYMENT_METHODS = ["cash", "card", "bank", "mobile", "other"] as const;
+// "credit" is a receivable tender, not money collected: its journal targets the customer.
+// store_credit is a refund destination only, not a sales tender.
+export const RETAIL_PAYMENT_METHODS = ["cash", "card", "bank", "mobile", "other", "credit", "store_credit"] as const;
 export type RetailPaymentMethod = (typeof RETAIL_PAYMENT_METHODS)[number];
 
 export const retailPosPayments = pgTable(

@@ -9,6 +9,7 @@ const harness = vi.hoisted(() => ({
   createContainer: vi.fn(),
   createPurchaseOrder: vi.fn(),
   getParentCompanyId: vi.fn(),
+  getCompanyById: vi.fn(),
   dbSelect: vi.fn(),
   dbInsert: vi.fn(),
   insertValues: vi.fn(),
@@ -56,6 +57,7 @@ vi.mock("../server/storage", () => ({
     createContainer: harness.createContainer,
     createPurchaseOrder: harness.createPurchaseOrder,
     getParentCompanyId: harness.getParentCompanyId,
+    getCompanyById: harness.getCompanyById,
   },
 }));
 
@@ -146,6 +148,7 @@ beforeEach(() => {
   harness.createContainer.mockResolvedValue({ id: 100, containerNumber: "MSKU1234567" });
   harness.createPurchaseOrder.mockResolvedValue({ id: 200, poNumber: "PO-30-CONFIRM" });
   harness.getParentCompanyId.mockResolvedValue(null);
+  harness.getCompanyById.mockResolvedValue({ id: 7, baseCurrency: "USD", displayCurrency: null });
   harness.clearERPContextCache.mockReturnValue(undefined);
   harness.dbSelect.mockImplementation(() => queryFor(harness.queryResults.shift() ?? []));
   harness.insertValues.mockResolvedValue(undefined);
@@ -406,6 +409,29 @@ describe("Phase 30 chatbot PO confirm branch gaps", () => {
     expect(res.statusCode).toBe(400);
     expect(res.body).toEqual({ message: "Invalid amount" });
     expect(harness.createPurchaseOrder).not.toHaveBeenCalled();
+  });
+
+  it("makes a USD/ZMW company confirm the invoice currency before any container or purchase write", async () => {
+    harness.getCompanyById.mockResolvedValue({ id: 7, baseCurrency: "USD", displayCurrency: "ZMW" });
+    const handler = captureConfirmHandler();
+
+    // The sheet-derived default (USD) is not a confirmation.
+    const unconfirmed = responseHarness();
+    await handler(confirmRequest({ currency: "USD" }), unconfirmed);
+    expect(unconfirmed.statusCode).toBe(409);
+    expect(unconfirmed.body.code).toBe("PO_IMPORT_CURRENCY_UNCONFIRMED");
+    expect(harness.createContainer).not.toHaveBeenCalled();
+    expect(harness.createPurchaseOrder).not.toHaveBeenCalled();
+
+    // A confirmed USD purchase for that company follows the unchanged USD path.
+    queueQueries([], [], []);
+    const confirmed = responseHarness();
+    await handler(confirmRequest({ currency: "USD", currencyConfirmed: true }), confirmed);
+    expect(confirmed.statusCode).not.toBe(409);
+    expect(harness.createPurchaseOrder).toHaveBeenCalledWith(
+      expect.objectContaining({ currency: "USD" }),
+      "2026-09-15"
+    );
   });
 
   it("converts an unexpected confirmation failure into a controlled 500", async () => {

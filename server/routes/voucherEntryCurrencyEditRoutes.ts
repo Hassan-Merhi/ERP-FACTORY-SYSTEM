@@ -105,6 +105,39 @@ export function registerVoucherEntryCurrencyEditRoutes(app: Express) {
         throw legError;
       }
 
+      // Direct entry edits must never replace the historical rate/currency of
+      // a posted Kwacha voucher, even if the general voucher editor is bypassed.
+      if (row.voucher.currency === "ZMW") {
+        if (
+          (req.body.transactionCurrency != null && String(req.body.transactionCurrency).toUpperCase() !== "ZMW") ||
+          (row.entry.transactionCurrency && row.entry.transactionCurrency !== "ZMW")
+        ) {
+          return res.status(409).json({
+            code: "ZMW_ENTRY_CURRENCY_LOCKED",
+            message: "Posted Kwacha entry currency is immutable. Reverse and rebook to change it.",
+          });
+        }
+        const originalRate = String(row.entry.historicalExchangeRate ?? row.voucher.exchangeRate ?? "");
+        const requestedRate = req.body.historicalExchangeRate;
+        if (
+          !originalRate ||
+          !Number.isFinite(Number(originalRate)) ||
+          Number(originalRate) <= 0 ||
+          (requestedRate != null && Number(requestedRate) !== Number(originalRate))
+        ) {
+          return res.status(409).json({
+            code: "ZMW_ENTRY_RATE_LOCKED",
+            message: "The original Kwacha exchange rate is missing or cannot be changed.",
+          });
+        }
+        if (row.entry.transactionDebitAmount == null || row.entry.transactionCreditAmount == null) {
+          return res.status(409).json({
+            code: "ZMW_ENTRY_NATIVE_AMOUNT_UNRESOLVED",
+            message: "Historical Kwacha original amounts must be resolved before editing.",
+          });
+        }
+      }
+
       const transactionCurrency =
         req.body.transactionCurrency || row.entry.transactionCurrency || row.voucher.currency || "USD";
       const isLegacyForeign =

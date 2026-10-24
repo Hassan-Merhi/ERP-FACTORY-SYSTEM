@@ -397,6 +397,8 @@
     "docs/remote-support-phase-18-control-coverage.md": "reference",
     "docs/render-production-logging.md": "reference",
     "docs/retail-fashion-inventory.md": "reference",
+    "docs/retail-pos-inventory-claude-handoff.md": "reference",
+    "docs/retail-pos-inventory-workflow.md": "reference",
     "docs/security-company-isolation-wave3.md": "reference",
     "docs/security-privacy.md": "reference",
     "docs/security/scorecard-review-and-exceptions.md": "reference",
@@ -448,6 +450,16 @@
     "docs/archive/factory-net-position-phase7-ui-reconciliation.md": "record",
     "docs/archive/factory-net-position-phase8-history-integrity.md": "record",
     "docs/archive/factory-net-position-phase9-handoff.md": "record",
-    "docs/factory-net-position-historical.md": "reference"
+    "docs/factory-net-position-historical.md": "reference",
+    "docs/zambia-zmw/phase-1-foundation.md": "reference",
+    "docs/zambia-zmw/phase-2-currency-engine.md": "reference",
+    "docs/zambia-zmw/phase-3-company-rates.md": "reference",
+    "docs/zambia-zmw/phase-4-company-currency-ui.md": "reference",
+    "docs/zambia-zmw/phase-5-pos-and-invoices.md": "reference",
+    "docs/zambia-zmw/phase-5-pos-sales-and-returns.md": "reference",
+    "docs/zambia-zmw/phase-6-vouchers-and-parties.md": "reference",
+    "docs/zambia-zmw/phase-7-cash-bank-transfers.md": "reference",
+    "docs/zambia-zmw/phase-8-inventory-purchasing-intercompany.md": "reference",
+    "docs/zambia-zmw/verification-2026-10-23.md": "reference"
   }
 }

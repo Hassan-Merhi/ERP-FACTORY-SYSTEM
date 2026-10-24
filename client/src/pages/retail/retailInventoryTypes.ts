@@ -70,6 +70,15 @@ export interface RetailCatalogFacets {
   categories: string[];
 }
 
+export interface RetailCatalogNavigation {
+  categories: Array<{
+    key: string;
+    name: string;
+    productCount: number;
+    brands: Array<{ key: string; id: number | null; name: string; productCount: number }>;
+  }>;
+}
+
 export interface DraftStock {
   locationId: number | "";
   quantity: number;

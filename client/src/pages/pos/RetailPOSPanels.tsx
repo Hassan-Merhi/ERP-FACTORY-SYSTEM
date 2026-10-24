@@ -1,10 +1,8 @@
-import { ArrowRightLeft, Minus, Percent, Plus, Printer, Repeat, RotateCcw, Trash2 } from "lucide-react";
+import { Minus, Percent, Plus, Printer, Repeat, RotateCcw, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { RetailItemImage } from "./RetailScanFeedback";
-import { money, type CartLine, type Location, type RetailPosItem, type RetailSale } from "./retailPosTypes";
+import { money, type CartLine, type RetailSale } from "./retailPosTypes";
 
 /** One cart line: exact variant, availability, line adjustment and quantity controls. */
 export function RetailCartLineRow({
@@ -101,7 +99,17 @@ export function RetailLastSaleSummary({ sale, onPrint }: { sale: RetailSale; onP
         <div className="mt-2 border-t pt-2 text-xs text-muted-foreground">
           {sale.payments.map((payment) => (
             <div key={payment.id} className="flex justify-between">
-              <span>{payment.paymentType === "refund" ? "Refund" : payment.method}</span>
+              <span>
+                {payment.method === "store_credit"
+                  ? "Customer account credited"
+                  : payment.method === "credit"
+                    ? payment.paymentType === "refund"
+                      ? "Credit reversed"
+                      : "On account (unpaid)"
+                    : payment.paymentType === "refund"
+                      ? "Refund"
+                      : payment.method}
+              </span>
               <span>{money(payment.amount)}</span>
             </div>
           ))}
@@ -202,92 +210,6 @@ export function RetailRecentSalesCard({
         {!isLoading && !sales.length && (
           <div className="text-sm text-muted-foreground">No retail sales at this location yet.</div>
         )}
-      </CardContent>
-    </Card>
-  );
-}
-
-/** Back-office transfer of one exact variant to another location. */
-export function RetailVariantTransferCard({
-  items,
-  destinations,
-  variantId,
-  toLocationId,
-  quantity,
-  pending,
-  onVariantChange,
-  onDestinationChange,
-  onQuantityChange,
-  onSubmit,
-}: {
-  items: RetailPosItem[];
-  destinations: Location[];
-  variantId: number | "";
-  toLocationId: number | "";
-  quantity: number;
-  pending: boolean;
-  onVariantChange: (value: number | "") => void;
-  onDestinationChange: (value: number | "") => void;
-  onQuantityChange: (value: number) => void;
-  onSubmit: () => void;
-}) {
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-lg">
-          <ArrowRightLeft className="h-5 w-5" /> Exact-variant transfer
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-3">
-        <div>
-          <Label>Variant (Color · Size)</Label>
-          <select
-            value={variantId}
-            onChange={(event) => onVariantChange(event.target.value ? Number(event.target.value) : "")}
-            className="mt-1 h-10 w-full rounded-md border bg-background px-3 text-sm"
-          >
-            <option value="">Choose exact product + color + size</option>
-            {items.map((item) => (
-              <option key={item.variantId} value={item.variantId}>
-                {item.name} · {item.brand} · {item.color} · {item.size} · Qty {item.quantity}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <Label>Destination</Label>
-          <select
-            value={toLocationId}
-            onChange={(event) => onDestinationChange(event.target.value ? Number(event.target.value) : "")}
-            className="mt-1 h-10 w-full rounded-md border bg-background px-3 text-sm"
-          >
-            <option value="">Choose destination</option>
-            {destinations.map((location) => (
-              <option key={location.id} value={location.id}>
-                {location.name}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <Label htmlFor="retail-transfer-qty">Quantity</Label>
-          <Input
-            id="retail-transfer-qty"
-            type="number"
-            min="0.000001"
-            step="1"
-            value={quantity}
-            onChange={(event) => onQuantityChange(Number(event.target.value))}
-          />
-        </div>
-        <Button
-          variant="outline"
-          className="w-full"
-          disabled={pending || !variantId || !toLocationId}
-          onClick={onSubmit}
-        >
-          {pending ? "Transferring…" : "Transfer exact variant"}
-        </Button>
       </CardContent>
     </Card>
   );

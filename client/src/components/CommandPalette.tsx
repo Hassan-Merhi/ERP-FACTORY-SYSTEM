@@ -514,6 +514,10 @@ export function CommandPalette({
           ...ERP_HUB_TABS.filter((tab) => !isRetailCompany || !isRetailHiddenErpPath(tab.path)),
         ],
         [...erpVis.visiblePinnedItems, ...erpVis.visibleUtilityItems]
+      ).map((page) =>
+        isRetailCompany && page.path === "/vouchers"
+          ? { ...page, description: "Payment and receipt vouchers; automatic journals are read-only" }
+          : page
       ),
     [erpVis.sections, erpVis.visiblePinnedItems, erpVis.visibleUtilityItems, isRetailCompany]
   );

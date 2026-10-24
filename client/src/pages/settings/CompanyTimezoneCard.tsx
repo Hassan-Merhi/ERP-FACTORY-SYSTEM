@@ -12,6 +12,7 @@ const TIMEZONE_OPTIONS = [
   { value: "browser", label: "Browser / Device local time" },
   { value: "UTC", label: "UTC — Coordinated Universal Time (UTC+0)" },
   { value: "Africa/Maputo", label: "Africa/Maputo (UTC+2)" },
+  { value: "Africa/Lusaka", label: "Africa/Lusaka — Zambia (UTC+2)" },
   { value: "Africa/Cairo", label: "Africa/Cairo (UTC+2)" },
   { value: "Africa/Lagos", label: "Africa/Lagos (UTC+1)" },
   { value: "Africa/Nairobi", label: "Africa/Nairobi (UTC+3)" },
@@ -57,6 +58,9 @@ export function CompanyTimezoneCard() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/company-settings"] });
       queryClient.invalidateQueries({ queryKey: ["/api/company-settings", selectedCompany?.id] });
+      // A timezone change can change today's business date immediately.
+      queryClient.invalidateQueries({ queryKey: ["/api/exchange-rates/check-today", selectedCompany?.id] });
+      queryClient.invalidateQueries({ queryKey: ["/api/exchange-rates/latest"] });
       toast({ title: "Updated", description: "Timezone setting has been saved." });
     },
     onError: (error: Error) => {

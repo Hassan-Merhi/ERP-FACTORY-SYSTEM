@@ -12,21 +12,32 @@ const METHODS: Array<{ value: RetailPaymentMethod; label: string }> = [
   { value: "bank", label: "Bank / Transfer" },
   { value: "mobile", label: "Mobile" },
   { value: "other", label: "Other" },
+  { value: "credit", label: "Customer credit (unpaid)" },
 ];
 
 export function RetailPaymentPanel({
   total,
   value,
   onChange,
+  canUseCredit = false,
 }: {
   total: number;
   value: RetailPaymentDraft[];
   onChange: (payments: RetailPaymentDraft[]) => void;
+  canUseCredit?: boolean;
 }) {
   const formId = useId();
-  const paid = value.reduce((sum, payment) => sum + (Number(payment.amount) || 0), 0);
-  const remaining = Math.max(0, total - paid);
-  const over = Math.max(0, paid - total);
+  const allocated = value.reduce((sum, payment) => sum + (Number(payment.amount) || 0), 0);
+  const paid = value.reduce(
+    (sum, payment) => (payment.method === "credit" ? sum : sum + (Number(payment.amount) || 0)),
+    0
+  );
+  const credit = value.reduce(
+    (sum, payment) => (payment.method === "credit" ? sum + (Number(payment.amount) || 0) : sum),
+    0
+  );
+  const remaining = Math.max(0, total - allocated);
+  const over = Math.max(0, allocated - total);
 
   const update = (index: number, patch: Partial<RetailPaymentDraft>) => {
     onChange(value.map((payment, paymentIndex) => (paymentIndex === index ? { ...payment, ...patch } : payment)));
@@ -37,23 +48,45 @@ export function RetailPaymentPanel({
       <div className="flex items-center justify-between gap-2">
         <div>
           <div className="text-sm font-semibold">Payment</div>
-          <div className="text-xs text-muted-foreground">Cash, card, bank, mobile, other or split payment.</div>
+          <div className="text-xs text-muted-foreground">
+            Cash, card, bank, split tender, or customer credit. Credit is not money received.
+          </div>
         </div>
         <Button
           type="button"
           size="sm"
           variant="outline"
-          disabled={value.length >= 8}
-          onClick={() =>
+          disabled={value.length >= 8 || total <= 0}
+          onClick={() => {
+            // Most sales start with one tender covering the *full* invoice.
+            // In that case simply appending the unallocated remainder would
+            // create a zero-value tender, which checkout cannot post. Split
+            // the existing largest tender instead, preserving exact totals.
+            const amounts = value.map((payment) => Number(payment.amount) || 0);
+            const largestIndex = amounts.indexOf(Math.max(...amounts));
+            const available = Number((amounts[largestIndex] ?? 0).toFixed(2));
+            const allocatedAmount = Number(remaining.toFixed(2));
+            if (allocatedAmount > 0) {
+              onChange([...value, { method: "cash", amount: allocatedAmount, tenderedAmount: allocatedAmount }]);
+              return;
+            }
+            if (available < 0.02) return;
+            const splitOff = Number((available / 2).toFixed(2));
+            const existingAmount = Number((available - splitOff).toFixed(2));
+            if (splitOff <= 0 || existingAmount <= 0) return;
             onChange([
-              ...value,
-              {
-                method: "cash",
-                amount: Number(remaining.toFixed(2)),
-                tenderedAmount: remaining > 0 ? Number(remaining.toFixed(2)) : null,
-              },
-            ])
-          }
+              ...value.map((payment, index) =>
+                index === largestIndex
+                  ? {
+                      ...payment,
+                      amount: existingAmount,
+                      tenderedAmount: payment.method === "cash" ? existingAmount : null,
+                    }
+                  : payment
+              ),
+              { method: "cash", amount: splitOff, tenderedAmount: splitOff },
+            ]);
+          }}
         >
           <Plus className="mr-1 h-3.5 w-3.5" /> Split
         </Button>
@@ -82,7 +115,7 @@ export function RetailPaymentPanel({
                 }}
               >
                 {METHODS.map((method) => (
-                  <option key={method.value} value={method.value}>
+                  <option key={method.value} value={method.value} disabled={method.value === "credit" && !canUseCredit}>
                     {method.label}
                   </option>
                 ))}
@@ -146,18 +179,22 @@ export function RetailPaymentPanel({
         );
       })}
 
-      <div className="grid grid-cols-3 gap-2 border-t pt-2 text-sm" aria-label="Payment totals">
+      <div className="grid grid-cols-4 gap-2 border-t pt-2 text-sm" aria-label="Payment totals">
         <div>
           <div className="text-xs text-muted-foreground">Due</div>
           <div className="font-semibold">{money(total)}</div>
         </div>
         <div>
-          <div className="text-xs text-muted-foreground">Paid</div>
+          <div className="text-xs text-muted-foreground">Collected</div>
           <div className="font-semibold">{money(paid)}</div>
         </div>
         <div>
+          <div className="text-xs text-muted-foreground">On account</div>
+          <div className="font-semibold">{money(credit)}</div>
+        </div>
+        <div>
           <div className="text-xs text-muted-foreground">{over > 0 ? "Over" : "Remaining"}</div>
-          <div className={Math.abs(paid - total) > 0.005 ? "font-semibold text-destructive" : "font-semibold"}>
+          <div className={Math.abs(allocated - total) > 0.005 ? "font-semibold text-destructive" : "font-semibold"}>
             {money(over > 0 ? over : remaining)}
           </div>
         </div>

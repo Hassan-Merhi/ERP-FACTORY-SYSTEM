@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@/lib/form-resolver";
 import { z } from "zod";
+import { companyRateValueSchema } from "@shared/companyRatePolicy";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,12 +17,7 @@ import { authenticatedUserQueryOptions } from "@/contracts/sessionQueryContracts
 import { canEditExchangeRates } from "@/lib/exchangeRateEditors";
 
 const rateFormSchema = z.object({
-  rate: z
-    .string()
-    .min(1, "Rate is required")
-    .refine((val) => !isNaN(parseFloat(val)) && parseFloat(val) > 0, {
-      message: "Rate must be a positive number",
-    }),
+  rate: companyRateValueSchema,
 });
 
 type RateFormData = z.infer<typeof rateFormSchema>;
@@ -114,7 +110,10 @@ export function DailyRateModal({ companyId }: DailyRateModalProps) {
   });
 
   const previousRate = todayRateCheck?.latestRate;
-  const previousRateValue = previousRate?.rate ? parseFloat(String(previousRate.rate)) : null;
+  const previousRateValue =
+    previousRate?.rate && companyRateValueSchema.safeParse(String(previousRate.rate)).success
+      ? Number(previousRate.rate)
+      : null;
   const previousRateDate = previousRate?.effectiveDate
     ? new Date(previousRate.effectiveDate).toLocaleDateString()
     : null;
@@ -160,6 +159,9 @@ export function DailyRateModal({ companyId }: DailyRateModalProps) {
 
   const createRateMutation = useMutation({
     mutationFn: async (data: RateFormData) => {
+      if (!todayRateCheck?.today || !company?.baseCurrency || !company?.displayCurrency) {
+        throw new Error("Company or business date is unavailable. Reload and try again.");
+      }
       return apiRequest("POST", "/api/exchange-rates", {
         fromCurrency: company?.baseCurrency,
         toCurrency: company?.displayCurrency,
@@ -167,11 +169,13 @@ export function DailyRateModal({ companyId }: DailyRateModalProps) {
         // Use the company's own business date (from the backend check-today response),
         // not this browser's local clock — so every user's save lands on the same shared
         // daily row regardless of their device/timezone.
-        effectiveDate: todayRateCheck?.today || format(new Date(), "yyyy-MM-dd"),
+        effectiveDate: todayRateCheck.today,
+        daily: true,
       });
     },
     onSuccess: async () => {
-      const today = todayRateCheck?.today || format(new Date(), "yyyy-MM-dd");
+      const today = todayRateCheck?.today;
+      if (!today) return;
       // Persist "rate set today" so the modal doesn't reappear in any tab or
       // after remounting until tomorrow.
       markDoneToday(companyId, today);
@@ -192,6 +196,14 @@ export function DailyRateModal({ companyId }: DailyRateModalProps) {
   });
 
   const onSubmit = (data: RateFormData) => {
+    if (!todayRateCheck?.today) {
+      toast({
+        title: "Business date unavailable",
+        description: "Reload before saving an exchange rate.",
+        variant: "destructive",
+      });
+      return;
+    }
     createRateMutation.mutate(data);
   };
 
@@ -220,7 +232,9 @@ export function DailyRateModal({ companyId }: DailyRateModalProps) {
           </DialogTitle>
           <DialogDescription>
             No exchange rate has been set for today (
-            {format(todayRateCheck?.today ? new Date(`${todayRateCheck.today}T00:00:00`) : new Date(), "MMM d, yyyy")}
+            {todayRateCheck?.today
+              ? format(new Date(`${todayRateCheck.today}T00:00:00`), "MMM d, yyyy")
+              : "business date unavailable"}
             ).
           </DialogDescription>
         </DialogHeader>
@@ -252,8 +266,8 @@ export function DailyRateModal({ companyId }: DailyRateModalProps) {
                     <Input
                       {...field}
                       type="number"
-                      step="0.01"
-                      placeholder="e.g., 600"
+                      step="0.000001"
+                      placeholder={`Enter ${company?.displayCurrency} per ${company?.baseCurrency}`}
                       autoFocus
                       data-testid="input-daily-rate"
                     />
@@ -267,12 +281,16 @@ export function DailyRateModal({ companyId }: DailyRateModalProps) {
                 type="button"
                 variant="outline"
                 onClick={handleUsePrevious}
-                disabled={createRateMutation.isPending}
+                disabled={createRateMutation.isPending || !todayRateCheck?.today}
                 data-testid="button-skip-rate"
               >
                 {previousRateValue ? "Use Previous Rate" : "Skip for Now"}
               </Button>
-              <Button type="submit" disabled={createRateMutation.isPending} data-testid="button-save-daily-rate">
+              <Button
+                type="submit"
+                disabled={createRateMutation.isPending || !todayRateCheck?.today}
+                data-testid="button-save-daily-rate"
+              >
                 {createRateMutation.isPending && <RefreshCw className="h-4 w-4 mr-2 animate-spin" />}
                 Set Today's Rate
               </Button>

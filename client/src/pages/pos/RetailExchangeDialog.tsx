@@ -1,16 +1,19 @@
 import { useEffect, useRef, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Minus, Plus, ScanLine, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
+import { fetchRetailCartPreview } from "./retailWave2Api";
 import { RetailItemImage } from "./RetailScanFeedback";
 import { RetailPaymentPanel } from "./RetailPaymentPanel";
 import {
   lookupRetailBarcode,
   makeKey,
   money,
+  outstandingSaleCredit,
   type RetailPaymentDraft,
   type RetailPosItem,
   type RetailSale,
@@ -18,7 +21,10 @@ import {
 
 interface ExchangeResult {
   replayed: boolean;
+  /** Net tender movement at the counter (collected now minus paid back). */
   balanceDue: number;
+  receivableReversed?: number;
+  tenderRefund?: number;
   refundValue: number;
   newSaleTotal: number;
   sale: RetailSale;
@@ -33,17 +39,21 @@ export function RetailExchangeDialog({
   sale,
   locationId,
   shiftId,
+  canOverride = false,
   onOpenChange,
   onCompleted,
 }: {
   sale: RetailSale | null;
   locationId: number | null;
   shiftId: number | null;
+  canOverride?: boolean;
   onOpenChange: (open: boolean) => void;
   onCompleted: (sale: RetailSale) => void | Promise<void>;
 }) {
   const { toast } = useToast();
   const [returnQty, setReturnQty] = useState<Record<number, number>>({});
+  const [noRestock, setNoRestock] = useState<Record<number, boolean>>({});
+  const [reason, setReason] = useState("");
   const [newItems, setNewItems] = useState<Array<RetailPosItem & { exchangeQuantity: number }>>([]);
   const [scanText, setScanText] = useState("");
   const [busy, setBusy] = useState(false);
@@ -52,6 +62,8 @@ export function RetailExchangeDialog({
 
   useEffect(() => {
     setReturnQty({});
+    setNoRestock({});
+    setReason("");
     setNewItems([]);
     setScanText("");
     setPayments([{ method: "cash", amount: 0, tenderedAmount: 0 }]);
@@ -59,16 +71,51 @@ export function RetailExchangeDialog({
   }, [sale?.id]);
 
   const replacementTotal = newItems.reduce((sum, item) => sum + item.exchangeQuantity * item.price, 0);
+  // Exact exchange replacement price includes promotions and tax, just like
+  // ordinary retail checkout. Never charge the customer's old catalogue price.
+  const replacementLines = newItems.map((item) => ({ variantId: item.variantId, quantity: item.exchangeQuantity }));
+  const replacementSignature = JSON.stringify({ locationId, replacementLines });
+  const previewQuery = useQuery({
+    queryKey: ["retail-exchange-preview", replacementSignature],
+    queryFn: () => fetchRetailCartPreview(replacementLines, null, locationId ?? undefined),
+    enabled: Boolean(sale && locationId && replacementLines.length),
+    staleTime: 0,
+  });
+  const newTotal = previewQuery.data?.pricing.totalAmount ?? replacementTotal;
   useEffect(() => {
-    const amount = Number(replacementTotal.toFixed(2));
-    setPayments([{ method: "cash", amount, tenderedAmount: amount }]);
-  }, [replacementTotal]);
+    const amount = Number(newTotal.toFixed(2));
+    setPayments((current) => {
+      if (current.length !== 1) return current;
+      const payment = current[0];
+      return [
+        {
+          ...payment,
+          amount,
+          tenderedAmount: payment.method === "cash" ? Math.max(amount, Number(payment.tenderedAmount ?? 0)) : null,
+        },
+      ];
+    });
+  }, [newTotal]);
 
   if (!sale) return null;
 
-  const refundValue = sale.items.reduce((sum, item) => sum + (returnQty[item.id] ?? 0) * item.unitPrice, 0);
-  const newTotal = replacementTotal;
-  const balance = newTotal - refundValue;
+  const refundValue = sale.items.reduce(
+    (sum, item) => sum + (returnQty[item.id] ?? 0) * (item.grossUnitPrice ?? item.unitPrice),
+    0
+  );
+  // Mirrors the server: unpaid receivable is reversed first, and only the rest
+  // is paid back to the original tenders. A reversal is not cash for the customer.
+  const receivableReversed = Math.min(refundValue, outstandingSaleCredit(sale));
+  const tenderRefund = Math.max(0, refundValue - receivableReversed);
+  const onAccount = payments.reduce(
+    (sum, payment) => (payment.method === "credit" ? sum + Number(payment.amount || 0) : sum),
+    0
+  );
+  const collectedNow = payments.reduce(
+    (sum, payment) => (payment.method === "credit" ? sum : sum + Number(payment.amount || 0)),
+    0
+  );
+  const balance = (newItems.length ? collectedNow : 0) - tenderRefund;
 
   const scan = async () => {
     const barcode = scanText.trim();
@@ -101,13 +148,29 @@ export function RetailExchangeDialog({
     if (!locationId) return;
     const returnItems = Object.entries(returnQty)
       .filter(([, quantity]) => quantity > 0)
-      .map(([saleItemId, quantity]) => ({ saleItemId: Number(saleItemId), quantity }));
+      .map(([saleItemId, quantity]) => ({
+        saleItemId: Number(saleItemId),
+        quantity,
+        restock: !noRestock[Number(saleItemId)],
+      }));
     const items = newItems.map((item) => ({ variantId: item.variantId, quantity: item.exchangeQuantity }));
     if (!returnItems.length || !items.length) {
       toast({ title: "Choose what is returned and what the customer takes", variant: "destructive" });
       return;
     }
-    const fingerprint = JSON.stringify({ sale: sale.id, shiftId, returnItems, items, payments });
+    if (!previewQuery.data || previewQuery.isFetching) {
+      toast({ title: "Replacement price is still loading", variant: "destructive" });
+      return;
+    }
+    if (Math.abs(payments.reduce((sum, payment) => sum + Number(payment.amount || 0), 0) - newTotal) > 0.005) {
+      toast({ title: "Replacement payments must equal the server-priced replacement total", variant: "destructive" });
+      return;
+    }
+    if (returnItems.some((line) => !line.restock) && !reason.trim()) {
+      toast({ title: "Explain why a returned exchange item is not restocked", variant: "destructive" });
+      return;
+    }
+    const fingerprint = JSON.stringify({ sale: sale.id, shiftId, returnItems, items, payments, reason });
     if (!attemptRef.current || attemptRef.current.fingerprint !== fingerprint) {
       attemptRef.current = { fingerprint, key: makeKey("retail-exchange") };
     }
@@ -121,6 +184,7 @@ export function RetailExchangeDialog({
         returnItems,
         newItems: items,
         payments,
+        notes: reason.trim() || undefined,
       });
       const result = (await response.json()) as ExchangeResult;
       attemptRef.current = null;
@@ -163,7 +227,8 @@ export function RetailExchangeDialog({
                   <div className="min-w-0 flex-1 text-sm" data-no-translate>
                     <div className="truncate font-medium">{item.name}</div>
                     <div className="text-xs text-muted-foreground">
-                      {item.color} · {item.size} · {money(item.unitPrice)} · {remaining}/{item.quantity}
+                      {item.color} · {item.size} · {money(item.grossUnitPrice ?? item.unitPrice)} · {remaining}/
+                      {item.quantity}
                     </div>
                   </div>
                   <Button
@@ -189,6 +254,18 @@ export function RetailExchangeDialog({
                   >
                     <Plus className="h-3.5 w-3.5" />
                   </Button>
+                  {canOverride && (
+                    <label className="flex items-center gap-1 text-xs">
+                      <input
+                        type="checkbox"
+                        checked={!noRestock[item.id]}
+                        onChange={(event) =>
+                          setNoRestock((current) => ({ ...current, [item.id]: !event.target.checked }))
+                        }
+                      />
+                      Restock
+                    </label>
+                  )}
                 </div>
               );
             })}
@@ -237,17 +314,63 @@ export function RetailExchangeDialog({
             ))}
           </section>
 
-          {newItems.length > 0 ? <RetailPaymentPanel total={newTotal} value={payments} onChange={setPayments} /> : null}
+          {newItems.length > 0 ? (
+            <RetailPaymentPanel
+              total={newTotal}
+              value={payments}
+              onChange={setPayments}
+              canUseCredit={Boolean(sale.customerId)}
+            />
+          ) : null}
 
+          <Input
+            placeholder="Exchange / damaged item reason (optional except for no-restock)"
+            value={reason}
+            onChange={(event) => setReason(event.target.value)}
+            maxLength={2000}
+          />
           <div className="space-y-1 rounded-md bg-muted/40 p-3 text-sm">
             <div className="flex justify-between">
               <span>Returned value</span>
               <span>-{money(refundValue)}</span>
             </div>
+            {receivableReversed > 0.005 && (
+              <div
+                className="flex justify-between text-xs text-muted-foreground"
+                data-testid="exchange-receivable-reversed"
+              >
+                <span>Reduces unpaid account balance</span>
+                <span>-{money(receivableReversed)}</span>
+              </div>
+            )}
+            {receivableReversed > 0.005 && (
+              <div className="flex justify-between text-xs text-muted-foreground">
+                <span>Paid back to original payments</span>
+                <span>-{money(tenderRefund)}</span>
+              </div>
+            )}
             <div className="flex justify-between">
-              <span>New items</span>
+              <span>New items (including promotions / tax)</span>
               <span>{money(newTotal)}</span>
             </div>
+            {newItems.length > 0 && onAccount > 0.005 && (
+              <div className="flex justify-between text-xs text-muted-foreground">
+                <span>Charged to customer account</span>
+                <span>{money(onAccount)}</span>
+              </div>
+            )}
+            {receivableReversed > 0.005 && newItems.length > 0 && onAccount <= 0.005 && sale.customerId && (
+              <div className="text-xs text-amber-700 dark:text-amber-300">
+                The return reduced the customer's unpaid balance. Use Customer credit below if the customer is not
+                paying for the replacement now.
+              </div>
+            )}
+            {previewQuery.isError && (
+              <div className="text-xs text-destructive">Could not load replacement pricing.</div>
+            )}
+            {previewQuery.isFetching && (
+              <div className="text-xs text-muted-foreground">Updating replacement pricing…</div>
+            )}
             <div className="flex justify-between border-t pt-1 font-semibold">
               <span>{balance >= 0 ? "Customer pays" : "Refund to customer"}</span>
               <span data-testid="exchange-balance">{money(Math.abs(balance))}</span>
@@ -257,7 +380,7 @@ export function RetailExchangeDialog({
             <Button variant="outline" onClick={() => onOpenChange(false)}>
               Cancel
             </Button>
-            <Button onClick={() => void submit()} disabled={busy}>
+            <Button onClick={() => void submit()} disabled={busy || previewQuery.isFetching || !previewQuery.data}>
               {busy ? "Saving…" : "Complete exchange"}
             </Button>
           </div>

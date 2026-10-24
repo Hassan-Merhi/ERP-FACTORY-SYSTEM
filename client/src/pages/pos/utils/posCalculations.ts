@@ -1,4 +1,5 @@
 import type { InventoryItem } from "../pos-components/posTypes";
+import { formatMoneyDisplay } from "@/lib/moneyDisplay";
 import { normalizeSearchText } from "@shared/searchNormalization";
 
 export interface POSColumn {
@@ -18,7 +19,9 @@ export const POS_COLUMNS: POSColumn[] = [
 ];
 
 export function formatDisplayAmount(activeCurrency: string, v: number): string {
-  return activeCurrency === "CFA" ? `CFA ${Math.round(v).toLocaleString()}` : `$ ${v.toLocaleString()}`;
+  if (activeCurrency === "CFA") return `CFA ${Math.round(v).toLocaleString()}`;
+  if (activeCurrency === "USD") return `$ ${v.toLocaleString()}`;
+  return formatMoneyDisplay(v, { currency: activeCurrency });
 }
 
 // Keep POS search normalization in one place so the visible picker and keyboard

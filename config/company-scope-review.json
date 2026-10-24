@@ -3,10 +3,6 @@
   "description": "Explicit Phase 4 review registry for legacy data queries that are safe because their caller, ownership join, transaction context, or controlled maintenance context provides the company boundary.",
   "reviews": [
     {
-      "path": "server/services/accounting/accountHistoryPolicy.ts",
-      "reason": "Wave 16 (B): counts the voucher lines naming one account, which the caller has already loaded in the active company; it deliberately counts every company's lines (an account with any line never moves company)."
-    },
-    {
       "path": "server/chat/reports/implementations/phase3ReportShard.ts",
       "reason": "Report shard receives the already-authorized company context from the chat report orchestrator."
     },
@@ -31,12 +27,12 @@
       "reason": "Ledger IDs are resolved from the already company-scoped allocation flow."
     },
     {
-      "path": "server/routes/account-transaction-pagination/voucherEntryStatement.ts",
-      "reason": "Account and voucher ownership is validated before the pagination query executes."
-    },
-    {
       "path": "server/routes/account-transaction-pagination/customerBalanceStatement.ts",
       "reason": "The route authorizes the customer's company (authorizeCompanyIdParam) before the query runs, and every query filters vouchers by that company_id."
+    },
+    {
+      "path": "server/routes/account-transaction-pagination/voucherEntryStatement.ts",
+      "reason": "Account and voucher ownership is validated before the pagination query executes."
     },
     {
       "path": "server/routes/accountTransactionRoutes.ts",
@@ -139,6 +135,10 @@
       "reason": "Bulk entry deletion is guarded by the owning voucher company boundary."
     },
     {
+      "path": "server/services/accounting/accountHistoryPolicy.ts",
+      "reason": "Wave 16 (B): counts the voucher lines naming one account, which the caller has already loaded in the active company; it deliberately counts every company's lines (an account with any line never moves company)."
+    },
+    {
       "path": "server/services/container-tracking/bulk.ts",
       "reason": "Tracking service receives company-authorized container IDs from its route caller."
     },
@@ -197,6 +197,10 @@
     {
       "path": "server/startup/ensureSupplierTrackingShopDutyDefaults.ts",
       "reason": "Process-level startup DDL: the only containers reference is a to_regclass existence probe, and the applied statements install schema defaults/triggers. No tenant rows are read or written and no caller-supplied company identity exists at startup."
+    },
+    {
+      "path": "server/startup/ensureZambiaHistoricalPurchaseCost.ts",
+      "reason": "Process-level startup DDL: the purchase_orders and po_line_items references are a to_regclass existence probe and idempotent ADD COLUMN IF NOT EXISTS / NOT VALID constraint statements from startup stage 036. No tenant rows are read or written and no caller-supplied company identity exists at startup."
     },
     {
       "path": "server/startup/postStartupJobs.ts",

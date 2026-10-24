@@ -229,7 +229,9 @@ describe("currency amount domain behavior", () => {
   it("bridges ERP rates to daybook USD-per-unit rates", () => {
     expect(erpRateToDaybookFxRateToUsd("USD", "USD", null)).toBe("1.0000000000");
     expect(erpRateToDaybookFxRateToUsd("CFA", "USD", "2500")).toBe("0.0004000000");
-    expect(erpRateToDaybookFxRateToUsd("BAD", "USD", "2500")).toBe("1");
+    // An unknown code is never bridged as a silent 1:1 rate (Zambia phase 2).
+    expect(() => erpRateToDaybookFxRateToUsd("BAD", "USD", "2500")).toThrow("Unsupported currency code");
+    expect(erpRateToDaybookFxRateToUsd("ZMW", "USD", "25")).toBe("0.0400000000");
     expect(() => erpRateToDaybookFxRateToUsd("CFA", "USD", "0")).toThrow("rate must be positive");
   });
 });

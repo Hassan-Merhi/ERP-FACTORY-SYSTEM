@@ -37,7 +37,8 @@ import { AddAgentDialog } from "./agents/AddAgentDialog";
 export default function Agents() {
   const { selectedCompany } = useCompany();
   const factoryMode = useAppMode() === "factory";
-  const { formatAmount, selectedCurrency, exchangeRate, isMultiCurrency } = useCurrencyContext();
+  const { formatAmount, selectedCurrency, exchangeRate, isMultiCurrency, baseCurrency, displayCurrency } =
+    useCurrencyContext();
   const { formatDisplayDate } = useDateFormat();
   const { toast } = useToast();
 
@@ -124,8 +125,8 @@ export default function Agents() {
     }
     // Include FX rate note when exporting in a converted currency.
     const fxNote =
-      isMultiCurrency && exchangeRate
-        ? `${selectedCurrency} @ rate ${exchangeRate.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })} per USD`
+      isMultiCurrency && displayCurrency && exchangeRate
+        ? `Displayed in ${selectedCurrency}; 1 ${baseCurrency} = ${exchangeRate.toLocaleString(undefined, { maximumFractionDigits: 6 })} ${displayCurrency}`
         : null;
     const rows = buildAgentStatementExcelRows({
       account: selectedAccount,

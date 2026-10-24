@@ -1,4 +1,5 @@
 import { formatNumber } from "@/lib/formatNumber";
+import { formatMoneyDisplay } from "@/lib/moneyDisplay";
 import { SafeStyle } from "@/components/SafeStyle";
 
 type InvoiceSaleItem = {
@@ -20,6 +21,7 @@ export type InvoiceSale = {
     voucherNumber?: string;
     customerId?: number;
     exchangeRate?: string | number;
+    currency?: string | null;
     description?: string | null;
   };
 };
@@ -43,6 +45,13 @@ export function InvoiceTemplate({
   fmtPrint,
   fmtPrintCurrency,
 }: InvoiceTemplateProps) {
+  // Reprints must use the voucher's original currency and locked rate. Only
+  // ZMW local-currency invoices are rendered in Kwacha; legacy Mali layout
+  // remains unchanged.
+  const lockedRate = Number(savedSale?.voucher?.exchangeRate);
+  const hasLockedZmw = savedSale?.voucher?.currency === "ZMW" && Number.isFinite(lockedRate) && lockedRate > 0;
+  const displaySaleMoney = (usd: number) =>
+    hasLockedZmw ? formatMoneyDisplay(usd * lockedRate, { currency: "ZMW" }) : fmtPrintCurrency(usd);
   return (
     <div style={{ position: "fixed", top: 0, left: "-99999px", width: "680px", pointerEvents: "none", zIndex: -1 }}>
       <div
@@ -101,23 +110,27 @@ export function InvoiceTemplate({
           <span>User: {printUserName}</span>
         </div>
 
-        {/* Daily Exchange Rate - Only for Mali company, uses transaction's locked rate */}
-        {selectedCompany?.name?.toLowerCase().includes("mali") &&
-          (savedSale?.voucher?.exchangeRate || exchangeRate) && (
-            <div
-              style={{
-                fontSize: "8pt",
-                fontWeight: "700",
-                marginBottom: "4px",
-                padding: "3px",
-                border: "1.5px solid black",
-                textAlign: "center",
-              }}
-            >
-              <span style={{ fontWeight: "900" }}>Daily Rate:</span> $1 ={" "}
-              {formatNumber(parseFloat(String(savedSale?.voucher?.exchangeRate ?? "")) || exchangeRate || 0)} CFA
-            </div>
-          )}
+        {/* Historical rate on Mali receipts and locked USD/ZMW on Zambia invoices. */}
+        {(hasLockedZmw ||
+          (selectedCompany?.name?.toLowerCase().includes("mali") &&
+            (savedSale?.voucher?.exchangeRate || exchangeRate))) && (
+          <div
+            style={{
+              fontSize: "8pt",
+              fontWeight: "700",
+              marginBottom: "4px",
+              padding: "3px",
+              border: "1.5px solid black",
+              textAlign: "center",
+            }}
+          >
+            <span style={{ fontWeight: "900" }}>Daily Rate:</span> $1 ={" "}
+            {hasLockedZmw
+              ? lockedRate.toLocaleString(undefined, { maximumFractionDigits: 6 })
+              : formatNumber(parseFloat(String(savedSale?.voucher?.exchangeRate ?? "")) || exchangeRate || 0)}{" "}
+            {hasLockedZmw ? "ZMW" : "CFA"}
+          </div>
+        )}
 
         {/* Credit Sale Customer Info */}
         {savedSale?.isCreditSale && savedSale?.customer && (
@@ -183,7 +196,7 @@ export function InvoiceTemplate({
                   verticalAlign: "middle",
                 }}
               >
-                Rate
+                {hasLockedZmw ? "Rate (K)" : "Rate"}
               </th>
               <th
                 style={{
@@ -195,7 +208,7 @@ export function InvoiceTemplate({
                   verticalAlign: "middle",
                 }}
               >
-                Amt
+                {hasLockedZmw ? "Amt (K)" : "Amt"}
               </th>
               <th
                 style={{
@@ -207,7 +220,7 @@ export function InvoiceTemplate({
                   verticalAlign: "middle",
                 }}
               >
-                Config
+                {hasLockedZmw ? "Config (USD)" : "Config"}
               </th>
               <th
                 style={{
@@ -219,7 +232,7 @@ export function InvoiceTemplate({
                   verticalAlign: "middle",
                 }}
               >
-                P/L Bale
+                {hasLockedZmw ? "P/L Bale (USD)" : "P/L Bale"}
               </th>
               <th
                 style={{
@@ -231,7 +244,7 @@ export function InvoiceTemplate({
                   verticalAlign: "middle",
                 }}
               >
-                Total P/L
+                {hasLockedZmw ? "Total P/L (USD)" : "Total P/L"}
               </th>
             </tr>
           </thead>
@@ -277,7 +290,7 @@ export function InvoiceTemplate({
                       border: "1px solid #bbb",
                     }}
                   >
-                    {fmtPrintCurrency(itemRateUSD)}
+                    {displaySaleMoney(itemRateUSD)}
                   </td>
                   <td
                     style={{
@@ -288,7 +301,7 @@ export function InvoiceTemplate({
                       border: "1px solid #bbb",
                     }}
                   >
-                    {fmtPrintCurrency(itemAmountUSD)}
+                    {displaySaleMoney(itemAmountUSD)}
                   </td>
                   <td
                     style={{
@@ -360,7 +373,7 @@ export function InvoiceTemplate({
                   verticalAlign: "middle",
                 }}
               >
-                {fmtPrintCurrency(
+                {displaySaleMoney(
                   (savedSale?.items ?? []).reduce(
                     (sum: number, item: InvoiceSaleItem) =>
                       sum + parseFloat(String(item.quantity)) * parseFloat(String(item.rateUSD || item.rate)),
@@ -418,7 +431,7 @@ export function InvoiceTemplate({
         >
           <span>TOTAL PAID:</span>
           <span>
-            {fmtPrintCurrency(
+            {displaySaleMoney(
               (savedSale?.items ?? []).reduce((sum: number, item: InvoiceSaleItem) => {
                 const rateUSD = parseFloat(String(item.rateUSD ?? item.rate ?? 0));
                 return sum + parseFloat(String(item.quantity ?? 0)) * rateUSD;

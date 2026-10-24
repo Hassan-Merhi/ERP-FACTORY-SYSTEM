@@ -13,6 +13,7 @@ import { registerPosCustomerRoutes } from "./posCustomerRoutes";
 import { registerPosWhatsAppRoutes } from "./posWhatsAppRoutes";
 import { registerRetailPosRoutes } from "./retailPosRoutes";
 import { registerRetailStockOpsRoutes } from "./retailStockOpsRoutes";
+import { registerRetailTransferWorkflowRoutes } from "./retailTransferWorkflowRoutes";
 import { registerRetailCustomerRoutes } from "./retailCustomerRoutes";
 import { registerRetailSellingRoutes } from "./retailSellingRoutes";
 import { registerRetailStockCountRoutes } from "./retailStockCountRoutes";
@@ -27,6 +28,7 @@ export function registerAllPosRoutes(app: Express): void {
 
   registerRetailPosRoutes(app);
   registerRetailStockOpsRoutes(app);
+  registerRetailTransferWorkflowRoutes(app);
   registerRetailCustomerRoutes(app);
   registerRetailSellingRoutes(app);
   registerRetailStockCountRoutes(app);

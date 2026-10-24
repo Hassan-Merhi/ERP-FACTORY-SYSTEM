@@ -15,15 +15,25 @@ interface ExchangeRateInputProps {
 export function ExchangeRateInput({
   value,
   onChange,
+  selectedCurrency,
   disabled = false,
   showLabel = true,
   className = "",
 }: ExchangeRateInputProps) {
-  const { exchangeRate: dailyRate } = useCurrencyContext();
+  const { exchangeRate: dailyRate, baseCurrency } = useCurrencyContext();
+  const rateLabel = selectedCurrency === baseCurrency ? baseCurrency : selectedCurrency;
 
   const [inputValue, setInputValue] = useState<string>("");
   const hasUserModified = useRef(false);
   const isInitialized = useRef(false);
+
+  useEffect(() => {
+    // Do not keep an input initialized with Mali's CFA rate when moving to
+    // Zambia. The active company rate is obtained separately by the context.
+    isInitialized.current = false;
+    hasUserModified.current = false;
+    setInputValue("");
+  }, [baseCurrency, rateLabel]);
 
   useEffect(() => {
     if (!isInitialized.current && !hasUserModified.current) {
@@ -54,8 +64,8 @@ export function ExchangeRateInput({
       return;
     }
 
-    const numValue = parseFloat(raw);
-    if (isNaN(numValue) || numValue <= 0) {
+    const numValue = Number(raw);
+    if (!Number.isFinite(numValue) || numValue <= 0) {
       onChange(null);
       return;
     }
@@ -65,7 +75,7 @@ export function ExchangeRateInput({
 
   return (
     <div className={`flex items-center gap-2 ${className}`}>
-      {showLabel && <Label className="text-xs text-muted-foreground whitespace-nowrap">1 USD =</Label>}
+      {showLabel && <Label className="text-xs text-muted-foreground whitespace-nowrap">1 {baseCurrency} =</Label>}
       <Input
         type="number"
         value={inputValue}
@@ -77,7 +87,7 @@ export function ExchangeRateInput({
         min="0"
         data-testid="input-exchange-rate"
       />
-      {showLabel && <span className="text-xs text-muted-foreground">CFA</span>}
+      {showLabel && <span className="text-xs text-muted-foreground">{rateLabel}</span>}
     </div>
   );
 }

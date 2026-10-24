@@ -145,7 +145,7 @@ export async function getRetailVariantSalesReport(filters: RetailVariantReportFi
        SELECT ri.variant_id,
               SUM(ri.quantity) AS returned_qty,
               SUM(ri.quantity * ri.unit_price) AS returned_revenue,
-              SUM(ri.quantity * si.unit_cost) AS returned_cost
+              SUM(CASE WHEN ri.restocked THEN ri.quantity * si.unit_cost ELSE 0 END) AS returned_cost
        FROM retail_pos_return_items ri
        JOIN retail_pos_returns r ON r.id = ri.return_id AND r.company_id = ri.company_id
        JOIN retail_pos_sale_items si ON si.id = ri.sale_item_id

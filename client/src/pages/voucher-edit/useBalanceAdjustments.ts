@@ -23,7 +23,10 @@ export const useBalanceAdjustments = (
         const amount = parseFloat(entry.amount || "0");
         const accountId = entry.accountId || 0;
         const accountType = entry.accountType || "ledger";
-        const entryUsdAmount = formValues.currency === "CFA" && exchangeRate ? amount / exchangeRate : amount;
+        const entryUsdAmount =
+          (formValues.currency === "CFA" || formValues.currency === "ZMW") && exchangeRate
+            ? amount / exchangeRate
+            : amount;
         totalAmount += entryUsdAmount;
         const entryKey = `${accountType}-${accountId}`;
         const isLiability =

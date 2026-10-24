@@ -1,3 +1,4 @@
+import { formatMoneyDisplay } from "@/lib/moneyDisplay";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { format, parseISO } from "date-fns";
@@ -233,7 +234,7 @@ function SidePanel({
 export default function StockInSalesReportComparison() {
   const params = useMemo(initialParams, []);
   const { selectedCompany } = useCompany();
-  const { formatAmount, selectedCurrency, convertToDisplay } = useCurrencyContext();
+  const { formatAmount, selectedCurrency, convertToDisplay, displayCurrency } = useCurrencyContext();
   const { formatDisplayDate } = useDateFormat();
 
   const [period, setPeriod] = useState<PeriodFilterValue>(() => initialPeriodValue(params));
@@ -306,9 +307,15 @@ export default function StockInSalesReportComparison() {
   const formatMetric = (key: MetricKey, kind: "qty" | "money" | "rate", value: number): string => {
     if (kind === "qty") return formatNumber(value, 3);
     if (kind === "money") return value < 0 ? `-${formatAmount(Math.abs(value))}` : formatAmount(value);
-    if (selectedCurrency === "CFA") {
+    if (displayCurrency && selectedCurrency === displayCurrency) {
       const converted = convertToDisplay(value);
-      return `${value < 0 ? "-" : ""}CFA ${formatNumber(Math.abs(converted), 2)}`;
+      if (Number.isFinite(converted)) {
+        const label =
+          displayCurrency === "CFA"
+            ? `CFA ${formatNumber(Math.abs(converted), 2)}`
+            : formatMoneyDisplay(Math.abs(converted), { currency: displayCurrency });
+        return `${value < 0 ? "-" : ""}${label}`;
+      }
     }
     return `${value < 0 ? "-" : ""}$ ${formatNumber(Math.abs(value), key === "avgProfitPerBale" ? 2 : 6)}`;
   };

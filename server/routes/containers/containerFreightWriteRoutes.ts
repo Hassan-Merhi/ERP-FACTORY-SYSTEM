@@ -26,6 +26,7 @@ import {
 } from "../../services/factory/factoryVoucherCorrection";
 
 import { applyPurchaseOrderItemsUpdate } from "./purchaseOrderItemsUpdate";
+import { assertZmwPurchaseEditAllowed, convertNativeChargeEdits } from "./purchaseOrderZmwEdit";
 import { storedCents, syncContainerCharges } from "./containerChargeSync";
 import { registerPurchaseOrderDeleteRoute } from "./purchaseOrderDeleteRoute";
 import { registerPoImportBackfillRoute } from "./poImportBackfillRoute";
@@ -52,6 +53,9 @@ export function registerContainerFreightWriteRoutes(app: Express) {
           message: "Access denied: Purchase order belongs to a different company",
         });
       }
+
+      // A posted Kwacha PO keeps its currency and locked rate (409 otherwise).
+      const nativeZmw = assertZmwPurchaseEditAllowed(existingPO, req.body);
 
       // Check edit permissions based on role
       const userRole = req.session.currentRole;
@@ -89,8 +93,15 @@ export function registerContainerFreightWriteRoutes(app: Express) {
         return res.json(await applyPurchaseOrderItemsUpdate(req, { id, existingPO }));
       }
 
+      // Charge-only Kwacha edits: keep the native amounts and rewrite the
+      // request's charges to historical USD at the locked rate before the
+      // existing voucher, parent and inventory synchronizers run.
+      const nativeChargeChanges: Partial<InsertPurchaseOrder> = nativeZmw
+        ? convertNativeChargeEdits(existingPO, req.body)
+        : {};
+
       // Only allow updating specific fields if no items provided
-      const allowedUpdates: Partial<InsertPurchaseOrder> = {};
+      const allowedUpdates: Partial<InsertPurchaseOrder> = { ...nativeChargeChanges };
       if (req.body.poNumber !== undefined) allowedUpdates.poNumber = req.body.poNumber;
       if (req.body.itemsTotal !== undefined) allowedUpdates.itemsTotal = req.body.itemsTotal;
       if (req.body.currency !== undefined) allowedUpdates.currency = req.body.currency;

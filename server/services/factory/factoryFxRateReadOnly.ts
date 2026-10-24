@@ -78,7 +78,8 @@ export async function resolveFactoryFxRateToUsd(
     const fetched = await fetchExternalFactoryFxRate(normalizedCurrency, dateISO);
     return { rate: fetched, effectiveDate: dateISO, source: "fetched", saved: false };
   } catch (error: unknown) {
-    const fallback = await storedFactoryFxRateOnOrBefore(db, companyId, normalizedCurrency, dateISO);
+    // Ignore archived settings rows even if the external provider is unavailable.
+    const fallback = await storedFactoryFxRateOnOrBefore(db, companyId, normalizedCurrency, dateISO, "auto");
     if (fallback) {
       return { rate: fallback.rate, effectiveDate: fallback.effectiveDate, source: fallback.source, saved: true };
     }

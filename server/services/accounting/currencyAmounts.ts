@@ -20,6 +20,7 @@
 
 import Decimal from "decimal.js";
 import { HttpError } from "../../lib/httpError";
+import { isSupportedAccountingCurrency, normalizeAccountingCurrencyAlias } from "@shared/currencyCatalog";
 
 // ─── Rate-convention enum ────────────────────────────────────────────────────
 
@@ -82,21 +83,7 @@ export interface NormalizedEntryAmounts {
 
 // ─── Supported currencies ────────────────────────────────────────────────────
 
-const KNOWN_CURRENCIES = new Set([
-  "USD", // US Dollar — base currency
-  "XOF", // West African CFA Franc (ISO 4217)
-  "CFA", // Non-standard alias used in this project for XOF; accepted here
-  "EUR",
-  "AUD",
-  "GBP",
-  "CNY",
-  "NGN",
-  "GHS",
-  "CDF",
-  "JPY",
-  "CAD",
-  "CHF",
-]);
+// Currency availability and labels are shared with the client via @shared/currencyCatalog.
 
 // ─── Public helpers ──────────────────────────────────────────────────────────
 
@@ -114,11 +101,9 @@ export function normalizeCurrencyCode(code: string | null | undefined): string {
   if (!code || typeof code !== "string") {
     throw new Error("Currency code must be a non-empty string.");
   }
-  const upper = code.trim().toUpperCase();
-  // Normalize ISO 4217 XOF → project alias CFA.
-  // Never convert the other direction: the DB and APIs use "CFA", not "XOF".
-  if (upper === "XOF") return "CFA";
-  if (!KNOWN_CURRENCIES.has(upper)) {
+  const upper = normalizeAccountingCurrencyAlias(code);
+  // XOF retains the legacy project identifier CFA; ZMW remains ZMW.
+  if (!isSupportedAccountingCurrency(upper)) {
     throw new Error(`Unsupported currency code: "${upper}". Add it to currencyAmounts.ts if needed.`);
   }
   return upper;
@@ -160,6 +145,30 @@ export function validateHistoricalRate(rate: string | number | null | undefined,
 }
 
 /**
+ * Convert between ERP foreign units per USD and Factory USD per foreign unit.
+ * Rates must come from the correct company and transaction date; no rate is
+ * looked up, assumed, or substituted here.
+ */
+function invertPositiveRate(rate: string | number | null | undefined, context: string): string {
+  const original = validateHistoricalRate(rate, context);
+  const inverted = new Decimal(1).div(original).toDecimalPlaces(10);
+  if (!inverted.isFinite() || inverted.lte(0)) {
+    throw new InvalidExchangeRateError(`${context}: reciprocal is too small to store at 10 decimals.`);
+  }
+  return inverted.toFixed(10);
+}
+
+/** ERP: foreign units per 1 USD -> Factory: USD per foreign unit. */
+export function erpTransactionPerUsdToFactoryUsdPerUnit(rate: string | number | null | undefined): string {
+  return invertPositiveRate(rate, "ERP transaction-per-USD rate");
+}
+
+/** Factory: USD per foreign unit -> ERP: foreign units per 1 USD. */
+export function factoryUsdPerUnitToErpTransactionPerUsd(rate: string | number | null | undefined): string {
+  return invertPositiveRate(rate, "Factory USD-per-unit rate");
+}
+
+/**
  * Convert a transaction-currency amount to base currency (USD).
  *
  * For TRANSACTION_PER_BASE (CFA per USD):
@@ -180,9 +189,15 @@ export function convertTransactionToBase(
   const txNorm = normalizeCurrencyCode(transactionCurrency);
   const baseNorm = normalizeCurrencyCode(baseCurrency);
   const amount = new Decimal(transactionAmount);
+  if (!amount.isFinite()) throw new Error("transactionAmount must be finite");
 
-  if (txNorm === baseNorm || convention === RateConvention.IDENTITY) {
+  if (txNorm === baseNorm) {
     return amount.toDecimalPlaces(6).toFixed(6);
+  }
+  if (convention === RateConvention.IDENTITY) {
+    throw new InvalidExchangeRateError(
+      `IDENTITY is invalid for ${txNorm}->${baseNorm}; an explicit foreign-currency rate is required.`
+    );
   }
 
   if (convention === RateConvention.TRANSACTION_PER_BASE) {
@@ -216,9 +231,15 @@ export function convertBaseToTransaction(
   const txNorm = normalizeCurrencyCode(transactionCurrency);
   const baseNorm = normalizeCurrencyCode(baseCurrency);
   const amount = new Decimal(baseAmount);
+  if (!amount.isFinite()) throw new Error("baseAmount must be finite");
 
-  if (txNorm === baseNorm || convention === RateConvention.IDENTITY) {
+  if (txNorm === baseNorm) {
     return amount.toDecimalPlaces(6).toFixed(6);
+  }
+  if (convention === RateConvention.IDENTITY) {
+    throw new InvalidExchangeRateError(
+      `IDENTITY is invalid for ${baseNorm}->${txNorm}; an explicit foreign-currency rate is required.`
+    );
   }
 
   if (convention === RateConvention.TRANSACTION_PER_BASE) {
@@ -235,7 +256,7 @@ export function convertBaseToTransaction(
 }
 
 export interface NormalizeVoucherEntryAmountsInput {
-  /** Transaction currency code. Pass "CFA" (project alias) or "USD". ISO "XOF" is accepted and normalised to "CFA". */
+  /** Transaction currency code, e.g. "ZMW", "USD" or legacy "CFA". ISO "XOF" is normalised to "CFA". */
   transactionCurrency: string;
   /** Base/functional currency of the company (typically "USD"). */
   baseCurrency: string;
@@ -251,7 +272,7 @@ export interface NormalizeVoucherEntryAmountsInput {
   transactionCreditAmount: string | number;
   /**
    * The historical exchange rate at posting time.
-   * For TRANSACTION_PER_BASE (CFA per USD): the CFA/USD rate stored on the voucher.
+   * For TRANSACTION_PER_BASE: foreign units per USD, locked on the voucher.
    * Required for any non-IDENTITY entry; must be a valid positive number.
    * NEVER pass null for a non-base currency — the function will throw.
    */
@@ -267,7 +288,7 @@ export interface NormalizeVoucherEntryAmountsInput {
  * Rules:
  *  - An entry must have exactly one of debit or credit > 0 (not both, not neither).
  *  - For USD in a USD-base company: convention = IDENTITY, rate = 1.
- *  - For CFA using CFA-per-USD: convention = TRANSACTION_PER_BASE,
+ *  - For CFA or ZMW using foreign units per USD: convention = TRANSACTION_PER_BASE,
  *    baseDebit = txDebit / rate, backward-compat debitAmount = baseDebit.
  *  - debitAmount (backward compat) always equals baseDebitAmount.
  */
@@ -279,6 +300,10 @@ export function normalizeVoucherEntryAmounts(input: NormalizeVoucherEntryAmounts
 
   const txDebit = new Decimal(input.transactionDebitAmount ?? 0);
   const txCredit = new Decimal(input.transactionCreditAmount ?? 0);
+
+  if (!txDebit.isFinite() || !txCredit.isFinite()) {
+    throw new Error("Posted transaction debit and credit amounts must be finite");
+  }
 
   // Validate: amounts must be non-negative
   if (txDebit.lt(0)) throw new Error("transactionDebitAmount must be ≥ 0");
@@ -309,7 +334,9 @@ export function normalizeVoucherEntryAmounts(input: NormalizeVoucherEntryAmounts
     // Non-base currency REQUIRES a valid positive rate — never silently default to 1
     rateDecimal = validateHistoricalRate(historicalRate, `historical rate for ${txCurrency}/${baseCcy}`);
     rateStr = rateDecimal.toDecimalPlaces(10).toFixed(10);
-    // For this project the ERP convention is CFA per USD → TRANSACTION_PER_BASE
+    // Compute using exactly the rate precision that is persisted on the entry.
+    rateDecimal = validateHistoricalRate(rateStr, `stored historical rate for ${txCurrency}/${baseCcy}`);
+    // ERP foreign vouchers store transaction units per one base unit.
     convention = RateConvention.TRANSACTION_PER_BASE;
   }
 
@@ -349,8 +376,10 @@ export function normalizeVoucherEntryAmounts(input: NormalizeVoucherEntryAmounts
 }
 
 /**
- * Sum the base-currency debit and credit totals from a list of normalized entries.
- * Returns { totalBaseDebit, totalBaseCredit } as decimal strings (6dp).
+ * Sum base amounts for a normalized journal. Legacy transaction totals below
+ * remain for backward compatibility but are NOT meaningful if the entries use
+ * more than one native currency. Use groupNormalizedTransactionAmountsByCurrency
+ * when displaying or reconciling native amounts from a mixed-currency journal.
  */
 export function sumNormalizedEntries(entries: NormalizedEntryAmounts[]): {
   totalBaseDebit: string;
@@ -376,6 +405,32 @@ export function sumNormalizedEntries(entries: NormalizedEntryAmounts[]): {
     totalTransactionDebit: totalTxDebit.toDecimalPlaces(6).toFixed(6),
     totalTransactionCredit: totalTxCredit.toDecimalPlaces(6).toFixed(6),
   };
+}
+
+/**
+ * Separately total the original transaction amounts for each actual currency.
+ * Never add ZMW and USD (or CFA and USD) as if they were one native balance.
+ * Every amount stays in its own currency and at its historical posting value.
+ */
+export function groupNormalizedTransactionAmountsByCurrency(
+  entries: NormalizedEntryAmounts[]
+): Record<string, { debit: string; credit: string }> {
+  const groups = new Map<string, { debit: Decimal; credit: Decimal }>();
+  for (const entry of entries) {
+    const currency = normalizeCurrencyCode(entry.transactionCurrency);
+    const totals = groups.get(currency) ?? { debit: new Decimal(0), credit: new Decimal(0) };
+    totals.debit = totals.debit.plus(entry.transactionDebitAmount);
+    totals.credit = totals.credit.plus(entry.transactionCreditAmount);
+    groups.set(currency, totals);
+  }
+  const result: Record<string, { debit: string; credit: string }> = {};
+  for (const [currency, totals] of groups) {
+    result[currency] = {
+      debit: totals.debit.toDecimalPlaces(6).toFixed(6),
+      credit: totals.credit.toDecimalPlaces(6).toFixed(6),
+    };
+  }
+  return result;
 }
 
 /**
@@ -564,19 +619,12 @@ export function erpRateToDaybookFxRateToUsd(
   baseCurrency: string,
   erpExchangeRate: string | number | null | undefined
 ): string {
-  let txCcy: string;
-  let baseCcy: string;
-  try {
-    txCcy = normalizeCurrencyCode(transactionCurrency);
-    baseCcy = normalizeCurrencyCode(baseCurrency);
-  } catch {
-    return "1"; // fallback for unknown currencies
+  const txCcy = normalizeCurrencyCode(transactionCurrency);
+  const baseCcy = normalizeCurrencyCode(baseCurrency);
+  if (baseCcy !== "USD") {
+    throw new InvalidExchangeRateError("Factory daybook fxRateToUsd requires USD as the base currency.");
   }
-
   if (txCcy === baseCcy) return "1.0000000000";
 
-  // erpExchangeRate = CFA per USD (TRANSACTION_PER_BASE)
-  // fxRateToUsd     = USD per CFA = 1 / erpExchangeRate
-  const rate = validateHistoricalRate(erpExchangeRate, "ERP exchange rate for daybook fxRateToUsd");
-  return new Decimal(1).div(rate).toDecimalPlaces(10).toFixed(10);
+  return erpTransactionPerUsdToFactoryUsdPerUnit(erpExchangeRate);
 }

@@ -308,10 +308,25 @@ export function ChatWidget() {
     setPoDraftSubmitting(true);
     setPoDraftError(null);
     try {
+      let submission = resolved;
+      const parsed = resolved as { currency?: string; importDate?: string; exchangeRate?: string };
+      if (parsed && String(parsed.currency).toUpperCase() === "ZMW") {
+        if (!parsed.importDate) throw new Error("A dated native Kwacha purchase is required.");
+        // Resolve the approved rate at confirmation, never infer a current
+        // exchange rate or silently multiply Kwacha as dollars.
+        const lookup = await fetch(
+          `/api/exchange-rates/latest?fromCurrency=USD&toCurrency=ZMW&asOf=${encodeURIComponent(parsed.importDate)}`,
+          { credentials: "include" }
+        );
+        if (!lookup.ok) throw new Error("Could not verify the approved USD/ZMW rate.");
+        const rate = (await lookup.json()) as { rate?: string } | null;
+        if (!rate?.rate) throw new Error("An approved historical USD/ZMW rate is required for this purchase.");
+        submission = { ...parsed, exchangeRate: rate.rate };
+      }
       const resp = await fetch("/api/chatbot/confirm-po-import", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(resolved),
+        body: JSON.stringify(submission),
         credentials: "include",
       });
       const data = await resp.json();

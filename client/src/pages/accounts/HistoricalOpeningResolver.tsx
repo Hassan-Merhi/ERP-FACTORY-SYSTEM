@@ -1,5 +1,5 @@
 import type { ClientErrorLike } from "@/lib/clientError";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { AlertTriangle, CheckCircle2, Loader2 } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -11,6 +11,8 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
+import { useCurrencyContext } from "@/contexts/CurrencyContext";
+import { useCompany } from "@/contexts/CompanyContext";
 
 interface UnresolvedOpening {
   entity_type: "ledger" | "bank" | "customer" | "supplier" | "employee" | "fixedAsset";
@@ -22,15 +24,24 @@ interface UnresolvedOpening {
 }
 
 interface Draft {
-  currency: "USD" | "CFA";
+  currency: "USD" | "CFA" | "ZMW";
   historicalRate: string;
 }
 
 export function HistoricalOpeningResolver() {
   const { toast } = useToast();
+  const { displayCurrency } = useCurrencyContext();
+  const { selectedCompany } = useCompany();
+  const companyId = selectedCompany?.id;
   const [drafts, setDrafts] = useState<Record<string, Draft>>({});
+  // A draft choice and a previously cached unresolved balance must not leak
+  // across company switches. Rate and opening amount are tenant data.
+  useEffect(() => {
+    setDrafts({});
+  }, [companyId]);
   const query = useQuery<UnresolvedOpening[]>({
-    queryKey: ["/api/accounts/multi-currency/unresolved-openings"],
+    queryKey: ["/api/accounts/multi-currency/unresolved-openings", companyId],
+    enabled: !!companyId,
     staleTime: 30_000,
   });
 
@@ -42,7 +53,7 @@ export function HistoricalOpeningResolver() {
       return apiRequest("PUT", `/api/accounts/multi-currency/opening-balance/${row.entity_type}/${row.id}`, {
         nativeAmount: row.raw_amount,
         currency: draft.currency,
-        historicalRate: draft.currency === "CFA" ? draft.historicalRate : "1",
+        historicalRate: draft.currency !== "USD" ? draft.historicalRate : "1",
         side: row.side,
       });
     },
@@ -116,8 +127,9 @@ export function HistoricalOpeningResolver() {
           <AlertTriangle className="h-4 w-4" />
           <AlertTitle>Manual review required</AlertTitle>
           <AlertDescription>
-            Choose the currency originally entered and the historical CFA-per-USD rate. This preserves the native amount
-            and stores a separate historical USD value. It does not use today’s rate.
+            Choose the currency originally entered and its historical foreign-units-per-USD rate (for Zambia, ZMW per
+            USD). This preserves the native amount and a separate historical USD value. Do not enter today's rate unless
+            it truly applied to the original opening.
           </AlertDescription>
         </Alert>
 
@@ -142,7 +154,10 @@ export function HistoricalOpeningResolver() {
                   mutation.variables?.row.entity_type === row.entity_type &&
                   mutation.variables?.row.id === row.id;
                 const invalidRate =
-                  draft.currency === "CFA" && (!draft.historicalRate || Number(draft.historicalRate) <= 0);
+                  draft.currency !== "USD" &&
+                  (!draft.historicalRate ||
+                    !Number.isFinite(Number(draft.historicalRate)) ||
+                    Number(draft.historicalRate) <= 0);
                 return (
                   <TableRow key={key}>
                     <TableCell className="capitalize">
@@ -159,7 +174,8 @@ export function HistoricalOpeningResolver() {
                       <Select
                         value={draft.currency}
                         onValueChange={(currency) => {
-                          if (currency !== "USD" && currency !== "CFA") return;
+                          if (currency !== "USD" && currency !== displayCurrency) return;
+                          if (currency !== "USD" && currency !== "CFA" && currency !== "ZMW") return;
                           setDrafts((current) => ({ ...current, [key]: { ...draft, currency } }));
                         }}
                       >
@@ -168,14 +184,15 @@ export function HistoricalOpeningResolver() {
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="USD">USD</SelectItem>
-                          <SelectItem value="CFA">CFA</SelectItem>
+                          {displayCurrency === "CFA" && <SelectItem value="CFA">CFA</SelectItem>}
+                          {displayCurrency === "ZMW" && <SelectItem value="ZMW">ZMW — Kwacha</SelectItem>}
                         </SelectContent>
                       </Select>
                     </TableCell>
                     <TableCell className="min-w-[170px]">
-                      {draft.currency === "CFA" ? (
+                      {draft.currency !== "USD" ? (
                         <div className="space-y-1">
-                          <Label className="sr-only">Historical CFA per USD rate</Label>
+                          <Label className="sr-only">Historical {draft.currency} per USD rate</Label>
                           <Input
                             type="number"
                             min="0.0000000001"

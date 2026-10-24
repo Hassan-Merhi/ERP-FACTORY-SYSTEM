@@ -57,6 +57,7 @@ import {
 
 export const RETAIL_INVENTORY_ADJUSTMENT_ACCOUNT = "RETAIL-INVENTORY-ADJUSTMENT";
 export const RETAIL_GRNI_ACCOUNT = "RETAIL-GRNI";
+export const RETAIL_IN_TRANSIT_ACCOUNT = "RETAIL-IN-TRANSIT";
 export const OPENING_EQUITY_ACCOUNT = "OPENING_BALANCE_EQUITY";
 export const retailInventoryOpeningVoucherNumber = (companyId: number) => `RETAIL-INV-OPEN-${companyId}`;
 
@@ -76,6 +77,7 @@ export const RETAIL_INVENTORY_OPENING_REFUSAL_MESSAGES = {
   RETAIL_INVENTORY_OPENING_LATER_DOCUMENTS:
     "Retail stock documents are dated after the chosen opening date. Choose a later opening date.",
   RETAIL_INVENTORY_OPENING_FUTURE_DATE: "The Retail inventory opening date cannot be in the future.",
+  RETAIL_IN_TRANSIT_TRANSFERS_PENDING: "Receive all dispatched Retail transfers before applying an inventory opening.",
 } as const;
 export type RetailInventoryOpeningRefusalCode = keyof typeof RETAIL_INVENTORY_OPENING_REFUSAL_MESSAGES;
 
@@ -196,11 +198,21 @@ export async function planRetailInventoryOpeningTx(
   const amount = subLedgerValue.minus(ledgerBalance);
   const laterDocuments = await movementsAfter(tx, companyId, openingDate);
   const existing = await retailInventoryOpeningTx(tx, companyId);
+  // Without an opening there are intentionally no live Retail stock journals.
+  // Forbid cut-over while stock is travelling: otherwise dispatch would be
+  // pre-opening and receipt post-opening, creating an unpaired inventory debit.
+  const [pendingTransit] = await rows<{ pending: number }>(
+    tx,
+    sql`SELECT COUNT(*)::int AS pending FROM retail_stock_operations
+        WHERE company_id = ${companyId} AND operation_type = 'transfer_dispatch'
+          AND metadata->>'status' = 'otw'`
+  );
   const today = await companyBusinessDate(companyId, tx);
   const blockers: RetailInventoryOpeningRefusalCode[] = [];
   if (existing) blockers.push("RETAIL_INVENTORY_OPENING_ALREADY_APPLIED");
   if (openingDate > today) blockers.push("RETAIL_INVENTORY_OPENING_FUTURE_DATE");
   if (laterDocuments > 0) blockers.push("RETAIL_INVENTORY_OPENING_LATER_DOCUMENTS");
+  if ((pendingTransit?.pending ?? 0) > 0) blockers.push("RETAIL_IN_TRANSIT_TRANSFERS_PENDING");
   const [last] = await rows<{ id: number | null }>(
     tx,
     sql`SELECT MAX(id) AS id FROM retail_stock_movements WHERE company_id = ${companyId}`

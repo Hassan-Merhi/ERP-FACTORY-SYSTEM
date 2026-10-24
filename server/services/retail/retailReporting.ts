@@ -30,6 +30,16 @@ const mapNumericFields = <T extends Record<string, unknown>>(row: T, fields: str
   return next;
 };
 
+// Damaged refunds reverse revenue and tax but do not restore sellable stock
+// or reverse the COGS of goods written off. A zero-delta audit movement records
+// the return, and its returnedQuantity metadata supplies the financial quantity.
+const effectiveMovementQuantitySql = `CASE
+  WHEN m.movement_type = 'return'
+   AND COALESCE((m.metadata->>'restocked')::boolean, true) = false
+    THEN -COALESCE((m.metadata->>'returnedQuantity')::numeric, 0)
+  ELSE -m.quantity_delta
+END`;
+
 function financialLocationPredicate(locationId?: number): string {
   return locationId ? " AND m.location_id = $4" : "";
 }
@@ -116,11 +126,13 @@ export async function getRetailDashboard(filters: RetailReportFilters) {
            m.id,
            m.movement_type,
            s.customer_id,
-           (-m.quantity_delta) AS net_quantity,
-           (-m.quantity_delta) * si.unit_price AS revenue,
-           (-m.quantity_delta) * si.unit_cost AS cogs,
-           CASE WHEN si.quantity <> 0 THEN (-m.quantity_delta) / si.quantity ELSE 0 END * si.tax_amount AS tax_amount,
-           CASE WHEN si.quantity <> 0 THEN (-m.quantity_delta) / si.quantity ELSE 0 END * si.line_discount_amount AS discount_amount
+           ${effectiveMovementQuantitySql} AS net_quantity,
+           ${effectiveMovementQuantitySql} * si.unit_price AS revenue,
+           CASE WHEN m.movement_type = 'return'
+                  AND COALESCE((m.metadata->>'restocked')::boolean, true) = false
+              THEN 0 ELSE ${effectiveMovementQuantitySql} * si.unit_cost END AS cogs,
+           CASE WHEN si.quantity <> 0 THEN ${effectiveMovementQuantitySql} / si.quantity ELSE 0 END * si.tax_amount AS tax_amount,
+           CASE WHEN si.quantity <> 0 THEN ${effectiveMovementQuantitySql} / si.quantity ELSE 0 END * si.line_discount_amount AS discount_amount
          FROM retail_stock_movements m
          JOIN retail_pos_sale_items si
            ON si.company_id = m.company_id
@@ -150,9 +162,11 @@ export async function getRetailDashboard(filters: RetailReportFilters) {
          SELECT
            m.location_id,
            m.variant_id,
-           (-m.quantity_delta) AS net_quantity,
-           (-m.quantity_delta) * si.unit_price AS revenue,
-           (-m.quantity_delta) * si.unit_cost AS cogs
+           ${effectiveMovementQuantitySql} AS net_quantity,
+           ${effectiveMovementQuantitySql} * si.unit_price AS revenue,
+           CASE WHEN m.movement_type = 'return'
+                  AND COALESCE((m.metadata->>'restocked')::boolean, true) = false
+              THEN 0 ELSE ${effectiveMovementQuantitySql} * si.unit_cost END AS cogs
          FROM retail_stock_movements m
          JOIN retail_pos_sale_items si
            ON si.company_id = m.company_id
@@ -466,7 +480,7 @@ export async function runRetailAudit(companyId: number): Promise<{
        WHERE ri.company_id = $1
        GROUP BY ri.id, ri.return_id, ri.sale_item_id, ri.variant_id, ri.quantity
        HAVING COUNT(m.id) <> 1
-          OR ABS(COALESCE(SUM(m.quantity_delta), 0) - ri.quantity) > 0.000001
+          OR ABS(COALESCE(SUM(m.quantity_delta), 0) - CASE WHEN ri.restocked THEN ri.quantity ELSE 0 END) > 0.000001
        LIMIT 25`,
       [companyId]
     ),

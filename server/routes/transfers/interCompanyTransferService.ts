@@ -5,6 +5,10 @@ import {
   type PostingActor,
 } from "../../services/accounting";
 import { requireCompanyAccess } from "./transferRequestContext";
+import {
+  resolveZambiaIntercompanyAmount,
+  zambiaTransferVoucherNumber,
+} from "../../services/accounting/zambiaIntercompanyTransfer";
 import { TransferRouteError } from "./transferErrors";
 import { transferRepository } from "./transferRepository";
 import { parseInterCompanyTransferInput } from "./transferValidation";
@@ -16,7 +20,25 @@ async function getOrCreateInterCompanyAccount(params: {
   code: string;
   name: string;
   accountType: "Asset" | "Liability";
-  accounts: { code: string; id: number; name: string; active: boolean; createdAt: Date; companyId: number; deletedAt: Date | null; accountType: string; subType: string | null; parentId: number | null; openingBalance: string | null; openingBalanceSide: string | null; openingBalanceNativeAmount: string | null; openingBalanceCurrency: string | null; openingBalanceHistoricalRate: string | null; openingBalanceBaseAmount: string | null; isHidden: boolean; }[];
+  accounts: {
+    code: string;
+    id: number;
+    name: string;
+    active: boolean;
+    createdAt: Date;
+    companyId: number;
+    deletedAt: Date | null;
+    accountType: string;
+    subType: string | null;
+    parentId: number | null;
+    openingBalance: string | null;
+    openingBalanceSide: string | null;
+    openingBalanceNativeAmount: string | null;
+    openingBalanceCurrency: string | null;
+    openingBalanceHistoricalRate: string | null;
+    openingBalanceBaseAmount: string | null;
+    isHidden: boolean;
+  }[];
 }) {
   const existing = params.accounts.find((account) => account.code === params.code);
   if (existing) return existing;
@@ -57,6 +79,23 @@ export const interCompanyTransferService = {
       throw new TransferRouteError(404, "To ledger account not found or doesn't belong to to company");
     }
 
+    const fx = await resolveZambiaIntercompanyAmount({
+      fromCompany,
+      toCompany,
+      amount: parsed.amount,
+      transferDate: parsed.transferDate,
+      currency: parsed.currency,
+      exchangeRate: parsed.exchangeRate,
+    });
+    // Resolve both companies before creating any accounts or financial rows.
+    const fromIsZmw = fx.currency === "ZMW" && fx.zambiaCompanyId === parsed.fromCompanyId;
+    const toIsZmw = fx.currency === "ZMW" && fx.zambiaCompanyId === parsed.toCompanyId;
+    // Validate retry identity before any clearing-account creation.
+    const zmwFromVoucherNumber =
+      fx.currency === "ZMW" ? zambiaTransferVoucherNumber("ICT-FROM", parsed.clientRequestId ?? "") : null;
+    const zmwToVoucherNumber =
+      fx.currency === "ZMW" ? zambiaTransferVoucherNumber("ICT-TO", parsed.clientRequestId ?? "") : null;
+
     const fromInterCompanyAccount = await getOrCreateInterCompanyAccount({
       companyId: parsed.fromCompanyId,
       code: `IC-TO-${toCompany.code}`,
@@ -72,8 +111,8 @@ export const interCompanyTransferService = {
       accounts: toAccounts,
     });
     const voucherTimestamp = Date.now();
-    const fromVoucherNumber = `ICT-FROM-${voucherTimestamp}`;
-    const toVoucherNumber = `ICT-TO-${voucherTimestamp}`;
+    const fromVoucherNumber = zmwFromVoucherNumber ?? `ICT-FROM-${voucherTimestamp}`;
+    const toVoucherNumber = zmwToVoucherNumber ?? `ICT-TO-${voucherTimestamp}`;
     const description = parsed.description || `Inter-company transfer to ${toCompany.name}`;
 
     return transferRepository.transaction(async (tx) => {
@@ -86,7 +125,8 @@ export const interCompanyTransferService = {
         description,
         debitNarration: fromNarration,
         creditNarration: fromNarration,
-        amount: parsed.amount,
+        amount: fromIsZmw ? fx.nativeAmount : fx.baseAmount,
+        ...(fromIsZmw ? { transactionCurrency: "ZMW" as const, historicalExchangeRate: fx.historicalRate } : {}),
         debitLedgerAccountId: fromInterCompanyAccount.id,
         creditLedgerAccountId: parsed.fromLedgerAccountId,
         clientRequestId: parsed.clientRequestId,
@@ -105,7 +145,8 @@ export const interCompanyTransferService = {
         description: parsed.description || `Inter-company transfer from ${fromCompany.name}`,
         debitNarration: toNarration,
         creditNarration: toNarration,
-        amount: parsed.amount,
+        amount: toIsZmw ? fx.nativeAmount : fx.baseAmount,
+        ...(toIsZmw ? { transactionCurrency: "ZMW" as const, historicalExchangeRate: fx.historicalRate } : {}),
         debitLedgerAccountId: parsed.toLedgerAccountId,
         creditLedgerAccountId: toInterCompanyAccount.id,
         clientRequestId: fromBuilt.clientRequestId,

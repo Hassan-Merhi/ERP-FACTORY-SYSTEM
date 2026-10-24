@@ -28,6 +28,8 @@ export interface PosSaleItemInput {
   stockItemId: number;
   quantity: number | string;
   rate: number | string;
+  /** Original ZMW unit price, supplied when currency is ZMW (not USD). */
+  originalCurrencyRate?: number | string;
 }
 
 /** The inventory row backing one sale line, as read by the availability pre-check. */

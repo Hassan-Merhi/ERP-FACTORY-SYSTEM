@@ -7,6 +7,7 @@ import { LoginHistoryTab } from "./LoginHistoryTab";
 
 export function SessionsHub({ isAdmin, isDev }: { isAdmin: boolean; isDev: boolean }) {
   const [tab, setTab] = useState(isDev ? "watch" : "sessions");
+  const canWatchUsers = isAdmin || isDev;
 
   return (
     <div className="space-y-4">
@@ -31,7 +32,7 @@ export function SessionsHub({ isAdmin, isDev }: { isAdmin: boolean; isDev: boole
               <History className="h-3.5 w-3.5" />
               Login History
             </TabsTrigger>
-            {isDev && (
+            {canWatchUsers && (
               <TabsTrigger value="watch" className="flex items-center gap-1">
                 <Activity className="h-3.5 w-3.5" />
                 Active Users Watch
@@ -46,7 +47,7 @@ export function SessionsHub({ isAdmin, isDev }: { isAdmin: boolean; isDev: boole
         <TabsContent value="login-history" className="mt-4">
           <LoginHistoryTab />
         </TabsContent>
-        {isDev && (
+        {canWatchUsers && (
           <TabsContent value="watch" className="mt-4">
             <ActiveUsersSection />
           </TabsContent>

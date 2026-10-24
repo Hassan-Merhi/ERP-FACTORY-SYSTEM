@@ -281,6 +281,13 @@
       "when": 1792600000000,
       "tag": "20261021_007_cost_centers_historical_batch_size",
       "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1792800000000,
+      "tag": "20261023_001_zambia_historical_purchase_cost",
+      "breakpoints": true
     }
   ]
 }

@@ -5,6 +5,8 @@ import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/queryClient";
 import { customersApi } from "@/api/customersApi";
+import { fetchRetailCustomerHistory } from "./pos/retailWave2Api";
+import type { RetailCustomerHistory } from "./pos/retailWave2Types";
 import { drCrClass } from "@/lib/formatNumber";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
@@ -47,7 +49,14 @@ function getCustomerCurrencyBalances(customer: unknown): CustomerCurrencyBalance
   return balances && typeof balances === "object" ? (balances as CustomerCurrencyBalances) : undefined;
 }
 
+// Remount the filters on company switches, so the Retail default does not
+// inherit the previous company's hide-zero preference while context loads.
 export default function Customers() {
+  const { selectedCompany } = useCompany();
+  return <CompanyCustomers key={selectedCompany?.id ?? "loading"} />;
+}
+
+function CompanyCustomers() {
   const { toast } = useToast();
   const { selectedCompany } = useCompany();
   const { formatHistoricalBaseAmount } = useCurrencyContext();
@@ -60,8 +69,12 @@ export default function Customers() {
     resetFilters,
     hasActiveFilters,
   } = usePaginatedFilterState<{ searchQuery: string; hideZero: boolean }>({
-    createInitialFilters: () => ({ searchQuery: "", hideZero: true }),
-    storageKey: selectedCompany?.id ? `erp-customers-filters-v1:${selectedCompany.id}` : undefined,
+    // Retail customers are often first created with zero balance at checkout;
+    // show them in Parties immediately, while preserving the optional Hide Zero control.
+    createInitialFilters: () => ({ searchQuery: "", hideZero: selectedCompany?.companyType !== "retail" }),
+    storageKey: selectedCompany?.id
+      ? `${selectedCompany.companyType === "retail" ? "erp-retail-customers-filters-v1" : "erp-customers-filters-v1"}:${selectedCompany.id}`
+      : undefined,
   });
   const [statementCustomer, setStatementCustomer] = useState<
     (Customer & { balance: number; balanceSide: string }) | null
@@ -71,6 +84,19 @@ export default function Customers() {
     queryKey: ["/api/customers", statementCustomer?.id, "transactions"],
     queryFn: () => fetch(`/api/customers/${statementCustomer!.id}/transactions`).then((r) => r.json()),
     enabled: !!statementCustomer?.id,
+  });
+
+  // Paid retail sales do not generate customer receivables, but they are
+  // still linked purchases. Show them separately from the account ledger.
+  const {
+    data: retailHistory,
+    isLoading: retailHistoryLoading,
+    isError: retailHistoryError,
+  } = useQuery<RetailCustomerHistory>({
+    queryKey: ["retail-accounting-customer-history", selectedCompany?.id, statementCustomer?.id],
+    queryFn: () => fetchRetailCustomerHistory(statementCustomer!.id, 100),
+    enabled: selectedCompany?.companyType === "retail" && Boolean(statementCustomer?.id),
+    staleTime: 15_000,
   });
 
   const { data: customers = [], isLoading } = useQuery<(Customer & { balance: number; balanceSide: string })[]>({
@@ -668,6 +694,63 @@ export default function Customers() {
                   </div>
                 );
               })()
+            )}
+            {selectedCompany?.companyType === "retail" && statementCustomer && (
+              <section className="mt-4 space-y-2 border-t pt-3" data-testid="retail-customer-purchases">
+                <div>
+                  <h3 className="text-sm font-semibold">Retail POS purchases and returns</h3>
+                  <p className="text-xs text-muted-foreground">
+                    Paid purchases appear here as sales history, not extra receivables.
+                    On-account sales and payments affect the accounting ledger above.
+                  </p>
+                </div>
+                {retailHistoryLoading ? (
+                  <Skeleton className="h-12 w-full" />
+                ) : retailHistoryError ? (
+                  <p className="text-xs text-destructive">Could not load Retail POS purchase history.</p>
+                ) : !retailHistory?.sales.length && !retailHistory?.returns.length ? (
+                  <p className="text-xs text-muted-foreground">No Retail POS purchases or returns yet.</p>
+                ) : (
+                  <div className="overflow-x-auto rounded-lg border">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="text-xs">Date</TableHead>
+                          <TableHead className="text-xs">Transaction</TableHead>
+                          <TableHead className="text-xs">Status</TableHead>
+                          <TableHead className="text-xs text-right">Amount</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {retailHistory?.sales.map((sale) => (
+                          <TableRow key={`sale-${sale.id}`} data-testid={`retail-customer-sale-${sale.id}`}>
+                            <TableCell className="text-xs whitespace-nowrap">
+                              {format(new Date(sale.createdAt), "dd/MM/yyyy")}
+                            </TableCell>
+                            <TableCell className="text-xs">Sale #{sale.id}</TableCell>
+                            <TableCell className="text-xs">{sale.status}</TableCell>
+                            <TableCell className="text-xs text-right font-mono">
+                              {formatHistoricalBaseAmount(sale.totalAmount)}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                        {retailHistory?.returns.map((entry) => (
+                          <TableRow key={`return-${entry.id}`} data-testid={`retail-customer-return-${entry.id}`}>
+                            <TableCell className="text-xs whitespace-nowrap">
+                              {format(new Date(entry.createdAt), "dd/MM/yyyy")}
+                            </TableCell>
+                            <TableCell className="text-xs">Return #{entry.id} (sale #{entry.saleId ?? "—"})</TableCell>
+                            <TableCell className="text-xs">Refund</TableCell>
+                            <TableCell className="text-xs text-right font-mono">
+                              {formatHistoricalBaseAmount(entry.refundAmount)}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+              </section>
             )}
           </div>
         </DialogContent>

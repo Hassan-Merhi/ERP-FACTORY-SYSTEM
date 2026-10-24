@@ -1,11 +1,8 @@
 import { createHash } from "node:crypto";
 import Decimal from "decimal.js";
 import type { VoucherEntryInsertFields } from "./accountingTypes";
-import {
-  PostingValidationError,
-  type CentralPostingRequest,
-  type PostingActor,
-} from "./centralPostingEngine";
+import { normalizeVoucherEntryAmounts } from "./currencyAmounts";
+import { PostingValidationError, type CentralPostingRequest, type PostingActor } from "./centralPostingEngine";
 import { resolveManualJournalClientRequestId } from "./manualJournalPosting";
 
 export type CompanyTransferVoucherType = "Payment" | "Receipt";
@@ -20,6 +17,9 @@ export interface BuildCompanyTransferPostingInput {
   debitNarration?: string | null;
   creditNarration?: string | null;
   amount: string | number;
+  /** ZMW transfer amount is native Kwacha on its Zambia leg only. */
+  transactionCurrency?: "USD" | "ZMW";
+  historicalExchangeRate?: string | null;
   debitLedgerAccountId: number;
   creditLedgerAccountId: number;
   clientRequestId?: unknown;
@@ -65,21 +65,47 @@ function fingerprint(input: {
   creditLedgerAccountId: number;
   sourceType: string;
   sourceSide: CompanyTransferSide;
+  transactionCurrency?: "ZMW";
+  nativeAmount?: string;
+  historicalExchangeRate?: string;
 }): string {
   return createHash("sha256").update(JSON.stringify(input)).digest("hex");
 }
 
 export function buildCompanyTransferPostingRequest(
-  input: BuildCompanyTransferPostingInput,
+  input: BuildCompanyTransferPostingInput
 ): BuiltCompanyTransferPosting {
-  const amount = positiveAmount(input.amount).toFixed();
+  const nativeAmount = positiveAmount(input.amount).toFixed();
+  const isZmw = input.transactionCurrency === "ZMW";
+  if (input.transactionCurrency && input.transactionCurrency !== "USD" && !isZmw) {
+    throw new PostingValidationError("POSTING_CURRENCY_INVALID", "Unsupported transfer currency");
+  }
+  if (isZmw && !input.historicalExchangeRate) {
+    throw new PostingValidationError("POSTING_RATE_INVALID", "ZMW transfer needs an approved locked USD/ZMW rate");
+  }
+  const debitNative = isZmw
+    ? normalizeVoucherEntryAmounts({
+        transactionCurrency: "ZMW",
+        baseCurrency: "USD",
+        transactionDebitAmount: nativeAmount,
+        transactionCreditAmount: "0",
+        historicalRate: input.historicalExchangeRate,
+      })
+    : null;
+  const creditNative = isZmw
+    ? normalizeVoucherEntryAmounts({
+        transactionCurrency: "ZMW",
+        baseCurrency: "USD",
+        transactionDebitAmount: "0",
+        transactionCreditAmount: nativeAmount,
+        historicalRate: input.historicalExchangeRate,
+      })
+    : null;
+  const amount = debitNative?.baseDebitAmount ?? nativeAmount;
   const debitLedgerAccountId = positiveId(input.debitLedgerAccountId, "debitLedgerAccountId");
   const creditLedgerAccountId = positiveId(input.creditLedgerAccountId, "creditLedgerAccountId");
   if (debitLedgerAccountId === creditLedgerAccountId) {
-    throw new PostingValidationError(
-      "POSTING_TARGET_INVALID",
-      "Transfer debit and credit accounts must be different",
-    );
+    throw new PostingValidationError("POSTING_TARGET_INVALID", "Transfer debit and credit accounts must be different");
   }
 
   const clientRequestId = resolveManualJournalClientRequestId(input.clientRequestId);
@@ -92,12 +118,34 @@ export function buildCompanyTransferPostingRequest(
       debitAmount: amount,
       creditAmount: "0",
       narration: debitNarration,
+      ...(debitNative
+        ? {
+            transactionCurrency: debitNative.transactionCurrency,
+            transactionDebitAmount: debitNative.transactionDebitAmount,
+            transactionCreditAmount: debitNative.transactionCreditAmount,
+            baseDebitAmount: debitNative.baseDebitAmount,
+            baseCreditAmount: debitNative.baseCreditAmount,
+            historicalExchangeRate: debitNative.historicalExchangeRate,
+            rateConvention: debitNative.rateConvention,
+          }
+        : {}),
     },
     {
       ledgerAccountId: creditLedgerAccountId,
       debitAmount: "0",
       creditAmount: amount,
       narration: creditNarration,
+      ...(creditNative
+        ? {
+            transactionCurrency: creditNative.transactionCurrency,
+            transactionDebitAmount: creditNative.transactionDebitAmount,
+            transactionCreditAmount: creditNative.transactionCreditAmount,
+            baseDebitAmount: creditNative.baseDebitAmount,
+            baseCreditAmount: creditNative.baseCreditAmount,
+            historicalExchangeRate: creditNative.historicalExchangeRate,
+            rateConvention: creditNative.rateConvention,
+          }
+        : {}),
     },
   ];
   const payloadFingerprint = fingerprint({
@@ -110,6 +158,13 @@ export function buildCompanyTransferPostingRequest(
     creditLedgerAccountId,
     sourceType: input.sourceType,
     sourceSide: input.sourceSide,
+    ...(isZmw
+      ? {
+          transactionCurrency: "ZMW" as const,
+          nativeAmount,
+          historicalExchangeRate: String(input.historicalExchangeRate),
+        }
+      : {}),
   });
 
   return {
@@ -124,12 +179,18 @@ export function buildCompanyTransferPostingRequest(
         description,
         totalAmount: amount,
         optional: false,
+        ...(isZmw ? { currency: "ZMW", exchangeRate: String(input.historicalExchangeRate) } : {}),
       },
       entries,
       source: {
         sourceType: input.sourceType,
         sourceId: `${clientRequestId}:${input.sourceSide}`,
-        idempotencyKey: `${input.sourceType}:${clientRequestId}:${input.sourceSide}:${payloadFingerprint.slice(0, 32)}`,
+        // ZMW retries reuse one stable key; a changed amount/rate is then
+        // a fingerprint conflict, never a second intercompany posting.
+        // Legacy USD/CFA identities retain their exact original format.
+        idempotencyKey: isZmw
+          ? `${input.sourceType}:${clientRequestId}:${input.sourceSide}:ZMW`
+          : `${input.sourceType}:${clientRequestId}:${input.sourceSide}:${payloadFingerprint.slice(0, 32)}`,
       },
       actor: input.actor,
     },

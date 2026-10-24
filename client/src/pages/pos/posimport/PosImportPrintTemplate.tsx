@@ -2,8 +2,8 @@
  * Hidden print receipt for the POS Import page.
  *
  * Split out of POSImport.tsx unchanged: the same inline print styles, the
- * Mali-only daily exchange rate banner, the credit-sale customer block and a
- * totals footer that always prints USD amounts.
+ * the locked-rate banner, the credit-sale customer block and original
+ * Kwacha receipt amounts when the voucher was posted in ZMW.
  */
 import type { RefObject } from "react";
 import { formatNumber } from "@/lib/formatNumber";
@@ -24,7 +24,7 @@ interface PrintSale {
   saleDate?: string;
   isCreditSale?: boolean;
   customer?: { name?: string } | null;
-  voucher?: { exchangeRate?: string; description?: string } | null;
+  voucher?: { exchangeRate?: string; currency?: string | null; description?: string } | null;
 }
 
 interface PrintProps {
@@ -135,8 +135,11 @@ export function PosImportPrintTemplate({
     (sum: number, item: PrintSaleItem) => sum + Number(item.quantity ?? 0) * Number(item.rate ?? 0),
     0
   );
-  const showDailyRate =
-    selectedCompany?.name?.toLowerCase().includes("mali") && (importedSale?.voucher?.exchangeRate || exchangeRate);
+  const isZmwReceipt = importedSale?.voucher?.currency === "ZMW";
+  const lockedRate = Number(importedSale?.voucher?.exchangeRate);
+  const showDailyRate = isZmwReceipt
+    ? Number.isFinite(lockedRate) && lockedRate > 0
+    : selectedCompany?.name?.toLowerCase().includes("mali") && (importedSale?.voucher?.exchangeRate || exchangeRate);
 
   return (
     <div className="hidden">
@@ -210,7 +213,10 @@ export function PosImportPrintTemplate({
             }}
           >
             <span style={{ fontWeight: "900" }}>Daily Rate:</span> $1 ={" "}
-            {formatNumber(Number(importedSale?.voucher?.exchangeRate ?? 0) || exchangeRate || 0)} CFA
+            {isZmwReceipt
+              ? lockedRate.toLocaleString(undefined, { maximumFractionDigits: 6 })
+              : formatNumber(Number(importedSale?.voucher?.exchangeRate ?? 0) || exchangeRate || 0)}{" "}
+            {isZmwReceipt ? "ZMW" : "CFA"}
           </div>
         )}
 

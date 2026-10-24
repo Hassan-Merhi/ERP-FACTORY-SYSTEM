@@ -283,6 +283,38 @@ describeWithDatabase("Retail Wave 2 — customers, pricing, discounts and tax", 
     expect(created.body.legalName).toBe("Layla Haddad");
     expect(created.body.code).toMatch(/^CUST\d+$/);
 
+    // POS quick-create must use the same customer/ledger link as Accounting -> Parties.
+    const [customerRecord] = await db
+      .select({ ledgerAccountId: schema.customers.ledgerAccountId })
+      .from(schema.customers)
+      .where(and(eq(schema.customers.companyId, companyId), eq(schema.customers.id, created.body.id)));
+    expect(customerRecord?.ledgerAccountId).toBeTruthy();
+
+    const [linkedAccount] = await db
+      .select({
+        companyId: schema.ledgerAccounts.companyId,
+        code: schema.ledgerAccounts.code,
+        accountType: schema.ledgerAccounts.accountType,
+        openingBalance: schema.ledgerAccounts.openingBalance,
+      })
+      .from(schema.ledgerAccounts)
+      .where(eq(schema.ledgerAccounts.id, customerRecord!.ledgerAccountId!));
+    expect(linkedAccount).toMatchObject({
+      companyId,
+      code: `CUST-${created.body.code}`,
+      accountType: "Asset",
+    });
+    expect(Number(linkedAccount?.openingBalance)).toBe(0);
+
+    const partyStats = await manager.get("/api/customers/stats");
+    expect(partyStats.status).toBe(200);
+    expect(partyStats.body.find((row: { id: number }) => row.id === created.body.id))
+      .toMatchObject({ id: created.body.id, ledgerAccountId: customerRecord!.ledgerAccountId, balance: 0 });
+
+    const statement = await manager.get(`/api/customers/${created.body.id}/transactions`);
+    expect(statement.status).toBe(200);
+    expect(Array.isArray(statement.body)).toBe(true);
+
     const search = await cashier.get("/api/pos/retail/customers?search=3123456");
     expect(search.status).toBe(200);
     expect(search.body.map((row: { id: number }) => row.id)).toContain(created.body.id);

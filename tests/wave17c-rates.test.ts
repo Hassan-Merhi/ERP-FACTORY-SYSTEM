@@ -256,6 +256,78 @@ describe("deleting a factory currency keeps the rates documents used (decision 2
   });
 });
 
+describe("same-day factory FX settings saves", () => {
+  it("keeps only one active rate, archives the superseded rate and is idempotent", async () => {
+    await setRole("Admin");
+    const data = { currencyCode: "KRW", rateToUsd: "0.00123", effectiveDate: "2026-10-23" };
+    const first = await agent.post("/api/factory/fx-rates").send(data);
+    expect(first.status).toBe(200);
+    const second = await agent.post("/api/factory/fx-rates").send({ ...data, rateToUsd: "0.00124" });
+    expect(second.status).toBe(200);
+    expect(second.body.id).not.toBe(first.body.id);
+    const same = await agent.post("/api/factory/fx-rates").send({ ...data, rateToUsd: "0.00124" });
+    expect(same.status).toBe(200);
+    expect(same.body.id).toBe(second.body.id);
+    expect(await factoryRates("KRW")).toEqual([
+      { currency_code: "KRW", rate: "0.00123000", date: data.effectiveDate, source: "archived" },
+      { currency_code: "KRW", rate: "0.00124000", date: data.effectiveDate, source: "manual" },
+    ]);
+    const visible = await agent.get("/api/factory/fx-rates");
+    expect(visible.status).toBe(200);
+    expect(visible.body.filter((r: { currencyCode: string }) => r.currencyCode === "KRW")).toHaveLength(1);
+  });
+});
+
+describe("individual factory FX settings rate removal", () => {
+  it("removes the selected row only and archives rates referenced by documents", async () => {
+    await setRole("Admin");
+    await insertRate("HKD", "0.125", "2026-08-01", "manual");
+    await insertRate("HKD", "0.126", "2026-09-01", "manual");
+    await withFixtureTransaction(async (client) => {
+      await client.query("SELECT set_config('app.company_scope_maintenance', 'on', true)");
+      await client.query(
+        `INSERT INTO vouchers
+           (company_id, voucher_number, voucher_type, voucher_date, total_amount, currency, exchange_rate, source_module)
+         VALUES ($1, $2, 'Journal', '2026-08-20', 10, 'HKD', 0.125, 'FACTORY')`,
+        [ctx.companyId, `${PREFIX}-hkd-row-delete`]
+      );
+    });
+    const before = (await pool.query(
+      `SELECT id, effective_date::text AS date FROM factory_fx_rates
+        WHERE company_id = $1 AND currency_code = 'HKD' ORDER BY effective_date`, [ctx.companyId]
+    )).rows;
+    expect(before).toHaveLength(2);
+    const [usedRate, unusedRate] = before;
+
+    await setRole("Manager");
+    expect((await agent.delete(`/api/factory/fx-rates/row/${usedRate.id}`)).status).toBe(403);
+    await setRole("Admin");
+    expect((await agent.delete("/api/factory/fx-rates/row/not-an-id")).status).toBe(400);
+    const unused = await agent.delete(`/api/factory/fx-rates/row/${unusedRate.id}`);
+    expect(unused.status).toBe(200);
+    expect(unused.body).toMatchObject({ id: unusedRate.id, archived: false });
+    expect(await factoryRates("HKD")).toEqual([
+      { currency_code: "HKD", rate: "0.12500000", date: "2026-08-01", source: "manual" },
+    ]);
+
+    const used = await agent.delete(`/api/factory/fx-rates/row/${usedRate.id}`);
+    expect(used.status).toBe(200);
+    expect(used.body).toMatchObject({ id: usedRate.id, archived: true });
+    expect((await agent.delete(`/api/factory/fx-rates/row/${usedRate.id}`)).status).toBe(404);
+    expect(await factoryRates("HKD")).toEqual([
+      { currency_code: "HKD", rate: "0.12500000", date: "2026-08-01", source: "archived" },
+    ]);
+    const visible = await agent.get("/api/factory/fx-rates");
+    expect(visible.status).toBe(200);
+    expect(visible.body.some((rate: { currencyCode: string }) => rate.currencyCode === "HKD")).toBe(false);
+    failExternalRate();
+    expect((await agent.get("/api/factory/fx-rates/HKD/2026-08-20")).status).toBe(404);
+    const audit = (await auditRows("factory_fx_rates"))
+      .filter((row) => String(row.record_identifier).startsWith("HKD "));
+    expect(audit.map((row) => row.action)).toEqual(["delete", "update"]);
+  });
+});
+
 describe("wave 6 repair apply (decision 4)", () => {
   const voucherIds: Record<string, number> = {};
 

@@ -18,7 +18,7 @@ export function ActiveUsersSection() {
   const [watchingUser, setWatchingUser] = useState<{ userId: string; username: string } | null>(null);
 
   const { data: currentUser } = useQuery<AuthMe>({ queryKey: ["/api/auth/me"] });
-  const isDeveloper = currentUser?.role === "Developer";
+  const canWatchUsers = ["Admin", "Owner", "Developer"].includes(currentUser?.role ?? "");
 
   type PresenceRow = typeof userPresence.$inferSelect;
 
@@ -117,7 +117,7 @@ export function ActiveUsersSection() {
                         </TableCell>
                         <TableCell className="text-muted-foreground">{getPageLabel(presence.currentRoute)}</TableCell>
                         <TableCell className="text-muted-foreground">{formatTimeAgo(presence.lastSeen)}</TableCell>
-                        {isDeveloper && (
+                        {canWatchUsers && (
                           <TableCell>
                             <Button
                               size="sm"
@@ -149,7 +149,7 @@ export function ActiveUsersSection() {
                         <Badge variant="outline" className="text-xs">
                           {presence.role || "—"}
                         </Badge>
-                        {isDeveloper && (
+                        {canWatchUsers && (
                           <Button
                             size="sm"
                             variant="ghost"

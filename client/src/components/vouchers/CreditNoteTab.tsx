@@ -24,6 +24,8 @@ import { AccountAutocomplete } from "@/components/AccountAutocomplete";
 import type { CombinedAccount } from "@/components/AccountAutocomplete";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useCurrencyContext } from "@/contexts/CurrencyContext";
+import { useCompany } from "@/contexts/CompanyContext";
 
 interface StockItem {
   id: number;
@@ -70,6 +72,8 @@ interface CreditNoteData {
     voucherDate: string;
     description: string;
     totalAmount: string;
+    currency?: string | null;
+    exchangeRate?: string | number | null;
   };
   cashAccountId: number;
   cashAccountType: string;
@@ -104,6 +108,8 @@ interface CreditNoteTabProps {
 
 export function CreditNoteTab({ allAccounts, editVoucherId }: CreditNoteTabProps) {
   const { toast } = useToast();
+  const { selectedCurrency, displayCurrency } = useCurrencyContext();
+  const { selectedCompany } = useCompany();
   // Same predicate as the phone save bar, so exactly one save action shows (phone landscape too).
   const isPhoneLayout = useErpPhoneLayout();
   const [items, setItems] = useState<CreditNoteItem[]>([]);
@@ -151,6 +157,56 @@ export function CreditNoteTab({ allAccounts, editVoucherId }: CreditNoteTabProps
     enabled: !!editVoucherId,
   });
 
+  const noteCurrency = isEditMode
+    ? editData?.voucher?.currency === "ZMW"
+      ? "ZMW"
+      : "USD"
+    : selectedCurrency === "ZMW" && displayCurrency === "ZMW"
+      ? "ZMW"
+      : "USD";
+  // Currency changes must never reinterpret prices already entered in the
+  // credit-note cart. New notes clear those prices; edits retain the original
+  // voucher's locked currency and exchange rate.
+  const previousNoteCurrency = useRef(noteCurrency);
+  useEffect(() => {
+    if (isEditMode) return;
+    if (previousNoteCurrency.current !== noteCurrency) {
+      previousNoteCurrency.current = noteCurrency;
+      setItems([]);
+      setRefundRate("");
+    }
+  }, [noteCurrency, isEditMode]);
+
+  const noteDate = form.watch("voucherDate");
+  const { data: datedZmwRate, isFetching: isFetchingNoteRate } = useQuery<{ rate: string } | null>({
+    queryKey: ["/api/exchange-rates/latest", selectedCompany?.id, "USD", "ZMW", noteDate, "credit-note"],
+    queryFn: async () => {
+      const query = new URLSearchParams({
+        companyId: String(selectedCompany!.id),
+        fromCurrency: "USD",
+        toCurrency: "ZMW",
+        asOf: noteDate,
+      });
+      const res = await fetch("/api/exchange-rates/latest?" + query.toString(), { credentials: "include" });
+      if (!res.ok) return null;
+      return res.json();
+    },
+    enabled: !!selectedCompany?.id && noteCurrency === "ZMW" && !isEditMode && !!noteDate,
+    staleTime: 0,
+  });
+  const savedNoteRate = Number(editData?.voucher?.exchangeRate);
+  const datedNoteRate = Number(datedZmwRate?.rate);
+  const noteRate =
+    noteCurrency === "ZMW"
+      ? isEditMode
+        ? Number.isFinite(savedNoteRate) && savedNoteRate > 0
+          ? savedNoteRate
+          : null
+        : !isFetchingNoteRate && datedZmwRate && Number.isFinite(datedNoteRate) && datedNoteRate > 0
+          ? datedNoteRate
+          : null
+      : null;
+
   useEffect(() => {
     if (editData && editVoucherId && !isEditMode) {
       setIsEditMode(true);
@@ -175,7 +231,10 @@ export function CreditNoteTab({ allAccounts, editVoucherId }: CreditNoteTabProps
         locationId: item.locationId,
         locationName: item.locationName,
         quantity: item.quantity,
-        refundRate: item.refundRate,
+        refundRate:
+          editData.voucher.currency === "ZMW" && Number(editData.voucher.exchangeRate) > 0
+            ? (Number(item.refundRate) * Number(editData.voucher.exchangeRate)).toFixed(2)
+            : item.refundRate,
         inventoryCost: item.inventoryCost || "0",
         uom: item.uom,
       }));
@@ -234,11 +293,14 @@ export function CreditNoteTab({ allAccounts, editVoucherId }: CreditNoteTabProps
       cashAccountId: number;
       cashAccountType: string;
       description: string;
+      currency?: string;
+      exchangeRate?: string;
       items: Array<{
         stockItemId: number;
         locationId: number;
         quantity: string;
         refundRate: string;
+        originalCurrencyRate?: string;
         inventoryCost: string;
       }>;
     }) => {
@@ -320,7 +382,8 @@ export function CreditNoteTab({ allAccounts, editVoucherId }: CreditNoteTabProps
         return;
       }
       const qty = parseFloat(itemQuantity);
-      const rate = parseFloat(refundRate) || item.avgRate;
+      const rate =
+        parseFloat(refundRate) || (noteCurrency === "ZMW" && noteRate ? item.avgRate * noteRate : item.avgRate);
       if (isNaN(qty) || qty <= 0) {
         toast({ title: "Invalid quantity", description: "Please enter a valid quantity", variant: "destructive" });
         return;
@@ -345,7 +408,7 @@ export function CreditNoteTab({ allAccounts, editVoucherId }: CreditNoteTabProps
       setRefundRate("");
       searchInputRef.current?.focus();
     },
-    [itemQuantity, locations, refundRate, selectedLocationId, toast]
+    [itemQuantity, locations, refundRate, selectedLocationId, toast, noteCurrency, noteRate]
   );
 
   useEffect(() => {
@@ -386,8 +449,18 @@ export function CreditNoteTab({ allAccounts, editVoucherId }: CreditNoteTabProps
     (sum, item) => sum + parseFloat(item.quantity) * parseFloat(item.inventoryCost),
     0
   );
+  // Inventory cost remains USD even while the refund price is entered in K.
+  const totalRefundUsd = noteCurrency === "ZMW" ? (noteRate ? totalRefund / noteRate : 0) : totalRefund;
 
   const onSubmit = (values: CreditNoteFormData) => {
+    if (noteCurrency === "ZMW" && (!noteRate || !Number.isFinite(noteRate) || noteRate <= 0)) {
+      toast({
+        title: "USD/ZMW rate required",
+        description: "Set an approved exchange rate for the refund date before saving.",
+        variant: "destructive",
+      });
+      return;
+    }
     if (items.length === 0) {
       toast({ title: "No items", description: "Please add at least one item", variant: "destructive" });
       return;
@@ -397,11 +470,15 @@ export function CreditNoteTab({ allAccounts, editVoucherId }: CreditNoteTabProps
       cashAccountId: values.cashAccountId,
       cashAccountType: values.cashAccountType,
       description: values.description || "",
+      currency: noteCurrency,
+      exchangeRate: noteCurrency === "ZMW" && noteRate ? String(noteRate) : undefined,
       items: items.map((item) => ({
         stockItemId: item.stockItemId,
         locationId: item.locationId,
         quantity: item.quantity,
-        refundRate: item.refundRate,
+        refundRate:
+          noteCurrency === "ZMW" && noteRate ? (Number(item.refundRate) / noteRate).toFixed(6) : item.refundRate,
+        originalCurrencyRate: noteCurrency === "ZMW" ? item.refundRate : undefined,
         inventoryCost: item.inventoryCost,
       })),
     };
@@ -539,10 +616,10 @@ export function CreditNoteTab({ allAccounts, editVoucherId }: CreditNoteTabProps
                           <TableHead>Item</TableHead>
                           <TableHead>Location</TableHead>
                           <TableHead className="text-right">Qty</TableHead>
-                          <TableHead className="text-right">Refund Rate</TableHead>
+                          <TableHead className="text-right">Refund Rate ({noteCurrency})</TableHead>
                           <TableHead className="text-right">Refund Amt</TableHead>
-                          <TableHead className="text-right">Inv. Cost</TableHead>
-                          <TableHead className="text-right">Inv. Value</TableHead>
+                          <TableHead className="text-right">Inv. Cost (USD)</TableHead>
+                          <TableHead className="text-right">Inv. Value (USD)</TableHead>
                           <TableHead></TableHead>
                         </TableRow>
                       </TableHeader>
@@ -618,12 +695,15 @@ export function CreditNoteTab({ allAccounts, editVoucherId }: CreditNoteTabProps
               <div className="flex flex-wrap justify-between items-center pt-4 border-t gap-2">
                 <div className="space-y-1">
                   <div className="text-lg font-semibold">
-                    Refund Total: <span className="font-mono text-primary">{formatNumber(totalRefund)}</span>
+                    Refund Total:{" "}
+                    <span className="font-mono text-primary">
+                      {noteCurrency === "ZMW" ? "K" : "$"} {formatNumber(totalRefund, 2)}
+                    </span>
                   </div>
                   <div className="text-sm text-muted-foreground">
                     Inventory Value: <span className="font-mono">{formatNumber(totalInventoryValue)}</span>
-                    {Math.abs(totalRefund - totalInventoryValue) > 0.01 && (
-                      <span className="ml-2">(Variance: {formatNumber(totalRefund - totalInventoryValue)})</span>
+                    {Math.abs(totalRefundUsd - totalInventoryValue) > 0.01 && (
+                      <span className="ml-2">(Variance: {formatNumber(totalRefundUsd - totalInventoryValue)})</span>
                     )}
                   </div>
                 </div>

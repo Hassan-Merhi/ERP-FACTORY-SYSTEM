@@ -17,6 +17,7 @@ export function registerSessionRoutes(app: Express) {
           userId: req.session.userId,
           role: req.session.currentRole,
           currentSid: req.sessionID,
+          companyId: req.session.currentCompanyId,
         }),
       );
     } catch (error: unknown) {
@@ -31,6 +32,7 @@ export function registerSessionRoutes(app: Express) {
           sid: req.params.sid,
           userId: req.session.userId,
           role: req.session.currentRole,
+          companyId: req.session.currentCompanyId,
         }),
       );
     } catch (error: unknown) {

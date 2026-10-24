@@ -1,10 +1,11 @@
+import { assertPreparedZmwPurchaseCost } from "../../services/accounting/zambiaPurchaseCosting";
 import { postFactoryPartyLineVoucherTx, postFactoryVoucherTx } from "../../services/factory/factoryVoucherPosting";
 import { retireVouchersTx, type VoucherRetirementActor } from "../../services/accounting/voucherRetirement";
 import { resolvePoImportCreditTarget } from "../../services/accounting/poImportAccounting";
 import { eq, and, isNull, sql } from "drizzle-orm";
 import { db, type DbTransaction } from "../../db";
 import * as schema from "@shared/schema";
-import type { PurchaseOrder, InsertPurchaseOrder } from "@shared/schema";
+import type { PurchaseOrder, InsertPurchaseOrder, InsertPOLineItem } from "@shared/schema";
 import { getConfiguredIntercompanyCreditAccount } from "../accounting/intercompany";
 import { MoneyDecimal, sumMoney, toMoney } from "../../lib/money";
 import {
@@ -23,12 +24,46 @@ const poChargesOf = (po: PoChargeFields) =>
 
 export async function createPurchaseOrder(
   po: InsertPurchaseOrder,
-  voucherDateOverride?: string
+  voucherDateOverride?: string,
+  /** Only native-ZMW callers provide all valued lines for an atomic write. */
+  nativeLines?: Array<Omit<InsertPOLineItem, "poId">>
 ): Promise<PurchaseOrder> {
+  // purchase_orders amounts and all linked landed-cost journals are historical
+  // USD; a ZMW label alone would silently post native Kwacha as USD.
+  await assertPreparedZmwPurchaseCost(po, voucherDateOverride);
   // The PO, its voucher(s), their lines and the PO's voucher link commit
   // together; they used to be separate autocommit writes.
   return db.transaction(async (tx) => {
     const [created] = await tx.insert(schema.purchaseOrders).values(po).returning();
+    if (nativeLines !== undefined) {
+      if (
+        String(po.currency ?? "").toUpperCase() !== "ZMW" ||
+        !Number.isSafeInteger(po.nativeLineCount) ||
+        nativeLines.length !== po.nativeLineCount ||
+        nativeLines.length === 0
+      ) {
+        throw new Error("Native purchase line set is incomplete");
+      }
+      // Source-controlled quantities, foreign prices and historical base
+      // totals commit together with the PO and both company journals.
+      const nativeTotal = sumMoney(nativeLines.map((line) => line.nativeLineTotal));
+      const baseTotal = sumMoney(nativeLines.map((line) => line.lineTotal));
+      if (
+        nativeLines.some(
+          (line) => line.nativeRate == null || line.nativeLineTotal == null || toMoney(line.quantity).lte(0)
+        ) ||
+        !nativeTotal.eq(toMoney(po.nativeItemsTotal)) ||
+        !baseTotal.eq(toMoney(po.itemsTotal))
+      ) {
+        throw new Error("Native PO line values do not reconcile to stored historic USD costs");
+      }
+      await tx.insert(schema.poLineItems).values(
+        nativeLines.map((line) => ({
+          ...line,
+          poId: created.id,
+        }))
+      );
+    }
 
     if (po.voucherId) {
       // Perpetual inventory (wave 8.2): the PO's cost moves to goods in transit.

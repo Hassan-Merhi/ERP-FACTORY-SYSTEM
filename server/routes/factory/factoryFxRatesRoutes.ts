@@ -17,6 +17,7 @@ import { companyBusinessDate } from "../../services/accounting/companyBusinessDa
 import { factoryFxRates, insertFactoryFxRateSchema } from "@shared/schema";
 import {
   deleteFactoryFxRates,
+  removeFactoryFxRateById,
   saveFactoryFxRate,
   saveFetchedFactoryFxRate,
 } from "../../services/accounting/exchangeRateWrites";
@@ -81,9 +82,17 @@ export function registerFactoryFxRatesRoutes(app: Express) {
       if (!ISO_DATE.test(dateISO)) {
         return res.status(400).json({ message: "Date must be YYYY-MM-DD format" });
       }
-      res.json(rateResponse(await resolveFactoryFxRateToUsd(companyId, currency, dateISO)));
+      try {
+        res.json(rateResponse(await resolveFactoryFxRateToUsd(companyId, currency, dateISO)));
+      } catch (err: unknown) {
+        res.status(404).json({ message: getErrorMessage(err) });
+      }
     } catch (error: unknown) {
-      res.status(500).json({ message: getErrorMessage(error) });
+      // No stored rate on or before the date and no external quote: the rate
+      // does not exist for that date, which is a 404, not a server fault.
+      const message = getErrorMessage(error);
+      if (message.startsWith("No FX rate available")) return res.status(404).json({ message });
+      res.status(500).json({ message });
     }
   });
 
@@ -148,6 +157,32 @@ export function registerFactoryFxRatesRoutes(app: Express) {
         res.json(rate);
       } catch (error: unknown) {
         res.status(400).json({ message: getErrorMessage(error) });
+      }
+    }
+  );
+
+  // The Settings trash button targets a single manual row by numeric ID.
+  // If documents might have used it, archive rather than destroying history.
+  app.delete(
+    "/api/factory/fx-rates/row/:id",
+    requireAuth,
+    requireRole(...RATE_EDITOR_ROLES),
+    async (req: Request, res: Response) => {
+      try {
+        const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
+        const rateId = Number(req.params.id);
+        if (!Number.isSafeInteger(rateId) || rateId <= 0) {
+          return res.status(400).json({ message: "Invalid rate ID" });
+        }
+        const result = await removeFactoryFxRateById(
+          { userId: req.session.userId!, username: req.session.username || "unknown", companyId },
+          rateId
+        );
+        if (!result) return res.status(404).json({ message: "Rate not found or already removed" });
+        return res.json({ ok: true, ...result });
+      } catch (error: unknown) {
+        return res.status(500).json({ message: getErrorMessage(error) });
       }
     }
   );

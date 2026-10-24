@@ -8,6 +8,9 @@
  *  - formatHistoricalBaseAmount never re-translates, whatever the display mode
  *  - formatCashAmount follows the company base currency (USD vs CFA ledgers)
  *  - the user's saved preference wins over local storage, and toggling saves it
+ *  - a Zambia USD/ZMW company converts only at its company rate: a Kwacha
+ *    amount with no approved rate is NaN or shown natively, never read as USD,
+ *    and ZMW selections never write Mali's global preference
  */
 import React from "react";
 import { act, renderHook, waitFor } from "@testing-library/react";
@@ -32,11 +35,15 @@ function setup({
   display = "CFA" as string | null,
   rate = "600" as string | null,
   preferred,
-}: { base?: string; display?: string | null; rate?: string | null; preferred?: string } = {}) {
+  userId,
+}: { base?: string; display?: string | null; rate?: string | null; preferred?: string; userId?: number } = {}) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false, staleTime: Infinity, queryFn: () => new Promise(() => {}) } },
   });
   client.setQueryData(["/api/companies/1"], { id: 1, baseCurrency: base, displayCurrency: display ?? "none" });
+  if (userId !== undefined) {
+    client.setQueryData(["/api/auth/me"], { id: userId, username: "zm", role: "admin", companyId: 1 });
+  }
   client.setQueryData(["/api/user-preferences"], { dateFormat: "MM/DD/YYYY", preferredCurrency: preferred });
   if (display) client.setQueryData(["/api/exchange-rates/latest", 1, base, display], rate ? { rate } : null);
   const wrapper = ({ children }: { children: React.ReactNode }) => (
@@ -152,6 +159,148 @@ describe("CurrencyContext", () => {
     localStorage.setItem("selectedCurrency", "CFA");
     const { result } = setup();
     expect(result.current.selectedCurrency).toBe("CFA");
+  });
+
+  describe("Zambia (USD base, ZMW display)", () => {
+    const zm = { base: "USD", display: "ZMW", rate: "25" };
+
+    it("exposes the Kwacha pair with its approved rate and defaults to USD", () => {
+      const { result } = setup(zm);
+      expect(result.current.baseCurrency).toBe("USD");
+      expect(result.current.displayCurrency).toBe("ZMW");
+      expect(result.current.isMultiCurrency).toBe(true);
+      expect(result.current.exchangeRate).toBe(25);
+      expect(result.current.hasExchangeRate).toBe(true);
+      expect(result.current.selectedCurrency).toBe("USD");
+    });
+
+    it("converts USD to Kwacha at the company rate and formats ngwee", () => {
+      const { result } = setup(zm);
+      expect(result.current.formatAmount(10, "ZMW")).toBe("K250.00");
+      expect(result.current.formatAmount(10)).toBe(`$ ${n(10, 0)}`);
+      expect(result.current.convertToUSD(250)).toBe(10);
+      expect(result.current.convertToDisplay(10)).toBe(10);
+      act(() => result.current.setCurrency("ZMW"));
+      expect(result.current.selectedCurrency).toBe("ZMW");
+      expect(result.current.convertToDisplay(10)).toBe(250);
+      expect(result.current.formatAmount(4)).toBe("K100.00");
+      expect(result.current.formatAmountRaw(99.5)).toBe("K99.50");
+      expect(result.current.formatTransactionAmount(12.345, "zmw")).toBe("K12.35");
+      expect(result.current.formatHistoricalBaseAmount(12)).toBe(`$ ${n(12, 0)}`);
+    });
+
+    it("formats cash and native balances per the selected mode", () => {
+      const { result } = setup(zm);
+      expect(result.current.formatCashAmount(2)).toBe(`$ ${n(2, 0)}`);
+      expect(result.current.formatCurrentCashTranslation(250, "ZMW")).toBe(`$ ${n(10, 0)}`);
+      expect(result.current.formatCurrentCashTranslation(3, "USD")).toBe(`$ ${n(3, 0)}`);
+      expect(result.current.formatCurrentCashTranslation(900, "CFA")).toBe(`CFA ${n(900, 0)}`);
+      act(() => result.current.setCurrency("ZMW"));
+      expect(result.current.formatCashAmount(2)).toBe("K50.00");
+      expect(result.current.formatCurrentCashTranslation(250, "ZMW")).toBe("K250.00");
+      expect(result.current.formatCurrentCashTranslation(3, "USD")).toBe("K75.00");
+      expect(result.current.formatCurrentCashTranslation(900, "CFA")).toBe(`CFA ${n(900, 0)}`);
+      expect(result.current.formatCurrentCashTranslation(null, "ZMW")).toBe("");
+      expect(result.current.formatCurrentCashTranslation("x", "ZMW")).toBe("");
+      expect(result.current.formatCashAmount(null)).toBe("");
+      expect(result.current.formatCashAmount("x")).toBe("");
+    });
+
+    it("previews a new transaction in both currencies of the pair", () => {
+      const { result } = setup(zm);
+      expect(result.current.formatNewTransactionPreview(2)).toBe(`$ ${n(2, 0)} ≈ K50.00`);
+      expect(result.current.formatNewTransactionPreview(null)).toBe("");
+      expect(result.current.formatNewTransactionPreview("x")).toBe("");
+      act(() => result.current.toggleCurrency());
+      expect(result.current.selectedCurrency).toBe("ZMW");
+      expect(result.current.formatNewTransactionPreview(50)).toBe(`K50.00 ≈ $ ${n(2, 0)}`);
+      act(() => result.current.toggleCurrency());
+      expect(result.current.selectedCurrency).toBe("USD");
+    });
+
+    it("never treats Kwacha as USD when the approved rate is missing", async () => {
+      const { result } = setup({ ...zm, rate: null });
+      expect(result.current.exchangeRate).toBeNull();
+      expect(result.current.hasExchangeRate).toBe(false);
+      await waitFor(() =>
+        expect(console.warn).toHaveBeenCalledWith(expect.stringContaining("Missing company rate for USD/ZMW"))
+      );
+      expect(result.current.convertToUSD(250)).toBeNaN();
+      expect(result.current.formatAmount(10, "ZMW")).toBe(`$ ${n(10, 0)}`);
+      expect(result.current.formatNewTransactionPreview(2)).toBe(`$ ${n(2, 0)} (exchange rate unavailable)`);
+      act(() => result.current.setCurrency("ZMW"));
+      expect(result.current.convertToDisplay(10)).toBeNaN();
+      expect(result.current.formatCashAmount(2)).toBe(`$ ${n(2, 0)}`);
+      expect(result.current.formatCurrentCashTranslation(250, "ZMW")).toBe("K250.00");
+      expect(result.current.formatCurrentCashTranslation(3, "USD")).toBe(`$ ${n(3, 0)}`);
+    });
+
+    it("stores the Kwacha choice per user and company, never in Mali's global preference", async () => {
+      const { result } = setup({ ...zm, userId: 7 });
+      act(() => result.current.setCurrency("ZMW"));
+      expect(result.current.selectedCurrency).toBe("ZMW");
+      expect(localStorage.getItem("erp-currency:7:1")).toBe("ZMW");
+      expect(localStorage.getItem("selectedCurrency")).toBeNull();
+      await act(async () => {});
+      expect(apiRequest).not.toHaveBeenCalled();
+      // A CFA preference saved for Mali is not an allowed Zambia currency.
+      act(() => result.current.setCurrency("CFA"));
+      expect(result.current.selectedCurrency).toBe("ZMW");
+    });
+
+    it("restores the scoped choice and follows a change made in another tab", () => {
+      localStorage.setItem("erp-currency:7:1", "ZMW");
+      localStorage.setItem("selectedCurrency", "CFA");
+      const { result } = setup({ ...zm, userId: 7 });
+      expect(result.current.selectedCurrency).toBe("ZMW");
+      act(() => result.current.setCurrency("USD"));
+      expect(result.current.selectedCurrency).toBe("USD");
+      localStorage.setItem("erp-currency:7:1", "ZMW");
+      act(() => {
+        window.dispatchEvent(new StorageEvent("storage", { key: "erp-currency:7:1", newValue: "ZMW" }));
+      });
+      expect(result.current.selectedCurrency).toBe("ZMW");
+      act(() => {
+        window.dispatchEvent(new StorageEvent("storage", { key: "unrelated", newValue: "USD" }));
+      });
+      expect(result.current.selectedCurrency).toBe("ZMW");
+    });
+
+    it("ignores a display currency equal to the base and a toggle without a pair", () => {
+      const { result } = setup({ base: "USD", display: "USD", rate: null });
+      expect(result.current.displayCurrency).toBeNull();
+      expect(result.current.hasExchangeRate).toBe(true);
+      act(() => result.current.toggleCurrency());
+      expect(result.current.selectedCurrency).toBe("USD");
+      expect(result.current.convertToUSD(5)).toBe(5);
+    });
+  });
+
+  describe("Mali (CFA base, USD display)", () => {
+    const ml = { base: "CFA", display: "USD", rate: "500" };
+
+    it("defaults to USD display and converts both ways at the stored CFA-per-USD rate", () => {
+      const { result } = setup(ml);
+      expect(result.current.baseCurrency).toBe("CFA");
+      expect(result.current.selectedCurrency).toBe("USD");
+      expect(result.current.convertToDisplay(2)).toBe(2);
+      expect(result.current.formatAmount(2, "CFA")).toBe(`CFA ${n(1000, 0)}`);
+      expect(result.current.formatNewTransactionPreview(2)).toBe(`$ ${n(2, 0)} ≈ CFA ${n(1000, 0)}`);
+      expect(result.current.formatCurrentCashTranslation(1000, "CFA")).toBe(`$ ${n(2, 0)}`);
+      act(() => result.current.setCurrency("CFA"));
+      expect(result.current.convertToDisplay(2)).toBe(1000);
+      expect(result.current.formatNewTransactionPreview(1000)).toBe(`CFA ${n(1000, 0)} ≈ $ ${n(2, 0)}`);
+      expect(result.current.formatCurrentCashTranslation(1000, "CFA")).toBe(`CFA ${n(1000, 0)}`);
+      expect(result.current.formatCurrentCashTranslation(2, "USD")).toBe(`$ ${n(2, 0)}`);
+    });
+
+    it("keeps the legacy CFA pass-through when no rate exists", () => {
+      const { result } = setup({ ...ml, rate: null });
+      act(() => result.current.setCurrency("CFA"));
+      expect(result.current.convertToDisplay(7)).toBe(7);
+      expect(result.current.convertToUSD(7)).toBe(7);
+      expect(result.current.formatCashAmount(7)).toBe(`CFA ${n(7, 0)}`);
+    });
   });
 
   it("throws when used outside the provider", () => {

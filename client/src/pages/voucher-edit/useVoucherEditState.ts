@@ -58,7 +58,7 @@ export function useVoucherEditState({
       paymentAccountId: 0,
       paymentAccountName: "",
       voucherDate: new Date(),
-      currency: selectedCurrency as "USD" | "CFA",
+      currency: selectedCurrency as "USD" | "CFA" | "ZMW",
       entries: [],
       paymentAccountNarration: "",
       notes: "",
@@ -81,7 +81,7 @@ export function useVoucherEditState({
     resolver: zodResolver(journalFormSchema),
     defaultValues: {
       voucherDate: new Date(),
-      currency: selectedCurrency as "USD" | "CFA",
+      currency: selectedCurrency as "USD" | "CFA" | "ZMW",
       entries: [],
       notes: "",
     },
@@ -91,7 +91,7 @@ export function useVoucherEditState({
     resolver: zodResolver(salesFormSchema),
     defaultValues: {
       voucherDate: new Date(),
-      currency: selectedCurrency as "USD" | "CFA",
+      currency: selectedCurrency as "USD" | "CFA" | "ZMW",
       locationId: 0,
       items: [],
       notes: "",
@@ -102,7 +102,7 @@ export function useVoucherEditState({
     resolver: zodResolver(purchaseFormSchema),
     defaultValues: {
       voucherDate: new Date(),
-      currency: selectedCurrency as "USD" | "CFA",
+      currency: selectedCurrency as "USD" | "CFA" | "ZMW",
       items: [],
       notes: "",
     },
@@ -112,7 +112,7 @@ export function useVoucherEditState({
     resolver: zodResolver(adjustmentFormSchema),
     defaultValues: {
       voucherDate: new Date(),
-      currency: selectedCurrency as "USD" | "CFA",
+      currency: selectedCurrency as "USD" | "CFA" | "ZMW",
       locationId: 0,
       items: [],
       notes: "",
@@ -123,7 +123,7 @@ export function useVoucherEditState({
     resolver: zodResolver(transferFormSchema),
     defaultValues: {
       voucherDate: new Date(),
-      currency: selectedCurrency as "USD" | "CFA",
+      currency: selectedCurrency as "USD" | "CFA" | "ZMW",
       sourceLocationId: 0,
       destinationLocationId: 0,
       items: [],
@@ -140,7 +140,7 @@ export function useVoucherEditState({
     bankAccounts,
     suppliers,
     allAccountsData,
-    selectedCurrency as "USD" | "CFA",
+    selectedCurrency as "USD" | "CFA" | "ZMW",
     paymentForm,
     journalForm,
     salesForm,

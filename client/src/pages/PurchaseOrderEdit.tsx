@@ -114,16 +114,16 @@ export default function PurchaseOrderEdit() {
         stockItemId: item.stockItemId,
         itemName: item.itemName,
         quantity: item.quantity,
-        rate: item.rate,
-        lineTotal: item.lineTotal,
+        rate: po.currency === "ZMW" ? (item.nativeRate ?? "") : item.rate,
+        lineTotal: po.currency === "ZMW" ? (item.nativeLineTotal ?? "") : item.lineTotal,
       }))
     );
-    setFreight(po.freight || "0");
-    setSurcharge(po.surcharge || "0");
-    setFumigation(po.fumigation || "0");
-    setDocumentCharges(po.documentCharges || "0");
-    setDiscount(po.discount || "0");
-    setOtherCharges(po.otherCharges || "0");
+    setFreight((po.currency === "ZMW" ? po.nativeFreight : po.freight) || "0");
+    setSurcharge((po.currency === "ZMW" ? po.nativeSurcharge : po.surcharge) || "0");
+    setFumigation((po.currency === "ZMW" ? po.nativeFumigation : po.fumigation) || "0");
+    setDocumentCharges((po.currency === "ZMW" ? po.nativeDocumentCharges : po.documentCharges) || "0");
+    setDiscount((po.currency === "ZMW" ? po.nativeDiscount : po.discount) || "0");
+    setOtherCharges((po.currency === "ZMW" ? po.nativeOtherCharges : po.otherCharges) || "0");
     setFreightPaidBy((po.freightPaidBy as "supplier" | "own" | "parent") || "supplier");
     setFreightOwnAccountId(po.freightOwnAccountId ?? null);
     setFreightParentAccountId(po.freightParentAccountId ?? null);
@@ -263,6 +263,7 @@ export default function PurchaseOrderEdit() {
     () => (parseFloat(itemsTotal) + parseFloat(chargesTotal)).toFixed(2),
     [itemsTotal, chargesTotal]
   );
+  const priceSymbol = currency === "ZMW" ? "K" : "$";
   const totalQuantity = useMemo(() => items.reduce((sum, item) => sum + (parseFloat(item.quantity) || 0), 0), [items]);
 
   const stockItemsList = useMemo(() => (stockItems || []) as StockItem[], [stockItems]);
@@ -382,6 +383,15 @@ export default function PurchaseOrderEdit() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
+            {po.currency === "ZMW" && (
+              <p className="text-sm text-muted-foreground rounded-md border p-3">
+                Original purchase prices and charges are in Kwacha (K). Historical USD inventory and parent-company
+                costs are fixed using{" "}
+                {po.historicalExchangeRate ? `K${po.historicalExchangeRate} per USD` : "an unresolved rate"}
+                {po.historicalRateDate ? ` as of ${po.historicalRateDate}` : ""}. To change currency or the rate,
+                reverse and rebook.
+              </p>
+            )}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div>
                 <Label htmlFor="poNumber">PO Number</Label>
@@ -418,7 +428,7 @@ export default function PurchaseOrderEdit() {
               </div>
               <div>
                 <Label htmlFor="currency">Currency</Label>
-                <Select value={currency} onValueChange={setCurrency}>
+                <Select value={currency} onValueChange={setCurrency} disabled={po?.currency === "ZMW"}>
                   <SelectTrigger id="currency" data-testid="select-currency">
                     <SelectValue />
                   </SelectTrigger>
@@ -427,6 +437,7 @@ export default function PurchaseOrderEdit() {
                     <SelectItem value="EUR">EUR</SelectItem>
                     <SelectItem value="GBP">GBP</SelectItem>
                     <SelectItem value="CFA">CFA</SelectItem>
+                    {po?.currency === "ZMW" && <SelectItem value="ZMW">ZMW (locked)</SelectItem>}
                   </SelectContent>
                 </Select>
               </div>
@@ -554,7 +565,8 @@ export default function PurchaseOrderEdit() {
                           />
                         </TableCell>
                         <TableCell className="text-right font-mono">
-                          ${formatCurrency(parseFloat(lineTotals[index] || "0"))}
+                          {priceSymbol}
+                          {formatCurrency(parseFloat(lineTotals[index] || "0"))}
                         </TableCell>
                         <TableCell>
                           <Button
@@ -583,7 +595,8 @@ export default function PurchaseOrderEdit() {
                         </TableCell>
                         <TableCell></TableCell>
                         <TableCell className="text-right font-mono font-bold">
-                          ${formatCurrency(parseFloat(itemsTotal))}
+                          {priceSymbol}
+                          {formatCurrency(parseFloat(itemsTotal))}
                         </TableCell>
                         <TableCell></TableCell>
                       </TableRow>
@@ -734,10 +747,14 @@ export default function PurchaseOrderEdit() {
               <div className="bg-muted/50 rounded-md p-4">
                 <div className="flex justify-between items-center">
                   <span className="font-medium">Grand Total:</span>
-                  <span className="text-xl font-bold font-mono">${formatCurrency(parseFloat(grandTotal))}</span>
+                  <span className="text-xl font-bold font-mono">
+                    {priceSymbol}
+                    {formatCurrency(parseFloat(grandTotal))}
+                  </span>
                 </div>
                 <p className="text-sm text-muted-foreground mt-1">
-                  Items (${formatCurrency(parseFloat(itemsTotal))}) + Charges ($
+                  Items ({priceSymbol}
+                  {formatCurrency(parseFloat(itemsTotal))}) + Charges ({priceSymbol}
                   {formatCurrency(parseFloat(chargesTotal))})
                 </p>
               </div>

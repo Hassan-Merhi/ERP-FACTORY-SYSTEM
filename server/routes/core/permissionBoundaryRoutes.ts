@@ -2,9 +2,13 @@ import type { Express } from "express";
 
 import { requireActionAccess, requireExportAccess, requireModuleAccess } from "../../lib/permissionMiddleware";
 import { registerProtectedCorrectionMutationBoundary } from "../../middleware/protectedCorrectionMutation";
+import { registerRetailManualVoucherBoundary } from "../../middleware/retailManualVoucherBoundary";
 
 export function registerPermissionBoundaryRoutes(app: Express): void {
   registerProtectedCorrectionMutationBoundary(app);
+  // Retail companies cannot manually create/edit Journal, Credit/Debit Note,
+  // Adjustment or Transfer Order vouchers; this runs before every voucher writer.
+  registerRetailManualVoucherBoundary(app);
   app.use("/api/factory", requireModuleAccess("mod_factory"));
   app.use("/api/pos", requireModuleAccess("mod_pos"));
   app.use("/api/properties", requireModuleAccess("mod_properties"));

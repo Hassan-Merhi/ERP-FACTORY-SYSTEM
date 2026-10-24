@@ -2,9 +2,8 @@ import { Archive, ArchiveRestore, ArrowRightLeft, History, Pencil, Printer, Slid
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent } from "@/components/ui/card";
-import { normalizeRetailImageUrls } from "@/lib/retailImageUrl";
 import { cn } from "@/lib/utils";
-import { ProductImageGallery, RetailImage } from "./RetailProductImage";
+import { RetailPhotoGallery } from "./RetailProductImage";
 import { money, sortRetailVariants, type RetailProduct, type RetailVariant } from "./retailInventoryTypes";
 
 export type RetailVariantAction = "print" | "transfer" | "adjust" | "history" | "archive" | "restore";
@@ -32,6 +31,9 @@ export function visibleVariants(product: RetailProduct, filters: RetailCatalogFi
       if (!filters.showArchived && (!variant.active || !product.active)) return false;
       if (filters.color && norm(variant.color) !== norm(filters.color)) return false;
       if (filters.size && norm(variant.size) !== norm(filters.size)) return false;
+      // Only show variants assigned to the chosen location; a different branch
+      // can hold other sizes/colors of the same style.
+      if (filters.locationId && !variant.stocks.some((stock) => stock.locationId === Number(filters.locationId))) return false;
       const quantity = variantQuantity(variant, filters.locationId);
       if (filters.stockStatus === "in" && quantity <= 0) return false;
       if (filters.stockStatus === "out" && quantity > 0) return false;
@@ -65,6 +67,7 @@ export function RetailCatalogList({
   onEdit,
   onArchiveProduct,
   onVariantAction,
+  showBrandHeadings = true,
 }: {
   products: RetailProduct[];
   filters: RetailCatalogFilters;
@@ -75,6 +78,7 @@ export function RetailCatalogList({
   onEdit: (product: RetailProduct) => void;
   onArchiveProduct: (product: RetailProduct, active: boolean) => void;
   onVariantAction: (action: RetailVariantAction, product: RetailProduct, variant: RetailVariant) => void;
+  showBrandHeadings?: boolean;
 }) {
   const groups: Array<{ brand: string; products: RetailProduct[] }> = [];
   for (const product of products) {
@@ -87,9 +91,11 @@ export function RetailCatalogList({
     <div className="space-y-6">
       {groups.map((group) => (
         <section key={group.brand} className="space-y-3" data-testid="brand-group">
-          <h2 className="border-b pb-1 text-lg font-bold uppercase tracking-wide" data-no-translate>
-            {group.brand}
-          </h2>
+          {showBrandHeadings && (
+            <h2 className="border-b pb-1 text-lg font-bold uppercase tracking-wide" data-no-translate>
+              {group.brand}
+            </h2>
+          )}
           {group.products.map((product) => {
             const rows = visibleVariants(product, filters);
             const rowIds = rows.map((variant) => variant.id);
@@ -99,13 +105,6 @@ export function RetailCatalogList({
               <Card key={product.id} className={cn(!product.active && "opacity-70")} data-testid="style-card">
                 <CardContent className="space-y-3 p-3 sm:p-4">
                   <div className="flex items-start gap-3">
-                    <button type="button" onClick={() => onOpenProduct(product)} className="shrink-0">
-                      <ProductImageGallery
-                        product={product}
-                        maxImages={3}
-                        imageClassName="h-16 w-16 rounded-md border"
-                      />
-                    </button>
                     <div className="min-w-0 flex-1">
                       <button
                         type="button"
@@ -163,9 +162,9 @@ export function RetailCatalogList({
                       </label>
                       {rows.map((variant) => {
                         const quantity = variantQuantity(variant, filters.locationId);
-                        const images = normalizeRetailImageUrls(
-                          variant.imageUrls.length ? variant.imageUrls : product.imageUrls
-                        );
+                        // Exact-variant photos come first; generic style photos follow.
+                        // Never add photos from other color/size variants here.
+                        const images = [...(variant.imageUrls ?? []), ...(product.imageUrls ?? [])];
                         return (
                           <div
                             key={variant.id}
@@ -180,25 +179,11 @@ export function RetailCatalogList({
                               checked={selected.has(variant.id)}
                               onCheckedChange={() => onToggle(variant.id)}
                             />
-                            <div className="flex shrink-0 -space-x-2">
-                              {(images.length ? images.slice(0, 3) : [""]).map((src, imageIndex) => (
-                                <RetailImage
-                                  key={src || `empty-${variant.id}`}
-                                  src={src}
-                                  alt={
-                                    src
-                                      ? `${product.name} · ${variant.color} · ${variant.size} photo ${imageIndex + 1}`
-                                      : ""
-                                  }
-                                  className="h-10 w-10 rounded-sm border-2 border-background"
-                                />
-                              ))}
-                              {images.length > 3 && (
-                                <span className="flex h-10 w-10 items-center justify-center rounded-sm border-2 border-background bg-muted text-[11px] font-bold">
-                                  +{images.length - 3}
-                                </span>
-                              )}
-                            </div>
+                            <RetailPhotoGallery
+                              images={images}
+                              title={`${product.name} · ${variant.color} / ${variant.size}`}
+                              imageClassName="h-12 w-12 rounded-md border"
+                            />
                             <div className="min-w-28 flex-1" data-no-translate>
                               <div className="font-semibold">
                                 {variant.color} / {variant.size}
@@ -211,7 +196,8 @@ export function RetailCatalogList({
                             <StockBadge quantity={quantity} lowThreshold={variant.lowStockThreshold} />
                             <div className="hidden min-w-32 text-xs text-muted-foreground md:block" data-no-translate>
                               {variant.stocks
-                                .filter((stock) => stock.quantity !== 0)
+                                .filter((stock) => stock.quantity !== 0 &&
+                                  (!filters.locationId || stock.locationId === Number(filters.locationId)))
                                 .map((stock) => `${stock.locationName}: ${stock.quantity}`)
                                 .join(" · ") || "—"}
                             </div>

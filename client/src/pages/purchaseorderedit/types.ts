@@ -11,6 +11,8 @@ export interface LineItem {
   quantity: string;
   rate: string;
   lineTotal?: string;
+  nativeRate?: string | null;
+  nativeLineTotal?: string | null;
 }
 
 export interface StockItem {
@@ -28,6 +30,15 @@ export interface PurchaseOrder {
   containerId: number;
   containerNumber: string;
   currency: string;
+  historicalExchangeRate?: string | null;
+  historicalRateDate?: string | null;
+  nativeItemsTotal?: string | null;
+  nativeFreight?: string | null;
+  nativeSurcharge?: string | null;
+  nativeFumigation?: string | null;
+  nativeDocumentCharges?: string | null;
+  nativeDiscount?: string | null;
+  nativeOtherCharges?: string | null;
   itemsTotal: string;
   freight: string;
   surcharge: string;

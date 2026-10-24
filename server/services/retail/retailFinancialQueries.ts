@@ -24,6 +24,7 @@ export async function loadRetailSalePayments(companyId: number, saleId: number) 
     changeAmount: toNumber(row.changeAmount),
     reference: row.reference,
     shiftId: row.shiftId,
+    relatedPaymentId: row.relatedPaymentId ?? null,
   }));
 }
 

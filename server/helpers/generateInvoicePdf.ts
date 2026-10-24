@@ -131,6 +131,8 @@ interface InvoiceData {
   voucherDate: string;
   description: string | null;
   exchangeRate: number | null;
+  /** Persisted voucher currency (never the current UI selection). */
+  currency: string;
   isCreditSale: boolean;
   companyName: string;
   userName: string;
@@ -182,11 +184,12 @@ export async function generateInvoicePdfMeta(
     voucher_date: string;
     description: string | null;
     exchange_rate: string | null;
+    currency: string | null;
     is_credit_sale: boolean;
     shift_id: number | null;
     company_name: string;
   }>(
-    `SELECT v.voucher_date, v.description, v.exchange_rate, v.is_credit_sale, v.shift_id,
+    `SELECT v.voucher_date, v.description, v.exchange_rate, v.currency, v.is_credit_sale, v.shift_id,
             c.name AS company_name
      FROM vouchers v
      JOIN companies c ON c.id = v.company_id
@@ -251,6 +254,7 @@ export async function generateInvoicePdfMeta(
     voucherDate: formatDbDate(v.voucher_date),
     description: v.description,
     exchangeRate: v.exchange_rate ? toMoney(v.exchange_rate).toNumber() : null,
+    currency: v.currency || "USD",
     isCreditSale: v.is_credit_sale,
     companyName: v.company_name,
     userName,
@@ -292,6 +296,12 @@ async function buildPdf(d: InvoiceData): Promise<{ buffer: Buffer; pageCount: nu
   let pageCount = 1; // autoFirstPage adds page 1
 
   const isMali = d.companyName.toLowerCase().includes("mali");
+  const isZmwInvoice =
+    d.currency === "ZMW" && d.exchangeRate !== null && Number.isFinite(d.exchangeRate) && d.exchangeRate > 0;
+  const formatSaleAmount = (usd: number) =>
+    isZmwInvoice
+      ? `K${(usd * d.exchangeRate!).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+      : fmtUSD(usd);
 
   // Auto-hide profit columns when no item has a configured price set
   const hasConfiguredPrice = d.items.some((item) => item.configuredPrice > 0);
@@ -366,8 +376,8 @@ async function buildPdf(d: InvoiceData): Promise<{ buffer: Buffer; pageCount: nu
 
   let y = HEADER_BAR_H + (d.compactMode ? 4 : 6);
 
-  // ── Daily exchange rate (Mali only) ──────────────────────────────────────────
-  if (isMali && d.exchangeRate) {
+  // ── Voucher's locked exchange rate; never use current rate for old sales. ──
+  if ((isMali || isZmwInvoice) && d.exchangeRate) {
     const rateH = d.compactMode ? 14 : 18;
     doc.save();
     doc.rect(MARGIN_X, y, USABLE_W, rateH).fill("#fffbeb");
@@ -377,7 +387,10 @@ async function buildPdf(d: InvoiceData): Promise<{ buffer: Buffer; pageCount: nu
       .font("Helvetica-Bold")
       .fontSize(d.compactMode ? 7 : 8)
       .fillColor("#92400e");
-    const rateStr = `Daily Rate: $1 = ${Math.round(d.exchangeRate).toLocaleString("en-US")} CFA`;
+    const shownRate = isZmwInvoice
+      ? d.exchangeRate.toLocaleString("en-US", { maximumFractionDigits: 6 })
+      : Math.round(d.exchangeRate).toLocaleString("en-US");
+    const rateStr = `Sale Rate: $1 = ${shownRate} ${isZmwInvoice ? "ZMW" : "CFA"}`;
     doc.text(rateStr, MARGIN_X, y + (d.compactMode ? 3 : 5), { width: USABLE_W, align: "center", lineBreak: false });
     y += rateH + (d.compactMode ? 3 : 5);
   }
@@ -421,12 +434,12 @@ async function buildPdf(d: InvoiceData): Promise<{ buffer: Buffer; pageCount: nu
     doc.font("Helvetica-Bold").fontSize(FONT_HDR).fillColor(CLR_WHITE);
     cellText(doc, "DESCRIPTION", X_DESC, COL_DESC_W, atY, THR_H, "left");
     cellText(doc, "QTY", X_QTY, COL_QTY_W, atY, THR_H, "center");
-    cellText(doc, "RATE", X_RATE, COL_RATE_W, atY, THR_H, "center");
-    cellText(doc, "AMT", X_AMT, COL_AMT_W, atY, THR_H, "center");
+    cellText(doc, isZmwInvoice ? "RATE (K)" : "RATE", X_RATE, COL_RATE_W, atY, THR_H, "center");
+    cellText(doc, isZmwInvoice ? "AMT (K)" : "AMT", X_AMT, COL_AMT_W, atY, THR_H, "center");
     if (!hideProfitCols) {
-      cellText(doc, "CONFIG", X_CFG, COL_CFG_W, atY, THR_H, "center");
-      cellText(doc, "P/L BALE", X_PLB, COL_PLB_W, atY, THR_H, "center");
-      cellText(doc, "TOTAL P/L", X_TPL, COL_TPL_W, atY, THR_H, "center");
+      cellText(doc, isZmwInvoice ? "CONFIG $" : "CONFIG", X_CFG, COL_CFG_W, atY, THR_H, "center");
+      cellText(doc, isZmwInvoice ? "P/L BALE $" : "P/L BALE", X_PLB, COL_PLB_W, atY, THR_H, "center");
+      cellText(doc, isZmwInvoice ? "TOTAL P/L $" : "TOTAL P/L", X_TPL, COL_TPL_W, atY, THR_H, "center");
     }
     return atY + THR_H;
   }
@@ -494,9 +507,13 @@ async function buildPdf(d: InvoiceData): Promise<{ buffer: Buffer; pageCount: nu
 
     doc.font("Helvetica").fontSize(FONT_ROW).fillColor(CLR_BODY);
     doc.text(fmtQty(item.quantity), X_QTY + 1, cy, { width: COL_QTY_W - 2, align: "center", lineBreak: false });
-    doc.text(fmtUSD(item.rateUSD), X_RATE + 1, cy, { width: COL_RATE_W - 2, align: "center", lineBreak: false });
+    doc.text(formatSaleAmount(item.rateUSD), X_RATE + 1, cy, {
+      width: COL_RATE_W - 2,
+      align: "center",
+      lineBreak: false,
+    });
     doc.font("Helvetica-Bold").fontSize(FONT_ROW).fillColor(CLR_BODY);
-    doc.text(fmtUSD(amtUSD), X_AMT + 1, cy, { width: COL_AMT_W - 2, align: "center", lineBreak: false });
+    doc.text(formatSaleAmount(amtUSD), X_AMT + 1, cy, { width: COL_AMT_W - 2, align: "center", lineBreak: false });
 
     if (!hideProfitCols) {
       doc.font("Helvetica").fontSize(FONT_ROW).fillColor(CLR_BODY);
@@ -549,7 +566,7 @@ async function buildPdf(d: InvoiceData): Promise<{ buffer: Buffer; pageCount: nu
   y += totH + (d.compactMode ? 5 : 8);
 
   // ── TOTAL PAID block ──────────────────────────────────────────────────────────
-  const paidStr = fmtUSD(totalAmt);
+  const paidStr = formatSaleAmount(totalAmt);
   doc.save();
   doc.rect(MARGIN_X, y, USABLE_W, paidH).fill(CLR_BRAND);
   doc.restore();
@@ -558,7 +575,9 @@ async function buildPdf(d: InvoiceData): Promise<{ buffer: Buffer; pageCount: nu
     .font("Helvetica")
     .fontSize(d.compactMode ? 7 : 8)
     .fillColor(CLR_MUTED);
-  doc.text("TOTAL PAID", MARGIN_X + 10, y + (d.compactMode ? 6 : 8), { lineBreak: false });
+  doc.text(isZmwInvoice ? "TOTAL PAID (ZMW)" : "TOTAL PAID", MARGIN_X + 10, y + (d.compactMode ? 6 : 8), {
+    lineBreak: false,
+  });
 
   doc
     .font("Helvetica-Bold")

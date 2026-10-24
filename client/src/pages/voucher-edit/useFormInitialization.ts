@@ -21,7 +21,7 @@ export const useFormInitialization = (
   bankAccounts: BankAccount[],
   suppliers: Supplier[],
   allAccountsData: AccountWithBalance[],
-  selectedCurrency: "USD" | "CFA",
+  selectedCurrency: "USD" | "CFA" | "ZMW",
   paymentForm: UseFormReturn<VoucherFormData>,
   journalForm: UseFormReturn<JournalFormData>,
   salesForm: UseFormReturn<SalesFormData>,
@@ -38,9 +38,15 @@ export const useFormInitialization = (
     const isConsumption = voucherType === "Consumption" || voucherType === "Production" || voucherType === "Mixed";
     const isStockTransfer = voucherType === "Stock Transfer";
 
+    const originalEntries =
+      voucher.currency === "ZMW"
+        ? voucher.entries.filter(
+            (entry) => !(entry.transactionCurrency === "USD" && entry.narration === "Base currency rounding difference")
+          )
+        : voucher.entries;
     if (isPaymentOrReceipt) {
-      const mainEntry = voucher.entries[0];
-      const contraEntries = voucher.entries.slice(1);
+      const mainEntry = originalEntries[0];
+      const contraEntries = originalEntries.slice(1);
       const accountType = mainEntry.ledgerAccountId
         ? "ledger"
         : mainEntry.bankAccountId
@@ -70,7 +76,7 @@ export const useFormInitialization = (
         paymentAccountId: accountId,
         paymentAccountName: accountName,
         voucherDate: parseISO(voucher.voucherDate),
-        currency: (voucher.currency as "USD" | "CFA") || selectedCurrency,
+        currency: (voucher.currency as "USD" | "CFA" | "ZMW") || selectedCurrency,
         paymentAccountNarration: mainEntry?.narration || "",
         notes: voucher.description || "",
         entries: contraEntries.map((e) => {
@@ -99,7 +105,16 @@ export const useFormInitialization = (
             accountType: eAccountType,
             accountId: eAccountId,
             accountName: eAccountName,
-            amount: parseFloat(e.debitAmount) > 0 ? e.debitAmount : e.creditAmount,
+            amount:
+              voucher.currency === "ZMW"
+                ? String(
+                    Number(e.transactionDebitAmount || "0") > 0
+                      ? e.transactionDebitAmount
+                      : e.transactionCreditAmount || "0"
+                  )
+                : parseFloat(e.debitAmount) > 0
+                  ? e.debitAmount
+                  : e.creditAmount,
             narration: e.narration || "",
           };
         }),
@@ -108,9 +123,9 @@ export const useFormInitialization = (
     } else if (isJournal) {
       journalForm.reset({
         voucherDate: parseISO(voucher.voucherDate),
-        currency: (voucher.currency as "USD" | "CFA") || selectedCurrency,
+        currency: (voucher.currency as "USD" | "CFA" | "ZMW") || selectedCurrency,
         notes: voucher.description || "",
-        entries: voucher.entries.map((e) => {
+        entries: originalEntries.map((e) => {
           const type = parseFloat(e.debitAmount) > 0 ? "DR" : "CR";
           const accountType = e.ledgerAccountId
             ? "ledger"
@@ -132,7 +147,12 @@ export const useFormInitialization = (
             accountType: accountType,
             accountId,
             accountName,
-            amount: type === "DR" ? e.debitAmount : e.creditAmount,
+            amount:
+              voucher.currency === "ZMW"
+                ? String(type === "DR" ? (e.transactionDebitAmount ?? "0") : (e.transactionCreditAmount ?? "0"))
+                : type === "DR"
+                  ? e.debitAmount
+                  : e.creditAmount,
             narration: e.narration || "",
           };
         }),
@@ -141,7 +161,7 @@ export const useFormInitialization = (
     } else if (isPurchase) {
       purchaseForm.reset({
         voucherDate: parseISO(voucher.voucherDate),
-        currency: (voucher.currency as "USD" | "CFA") || selectedCurrency,
+        currency: (voucher.currency as "USD" | "CFA" | "ZMW") || selectedCurrency,
         items: (voucher.purchaseOrder?.items || []).map((item) => ({
           id: item.id,
           stockItemId: item.stockItemId,
@@ -169,7 +189,7 @@ export const useFormInitialization = (
     } else if (isStockTransfer) {
       transferForm.reset({
         voucherDate: parseISO(voucher.voucherDate),
-        currency: (voucher.currency as "USD" | "CFA") || selectedCurrency,
+        currency: (voucher.currency as "USD" | "CFA" | "ZMW") || selectedCurrency,
         sourceLocationId: voucher.transferData?.sourceLocationId || voucher.locationId || 0,
         destinationLocationId: voucher.transferData?.destinationLocationId || 0,
         items: (voucher.transferData?.items || []).map((item) => ({

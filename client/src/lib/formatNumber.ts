@@ -1,4 +1,6 @@
-export type CurrencyCode = "USD" | "CFA";
+import { getCurrencyDisplayMetadata, type SupportedAccountingCurrency } from "@shared/currencyCatalog";
+
+export type CurrencyCode = SupportedAccountingCurrency;
 
 /**
  * Returns tailwind text-color classes for a Dr/Cr balance side.
@@ -36,7 +38,7 @@ export function formatCurrency(num: number | null | undefined): string {
 /**
  * Format a currency value with currency label
  * @param num - The number to format
- * @param currency - The currency code (USD or CFA)
+ * @param currency - The original amount's currency code (e.g. USD, CFA, ZMW)
  * @returns Formatted string with currency symbol/label
  */
 export function formatCurrencyWithLabel(num: number | string, currency: CurrencyCode = "USD"): string {
@@ -46,9 +48,18 @@ export function formatCurrencyWithLabel(num: number | string, currency: Currency
   if (currency === "USD") {
     const isWhole = Math.abs(numValue) % 1 === 0;
     return `$ ${numValue.toLocaleString(undefined, { minimumFractionDigits: isWhole ? 0 : 2, maximumFractionDigits: 2 })}`;
-  } else {
+  }
+  if (currency === "CFA" || currency === "XOF" || currency === "XAF") {
     return `CFA ${numValue.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
   }
+
+  const meta = getCurrencyDisplayMetadata(currency);
+  const minDecimals = currency === "ZMW" ? 2 : Math.abs(numValue) % 1 === 0 ? 0 : meta.fractionDigits;
+  const formatted = numValue.toLocaleString(undefined, {
+    minimumFractionDigits: minDecimals,
+    maximumFractionDigits: meta.fractionDigits,
+  });
+  return `${meta.prefix}${formatted}`;
 }
 
 /**

@@ -23,6 +23,8 @@ import { apiRequest, queryClient, invalidateContainerLandedCostQueries } from "@
 import { CalendarIcon, Plus, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useDateFormat } from "@/contexts/DateFormatContext";
+import { useCompany } from "@/contexts/CompanyContext";
+import { isRetailManualVoucherTypeHidden } from "@/lib/retailVoucherPolicy";
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
 import type { Voucher } from "@shared/schema";
 import {
@@ -54,6 +56,7 @@ interface VoucherEditDialogProps {
 
 export function VoucherEditDialog({ voucherId, open, onOpenChange }: VoucherEditDialogProps) {
   const { toast } = useToast();
+  const { selectedCompany } = useCompany();
   const { formatHistoricalBaseAmount: formatAmount } = useCurrencyContext();
   const { formatDisplayDate } = useDateFormat();
   const [showOptionalWarning, setShowOptionalWarning] = useState(false);
@@ -113,6 +116,12 @@ export function VoucherEditDialog({ voucherId, open, onOpenChange }: VoucherEdit
   const updateMutation = useMutation({
     mutationFn: async (data: VoucherFormData) => {
       if (!voucherId) throw new Error("Voucher ID is required");
+      if (
+        selectedCompany?.companyType === "retail" &&
+        (isRetailManualVoucherTypeHidden(voucherData?.voucherType) || isRetailManualVoucherTypeHidden(data.voucherType))
+      ) {
+        throw new Error("Retail system journals and adjustment vouchers are read-only");
+      }
 
       return await apiRequest("PUT", `/api/vouchers/${voucherId}/with-entries`, voucherFormToPayload(data));
     },
@@ -155,6 +164,8 @@ export function VoucherEditDialog({ voucherId, open, onOpenChange }: VoucherEdit
   const entries = form.watch("entries");
   const { totalDebits, totalCredits, isBalanced } = computeEntryTotals(entries);
   const isOptional = form.watch("optional");
+  const retailReadOnly =
+    selectedCompany?.companyType === "retail" && isRetailManualVoucherTypeHidden(voucherData?.voucherType);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -168,6 +179,16 @@ export function VoucherEditDialog({ voucherId, open, onOpenChange }: VoucherEdit
 
         {isLoading ? (
           <div className="text-center py-8">Loading voucher data...</div>
+        ) : retailReadOnly ? (
+          <div className="space-y-3 rounded-md border p-4 text-sm">
+            <p>
+              Retail does not permit manually editing this voucher type. Its posted accounting remains available in the
+              Daybook and voucher detail view.
+            </p>
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+              Close
+            </Button>
+          </div>
         ) : (
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6" noValidate>
@@ -202,7 +223,9 @@ export function VoucherEditDialog({ voucherId, open, onOpenChange }: VoucherEdit
                         <SelectContent>
                           <SelectItem value="Payment">Payment</SelectItem>
                           <SelectItem value="Receipt">Receipt</SelectItem>
-                          <SelectItem value="Journal">Journal</SelectItem>
+                          {selectedCompany?.companyType !== "retail" && (
+                            <SelectItem value="Journal">Journal</SelectItem>
+                          )}
                           <SelectItem value="Sales">Sales</SelectItem>
                           <SelectItem value="Purchase">Purchase</SelectItem>
                           <SelectItem value="Contra">Contra</SelectItem>

@@ -71,6 +71,7 @@ interface SettingsSidebarItem {
   label: string;
   icon: LucideIcon;
   devOnly?: boolean;
+  adminOnly?: boolean;
 }
 
 export default function Settings() {
@@ -110,6 +111,7 @@ export default function Settings() {
   const showSupplierTrackingDefaults = appMode === "erp" && selectedCompany?.companyType !== "supplier_partner";
 
   const canManageCompanyTimezone = ["Admin", "Owner", "Developer"].includes(currentUser?.role ?? "");
+  const canManageSessions = ["Admin", "Owner", "Developer"].includes(currentUser?.role ?? "");
 
   const sidebarGroups = [
     {
@@ -124,7 +126,7 @@ export default function Settings() {
       label: "Users & Access",
       items: [
         { key: "users-permissions", label: "Users & Permissions", icon: Users },
-        { key: "sessions-hub", label: "Sessions & Users", icon: Shield, devOnly: true },
+        { key: "sessions-hub", label: "Sessions & Users", icon: Shield, adminOnly: true },
       ],
     },
     {
@@ -176,7 +178,7 @@ export default function Settings() {
   ];
 
   const allowedItems = (items: SettingsSidebarItem[]) =>
-    items.filter((item) => !item.devOnly || currentUser?.role === "Developer");
+    items.filter((item) => (!item.devOnly || currentUser?.role === "Developer") && (!item.adminOnly || canManageSessions));
   const canManageTrackingDefaults = ["Admin", "Owner", "Developer"].includes(currentUser?.role ?? "");
 
   const activeSectionLabel = sidebarGroups
@@ -301,8 +303,8 @@ export default function Settings() {
           {activeSection === "users-permissions" && (
             <UsersPermissionsHub userRole={currentUser?.role} appMode={appMode} />
           )}
-          {activeSection === "sessions-hub" && currentUser?.role === "Developer" && (
-            <SessionsHub isAdmin={true} isDev={true} />
+          {activeSection === "sessions-hub" && canManageSessions && (
+            <SessionsHub isAdmin={true} isDev={currentUser?.role === "Developer"} />
           )}
           {activeSection === "supplier-tracking-defaults" && showSupplierTrackingDefaults && (
             <SupplierTrackingDefaultsTab canManage={canManageTrackingDefaults} />

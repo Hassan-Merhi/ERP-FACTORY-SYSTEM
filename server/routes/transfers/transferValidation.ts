@@ -12,6 +12,12 @@ const clientRequestIdSchema = z
   .regex(/^[A-Za-z0-9._:-]+$/)
   .optional();
 
+const transferCurrencyFields = {
+  currency: z.enum(["USD", "ZMW"]).optional(),
+  /** Original approved ZMW-per-USD rate. No rate is accepted for USD. */
+  exchangeRate: z.string().trim().optional(),
+};
+
 const simpleTransferSchema = z.object({
   fromCompanyId: z.number().int().positive(),
   toCompanyId: z.number().int().positive(),
@@ -21,10 +27,12 @@ const simpleTransferSchema = z.object({
   transferDate: z.string(),
   description: z.string().optional(),
   clientRequestId: clientRequestIdSchema,
+  ...transferCurrencyFields,
 });
 
 const interCompanyTransferSchema = insertInterCompanyTransferSchema.extend({
   clientRequestId: clientRequestIdSchema,
+  ...transferCurrencyFields,
 });
 
 export function parseInterCompanyTransferInput(input: unknown) {

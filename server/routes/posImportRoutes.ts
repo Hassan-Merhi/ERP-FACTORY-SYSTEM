@@ -1,6 +1,7 @@
 /** POS Excel-import routes. */
 import type { Express } from "express";
 import { getErrorMessage, HttpError } from "../lib/httpHandlers";
+import { PosZmwRateError, resolveLockedZmwPosCurrency, assertZmwImportPrices } from "../services/pos/posZmwRatePolicy";
 import { logger } from "../lib/logger";
 import {
   addInventoryValues,
@@ -198,7 +199,7 @@ export function registerPosImportRoutes(app: Express) {
   app.post("/api/pos-import/import", requireAuth, async (req, res) => {
     try {
       if (!req.session.currentCompanyId) return res.status(400).json({ message: "No company selected" });
-      const { locationId, saleDate, items, cashAccountId } = req.body;
+      const { locationId, saleDate, items, cashAccountId, currency, exchangeRate } = req.body;
       if (!locationId || !saleDate || !items || !Array.isArray(items) || !cashAccountId) {
         return res.status(400).json({ message: "Missing required fields" });
       }
@@ -212,6 +213,22 @@ export function registerPosImportRoutes(app: Express) {
       if (!cashAccount || cashAccount.companyId !== req.session.currentCompanyId) {
         return res.status(400).json({ message: "Invalid cash account" });
       }
+
+      const lockedPosCurrency = await resolveLockedZmwPosCurrency(
+        req.session.currentCompanyId,
+        saleDate,
+        currency,
+        exchangeRate
+      );
+      assertZmwImportPrices(items, lockedPosCurrency);
+      const nativeTransaction = (total: string) =>
+        lockedPosCurrency.currency === "ZMW"
+          ? {
+              currency: "ZMW",
+              amount: toInventoryDecimal(total).mul(lockedPosCurrency.exchangeRate!).toFixed(6),
+              rate: lockedPosCurrency.exchangeRate!,
+            }
+          : null;
 
       const salesRevenueAccount = await storage.getOrCreateLedgerAccount({
         companyId: req.session.currentCompanyId!,
@@ -257,15 +274,19 @@ export function registerPosImportRoutes(app: Express) {
           voucherType: "Sales",
           voucherDate: saleDate,
           description: `POS Import - ${items.length} items`,
+          currency: lockedPosCurrency.currency,
+          exchangeRate: lockedPosCurrency.exchangeRate,
           lines: [
             {
               ledgerAccountId: cashAccountId,
               debit: totalSalesAmount,
+              transaction: nativeTransaction(totalSalesAmount),
               narration: `Cash from POS Sales - ${items.length} items`,
             },
             {
               ledgerAccountId: salesRevenueAccount.id,
               credit: totalSalesAmount,
+              transaction: nativeTransaction(totalSalesAmount),
               narration: `Sales Revenue - ${items.length} items`,
             },
           ],
@@ -447,6 +468,9 @@ export function registerPosImportRoutes(app: Express) {
       }
     } catch (error: unknown) {
       if (sendBaleMirrorMovementRefusal(res, error)) return;
+      if (error instanceof PosZmwRateError) {
+        return res.status(error.statusCode).json({ code: error.code, message: error.message });
+      }
       if (error instanceof HttpError && error.statusCode === 400) {
         return res.status(400).json({ message: getErrorMessage(error) });
       }

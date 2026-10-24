@@ -53,6 +53,8 @@ const compatibilityTranslationFiles = [
   "client/src/i18n/phase3RemainingTranslations.part32.ts",
   "client/src/i18n/phase3RemainingTranslations.part33.ts",
   "client/src/i18n/phase3RemainingTranslations.part34.ts",
+  "client/src/i18n/phase3RemainingTranslations.part35.ts",
+  "client/src/i18n/phase3RemainingTranslations.part36.ts",
   "client/src/i18n/supplierPartnerPhase4Translations.part1.ts",
   "client/src/i18n/supplierPartnerPhase4Translations.part2.ts",
   "client/src/i18n/supplierPartnerPhase4Translations.part3.ts",
@@ -180,6 +182,11 @@ const reviewedTechnicalValues = new Set([
   "SCHEDULED_WHATSAPP_DELIVERY_TRACKING_SCHEMA_UNAVAILABLE",
   // Detector fragment: the scanner cut a voucher-narration template at its ternary.
   "Continuation receipt — container ${container.containerNumber}${supplierName?.trim() ?",
+  // Retail transfer voucher descriptions stored on the ledger journal, like the continuation receipt above.
+  "Retail transfer #${created.id} dispatched: stock in transit",
+  "Retail transfer #${transferId} received at location ${details.toLocationId}",
+  // Detector false positive: the JSX condition opening the Retail POS low-stock warning, not copy.
+  "line.quantity && (",
 ]);
 
 function argumentValue(name) {

@@ -3,12 +3,13 @@ import { getErrorMessage } from "../lib/httpHandlers";
 import Decimal from "decimal.js";
 import { and, eq, isNull } from "drizzle-orm";
 import { db, pool } from "../db";
-import { requireAuth, requireNonPOS } from "../auth";
+import { requireAuth, requireNonPOS, requireRole } from "../auth";
 import { bankAccounts, companies, ledgerAccounts } from "@shared/schema";
 import { normalizeOpeningBalanceCurrency } from "../services/accounting/openingBalanceCurrency";
 import { getCashLedgerAccountSummary } from "../services/accounting/cashLedgerAccountSummaryService";
 import { getCashBankAccountSummary, getCashBankRevaluation } from "../services/accounting/cashBankRevaluationService";
 import { openingSideOf } from "../services/accounting/balances/openingSide";
+import { errorStatus } from "../lib/httpHandlers";
 
 const OPENING_FIELDS = [
   "openingBalance",
@@ -160,6 +161,25 @@ export const normalizeAccountOpeningBalance: RequestHandler = async (req, res, n
     const companyId = req.session.currentCompanyId ?? Number(req.body?.companyId);
     if (!companyId) return res.status(400).json({ message: "No company selected" });
     const baseCurrency = await getBaseCurrency(companyId);
+    if (String(req.body?.openingBalanceCurrency || "").toUpperCase() === "ZMW") {
+      const [company] = await db
+        .select({
+          baseCurrency: companies.baseCurrency,
+          displayCurrency: companies.displayCurrency,
+        })
+        .from(companies)
+        .where(eq(companies.id, companyId))
+        .limit(1);
+      if (
+        String(company?.baseCurrency).toUpperCase() !== "USD" ||
+        String(company?.displayCurrency).toUpperCase() !== "ZMW"
+      ) {
+        return res.status(409).json({
+          code: "ZMW_OPENING_COMPANY_MISMATCH",
+          message: "A Kwacha cash/bank opening must belong to a USD-base, ZMW-display company.",
+        });
+      }
+    }
 
     let existing: typeof ledgerAccounts.$inferSelect | typeof bankAccounts.$inferSelect | null = null;
     const idMatch = req.path.match(/\/(\d+)$/);
@@ -262,6 +282,35 @@ async function getHistoricalLedgerBalance(companyId: number, ledgerAccountId: nu
 }
 
 export function registerAccountCurrencyRoutes(app: Express) {
+  // A real movement between two existing, company-owned Cash/Bank accounts.
+  // It creates a balanced, idempotent journal; it does NOT revalue history.
+  app.post(
+    "/api/accounts/multi-currency/zambia-transfer",
+    requireAuth,
+    requireNonPOS,
+    requireRole("Admin", "Owner"),
+    async (req, res) => {
+      try {
+        const companyId = req.session.currentCompanyId;
+        if (!companyId) return res.status(400).json({ message: "Select a company" });
+        // Loaded on demand: the posting engine's module graph is far larger
+        // than this read-mostly route's and is exercised by its own tests.
+        const [{ postZambiaCashTransfer }, { sessionPostingActor }] = await Promise.all([
+          import("../services/accounting/zambiaCashTransferService"),
+          import("../services/accounting/erpVoucherPosting"),
+        ]);
+        const result = await postZambiaCashTransfer(
+          req.body,
+          companyId,
+          sessionPostingActor(req, "Zambia USD/ZMW cash or bank currency conversion")
+        );
+        return res.status(result.replayed ? 200 : 201).json(result);
+      } catch (error: unknown) {
+        return res.status(errorStatus(error)).json({ message: getErrorMessage(error) });
+      }
+    }
+  );
+
   app.get("/api/bank-accounts/revaluation", requireAuth, requireNonPOS, async (req, res) => {
     try {
       const companyId = req.session.currentCompanyId;

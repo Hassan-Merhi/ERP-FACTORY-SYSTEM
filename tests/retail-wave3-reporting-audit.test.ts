@@ -14,7 +14,7 @@ describe("Retail Wave 3 reporting and reconciliation", () => {
     expect(migration).toContain("ADD COLUMN IF NOT EXISTS unit_cost");
     expect(migration).toContain("retail_snapshot_sale_item_cost");
     expect(schema).toContain('unitCost: decimal("unit_cost"');
-    expect(reporting).toContain("si.unit_cost AS cogs");
+    expect(reporting).toContain("* si.unit_cost END AS cogs");
     expect(reporting).toContain("SUM(revenue - cogs)");
   });
 
@@ -86,12 +86,15 @@ describe("Retail Wave 3 reporting and reconciliation", () => {
   });
 
   it("keeps the retail POS responsive for phone, tablet and desktop layouts", () => {
+    // Retail POS uses the shared ERP-style workspace: one stacked column on
+    // phones/tablets, sale grid + item sidebar side by side on wide screens.
     const pos = read("client/src/pages/pos/RetailPOS.tsx");
+    const columns = read("client/src/pages/pos/pos-components/PosWorkspaceColumns.tsx");
     expect(pos).toContain("flex-col gap-3");
-    expect(pos).toContain("md:flex-row");
-    expect(pos).toContain("sm:grid-cols-2");
-    expect(pos).toContain("lg:grid-cols-3");
-    expect(pos).toContain("xl:grid-cols-[minmax(0,1.5fr)_minmax(360px,0.7fr)]");
+    expect(pos).toContain('<PosWorkspaceColumns layout="retail">');
+    expect(pos).toContain("md:p-5");
+    expect(pos).toContain("xl:hidden");
+    expect(columns).toContain("xl:grid-cols-[minmax(0,1.5fr)_minmax(360px,0.7fr)]");
   });
 
   it("keeps reporting available without replacing the standard ERP dashboard and accounting workspace", () => {

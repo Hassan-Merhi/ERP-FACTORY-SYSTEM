@@ -46,6 +46,7 @@ import { postSaleCogsTx } from "../accounting/perpetualInventory/saleCogs";
 import { baleMirrorMovementRefusal } from "../accounting/perpetualInventory/cutoverRefusal";
 import { MoneyDecimal } from "../../lib/money";
 import { spDeductionAmount, spPayableAfterDeduction } from "./spDeduction";
+import { PosZmwRateError, resolveLockedZmwPosCurrency, assertZmwImportPrices } from "./posZmwRatePolicy";
 
 function err(result: HandlerErrorResult): CreatePosSaleResult {
   return { status: result.status, body: result.body };
@@ -175,6 +176,30 @@ export async function createPosSale(
   const { location } = locationResult;
 
   const voucherDate = providedVoucherDate || voucherDateFallback;
+  // Lock the company's effective-dated rate before creating any accounting or
+  // inventory rows. The client must recalculate USD line prices when a
+  // backdated ZMW sale's approved rate differs from the current rate.
+  let lockedPosCurrency: { currency: string; exchangeRate: string | null };
+  try {
+    lockedPosCurrency = await resolveLockedZmwPosCurrency(currentCompanyId, voucherDate, currency, exchangeRate);
+  } catch (error) {
+    if (error instanceof PosZmwRateError) {
+      return err({ status: error.statusCode, body: { code: error.code, message: error.message } });
+    }
+    throw error;
+  }
+
+  // Verify original ZMW POS unit prices against the USD line prices at the
+  // exact company/date rate before inventory or voucher writes. This blocks
+  // stale client rates, silent currency substitution, and altered USD prices.
+  try {
+    assertZmwImportPrices(items, lockedPosCurrency);
+  } catch (error) {
+    if (error instanceof PosZmwRateError) {
+      return err({ status: error.statusCode, body: { code: error.code, message: error.message } });
+    }
+    throw error;
+  }
 
   const stockExistsError = await validateStockItemsExist(currentCompanyId, items);
   if (stockExistsError) return err(stockExistsError.error);
@@ -236,8 +261,8 @@ export async function createPosSale(
         isSpCompany,
         salesAccount,
         spCtx,
-        currency: currency || "USD",
-        exchangeRate: exchangeRate ? String(exchangeRate) : null,
+        currency: lockedPosCurrency.currency,
+        exchangeRate: lockedPosCurrency.exchangeRate,
       });
       const posted = await postErpVoucherTx(tx, {
         companyId: currentCompanyId,
@@ -249,8 +274,8 @@ export async function createPosSale(
             ? `Credit Invoice Sale at ${location.name} - ${customerAccount ? customerAccount.name : undefined}`
             : `POS Sale at ${location.name}`),
         locationId: parsedLocationId,
-        currency: currency || "USD",
-        exchangeRate: exchangeRate != null && exchangeRate !== "" ? String(exchangeRate) : null,
+        currency: lockedPosCurrency.currency,
+        exchangeRate: lockedPosCurrency.exchangeRate,
         lines: saleLines,
         source: { type: "pos-sale", id: clientSaleId || `legacy-${randomUUID()}` },
         actor: { userId, username, reason: "POS sale" },

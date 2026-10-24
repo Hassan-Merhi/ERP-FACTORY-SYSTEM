@@ -3,6 +3,7 @@ import { getErrorMessage } from "../lib/httpHandlers";
 import { pool } from "../db";
 import { requireAuth, requireNonPOS } from "../auth";
 import { normalizeOpeningBalanceCurrency } from "../services/accounting/openingBalanceCurrency";
+import { storage } from "../storage";
 
 const ALLOWED_ROLES = new Set(["Admin", "Owner", "Developer"]);
 
@@ -204,6 +205,19 @@ export function registerOpeningBalanceResolutionRoutes(app: Express) {
         }
 
         const baseCurrency = await getBaseCurrency(companyId);
+        if (String(req.body.currency || "").toUpperCase() === "ZMW") {
+          const company = await storage.getCompanyById(companyId);
+          if (
+            !company ||
+            String(company.baseCurrency).toUpperCase() !== "USD" ||
+            String(company.displayCurrency).toUpperCase() !== "ZMW"
+          ) {
+            return res.status(409).json({
+              code: "ZMW_OPENING_COMPANY_MISMATCH",
+              message: "Kwacha historical openings require the active company to use USD/ZMW.",
+            });
+          }
+        }
         const normalized = normalizeOpeningBalanceCurrency({
           openingBalance: req.body.nativeAmount,
           openingBalanceCurrency: req.body.currency,

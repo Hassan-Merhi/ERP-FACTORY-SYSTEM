@@ -68,5 +68,8 @@ function txCurrencyLabel(entry: ViewVoucherEntry): string | null {
   if (entry.transactionCurrency === "CFA") {
     return `CFA ${Math.round(amt).toLocaleString()}`;
   }
+  if (entry.transactionCurrency === "ZMW") {
+    return `K${amt.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  }
   return `${entry.transactionCurrency} ${amt.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }

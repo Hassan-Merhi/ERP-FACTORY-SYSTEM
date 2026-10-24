@@ -32,6 +32,7 @@ vi.mock("@tanstack/react-query", () => ({
     };
     return mutation;
   },
+  useQueryClient: () => ({ invalidateQueries: vi.fn() }),
 }));
 vi.mock("@/hooks/use-toast", () => ({ useToast: () => ({ toast: harness.toast }) }));
 vi.mock("@/contexts/AppModeContext", () => ({ useAppMode: () => "factory" }));

@@ -253,6 +253,35 @@ export function hasSupportedPostingTargetShape(entry: VoucherEntryInsertFields):
 }
 
 const FX_CONVERSION_NOISE_PER_LINE = new Decimal("0.000001");
+const ZMW_CASH_EXCHANGE_CENT_TOLERANCE = new Decimal("0.005");
+
+/**
+ * A real USD<->ZMW transfer has precisely one native ZMW leg and one USD leg,
+ * both belonging to the same journal. Converting the original Kwacha amount
+ * to 2dp USD can produce up to half a cent of translation noise. Only this
+ * dedicated, audited transfer source may use the wider allowance; the engine's
+ * existing ledger-cent rounding mechanism remains authoritative.
+ */
+function isVerifiedMixedZmwCashTransfer(request: CentralPostingRequest): boolean {
+  if (
+    request.source.sourceType !== "zambia-cash-currency-transfer" ||
+    String(request.voucher.currency || "USD").toUpperCase() !== "USD" ||
+    request.entries.length !== 2
+  )
+    return false;
+  const codes = request.entries.map((e) => String(e.transactionCurrency || "").toUpperCase()).sort();
+  if (codes[0] !== "USD" || codes[1] !== "ZMW") return false;
+  return request.entries.every(
+    (entry) =>
+      entry.transactionDebitAmount != null &&
+      entry.transactionCreditAmount != null &&
+      entry.baseDebitAmount != null &&
+      entry.baseCreditAmount != null &&
+      (entry.transactionCurrency === "USD"
+        ? entry.rateConvention === "IDENTITY"
+        : entry.rateConvention === "TRANSACTION_PER_BASE")
+  );
+}
 
 function isForeignCurrencyRequest(request: CentralPostingRequest): boolean {
   const voucherCurrency = String(request.voucher.currency ?? "USD")
@@ -340,9 +369,11 @@ export function validateCentralPostingRequest(request: CentralPostingRequest): V
   // differ in its 6 dp base by conversion noise (at most 0.000001 per line);
   // the engine's ROUNDING line absorbs it with the 2 dp rounding remainder.
   const baseDrift = debitTotal.minus(creditTotal).abs();
-  const conversionNoiseAllowed = isForeignCurrencyRequest(request)
-    ? FX_CONVERSION_NOISE_PER_LINE.times(entries.length)
-    : new Decimal(0);
+  const conversionNoiseAllowed = isVerifiedMixedZmwCashTransfer(request)
+    ? ZMW_CASH_EXCHANGE_CENT_TOLERANCE
+    : isForeignCurrencyRequest(request)
+      ? FX_CONVERSION_NOISE_PER_LINE.times(entries.length)
+      : new Decimal(0);
   if (foreignTransactionCurrencyUnbalanced(entries)) {
     throw new PostingValidationError("POSTING_UNBALANCED", "Voucher is not balanced in its transaction currency");
   }

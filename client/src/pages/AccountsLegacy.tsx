@@ -26,6 +26,7 @@ import { AccountDialogs } from "./accounts/AccountDialogs";
 import { AccountTable } from "./accounts/AccountTable";
 import { useAccountDisplayOrder } from "@/hooks/useAccountDisplayOrder";
 import { AccountStatementView } from "./accounts/AccountStatementView";
+import { ZambiaCashCurrencyTransfer } from "./accounts/ZambiaCashCurrencyTransfer";
 import type { Account, FxAgentAccountBalance } from "./accounts/accountTypes";
 import { useAccountsLegacyModel } from "./accountslegacy/useAccountsLegacyModel";
 import { AccountSearchResults } from "./accountslegacy/AccountSearchResults";
@@ -279,6 +280,7 @@ export default function Accounts() {
             <TabsContent value="view" className="space-y-4">
               {!selectedAccount ? (
                 <div className="space-y-4">
+                  <ZambiaCashCurrencyTransfer />
                   {/* Search — command-palette style */}
                   <div className="relative">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />

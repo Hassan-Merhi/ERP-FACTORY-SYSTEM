@@ -24,9 +24,7 @@ export interface NormalizedOpeningBalanceCurrency {
  * openingBalance columns should store openingBalanceBaseAmount so older reports
  * continue reading historical company-base values.
  */
-export function normalizeOpeningBalanceCurrency(
-  input: OpeningBalanceCurrencyInput,
-): NormalizedOpeningBalanceCurrency {
+export function normalizeOpeningBalanceCurrency(input: OpeningBalanceCurrencyInput): NormalizedOpeningBalanceCurrency {
   const baseCurrency = normalizeCurrencyCode(input.baseCurrency || "USD");
   const amount = new Decimal(input.openingBalance ?? 0);
 
@@ -54,16 +52,16 @@ export function normalizeOpeningBalanceCurrency(
   if (currency === baseCurrency) {
     historicalRate = new Decimal(1);
     computedBase = amount;
-  } else if (currency === "CFA" && baseCurrency === "USD") {
+  } else if ((currency === "CFA" || currency === "ZMW") && baseCurrency === "USD") {
     historicalRate = validateHistoricalRate(
       input.openingBalanceHistoricalRate,
-      "CFA opening-balance historical rate",
+      `${currency} opening-balance historical rate`
     );
     computedBase = amount.div(historicalRate);
   } else {
     throw new Error(
       `Opening-balance conversion for ${currency}/${baseCurrency} is not configured. ` +
-        "Provide a supported historical conversion before saving the account.",
+        "Provide a supported historical conversion before saving the account."
     );
   }
 
@@ -79,7 +77,7 @@ export function normalizeOpeningBalanceCurrency(
     if (!suppliedBase.eq(computedBase.toDecimalPlaces(6))) {
       throw new Error(
         `Opening-balance base amount does not match the native amount and historical rate. ` +
-          `Expected ${computedBase.toDecimalPlaces(6).toFixed(6)} ${baseCurrency}.`,
+          `Expected ${computedBase.toDecimalPlaces(6).toFixed(6)} ${baseCurrency}.`
       );
     }
   }

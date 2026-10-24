@@ -1,3 +1,4 @@
+import { assertApprovedZmwVoucherRate } from "../../services/accounting/zambiaVoucherRatePolicy";
 import { infrastructurePostingIdentity } from "../../services/accounting/infrastructureVoucherIdentity";
 import type { Express } from "express";
 import { getErrorMessage, errorStatus } from "../../lib/httpHandlers";
@@ -104,6 +105,20 @@ export function registerVoucherCreateRoutes(app: Express) {
       }
       const textField = (value: unknown) => (typeof value === "string" && value.trim() ? value : undefined);
       const exchangeRate = await getCurrentExchangeRate(companyId);
+      const headerCurrency =
+        typeof req.body.currency === "string" && /^[A-Z]{3}$/.test(req.body.currency) ? req.body.currency : "USD";
+      const approvedHeaderRate = await assertApprovedZmwVoucherRate(
+        companyId,
+        String(req.body.voucherDate),
+        headerCurrency,
+        req.body.exchangeRate
+      );
+      // A standalone voucher's total_amount is always historical USD,
+      // including when its user-facing header is entered in Kwacha.
+      const historicalBaseTotal =
+        headerCurrency === "ZMW"
+          ? new Decimal(totalAmount).div(new Decimal(approvedHeaderRate!)).toDecimalPlaces(6).toFixed(6)
+          : totalAmount;
       const voucher = await storage.createVoucher({
         companyId,
         voucherNumber: String(req.body.voucherNumber),
@@ -111,15 +126,19 @@ export function registerVoucherCreateRoutes(app: Express) {
         // receives (StockTransfer/Transfer from POS, Production, Mixed).
         voucherType: String(voucherType) as InsertVoucher["voucherType"],
         voucherDate: String(req.body.voucherDate),
-        totalAmount,
+        totalAmount: historicalBaseTotal,
         description: textField(req.body.description),
         optional: req.body.optional ?? false,
-        currency:
-          typeof req.body.currency === "string" && /^[A-Z]{3}$/.test(req.body.currency) ? req.body.currency : "USD",
+        currency: headerCurrency,
         locationId: Number.isInteger(req.body.locationId) ? req.body.locationId : undefined,
         locationName: textField(req.body.locationName),
         effectiveDate: textField(req.body.effectiveDate) ?? null,
-        exchangeRate: exchangeRate == null ? undefined : String(exchangeRate),
+        exchangeRate:
+          headerCurrency === "ZMW"
+            ? (approvedHeaderRate ?? undefined)
+            : exchangeRate == null
+              ? undefined
+              : String(exchangeRate),
         sourceModule: "ERP",
         postingSource: infrastructurePostingIdentity(
           "manual-voucher",
@@ -179,11 +198,18 @@ export function registerVoucherCreateRoutes(app: Express) {
       // Fall back to the current company rate (legacy USD-only path).
       const voucherCurrency: string = (voucher.currency as string | undefined) || "USD";
       const voucherHistoricalRate: string | null =
-        voucher.exchangeRate != null
-          ? String(voucher.exchangeRate)
-          : exchangeRate != null
-            ? String(exchangeRate)
-            : null;
+        voucherCurrency === "ZMW"
+          ? await assertApprovedZmwVoucherRate(
+              req.session.currentCompanyId!,
+              String(voucher.voucherDate),
+              voucherCurrency,
+              voucher.exchangeRate
+            )
+          : voucher.exchangeRate != null
+            ? String(voucher.exchangeRate)
+            : exchangeRate != null
+              ? String(exchangeRate)
+              : null;
 
       // Create voucher + all entries atomically inside a single transaction.
       // Any thrown error automatically rolls back both the voucher row and
@@ -232,7 +258,35 @@ export function registerVoucherCreateRoutes(app: Express) {
           // If the caller already provides transactionCurrency (new multi-currency frontend),
           // use those fields as-is. Otherwise derive from the voucher's currency/rate.
           let dualCurrencyFields: Record<string, unknown> = {};
-          if (!entry.transactionCurrency) {
+          if (voucherCurrency === "ZMW") {
+            // ZMW voucher lines are supplied in native Kwacha. Rebuild every
+            // historical USD/base field on the server; never trust caller
+            // supplied base fields, rate conventions, or a currency mismatch.
+            if (entry.transactionCurrency && String(entry.transactionCurrency).toUpperCase() !== "ZMW") {
+              throw new PostingValidationError(
+                "POSTING_CURRENCY_INVALID",
+                "A ZMW voucher cannot contain an unconverted non-ZMW line."
+              );
+            }
+            const norm = normalizeVoucherEntryAmounts({
+              transactionCurrency: "ZMW",
+              baseCurrency: "USD",
+              transactionDebitAmount: String(entry.transactionDebitAmount ?? entry.debitAmount ?? "0"),
+              transactionCreditAmount: String(entry.transactionCreditAmount ?? entry.creditAmount ?? "0"),
+              historicalRate: voucherHistoricalRate,
+            });
+            dualCurrencyFields = {
+              transactionCurrency: norm.transactionCurrency,
+              transactionDebitAmount: norm.transactionDebitAmount,
+              transactionCreditAmount: norm.transactionCreditAmount,
+              baseDebitAmount: norm.baseDebitAmount,
+              baseCreditAmount: norm.baseCreditAmount,
+              historicalExchangeRate: norm.historicalExchangeRate,
+              rateConvention: norm.rateConvention,
+              debitAmount: norm.debitAmount,
+              creditAmount: norm.creditAmount,
+            };
+          } else if (!entry.transactionCurrency) {
             try {
               const debitAmt = String(entry.debitAmount || "0");
               const creditAmt = String(entry.creditAmount || "0");

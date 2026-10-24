@@ -71,7 +71,7 @@
     },
     "/api/accounts/multi-currency/cash-bank-revaluation": {
       "status": 200,
-      "shape": "{accounts:[{accountKind:scalar,accountType:scalar,code:scalar,currentCfaPerUsd:scalar,currentRateMissing:scalar,currentTranslatedBaseBalance:scalar,historicalBaseBalance:scalar,id:scalar,linkedLedgerId:scalar,name:scalar,nativeBalancesByCurrency:{…},openingBalanceCurrencyUnresolved:scalar,totalsProvisional:scalar,translationDifference:scalar,unresolvedLegacyEntryCount:scalar,unresolvedLegacyNetRaw:scalar,unresolvedOpeningBalanceRaw:scalar,unresolvedTranslationCurrencies:[]}],currentCfaPerUsd:scalar,unresolvedAccountCount:scalar}"
+      "shape": "{accounts:[{accountKind:scalar,accountType:scalar,code:scalar,currentCfaPerUsd:scalar,currentRateMissing:scalar,currentTranslatedBaseBalance:scalar,currentZmwPerUsd:scalar,historicalBaseBalance:scalar,id:scalar,linkedLedgerId:scalar,name:scalar,nativeBalancesByCurrency:{…},openingBalanceCurrencyUnresolved:scalar,totalsProvisional:scalar,translationDifference:scalar,unresolvedLegacyEntryCount:scalar,unresolvedLegacyNetRaw:scalar,unresolvedOpeningBalanceRaw:scalar,unresolvedTranslationCurrencies:[]}],currentCfaPerUsd:scalar,currentZmwPerUsd:scalar,unresolvedAccountCount:scalar}"
     },
     "/api/accounts/multi-currency/readiness": {
       "status": 200,
@@ -187,7 +187,7 @@
     },
     "/api/bank-accounts/revaluation": {
       "status": 200,
-      "shape": "{accounts:[{accountKind:scalar,accountType:scalar,code:scalar,currentCfaPerUsd:scalar,currentRateMissing:scalar,currentTranslatedBaseBalance:scalar,historicalBaseBalance:scalar,id:scalar,linkedLedgerId:scalar,name:scalar,nativeBalancesByCurrency:{…},openingBalanceCurrencyUnresolved:scalar,totalsProvisional:scalar,translationDifference:scalar,unresolvedLegacyEntryCount:scalar,unresolvedLegacyNetRaw:scalar,unresolvedOpeningBalanceRaw:scalar,unresolvedTranslationCurrencies:[]}],currentCfaPerUsd:scalar,unresolvedAccountCount:scalar}"
+      "shape": "{accounts:[{accountKind:scalar,accountType:scalar,code:scalar,currentCfaPerUsd:scalar,currentRateMissing:scalar,currentTranslatedBaseBalance:scalar,currentZmwPerUsd:scalar,historicalBaseBalance:scalar,id:scalar,linkedLedgerId:scalar,name:scalar,nativeBalancesByCurrency:{…},openingBalanceCurrencyUnresolved:scalar,totalsProvisional:scalar,translationDifference:scalar,unresolvedLegacyEntryCount:scalar,unresolvedLegacyNetRaw:scalar,unresolvedOpeningBalanceRaw:scalar,unresolvedTranslationCurrencies:[]}],currentCfaPerUsd:scalar,currentZmwPerUsd:scalar,unresolvedAccountCount:scalar}"
     },
     "/api/business-alerts": {
       "status": 200,
@@ -363,7 +363,7 @@
     },
     "/api/exchange-rates/check-today": {
       "status": 200,
-      "shape": "{hasRate:scalar}"
+      "shape": "{hasRate:scalar,latestRate:scalar,today:scalar}"
     },
     "/api/exchange-rates/latest": {
       "status": 400,
@@ -1819,7 +1819,7 @@
     },
     "/api/stats/net-profit": {
       "status": 200,
-      "shape": "{currency:{currentCashBankTranslationApplied:scalar,historicalBaseCreditTotal:scalar,historicalBaseDebitTotal:scalar,historicalValuesLocked:scalar,nativeCreditByCurrency:{},nativeDebitByCurrency:{},provisionalReason:scalar,rateConvention:scalar,totalsProvisional:scalar,unresolvedLegacyEntryCount:scalar,unresolvedLegacyRawNet:scalar},currencyRevaluation:{appliedToCurrentSnapshotOnly:scalar,currentCashBankTranslationDifference:scalar,currentCfaPerUsd:scalar,currentTranslatedBankAccountIds:[],currentTranslatedLedgerAccountIds:[scalar],reportTotalsProvisional:scalar,unresolvedAccountCount:scalar,unresolvedAccounts:[]},equity:{accounts:[],includedInNetPosition:scalar,total:scalar},expenses:{accounts:[],breakdown:[],total:scalar},expensesTotal:scalar,forUs:{accounts:[{…}],breakdown:[{…}],total:scalar},forUsTotal:scalar,income:{accounts:[],breakdown:[],total:scalar},incomeTotal:scalar,netPosition:scalar,netPositionBreakdown:{assets:{breakdown:[…],total:scalar},equity:{accounts:[],includedInNetPosition:scalar,total:scalar},expenses:{breakdown:[],total:scalar},income:{breakdown:[],total:scalar},liabilities:{breakdown:[],total:scalar},netPosition:scalar},netPositionLabel:scalar,netProfit:scalar,netWorth:scalar,notInLedger:{label:scalar,lines:[],total:scalar},onUs:{accounts:[],breakdown:[],total:scalar},onUsTotal:scalar,ownersCapital:scalar,spPosProfit:scalar,totalExpenses:scalar,totalIncome:scalar}"
+      "shape": "{currency:{currentCashBankTranslationApplied:scalar,historicalBaseCreditTotal:scalar,historicalBaseDebitTotal:scalar,historicalValuesLocked:scalar,nativeCreditByCurrency:{},nativeDebitByCurrency:{},provisionalReason:scalar,rateConvention:scalar,totalsProvisional:scalar,unresolvedLegacyEntryCount:scalar,unresolvedLegacyRawNet:scalar},currencyRevaluation:{appliedToCurrentSnapshotOnly:scalar,currentCashBankTranslationDifference:scalar,currentCfaPerUsd:scalar,currentTranslatedBankAccountIds:[],currentTranslatedLedgerAccountIds:[scalar],currentZmwPerUsd:scalar,reportTotalsProvisional:scalar,unresolvedAccountCount:scalar,unresolvedAccounts:[]},equity:{accounts:[],includedInNetPosition:scalar,total:scalar},expenses:{accounts:[],breakdown:[],total:scalar},expensesTotal:scalar,forUs:{accounts:[{…}],breakdown:[{…}],total:scalar},forUsTotal:scalar,income:{accounts:[],breakdown:[],total:scalar},incomeTotal:scalar,netPosition:scalar,netPositionBreakdown:{assets:{breakdown:[…],total:scalar},equity:{accounts:[],includedInNetPosition:scalar,total:scalar},expenses:{breakdown:[],total:scalar},income:{breakdown:[],total:scalar},liabilities:{breakdown:[],total:scalar},netPosition:scalar},netPositionLabel:scalar,netProfit:scalar,netWorth:scalar,notInLedger:{label:scalar,lines:[],total:scalar},onUs:{accounts:[],breakdown:[],total:scalar},onUsTotal:scalar,ownersCapital:scalar,spPosProfit:scalar,totalExpenses:scalar,totalIncome:scalar}"
     },
     "/api/stats/stock-summary": {
       "status": 200,

@@ -1,9 +1,8 @@
 import { punctuationInsensitiveSearch } from "../../lib/searchNormalization";
 import type { Express } from "express";
-import { and, desc, eq, isNull, or, sql } from "drizzle-orm";
+import { and, desc, eq, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import {
-  customers,
   locations,
   retailBrands,
   retailPosSales,
@@ -17,6 +16,8 @@ import {
 import { requireAuth } from "../../auth";
 import { db } from "../../db";
 import { getErrorMessage } from "../../lib/httpHandlers";
+import { retailLocationRefusal } from "./retailLocationAccess";
+import { resolveRetailSaleCustomer, retailReturnRefusal } from "./retailCheckoutPolicy";
 import { currentUserId, ensureCompanyLocation, requireRetailCompany } from "./retailPosContext";
 import {
   addMovement,
@@ -63,9 +64,10 @@ const idempotencyKeySchema = z.string().trim().min(8).max(191);
 const positiveQuantitySchema = z.coerce.number().finite().positive();
 
 const paymentSchema = z.object({
-  method: z.enum(["cash", "card", "bank", "mobile", "other"]),
+  method: z.enum(["cash", "card", "bank", "mobile", "other", "credit"]),
   amount: z.coerce.number().finite().positive(),
-  tenderedAmount: z.coerce.number().finite().positive().optional(),
+  // Non-cash and customer-credit tenders do not have a cash-tendered amount.
+  tenderedAmount: z.coerce.number().finite().positive().nullable().optional(),
   reference: z.string().trim().max(191).optional(),
 });
 
@@ -114,11 +116,13 @@ const returnSchema = z.object({
   idempotencyKey: idempotencyKeySchema,
   shiftId: z.coerce.number().int().positive().optional(),
   notes: z.string().trim().max(2000).optional(),
+  refundDestination: z.enum(["original", "customer_credit"]).default("original"),
   items: z
     .array(
       z.object({
         saleItemId: z.coerce.number().int().positive(),
         quantity: positiveQuantitySchema,
+        restock: z.boolean().default(true),
       })
     )
     .min(1)
@@ -531,21 +535,9 @@ export function registerRetailPosRoutes(app: Express): void {
         };
       }
 
-      // The customer is optional: walk-in stays the default and costs no extra query.
-      let customer: RetailSaleInput["customer"] = null;
-      if (body.customerId) {
-        const [row] = await db
-          .select({ id: customers.id, legalName: customers.legalName })
-          .from(customers)
-          .where(
-            and(eq(customers.id, body.customerId), eq(customers.companyId, companyId), isNull(customers.deletedAt))
-          )
-          .limit(1);
-        if (!row) return res.status(404).json({ message: "Customer not found" });
-        customer = { id: row.id, name: row.legalName };
-      } else if (body.customerName?.trim()) {
-        customer = { id: null, name: body.customerName.trim() };
-      }
+      const resolved = await resolveRetailSaleCustomer(companyId, body);
+      if ("status" in resolved) return res.status(resolved.status).json(resolved.body);
+      const { customer } = resolved;
 
       const result = await db.transaction((tx) =>
         createRetailSaleInTx(tx, {
@@ -612,6 +604,8 @@ export function registerRetailPosRoutes(app: Express): void {
       const body = returnSchema.parse(req.body);
       await ensureCompanyLocation(companyId, body.locationId);
       const userId = currentUserId(req);
+      const refusal = await retailReturnRefusal({ companyId, saleId, role: req.user?.role, ...body });
+      if (refusal) return res.status(refusal.status).json(refusal.body);
 
       const result = await db.transaction(async (tx) => {
         const returned = await createRetailReturnInTx(tx, {
@@ -637,6 +631,7 @@ export function registerRetailPosRoutes(app: Express): void {
             shiftId: shift?.id ?? null,
             refundAmount: returned.refundAmount,
             idempotencyKey: body.idempotencyKey,
+            destination: body.refundDestination,
             userId,
           });
           const refundVoucherId = await postRetailRefundAccountingTx(tx, {
@@ -687,6 +682,10 @@ export function registerRetailPosRoutes(app: Express): void {
       if (req.user?.role === "POS") return res.status(403).json({ message: "POS users cannot transfer retail stock" });
       if (body.fromLocationId === body.toLocationId)
         return res.status(400).json({ message: "Transfer locations must be different" });
+      // An immediate transfer both ships and receives, so both stores must be the user's.
+      const locationRefusal = await retailLocationRefusal(req, companyId, [body.fromLocationId, body.toLocationId]);
+      if (locationRefusal)
+        return res.status(403).json({ code: "RETAIL_LOCATION_NOT_ASSIGNED", message: locationRefusal });
       await Promise.all([
         ensureCompanyLocation(companyId, body.fromLocationId),
         ensureCompanyLocation(companyId, body.toLocationId),

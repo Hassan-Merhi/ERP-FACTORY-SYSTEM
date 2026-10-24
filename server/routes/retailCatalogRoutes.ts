@@ -9,6 +9,7 @@ import { getErrorMessage } from "../lib/httpHandlers";
 interface CatalogQuery {
   search: string;
   brandId?: number;
+  noBrand: boolean;
   color: string;
   size: string;
   category: string;
@@ -72,6 +73,7 @@ function parseCatalogQuery(req: Request): CatalogQuery {
   return {
     search: normalize(req.query.search),
     brandId: positiveInteger(req.query.brandId),
+    noBrand: req.query.brandId === "none",
     color: normalize(req.query.color),
     size: normalize(req.query.size),
     category: normalize(req.query.category),
@@ -152,74 +154,56 @@ function buildCatalogWhere(companyId: number, query: CatalogQuery) {
       )
     )`);
   }
-  if (query.brandId) where.push(`p.brand_id = ${add(query.brandId)}`);
-  if (query.category) where.push(`LOWER(COALESCE(p.category, '')) = ${add(query.category)}`);
-  if (query.color) {
-    where.push(`EXISTS (
-      SELECT 1
-      FROM retail_product_variants color_variant
-      WHERE color_variant.company_id = p.company_id
-        AND color_variant.product_id = p.id
-        AND color_variant.active = true
-        AND LOWER(color_variant.color) = ${add(query.color)}
-    )`);
+  if (query.noBrand) where.push("p.brand_id IS NULL");
+  else if (query.brandId) where.push(`p.brand_id = ${add(query.brandId)}`);
+  if (query.category === "__uncategorized__") {
+    where.push("NULLIF(BTRIM(p.category), '') IS NULL");
+  } else if (query.category) {
+    where.push(`LOWER(BTRIM(p.category)) = ${add(query.category)}`);
   }
-  if (query.size) {
+  // Location, color, size and stock filters must refer to the SAME exact
+  // variant. Independent EXISTS checks could show a size held in another
+  // location and leave the selected location's item card empty.
+  if (query.color || query.size || query.locationId || query.stockStatus !== "all") {
+    const variantClauses: string[] = [
+      "match_variant.company_id = p.company_id",
+      "match_variant.product_id = p.id",
+      "match_variant.active = true",
+    ];
+    if (query.color) variantClauses.push(`LOWER(match_variant.color) = ${add(query.color)}`);
+    if (query.size) variantClauses.push(`LOWER(match_variant.size) = ${add(query.size)}`);
+    if (query.locationId) {
+      variantClauses.push(`EXISTS (
+        SELECT 1 FROM retail_variant_inventory assigned_inventory
+        WHERE assigned_inventory.company_id = match_variant.company_id
+          AND assigned_inventory.variant_id = match_variant.id
+          AND assigned_inventory.location_id = ${add(query.locationId)}
+      )`);
+    }
+    if (query.stockStatus === "low") {
+      const locationClause = query.locationId ? `AND low_inventory.location_id = ${add(query.locationId)}` : "";
+      variantClauses.push(`EXISTS (
+        SELECT 1 FROM retail_variant_inventory low_inventory
+        WHERE low_inventory.company_id = match_variant.company_id
+          AND low_inventory.variant_id = match_variant.id
+          ${locationClause}
+          AND low_inventory.quantity > 0
+          AND low_inventory.quantity <= match_variant.low_stock_threshold
+      )`);
+    } else if (query.stockStatus === "in" || query.stockStatus === "out") {
+      const locationClause = query.locationId ? `AND stock_inventory.location_id = ${add(query.locationId)}` : "";
+      const comparator = query.stockStatus === "in" ? "> 0" : "<= 0";
+      variantClauses.push(`COALESCE((
+        SELECT SUM(stock_inventory.quantity)
+        FROM retail_variant_inventory stock_inventory
+        WHERE stock_inventory.company_id = match_variant.company_id
+          AND stock_inventory.variant_id = match_variant.id
+          ${locationClause}
+      ), 0) ${comparator}`);
+    }
     where.push(`EXISTS (
-      SELECT 1
-      FROM retail_product_variants size_variant
-      WHERE size_variant.company_id = p.company_id
-        AND size_variant.product_id = p.id
-        AND size_variant.active = true
-        AND LOWER(size_variant.size) = ${add(query.size)}
-    )`);
-  }
-  if (query.locationId) {
-    where.push(`EXISTS (
-      SELECT 1
-      FROM retail_product_variants location_variant
-      JOIN retail_variant_inventory location_inventory
-        ON location_inventory.company_id = location_variant.company_id
-       AND location_inventory.variant_id = location_variant.id
-      WHERE location_variant.company_id = p.company_id
-        AND location_variant.product_id = p.id
-        AND location_variant.active = true
-        AND location_inventory.location_id = ${add(query.locationId)}
-    )`);
-  }
-
-  if (query.stockStatus === "low") {
-    where.push(`EXISTS (
-      SELECT 1
-      FROM retail_product_variants low_variant
-      JOIN retail_variant_inventory low_inventory
-        ON low_inventory.company_id = low_variant.company_id
-       AND low_inventory.variant_id = low_variant.id
-      WHERE low_variant.company_id = p.company_id
-        AND low_variant.product_id = p.id
-        AND low_variant.active = true
-        ${query.locationId ? `AND low_inventory.location_id = ${add(query.locationId)}` : ""}
-        AND low_inventory.quantity > 0
-        AND low_inventory.quantity <= low_variant.low_stock_threshold
-    )`);
-  } else if (query.stockStatus === "in" || query.stockStatus === "out") {
-    // Fashion stock is judged per exact color/size: a style is "out" when any of its
-    // active variants is sold out (optionally at the chosen location), "in" when any has stock.
-    const locationClause = query.locationId ? `AND stock_inventory.location_id = ${add(query.locationId)}` : "";
-    const comparator = query.stockStatus === "in" ? "> 0" : "<= 0";
-    where.push(`EXISTS (
-      SELECT 1
-      FROM retail_product_variants stock_variant
-      WHERE stock_variant.company_id = p.company_id
-        AND stock_variant.product_id = p.id
-        AND stock_variant.active = true
-        AND COALESCE((
-          SELECT SUM(stock_inventory.quantity)
-          FROM retail_variant_inventory stock_inventory
-          WHERE stock_inventory.company_id = stock_variant.company_id
-            AND stock_inventory.variant_id = stock_variant.id
-            ${locationClause}
-        ), 0) ${comparator}
+      SELECT 1 FROM retail_product_variants match_variant
+      WHERE ${variantClauses.join(" AND ")}
     )`);
   }
 
@@ -377,6 +361,64 @@ export function registerRetailCatalogRoutes(app: Express): void {
       return;
     } catch (error: unknown) {
       return res.status(500).json({ message: getErrorMessage(error) });
+    }
+  });
+
+  // Location → category → brand browsing. Group the complete filtered catalog on the
+  // server, not a paginated slice, so brands and categories never disappear on page 2.
+  app.get("/api/retail/catalog-navigation", requireAuth, requireNonPOS, async (req, res) => {
+    try {
+      const companyId = await requireRetailCompany(req, res);
+      if (!companyId) return;
+      const query = parseCatalogQuery(req);
+      // Category and brand are drill-down selections; navigation must enumerate all
+      // matches at the selected location under the other active search/stock filters.
+      const where = buildCatalogWhere(companyId, { ...query, category: "", brandId: undefined, noBrand: false });
+      const result = await pool.query<{
+        category_key: string;
+        category_name: string;
+        brand_id: number | null;
+        brand_name: string;
+        product_count: string;
+      }>(
+        `SELECT
+           COALESCE(LOWER(NULLIF(BTRIM(p.category), '')), '__uncategorized__') AS category_key,
+           COALESCE(MIN(NULLIF(BTRIM(p.category), '')), 'Uncategorized') AS category_name,
+           p.brand_id AS brand_id,
+           COALESCE(b.name, 'Other / No Brand') AS brand_name,
+           COUNT(*)::text AS product_count
+         FROM retail_products p
+         LEFT JOIN retail_brands b ON b.id = p.brand_id AND b.company_id = p.company_id
+         WHERE ${where.text}
+         GROUP BY COALESCE(LOWER(NULLIF(BTRIM(p.category), '')), '__uncategorized__'),
+                  p.brand_id, b.name
+         ORDER BY category_name, brand_name`,
+        where.params
+      );
+      const categories = new Map<string, {
+        key: string;
+        name: string;
+        productCount: number;
+        brands: Array<{ key: string; id: number | null; name: string; productCount: number }>;
+      }>();
+      for (const row of result.rows) {
+        let category = categories.get(row.category_key);
+        if (!category) {
+          category = { key: row.category_key, name: row.category_name, productCount: 0, brands: [] };
+          categories.set(row.category_key, category);
+        }
+        const count = Number(row.product_count);
+        category.productCount += count;
+        category.brands.push({
+          key: row.brand_id === null ? "none" : String(row.brand_id),
+          id: row.brand_id,
+          name: row.brand_name,
+          productCount: count,
+        });
+      }
+      res.json({ categories: [...categories.values()] });
+    } catch (error) {
+      res.status(500).json({ message: getErrorMessage(error) });
     }
   });
 

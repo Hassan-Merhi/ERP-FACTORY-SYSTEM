@@ -24,6 +24,7 @@ import { describe, expect, it } from "vitest";
 import { startupMigrations } from "../server/startup-schema";
 import { supplierTrackingShopDutyDefaultsSchema } from "../server/startup-schema/034-supplier-tracking-shop-duty-defaults";
 import { posPortDepartureDateSchema } from "../server/startup-schema/035-pos-port-departure-date";
+import { zambiaHistoricalPurchaseCostSchema } from "../server/startup-schema/036-zambia-historical-purchase-cost";
 
 /** Statement count of the reviewed composed array. */
 /**
@@ -177,7 +178,13 @@ import { posPortDepartureDateSchema } from "../server/startup-schema/035-pos-por
  * statements without re-pinning: 033 sits before 034, so the pre-034 hash
  * moved and the count goes from 1426 to 1429. No existing statement changed.
  */
-const EXPECTED_STATEMENT_COUNT = 1429;
+/*
+ * Re-pinned when stage 036 appended the Zambia native-Kwacha purchase columns
+ * (ten on purchase_orders, two on po_line_items) and the NOT VALID check
+ * constraint behind the existing 034/035 stages, taking the count from 1429 to
+ * 1442. The pre-034 baseline hash is unchanged; nothing moved.
+ */
+const EXPECTED_STATEMENT_COUNT = 1442;
 const EXPECTED_CONTENT_HASH = "29546605193be3d475c6e26253b6667ad850dbc706bb4815be71b1e383a0bf2d";
 /**
  * sha256 of JSON.stringify(startupMigrations) for the reviewed composed array.
@@ -295,7 +302,14 @@ describe("startup schema integrity", () => {
   it("preserves statement content and order exactly", () => {
     expect(
       contentHash(
-        startupMigrations.slice(0, -(supplierTrackingShopDutyDefaultsSchema.length + posPortDepartureDateSchema.length))
+        startupMigrations.slice(
+          0,
+          -(
+            supplierTrackingShopDutyDefaultsSchema.length +
+            posPortDepartureDateSchema.length +
+            zambiaHistoricalPurchaseCostSchema.length
+          )
+        )
       ),
       "The pre-stage-034 startup migrations changed unexpectedly. " +
         "The 034 supplier tracking changes must remain appended after the existing baseline."
@@ -304,7 +318,13 @@ describe("startup schema integrity", () => {
 
   it("appends the supplier shop and duty migration last without changing the pinned baseline", () => {
     expect(supplierTrackingShopDutyDefaultsSchema).toHaveLength(3);
-    expect(startupMigrations.slice(-4, -1)).toEqual(supplierTrackingShopDutyDefaultsSchema);
+    const tail =
+      supplierTrackingShopDutyDefaultsSchema.length +
+      posPortDepartureDateSchema.length +
+      zambiaHistoricalPurchaseCostSchema.length;
+    expect(startupMigrations.slice(-tail, -tail + supplierTrackingShopDutyDefaultsSchema.length)).toEqual(
+      supplierTrackingShopDutyDefaultsSchema
+    );
     expect(supplierTrackingShopDutyDefaultsSchema[0]).toContain("ADD COLUMN IF NOT EXISTS shop_name");
     expect(supplierTrackingShopDutyDefaultsSchema[1]).toContain("ADD COLUMN IF NOT EXISTS duty_fee");
     expect(supplierTrackingShopDutyDefaultsSchema[2]).toContain(
@@ -317,7 +337,33 @@ describe("startup schema integrity", () => {
     expect(posPortDepartureDateSchema).toEqual([
       "ALTER TABLE containers ADD COLUMN IF NOT EXISTS port_departure_date date",
     ]);
-    expect(startupMigrations.slice(-1)).toEqual(posPortDepartureDateSchema);
+    expect(
+      startupMigrations.slice(
+        -1 - zambiaHistoricalPurchaseCostSchema.length,
+        -zambiaHistoricalPurchaseCostSchema.length
+      )
+    ).toEqual(posPortDepartureDateSchema);
+  });
+
+  it("appends the Zambia native-Kwacha purchase columns last, additive and idempotent", () => {
+    expect(zambiaHistoricalPurchaseCostSchema).toHaveLength(13);
+    expect(startupMigrations.slice(-zambiaHistoricalPurchaseCostSchema.length)).toEqual(
+      zambiaHistoricalPurchaseCostSchema
+    );
+    // Every column statement is an idempotent ADD COLUMN IF NOT EXISTS on one
+    // of the two purchase tables, so a re-run against production is a no-op.
+    const idempotentColumnStatement = /^ALTER TABLE (purchase_orders|po_line_items) ADD COLUMN IF NOT EXISTS /;
+    expect(
+      zambiaHistoricalPurchaseCostSchema.slice(0, 12).filter((statement) => idempotentColumnStatement.test(statement))
+    ).toHaveLength(12);
+    // The check constraint is added once (guarded by a pg_constraint lookup)
+    // and NOT VALID, so no historical row is re-validated or rewritten.
+    const constraintStatement = zambiaHistoricalPurchaseCostSchema[12];
+    expect(
+      ["purchase_orders_zmw_historical_rate_ck", "NOT VALID", "IF NOT EXISTS (SELECT 1 FROM pg_constraint"].filter(
+        (fragment) => constraintStatement.includes(fragment)
+      )
+    ).toHaveLength(3);
   });
 
   it("contains only non-empty SQL strings", () => {

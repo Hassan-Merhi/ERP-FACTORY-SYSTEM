@@ -205,6 +205,7 @@ export function registerStatsMultiCurrencyRoutes(app: Express) {
         if (adjusted?.currency) adjusted.currency.currentCashBankTranslationApplied = true;
         adjusted.currencyRevaluation = {
           currentCfaPerUsd: revaluation.currentCfaPerUsd,
+          currentZmwPerUsd: revaluation.currentZmwPerUsd,
           unresolvedAccountCount: revaluation.unresolvedAccountCount,
           unresolvedAccounts: revaluation.accounts
             .filter((row) => row.totalsProvisional)

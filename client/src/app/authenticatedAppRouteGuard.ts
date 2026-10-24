@@ -56,7 +56,10 @@ export function resolveAuthenticatedAppRoute({
   let decision: AuthenticatedAppRouteDecision = { kind: "continue" };
 
   // All Daybook is intentionally unavailable to ERP Tester, including direct links.
-  if (userRole === "ERP Tester" && (currentLocation === "/transaction-journal" || currentLocation.startsWith("/transaction-journal/"))) {
+  if (
+    userRole === "ERP Tester" &&
+    (currentLocation === "/transaction-journal" || currentLocation.startsWith("/transaction-journal/"))
+  ) {
     decision = { kind: "redirect", to: "/daybook" };
   } else if (
     userRole === "ERP Tester" &&
@@ -91,9 +94,19 @@ export function resolveAuthenticatedAppRoute({
     decision = { kind: "redirect", to: "/sp" };
   } else if (isRetailRoute && !isRetailCompany) {
     decision = { kind: "redirect", to: "/tracking" };
+  } else if (isRetailCompany && currentLocation === "/retail/selling") {
+    // Retired workspace: old bookmarks should return to inventory, not expose selling controls.
+    decision = { kind: "redirect", to: "/retail/inventory" };
   } else if (isRetailCompany && (currentLocation === "/" || currentLocation === "/retail/dashboard")) {
     // Retail is still a normal ERP company. Its landing page is the standard ERP dashboard.
     decision = { kind: "redirect", to: "/financial-overview" };
+  } else if (
+    isRetailCompany &&
+    (currentLocation === "/stock-transfer-order" || currentLocation.startsWith("/stock-transfer-order/"))
+  ) {
+    // Retail stock transfers live in the exact-variant stock-operations workflow.
+    // Do not open the legacy manual Transfer Order editor by a direct URL.
+    decision = { kind: "redirect", to: "/retail/stock" };
   } else if (isRetailCompany && currentLocation === "/pos") {
     // Retail uses the variant-aware POS rather than the legacy stock-item POS.
     decision = { kind: "redirect", to: "/retail/pos" };

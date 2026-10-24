@@ -130,6 +130,8 @@ These describe work in progress and carry live figures bound to their sources.
 | [Retail Wave 2 spec](superpowers/specs/2026-10-05-retail-wave2-customers-pricing-tax-stock-count-design.md) | Current Retail customers, discounts, tax foundation and physical stock-count contract |
 | [Retail Wave 2 plan](superpowers/plans/2026-10-05-retail-wave2-customers-pricing-tax-stock-count.md) | Implementation and verification plan for the current Retail Wave 2 rollout |
 | [retail-fashion-inventory.md](retail-fashion-inventory.md) | Retail fashion intake, generated barcodes and labels, scan-to-sell, barcode stock movements and reports |
+| [retail-pos-inventory-workflow.md](retail-pos-inventory-workflow.md) | Retail ERP-style POS, customer credit, credit-first returns/exchanges, voucher restrictions and two-stage transfers |
+| [retail-pos-inventory-claude-handoff.md](retail-pos-inventory-claude-handoff.md) | Retail POS + Inventory verification record: checks run, accounting reconciliation and open items |
 | [performance-phase9.md](performance-phase9.md) | Build, bundle, and runtime performance constraints |
 | [performance-wave5-production-certification.md](performance-wave5-production-certification.md) | Production performance certification and remaining measurement gates |
 | [remote-support-phase-17-transport-resilience.md](remote-support-phase-17-transport-resilience.md) | Remote-support Phase 17: binary transport with a conditional HTTP polling fallback |
@@ -154,6 +156,16 @@ These describe work in progress and carry live figures bound to their sources.
 | [examples.md](examples.md) | Worked examples |
 | [faq.md](faq.md) | Frequently asked questions |
 | [factory-fx-agent-wallets.md](factory-fx-agent-wallets.md) | In-progress USD/EUR FX agent wallet design and review requirements |
+| [zambia-zmw/phase-1-foundation.md](zambia-zmw/phase-1-foundation.md) | Zambia ZMW: Phase 1 baseline, rate-direction and data-preservation contract |
+| [zambia-zmw/phase-2-currency-engine.md](zambia-zmw/phase-2-currency-engine.md) | Zambia ZMW: Phase 2 shared currency catalog, decimal conversion and rate-direction helpers |
+| [zambia-zmw/phase-3-company-rates.md](zambia-zmw/phase-3-company-rates.md) | Zambia ZMW: Phase 3 company settings, effective-dated USD/ZMW rates and permissions |
+| [zambia-zmw/phase-4-company-currency-ui.md](zambia-zmw/phase-4-company-currency-ui.md) | Zambia ZMW: Phase 4 company-aware currency context, selectors and scoped preferences |
+| [zambia-zmw/phase-5-pos-and-invoices.md](zambia-zmw/phase-5-pos-and-invoices.md) | Zambia ZMW: Phase 5 POS pricing, Excel imports, credit notes and historical invoice PDFs |
+| [zambia-zmw/phase-5-pos-sales-and-returns.md](zambia-zmw/phase-5-pos-sales-and-returns.md) | Zambia ZMW: Phase 5 POS sales, returns and receipt rate locking |
+| [zambia-zmw/phase-6-vouchers-and-parties.md](zambia-zmw/phase-6-vouchers-and-parties.md) | Zambia ZMW: Phase 6 journals, payments, receipts and locked historical voucher edits |
+| [zambia-zmw/phase-7-cash-bank-transfers.md](zambia-zmw/phase-7-cash-bank-transfers.md) | Zambia ZMW: Phase 7 Kwacha cash/bank accounts, current translation and USD/ZMW conversions |
+| [zambia-zmw/phase-8-inventory-purchasing-intercompany.md](zambia-zmw/phase-8-inventory-purchasing-intercompany.md) | Zambia ZMW: Phase 8 native Kwacha purchasing, inventory valuation and intercompany postings |
+| [zambia-zmw/verification-2026-10-23.md](zambia-zmw/verification-2026-10-23.md) | Zambia ZMW: independent verification of Phases 1–8, fixes applied, accounting evidence and release steps |
 | [cost-centers-phase1.md](cost-centers-phase1.md) | Cost centers: database foundation (tables, company isolation, RLS) |
 | [cost-centers-phase2.md](cost-centers-phase2.md) | Cost centers: backend APIs and allocation integrity guards |
 | [cost-centers-phase3.md](cost-centers-phase3.md) | Cost centers: ERP interface, voucher allocation and Daybook filters |

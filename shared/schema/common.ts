@@ -14,6 +14,7 @@ import {
 } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
+import { companyRateValueSchema, companyRateDateSchema } from "../companyRatePolicy";
 
 export const companies = pgTable("companies", {
   id: serial("id").primaryKey(),
@@ -76,8 +77,8 @@ export const insertExchangeRateSchema = createInsertSchema(exchangeRates)
     companyId: z.number().min(1, "Company is required"),
     fromCurrency: z.string().min(1, "From currency is required"),
     toCurrency: z.string().min(1, "To currency is required"),
-    rate: z.string().min(1, "Rate is required"),
-    effectiveDate: z.string().min(1, "Effective date is required"),
+    rate: companyRateValueSchema,
+    effectiveDate: companyRateDateSchema,
   });
 
 export type InsertExchangeRate = z.infer<typeof insertExchangeRateSchema>;

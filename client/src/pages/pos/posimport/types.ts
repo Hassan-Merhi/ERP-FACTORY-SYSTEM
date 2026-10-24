@@ -48,6 +48,7 @@ export interface PosImportValidationResult {
 export interface ImportedSale {
   voucher?: {
     exchangeRate?: string;
+    currency?: string | null;
     description?: string;
   } | null;
   items: PosImportItem[];

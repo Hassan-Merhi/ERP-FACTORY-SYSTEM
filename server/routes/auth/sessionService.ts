@@ -17,9 +17,18 @@ export const sessionService = {
     userId: string | undefined;
     role: string | undefined;
     currentSid: string;
+    companyId: number | undefined;
   }) {
     const includeAllUsers = ADMIN_SESSION_ROLES.has(params.role || "");
-    const rows = await sessionRepository.listActiveSessions(params.userId, includeAllUsers);
+    const isDeveloper = params.role === "Developer";
+    if (includeAllUsers && !isDeveloper && (!Number.isInteger(params.companyId) || (params.companyId ?? 0) <= 0)) {
+      throw new SessionRouteError(400, "No company selected");
+    }
+    const rows = await sessionRepository.listActiveSessions(
+      params.userId,
+      includeAllUsers,
+      isDeveloper ? undefined : params.companyId,
+    );
     const ips = Array.from(new Set(rows.map((row) => row.sess?.ip).filter(Boolean))) as string[];
 
     const geoByIp: Record<string, { city: string | null; country: string | null }> = {};
@@ -62,12 +71,18 @@ export const sessionService = {
     sid: string;
     userId: string | undefined;
     role: string | undefined;
+    companyId: number | undefined;
   }) {
     const session = await sessionRepository.getSession(params.sid);
     if (!session) throw new SessionRouteError(404, "Session not found");
 
+    const isDeveloper = params.role === "Developer";
     const isAdmin = ADMIN_SESSION_ROLES.has(params.role || "");
-    if (!isAdmin && session.sess?.userId !== params.userId) {
+    const isOwnSession = session.sess?.userId === params.userId;
+    const targetCompanyId = Number(session.sess?.currentCompanyId);
+    const isSameCompany = Number.isInteger(params.companyId) && (params.companyId ?? 0) > 0 && targetCompanyId === params.companyId;
+    const isDeveloperSession = session.sess?.currentRole === "Developer";
+    if (!isDeveloper && !isOwnSession && (!isAdmin || !isSameCompany || isDeveloperSession)) {
       throw new SessionRouteError(403, "Access denied");
     }
 
@@ -83,6 +98,9 @@ export const sessionService = {
   async loginHistory(role: string | undefined, companyId: number | undefined) {
     if (!ADMIN_SESSION_ROLES.has(role || "")) {
       throw new SessionRouteError(403, "Access denied. Admin or Owner role required.");
+    }
+    if (role !== "Developer" && (!Number.isInteger(companyId) || (companyId ?? 0) <= 0)) {
+      throw new SessionRouteError(400, "No company selected");
     }
     return sessionRepository.getLoginHistory(companyId);
   },

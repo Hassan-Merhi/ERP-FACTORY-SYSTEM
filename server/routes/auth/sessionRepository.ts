@@ -25,9 +25,20 @@ function isMissingSessionTable(error: unknown): boolean {
 }
 
 export const sessionRepository = {
-  async listActiveSessions(userId: string | undefined, includeAllUsers: boolean): Promise<StoredSessionRow[]> {
+  async listActiveSessions(userId: string | undefined, includeAllUsers: boolean, companyId?: number): Promise<StoredSessionRow[]> {
     try {
       if (includeAllUsers) {
+        if (companyId) {
+          const result = await pool.query(
+            `SELECT sid, sess, expire FROM session
+             WHERE expire > NOW()
+               AND sess->>'currentCompanyId' = $1
+               AND sess->>'currentRole' <> 'Developer'
+             ORDER BY (sess->>'userId') NULLS LAST, expire DESC`,
+            [String(companyId)]
+          );
+          return result.rows;
+        }
         const result = await pool.query(
           `SELECT sid, sess, expire FROM session WHERE expire > NOW() ORDER BY (sess->>'userId') NULLS LAST, expire DESC`
         );

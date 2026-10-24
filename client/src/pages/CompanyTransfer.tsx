@@ -4,7 +4,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest, keyStartsWith, queryClient } from "@/lib/queryClient";
 import { companyKeys } from "@/lib/queryKeys";
 import { useCompany } from "@/contexts/CompanyContext";
-import { useCurrencyContext } from "@/contexts/CurrencyContext";
+
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -74,9 +74,14 @@ const MODULE_PREFIXES: Record<string, string> = {
 
 const MODULES = ["PROPERTIES", "ERP", "FACTORY"] as const;
 
+// Transfer history stores the common USD accounting base, never a current
+// Kwacha translation. Formatting through the active company's currency context
+// mislabeled parent and Zambia accounting balances on this screen.
+const formatUsdBase = (value: string) =>
+  new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(Number(value));
+
 export default function CompanyTransfer() {
   const { companies, selectedCompany: currentCompany } = useCompany();
-  const { formatAmount } = useCurrencyContext();
   const { toast } = useToast();
 
   const [undoTarget, setUndoTarget] = useState<Transfer | null>(null);
@@ -90,7 +95,7 @@ export default function CompanyTransfer() {
   const fromCompanyId = currentCompany?.id;
   const otherCompanies = useMemo(
     () => companies.filter((company) => company.id !== fromCompanyId),
-    [companies, fromCompanyId],
+    [companies, fromCompanyId]
   );
 
   const { data: fromAccounts = [] } = useQuery<LedgerAccount[]>({
@@ -183,7 +188,7 @@ export default function CompanyTransfer() {
 
   const toggleCashAccount = (id: number) => {
     setRuleCashAccountIds((previous) =>
-      previous.includes(id) ? previous.filter((accountId) => accountId !== id) : [...previous, id],
+      previous.includes(id) ? previous.filter((accountId) => accountId !== id) : [...previous, id]
     );
   };
 
@@ -451,7 +456,7 @@ export default function CompanyTransfer() {
                       <TableCell className="text-sm font-medium">{transfer.toCompanyName}</TableCell>
                       <TableCell className="text-sm text-muted-foreground">{transfer.toAccountName}</TableCell>
                       <TableCell className="font-mono text-sm font-semibold">
-                        {formatAmount(Number.parseFloat(transfer.amount))}
+                        {formatUsdBase(transfer.amount)}
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground">{transfer.description ?? "—"}</TableCell>
                       <TableCell className="text-right">
@@ -480,12 +485,13 @@ export default function CompanyTransfer() {
             <AlertDialogDescription>
               {undoTarget && (
                 <>
-                  This will reverse the <strong>{formatAmount(Number.parseFloat(undoTarget.amount))}</strong> transfer from{" "}
+                  This will reverse the <strong>{formatUsdBase(undoTarget.amount)}</strong> transfer from{" "}
                   <strong>{undoTarget.fromCompanyName}</strong> to <strong>{undoTarget.toCompanyName}</strong> on{" "}
                   <strong>{undoTarget.transferDate}</strong>.
                   <br />
                   <br />
-                  Both company balances will return to their prior values and the transfer history entry will be removed.
+                  Both company balances will return to their prior values and the transfer history entry will be
+                  removed.
                 </>
               )}
             </AlertDialogDescription>

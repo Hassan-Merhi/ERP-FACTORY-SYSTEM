@@ -52,6 +52,7 @@ import { registerProcessErrorHandlers } from "./startup/registerProcessErrorHand
 import { runStartupMigrations, warmupDb } from "./startup/runServerStartupMigrations";
 import { ensureFactoryStaffTrackingSchema } from "./startup/factoryStaffTrackingSchema";
 import { ensureSupplierTrackingShopDutyDefaults } from "./startup/ensureSupplierTrackingShopDutyDefaults";
+import { ensureZambiaHistoricalPurchaseCost } from "./startup/ensureZambiaHistoricalPurchaseCost";
 import { ensureFactoryContainerPlannerSchemaOnBoot } from "./startup/factoryContainerPlannerSchema";
 import { ensurePriorityScanSchema } from "./startup/priorityScanSchema";
 import { ensureFactoryBaleOrderIntegrity } from "./startup/ensureFactoryBaleOrderIntegrity";
@@ -305,6 +306,9 @@ let migrationsDone = false;
       await ensureFinancialOperationRequests(pool);
       await ensureSupplierTrackingShopDutyDefaults(pool);
       logger.info("[startup] ✓ Supplier Tracking Shop/Duty defaults ensured");
+      // Zambia Phase 8: native Kwacha purchase evidence columns (startup stage 036
+      // mirrored for production, which disables the bulk startup pass); fatal on failure.
+      await ensureZambiaHistoricalPurchaseCost(pool);
       await ensureRecurringJournalSchema(pool);
       await ensurePriorityScanSchema(pool);
       logger.info("[startup] ✓ Priority Scan schema ensured");

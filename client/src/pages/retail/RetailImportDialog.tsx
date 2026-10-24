@@ -61,6 +61,8 @@ export function ImportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
     },
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ["retail-products"] });
+      queryClient.invalidateQueries({ queryKey: ["retail-catalog-navigation"] });
+      queryClient.invalidateQueries({ queryKey: ["retail-catalog-facets"] });
       queryClient.invalidateQueries({ queryKey: ["retail-brands"] });
       toast({
         title: "Retail import complete",

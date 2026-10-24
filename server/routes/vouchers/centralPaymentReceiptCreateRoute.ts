@@ -1,3 +1,4 @@
+import { assertApprovedZmwVoucherRate } from "../../services/accounting/zambiaVoucherRatePolicy";
 import type { Express, NextFunction, Request, Response } from "express";
 import { and, eq } from "drizzle-orm";
 import { customers, factoryDaybookEntries, factorySettings, ledgerAccounts } from "@shared/schema";
@@ -143,6 +144,12 @@ async function createCentralPaymentReceipt(req: Request, res: Response, next: Ne
     }
 
     const body = req.body as CentralPaymentReceiptBody;
+    const approvedRate = await assertApprovedZmwVoucherRate(
+      companyId,
+      body.voucherDate,
+      body.currency || "USD",
+      body.exchangeRate
+    );
     const result = await db.transaction(async (tx) => {
       const built = await buildPaymentReceiptPostingRequest({
         companyId,
@@ -154,7 +161,7 @@ async function createCentralPaymentReceipt(req: Request, res: Response, next: Ne
         entries: body.entries,
         notes: body.notes,
         currency: body.currency || "USD",
-        exchangeRate: body.exchangeRate ?? null,
+        exchangeRate: approvedRate,
         effectiveDate: body.effectiveDate || null,
         clientRequestId: body.clientRequestId,
         actor: {

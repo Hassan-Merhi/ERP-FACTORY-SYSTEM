@@ -1,3 +1,4 @@
+import { formatMoneyDisplay } from "@/lib/moneyDisplay";
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { format, parseISO } from "date-fns";
@@ -259,7 +260,7 @@ function profitClassName(value: number): string {
 
 export default function StockInSalesReportDetail() {
   const { selectedCompany } = useCompany();
-  const { formatAmount, selectedCurrency, convertToDisplay } = useCurrencyContext();
+  const { formatAmount, selectedCurrency, convertToDisplay, displayCurrency } = useCurrencyContext();
   const { formatDisplayDate } = useDateFormat();
   const { toast } = useToast();
   const [isExporting, setIsExporting] = useState(false);
@@ -339,8 +340,16 @@ export default function StockInSalesReportDetail() {
   const summary = data?.summary ?? EMPTY_METRICS;
   const roundedMoney = (value: number) =>
     value < 0 ? `-${formatAmount(Math.round(Math.abs(value)))}` : formatAmount(Math.round(value));
-  const rate = (value: number) =>
-    selectedCurrency === "CFA" ? `CFA ${formatNumber(convertToDisplay(value), 2)}` : `$ ${formatNumber(value, 2)}`;
+  const rate = (value: number) => {
+    const converted = convertToDisplay(value);
+    if (displayCurrency && selectedCurrency === displayCurrency && Number.isFinite(converted)) {
+      // Preserve Mali's existing report-rate precision rather than changing
+      // CFA presentation as a side effect of introducing ZMW.
+      if (displayCurrency === "CFA") return `CFA ${formatNumber(converted, 2)}`;
+      return formatMoneyDisplay(converted, { currency: displayCurrency });
+    }
+    return `$ ${formatNumber(value, 2)}`;
+  };
   const displayDate = (value: string) => {
     try {
       return formatDisplayDate(parseISO(value));

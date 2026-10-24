@@ -41,7 +41,14 @@ export function resolvePosItemRate(
   /** The last price it sold at in the display currency, when there is one. */
   lastSoldDisplayRate: number | null;
 } {
-  const toDisplay = (usd: number) => (activeCurrency === "CFA" ? Math.round(usd * (exchangeRate ?? 0)) : usd);
+  const toDisplay = (usd: number) =>
+    activeCurrency === "USD"
+      ? usd
+      : exchangeRate && Number.isFinite(exchangeRate) && exchangeRate > 0
+        ? activeCurrency === "CFA"
+          ? Math.round(usd * exchangeRate)
+          : Number((usd * exchangeRate).toFixed(2))
+        : Number.NaN;
   const lastSoldUSD = lastSoldPrices[item.stockItemId] ? parseFloat(lastSoldPrices[item.stockItemId]) : null;
   const rateUSD = lastSoldUSD ?? item.price;
   return {
@@ -117,7 +124,7 @@ export function usePosRowCalculations({
     const rateUSD =
       overrides?.rate === undefined
         ? resolved.rateUSD
-        : activeCurrency === "CFA" && exchangeRate
+        : activeCurrency !== "USD" && exchangeRate
           ? overrides.rate / exchangeRate
           : overrides.rate;
     const quantity = overrides?.quantity ?? 1;
@@ -156,7 +163,7 @@ export function usePosRowCalculations({
       const numValue = value === "" ? 0 : parseFloat(String(value)) || 0;
       newRows[index][field] = numValue;
       if (field === "rate") {
-        newRows[index].rateUSD = activeCurrency === "CFA" && exchangeRate ? numValue / exchangeRate : numValue;
+        newRows[index].rateUSD = activeCurrency !== "USD" && exchangeRate ? numValue / exchangeRate : numValue;
       }
       newRows[index].amount = (newRows[index].quantity || 0) * (newRows[index].rate || 0);
     }

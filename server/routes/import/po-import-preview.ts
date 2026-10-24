@@ -21,6 +21,9 @@ export interface PoImportPreviewItem {
   rate: number;
   lineTotal: number;
   currency?: string;
+  /** Phase 8: original value before server conversion to historical USD. */
+  nativeRate?: string;
+  nativeLineTotal?: string;
   stockItemId?: number | null;
 }
 

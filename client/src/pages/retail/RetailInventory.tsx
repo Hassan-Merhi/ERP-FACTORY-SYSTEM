@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useLocation, useRoute } from "wouter";
-import { ArrowLeft, Boxes, Camera, Pencil, Plus, Printer, ShoppingCart, Upload } from "lucide-react";
+import { ArrowLeft, Boxes, Camera, ChevronDown, ChevronRight, FolderOpen, MapPin, Pencil, Plus, Printer, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -23,6 +23,7 @@ import {
   type Brand,
   type Location,
   type RetailCatalogFacets,
+  type RetailCatalogNavigation,
   type RetailCatalogPage,
   type RetailProduct,
   type RetailVariant,
@@ -36,11 +37,11 @@ export default function RetailInventory() {
   const [importOpen, setImportOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<RetailProduct | null>(null);
   const [search, setSearch] = useState("");
-  const [brandId, setBrandId] = useState("");
   const [color, setColor] = useState("");
   const [size, setSize] = useState("");
-  const [category, setCategory] = useState("");
   const [locationId, setLocationId] = useState("");
+  const [categoryKey, setCategoryKey] = useState<string | null>(null);
+  const [expandedBrandKey, setExpandedBrandKey] = useState<string | null>(null);
   const [stockStatus, setStockStatus] = useState("all");
   const [page, setPage] = useState(1);
   const [debouncedSearch, setDebouncedSearch] = useState("");
@@ -58,16 +59,22 @@ export default function RetailInventory() {
 
   useEffect(() => {
     setPage(1);
-  }, [debouncedSearch, brandId, color, size, category, locationId, stockStatus, showArchived]);
+  }, [debouncedSearch, color, size, categoryKey, expandedBrandKey, locationId, stockStatus, showArchived]);
 
   const retailEnabled = selectedCompany?.companyType === "retail";
   const companyKey = selectedCompany?.id ?? 0;
+  useEffect(() => {
+    setLocationId("");
+    setCategoryKey(null);
+    setExpandedBrandKey(null);
+    setSelected(new Set());
+  }, [companyKey]);
   const { data: brands = [] } = useQuery<Brand[]>({
     queryKey: ["retail-brands", companyKey],
     queryFn: () => getJson("/api/retail/brands"),
     enabled: retailEnabled,
   });
-  const { data: locations = [] } = useQuery<Location[]>({
+  const { data: locations = [], isLoading: locationsLoading } = useQuery<Location[]>({
     queryKey: ["retail-locations", companyKey],
     queryFn: () => getJson("/api/locations"),
     enabled: retailEnabled,
@@ -79,28 +86,49 @@ export default function RetailInventory() {
     staleTime: 60_000,
   });
 
+  // Only fetch the paginated product cards when a brand is expanded. The
+  // independent navigation endpoint enumerates *all* matching categories and
+  // brands, so pagination cannot hide a group.
+  const navigationParams = useMemo(() => {
+    const params = new URLSearchParams({ stockStatus });
+    if (locationId) params.set("locationId", locationId);
+    if (debouncedSearch) params.set("search", debouncedSearch);
+    if (color) params.set("color", color);
+    if (size) params.set("size", size);
+    if (showArchived) params.set("archived", "include");
+    return params.toString();
+  }, [locationId, debouncedSearch, color, size, stockStatus, showArchived]);
+
+  const { data: navigationData, isLoading: navigationLoading, isError: navigationFailed } =
+    useQuery<RetailCatalogNavigation>({
+      queryKey: ["retail-catalog-navigation", companyKey, navigationParams],
+      queryFn: () => getJson(`/api/retail/catalog-navigation?${navigationParams}`),
+      enabled: retailEnabled && Boolean(locationId),
+    });
+  const selectedLocation = locations.find((entry) => String(entry.id) === locationId);
+  const selectedCategory = navigationData?.categories.find((entry) => entry.key === categoryKey);
+  const expandedBrand = selectedCategory?.brands.find((entry) => entry.key === expandedBrandKey);
+
   const catalogParams = useMemo(() => {
     const params = new URLSearchParams({ page: String(page), pageSize: "60", stockStatus });
     if (debouncedSearch) params.set("search", debouncedSearch);
-    if (brandId) params.set("brandId", brandId);
     if (color) params.set("color", color);
     if (size) params.set("size", size);
-    if (category) params.set("category", category);
+    if (categoryKey) params.set("category", categoryKey);
+    if (expandedBrandKey) params.set("brandId", expandedBrandKey);
     if (locationId) params.set("locationId", locationId);
     if (showArchived) params.set("archived", "include");
     return params.toString();
-  }, [page, debouncedSearch, brandId, color, size, category, locationId, stockStatus, showArchived]);
+  }, [page, debouncedSearch, color, size, categoryKey, expandedBrandKey, locationId, stockStatus, showArchived]);
 
-  const { data: catalogPage, isLoading } = useQuery<RetailCatalogPage>({
+  const { data: catalogPage, isLoading, isError: catalogFailed } = useQuery<RetailCatalogPage>({
     queryKey: ["retail-products", "page", companyKey, catalogParams],
     queryFn: () => getJson(`/api/retail/products-page?${catalogParams}`),
-    enabled: retailEnabled,
-    placeholderData: (previous) => previous,
+    enabled: retailEnabled && Boolean(locationId && selectedCategory && expandedBrand),
   });
   const products = catalogPage?.items ?? [];
   const colors = catalogFacets?.colors ?? [];
   const sizes = catalogFacets?.sizes ?? [];
-  const categories = catalogFacets?.categories ?? [];
 
   const productId = detailMatch ? Number(detailParams?.id) : 0;
   const { data: detailProduct, isError: detailFailed } = useQuery<RetailProduct>({
@@ -143,6 +171,7 @@ export default function RetailInventory() {
   const refreshCatalog = () =>
     Promise.all([
       queryClient.invalidateQueries({ queryKey: ["retail-products"] }),
+      queryClient.invalidateQueries({ queryKey: ["retail-catalog-navigation"] }),
       queryClient.invalidateQueries({ queryKey: ["retail-product"] }),
       queryClient.invalidateQueries({ queryKey: ["retail-pos-items"] }),
     ]);
@@ -277,9 +306,8 @@ export default function RetailInventory() {
         <div className="flex flex-wrap items-start gap-5">
           <ProductImageGallery
             product={detailProduct}
-            maxImages={6}
             className="max-w-full"
-            imageClassName="h-32 w-32 rounded-lg border"
+            imageClassName="h-36 w-36 rounded-lg border sm:h-44 sm:w-44"
           />
           <div>
             <h1 className="text-3xl font-bold">{detailProduct.name}</h1>
@@ -297,7 +325,7 @@ export default function RetailInventory() {
           <CardContent>
             <RetailCatalogList
               products={[detailProduct]}
-              filters={{ ...catalogFilters, color: "", size: "", stockStatus: "all", showArchived: true }}
+              filters={{ ...catalogFilters, locationId: "", color: "", size: "", stockStatus: "all", showArchived: true }}
               selected={selected}
               onToggle={toggleVariant}
               onToggleProduct={toggleVariants}
@@ -332,13 +360,10 @@ export default function RetailInventory() {
             <h1 className="text-2xl font-bold">Retail Inventory</h1>
           </div>
           <p className="mt-1 text-sm text-muted-foreground">
-            Products grouped by brand and style with exact color, size, stock and barcode variants.
+            Choose a location, open a category, then expand a brand to browse its items.
           </p>
         </div>
-        <div className="flex gap-2">
-          <Button variant="secondary" onClick={() => navigate("/retail/pos")}>
-            <ShoppingCart className="mr-2 h-4 w-4" /> Open POS
-          </Button>
+        <div className="flex flex-wrap gap-2">
           <Button variant="outline" onClick={() => setImportOpen(true)}>
             <Upload className="mr-2 h-4 w-4" /> Import
           </Button>
@@ -357,27 +382,17 @@ export default function RetailInventory() {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-2 md:grid-cols-8">
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-5">
         <Input
           placeholder="Search style, brand, barcode, SKU, color or size…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="col-span-2"
+          className="sm:col-span-2 lg:col-span-2"
+          aria-label="Search retail inventory"
         />
         <select
           className="h-10 rounded-md border bg-background px-2 text-sm"
-          value={brandId}
-          onChange={(e) => setBrandId(e.target.value)}
-        >
-          <option value="">All brands</option>
-          {brands.map((brand) => (
-            <option key={brand.id} value={brand.id}>
-              {brand.name}
-            </option>
-          ))}
-        </select>
-        <select
-          className="h-10 rounded-md border bg-background px-2 text-sm"
+          aria-label="Filter by color"
           value={color}
           onChange={(e) => setColor(e.target.value)}
         >
@@ -388,6 +403,7 @@ export default function RetailInventory() {
         </select>
         <select
           className="h-10 rounded-md border bg-background px-2 text-sm"
+          aria-label="Filter by size"
           value={size}
           onChange={(e) => setSize(e.target.value)}
         >
@@ -398,30 +414,7 @@ export default function RetailInventory() {
         </select>
         <select
           className="h-10 rounded-md border bg-background px-2 text-sm"
-          value={category}
-          onChange={(e) => setCategory(e.target.value)}
-        >
-          <option value="">All categories</option>
-          {categories.map((value) => (
-            <option key={value}>{value}</option>
-          ))}
-        </select>
-        <select
-          className="h-10 rounded-md border bg-background px-2 text-sm"
-          value={locationId}
-          onChange={(e) => setLocationId(e.target.value)}
-        >
-          <option value="">All locations</option>
-          {locations
-            .filter((location) => location.active !== false)
-            .map((location) => (
-              <option key={location.id} value={location.id}>
-                {location.name}
-              </option>
-            ))}
-        </select>
-        <select
-          className="h-10 rounded-md border bg-background px-2 text-sm"
+          aria-label="Filter by stock status"
           value={stockStatus}
           onChange={(e) => setStockStatus(e.target.value)}
         >
@@ -431,62 +424,221 @@ export default function RetailInventory() {
           <option value="out">Out of stock</option>
         </select>
       </div>
-
       <label className="flex items-center gap-2 text-sm text-muted-foreground">
         <Checkbox checked={showArchived} onCheckedChange={(value) => setShowArchived(value === true)} />
         <span>Show archived items</span>
       </label>
 
-      {isLoading ? (
-        <div className="p-8 text-center text-muted-foreground">Loading retail inventory…</div>
-      ) : products.length === 0 ? (
-        <div className="rounded-lg border border-dashed p-8 text-center text-muted-foreground">
-          No products match these filters.
-        </div>
-      ) : (
-        <RetailCatalogList
-          products={products}
-          filters={catalogFilters}
-          selected={selected}
-          onToggle={toggleVariant}
-          onToggleProduct={toggleVariants}
-          onOpenProduct={(product) => navigate(`/retail/products/${product.id}`)}
-          onEdit={openEditor}
-          onArchiveProduct={(product, active) => void setProductActive(product, active)}
-          onVariantAction={handleVariantAction}
-        />
-      )}
+      <nav aria-label="Retail inventory breadcrumbs" className="flex flex-wrap items-center gap-1 rounded-lg border bg-card p-2">
+        <Button
+          variant={!locationId ? "secondary" : "ghost"}
+          size="sm"
+          onClick={() => {
+            setLocationId("");
+            setCategoryKey(null);
+            setExpandedBrandKey(null);
+            setSelected(new Set());
+          }}
+        >
+          <MapPin className="mr-1 h-4 w-4" /> Locations
+        </Button>
+        {locationId && (
+          <>
+            <ChevronRight className="h-4 w-4 text-muted-foreground" />
+            <Button
+              variant={!categoryKey ? "secondary" : "ghost"}
+              size="sm"
+              onClick={() => {
+                setCategoryKey(null);
+                setExpandedBrandKey(null);
+                setSelected(new Set());
+              }}
+              data-no-translate
+            >
+              {selectedLocation?.name ?? "Location"}
+            </Button>
+          </>
+        )}
+        {categoryKey && (
+          <>
+            <ChevronRight className="h-4 w-4 text-muted-foreground" />
+            <span className="px-2 text-sm font-semibold" data-no-translate>
+              {selectedCategory?.name ?? (categoryKey === "__uncategorized__" ? "Uncategorized" : categoryKey)}
+            </span>
+          </>
+        )}
+      </nav>
 
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <p className="text-sm text-muted-foreground">
-          {catalogPage?.total ?? 0} product{(catalogPage?.total ?? 0) === 1 ? "" : "s"}
-          {(catalogPage?.totalPages ?? 0) > 0
-            ? ` · Page ${catalogPage?.page ?? page} of ${catalogPage?.totalPages}`
-            : ""}
+      {!locationId ? (
+        <section className="space-y-3">
+          <h2 className="text-lg font-semibold">Choose a location</h2>
+          {locationsLoading ? (
+            <p className="p-5 text-sm text-muted-foreground">Loading locations…</p>
+          ) : locations.filter((entry) => entry.active !== false).length === 0 ? (
+            <p className="rounded-lg border border-dashed p-6 text-sm text-muted-foreground">
+              No active locations are available.
+            </p>
+          ) : (
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+              {locations.filter((entry) => entry.active !== false).map((location) => (
+                <button
+                  key={location.id}
+                  type="button"
+                  className="flex items-center gap-3 rounded-lg border bg-card p-4 text-left transition-colors hover:bg-muted/50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring"
+                  onClick={() => {
+                    setLocationId(String(location.id));
+                    setCategoryKey(null);
+                    setExpandedBrandKey(null);
+                    setSelected(new Set());
+                  }}
+                >
+                  <MapPin className="h-5 w-5 shrink-0 text-primary" />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate font-semibold" data-no-translate>{location.name}</span>
+                    <span className="block text-xs text-muted-foreground" data-no-translate>{location.code}</span>
+                  </span>
+                  <ChevronRight className="h-5 w-5 text-muted-foreground" />
+                </button>
+              ))}
+            </div>
+          )}
+        </section>
+      ) : navigationLoading ? (
+        <p className="p-6 text-sm text-muted-foreground">Loading inventory groups…</p>
+      ) : navigationFailed ? (
+        <p className="rounded-lg border p-6 text-sm text-destructive">
+          Could not load inventory categories. Try again.
         </p>
-        <div className="flex gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={(catalogPage?.page ?? page) <= 1 || isLoading}
-            onClick={() => setPage((current) => Math.max(1, current - 1))}
-          >
-            Previous
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={
-              isLoading ||
-              (catalogPage?.totalPages ?? 0) === 0 ||
-              (catalogPage?.page ?? page) >= (catalogPage?.totalPages ?? 0)
-            }
-            onClick={() => setPage((current) => current + 1)}
-          >
-            Next
-          </Button>
-        </div>
-      </div>
+      ) : !categoryKey ? (
+        <section className="space-y-3">
+          <h2 className="text-lg font-semibold" data-no-translate>
+            Categories in {selectedLocation?.name ?? "selected location"}
+          </h2>
+          {(navigationData?.categories.length ?? 0) === 0 ? (
+            <p className="rounded-lg border border-dashed p-6 text-sm text-muted-foreground">
+              No categories match the selected location and filters.
+            </p>
+          ) : (
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+              {navigationData?.categories.map((item) => (
+                <button
+                  key={item.key}
+                  type="button"
+                  className="flex items-center gap-3 rounded-lg border bg-card p-4 text-left transition-colors hover:bg-muted/50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring"
+                  onClick={() => {
+                    setCategoryKey(item.key);
+                    setExpandedBrandKey(null);
+                    setSelected(new Set());
+                  }}
+                >
+                  <FolderOpen className="h-5 w-5 shrink-0 text-primary" />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate font-semibold" data-no-translate>{item.name}</span>
+                    <span className="block text-xs text-muted-foreground">
+                      {item.productCount} products
+                    </span>
+                  </span>
+                  <ChevronRight className="h-5 w-5 text-muted-foreground" />
+                </button>
+              ))}
+            </div>
+          )}
+        </section>
+      ) : (
+        <section className="space-y-3">
+          <h2 className="text-lg font-semibold" data-no-translate>
+            Brands in {selectedCategory?.name ?? (categoryKey === "__uncategorized__" ? "Uncategorized" : categoryKey)}
+          </h2>
+          {!selectedCategory || selectedCategory.brands.length === 0 ? (
+            <p className="rounded-lg border border-dashed p-6 text-sm text-muted-foreground">
+              No brands match this category and the current filters.
+            </p>
+          ) : (
+            <div className="space-y-3">
+              {selectedCategory.brands.map((brand) => (
+                <div key={brand.key} className="overflow-hidden rounded-lg border bg-card">
+                  <button
+                    type="button"
+                    className="flex w-full items-center gap-3 p-4 text-left transition-colors hover:bg-muted/50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring"
+                    aria-expanded={expandedBrandKey === brand.key}
+                    onClick={() => {
+                      setExpandedBrandKey((current) => current === brand.key ? null : brand.key);
+                      setPage(1);
+                      setSelected(new Set());
+                    }}
+                  >
+                    {expandedBrandKey === brand.key ? (
+                      <ChevronDown className="h-5 w-5 text-primary" />
+                    ) : (
+                      <ChevronRight className="h-5 w-5 text-muted-foreground" />
+                    )}
+                    <span className="flex-1 truncate font-semibold" data-no-translate>{brand.name}</span>
+                    <span className="text-xs text-muted-foreground">
+                      {brand.productCount} products
+                    </span>
+                  </button>
+                  {expandedBrandKey === brand.key && (
+                    <div className="space-y-4 border-t p-3 sm:p-4">
+                      {isLoading ? (
+                        <p className="p-6 text-sm text-muted-foreground">Loading products…</p>
+                      ) : catalogFailed ? (
+                        <p className="p-6 text-sm text-destructive">Could not load products. Try again.</p>
+                      ) : products.length === 0 ? (
+                        <p className="rounded-lg border border-dashed p-6 text-sm text-muted-foreground">
+                          No products match these filters.
+                        </p>
+                      ) : (
+                        <RetailCatalogList
+                          products={products}
+                          filters={catalogFilters}
+                          selected={selected}
+                          onToggle={toggleVariant}
+                          onToggleProduct={toggleVariants}
+                          onOpenProduct={(product) => navigate(`/retail/products/${product.id}`)}
+                          onEdit={openEditor}
+                          onArchiveProduct={(product, active) => void setProductActive(product, active)}
+                          onVariantAction={handleVariantAction}
+                          showBrandHeadings={false}
+                        />
+                      )}
+                      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                        <p className="text-sm text-muted-foreground">
+                          {catalogPage?.total ?? 0} product{(catalogPage?.total ?? 0) === 1 ? "" : "s"}
+                          {(catalogPage?.totalPages ?? 0) > 0
+                            ? ` · Page ${catalogPage?.page ?? page} of ${catalogPage?.totalPages}`
+                            : ""}
+                        </p>
+                        <div className="flex gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={(catalogPage?.page ?? page) <= 1 || isLoading}
+                            onClick={() => setPage((current) => Math.max(1, current - 1))}
+                          >
+                            Previous
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={
+                              isLoading ||
+                              (catalogPage?.totalPages ?? 0) === 0 ||
+                              (catalogPage?.page ?? page) >= (catalogPage?.totalPages ?? 0)
+                            }
+                            onClick={() => setPage((current) => current + 1)}
+                          >
+                            Next
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+      )}
 
       <ProductEditor
         open={editorOpen}

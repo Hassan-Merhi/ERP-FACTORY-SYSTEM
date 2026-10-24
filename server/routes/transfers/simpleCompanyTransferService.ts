@@ -6,6 +6,10 @@ import {
   type PostingActor,
 } from "../../services/accounting";
 import { requireCompanyAccess } from "./transferRequestContext";
+import {
+  resolveZambiaIntercompanyAmount,
+  zambiaTransferVoucherNumber,
+} from "../../services/accounting/zambiaIntercompanyTransfer";
 import { TransferRouteError } from "./transferErrors";
 import { transferRepository } from "./transferRepository";
 import { parseSimpleTransferInput } from "./transferValidation";
@@ -50,6 +54,18 @@ function buildTransferReversalRequest(input: {
     debitAmount: String(entry.creditAmount ?? "0"),
     creditAmount: String(entry.debitAmount ?? "0"),
     narration: entry.narration ? `Reversal: ${entry.narration}` : `Reversal of ${snapshot.voucher.voucherNumber}`,
+    // Reverse the original currency evidence, not the current conversion.
+    ...(snapshot.voucher.currency === "ZMW" && entry.transactionCurrency === "ZMW"
+      ? {
+          transactionCurrency: entry.transactionCurrency,
+          transactionDebitAmount: entry.transactionCreditAmount,
+          transactionCreditAmount: entry.transactionDebitAmount,
+          baseDebitAmount: entry.baseCreditAmount,
+          baseCreditAmount: entry.baseDebitAmount,
+          historicalExchangeRate: entry.historicalExchangeRate,
+          rateConvention: entry.rateConvention,
+        }
+      : {}),
   }));
 
   return {
@@ -61,6 +77,12 @@ function buildTransferReversalRequest(input: {
       description: `Reversal of company transfer #${transferId} (${side})`,
       totalAmount: snapshot.voucher.totalAmount,
       optional: false,
+      ...(snapshot.voucher.currency === "ZMW"
+        ? {
+            currency: "ZMW",
+            exchangeRate: snapshot.voucher.exchangeRate,
+          }
+        : {}),
     },
     entries,
     source: {
@@ -91,6 +113,22 @@ export const simpleCompanyTransferService = {
     ]);
     if (!fromCompany || !toCompany) throw new TransferRouteError(404, "Company not found");
 
+    const fx = await resolveZambiaIntercompanyAmount({
+      fromCompany,
+      toCompany,
+      amount: parsed.amount,
+      transferDate: parsed.transferDate,
+      currency: parsed.currency,
+      exchangeRate: parsed.exchangeRate,
+    });
+    const fromIsZmw = fx.currency === "ZMW" && fx.zambiaCompanyId === parsed.fromCompanyId;
+    const toIsZmw = fx.currency === "ZMW" && fx.zambiaCompanyId === parsed.toCompanyId;
+    // Validate native-ZMW request identity before creating clearing accounts.
+    const zmwOutNumber =
+      fx.currency === "ZMW" ? zambiaTransferVoucherNumber("TR-OUT", parsed.clientRequestId ?? "") : null;
+    const zmwInNumber =
+      fx.currency === "ZMW" ? zambiaTransferVoucherNumber("TR-IN", parsed.clientRequestId ?? "") : null;
+
     const description = parsed.description || `Transfer to ${toCompany.name}`;
     const [fromClearing, toClearing] = await Promise.all([
       getOrCreateClearingAccount(parsed.fromCompanyId),
@@ -102,13 +140,14 @@ export const simpleCompanyTransferService = {
       const fromNarration = `Transfer out to ${toCompany.name}`;
       const fromBuilt = buildCompanyTransferPostingRequest({
         companyId: parsed.fromCompanyId,
-        voucherNumber: `TR-OUT-${voucherTimestamp}`,
+        voucherNumber: zmwOutNumber ?? `TR-OUT-${voucherTimestamp}`,
         voucherType: "Payment",
         voucherDate: parsed.transferDate,
         description: `${description} → ${toCompany.name}`,
         debitNarration: fromNarration,
         creditNarration: fromNarration,
-        amount: parsed.amount,
+        amount: fromIsZmw ? fx.nativeAmount : fx.baseAmount,
+        ...(fromIsZmw ? { transactionCurrency: "ZMW" as const, historicalExchangeRate: fx.historicalRate } : {}),
         debitLedgerAccountId: fromClearing.id,
         creditLedgerAccountId: parsed.fromLedgerAccountId,
         clientRequestId: parsed.clientRequestId,
@@ -121,13 +160,14 @@ export const simpleCompanyTransferService = {
       const toNarration = `Transfer in from ${fromCompany.name}`;
       const toBuilt = buildCompanyTransferPostingRequest({
         companyId: parsed.toCompanyId,
-        voucherNumber: `TR-IN-${voucherTimestamp}`,
+        voucherNumber: zmwInNumber ?? `TR-IN-${voucherTimestamp}`,
         voucherType: "Receipt",
         voucherDate: parsed.transferDate,
         description: `Transfer from ${fromCompany.name}`,
         debitNarration: toNarration,
         creditNarration: toNarration,
-        amount: parsed.amount,
+        amount: toIsZmw ? fx.nativeAmount : fx.baseAmount,
+        ...(toIsZmw ? { transactionCurrency: "ZMW" as const, historicalExchangeRate: fx.historicalRate } : {}),
         debitLedgerAccountId: parsed.toLedgerAccountId,
         creditLedgerAccountId: toClearing.id,
         clientRequestId: fromBuilt.clientRequestId,

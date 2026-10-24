@@ -7,6 +7,7 @@
  */
 import type { Express } from "express";
 import { getErrorMessage } from "../lib/httpHandlers";
+import { PosZmwRateError, resolveLockedZmwPosCurrency, assertZmwImportPrices } from "../services/pos/posZmwRatePolicy";
 import { logger } from "../lib/logger";
 import { and, desc, eq } from "drizzle-orm";
 import { db } from "../db";
@@ -216,11 +217,30 @@ export function registerCreditSalesImportRoutes(app: Express) {
         return res.status(400).json({ message: "No company selected" });
       }
 
-      const { locationId, saleDate, items, customerId } = req.body;
+      const { locationId, saleDate, items, customerId, currency, exchangeRate } = req.body;
 
       if (!locationId || !saleDate || !items || !Array.isArray(items) || !customerId) {
         return res.status(400).json({ message: "Missing required fields" });
       }
+
+      // Verify the company's effective-dated rate and every USD/native sheet
+      // price BEFORE any customer, voucher, inventory, or financial-operation
+      // write. This applies to imported credit sales as well as cash sales.
+      const lockedPosCurrency = await resolveLockedZmwPosCurrency(
+        req.session.currentCompanyId,
+        saleDate,
+        currency,
+        exchangeRate
+      );
+      assertZmwImportPrices(items, lockedPosCurrency);
+      const nativeTransaction = (total: string) =>
+        lockedPosCurrency.currency === "ZMW"
+          ? {
+              currency: "ZMW",
+              amount: toMoney(total).times(toMoney(lockedPosCurrency.exchangeRate!)).toFixed(6),
+              rate: lockedPosCurrency.exchangeRate!,
+            }
+          : null;
 
       const location = await storage.getLocationById(locationId);
       if (!location || location.companyId !== req.session.currentCompanyId) {
@@ -314,15 +334,19 @@ export function registerCreditSalesImportRoutes(app: Express) {
             voucherType: "Sales",
             voucherDate: saleDate,
             description: `Credit Sale Import - ${items.length} items - Customer: ${customer.legalName}`,
+            currency: lockedPosCurrency.currency,
+            exchangeRate: lockedPosCurrency.exchangeRate,
             lines: [
               {
                 ledgerAccountId: customerLedgerAccountId!,
                 debit: totalSales,
+                transaction: nativeTransaction(totalSales),
                 narration: `Credit Sale to ${customer.legalName} - ${items.length} items`,
               },
               {
                 ledgerAccountId: salesRevenueAccount.id,
                 credit: totalSales,
+                transaction: nativeTransaction(totalSales),
                 narration: `Credit Sale Revenue - ${items.length} items`,
               },
             ],
@@ -556,6 +580,9 @@ export function registerCreditSalesImportRoutes(app: Express) {
       }
     } catch (error: unknown) {
       if (sendBaleMirrorMovementRefusal(res, error)) return;
+      if (error instanceof PosZmwRateError) {
+        return res.status(error.statusCode).json({ code: error.code, message: error.message });
+      }
       logger.error("Credit Sales Import error:", { error: error });
       res.status(500).json({ message: getErrorMessage(error) });
     }

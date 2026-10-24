@@ -14,7 +14,7 @@ import {
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
-const openingBalanceCurrencySchema = z.enum(["USD", "CFA"]).nullable().optional();
+const openingBalanceCurrencySchema = z.enum(["USD", "CFA", "ZMW"]).nullable().optional();
 const nullableDecimalString = z.string().nullable().optional();
 
 export const ledgerAccounts = pgTable(

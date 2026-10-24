@@ -5,7 +5,7 @@
     "GET /api/stats/net-profit": {
       "status": 200,
       "shape": "{currency,currencyRevaluation,equity,expenses,expensesTotal,forUs,forUsTotal,income,incomeTotal,netPosition,netPositionBreakdown,netPositionLabel,netProfit,netWorth,notInLedger,onUs,onUsTotal,ownersCapital,spPosProfit,totalExpenses,totalIncome}",
-      "hash": "f8f6baf6da5f94f513ba6935c0a96de070ec9315d4fb69dc31b352f358ae23ec"
+      "hash": "e470a389a4c3c3e54c1703e9b9a6e2f6c8fe897c74119a5ffca00780f1450a9d"
     },
     "GET /api/reports/net-profit-excel": {
       "status": 200,
@@ -24,8 +24,8 @@
     },
     "PATCH /api/purchase-orders/:poId": {
       "status": 200,
-      "shape": "{chargesEdited,companyId,containerId,createdAt,currency,discount,documentCharges,freight,freightOwnAccountId,freightPaidBy,freightParentAccountId,fumigation,id,itemsTotal,otherCharges,poNumber,status,supplierId,surcharge,voucherId}",
-      "hash": "69b8c4af5f779ba4f55c187626c307bc05387fd1e2dec54a6ad3dae1252ba918"
+      "shape": "{chargesEdited,companyId,containerId,createdAt,currency,discount,documentCharges,freight,freightOwnAccountId,freightPaidBy,freightParentAccountId,fumigation,historicalExchangeRate,historicalRateDate,id,itemsTotal,nativeDiscount,nativeDocumentCharges,nativeFreight,nativeFumigation,nativeItemsTotal,nativeLineCount,nativeOtherCharges,nativeSurcharge,otherCharges,poNumber,status,supplierId,surcharge,voucherId}",
+      "hash": "bd2b56f3d18c1481f6a919e20c43755d849dc6d8f4124f273176ffa5d0cfac9d"
     },
     "POST /api/factory/raw-stock/offload": {
       "status": 200,

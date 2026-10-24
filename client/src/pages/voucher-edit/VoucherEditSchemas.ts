@@ -106,7 +106,7 @@ export const voucherFormSchema = z.object({
   paymentAccountId: z.number().min(1, "Please select an account"),
   paymentAccountName: z.string(),
   voucherDate: z.date(),
-  currency: z.enum(["USD", "CFA"]).default("USD"),
+  currency: z.enum(["USD", "CFA", "ZMW"]).default("USD"),
   entries: z.array(voucherEntrySchema).min(1, "Add at least one entry"),
   paymentAccountNarration: z.string().optional(),
   notes: z.string().optional(),
@@ -114,14 +114,14 @@ export const voucherFormSchema = z.object({
 
 export const journalFormSchema = z.object({
   voucherDate: z.date(),
-  currency: z.enum(["USD", "CFA"]).default("USD"),
+  currency: z.enum(["USD", "CFA", "ZMW"]).default("USD"),
   entries: z.array(journalEntrySchema).min(1, "Add at least one entry"),
   notes: z.string().default(""),
 });
 
 export const salesFormSchema = z.object({
   voucherDate: z.date(),
-  currency: z.enum(["USD", "CFA"]).default("USD"),
+  currency: z.enum(["USD", "CFA", "ZMW"]).default("USD"),
   locationId: z.number().min(1, "Location is required"),
   items: z.array(salesLineItemSchema).min(1, "Add at least one item"),
   notes: z.string().optional(),
@@ -129,14 +129,14 @@ export const salesFormSchema = z.object({
 
 export const purchaseFormSchema = z.object({
   voucherDate: z.date(),
-  currency: z.enum(["USD", "CFA"]).default("USD"),
+  currency: z.enum(["USD", "CFA", "ZMW"]).default("USD"),
   items: z.array(purchaseLineItemSchema).min(1, "Add at least one item"),
   notes: z.string().optional(),
 });
 
 export const adjustmentFormSchema = z.object({
   voucherDate: z.date(),
-  currency: z.enum(["USD", "CFA"]).default("USD"),
+  currency: z.enum(["USD", "CFA", "ZMW"]).default("USD"),
   locationId: z.number().min(1, "Location is required"),
   items: z.array(adjustmentLineItemSchema).min(1, "Add at least one item"),
   notes: z.string().optional(),
@@ -144,7 +144,7 @@ export const adjustmentFormSchema = z.object({
 
 export const transferFormSchema = z.object({
   voucherDate: z.date(),
-  currency: z.enum(["USD", "CFA"]).default("USD"),
+  currency: z.enum(["USD", "CFA", "ZMW"]).default("USD"),
   sourceLocationId: z.number().min(1, "Source location is required"),
   destinationLocationId: z.number().min(1, "Destination location is required"),
   items: z.array(transferLineItemSchema).min(1, "Add at least one item"),

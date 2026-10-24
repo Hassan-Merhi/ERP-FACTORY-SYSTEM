@@ -1,3 +1,4 @@
+import { assertApprovedZmwVoucherRate } from "../../services/accounting/zambiaVoucherRatePolicy";
 import type { Express, NextFunction, Request, Response } from "express";
 import { and, eq, isNull } from "drizzle-orm";
 import {
@@ -260,13 +261,15 @@ async function createActiveJournal(req: Request, res: Response, next: NextFuncti
       });
     }
 
+    const approvedRate = await assertApprovedZmwVoucherRate(companyId, voucherDate, currency || "USD", exchangeRate);
+
     const built = buildManualJournalPostingRequest({
       companyId,
       voucherDate,
       entries: postingEntries,
       notes,
       currency: currency || "USD",
-      exchangeRate: exchangeRate ?? null,
+      exchangeRate: approvedRate,
       effectiveDate: effectiveDate || null,
       clientRequestId,
       actor: {

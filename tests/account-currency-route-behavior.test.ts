@@ -22,6 +22,7 @@ const harness = vi.hoisted(() => ({
 vi.mock("../server/auth", () => ({
   requireAuth: (_req: unknown, _res: unknown, next: () => void) => next(),
   requireNonPOS: (_req: unknown, _res: unknown, next: () => void) => next(),
+  requireRole: () => (_req: unknown, _res: unknown, next: () => void) => next(),
 }));
 vi.mock("@shared/schema", () => harness.schema);
 vi.mock("drizzle-orm", () => ({
@@ -41,6 +42,7 @@ vi.mock("../server/services/accounting/cashLedgerAccountSummaryService", () => (
 }));
 vi.mock("../server/lib/httpHandlers", () => ({
   getErrorMessage: (error: unknown) => (error instanceof Error ? error.message : String(error)),
+  errorStatus: () => 500,
 }));
 vi.mock("../server/db", () => ({
   db: {
@@ -78,6 +80,8 @@ describe("account currency and historical opening behavior", () => {
     harness.normalizeOpeningBalanceCurrency.mockReset();
     registerAccountCurrencyRoutes({
       get: (path: string, ...callbacks: any[]) => harness.handlers.set(path, callbacks.at(-1)!),
+      // The Zambia USD/ZMW cash conversion route registers alongside the reads.
+      post: (path: string, ...callbacks: any[]) => harness.handlers.set(path, callbacks.at(-1)!),
     } as never);
   });
 

@@ -22,6 +22,7 @@ import type { PgUpdateSetSource } from "drizzle-orm/pg-core";
 import type Decimal from "decimal.js";
 import { parseMoneyInput, sumMoney, toMoney } from "../../lib/money";
 import { syncPurchaseOrderGitTx } from "../../services/accounting/perpetualInventory/stockReceipts";
+import { assertHistoricalUsdPurchaseCost } from "../../services/accounting/zambiaPurchaseCurrencyGuard";
 import {
   assertVoucherEditableTx,
   recordVoucherEditAuditTx,
@@ -91,6 +92,7 @@ export function registerVoucherPurchaseUpdateRoutes(app: Express) {
 
       const [po] = await db.select().from(purchaseOrders).where(eq(purchaseOrders.voucherId, id)).limit(1);
       if (!po) return res.status(404).json({ message: "Associated purchase order not found" });
+      assertHistoricalUsdPurchaseCost(po.currency);
       const amounts = parseItemAmounts(items);
       if (!amounts) return res.status(400).json({ message: "Invalid amount" });
       const lineTotals = amounts.map(({ quantity, rate }) => quantity.times(rate));

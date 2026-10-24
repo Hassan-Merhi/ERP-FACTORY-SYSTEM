@@ -49,6 +49,10 @@ export interface VoucherEntry {
   employeeId?: number | null;
   debitAmount: string;
   creditAmount: string;
+  transactionCurrency?: string | null;
+  transactionDebitAmount?: string | null;
+  transactionCreditAmount?: string | null;
+  historicalExchangeRate?: string | null;
   narration: string | null;
 }
 
@@ -145,6 +149,7 @@ export interface VoucherData {
   totalAmount: string;
   optional: boolean;
   currency?: string | null;
+  exchangeRate?: string | null;
   entries: VoucherEntry[];
   purchaseOrder?: PurchaseOrderData | null;
   salesItems?: SalesItem[] | null;

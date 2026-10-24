@@ -122,6 +122,19 @@ vi.mock("../server/services/accounting/voucherCorrection", () => ({
   sendVoucherCorrectionRefusal: () => false,
 }));
 vi.mock("../server/services/accounting/engineRounding", () => ({ rebalanceVoucherRoundingTx: async () => "0.00" }));
+// The Zambia rate policy reads companies, business dates and approved rates
+// through storage; it has its own coverage, so this isolated route test keeps
+// the USD/CFA pass-through behaviour (no ZMW voucher is posted here).
+vi.mock("../server/services/accounting/zambiaVoucherRatePolicy", () => ({
+  assertApprovedZmwVoucherRate: async (
+    _companyId: number,
+    _voucherDate: string,
+    _currency: string | null | undefined,
+    suppliedRate: string | number | null | undefined
+  ) => (suppliedRate == null || suppliedRate === "" ? null : String(suppliedRate)),
+  assertLockedZmwVoucherEdit: () => undefined,
+  assertResolvedZmwVoucherEntriesTx: async () => undefined,
+}));
 vi.mock("../server/routes/factoryWhatsappRoutes", () => ({
   checkAccountWhatsAppRule: harness.checkAccountWhatsAppRule,
 }));

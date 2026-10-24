@@ -128,7 +128,7 @@ export const insertVoucherSchema = createInsertSchema(vouchers)
     ]),
     voucherDate: z.string().min(1, "Voucher date is required"),
     totalAmount: z.string().min(1, "Total amount is required"),
-    currency: z.enum(["USD", "CFA"]).default("USD"),
+    currency: z.enum(["USD", "CFA", "ZMW"]).default("USD"),
     optional: z.boolean().optional().default(false),
     shiftId: z.number().optional(),
     exchangeRate: z.string().optional(),
@@ -208,7 +208,7 @@ export const voucherEntries = pgTable(
     // debitAmount / creditAmount (above) are redefined as backward-compatible
     // historical BASE-CURRENCY (USD) amounts for all newly posted vouchers.
     // Legacy rows that stored CFA directly must be repaired by the backfill script.
-    /** ISO-4217 code of the original transaction currency (e.g. "XOF", "USD"). */
+    /** ISO-4217 code of the original transaction currency (e.g. "XOF", "ZMW", "USD"). */
     transactionCurrency: varchar("transaction_currency", { length: 3 }),
     /** Transaction-currency debit amount at time of posting (6 dp). */
     transactionDebitAmount: decimal("transaction_debit_amount", { precision: 20, scale: 6 }),
@@ -223,7 +223,7 @@ export const voucherEntries = pgTable(
     /**
      * Rate convention:
      *  IDENTITY             – transaction currency IS the base currency
-     *  TRANSACTION_PER_BASE – rate = transaction-currency units per 1 base unit (CFA per USD)
+     *  TRANSACTION_PER_BASE – rate = transaction-currency units per 1 base unit (CFA or ZMW per USD)
      *  BASE_PER_TRANSACTION – rate = base units per 1 transaction unit (reserved)
      */
     rateConvention: varchar("rate_convention", { length: 30 }),

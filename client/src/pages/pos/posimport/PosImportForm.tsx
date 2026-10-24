@@ -18,7 +18,7 @@ import { formatNumber } from "@/lib/formatNumber";
 import type { PosImportModel } from "./usePosImportModel";
 
 export function PosImportForm({ model }: { model: PosImportModel }) {
-  const { isCreditSale, saleCurrency, exchangeRate, isValidated, hasValidationErrors } = model;
+  const { isCreditSale, saleCurrency, displayCurrency, exchangeRate, isValidated, hasValidationErrors } = model;
   return (
     <Card>
       <CardHeader>
@@ -75,23 +75,25 @@ export function PosImportForm({ model }: { model: PosImportModel }) {
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">
               <Label htmlFor="currency">Currency (Excel rates are in)</Label>
-              <Select value={saleCurrency} onValueChange={(v) => model.setSaleCurrency(v as "USD" | "CFA")}>
+              <Select value={saleCurrency} onValueChange={(v) => model.setSaleCurrency(v as "USD" | "CFA" | "ZMW")}>
                 <SelectTrigger id="currency" data-testid="select-currency">
                   <SelectValue placeholder="Select currency" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="USD">USD</SelectItem>
-                  <SelectItem value="CFA">CFA</SelectItem>
+                  {displayCurrency === "CFA" && <SelectItem value="CFA">CFA</SelectItem>}
+                  {displayCurrency === "ZMW" && <SelectItem value="ZMW">ZMW — Kwacha</SelectItem>}
                 </SelectContent>
               </Select>
-              {saleCurrency === "CFA" && exchangeRate && (
+              {saleCurrency !== "USD" && exchangeRate && (
                 <p className="text-sm text-muted-foreground">
-                  Rate: 1 USD = {formatNumber(exchangeRate)} CFA. Amounts will be converted to USD.
+                  Rate: 1 USD = {formatNumber(exchangeRate, 6)} {saleCurrency}. Amounts will be posted in USD with the
+                  original {saleCurrency} and locked rate recorded.
                 </p>
               )}
-              {saleCurrency === "CFA" && !exchangeRate && (
+              {saleCurrency !== "USD" && !exchangeRate && (
                 <p className="text-sm text-destructive">
-                  No exchange rate set. Please set a rate in Settings before importing CFA sales.
+                  No applicable USD/{saleCurrency} rate for this sale date. Set a rate in Settings before importing.
                 </p>
               )}
             </div>

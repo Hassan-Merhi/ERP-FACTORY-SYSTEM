@@ -260,6 +260,13 @@ export const SYSTEM_ACCOUNTS: readonly SystemAccountDefinition[] = [
       ["RETAIL-OTHER", "Retail Other Clearing", "Asset", undefined, "Retail payments by other methods."],
       ["RETAIL-SALES", "Retail Sales Revenue", "Income", "Direct Income", "Retail POS sales."],
       ["RETAIL-INVENTORY", "Retail Inventory Asset", "Asset", undefined, "Retail stock at cost."],
+      [
+        "RETAIL-IN-TRANSIT",
+        "Retail Inventory In Transit",
+        "Asset",
+        undefined,
+        "Retail stock dispatched between locations, awaiting confirmed receipt.",
+      ],
       ["RETAIL-COGS", "Retail Cost of Goods Sold", "Direct Expense", undefined, "Cost of Retail POS sales."],
       ["RETAIL-DISCOUNTS", "Retail Discounts", "Expense", undefined, "Retail discounts given."],
       ["RETAIL-TAX", "Retail Tax Payable", "Liability", undefined, "Tax collected on Retail sales."],

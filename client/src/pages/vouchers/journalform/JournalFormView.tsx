@@ -1,5 +1,6 @@
 import { format } from "date-fns";
 import { ExchangeRateInput } from "@/components/ExchangeRateInput";
+import { useCurrencyContext } from "@/contexts/CurrencyContext";
 import { DraftRestorePrompt } from "@/components/DraftRestorePrompt";
 import { Card, CardContent } from "@/components/ui/card";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
@@ -28,19 +29,28 @@ export function JournalFormView({ model }: { model: Model }) {
     journalEffectiveDate,
     setJournalEffectiveDate,
   } = model;
+  const { baseCurrency, displayCurrency } = useCurrencyContext();
 
   if (isPOS) return null;
 
   return (
     <div className="space-y-4">
-      {selectedCurrency === "CFA" && (
+      {displayCurrency && selectedCurrency === displayCurrency && selectedCurrency !== baseCurrency && (
         <div className="flex flex-wrap items-center gap-2 sm:gap-4 p-3 bg-muted/30 rounded-md">
           <span className="text-sm text-muted-foreground">Transaction Rate:</span>
           <ExchangeRateInput
             value={transactionRate}
             onChange={setTransactionRate}
             selectedCurrency={selectedCurrency}
+            disabled={selectedCurrency === "ZMW"}
           />
+          {selectedCurrency === "ZMW" && (
+            <span className="text-xs text-muted-foreground" data-testid="zmw-locked-journal-rate">
+              {transactionRate
+                ? "Approved rate for voucher date (locked)"
+                : "No approved rate for this date; posting will be rejected"}
+            </span>
+          )}
         </div>
       )}
 

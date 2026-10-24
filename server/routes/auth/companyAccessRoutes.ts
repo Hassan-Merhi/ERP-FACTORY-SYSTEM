@@ -22,6 +22,7 @@ import { storage } from "../../storage";
 import { CompanyHasHistoryError } from "../../storage/company-deletion";
 import { companies, users, userCompanyRoles, erpUserPageAccess, roleFeaturePermissions } from "@shared/schema";
 import { eq } from "drizzle-orm";
+import { isSupportedZmwCompanyPair } from "@shared/companyRatePolicy";
 
 declare module "express-session" {
   interface SessionData {
@@ -141,6 +142,20 @@ async function prepareCompanyPayload(
 
   if (hasParentDecision) {
     payload.parentCompanyId = await normalizeParentCompanyId(payload.parentCompanyId, companyId);
+  }
+
+  // ZMW in this ERP uses a USD functional/accounting base. Validate the
+  // resulting company configuration, including partial PATCH requests, before
+  // saving it. Do not alter other companies or rewrite existing currency data.
+  if (payload.baseCurrency !== undefined || payload.displayCurrency !== undefined) {
+    const current = companyId === undefined ? null : await storage.getCompanyById(companyId);
+    const base = payload.baseCurrency === undefined ? (current?.baseCurrency ?? "USD") : payload.baseCurrency;
+    const display = payload.displayCurrency === undefined ? current?.displayCurrency : payload.displayCurrency;
+    if (!isSupportedZmwCompanyPair(String(base ?? ""), display == null ? null : String(display))) {
+      throw new CompanyParentValidationError(
+        "ZMW display currency currently requires USD as the company's base currency."
+      );
+    }
   }
   return payload;
 }

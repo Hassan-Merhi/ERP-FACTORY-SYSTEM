@@ -78,7 +78,7 @@ export interface SaleItem {
   brand: string;
 }
 
-export type RetailPaymentMethod = "cash" | "card" | "bank" | "mobile" | "other";
+export type RetailPaymentMethod = "cash" | "card" | "bank" | "mobile" | "other" | "credit" | "store_credit";
 
 export interface RetailPaymentDraft {
   method: RetailPaymentMethod;
@@ -96,6 +96,20 @@ export interface RetailPayment {
   changeAmount: number;
   reference: string | null;
   shiftId: number | null;
+  relatedPaymentId?: number | null;
+}
+
+/**
+ * Unpaid customer-credit (on account) value still outstanding on a sale.
+ * The server reverses this receivable first on any return, before paying
+ * anything back to cash/card/bank tenders.
+ */
+export function outstandingSaleCredit(sale: Pick<RetailSale, "payments">): number {
+  const credit = (sale.payments ?? []).reduce((sum, payment) => {
+    if (payment.method !== "credit") return sum;
+    return payment.paymentType === "payment" ? sum + payment.amount : sum - payment.amount;
+  }, 0);
+  return Math.max(0, Number(credit.toFixed(2)));
 }
 
 export interface RetailSale {

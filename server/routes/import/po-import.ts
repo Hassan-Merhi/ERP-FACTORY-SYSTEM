@@ -31,6 +31,14 @@ import { resolvePoImportCreditTarget } from "../../services/accounting/poImportA
 import { supplierService } from "../suppliers/supplierService";
 import { collectPreviewItemErrors, findPreviewContainer, type PoImportPreviewItem } from "./po-import-preview";
 import { allocatePoCharges } from "./poChargeAllocation";
+import { applyExplicitImportCurrency } from "./poImportCurrency";
+import {
+  convertZmwContainerPreview,
+  nativePurchaseOrderFields,
+  splitNativeCharges,
+  validateZmwContainerPreview,
+} from "./poImportZambia";
+import { errorStatus } from "../../lib/httpHandlers";
 
 export function registerPoImportRoutes(app: Express) {
   app.post("/api/po-import/validate", requireAuth, async (req, res) => {
@@ -88,6 +96,18 @@ export function registerPoImportRoutes(app: Express) {
         errors.push("Container data not found in preview");
       } else {
         const containerPreview = parsedPreview.container;
+        // The stated invoice currency is applied to every line before the
+        // Kwacha checks below, so a sheet without a Currency column can never
+        // be read as USD for a Kwacha-enabled company.
+        const importCompany = await storage.getCompanyById(req.session.currentCompanyId!);
+        errors.push(...applyExplicitImportCurrency(containerPreview.items, req.body.currency, importCompany));
+        errors.push(
+          ...(await validateZmwContainerPreview(containerPreview, {
+            companyId: req.session.currentCompanyId!,
+            date: req.body.importDate,
+            exchangeRate: req.body.exchangeRate,
+          }))
+        );
         errors.push(
           ...(await collectPreviewItemErrors(containerPreview.items, req.session.currentCompanyId!, allStockItems))
         );
@@ -177,6 +197,7 @@ export function registerPoImportRoutes(app: Express) {
         return res.status(400).json({ message: "Container data not found in preview" });
       }
       const containerPreview = parsedPreview.container;
+      // Currency normalization follows successful structural validation, before any writes.
       // This endpoint writes these figures, so a payload that did not carry them
       // as readable numbers is refused rather than summed into NaN.
       for (const line of parsedPreview.linesWithUnreadableMoney) {
@@ -195,6 +216,12 @@ export function registerPoImportRoutes(app: Express) {
         ...(await collectPreviewItemErrors(containerPreview.items, req.session.currentCompanyId!, allStockItems))
       );
 
+      // The explicitly selected invoice currency is stamped on every line (and
+      // checked against the sheet) before any Kwacha conversion or write.
+      validationErrors.push(
+        ...applyExplicitImportCurrency(containerPreview.items, req.body.currency, currentCompanyLink)
+      );
+
       // Reject import if validation fails
       if (validationErrors.length > 0) {
         return res.status(400).json({
@@ -202,6 +229,15 @@ export function registerPoImportRoutes(app: Express) {
           errors: validationErrors,
         });
       }
+
+      // Historical ZMW is converted once before container, subsidiary voucher,
+      // parent credit or stock writes (409 for a mixed-currency container).
+      // Original Kwacha money is preserved on each line and each PO.
+      const zambiaNative = await convertZmwContainerPreview(containerPreview, {
+        companyId: currentCompanyId,
+        date: importDate,
+        exchangeRate: req.body.exchangeRate,
+      });
 
       // Check idempotency
       const existingImport = await storage.getImportLogByHash(fileHash);
@@ -338,6 +374,8 @@ export function registerPoImportRoutes(app: Express) {
 
       // Split each container charge across the POs by item value, exact to the cent.
       const poEntries = Object.entries(poGroups);
+      // Native and base charge splits share the PO grouping, but never mix units.
+      const nativeChargeSplits = splitNativeCharges(zambiaNative, poEntries, resolvedFreightPaidBy === "parent");
       const chargeSplits = allocatePoCharges(
         poEntries.map(([, items]) => items.map((item) => item.lineTotal)),
         {
@@ -754,6 +792,7 @@ export function registerPoImportRoutes(app: Express) {
             supplierId,
             voucherId: voucher.id,
             currency: poItems[0]?.currency,
+            ...nativePurchaseOrderFields(zambiaNative, nativeChargeSplits, poIndex, poItems.length, importDate),
             itemsTotal: poItemsTotal.toFixed(),
             freight: poFreight.toFixed(2),
             surcharge: poSurcharge.toFixed(2),
@@ -765,7 +804,7 @@ export function registerPoImportRoutes(app: Express) {
             freightPaidBy: resolvedFreightPaidBy,
             freightParentAccountId: resolvedFreightPaidBy === "parent" ? resolvedFreightParentAccountId : null,
           },
-          getClientDate(req)
+          zambiaNative ? importDate : getClientDate(req)
         );
 
         for (const item of poItems) {
@@ -798,6 +837,7 @@ export function registerPoImportRoutes(app: Express) {
             quantity: item.quantity.toString(),
             rate: item.rate.toString(),
             lineTotal: item.lineTotal.toString(),
+            ...(zambiaNative ? { nativeRate: item.nativeRate, nativeLineTotal: item.nativeLineTotal } : {}),
           });
         }
       }
@@ -849,7 +889,7 @@ export function registerPoImportRoutes(app: Express) {
         res.status(error.status).json({ code: error.code, message: error.message });
         return;
       }
-      res.status(500).json({ message: getErrorMessage(error) });
+      res.status(errorStatus(error)).json({ message: getErrorMessage(error) });
     }
   });
 }

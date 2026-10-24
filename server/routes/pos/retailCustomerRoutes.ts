@@ -15,6 +15,7 @@ import {
   retailBrands,
   retailPosReturnItems,
   retailPosReturns,
+  retailPosPayments,
   retailPosSaleItems,
   retailPosSales,
   retailProductVariants,
@@ -26,6 +27,9 @@ import { db } from "../../db";
 import { getErrorMessage } from "../../lib/httpHandlers";
 import { punctuationInsensitiveSearch } from "../../lib/searchNormalization";
 import { loadSaleResponse } from "../../services/retail/retailSaleService";
+import { getCustomerBalance } from "../../storage/accounting/customer-balances";
+import { customerService } from "../customers/customerService";
+import { getCustomerAuditActor } from "../customers/customerRequestContext";
 import { ensureCompanyLocation, requireRetailCompany } from "./retailPosContext";
 
 const customerCreateSchema = z.object({
@@ -96,49 +100,55 @@ export function registerRetailCustomerRoutes(app: Express): void {
     }
   });
 
+  /** Signed balance from the canonical ERP customer ledger (debit = amount owed). */
+  app.get("/api/pos/retail/customers/:id/balance", requireAuth, async (req, res) => {
+    try {
+      const companyId = await requireRetailCompany(req, res);
+      if (!companyId) return;
+      const customerId = Number(req.params.id);
+      if (!Number.isInteger(customerId) || customerId <= 0) {
+        return res.status(400).json({ message: "Invalid customer" });
+      }
+      const [owned] = await db
+        .select({ id: customers.id })
+        .from(customers)
+        .where(and(eq(customers.id, customerId), eq(customers.companyId, companyId), isNull(customers.deletedAt)))
+        .limit(1);
+      if (!owned) return res.status(404).json({ message: "Customer not found" });
+      res.json({ customerId, balance: await getCustomerBalance(customerId, companyId) });
+    } catch (error) {
+      res.status(400).json({ message: getErrorMessage(error) });
+    }
+  });
+
   /** Quick-create a customer from the POS (name required, phone optional). */
   app.post("/api/pos/retail/customers", requireAuth, async (req, res) => {
     try {
       const companyId = await requireRetailCompany(req, res);
       if (!companyId) return;
       const body = customerCreateSchema.parse(req.body);
-      const usedCodes = new Set(
-        (
-          await db
-            .select({ code: customers.code })
-            .from(customers)
-            .where(and(eq(customers.companyId, companyId), isNull(customers.deletedAt)))
-        ).map((row) => row.code)
-      );
-      let suffix = 1;
-      for (const code of usedCodes) {
-        const parsed = Number(String(code).replace(/^CUST/i, ""));
-        if (Number.isFinite(parsed)) suffix = Math.max(suffix, parsed + 1);
-      }
-      let code = `CUST${String(suffix).padStart(3, "0")}`;
-      while (usedCodes.has(code)) {
-        suffix += 1;
-        code = `CUST${String(suffix).padStart(3, "0")}`;
-      }
-      const [customer] = await db
-        .insert(customers)
-        .values({
-          companyId,
-          code,
+      // Use the canonical ERP creation path so the customer and their
+      // Accounts Receivable ledger are created and linked atomically.
+      // Retail POS users are authorized here by requireRetailCompany; they
+      // do not need access to Accounting -> Parties to add a customer.
+      const customer = await customerService.create(
+        companyId,
+        {
           legalName: body.legalName,
-          phone: body.phone?.trim() ? body.phone.trim() : null,
+          phone: body.phone?.trim() || null,
           openingBalance: "0",
           openingBalanceSide: "Dr",
           active: true,
-        })
-        .returning({
-          id: customers.id,
-          code: customers.code,
-          legalName: customers.legalName,
-          phone: customers.phone,
-          active: customers.active,
-        });
-      res.status(201).json(customer);
+        },
+        getCustomerAuditActor(req)
+      );
+      res.status(201).json({
+        id: customer.id,
+        code: customer.code,
+        legalName: customer.legalName,
+        phone: customer.phone,
+        active: customer.active,
+      });
     } catch (error) {
       res.status(400).json({ message: getErrorMessage(error) });
     }
@@ -358,11 +368,32 @@ export function registerRetailCustomerRoutes(app: Express): void {
       if (!Number.isInteger(saleId) || saleId <= 0) return res.status(400).json({ message: "Invalid sale" });
       const body = z.object({ customerId: z.coerce.number().int().positive().nullable() }).parse(req.body ?? {});
       const [sale] = await db
-        .select({ id: retailPosSales.id })
+        .select({ id: retailPosSales.id, customerId: retailPosSales.customerId })
         .from(retailPosSales)
         .where(and(eq(retailPosSales.id, saleId), eq(retailPosSales.companyId, companyId)))
         .limit(1);
       if (!sale) return res.status(404).json({ message: "Retail sale not found" });
+      // Customer receivable journal entries are immutable. Once a sale has posted to the
+      // customer's ledger (an on-account tender, or a refund credited to their account),
+      // changing its customer needs a supervised reversal/repost, not a name update.
+      if (body.customerId !== sale.customerId) {
+        const [creditTender] = await db
+          .select({ id: retailPosPayments.id })
+          .from(retailPosPayments)
+          .where(
+            and(
+              eq(retailPosPayments.companyId, companyId),
+              eq(retailPosPayments.saleId, saleId),
+              inArray(retailPosPayments.method, ["credit", "store_credit"])
+            )
+          )
+          .limit(1);
+        if (creditTender)
+          return res.status(409).json({
+            code: "RETAIL_CREDIT_CUSTOMER_LOCKED",
+            message: "Cannot change the customer on a posted credit sale; use an accounting reversal instead",
+          });
+      }
       let customerName = "Walk-in";
       if (body.customerId) {
         const [customer] = await db

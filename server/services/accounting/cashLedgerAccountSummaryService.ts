@@ -4,7 +4,7 @@ import { db, pool } from "../../db";
 import { ledgerAccounts } from "@shared/schema";
 import type { CashBankCurrencySummary, NativeBalancesByCurrency } from "./cashBankRevaluationService";
 import { normalizeCurrencyCode } from "./currencyAmounts";
-import { getLatestCfaPerUsd } from "./latestCfaPerUsd";
+import { getCashBankTranslationRates, type CashBankTranslationRates } from "./cashBankTranslationRates";
 
 const DP_AMOUNT = 6;
 const DP_RATE = 10;
@@ -169,7 +169,7 @@ async function loadLedgerAggregate(companyId: number, accountId: number): Promis
 function summarizeLedgerAccount(
   account: LedgerAccountRow,
   rows: AggregateRow[],
-  currentCfaPerUsd: Decimal | null
+  rates: CashBankTranslationRates
 ): CashBankCurrencySummary {
   const native = new Map<string, Decimal>();
   let historicalBase = new Decimal(0);
@@ -219,12 +219,13 @@ function summarizeLedgerAccount(
   for (const [currency, value] of native) {
     if (currency === "USD") {
       translated = translated.plus(value);
-    } else if (currency === "CFA") {
-      if (!currentCfaPerUsd) {
+    } else if (currency === "CFA" || currency === "ZMW") {
+      const rate = rates[currency];
+      if (!rate) {
         currentRateMissing = true;
         unresolvedTranslationCurrencies.push(currency);
       } else {
-        translated = translated.plus(value.div(currentCfaPerUsd));
+        translated = translated.plus(value.div(rate));
       }
     } else {
       unresolvedTranslationCurrencies.push(currency);
@@ -254,7 +255,8 @@ function summarizeLedgerAccount(
     historicalBaseBalance: historicalBase.toDecimalPlaces(DP_AMOUNT).toFixed(DP_AMOUNT),
     currentTranslatedBaseBalance,
     translationDifference,
-    currentCfaPerUsd: currentCfaPerUsd?.toDecimalPlaces(DP_RATE).toFixed(DP_RATE) ?? null,
+    currentCfaPerUsd: rates.CFA?.toDecimalPlaces(DP_RATE).toFixed(DP_RATE) ?? null,
+    currentZmwPerUsd: rates.ZMW?.toDecimalPlaces(DP_RATE).toFixed(DP_RATE) ?? null,
     currentRateMissing,
     openingBalanceCurrencyUnresolved,
     unresolvedOpeningBalanceRaw,
@@ -265,7 +267,7 @@ function summarizeLedgerAccount(
   };
 }
 
-/** `asOf`: the date of the current CFA rate (default: the company's business date). */
+/** `asOf`: the currency-translation rate cutoff (default company business date); not a voucher date cut. */
 export async function getCashLedgerAccountSummary(
   companyId: number,
   accountId: number,
@@ -274,9 +276,9 @@ export async function getCashLedgerAccountSummary(
   const account = await loadLedgerAccount(companyId, accountId);
   if (!account) return null;
 
-  const [rows, currentCfaPerUsd] = await Promise.all([
+  const [rows, rates] = await Promise.all([
     loadLedgerAggregate(companyId, accountId),
-    getLatestCfaPerUsd(companyId, asOf),
+    getCashBankTranslationRates(companyId, asOf),
   ]);
-  return summarizeLedgerAccount(account, rows, currentCfaPerUsd);
+  return summarizeLedgerAccount(account, rows, rates);
 }

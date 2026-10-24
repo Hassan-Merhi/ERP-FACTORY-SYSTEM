@@ -164,6 +164,18 @@ export const purchaseOrders = pgTable(
       .references(() => suppliers.id, { onDelete: "restrict" }),
     voucherId: integer("voucher_id").references(() => vouchers.id, { onDelete: "restrict" }),
     currency: text("currency").notNull().default("USD"),
+    // Phase 8: original native purchase currency and approved posting-date rate.
+    // Existing monetary columns remain historical USD, including stock valuation.
+    historicalExchangeRate: decimal("historical_exchange_rate", { precision: 20, scale: 10 }),
+    historicalRateDate: date("historical_rate_date"),
+    nativeLineCount: integer("native_line_count"),
+    nativeItemsTotal: decimal("native_items_total", { precision: 20, scale: 2 }),
+    nativeFreight: decimal("native_freight", { precision: 20, scale: 2 }),
+    nativeSurcharge: decimal("native_surcharge", { precision: 20, scale: 2 }),
+    nativeFumigation: decimal("native_fumigation", { precision: 20, scale: 2 }),
+    nativeDocumentCharges: decimal("native_document_charges", { precision: 20, scale: 2 }),
+    nativeDiscount: decimal("native_discount", { precision: 20, scale: 2 }),
+    nativeOtherCharges: decimal("native_other_charges", { precision: 20, scale: 2 }),
     itemsTotal: decimal("items_total", { precision: 20, scale: 2 }).default("0"),
     freight: decimal("freight", { precision: 20, scale: 2 }).default("0"),
     surcharge: decimal("surcharge", { precision: 20, scale: 2 }).default("0"),
@@ -220,6 +232,9 @@ export const poLineItems = pgTable("po_line_items", {
   quantity: decimal("quantity", { precision: 15, scale: 3 }).notNull(),
   rate: decimal("rate", { precision: 15, scale: 2 }).notNull(),
   lineTotal: decimal("line_total", { precision: 20, scale: 2 }).notNull(),
+  // Native ZMW evidence is immutable once the PO has been posted.
+  nativeRate: decimal("native_rate", { precision: 20, scale: 2 }),
+  nativeLineTotal: decimal("native_line_total", { precision: 20, scale: 2 }),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 

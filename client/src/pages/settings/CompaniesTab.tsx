@@ -67,6 +67,10 @@ export function CompaniesTab() {
     onSuccess: () => {
       toast({ title: "Success", description: editingCompany ? "Company updated." : "Company created." });
       queryClient.invalidateQueries({ queryKey: ["/api/companies"] });
+      if (editingCompany) {
+        queryClient.invalidateQueries({ queryKey: [`/api/companies/${editingCompany.id}`] });
+        queryClient.invalidateQueries({ queryKey: ["/api/exchange-rates"] });
+      }
 
       // Supplier visibility for PO Import depends on companies.parentCompanyId.
       // A cached empty supplier list can otherwise survive for the normal
@@ -138,6 +142,7 @@ export function CompaniesTab() {
   }
 
   const selectedCompanyType = companyForm.watch("companyType");
+  const selectedDisplayCurrency = companyForm.watch("displayCurrency");
   const selectedParentCompanyId = companyForm.watch("parentCompanyId");
   const editingCompanyId = Number(editingCompany?.id ?? 0);
   const activeParentCompanies = companies.filter(
@@ -301,6 +306,7 @@ export function CompaniesTab() {
                           <SelectContent>
                             <SelectItem value="none">None</SelectItem>
                             <SelectItem value="CFA">CFA</SelectItem>
+                            <SelectItem value="ZMW">ZMW — Zambian Kwacha (K)</SelectItem>
                             <SelectItem value="EUR">EUR</SelectItem>
                             <SelectItem value="GBP">GBP</SelectItem>
                           </SelectContent>
@@ -310,6 +316,13 @@ export function CompaniesTab() {
                     )}
                   />
                 </div>
+                {selectedDisplayCurrency === "ZMW" && (
+                  <p className="text-xs text-muted-foreground" data-testid="zambia-zmw-currency-note">
+                    Kwacha pricing uses a USD accounting base. After saving, set the company's daily USD/ZMW rate in
+                    Exchange Rates before entering ZMW transactions. In Company Timezone, select Africa/Lusaka for
+                    Zambia's correct business day. Existing voucher balances are not converted.
+                  </p>
+                )}
                 <FormField
                   control={companyForm.control}
                   name="active"

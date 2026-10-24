@@ -281,6 +281,7 @@ export default function RetailQuickAdd() {
       }
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["retail-products"] }),
+        queryClient.invalidateQueries({ queryKey: ["retail-catalog-navigation"] }),
         queryClient.invalidateQueries({ queryKey: ["retail-product"] }),
         queryClient.invalidateQueries({ queryKey: ["retail-brands"] }),
         queryClient.invalidateQueries({ queryKey: ["retail-styles"] }),

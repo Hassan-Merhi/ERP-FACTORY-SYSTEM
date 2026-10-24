@@ -73,6 +73,10 @@ export interface JournalVoucherEntry {
   customerId?: number | null;
   debitAmount?: string | number | null;
   creditAmount?: string | number | null;
+  transactionCurrency?: string | null;
+  transactionDebitAmount?: string | number | null;
+  transactionCreditAmount?: string | number | null;
+  historicalExchangeRate?: string | number | null;
   narration?: string | null;
 }
 
@@ -81,6 +85,8 @@ export interface JournalVoucherToEdit {
   voucherNumber?: string | null;
   voucherType: string;
   voucherDate: string;
+  currency?: string | null;
+  exchangeRate?: string | number | null;
   entries?: JournalVoucherEntry[];
   description?: string | null;
   notes?: string | null;

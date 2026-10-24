@@ -153,6 +153,7 @@ export const RETAIL_HIDDEN_ERP_ROUTES = new Set([
   "/tracking",
   "/agents",
   "/transaction-journal",
+  "/stock-transfer-order",
   "/stock",
   "/supplier-profit-check",
   "/pos-item-replacement",

@@ -94,7 +94,8 @@ export async function ensureRetailFinancialSchema(pool: Pool): Promise<void> {
       ADD COLUMN IF NOT EXISTS shift_id INTEGER REFERENCES pos_shifts(id) ON DELETE SET NULL,
       ADD COLUMN IF NOT EXISTS accounting_voucher_id INTEGER;
     ALTER TABLE retail_pos_return_items
-      ADD COLUMN IF NOT EXISTS unit_cost NUMERIC(20,6) NOT NULL DEFAULT 0;
+      ADD COLUMN IF NOT EXISTS unit_cost NUMERIC(20,6) NOT NULL DEFAULT 0,
+      ADD COLUMN IF NOT EXISTS restocked BOOLEAN NOT NULL DEFAULT true;
     CREATE INDEX IF NOT EXISTS retail_pos_sales_shift_idx ON retail_pos_sales (shift_id);
 
     CREATE TABLE IF NOT EXISTS retail_pos_payments (

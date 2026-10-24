@@ -3,7 +3,7 @@ import { and, eq, isNull, or } from "drizzle-orm";
 import { db, pool } from "../../db";
 import { bankAccounts, ledgerAccounts } from "@shared/schema";
 import { normalizeCurrencyCode } from "./currencyAmounts";
-import { getLatestCfaPerUsd } from "./latestCfaPerUsd";
+import { getCashBankTranslationRates } from "./cashBankTranslationRates";
 
 const DP_AMOUNT = 6;
 const DP_RATE = 10;
@@ -25,6 +25,7 @@ export interface CashBankCurrencySummary {
   currentTranslatedBaseBalance: string | null;
   translationDifference: string | null;
   currentCfaPerUsd: string | null;
+  currentZmwPerUsd: string | null;
   currentRateMissing: boolean;
   openingBalanceCurrencyUnresolved: boolean;
   unresolvedOpeningBalanceRaw: string | null;
@@ -102,7 +103,7 @@ export type CashBankAttribution = "legacy" | "engine";
 
 export interface CashBankRevaluationOptions {
   attribution?: CashBankAttribution;
-  /** The date of the current CFA rate (default: the company's business date); a later rate is never used. */
+  /** Current snapshot rate date (default company business date). Does not date-cut voucher balances. */
   asOf?: string;
 }
 
@@ -284,13 +285,16 @@ export async function getCashBankRevaluation(
 ): Promise<{
   accounts: CashBankCurrencySummary[];
   currentCfaPerUsd: string | null;
+  currentZmwPerUsd: string | null;
   unresolvedAccountCount: number;
 }> {
   const attribution = options.attribution ?? "legacy";
-  const [accounts, currentCfaPerUsd] = await Promise.all([
+  const [accounts, rates] = await Promise.all([
     loadAccounts(companyId, attribution),
-    getLatestCfaPerUsd(companyId, options.asOf),
+    getCashBankTranslationRates(companyId, options.asOf),
   ]);
+  const currentCfaPerUsd = rates.CFA;
+  const currentZmwPerUsd = rates.ZMW;
 
   const ledgerIds = accounts.filter((row) => row.accountKind === "ledger").map((row) => row.id);
   const bankIds = accounts.filter((row) => row.accountKind === "bank").map((row) => row.id);
@@ -361,12 +365,13 @@ export async function getCashBankRevaluation(
     for (const [currency, value] of native) {
       if (currency === "USD") {
         translated = translated.plus(value);
-      } else if (currency === "CFA") {
-        if (!currentCfaPerUsd) {
+      } else if (currency === "CFA" || currency === "ZMW") {
+        const rate = currency === "CFA" ? currentCfaPerUsd : currentZmwPerUsd;
+        if (!rate) {
           currentRateMissing = true;
           unresolvedTranslationCurrencies.push(currency);
         } else {
-          translated = translated.plus(value.div(currentCfaPerUsd));
+          translated = translated.plus(value.div(rate));
         }
       } else {
         unresolvedTranslationCurrencies.push(currency);
@@ -398,6 +403,7 @@ export async function getCashBankRevaluation(
       currentTranslatedBaseBalance,
       translationDifference,
       currentCfaPerUsd: currentCfaPerUsd?.toDecimalPlaces(DP_RATE).toFixed(DP_RATE) ?? null,
+      currentZmwPerUsd: currentZmwPerUsd?.toDecimalPlaces(DP_RATE).toFixed(DP_RATE) ?? null,
       currentRateMissing,
       openingBalanceCurrencyUnresolved,
       unresolvedOpeningBalanceRaw,
@@ -411,6 +417,7 @@ export async function getCashBankRevaluation(
   return {
     accounts: summaries,
     currentCfaPerUsd: currentCfaPerUsd?.toDecimalPlaces(DP_RATE).toFixed(DP_RATE) ?? null,
+    currentZmwPerUsd: currentZmwPerUsd?.toDecimalPlaces(DP_RATE).toFixed(DP_RATE) ?? null,
     unresolvedAccountCount: summaries.filter((row) => row.totalsProvisional).length,
   };
 }
