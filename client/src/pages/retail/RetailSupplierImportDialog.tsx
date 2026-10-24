@@ -694,7 +694,7 @@ export function RetailSupplierImportDialog({
                 {photoArchiveName ? `${photoArchiveName} — ${photoArchive?.imageCount ?? 0} verified images`
                   : photoBusy ? "Checking picture ZIP…" : "Choose ZIP with JPG/PNG/WEBP/GIF files referenced by their filenames in Excel."}
               </p>
-              {photoError && <p role="alert" className="text-xs text-destructive">{photoError}</p>
+              {photoError && <p role="alert" className="text-xs text-destructive">{photoError}</p>}
             </div>
           </div>
           {fileError && <p role="alert" className="text-sm text-destructive">{fileError}</p>}
