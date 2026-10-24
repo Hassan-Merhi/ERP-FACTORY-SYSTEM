@@ -188,8 +188,16 @@ describe("factory location inventory page behavior", () => {
     fireEvent.click(screen.getByTestId("row-location-11"));
 
     expect(screen.getByTestId("text-page-title")).toHaveTextContent("Main");
-    expect(screen.getByTestId("stat-total-bales")).toHaveTextContent("12");
-    expect(screen.getByTestId("stat-total-kg")).toHaveTextContent("650");
+    // Bales and KG are combined cards (d64cb5a): the total, then regular and
+    // wipers & garbage. Nothing here is a special category, so all of it is regular.
+    // The card labels repeat as table headers, so anchor on the card-only split label.
+    const balesCard = screen.getByText("Regular Bales").closest(".rounded-xl");
+    expect(balesCard).toHaveTextContent(/Total Bales\s*12/);
+    expect(balesCard).toHaveTextContent(/Regular Bales\s*12/);
+    expect(balesCard).toHaveTextContent(/Wipers & Garbage Bales\s*0/);
+    const kgCard = screen.getByText("Regular KG").closest(".rounded-xl");
+    expect(kgCard).toHaveTextContent(/Total KG\s*650/);
+    expect(kgCard).toHaveTextContent(/Regular KG\s*650/);
     expect(screen.getByTestId("stat-categories")).toHaveTextContent("2");
     expect(screen.getByTestId("stat-cost-value")).toHaveTextContent("$100.00");
     expect(screen.getByTestId("stat-sell-value")).toHaveTextContent("$156.00");

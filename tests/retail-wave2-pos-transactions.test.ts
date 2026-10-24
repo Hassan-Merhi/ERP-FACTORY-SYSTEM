@@ -110,7 +110,9 @@ describe("Retail POS Wave 2 transaction invariants", () => {
     expect(retailPos).toContain('selectedCompany?.role === "POS"');
     expect(retailPos).toContain("assignedLocationId");
     expect(retailPos).toContain("disabled={isPosRole}");
-    expect(retailPos).toContain("{!isPosRole && (");
+    // Variant transfers used to render here for non-POS roles only; 5099a92 took
+    // them off the POS screen for everyone. Transfers belong to Retail Inventory.
+    expect(retailPos).not.toContain("RetailVariantTransferCard");
   });
 
   it("supports exact barcode lookup and keyboard wedge scanners", () => {
