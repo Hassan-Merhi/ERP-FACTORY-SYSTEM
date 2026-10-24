@@ -9,11 +9,13 @@ import { apiRequest } from "@/lib/queryClient";
 import { fetchRetailCartPreview } from "./retailWave2Api";
 import { RetailItemImage } from "./RetailScanFeedback";
 import { RetailPaymentPanel } from "./RetailPaymentPanel";
+import { type RetailPaymentAccounts } from "./RetailPaymentAccountSelect";
 import {
   lookupRetailBarcode,
   makeKey,
   money,
   outstandingSaleCredit,
+  readJson,
   type RetailPaymentDraft,
   type RetailPosItem,
   type RetailSale,
@@ -57,7 +59,12 @@ export function RetailExchangeDialog({
   const [newItems, setNewItems] = useState<Array<RetailPosItem & { exchangeQuantity: number }>>([]);
   const [scanText, setScanText] = useState("");
   const [busy, setBusy] = useState(false);
-  const [payments, setPayments] = useState<RetailPaymentDraft[]>([{ method: "cash", amount: 0, tenderedAmount: 0 }]);
+  const [payments, setPayments] = useState<RetailPaymentDraft[]>([{ method: "cash", amount: 0, tenderedAmount: null }]);
+  const { data: accounts } = useQuery<RetailPaymentAccounts>({
+    queryKey: ["retail-payment-accounts"],
+    queryFn: () => readJson<RetailPaymentAccounts>("/api/pos/retail/payment-accounts"),
+    enabled: Boolean(sale),
+  });
   const attemptRef = useRef<{ fingerprint: string; key: string } | null>(null);
 
   useEffect(() => {
@@ -66,7 +73,7 @@ export function RetailExchangeDialog({
     setReason("");
     setNewItems([]);
     setScanText("");
-    setPayments([{ method: "cash", amount: 0, tenderedAmount: 0 }]);
+    setPayments([{ method: "cash", amount: 0, tenderedAmount: null }]);
     attemptRef.current = null;
   }, [sale?.id]);
 
@@ -160,6 +167,10 @@ export function RetailExchangeDialog({
     }
     if (!previewQuery.data || previewQuery.isFetching) {
       toast({ title: "Replacement price is still loading", variant: "destructive" });
+      return;
+    }
+    if (!accounts || payments.some((payment) => payment.method !== "credit" && !payment.ledgerAccountId && !payment.bankAccountId)) {
+      toast({ title: "Select an account for each replacement payment", variant: "destructive" });
       return;
     }
     if (Math.abs(payments.reduce((sum, payment) => sum + Number(payment.amount || 0), 0) - newTotal) > 0.005) {
@@ -320,6 +331,8 @@ export function RetailExchangeDialog({
               value={payments}
               onChange={setPayments}
               canUseCredit={Boolean(sale.customerId)}
+              accounts={accounts}
+              customerName={sale.customerName}
             />
           ) : null}
 
