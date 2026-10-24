@@ -94,7 +94,6 @@ export function replayWorkerAdvances(
   return cents(total);
 }
 
-
 /**
  * Restore advance amounts, repayments and payroll deductions as actually
  * recorded at the selected day. Used only after ALL three baselines exist.
@@ -140,11 +139,21 @@ async function recordedWorkerAdvancesAsOf(
   for (const r of payrolls.rows.values()) {
     const id = Number(r.id);
     const workerId = Number(r.worker_id);
-    if (r.deleted_at != null || !workers.has(workerId) || payrollsWithRepayments.has(id) ||
-        String(r.period_start ?? "").slice(0, 10) > scope.asOf) continue;
+    if (
+      r.deleted_at != null ||
+      !workers.has(workerId) ||
+      payrollsWithRepayments.has(id) ||
+      String(r.period_start ?? "").slice(0, 10) > scope.asOf
+    )
+      continue;
     const deduction = value(r.advances as string | number | null | undefined);
     if (deduction.lte(0)) continue;
-    deductions.set(workerId, value(deductions.get(workerId) ?? "0").plus(deduction).toFixed());
+    deductions.set(
+      workerId,
+      value(deductions.get(workerId) ?? "0")
+        .plus(deduction)
+        .toFixed()
+    );
   }
   return { value: replayWorkerAdvances(selected, byAdvance, deductions), warnings: [] };
 }
@@ -234,7 +243,6 @@ async function factoryWorkerAdvancesAsOf(companyId: number, scope: FactoryNetPos
   };
 }
 
-
 /** Post-baseline Factory rent, reconstructed from recorded unit, contract,
  * monthly-ledger and posted-payment state. Earlier dates fall back to the
  * existing dated-source calculations and their explicit limitations.
@@ -250,18 +258,30 @@ async function recordedFactoryRentalAsOf(
     loadFactoryRowsKnownAt("property_payments", companyId, scope),
   ]);
   if (!units.ready || !contracts.ready || !monthly.ready || !payments.ready) return null;
-  const activeUnitIds = new Set([...units.rows.values()]
-    .filter((r) => r.module === "FACTORY" && r.active === true && r.deleted_at == null)
-    .map((r) => Number(r.id)));
+  const activeUnitIds = new Set(
+    [...units.rows.values()]
+      .filter((r) => r.module === "FACTORY" && r.active === true && r.deleted_at == null)
+      .map((r) => Number(r.id))
+  );
   const selected = [...contracts.rows.values()]
-    .filter((r) => r.company_id === companyId && r.module === "FACTORY" &&
-       r.deleted_at == null && String(r.start_date ?? "").slice(0, 10) <= scope.asOf)
-    .filter((r) => r.status === "ACTIVE"
-      ? activeUnitIds.has(Number(r.unit_id))
-      : r.end_date != null && String(r.end_date).slice(0, 10) >= scope.asOf)
+    .filter(
+      (r) =>
+        r.company_id === companyId &&
+        r.module === "FACTORY" &&
+        r.deleted_at == null &&
+        String(r.start_date ?? "").slice(0, 10) <= scope.asOf
+    )
+    .filter((r) =>
+      r.status === "ACTIVE"
+        ? activeUnitIds.has(Number(r.unit_id))
+        : r.end_date != null && String(r.end_date).slice(0, 10) >= scope.asOf
+    )
     .map((r) => ({ id: Number(r.id), startDate: String(r.start_date).slice(0, 10) }));
   if (!selected.length) return { value: 0, warnings: [] };
-  const sums = new Map<number, { expected: InstanceType<typeof MoneyDecimal>; paid: InstanceType<typeof MoneyDecimal> }>();
+  const sums = new Map<
+    number,
+    { expected: InstanceType<typeof MoneyDecimal>; paid: InstanceType<typeof MoneyDecimal> }
+  >();
   const billingDays = new Map<number, number>();
   for (const contract of selected) {
     if (!Number.isSafeInteger(contract.id) || contract.id <= 0) throw new Error("HISTORICAL_RENT_CONTRACT_ID_INVALID");
@@ -292,9 +312,12 @@ async function recordedFactoryRentalAsOf(
     if (!r.posted_at) warnings.add("HISTORICAL_RENT_POSTING_TIMESTAMP_MISSING");
     row.paid = row.paid.plus(value(r.amount as string | number | null | undefined));
   }
-  const valueAtDate = sumRentalContractPositions([...sums.values()].map((r) => ({
-    expected: r.expected.toFixed(), paid: r.paid.toFixed(),
-  })));
+  const valueAtDate = sumRentalContractPositions(
+    [...sums.values()].map((r) => ({
+      expected: r.expected.toFixed(),
+      paid: r.paid.toFixed(),
+    }))
+  );
   return { value: valueAtDate, warnings: [...warnings] };
 }
 

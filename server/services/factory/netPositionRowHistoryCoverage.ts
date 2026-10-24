@@ -20,9 +20,7 @@ export type FactoryRowHistoryCoverage = {
   certified: false;
 };
 
-export async function loadFactoryRowHistoryCoverage(
-  scope: FactoryNetPositionAsOf
-): Promise<FactoryRowHistoryCoverage> {
+export async function loadFactoryRowHistoryCoverage(scope: FactoryNetPositionAsOf): Promise<FactoryRowHistoryCoverage> {
   const trackedTables = FACTORY_ROW_HISTORY_TABLES.length;
   const empty = (): FactoryRowHistoryCoverage => ({
     trackedTables,
@@ -62,8 +60,7 @@ export async function loadFactoryRowHistoryCoverage(
   let readyTables = 0;
   for (const [name] of FACTORY_ROW_HISTORY_TABLES) {
     const status = byName.get(name);
-    if (!status || status.version !== FACTORY_ROW_HISTORY_VERSION ||
-        Number(status.installed_triggers) !== 3) {
+    if (!status || status.version !== FACTORY_ROW_HISTORY_VERSION || Number(status.installed_triggers) !== 3) {
       unavailableTables.push(name);
     } else if (!status.available_by_date) {
       preBaselineTables.push(name);

@@ -510,9 +510,7 @@ async function finishedStockAt(companyId: number, scope: FactoryNetPositionAsOf,
   if (Number(row.uncertain_removals || 0) > 0) warnings.push("HISTORICAL_STOCK_REMOVAL_TIME_UNKNOWN");
   const productCounts = row.product_counts ?? [];
   if (!Array.isArray(productCounts)) throw new Error("HISTORICAL_STOCK_PRODUCT_GROUPS_INVALID");
-  const productIds = productCounts
-    .filter((item) => item.id != null)
-    .map((item) => Number(item.id));
+  const productIds = productCounts.filter((item) => item.id != null).map((item) => Number(item.id));
   const productHistory = productIds.length
     ? await loadFactoryRowsKnownAt("factory_bale_products", companyId, scope, productIds)
     : null;

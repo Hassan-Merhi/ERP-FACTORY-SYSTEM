@@ -77,39 +77,31 @@ export const FACTORY_ROW_HISTORY_DDL: readonly string[] = [
   // Stamped when the change is written, not when its transaction began (now()).
   `ALTER TABLE factory_row_history ALTER COLUMN recorded_at SET DEFAULT (clock_timestamp() AT TIME ZONE 'UTC')`,
   `CREATE INDEX IF NOT EXISTS factory_row_history_record_idx ON factory_row_history (table_name, record_id, id)`,
-  `CREATE INDEX IF NOT EXISTS factory_row_history_recorded_idx ON factory_row_history (table_name, recorded_at)`,
   `CREATE INDEX IF NOT EXISTS factory_row_history_company_record_idx ON factory_row_history (company_id, table_name, record_id, id)`,
+  `CREATE INDEX IF NOT EXISTS factory_row_history_recorded_idx ON factory_row_history (table_name, recorded_at)`,
   `CREATE TABLE IF NOT EXISTS factory_row_history_baselines (
      table_name text PRIMARY KEY,
      baseline_at timestamp NOT NULL,
      snapshot_rows integer NOT NULL,
      version text NOT NULL
    )`,
-  // Three source tables have no company_id of their own. Resolve the company
-  // from their immutable parent identifier instead of silently writing NULL.
-  // During cascaded deletes the parent may already be gone, so preserve the
-  // last positively attributed owner when one exists.
+  // Child rows inherit the company from the order or mix-batch parent.
+  // Cascaded deletes can fall back to the previously recorded owner.
   `CREATE OR REPLACE FUNCTION erp_factory_row_history_company_id(
        p_table text, p_row jsonb
      ) RETURNS integer LANGUAGE plpgsql STABLE AS $fn$
    DECLARE v_company integer;
    BEGIN
-     IF p_row ? 'company_id' THEN
-       RETURN (p_row->>'company_id')::integer;
-     END IF;
+     IF p_row ? 'company_id' THEN RETURN (p_row->>'company_id')::integer; END IF;
      IF p_table IN ('customer_order_bales','customer_order_charges') THEN
-       SELECT company_id INTO v_company FROM customer_orders
-        WHERE id = (p_row->>'order_id')::integer;
+       SELECT company_id INTO v_company FROM customer_orders WHERE id = (p_row->>'order_id')::integer;
      ELSIF p_table = 'factory_mix_batch_sources' THEN
-       SELECT company_id INTO v_company FROM factory_mix_batches
-        WHERE id = (p_row->>'mix_batch_id')::integer;
+       SELECT company_id INTO v_company FROM factory_mix_batches WHERE id = (p_row->>'mix_batch_id')::integer;
      END IF;
      IF v_company IS NULL THEN
        SELECT company_id INTO v_company FROM factory_row_history
-        WHERE table_name = p_table
-          AND record_id = (p_row->>'id')::bigint
-          AND company_id IS NOT NULL
-        ORDER BY id DESC LIMIT 1;
+        WHERE table_name = p_table AND record_id = (p_row->>'id')::bigint
+          AND company_id IS NOT NULL ORDER BY id DESC LIMIT 1;
      END IF;
      RETURN v_company;
    END
@@ -119,13 +111,10 @@ export const FACTORY_ROW_HISTORY_DDL: readonly string[] = [
    DECLARE
      v_actor text := ${actor};
      v_noise text[] := TG_ARGV;
-     v_previous_maintenance text := current_setting('app.company_scope_maintenance', true);
+     v_previous_maintenance text := current_setting('app.company_scope_maintenance',true);
    BEGIN
-     -- The recorder is an internal write-audit facility, not a permission
-     -- check: the scoped INSERT policy must not fail an otherwise authorised
-     -- write or an unscoped background job. Enter the maintenance capability
-     -- only while persisting the evidence, then restore the caller's value.
-     PERFORM set_config('app.company_scope_maintenance', 'on', true);
+     -- Scope elevation is limited to internal audit insertion and immediately restored.
+     PERFORM set_config('app.company_scope_maintenance','on',true);
      IF TG_OP = 'INSERT' THEN
        INSERT INTO factory_row_history (table_name, record_id, company_id, op, recorded_at, actor, new_values)
        SELECT TG_TABLE_NAME, (img->>'id')::bigint, erp_factory_row_history_company_id(TG_TABLE_NAME,img), 'I', (clock_timestamp() AT TIME ZONE 'UTC'), v_actor, img
@@ -150,22 +139,19 @@ export const FACTORY_ROW_HISTORY_DDL: readonly string[] = [
        SELECT TG_TABLE_NAME, (img->>'id')::bigint, erp_factory_row_history_company_id(TG_TABLE_NAME,img), 'D', (clock_timestamp() AT TIME ZONE 'UTC'), v_actor, img
          FROM (SELECT to_jsonb(o) AS img FROM history_old o) AS rows;
      END IF;
-     PERFORM set_config('app.company_scope_maintenance', COALESCE(NULLIF(v_previous_maintenance, ''), 'off'), true);
+     PERFORM set_config('app.company_scope_maintenance',COALESCE(NULLIF(v_previous_maintenance,''),'off'),true);
      RETURN NULL;
    END
    $fn$`,
-  // Read access is always company-scoped, even for the table owner; rows of
-  // unknown ownership are never exposed to any tenant. INSERT permits unknown
-  // ownership for a parent-deletion cascade; the triggers write in the
-  // maintenance capability, so the policy never fails a recorded write.
+  // FORCE RLS on the history owner; SELECT is company-scoped.
   `ALTER TABLE factory_row_history ENABLE ROW LEVEL SECURITY`,
   `ALTER TABLE factory_row_history FORCE ROW LEVEL SECURITY`,
   `DROP POLICY IF EXISTS factory_row_history_tenant_read ON factory_row_history`,
   `CREATE POLICY factory_row_history_tenant_read ON factory_row_history
-      FOR SELECT USING (erp_company_scope_matches(company_id))`,
+     FOR SELECT USING (erp_company_scope_matches(company_id))`,
   `DROP POLICY IF EXISTS factory_row_history_tenant_insert ON factory_row_history`,
   `CREATE POLICY factory_row_history_tenant_insert ON factory_row_history
-      FOR INSERT WITH CHECK (company_id IS NULL OR erp_company_scope_matches(company_id))`,
+     FOR INSERT WITH CHECK (company_id IS NULL OR erp_company_scope_matches(company_id))`,
   // Append-only, like audit_log: history that can be rewritten proves nothing.
   `CREATE OR REPLACE FUNCTION erp_factory_row_history_append_only() RETURNS trigger
    LANGUAGE plpgsql AS $fn$

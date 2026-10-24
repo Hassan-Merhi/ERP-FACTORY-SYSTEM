@@ -207,7 +207,6 @@ type ContainerRow = {
   updated_after_cutoff: boolean;
 };
 
-
 // The live container master, receipts and cumulative raw stock are mutable.
 // Once ALL three source baselines exist, derive the OTW stage and amounts
 // from their recorded row versions, including subsequently deleted rows.
@@ -237,11 +236,7 @@ async function recordedOtwAt(
     // factory_raw_stock.offloaded_at is a UTC-naive timestamp, not a
     // company-local DATE. Do not use its UTC string prefix as business date.
     const iso = String(rawTimestamp).trim();
-    const asInstant = new Date(
-      /[zZ]$|[+-][0-9]{2}:?[0-9]{2}$/.test(iso)
-        ? iso
-        : iso.replace(" ", "T") + "Z"
-    );
+    const asInstant = new Date(/[zZ]$|[+-][0-9]{2}:?[0-9]{2}$/.test(iso) ? iso : iso.replace(" ", "T") + "Z");
     if (Number.isNaN(asInstant.getTime())) {
       throw new Error("HISTORICAL_RAW_OFFLOAD_TIMESTAMP_INVALID");
     }
@@ -269,9 +264,11 @@ async function recordedOtwAt(
       commissionCurrencyCode: text(c, "commission_currency_code", "USD"),
       otherCharges: text(c, "other_charges", "0"),
       preOffloadFreight: c.pre_offload_freight == null ? null : text(c, "pre_offload_freight"),
-      preOffloadFreightCurrencyCode: c.pre_offload_freight_currency_code == null ? null : text(c, "pre_offload_freight_currency_code"),
+      preOffloadFreightCurrencyCode:
+        c.pre_offload_freight_currency_code == null ? null : text(c, "pre_offload_freight_currency_code"),
       preOffloadCommission: c.pre_offload_commission_amount == null ? null : text(c, "pre_offload_commission_amount"),
-      preOffloadCommissionCurrencyCode: c.pre_offload_commission_currency_code == null ? null : text(c, "pre_offload_commission_currency_code"),
+      preOffloadCommissionCurrencyCode:
+        c.pre_offload_commission_currency_code == null ? null : text(c, "pre_offload_commission_currency_code"),
       preOffloadOtherCharges: c.pre_offload_other_charges == null ? null : text(c, "pre_offload_other_charges"),
     });
     if (!valued) continue;
@@ -395,7 +392,6 @@ type OrderRow = {
   unchanged_since_cutoff: boolean;
 };
 
-
 // On and after the baseline, a recorded order image is a better source than
 // inferring yesterday's stage from today's mutable flags and old daybook events.
 // It also restores orders subsequently hard-deleted or rewritten. grand_total
@@ -413,12 +409,13 @@ async function recordedOrdersAt(
   const snapshot = await loadFactoryRowsKnownAt("customer_orders", companyId, scope);
   if (!snapshot.ready) return null;
   const orders = [...snapshot.rows.values()]
-    .filter((row) => row.deleted_at == null && typeof row.order_date === "string"
-      && row.order_date.slice(0, 10) <= scope.asOf)
-    .sort((a, b) =>
-      String(b.order_date).localeCompare(String(a.order_date)) || Number(b.id) - Number(a.id));
-  const customerIds = [...new Set(orders.map((row) => Number(row.customer_id))
-    .filter((id) => Number.isSafeInteger(id) && id > 0))];
+    .filter(
+      (row) => row.deleted_at == null && typeof row.order_date === "string" && row.order_date.slice(0, 10) <= scope.asOf
+    )
+    .sort((a, b) => String(b.order_date).localeCompare(String(a.order_date)) || Number(b.id) - Number(a.id));
+  const customerIds = [
+    ...new Set(orders.map((row) => Number(row.customer_id)).filter((id) => Number.isSafeInteger(id) && id > 0)),
+  ];
   const customerNames = new Map<number, string>();
   if (customerIds.length) {
     const names = resultRows<{ id: number; legal_name: string | null }>(
