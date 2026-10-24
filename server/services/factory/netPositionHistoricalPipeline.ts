@@ -13,6 +13,7 @@ import { resultRows } from "../../lib/queryResult";
 import { MoneyDecimal, toMoney } from "../../lib/money";
 import { netPositionLegacyScanKnown, netPositionRecordedThrough } from "./netPositionAsOf";
 import { loadFactoryRowsKnownAt, type HistoricalRow } from "./netPositionRowHistoryReader";
+import { sqlArray } from "../../lib/sqlArray";
 
 const decimal = (v: unknown): Decimal => toMoney(v as string | number | null | undefined);
 const cents = (v: Decimal): number => v.toDecimalPlaces(2, MoneyDecimal.ROUND_HALF_UP).toNumber();
@@ -379,6 +380,70 @@ type OrderRow = {
   unchanged_since_cutoff: boolean;
 };
 
+
+// On and after the baseline, a recorded order image is a better source than
+// inferring yesterday's stage from today's mutable flags and old daybook events.
+// It also restores orders subsequently hard-deleted or rewritten. grand_total
+// and total_qty_bales come from the same recorded version, avoiding today's
+// revised charges and scan prices in an earlier date.
+async function recordedOrdersAt(
+  companyId: number,
+  scope: FactoryNetPositionAsOf
+): Promise<{
+  pendingOrders: DatedPipelineOrder[];
+  verifiedOrders: DatedPipelineOrder[];
+  loadingOrders: DatedPipelineOrder[];
+  warnings: string[];
+} | null> {
+  const snapshot = await loadFactoryRowsKnownAt("customer_orders", companyId, scope);
+  if (!snapshot.ready) return null;
+  const orders = [...snapshot.rows.values()]
+    .filter((row) => row.deleted_at == null && typeof row.order_date === "string"
+      && row.order_date.slice(0, 10) <= scope.asOf)
+    .sort((a, b) =>
+      String(b.order_date).localeCompare(String(a.order_date)) || Number(b.id) - Number(a.id));
+  const customerIds = [...new Set(orders.map((row) => Number(row.customer_id))
+    .filter((id) => Number.isSafeInteger(id) && id > 0))];
+  const customerNames = new Map<number, string>();
+  if (customerIds.length) {
+    const names = resultRows<{ id: number; legal_name: string | null }>(
+      await db.execute(sql`SELECT id, legal_name FROM customers
+        WHERE company_id = ${companyId} AND id = ANY(${sqlArray(customerIds)})`)
+    );
+    for (const c of names) if (c.legal_name) customerNames.set(Number(c.id), c.legal_name);
+  }
+  const pendingOrders: DatedPipelineOrder[] = [];
+  const verifiedOrders: DatedPipelineOrder[] = [];
+  const loadingOrders: DatedPipelineOrder[] = [];
+  const warnings = new Set<string>();
+  for (const row of orders) {
+    const status = String(row.status ?? "").toUpperCase();
+    if (!["PENDING_VERIFICATION", "VERIFIED", "LOADING"].includes(status)) {
+      if (!["FINALIZED", "DISPATCHED", "SOLD", "CANCELLED", "DELETED"].includes(status)) {
+        warnings.add("HISTORICAL_ORDER_LIFECYCLE_UNVERSIONED");
+      }
+      continue;
+    }
+    const id = Number(row.id);
+    if (!Number.isSafeInteger(id) || id <= 0) throw new Error("HISTORICAL_ORDER_ROW_HISTORY_INVALID");
+    const customerId = Number(row.customer_id);
+    const item: DatedPipelineOrder = {
+      id,
+      customerName: customerNames.get(customerId) ?? `Customer #${customerId}`,
+      orderDate: String(row.order_date).slice(0, 10),
+      grandTotal: cents(decimal(row.grand_total)),
+      totalQtyBales: Number(row.total_qty_bales ?? 0),
+    };
+    if (!Number.isSafeInteger(item.totalQtyBales) || item.totalQtyBales < 0) {
+      throw new Error("HISTORICAL_ORDER_ROW_HISTORY_QUANTITY_INVALID");
+    }
+    if (status === "VERIFIED") verifiedOrders.push(item);
+    else if (status === "LOADING") loadingOrders.push(item);
+    else pendingOrders.push(item);
+  }
+  return { pendingOrders, verifiedOrders, loadingOrders, warnings: [...warnings] };
+}
+
 async function getHistoricalOrders(
   companyId: number,
   scope: FactoryNetPositionAsOf
@@ -388,6 +453,8 @@ async function getHistoricalOrders(
   loadingOrders: DatedPipelineOrder[];
   warnings: string[];
 }> {
+  const recorded = await recordedOrdersAt(companyId, scope);
+  if (recorded) return recorded;
   const rows = resultRows<OrderRow>(
     await db.execute(sql`
     WITH scan_events AS (
