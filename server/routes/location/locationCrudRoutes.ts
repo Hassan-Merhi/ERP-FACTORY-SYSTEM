@@ -146,30 +146,25 @@ export function registerLocationCrudRoutes(app: Express) {
         companyId: req.session.currentCompanyId,
       });
 
-      // Location codes are UNIQUE across all companies (and include soft-deleted
-      // rows). The previous company-scoped lookup could generate a code that
-      // existed in a different company and produce a SQL unique-key error.
-      const codeExistsAnywhere = async (code: string): Promise<boolean> => {
-        const rows = await db
-          .select({ id: locations.id })
-          .from(locations)
-          .where(eq(locations.code, code))
-          .limit(1);
-        return rows.length > 0;
-      };
-
+      // `locations.code` is globally unique, but a tenant-scoped connection
+      // must not read another company's locations to find a free code.
+      // Namespace generated codes by the authenticated company ID, preserve
+      // historic codes, and still check collisions inside this company.
       if (!parsed.code) {
         const sanitized = parsed.name.trim().replace(/[^a-zA-Z0-9]/g, "");
-        const baseCode = sanitized.substring(0, 6).toUpperCase() || "LOC";
+        const baseCode = `C${req.session.currentCompanyId}-${sanitized.substring(0, 6).toUpperCase() || "LOC"}`;
         let code = baseCode;
         let suffix = 1;
-        while (await codeExistsAnywhere(code)) {
+        while (await storage.getLocationByCode(code, req.session.currentCompanyId)) {
           code = `${baseCode}${suffix}`;
           suffix++;
         }
         parsed.code = code;
-      } else if (await codeExistsAnywhere(parsed.code)) {
-        return res.status(409).json({ message: "Location code already exists. Choose another code or name." });
+      } else {
+        const existing = await storage.getLocationByCode(parsed.code, req.session.currentCompanyId);
+        if (existing) {
+          return res.status(409).json({ message: "Location code already exists. Choose another code or name." });
+        }
       }
 
       // Provide defaults for optional fields
