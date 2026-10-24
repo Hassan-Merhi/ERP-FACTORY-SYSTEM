@@ -4,7 +4,8 @@ import type { AccountingForm, AccountingFormSubmit, AccountingFormValues } from 
  *
  * Extracted from AccountingCreate.tsx during the Phase 4 god-file split.
  */
-import { Card } from "@/components/ui/card";
+import { CreateFormShell } from "./CreateFormShell";
+import { Users } from "lucide-react";
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -24,14 +25,14 @@ function EmployeeForm({
   isPending: boolean;
 }) {
   return (
-    <Card className="p-4 md:p-6">
+    <CreateFormShell icon={Users} title="New employee" description="Save employee details and choose whether they work in the warehouse or on the shop floor.">
       <Form {...form}>
         <form
           noValidate
           onSubmit={form.handleSubmit((data: AccountingFormValues) => onSubmit(data, false))}
           className="space-y-6"
         >
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-x-5 gap-y-6 md:grid-cols-2">
             <FormField
               control={form.control}
               name="firstName"
@@ -68,7 +69,7 @@ function EmployeeForm({
                 <FormItem>
                   <FormLabel>Starting Date *</FormLabel>
                   <FormControl>
-                    <Input {...field} type="text" placeholder="YYYY-MM-DD" data-testid="input-join-date" />
+                    <Input {...field} type="date" data-testid="input-join-date" />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -92,6 +93,20 @@ function EmployeeForm({
                       <SelectItem value="Worker">Worker (Shop Floor Staff)</SelectItem>
                     </SelectContent>
                   </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="phone"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Phone <span className="text-muted-foreground font-normal">(optional)</span></FormLabel>
+                  <FormControl>
+                    <Input {...field} placeholder="Contact number" type="tel" data-testid="input-phone" />
+                  </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
@@ -131,10 +146,10 @@ function EmployeeForm({
             />
           </div>
 
-          <FormButtons onCancel={onCancel} isPending={isPending} />
+          <FormButtons onCancel={onCancel} isPending={isPending} submitLabel="Create employee" />
         </form>
       </Form>
-    </Card>
+    </CreateFormShell>
   );
 }
 

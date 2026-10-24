@@ -34,6 +34,24 @@ function RowActions({
   suffix: string;
 }) {
   const isHidden = model.hiddenRowIds.has(voucher.id);
+  if (voucher.entryType === "offload") {
+    return (
+      <>
+        <Button variant="ghost" size="icon"
+          onClick={() => model.openInCompany(voucher.companyId, `/offloads/${voucher.offloadId}`)}
+          data-testid={`button-view-offload${suffix}-${voucher.offloadId}`}
+          title="View offload">
+          <Eye className="h-4 w-4" />
+        </Button>
+        <Button variant="ghost" size="icon"
+          onClick={() => model.openInCompany(voucher.companyId, `/containers/${voucher.containerId}`)}
+          data-testid={`button-open-offload-container${suffix}-${voucher.offloadId}`}
+          title="Open container">
+          <Pencil className="h-4 w-4" />
+        </Button>
+      </>
+    );
+  }
   return (
     <>
       <Button
@@ -235,7 +253,7 @@ function ListHeader({ model }: { model: TransactionJournalModel }) {
     <CardHeader className="pb-3 flex flex-row items-center justify-between gap-2 flex-wrap">
       <div className="flex items-center gap-2 flex-wrap">
         <CardTitle className="text-base">
-          Vouchers
+          Transactions
           {!model.isLoading && (
             <span className="ml-2 text-sm font-normal text-muted-foreground">
               {model.totalVouchers.toLocaleString()} total

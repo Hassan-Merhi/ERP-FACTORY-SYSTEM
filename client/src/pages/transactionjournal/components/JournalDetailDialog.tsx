@@ -73,6 +73,7 @@ function DetailPanels({ model }: { model: TransactionJournalModel }) {
         viewPurchaseItems={viewPurchaseItems}
         entryBalances={entryBalances}
         openInCompany={model.openInCompany}
+        openComparisonInCompany={model.openComparisonInCompany}
         fmt={fmt}
         fmtNum={fmtNum}
       />

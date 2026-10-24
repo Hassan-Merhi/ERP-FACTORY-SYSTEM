@@ -156,7 +156,7 @@ export function registerRetailPosCancellationRoute(app: Express): void {
           idempotencyKey: body.idempotencyKey,
           userId,
         });
-        const cancelVoucherId = await postRetailRefundAccountingTx(tx, {
+        const cancelPosting = await postRetailRefundAccountingTx(tx, {
           companyId,
           locationId: body.locationId,
           saleId,
@@ -175,7 +175,7 @@ export function registerRetailPosCancellationRoute(app: Express): void {
           sourceId: saleId,
           description: `Retail cancellation of sale #${saleId}`,
           actor: { userId, username: req.user?.username ?? null },
-          alreadyDebited: cancelVoucherId ? restoredCost : undefined,
+          alreadyDebited: cancelPosting.costReversed ? restoredCost : undefined,
         });
         return {
           replayed: false,

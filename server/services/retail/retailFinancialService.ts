@@ -1,13 +1,14 @@
 import { createHash } from "node:crypto";
 import type Decimal from "decimal.js";
 import { and, asc, eq } from "drizzle-orm";
-import { companies, posShifts, retailPosPayments, retailPosSales } from "@shared/schema";
+import { companies, posShifts, retailInventoryOpenings, retailPosPayments, retailPosSales, voucherEntries } from "@shared/schema";
 import type { RetailPaymentMethod } from "@shared/schema/retailPos";
 import type { DbTransaction } from "../../db";
 import { allocateCents, MoneyDecimal, toMoney, type MoneyInput } from "../../lib/money";
 import { postBalancedVoucherTx } from "../accounting/centralPostingEngine";
 import { createDatabasePostingDependencies } from "../accounting/databasePostingDependencies";
 import { companyBusinessDate } from "../accounting/companyBusinessDate";
+import { resolveRetailPaymentAccountTx, type RetailMoneyAccountSelection } from "./retailPaymentAccounts";
 
 import {
   ensureRetailAccountingSettingsTx,
@@ -39,6 +40,8 @@ export interface RetailPaymentInput {
   amount: Decimal.Value;
   tenderedAmount?: Decimal.Value | null;
   reference?: string | null;
+  ledgerAccountId?: number | null;
+  bankAccountId?: number | null;
 }
 
 export interface RetailResolvedPayment {
@@ -149,6 +152,8 @@ interface NormalizedPayment {
   amount: Decimal;
   tenderedAmount: Decimal | null;
   reference?: string | null;
+  ledgerAccountId?: number | null;
+  bankAccountId?: number | null;
 }
 
 function normalizePayments(total: Decimal, requested?: RetailPaymentInput[]): NormalizedPayment[] {
@@ -171,7 +176,8 @@ function normalizePayments(total: Decimal, requested?: RetailPaymentInput[]): No
       }
     }
     sum = sum.plus(amount);
-    normalized.push({ method: payment.method, amount, tenderedAmount: tendered, reference: payment.reference });
+    normalized.push({ method: payment.method, amount, tenderedAmount: tendered, reference: payment.reference,
+      ledgerAccountId: payment.ledgerAccountId, bankAccountId: payment.bankAccountId });
   }
   if (sum.minus(total).abs().greaterThan(EPSILON)) {
     throw new Error(`Retail payments (${sum.toFixed(2)}) must equal sale total (${total.toFixed(2)})`);
@@ -253,7 +259,16 @@ export async function settleRetailSaleTx(
   const resolved: RetailResolvedPayment[] = [];
 
   for (const [index, payment] of requested.entries()) {
-    const target = paymentTarget(settings, payment.method, shift?.cashAccountId ?? null);
+    const explicitAccount = payment.ledgerAccountId != null || payment.bankAccountId != null;
+    if (payment.method === "credit" && explicitAccount) {
+      throw new Error("Customer credit must post to the selected customer's ledger");
+    }
+    const target = explicitAccount
+      ? await resolveRetailPaymentAccountTx(tx, input.companyId, payment)
+      : paymentTarget(settings, payment.method, shift?.cashAccountId ?? null);
+    if (explicitAccount && payment.method !== (target as { method: string }).method) {
+      throw new Error("Selected Retail account does not match the payment type");
+    }
     const amount = payment.amount;
     const tendered = payment.tenderedAmount;
     const change =
@@ -292,10 +307,22 @@ export async function settleRetailSaleTx(
     resolved.push(resolvedPayment(row));
   }
 
-  if (saleTotal.isZero() && totalCost.isZero()) return { payments: resolved, voucherId: null };
+  // Retail stock is tracked independently of its ledger valuation until the
+  // owner deliberately applies a perpetual-inventory opening. Otherwise a
+  // sale creates a negative "Retail Inventory Asset" with no opening/receipt
+  // debit (and the customer's money is mistakenly perceived to be there).
+  // Keep the item's cost snapshot for reports and future supplier settlement.
+  const [inventoryOpening] = await tx
+    .select({ companyId: retailInventoryOpenings.companyId })
+    .from(retailInventoryOpenings)
+    .where(eq(retailInventoryOpenings.companyId, input.companyId))
+    .limit(1);
+  if (saleTotal.isZero() && (!inventoryOpening || totalCost.isZero())) {
+    return { payments: resolved, voucherId: null };
+  }
 
   const saleAccountingAmount = accountingMoney(saleTotal);
-  const costAccountingAmount = accountingMoney(totalCost);
+  const costAccountingAmount = accountingMoney(inventoryOpening ? totalCost : 0);
   const taxAccountingAmount = includedTax(saleAccountingAmount, input.taxAmount, "Retail sale tax");
   const revenueAccountingAmount = saleAccountingAmount.minus(taxAccountingAmount);
   const entries = [
@@ -392,11 +419,19 @@ export async function refundRetailPaymentsTx(
     idempotencyKey: string;
     userId: string;
     /** Cash/card/bank refund, or credit the real customer ledger instead. */
-    destination?: "original" | "customer_credit";
+    destination?: "original" | "customer_credit" | "account";
+    refundAccount?: RetailMoneyAccountSelection;
   }
 ): Promise<RetailResolvedPayment[]> {
   let remaining = exactMoney(input.refundAmount, "Retail refund amount");
   if (remaining.lessThanOrEqualTo(0)) return [];
+  const refundTarget = input.destination === "account"
+    ? await resolveRetailPaymentAccountTx(tx, input.companyId, input.refundAccount ?? {})
+    : null;
+  if (input.destination !== "account" &&
+      (input.refundAccount?.ledgerAccountId || input.refundAccount?.bankAccountId)) {
+    throw new Error("Manual refund account requires account refund destination");
+  }
   if (input.destination === "customer_credit") {
     const [sale] = await tx
       .select({ customerId: retailPosSales.customerId })
@@ -499,7 +534,11 @@ export async function refundRetailPaymentsTx(
     // Credit-original = cancellation of an unpaid receivable. For collected
     // tenders customer_credit records a fresh credit to the party, not a payout.
     const refundMethod =
-      input.destination === "customer_credit" && original.method !== "credit" ? "store_credit" : original.method;
+      input.destination === "customer_credit" && original.method !== "credit"
+        ? "store_credit"
+        : input.destination === "account" && original.method !== "credit"
+          ? refundTarget!.method
+          : original.method;
     const [inserted] = await tx
       .insert(retailPosPayments)
       .values({
@@ -517,8 +556,10 @@ export async function refundRetailPaymentsTx(
           refundMethod === "store_credit"
             ? `Customer credit from payment #${original.id}`
             : `Refund for payment #${original.id}`,
-        ledgerAccountId: refundMethod === "store_credit" ? null : original.ledgerAccountId,
-        bankAccountId: refundMethod === "store_credit" ? null : original.bankAccountId,
+        ledgerAccountId: refundMethod === "store_credit"
+          ? null : original.method === "credit" ? null : refundTarget?.ledgerAccountId ?? original.ledgerAccountId,
+        bankAccountId: refundMethod === "store_credit"
+          ? null : original.method === "credit" ? null : refundTarget?.bankAccountId ?? original.bankAccountId,
         relatedPaymentId: original.id,
         idempotencyKey: key,
         createdBy: input.userId,
@@ -544,6 +585,33 @@ export async function refundRetailPaymentsTx(
   return created;
 }
 
+/**
+ * Find the *original* sale's posted inventory/COGS pair. Returns must reverse
+ * what that sale actually journalled, not assume every historic sale did so.
+ * Keep the original account IDs even if default settings changed later.
+ */
+async function originalSaleCostAccountsTx(tx: DbTransaction, voucherId: number, saleId: number) {
+  const lines = await tx
+    .select({
+      ledgerAccountId: voucherEntries.ledgerAccountId,
+      narration: voucherEntries.narration,
+      debitAmount: voucherEntries.debitAmount,
+      creditAmount: voucherEntries.creditAmount,
+    })
+    .from(voucherEntries)
+    .where(eq(voucherEntries.voucherId, voucherId));
+  const inventory = lines.find(
+    (line) => line.narration === `Retail sale #${saleId} · inventory` &&
+      line.ledgerAccountId != null && toMoney(line.creditAmount).isPositive()
+  );
+  const cogs = lines.find(
+    (line) => line.narration === `Retail sale #${saleId} · COGS` &&
+      line.ledgerAccountId != null && toMoney(line.debitAmount).isPositive()
+  );
+  if (!inventory?.ledgerAccountId || !cogs?.ledgerAccountId) return null;
+  return { inventoryLedgerAccountId: inventory.ledgerAccountId, cogsLedgerAccountId: cogs.ledgerAccountId };
+}
+
 export async function postRetailRefundAccountingTx(
   tx: DbTransaction,
   input: {
@@ -561,7 +629,7 @@ export async function postRetailRefundAccountingTx(
     userId: string;
     username?: string | null;
   }
-): Promise<number | null> {
+): Promise<{ voucherId: number | null; costReversed: boolean }> {
   const [originalSale] = await tx
     .select({
       accountingVoucherId: retailPosSales.accountingVoucherId,
@@ -573,7 +641,7 @@ export async function postRetailRefundAccountingTx(
   // Do not invent a reversal for pre-Wave-1 sales that never had an accounting
   // posting. Their synthetic legacy payment exists only to make the operational
   // refund safe; reconciliation continues to flag the missing historical journal.
-  if (!originalSale?.accountingVoucherId) return null;
+  if (!originalSale?.accountingVoucherId) return { voucherId: null, costReversed: false };
   if (
     input.refunds.some((payment) => payment.method === "credit" || payment.method === "store_credit") &&
     !originalSale.customerId
@@ -583,10 +651,15 @@ export async function postRetailRefundAccountingTx(
 
   const refundTotal = exactMoney(input.refundAmount, "Retail refund amount");
   const restoredCost = exactMoney(input.restoredCost, "Retail restored cost");
-  if (refundTotal.isZero() && restoredCost.isZero()) return null;
+  const originalCostAccounts = await originalSaleCostAccountsTx(
+    tx, originalSale.accountingVoucherId, input.saleId
+  );
+  if (refundTotal.isZero() && (!originalCostAccounts || restoredCost.isZero())) {
+    return { voucherId: null, costReversed: false };
+  }
   const settings = await ensureRetailAccountingSettingsTx(tx, input.companyId, input.locationId);
   const refundAccountingAmount = accountingMoney(refundTotal);
-  const restoredCostAccountingAmount = accountingMoney(restoredCost);
+  const restoredCostAccountingAmount = accountingMoney(originalCostAccounts ? restoredCost : 0);
   const refundTaxAccountingAmount = includedTax(refundAccountingAmount, input.refundTaxAmount, "Retail refund tax");
   const refundRevenueAccountingAmount = refundAccountingAmount.minus(refundTaxAccountingAmount);
   const entries = [
@@ -628,13 +701,13 @@ export async function postRetailRefundAccountingTx(
       ? []
       : [
           {
-            ledgerAccountId: settings.inventoryAssetLedgerAccountId,
+            ledgerAccountId: originalCostAccounts!.inventoryLedgerAccountId,
             debitAmount: restoredCostAccountingAmount.toFixed(2),
             creditAmount: "0",
             narration: `Retail sale #${input.saleId} · inventory restored`,
           },
           {
-            ledgerAccountId: settings.cogsLedgerAccountId,
+            ledgerAccountId: originalCostAccounts!.cogsLedgerAccountId,
             debitAmount: "0",
             creditAmount: restoredCostAccountingAmount.toFixed(2),
             narration: `Retail sale #${input.saleId} · COGS reversed`,
@@ -670,5 +743,5 @@ export async function postRetailRefundAccountingTx(
     },
     postingDependencies
   );
-  return posted.voucher.id;
+  return { voucherId: posted.voucher.id, costReversed: !restoredCostAccountingAmount.isZero() };
 }

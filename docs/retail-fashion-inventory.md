@@ -106,14 +106,19 @@ assigned location. Retail shift summaries combine opening cash, cash sales, cash
 and audited cash-in/cash-out movements. Closing stores expected cash, actual closing cash
 and variance. Non-cash methods are reported separately and do not inflate drawer cash.
 
-Every new Retail sale posts one idempotent balanced journal through the central accounting
+Every new Retail sale posts an idempotent balanced journal through the central accounting
 engine:
 
-- debit the payment settlement account(s), credit Retail Sales Revenue;
-- debit Retail COGS, credit Retail Inventory Asset using the sale-line cost snapshot.
+- debit the selected cash/bank payment settlement account(s) or customer receivable;
+  credit Retail Sales Revenue (and tax payable, if applicable);
+- **only after the Retail inventory accounting opening is applied**, debit Retail COGS
+  and credit Retail Inventory Asset using the sale-line cost snapshot. Without
+  an opening, item costs remain on stock/sale records for operational profit
+  reporting rather than creating a negative inventory asset in Analytics.
 
-Returns, exchanges and cancellations refund against the original payment methods and post
-the corresponding revenue/COGS/inventory reversals without rewriting the original journal.
+Returns, exchanges and cancellations refund against the original payment methods and
+reverse only the accounting entries that the original sale actually posted, without
+rewriting the original journal. Payments to stock suppliers remain separate vouchers.
 Sales created before Wave 1 remain refundable: the first refund materializes their
 historical sale total as a legacy cash payment, while reconciliation continues to flag
 missing historical accounting rather than fabricating a historical journal.

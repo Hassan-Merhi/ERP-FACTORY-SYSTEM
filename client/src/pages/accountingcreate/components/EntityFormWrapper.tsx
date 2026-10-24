@@ -25,11 +25,9 @@ export // Wrapper component to properly recreate form when entity changes
 function EntityFormWrapper({
   entityType,
   config,
-  onCreated,
 }: {
   entityType: EntityType;
   config: (typeof entityConfig)[EntityType];
-  onCreated?: () => void;
 }) {
   const { toast } = useToast();
   const { selectedCompany } = useCompany();
@@ -45,24 +43,27 @@ function EntityFormWrapper({
 
   const createMutation = useMutation({
     mutationFn: async (data: AccountingFormValues) => {
-      // Only add companyId if not already provided by the form
-      const payload = data.companyId
-        ? data
-        : {
-            ...data,
-            companyId:
-              selectedCompany?.id ||
-              (() => {
-                throw new Error("No company selected");
-              })(),
-          };
+      // Always submit against the selected company; location routes enforce the session company too.
+      if (!selectedCompany?.id) throw new Error("No company selected");
+      const payload = {
+        ...data,
+        companyId: selectedCompany.id,
+        ...(entityType === "stockGroup"
+          ? { name: String(data.name || "").trim(), code: String(data.name || "").trim() }
+          : {}),
+        ...(entityType === "stockItem"
+          ? { openingQty: "0", openingRate: "0", openingValue: "0", reorderLevel: "0" }
+          : {}),
+      };
       const res = await modeApiRequest("POST", config.endpoint, payload);
       return await res.json();
     },
     onSuccess: (data) => {
       toast({
-        title: "Success",
-        description: `${config.label} "${data.name || data.legalName || data.code}" created successfully`,
+        title: `${config.label} created`,
+        description: `"${data.name || data.legalName || data.code || "New record"}" is ready to use.`,
+        duration: 3500,
+        className: "max-w-sm rounded-xl border-primary/20 px-4 py-3 pr-8 shadow-lg",
       });
       queryClient.invalidateQueries({ queryKey: [config.endpoint] });
 
@@ -78,7 +79,6 @@ function EntityFormWrapper({
       }
 
       form.reset(getDefaultValues(entityType));
-      onCreated?.();
     },
     onError: (error: ClientErrorLike) => {
       if ((error as { _handledGlobally?: boolean })?._handledGlobally) return;

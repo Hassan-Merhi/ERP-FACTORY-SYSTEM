@@ -10,7 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Badge } from "@/components/ui/badge";
+import { BaleHistoryStatusBadge, getBaleHistoryDisplayStatus } from "./BaleHistoryStatusBadge";
 import { useState } from "react";
 import { useEscapeToParent } from "@/hooks/use-escape-to-parent";
 
@@ -57,7 +57,7 @@ export function FactoryBaleProductMonthDetail() {
   const sellingPricePerBale = parseFloat(responseData?.sellingPrice || "0");
 
   const filteredData = (data || []).filter((bale) => {
-    const effectiveStatus = bale.status === "IN_STOCK" && bale.isInLoadingOrder ? "LOADING" : bale.status;
+    const effectiveStatus = getBaleHistoryDisplayStatus(bale);
     if (statusFilter !== "all" && effectiveStatus !== statusFilter) return false;
     if (searchTerm) {
       if (!searchAny(searchTerm, bale.baleCode, bale.referenceNumber)) return false;
@@ -117,19 +117,30 @@ export function FactoryBaleProductMonthDetail() {
         onSuccess={handleWeightSuccess}
       />
 
-      <div className="flex items-center gap-4">
-        <Button variant="ghost" size="icon" onClick={() => navigate(backPath)} data-testid="button-back">
-          <ArrowLeft className="h-5 w-5" />
-        </Button>
-        <div>
-          <h1 className="text-lg sm:text-2xl font-bold" data-testid="text-page-title">
-            Bale Details — {monthName} {year}
-          </h1>
-          <p className="text-sm text-muted-foreground" data-testid="text-bale-count">
-            <Package className="inline h-4 w-4 mr-1" />
-            {data?.length || 0} bale(s)
-          </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-4">
+          <Button variant="ghost" size="icon" onClick={() => navigate(backPath)} data-testid="button-back">
+            <ArrowLeft className="h-5 w-5" />
+          </Button>
+          <div className="min-w-0">
+            <h1 className="text-lg sm:text-2xl font-bold" data-testid="text-page-title">
+              Bale Details — {monthName} {year}
+            </h1>
+            <p className="text-sm text-muted-foreground" data-testid="text-bale-count">
+              <Package className="inline h-4 w-4 mr-1" />
+              {data?.length || 0} bale(s)
+            </p>
+          </div>
         </div>
+        <Button
+          variant="outline"
+          size="sm"
+          className="shrink-0 sm:ml-auto"
+          onClick={() => navigate(`/factory/bale-product-history/${productId}/${locationId}/${year}/all`)}
+          data-testid="button-show-all-months"
+        >
+          Show All Months
+        </Button>
       </div>
 
       <Card>
@@ -160,6 +171,7 @@ export function FactoryBaleProductMonthDetail() {
                 <SelectItem value="IN_STOCK">In Stock</SelectItem>
                 <SelectItem value="LOADING">Loading</SelectItem>
                 <SelectItem value="SOLD">Sold</SelectItem>
+                <SelectItem value="RESERVED_FOR_ORDER">Reserved for Order</SelectItem>
                 <SelectItem value="DISPATCHED">Dispatched</SelectItem>
                 <SelectItem value="DELETED">Deleted</SelectItem>
               </SelectContent>
@@ -203,7 +215,6 @@ export function FactoryBaleProductMonthDetail() {
               </TableHeader>
               <TableBody>
                 {filteredData.map((bale) => {
-                  const isLoadingStatus = bale.status === "IN_STOCK" && bale.isInLoadingOrder;
                   return (
                     <TableRow key={bale.id} data-testid={`row-bale-${bale.id}`}>
                       <TableCell className="font-medium font-mono" data-testid={`text-bale-code-${bale.id}`}>
@@ -255,25 +266,7 @@ export function FactoryBaleProductMonthDetail() {
                         </TableCell>
                       )}
                       <TableCell data-testid={`text-status-${bale.id}`}>
-                        {isLoadingStatus ? (
-                          <Badge
-                            variant="outline"
-                            className="text-[11px] px-1.5 py-0.5 border-amber-400 text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 no-default-active-elevate"
-                          >
-                            Loading
-                          </Badge>
-                        ) : bale.status === "DELETED" || bale.status === "REMOVED" ? (
-                          <Badge variant="destructive">Deleted</Badge>
-                        ) : bale.status === "DISPATCHED" ? (
-                          <Badge
-                            variant="secondary"
-                            className="bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200"
-                          >
-                            Dispatched
-                          </Badge>
-                        ) : (
-                          <Badge variant="secondary">{bale.status}</Badge>
-                        )}
+                        <BaleHistoryStatusBadge bale={bale} />
                       </TableCell>
                       <TableCell data-testid={`text-date-${bale.id}`}>{formatDateTime(bale.createdAt)}</TableCell>
                     </TableRow>
@@ -302,9 +295,9 @@ export function FactoryBaleProductMonthDetail() {
                   <span className="font-medium font-mono" data-testid={`text-mobile-bale-code-${bale.id}`}>
                     {bale.baleCode}
                   </span>
-                  <Badge variant="secondary" data-testid={`text-mobile-status-${bale.id}`}>
-                    {bale.status}
-                  </Badge>
+                  <span data-testid={`text-mobile-status-${bale.id}`}>
+                    <BaleHistoryStatusBadge bale={bale} />
+                  </span>
                 </div>
                 <div className="text-xs mb-2">
                   <button

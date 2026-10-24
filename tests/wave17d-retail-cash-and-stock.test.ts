@@ -290,7 +290,7 @@ describe("RETAIL-INVENTORY connected to the Retail stock (decision 3)", () => {
   let shiftId = 0;
   const reconciliation = async () => (await agent.get("/api/retail/financial/inventory-reconciliation")).body;
 
-  it("journals nothing before the opening", async () => {
+  it("keeps stock off the ledger before opening while still journalling sale cash and revenue", async () => {
     const receipt = await agent.post("/api/pos/retail/receipts").send({
       idempotencyKey: "w17d-receipt-0001",
       variantId,
@@ -299,6 +299,32 @@ describe("RETAIL-INVENTORY connected to the Retail stock (decision 3)", () => {
       unitCost: 6,
     });
     expect(receipt.status).toBe(201);
+    expect(await vouchersLike("RETAIL-STK-%")).toEqual([]);
+
+    // Even before the inventory opening, the POS must collect the selected
+    // payment and recognise sales revenue without inventing a negative stock
+    // asset. Cancellation must reverse only those original journal lines.
+    const sale = await agent.post("/api/pos/retail/sales").send({
+      idempotencyKey: "w17d-preopening-sale-0001",
+      locationId: ctx.locationId,
+      items: [{ variantId, quantity: 1 }],
+      payments: [{ method: "cash", amount: 9 }],
+    });
+    expect(sale.status).toBe(201);
+    const saleId = sale.body.sale.id;
+    expect(await voucherLines(`RETAIL-SALE-${saleId}`)).toEqual([
+      { code: "RETAIL-CASH", d: "9.00", c: "0.00" },
+      { code: "RETAIL-SALES", d: "0.00", c: "9.00" },
+    ]);
+    const cancellation = await agent.post(`/api/pos/retail/sales/${saleId}/cancel`).send({
+      idempotencyKey: "w17d-preopening-cancel-0001",
+      locationId: ctx.locationId,
+    });
+    expect(cancellation.status).toBe(201);
+    expect(await voucherLines(`RETAIL-CANCEL-${saleId}`)).toEqual([
+      { code: "RETAIL-SALES", d: "9.00", c: "0.00" },
+      { code: "RETAIL-CASH", d: "0.00", c: "9.00" },
+    ]);
     expect(await vouchersLike("RETAIL-STK-%")).toEqual([]);
     // 10 × 4 + 5 × 6 = 70 in stock, nothing in the ledger.
     expect(await reconciliation()).toMatchObject({

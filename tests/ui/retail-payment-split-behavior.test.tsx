@@ -10,7 +10,16 @@
 import React, { useState } from "react";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { RetailPaymentPanel } from "@/pages/pos/RetailPaymentPanel";
+import { paymentAccountValue, paymentFromAccount, type RetailPaymentAccounts } from "@/pages/pos/RetailPaymentAccountSelect";
 import { outstandingSaleCredit, type RetailPaymentDraft } from "@/pages/pos/retailPosTypes";
+
+const accounts: RetailPaymentAccounts = {
+  ledgers: [
+    { id: 11, code: "C-001", name: "Main Cash", accountType: "Cash" },
+    { id: 12, code: "B-001", name: "Bank Ledger", accountType: "Bank" },
+  ],
+  banks: [{ id: 21, code: "B-002", name: "Bank Current", }],
+};
 
 function Harness({
   total,
@@ -29,6 +38,8 @@ function Harness({
       total={total}
       value={payments}
       canUseCredit={canUseCredit}
+      accounts={accounts}
+      customerName={canUseCredit ? "Test Customer" : null}
       onChange={(next) => {
         setPayments(next);
         onChange(next);
@@ -66,7 +77,7 @@ describe("RetailPaymentPanel Split", () => {
     fireEvent.click(screen.getByRole("button", { name: /split/i }));
     expect(changes.at(-1)).toEqual([
       { method: "card", amount: 60, tenderedAmount: null },
-      { method: "cash", amount: 40, tenderedAmount: 40 },
+      { method: "cash", amount: 40, tenderedAmount: null },
     ]);
   });
 
@@ -74,7 +85,7 @@ describe("RetailPaymentPanel Split", () => {
     const { unmount } = render(
       <Harness total={10} initial={[{ method: "cash", amount: 10, tenderedAmount: 10 }]} onChange={() => {}} />
     );
-    expect((screen.getByRole("option", { name: /customer credit/i }) as HTMLOptionElement).disabled).toBe(true);
+    expect(screen.queryByRole("option", { name: /customer credit/i })).toBeNull();
     unmount();
     render(
       <Harness
@@ -84,7 +95,34 @@ describe("RetailPaymentPanel Split", () => {
         onChange={() => {}}
       />
     );
-    expect((screen.getByRole("option", { name: /customer credit/i }) as HTMLOptionElement).disabled).toBe(false);
+    expect(screen.getByRole("option", { name: /customer credit/i })).toBeTruthy();
+  });
+});
+
+describe("Retail money account selection", () => {
+  it("posts to a chosen cash ledger or bank account with no stale destination IDs", () => {
+    const cash = paymentFromAccount("ledger:11", 75, accounts);
+    const bank = paymentFromAccount("bank:21", 75, accounts);
+    expect(cash).toMatchObject({ method: "cash", ledgerAccountId: 11, amount: 75 });
+    expect(bank).toMatchObject({ method: "bank", bankAccountId: 21, amount: 75 });
+    expect(paymentAccountValue(bank)).toBe("bank:21");
+    expect(bank.ledgerAccountId).toBeUndefined();
+    expect(paymentFromAccount("credit", 10, accounts)).toEqual({ method: "credit", amount: 10, tenderedAmount: null });
+    expect(() => paymentFromAccount("ledger:999", 10, accounts)).toThrow();
+  });
+
+  it("changes from cash to bank without retaining the prior payment ledger", () => {
+    const changes: RetailPaymentDraft[][] = [];
+    render(
+      <Harness
+        total={100}
+        initial={[paymentFromAccount("ledger:11", 100, accounts)]}
+        onChange={(next) => changes.push(next)}
+      />
+    );
+    fireEvent.change(screen.getByRole("combobox", { name: /account/i }), { target: { value: "bank:21" } });
+    expect(changes.at(-1)?.[0]).toMatchObject({ method: "bank", bankAccountId: 21, amount: 100 });
+    expect(changes.at(-1)?.[0].ledgerAccountId).toBeUndefined();
   });
 });
 

@@ -36,6 +36,13 @@ interface ShiftSummary {
   expectedCash: number;
 }
 
+interface DrawerLedgerBalance {
+  cashAccountId: number;
+  accountName: string;
+  accountCode: string | null;
+  balance: string;
+}
+
 interface CashReason {
   reasonCode: string;
   label: string | null;
@@ -57,13 +64,14 @@ async function json<T>(response: Response): Promise<T> {
 
 export function RetailShiftPanel({
   locationId,
+  cashAccountId,
   onShiftChange,
 }: {
   locationId: number | null;
+  cashAccountId?: number | null;
   onShiftChange: (shift: RetailShift | null) => void;
 }) {
   const { toast } = useToast();
-  const [openingCash, setOpeningCash] = useState(0);
   const [closingCash, setClosingCash] = useState(0);
   const [movementAmount, setMovementAmount] = useState(0);
   const [movementReason, setMovementReason] = useState("");
@@ -89,6 +97,20 @@ export function RetailShiftPanel({
   });
 
   const shift = currentQuery.data ?? null;
+  // When a shift is open its drawer account is fixed; otherwise the selected
+  // POS Cash account (or configured location default) determines the balance.
+  const drawerAccountId = shift ? shift.cashAccountId : cashAccountId ?? null;
+  const ledgerBalanceQuery = useQuery<DrawerLedgerBalance>({
+    queryKey: ["retail-shift-ledger-balance", locationId, drawerAccountId],
+    queryFn: async () => json<DrawerLedgerBalance>(
+      await fetch(
+        `/api/pos/retail/shift-ledger-balance?locationId=${locationId}${drawerAccountId ? `&cashAccountId=${drawerAccountId}` : ""}`,
+        { credentials: "include" }
+      )
+    ),
+    enabled: Boolean(locationId),
+    staleTime: 5_000,
+  });
   useEffect(() => onShiftChange(shift), [shift, onShiftChange]);
 
   const historyQuery = useQuery<RetailShift[]>({
@@ -114,6 +136,7 @@ export function RetailShiftPanel({
       queryClient.invalidateQueries({ queryKey: ["retail-current-shift"] }),
       queryClient.invalidateQueries({ queryKey: ["retail-shift-summary"] }),
       queryClient.invalidateQueries({ queryKey: ["retail-shift-history"] }),
+      queryClient.invalidateQueries({ queryKey: ["retail-shift-ledger-balance"] }),
     ]);
   };
 
@@ -122,7 +145,7 @@ export function RetailShiftPanel({
       if (!locationId) throw new Error("Select a selling location first");
       const response = await apiRequest("POST", "/api/pos/shifts/open", {
         locationId,
-        openingCash,
+        cashAccountId: drawerAccountId,
       });
       return response.json();
     },
@@ -192,29 +215,34 @@ export function RetailShiftPanel({
       </CardHeader>
       <CardContent className="space-y-3">
         {!shift ? (
-          <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
-            <div>
-              <Label htmlFor="retail-opening-cash">Opening cash</Label>
-              <Input
-                id="retail-opening-cash"
-                type="number"
-                min="0"
-                step="0.01"
-                value={openingCash}
-                onChange={(event) => setOpeningCash(Number(event.target.value))}
-              />
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="text-sm" data-testid="retail-shift-ledger-balance">
+              <div className="text-xs text-muted-foreground">Cash ledger balance</div>
+              {ledgerBalanceQuery.isError ? (
+                <span className="text-destructive">Could not load cash ledger balance</span>
+              ) : ledgerBalanceQuery.data ? (
+                <>
+                  <strong>{money(Number(ledgerBalanceQuery.data.balance))}</strong>
+                  <span className="ml-2 text-xs text-muted-foreground">
+                    {ledgerBalanceQuery.data.accountName}
+                  </span>
+                </>
+              ) : (
+                <span className="text-muted-foreground">Loading ledger balance...</span>
+              )}
             </div>
-            <div className="flex items-end">
-              <Button onClick={() => openMutation.mutate()} disabled={openMutation.isPending}>
-                <LogIn className="mr-2 h-4 w-4" /> Open shift
-              </Button>
-            </div>
+            <Button
+              onClick={() => openMutation.mutate()}
+              disabled={openMutation.isPending || !ledgerBalanceQuery.data || ledgerBalanceQuery.isFetching}
+            >
+              <LogIn className="mr-2 h-4 w-4" /> Open shift
+            </Button>
           </div>
         ) : (
           <>
             <div className="grid grid-cols-2 gap-2 text-sm md:grid-cols-4">
               <div>
-                <div className="text-xs text-muted-foreground">Opening</div>
+                <div className="text-xs text-muted-foreground">At shift opening (ledger)</div>
                 <strong>{money(Number(shift.openingCash))}</strong>
               </div>
               <div>
@@ -229,6 +257,13 @@ export function RetailShiftPanel({
                 <div className="text-xs text-muted-foreground">Expected cash</div>
                 <strong>{money(summary?.expectedCash ?? Number(shift.openingCash))}</strong>
               </div>
+            </div>
+
+            <div className="text-xs text-muted-foreground" data-testid="retail-shift-current-ledger-balance">
+              Current cash ledger balance: {ledgerBalanceQuery.data
+                ? money(Number(ledgerBalanceQuery.data.balance))
+                : ledgerBalanceQuery.isError ? "Unavailable" : "Loading..."}
+              {ledgerBalanceQuery.data ? ` · ${ledgerBalanceQuery.data.accountName}` : ""}
             </div>
 
             {summary?.paymentMethods ? (

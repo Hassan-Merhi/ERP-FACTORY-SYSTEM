@@ -95,6 +95,7 @@ export function JournalFilters({ model }: { model: TransactionJournalModel }) {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Types</SelectItem>
+            <SelectItem value="Offload">Offload</SelectItem>
             {(model.voucherTypes || []).map((t) => (
               <SelectItem key={t} value={t}>
                 {t}

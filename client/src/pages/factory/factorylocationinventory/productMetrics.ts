@@ -1,4 +1,5 @@
 import type { useFactoryLocationInventory } from "../FactoryLocationInventoryModel";
+import { isSpecialFactoryCategory } from "./utils";
 
 type FactoryLocationInventoryModel = ReturnType<typeof useFactoryLocationInventory>;
 
@@ -18,11 +19,25 @@ export function createFactoryLocationProductMetrics(inventory: FactoryLocationIn
     .sort((left, right) => left.categoryName.localeCompare(right.categoryName))
     .map((group) => group.categoryName);
 
-  const statsBales = activeInventoryData.reduce(
-    (sum, product) => sum + product.baleCount - (product.loadingCount ?? 0),
-    0
+  // Keep ordinary bales separate from Wipers/Garbage, using the same category
+  // classification as the regular/special sections in the stock table.
+  const stockBreakdown = activeInventoryData.reduce(
+    (totals, product) => {
+      const bales = product.baleCount - (product.loadingCount ?? 0);
+      const kg = product.totalWeight;
+      if (isSpecialFactoryCategory(product.category || "")) {
+        totals.specialBales += bales;
+        totals.specialKg += kg;
+        if (bales > 0) totals.specialProductCount += 1;
+      } else {
+        totals.regularBales += bales;
+        totals.regularKg += kg;
+        if (bales > 0) totals.regularProductCount += 1;
+      }
+      return totals;
+    },
+    { regularBales: 0, regularKg: 0, specialBales: 0, specialKg: 0, regularProductCount: 0, specialProductCount: 0 }
   );
-  const statsKg = activeInventoryData.reduce((sum, product) => sum + product.totalWeight, 0);
   const statsCostValue = activeInventoryData.reduce(
     (sum, product) => sum + (product.baleCount - (product.loadingCount ?? 0)) * product.productionPrice,
     0
@@ -87,9 +102,8 @@ export function createFactoryLocationProductMetrics(inventory: FactoryLocationIn
     spTotalKg,
     spTotalProdValue,
     spTotalSellValue,
-    statsBales,
+    ...stockBreakdown,
     statsCostValue,
-    statsKg,
     statsSellValue,
     toggleCol,
     totalBales,

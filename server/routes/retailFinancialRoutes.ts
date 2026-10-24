@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { and, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
-import { bankAccounts, ledgerAccounts, posShifts, retailCashMovements } from "@shared/schema";
+import { bankAccounts, ledgerAccounts, posShifts, retailCashMovements, userLocations } from "@shared/schema";
 import { requireAuth, requireNonPOS } from "../auth";
 import { db } from "../db";
 import { getErrorMessage, HttpError } from "../lib/httpHandlers";
@@ -26,6 +26,7 @@ import { parseMoneyInput, toMoney } from "../lib/money";
 import {
   getRetailFinancialReconciliation,
   getRetailShiftSummary,
+  getRetailCashDrawerBalance,
   listRetailFinancialAccounts,
 } from "../services/retail/retailFinancialQueries";
 
@@ -186,6 +187,39 @@ export function registerRetailFinancialRoutes(app: Express): void {
           to: parseDate(req.query.to),
         })
       );
+    } catch (error) {
+      res.status(400).json({ message: getErrorMessage(error) });
+    }
+  });
+
+  // Read-only current balance of the actual drawer ledger; also available
+  // before opening a shift. Company and POS assigned-location scoped.
+  app.get("/api/pos/retail/shift-ledger-balance", requireAuth, async (req, res) => {
+    try {
+      const companyId = await requireRetailCompany(req, res);
+      if (!companyId) return;
+      const locationId = Number(req.query.locationId);
+      if (!Number.isSafeInteger(locationId) || locationId <= 0) {
+        return res.status(400).json({ message: "Location is required" });
+      }
+      await ensureCompanyLocation(companyId, locationId);
+      if (req.user?.role === "POS") {
+        const [assigned] = await db
+          .select({ locationId: userLocations.locationId })
+          .from(userLocations)
+          .where(and(
+            eq(userLocations.companyId, companyId),
+            eq(userLocations.userId, req.user.id),
+            eq(userLocations.locationId, locationId)
+          ))
+          .limit(1);
+        if (!assigned) return res.status(403).json({ message: "This location is not assigned to you" });
+      }
+      const cashAccountId = req.query.cashAccountId == null ? null : Number(req.query.cashAccountId);
+      if (cashAccountId != null && (!Number.isSafeInteger(cashAccountId) || cashAccountId <= 0)) {
+        return res.status(400).json({ message: "Invalid cash ledger account" });
+      }
+      res.json(await getRetailCashDrawerBalance(companyId, locationId, cashAccountId));
     } catch (error) {
       res.status(400).json({ message: getErrorMessage(error) });
     }

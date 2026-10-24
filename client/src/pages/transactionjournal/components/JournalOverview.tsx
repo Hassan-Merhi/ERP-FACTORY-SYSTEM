@@ -13,6 +13,7 @@ import type { TransactionJournalModel } from "../useTransactionJournalModel";
 
 const TYPE_CHIPS = [
   { label: "All", value: "all" },
+  { label: "Offload", value: "Offload" },
   { label: "Payment", value: "Payment" },
   { label: "Receipt", value: "Receipt" },
   { label: "Sales", value: "Sales" },
@@ -67,7 +68,7 @@ export function JournalSummaryCards({ model }: { model: TransactionJournalModel 
           </CardHeader>
           <CardContent className="px-3 pb-3">
             <div className="text-lg font-semibold">{row.count.toLocaleString()}</div>
-            <div className="text-xs text-muted-foreground">vouchers</div>
+            <div className="text-xs text-muted-foreground">transactions</div>
             {row.usdDr > 0 && (
               <div className="text-xs text-muted-foreground mt-1">
                 USD Dr: {row.usdDr.toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}

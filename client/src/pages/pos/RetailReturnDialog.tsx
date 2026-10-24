@@ -1,15 +1,18 @@
 import { useEffect, useRef, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { ArrowLeftRight, RotateCcw, Search, Printer, Minus, Plus } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
+import { useCompany } from "@/contexts/CompanyContext";
 import { apiRequest } from "@/lib/queryClient";
 import { RetailPhotoGallery } from "@/pages/retail/RetailProductImage";
-import { makeKey, money, type RetailSale } from "./retailPosTypes";
+import { makeKey, money, readJson, type RetailSale } from "./retailPosTypes";
+import { paymentFromAccount, RetailPaymentAccountOptions, type RetailPaymentAccounts } from "./RetailPaymentAccountSelect";
 
-type Destination = "original" | "customer_credit";
+type Destination = "original" | "customer_credit" | "account";
 type ReturnLine = { quantity: number; restock: boolean };
 
 export function RetailReturnDialog({
@@ -34,12 +37,19 @@ export function RetailReturnDialog({
   onCompleted: (sale: RetailSale) => void | Promise<void>;
 }) {
   const { toast } = useToast();
+  const { selectedCompany } = useCompany();
   const [term, setTerm] = useState("");
   const [results, setResults] = useState<RetailSale[]>([]);
   const [searching, setSearching] = useState(false);
   const [sale, setSale] = useState<RetailSale | null>(null);
   const [lines, setLines] = useState<Record<number, ReturnLine>>({});
   const [destination, setDestination] = useState<Destination>("original");
+  const [refundAccount, setRefundAccount] = useState("");
+  const { data: accounts } = useQuery<RetailPaymentAccounts>({
+    queryKey: ["retail-payment-accounts", selectedCompany?.id],
+    queryFn: () => readJson<RetailPaymentAccounts>("/api/pos/retail/payment-accounts"),
+    enabled: open,
+  });
   const [reason, setReason] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const attempt = useRef<{ signature: string; key: string } | null>(null);
@@ -52,6 +62,7 @@ export function RetailReturnDialog({
     setLines({});
     setReason("");
     setDestination("original");
+    setRefundAccount("");
     attempt.current = null;
   }, [open]);
 
@@ -94,6 +105,7 @@ export function RetailReturnDialog({
     setSale(selected);
     setLines({});
     setDestination("original");
+    setRefundAccount("");
     setReason("");
     attempt.current = null;
   };
@@ -122,6 +134,10 @@ export function RetailReturnDialog({
 
   const submit = async () => {
     if (!sale || !locationId || !returned.length) return;
+    if (destination === "account" && (!refundAccount || !accounts)) {
+      toast({ title: "Select the cash or bank account for this refund", variant: "destructive" });
+      return;
+    }
     if (destination === "customer_credit" && !sale.customerId) {
       toast({ title: "Account credit requires a customer on the original sale", variant: "destructive" });
       return;
@@ -131,25 +147,29 @@ export function RetailReturnDialog({
       return;
     }
     // The same exact retry uses one key; edited lines/options use a fresh key.
-    const signature = JSON.stringify({ saleId: sale.id, locationId, returned, destination, reason: reason.trim() });
+    const signature = JSON.stringify({ saleId: sale.id, locationId, returned, destination, refundAccount, reason: reason.trim() });
     if (!attempt.current || attempt.current.signature !== signature) {
       attempt.current = { signature, key: makeKey("retail-return") };
     }
     setSubmitting(true);
     try {
+      const chosenAccount = destination === "account" && accounts
+        ? paymentFromAccount(refundAccount, 1, accounts) : null;
       const response = await apiRequest("POST", `/api/pos/retail/sales/${sale.id}/returns`, {
         locationId,
         shiftId: shiftId ?? undefined,
         idempotencyKey: attempt.current.key,
         items: returned,
         refundDestination: destination,
+        refundLedgerAccountId: chosenAccount?.ledgerAccountId,
+        refundBankAccountId: chosenAccount?.bankAccountId,
         notes: reason.trim() || undefined,
       });
       const data = (await response.json()) as { replayed: boolean; refundAmount: number; sale: RetailSale };
       const outcome =
         destination === "customer_credit"
           ? "Credited to customer account"
-          : "Reversed / refunded against original tenders";
+          : destination === "account" ? "Refunded through selected account" : "Reversed / refunded against original tenders";
       toast({
         title: data.replayed ? "Return already recorded" : "Return completed",
         description: `${outcome}: ${money(data.refundAmount)}`,
@@ -344,7 +364,24 @@ export function RetailReturnDialog({
                 <option value="customer_credit" disabled={!sale.customerId || !canOverride}>
                   Customer account credit (manager)
                 </option>
+                <option value="account" disabled={!canOverride}>Refund from selected cash/bank account (manager)</option>
               </select>
+              {destination === "account" && (
+                <select
+                  aria-label="Refund cash or bank account"
+                  className="mt-2 h-9 w-full rounded-md border bg-background px-3 text-sm"
+                  value={refundAccount}
+                  onChange={(event) => setRefundAccount(event.target.value)}
+                  data-testid="retail-refund-account"
+                >
+                  <RetailPaymentAccountOptions accounts={accounts} />
+                </select>
+              )}
+              {sale.customerId && (
+                <p className="text-xs text-muted-foreground">
+                  Unpaid amounts are reversed on the original customer's ledger before any money is refunded.
+                </p>
+              )}
             </div>
             <Textarea
               placeholder="Return reason / damaged item explanation"
@@ -360,7 +397,7 @@ export function RetailReturnDialog({
                   Final amount recalculated from original sale by the server
                 </div>
               </div>
-              <Button type="button" disabled={submitting || !returned.length} onClick={() => void submit()}>
+              <Button type="button" disabled={submitting || !returned.length || (destination === "account" && !refundAccount)} onClick={() => void submit()}>
                 <RotateCcw className="mr-2 h-4 w-4" />
                 {submitting ? "Refunding…" : "Confirm return"}
               </Button>

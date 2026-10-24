@@ -1,4 +1,4 @@
-import { Archive, ArchiveRestore, ArrowRightLeft, History, Pencil, Printer, SlidersHorizontal } from "lucide-react";
+import { Archive, ArchiveRestore, Pencil, Printer } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent } from "@/components/ui/card";
@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 import { RetailPhotoGallery } from "./RetailProductImage";
 import { money, sortRetailVariants, type RetailProduct, type RetailVariant } from "./retailInventoryTypes";
 
-export type RetailVariantAction = "print" | "transfer" | "adjust" | "history" | "archive" | "restore";
+export type RetailVariantAction = "print" | "archive" | "restore";
 
 export interface RetailCatalogFilters {
   color: string;
@@ -211,36 +211,6 @@ export function RetailCatalogList({
                                 onClick={() => onVariantAction("print", product, variant)}
                               >
                                 <Printer className="h-4 w-4" />
-                              </Button>
-                              <Button
-                                size="icon"
-                                variant="ghost"
-                                className="h-8 w-8"
-                                aria-label="Transfer"
-                                title="Transfer"
-                                onClick={() => onVariantAction("transfer", product, variant)}
-                              >
-                                <ArrowRightLeft className="h-4 w-4" />
-                              </Button>
-                              <Button
-                                size="icon"
-                                variant="ghost"
-                                className="h-8 w-8"
-                                aria-label="Adjust stock"
-                                title="Adjust stock"
-                                onClick={() => onVariantAction("adjust", product, variant)}
-                              >
-                                <SlidersHorizontal className="h-4 w-4" />
-                              </Button>
-                              <Button
-                                size="icon"
-                                variant="ghost"
-                                className="h-8 w-8"
-                                aria-label="Movement history"
-                                title="Movement history"
-                                onClick={() => onVariantAction("history", product, variant)}
-                              >
-                                <History className="h-4 w-4" />
                               </Button>
                               <Button
                                 size="icon"

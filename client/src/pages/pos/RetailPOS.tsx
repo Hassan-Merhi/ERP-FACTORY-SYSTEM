@@ -13,6 +13,7 @@ import { RetailErpPosSaleGrid, RetailErpPosItemPicker } from "./RetailErpPosWork
 import { RetailExchangeDialog } from "./RetailExchangeDialog";
 import { RetailReturnDialog } from "./RetailReturnDialog";
 import { RetailPaymentPanel } from "./RetailPaymentPanel";
+import { paymentAccountValue, paymentFromAccount, RetailPaymentAccountOptions, type RetailPaymentAccounts } from "./RetailPaymentAccountSelect";
 import { RetailLastSaleSummary } from "./RetailPOSPanels";
 import { RetailShiftPanel, type RetailShift } from "./RetailShiftPanel";
 import { useRetailReceiptPrinter } from "./retailReceipt";
@@ -50,7 +51,7 @@ export default function RetailPOS() {
   const [exchangeSale, setExchangeSale] = useState<RetailSale | null>(null);
   const [returnDialogOpen, setReturnDialogOpen] = useState(false);
   const [currentShift, setCurrentShift] = useState<RetailShift | null>(null);
-  const [payments, setPayments] = useState<RetailPaymentDraft[]>([{ method: "cash", amount: 0, tenderedAmount: 0 }]);
+  const [payments, setPayments] = useState<RetailPaymentDraft[]>([{ method: "cash", amount: 0, tenderedAmount: null }]);
   const [customer, setCustomer] = useState<RetailCustomerSummary | null>(null);
   const [orderDiscount, setOrderDiscount] = useState<{
     type: "none" | "percent" | "fixed";
@@ -75,15 +76,23 @@ export default function RetailPOS() {
     queryFn: () => readJson<Location[]>("/api/locations"),
     enabled: selectedCompany?.companyType === "retail",
   });
+  const paymentAccountsQuery = useQuery<RetailPaymentAccounts>({
+    queryKey: ["retail-payment-accounts", selectedCompany?.id],
+    queryFn: () => readJson<RetailPaymentAccounts>("/api/pos/retail/payment-accounts"),
+    enabled: selectedCompany?.companyType === "retail",
+  });
+  const paymentAccounts = paymentAccountsQuery.data;
   const isPosRole = selectedCompany?.role === "POS";
   const assignedLocationId = selectedCompany?.assignedLocationId ?? null;
   const locations = (locationsQuery.data ?? [])
     .filter((location) => location.id > 0)
     .filter((location) => !isPosRole || location.id === assignedLocationId);
-  const { printReceipt, portal: receiptPortal } = useRetailReceiptPrinter(
-    selectedCompany?.name,
-    selectedLocation?.name
-  );
+  const {
+    printReceipt,
+    portal: receiptPortal,
+    paperWidth: receiptPaperWidth,
+    setPaperWidth: setReceiptPaperWidth,
+  } = useRetailReceiptPrinter(selectedCompany?.name, selectedLocation?.name);
 
   const focusScan = useCallback(() => {
     window.setTimeout(() => scanInputRef.current?.focus({ preventScroll: true }), 30);
@@ -100,7 +109,7 @@ export default function RetailPOS() {
 
   useEffect(() => {
     setCart([]);
-    setPayments([{ method: "cash", amount: 0, tenderedAmount: 0 }]);
+    setPayments([{ method: "cash", amount: 0, tenderedAmount: null }]);
     setNotes("");
     setScanText("");
     setSearch("");
@@ -180,6 +189,7 @@ export default function RetailPOS() {
       queryClient.invalidateQueries({ queryKey: ["retail-products"] }),
       queryClient.invalidateQueries({ queryKey: ["retail-product"] }),
       queryClient.invalidateQueries({ queryKey: ["retail-shift-summary"] }),
+      queryClient.invalidateQueries({ queryKey: ["retail-shift-ledger-balance"] }),
       queryClient.invalidateQueries({ queryKey: ["retail-current-shift"] }),
       queryClient.invalidateQueries({ queryKey: ["retail-pos-customer-balance"] }),
       queryClient.invalidateQueries({ queryKey: ["retail-accounting-customer-history", selectedCompany?.id] }),
@@ -303,7 +313,7 @@ export default function RetailPOS() {
       setLastSale(data.sale);
       setCustomer(null);
       // A credit or split tender belongs to the completed sale only.
-      setPayments([{ method: "cash", amount: 0, tenderedAmount: 0 }]);
+      setPayments([{ method: "cash", amount: 0, tenderedAmount: null }]);
       setOrderDiscount({ type: "none", value: 0, reason: "" });
       setOrderDiscountOpen(false);
       setApprovalToken(null);
@@ -389,10 +399,14 @@ export default function RetailPOS() {
   );
   const paymentsValid =
     (!hasCreditTender || Boolean(customer?.id)) &&
+    Boolean(paymentAccounts) &&
     Math.abs(paymentTotal - total) <= 0.005 &&
     payments.every(
       (payment) =>
         Number(payment.amount) > 0 &&
+        (payment.method === "credit"
+          ? Boolean(customer?.id)
+          : Boolean(payment.ledgerAccountId || payment.bankAccountId)) &&
         (payment.method !== "cash" ||
           payment.tenderedAmount == null ||
           Number(payment.tenderedAmount) + 0.000001 >= Number(payment.amount))
@@ -412,7 +426,7 @@ export default function RetailPOS() {
     if (!next?.id) {
       setPayments((current) =>
         current.map((payment) =>
-          payment.method === "credit" ? { ...payment, method: "cash", tenderedAmount: payment.amount } : payment
+          payment.method === "credit" ? ({ method: "cash", amount: payment.amount, tenderedAmount: null } as RetailPaymentDraft) : payment
         )
       );
     }
@@ -483,62 +497,28 @@ export default function RetailPOS() {
             title="Retail sales use the actual checkout date; backdated posting is not enabled"
           />
         </div>
-        <div className="space-y-1">
-          <label htmlFor="retail-pos-method" className="text-xs text-muted-foreground">
-            Payment
+        <div className="min-w-[200px] space-y-1">
+          <label htmlFor="retail-pos-account" className="text-xs text-muted-foreground">
+            Payment account
           </label>
           <select
-            id="retail-pos-method"
-            className="block h-9 min-w-28 rounded-md border bg-background px-3 text-sm"
-            value={payments[0]?.method ?? "cash"}
+            id="retail-pos-account"
+            className="block h-9 w-full min-w-[200px] max-w-[340px] rounded-md border bg-background px-3 text-sm"
+            value={paymentAccountValue(payments[0] ?? { method: "cash", amount: 0 })}
             onChange={(event) => {
-              const method = event.target.value as RetailPaymentDraft["method"];
-              setPayments((current) =>
-                current.map((payment, index) =>
-                  index === 0
-                    ? {
-                        ...payment,
-                        method,
-                        tenderedAmount: method === "cash" ? payment.amount || 0 : null,
-                      }
-                    : payment
-                )
-              );
+              if (!paymentAccounts) return;
+              const value = event.target.value;
+              setPayments((current) => current.map((payment, index) =>
+                index !== 0 ? payment : value
+                  ? paymentFromAccount(value, payment.amount, paymentAccounts)
+                  : ({ method: "cash", amount: payment.amount, tenderedAmount: null } as RetailPaymentDraft)
+              ));
             }}
+            data-testid="retail-pos-account"
           >
-            <option value="cash">Cash</option>
-            <option value="card">Card</option>
-            <option value="bank">Bank</option>
-            <option value="mobile">Mobile</option>
-            <option value="other">Other</option>
-            <option value="credit" disabled={!customer?.id}>
-              Customer Credit
-            </option>
+            <RetailPaymentAccountOptions accounts={paymentAccounts} allowCredit={Boolean(customer?.id)} customerName={customer?.legalName} />
           </select>
         </div>
-        <label
-          className="flex items-center gap-2 pt-6 text-sm"
-          title={
-            !customer ? "Select a customer for credit sales" : "Charge the sale to the selected customer's ERP account"
-          }
-        >
-          <input
-            type="checkbox"
-            checked={hasCreditTender}
-            disabled={!customer?.id && !hasCreditTender}
-            onChange={(event) => {
-              const amount = Number(total.toFixed(2));
-              setPayments(
-                event.target.checked
-                  ? [{ method: "credit", amount, tenderedAmount: null }]
-                  : [{ method: "cash", amount, tenderedAmount: amount }]
-              );
-            }}
-            data-testid="toggle-retail-credit-sale"
-            className="h-4 w-4 accent-primary"
-          />
-          Credit
-        </label>
         <div className="min-w-[190px] flex-1 xl:max-w-[350px]">
           <RetailCustomerPicker customer={customer} onSelect={selectCustomer} />
         </div>
@@ -552,7 +532,11 @@ export default function RetailPOS() {
         )}
       </div>
 
-      <RetailShiftPanel locationId={selectedLocation?.id ?? null} onShiftChange={setCurrentShift} />
+      <RetailShiftPanel
+        locationId={selectedLocation?.id ?? null}
+        cashAccountId={payments[0]?.method === "cash" ? payments[0].ledgerAccountId ?? null : null}
+        onShiftChange={setCurrentShift}
+      />
 
       <PosWorkspaceColumns layout="retail">
         <div className="flex min-w-0 flex-col gap-3">
@@ -702,6 +686,8 @@ export default function RetailPOS() {
                 value={payments}
                 onChange={setPayments}
                 canUseCredit={Boolean(customer?.id)}
+                accounts={paymentAccounts}
+                customerName={customer?.legalName}
               />
             )}
             {isPosRole && !currentShift && cart.length > 0 && (
@@ -718,7 +704,14 @@ export default function RetailPOS() {
             >
               {saleMutation.isPending ? "Completing sale…" : "Complete Sale"}
             </Button>
-            {lastSale && <RetailLastSaleSummary sale={lastSale} onPrint={() => printReceipt(lastSale)} />}
+            {lastSale && (
+              <RetailLastSaleSummary
+                sale={lastSale}
+                onPrint={() => printReceipt(lastSale)}
+                paperWidth={receiptPaperWidth}
+                onPaperWidthChange={setReceiptPaperWidth}
+              />
+            )}
           </div>
         </div>
         <RetailErpPosItemPicker

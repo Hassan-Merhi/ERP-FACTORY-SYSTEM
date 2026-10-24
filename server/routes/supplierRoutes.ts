@@ -2,6 +2,7 @@ import type { Express } from "express";
 
 import { requireAuth, requireNonPOS } from "../auth";
 import { sendSupplierRouteError } from "./suppliers/supplierErrors";
+import { masterDataDbErrorResponse } from "../lib/masterDataDbError";
 import {
   enforceSupplierCompanyQuery,
   getActiveSupplierCompanyId,
@@ -60,6 +61,8 @@ export function registerSupplierRoutes(app: Express) {
       const supplier = await supplierService.create(companyId, req.body, getSupplierAuditActor(req));
       return res.status(201).json(supplier);
     } catch (error: unknown) {
+      const dbError = masterDataDbErrorResponse(error, "supplier", req.session.currentCompanyId);
+      if (dbError) return res.status(dbError.status).json(dbError.body);
       return sendSupplierRouteError(res, error, 400);
     }
   });

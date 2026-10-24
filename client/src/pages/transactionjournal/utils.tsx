@@ -22,6 +22,7 @@ export function fmtDate(d: string) {
 }
 
 export const VOUCHER_TYPE_COLORS: Record<string, string> = {
+  Offload: "bg-amber-500/20 text-amber-700 dark:text-amber-400 border border-amber-500/30",
   Payment: "bg-red-100    text-red-800    dark:bg-red-900/30    dark:text-red-300",
   Receipt: "bg-green-100  text-green-800  dark:bg-green-900/30  dark:text-green-300",
   Journal: "bg-blue-100   text-blue-800   dark:bg-blue-900/30   dark:text-blue-300",

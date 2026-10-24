@@ -1,12 +1,10 @@
 import { useLocation } from "wouter";
-import { Boxes, Camera, ScanLine } from "lucide-react";
+import { Boxes } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-/** Retail workspace pills; POS, reports, stock count and history are reached elsewhere. */
+/** Retail uses inventory as its only stock workspace; intake is handled by supplier-credit import. */
 export const RETAIL_NAV_LINKS = [
   { href: "/retail/inventory", label: "Inventory", icon: Boxes },
-  { href: "/retail/quick-add", label: "Quick add", icon: Camera },
-  { href: "/retail/stock", label: "Stock operations", icon: ScanLine },
 ] as const;
 
 /** Compact, scrollable switcher between the retail fashion workspaces (phone friendly). */

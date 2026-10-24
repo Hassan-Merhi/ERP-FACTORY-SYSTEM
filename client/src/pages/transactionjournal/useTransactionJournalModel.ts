@@ -41,7 +41,7 @@ export interface CompanySummary {
 
 export function useTransactionJournalModel() {
   const [, setLocation] = useLocation();
-  const { selectCompany, companies: contextCompanies } = useCompany();
+  const { selectCompany, selectedCompany, companies: contextCompanies } = useCompany();
   const { toast } = useToast();
   const { formatCashAmount } = useCurrencyContext();
 
@@ -280,6 +280,36 @@ export function useTransactionJournalModel() {
     setLocation(path);
   };
 
+  // Compare must open its own tab (as on normal Daybook), without losing the
+  // company-switch guard when All Daybook is viewing a different company.
+  const openComparisonInCompany = (companyId: number, path: string) => {
+    if (selectedCompany?.id === companyId) {
+      window.open(path, "_blank", "noopener,noreferrer");
+      return;
+    }
+    // Open synchronously from the click to avoid browser popup blocking while
+    // the authorized company switch completes.
+    const tab = window.open("about:blank", "_blank");
+    if (!tab) {
+      toast({ title: "Allow pop-ups to open the comparison", variant: "destructive" });
+      return;
+    }
+    tab.opener = null;
+    void (async () => {
+      const company = contextCompanies.find((item) => item.id === companyId);
+      if (company) {
+        const switched = await selectCompany(company);
+        if (!switched) throw new Error("Company switch failed");
+      } else {
+        await apiRequest("POST", "/api/auth/set-company", { companyId });
+      }
+      tab.location.replace(path);
+    })().catch(() => {
+      tab.close();
+      toast({ title: "Could not switch to the PO company", variant: "destructive" });
+    });
+  };
+
   const availableCompanies: CompanyOption[] = data?.companies || [];
 
   // ── Visible vouchers (filter hidden unless showHidden) ──
@@ -414,6 +444,7 @@ export function useTransactionJournalModel() {
     viewPurchaseItems,
     entryBalances,
     openInCompany,
+    openComparisonInCompany,
   };
 }
 

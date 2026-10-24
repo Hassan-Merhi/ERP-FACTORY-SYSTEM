@@ -1,3 +1,4 @@
+import { useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -36,7 +37,44 @@ import { FactoryLocationInventoryProductFooterDialogs } from "./factorylocationi
 
 type FactoryLocationInventoryModel = ReturnType<typeof useFactoryLocationInventory>;
 
+type BreakdownStatCardProps = {
+  icon: ReactNode;
+  label: string;
+  total: string;
+  regular: string;
+  special: string;
+  unit: string;
+  accent: string;
+};
+
+function BreakdownStatCard({ icon, label, total, regular, special, unit, accent }: BreakdownStatCardProps) {
+  return (
+    <div className="min-w-0 rounded-xl border bg-card/40 shadow-xs">
+      <div className="flex items-start gap-3 px-3.5 py-3">
+        <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${accent}`}>
+          {icon}
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{label}</div>
+          <div className="text-xl font-bold leading-tight tracking-tight tabular-nums">{total}</div>
+          <div className="mt-2 grid grid-cols-2 gap-2 border-t pt-2">
+            <div className="min-w-0">
+              <div className="text-[11px] leading-tight text-muted-foreground">Regular {unit}</div>
+              <div className="mt-0.5 text-sm font-semibold tabular-nums">{regular}</div>
+            </div>
+            <div className="min-w-0 border-l pl-2">
+              <div className="text-[11px] leading-tight text-muted-foreground">Wipers &amp; Garbage {unit}</div>
+              <div className="mt-0.5 text-sm font-semibold tabular-nums">{special}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function FactoryLocationInventoryProductView({ inventory }: { inventory: FactoryLocationInventoryModel }) {
+  const [categorySearch, setCategorySearch] = useState("");
   const {
     activeInventoryData,
     applyProductionPrices,
@@ -92,9 +130,13 @@ export function FactoryLocationInventoryProductView({ inventory }: { inventory: 
     spTotalKg,
     spTotalProdValue,
     spTotalSellValue,
-    statsBales,
+    regularBales,
+    regularKg,
+    regularProductCount,
+    specialBales,
+    specialKg,
+    specialProductCount,
     statsCostValue,
-    statsKg,
     statsSellValue,
     toggleCol,
     totalBales,
@@ -104,6 +146,9 @@ export function FactoryLocationInventoryProductView({ inventory }: { inventory: 
   } = createFactoryLocationProductMetrics(inventory);
 
   const { renderProductRow, renderMobileCard } = createFactoryLocationProductRenderers(inventory);
+  const matchingCategoryNames = allCategoryNames.filter((name) =>
+    name.toLocaleLowerCase().includes(categorySearch.trim().toLocaleLowerCase())
+  );
 
   return (
     <div className={`p-4 md:p-6 w-full space-y-5 ${proformaMode && selections.size > 0 ? "pb-24" : ""}`}>
@@ -179,21 +224,25 @@ export function FactoryLocationInventoryProductView({ inventory }: { inventory: 
         </div>
       </div>
 
-      {/* KPI cards */}
+      {/* KPI cards: each stock quantity shows the combined total and both categories. */}
       {!inventoryLoading && (
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
-          <StatCard
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          <BreakdownStatCard
             icon={<Package className="h-4 w-4 text-blue-400" />}
             label="Total Bales"
-            value={statsBales.toLocaleString()}
-            sub={`${activeInventoryData.filter((p) => p.baleCount > 0).length} products`}
+            total={(regularBales + specialBales).toLocaleString()}
+            regular={regularBales.toLocaleString()}
+            special={specialBales.toLocaleString()}
+            unit="Bales"
             accent="bg-blue-500/10"
           />
-          <StatCard
+          <BreakdownStatCard
             icon={<Weight className="h-4 w-4 text-emerald-400" />}
             label="Total KG"
-            value={fmt(statsKg)}
-            sub={statsBales > 0 ? `~${fmt(statsKg / statsBales)} KG / bale` : undefined}
+            total={fmt(regularKg + specialKg)}
+            regular={fmt(regularKg)}
+            special={fmt(specialKg)}
+            unit="KG"
             accent="bg-emerald-500/10"
           />
           <StatCard
@@ -336,7 +385,7 @@ export function FactoryLocationInventoryProductView({ inventory }: { inventory: 
             />
           </div>
           <div className="flex items-center gap-2 flex-wrap">
-            <Popover>
+            <Popover onOpenChange={(open) => { if (!open) setCategorySearch(""); }}>
               <PopoverTrigger asChild>
                 <Button variant="outline" size="sm" className="gap-1.5 h-8" data-testid="button-category-filter">
                   <ListFilter className="h-3.5 w-3.5" />
@@ -348,7 +397,18 @@ export function FactoryLocationInventoryProductView({ inventory }: { inventory: 
                   <ChevronDown className="h-3 w-3 opacity-50 ml-0.5" />
                 </Button>
               </PopoverTrigger>
-              <PopoverContent className="w-60 p-1" align="start">
+              <PopoverContent className="w-64 p-1" align="start">
+                <div className="relative p-1">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+                  <Input
+                    value={categorySearch}
+                    onChange={(event) => setCategorySearch(event.target.value)}
+                    placeholder="Search categories..."
+                    aria-label="Search categories"
+                    className="h-8 pl-8 text-xs"
+                    data-testid="input-search-categories"
+                  />
+                </div>
                 <div className="max-h-64 overflow-y-auto">
                   <div
                     className="flex items-center gap-2 px-2 py-1.5 rounded-xs cursor-pointer hover-elevate text-xs"
@@ -363,7 +423,7 @@ export function FactoryLocationInventoryProductView({ inventory }: { inventory: 
                     <span className="font-medium">All Categories</span>
                   </div>
                   <div className="border-t my-1" />
-                  {allCategoryNames.map((name) => (
+                  {matchingCategoryNames.map((name) => (
                     <div
                       key={name}
                       className="flex items-center gap-2 px-2 py-1.5 rounded-xs cursor-pointer hover-elevate text-xs"
@@ -376,6 +436,7 @@ export function FactoryLocationInventoryProductView({ inventory }: { inventory: 
                     >
                       <Checkbox
                         checked={categoryFilter.includes(name)}
+                        onClick={(event) => event.stopPropagation()}
                         onCheckedChange={() =>
                           setCategoryFilter((prev) =>
                             prev.includes(name) ? prev.filter((c) => c !== name) : [...prev, name]
@@ -386,6 +447,9 @@ export function FactoryLocationInventoryProductView({ inventory }: { inventory: 
                       <span className="truncate">{name}</span>
                     </div>
                   ))}
+                  {matchingCategoryNames.length === 0 && (
+                    <p className="px-2 py-3 text-xs text-muted-foreground text-center">No matching categories</p>
+                  )}
                 </div>
                 {categoryFilter.length > 0 && (
                   <div className="border-t mt-1 pt-1">

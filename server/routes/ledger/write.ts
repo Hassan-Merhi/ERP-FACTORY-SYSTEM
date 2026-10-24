@@ -8,6 +8,7 @@ import type { Express } from "express";
 import { errorStatus, getErrorMessage, HttpError } from "../../lib/httpHandlers";
 import { db } from "../../db";
 import { storage } from "../../storage";
+import { masterDataDbErrorResponse } from "../../lib/masterDataDbError";
 import { requireAuth, requireNonPOS, requireRole } from "../../auth";
 import { logAudit } from "../_helpers";
 import { ledgerAccounts, customers, insertLedgerAccountSchema, updateLedgerAccountSchema } from "@shared/schema";
@@ -207,6 +208,8 @@ export function registerLedgerAccountWriteRoutes(app: Express) {
     } catch (error: unknown) {
       const parentRefused = ledgerParentErrorResponse(error);
       if (parentRefused) return res.status(parentRefused.status).json(parentRefused.body);
+      const dbError = masterDataDbErrorResponse(error, "ledger-account", req.session.currentCompanyId);
+      if (dbError) return res.status(dbError.status).json(dbError.body);
       res.status(errorStatus(error, 400)).json({ message: getErrorMessage(error) });
     }
   });

@@ -51,6 +51,8 @@ const paymentSchema = z.object({
   amount: z.coerce.number().finite().positive(),
   tenderedAmount: z.coerce.number().finite().positive().nullable().optional(),
   reference: z.string().trim().max(191).optional(),
+  ledgerAccountId: z.number().int().positive().nullable().optional(),
+  bankAccountId: z.number().int().positive().nullable().optional(),
 });
 
 const receiveSchema = z.object({
@@ -69,6 +71,9 @@ export const retailExchangeSchema = z.object({
   locationId: z.coerce.number().int().positive(),
   shiftId: z.coerce.number().int().positive().optional(),
   payments: z.array(paymentSchema).min(1).max(8).optional(),
+  refundDestination: z.enum(["original", "account"]).default("original"),
+  refundLedgerAccountId: z.number().int().positive().nullable().optional(),
+  refundBankAccountId: z.number().int().positive().nullable().optional(),
   notes: z.string().trim().max(2000).optional(),
   returnItems: z
     .array(
@@ -246,7 +251,7 @@ export function registerRetailStockOpsRoutes(app: Express): void {
       const userId = currentUserId(req);
       // A shift is optional, as for sales: a refund made without one stays off every
       // drawer (see validateRetailShiftTx) rather than landing on a closed shift.
-      if (!isRetailManagerRole(req.user?.role) && body.returnItems.some((item) => !item.restock)) {
+      if (!isRetailManagerRole(req.user?.role) && (body.refundDestination === "account" || body.returnItems.some((item) => !item.restock))) {
         return res
           .status(403)
           .json({ message: "Manager approval is required to exchange damaged items without restocking" });
@@ -319,13 +324,15 @@ export function registerRetailStockOpsRoutes(app: Express): void {
             shiftId: shift?.id ?? null,
             refundAmount: returned.refundValue,
             idempotencyKey: `${body.idempotencyKey}:return`.slice(0, 191),
+            destination: body.refundDestination,
+            refundAccount: { ledgerAccountId: body.refundLedgerAccountId, bankAccountId: body.refundBankAccountId },
             userId,
           });
           for (const refund of refunds) {
             if (refund.method === "credit") receivableReversed = receivableReversed.plus(refund.amount);
             else tenderRefund = tenderRefund.plus(refund.amount);
           }
-          const refundVoucherId = await postRetailRefundAccountingTx(tx, {
+          const refundPosting = await postRetailRefundAccountingTx(tx, {
             companyId,
             locationId: body.locationId,
             saleId: body.saleId,
@@ -345,7 +352,7 @@ export function registerRetailStockOpsRoutes(app: Express): void {
             sourceId: returned.returnId,
             description: `Retail return #${returned.returnId} for sale #${body.saleId}`,
             actor: { userId, username: req.user?.username ?? null },
-            alreadyDebited: refundVoucherId ? returned.costValue : undefined,
+            alreadyDebited: refundPosting.costReversed ? returned.costValue : undefined,
           });
         }
 

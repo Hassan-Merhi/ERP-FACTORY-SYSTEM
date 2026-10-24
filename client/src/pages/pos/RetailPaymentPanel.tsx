@@ -4,27 +4,23 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { MoneyInput } from "@/components/ui/decimal-input";
 import { Label } from "@/components/ui/label";
-import { money, type RetailPaymentDraft, type RetailPaymentMethod } from "./retailPosTypes";
-
-const METHODS: Array<{ value: RetailPaymentMethod; label: string }> = [
-  { value: "cash", label: "Cash" },
-  { value: "card", label: "Card" },
-  { value: "bank", label: "Bank / Transfer" },
-  { value: "mobile", label: "Mobile" },
-  { value: "other", label: "Other" },
-  { value: "credit", label: "Customer credit (unpaid)" },
-];
+import { money, type RetailPaymentDraft } from "./retailPosTypes";
+import { paymentAccountValue, paymentFromAccount, RetailPaymentAccountOptions, type RetailPaymentAccounts } from "./RetailPaymentAccountSelect";
 
 export function RetailPaymentPanel({
   total,
   value,
   onChange,
   canUseCredit = false,
+  accounts,
+  customerName,
 }: {
   total: number;
   value: RetailPaymentDraft[];
   onChange: (payments: RetailPaymentDraft[]) => void;
   canUseCredit?: boolean;
+  accounts?: RetailPaymentAccounts;
+  customerName?: string | null;
 }) {
   const formId = useId();
   const allocated = value.reduce((sum, payment) => sum + (Number(payment.amount) || 0), 0);
@@ -49,7 +45,7 @@ export function RetailPaymentPanel({
         <div>
           <div className="text-sm font-semibold">Payment</div>
           <div className="text-xs text-muted-foreground">
-            Cash, card, bank, split tender, or customer credit. Credit is not money received.
+            Select a cash/bank account. Customer credit posts only to the chosen customer ledger.
           </div>
         </div>
         <Button
@@ -67,7 +63,7 @@ export function RetailPaymentPanel({
             const available = Number((amounts[largestIndex] ?? 0).toFixed(2));
             const allocatedAmount = Number(remaining.toFixed(2));
             if (allocatedAmount > 0) {
-              onChange([...value, { method: "cash", amount: allocatedAmount, tenderedAmount: allocatedAmount }]);
+              onChange([...value, { method: "cash", amount: allocatedAmount, tenderedAmount: null }]);
               return;
             }
             if (available < 0.02) return;
@@ -84,7 +80,7 @@ export function RetailPaymentPanel({
                     }
                   : payment
               ),
-              { method: "cash", amount: splitOff, tenderedAmount: splitOff },
+              { method: "cash", amount: splitOff, tenderedAmount: null },
             ]);
           }}
         >
@@ -97,28 +93,24 @@ export function RetailPaymentPanel({
         const tendered = Number(payment.tenderedAmount ?? amount) || 0;
         const change = payment.method === "cash" ? Math.max(0, tendered - amount) : 0;
         return (
-          <div key={index} className="grid gap-2 rounded-md border bg-background p-2 md:grid-cols-[140px_1fr_1fr_auto]">
+          <div key={index} className="grid gap-2 rounded-md border bg-background p-2 md:grid-cols-[minmax(190px,2fr)_1fr_1fr_auto]">
             <div>
               <Label htmlFor={`${formId}-method-${index}`} className="text-xs">
-                Method
+                Account
               </Label>
               <select
                 id={`${formId}-method-${index}`}
                 className="mt-1 h-9 w-full rounded-md border bg-background px-2 text-sm"
-                value={payment.method}
+                value={paymentAccountValue(payment)}
                 onChange={(event) => {
-                  const method = event.target.value as RetailPaymentMethod;
-                  update(index, {
-                    method,
-                    tenderedAmount: method === "cash" ? (payment.tenderedAmount ?? payment.amount) : null,
-                  });
+                  const selection = event.target.value;
+                  if (!accounts) return;
+                  onChange(value.map((entry, paymentIndex) => paymentIndex !== index ? entry :
+                    selection ? paymentFromAccount(selection, entry.amount, accounts)
+                    : ({ method: "cash", amount: entry.amount, tenderedAmount: null } as RetailPaymentDraft)));
                 }}
               >
-                {METHODS.map((method) => (
-                  <option key={method.value} value={method.value} disabled={method.value === "credit" && !canUseCredit}>
-                    {method.label}
-                  </option>
-                ))}
+                <RetailPaymentAccountOptions accounts={accounts} allowCredit={canUseCredit} customerName={customerName} />
               </select>
             </div>
             <div>

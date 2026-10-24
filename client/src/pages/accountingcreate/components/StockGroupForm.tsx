@@ -4,7 +4,8 @@ import type { AccountingForm, AccountingFormSubmit, AccountingFormValues } from 
  *
  * Extracted from AccountingCreate.tsx during the Phase 4 god-file split.
  */
-import { Card } from "@/components/ui/card";
+import { CreateFormShell } from "./CreateFormShell";
+import { FolderTree } from "lucide-react";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -23,28 +24,14 @@ function StockGroupForm({
   isPending: boolean;
 }) {
   return (
-    <Card className="p-4 md:p-6">
+    <CreateFormShell icon={FolderTree} title="New stock group" description="Organize stock items into an easy-to-find group.">
       <Form {...form}>
         <form
           noValidate
           onSubmit={form.handleSubmit((data: AccountingFormValues) => onSubmit(data, false))}
           className="space-y-6"
         >
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <FormField
-              control={form.control}
-              name="code"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Code *</FormLabel>
-                  <FormControl>
-                    <Input {...field} placeholder="GRP001" data-testid="input-code" />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
+          <div className="grid grid-cols-1 gap-x-5 gap-y-6 md:grid-cols-2">
             <FormField
               control={form.control}
               name="name"
@@ -52,7 +39,7 @@ function StockGroupForm({
                 <FormItem>
                   <FormLabel>Name *</FormLabel>
                   <FormControl>
-                    <Input {...field} placeholder="Cotton Bales" data-testid="input-name" />
+                    <Input {...field} placeholder="e.g. Cotton Bales" maxLength={50} data-testid="input-name" />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -73,10 +60,11 @@ function StockGroupForm({
             />
           </div>
 
-          <FormButtons onCancel={onCancel} isPending={isPending} />
+          <p className="text-xs text-muted-foreground">The stock group code will match the name automatically (up to 50 characters).</p>
+          <FormButtons onCancel={onCancel} isPending={isPending} submitLabel="Create group" />
         </form>
       </Form>
-    </Card>
+    </CreateFormShell>
   );
 }
 

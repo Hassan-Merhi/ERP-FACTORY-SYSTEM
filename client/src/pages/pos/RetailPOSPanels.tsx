@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { RetailItemImage } from "./RetailScanFeedback";
 import { money, type CartLine, type RetailSale } from "./retailPosTypes";
+import type { RetailReceiptPaperWidth } from "./retailReceipt";
 
 /** One cart line: exact variant, availability, line adjustment and quantity controls. */
 export function RetailCartLineRow({
@@ -81,7 +82,17 @@ export function RetailCartLineRow({
 }
 
 /** Summary of the sale just completed, with its tenders and a reprint button. */
-export function RetailLastSaleSummary({ sale, onPrint }: { sale: RetailSale; onPrint: () => void }) {
+export function RetailLastSaleSummary({
+  sale,
+  onPrint,
+  paperWidth,
+  onPaperWidthChange,
+}: {
+  sale: RetailSale;
+  onPrint: () => void;
+  paperWidth: RetailReceiptPaperWidth;
+  onPaperWidthChange: (width: RetailReceiptPaperWidth) => void;
+}) {
   return (
     <div className="rounded-lg border bg-muted/30 p-3 text-sm" data-testid="last-sale">
       <div className="flex items-center justify-between gap-2">
@@ -115,9 +126,23 @@ export function RetailLastSaleSummary({ sale, onPrint }: { sale: RetailSale; onP
           ))}
         </div>
       ) : null}
-      <Button size="sm" variant="outline" className="mt-2 w-full" onClick={onPrint}>
-        <Printer className="mr-2 h-4 w-4" /> Print receipt
-      </Button>
+      <div className="mt-2 flex flex-wrap items-center gap-2">
+        <label htmlFor="retail-receipt-width" className="sr-only">Thermal receipt paper width</label>
+        <select
+          id="retail-receipt-width"
+          aria-label="Thermal receipt paper width"
+          data-testid="retail-receipt-paper-width"
+          className="h-9 rounded-md border bg-background px-2 text-sm"
+          value={paperWidth}
+          onChange={(event) => onPaperWidthChange(event.target.value === "58" ? 58 : 80)}
+        >
+          <option value={80}>80 mm</option>
+          <option value={58}>58 mm</option>
+        </select>
+        <Button size="sm" variant="outline" className="min-w-[130px] flex-1" onClick={onPrint}>
+          <Printer className="mr-2 h-4 w-4" /> Print receipt
+        </Button>
+      </div>
     </div>
   );
 }

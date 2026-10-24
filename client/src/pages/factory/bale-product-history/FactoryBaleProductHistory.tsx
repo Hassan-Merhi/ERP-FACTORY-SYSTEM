@@ -61,24 +61,26 @@ export function FactoryBaleProductHistory() {
 
   return (
     <div className="container mx-auto p-3 sm:p-6 space-y-4 sm:space-y-6">
-      <div className="flex items-center gap-4">
+      <div className="flex w-full items-start gap-4">
         <Button variant="ghost" size="icon" onClick={() => navigate(backPath)} data-testid="button-back">
           <ArrowLeft className="h-5 w-5" />
         </Button>
-        <PageHeader
-          title={product?.name || "Bale Product History"}
-          subtitle={`${product?.articleCode || ""} · ${year}`}
-        >
-          <Button
-            variant="outline"
-            size="sm"
-            className="gap-1.5"
-            onClick={() => navigate(`/factory/bale-product-history/${productId}/${locationId}/${year}/all`)}
-            data-testid="button-show-all-months"
+        <div className="min-w-0 flex-1">
+          <PageHeader
+            title={product?.name || "Bale Product History"}
+            subtitle={`${product?.articleCode || ""} · ${year}`}
           >
-            Show All Months
-          </Button>
-        </PageHeader>
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1.5"
+              onClick={() => navigate(`/factory/bale-product-history/${productId}/${locationId}/${year}/all`)}
+              data-testid="button-show-all-months"
+            >
+              Show All Months
+            </Button>
+          </PageHeader>
+        </div>
       </div>
 
       {grandTotal && (
