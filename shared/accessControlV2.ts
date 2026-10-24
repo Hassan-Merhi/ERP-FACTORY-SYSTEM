@@ -124,6 +124,8 @@ export interface AccessControlEvaluationInput {
   role: string;
   companyId: number | null;
   isAssignedToCompany: boolean;
+  /** Approved cross-company support path for the Developer role only. */
+  developerSupportBypass?: boolean;
   resource: AccessControlResource;
   action: AccessControlAction;
 
@@ -149,6 +151,7 @@ export type AccessControlDecisionReason =
   | "hard_denial"
   | "immutable_existing_record"
   | "create_only_protected_action"
+  | "create_only_not_creatable"
   | "create_only_not_operational"
   | "user_override"
   | "role_override"
@@ -181,14 +184,16 @@ function createOnlyDefault(
  * user override > role override > Create Only template / legacy parity.
  */
 export function evaluateAccessControl(input: AccessControlEvaluationInput): AccessControlEvaluation {
-  if (!Number.isSafeInteger(input.companyId) || (input.companyId ?? 0) <= 0 || !input.isAssignedToCompany) {
+  const validCompany = typeof input.companyId === "number" && Number.isSafeInteger(input.companyId) && input.companyId > 0;
+  const assignedOrSupport = input.isAssignedToCompany || (input.role === "Developer" && input.developerSupportBypass === true);
+  if (!validCompany || !assignedOrSupport) {
     return { allowed: false, reason: "invalid_company_scope" };
   }
 
   if (input.hardDenied) return { allowed: false, reason: "hard_denial" };
 
   // A "create" request is only such if it cannot rewrite an existing record.
-  if (input.action === "create" && input.touchesExistingRecord) {
+  if (input.role === CREATE_ONLY_ROLE && input.action === "create" && input.touchesExistingRecord) {
     return { allowed: false, reason: "immutable_existing_record" };
   }
 
@@ -198,6 +203,9 @@ export function evaluateAccessControl(input: AccessControlEvaluationInput): Acce
     }
     if (!OPERATIONAL_RESOURCES.has(input.resource)) {
       return { allowed: false, reason: "create_only_not_operational" };
+    }
+    if (input.action === "create" && !CREATE_ONLY_CREATABLE_RESOURCES.has(input.resource)) {
+      return { allowed: false, reason: "create_only_not_creatable" };
     }
   }
 
