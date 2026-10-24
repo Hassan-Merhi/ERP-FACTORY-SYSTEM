@@ -107,7 +107,7 @@ export function RetailPaymentPanel({
                   if (!accounts) return;
                   onChange(value.map((entry, paymentIndex) => paymentIndex !== index ? entry :
                     selection ? paymentFromAccount(selection, entry.amount, accounts)
-                    : { method: "cash", amount: entry.amount, tenderedAmount: null }));
+                    : ({ method: "cash", amount: entry.amount, tenderedAmount: null } as RetailPaymentDraft)));
                 }}
               >
                 <RetailPaymentAccountOptions accounts={accounts} allowCredit={canUseCredit} customerName={customerName} />
