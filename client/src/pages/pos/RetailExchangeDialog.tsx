@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
+import { useCompany } from "@/contexts/CompanyContext";
 import { apiRequest } from "@/lib/queryClient";
 import { fetchRetailCartPreview } from "./retailWave2Api";
 import { RetailItemImage } from "./RetailScanFeedback";
@@ -53,6 +54,7 @@ export function RetailExchangeDialog({
   onCompleted: (sale: RetailSale) => void | Promise<void>;
 }) {
   const { toast } = useToast();
+  const { selectedCompany } = useCompany();
   const [returnQty, setReturnQty] = useState<Record<number, number>>({});
   const [noRestock, setNoRestock] = useState<Record<number, boolean>>({});
   const [reason, setReason] = useState("");
@@ -61,7 +63,7 @@ export function RetailExchangeDialog({
   const [busy, setBusy] = useState(false);
   const [payments, setPayments] = useState<RetailPaymentDraft[]>([{ method: "cash", amount: 0, tenderedAmount: null }]);
   const { data: accounts } = useQuery<RetailPaymentAccounts>({
-    queryKey: ["retail-payment-accounts"],
+    queryKey: ["retail-payment-accounts", selectedCompany?.id],
     queryFn: () => readJson<RetailPaymentAccounts>("/api/pos/retail/payment-accounts"),
     enabled: Boolean(sale),
   });
