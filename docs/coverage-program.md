@@ -43,6 +43,11 @@ suite fails; a suite that survives a meaningful mutation is not finished.
 
 ## Measured (2026-10-24)
 
+Backend, full suite (1,104 files, 7,613 tests): 73.43% lines, 71.97%
+statements, 77.47% functions, 60.10% branches. Global floors moved to
+71/69/75/58 and eleven per-file floors on posting and security modules were
+raised to match. Branches are the backend's widest gap.
+
 Frontend, full suite on the merged branch: 37.57% lines, 35.75% statements,
 27.02% functions, 27.68% branches. `lib/` (78% lines), `hooks/` (61%) and
 `contexts/` (55%) hold about 2,100 of the ~46,000 uncovered lines; pages hold
