@@ -85,6 +85,8 @@ export interface RetailPaymentDraft {
   amount: number;
   tenderedAmount?: number | null;
   reference?: string | null;
+  ledgerAccountId?: number | null;
+  bankAccountId?: number | null;
 }
 
 export interface RetailPayment {
@@ -97,6 +99,8 @@ export interface RetailPayment {
   reference: string | null;
   shiftId: number | null;
   relatedPaymentId?: number | null;
+  ledgerAccountId?: number | null;
+  bankAccountId?: number | null;
 }
 
 /**
