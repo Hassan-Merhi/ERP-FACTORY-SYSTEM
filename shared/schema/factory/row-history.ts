@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import { bigint, bigserial, index, integer, jsonb, pgTable, text, timestamp, varchar } from "drizzle-orm/pg-core";
 
 /**
@@ -7,8 +8,8 @@ import { bigint, bigserial, index, integer, jsonb, pgTable, text, timestamp, var
  *   op I  row inserted (new_values = whole row)
  *   op U  row updated (old_values / new_values = only the columns that changed)
  *   op D  row deleted (old_values = whole row)
- * recorded_at is when the change was written, in the same zone as the tracked
- * tables' created_at columns.
+ * recorded_at is when the change was written (clock_timestamp(), not the
+ * transaction start), in the same zone as the tracked tables' created_at columns.
  */
 export const factoryRowHistory = pgTable(
   "factory_row_history",
@@ -18,7 +19,9 @@ export const factoryRowHistory = pgTable(
     recordId: bigint("record_id", { mode: "number" }).notNull(),
     companyId: integer("company_id"),
     op: varchar("op", { length: 1 }).notNull(),
-    recordedAt: timestamp("recorded_at").notNull().defaultNow(),
+    recordedAt: timestamp("recorded_at")
+      .notNull()
+      .default(sql`clock_timestamp()`),
     actor: text("actor"),
     oldValues: jsonb("old_values"),
     newValues: jsonb("new_values"),

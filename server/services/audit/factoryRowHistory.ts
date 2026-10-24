@@ -18,7 +18,10 @@ import { AUDIT_ACTOR_SETTINGS, UNKNOWN_AUDIT_ACTOR } from "./auditActorContext";
  * When a table's trigger is installed, every existing row is copied as op S in
  * the same transaction, under a SHARE ROW EXCLUSIVE lock (reads continue,
  * writes wait), so the snapshot and the trigger start at the same instant:
- * factory_row_history_baselines.baseline_at.
+ * factory_row_history_baselines.baseline_at, read after the lock. Changes are
+ * stamped with clock_timestamp(), the moment they are written: now() is the
+ * transaction's start and would date a change made by a transaction begun
+ * before the baseline, or before midnight, too early.
  *
  * Production disables the bulk startup migrations, so this runs on every boot.
  * A table already at FACTORY_ROW_HISTORY_VERSION with its triggers present is
@@ -28,7 +31,7 @@ import { AUDIT_ACTOR_SETTINGS, UNKNOWN_AUDIT_ACTOR } from "./auditActorContext";
  * is left for the next boot. History is evidence, not a write guard, so a
  * failure is logged and the server starts.
  */
-export const FACTORY_ROW_HISTORY_VERSION = "2026-10-factory-row-history-v1";
+export const FACTORY_ROW_HISTORY_VERSION = "2026-10-factory-row-history-v2";
 
 /** Tracked tables and, for each, column-name prefixes whose changes alone are noise. */
 export const FACTORY_ROW_HISTORY_TABLES: ReadonlyArray<readonly [table: string, noisePrefixes: readonly string[]]> = [
@@ -65,11 +68,13 @@ export const FACTORY_ROW_HISTORY_DDL: readonly string[] = [
      record_id bigint NOT NULL,
      company_id integer,
      op varchar(1) NOT NULL,
-     recorded_at timestamp NOT NULL DEFAULT now(),
+     recorded_at timestamp NOT NULL DEFAULT clock_timestamp(),
      actor text,
      old_values jsonb,
      new_values jsonb
    )`,
+  // Stamped when the change is written, not when its transaction began (now()).
+  `ALTER TABLE factory_row_history ALTER COLUMN recorded_at SET DEFAULT clock_timestamp()`,
   `CREATE INDEX IF NOT EXISTS factory_row_history_record_idx ON factory_row_history (table_name, record_id, id)`,
   `CREATE INDEX IF NOT EXISTS factory_row_history_recorded_idx ON factory_row_history (table_name, recorded_at)`,
   `CREATE TABLE IF NOT EXISTS factory_row_history_baselines (
@@ -85,12 +90,12 @@ export const FACTORY_ROW_HISTORY_DDL: readonly string[] = [
      v_noise text[] := TG_ARGV;
    BEGIN
      IF TG_OP = 'INSERT' THEN
-       INSERT INTO factory_row_history (table_name, record_id, company_id, op, actor, new_values)
-       SELECT TG_TABLE_NAME, (img->>'id')::bigint, (img->>'company_id')::integer, 'I', v_actor, img
+       INSERT INTO factory_row_history (table_name, record_id, company_id, op, recorded_at, actor, new_values)
+       SELECT TG_TABLE_NAME, (img->>'id')::bigint, (img->>'company_id')::integer, 'I', clock_timestamp(), v_actor, img
          FROM (SELECT to_jsonb(n) AS img FROM history_new n) AS rows;
      ELSIF TG_OP = 'UPDATE' THEN
-       INSERT INTO factory_row_history (table_name, record_id, company_id, op, actor, old_values, new_values)
-       SELECT TG_TABLE_NAME, (rows.after->>'id')::bigint, (rows.after->>'company_id')::integer, 'U', v_actor,
+       INSERT INTO factory_row_history (table_name, record_id, company_id, op, recorded_at, actor, old_values, new_values)
+       SELECT TG_TABLE_NAME, (rows.after->>'id')::bigint, (rows.after->>'company_id')::integer, 'U', clock_timestamp(), v_actor,
               diff.old_values, diff.new_values
          FROM (SELECT to_jsonb(o) AS before, to_jsonb(n) AS after
                  FROM history_old o JOIN history_new n ON n.id = o.id) AS rows
@@ -104,8 +109,8 @@ export const FACTORY_ROW_HISTORY_DDL: readonly string[] = [
         ) AS diff
         WHERE diff.material;
      ELSE
-       INSERT INTO factory_row_history (table_name, record_id, company_id, op, actor, old_values)
-       SELECT TG_TABLE_NAME, (img->>'id')::bigint, (img->>'company_id')::integer, 'D', v_actor, img
+       INSERT INTO factory_row_history (table_name, record_id, company_id, op, recorded_at, actor, old_values)
+       SELECT TG_TABLE_NAME, (img->>'id')::bigint, (img->>'company_id')::integer, 'D', clock_timestamp(), v_actor, img
          FROM (SELECT to_jsonb(o) AS img FROM history_old o) AS rows;
      END IF;
      RETURN NULL;
@@ -199,13 +204,18 @@ async function installTable(client: PoolClient, table: string, noisePrefixes: re
   let snapshotRows = 0;
   await inTransaction(client, async () => {
     await client.query(`LOCK TABLE ${table} IN SHARE ROW EXCLUSIVE MODE`);
+    // Taken after the lock: no write recorded before this instant is missing from the snapshot,
+    // and every later write waits for this commit and is stamped after it.
+    const baselineAt = (await client.query<{ at: string }>(`SELECT clock_timestamp()::timestamp::text AS at`)).rows[0]
+      .at;
     const existing = await client.query(`SELECT 1 FROM factory_row_history_baselines WHERE table_name = $1`, [table]);
     if (existing.rowCount === 0) {
       const snapshot = await client.query(
-        `INSERT INTO factory_row_history (table_name, record_id, company_id, op, actor, new_values)
-         SELECT $1, (img->>'id')::bigint, (img->>'company_id')::integer, 'S', 'system:row-history-baseline', img
+        `INSERT INTO factory_row_history (table_name, record_id, company_id, op, recorded_at, actor, new_values)
+         SELECT $1, (img->>'id')::bigint, (img->>'company_id')::integer, 'S', $2::timestamp,
+                'system:row-history-baseline', img
            FROM (SELECT to_jsonb(t) AS img FROM ${table} t) AS rows`,
-        [table]
+        [table, baselineAt]
       );
       snapshotRows = snapshot.rowCount ?? 0;
     }
@@ -214,9 +224,9 @@ async function installTable(client: PoolClient, table: string, noisePrefixes: re
     }
     await client.query(
       `INSERT INTO factory_row_history_baselines (table_name, baseline_at, snapshot_rows, version)
-       VALUES ($1, now(), $2, $3)
+       VALUES ($1, $2::timestamp, $3, $4)
        ON CONFLICT (table_name) DO UPDATE SET version = EXCLUDED.version`,
-      [table, snapshotRows, FACTORY_ROW_HISTORY_VERSION]
+      [table, baselineAt, snapshotRows, FACTORY_ROW_HISTORY_VERSION]
     );
   });
   return snapshotRows;

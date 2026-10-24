@@ -84,11 +84,11 @@ databaseDescribe("factory row history", () => {
     const after = await pool.query<{ n: string }>(`SELECT count(*) AS n FROM factory_row_history WHERE op = 'S'`);
     expect(after.rows[0].n).toBe(before.rows[0].n);
 
-    if (first.installed.includes("factory_suppliers")) {
-      expect(await history("factory_suppliers", preexistingSupplier)).toMatchObject([
-        { op: "S", company_id: companyId, new_values: { name: `Before ${suffix}` } },
-      ]);
-    }
+    // In the baseline when this run took it; an insert when an earlier install already recorded it.
+    const recorded = await history("factory_suppliers", preexistingSupplier);
+    expect(recorded).toHaveLength(1);
+    expect(["S", "I"]).toContain(recorded[0].op);
+    expect(recorded[0]).toMatchObject({ company_id: companyId, new_values: { name: `Before ${suffix}` } });
   });
 
   it("records inserts, only the changed columns of an edit, and deletes", async () => {
@@ -130,6 +130,38 @@ databaseDescribe("factory row history", () => {
     expect(rows.map((row) => row.op)).toEqual(["I", "U"]);
     expect(rows[1].old_values).toEqual({ rate_per_kg: 0.5 });
     expect(rows[1].new_values).toEqual({ rate_per_kg: 0.55 });
+  });
+
+  it("stamps a change when it is written, not when its transaction began", async () => {
+    const client = await pool.connect();
+    const { id, began } = await (async () => {
+      try {
+        await client.query("BEGIN");
+        const start = (await client.query<{ at: string }>(`SELECT now()::timestamp::text AS at`)).rows[0].at;
+        await client.query(`SELECT pg_sleep(0.3)`);
+        const created = await client.query<{ id: number }>(
+          `INSERT INTO factory_suppliers (company_id, name) VALUES ($1, $2) RETURNING id`,
+          [companyId, `Late ${suffix}`]
+        );
+        await client.query("COMMIT");
+        return { id: created.rows[0].id, began: start };
+      } finally {
+        client.release();
+      }
+    })();
+    const stamped = await pool.query<{ late: boolean }>(
+      `SELECT recorded_at >= $1::timestamp + interval '250 milliseconds' AS late
+         FROM factory_row_history WHERE table_name = 'factory_suppliers' AND record_id = $2 AND op = 'I'`,
+      [began, id]
+    );
+    expect(stamped.rows).toEqual([{ late: true }]);
+
+    const baseline = await pool.query<{ aligned: boolean }>(
+      `SELECT bool_and(h.recorded_at = b.baseline_at) AS aligned
+         FROM factory_row_history h JOIN factory_row_history_baselines b ON b.table_name = h.table_name
+        WHERE h.op = 'S'`
+    );
+    expect(baseline.rows[0].aligned).not.toBe(false);
   });
 
   it("refuses to change, delete or truncate recorded history", async () => {
