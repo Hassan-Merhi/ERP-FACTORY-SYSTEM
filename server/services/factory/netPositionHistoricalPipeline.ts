@@ -7,7 +7,7 @@
  */
 import { sql } from "drizzle-orm";
 import type Decimal from "decimal.js";
-import type { FactoryNetPositionAsOf } from "@shared/factoryNetPositionAsOf";
+import { netPositionBusinessDay, type FactoryNetPositionAsOf } from "@shared/factoryNetPositionAsOf";
 import { db } from "../../db";
 import { resultRows } from "../../lib/queryResult";
 import { MoneyDecimal, toMoney } from "../../lib/money";
@@ -232,7 +232,22 @@ async function recordedOtwAt(
     if (onDate(r.receipt_date) && !r.deleted_at) validReceiptContainers.add(Number(r.container_id));
   }
   for (const r of stock.rows.values()) {
-    if (onDate(r.offloaded_at ?? r.created_at) && !r.deleted_at) rawContainers.add(Number(r.container_id));
+    const rawTimestamp = r.offloaded_at ?? r.created_at;
+    if (rawTimestamp == null || r.deleted_at) continue;
+    // factory_raw_stock.offloaded_at is a UTC-naive timestamp, not a
+    // company-local DATE. Do not use its UTC string prefix as business date.
+    const iso = String(rawTimestamp).trim();
+    const asInstant = new Date(
+      /[zZ]$|[+-][0-9]{2}:?[0-9]{2}$/.test(iso)
+        ? iso
+        : iso.replace(" ", "T") + "Z"
+    );
+    if (Number.isNaN(asInstant.getTime())) {
+      throw new Error("HISTORICAL_RAW_OFFLOAD_TIMESTAMP_INVALID");
+    }
+    if (netPositionBusinessDay(asInstant, scope.timeZone) <= scope.asOf) {
+      rawContainers.add(Number(r.container_id));
+    }
   }
   const buckets = new Map<string, Decimal>();
   const warnings = new Set<string>();

@@ -31,7 +31,7 @@ import { AUDIT_ACTOR_SETTINGS, UNKNOWN_AUDIT_ACTOR } from "./auditActorContext";
  * is left for the next boot. History is evidence, not a write guard, so a
  * failure is logged and the server starts.
  */
-export const FACTORY_ROW_HISTORY_VERSION = "2026-10-factory-row-history-v6-rental-units";
+export const FACTORY_ROW_HISTORY_VERSION = "2026-10-factory-row-history-v6-audit-write-scope";
 
 /** Tracked tables and, for each, column-name prefixes whose changes alone are noise. */
 export const FACTORY_ROW_HISTORY_TABLES: ReadonlyArray<readonly [table: string, noisePrefixes: readonly string[]]> = [
@@ -78,6 +78,7 @@ export const FACTORY_ROW_HISTORY_DDL: readonly string[] = [
   `ALTER TABLE factory_row_history ALTER COLUMN recorded_at SET DEFAULT (clock_timestamp() AT TIME ZONE 'UTC')`,
   `CREATE INDEX IF NOT EXISTS factory_row_history_record_idx ON factory_row_history (table_name, record_id, id)`,
   `CREATE INDEX IF NOT EXISTS factory_row_history_recorded_idx ON factory_row_history (table_name, recorded_at)`,
+  `CREATE INDEX IF NOT EXISTS factory_row_history_company_record_idx ON factory_row_history (company_id, table_name, record_id, id)`,
   `CREATE TABLE IF NOT EXISTS factory_row_history_baselines (
      table_name text PRIMARY KEY,
      baseline_at timestamp NOT NULL,
@@ -104,17 +105,11 @@ export const FACTORY_ROW_HISTORY_DDL: readonly string[] = [
         WHERE id = (p_row->>'mix_batch_id')::integer;
      END IF;
      IF v_company IS NULL THEN
-       -- Reads of the history are tenant-scoped; outside any scope (22023) the
-       -- owner stays unknown rather than failing the write being recorded.
-       BEGIN
-         SELECT company_id INTO v_company FROM factory_row_history
-          WHERE table_name = p_table
-            AND record_id = (p_row->>'id')::bigint
-            AND company_id IS NOT NULL
-          ORDER BY id DESC LIMIT 1;
-       EXCEPTION WHEN SQLSTATE '22023' THEN
-         v_company := NULL;
-       END;
+       SELECT company_id INTO v_company FROM factory_row_history
+        WHERE table_name = p_table
+          AND record_id = (p_row->>'id')::bigint
+          AND company_id IS NOT NULL
+        ORDER BY id DESC LIMIT 1;
      END IF;
      RETURN v_company;
    END
@@ -124,7 +119,13 @@ export const FACTORY_ROW_HISTORY_DDL: readonly string[] = [
    DECLARE
      v_actor text := ${actor};
      v_noise text[] := TG_ARGV;
+     v_previous_maintenance text := current_setting('app.company_scope_maintenance', true);
    BEGIN
+     -- The recorder is an internal write-audit facility, not a permission
+     -- check: the scoped INSERT policy must not fail an otherwise authorised
+     -- write or an unscoped background job. Enter the maintenance capability
+     -- only while persisting the evidence, then restore the caller's value.
+     PERFORM set_config('app.company_scope_maintenance', 'on', true);
      IF TG_OP = 'INSERT' THEN
        INSERT INTO factory_row_history (table_name, record_id, company_id, op, recorded_at, actor, new_values)
        SELECT TG_TABLE_NAME, (img->>'id')::bigint, erp_factory_row_history_company_id(TG_TABLE_NAME,img), 'I', (clock_timestamp() AT TIME ZONE 'UTC'), v_actor, img
@@ -149,14 +150,14 @@ export const FACTORY_ROW_HISTORY_DDL: readonly string[] = [
        SELECT TG_TABLE_NAME, (img->>'id')::bigint, erp_factory_row_history_company_id(TG_TABLE_NAME,img), 'D', (clock_timestamp() AT TIME ZONE 'UTC'), v_actor, img
          FROM (SELECT to_jsonb(o) AS img FROM history_old o) AS rows;
      END IF;
+     PERFORM set_config('app.company_scope_maintenance', COALESCE(NULLIF(v_previous_maintenance, ''), 'off'), true);
      RETURN NULL;
    END
    $fn$`,
   // Read access is always company-scoped, even for the table owner; rows of
-  // unknown ownership are never exposed to any tenant. Rows arrive only from
-  // the triggers, recording a write the database already accepted, so INSERT
-  // is never refused: a scope check here would roll back that write whenever
-  // it ran outside a tenant scope (an unscoped job, a startup repair).
+  // unknown ownership are never exposed to any tenant. INSERT permits unknown
+  // ownership for a parent-deletion cascade; the triggers write in the
+  // maintenance capability, so the policy never fails a recorded write.
   `ALTER TABLE factory_row_history ENABLE ROW LEVEL SECURITY`,
   `ALTER TABLE factory_row_history FORCE ROW LEVEL SECURITY`,
   `DROP POLICY IF EXISTS factory_row_history_tenant_read ON factory_row_history`,
@@ -164,7 +165,7 @@ export const FACTORY_ROW_HISTORY_DDL: readonly string[] = [
       FOR SELECT USING (erp_company_scope_matches(company_id))`,
   `DROP POLICY IF EXISTS factory_row_history_tenant_insert ON factory_row_history`,
   `CREATE POLICY factory_row_history_tenant_insert ON factory_row_history
-      FOR INSERT WITH CHECK (true)`,
+      FOR INSERT WITH CHECK (company_id IS NULL OR erp_company_scope_matches(company_id))`,
   // Append-only, like audit_log: history that can be rewritten proves nothing.
   `CREATE OR REPLACE FUNCTION erp_factory_row_history_append_only() RETURNS trigger
    LANGUAGE plpgsql AS $fn$
