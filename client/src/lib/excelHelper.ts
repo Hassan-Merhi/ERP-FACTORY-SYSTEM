@@ -227,12 +227,7 @@ function isUint8Array(value: unknown): value is Uint8Array {
   return Object.prototype.toString.call(value) === "[object Uint8Array]";
 }
 
-function hasZipSignature(
-  bytes: Uint8Array,
-  index: number,
-  third: number,
-  fourth: number
-): boolean {
+function hasZipSignature(bytes: Uint8Array, index: number, third: number, fourth: number): boolean {
   return (
     index >= 0 &&
     index + 3 < bytes.length &&
@@ -267,10 +262,7 @@ function findLastCompleteXlsxZip(bytes: Uint8Array): Uint8Array | null {
     }
 
     const centralDirectoryStart = archiveStart + centralDirectoryOffset;
-    if (
-      centralDirectorySize > 0 &&
-      !hasZipSignature(bytes, centralDirectoryStart, 0x01, 0x02)
-    ) {
+    if (centralDirectorySize > 0 && !hasZipSignature(bytes, centralDirectoryStart, 0x01, 0x02)) {
       continue;
     }
 
@@ -303,6 +295,11 @@ async function loadSpreadsheet(workbook: ExcelJS.Workbook, bytes: Uint8Array): P
   }
 
   const text = new TextDecoder("utf-8").decode(bytes).replace(/^\uFEFF/, "");
+  // Papa cannot detect a delimiter in a blank file and would report that
+  // instead, which tells the user nothing about what is wrong.
+  if (!text.trim()) {
+    throw new Error("CSV file is empty");
+  }
   const parsed = Papa.parse<string[]>(text, { skipEmptyLines: "greedy" });
 
   if (parsed.errors.length > 0) {
@@ -332,9 +329,7 @@ function prepareNoCostContainerItemsSheet(worksheet: ExcelJS.Worksheet): void {
   if (!isNoCostContainerItemsSheet(worksheet)) return;
 
   const existingLastRow = worksheet.rowCount;
-  const hasTotalRow =
-    worksheet.getCell(`A${existingLastRow}`).text.trim().toUpperCase() ===
-    "TOTAL Q'TY";
+  const hasTotalRow = worksheet.getCell(`A${existingLastRow}`).text.trim().toUpperCase() === "TOTAL Q'TY";
   const dataEndRow = hasTotalRow ? existingLastRow - 1 : existingLastRow;
 
   const rows: Array<{
@@ -376,8 +371,7 @@ function prepareNoCostContainerItemsSheet(worksheet: ExcelJS.Worksheet): void {
   if (!hasTotalRow) {
     worksheet.mergeCells(`A${totalRowNumber}:C${totalRowNumber}`);
   }
-  totalRow.getCell(4).value =
-    rows.length > 0 ? { formula: `SUM(D4:D${3 + rows.length})` } : 0;
+  totalRow.getCell(4).value = rows.length > 0 ? { formula: `SUM(D4:D${3 + rows.length})` } : 0;
   totalRow.height = 24;
   totalRow.eachCell({ includeEmpty: true }, (cell, colNum) => {
     cell.fill = {
@@ -423,10 +417,7 @@ class ExportAwareWorkbook extends OriginalWorkbook {
   private containerItemsWorksheet: ExcelJS.Worksheet | null = null;
   private containerItemsWriteHookInstalled = false;
 
-  override addWorksheet(
-    name?: string,
-    options?: Partial<ExcelJS.AddWorksheetOptions>
-  ): ExcelJS.Worksheet {
+  override addWorksheet(name?: string, options?: Partial<ExcelJS.AddWorksheetOptions>): ExcelJS.Worksheet {
     const worksheet = super.addWorksheet(name, options);
     if (name === "Container Items") {
       this.containerItemsWorksheet = worksheet;
@@ -449,8 +440,7 @@ class ExportAwareWorkbook extends OriginalWorkbook {
   }
 }
 
-(ExcelJS as unknown as { Workbook: WorkbookConstructor }).Workbook =
-  ExportAwareWorkbook as WorkbookConstructor;
+(ExcelJS as unknown as { Workbook: WorkbookConstructor }).Workbook = ExportAwareWorkbook as WorkbookConstructor;
 
 export async function writeFile(workbook: ExcelJS.Workbook, filename: string): Promise<void> {
   const buffer = await workbook.xlsx.writeBuffer();
