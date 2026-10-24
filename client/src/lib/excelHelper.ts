@@ -49,6 +49,21 @@ const numToCol = (num: number): string => {
   return col;
 };
 
+/**
+ * The value an importer wants from a cell: a formula's result, a hyperlink's
+ * text, and the joined text of a rich-text cell (one with mixed formatting),
+ * which ExcelJS otherwise returns as { richText: [...] }.
+ */
+function plainCellValue(value: ExcelJS.CellValue): unknown {
+  let plain: unknown = value;
+  if (plain && typeof plain === "object" && "result" in plain) plain = plain.result;
+  if (plain && typeof plain === "object" && "richText" in plain && Array.isArray(plain.richText)) {
+    return plain.richText.map((part: { text?: unknown }) => (typeof part.text === "string" ? part.text : "")).join("");
+  }
+  if (plain && typeof plain === "object" && "text" in plain) plain = plain.text;
+  return plain;
+}
+
 const parseOrigin = (origin: string | { r: number; c: number } | undefined): { r: number; c: number } => {
   if (!origin) return { r: 0, c: 0 };
   if (typeof origin === "object") return origin;
@@ -162,14 +177,7 @@ export const utils = {
       worksheet.eachRow((row) => {
         const rowData: SpreadsheetRow = [];
         row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
-          let value = cell.value;
-          if (value && typeof value === "object" && "result" in value) {
-            value = value.result;
-          }
-          if (value && typeof value === "object" && "text" in value) {
-            value = value.text;
-          }
-          rowData[colNumber - 1] = value;
+          rowData[colNumber - 1] = plainCellValue(cell.value);
         });
         data.push(rowData as unknown as T);
       });
@@ -186,14 +194,7 @@ export const utils = {
         row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
           const header = headers[colNumber - 1];
           if (header) {
-            let value = cell.value;
-            if (value && typeof value === "object" && "result" in value) {
-              value = value.result;
-            }
-            if (value && typeof value === "object" && "text" in value) {
-              value = value.text;
-            }
-            rowData[header] = value;
+            rowData[header] = plainCellValue(cell.value);
           }
         });
         if (defval !== undefined) {
