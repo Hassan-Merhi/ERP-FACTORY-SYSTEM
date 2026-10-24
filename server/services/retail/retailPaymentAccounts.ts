@@ -1,6 +1,7 @@
 import { and, eq, inArray, isNull } from "drizzle-orm";
 import { bankAccounts, ledgerAccounts } from "@shared/schema";
 import { db, type DbTransaction } from "../../db";
+import { getRetailAccountingSettings } from "./retailAccountingSettingsService";
 
 /** Only money-holding accounts can receive POS receipts or pay refunds. */
 export interface RetailMoneyAccountSelection {
@@ -9,6 +10,9 @@ export interface RetailMoneyAccountSelection {
 }
 
 export async function listRetailPaymentAccounts(companyId: number) {
+  // New retail companies need their default Cash ledger created before the
+  // cashier can select an account for the very first sale.
+  await getRetailAccountingSettings(companyId);
   const [ledgers, banks] = await Promise.all([
     db.select({
       id: ledgerAccounts.id, code: ledgerAccounts.code, name: ledgerAccounts.name,
