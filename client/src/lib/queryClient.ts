@@ -553,7 +553,8 @@ export async function apiRequestPrivileged(
   method: string,
   url: string,
   data?: unknown | undefined,
-  timeoutMs = 60000
+  timeoutMs = 60000,
+  _isRetry = false
 ): Promise<Response> {
   const prepared = await prepareApiRequest(method, url, data, timeoutMs);
 
@@ -562,9 +563,11 @@ export async function apiRequestPrivileged(
 
     clearTimeout(prepared.timeoutId);
 
-    if (await isCsrfTokenMismatch(res)) {
+    // Retry once with a fresh token, as apiRequest does. Without the guard a server
+    // that keeps rejecting the token turned one approval into an endless request loop.
+    if (!_isRetry && (await isCsrfTokenMismatch(res))) {
       resetCsrfToken();
-      return apiRequestPrivileged(method, url, data, timeoutMs);
+      return apiRequestPrivileged(method, url, data, timeoutMs, true);
     }
 
     await throwIfResNotOk(res);
