@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
+import { useCompany } from "@/contexts/CompanyContext";
 import { apiRequest } from "@/lib/queryClient";
 import { RetailPhotoGallery } from "@/pages/retail/RetailProductImage";
 import { makeKey, money, readJson, type RetailSale } from "./retailPosTypes";
@@ -36,6 +37,7 @@ export function RetailReturnDialog({
   onCompleted: (sale: RetailSale) => void | Promise<void>;
 }) {
   const { toast } = useToast();
+  const { selectedCompany } = useCompany();
   const [term, setTerm] = useState("");
   const [results, setResults] = useState<RetailSale[]>([]);
   const [searching, setSearching] = useState(false);
@@ -44,7 +46,7 @@ export function RetailReturnDialog({
   const [destination, setDestination] = useState<Destination>("original");
   const [refundAccount, setRefundAccount] = useState("");
   const { data: accounts } = useQuery<RetailPaymentAccounts>({
-    queryKey: ["retail-payment-accounts"],
+    queryKey: ["retail-payment-accounts", selectedCompany?.id],
     queryFn: () => readJson<RetailPaymentAccounts>("/api/pos/retail/payment-accounts"),
     enabled: open,
   });
