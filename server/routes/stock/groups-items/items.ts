@@ -8,6 +8,7 @@ import type { Express, Request, Response } from "express";
 import { getErrorMessage } from "../../../lib/httpHandlers";
 import { db } from "../../../db";
 import { storage } from "../../../storage";
+import { masterDataDbErrorResponse } from "../../../lib/masterDataDbError";
 import { requireAuth, requireNonPOS } from "../../../auth";
 import { logAudit } from "../../_helpers";
 import { stockItems, insertStockItemSchema } from "@shared/schema";
@@ -244,6 +245,8 @@ export function registerStockItemRoutes(app: Express) {
       });
       res.status(201).json(item);
     } catch (error: unknown) {
+      const dbError = masterDataDbErrorResponse(error, "stock-item", req.session.currentCompanyId);
+      if (dbError) return res.status(dbError.status).json(dbError.body);
       res.status(400).json({ message: getErrorMessage(error) });
     }
   });
