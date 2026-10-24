@@ -105,9 +105,9 @@ export function RetailPaymentPanel({
                 onChange={(event) => {
                   const selection = event.target.value;
                   if (!accounts) return;
-                  update(index, selection
-                    ? paymentFromAccount(selection, payment.amount, accounts)
-                    : { method: "cash", amount: payment.amount, tenderedAmount: null, ledgerAccountId: null, bankAccountId: null });
+                  onChange(value.map((entry, paymentIndex) => paymentIndex !== index ? entry :
+                    selection ? paymentFromAccount(selection, entry.amount, accounts)
+                    : { method: "cash", amount: entry.amount, tenderedAmount: null }));
                 }}
               >
                 <RetailPaymentAccountOptions accounts={accounts} allowCredit={canUseCredit} customerName={customerName} />
