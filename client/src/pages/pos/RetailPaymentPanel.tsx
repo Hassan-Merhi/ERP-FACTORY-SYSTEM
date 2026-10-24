@@ -93,7 +93,7 @@ export function RetailPaymentPanel({
         const tendered = Number(payment.tenderedAmount ?? amount) || 0;
         const change = payment.method === "cash" ? Math.max(0, tendered - amount) : 0;
         return (
-          <div key={index} className="grid gap-2 rounded-md border bg-background p-2 md:grid-cols-[140px_1fr_1fr_auto]">
+          <div key={index} className="grid gap-2 rounded-md border bg-background p-2 md:grid-cols-[minmax(190px,2fr)_1fr_1fr_auto]">
             <div>
               <Label htmlFor={`${formId}-method-${index}`} className="text-xs">
                 Account
