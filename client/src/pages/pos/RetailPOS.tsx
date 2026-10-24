@@ -420,7 +420,7 @@ export default function RetailPOS() {
     if (!next?.id) {
       setPayments((current) =>
         current.map((payment) =>
-          payment.method === "credit" ? { method: "cash", amount: payment.amount, tenderedAmount: null } : payment
+          payment.method === "credit" ? ({ method: "cash", amount: payment.amount, tenderedAmount: null } as RetailPaymentDraft) : payment
         )
       );
     }
@@ -505,7 +505,7 @@ export default function RetailPOS() {
               setPayments((current) => current.map((payment, index) =>
                 index !== 0 ? payment : value
                   ? paymentFromAccount(value, payment.amount, paymentAccounts)
-                  : { method: "cash", amount: payment.amount, tenderedAmount: null }
+                  : ({ method: "cash", amount: payment.amount, tenderedAmount: null } as RetailPaymentDraft)
               ));
             }}
             data-testid="retail-pos-account"
