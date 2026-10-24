@@ -25,16 +25,17 @@ const review = JSON.parse(
 if (manifest.formatVersion !== 1 || review.formatVersion !== 1) {
   throw new Error("Unsupported permission/route manifest format");
 }
-if (!Array.isArray(manifest.routes) || !review.routes || typeof review.routes !== "object") {
+if (!Array.isArray(manifest.routes) || !Array.isArray(manifest.middlewareMounts) || !review.routes || typeof review.routes !== "object") {
   throw new Error("Malformed route inventory input");
 }
 
+if (manifest.routes.length !== manifest.routeCount || manifest.middlewareMounts.length !== manifest.middlewareMountCount) throw new Error("Route manifest count drift");
 const passiveMethods = new Set(["GET", "HEAD", "OPTIONS"]);
 // Any uncommon Express method can mutate state; never implicitly treat it as read-only.
 const signatures = new Set();
 const inventory = [];
 for (const [index, raw] of manifest.routes.entries()) {
-  const matched = /^([A-Z]+) (\/\S+) \[(.*)\]$/.exec(raw);
+  const matched = /^([A-Z-]+) (\/\S+) \[(.*)\]$/.exec(raw);
   if (!matched) throw new Error(`Cannot read route-manifest entry #${index}: ${raw}`);
   const [, method, path, guardChain] = matched;
   const signature = `${method} ${path}`;
