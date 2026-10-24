@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
-import { ProductImageGallery, RetailPhotoGallery } from "./RetailProductImage";
+import { RetailPhotoGallery } from "./RetailProductImage";
 import { money, sortRetailVariants, type RetailProduct, type RetailVariant } from "./retailInventoryTypes";
 
 export type RetailVariantAction = "print" | "transfer" | "adjust" | "history" | "archive" | "restore";
@@ -98,10 +98,6 @@ export function RetailCatalogList({
               <Card key={product.id} className={cn(!product.active && "opacity-70")} data-testid="style-card">
                 <CardContent className="space-y-3 p-3 sm:p-4">
                   <div className="flex items-start gap-3">
-                    <ProductImageGallery
-                      product={product}
-                      imageClassName="h-20 w-20 rounded-md border sm:h-24 sm:w-24"
-                    />
                     <div className="min-w-0 flex-1">
                       <button
                         type="button"
