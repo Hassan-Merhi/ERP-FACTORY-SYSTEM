@@ -24,7 +24,7 @@ const changeSchema = z.object({
 }).strict();
 
 const saveBase = z.object({
-  expectedRevision: z.number().int().nonnegative().safe(),
+  expectedRevision: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
   reason: z.string().trim().min(10).max(500),
   changes: z.array(changeSchema).min(1).max(100),
 }).strict();
