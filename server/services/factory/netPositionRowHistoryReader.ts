@@ -38,8 +38,13 @@ export function replayFactoryRowChanges(changes: readonly HistoricalChange[]): M
       state.set(id, { ...change.new_values });
     } else if (change.op === "U") {
       const current = state.get(id);
-      if (!current || !change.new_values || typeof change.new_values !== "object" ||
-          Array.isArray(change.new_values) || !change.old_values) {
+      if (
+        !current ||
+        !change.new_values ||
+        typeof change.new_values !== "object" ||
+        Array.isArray(change.new_values) ||
+        !change.old_values
+      ) {
         throw new Error("HISTORICAL_ROW_HISTORY_UPDATE_WITHOUT_BASE");
       }
       // A missing key means unchanged; a JSON null represents a real SQL NULL.
@@ -120,7 +125,7 @@ export async function loadFactoryRowsKnownAt(
         FROM factory_row_history h
        WHERE h.table_name = ${table} AND h.company_id = ${companyId}
          AND ${netPositionRecordedThrough(sql`h.recorded_at`, scope, "utc-naive-timestamp")}
-         ${recordIds ? sql`AND h.record_id = ANY(${sqlArray(recordIds)})` : sql``}
+         ${recordIds ? sql`AND h.record_id = ANY(${sqlArray([...recordIds])})` : sql``}
        ORDER BY h.record_id, h.id
        LIMIT ${MAX_HISTORY_EVENTS + 1}
     `)

@@ -31,7 +31,7 @@ import { AUDIT_ACTOR_SETTINGS, UNKNOWN_AUDIT_ACTOR } from "./auditActorContext";
  * is left for the next boot. History is evidence, not a write guard, so a
  * failure is logged and the server starts.
  */
-export const FACTORY_ROW_HISTORY_VERSION = "2026-10-factory-row-history-v3-tenanted";
+export const FACTORY_ROW_HISTORY_VERSION = "2026-10-factory-row-history-v4-tenanted";
 
 /** Tracked tables and, for each, column-name prefixes whose changes alone are noise. */
 export const FACTORY_ROW_HISTORY_TABLES: ReadonlyArray<readonly [table: string, noisePrefixes: readonly string[]]> = [
@@ -103,100 +103,21 @@ export const FACTORY_ROW_HISTORY_DDL: readonly string[] = [
         WHERE id = (p_row->>'mix_batch_id')::integer;
      END IF;
      IF v_company IS NULL THEN
-       SELECT company_id INTO v_company FROM factory_row_history
-        WHERE table_name = p_table
-          AND record_id = (p_row->>'id')::bigint
-          AND company_id IS NOT NULL
-        ORDER BY id DESC LIMIT 1;
+       -- Reads of the history are tenant-scoped; outside any scope (22023) the
+       -- owner stays unknown rather than failing the write being recorded.
+       BEGIN
+         SELECT company_id INTO v_company FROM factory_row_history
+          WHERE table_name = p_table
+            AND record_id = (p_row->>'id')::bigint
+            AND company_id IS NOT NULL
+          ORDER BY id DESC LIMIT 1;
+       EXCEPTION WHEN SQLSTATE '22023' THEN
+         v_company := NULL;
+       END;
      END IF;
      RETURN v_company;
    END
-   $fnimport type { Pool, PoolClient } from "pg";
-
-import { getErrorMessage } from "../../lib/httpHandlers";
-import { logger } from "../../lib/logger";
-import { AUDIT_ACTOR_SETTINGS, UNKNOWN_AUDIT_ACTOR } from "./auditActorContext";
-
-/**
- * Change history of the factory tables the historical Net Position reads, so a
- * date from the baseline on can be rebuilt from what was recorded instead of
- * today's rows (factory_row_history, shared/schema/factory/row-history.ts).
- *
- * AFTER INSERT / UPDATE / DELETE statement triggers (transition tables, one
- * set-based INSERT per statement) record every row change:
- *   I  the whole new row;  D  the whole old row;
- *   U  only the columns that changed, before and after. An UPDATE that changes
- *      nothing, or only updated_at and the table's noise columns (a container's
- *      carrier-tracking fields), is not recorded.
- * When a table's trigger is installed, every existing row is copied as op S in
- * the same transaction, under a SHARE ROW EXCLUSIVE lock (reads continue,
- * writes wait), so the snapshot and the trigger start at the same instant:
- * factory_row_history_baselines.baseline_at, read after the lock. Changes are
- * stamped with clock_timestamp(), the moment they are written: now() is the
- * transaction's start and would date a change made by a transaction begun
- * before the baseline, or before midnight, too early.
- *
- * Production disables the bulk startup migrations, so this runs on every boot.
- * A table already at FACTORY_ROW_HISTORY_VERSION with its triggers present is
- * skipped without DDL or locks. Each table installs in its own transaction and
- * takes no other table lock, so it cannot deadlock against the instance still
- * serving traffic during a deploy; a table it cannot lock within the timeout
- * is left for the next boot. History is evidence, not a write guard, so a
- * failure is logged and the server starts.
- */
-export const FACTORY_ROW_HISTORY_VERSION = "2026-10-factory-row-history-v3-tenanted";
-
-/** Tracked tables and, for each, column-name prefixes whose changes alone are noise. */
-export const FACTORY_ROW_HISTORY_TABLES: ReadonlyArray<readonly [table: string, noisePrefixes: readonly string[]]> = [
-  ["customer_orders", []],
-  ["customer_order_bales", []],
-  ["customer_order_charges", []],
-  ["factory_bales", []],
-  ["factory_bale_products", []],
-  ["factory_containers", ["tracking_", "json_cargo_"]],
-  ["factory_container_other_charges", []],
-  ["factory_container_receipts", []],
-  ["factory_raw_stock", []],
-  ["factory_suppliers", []],
-  ["factory_mix_batches", []],
-  ["factory_mix_batch_sources", []],
-  ["factory_worker_advances", []],
-  ["factory_advance_repayments", []],
-  ["factory_payrolls", []],
-  ["property_contracts", []],
-  ["property_monthly_ledger", []],
-  ["property_payments", []],
-  ["ledger_accounts", []],
-];
-
-const INSTALL_LOCK_KEY = 2026_10_240;
-const LOCK_TIMEOUT = "5s";
-
-const actor = `COALESCE(NULLIF(btrim(current_setting('${AUDIT_ACTOR_SETTINGS.actorId}', true)), ''), '${UNKNOWN_AUDIT_ACTOR}')`;
-
-export const FACTORY_ROW_HISTORY_DDL: readonly string[] = [
-  `CREATE TABLE IF NOT EXISTS factory_row_history (
-     id bigserial PRIMARY KEY,
-     table_name text NOT NULL,
-     record_id bigint NOT NULL,
-     company_id integer,
-     op varchar(1) NOT NULL,
-     recorded_at timestamp NOT NULL DEFAULT clock_timestamp(),
-     actor text,
-     old_values jsonb,
-     new_values jsonb
-   )`,
-  // Stamped when the change is written, not when its transaction began (now()).
-  `ALTER TABLE factory_row_history ALTER COLUMN recorded_at SET DEFAULT clock_timestamp()`,
-  `CREATE INDEX IF NOT EXISTS factory_row_history_record_idx ON factory_row_history (table_name, record_id, id)`,
-  `CREATE INDEX IF NOT EXISTS factory_row_history_recorded_idx ON factory_row_history (table_name, recorded_at)`,
-  `CREATE TABLE IF NOT EXISTS factory_row_history_baselines (
-     table_name text PRIMARY KEY,
-     baseline_at timestamp NOT NULL,
-     snapshot_rows integer NOT NULL,
-     version text NOT NULL
-   )`,
-,
+   $fn$`,
   `CREATE OR REPLACE FUNCTION erp_factory_row_history() RETURNS trigger
    LANGUAGE plpgsql AS $fn$
    DECLARE
@@ -230,9 +151,11 @@ export const FACTORY_ROW_HISTORY_DDL: readonly string[] = [
      RETURN NULL;
    END
    $fn$`,
-  // Read access is always company-scoped, even for the table owner.
-  // INSERT permits unknown ownership for a parent-deletion cascade when it
-  // cannot be reconstructed; those rows are never exposed to any tenant.
+  // Read access is always company-scoped, even for the table owner; rows of
+  // unknown ownership are never exposed to any tenant. Rows arrive only from
+  // the triggers, recording a write the database already accepted, so INSERT
+  // is never refused: a scope check here would roll back that write whenever
+  // it ran outside a tenant scope (an unscoped job, a startup repair).
   `ALTER TABLE factory_row_history ENABLE ROW LEVEL SECURITY`,
   `ALTER TABLE factory_row_history FORCE ROW LEVEL SECURITY`,
   `DROP POLICY IF EXISTS factory_row_history_tenant_read ON factory_row_history`,
@@ -240,7 +163,7 @@ export const FACTORY_ROW_HISTORY_DDL: readonly string[] = [
       FOR SELECT USING (erp_company_scope_matches(company_id))`,
   `DROP POLICY IF EXISTS factory_row_history_tenant_insert ON factory_row_history`,
   `CREATE POLICY factory_row_history_tenant_insert ON factory_row_history
-      FOR INSERT WITH CHECK (company_id IS NULL OR erp_company_scope_matches(company_id))`,
+      FOR INSERT WITH CHECK (true)`,
   // Append-only, like audit_log: history that can be rewritten proves nothing.
   `CREATE OR REPLACE FUNCTION erp_factory_row_history_append_only() RETURNS trigger
    LANGUAGE plpgsql AS $fn$

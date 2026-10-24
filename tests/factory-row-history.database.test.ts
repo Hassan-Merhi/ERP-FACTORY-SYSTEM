@@ -164,6 +164,69 @@ databaseDescribe("factory row history", () => {
     expect(baseline.rows[0].aligned).not.toBe(false);
   });
 
+  it("records an unscoped write under RLS and shows each tenant only its own history", async () => {
+    // The superuser test connection bypasses RLS; production's role does not.
+    expect((await ensureFactoryRowHistory(pool)).failed).toEqual([]);
+    const role = `rh_app_${suffix}`;
+    await pool.query(`CREATE ROLE ${role} NOLOGIN NOSUPERUSER NOBYPASSRLS`);
+    await pool.query(`GRANT USAGE ON SCHEMA public TO ${role}`);
+    await pool.query(`GRANT SELECT, INSERT, UPDATE ON ALL TABLES IN SCHEMA public TO ${role}`);
+    await pool.query(`GRANT USAGE ON ALL SEQUENCES IN SCHEMA public TO ${role}`);
+    const other = await pool.query<{ id: number }>(
+      `INSERT INTO companies (code, name, company_type) VALUES ($1, $2, 'factory') RETURNING id`,
+      [`RO${suffix}`, `Row history other ${suffix}`]
+    );
+    const otherCompany = other.rows[0].id;
+    const client = await pool.connect();
+    try {
+      const asRole = async <T>(settings: [string, string][], work: () => Promise<T>): Promise<T> => {
+        await client.query("BEGIN");
+        try {
+          await client.query(`SET LOCAL ROLE ${role}`);
+          for (const [name, value] of settings) await client.query(`SELECT set_config($1, $2, true)`, [name, value]);
+          const result = await work();
+          await client.query("COMMIT");
+          return result;
+        } catch (error) {
+          await client.query("ROLLBACK");
+          throw error;
+        }
+      };
+      const unscoped: [string, string][] = [
+        ["app.company_scope_maintenance", "off"],
+        ["app.current_company_id", ""],
+      ];
+      // An unscoped write to a table without RLS of its own must still succeed.
+      const created = await asRole(unscoped, () =>
+        client.query<{ id: number }>(`INSERT INTO factory_suppliers (company_id, name) VALUES ($1, $2) RETURNING id`, [
+          otherCompany,
+          `Unscoped ${suffix}`,
+        ])
+      );
+      const otherSupplier = created.rows[0].id;
+      expect(await history("factory_suppliers", otherSupplier)).toMatchObject([{ op: "I", company_id: otherCompany }]);
+
+      const visible = await asRole(
+        [
+          ["app.company_scope_maintenance", "off"],
+          ["app.current_company_id", String(companyId)],
+        ],
+        () =>
+          client.query<{ company_id: number }>(
+            `SELECT DISTINCT company_id FROM factory_row_history WHERE company_id = ANY($1::int[])`,
+            [[companyId, otherCompany]]
+          )
+      );
+      expect(visible.rows).toEqual([{ company_id: companyId }]);
+    } finally {
+      client.release();
+      await pool.query(`DELETE FROM factory_suppliers WHERE company_id = $1`, [otherCompany]);
+      await pool.query(`DELETE FROM companies WHERE id = $1`, [otherCompany]);
+      await pool.query(`DROP OWNED BY ${role}`);
+      await pool.query(`DROP ROLE ${role}`);
+    }
+  });
+
   it("refuses to change, delete or truncate recorded history", async () => {
     for (const statement of [
       `UPDATE factory_row_history SET actor = 'x' WHERE id = (SELECT max(id) FROM factory_row_history)`,
