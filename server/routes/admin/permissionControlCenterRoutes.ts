@@ -60,23 +60,23 @@ function handleV2Error(error: unknown, res: Response): void {
     return;
   }
   if (error instanceof ZodError) {
-    res.status(400).json({ code: "INVALID_POLICY_INPUT", message: "Invalid permission request", issues: error.issues });
+    res.status(400).json({ code: "INVALID_POLICY_INPUT", message: "INVALID_POLICY_INPUT", issues: error.issues });
     return;
   }
   const code = (error as { code?: string } | null)?.code;
   if (code === "42P01" || code === "42703" || code === "42883") {
     res.status(503).json({
       code: "ACCESS_POLICY_SCHEMA_REQUIRED",
-      message: "Apply the reviewed Phase 2 permissions SQL migration before using this screen",
+      message: "ACCESS_POLICY_SCHEMA_REQUIRED",
     });
     return;
   }
   if (code === "23514" || code === "23503" || code === "23505") {
-    res.status(409).json({ code: "ACCESS_POLICY_CONSTRAINT", message: "The policy update conflicts with a company or security constraint" });
+    res.status(409).json({ code: "ACCESS_POLICY_CONSTRAINT", message: "ACCESS_POLICY_CONSTRAINT" });
     return;
   }
   // Do not leak queries, user IDs, table names or DB state in HTTP responses.
-  res.status(500).json({ code: "ACCESS_POLICY_UNAVAILABLE", message: "Permission service could not complete the request" });
+  res.status(500).json({ code: "ACCESS_POLICY_UNAVAILABLE", message: "ACCESS_POLICY_UNAVAILABLE" });
 }
 
 function handle(fn: (req: Request, res: Response) => Promise<void>) {
