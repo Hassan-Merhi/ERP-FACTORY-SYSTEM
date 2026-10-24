@@ -28,7 +28,7 @@ CREATE TABLE IF NOT EXISTS access_role_rules (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   CONSTRAINT access_role_rules_template_fk FOREIGN KEY(company_id, role_id)
     REFERENCES access_role_templates(company_id, id) ON DELETE RESTRICT,
-  UNIQUE(company_id, role_id, resource_key, action_key)
+  CONSTRAINT access_role_rules_v2_unique UNIQUE(company_id, role_id, resource_key, action_key)
 );
 
 CREATE TABLE IF NOT EXISTS access_user_overrides (
@@ -41,7 +41,7 @@ CREATE TABLE IF NOT EXISTS access_user_overrides (
   updated_by VARCHAR NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  UNIQUE(company_id, user_id, resource_key, action_key)
+  CONSTRAINT access_user_overrides_v2_unique UNIQUE(company_id, user_id, resource_key, action_key)
 );
 
 CREATE TABLE IF NOT EXISTS access_policy_versions (
