@@ -629,9 +629,11 @@ export function registerUserManagementRoutes(app: Express) {
         return res.json({ pageKeys: [...FEATURE_KEYS], fullAccess: true, hiddenErpCostFields: [] });
       }
       const pageKeys = await storage.getErpUserPageAccess(companyId, userId);
+      // Analytics is part of the Owner role even for existing owners whose
+      // per-user page list was saved before this permission was added.
       const visiblePageKeys =
         role === "Owner"
-          ? pageKeys.filter((key) => key !== "analytics")
+          ? [...new Set([...pageKeys, "analytics"])]
           : role === "ERP Tester"
             ? pageKeys.filter((key) => key !== "settings")
             : pageKeys;

@@ -47,7 +47,6 @@ interface PropertiesRoutesProps {
  */
 export function PropertiesRoutes({ user }: PropertiesRoutesProps) {
   const isAdmin = user.role === "Admin" || user.role === "Developer";
-  const isOwner = user.role === "Owner";
   const isDeveloper = user.role === "Developer";
 
   return (
@@ -68,13 +67,7 @@ export function PropertiesRoutes({ user }: PropertiesRoutesProps) {
       <Route path="/properties/voucher-detail/:voucherId" component={PropertiesVoucherDetail} />
       <Route path="/properties/vouchers">{() => <PropertiesVouchers />}</Route>
       <Route path="/properties/create" component={PropertiesCreate} />
-      {isOwner ? (
-        <Route path="/properties/analytics">
-          <Redirect replace to="/properties/daybook" />
-        </Route>
-      ) : (
-        <Route path="/properties/analytics" component={PropertiesAnalytics} />
-      )}
+      <Route path="/properties/analytics" component={PropertiesAnalytics} />
       <Route path="/properties/agents" component={Agents} />
       <Route path="/properties/daybook" component={PropertiesDaybook} />
 

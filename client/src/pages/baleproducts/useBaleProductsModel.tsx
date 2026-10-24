@@ -75,7 +75,7 @@ export function useBaleProductsModel() {
   }, [editingProduct]);
 
   const { data: currentUser } = useQuery<AuthMe>({ queryKey: ["/api/auth/me"] });
-  const isAdmin = ["Admin", "Owner", "Developer"].includes(currentUser?.role || "");
+  const isAdmin = ["Admin", "Owner", "Developer"].includes(currentUser?.currentRole ?? currentUser?.role ?? "");
 
   const { data: myAccess } = useQuery<{ hiddenCostFields: string[] }>({
     queryKey: ["/api/factory/my-access"],

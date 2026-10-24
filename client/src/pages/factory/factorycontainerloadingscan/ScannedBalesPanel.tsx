@@ -332,7 +332,7 @@ export function ScannedBalesPanel({ model }: { model: FactoryContainerLoadingSca
   const { data: currentUser } = useQuery<{ role?: string; currentRole?: string | null }>({
     queryKey: ["/api/auth/me"],
   });
-  const canEmptyContainer = ["Admin", "Developer"].includes(currentUser?.currentRole ?? currentUser?.role ?? "");
+  const canEmptyContainer = ["Admin", "Owner", "Developer"].includes(currentUser?.currentRole ?? currentUser?.role ?? "");
   // Scan audit fields now ride on the order's bale rows. This avoids a second
   // growing request after every scan while preserving the exact same UI.
   const scanAuditByBaleId = useMemo(

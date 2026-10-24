@@ -97,6 +97,22 @@ describe("ErpRoutes access guard", () => {
     expect(screen.queryByTestId("page-POSPage")).not.toBeInTheDocument();
   });
 
+  it("admits an Owner to ERP Analytics when Analytics is granted", async () => {
+    const { ErpRoutes } = await import("@/routes/ErpRoutes");
+    mountAt("/analytics", <ErpRoutes user={{ role: "Owner" }} />, [
+      [["/api/my-erp-pages"], { fullAccess: false, pageKeys: ["analytics"] }],
+    ]);
+
+    expect(await screen.findByTestId("page-Analytics")).toBeInTheDocument();
+  });
+
+  it("admits an Owner to Properties Analytics", async () => {
+    const { PropertiesRoutes } = await import("@/app/PropertiesRoutes");
+    mountAt("/properties/analytics", <PropertiesRoutes user={{ role: "Owner" } as any} />);
+
+    expect(await screen.findByTestId("page-PropertiesAnalytics")).toBeInTheDocument();
+  });
+
   it("admits /pos when the page keys include pos", async () => {
     const { ErpRoutes } = await import("@/routes/ErpRoutes");
     mountAt("/pos", <ErpRoutes user={{ role: "Accountant" }} />, [

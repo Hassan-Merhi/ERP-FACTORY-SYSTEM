@@ -3,7 +3,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const harness = vi.hoisted(() => ({
-  // Emptying a loading is admin-only (#1732); most cases run as an admin.
+  // Admin, Owner and Developer can empty a loading; most cases run as Admin.
   currentRole: "Admin",
   orderDetailReady: true,
   toast: vi.fn(),
@@ -473,7 +473,13 @@ describe("factory container loading scan behavior", () => {
     expect(screen.getByTestId("row-removal-201")).toHaveTextContent("loader");
   });
 
-  it("hides Empty Container from users who are not admins", async () => {
+  it("shows Empty Container for an Owner", async () => {
+    harness.currentRole = "Owner";
+    render(<FactoryContainerLoadingScan />);
+    expect(await screen.findByTestId("button-empty-container")).toBeEnabled();
+  });
+
+  it("hides Empty Container from users who are not authorized", async () => {
     harness.currentRole = "Staff";
     render(<FactoryContainerLoadingScan />);
 

@@ -33,7 +33,7 @@ export function registerOrderBaleRemovalRoutes(app: Express) {
   app.post(
     "/api/factory/customer-orders/:id/bales/empty",
     requireAuth,
-    requireRole("Admin"),
+    requireRole("Admin", "Owner"),
     async (req: Request, res: Response) => {
       try {
         const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
