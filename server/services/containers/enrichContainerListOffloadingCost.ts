@@ -5,8 +5,9 @@ import { containerOffloads, containers, type Container } from "@shared/schema";
 /**
  * Append the offload-only portion of landed cost to container list responses.
  * Container.grandTotal already includes PO charges (freight, documentation,
- * surcharge, etc.). containerOffloads.totalCharges includes the separate
- * offloading charges, including posted additional CHG voucher adjustments.
+ * surcharge, etc.). containerOffloads.totalCharges includes BOTH PO charges
+ * and separate offloading charges (including CHG voucher adjustments). Subtract
+ * the PO charges before adding the offload-only amount to the displayed total.
  *
  * Fetch all matching offloads in one company-scoped query rather than one
  * query per container. The underlying accounting values are not modified.
@@ -20,7 +21,7 @@ export async function enrichContainerListOffloadingCost<T extends Container>(
   const charges = await db
     .select({
       containerId: containerOffloads.containerId,
-      offloadingCost: sql<string>`COALESCE(SUM(${containerOffloads.totalCharges}), 0)::text`,
+      offloadingCost: sql<string>`COALESCE(SUM(${containerOffloads.totalCharges} - COALESCE(${containers.chargesTotal}, 0)), 0)::text`,
     })
     .from(containerOffloads)
     .innerJoin(containers, eq(containers.id, containerOffloads.containerId))
