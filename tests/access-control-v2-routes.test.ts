@@ -71,7 +71,7 @@ describe("Phase 1 permissions V2 route coverage (shadow-mode only)", () => {
       role: CREATE_ONLY_ROLE,
       companyId: 1,
       isAssignedToCompany: true,
-      routeVerified: candidate?.status === "verified",
+      routeVerified: false,
       resource: candidate!.resource,
       action: candidate!.action,
       roleDecision: "allow",
