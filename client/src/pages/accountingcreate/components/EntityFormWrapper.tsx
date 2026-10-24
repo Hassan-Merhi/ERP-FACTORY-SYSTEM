@@ -61,6 +61,7 @@ function EntityFormWrapper({
         title: `${config.label} created`,
         description: `"${data.name || data.legalName || data.code || "New record"}" is ready to use.`,
         duration: 3500,
+        className: "max-w-sm rounded-xl border-primary/20 px-4 py-3 pr-8 shadow-lg",
       });
       queryClient.invalidateQueries({ queryKey: [config.endpoint] });
 
