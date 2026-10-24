@@ -29,7 +29,8 @@ if (!Array.isArray(manifest.routes) || !review.routes || typeof review.routes !=
   throw new Error("Malformed route inventory input");
 }
 
-const methodsThatMayWrite = new Set(["POST", "PUT", "PATCH", "DELETE"]);
+const passiveMethods = new Set(["GET", "HEAD", "OPTIONS"]);
+// Any uncommon Express method can mutate state; never implicitly treat it as read-only.
 const signatures = new Set();
 const inventory = [];
 for (const [index, raw] of manifest.routes.entries()) {
@@ -47,7 +48,7 @@ for (const [index, raw] of manifest.routes.entries()) {
       : path.startsWith("/api/sp/") ? "supplier-partner"
       : path.startsWith("/api/") ? "erp-or-platform" : "other",
     guardChain,
-    mayWrite: methodsThatMayWrite.has(method),
+    mayWrite: !passiveMethods.has(method),
     action: candidate?.action ?? null,
     resource: candidate?.resource ?? null,
     reviewState: candidate?.status ?? "unreviewed",
