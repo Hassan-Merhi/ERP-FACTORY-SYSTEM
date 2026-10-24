@@ -12,6 +12,7 @@ import { db } from "../../db";
 import { resultRows } from "../../lib/queryResult";
 import { MoneyDecimal, toMoney } from "../../lib/money";
 import { netPositionLegacyScanKnown, netPositionRecordedThrough } from "./netPositionAsOf";
+import { loadFactoryRowsKnownAt, type HistoricalRow } from "./netPositionRowHistoryReader";
 
 const decimal = (v: unknown): Decimal => toMoney(v as string | number | null | undefined);
 const cents = (v: Decimal): number => v.toDecimalPlaces(2, MoneyDecimal.ROUND_HALF_UP).toNumber();
@@ -205,11 +206,78 @@ type ContainerRow = {
   updated_after_cutoff: boolean;
 };
 
+
+// The live container master, receipts and cumulative raw stock are mutable.
+// Once ALL three source baselines exist, derive the OTW stage and amounts
+// from their recorded row versions, including subsequently deleted rows.
+// Earlier dates still use the existing legacy reconstruction and warnings.
+async function recordedOtwAt(
+  companyId: number,
+  scope: FactoryNetPositionAsOf,
+  getConfigFx: (currency: string) => number
+): Promise<{ value: number; warnings: string[] } | null> {
+  const [containers, receipts, stock] = await Promise.all([
+    loadFactoryRowsKnownAt("factory_containers", companyId, scope),
+    loadFactoryRowsKnownAt("factory_container_receipts", companyId, scope),
+    loadFactoryRowsKnownAt("factory_raw_stock", companyId, scope),
+  ]);
+  if (!containers.ready || !receipts.ready || !stock.ready) return null;
+  const text = (row: HistoricalRow, key: string, fallback = ""): string =>
+    row[key] == null ? fallback : String(row[key]);
+  const onDate = (value: unknown) => typeof value === "string" && value.slice(0, 10) <= scope.asOf;
+  const validReceiptContainers = new Set<number>();
+  const rawContainers = new Set<number>();
+  for (const r of receipts.rows.values()) {
+    if (onDate(r.receipt_date) && !r.deleted_at) validReceiptContainers.add(Number(r.container_id));
+  }
+  for (const r of stock.rows.values()) {
+    if (onDate(r.offloaded_at ?? r.created_at) && !r.deleted_at) rawContainers.add(Number(r.container_id));
+  }
+  const buckets = new Map<string, Decimal>();
+  const warnings = new Set<string>();
+  for (const c of containers.rows.values()) {
+    if (c.deleted_at) continue;
+    const id = Number(c.id);
+    const valued = historicalContainerOtw({
+      status: text(c, "status"),
+      preOffloadStatus: c.pre_offload_status == null ? null : text(c, "pre_offload_status"),
+      receivedByCutoff: validReceiptContainers.has(id) || rawContainers.has(id),
+      updatedAfterCutoff: false,
+      currencyCode: text(c, "currency_code", "USD"),
+      totalKg: text(c, "total_kg", "0"),
+      ratePerKg: text(c, "rate_per_kg", "0"),
+      finalPayable: text(c, "final_payable_amount", "0"),
+      freight: text(c, "freight", "0"),
+      freightCurrencyCode: text(c, "freight_currency_code") || text(c, "currency_code", "USD"),
+      commission: text(c, "commission_amount", "0"),
+      commissionCurrencyCode: text(c, "commission_currency_code", "USD"),
+      otherCharges: text(c, "other_charges", "0"),
+      preOffloadFreight: c.pre_offload_freight == null ? null : text(c, "pre_offload_freight"),
+      preOffloadFreightCurrencyCode: c.pre_offload_freight_currency_code == null ? null : text(c, "pre_offload_freight_currency_code"),
+      preOffloadCommission: c.pre_offload_commission_amount == null ? null : text(c, "pre_offload_commission_amount"),
+      preOffloadCommissionCurrencyCode: c.pre_offload_commission_currency_code == null ? null : text(c, "pre_offload_commission_currency_code"),
+      preOffloadOtherCharges: c.pre_offload_other_charges == null ? null : text(c, "pre_offload_other_charges"),
+    });
+    if (!valued) continue;
+    valued.warnings.forEach((warning) => warnings.add(warning));
+    for (const { currency, amount } of valued.amounts) {
+      buckets.set(currency, (buckets.get(currency) ?? new MoneyDecimal(0)).plus(amount));
+    }
+  }
+  let total: Decimal = new MoneyDecimal(0);
+  for (const [currency, amount] of buckets) {
+    total = total.plus(amount.times(currency === "USD" ? 1 : getConfigFx(currency)));
+  }
+  return { value: cents(total), warnings: [...warnings] };
+}
+
 async function getHistoricalOtw(
   companyId: number,
   scope: FactoryNetPositionAsOf,
   getConfigFx: (currency: string) => number
 ): Promise<{ value: number; warnings: string[] }> {
+  const recorded = await recordedOtwAt(companyId, scope, getConfigFx);
+  if (recorded) return recorded;
   const receiptKnown = sql`r.receipt_date <= ${scope.asOf}::date
                 AND ${isBefore(scope, "r.created_at")}
                 AND (r.deleted_at IS NULL OR NOT ${isBefore(scope, "r.deleted_at")})`;
