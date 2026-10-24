@@ -31,7 +31,7 @@ export const accessRoleRules = pgTable("access_role_rules", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => ({
   companyRoleIdx: index("access_role_rules_company_role_idx").on(t.companyId, t.roleId),
-  ruleUnique: uniqueIndex("access_role_rules_company_id_role_id_resource_key_action_key_key").on(t.companyId, t.roleId, t.resourceKey, t.actionKey),
+  ruleUnique: uniqueIndex("access_role_rules_v2_unique").on(t.companyId, t.roleId, t.resourceKey, t.actionKey),
 }));
 
 export const accessUserOverrides = pgTable("access_user_overrides", {
@@ -46,7 +46,7 @@ export const accessUserOverrides = pgTable("access_user_overrides", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => ({
   companyUserIdx: index("access_user_overrides_company_user_idx").on(t.companyId, t.userId),
-  overrideUnique: uniqueIndex("access_user_overrides_company_id_user_id_resource_key_action_key_key").on(t.companyId, t.userId, t.resourceKey, t.actionKey),
+  overrideUnique: uniqueIndex("access_user_overrides_v2_unique").on(t.companyId, t.userId, t.resourceKey, t.actionKey),
 }));
 
 export const accessPolicyVersions = pgTable("access_policy_versions", {
