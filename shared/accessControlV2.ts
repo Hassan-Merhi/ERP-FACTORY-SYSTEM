@@ -133,10 +133,11 @@ export interface AccessControlEvaluationInput {
    * company isolation, privileged maintenance, and existing security guards. */
   hardDenied?: boolean;
 
-  /** For a POST creating a new record, true if it ALSO mutates an existing
-   * entity: movement of stock, changing container status, rewriting vouchers,
-   * etc. Such a route must be separately classified, not called "create". */
-  touchesExistingRecord?: boolean;
+  /** True when a route labelled "create" is actually attempting to EDIT an
+   * existing business document (not the legitimate ledger/stock postings that
+   * arise automatically from a brand-new sale, voucher or production batch).
+   * Classify status transitions, correction and finalization separately. */
+  isExistingRecordEdit?: boolean;
 
   /** V2 explicit policies; legacy roles will be evaluated in shadow mode. */
   roleDecision?: AccessDecision;
@@ -192,8 +193,9 @@ export function evaluateAccessControl(input: AccessControlEvaluationInput): Acce
 
   if (input.hardDenied) return { allowed: false, reason: "hard_denial" };
 
-  // A "create" request is only such if it cannot rewrite an existing record.
-  if (input.role === CREATE_ONLY_ROLE && input.action === "create" && input.touchesExistingRecord) {
+  // New documents may post stock/ledger side effects; changing the prior
+  // document itself is still an edit, whatever HTTP verb the route uses.
+  if (input.role === CREATE_ONLY_ROLE && input.action === "create" && input.isExistingRecordEdit) {
     return { allowed: false, reason: "immutable_existing_record" };
   }
 
