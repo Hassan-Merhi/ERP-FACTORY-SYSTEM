@@ -61,7 +61,7 @@ export async function retailReturnRefusal(input: {
       status: 403,
       body: {
         code: "RETAIL_RETURN_MANAGER_REQUIRED",
-        message: "Manager access is required for account credits and damaged/non-restock returns",
+        message: "Manager access is required for refund-account overrides, customer credits and damaged/non-restock returns",
       },
     };
   }
