@@ -59,7 +59,9 @@ export function normalizeRetailReceiptNumber(value: string): number | null {
   const cleaned = value.trim().replace(/^#/, "").replace(/^r-?/i, "");
   if (!/^\d+$/.test(cleaned)) return null;
   const parsed = Number(cleaned);
-  return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+  // retail_pos_sales.id is a PostgreSQL 32-bit integer. A scanned 13-digit
+  // item barcode in the receipt field must never be sent as a sale ID.
+  return Number.isSafeInteger(parsed) && parsed > 0 && parsed <= 2147483647 ? parsed : null;
 }
 
 export function registerRetailCustomerRoutes(app: Express): void {

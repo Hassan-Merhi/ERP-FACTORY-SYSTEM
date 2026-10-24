@@ -1,7 +1,7 @@
 {
   "formatVersion": 1,
   "description": "Ordered snapshot of every registered Express route (method, path, guard chain) and middleware mount. Regenerate with UPDATE_ROUTE_MANIFEST=1 only when a route change is intended; during a file split the manifest must not change at all.",
-  "routeCount": 2236,
+  "routeCount": 2242,
   "middlewareMountCount": 137,
   "routes": [
     "GET /api/admin/operational-monitoring [requireAuth > <anonymous> > <anonymous>]",
@@ -1274,6 +1274,11 @@
     "GET /api/stock-items/merge-logs/historical [requireAuth > requireNonPOS > <anonymous>]",
     "POST /api/stock-items/merge-logs/historical-restore [requireAuth > requireNonPOS > <anonymous>]",
     "POST /api/stock-items/merge-logs/:logId/unmerge [requireAuth > requireNonPOS > <anonymous>]",
+    "GET /api/retail/supplier-import/history [requireAuth > requireNonPOS > <anonymous>]",
+    "GET /api/retail/supplier-import/history/:id [requireAuth > requireNonPOS > <anonymous>]",
+    "GET /api/retail/supplier-import/requests/:key [requireAuth > requireNonPOS > <anonymous>]",
+    "POST /api/retail/supplier-import/confirm [requireAuth > requireNonPOS > <anonymous>]",
+    "POST /api/retail/supplier-import/catalog-preview [requireAuth > requireNonPOS > <anonymous>]",
     "GET /api/retail/brands [requireAuth > <anonymous>]",
     "POST /api/retail/brands [requireAuth > requireNonPOS > <anonymous>]",
     "GET /api/retail/products [requireAuth > <anonymous>]",
@@ -1301,6 +1306,7 @@
     "GET /api/retail/financial/settings [requireAuth > requireNonPOS > <anonymous>]",
     "PUT /api/retail/financial/settings [requireAuth > requireNonPOS > <anonymous>]",
     "GET /api/retail/financial/reconciliation [requireAuth > requireNonPOS > <anonymous>]",
+    "GET /api/pos/retail/shift-ledger-balance [requireAuth > <anonymous>]",
     "GET /api/pos/retail/shifts/:id/summary [requireAuth > <anonymous>]",
     "POST /api/pos/retail/shifts/:id/cash-movements [requireAuth > <anonymous>]",
     "GET /api/retail/financial/cash-reasons [requireAuth > <anonymous>]",

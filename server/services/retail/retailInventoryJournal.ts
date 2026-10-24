@@ -28,8 +28,9 @@
  *     contra does not explain (re-costing, cent rounding) goes to
  *     RETAIL-INVENTORY-ADJUSTMENT. Deterministic voucher numbers
  *     RETAIL-STK-{KIND}-{source} and identities `retail-stock-{kind}:{source}`.
- *     Before the opening nothing is posted (no half-books). Sale COGS is
- *     unchanged.
+ *     Before the opening nothing is posted (no half-books), including sale
+ *     COGS/asset entries. Sales still settle into cash/customer and revenue,
+ *     with cost retained on sale lines for operational profit reporting.
  * (c) The reconciliation (retailInventoryReconciliationTx) compares the
  *     ledger and the sub-ledger; the perpetual reconciliation, the readiness
  *     report and the integrity diagnostic show it.

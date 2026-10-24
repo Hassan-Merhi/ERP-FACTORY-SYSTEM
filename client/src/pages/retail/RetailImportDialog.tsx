@@ -123,6 +123,10 @@ export function ImportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
         <DialogHeader>
           <DialogTitle>Import Retail Products</DialogTitle>
         </DialogHeader>
+        <p className="rounded-md border border-amber-300 bg-amber-50 p-2 text-xs text-amber-950 dark:border-amber-700 dark:bg-amber-950/30 dark:text-amber-100">
+          Legacy import writes absolute inventory quantities and does not credit a supplier payable account.
+          It is NOT suitable for stock purchased on credit. Use Supplier Stock Import for the new purchase workflow.
+        </p>
         <p className="text-sm text-muted-foreground">
           Columns: Name | Brand | Color | Size | Barcode | Cost | Price | Qty | Location | Category | VariantImageUrl.
           Brand can be left blank for Other / No Brand. Color defaults to Default for legacy files. Rows with the same

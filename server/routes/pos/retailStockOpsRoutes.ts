@@ -332,7 +332,7 @@ export function registerRetailStockOpsRoutes(app: Express): void {
             if (refund.method === "credit") receivableReversed = receivableReversed.plus(refund.amount);
             else tenderRefund = tenderRefund.plus(refund.amount);
           }
-          const refundVoucherId = await postRetailRefundAccountingTx(tx, {
+          const refundPosting = await postRetailRefundAccountingTx(tx, {
             companyId,
             locationId: body.locationId,
             saleId: body.saleId,
@@ -352,7 +352,7 @@ export function registerRetailStockOpsRoutes(app: Express): void {
             sourceId: returned.returnId,
             description: `Retail return #${returned.returnId} for sale #${body.saleId}`,
             actor: { userId, username: req.user?.username ?? null },
-            alreadyDebited: refundVoucherId ? returned.costValue : undefined,
+            alreadyDebited: refundPosting.costReversed ? returned.costValue : undefined,
           });
         }
 

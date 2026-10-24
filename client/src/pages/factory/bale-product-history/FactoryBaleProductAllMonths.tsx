@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Badge } from "@/components/ui/badge";
+import { BaleHistoryStatusBadge, getBaleHistoryDisplayStatus } from "./BaleHistoryStatusBadge";
 import { useState } from "react";
 import { useEscapeToParent } from "@/hooks/use-escape-to-parent";
 
@@ -54,7 +54,7 @@ export function FactoryBaleProductAllMonths() {
   const sellingPricePerBale = parseFloat(responseData?.sellingPrice || "0");
 
   const filteredData = (data ?? []).filter((bale) => {
-    const effectiveStatus = bale.status === "IN_STOCK" && bale.isInLoadingOrder ? "LOADING" : bale.status;
+    const effectiveStatus = getBaleHistoryDisplayStatus(bale);
     if (statusFilter !== "all" && effectiveStatus !== statusFilter) return false;
     return true;
   });
@@ -125,6 +125,7 @@ export function FactoryBaleProductAllMonths() {
                 <SelectItem value="IN_STOCK">In Stock</SelectItem>
                 <SelectItem value="LOADING">Loading</SelectItem>
                 <SelectItem value="SOLD">Sold</SelectItem>
+                <SelectItem value="RESERVED_FOR_ORDER">Reserved for Order</SelectItem>
                 <SelectItem value="DISPATCHED">Dispatched</SelectItem>
                 <SelectItem value="DELETED">Deleted</SelectItem>
               </SelectContent>
@@ -205,25 +206,7 @@ export function FactoryBaleProductAllMonths() {
                       </TableCell>
                     )}
                     <TableCell data-testid={`text-status-${bale.id}`}>
-                      {bale.status === "IN_STOCK" && bale.isInLoadingOrder ? (
-                        <Badge
-                          variant="outline"
-                          className="text-[11px] px-1.5 py-0.5 border-amber-400 text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 no-default-active-elevate"
-                        >
-                          Loading
-                        </Badge>
-                      ) : bale.status === "DELETED" || bale.status === "REMOVED" ? (
-                        <Badge variant="destructive">Deleted</Badge>
-                      ) : bale.status === "DISPATCHED" ? (
-                        <Badge
-                          variant="secondary"
-                          className="bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200"
-                        >
-                          Dispatched
-                        </Badge>
-                      ) : (
-                        <Badge variant="secondary">{bale.status}</Badge>
-                      )}
+                      <BaleHistoryStatusBadge bale={bale} />
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground" data-testid={`text-date-${bale.id}`}>
                       {formatDateTime(bale.createdAt)}
@@ -253,9 +236,9 @@ export function FactoryBaleProductAllMonths() {
                   <span className="font-medium font-mono" data-testid={`text-mobile-bale-code-${bale.id}`}>
                     {bale.baleCode}
                   </span>
-                  <Badge variant="secondary" data-testid={`text-mobile-status-${bale.id}`}>
-                    {bale.status}
-                  </Badge>
+                  <span data-testid={`text-mobile-status-${bale.id}`}>
+                    <BaleHistoryStatusBadge bale={bale} />
+                  </span>
                 </div>
                 <div className="text-xs mb-2">
                   <button

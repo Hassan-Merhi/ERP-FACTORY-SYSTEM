@@ -5,7 +5,8 @@
  * first-match, so that order is behaviour.
  */
 import type { Express, Request, Response } from "express";
-import { getErrorMessage } from "../../lib/httpHandlers";
+import { getErrorDetails } from "@shared/errorUtils";
+import { logger } from "../../lib/logger";
 import { db } from "../../db";
 import { storage } from "../../storage";
 import { requireAuth } from "../../auth";
@@ -28,7 +29,7 @@ import type Decimal from "decimal.js";
 import { MoneyDecimal, toMoney } from "../../lib/money";
 import { getCustomerLedgerAndMemo, splitBalanceFields } from "../factory/customers-core/customerLedgerSplit";
 
-export async function serveAccountListForCompany(req: Request, res: Response, companyId: number) {
+export async function serveAccountListForCompany(req: Request, res: Response, companyId: number, attempt = 0): Promise<unknown> {
   try {
     const analyticsProfile = req.query.profile === "analytics";
 
@@ -399,7 +400,26 @@ export async function serveAccountListForCompany(req: Request, res: Response, co
       allPosted: !effectiveEndDate,
     });
   } catch (error: unknown) {
-    res.status(500).json({ message: getErrorMessage(error) });
+    // Read-only list assembly is safe to retry once if a concurrent migration
+    // or stock write deadlocks one of its database reads (SQLSTATE 40P01).
+    // Never retry writes and never weaken tenant scope to sidestep this error.
+    let cause: unknown = error;
+    let pgCode: string | undefined;
+    for (let i = 0; i < 5 && cause != null; i++) {
+      const details = getErrorDetails(cause);
+      if (typeof details.code === "string" && /^[0-9A-Z]{5}$/.test(details.code)) {
+        pgCode = details.code;
+        break;
+      }
+      cause = typeof cause === "object" && "cause" in cause ? cause.cause : null;
+    }
+    logger.error("[accounts/list] Failed to assemble account balances", { error, companyId, pgCode, attempt });
+    if ((pgCode === "40P01" || pgCode === "40001") && attempt === 0 && !res.headersSent) {
+      return serveAccountListForCompany(req, res, companyId, 1);
+    }
+    if (!res.headersSent) {
+      res.status(500).json({ message: "Accounts could not be loaded. Please try again.", code: "ACCOUNT_LIST_READ_FAILED" });
+    }
   }
 }
 

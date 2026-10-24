@@ -1,9 +1,57 @@
 import { and, asc, eq, isNull } from "drizzle-orm";
+import { getPartyBalance } from "../accounting/balances/ledgerBalanceEngine";
+import { companyBusinessDate } from "../accounting/companyBusinessDate";
 import { bankAccounts, ledgerAccounts, posShifts, retailCashMovements, retailPosPayments } from "@shared/schema";
 import { db, pool } from "../../db";
 import { getRetailAccountingSettings } from "./retailAccountingSettingsService";
 
 /** Read-only Retail payment, shift and reconciliation queries. */
+
+/**
+ * Cash shift openings are ledger snapshots, never user-entered or posted again.
+ * A user may select an existing Cash ledger at checkout; otherwise use the
+ * location's configured Retail cash ledger. The accounting balance engine
+ * includes the master opening balance and all eligible posted voucher lines.
+ */
+export async function getRetailCashDrawerBalance(
+  companyId: number,
+  locationId: number,
+  requestedCashAccountId?: number | null
+) {
+  const accountId = requestedCashAccountId ??
+    (await getRetailAccountingSettings(companyId, locationId)).cashLedgerAccountId;
+  if (!Number.isSafeInteger(accountId) || accountId <= 0) {
+    throw new Error("A valid cash ledger account is required");
+  }
+  const [account] = await db
+    .select({
+      id: ledgerAccounts.id,
+      name: ledgerAccounts.name,
+      code: ledgerAccounts.code,
+      accountType: ledgerAccounts.accountType,
+    })
+    .from(ledgerAccounts)
+    .where(and(
+      eq(ledgerAccounts.companyId, companyId),
+      eq(ledgerAccounts.id, accountId),
+      isNull(ledgerAccounts.deletedAt)
+    ))
+    .limit(1);
+  if (!account || account.accountType !== "Cash") {
+    throw new Error("Select an active Cash ledger account belonging to this company");
+  }
+
+  // Match the current-date ERP ledger, excluding future-dated vouchers.
+  const asOf = await companyBusinessDate(companyId);
+  const balance = await getPartyBalance(db, { companyId, kind: "ledger", id: account.id, asOf });
+  if (!balance) throw new Error("Cash ledger balance is unavailable");
+  return {
+    cashAccountId: account.id,
+    accountName: account.name,
+    accountCode: account.code,
+    balance: balance.closing,
+  };
+}
 
 function toNumber(value: unknown): number {
   const parsed = Number(value ?? 0);

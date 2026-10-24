@@ -2,6 +2,7 @@ import type { Express } from "express";
 import { getErrorMessage } from "../lib/httpHandlers";
 import { db } from "../db";
 import { storage } from "../storage";
+import { masterDataDbErrorResponse } from "../lib/masterDataDbError";
 import { requireAuth, requireNonPOS } from "../auth";
 import { employees, insertEmployeeSchema } from "@shared/schema";
 import { eq } from "drizzle-orm";
@@ -167,6 +168,8 @@ export function registerEmployeeRoutes(app: Express) {
 
       res.status(201).json(employee);
     } catch (error: unknown) {
+      const dbError = masterDataDbErrorResponse(error, "employee", req.session.currentCompanyId);
+      if (dbError) return res.status(dbError.status).json(dbError.body);
       res.status(400).json({ message: getErrorMessage(error) });
     }
   });

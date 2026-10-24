@@ -142,6 +142,7 @@
     "html2canvas": "^1.4.1",
     "jspdf": "^4.2.1",
     "jspdf-autotable": "^5.0.7",
+    "jszip": "^3.10.1",
     "lucide-react": "^1.55.0",
     "motion": "^14.1.0",
     "multer": "^2.5.0",

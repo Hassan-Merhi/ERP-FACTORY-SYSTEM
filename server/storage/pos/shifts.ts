@@ -3,6 +3,7 @@ import { db } from "../../db";
 import * as schema from "@shared/schema";
 import { moneyString, parseMoneyInput, sumMoney, toMoney } from "../../lib/money";
 import { postRetailShiftOverShortTx } from "../../services/retail/retailCashJournal";
+import { ensureRetailAccountingSettingsTx } from "../../services/retail/retailAccountingSettingsService";
 
 export async function getCurrentShift(userId: string, locationId: number): Promise<schema.PosShift | undefined> {
   const [shift] = await db
@@ -70,6 +71,7 @@ export async function closeShift(
           paymentType: schema.retailPosPayments.paymentType,
           method: schema.retailPosPayments.method,
           amount: schema.retailPosPayments.amount,
+          ledgerAccountId: schema.retailPosPayments.ledgerAccountId,
         })
         .from(schema.retailPosPayments)
         .where(and(eq(schema.retailPosPayments.companyId, shift.companyId), eq(schema.retailPosPayments.shiftId, id)));
@@ -83,6 +85,10 @@ export async function closeShift(
           and(eq(schema.retailCashMovements.companyId, shift.companyId), eq(schema.retailCashMovements.shiftId, id))
         );
 
+      // Reconcile only the drawer ledger captured at shift opening. A sale
+      // paid to another Cash ledger must not inflate this drawer's expected count.
+      const drawerAccountId = shift.cashAccountId ??
+        (await ensureRetailAccountingSettingsTx(tx, shift.companyId, shift.locationId)).cashLedgerAccountId;
       const saleIds = new Set<number>();
       let cashNet = toMoney(0);
       for (const payment of payments) {
@@ -90,8 +96,12 @@ export async function closeShift(
         if (payment.paymentType === "payment") {
           saleIds.add(payment.saleId);
           salesTotal = salesTotal.plus(amount);
-          if (payment.method === "cash") cashNet = cashNet.plus(amount);
-        } else if (payment.paymentType === "refund" && payment.method === "cash") {
+          if (payment.method === "cash" &&
+              (payment.ledgerAccountId === drawerAccountId || payment.ledgerAccountId == null)) {
+            cashNet = cashNet.plus(amount);
+          }
+        } else if (payment.paymentType === "refund" && payment.method === "cash" &&
+                   (payment.ledgerAccountId === drawerAccountId || payment.ledgerAccountId == null)) {
           cashNet = cashNet.minus(amount);
         }
       }

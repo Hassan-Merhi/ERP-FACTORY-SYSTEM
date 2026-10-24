@@ -191,25 +191,14 @@ export function registerSchemaDiagnosticRoutes(app: Express) {
     const existingTables = new Set(tableCheckResult.rows.map((r) => r.table_name));
 
     if (!existingTables.has("fiscal_period_closures")) {
-      try {
-        await pool.query(`
-          CREATE TABLE IF NOT EXISTS fiscal_period_closures (
-            id              SERIAL PRIMARY KEY,
-            company_id      INTEGER NOT NULL,
-            period_end_date DATE    NOT NULL,
-            closed_by       TEXT,
-            closed_at       TIMESTAMP NOT NULL DEFAULT NOW(),
-            notes           TEXT
-          )
-        `);
-        await pool.query(`
-          CREATE UNIQUE INDEX IF NOT EXISTS fiscal_period_closures_company_period_uidx
-          ON fiscal_period_closures (company_id, period_end_date)
-        `);
-        applied.push("TABLE fiscal_period_closures");
-      } catch (err: unknown) {
-        failed.push({ item: "TABLE fiscal_period_closures", error: getErrorMessage(err) });
-      }
+      // Do not synthesize the obsolete six-column fiscal table. Its original
+      // definition omits required closing-voucher, date, audit and amount
+      // columns, making subsequent reads/writes fail and risking closed books.
+      // Restore the canonical structure through a reviewed SQL migration.
+      failed.push({
+        item: "TABLE fiscal_period_closures",
+        error: "Missing financial-control table. Apply the canonical fiscal-period migration manually; no table was created.",
+      });
     }
 
     // 2. Add missing columns

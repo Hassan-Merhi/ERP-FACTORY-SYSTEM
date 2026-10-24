@@ -3,7 +3,8 @@ import { getErrorMessage } from "../../lib/httpHandlers";
 import { db } from "../../db";
 import { storage } from "../../storage";
 import { requireAuth } from "../../auth";
-import { userLocations } from "@shared/schema";
+import { companies, userLocations } from "@shared/schema";
+import { getRetailCashDrawerBalance } from "../../services/retail/retailFinancialQueries";
 import { eq, and } from "drizzle-orm";
 import { parseMoneyInput } from "../../lib/money";
 
@@ -137,14 +138,25 @@ export function registerPosShiftRoutes(app: Express): void {
         });
       }
 
+      const [company] = await db
+        .select({ companyType: companies.companyType })
+        .from(companies)
+        .where(eq(companies.id, req.session.currentCompanyId))
+        .limit(1);
+      // Retail cash belongs to the ledger. Do not trust an openingCash amount
+      // from the browser or post a second opening accounting entry.
+      const requestedAccountId = cashAccountId == null ? null : Number(cashAccountId);
+      const drawer = company?.companyType === "retail"
+        ? await getRetailCashDrawerBalance(req.session.currentCompanyId, locationId, requestedAccountId)
+        : null;
       const shift = await storage.openShift({
         companyId: req.session.currentCompanyId,
         locationId,
         userId,
         username,
-        cashAccountId: cashAccountId || null,
+        cashAccountId: drawer?.cashAccountId ?? cashAccountId ?? null,
         posStation: posStation || null,
-        openingCash: openingCash || "0",
+        openingCash: drawer?.balance ?? openingCash ?? "0",
         status: "open",
       });
 

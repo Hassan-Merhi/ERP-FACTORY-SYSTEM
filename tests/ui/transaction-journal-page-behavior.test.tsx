@@ -186,6 +186,39 @@ describe("transaction journal page behavior", () => {
     expect(screen.getByTestId("row-voucher-102")).toHaveTextContent("Customer receipt");
   });
 
+  it("renders one company heading and one type heading for adjacent vouchers of the same type", () => {
+    // The server groups globally before paging; each page only introduces a
+    // heading when its visible company/type changes.
+    const secondPayment = {
+      ...journalData.vouchers[0],
+      id: 103,
+      voucherNumber: "PAY-103",
+      description: "Second supplier payment",
+    };
+    journalData.vouchers.splice(1, 0, secondPayment);
+    try {
+      const { container } = render(<TransactionJournal />);
+      const rows = Array.from(container.querySelectorAll("tbody tr"))
+        .map((row) => row.getAttribute("data-testid"))
+        .filter(Boolean);
+
+      expect(rows).toEqual([
+        "row-company-group-4",
+        "row-type-group-4-payment",
+        "row-voucher-101",
+        "row-voucher-103",
+        "row-company-group-5",
+        "row-type-group-5-receipt",
+        "row-voucher-102",
+      ]);
+      expect(screen.getByTestId("card-company-group-4")).toHaveTextContent("GC Lshi");
+      expect(screen.getByTestId("card-type-group-4-payment")).toHaveTextContent("Payment");
+      expect(screen.getByTestId("card-voucher-103")).toHaveTextContent("Second supplier payment");
+    } finally {
+      journalData.vouchers.splice(1, 1);
+    }
+  });
+
   it("supports search, quick type filters, and factory inclusion", () => {
     render(<TransactionJournal />);
     expect(screen.getByTestId("button-toggle-factory")).toHaveTextContent("Excluded");

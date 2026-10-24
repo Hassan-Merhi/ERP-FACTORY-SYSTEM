@@ -5,7 +5,11 @@
  */
 
 export interface JournalVoucher {
+  /** A negative display ID marks an offload, not a posting in vouchers. */
   id: number;
+  entryType?: "voucher" | "offload";
+  offloadId?: number | null;
+  containerId?: number | null;
   companyId: number;
   companyName: string;
   voucherNumber: string;

@@ -1,22 +1,56 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
 import { money, type RetailSale } from "./retailPosTypes";
 
+export type RetailReceiptPaperWidth = 58 | 80;
+const RECEIPT_PAPER_STORAGE_KEY = "retail-pos-receipt-width";
+
+function readPaperWidth(): RetailReceiptPaperWidth {
+  try {
+    return window.localStorage.getItem(RECEIPT_PAPER_STORAGE_KEY) === "58" ? 58 : 80;
+  } catch {
+    return 80;
+  }
+}
+
+// Off-screen (rather than display:none) to measure actual receipt height.
 const RECEIPT_CSS = `
-#retail-receipt-print-root { font-family: "Courier New", monospace; color: #000; background: #fff; width: 72mm; padding: 3mm 4mm; font-size: 9pt; }
-#retail-receipt-print-root .rr-center { text-align: center; }
-#retail-receipt-print-root .rr-title { font-weight: 700; font-size: 11pt; }
-#retail-receipt-print-root .rr-rule { border-top: 1px dashed #000; margin: 2mm 0; }
-#retail-receipt-print-root .rr-line { display: flex; justify-content: space-between; gap: 2mm; }
-#retail-receipt-print-root .rr-item { margin-bottom: 1.5mm; }
-#retail-receipt-print-root .rr-total { font-weight: 700; font-size: 11pt; }
-#retail-receipt-print-root .rr-muted { font-size: 8pt; }
-@media screen { #retail-receipt-print-root { display: none; } }
+#retail-receipt-print-root {
+  box-sizing: border-box;
+  width: var(--rr-paper-width);
+  max-width: var(--rr-paper-width);
+  padding: 2.5mm var(--rr-side-padding) 3mm;
+  margin: 0;
+  background: #fff !important;
+  color: #000 !important;
+  font-family: "Courier New", Courier, monospace;
+  font-size: var(--rr-font-size);
+  line-height: 1.35;
+  font-weight: 400;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+#retail-receipt-print-root *, #retail-receipt-print-root *::before, #retail-receipt-print-root *::after { box-sizing: border-box; }
+#retail-receipt-print-root .rr-center { text-align: center; overflow-wrap: anywhere; }
+#retail-receipt-print-root .rr-title { font-weight: 800; font-size: var(--rr-title-size); line-height: 1.2; margin-bottom: 1.5mm; }
+#retail-receipt-print-root .rr-rule { width: 100%; border-top: 1px dashed #111; margin: 2.5mm 0; }
+#retail-receipt-print-root .rr-line { display: flex; justify-content: space-between; align-items: baseline; gap: 2mm; }
+#retail-receipt-print-root .rr-line > :first-child { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
+#retail-receipt-print-root .rr-line > :last-child { flex: 0 0 auto; white-space: nowrap; text-align: right; }
+#retail-receipt-print-root .rr-item { padding: 1mm 0; break-inside: avoid; page-break-inside: avoid; }
+#retail-receipt-print-root .rr-item-name { font-weight: 700; overflow-wrap: anywhere; }
+#retail-receipt-print-root .rr-item-details { font-size: 0.88em; overflow-wrap: anywhere; }
+#retail-receipt-print-root .rr-total { font-weight: 800; font-size: 1.18em; padding-top: 1.5mm; }
+#retail-receipt-print-root .rr-total, #retail-receipt-print-root .rr-payment { font-variant-numeric: tabular-nums; }
+#retail-receipt-print-root .rr-muted { font-size: 0.88em; }
+#retail-receipt-print-root .rr-footer { padding: 2.5mm 0 1mm; font-weight: 700; }
+@media screen {
+  #retail-receipt-print-root { display: block !important; position: fixed !important; left: -10000px !important; top: 0 !important; visibility: hidden !important; pointer-events: none !important; }
+}
 @media print {
-  @page { size: 80mm auto; margin: 0; }
-  html, body { background: #fff !important; }
+  html, body { width: 100% !important; min-width: 0 !important; height: auto !important; margin: 0 !important; padding: 0 !important; background: white !important; }
   body > *:not(#retail-receipt-print-root) { display: none !important; }
-  #retail-receipt-print-root { display: block; }
+  #retail-receipt-print-root { display: block !important; position: static !important; visibility: visible !important; width: var(--rr-paper-width) !important; max-width: var(--rr-paper-width) !important; margin: 0 !important; box-shadow: none !important; }
 }
 `;
 
@@ -52,9 +86,8 @@ export function RetailReceipt({
     <div data-no-translate>
       <div className="rr-center rr-title">{companyName ?? "Receipt"}</div>
       {locationName && <div className="rr-center">{locationName}</div>}
-      <div className="rr-center">
-        #{sale.id} · {new Date(sale.createdAt).toLocaleString()}
-      </div>
+      <div className="rr-center rr-muted">Receipt #{sale.id}</div>
+      <div className="rr-center rr-muted">{new Date(sale.createdAt).toLocaleString()}</div>
       <div className="rr-center rr-muted">Customer: {sale.customerName || "Walk-in"}</div>
       <div className="rr-rule" />
       {sale.items.map((item) => {
@@ -63,12 +96,9 @@ export function RetailReceipt({
         const discounted = paidUnit < listUnit - 0.000001 || Number(item.lineDiscountAmount ?? 0) > 0;
         return (
           <div key={item.id} className="rr-item">
-            <div>
-              {item.brand} · {item.name}
-            </div>
-            <div>
-              {item.color} / {item.size} · {item.barcode}
-            </div>
+            <div className="rr-item-name">{item.brand} · {item.name}</div>
+            <div className="rr-item-details">{item.color} / {item.size}</div>
+            <div className="rr-item-details rr-muted">{item.barcode}</div>
             <div className="rr-line">
               <span>
                 {item.quantity} × {money(paidUnit)}
@@ -185,39 +215,73 @@ export function RetailReceipt({
       {sale.approvedByName && <div className="rr-center rr-muted">Discount approved by {sale.approvedByName}</div>}
       {sale.status !== "completed" && <div className="rr-center">*** {sale.status.toUpperCase()} ***</div>}
       <div className="rr-rule" />
-      <div className="rr-center">Thank you</div>
+      <div className="rr-center rr-footer">Thank you for shopping!</div>
     </div>
   );
 }
 
-/** Prints an 80 mm receipt through the browser print dialog (thermal receipt printers or any printer). */
+/** Prints on thermal roll paper (80mm default, optional persistent 58mm). */
 export function useRetailReceiptPrinter(companyName?: string, locationName?: string) {
-  const [sale, setSale] = useState<RetailSale | null>(null);
+  const [job, setJob] = useState<{ sale: RetailSale; width: RetailReceiptPaperWidth } | null>(null);
+  const [paperWidth, setPaperWidth] = useState<RetailReceiptPaperWidth>(readPaperWidth);
+
+  const changePaperWidth = (width: RetailReceiptPaperWidth) => {
+    setPaperWidth(width);
+    try {
+      window.localStorage.setItem(RECEIPT_PAPER_STORAGE_KEY, String(width));
+    } catch {
+      // Printing also works if the browser prevents preference storage.
+    }
+  };
 
   useEffect(() => {
-    if (!sale) return;
+    if (!job) return;
     const style = document.createElement("style");
     style.setAttribute("data-retail-receipt-print", "true");
     style.textContent = RECEIPT_CSS;
     document.head.appendChild(style);
-    const finish = () => setSale(null);
-    window.addEventListener("afterprint", finish, { once: true });
-    const timer = window.setTimeout(() => window.print(), 100);
+
+    // A real page height is required: @page { size: 80mm auto } is invalid
+    // in Chromium, causing the browser to silently fall back to A4.
+    // The offscreen receipt has the actual thermal width for measuring wraps.
+    const finish = () => setJob((current) => (current === job ? null : current));
+    window.addEventListener("afterprint", finish);
+    const frame = window.requestAnimationFrame(() => {
+      const root = document.getElementById("retail-receipt-print-root");
+      if (!root) {
+        finish();
+        return;
+      }
+      const heightMm = root.getBoundingClientRect().height * 25.4 / 96;
+      const paperHeightMm = Math.max(45, Math.ceil(heightMm + 4));
+      style.textContent = RECEIPT_CSS + "\n@page { size: " + job.width + "mm " + paperHeightMm + "mm; margin: 0; }";
+      window.print();
+    });
+
     return () => {
-      window.clearTimeout(timer);
+      window.cancelAnimationFrame(frame);
       window.removeEventListener("afterprint", finish);
       style.remove();
     };
-  }, [sale]);
+  }, [job]);
 
-  const portal = sale
+  const printReceipt = (sale: RetailSale) => setJob({ sale, width: paperWidth });
+  const portal = job
     ? createPortal(
-        <div id="retail-receipt-print-root">
-          <RetailReceipt sale={sale} companyName={companyName} locationName={locationName} />
+        <div
+          id="retail-receipt-print-root"
+          style={{
+            "--rr-paper-width": job.width + "mm",
+            "--rr-side-padding": job.width === 80 ? "3.5mm" : "2.5mm",
+            "--rr-font-size": job.width === 80 ? "10pt" : "8.5pt",
+            "--rr-title-size": job.width === 80 ? "14pt" : "12pt",
+          } as CSSProperties}
+        >
+          <RetailReceipt sale={job.sale} companyName={companyName} locationName={locationName} />
         </div>,
         document.body
       )
     : null;
 
-  return { printReceipt: setSale, portal };
+  return { printReceipt, portal, paperWidth, setPaperWidth: changePaperWidth };
 }

@@ -7,6 +7,7 @@
 import type { Express } from "express";
 import { getErrorMessage } from "../../../lib/httpHandlers";
 import { storage } from "../../../storage";
+import { masterDataDbErrorResponse } from "../../../lib/masterDataDbError";
 import { requireAuth, requireNonPOS } from "../../../auth";
 import { insertStockGroupSchema } from "@shared/schema";
 
@@ -48,6 +49,8 @@ export function registerStockGroupRoutes(app: Express) {
       const group = await storage.createStockGroup(parsed);
       res.status(201).json(group);
     } catch (error: unknown) {
+      const dbError = masterDataDbErrorResponse(error, "stock-group", req.session.currentCompanyId);
+      if (dbError) return res.status(dbError.status).json(dbError.body);
       res.status(400).json({ message: getErrorMessage(error) });
     }
   });

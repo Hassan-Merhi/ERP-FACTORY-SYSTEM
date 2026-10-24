@@ -650,7 +650,7 @@ export function registerRetailPosRoutes(app: Express): void {
             refundAccount: { ledgerAccountId: body.refundLedgerAccountId, bankAccountId: body.refundBankAccountId },
             userId,
           });
-          const refundVoucherId = await postRetailRefundAccountingTx(tx, {
+          const refundPosting = await postRetailRefundAccountingTx(tx, {
             companyId,
             locationId: body.locationId,
             saleId,
@@ -670,7 +670,7 @@ export function registerRetailPosRoutes(app: Express): void {
             sourceId: returned.returnId,
             description: `Retail return #${returned.returnId} for sale #${saleId}`,
             actor: { userId, username: req.user?.username ?? null },
-            alreadyDebited: refundVoucherId ? returned.costValue : undefined,
+            alreadyDebited: refundPosting.costReversed ? returned.costValue : undefined,
           });
         }
         return returned;
