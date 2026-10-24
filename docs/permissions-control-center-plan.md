@@ -1,5 +1,5 @@
 # Permissions Control Center — ERP + Factory
-Status: Planning baseline (not wired to production permissions)
+Status: Phase 1 source deliverables complete; phases 2–8 pending (NOT wired to production permissions)
 Branch: `feature/permissions-control-center`
 
 ## Goal
@@ -50,7 +50,7 @@ Table is the *Create Only* default proposal. Posting a newly created voucher is 
 - Backwards compatibility: existing live roles must retain the same effective permissions until their company is explicitly migrated to the new matrix. Migration begins in **read-only comparison/shadow mode**; do not silently re-grant denied features.
 
 ## Phases
-1. **Inventory & unified contract** — enumerate protected API routes and current UI controls; map each to domain/action; define typed permission catalog, role/override precedence, locked actions and default Create Only rules; add parity tests and schema migration plan. No behavior changes.
+1. **Inventory & unified contract — SOURCE COMPLETE** — enumerate protected API routes and current UI controls; map each to domain/action; define typed permission catalog, role/override precedence, locked actions and default Create Only rules; add parity tests and schema migration plan. No behavior changes.
 2. **Storage & effective permission API** — company-scoped role permissions and user overrides; policy versions; transaction/audit; GET effective permissions and preview; backward compatible with existing storage. Database migration idempotent and reviewed before running.
 3. **Server-side authorization** — attach business-action checks to ERP, Factory, POS/Retail and Properties endpoints; enforce Create Only and existing hard restrictions; reject direct API edits/deletes/finalize/void/bulk routes; prioritize accounting/stock/containers/payroll.
 4. **Role Templates UI** — company/role selector, searchable matrix, bulk per-action controls, inherited vs explicit states, preview before save, role impact count; no hidden inversion of "checked".
@@ -71,3 +71,6 @@ Table is the *Create Only* default proposal. Posting a newly created voucher is 
 - This planning document does **not** change live permissions, schema, or application behavior.
 - No SQL, CI, tests, merge or deployment were executed as part of creating this plan.
 - In particular, do not reinterpret the legacy `enabled` booleans or replace the existing authorization in a single cutover.
+
+## Phase 1 handoff (2026-10-24)
+See [permissions-control-center-phase1.md](permissions-control-center-phase1.md). Full route inventory audit and 112 candidate action mappings are committed; 1,092 potentially mutating registrations remain unreviewed and must be handler-verified in Phase 3. Initial tests are authored, not executed. Create Only is not selectable or enforced yet.
