@@ -14,10 +14,9 @@ function StockTransferOrderEditor({ onSwitchToNormalView }: StockTransferOrderPr
 
 export default function StockTransferOrder(props: StockTransferOrderProps = {}) {
   const { selectedCompany } = useCompany();
-  // Retail has its own barcode/variant stock operations; a direct link must
-  // never mount the generic ERP Transfer Order form for a Retail company.
+  // Retail uses the Stock Transfer voucher tab instead of the Transfer Order editor.
   if (selectedCompany?.companyType === "retail") {
-    return <Redirect replace to="/retail/stock" />;
+    return <Redirect replace to="/vouchers?tab=transfer" />;
   }
   return <StockTransferOrderEditor {...props} />;
 }

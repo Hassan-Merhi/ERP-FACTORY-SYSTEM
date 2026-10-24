@@ -5,7 +5,8 @@ import type { AccountingForm, AccountingFormSubmit, AccountingFormValues, Ledger
  * Extracted from AccountingCreate.tsx during the Phase 4 god-file split.
  */
 import { useState } from "react";
-import { Card } from "@/components/ui/card";
+import { CreateFormShell } from "./CreateFormShell";
+import { BookOpen } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
@@ -68,14 +69,18 @@ function LedgerAccountForm({
   const [parentGroupOpen, setParentGroupOpen] = useState(false);
 
   return (
-    <Card className="p-4 md:p-6">
+    <CreateFormShell icon={BookOpen} title="New ledger account" description="Create an account with the correct type, grouping, and optional opening balance.">
       <Form {...form}>
         <form
           noValidate
           onSubmit={form.handleSubmit((data: AccountingFormValues) => onSubmit(data, false))}
           className="space-y-6"
         >
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-x-5 gap-y-6 md:grid-cols-2">
+            <div className="md:col-span-2 border-b border-border/70 pb-3">
+              <h3 className="text-sm font-semibold">Account details</h3>
+              <p className="mt-1 text-xs text-muted-foreground">Name and classify this ledger account; the code is generated automatically.</p>
+            </div>
             <FormField
               control={form.control}
               name="name"
@@ -217,6 +222,10 @@ function LedgerAccountForm({
               }}
             />
 
+            <div className="md:col-span-2 border-b border-border/70 pb-3 pt-2">
+              <h3 className="text-sm font-semibold">Opening balance <span className="font-normal text-muted-foreground">(optional)</span></h3>
+              <p className="mt-1 text-xs text-muted-foreground">Leave this as zero for a new account. Choose debit or credit only when entering an existing balance.</p>
+            </div>
             <FormField
               control={form.control}
               name="openingBalance"
@@ -275,10 +284,10 @@ function LedgerAccountForm({
             />
           </div>
 
-          <FormButtons onCancel={onCancel} isPending={isPending} />
+          <FormButtons onCancel={onCancel} isPending={isPending} submitLabel="Create account" />
         </form>
       </Form>
-    </Card>
+    </CreateFormShell>
   );
 }
 

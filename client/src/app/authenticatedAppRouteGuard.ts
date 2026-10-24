@@ -94,8 +94,14 @@ export function resolveAuthenticatedAppRoute({
     decision = { kind: "redirect", to: "/sp" };
   } else if (isRetailRoute && !isRetailCompany) {
     decision = { kind: "redirect", to: "/tracking" };
-  } else if (isRetailCompany && currentLocation === "/retail/selling") {
-    // Retired workspace: old bookmarks should return to inventory, not expose selling controls.
+  } else if (
+    isRetailCompany &&
+    (currentLocation === "/retail/selling" ||
+      currentLocation === "/retail/quick-add" ||
+      currentLocation === "/retail/stock" ||
+      currentLocation === "/optional-vouchers")
+  ) {
+    // Unused retail workspaces are retired; old bookmarks return to inventory.
     decision = { kind: "redirect", to: "/retail/inventory" };
   } else if (isRetailCompany && (currentLocation === "/" || currentLocation === "/retail/dashboard")) {
     // Retail is still a normal ERP company. Its landing page is the standard ERP dashboard.
@@ -104,9 +110,8 @@ export function resolveAuthenticatedAppRoute({
     isRetailCompany &&
     (currentLocation === "/stock-transfer-order" || currentLocation.startsWith("/stock-transfer-order/"))
   ) {
-    // Retail stock transfers live in the exact-variant stock-operations workflow.
-    // Do not open the legacy manual Transfer Order editor by a direct URL.
-    decision = { kind: "redirect", to: "/retail/stock" };
+    // Stock transfers are accessed through the Retail-visible Vouchers transfer tab.
+    decision = { kind: "redirect", to: "/vouchers?tab=transfer" };
   } else if (isRetailCompany && currentLocation === "/pos") {
     // Retail uses the variant-aware POS rather than the legacy stock-item POS.
     decision = { kind: "redirect", to: "/retail/pos" };

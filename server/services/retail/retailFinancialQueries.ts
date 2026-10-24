@@ -1,6 +1,7 @@
 import { and, asc, eq, isNull } from "drizzle-orm";
 import { bankAccounts, ledgerAccounts, posShifts, retailCashMovements, retailPosPayments } from "@shared/schema";
 import { db, pool } from "../../db";
+import { getRetailAccountingSettings } from "./retailAccountingSettingsService";
 
 /** Read-only Retail payment, shift and reconciliation queries. */
 
@@ -25,6 +26,8 @@ export async function loadRetailSalePayments(companyId: number, saleId: number) 
     reference: row.reference,
     shiftId: row.shiftId,
     relatedPaymentId: row.relatedPaymentId ?? null,
+    ledgerAccountId: row.ledgerAccountId ?? null,
+    bankAccountId: row.bankAccountId ?? null,
   }));
 }
 
@@ -44,6 +47,10 @@ export async function getRetailShiftSummary(companyId: number, shiftId: number) 
     .from(retailCashMovements)
     .where(and(eq(retailCashMovements.companyId, companyId), eq(retailCashMovements.shiftId, shiftId)));
 
+  // A cashier can route a payment to a different Cash ledger; that money must not inflate
+  // the drawer account of this shift during reconciliation.
+  const drawerAccountId = shift.cashAccountId ??
+    (await getRetailAccountingSettings(companyId, shift.locationId)).cashLedgerAccountId;
   const methods: Record<string, number> = {};
   let cashSales = 0;
   let cashRefunds = 0;
@@ -52,7 +59,7 @@ export async function getRetailShiftSummary(companyId: number, shiftId: number) 
     const signed = payment.paymentType === "refund" ? -toNumber(payment.amount) : toNumber(payment.amount);
     methods[payment.method] = (methods[payment.method] ?? 0) + signed;
     if (payment.paymentType === "payment") saleIds.add(payment.saleId);
-    if (payment.method === "cash") {
+    if (payment.method === "cash" && (payment.ledgerAccountId === drawerAccountId || payment.ledgerAccountId == null)) {
       if (payment.paymentType === "refund") cashRefunds += toNumber(payment.amount);
       else cashSales += toNumber(payment.amount);
     }

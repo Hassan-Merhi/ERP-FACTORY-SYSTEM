@@ -1,6 +1,7 @@
 import { punctuationInsensitiveSearch } from "../../lib/searchNormalization";
 import type { Express } from "express";
 import { and, desc, eq, or, sql } from "drizzle-orm";
+import { listRetailPaymentAccounts } from "../../services/retail/retailPaymentAccounts";
 import { z } from "zod";
 import {
   locations,
@@ -69,6 +70,8 @@ const paymentSchema = z.object({
   // Non-cash and customer-credit tenders do not have a cash-tendered amount.
   tenderedAmount: z.coerce.number().finite().positive().nullable().optional(),
   reference: z.string().trim().max(191).optional(),
+  ledgerAccountId: z.number().int().positive().nullable().optional(),
+  bankAccountId: z.number().int().positive().nullable().optional(),
 });
 
 const saleItemSchema = z.object({
@@ -116,7 +119,9 @@ const returnSchema = z.object({
   idempotencyKey: idempotencyKeySchema,
   shiftId: z.coerce.number().int().positive().optional(),
   notes: z.string().trim().max(2000).optional(),
-  refundDestination: z.enum(["original", "customer_credit"]).default("original"),
+  refundDestination: z.enum(["original", "customer_credit", "account"]).default("original"),
+  refundLedgerAccountId: z.number().int().positive().nullable().optional(),
+  refundBankAccountId: z.number().int().positive().nullable().optional(),
   items: z
     .array(
       z.object({
@@ -595,6 +600,16 @@ export function registerRetailPosRoutes(app: Express): void {
     }
   });
 
+  app.get("/api/pos/retail/payment-accounts", requireAuth, async (req, res) => {
+    try {
+      const companyId = await requireRetailCompany(req, res);
+      if (!companyId) return;
+      res.json(await listRetailPaymentAccounts(companyId));
+    } catch (error) {
+      res.status(400).json({ message: getErrorMessage(error) });
+    }
+  });
+
   app.post("/api/pos/retail/sales/:saleId/returns", requireAuth, async (req, res) => {
     try {
       const companyId = await requireRetailCompany(req, res);
@@ -632,6 +647,7 @@ export function registerRetailPosRoutes(app: Express): void {
             refundAmount: returned.refundAmount,
             idempotencyKey: body.idempotencyKey,
             destination: body.refundDestination,
+            refundAccount: { ledgerAccountId: body.refundLedgerAccountId, bankAccountId: body.refundBankAccountId },
             userId,
           });
           const refundVoucherId = await postRetailRefundAccountingTx(tx, {

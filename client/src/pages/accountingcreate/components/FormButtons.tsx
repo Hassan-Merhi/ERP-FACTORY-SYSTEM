@@ -1,19 +1,30 @@
-/**
- * FormButtons — extracted sub-component.
- *
- * Extracted from AccountingCreate.tsx during the Phase 4 god-file split.
- */
-import {Button} from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
+import { Loader2, Plus } from "lucide-react";
 
-export // Reusable Form Buttons Component
-function FormButtons({ onCancel, isPending }: { onCancel: () => void; isPending: boolean }) {
+export function FormButtons({
+  onCancel,
+  isPending,
+  submitLabel = "Create",
+}: {
+  onCancel: () => void;
+  isPending: boolean;
+  submitLabel?: string;
+}) {
   return (
-    <div className="flex flex-wrap gap-2 justify-end border-t pt-4">
-      <Button type="button" variant="outline" onClick={onCancel} disabled={isPending} data-testid="button-cancel">
-        Cancel
+    <div className="flex flex-wrap items-center justify-end gap-3 border-t border-border/70 pt-5">
+      <Button
+        type="button"
+        variant="outline"
+        onClick={onCancel}
+        disabled={isPending}
+        data-testid="button-cancel"
+        className="rounded-lg"
+      >
+        Clear fields
       </Button>
-      <Button type="submit" disabled={isPending} data-testid="button-save">
-        {isPending ? "Saving..." : "Save"}
+      <Button type="submit" disabled={isPending} data-testid="button-save" className="gap-2 rounded-lg px-5">
+        {isPending ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Plus className="h-4 w-4" aria-hidden="true" />}
+        {isPending ? "Creating..." : submitLabel}
       </Button>
     </div>
   );

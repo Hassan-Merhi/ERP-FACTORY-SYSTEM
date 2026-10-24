@@ -1,11 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useLocation, useRoute } from "wouter";
-import { ArrowLeft, Boxes, Camera, ChevronDown, ChevronRight, FolderOpen, MapPin, Pencil, Plus, Printer, Upload } from "lucide-react";
+import { ArrowLeft, Boxes, ChevronDown, ChevronRight, FolderOpen, MapPin, Pencil, Plus, Printer, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useToast } from "@/hooks/use-toast";
@@ -13,9 +12,7 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { ImportDialog } from "./RetailImportDialog";
 import { ProductEditor } from "./RetailProductEditor";
 import { ProductImageGallery } from "./RetailProductImage";
-import { RetailNav } from "./RetailNav";
 import { RetailCatalogList, type RetailCatalogFilters, type RetailVariantAction } from "./RetailCatalogList";
-import { RetailLabelHistory, RetailMovementHistory } from "./RetailMovementHistory";
 import { RetailLabelPrintDialog, type RetailLabelRequestItem } from "./retailLabels";
 import { confirmAction } from "@/components/ConfirmHost";
 import {
@@ -49,7 +46,6 @@ export default function RetailInventory() {
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [labelItems, setLabelItems] = useState<RetailLabelRequestItem[]>([]);
   const [labelOpen, setLabelOpen] = useState(false);
-  const [historyTarget, setHistoryTarget] = useState<{ product: RetailProduct; variant: RetailVariant } | null>(null);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -190,10 +186,6 @@ export default function RetailInventory() {
     if (action === "print") {
       setLabelItems([labelItemFor(product, variant)]);
       setLabelOpen(true);
-    } else if (action === "transfer" || action === "adjust") {
-      navigate(`/retail/stock?variant=${variant.id}&mode=${action}`);
-    } else if (action === "history") {
-      setHistoryTarget({ product, variant });
     } else {
       const active = action === "restore";
       try {
@@ -239,26 +231,6 @@ export default function RetailInventory() {
   const actionDialogs = (
     <>
       <RetailLabelPrintDialog open={labelOpen} onOpenChange={setLabelOpen} items={labelItems} />
-      <Dialog open={Boolean(historyTarget)} onOpenChange={(open) => !open && setHistoryTarget(null)}>
-        <DialogContent className="max-h-[92vh] max-w-4xl overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Movement history</DialogTitle>
-          </DialogHeader>
-          {historyTarget && (
-            <div className="space-y-3">
-              <p className="text-sm" data-no-translate>
-                <strong>
-                  {historyTarget.product.brand.name} · {historyTarget.product.name}
-                </strong>{" "}
-                · {historyTarget.variant.color} / {historyTarget.variant.size} ·{" "}
-                <span className="font-mono">{historyTarget.variant.barcode}</span>
-              </p>
-              <RetailMovementHistory variantId={historyTarget.variant.id} companyKey={companyKey} />
-              <RetailLabelHistory variantId={historyTarget.variant.id} companyKey={companyKey} />
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
     </>
   );
 
@@ -352,7 +324,6 @@ export default function RetailInventory() {
 
   return (
     <div className="mx-auto max-w-[1600px] space-y-5 p-4 pb-24 md:p-6 md:pb-24">
-      <RetailNav />
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <div className="flex items-center gap-2">
@@ -375,9 +346,6 @@ export default function RetailInventory() {
             }}
           >
             <Plus className="mr-2 h-4 w-4" /> Add Product
-          </Button>
-          <Button onClick={() => navigate("/retail/quick-add")}>
-            <Camera className="mr-2 h-4 w-4" /> Quick add
           </Button>
         </div>
       </div>

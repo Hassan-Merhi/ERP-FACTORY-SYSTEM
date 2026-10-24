@@ -5,15 +5,18 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
+import { useCompany } from "@/contexts/CompanyContext";
 import { apiRequest } from "@/lib/queryClient";
 import { fetchRetailCartPreview } from "./retailWave2Api";
 import { RetailItemImage } from "./RetailScanFeedback";
 import { RetailPaymentPanel } from "./RetailPaymentPanel";
+import { paymentFromAccount, type RetailPaymentAccounts } from "./RetailPaymentAccountSelect";
 import {
   lookupRetailBarcode,
   makeKey,
   money,
   outstandingSaleCredit,
+  readJson,
   type RetailPaymentDraft,
   type RetailPosItem,
   type RetailSale,
@@ -51,13 +54,20 @@ export function RetailExchangeDialog({
   onCompleted: (sale: RetailSale) => void | Promise<void>;
 }) {
   const { toast } = useToast();
+  const { selectedCompany } = useCompany();
   const [returnQty, setReturnQty] = useState<Record<number, number>>({});
   const [noRestock, setNoRestock] = useState<Record<number, boolean>>({});
   const [reason, setReason] = useState("");
   const [newItems, setNewItems] = useState<Array<RetailPosItem & { exchangeQuantity: number }>>([]);
   const [scanText, setScanText] = useState("");
+  const [refundAccount, setRefundAccount] = useState("");
   const [busy, setBusy] = useState(false);
-  const [payments, setPayments] = useState<RetailPaymentDraft[]>([{ method: "cash", amount: 0, tenderedAmount: 0 }]);
+  const [payments, setPayments] = useState<RetailPaymentDraft[]>([{ method: "cash", amount: 0, tenderedAmount: null }]);
+  const { data: accounts } = useQuery<RetailPaymentAccounts>({
+    queryKey: ["retail-payment-accounts", selectedCompany?.id],
+    queryFn: () => readJson<RetailPaymentAccounts>("/api/pos/retail/payment-accounts"),
+    enabled: Boolean(sale),
+  });
   const attemptRef = useRef<{ fingerprint: string; key: string } | null>(null);
 
   useEffect(() => {
@@ -66,7 +76,8 @@ export function RetailExchangeDialog({
     setReason("");
     setNewItems([]);
     setScanText("");
-    setPayments([{ method: "cash", amount: 0, tenderedAmount: 0 }]);
+    setRefundAccount("");
+    setPayments([{ method: "cash", amount: 0, tenderedAmount: null }]);
     attemptRef.current = null;
   }, [sale?.id]);
 
@@ -162,6 +173,10 @@ export function RetailExchangeDialog({
       toast({ title: "Replacement price is still loading", variant: "destructive" });
       return;
     }
+    if (!accounts || payments.some((payment) => payment.method !== "credit" && !payment.ledgerAccountId && !payment.bankAccountId)) {
+      toast({ title: "Select an account for each replacement payment", variant: "destructive" });
+      return;
+    }
     if (Math.abs(payments.reduce((sum, payment) => sum + Number(payment.amount || 0), 0) - newTotal) > 0.005) {
       toast({ title: "Replacement payments must equal the server-priced replacement total", variant: "destructive" });
       return;
@@ -170,12 +185,17 @@ export function RetailExchangeDialog({
       toast({ title: "Explain why a returned exchange item is not restocked", variant: "destructive" });
       return;
     }
-    const fingerprint = JSON.stringify({ sale: sale.id, shiftId, returnItems, items, payments, reason });
+    if (refundAccount && (!canOverride || !accounts)) {
+      toast({ title: "A manager must select a valid refund account", variant: "destructive" });
+      return;
+    }
+    const fingerprint = JSON.stringify({ sale: sale.id, shiftId, returnItems, items, payments, refundAccount, reason });
     if (!attemptRef.current || attemptRef.current.fingerprint !== fingerprint) {
       attemptRef.current = { fingerprint, key: makeKey("retail-exchange") };
     }
     setBusy(true);
     try {
+      const chosenRefundAccount = refundAccount && accounts ? paymentFromAccount(refundAccount, 1, accounts) : null;
       const response = await apiRequest("POST", "/api/pos/retail/exchanges", {
         idempotencyKey: attemptRef.current.key,
         saleId: sale.id,
@@ -184,6 +204,9 @@ export function RetailExchangeDialog({
         returnItems,
         newItems: items,
         payments,
+        refundDestination: refundAccount ? "account" : "original",
+        refundLedgerAccountId: chosenRefundAccount?.ledgerAccountId,
+        refundBankAccountId: chosenRefundAccount?.bankAccountId,
         notes: reason.trim() || undefined,
       });
       const result = (await response.json()) as ExchangeResult;
@@ -320,9 +343,34 @@ export function RetailExchangeDialog({
               value={payments}
               onChange={setPayments}
               canUseCredit={Boolean(sale.customerId)}
+              accounts={accounts}
+              customerName={sale.customerName}
             />
           ) : null}
 
+          {canOverride && tenderRefund > 0.005 && (
+            <label className="block space-y-1 text-sm">
+              <span>Refund from account</span>
+              <select
+                className="h-9 w-full rounded-md border bg-background px-2"
+                value={refundAccount}
+                onChange={(event) => setRefundAccount(event.target.value)}
+                aria-label="Exchange refund account"
+              >
+                <option value="">Original payment accounts</option>
+                {accounts?.ledgers.map((entry) => (
+                  <option key={`ledger:${entry.id}`} value={`ledger:${entry.id}`}>
+                    {entry.code} · {entry.name}
+                  </option>
+                ))}
+                {accounts?.banks.map((entry) => (
+                  <option key={`bank:${entry.id}`} value={`bank:${entry.id}`}>
+                    {entry.code} · {entry.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
           <Input
             placeholder="Exchange / damaged item reason (optional except for no-restock)"
             value={reason}

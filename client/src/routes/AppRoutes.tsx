@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { useLocation } from "wouter";
+import { Redirect, useLocation } from "wouter";
 import { lazyRetry as lazy } from "@/lib/lazyRetry";
 import { PosRoutes } from "./PosRoutes";
 import { ErpRoutes } from "./ErpRoutes";
@@ -9,8 +9,6 @@ const SpGoldenCoast = lazy(() => import("@/pages/sp/SpGoldenCoast"));
 const RetailDashboard = lazy(() => import("@/pages/retail/RetailDashboard"));
 const RetailInventory = lazy(() => import("@/pages/retail/RetailInventory"));
 const RetailPOS = lazy(() => import("@/pages/pos/RetailPOS"));
-const RetailQuickAdd = lazy(() => import("@/pages/retail/RetailQuickAdd"));
-const RetailStockOperations = lazy(() => import("@/pages/retail/RetailStockOperations"));
 const RetailStockCount = lazy(() => import("@/pages/retail/RetailStockCount"));
 const RetailSalesHistory = lazy(() => import("@/pages/retail/RetailSalesHistory"));
 
@@ -49,12 +47,9 @@ export function Router({ user, posImportEnabled }: RouterProps) {
     return <RetailPOS />;
   }
 
-  if (location === "/retail/quick-add") {
-    return <RetailQuickAdd />;
-  }
-
-  if (location === "/retail/stock") {
-    return <RetailStockOperations />;
+  // Retired intake/stock-operations bookmarks cannot open manual stock writes.
+  if (location === "/retail/quick-add" || location === "/retail/stock") {
+    return <Redirect replace to="/retail/inventory" />;
   }
 
   if (location === "/retail/stock-count") {

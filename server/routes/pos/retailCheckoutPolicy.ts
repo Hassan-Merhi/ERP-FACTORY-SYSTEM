@@ -52,16 +52,16 @@ export async function retailReturnRefusal(input: {
   companyId: number;
   saleId: number;
   role: string | null | undefined;
-  refundDestination: "original" | "customer_credit";
+  refundDestination: "original" | "customer_credit" | "account";
   items: Array<{ restock: boolean }>;
 }): Promise<RetailReturnRefusal | null> {
   const accountCredit = input.refundDestination === "customer_credit";
-  if (!isRetailManagerRole(input.role) && (accountCredit || input.items.some((item) => !item.restock))) {
+  if (!isRetailManagerRole(input.role) && (accountCredit || input.refundDestination === "account" || input.items.some((item) => !item.restock))) {
     return {
       status: 403,
       body: {
         code: "RETAIL_RETURN_MANAGER_REQUIRED",
-        message: "Manager access is required for account credits and damaged/non-restock returns",
+        message: "Manager access is required for refund-account overrides, customer credits and damaged/non-restock returns",
       },
     };
   }
