@@ -2,6 +2,7 @@ import { eq, and, asc, sql, ne } from "drizzle-orm";
 import { db } from "../../db";
 import * as schema from "@shared/schema";
 import type { Container, InsertContainer, PurchaseOrder } from "@shared/schema";
+import { enrichContainerListOffloadingCost } from "../../services/containers/enrichContainerListOffloadingCost";
 
 // ---------------------------------------------------------------------------
 // Containers
@@ -15,12 +16,13 @@ export async function getAllContainers(companyId: number): Promise<Container[]> 
     .orderBy(asc(schema.containers.containerNumber));
 }
 
-export async function getActiveContainers(companyId: number): Promise<Container[]> {
-  return await db
+export async function getActiveContainers(companyId: number): Promise<Array<Container & { offloadingCost: string }>> {
+  const rows = await db
     .select()
     .from(schema.containers)
     .where(and(eq(schema.containers.companyId, companyId), ne(schema.containers.status, "SOLD")))
     .orderBy(asc(schema.containers.containerNumber));
+  return enrichContainerListOffloadingCost(rows, companyId);
 }
 
 export async function getSoldContainers(companyId: number) {

@@ -17,6 +17,7 @@ import { ContainerToolbar } from "./containers/ContainerToolbar";
 import { ContainerLoadingState } from "./containers/ContainerLoadingState";
 import { ContainerSpView } from "./containers/ContainerSpView";
 import { ContainerConfirmDialogs } from "./containers/ContainerConfirmDialogs";
+import { getContainerTotalCost } from "./containers/containerTotalCost";
 
 export default function Containers() {
   const { formatDisplayDate } = useDateFormat();
@@ -137,14 +138,9 @@ export default function Containers() {
           {!hideContainerCosts && (
             <div className="flex items-center gap-2 bg-primary/10 rounded-lg px-3 py-2">
               <span className="text-sm font-semibold font-mono text-primary" data-testid="text-total-amount">
-                {formatAmount(
-                  containers.reduce((sum, c) => {
-                    const gTotal = parseFloat(c.grandTotal ?? "0");
-                    return sum + (gTotal || parseFloat(c.itemsTotal ?? "0") || 0);
-                  }, 0)
-                )}
+                {formatAmount(containers.reduce((sum, c) => sum + getContainerTotalCost(c), 0))}
               </span>
-              <span className="text-xs text-muted-foreground">total value</span>
+              <span className="text-xs text-muted-foreground">total container cost (incl. offloading)</span>
             </div>
           )}
         </div>
