@@ -28,6 +28,7 @@ export const factoryRowHistory = pgTable(
   },
   (t) => ({
     recordIdx: index("factory_row_history_record_idx").on(t.tableName, t.recordId, t.id),
+    companyRecordIdx: index("factory_row_history_company_record_idx").on(t.companyId, t.tableName, t.recordId, t.id),
     recordedIdx: index("factory_row_history_recorded_idx").on(t.tableName, t.recordedAt),
   })
 );
