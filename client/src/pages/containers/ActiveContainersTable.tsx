@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { Container } from "@shared/schema";
+import { getContainerOffloadingCost, getContainerTotalCost } from "./containerTotalCost";
 
 interface ActiveContainersTableProps {
   containers: Container[];
@@ -171,10 +172,15 @@ export function ActiveContainersTable({
               </div>
               {!hideContainerCosts && (
                 <div className="text-right">
-                  <p className="text-xs text-muted-foreground">Total</p>
-                  <p className="text-sm font-mono font-semibold">
-                    {formatAmount(parseFloat(container.grandTotal || "0"))}
+                  <p className="text-xs text-muted-foreground">Total cost</p>
+                  <p className="text-sm font-mono font-semibold" data-testid={`text-container-cost-${container.id}`}>
+                    {formatAmount(getContainerTotalCost(container))}
                   </p>
+                  {getContainerOffloadingCost(container) !== 0 && (
+                    <p className="text-xs text-muted-foreground">
+                      Incl. offloading: {formatAmount(getContainerOffloadingCost(container))}
+                    </p>
+                  )}
                 </div>
               )}
               <Link href={`/containers/${container.id}`} className="w-full sm:w-auto">
