@@ -5,7 +5,7 @@ Branch: `feature/permissions-control-center`
 ## Goal
 An in-app, company-scoped control center in Settings > Users & Permissions to manage **role templates** and **per-user exceptions**, with a single explicit matrix for **View / Create / Edit / Delete / Approve-Finalize / Reverse-Void / Import / Export / Manage Settings** across ERP, Factory, Retail/POS, Rentals/Properties and Supplier Partner where applicable.
 
-The requested new **Create Only** role can read operational data and add permitted **new** records but cannot alter, delete, void, reverse or approve/finalize previously existing records (including its own). **Create** means strictly creating a new entity. It does not imply permission to modify the state of an existing object or to execute a correction.
+The requested new **Create Only** role can read operational data and add permitted **new** records but cannot alter, delete, void, reverse or approve/finalize previously existing records (including its own). **Create** means strictly creating a new entity. It permits the automatic, auditable ledger and stock postings intrinsic to a NEW sale, voucher or production batch; it does not permit the user to edit an existing business document, modify the state of an existing workflow, or execute a correction.
 
 ### Current state confirmed from main
 - Roles use company-scoped `user_company_roles` with Developer, Admin, Owner, Manager, POS, Normal User, View Only and ERP Tester.
@@ -40,7 +40,7 @@ Table is the *Create Only* default proposal. Posting a newly created voucher is 
 - Evaluate **authenticated user + active company + company type + location scope + feature + action + resource state** on the server; never trust a supplied role/company/permission in the browser.
 - **Hard denials** (tenant isolation, privileged maintenance, protected accounting, closed periods, maker-checker constraints, and any existing restrictive special rules) win over role grants and individual exceptions.
 - Effective decision: hard guard => deny; otherwise explicit user override when permitted; otherwise role-company grant; otherwise secure default. Lack of a classified sensitive mutation must **fail closed for new policy**, not become unrestricted.
-- An HTTP **POST is not necessarily Create**. PATCH/PUT/DELETE are not the only forms of mutation. Operations that finalize, cancel, reverse, adjust balances, return stock, offload, change allocations, or approve must use their *business action*, regardless of HTTP verb.
+- An HTTP **POST is not necessarily Create**. PATCH/PUT/DELETE are not the only forms of mutation. Operations that finalize, cancel, reverse, adjust an existing ledger, return stock, offload an existing container, change allocations, or approve must use their *business action*, regardless of HTTP verb. A NEW POS sale, voucher or production batch can legitimately update stock and ledgers as automatic consequences of creation; those automatic postings are permitted when the user is allowed to create the originating transaction.
 - Distinguish safe operational state changes on a new draft from editing an existing approved record; use resource lifecycle/status checks where required.
 - All access is per assigned company, no cross-company widening. Preserve POS assigned location/cash restrictions and ERP Tester no-Settings rule.
 - Never allow users to give themselves permission grants, escalate to Admin/Developer, modify protected approval controls, or revoke the last company access administrator.
