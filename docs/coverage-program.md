@@ -54,6 +54,13 @@ Frontend, full suite on the merged branch: 37.57% lines, 35.75% statements,
 about 37,800. Phase 1 therefore improves specific modules far more than the
 global figure; the global figure moves with Phases 2–4.
 
+## Backend gaps
+
+`config/backend-coverage-gap-baseline.json` ranks the 30 files with the most
+uncovered lines. The top four are the historical sales-cost repair modules in
+`server/services/inventory/historicalSalesCostRepair*.ts` (about 1,000 lines at
+0%), which makes them the first Phase 2 target.
+
 ## Removal candidates
 
 Code that production never runs but that still counts against coverage. Each
@@ -70,6 +77,10 @@ needs an owner decision; none is removed by the coverage program itself.
   Not a mechanical delete: `lib/offlineQueue.ts` is also used by the Factory
   loading-scan purge, `useConnectivity()` has 9 consumers reading the stub
   values, and `syncEngine.ts` carries a per-file coverage floor.
+- **Unimported fetch interceptors.** `client/src/lib/accountStatementPaginationClient.ts`,
+  `erpDaybookPaginationClient.ts` and `accountStatementContinuousClient.ts`
+  patch `window.fetch` when imported, and nothing imports them, so they never
+  install. Not tested for that reason.
 - **Backend modules reachable only from tests** (from `npm run report:dead-code`),
   for example `server/services/accounting/financialCloseService.ts` (which has
   a 99% per-file floor), `server/lib/trackTraceScraper.ts`,
