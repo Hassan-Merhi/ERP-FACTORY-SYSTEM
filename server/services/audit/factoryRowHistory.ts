@@ -77,6 +77,7 @@ export const FACTORY_ROW_HISTORY_DDL: readonly string[] = [
   // Stamped when the change is written, not when its transaction began (now()).
   `ALTER TABLE factory_row_history ALTER COLUMN recorded_at SET DEFAULT (clock_timestamp() AT TIME ZONE 'UTC')`,
   `CREATE INDEX IF NOT EXISTS factory_row_history_record_idx ON factory_row_history (table_name, record_id, id)`,
+  `CREATE INDEX IF NOT EXISTS factory_row_history_company_record_idx ON factory_row_history (company_id, table_name, record_id, id)`,
   `CREATE INDEX IF NOT EXISTS factory_row_history_recorded_idx ON factory_row_history (table_name, recorded_at)`,
   `CREATE TABLE IF NOT EXISTS factory_row_history_baselines (
      table_name text PRIMARY KEY,
