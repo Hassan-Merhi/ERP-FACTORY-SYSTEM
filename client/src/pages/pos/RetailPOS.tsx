@@ -13,7 +13,7 @@ import { RetailErpPosSaleGrid, RetailErpPosItemPicker } from "./RetailErpPosWork
 import { RetailExchangeDialog } from "./RetailExchangeDialog";
 import { RetailReturnDialog } from "./RetailReturnDialog";
 import { RetailPaymentPanel } from "./RetailPaymentPanel";
-import { RetailLastSaleSummary, RetailVariantTransferCard } from "./RetailPOSPanels";
+import { RetailLastSaleSummary } from "./RetailPOSPanels";
 import { RetailShiftPanel, type RetailShift } from "./RetailShiftPanel";
 import { useRetailReceiptPrinter } from "./retailReceipt";
 import { RetailApprovalDialog } from "./RetailApprovalDialog";
@@ -49,9 +49,6 @@ export default function RetailPOS() {
   const [lastSale, setLastSale] = useState<RetailSale | null>(null);
   const [exchangeSale, setExchangeSale] = useState<RetailSale | null>(null);
   const [returnDialogOpen, setReturnDialogOpen] = useState(false);
-  const [transferVariantId, setTransferVariantId] = useState<number | "">("");
-  const [transferToLocationId, setTransferToLocationId] = useState<number | "">("");
-  const [transferQuantity, setTransferQuantity] = useState(1);
   const [currentShift, setCurrentShift] = useState<RetailShift | null>(null);
   const [payments, setPayments] = useState<RetailPaymentDraft[]>([{ method: "cash", amount: 0, tenderedAmount: 0 }]);
   const [customer, setCustomer] = useState<RetailCustomerSummary | null>(null);
@@ -71,7 +68,6 @@ export default function RetailPOS() {
   }>({ open: false, reasons: [], pending: false, error: null });
   const scanInputRef = useRef<HTMLInputElement | null>(null);
   const saleAttemptRef = useRef<{ fingerprint: string; key: string } | null>(null);
-  const transferAttemptRef = useRef<{ fingerprint: string; key: string } | null>(null);
   const allowNegative = canSellIntoNegative(selectedCompany);
 
   const locationsQuery = useQuery({
@@ -111,8 +107,6 @@ export default function RetailPOS() {
     setLastScan(null);
     setLastSale(null);
     setReturnDialogOpen(false);
-    setTransferVariantId("");
-    setTransferToLocationId("");
     setCustomer(null);
     setOrderDiscount({ type: "none", value: 0, reason: "" });
     setOrderDiscountOpen(false);
@@ -359,35 +353,6 @@ export default function RetailPOS() {
       saleMutation.mutate({ approvalToken: data.approvalToken });
     },
     onError: (error) => setApprovalRequest((current) => ({ ...current, pending: false, error: error.message })),
-  });
-
-  const transferMutation = useMutation({
-    mutationFn: async () => {
-      if (!selectedLocation?.id || !transferVariantId || !transferToLocationId || transferQuantity <= 0) {
-        throw new Error("Choose an item, destination and quantity");
-      }
-      const fingerprint = `${selectedLocation.id}|${transferToLocationId}|${transferVariantId}|${transferQuantity}`;
-      if (!transferAttemptRef.current || transferAttemptRef.current.fingerprint !== fingerprint) {
-        transferAttemptRef.current = { fingerprint, key: makeKey("retail-transfer") };
-      }
-      const response = await apiRequest("POST", "/api/pos/retail/transfers", {
-        idempotencyKey: transferAttemptRef.current.key,
-        variantId: Number(transferVariantId),
-        fromLocationId: selectedLocation.id,
-        toLocationId: Number(transferToLocationId),
-        quantity: Number(transferQuantity),
-      });
-      return response.json();
-    },
-    onSuccess: async () => {
-      transferAttemptRef.current = null;
-      setTransferVariantId("");
-      setTransferToLocationId("");
-      setTransferQuantity(1);
-      await refreshRetailPos();
-      toast({ title: "Transfer completed", description: "The exact variant moved between locations." });
-    },
-    onError: (error) => toast({ title: "Transfer failed", description: error.message, variant: "destructive" }),
   });
 
   const total = preview?.pricing.totalAmount ?? cart.reduce((sum, line) => sum + line.price * line.cartQuantity, 0);
@@ -770,21 +735,6 @@ export default function RetailPOS() {
           }}
         />
       </PosWorkspaceColumns>
-
-      {!isPosRole && (
-        <RetailVariantTransferCard
-          items={itemsQuery.data ?? []}
-          destinations={locations.filter((location) => location.id !== selectedLocation?.id)}
-          variantId={transferVariantId}
-          toLocationId={transferToLocationId}
-          quantity={transferQuantity}
-          pending={transferMutation.isPending}
-          onVariantChange={setTransferVariantId}
-          onDestinationChange={setTransferToLocationId}
-          onQuantityChange={setTransferQuantity}
-          onSubmit={() => transferMutation.mutate()}
-        />
-      )}
 
       {cart.length > 0 && (
         <div className="fixed inset-x-0 bottom-0 z-30 border-t bg-background/95 p-3 backdrop-blur-sm xl:hidden">
