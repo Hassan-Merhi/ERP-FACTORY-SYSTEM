@@ -8,6 +8,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { pool } from "../server/db";
+import { runWithDatabaseMaintenanceScope } from "../server/services/security/databaseScopeRuntimeContext";
 import {
   ensureFactoryRowHistory,
   FACTORY_ROW_HISTORY_TABLES,
@@ -25,11 +26,11 @@ type HistoryRow = {
 };
 
 async function history(table: string, recordId: number): Promise<HistoryRow[]> {
-  const result = await pool.query<HistoryRow>(
+  const result = await runWithDatabaseMaintenanceScope("row-history-test-read", () => pool.query<HistoryRow>(
     `SELECT op, company_id, old_values, new_values FROM factory_row_history
       WHERE table_name = $1 AND record_id = $2 ORDER BY id`,
     [table, recordId]
-  );
+  ));
   return result.rows;
 }
 
@@ -77,11 +78,11 @@ databaseDescribe("factory row history", () => {
     );
     expect(new Set(baselines.rows.map((row) => row.version))).toEqual(new Set([FACTORY_ROW_HISTORY_VERSION]));
 
-    const before = await pool.query<{ n: string }>(`SELECT count(*) AS n FROM factory_row_history WHERE op = 'S'`);
+    const before = await runWithDatabaseMaintenanceScope("row-history-test-count", () => pool.query<{ n: string }>(`SELECT count(*) AS n FROM factory_row_history WHERE op = 'S'`));
     const second = await ensureFactoryRowHistory(pool);
     expect(second.installed).toEqual([]);
     expect(second.failed).toEqual([]);
-    const after = await pool.query<{ n: string }>(`SELECT count(*) AS n FROM factory_row_history WHERE op = 'S'`);
+    const after = await runWithDatabaseMaintenanceScope("row-history-test-count", () => pool.query<{ n: string }>(`SELECT count(*) AS n FROM factory_row_history WHERE op = 'S'`));
     expect(after.rows[0].n).toBe(before.rows[0].n);
 
     // In the baseline when this run took it; an insert when an earlier install already recorded it.
@@ -149,19 +150,47 @@ databaseDescribe("factory row history", () => {
         client.release();
       }
     })();
-    const stamped = await pool.query<{ late: boolean }>(
+    const stamped = await runWithDatabaseMaintenanceScope("row-history-test-stamp", () => pool.query<{ late: boolean }>(
       `SELECT recorded_at >= $1::timestamp + interval '250 milliseconds' AS late
          FROM factory_row_history WHERE table_name = 'factory_suppliers' AND record_id = $2 AND op = 'I'`,
       [began, id]
-    );
+    ));
     expect(stamped.rows).toEqual([{ late: true }]);
 
-    const baseline = await pool.query<{ aligned: boolean }>(
+    const baseline = await runWithDatabaseMaintenanceScope("row-history-test-baseline", () => pool.query<{ aligned: boolean }>(
       `SELECT bool_and(h.recorded_at = b.baseline_at) AS aligned
          FROM factory_row_history h JOIN factory_row_history_baselines b ON b.table_name = h.table_name
         WHERE h.op = 'S'`
-    );
+    ));
     expect(baseline.rows[0].aligned).not.toBe(false);
+  });
+
+
+  it("forces tenant scope on saved row images, even for the table owner", async () => {
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+      await client.query("SELECT set_config('app.company_scope_maintenance', 'off', true)");
+      await client.query("SELECT set_config('app.current_company_id', $1, true)", [String(companyId)]);
+      const own = await client.query<{ n: string }>(
+        "SELECT COUNT(*)::text AS n FROM factory_row_history WHERE table_name = 'factory_suppliers' AND record_id = $1",
+        [preexistingSupplier]
+      );
+      expect(Number(own.rows[0].n)).toBeGreaterThan(0);
+      await client.query("SELECT set_config('app.current_company_id', $1, true)", [String(companyId + 100000)]);
+      const other = await client.query<{ n: string }>(
+        "SELECT COUNT(*)::text AS n FROM factory_row_history WHERE table_name = 'factory_suppliers' AND record_id = $1",
+        [preexistingSupplier]
+      );
+      expect(other.rows[0].n).toBe("0");
+      const security = await client.query<{ relrowsecurity: boolean; relforcerowsecurity: boolean }>(
+        "SELECT relrowsecurity, relforcerowsecurity FROM pg_class WHERE oid = 'factory_row_history'::regclass"
+      );
+      expect(security.rows[0]).toMatchObject({ relrowsecurity: true, relforcerowsecurity: true });
+      await client.query("ROLLBACK");
+    } finally {
+      client.release();
+    }
   });
 
   it("refuses to change, delete or truncate recorded history", async () => {
@@ -170,7 +199,8 @@ databaseDescribe("factory row history", () => {
       `DELETE FROM factory_row_history WHERE id = (SELECT max(id) FROM factory_row_history)`,
       `TRUNCATE factory_row_history`,
     ]) {
-      await expect(pool.query(statement)).rejects.toMatchObject({ code: "42501" });
+      await expect(runWithDatabaseMaintenanceScope("row-history-test-append-only", () => pool.query(statement)))
+        .rejects.toMatchObject({ code: "42501" });
     }
   });
 });
