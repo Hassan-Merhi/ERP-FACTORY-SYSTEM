@@ -6,6 +6,8 @@
  * fiscalTransferRoutes.ts as a sub-registrar; behaviour is unchanged.
  */
 import type { Express } from "express";
+import { getErrorDetails } from "@shared/errorUtils";
+import { logger } from "../lib/logger";
 import { getErrorMessage, errorStatus } from "../lib/httpHandlers";
 import { eq, and, inArray, isNull, sql } from "drizzle-orm";
 import { db } from "../db";
@@ -155,7 +157,26 @@ export function registerFinancialSalesRoutes(app: Express) {
       const closures = await storage.getFiscalPeriodClosures(req.session.currentCompanyId);
       res.json(closures);
     } catch (error: unknown) {
-      res.status(500).json({ message: getErrorMessage(error) });
+      const details = getErrorDetails(error);
+      const cause = typeof error === "object" && error !== null && "cause" in error
+        ? getErrorDetails(error.cause)
+        : undefined;
+      const pgCode = cause?.code ?? details.code;
+      logger.error("[GET /api/fiscal-period/closures] Failed to load closures", {
+        error,
+        companyId: req.session.currentCompanyId,
+        pgCode,
+      });
+      if (pgCode === "42703" || pgCode === "42P01") {
+        return res.status(503).json({
+          message: "The fiscal-period database schema needs an administrator update.",
+          code: "FISCAL_PERIOD_SCHEMA_OUTDATED",
+        });
+      }
+      return res.status(500).json({
+        message: "Fiscal-period closures could not be loaded. Please contact an administrator.",
+        code: "FISCAL_PERIOD_READ_FAILED",
+      });
     }
   });
 
