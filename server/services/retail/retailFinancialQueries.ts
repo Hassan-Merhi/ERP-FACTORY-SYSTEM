@@ -59,7 +59,7 @@ export async function getRetailShiftSummary(companyId: number, shiftId: number) 
     const signed = payment.paymentType === "refund" ? -toNumber(payment.amount) : toNumber(payment.amount);
     methods[payment.method] = (methods[payment.method] ?? 0) + signed;
     if (payment.paymentType === "payment") saleIds.add(payment.saleId);
-    if (payment.method === "cash" && payment.ledgerAccountId === drawerAccountId) {
+    if (payment.method === "cash" && (payment.ledgerAccountId === drawerAccountId || payment.ledgerAccountId == null)) {
       if (payment.paymentType === "refund") cashRefunds += toNumber(payment.amount);
       else cashSales += toNumber(payment.amount);
     }
