@@ -1,6 +1,6 @@
 /**
  * Retail navigation (Phase 1/6): the Retail workspace shows only Inventory,
- * Quick add, Stock operations and Selling settings. The Retail POS stays
+ * Quick add and Stock operations. The Retail POS stays
  * reachable through the standard /pos entry, and the legacy Transfer Order
  * editor redirects to the exact-variant stock operations for Retail only.
  */
@@ -18,13 +18,16 @@ const route = (currentLocation: string, companyType: string) =>
   }).decision;
 
 describe("Retail navigation", () => {
-  it("lists only the four Retail workspace pills", () => {
+  it("lists only the three Retail workspace pills", () => {
     expect(RETAIL_NAV_LINKS.map((link) => link.href)).toEqual([
       "/retail/inventory",
       "/retail/quick-add",
       "/retail/stock",
-      "/retail/selling",
     ]);
+  });
+
+  it("redirects old Selling settings bookmarks to Retail Inventory", () => {
+    expect(route("/retail/selling", "retail")).toEqual({ kind: "redirect", to: "/retail/inventory" });
   });
 
   it("sends the standard POS entry to the variant-aware Retail POS", () => {
