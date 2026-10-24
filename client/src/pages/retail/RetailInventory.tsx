@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { ImportDialog } from "./RetailImportDialog";
+import { RetailSupplierImportDialog } from "./RetailSupplierImportDialog";
 import { ProductEditor } from "./RetailProductEditor";
 import { ProductImageGallery } from "./RetailProductImage";
 import { RetailCatalogList, type RetailCatalogFilters, type RetailVariantAction } from "./RetailCatalogList";
@@ -31,7 +31,7 @@ export default function RetailInventory() {
   const [, navigate] = useLocation();
   const [detailMatch, detailParams] = useRoute("/retail/products/:id");
   const [editorOpen, setEditorOpen] = useState(false);
-  const [importOpen, setImportOpen] = useState(false);
+  const [supplierImportOpen, setSupplierImportOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<RetailProduct | null>(null);
   const [search, setSearch] = useState("");
   const [color, setColor] = useState("");
@@ -335,8 +335,8 @@ export default function RetailInventory() {
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button variant="outline" onClick={() => setImportOpen(true)}>
-            <Upload className="mr-2 h-4 w-4" /> Import
+          <Button onClick={() => setSupplierImportOpen(true)}>
+            <Upload className="mr-2 h-4 w-4" /> Supplier Stock Import
           </Button>
           <Button
             variant="outline"
@@ -615,7 +615,7 @@ export default function RetailInventory() {
         brands={brands}
         locations={locations}
       />
-      <ImportDialog open={importOpen} onOpenChange={setImportOpen} />
+      <RetailSupplierImportDialog open={supplierImportOpen} onOpenChange={setSupplierImportOpen} />
       {bulkBar}
       {actionDialogs}
     </div>

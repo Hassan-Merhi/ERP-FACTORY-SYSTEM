@@ -156,7 +156,25 @@ export async function getGlobalDaybookFeed(input: JournalInput) {
   const pageValues = [...values, limit, (page - 1) * limit];
   const pageSql = `${cte}
     SELECT * FROM combined
-    ORDER BY "companyName" ASC, "voucherDate" DESC, id DESC
+    -- Group globally before LIMIT/OFFSET, so a voucher type is not intermixed
+    -- with other types from the same company across consecutive pages.
+    ORDER BY LOWER("companyName") ASC, "companyId" ASC,
+      CASE
+        WHEN LOWER(TRIM("voucherType")) = 'payment' THEN 0
+        WHEN LOWER(TRIM("voucherType")) = 'receipt' THEN 1
+        WHEN LOWER(TRIM("voucherType")) = 'journal' THEN 2
+        WHEN LOWER(TRIM("voucherType")) IN ('sale', 'sales') THEN 3
+        WHEN LOWER(TRIM("voucherType")) = 'purchase' THEN 4
+        WHEN LOWER(REPLACE(TRIM("voucherType"), ' ', '')) = 'stocktransfer' THEN 5
+        WHEN LOWER(TRIM("voucherType")) = 'offload' THEN 6
+        ELSE 7
+      END ASC,
+      CASE
+        WHEN LOWER(TRIM("voucherType")) IN ('sale', 'sales') THEN 'sales'
+        WHEN LOWER(REPLACE(TRIM("voucherType"), ' ', '')) = 'stocktransfer' THEN 'stock transfer'
+        ELSE LOWER(TRIM("voucherType"))
+      END ASC,
+      "voucherDate" DESC, id DESC
     LIMIT $${values.length + 1} OFFSET $${values.length + 2}`;
   const [pageResult, countResult, summaryResult] = await Promise.all([
     pool.query(pageSql, pageValues),

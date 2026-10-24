@@ -232,7 +232,6 @@ export function useErpVisibleSections(user?: SidebarUser): {
     if (item.url === "/live-sheets") return isDeveloper;
     if (item.url === "/chat") return isDeveloper;
     if (item.url === "/item-market-analysis" && selectedCompany?.companyType !== "erp") return false;
-    if (item.url === "/analytics" && isOwner) return false;
     if (
       (item.url === "/accounting/open-items" ||
         item.url === "/accounting/cash-bank" ||

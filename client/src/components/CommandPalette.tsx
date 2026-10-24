@@ -464,7 +464,6 @@ export function CommandPalette({
   const appMode = useAppMode();
   const [, setLocation] = useLocation();
   const effectiveRole = user?.currentRole ?? user?.role ?? "";
-  const isOwner = effectiveRole === "Owner";
   const canSeeAdminCommands = effectiveRole === "Admin" || effectiveRole === "Developer";
 
   const isControlled = externalOpen !== undefined;
@@ -531,8 +530,8 @@ export function CommandPalette({
       buildEntries(PROPERTIES_NAV_SECTIONS, [
         ...PROPERTIES_EXTRAS.filter((entry) => user?.role !== "ERP Tester" || entry.path !== "/my-settings"),
         ...(canSeeAdminCommands ? PROPERTIES_ADMIN_EXTRAS : []),
-      ]).filter((page) => !isOwner || page.path !== "/properties/analytics"),
-    [canSeeAdminCommands, isOwner, user?.role]
+      ]),
+    [canSeeAdminCommands, user?.role]
   );
 
   const showErp = !isPOS && hasErpAccess;

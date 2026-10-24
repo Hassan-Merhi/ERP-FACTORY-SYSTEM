@@ -3,6 +3,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const harness = vi.hoisted(() => ({
+  currentRole: "Admin",
   apiRequest: vi.fn(),
   toast: vi.fn(),
   invalidateQueries: vi.fn(),
@@ -56,7 +57,7 @@ const products = [
 vi.mock("@tanstack/react-query", () => ({
   useQuery: ({ queryKey }: any) => {
     const root = queryKey?.[0];
-    if (root === "/api/auth/me") return { data: { id: "admin-1", role: "Admin" } };
+    if (root === "/api/auth/me") return { data: { id: "user-1", role: harness.currentRole, currentRole: harness.currentRole } };
     if (root === "/api/factory/my-access") return { data: { hiddenCostFields: [] } };
     if (root === "/api/factory/settings") return { data: { hideAvgCost: false, hideSellingPrice: false } };
     if (root === "/api/factory/bale-products") return { data: products, isLoading: false };
@@ -157,6 +158,7 @@ import BaleProducts from "@/pages/BaleProducts";
 describe("bale products page behavior", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    harness.currentRole = "Admin";
     harness.apiRequest.mockImplementation(async (method: string, path: string, body?: unknown) => ({
       ok: true,
       json: async () => {
@@ -167,6 +169,27 @@ describe("bale products page behavior", () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async () => ({ ok: true, json: async () => ({}) }))
+    );
+  });
+
+  it("allows Owners to hide and restore items in Product List", async () => {
+    harness.currentRole = "Owner";
+    render(<BaleProducts />);
+    fireEvent.click(screen.getByTestId("checkbox-product-1"));
+    fireEvent.click(screen.getByTestId("button-bulk-hide"));
+    await waitFor(() =>
+      expect(harness.apiRequest).toHaveBeenCalledWith("POST", "/api/factory/bale-products/bulk-toggle-active", {
+        ids: [1],
+        active: false,
+      })
+    );
+    fireEvent.click(screen.getByTestId("menu-filter-hidden"));
+    fireEvent.click(screen.getByTestId("button-unhide-product-3"));
+    await waitFor(() =>
+      expect(harness.apiRequest).toHaveBeenCalledWith("POST", "/api/factory/bale-products/bulk-toggle-active", {
+        ids: [3],
+        active: true,
+      })
     );
   });
 

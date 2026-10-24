@@ -41,7 +41,9 @@ export function registerFactoryProductBulkRoutes(app: Express) {
 
   app.post("/api/factory/bale-products/bulk-toggle-active", requireAuth, async (req: Request, res: Response) => {
     try {
-      if (!checkFactoryAdmin(req, res)) return;
+      // Owners may hide/restore catalogue products without an admin override.
+      // Other bulk product mutations remain admin-only.
+      if (req.session.currentRole !== "Owner" && !checkFactoryAdmin(req, res)) return;
       const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });
 

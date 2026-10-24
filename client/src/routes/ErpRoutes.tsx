@@ -126,7 +126,6 @@ export function ErpRoutes({ user }: ErpRoutesProps) {
 
   const effectiveRole = user?.currentRole ?? user?.role ?? "";
   const isDeveloper = effectiveRole === "Developer";
-  const isOwner = effectiveRole === "Owner";
   const isAdminOrDev = effectiveRole === "Admin" || isDeveloper;
   const isAdminOwnerOrDev = effectiveRole === "Admin" || effectiveRole === "Owner" || isDeveloper;
   const canAccess = (key: FeatureKey) => canAccessErpFeature(erpAccess, key);
@@ -242,7 +241,7 @@ export function ErpRoutes({ user }: ErpRoutesProps) {
       {R("/ai-command-center", isDeveloper, AICommandCenter)}
       {G("/pos-import", "pos", POSImport)}
       <Route path="/agents" component={Agents} />
-      {R("/analytics", !isOwner && canAccess("analytics"), Analytics)}
+      {G("/analytics", "analytics", Analytics)}
 
       {R("/accounts/historical-openings", isAdminOwnerOrDev && canAccess("accounts"), HistoricalOpenings)}
       {G("/accounts", "accounts", Accounts)}

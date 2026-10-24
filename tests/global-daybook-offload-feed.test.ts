@@ -56,7 +56,11 @@ describe("All Daybook cross-company offload feed", () => {
     const statements = query.mock.calls.map(([sql]) => String(sql));
     expect(statements.every(sql => sql.includes("UNION ALL"))).toBe(true);
     expect(statements.every(sql => sql.includes("c.company_id = ANY($1::integer[])"))).toBe(true);
-    expect(statements[0]).toContain("ORDER BY \"companyName\" ASC, \"voucherDate\" DESC, id DESC");
+    expect(statements[0]).toContain('ORDER BY LOWER("companyName") ASC, "companyId" ASC');
+    expect(statements[0]).toContain("WHEN LOWER(TRIM(\"voucherType\")) = 'payment' THEN 0");
+    expect(statements[0]).toContain("WHEN LOWER(TRIM(\"voucherType\")) = 'journal' THEN 2");
+    expect(statements[0]).toContain("WHEN LOWER(TRIM(\"voucherType\")) = 'offload' THEN 6");
+    expect(statements[0]).toMatch(/"voucherDate" DESC, id DESC\s+LIMIT/);
     expect(statements[2]).toContain("j.\"entryType\" = 'voucher'");
     expect(statements[2]).toContain("COUNT(DISTINCT");
   });
