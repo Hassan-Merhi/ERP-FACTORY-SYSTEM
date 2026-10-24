@@ -137,7 +137,7 @@ databaseDescribe("factory row history", () => {
     const { id, began } = await (async () => {
       try {
         await client.query("BEGIN");
-        const start = (await client.query<{ at: string }>(`SELECT now()::timestamp::text AS at`)).rows[0].at;
+        const start = (await client.query<{ at: string }>(`SELECT (now() AT TIME ZONE 'UTC')::text AS at`)).rows[0].at;
         await client.query(`SELECT pg_sleep(0.3)`);
         const created = await client.query<{ id: number }>(
           `INSERT INTO factory_suppliers (company_id, name) VALUES ($1, $2) RETURNING id`,
