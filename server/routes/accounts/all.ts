@@ -29,7 +29,7 @@ import type Decimal from "decimal.js";
 import { MoneyDecimal, toMoney } from "../../lib/money";
 import { getCustomerLedgerAndMemo, splitBalanceFields } from "../factory/customers-core/customerLedgerSplit";
 
-export async function serveAccountListForCompany(req: Request, res: Response, companyId: number, attempt = 0) {
+export async function serveAccountListForCompany(req: Request, res: Response, companyId: number, attempt = 0): Promise<unknown> {
   try {
     const analyticsProfile = req.query.profile === "analytics";
 
