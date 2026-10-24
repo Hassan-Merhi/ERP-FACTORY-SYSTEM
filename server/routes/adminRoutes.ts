@@ -1,5 +1,6 @@
 import type { Express } from "express";
 import { registerUserManagementRoutes } from "./admin/userManagementRoutes";
+import { registerPermissionControlCenterRoutes } from "./admin/permissionControlCenterRoutes";
 import { registerCompanySettingsRoutes } from "./admin/companySettingsRoutes";
 import { registerAccountMigrationRoundTripRoutes } from "./admin/accountMigrationRoundTripRoutes";
 import { registerAccountMigrationSafeRoutes } from "./admin/accountMigrationSafeRoutes";
@@ -52,6 +53,7 @@ export function registerAdminRoutes(app: Express) {
   app.use("/api/files/:id/preview", requireStoredFileAccess("read"));
 
   registerUserManagementRoutes(app);
+  registerPermissionControlCenterRoutes(app);
   registerCompanySettingsRoutes(app);
   registerAccountMigrationRoundTripRoutes(app);
   registerAccountMigrationSafeRoutes(app);
