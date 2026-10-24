@@ -84,19 +84,26 @@ export async function loadFactoryRowsKnownAt(
     log_ready: boolean;
     baseline_ready: boolean;
     rls_enabled: boolean;
+    read_policy_present: boolean;
   }>(
     await db.execute(sql`
       SELECT to_regclass('public.factory_row_history') IS NOT NULL AS log_ready,
              to_regclass('public.factory_row_history_baselines') IS NOT NULL AS baseline_ready,
              COALESCE((SELECT c.relrowsecurity AND c.relforcerowsecurity
                           FROM pg_class c WHERE c.oid = to_regclass('public.factory_row_history')),false)
-                          AS rls_enabled
+                          AS rls_enabled,
+             EXISTS (SELECT 1 FROM pg_policies
+                      WHERE schemaname='public' AND tablename='factory_row_history'
+                        AND policyname='factory_row_history_tenant_read'
+                        AND cmd='SELECT') AS read_policy_present
     `)
   )[0];
   if (!presence?.log_ready || !presence.baseline_ready) {
     return { ready: false, reason: "HISTORICAL_ROW_HISTORY_NOT_INSTALLED" };
   }
-  if (!presence.rls_enabled) throw new Error("HISTORICAL_ROW_HISTORY_RLS_MISSING");
+  if (!presence.rls_enabled || !presence.read_policy_present) {
+    throw new Error("HISTORICAL_ROW_HISTORY_RLS_MISSING");
+  }
 
   const metadata = resultRows<{ baseline_at: string; at_or_after_baseline: boolean; triggers_ready: boolean }>(
     await db.execute(sql`
