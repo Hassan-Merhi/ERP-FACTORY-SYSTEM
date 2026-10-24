@@ -49,7 +49,10 @@ type BreakdownStatCardProps = {
 
 function BreakdownStatCard({ icon, label, total, regular, special, unit, accent }: BreakdownStatCardProps) {
   return (
-    <div className="min-w-0 rounded-xl border bg-card/40 shadow-xs">
+    <div
+      className="min-w-0 rounded-xl border bg-card/40 shadow-xs"
+      data-testid={`stat-${label.replace(/\s+/g, "-").toLowerCase()}`}
+    >
       <div className="flex items-start gap-3 px-3.5 py-3">
         <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${accent}`}>{icon}</div>
         <div className="min-w-0 flex-1">
