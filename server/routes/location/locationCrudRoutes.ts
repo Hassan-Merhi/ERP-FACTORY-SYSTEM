@@ -146,31 +146,30 @@ export function registerLocationCrudRoutes(app: Express) {
         companyId: req.session.currentCompanyId,
       });
 
-      // Auto-generate code from name if not provided
+      // Location codes are UNIQUE across all companies (and include soft-deleted
+      // rows). The previous company-scoped lookup could generate a code that
+      // existed in a different company and produce a SQL unique-key error.
+      const codeExistsAnywhere = async (code: string): Promise<boolean> => {
+        const rows = await db
+          .select({ id: locations.id })
+          .from(locations)
+          .where(eq(locations.code, code))
+          .limit(1);
+        return rows.length > 0;
+      };
+
       if (!parsed.code) {
-        // Generate code from name: remove non-alphanumeric, take first 6 letters, uppercase
         const sanitized = parsed.name.trim().replace(/[^a-zA-Z0-9]/g, "");
-        let baseCode = sanitized.substring(0, 6).toUpperCase();
-
-        // Fallback if baseCode is empty after sanitization
-        if (!baseCode || baseCode.length === 0) {
-          baseCode = "LOC";
-        }
-
-        // Ensure uniqueness by adding suffix if needed
+        const baseCode = sanitized.substring(0, 6).toUpperCase() || "LOC";
         let code = baseCode;
         let suffix = 1;
-        while (await storage.getLocationByCode(code, req.session.currentCompanyId)) {
+        while (await codeExistsAnywhere(code)) {
           code = `${baseCode}${suffix}`;
           suffix++;
         }
         parsed.code = code;
-      } else {
-        // Check for duplicate code if manually provided
-        const existing = await storage.getLocationByCode(parsed.code, req.session.currentCompanyId);
-        if (existing) {
-          return res.status(400).json({ message: "Location code already exists" });
-        }
+      } else if (await codeExistsAnywhere(parsed.code)) {
+        return res.status(409).json({ message: "Location code already exists. Choose another code or name." });
       }
 
       // Provide defaults for optional fields
@@ -208,7 +207,34 @@ export function registerLocationCrudRoutes(app: Express) {
       });
       res.status(201).json(location);
     } catch (error: unknown) {
-      res.status(400).json({ message: getErrorMessage(error) });
+      // Drizzle wraps PostgreSQL errors in `cause`. Keep SQL and parameter
+      // values in the server logs, never in the browser toast/HTTP response.
+      const details = getErrorDetails(error);
+      const cause = typeof error === "object" && error !== null && "cause" in error
+        ? getErrorDetails(error.cause)
+        : undefined;
+      const pgCode = cause?.code ?? details.code;
+      logger.error("[POST /api/locations] Location creation failed", {
+        error,
+        companyId: req.session.currentCompanyId,
+        pgCode,
+      });
+      if (details.name === "ZodError") {
+        return res.status(400).json({ message: "Invalid location information. Please check the name and try again." });
+      }
+      if (pgCode === "23505") {
+        return res.status(409).json({ message: "That location code is already in use. Try again." });
+      }
+      if (pgCode === "42703" || pgCode === "42P01") {
+        return res.status(503).json({
+          message: "The location database schema needs an administrator update.",
+          code: "LOCATION_SCHEMA_OUTDATED",
+        });
+      }
+      return res.status(500).json({
+        message: "Location could not be created. Please contact an administrator.",
+        code: "LOCATION_CREATE_FAILED",
+      });
     }
   });
 
