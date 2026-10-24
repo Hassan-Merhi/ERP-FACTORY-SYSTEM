@@ -55,7 +55,7 @@ describe("Phase 2 permission API security registration contract", () => {
 
   it("never activates live policy or claims candidate action verified", () => {
     expect(store).toContain('mode: "shadow"');
-    expect(routes).toContain("currentlyEnforcedByV2");
+    expect(store).toContain("currentlyEnforcedByV2");
     expect(routes).toContain('enforced: false');
   });
 });
