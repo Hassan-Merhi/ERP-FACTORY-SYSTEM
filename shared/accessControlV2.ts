@@ -132,6 +132,9 @@ export interface AccessControlEvaluationInput {
   /** Hard denials include closed accounting periods, resource-state checks,
    * company isolation, privileged maintenance, and existing security guards. */
   hardDenied?: boolean;
+  /** Explicit sign-off after reviewing the handler and all transaction side effects.
+   * Candidate-only route mappings can never grant the new role permission. */
+  routeVerified?: boolean;
 
   /** True when a route labelled "create" is actually attempting to EDIT an
    * existing business document (not the legitimate ledger/stock postings that
@@ -151,6 +154,7 @@ export type AccessControlDecisionReason =
   | "invalid_company_scope"
   | "hard_denial"
   | "immutable_existing_record"
+  | "route_not_verified"
   | "create_only_protected_action"
   | "create_only_not_creatable"
   | "create_only_not_operational"
@@ -200,6 +204,9 @@ export function evaluateAccessControl(input: AccessControlEvaluationInput): Acce
   }
 
   if (input.role === CREATE_ONLY_ROLE) {
+    if (input.routeVerified !== true) {
+      return { allowed: false, reason: "route_not_verified" };
+    }
     if (CREATE_ONLY_HARD_DENIED_ACTIONS.has(input.action)) {
       return { allowed: false, reason: "create_only_protected_action" };
     }
