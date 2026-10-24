@@ -231,15 +231,17 @@ describe("Retail Wave 2 — client UI", () => {
     expect(queue).toContain("/^\\/api\\/user\\/change-password$/");
   });
 
-  it("registers the stock count, selling settings and sales history workspaces", () => {
+  it("registers stock count and history without exposing the retired Selling settings page", () => {
     const routes = read("client/src/routes/AppRoutes.tsx");
-    for (const page of ["RetailStockCount", "RetailSellingSettings", "RetailSalesHistory"]) {
+    for (const page of ["RetailStockCount", "RetailSalesHistory"]) {
       expect(routes).toContain(page);
     }
+    expect(routes).not.toContain("RetailSellingSettings");
     const nav = read("client/src/pages/retail/RetailNav.tsx");
-    for (const href of ["/retail/inventory", "/retail/quick-add", "/retail/stock", "/retail/selling"]) {
+    for (const href of ["/retail/inventory", "/retail/quick-add", "/retail/stock"]) {
       expect(nav).toContain(href);
     }
+    expect(nav).not.toContain("/retail/selling");
     // The exact pill list (legacy pages hidden) is checked behaviourally in
     // tests/ui/retail-navigation-behavior.test.ts.
     const stockCount = read("client/src/pages/retail/RetailStockCount.tsx");
@@ -251,7 +253,6 @@ describe("Retail Wave 2 — client UI", () => {
     ]) {
       expect(stockCount).toContain(marker);
     }
-    expect(read("client/src/pages/retail/RetailSellingSettings.tsx")).toContain("retail-settings-tax-enabled");
     expect(read("client/src/pages/retail/RetailSalesHistory.tsx")).toContain("retail-history-receipt");
   });
 
