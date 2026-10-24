@@ -51,6 +51,8 @@ const paymentSchema = z.object({
   amount: z.coerce.number().finite().positive(),
   tenderedAmount: z.coerce.number().finite().positive().nullable().optional(),
   reference: z.string().trim().max(191).optional(),
+  ledgerAccountId: z.number().int().positive().nullable().optional(),
+  bankAccountId: z.number().int().positive().nullable().optional(),
 });
 
 const receiveSchema = z.object({
