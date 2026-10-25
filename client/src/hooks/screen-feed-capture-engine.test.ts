@@ -240,4 +240,119 @@ describe("screen feed capture engine", () => {
     await captureOnce(fetchMock);
     expect(strippedSrc).toBeNull();
   });
+  describe("cancellation, change detection and retries", () => {
+    const base = () => ({
+      fast: false,
+      lastSignature: null as string | null,
+      lastUploadedClickTs: 0,
+      cursor: null,
+      expectedPath: window.location.href,
+      clicks: [] as Array<{ x: number; y: number; label: string; ts: number }>,
+      scrollElements: [] as HTMLElement[],
+      shouldContinue: () => true,
+    });
+    const uploads = () =>
+      fetchMock.mock.calls.filter((call) => call[0] === "/api/screen-feed" && call[1]?.method === "POST");
+
+    it("cancels before rendering when capture should stop", async () => {
+      const result = await captureAndUploadScreenFrame({ ...base(), shouldContinue: () => false });
+
+      expect(result).toMatchObject({ cancelled: true, uploaded: false, failed: false });
+      expect(html2canvas).not.toHaveBeenCalled();
+    });
+
+    it("discards a frame when the page navigated while it rendered", async () => {
+      const start = window.location.href;
+      html2canvas.mockImplementation(async () => {
+        window.history.replaceState({}, "", "/elsewhere");
+        return makeCanvas(1200, 800, false);
+      });
+
+      const result = await captureAndUploadScreenFrame({ ...base(), expectedPath: start });
+      window.history.replaceState({}, "", start);
+
+      expect(result.cancelled).toBe(true);
+      expect(uploads()).toHaveLength(0);
+    });
+
+    it("skips an unchanged frame unless a newer click must be shown", async () => {
+      html2canvas.mockResolvedValue(makeCanvas(1200, 800, false));
+      const first = await captureAndUploadScreenFrame(base());
+      expect(first.signature).toBeTruthy();
+
+      const same = await captureAndUploadScreenFrame({ ...base(), lastSignature: first.signature });
+      expect(same).toMatchObject({ unchanged: true, uploaded: false, signature: first.signature });
+      expect(uploads()).toHaveLength(1);
+
+      const click = { x: 0.5, y: 0.5, label: "Save", ts: Date.now() };
+      const clicked = await captureAndUploadScreenFrame({
+        ...base(),
+        lastSignature: first.signature,
+        clicks: [click, { ...click, ts: 1 }],
+      });
+      expect(clicked).toMatchObject({ uploaded: true, latestClickTs: click.ts });
+      expect(JSON.parse(uploads()[1][1].body).clicks).toHaveLength(1);
+    });
+
+    it("retries a failed render at lower cost, then falls back with both reasons", async () => {
+      html2canvas.mockRejectedValueOnce(new Error("bad css")).mockResolvedValueOnce(makeCanvas(600, 400, false));
+      const { body } = await captureOnce(fetchMock);
+      expect(body.capture).toMatchObject({ source: "retry", failureReason: "bad css" });
+      const retryOptions = html2canvas.mock.calls[1][1] as { scale: number; foreignObjectRendering: boolean };
+      expect(retryOptions.scale).toBeLessThanOrEqual(0.5);
+      expect(retryOptions.foreignObjectRendering).toBe(false);
+
+      fetchMock.mockClear();
+      html2canvas.mockReset().mockRejectedValueOnce(new Error("bad css")).mockRejectedValueOnce("still bad");
+      const fallback = await captureOnce(fetchMock);
+      expect(fallback.body.capture).toMatchObject({ source: "fallback", failureReason: "bad css; retry: still bad" });
+    });
+
+    it("does not retry a render that timed out", async () => {
+      html2canvas.mockRejectedValue(new Error("timeout-render"));
+
+      const { body } = await captureOnce(fetchMock);
+
+      expect(html2canvas).toHaveBeenCalledTimes(1);
+      expect(body.capture).toMatchObject({ source: "fallback", failureReason: "timeout-render" });
+    });
+
+    it("copies live form values and scroll positions into the rendered clone", async () => {
+      document.body.innerHTML = `
+        <input id="name" /><input id="flag" type="checkbox" checked />
+        <textarea id="note"></textarea>
+        <select id="pick"><option value="a">A</option><option value="b">B</option></select>
+        <div contenteditable="true" id="rich"></div>
+        <div id="list" style="overflow:auto"></div>`;
+      (document.getElementById("name") as HTMLInputElement).value = "Typed";
+      (document.getElementById("flag") as HTMLInputElement).checked = false;
+      (document.getElementById("note") as HTMLTextAreaElement).value = "Line";
+      (document.getElementById("pick") as HTMLSelectElement).value = "b";
+      document.getElementById("rich")!.innerHTML = "<b>Bold</b>";
+      const list = document.getElementById("list")!;
+      list.scrollTop = 120;
+      let clone: Document | null = null;
+      html2canvas.mockImplementation(async (_element, options: { onclone?: (doc: Document) => void }) => {
+        clone = document.implementation.createHTMLDocument("clone");
+        clone.body.innerHTML = document.body.innerHTML;
+        options.onclone?.(clone);
+        return makeCanvas(1200, 800, false);
+      });
+
+      await captureAndUploadScreenFrame({ ...base(), scrollElements: [list] });
+
+      const copy = clone!;
+      expect((copy.getElementById("name") as HTMLInputElement).value).toBe("Typed");
+      expect(copy.getElementById("flag")!.hasAttribute("checked")).toBe(false);
+      expect(copy.getElementById("note")!.textContent).toBe("Line");
+      expect((copy.getElementById("pick") as HTMLSelectElement).value).toBe("b");
+      expect(copy.getElementById("rich")!.innerHTML).toBe("<b>Bold</b>");
+      expect(copy.getElementById("list")!.scrollTop).toBe(120);
+      // The original page keeps no capture bookkeeping.
+      expect(list.getAttributeNames().some((name) => name.startsWith("data-") && name !== "contenteditable")).toBe(
+        false
+      );
+      document.body.innerHTML = "";
+    });
+  });
 });
