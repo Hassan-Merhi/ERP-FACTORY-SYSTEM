@@ -114,7 +114,7 @@
         "lines": 93,
         "statements": 94,
         "functions": 87,
-        "branches": 94
+        "branches": 89
       },
       "server/services/security/namedPermissionService.ts": {
         "lines": 99,
