@@ -133,8 +133,8 @@ These describe work in progress and carry live figures bound to their sources.
 | [retail-fashion-inventory.md](retail-fashion-inventory.md) | Retail fashion intake, generated barcodes and labels, scan-to-sell, barcode stock movements and reports |
 | [retail-pos-inventory-workflow.md](retail-pos-inventory-workflow.md) | Retail ERP-style POS, customer credit, credit-first returns/exchanges, voucher restrictions and two-stage transfers |
 | [retail-pos-inventory-claude-handoff.md](retail-pos-inventory-claude-handoff.md) | Retail POS + Inventory verification record: checks run, accounting reconciliation and open items |
-| [retail-supplier-stock-import-phases.md](retail-supplier-stock-import-phases.md) | Retail supplier stock import: spreadsheet preflight, picture ZIP matching, supplier purchase receipt and its phases |
-| [retail-supplier-stock-import-phase7-handoff.md](retail-supplier-stock-import-phase7-handoff.md) | Retail supplier stock import verification handoff: integration checklist and main-branch drift |
+| [retail-supplier-stock-import-phases.md](retail-supplier-stock-import-phases.md) | Retail supplier stock import: spreadsheet template, preview, supplier-credit receipt, barcodes and labels by phase |
+| [retail-supplier-stock-import-phase7-handoff.md](retail-supplier-stock-import-phase7-handoff.md) | Retail supplier stock import integration contract and verification handoff |
 | [performance-phase9.md](performance-phase9.md) | Build, bundle, and runtime performance constraints |
 | [performance-wave5-production-certification.md](performance-wave5-production-certification.md) | Production performance certification and remaining measurement gates |
 | [remote-support-phase-17-transport-resilience.md](remote-support-phase-17-transport-resilience.md) | Remote-support Phase 17: binary transport with a conditional HTTP polling fallback |

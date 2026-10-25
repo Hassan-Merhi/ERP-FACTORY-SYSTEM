@@ -276,16 +276,11 @@ export async function settleRetailSaleTx(
     if (payment.method === "credit" && explicitAccount) {
       throw new Error("Customer credit must post to the selected customer's ledger");
     }
-    let target: { ledgerAccountId: number | null; bankAccountId: number | null };
-    if (explicitAccount) {
-      const account = await resolveRetailPaymentAccountTx(tx, input.companyId, payment);
-      if (payment.method !== account.method) {
-        throw new Error("Selected Retail account does not match the payment type");
-      }
-      target = account;
-    } else {
-      target = paymentTarget(settings, payment.method, shift?.cashAccountId ?? null);
+    const explicitTarget = explicitAccount ? await resolveRetailPaymentAccountTx(tx, input.companyId, payment) : null;
+    if (explicitTarget && payment.method !== explicitTarget.method) {
+      throw new Error("Selected Retail account does not match the payment type");
     }
+    const target = explicitTarget ?? paymentTarget(settings, payment.method, shift?.cashAccountId ?? null);
     const amount = payment.amount;
     const tendered = payment.tenderedAmount;
     const change =

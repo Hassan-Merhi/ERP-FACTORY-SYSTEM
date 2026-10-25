@@ -1455,7 +1455,7 @@
     },
     "/api/reports/containers": {
       "status": 200,
-      "shape": "{containers:[],filters:{endDate:scalar,startDate:scalar,status:scalar,supplierId:scalar},summary:{totalChargesTotal:scalar,totalContainers:scalar,totalGrandTotal:scalar,totalItemsTotal:scalar}}"
+      "shape": "{containers:[],filters:{endDate:scalar,startDate:scalar,status:scalar,supplierId:scalar},summary:{totalChargesTotal:scalar,totalContainerCost:scalar,totalContainers:scalar,totalGrandTotal:scalar,totalItemsTotal:scalar,totalOffloadingCharges:scalar}}"
     },
     "/api/reports/item-market-analysis": {
       "status": 200,

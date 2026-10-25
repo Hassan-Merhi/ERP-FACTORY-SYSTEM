@@ -43,9 +43,7 @@ const PAGES: PageCase[] = [
     name: "AccountingCreate",
     load: () => import("@/pages/AccountingCreate"),
     landmark: "select-entity-mobile",
-    // No showsRows: the only seeded rows it rendered were /api/companies options in
-    // the location form's company picker, which #2465 removed on purpose (a new
-    // location always belongs to the current company).
+    // Create forms derive the active company (#2465); no seeded rows are listed.
     sweep: true,
   },
   { name: "Accounts", load: () => import("@/pages/Accounts"), landmark: "button-account-groups", sweep: true },
@@ -287,9 +285,7 @@ const PAGES: PageCase[] = [
     name: "PropertiesCreate",
     load: () => import("@/pages/properties/PropertiesCreate"),
     landmark: "select-entity-mobile",
-    // No showsRows: the only seeded rows it rendered were /api/companies options in
-    // the location form's company picker, which #2465 removed on purpose (a new
-    // location always belongs to the current company).
+    // Create forms derive the active company (#2465); no seeded rows are listed.
     sweep: true,
   },
   {
