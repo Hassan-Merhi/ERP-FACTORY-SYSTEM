@@ -54,6 +54,37 @@ Frontend, full suite on the merged branch: 37.57% lines, 35.75% statements,
 about 37,800. Phase 1 therefore improves specific modules far more than the
 global figure; the global figure moves with Phases 2–4.
 
+## Frontend Phase 1 (done 2026-10-25)
+
+Scope: the 125 live files in `client/src/lib`, `hooks` and `contexts`, leaving
+out the offline-mode files and the unimported interceptors listed under
+removal candidates.
+
+| | Before | After |
+|---|---|---|
+| Lines | 80.0% (1,318 uncovered) | 96.3% (245 uncovered) |
+| Branches | 68.3% (1,883 uncovered) | 86.0% (830 uncovered) |
+
+The full frontend suite (280 files, 2,941 tests) now measures 39.21% lines,
+37.58% statements, 28.15% functions and 29.12% branches. Global floors moved
+to 37/35/26/27. Every live `lib/`, `hooks/` and `contexts/` file of 10+ lines
+at 85% lines or more has a per-file floor (82 new); 17 existing per-file
+metrics were raised.
+
+Bugs the new suites found and fixed:
+
+- `apiRequestPrivileged` looped forever on a repeated CSRF mismatch; it now
+  retries once.
+- `excelHelper` read rich-text cells as `[object Object]` and accepted a blank
+  CSV; it now unwraps rich text and rejects an empty file.
+- `useServerRestart` stopped watching for a dev-server restart after one
+  non-OK `/api/boot` answer; it now keeps polling.
+
+Largest remaining gaps: `remote-keyboard-control-policy.ts`,
+`screen-feed-capture-engine.ts` and `screen-feed-binary-transport.ts`
+(defensive branches), and the offline-queue branch of `apiRequest`, which only
+runs with offline mode on.
+
 ## Backend gaps
 
 `config/backend-coverage-gap-baseline.json` ranks the 30 files with the most
