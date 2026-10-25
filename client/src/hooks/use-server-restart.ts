@@ -15,14 +15,17 @@ export function useServerRestart() {
       if (reloading.current) return;
       try {
         const res = await fetch("/api/boot", { credentials: "omit" });
-        if (!res.ok) return;
-        const { bootId } = await res.json();
-        if (knownBootId.current === null) {
-          knownBootId.current = bootId;
-        } else if (knownBootId.current !== bootId) {
-          reloading.current = true;
-          window.location.reload();
-          return;
+        // A non-OK answer (e.g. 503 while the dev server is still starting) means
+        // "not ready yet", like a network error: poll again rather than stop for good.
+        if (res.ok) {
+          const { bootId } = await res.json();
+          if (knownBootId.current === null) {
+            knownBootId.current = bootId;
+          } else if (knownBootId.current !== bootId) {
+            reloading.current = true;
+            window.location.reload();
+            return;
+          }
         }
       } catch {
         // server not yet ready — try again next tick
