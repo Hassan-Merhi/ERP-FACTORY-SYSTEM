@@ -8,6 +8,7 @@ import type { PoolClient } from "pg";
 import { pool } from "../../server/db";
 import { ensureHistoricalSalesCostRepairSchema } from "../../server/services/inventory/ensureHistoricalSalesCostRepairSchema";
 import { dryRunCompany } from "../../server/services/inventory/historicalSalesCostRepairDryRun";
+import { routePoolToClient } from "./routedPoolClient";
 
 let sequence = 0;
 
@@ -265,36 +266,7 @@ export class HscrFixture {
    * fixture's: BEGIN/COMMIT/ROLLBACK become savepoints and release is a no-op.
    */
   routePool(): () => void {
-    const client = this.client;
-    let depth = 0;
-    const translate = (sql: string): string | null => {
-      const statement = sql.trim().toUpperCase();
-      if (statement.startsWith("BEGIN")) return `SAVEPOINT hscr_route_${++depth}`;
-      if (statement === "COMMIT") return depth > 0 ? `RELEASE SAVEPOINT hscr_route_${depth--}` : "SELECT 1";
-      if (statement === "ROLLBACK") return depth > 0 ? `ROLLBACK TO SAVEPOINT hscr_route_${depth--}` : "SELECT 1";
-      return null;
-    };
-    const query = (text: unknown, ...rest: unknown[]) => {
-      const sql = typeof text === "string" ? text : (text as { text?: string })?.text;
-      const translated = typeof sql === "string" ? translate(sql) : null;
-      return translated
-        ? client.query(translated)
-        : (client.query as (...args: unknown[]) => Promise<unknown>)(text, ...rest);
-    };
-    const routed = new Proxy(client, {
-      get(target, property) {
-        if (property === "release") return () => undefined;
-        if (property === "query") return query;
-        const value = Reflect.get(target, property);
-        return typeof value === "function" ? value.bind(target) : value;
-      },
-    });
-    const connect = vi.spyOn(pool, "connect").mockImplementation((async () => routed) as never);
-    const poolQuery = vi.spyOn(pool, "query").mockImplementation(query as never);
-    return () => {
-      connect.mockRestore();
-      poolQuery.mockRestore();
-    };
+    return routePoolToClient(this.client);
   }
 
   dryRun(cutoff = "2027-01-01T00:00:00Z", options: { diagnoseKeys?: Set<string> } = {}) {
