@@ -9,6 +9,8 @@
  */
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { queryClient } from "@/lib/queryClient";
+
 const ENDPOINT = "/api/factory/v5/stock-allocation";
 
 let underlyingFetch: ReturnType<typeof vi.fn>;
@@ -299,6 +301,141 @@ describe("v5 allocation on-screen interception", () => {
 
     const response = await window.fetch(`${ENDPOINT}?companyId=1&filter=error`);
     expect(response.status).toBe(502);
+  });
+});
+
+describe("v5 allocation edges", () => {
+  const codes = async (response: Response) =>
+    ((await response.json()) as { rows: Array<{ articleCode: string }> }).rows.map((row) => row.articleCode);
+
+  function pagedBy(pages: Record<number, string[]>, totalPages = 3) {
+    underlyingFetch.mockImplementation(async (input: unknown) => {
+      const page = Number(sentUrl([input]).searchParams.get("page") || "1");
+      return jsonResponse(
+        allocationPage({
+          rows: (pages[page] ?? []).map((articleCode) => ({ articleCode })),
+          total: 300,
+          page,
+          totalPages,
+        })
+      );
+    });
+  }
+
+  afterEach(() => vi.restoreAllMocks());
+
+  it("reports why a full export failed on a later page", async () => {
+    underlyingFetch
+      .mockImplementationOnce(async () => jsonResponse(allocationPage({ totalPages: 3 })))
+      .mockImplementationOnce(async () => jsonResponse(allocationPage({ page: 2, totalPages: 3 })))
+      .mockImplementationOnce(async () => ({
+        ok: false,
+        status: 500,
+        json: async () => {
+          throw new SyntaxError("not json");
+        },
+      }));
+
+    await expect(fetchAllV5AllocationData()).rejects.toThrow("Failed to load stock allocation page 3");
+
+    underlyingFetch
+      .mockImplementationOnce(async () => jsonResponse(allocationPage({ totalPages: 2 })))
+      .mockImplementationOnce(async () => jsonResponse({ message: "Allocation locked" }, false, 423));
+    await expect(fetchAllV5AllocationData()).rejects.toThrow("Allocation locked");
+  });
+
+  it("keeps each product once when pages overlap", async () => {
+    pagedBy({ 1: ["A-1", "A-2"], 2: ["A-2", "A-3"] });
+
+    await window.fetch(`${ENDPOINT}?companyId=1&filter=overlap`);
+    scrollToBottom();
+    const merged = await window.fetch(`${ENDPOINT}?companyId=1&filter=overlap`);
+
+    expect(await codes(merged)).toEqual(["A-1", "A-2", "A-3"]);
+  });
+
+  it("recovers from a network error, an unreadable page or an unpaged answer", async () => {
+    pagedBy({ 1: ["R-1"] });
+    await window.fetch(`${ENDPOINT}?companyId=1&filter=recover`);
+    scrollToBottom();
+
+    underlyingFetch.mockRejectedValueOnce(new TypeError("Failed to fetch"));
+    await expect(window.fetch(`${ENDPOINT}?companyId=1&filter=recover`)).rejects.toThrow("Failed to fetch");
+    expect(sentUrl(underlyingFetch.mock.calls.at(-1)!).searchParams.get("page")).toBe("2");
+
+    underlyingFetch.mockImplementationOnce(async () => ({
+      ok: true,
+      status: 200,
+      clone() {
+        return this;
+      },
+      json: async () => {
+        throw new SyntaxError("not json");
+      },
+    }));
+    const unreadable = await window.fetch(`${ENDPOINT}?companyId=1&filter=recover`);
+    expect(unreadable.ok).toBe(true);
+
+    const legacy = allocationPage({ total: undefined });
+    underlyingFetch.mockImplementationOnce(async () => jsonResponse(legacy));
+    const unpaged = await window.fetch(`${ENDPOINT}?companyId=1&filter=recover`);
+    expect(await unpaged.json()).toBe(legacy);
+
+    pagedBy({ 1: ["R-1"], 2: ["R-2"] });
+    await window.fetch(`${ENDPOINT}?companyId=1&filter=recover`);
+    scrollToBottom();
+    expect(await codes(await window.fetch(`${ENDPOINT}?companyId=1&filter=recover`))).toEqual(["R-1", "R-2"]);
+  });
+
+  it("asks for the full model in Negative Only mode and for focused deep links", async () => {
+    const invalidate = vi.spyOn(queryClient, "invalidateQueries").mockResolvedValue();
+    const toggle = document.createElement("button");
+    toggle.dataset.testid = "button-v5-toggle-negative-only";
+    const icon = document.createElement("span");
+    toggle.append(icon);
+    document.body.append(toggle);
+
+    icon.click();
+    await Promise.resolve();
+    expect(invalidate).toHaveBeenCalledTimes(1);
+    await window.fetch(`${ENDPOINT}?companyId=1&filter=negative`);
+    expect(sentUrl(underlyingFetch.mock.calls.at(-1)!).searchParams.has("pagination")).toBe(false);
+
+    toggle.click();
+    await window.fetch(`${ENDPOINT}?companyId=1&filter=negative`);
+    expect(sentUrl(underlyingFetch.mock.calls.at(-1)!).searchParams.get("pagination")).toBe("1");
+
+    document.body.click();
+    await Promise.resolve();
+    expect(invalidate).toHaveBeenCalledTimes(2);
+    toggle.remove();
+
+    for (const search of ["?proformaId=4", "?openEdit=true"]) {
+      window.history.replaceState({}, "", `/factory/stock-allocation-v5${search}`);
+      await window.fetch(`${ENDPOINT}?companyId=1&filter=deep`);
+      expect(sentUrl(underlyingFetch.mock.calls.at(-1)!).searchParams.has("pagination")).toBe(false);
+    }
+  });
+
+  it("ignores short inner scroll areas and forgets progress after leaving the page", async () => {
+    const invalidate = vi.spyOn(queryClient, "invalidateQueries").mockResolvedValue();
+    pagedBy({ 1: ["L-1"] });
+    await window.fetch(`${ENDPOINT}?companyId=1&filter=leave`);
+
+    const panel = document.createElement("div");
+    document.body.append(panel);
+    Object.defineProperty(panel, "scrollHeight", { configurable: true, value: 300 });
+    panel.dispatchEvent(new Event("scroll"));
+    expect(invalidate).not.toHaveBeenCalled();
+    panel.remove();
+
+    window.history.pushState({}, "", "/dashboard");
+    await Promise.resolve();
+    window.history.pushState({}, "", "/factory/stock-allocation-v5");
+    await Promise.resolve();
+    scrollToBottom();
+    expect(invalidate).not.toHaveBeenCalled();
+    expect(progressDisplay()).toBe("none");
   });
 });
 
