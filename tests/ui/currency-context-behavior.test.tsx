@@ -26,6 +26,7 @@ vi.mock("@/contexts/CompanyContext", () => ({
 }));
 
 import { CurrencyProvider, useCurrencyContext } from "@/contexts/CurrencyContext";
+import { installFakeApi, respond } from "./fakeApi";
 
 const n = (v: number, dp: number) =>
   v.toLocaleString(undefined, { minimumFractionDigits: dp, maximumFractionDigits: dp });
@@ -36,7 +37,15 @@ function setup({
   rate = "600" as string | null,
   preferred,
   userId,
-}: { base?: string; display?: string | null; rate?: string | null; preferred?: string; userId?: number } = {}) {
+  seedRate = true,
+}: {
+  base?: string;
+  display?: string | null;
+  rate?: string | null;
+  preferred?: string;
+  userId?: number;
+  seedRate?: boolean;
+} = {}) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false, staleTime: Infinity, queryFn: () => new Promise(() => {}) } },
   });
@@ -45,7 +54,8 @@ function setup({
     client.setQueryData(["/api/auth/me"], { id: userId, username: "zm", role: "admin", companyId: 1 });
   }
   client.setQueryData(["/api/user-preferences"], { dateFormat: "MM/DD/YYYY", preferredCurrency: preferred });
-  if (display) client.setQueryData(["/api/exchange-rates/latest", 1, base, display], rate ? { rate } : null);
+  if (display && seedRate)
+    client.setQueryData(["/api/exchange-rates/latest", 1, base, display], rate ? { rate } : null);
   const wrapper = ({ children }: { children: React.ReactNode }) => (
     <QueryClientProvider client={client}>
       <CurrencyProvider>{children}</CurrencyProvider>
@@ -301,6 +311,28 @@ describe("CurrencyContext", () => {
       expect(result.current.convertToUSD(7)).toBe(7);
       expect(result.current.formatCashAmount(7)).toBe(`CFA ${n(7, 0)}`);
     });
+  });
+
+  it("fetches the company's latest rate for its currency pair", async () => {
+    const api = installFakeApi();
+    api.get("/api/exchange-rates/latest", { rate: "610" });
+    const { result } = setup({ seedRate: false });
+
+    await waitFor(() => expect(result.current.exchangeRate).toBe(610));
+    const url = new URL(api.callsTo("GET", "/api/exchange-rates/latest")[0].url, "http://x");
+    expect(Object.fromEntries(url.searchParams)).toEqual({ companyId: "1", fromCurrency: "USD", toCurrency: "CFA" });
+  });
+
+  it("treats a refused rate lookup as no rate", async () => {
+    const api = installFakeApi();
+    // Even an error body that looks like a rate must not be used.
+    api.get("/api/exchange-rates/latest", respond(404, { rate: "999" }));
+    const { result } = setup({ seedRate: false });
+
+    await waitFor(() => expect(api.callsTo("GET", "/api/exchange-rates/latest")).toHaveLength(1));
+    await waitFor(() => expect(result.current.isLoadingRate).toBe(false));
+    expect(result.current.exchangeRate).toBeFalsy();
+    expect(result.current.formatAmount(5)).toBe(`$ ${n(5, 0)}`);
   });
 
   it("throws when used outside the provider", () => {
