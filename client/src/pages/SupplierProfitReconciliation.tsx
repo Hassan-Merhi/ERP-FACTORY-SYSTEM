@@ -166,6 +166,7 @@ export default function SupplierProfitReconciliation() {
     enabled: !!supplierId && !!selectedCompany?.id,
   });
 
+  // This sheet displays only saved summary amounts; drilldowns stay in Sales Report.
   const report = reportQuery.data;
   const totals = report?.totals;
   const isAllTime = period === "all";
