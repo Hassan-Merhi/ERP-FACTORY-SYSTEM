@@ -317,6 +317,76 @@ export async function exportMixBatchCostAnalysis(
   const sourceCost = `'Mix Batch Details'!$F$5:$F$${sourceEnd}`;
   const sourceReview = `'Mix Batch Details'!$I$5:$I$${sourceEnd}`;
 
+
+  const batchById = new Map(rows.map(row => [row.id, row]));
+  const validSources = sources.filter(source => batchById.has(Number(source.mixBatchId)));
+  banner(sourceDetails, "MIX BATCH SOURCE DETAILS",
+    "Every supplier / container contribution · historical recorded USD values · original batches only", "J");
+  header(sourceDetails, ["Date", "Batch", "Supplier / source", "Category", "Container", "KG", "Recorded $/KG", "Cost USD", "Source batch ID", "Review"]);
+  [18, 24, 37, 26, 22, 19, 20, 23, 19, 25].forEach((width,i) => { sourceDetails.getColumn(i+1).width = width; });
+  for (const source of validSources) {
+    const batch = batchById.get(Number(source.mixBatchId))!;
+    const kg = numeric(source.weightKg);
+    const cost = numeric(source.totalCost);
+    const row = sourceDetails.addRow([
+      excelDate(batch.date), batch.code, textValue(source.supplierName || "Unassigned supplier"),
+      textValue(source.categoryName || "Uncategorized"), textValue(source.containerNumber || ""),
+      kg, null, cost, source.sourceBatchId ?? "",
+      kg <= 0 || cost <= 0 ? "CHECK SOURCE COST" : !source.supplierId && !source.sourceBatchId ? "CHECK SUPPLIER" : "",
+    ]);
+    row.getCell(7).value = { formula: `IFERROR(H${row.number}/F${row.number},0)`, result: kg > 0 ? cost / kg : 0 };
+    row.getCell(1).numFmt = "dd mmm yyyy";
+    row.getCell(6).numFmt = KG_FMT;
+    row.getCell(7).numFmt = RATE_FMT;
+    row.getCell(8).numFmt = USD_FMT;
+  }
+  styleData(sourceDetails, sourceDetails.rowCount, 10);
+  for (let r = 5; r <= sourceDetails.rowCount; r++) {
+    for (const c of [2,3,4,5,10]) sourceDetails.getRow(r).getCell(c).alignment = { horizontal: "left" };
+    if (sourceDetails.getCell(`J${r}`).value) sourceDetails.getCell(`J${r}`).fill = color(ALERT);
+  }
+
+  banner(bySupplier, "DAILY COST BY SUPPLIER",
+    "Separate historical weighted-average cost for each supplier each day, with a bold combined daily total", "I");
+  header(bySupplier, ["Date", "Supplier / source", "Category", "Batches", "KG used", "Cost USD", "Avg USD / KG", "Containers", "Review"]);
+  [19, 38, 26, 15, 21, 24, 21, 32, 30].forEach((width,i) => { bySupplier.getColumn(i+1).width = width; });
+  for (const day of days) {
+    for (const source of dailySuppliers.filter(item => item.date === day.key)) {
+      const row = bySupplier.addRow([
+        excelDate(day.key), source.supplierName, source.categoryName, source.batches,
+        source.kg, source.cost, null, source.containers, source.review,
+      ]);
+      row.getCell(7).value = { formula: `IFERROR(F${row.number}/E${row.number},0)`, result: source.kg > 0 ? source.cost / source.kg : 0 };
+      row.getCell(1).numFmt = "dd mmm yyyy";
+      row.getCell(5).numFmt = KG_FMT;
+      row.getCell(6).numFmt = USD_FMT;
+      row.getCell(7).numFmt = RATE_FMT;
+    }
+    const total = bySupplier.addRow([
+      excelDate(day.key), "DAILY TOTAL", "", day.count, day.kg, day.cost, null, "",
+      day.zeroCost ? `${day.zeroCost} batch review(s)` : "",
+    ]);
+    total.getCell(7).value = { formula: `IFERROR(F${total.number}/E${total.number},0)`, result: day.kg > 0 ? day.cost / day.kg : 0 };
+    total.getCell(1).numFmt = "dd mmm yyyy";
+    total.getCell(5).numFmt = KG_FMT;
+    total.getCell(6).numFmt = USD_FMT;
+    total.getCell(7).numFmt = RATE_FMT;
+  }
+  styleData(bySupplier, bySupplier.rowCount, 9);
+  for (let r = 5; r <= bySupplier.rowCount; r++) {
+    for (const c of [2,3,8,9]) bySupplier.getRow(r).getCell(c).alignment = { horizontal: "left" };
+    if (bySupplier.getCell(`B${r}`).value === "DAILY TOTAL") {
+      for (let c = 1; c <= 9; c++) {
+        const cell = bySupplier.getRow(r).getCell(c);
+        cell.fill = color(NAVY_2);
+        cell.font = { name: "Aptos", bold: true, color: { argb: WHITE } };
+      }
+    } else if (bySupplier.getCell(`I${r}`).value) {
+      bySupplier.getCell(`I${r}`).fill = color(ALERT);
+      bySupplier.getCell(`I${r}`).font = { name: "Aptos", bold: true, color: { argb: "FF9A3412" } };
+    }
+  }
+
   banner(daily, "DAILY WEIGHTED AVERAGE", "Daily cost = total recorded mix cost ÷ total KG mixed · all historical days", "G");
   header(daily, ["Production date", "Month", "Batches", "Total KG mixed", "Total cost USD", "Avg cost / KG", "Cost review flags"]);
   [20, 16, 14, 21, 23, 22, 21].forEach((width, index) => { daily.getColumn(index + 1).width = width; });
