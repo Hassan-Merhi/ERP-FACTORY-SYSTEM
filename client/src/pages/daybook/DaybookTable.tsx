@@ -142,10 +142,7 @@ export function DaybookTable({
       });
 
     return (
-      <Table
-        className="text-foreground dark:[&_tr]:border-border/70 dark:[&_th]:border-border/70 dark:[&_td]:border-border/70"
-        wrapperClassName="max-h-[calc(100dvh-220px)] border-border/70 dark:border-border/70"
-      >
+      <Table wrapperClassName="max-h-[calc(100dvh-220px)]">
         <TableHeader className="sticky top-0 z-20 bg-muted [&_th]:bg-muted [&_th]:text-foreground/90">
           <TableRow>
             <TableHead className="sticky left-0 bg-muted z-10 pl-4">Date / Type</TableHead>
@@ -153,7 +150,7 @@ export function DaybookTable({
             {!hideAmounts && <TableHead className="text-right">Total</TableHead>}
           </TableRow>
         </TableHeader>
-        <TableBody>
+        <TableBody className="text-foreground dark:[&_tr]:border-border/70 dark:[&_td]:border-border/70">
           {dateOrder.map((date) => {
             const dg = dateGroups[date];
             const dateKey = `date-${date}`;
@@ -860,10 +857,7 @@ export function DaybookTable({
 
       {/* ── Desktop table (hidden below sm) ── */}
       <div className="hidden sm:block">
-        <Table
-          className="text-foreground dark:[&_tr]:border-border/70 dark:[&_th]:border-border/70 dark:[&_td]:border-border/70"
-          wrapperClassName="max-h-[calc(100dvh-220px)] border-border/70 dark:border-border/70"
-        >
+        <Table wrapperClassName="max-h-[calc(100dvh-220px)]">
           <TableHeader className="sticky top-0 z-20 bg-muted [&_th]:bg-muted [&_th]:text-foreground/90">
             <TableRow>
               <TableHead className="sticky left-0 bg-muted z-10">Date</TableHead>
@@ -873,7 +867,7 @@ export function DaybookTable({
               <TableHead className="text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
-          <TableBody>{tableRows}</TableBody>
+          <TableBody className="text-foreground dark:[&_tr]:border-border/70 dark:[&_td]:border-border/70">{tableRows}</TableBody>
         </Table>
         {loadMoreButton}
       </div>
