@@ -79,7 +79,6 @@ export const FACTORY_ACCESS_REGISTRY: readonly FactoryPageDefinition[] = [
     group: "Finance",
     route: "/factory/daybook",
     pinned: true,
-    sidebar: true,
     landing: true,
   },
   {
