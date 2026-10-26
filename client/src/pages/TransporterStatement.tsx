@@ -655,7 +655,7 @@ export default function TransporterStatement({ embedded }: { embedded?: boolean 
                           {fmtNum(row.runningBalance)}
                         </TableCell>
                         <TableCell>
-                          {isViewer ? <span className="text-sm">{row.dueDate ? formatDate(row.dueDate) : "—"}</span> : <DueDateCell row={row} onSave={handleDueDateSave} />}
+                          {isViewer ? <span className="text-sm">{row.dateToBePaid ? formatDate(row.dateToBePaid) : "—"}</span> : <DueDateCell row={row} onSave={handleDueDateSave} />}
                         </TableCell>
                         <TableCell>
                           <StatusBadge status={row.status} paidAmount={row.paidAmount} total={row.credit} />
