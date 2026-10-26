@@ -40,7 +40,7 @@ import {
 import { useAppMode } from "@/contexts/AppModeContext";
 import { isRetailHiddenErpPath, useErpVisibleSections } from "@/components/AppSidebar";
 import { useCompany } from "@/contexts/CompanyContext";
-import { getAccountingToolLinks } from "@/lib/accountingToolboxNavigation";
+import { getAccountingToolLinks, getDeveloperMaintenanceLinks } from "@/lib/accountingToolboxNavigation";
 import { useFactoryVisibleSections } from "@/components/FactorySidebar";
 import { getPropertiesVisibleNavSections } from "@/components/PropertiesSidebar";
 import type { NavItem, NavSection } from "@/components/sidebar/sidebarPrimitives";
@@ -171,6 +171,12 @@ const FACTORY_ACCOUNTING_CONTEXT: PageEntry[] = getAccountingToolLinks("factory"
   label: item.label, description: item.description, path: item.path, icon: ShieldCheck,
 }));
 const PROPERTIES_ACCOUNTING_CONTEXT: PageEntry[] = getAccountingToolLinks("properties").map((item) => ({
+  label: item.label, description: item.description, path: item.path, icon: ShieldCheck,
+}));
+const FACTORY_MAINTENANCE_CONTEXT: PageEntry[] = getDeveloperMaintenanceLinks("factory").map((item) => ({
+  label: item.label, description: item.description, path: item.path, icon: ShieldCheck,
+}));
+const PROPERTIES_MAINTENANCE_CONTEXT: PageEntry[] = getDeveloperMaintenanceLinks("properties").map((item) => ({
   label: item.label, description: item.description, path: item.path, icon: ShieldCheck,
 }));
 
@@ -578,7 +584,7 @@ export function CommandPalette({
     );
     return buildEntries(factoryVis.sections, [
       ...accessibleExtras,
-      ...(effectiveRole === "Developer" ? FACTORY_ACCOUNTING_CONTEXT : []),
+      ...(effectiveRole === "Developer" ? [...FACTORY_ACCOUNTING_CONTEXT, ...FACTORY_MAINTENANCE_CONTEXT] : []),
     ]);
   }, [factoryVis.sections, factoryVis.isPinnedVisible, effectiveRole]);
 
@@ -586,7 +592,7 @@ export function CommandPalette({
     () =>
       buildEntries(getPropertiesVisibleNavSections(effectiveRole === "Developer"), [
         ...PROPERTIES_EXTRAS.filter((entry) => effectiveRole !== "ERP Tester" || entry.path !== "/properties/my-settings"),
-        ...(effectiveRole === "Developer" ? [...PROPERTIES_DEVELOPER_EXTRAS, ...PROPERTIES_ACCOUNTING_CONTEXT] : []),
+        ...(effectiveRole === "Developer" ? [...PROPERTIES_DEVELOPER_EXTRAS, ...PROPERTIES_ACCOUNTING_CONTEXT, ...PROPERTIES_MAINTENANCE_CONTEXT] : []),
         ...(canSeeAdminCommands ? PROPERTIES_ADMIN_EXTRAS : []),
       ]),
     [canSeeAdminCommands, effectiveRole]
