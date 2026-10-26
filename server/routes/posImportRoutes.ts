@@ -30,6 +30,7 @@ import { sendWhatsAppFileByUploadPos, sendWhatsAppFileToChatIdPos } from "../ser
 import { salesItems, companies, inventory, stockItemLocationPrices, type Voucher } from "@shared/schema";
 import { MoneyDecimal } from "../lib/money";
 import { erpRequestSourceId, postErpVoucherTx, sessionPostingActor } from "../services/accounting/erpVoucherPosting";
+import { validateHistoricalRate } from "../services/accounting/currencyAmounts";
 import { postSaleCogsTx, relievedValue } from "../services/accounting/perpetualInventory/saleCogs";
 import {
   assertNoBaleMirrorMovementTx,
@@ -221,12 +222,21 @@ export function registerPosImportRoutes(app: Express) {
         exchangeRate
       );
       assertZmwImportPrices(items, lockedPosCurrency);
+      // Non-USD sales must carry native-currency amounts and a locked rate
+      // on both voucher entries. Previously this covered only ZMW; CFA POS
+      // imports therefore failed centrally for every location.
+      const nativeRate = lockedPosCurrency.currency === "USD"
+        ? null
+        : validateHistoricalRate(
+            lockedPosCurrency.exchangeRate,
+            `${lockedPosCurrency.currency} POS import exchange rate`
+          );
       const nativeTransaction = (total: string) =>
-        lockedPosCurrency.currency === "ZMW"
+        nativeRate
           ? {
-              currency: "ZMW",
-              amount: toInventoryDecimal(total).mul(lockedPosCurrency.exchangeRate!).toFixed(6),
-              rate: lockedPosCurrency.exchangeRate!,
+              currency: lockedPosCurrency.currency,
+              amount: toInventoryDecimal(total).mul(nativeRate.toFixed()).toFixed(lockedPosCurrency.currency === "ZMW" ? 6 : 2),
+              rate: nativeRate.toFixed(),
             }
           : null;
 
