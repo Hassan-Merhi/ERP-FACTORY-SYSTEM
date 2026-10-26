@@ -1,0 +1,56 @@
+name: Temporary negative-layer focused DB regression
+on:
+  push:
+    branches: [fix/negative-shortage-layer-prune-core-20261026]
+permissions:
+  contents: read
+jobs:
+  focused-inventory-test:
+    runs-on: ubuntu-26.04
+    timeout-minutes: 22
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: heliumdb
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres -d heliumdb"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/heliumdb
+      PGSSLMODE: disable
+      PORT: "5000"
+      NODE_ENV: test
+      SESSION_SECRET: focused-regression-test-session-secret
+      CSRF_ENFORCE: "0"
+      ENABLE_SCHEDULERS: "false"
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: "24.22.1"
+          cache: npm
+      - run: npm ci --no-audit --bin-links=true
+      - run: node node_modules/drizzle-kit/bin.cjs push --force
+      - run: npm run build
+      - name: Initialize disposable database startup schema
+        shell: bash
+        run: |
+          set -euo pipefail
+          node dist/index.js > "$RUNNER_TEMP/focused-app.log" 2>&1 &
+          pid=$!
+          trap 'kill "$pid" 2>/dev/null || true; wait "$pid" 2>/dev/null || true' EXIT
+          for i in $(seq 1 120); do
+            if curl --silent --fail "http://127.0.0.1:5000/api/health/db" >/dev/null; then exit 0; fi
+            if ! kill -0 "$pid" 2>/dev/null; then cat "$RUNNER_TEMP/focused-app.log"; exit 1; fi
+            sleep 1
+          done
+          cat "$RUNNER_TEMP/focused-app.log"
+          exit 1
+      - name: Run negative-stock database tests
+        run: node node_modules/vitest/vitest.mjs run tests/wave11-negative-stock.test.ts --maxWorkers=1 --no-file-parallelism
