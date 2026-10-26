@@ -16,7 +16,10 @@ import { syncPurchaseOrderGitTx } from "../../services/accounting/perpetualInven
 import { usdLineAmounts } from "../../services/factory/factoryVoucherPosting";
 import { editPostedFactoryVoucherTx } from "../../services/factory/factoryVoucherCorrection";
 import { runWithVerifiedPoParentScope } from "../../services/security/parentCompanyPostingScope";
-import { assertOffloadedPurchaseOrderCostBasisUnchanged } from "./offloadedPurchaseOrderCostBasisGuard";
+import {
+  assertOffloadedPurchaseOrderChargesUnchanged,
+  assertOffloadedPurchaseOrderCostBasisUnchanged,
+} from "./offloadedPurchaseOrderCostBasisGuard";
 
 type PurchaseOrderRecord = NonNullable<Awaited<ReturnType<typeof storage.getPurchaseOrderById>>>;
 
@@ -188,7 +191,7 @@ export async function applyPurchaseOrderItemsUpdate(
       // Take the PO row second, matching the offload lifecycle's container -> PO lock
       // order and making every item rewrite for this PO serialize behind the same row.
       const [lockedPO] = await tx
-        .select({ id: purchaseOrders.id, containerId: purchaseOrders.containerId })
+        .select()
         .from(purchaseOrders)
         .where(and(eq(purchaseOrders.id, id), eq(purchaseOrders.companyId, existingPO.companyId)))
         .limit(1)
@@ -205,6 +208,14 @@ export async function applyPurchaseOrderItemsUpdate(
         throw new HttpError(409, "Reverse the offload before editing native Kwacha purchase quantities or prices.");
       }
       if (lockedContainer?.status === "OFFLOADED") {
+        assertOffloadedPurchaseOrderChargesUnchanged(lockedPO, {
+          freight: freight.toFixed(2),
+          surcharge: surcharge.toFixed(2),
+          fumigation: fumigation.toFixed(2),
+          documentCharges: documentCharges.toFixed(2),
+          discount: discount.toFixed(2),
+          otherCharges: otherCharges.toFixed(2),
+        });
         const currentLineItems = await tx
           .select({
             id: poLineItems.id,
