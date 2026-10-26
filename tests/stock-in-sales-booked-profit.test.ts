@@ -22,6 +22,25 @@ describe("Stock In/Sales profit uses posted sale and cost totals", () => {
     expect(code).not.toContain("costProfit: salesItems.profit");
   });
 
+  it("returns consistent sale profit in vouchers and assistant-backed summaries", () => {
+    const rootSource = (name: string) => readFileSync(path.resolve(process.cwd(), name), "utf8");
+    for (const file of [
+      "server/routes/globalTransactionRoutes.ts",
+      "server/routes/voucher-entries/reads.ts",
+    ]) {
+      const code = rootSource(file);
+      expect(code).toContain(
+        "profit: sql<string>`(${salesItems.totalSales}::numeric - ${salesItems.totalCost}::numeric)`"
+      );
+      expect(code).not.toContain("profit: salesItems.profit");
+    }
+    for (const file of ["server/chat/erpContext.ts", "server/aiTools.ts"]) {
+      const code = rootSource(file);
+      expect(code).not.toContain("CAST(${schema.salesItems.profit} AS NUMERIC)");
+      expect(code).not.toContain("profit: schema.salesItems.profit");
+    }
+  });
+
   it("keeps MALI HMD booked profit correct despite historical cached profit drift", () => {
     const revenue = 339200.81;
     const bookedCogs = 303022.84;
