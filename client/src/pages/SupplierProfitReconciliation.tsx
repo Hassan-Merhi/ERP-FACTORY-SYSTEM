@@ -494,7 +494,15 @@ export default function SupplierProfitReconciliation() {
                 <Button
                   size="sm"
                   variant="outline"
-                  onClick={() => navigate(`/sales-report?${new URLSearchParams({ startDate: range.from, endDate: range.to, ...(groupId ? { stockGroupId: groupId } : {}) })}`)}
+                  onClick={() =>
+                    navigate(
+                      `/sales-report?${new URLSearchParams({
+                        startDate: range.from,
+                        endDate: range.to,
+                        ...(groupId ? { stockGroupId: groupId } : {}),
+                      })}`
+                    )
+                  }
                 >
                   <ExternalLink className="h-4 w-4 mr-1" />
                   Open Sales Report
