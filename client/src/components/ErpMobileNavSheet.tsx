@@ -7,8 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
 import {
-  ERP_NAV_SECTIONS,
-  ERP_PINNED_ITEMS,
+   ERP_PINNED_ITEMS,
   ERP_UTILITY_ITEMS,
   SETTINGS_HIDDEN_ROLES,
   useErpVisibleSections,
@@ -78,10 +77,9 @@ export function ErpMobileNavSheet({ user, open, onOpenChange }: ErpMobileNavShee
   const { t, language } = useApplicationLanguage();
   const { selectedCompany } = useCompany();
   const { conflictCount } = useConnectivity();
-  const { isItemVisible } = useErpVisibleSections(user);
+  const { isItemVisible, sections: visibleSections } = useErpVisibleSections(user);
   const primaryHrefs = useErpPrimaryDestinations(user);
   const currentRole = user?.currentRole ?? user?.role ?? "";
-  const isDeveloper = currentRole === "Developer";
 
   const { data: chatUnread } = useQuery<{ count: number }>({
     queryKey: companyQueryKey("/api/chat/unread-count", selectedCompany?.id),
@@ -97,7 +95,9 @@ export function ErpMobileNavSheet({ user, open, onOpenChange }: ErpMobileNavShee
       seen.add(item.url);
       return true;
     };
-    const allItems = [...ERP_PINNED_ITEMS, ...ERP_NAV_SECTIONS.flatMap((section) => section.items)];
+    // Reuse the desktop sidebar's already-consolidated sections; the phone menu
+    // must not resurrect standalone pages hidden inside accessible parent hubs.
+    const allItems = [...ERP_PINNED_ITEMS, ...visibleSections.flatMap((section) => section.items)];
     const byUrl = new Map(allItems.map((item) => [item.url, item]));
 
     const result: PhoneNavGroup[] = [];
@@ -114,8 +114,7 @@ export function ErpMobileNavSheet({ user, open, onOpenChange }: ErpMobileNavShee
       });
       pushGroup(group.label, group.color, items);
     }
-    for (const section of ERP_NAV_SECTIONS) {
-      if (section.devOnly && !isDeveloper) continue;
+    for (const section of visibleSections) {
       pushGroup(section.label, section.color, section.items.filter(keep));
     }
     // Pinned pages that no phone group claims still appear, so nothing becomes unreachable.
@@ -151,8 +150,8 @@ export function ErpMobileNavSheet({ user, open, onOpenChange }: ErpMobileNavShee
     chatUnread?.count,
     conflictCount,
     currentRole,
-    isDeveloper,
     isItemVisible,
+    visibleSections,
     primaryHrefs,
     selectedCompany?.companyType,
   ]);
