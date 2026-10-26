@@ -356,6 +356,15 @@ export function FactorySidebar({
         <div className="mt-4 pt-3 border-t border-sidebar-border/60 space-y-0.5">
           {isDeveloper && (
             <SidebarFlatLink
+              href="/factory/accounting/toolbox"
+              icon={FileText}
+              label="Accounting Toolbox"
+              color={NAV_COLOR.accounting}
+              testId="link-factory-accounting-toolbox"
+            />
+          )}
+          {isDeveloper && (
+            <SidebarFlatLink
               href="/factory/spreadsheet"
               icon={TableProperties}
               label="Spreadsheet"
