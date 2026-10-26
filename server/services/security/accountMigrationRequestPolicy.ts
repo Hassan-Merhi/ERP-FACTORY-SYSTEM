@@ -8,10 +8,6 @@ export function isAccountMigrationSourceReadPath(method: string, path: string): 
   return method.toUpperCase() === "GET" && /^\/api\/admin\/account-migration\/accounts\/[1-9]\d*$/.test(path);
 }
 
-export function canReadAccountMigrationSource(
-  method: string,
-  path: string,
-  role: string | null | undefined
-): boolean {
+export function canReadAccountMigrationSource(method: string, path: string, role: string | null | undefined): boolean {
   return isAccountMigrationSourceReadPath(method, path) && (role === "Admin" || role === "Developer");
 }
