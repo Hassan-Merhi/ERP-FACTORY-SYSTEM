@@ -469,17 +469,17 @@ export async function executeContainerOffloadLifecycle(
       }
     }
 
-    let reversalDelta: Decimal = new MoneyDecimal(0);
-    if (existingOffload) {
-      reversalDelta = await reverseExistingOffload(tx, container, existingOffload, lineItems);
-    }
-
     if (requestsCorrection && !OFFLOAD_COST_CORRECTION_ROLES.has(String(input.actorRole ?? ""))) {
       throw new ContainerOffloadLifecycleError(
         OFFLOAD_COST_CORRECTION_FORBIDDEN_MESSAGE,
         403,
         OFFLOAD_COST_CORRECTION_FORBIDDEN_CODE
       );
+    }
+
+    let reversalDelta: Decimal = new MoneyDecimal(0);
+    if (existingOffload) {
+      reversalDelta = await reverseExistingOffload(tx, container, existingOffload, lineItems);
     }
     for (const correction of input.inventoryCostCorrections ?? []) {
       if (!(correction.correctRate > 0) || !validCorrectionIds.has(correction.stockItemId)) continue;
