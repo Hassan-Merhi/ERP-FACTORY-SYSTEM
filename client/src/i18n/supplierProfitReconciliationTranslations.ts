@@ -37,7 +37,7 @@ const supplierProfitPhrases = [
 ] as const;
 
 const translations = new Map<string, { en: string; ar: string; fr: string }>(
-  supplierProfitPhrases.map(({ en, ar, fr }) => [en, { en, ar, fr }])
+  supplierProfitPhrases.map(({ en, ar, fr }) => [en, { en, ar, fr }] as const)
 );
 
 export function isSupplierProfitReconciliationText(value: string): boolean {
