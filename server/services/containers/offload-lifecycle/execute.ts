@@ -418,7 +418,8 @@ export async function executeContainerOffloadLifecycle(
         previousItems.length === 0 ||
         offloadEconomicBasisChanged(previousItems, proposedItems, existingOffload.locationId, input.locationId);
 
-      if (basisChanged) {
+      // Reversing/reposting a receipt can alter stock relief even when total
+      // posted value appears unchanged. Never replay after downstream usage.
         const affectedItemIds = positiveIds([...previousItems, ...proposedItems].map((item) => item.stockItemId));
         if (affectedItemIds.length > 0) {
           const [salesAfterReceipt, transfersAfterReceipt, canonicalAfterReceipt] = await Promise.all([
@@ -472,13 +473,14 @@ export async function executeContainerOffloadLifecycle(
           ]);
           if (salesAfterReceipt.length || transfersAfterReceipt.length || canonicalAfterReceipt.length) {
             throw new ContainerOffloadLifecycleError(
-              "Stock from this container has sale, transfer, or adjustment history. Offload costs cannot be rewritten without an audited inventory-and-COGS correction.",
+              basisChanged
+                ? "Stock from this container has sale, transfer, or adjustment history. Offload costs cannot be rewritten without an audited inventory-and-COGS correction."
+                : "Stock from this container has downstream transactions. The receipt cannot be reversed and replayed; use an audited correction workflow.",
               409,
               "CONTAINER_OFFLOAD_DOWNSTREAM_COST_LOCKED"
             );
           }
         }
-      }
     }
 
     if (requestsCorrection && !OFFLOAD_COST_CORRECTION_ROLES.has(String(input.actorRole ?? ""))) {
