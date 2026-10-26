@@ -57,7 +57,7 @@ function getInitialSalesReportPeriod(): PeriodFilterValue {
 function getInitialSalesReportGroups(): string[] {
   if (typeof window === "undefined") return [];
   const groupId = new URLSearchParams(window.location.search).get("stockGroupId");
-  return groupId && /^[1-9]\\d*$/.test(groupId) ? [groupId] : [];
+  return groupId && /^[1-9]\d*$/.test(groupId) ? [groupId] : [];
 }
 
 export default function SalesReport() {
