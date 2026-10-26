@@ -345,7 +345,7 @@ export default function AccountMigration() {
   });
 
   const {
-    data: pendingMigrations = [],
+    data: pendingMigrationsResponse,
     isLoading: loadingPending,
     isError: pendingError,
     refetch: refetchPendingMigrations,
@@ -364,6 +364,10 @@ export default function AccountMigration() {
     },
     staleTime: 0,
   });
+
+  const pendingMigrations: PendingMigration[] = Array.isArray(pendingMigrationsResponse)
+    ? pendingMigrationsResponse
+    : [];
 
   const previewMutation = useMutation({
     mutationFn: async () => {
