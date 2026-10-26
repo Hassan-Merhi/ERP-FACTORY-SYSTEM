@@ -21,6 +21,7 @@ const item = (overrides: Partial<CostRow>): CostRow => ({
   stock_value: "719.79",
   stock_at_rate: "719.82",
   adj_qty: "0",
+  adj_value: "0",
   transfer_lines: 2,
   transfer_value_missing: 2,
   blocked_sales: 0,
@@ -32,7 +33,23 @@ describe("read-only supplier inventory cost repair workpaper", () => {
   it("flags missing original transfer value even for an unsold quantity-balanced stock code", () => {
     expect(costRowFlags(item({}))).toContain("TRANSFER_SOURCE_VALUE_UNPROVEN");
     expect(costRowFlags(item({}))).toContain("UNSOLD_TRANSFER_VALUE_DIFFERENCE");
-    expect(costRowFlags(item({}))).toContain("COST_GAP");
+    expect(costRowFlags(item({}))).toContain("COST_GAP_AFTER_RECORDED_ADJUSTMENTS");
+  });
+
+  it("explains unchanged-stock cost differences with signed adjustment values", () => {
+    const removed = costRowFlags(item({
+      code: "HMD12059",
+      qty_received: "17",
+      qty_stock: "16",
+      stock_value: "1189.67",
+      landed: "1262.66",
+      adj_qty: "-1",
+      adj_value: "-72.99",
+      transfer_lines: 0,
+      transfer_value_missing: 0,
+    }));
+    expect(removed).toContain("COST_EXPLAINED_BY_ADJUSTMENT");
+    expect(removed).not.toContain("COST_GAP_AFTER_RECORDED_ADJUSTMENTS");
   });
 
   it("does not mistake a logged quantity correction for unproven quantity", () => {
