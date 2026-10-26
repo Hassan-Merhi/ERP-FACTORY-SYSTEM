@@ -84,8 +84,8 @@ export function ErpShell({ user, hasErpAccess, handleLogout, leaveConfirmDialog 
                     data-testid="erp-view-only-banner"
                     className="border-b bg-muted/50 px-4 py-2 text-xs text-muted-foreground sm:text-sm"
                   >
-                    <strong className="font-semibold text-foreground">ERP · View Only.</strong>{" "}
-                    You can browse company information, but creating, editing, importing, posting and deleting are disabled.
+                    <strong className="font-semibold text-foreground">ERP · View Only.</strong> You can browse company
+                    information, but creating, editing, importing, posting and deleting are disabled.
                   </div>
                 )}
                 <AppTopBar
