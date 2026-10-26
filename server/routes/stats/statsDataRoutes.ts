@@ -271,7 +271,11 @@ export function registerStatsDataRoutes(app: Express) {
       // Closing stock: the one stock valuation (stockValuation.ts, wave 11),
       // SUM(total_value), not quantity × the rounded average rate.
       const closingStock = dec(await companyStockValue(db, companyId));
-      const perpetualInventoryActive = await isPerpetualInventoryActive(db, companyId, new Date().toISOString().slice(0, 10));
+      const perpetualInventoryActive = await isPerpetualInventoryActive(
+        db,
+        companyId,
+        new Date().toISOString().slice(0, 10)
+      );
       const totalSales = dec(row?.total_sales);
       const storedCogs = dec(row?.stored_cogs);
       const reconciledCogs = openingStock
