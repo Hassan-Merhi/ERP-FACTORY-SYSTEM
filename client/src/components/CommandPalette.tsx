@@ -528,7 +528,10 @@ export function CommandPalette({
   const appMode = useAppMode();
   const [, setLocation] = useLocation();
   const effectiveRole = user?.currentRole ?? user?.role ?? "";
-  const canSeeAdminCommands = effectiveRole === "Admin" || effectiveRole === "Developer";
+  // FactoryRoutes and PropertiesRoutes guard pages using user.role; their
+  // command search must not grant a route based on a different role field.
+  const shellRole = appMode === "factory" || appMode === "properties" ? (user?.role ?? "") : effectiveRole;
+  const canSeeAdminCommands = shellRole === "Admin" || shellRole === "Developer";
 
   const isControlled = externalOpen !== undefined;
   const open = isControlled ? externalOpen : internalOpen;
@@ -563,7 +566,7 @@ export function CommandPalette({
   const { selectedCompany } = useCompany();
   const erpVis = useErpVisibleSections(hasErpAccess && !isPOS ? user : undefined);
   const factoryVis = useFactoryVisibleSections(
-    hasFactoryAccess && !isPOS && user ? { role: user.currentRole ?? user.role ?? undefined } : undefined
+    hasFactoryAccess && !isPOS && user ? { role: user.role ?? undefined } : undefined
   );
 
   const isRetailCompany = selectedCompany?.companyType === "retail";
@@ -603,18 +606,18 @@ export function CommandPalette({
     );
     return buildEntries(factoryVis.sections, [
       ...accessibleExtras,
-      ...(effectiveRole === "Developer" ? [...FACTORY_ACCOUNTING_CONTEXT, ...FACTORY_MAINTENANCE_CONTEXT] : []),
+      ...(shellRole === "Developer" ? [...FACTORY_ACCOUNTING_CONTEXT, ...FACTORY_MAINTENANCE_CONTEXT] : []),
     ]);
-  }, [factoryVis.sections, factoryVis.isPinnedVisible, factoryVis.isHubTabVisible, effectiveRole]);
+  }, [factoryVis.sections, factoryVis.isPinnedVisible, factoryVis.isHubTabVisible, shellRole]);
 
   const propertiesPages = useMemo(
     () =>
-      buildEntries(getPropertiesVisibleNavSections(effectiveRole === "Developer"), [
-        ...PROPERTIES_EXTRAS.filter((entry) => effectiveRole !== "ERP Tester" || entry.path !== "/properties/my-settings"),
-        ...(effectiveRole === "Developer" ? [...PROPERTIES_DEVELOPER_EXTRAS, ...PROPERTIES_ACCOUNTING_CONTEXT, ...PROPERTIES_MAINTENANCE_CONTEXT] : []),
+      buildEntries(getPropertiesVisibleNavSections(shellRole === "Developer"), [
+        ...PROPERTIES_EXTRAS.filter((entry) => shellRole !== "ERP Tester" || entry.path !== "/properties/my-settings"),
+        ...(shellRole === "Developer" ? [...PROPERTIES_DEVELOPER_EXTRAS, ...PROPERTIES_ACCOUNTING_CONTEXT, ...PROPERTIES_MAINTENANCE_CONTEXT] : []),
         ...(canSeeAdminCommands ? PROPERTIES_ADMIN_EXTRAS : []),
       ]),
-    [canSeeAdminCommands, effectiveRole]
+    [canSeeAdminCommands, shellRole]
   );
 
   const showErp = !isPOS && hasErpAccess;
