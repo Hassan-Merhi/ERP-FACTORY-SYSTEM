@@ -41,3 +41,35 @@ export function assertOffloadedPurchaseOrderCostBasisUnchanged(
     );
   }
 }
+
+export interface PurchaseOrderChargeBasis {
+  freight: string | number | null | undefined;
+  surcharge: string | number | null | undefined;
+  fumigation: string | number | null | undefined;
+  documentCharges: string | number | null | undefined;
+  discount: string | number | null | undefined;
+  otherCharges: string | number | null | undefined;
+}
+
+/** Posted PO charge changes need an offload recost, not a voucher-only edit. */
+export function assertOffloadedPurchaseOrderChargesUnchanged(
+  previous: PurchaseOrderChargeBasis,
+  proposed: PurchaseOrderChargeBasis
+): void {
+  const fields: (keyof PurchaseOrderChargeBasis)[] = [
+    "freight",
+    "surcharge",
+    "fumigation",
+    "documentCharges",
+    "discount",
+    "otherCharges",
+  ];
+  for (const field of fields) {
+    if (!toMoney(previous[field]).toDecimalPlaces(2).equals(toMoney(proposed[field]).toDecimalPlaces(2))) {
+      throw new HttpError(
+        409,
+        "This container is offloaded. Changing purchase charges separately would desynchronize its landed inventory cost. Use the controlled offload correction workflow."
+      );
+    }
+  }
+}
