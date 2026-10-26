@@ -422,8 +422,9 @@ export function registerFactoryProductionValueReportRoutes(app: Express) {
       const balanceCostPerKg = balanceSnapshot.costPerKg;
       const balanceValue = balanceSnapshot.value;
 
-      // Weight Cost follows the same historical batch-rate cutoff shown in Balance on Table:
-      // bales produced in the selected period × cumulative batch rate through that period's end.
+      // Production profit is deliberately unchanged: its Weight Cost still
+      // uses the historical cumulative rate. Balance on Table's batch-specific
+      // remaining-value rate must NOT be substituted into this calculation.
       const weightCostDecimal = calculateProductionWeightCost({
         producedWeightKg: totalBaleWeightKg,
         batchRateCost: balanceBatchRateDecimal,
@@ -633,6 +634,8 @@ export function registerFactoryProductionValueReportRoutes(app: Express) {
           // toggle only changes finished-production valuation; table material stays at cost.
           costPerKg: hideReportCosts ? 0 : balanceCostPerKg,
           value: hideReportCosts ? 0 : balanceValue,
+          diagnostics: hideReportCosts ? null : balanceSnapshot.diagnostics,
+          warnings: hideReportCosts ? [] : balanceSnapshot.warnings,
         },
         summary: {
           // Keep batchCost as a compatibility alias for older clients. It now carries the
