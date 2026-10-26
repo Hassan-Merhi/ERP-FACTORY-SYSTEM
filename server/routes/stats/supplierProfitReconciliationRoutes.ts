@@ -131,7 +131,7 @@ export function registerSupplierProfitReconciliationRoutes(app: Express) {
             COALESCE(SUM(s.profit::numeric),0)::text AS stored_profit,
             COALESCE(SUM(s.quantity::numeric),0)::text AS quantity
           FROM sales_items s JOIN vouchers v ON v.id=s.voucher_id
-          JOIN eligible i ON i.id=s.stock_item_id WHERE ${salesWhere}
+          JOIN eligible i ON i.id=s.stock_item_id WHERE v.company_id=$1 AND ${salesWhere}
         `, params),
         client.query(`
           WITH eligible AS MATERIALIZED (${eligible})
@@ -141,7 +141,7 @@ export function registerSupplierProfitReconciliationRoutes(app: Express) {
             COALESCE(SUM(s.total_cost::numeric),0)::text AS cogs,
             COALESCE(SUM(s.profit::numeric),0)::text AS stored_profit
           FROM sales_items s JOIN vouchers v ON v.id=s.voucher_id
-          JOIN eligible i ON i.id=s.stock_item_id WHERE ${salesWhere}
+          JOIN eligible i ON i.id=s.stock_item_id WHERE v.company_id=$1 AND ${salesWhere}
           GROUP BY 1 ORDER BY 1 DESC
         `, params),
         client.query(`
@@ -151,7 +151,7 @@ export function registerSupplierProfitReconciliationRoutes(app: Express) {
             s.quantity::text AS quantity, s.total_sales::text AS revenue,
             s.total_cost::text AS cogs, s.profit::text AS stored_profit
           FROM sales_items s JOIN vouchers v ON v.id=s.voucher_id
-          JOIN eligible i ON i.id=s.stock_item_id WHERE ${salesWhere}
+          JOIN eligible i ON i.id=s.stock_item_id WHERE v.company_id=$1 AND ${salesWhere}
           ORDER BY v.voucher_date DESC, v.id DESC, s.id DESC LIMIT 300
         `, params),
         client.query(`
@@ -196,7 +196,7 @@ export function registerSupplierProfitReconciliationRoutes(app: Express) {
             SELECT s.stock_item_id, SUM(s.quantity::numeric) qty, SUM(s.total_sales::numeric) revenue,
                    SUM(s.total_cost::numeric) cogs, SUM(s.profit::numeric) stored_profit
             FROM sales_items s JOIN vouchers v ON v.id=s.voucher_id
-            JOIN eligible i ON i.id=s.stock_item_id WHERE ${salesWhere}
+            JOIN eligible i ON i.id=s.stock_item_id WHERE v.company_id=$1 AND ${salesWhere}
             GROUP BY s.stock_item_id
           ), received AS (
             SELECT oi.stock_item_id, SUM(oi.quantity::numeric) qty, SUM(oi.total_value::numeric) cost
