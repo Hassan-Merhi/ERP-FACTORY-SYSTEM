@@ -9,6 +9,7 @@ import { hydrateActiveCredentialVersion } from "./services/security/credentialVe
 import { CompanyIsolationError, assertRequestCompanyMatchesSession } from "./services/security/companyIsolationPolicy";
 import { decideExplicitCompanyScope } from "./services/security/companyRequestScopePolicy";
 import { isErpTesterForbiddenApiPath } from "@shared/erpTestCompanyAccess";
+import { canReadAccountMigrationSource } from "./services/security/accountMigrationRequestPolicy";
 
 const EXPECTED_ANONYMOUS_SESSION_REASONS = new Set(["SESSION_REQUIRED", "SESSION_USER_REQUIRED"]);
 
@@ -147,6 +148,12 @@ function authorizeExplicitCompanyScope(req: Request, res: Response): boolean {
 
   const userId = req.session.userId;
   const role = req.session.currentRole;
+
+  // Account Migration is an intentional cross-company Admin read. The global
+  // :companyId guard and the route handler each verify actual user membership
+  // before returning accounts. Do not grant the same override to ordinary
+  // ledger endpoints or write requests.
+  if (canReadAccountMigrationSource(req.method, req.path, role)) return true;
 
   // Developer is the system-wide support/admin role. Its company access is
   // already constrained by the role-specific route policies and canonical
