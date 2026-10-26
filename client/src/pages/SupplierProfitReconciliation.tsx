@@ -370,7 +370,7 @@ export default function SupplierProfitReconciliation() {
                 <p className="text-xs leading-relaxed text-muted-foreground">
                   {isAllTime
                     ? "Container profit is an estimate; shared stock items can belong to other suppliers. Supplier balance comes from the ledger."
-                    : "Only sales are filtered by this date. Stock, OTW and supplier balance show current amounts; historical container profit is not calculated."}
+                    : "Sales and offloaded receipts follow the selected dates. Stock, OTW and supplier balance are current; historical container profit is not calculated."}
                 </p>
               </CardContent>
             </Card>
