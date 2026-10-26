@@ -194,9 +194,9 @@ export function registerSupplierProfitReconciliationRoutes(app: Express) {
             SUM(oi.quantity::numeric)::text AS quantity,
             SUM(oi.total_value::numeric)::text AS landed,
             (CASE WHEN COALESCE(o.total_bales::numeric,0)>0
-              THEN o.total_charges::numeric*SUM(oi.quantity::numeric)/o.total_bales::numeric
+              THEN (o.total_charges::numeric-COALESCE(c.charges_total::numeric,0))*SUM(oi.quantity::numeric)/o.total_bales::numeric
               ELSE 0 END)::text AS allocated_charges,
-            o.total_charges::text AS full_offload_charges
+            (o.total_charges::numeric-COALESCE(c.charges_total::numeric,0))::text AS full_offload_charges
           FROM container_offload_items oi
           JOIN eligible i ON i.id=oi.stock_item_id
           JOIN container_offloads o ON o.id=oi.offload_id AND o.optional=false
@@ -212,7 +212,7 @@ export function registerSupplierProfitReconciliationRoutes(app: Express) {
         client.query(
           `
           SELECT c.id, c.container_number, c.status, c.import_date::text AS date,
-            COALESCE(c.items_total,0)::text AS base_amount
+            COALESCE(NULLIF(c.grand_total::numeric,0),COALESCE(c.items_total,0)::numeric+COALESCE(c.charges_total,0)::numeric)::text AS base_amount
           FROM containers c
           WHERE c.company_id=$1 AND c.supplier_id=$2
             AND UPPER(c.status) IN ('OTW','PENDING')
@@ -321,9 +321,9 @@ export function registerSupplierProfitReconciliationRoutes(app: Express) {
         grouping,
         sourceBasis: {
           sales: "Saved sales_items amounts with Sales Report voucher_date and current stock-item group mapping",
-          offloads: "Saved container_offload_items.total_value; charges allocated by received-bale share",
+          offloads: "Saved container_offload_items.total_value; offloading charges exclude supplier PO charges and allocate by received-bale share",
           inventory: "Current inventory.total_value, never reconstructed as historical",
-          otw: "Current containers.items_total for OTW/PENDING; never included in realized profit",
+          otw: "Current containers.grand_total (or item plus PO charges) for OTW/PENDING; never included in realized profit",
           attribution:
             "Item appeared in receipts from this supplier; mixed-source SKUs cannot prove which supplier sold units came from",
         },
@@ -378,6 +378,7 @@ export function registerSupplierProfitReconciliationRoutes(app: Express) {
         items: itemRows,
         itemsTruncated: itemRows.length === 1000,
         warnings: [
+          "Item-level supplier attribution is based on goods received, not traceable sale lots; profit is a comparison, not a certified supplier figure.",
           ...(itemRows.some((r) => r.supplierCount > 1)
             ? [
                 "Some stock items have receipts from more than one supplier. Their sales cannot be attributed definitively without a historical lot link.",
