@@ -182,14 +182,14 @@ export function registerSupplierProfitReconciliationRoutes(app: Express) {
           WHERE c.company_id=$1 AND c.supplier_id=$2
             AND UPPER(c.status) IN ('OTW','PENDING')
           ORDER BY c.import_date DESC,c.id DESC
-        `, params),
+        `, params.slice(0,2)),
         client.query(`
           WITH eligible AS MATERIALIZED (${eligible})
           SELECT COALESCE(SUM(inv.quantity::numeric),0)::text AS quantity,
             COALESCE(SUM(inv.total_value::numeric),0)::text AS value
           FROM inventory inv JOIN eligible i ON i.id=inv.stock_item_id
           WHERE inv.company_id=$1
-        `, params),
+        `, params.slice(0,3)),
         client.query(`
           WITH eligible AS MATERIALIZED (${eligible}),
           sold AS (
