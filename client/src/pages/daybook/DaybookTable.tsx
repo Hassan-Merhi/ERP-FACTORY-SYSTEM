@@ -594,7 +594,7 @@ export function DaybookTable({
                           </span>
                           <div className="flex items-center gap-4 shrink-0 ml-4">
                             {parseFloat(e.debitAmount || "0") > 0 && !hideAmounts && (
-                              <span className="font-mono text-xs font-medium text-rose-700 dark:text-rose-300">
+                              <span className="font-mono text-xs font-medium text-emerald-700 dark:text-emerald-300">
                                 Dr{" "}
                                 {formatTransactionAmount && e.transactionCurrency
                                   ? formatTransactionAmount(
@@ -605,7 +605,7 @@ export function DaybookTable({
                               </span>
                             )}
                             {parseFloat(e.creditAmount || "0") > 0 && !hideAmounts && (
-                              <span className="font-mono text-xs font-medium text-emerald-700 dark:text-emerald-300">
+                              <span className="font-mono text-xs font-medium text-rose-700 dark:text-rose-300">
                                 Cr{" "}
                                 {formatTransactionAmount && e.transactionCurrency
                                   ? formatTransactionAmount(
