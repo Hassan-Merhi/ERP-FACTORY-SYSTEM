@@ -30,6 +30,20 @@ Two unsold transferred items need **source rate proofs**, not blind stock-value 
 - HMD12579: offloaded $557.52, current depot $719.79, net +$162.27, transfer lines without `value_moved`.
 - HMD13011: observed receipt vs depot stock difference $50.80; older transfers lack `value_moved`, and a later offload was reversed/reposted in October. Source value must be time-ordered.
 
+## Verified movement-value corrections to the original manual formula
+
+The first unadjusted receipt-minus-sales-minus-inventory comparison is **not a full cost equation**: stock adjustments can change inventory without a sale. A signed inventory adjustment belongs in the cost bridge. On 26 October we verified three exact examples:
+
+| Code | Raw item cost gap | Recorded signed adjustment value | After that adjustment |
+|---|---:|---:|---:|
+| HMD12003 | -$0.10 | +$0.10 | $0.00 |
+| HMD12059 | +$72.99 | -$72.99 | $0.00 |
+| HMD12091 | -$47.99 | +$47.99 | $0.00 |
+
+These entries already balance and must **not** be manually revalued. HMD12059 and HMD12091 appear at both MALI and Mali Depot because several offloads legitimately received directly into each location; their depot presence by itself is not an undocumented transfer.
+
+Across the entire HMD group the nominal signed canonical adjustment/movement value is **+$665.14**. Adding that mechanically produces a **+$586.28** residual on saved values, but that is **not an accounting error to post**: the tally includes credit-note and deleted-sale reversals, plus adjustment edit/reverse pairs whose underlying sales accounting must be deduplicated. Build the source-specific movement bridge before treating any such sum as a COGS true-up.
+
 ## Recovery stages
 
 1. **Freeze and fingerprint evidence:** Take a company-scoped, repeatable-read snapshot, identify each receipt/offload, sale, return, transfer, stock adjustment, historical valuation override and deleted/reversed transaction. Use `scripts/audit-erp-supplier-inventory-cost.ts` read-only, then save its JSON output. Do not backdate after a live posting without refreshing the snapshot.
