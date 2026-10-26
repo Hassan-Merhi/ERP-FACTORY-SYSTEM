@@ -321,9 +321,11 @@ export function registerSupplierProfitReconciliationRoutes(app: Express) {
         grouping,
         sourceBasis: {
           sales: "Saved sales_items amounts with Sales Report voucher_date and current stock-item group mapping",
-          offloads: "Saved container_offload_items.total_value; offloading charges exclude supplier PO charges and allocate by received-bale share",
+          offloads:
+            "Saved container_offload_items.total_value; offloading charges exclude supplier PO charges and allocate by received-bale share",
           inventory: "Current inventory.total_value, never reconstructed as historical",
-          otw: "Current containers.grand_total (or item plus PO charges) for OTW/PENDING; never included in realized profit",
+          otw:
+            "Current containers.grand_total (or item plus PO charges) for OTW/PENDING; never included in realized profit",
           attribution:
             "Item appeared in receipts from this supplier; mixed-source SKUs cannot prove which supplier sold units came from",
         },
