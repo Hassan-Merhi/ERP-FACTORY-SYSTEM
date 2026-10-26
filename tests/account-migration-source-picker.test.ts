@@ -2,13 +2,23 @@ import { readFileSync } from "fs";
 import { describe, expect, it } from "vitest";
 
 const page = readFileSync("client/src/pages/AccountMigration.tsx", "utf8");
+const route = readFileSync("server/routes/admin/import-export/account-migration.ts", "utf8");
 
 describe("account migration source-company picker", () => {
-  it("loads source ledgers through the authorized cross-company ledger read", () => {
+  it("loads source ledgers through the dedicated authorized migration read", () => {
     expect(page).toContain(
-      "/api/ledger-accounts?companyId=${encodeURIComponent(srcCompanyId)}&includeHidden=true"
+      "/api/admin/account-migration/accounts/${encodeURIComponent(srcCompanyId)}"
     );
-    expect(page).not.toContain("/api/admin/account-migration/accounts/${srcCompanyId}");
+    expect(page).not.toContain("/api/ledger-accounts?companyId=");
+  });
+
+  it("requires company membership and transaction-local scoped RLS for that read", () => {
+    expect(route).toContain("await assertCompaniesAccess(context.userId, [companyId])");
+    expect(route).toContain("set_config('app.company_scope_maintenance', 'off', true)");
+    expect(route).toContain("set_config('app.authorized_company_ids', ${String(companyId)}, true)");
+    expect(route).toContain("eq(ledgerAccounts.companyId, companyId)");
+    expect(route).toContain("isNull(ledgerAccounts.deletedAt)");
+    expect(route).toContain('requireRole("Admin", "Developer")');
   });
 
   it("surfaces source-account request failures instead of showing a false empty state", () => {
