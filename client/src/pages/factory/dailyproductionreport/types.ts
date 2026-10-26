@@ -26,6 +26,10 @@ export interface ReportData {
     missingSelectedPriceBales: number;
     missingCostPriceBales: number;
     missingSellingPriceBales: number;
+    materialCostUnresolvedBales: number;
+    materialCostUnresolvedKg: number;
+    materialCostStoredBales: number;
+    materialCostRateFallbackBales: number;
   };
   production: {
     totalBales: number;
