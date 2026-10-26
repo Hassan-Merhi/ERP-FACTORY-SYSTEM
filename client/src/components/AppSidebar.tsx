@@ -122,6 +122,7 @@ export const ERP_NAV_SECTIONS: NavSection[] = [
     color: NAV_COLOR.analytics,
     items: [
       { title: "Sales Report", url: "/sales-report", icon: PieChart },
+      { title: "Supplier Profit Reconciliation", url: "/supplier-profit-reconciliation", icon: Calculator },
       { title: "Stock In & Sales", url: "/stock-in-sales-report", icon: BarChart3 },
       { title: "Item Market Analysis", url: "/item-market-analysis", icon: BarChart3 },
       { title: "Analytics", url: "/analytics", icon: BarChart3 },
@@ -160,6 +161,7 @@ export const RETAIL_HIDDEN_ERP_ROUTES = new Set([
   "/pos-item-replacement",
   "/sales-tools",
   "/stock-in-sales-report",
+  "/supplier-profit-reconciliation",
   "/erp/rental/shops",
   "/ai-command-center",
   "/ai-validation",
