@@ -63,7 +63,7 @@ export function registerStatsReportsRoutes(app: Express) {
           costPrice: salesItems.costPrice,
           totalSales: salesItems.totalSales,
           totalCost: salesItems.totalCost,
-          profit: salesItems.profit,
+          profit: sql<string>`COALESCE(${salesItems.totalSales}::numeric, 0) - COALESCE(${salesItems.totalCost}::numeric, 0)`,
         })
         .from(salesItems)
         .innerJoin(vouchers, eq(salesItems.voucherId, vouchers.id))
