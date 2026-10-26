@@ -6,7 +6,10 @@ import { getErrorMessage } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
 import { getAccessibleCompanyIds } from "../../security/companyAccessBoundary";
 import { storage } from "../../storage";
-import { createTenantDatabaseScope, runWithDatabaseScopeRuntimeContext } from "../../services/security/databaseScopeRuntimeContext";
+import {
+  createTenantDatabaseScope,
+  runWithDatabaseScopeRuntimeContext,
+} from "../../services/security/databaseScopeRuntimeContext";
 
 type Grouping = "daily" | "monthly" | "yearly";
 type ProfitFilter = "all" | "positive" | "negative";
@@ -363,7 +366,11 @@ export function registerSalesReportBandwidthRoutes(app: Express): void {
       const groups = primaryCompanyId
         ? await runWithDatabaseScopeRuntimeContext(
             createTenantDatabaseScope(primaryCompanyId, authorizedIds, "authorized-companies"),
-            () => buildSalesSummary(selectedCompanies.map((company) => company.id), readSummaryParams(req))
+            () =>
+              buildSalesSummary(
+                selectedCompanies.map((company) => company.id),
+                readSummaryParams(req)
+              )
           )
         : [];
       return res.json({

@@ -11,8 +11,9 @@ describe("Sales Report historical-profit consistency", () => {
   it("calculates the compact summary and all-company comparison from recorded sales minus COGS", () => {
     const compact = read("server/routes/stats/salesReportBandwidthRoutes.ts");
     // The grouped summary and comparison both use the amount recorded on each line.
-    expect(compact.match(/COALESCE\(sales.total_sales, 0\)::numeric - COALESCE\(sales.total_cost, 0\)::numeric/g)?.length)
-      .toBe(2);
+    expect(
+      compact.match(/COALESCE\(sales.total_sales, 0\)::numeric - COALESCE\(sales.total_cost, 0\)::numeric/g)?.length
+    ).toBe(2);
     expect(compact).not.toContain("SUM(COALESCE(sales.profit, 0)::numeric)");
   });
 
@@ -21,7 +22,9 @@ describe("Sales Report historical-profit consistency", () => {
     const legacy = read("server/routes/stats/statsReportsRoutes.ts");
     expect(data).toContain("subtractInventoryValues(totalSales, toInventoryDecimal(item.totalCost))");
     expect(data).toContain("costProfit: costProfit.toString()");
-    expect(legacy).toContain("COALESCE(${salesItems.totalSales}::numeric, 0) - COALESCE(${salesItems.totalCost}::numeric, 0)");
+    expect(legacy).toContain(
+      "COALESCE(${salesItems.totalSales}::numeric, 0) - COALESCE(${salesItems.totalCost}::numeric, 0)"
+    );
   });
 
   it("shows no supplier reconciliation controls anywhere in the built Sales Report", () => {
@@ -38,7 +41,7 @@ describe("Sales Report historical-profit consistency", () => {
     const revenue = 339200.81;
     const storedCogs = 303022.84;
     const formerStoredProfit = 36178.05;
-    const manualReceipts = 372853.70;
+    const manualReceipts = 372853.7;
     const currentStockRateValuation = 69909.75;
     const displayedProfit = revenue - storedCogs;
     const manualProfit = revenue - (manualReceipts - currentStockRateValuation);

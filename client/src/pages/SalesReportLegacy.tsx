@@ -13,15 +13,7 @@ import { useDateJump } from "@/hooks/use-date-jump";
 import { useToast } from "@/hooks/use-toast";
 import { PageHeader } from "@/components/PageHeader";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import {
-  FileSpreadsheet,
-  FileText,
-  TrendingUp,
-  TrendingDown,
-  ChevronRight,
-  ChevronDown,
-  Download,
-} from "lucide-react";
+import { FileSpreadsheet, FileText, TrendingUp, TrendingDown, ChevronRight, ChevronDown, Download } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import {

@@ -12,7 +12,15 @@ import { companyStockValue } from "../../services/inventory/stockValuation";
 import { storage } from "../../storage";
 import { getAccessibleCompanyIds } from "../../security/companyAccessBoundary";
 import { requireAuth, requireNonPOS } from "../../auth";
-import { stockItems, stockGroups, vouchers, salesItems, locations, stockItemLocationPrices, locationPriceGroups } from "@shared/schema";
+import {
+  stockItems,
+  stockGroups,
+  vouchers,
+  salesItems,
+  locations,
+  stockItemLocationPrices,
+  locationPriceGroups,
+} from "@shared/schema";
 import { eq, and, sql, isNull } from "drizzle-orm";
 
 import { getMonthlyData, getStockSummary, getExpenseBreakdown } from "../../services/stats/dashboardStatsService";
@@ -144,7 +152,9 @@ export function registerStatsDataRoutes(app: Express) {
           stockGroupId: stockItems.stockGroupId,
           quantity: salesItems.quantity,
           actualSellingPrice: salesItems.sellingPrice,
-          configuredSellingPrice: sql<string | null>`COALESCE(${stockItemLocationPrices.sellingPrice}, ${stockItems.sellingPrice})`,
+          configuredSellingPrice: sql<
+            string | null
+          >`COALESCE(${stockItemLocationPrices.sellingPrice}, ${stockItems.sellingPrice})`,
           costPrice: salesItems.costPrice,
           totalSales: salesItems.totalSales,
           totalCost: salesItems.totalCost,
@@ -337,7 +347,9 @@ export function registerStatsDataRoutes(app: Express) {
             stockGroupName: stockGroups.name,
             quantity: salesItems.quantity,
             actualSellingPrice: salesItems.sellingPrice,
-            configuredSellingPrice: sql<string | null>`COALESCE(${stockItemLocationPrices.sellingPrice}, ${stockItems.sellingPrice})`,
+            configuredSellingPrice: sql<
+              string | null
+            >`COALESCE(${stockItemLocationPrices.sellingPrice}, ${stockItems.sellingPrice})`,
             costPrice: salesItems.costPrice,
             totalSales: salesItems.totalSales,
             totalCost: salesItems.totalCost,
