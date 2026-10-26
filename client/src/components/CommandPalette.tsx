@@ -41,7 +41,7 @@ import { useAppMode } from "@/contexts/AppModeContext";
 import { isRetailHiddenErpPath, useErpVisibleSections } from "@/components/AppSidebar";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useFactoryVisibleSections } from "@/components/FactorySidebar";
-import { PROPERTIES_NAV_SECTIONS } from "@/components/PropertiesSidebar";
+import { getPropertiesVisibleNavSections } from "@/components/PropertiesSidebar";
 import type { NavItem, NavSection } from "@/components/sidebar/sidebarPrimitives";
 
 interface CommandPaletteUser {
@@ -313,7 +313,7 @@ const PROPERTIES_EXTRAS: PageEntry[] = [
     icon: LayoutDashboard,
   },
   { label: "Properties Analytics", description: "Properties analytics", path: "/properties/analytics", icon: PieChart },
-  { label: "My Settings", description: "Personal preferences", path: "/my-settings", icon: Settings },
+  { label: "My Settings", description: "Personal preferences", path: "/properties/my-settings", icon: Settings },
 ];
 
 const PROPERTIES_ADMIN_EXTRAS: PageEntry[] = [
@@ -508,7 +508,10 @@ export function CommandPalette({
       buildEntries(
         erpVis.sections,
         [
-          ...ERP_EXTRAS,
+          ...ERP_EXTRAS.filter((entry) => {
+            if (entry.path === "/") return canSeeAdminCommands;
+            return erpVis.isItemVisible({ title: entry.label, url: entry.path, icon: entry.icon });
+          }),
           // Hub tabs bypass the sidebar visibility rules, so retail companies filter them here.
           ...ERP_HUB_TABS.filter((tab) => !isRetailCompany || !isRetailHiddenErpPath(tab.path)),
         ],
@@ -518,20 +521,23 @@ export function CommandPalette({
           ? { ...page, description: "Payment and receipt vouchers; automatic journals are read-only" }
           : page
       ),
-    [erpVis.sections, erpVis.visiblePinnedItems, erpVis.visibleUtilityItems, isRetailCompany]
+    [erpVis.sections, erpVis.visiblePinnedItems, erpVis.visibleUtilityItems, erpVis.isItemVisible, isRetailCompany, canSeeAdminCommands]
   );
 
   const factoryPages = useMemo(() => {
-    return buildEntries(factoryVis.sections, [...FACTORY_EXTRAS_ALWAYS, ...FACTORY_HUB_TABS]);
-  }, [factoryVis.sections]);
+    const accessibleExtras = [...FACTORY_EXTRAS_ALWAYS, ...FACTORY_HUB_TABS].filter((entry) =>
+      factoryVis.isPinnedVisible({ url: entry.path })
+    );
+    return buildEntries(factoryVis.sections, accessibleExtras);
+  }, [factoryVis.sections, factoryVis.isPinnedVisible]);
 
   const propertiesPages = useMemo(
     () =>
-      buildEntries(PROPERTIES_NAV_SECTIONS, [
+      buildEntries(getPropertiesVisibleNavSections(effectiveRole === "Developer"), [
         ...PROPERTIES_EXTRAS.filter((entry) => user?.role !== "ERP Tester" || entry.path !== "/my-settings"),
         ...(canSeeAdminCommands ? PROPERTIES_ADMIN_EXTRAS : []),
       ]),
-    [canSeeAdminCommands, user?.role]
+    [canSeeAdminCommands, user?.role, effectiveRole]
   );
 
   const showErp = !isPOS && hasErpAccess;
