@@ -201,6 +201,9 @@ export function useErpVisibleSections(user?: SidebarUser): {
     const isOwner = effectiveRole === "Owner";
     const featureKeys = getErpRouteFeatureKeys(item.url);
 
+    // Match the View Only Dashboard restriction already enforced on main.
+    // Shared by desktop, mobile, recent links and command search.
+    if (effectiveRole === "View Only" && item.url === "/financial-overview") return false;
     if (selectedCompany?.companyType === "retail" && RETAIL_HIDDEN_ERP_ROUTES.has(item.url)) return false;
     if (effectiveRole === "ERP Tester" && item.url === "/transaction-journal") return false;
     if (item.url === "/tracking") return !isPOSUser;
