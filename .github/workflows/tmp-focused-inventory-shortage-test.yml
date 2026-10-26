@@ -1,5 +1,7 @@
 name: Temporary negative-layer focused DB regression
 on:
+  pull_request:
+    branches: [main]
   push:
     branches: [fix/negative-shortage-layer-prune-core-20261026]
 permissions:
