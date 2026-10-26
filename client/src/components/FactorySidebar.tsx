@@ -201,12 +201,17 @@ export function useFactoryVisibleSections(user?: FactorySidebarUser): {
       const enabled = defaultOn ? settings?.[page.featureFlag] !== false : settings?.[page.featureFlag] === true;
       if (!enabled) return false;
     }
+    // Cost Centers deliberately has stricter route-level grants even for
+    // privileged roles. Match the FactoryRoutes condition before any bypass.
+    if (page.key === "factory/cost-centers") {
+      return myAccess.fullAccess ||
+        myAccess.pageKeys.includes("factory/cost-centers") ||
+        myAccess.pageKeys.includes("factory/accounts");
+    }
+    // The ordinary Factory route guard bypasses per-user page lists for these roles.
     const privilegedRole = ["Admin", "Owner", "Developer"].includes(user?.role ?? "");
     if (!privilegedRole && !myAccess.fullAccess && !hasFactoryPageKey(page, myAccess.pageKeys)) {
-      // FactoryRoutes explicitly allows account access to open Cost Centers.
-      if (!(page.key === "factory/cost-centers" && myAccess.pageKeys.includes("factory/accounts"))) {
-        return false;
-      }
+      return false;
     }
     return true;
   };
