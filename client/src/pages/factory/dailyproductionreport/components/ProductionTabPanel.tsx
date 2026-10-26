@@ -540,7 +540,11 @@ export function ProductionTabPanel({ report }: { report: DailyProductionReportSt
                   <StatRow label="Weight" value={fmtKg(data?.balanceOnTable.weightKg ?? 0)} />
                   {!costsHidden && (
                     <>
-                      <StatRow label="Cumulative Rate" value={fmtRate(data?.balanceOnTable.costPerKg ?? 0)} sub="per kg, through end date" />
+                      <StatRow
+                        label="Cumulative Rate"
+                        value={fmtRate(data?.balanceOnTable.costPerKg ?? 0)}
+                        sub="per kg, through end date"
+                      />
                       <StatRow label="Value" value={fmtMoney(data?.balanceOnTable.value ?? 0)} />
                     </>
                   )}
