@@ -111,10 +111,15 @@ const FACTORY_NAV_ICONS: Record<string, typeof Package> = {
   "factory/intelligence/settings": Settings,
 };
 
-const FACTORY_SIDEBAR_GROUP_ORDER = ["Production", "Sales", "Inventory", "Finance", "Rentals", "Intelligence"] as const;
+// UI grouping only: do not change the canonical registry's permission keys or Settings grouping.
+const FACTORY_SIDEBAR_GROUP_ORDER = ["Production", "Inventory", "Sales & Loading", "Finance", "Rentals", "Intelligence"] as const;
+function visibleFactoryGroup(page: (typeof FACTORY_SIDEBAR_PAGES)[number]): string {
+  if (page.key === "factory/bales-hub") return "Inventory";
+  return page.group === "Sales" ? "Sales & Loading" : page.group;
+}
 const FACTORY_SIDEBAR_COLORS: Record<string, string> = {
   Production: NAV_COLOR.operations,
-  Sales: NAV_COLOR.sales,
+  "Sales & Loading": NAV_COLOR.sales,
   Inventory: NAV_COLOR.inventory,
   Finance: NAV_COLOR.finance,
   Rentals: NAV_COLOR.rentals,
@@ -122,13 +127,13 @@ const FACTORY_SIDEBAR_COLORS: Record<string, string> = {
 };
 
 export const FACTORY_NAV_SECTIONS: FactoryNavSection[] = FACTORY_SIDEBAR_GROUP_ORDER.map((label) => {
-  const pages = FACTORY_SIDEBAR_PAGES.filter((page) => page.group === label);
+  const pages = FACTORY_SIDEBAR_PAGES.filter((page) => visibleFactoryGroup(page) === label && !page.pinned);
   return {
     label,
     color: FACTORY_SIDEBAR_COLORS[label],
     developerOnly: pages.length > 0 && pages.every((page) => page.accessLevel === "developer"),
     items: pages.map((page) => ({
-      title: page.label,
+      title: page.key === "factory/invoicing" ? "Invoicing & Loadings" : page.label,
       url: page.route,
       icon: FACTORY_NAV_ICONS[page.key] ?? FileText,
       accessKey: page.key,
@@ -227,6 +232,21 @@ export function useFactoryVisibleSections(user?: FactorySidebarUser): {
           return false;
         }
         if (item.hideKey && myAccess?.hiddenCostFields?.includes(item.hideKey)) return false;
+
+        // Relocate lower-traffic specialty pages into their owning workflow.
+        // Keep the standalone link if the user cannot open any parent page.
+        const relatedParentVisible = (url: string) => isPinnedVisible({ url });
+        if (item.accessKey === "factory/contacts" && relatedParentVisible("/factory/parties")) return false;
+        if (item.accessKey === "factory/cost-centers" && relatedParentVisible("/factory/accounts")) return false;
+        if (item.accessKey === "factory/sheets-sacks" && relatedParentVisible("/factory/location-inventory")) {
+          return false;
+        }
+        if (
+          item.accessKey === "factory/stock-allocation-v5" &&
+          (relatedParentVisible("/factory/location-inventory") || relatedParentVisible("/factory/containers-hub"))
+        ) {
+          return false;
+        }
         return true;
       }),
     }))
