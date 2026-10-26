@@ -83,6 +83,15 @@ export interface ReportData {
     weightKg: number;
     costPerKg: number;
     value: number;
+    diagnostics?: {
+      basis: "remaining-batch-cost";
+      valuedBatchCount: number;
+      inferredHistoricalBatchCount: number;
+      invalidBatchCount: number;
+      legacyWeightKg: number;
+      weightDifferenceKg: number;
+    } | null;
+    warnings?: string[];
   };
   kgComparison: {
     producedKg: number;
