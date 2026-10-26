@@ -118,6 +118,11 @@ needs an owner decision; none is removed by the coverage program itself.
   `server/lib/workerBalesPdfGenerator.ts` and the three
   `server/services/sp-sales-form-v2/build*Sheet.ts` builders. Deleting them
   deletes the tests that certify them, so each is decided individually.
+- **Factory container tracking chain.** In `server/services/factory-container-tracking/`,
+  nothing outside the folder calls `trackOneFactoryContainerById` (`capacity-api.ts`),
+  so `track-one.ts`, `persistence.ts` and the factory `parcels-app.ts` only reach
+  each other. Production uses the folder only for `getFactoryTrackingProgress`.
+  The dead-code report misses them because `index.ts` re-exports every part.
 
 Removed so far: `server/services/factory/historical-replay/exactApply.ts`
 (superseded by `exactApplyFinal.ts`) and `server/services/syncSalesItemCosts.ts`
