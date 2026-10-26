@@ -6,7 +6,12 @@ import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
-import { PeriodFilter, PeriodFilterValue, getDefaultPeriodValue, parsePeriodFilterDate } from "@/components/ui/period-filter";
+import {
+  PeriodFilter,
+  PeriodFilterValue,
+  getDefaultPeriodValue,
+  parsePeriodFilterDate,
+} from "@/components/ui/period-filter";
 import { ErpMobileFilters } from "@/components/ui/erp-mobile-filters";
 import { useDateJump } from "@/hooks/use-date-jump";
 
@@ -37,6 +42,7 @@ import {
   type SalesReportFilterControlsProps,
 } from "./salesreportlegacy/SalesReportFilterControls";
 import type { ApiListRow } from "@shared/apiTypes";
+
 function getInitialSalesReportPeriod(): PeriodFilterValue {
   if (typeof window === "undefined") return getDefaultPeriodValue("today");
   const query = new URLSearchParams(window.location.search);
