@@ -284,6 +284,9 @@ export function registerContainerFreightWriteRoutes(app: Express) {
                 .limit(1)).length > 0
             : false;
           if (lockedContainer?.status === "OFFLOADED" || hasActiveOffload) {
+            if (String(req.body.currency ?? lockedPO.currency).toUpperCase() !== String(lockedPO.currency).toUpperCase()) {
+              throw new HttpError(409, "Cannot change purchase currency after stock has been received.");
+            }
             assertOffloadedPurchaseOrderChargesUnchanged(lockedPO, {
               freight: newFreight.toFixed(2),
               surcharge: newSurcharge.toFixed(2),
