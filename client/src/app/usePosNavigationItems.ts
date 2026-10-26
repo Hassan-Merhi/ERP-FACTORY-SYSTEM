@@ -84,14 +84,6 @@ export function usePosNavigationItems({
 
   const items: PosNavItem[] = [
     {
-      label: "Containers OTW",
-      group: "tools",
-      icon: Ship,
-      active: isOnContainers,
-      testId: "button-pos-containers-tab",
-      onClick: () => setLocation("/pos-containers"),
-    },
-    {
       label: "Point of Sale",
       group: "primary",
       icon: ShoppingCart,
@@ -138,6 +130,14 @@ export function usePosNavigationItems({
       active: isOnTransferOrders,
       testId: "button-transfer-orders-tab",
       onClick: () => setLocation("/pos-transfer-orders"),
+    },
+    {
+      label: "Containers OTW",
+      group: "primary",
+      icon: Ship,
+      active: isOnContainers,
+      testId: "button-pos-containers-tab",
+      onClick: () => setLocation("/pos-containers"),
     },
     ...(user?.canAccessCustomers
       ? [
