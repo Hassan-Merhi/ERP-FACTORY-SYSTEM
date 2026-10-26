@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useLocation } from "wouter";
 import { useMainContentFocus } from "@/hooks/use-main-content-focus";
 import { useCompany } from "@/contexts/CompanyContext";
@@ -31,7 +31,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { SkipLink } from "@/components/ui/responsive-accessibility";
 import { WorkspaceRouteBoundary } from "@/components/ui/workspace-route-boundary";
-import { ArrowLeft, LogOut, Search, ShoppingCart } from "lucide-react";
+import { ArrowLeft, LogOut, Search, ShoppingCart, ChevronDown } from "lucide-react";
 import { usePosNavigationItems } from "./usePosNavigationItems";
 import { canUseAdminSearch, type ShellUser } from "./shellUser";
 import "@/styles/pos-sidebar-modern.css";
@@ -78,13 +78,20 @@ export function PosShell({
   const [currentLocation] = useLocation();
   const { selectedCompany } = useCompany();
   const { t } = useApplicationLanguage();
-  const posNavItems = usePosNavigationItems({ user, posImportEnabled, chatUnread });
+  const posNavItems = usePosNavigationItems({ user, posImportEnabled, chatUnread, companyType: selectedCompany?.companyType });
+  const primaryNavItems = posNavItems.filter((item) => item.group === "primary");
+  const toolNavItems = posNavItems.filter((item) => item.group === "tools");
+  const [toolsExpanded, setToolsExpanded] = useState(false);
+  useEffect(() => {
+    if (toolNavItems.some((item) => item.active)) setToolsExpanded(true);
+  }, [currentLocation, selectedCompany?.id]);
 
   const posStyle = { "--sidebar-width": "14rem", "--sidebar-width-icon": "3.5rem" };
   const isFullHeightRoute =
     currentLocation === "/" ||
     currentLocation === "/pos" ||
     currentLocation === "/pos/" ||
+    currentLocation === "/retail/pos" ||
     currentLocation.startsWith("/pos/edit/");
   const hasAdminSearch = canUseAdminSearch(user);
   const userMenuUser = { username: user.username, role: user.role ?? "POS" };
