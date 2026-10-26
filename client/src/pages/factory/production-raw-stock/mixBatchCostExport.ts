@@ -267,7 +267,7 @@ export async function exportMixBatchCostAnalysis(
     // Latest month is first, so the prior calendar month is the next row when present.
     const prior = months[index + 1];
     const priorDate = /^\d{4}-\d{2}$/.test(item.key) ? new Date(`${item.key}-01T12:00:00Z`) : null;
-    priorDate?.setUTCMonth(priorDate.getUTCMonth() - 1);
+    if (priorDate) priorDate.setUTCMonth(priorDate.getUTCMonth() - 1);
     if (priorDate && prior && prior.key === priorDate.toISOString().slice(0, 7) && prior.kg > 0 && prior.cost > 0) {
       const delta = item.kg > 0 ? (item.cost / item.kg) / (prior.cost / prior.kg) - 1 : 0;
       row.getCell(6).value = { formula: `IFERROR(E${n}/E${n + 1}-1,0)`, result: Number.isFinite(delta) ? delta : 0 };
