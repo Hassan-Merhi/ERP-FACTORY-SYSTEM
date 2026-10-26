@@ -2,7 +2,7 @@
  * Shared read-only Balance on Table as-of valuation for Production Overview
  * and Factory Net Position. Each remaining batch (including carry-forwards)
  * retains its own stored cost basis. The original cumulative batch rate is
- * returned separately for the legacy production-profit computation.
+ * exposed separately for legacy reconciliation only.
  */
 import { sql } from "drizzle-orm";
 import { db } from "../../db";
@@ -202,8 +202,8 @@ export async function getFactoryBalanceOnTableSnapshot(
     weightKg: valuation.remainingWeight.toNumber(),
     costPerKg: valuation.weightedRate.toNumber(),
     value: valuation.remainingValue.toDecimalPlaces(2).toNumber(),
-    // This retained cumulative rate remains the basis of the unchanged
-    // Production Weight Cost/Profit calculation, not the Balance on Table rate.
+    // Kept for legacy reporting/reconciliation only. Production Weight Cost
+    // uses each produced bale's historical material cost; WIP uses remaining batches.
     batchRateDecimal: cumulativeRate,
     baleWeightKg: baleKg.toNumber(),
     diagnostics,
