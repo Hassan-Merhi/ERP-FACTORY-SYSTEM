@@ -3,7 +3,8 @@ import { formatNumber } from "@/lib/formatNumber";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Layers, Pencil, Trash2, MessageCircle, Loader2 } from "lucide-react";
+import { Layers, Pencil, Trash2, MessageCircle, Loader2, FileSpreadsheet } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
 import { MixBatchWhatsAppPreview } from "./MixBatchWhatsAppPreview";
 import type { MixBatchSupplierCategory, MixBatchSupplierCategoryLink } from "./mixBatchCategoryTargets";
@@ -92,6 +93,29 @@ export function MixBatchList({
   formatDisplayDate,
 }: MixBatchListProps) {
   const [showAllMixBatches, setShowAllMixBatches] = useState(false);
+  const [isExportingExcel, setIsExportingExcel] = useState(false);
+  const [exportMonth, setExportMonth] = useState(() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  });
+  const { toast } = useToast();
+
+  const handleExportExcel = async () => {
+    setIsExportingExcel(true);
+    try {
+      const { exportMixBatchCostAnalysis } = await import("./mixBatchCostExport");
+      await exportMixBatchCostAnalysis(mixBatches, exportMonth);
+      toast({ title: "Excel exported", description: "Daily, monthly, dashboard and detailed batch cost sheets downloaded." });
+    } catch (error) {
+      toast({
+        title: "Excel export failed",
+        description: error instanceof Error ? error.message : "Could not generate the Excel workbook.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsExportingExcel(false);
+    }
+  };
   const BATCH_PREVIEW_COUNT = 15;
 
   const visibleMixBatches = useMemo(
@@ -143,6 +167,32 @@ export function MixBatchList({
             )}
             Send WhatsApp
           </Button>
+        </div>
+
+        <div className="flex w-full flex-col gap-1.5 sm:w-auto">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <input
+              type="month"
+              value={exportMonth}
+              onChange={(event) => setExportMonth(event.target.value)}
+              aria-label="Excel dashboard month"
+              title="Dashboard month (the export includes all historical daily and monthly data)"
+              className="h-10 min-w-0 rounded-md border border-input bg-background px-2 text-sm font-medium sm:w-36"
+              data-testid="input-mix-batch-export-month"
+            />
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleExportExcel}
+              disabled={isLoading || isExportingExcel || mixBatches.length === 0 || !exportMonth}
+              className="h-10 gap-2 border-emerald-500/40 font-semibold text-emerald-700 dark:text-emerald-300"
+              data-testid="button-export-mix-batch-cost-excel"
+            >
+              {isExportingExcel ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileSpreadsheet className="h-4 w-4" />}
+              Export Cost Excel
+            </Button>
+          </div>
+          <span className="text-[10px] text-muted-foreground">Dashboard month · all history included</span>
         </div>
 
         <MixBatchWhatsAppPreview
