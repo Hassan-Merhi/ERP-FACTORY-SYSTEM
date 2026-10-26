@@ -10,6 +10,7 @@ import {
 import { db } from "../../db";
 import { companyStockValue } from "../../services/inventory/stockValuation";
 import { isPerpetualInventoryActive } from "../../services/accounting/perpetualInventory/cutover";
+import { describeInventoryCostBridge } from "../../services/accounting/costBridgeInterpretation";
 import { storage } from "../../storage";
 import { getAccessibleCompanyIds } from "../../security/companyAccessBoundary";
 import { requireAuth, requireNonPOS } from "../../auth";
@@ -291,11 +292,7 @@ export function registerStatsDataRoutes(app: Express) {
         reconciliation: subtractInventoryValues(storedCogs, reconciledCogs).toNumber(),
         storedCostProfit: subtractInventoryValues(totalSales, storedCogs).toNumber(),
         adjustedCostProfit: subtractInventoryValues(totalSales, reconciledCogs).toNumber(),
-        accountingBasis: perpetualInventoryActive ? "perpetual" : "periodic",
-        inventoryBridgeIsJournalReconciliation: perpetualInventoryActive,
-        reconciliationInterpretation: perpetualInventoryActive
-          ? "Inventory movement and stored COGS bridge; review source-level movements before posting corrections."
-          : "Diagnostic stock-flow comparison only. Periodic inventory does not book each sale through the inventory control account; production, consumption, returns, legacy transfers and historical repricing can explain a nonzero difference. Do not book the difference as a standalone adjustment.",
+        ...describeInventoryCostBridge(perpetualInventoryActive),
         formula:
           "Opening Stock + Stock Received + Net Credit/Debit Note Inventory + Stock Adjustment Net - Closing Stock",
       });
