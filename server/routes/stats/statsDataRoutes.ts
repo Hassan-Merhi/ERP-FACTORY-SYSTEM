@@ -23,6 +23,7 @@ function enhanceSalesReportItem<
     actualSellingPrice: string;
     totalSales: string;
     costProfit: string;
+    totalCost: string;
     quantity: string;
   },
 >(item: T) {
@@ -33,7 +34,9 @@ function enhanceSalesReportItem<
   const configuredProfit = multiplyInventoryValues(subtractInventoryValues(actualPrice, configuredPrice), quantity);
   const totalConfiguredCost = multiplyInventoryValues(configuredPrice, quantity);
   const totalSales = toInventoryDecimal(item.totalSales);
-  const costProfit = toInventoryDecimal(item.costProfit);
+  // Display profit must reconcile to the exact booked line totals. Preserve
+  // stored sales_items.profit as historical evidence; never recost a sale here.
+  const costProfit = subtractInventoryValues(totalSales, toInventoryDecimal(item.totalCost));
   const costProfitPercentage = totalSales.isPositive()
     ? multiplyInventoryValues(divideInventoryValues(costProfit, totalSales), 100)
     : toInventoryDecimal(0);
@@ -43,6 +46,7 @@ function enhanceSalesReportItem<
 
   return {
     ...item,
+    costProfit: costProfit.toString(),
     configuredSellingPrice: configuredPrice.toString(),
     configuredProfit: configuredProfit.toNumber(),
     totalConfiguredCost: totalConfiguredCost.toNumber(),
