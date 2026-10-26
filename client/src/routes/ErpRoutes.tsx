@@ -11,6 +11,7 @@ import {
   AccountMigration,
   AccountTransfer,
   AccountingCreate,
+  AccountingToolbox,
   AccountingOpenItems,
   CashBankReconciliation,
   MonetaryFxAccounting,
@@ -245,6 +246,7 @@ export function ErpRoutes({ user }: ErpRoutesProps) {
 
       {R("/accounts/historical-openings", isAdminOwnerOrDev && canAccess("accounts"), HistoricalOpenings)}
       {G("/accounts", "accounts", Accounts)}
+      {R("/accounting/toolbox", isDeveloper, AccountingToolbox)}
       {R("/accounting/open-items", isDeveloper, AccountingOpenItems)}
       {R("/accounting/cash-bank", isDeveloper, CashBankReconciliation)}
       {R("/accounting/monetary-fx", isDeveloper, MonetaryFxAccounting)}
