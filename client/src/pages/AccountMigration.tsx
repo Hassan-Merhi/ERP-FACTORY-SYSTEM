@@ -323,7 +323,7 @@ export default function AccountMigration() {
   } = useQuery<LedgerAccount[]>({
     queryKey: ["/api/admin/account-migration/accounts", srcCompanyId],
     queryFn: async () => {
-      const res = await fetch(`/api/ledger-accounts?companyId=${encodeURIComponent(srcCompanyId)}&includeHidden=true`, {
+      const res = await fetch(`/api/admin/account-migration/accounts/${encodeURIComponent(srcCompanyId)}`, {
         credentials: "include",
         cache: "no-store",
       });
