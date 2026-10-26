@@ -25,6 +25,7 @@ Started: 2026-10-26. Single working branch: `feature/navigation-usage-cleanup`.
 - Phase 1: SOURCE CHANGES COMPLETE, pending Claude verification. Removed duplicate Factory Daybook grouped link while keeping pinned/route; shared Properties role-based nav filter; command search now respects Factory page grants/feature flags, developer reconciliation visibility and other core route controls. All committed on this branch; no CI/tests/builds.
 - Phase 2: LIVE STUDY COMPLETE WITH LIMITATIONS. Read-only Render service/log/metric checks and primary Postgres aggregate queries documented in `docs/navigation-usage-study-2026-10-26.md` (3,445 navigation events at initial snapshot; 24 users; 11 companies; 122 raw routes). Events are retained only 30 days / max 200 per user. No data mutation.
 - Phase 3: SOURCE CHANGES COMPLETE, pending Claude verification. ERP context links, permission-aware sidebar fallbacks, supplier profit tab, Sales Tools replacement tab, optional-voucher link, and related-sales-report links have been committed. All legacy routes preserved. See `docs/navigation-cleanup-phase3-erp.md` for exact changes and Claude checklist.
-- Phase 4: NEXT ACTIVE PHASE — Factory navigation consolidation.
-- Phases 5–8: NOT STARTED.
+- Phase 4: SOURCE CHANGES COMPLETE, pending Claude verification. Factory sidebar organized around Production, Inventory, Sales & Loading, Finance while keeping Rentals and developer Intelligence; Bale Explorer shown under Inventory; four low-use specialty pages moved into permission-checked contextual navigation with standalone fallbacks; Factory command search retains direct links. See `docs/navigation-cleanup-phase4-factory.md`. No FactoryRoutes or canonical factory access registry changes.
+- Phase 5: NEXT ACTIVE PHASE — Properties and POS navigation.
+- Phases 6–8: NOT STARTED.
 - Claude acceptance is pending. Never claim 100% production verification before Claude completes it.
