@@ -50,7 +50,7 @@ export function getDeveloperMaintenanceLinks(mode: AccountingToolboxMode): Accou
     item("Inventory Repair", "Review inventory discrepancies", "/factory/inventory-repair"),
     item("Import Cycle Diagnostics", "Investigate import-cycle problems", "/factory/import-cycle-diagnostics"),
     item("Deleted Items", "Inspect historical deletions and recovery", "/factory/deleted-items"),
-    item("Balance Repair", "Review ledger reconciliation and repair", "/balance-repair"),
+    item("Balance Repair", "Review ledger reconciliation and repair", "/factory/balance-repair"),
     item("Net Position Details", "Inspect the factory net-position breakdown", "/factory/net-position-details"),
   ];
   return [
