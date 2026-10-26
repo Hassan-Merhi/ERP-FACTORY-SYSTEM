@@ -433,7 +433,7 @@ async function loadStockOut(filters: StockInSalesDetailFilters): Promise<Paginat
         unitCost: salesItems.costPrice,
         totalSales: salesItems.totalSales,
         totalCost: salesItems.totalCost,
-        costProfit: salesItems.profit,
+        costProfit: sql<string>`(${salesItems.totalSales}::numeric - ${salesItems.totalCost}::numeric)`,
       })
       .from(salesItems)
       .innerJoin(vouchers, eq(salesItems.voucherId, vouchers.id))
