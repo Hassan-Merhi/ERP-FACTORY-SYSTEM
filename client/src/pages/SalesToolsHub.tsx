@@ -33,7 +33,7 @@ export default function SalesToolsHub({ access }: { access?: ErpFeatureAccess })
   const { data: user } = useQuery<AuthMe>({ queryKey: ["/api/auth/me"] });
   const { selectedCompany } = useCompany();
 
-  const isPOS = user?.role === "POS";
+  const isPOS = (user?.currentRole ?? user?.role) === "POS";
   const tabs = isPOS
     ? POS_TABS.filter((tab) => tab.key !== "daybook" || canAccessErpFeature(access, "pos_daybook"))
     : ERP_TABS.filter(
