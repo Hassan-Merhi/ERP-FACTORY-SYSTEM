@@ -532,8 +532,28 @@ export function ProductionTabPanel({ report }: { report: DailyProductionReportSt
                   <StatRow label="Weight" value={fmtKg(data?.balanceOnTable.weightKg ?? 0)} />
                   {!costsHidden && (
                     <>
-                      <StatRow label="Batch Rate" value={fmtRate(data?.balanceOnTable.costPerKg ?? 0)} sub="per kg" />
+                      <StatRow
+                        label="Remaining Avg Rate"
+                        value={fmtRate(data?.balanceOnTable.costPerKg ?? 0)}
+                        sub="per kg, through selected date"
+                      />
                       <StatRow label="Value" value={fmtMoney(data?.balanceOnTable.value ?? 0)} />
+                      <div className="pt-2 text-[11px] text-muted-foreground">
+                        From {data?.balanceOnTable.diagnostics?.valuedBatchCount ?? 0} batches with material remaining.
+                      </div>
+                      {(data?.balanceOnTable.warnings?.length ?? 0) > 0 && (
+                        <div className="pt-1 text-[11px] text-amber-600 dark:text-amber-400" role="status">
+                          {data?.balanceOnTable.diagnostics?.inferredHistoricalBatchCount
+                            ? "Some historical batch usage is inferred from recorded events. "
+                            : ""}
+                          {data?.balanceOnTable.diagnostics?.invalidBatchCount
+                            ? "Some batches have invalid weight or cost. "
+                            : ""}
+                          {Math.abs(data?.balanceOnTable.diagnostics?.weightDifferenceKg ?? 0) > 0.001
+                            ? "Remaining batch kg differs from the old global weight calculation."
+                            : ""}
+                        </div>
+                      )
                     </>
                   )}
                 </>
