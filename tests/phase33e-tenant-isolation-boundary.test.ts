@@ -476,6 +476,7 @@ describe("Phase 33E :companyId path boundary", () => {
       { companyId: 10, role: "Admin" },
       { companyId: 20, role: "Admin" },
     ]);
+    harness.storage.getUser.mockResolvedValue({ id: "user-1", role: "Admin" });
     const allowed = await runParam(
       request({ path: "/api/admin/account-migration/accounts/20", method: "GET", currentRole: "Admin" }),
       "20"
