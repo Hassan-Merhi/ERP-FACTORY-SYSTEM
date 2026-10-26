@@ -1,7 +1,7 @@
 import type { Request } from "express";
 import { eq, and } from "drizzle-orm";
 
-import { containers, containerCharges, purchaseOrders, poLineItems, vouchers, voucherEntries } from "@shared/schema";
+import { containers, containerOffloads, containerCharges, purchaseOrders, poLineItems, vouchers, voucherEntries } from "@shared/schema";
 
 import { db } from "../../db";
 import { storage } from "../../storage";
@@ -204,10 +204,19 @@ export async function applyPurchaseOrderItemsUpdate(
       // The route performs a fast user-facing check before entering the transaction.
       // Re-check here after the container lock so an offload that won the race cannot
       // be followed by a stock-item swap against inventory that was already materialized.
-      if (nativeZmw && lockedContainer?.status === "OFFLOADED") {
+      const hasActiveOffload = lockedContainer
+        ? (await tx
+            .select({ id: containerOffloads.id })
+            .from(containerOffloads)
+            .where(and(eq(containerOffloads.containerId, lockedContainer.id), eq(containerOffloads.optional, false)))
+            .limit(1)).length > 0
+        : false;
+      // The materialized receipt remains posted even after status advances beyond OFFLOADED.
+      const receiptPosted = lockedContainer?.status === "OFFLOADED" || hasActiveOffload;
+      if (nativeZmw && receiptPosted) {
         throw new HttpError(409, "Reverse the offload before editing native Kwacha purchase quantities or prices.");
       }
-      if (lockedContainer?.status === "OFFLOADED") {
+      if (receiptPosted) {
         assertOffloadedPurchaseOrderChargesUnchanged(lockedPO, {
           freight: freight.toFixed(2),
           surcharge: surcharge.toFixed(2),
