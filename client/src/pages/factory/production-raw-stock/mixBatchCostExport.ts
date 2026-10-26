@@ -34,10 +34,10 @@ const TEXT = "FF25364B";
 const WHITE = "FFFFFFFF";
 const MUTED = "FF62758D";
 const ALERT = "FFFFE8DA";
-const KG_FMT = '#,##0.000;[Red](#,##0.000);–';
-const USD_FMT = '$#,##0.00;[Red]($#,##0.00);–';
-const RATE_FMT = '$0.0000;[Red]($0.0000);–';
-const PCT_FMT = '+0.0%;[Red]-0.0%;–';
+const KG_FMT = '#,##0.000;[Red](#,##0.000);"–"';
+const USD_FMT = '$#,##0.00;[Red]($#,##0.00);"–"';
+const RATE_FMT = '$0.0000;[Red]($0.0000);"–"';
+const PCT_FMT = '+0.0%;[Red]-0.0%;"–"';
 
 function numeric(value: string | number | null | undefined): number {
   const parsed = Number(value ?? 0);
@@ -61,7 +61,7 @@ function textValue(value: string): string {
   return /^[=+@\-]/.test(trimmed.trimStart()) ? `'${trimmed}` : trimmed;
 }
 
-function compileRows(batches: MixBatchRow[]): CostRow[] {
+export function compileRows(batches: MixBatchRow[]): CostRow[] {
   return batches
     .filter(batch => batch.carryForwardFromId == null)
     .map(batch => {
@@ -82,7 +82,7 @@ function compileRows(batches: MixBatchRow[]): CostRow[] {
     .sort((a, b) => b.date.localeCompare(a.date) || b.code.localeCompare(a.code));
 }
 
-function groupRows(rows: CostRow[], period: "date" | "month"): CostGroup[] {
+export function groupRows(rows: CostRow[], period: "date" | "month"): CostGroup[] {
   const map = new Map<string, CostGroup>();
   for (const row of rows) {
     const key = row[period];
