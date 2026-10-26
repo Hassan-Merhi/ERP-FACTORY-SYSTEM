@@ -493,18 +493,6 @@ export async function exportMixBatchCostAnalysis(
   dashboard.getRow(footerRow).height = 36;
   dashboard.views = [{ state: "frozen", ySplit: 11 }];
 
-  // Highlight unusually high/low weighted rates without hiding any figures.
-  if (daily.rowCount >= 6) {
-    daily.addConditionalFormatting({
-      ref: `F5:F${daily.rowCount}`,
-      rules: [{ type: "colorScale", cfvo: [{ type: "min" }, { type: "max" }], color: [{ argb: "FFD7F3EF" }, { argb: "FFFFE0C0" }] }],
-    });
-  }
-  if (monthly.rowCount >= 6) {
-    monthly.addConditionalFormatting({
-      ref: `E5:E${monthly.rowCount}`,
-      rules: [{ type: "colorScale", cfvo: [{ type: "min" }, { type: "max" }], color: [{ argb: "FFD7F3EF" }, { argb: "FFFFE0C0" }] }],
-    });
-  }
+  // High/low amounts remain visible with readable fixed USD and KG formats.
   await writeFile(workbook, `Raw_Materials_Cost_Analysis_${allTime ? "All_Time" : month}.xlsx`);
 }
