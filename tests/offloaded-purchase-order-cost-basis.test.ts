@@ -53,7 +53,9 @@ describe("offloaded purchase order cost-basis integrity", () => {
     ["discount", "1"],
     ["otherCharges", "1"],
   ] as const)("blocks a changed %s from bypassing offload costing", (field, amount) => {
-    expect(() => assertOffloadedPurchaseOrderChargesUnchanged(oldCharges, { ...oldCharges, [field]: amount })).toThrow();
+    expect(() =>
+      assertOffloadedPurchaseOrderChargesUnchanged(oldCharges, { ...oldCharges, [field]: amount })
+    ).toThrow();
   });
 
   it("protects both item-edit and charge-only routes inside locked transactions", () => {
@@ -67,6 +69,6 @@ describe("offloaded purchase order cost-basis integrity", () => {
     expect(itemRoute.indexOf("assertOffloadedPurchaseOrderCostBasisUnchanged")).toBeLessThan(
       itemRoute.indexOf("await tx.delete(poLineItems)")
     );
-    expect(itemRoute).toContain("if (lockedContainer?.status === \"OFFLOADED\")");
+    expect(itemRoute).toContain('if (lockedContainer?.status === "OFFLOADED")');
   });
 });
