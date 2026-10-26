@@ -34,7 +34,10 @@ import { isRetailFinancialText, translateRetailFinancialText } from "@/i18n/reta
 import { isRetailFashionText, translateRetailFashionText } from "@/i18n/retailFashionTranslations";
 import { isWave8ReleaseText, translateWave8ReleaseText } from "@/i18n/wave8ReleaseTranslations";
 import { isPayrollUiText, translatePayrollUiText } from "@/i18n/payrollUiTranslations";
-import { isSupplierProfitReconciliationText, translateSupplierProfitReconciliationText } from "@/i18n/supplierProfitReconciliationTranslations";
+import {
+  isSupplierProfitReconciliationText,
+  translateSupplierProfitReconciliationText,
+} from "@/i18n/supplierProfitReconciliationTranslations";
 
 const HARD_EXCLUDED_SELECTOR = [
   "code",
