@@ -1,4 +1,5 @@
 import type { Express } from "express";
+import { registerSupplierProfitReconciliationRoutes } from "./supplierProfitReconciliationRoutes";
 import { getErrorMessage } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
 import {
@@ -79,6 +80,7 @@ const effectiveSalesPriceLocation = sql<number>`COALESCE(
 )`;
 
 export function registerStatsDataRoutes(app: Express) {
+  registerSupplierProfitReconciliationRoutes(app);
   app.get("/api/stats/monthly-data", requireAuth, requireNonPOS, async (req, res) => {
     try {
       const companyId = req.session.currentCompanyId;
