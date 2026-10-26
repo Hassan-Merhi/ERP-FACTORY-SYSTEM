@@ -152,6 +152,16 @@ const ERP_HUB_TABS: PageEntry[] = [
   { label: "Customers", description: "Customer accounts", path: "/parties?tab=customers", icon: Users },
 ];
 
+/** Keep relocated tools directly searchable even when their sidebar shortcuts collapse into parent hubs. */
+const ERP_CONTEXT_ITEMS: NavItem[] = [
+  { title: "Stock", url: "/stock", icon: Box },
+  { title: "Optional Vouchers", url: "/optional-vouchers", icon: FileText },
+  { title: "Supplier Profit Check", url: "/supplier-profit-check", icon: PieChart },
+  { title: "POS Item Replacement", url: "/pos-item-replacement", icon: Archive },
+  { title: "Stock In & Sales", url: "/stock-in-sales-report", icon: BarChart3 },
+  { title: "Item Market Analysis", url: "/item-market-analysis", icon: BarChart3 },
+];
+
 /** Factory routes that aren't in FACTORY_NAV_SECTIONS but were historically in the palette. */
 const FACTORY_EXTRAS_ALWAYS: PageEntry[] = [
   { label: "Factory Daybook", description: DESCRIPTIONS["/factory/daybook"], path: "/factory/daybook", icon: Calendar },
@@ -515,7 +525,7 @@ export function CommandPalette({
           // Hub tabs bypass the sidebar visibility rules, so retail companies filter them here.
           ...ERP_HUB_TABS.filter((tab) => !isRetailCompany || !isRetailHiddenErpPath(tab.path)),
         ],
-        [...erpVis.visiblePinnedItems, ...erpVis.visibleUtilityItems]
+        [...erpVis.visiblePinnedItems, ...erpVis.visibleUtilityItems, ...ERP_CONTEXT_ITEMS.filter(erpVis.isItemVisible)]
       ).map((page) =>
         isRetailCompany && page.path === "/vouchers"
           ? { ...page, description: "Payment and receipt vouchers; automatic journals are read-only" }
