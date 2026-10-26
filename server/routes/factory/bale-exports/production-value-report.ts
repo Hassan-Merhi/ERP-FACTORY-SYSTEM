@@ -422,10 +422,12 @@ export function registerFactoryProductionValueReportRoutes(app: Express) {
       const balanceCostPerKg = balanceSnapshot.costPerKg;
       const balanceValue = balanceSnapshot.value;
 
-      // Weight Cost follows the same historical batch-rate cutoff shown in Balance on Table:
-      // bales produced in the selected period × cumulative batch rate through that period's end.
+      // Weight Cost includes all material converted during the selected period:
+      // regular bales plus wipers and garbage. Those groups are mutually exclusive
+      // in baleRows, so each kilogram is charged once at the historical batch rate
+      // through the selected period's end (matching Balance on Table).
       const weightCostDecimal = calculateProductionWeightCost({
-        producedWeightKg: totalBaleWeightKg,
+        producedWeightKg: new BatchRateDecimal(totalBaleWeightKg).plus(totalWgWeightKg),
         batchRateCost: balanceBatchRateDecimal,
       });
       // Profit follows the active valuation mode:
