@@ -7,11 +7,11 @@
  * This changes only shortage metadata: never inventory quantity, value, COGS,
  * posted vouchers, suppliers or intercompany balances.
  */
-import { sql } from "drizzle-orm";
-import type { DbTransaction } from "../../db";
+import { sql, type SQL } from "drizzle-orm";
+import { resultRows } from "../../lib/queryResult";
 import { logger } from "../../lib/logger";
 
-type Executor = DbTransaction | typeof import("../../db").db;
+type Executor = { execute: (query: SQL) => Promise<unknown> };
 
 export async function clearResolvedNegativeLayers(
   tx: Executor,
@@ -28,7 +28,7 @@ export async function clearResolvedNegativeLayers(
       AND stock_item_id = ${stockItemId}
     RETURNING id, qty
   `);
-  const rows = result.rows as { id: number; qty: string | number }[];
+  const rows = resultRows<{ id: number; qty: string | number }>(result);
   if (!rows.length) return;
   logger.warn("[inventory] Removed stale negative-stock shortage layers for non-negative stock", {
     companyId,
