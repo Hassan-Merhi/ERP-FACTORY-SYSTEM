@@ -159,6 +159,7 @@ interface FactorySidebarUser {
 export function useFactoryVisibleSections(user?: FactorySidebarUser): {
   sections: FactoryNavSection[];
   isPinnedVisible: (item: Pick<NavItem, "url">) => boolean;
+  isHubTabVisible: (url: string) => boolean;
   isAdmin: boolean;
   isDeveloper: boolean;
   isPrivileged: boolean;
@@ -210,6 +211,54 @@ export function useFactoryVisibleSections(user?: FactorySidebarUser): {
     return true;
   };
 
+  const isHubTabVisible = (url: string): boolean => {
+    if (!myAccess) return false;
+    const [pathname, query = ""] = url.split("?", 2);
+    const params = new URLSearchParams(query);
+    const tab = params.get("tab");
+    const section = params.get("section");
+    const hidden = myAccess.hiddenCostFields ?? [];
+    const hiddenKeyByTab: Record<string, Record<string, string>> = {
+      "/factory/bales-hub": {
+        history: "hide_tab_bales_history",
+        barcode: "hide_tab_bales_barcode",
+        products: "hide_tab_bales_products",
+        "customer-loading": "hide_tab_bales_customer_loading",
+      },
+      "/factory/invoicing": {
+        proformas: "hide_invoicing_proformas_tab",
+        invoices: "hide_invoicing_invoices_tab",
+        loadings: "hide_invoicing_loadings_tab",
+        pending: "hide_tab_loadings_pending",
+        priority: "hide_tab_loadings_pending",
+      },
+      "/factory/sales/loadings": {
+        loadings: "hide_invoicing_loadings_tab",
+        pending: "hide_tab_loadings_pending",
+        priority: "hide_tab_loadings_pending",
+      },
+      "/factory/parties": {
+        customers: "hide_tab_parties_customers",
+        suppliers: "hide_tab_parties_suppliers",
+      },
+      "/factory/payroll-hub": {
+        workers: "hide_tab_payrollhub_workers",
+        employees: "hide_tab_payrollhub_employees",
+        insurance: "hide_tab_payrollhub_insurance",
+      },
+    };
+    const value = tab ?? section;
+    const hideKey = value ? hiddenKeyByTab[pathname]?.[value] : undefined;
+    if (hideKey && hidden.includes(hideKey)) return false;
+    if (pathname === "/factory/invoicing" && ["pending", "priority"].includes(tab ?? "") &&
+        (hidden.includes("hide_invoicing_loadings_tab") || settings?.loadingsTabPendingEnabled === false)) return false;
+    if (pathname === "/factory/sales/loadings" && ["pending", "priority"].includes(tab ?? "") &&
+        settings?.loadingsTabPendingEnabled === false) return false;
+    if (pathname === "/factory/bales-hub" && tab === "barcode" &&
+        settings?.balesTabBarcodeEnabled === false) return false;
+    return true;
+  };
+
   const sections = FACTORY_NAV_SECTIONS.filter((s) => !s.developerOnly || isDeveloper)
     .map((s) => ({
       ...s,
@@ -239,7 +288,7 @@ export function useFactoryVisibleSections(user?: FactorySidebarUser): {
     .filter((s) => s.items.length > 0);
 
   const isPrivileged = isAdmin || myAccess?.fullAccess === true;
-  return { sections, isPinnedVisible, isAdmin, isDeveloper, isPrivileged };
+  return { sections, isPinnedVisible, isHubTabVisible, isAdmin, isDeveloper, isPrivileged };
 }
 
 export function FactorySidebar({
