@@ -189,7 +189,7 @@ export function useFactoryVisibleSections(user?: FactorySidebarUser): {
 
   const isPinnedVisible = (item: Pick<NavItem, "url">): boolean => {
     const page = resolveFactoryPage(item.url);
-    if (!page) return false;
+    if (!page || !myAccess) return false; // Never show destinations before company grants resolve.
     if (!factoryPageAllowsRole(page, user?.role)) return false;
     if (
       page.key === "factory/cost-centers" &&
@@ -213,31 +213,9 @@ export function useFactoryVisibleSections(user?: FactorySidebarUser): {
     .map((s) => ({
       ...s,
       items: s.items.filter((item) => {
-        if (item.developerOnly && !isDeveloper) return false;
-        if (item.adminOnly && !isAdmin) return false;
-        if (
-          item.accessKey === "factory/cost-centers" &&
-          !["Admin", "Owner", "Developer", "Manager"].includes(user?.role || "")
-        )
-          return false;
-        if (item.featureFlag) {
-          if (item.featureFlagDefaultOn) {
-            if (settings && settings[item.featureFlag] === false) return false;
-          } else {
-            if (!settings || settings[item.featureFlag] !== true) return false;
-          }
-        }
-        const page = resolveFactoryPage(item.url);
-        if (!page || !factoryPageAllowsRole(page, user?.role)) return false;
-        if (
-          myAccess &&
-          !myAccess.fullAccess &&
-          myAccess.pageKeys.length > 0 &&
-          !hasFactoryPageKey(page, myAccess.pageKeys) &&
-          !(item.accessKey === "factory/cost-centers" && myAccess.pageKeys.includes("factory/accounts"))
-        ) {
-          return false;
-        }
+        // Use the same role, feature-flag, and per-company allow-list check as
+        // pinned and recent navigation. An empty grant list remains default-deny.
+        if (!isPinnedVisible({ url: item.url })) return false;
         if (item.hideKey && myAccess?.hiddenCostFields?.includes(item.hideKey)) return false;
 
         // Relocate lower-traffic specialty pages into their owning workflow.
