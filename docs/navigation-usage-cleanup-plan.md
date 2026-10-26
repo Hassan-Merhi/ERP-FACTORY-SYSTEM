@@ -8,12 +8,12 @@ Started: 2026-10-26. Single working branch: `feature/navigation-usage-cleanup`.
 - Work one phase at a time. Before progressing, inspect the prior phase's changed source, verify completion by read-only source review, fix incomplete parts, and document limitations. A scheduled check is not proof of correctness.
 - Preserve accounting, production, inventory, sales, permissions, historical records, APIs, bookmarked routes, and audit trails. Avoid deleting functionality just because it is not exposed in main navigation.
 - Use live usage to prioritize. Do not claim usage metrics until supported by actual data, and do not treat API call volume as human page usage.
-- Render workspace requires user confirmation before accessing services, logs, metrics or databases. No live usage data verified as of plan creation.
+- Render workspace **My Workspace** was explicitly confirmed by the user on 2026-10-26. Read-only production telemetry and aggregated user navigation activity were inspected. Findings are documented in `docs/navigation-usage-study-2026-10-26.md`; the event history is capped per user and must not be treated as exhaustive.
 
 ## Phase sequence and exit criteria
 
 1. **Inventory and safe duplicate cleanup**: document current ERP, Factory, Properties and POS navigation and permission filters; remove proven duplicate navigation without altering routes. **Started**: removed the duplicated Factory Daybook entry from the grouped Finance navigation, preserving its pinned shortcut and route. Remaining work includes auditing role/access parity in the command palette.
-2. **Usage ranking and telemetry assessment**: inspect available Render request logs, service metrics and read-only database analytics after user confirms the Render workspace. Distinguish human page views from API traffic and identify unused low-traffic pages. If instrumentation is insufficient, add privacy-respecting page visit aggregation *in source only* with role/company-type separation, no raw personal browsing trail, and do not assert historical zero usage.
+2. **Usage ranking and telemetry assessment**: inspect available Render request logs, service metrics and read-only database analytics after user confirms the Render workspace. **COMPLETED (read-only)**: existing `user_activity_log` captures route-change events; retention capped at 30 days and 200 per user. See evidence report for exact counts and uncertainty. New telemetry not installed because route logging already exists.
 3. **ERP navigation consolidation**: reorganize Inventory/Stock, Optional Vouchers, Supplier Profit Check, POS Item Replacement, and Sales & Analytics navigation into contextual hubs. Keep deep links.
 4. **Factory navigation consolidation**: group Factory operational workflows into Production, Inventory, Sales/Loading and Finance; prevent duplicate pinned/grouped links; keep stock, bale, load, accounting permissions intact.
 5. **Properties and POS navigation**: consolidate Properties rentals tabs, make POS cashier-oriented and hide management-only tools according to server permissions. Keep standard ERP, Retail, Factory and Supplier Partner modes separate.
@@ -21,7 +21,9 @@ Started: 2026-10-26. Single working branch: `feature/navigation-usage-cleanup`.
 7. **Navigation/permissions consistency**: align sidebars, command palette, recent navigation, deep-link access, and company-type behavior, retaining server authorization.
 8. **Final source-only review and Claude handoff**: check changed files and implementation mapping by inspection, prepare detailed Claude validation checklist, note CI not executed, leave PR unmerged and deployment untouched.
 
-## Phase status
-- Phase 1: IN PROGRESS. Completed initial deduplication of Factory Daybook; further navigation/access review pending.
-- Phases 2–8: NOT STARTED.
-- Render live usage study: BLOCKED pending explicit workspace confirmation.
+## Phase status (2026-10-26)
+- Phase 1: SOURCE CHANGES COMPLETE, pending Claude verification. Removed duplicate Factory Daybook grouped link while keeping pinned/route; shared Properties role-based nav filter; command search now respects Factory page grants/feature flags, developer reconciliation visibility and other core route controls. All committed on this branch; no CI/tests/builds.
+- Phase 2: LIVE STUDY COMPLETE WITH LIMITATIONS. Read-only Render service/log/metric checks and primary Postgres aggregate queries documented in `docs/navigation-usage-study-2026-10-26.md` (3,445 navigation events at initial snapshot; 24 users; 11 companies; 122 raw routes). Events are retained only 30 days / max 200 per user. No data mutation.
+- Phase 3: NEXT ACTIVE PHASE — ERP hub consolidation. Ensure each relocated operation remains discoverable and old URLs still work.
+- Phases 4–8: NOT STARTED.
+- Claude acceptance is pending. Never claim 100% production verification before Claude completes it.
