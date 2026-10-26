@@ -1,6 +1,6 @@
 /** Developer-only navigation catalog. Paths match the existing role-guarded routes. */
 export type AccountingToolboxMode = "erp" | "factory" | "properties";
-export type AccountingToolCategory = "Reconciliation" | "Reporting & history" | "Release & audit";
+export type AccountingToolCategory = "Reconciliation" | "Reporting & history" | "Release & audit" | "Diagnostics & maintenance";
 export interface AccountingToolLink {
   label: string;
   description: string;
@@ -29,5 +29,36 @@ export function getAccountingToolLinks(mode: AccountingToolboxMode): AccountingT
     link("fiscal-review", "Fiscal Closing & Audit", "Fiscal close and audit review", "Release & audit"),
     link("dashboard", "Unified Accounting Dashboard", "Accounting overview and readiness", "Reporting & history"),
     link("rollout", "Unified Accounting Rollout", "Release readiness and review metadata", "Release & audit"),
+  ];
+}
+
+/** Existing maintenance routes, deliberately not remapped or redirected. The toolbox is Developer-only. */
+export function getDeveloperMaintenanceLinks(mode: AccountingToolboxMode): AccountingToolLink[] {
+  const item = (label: string, description: string, path: string): AccountingToolLink =>
+    ({ label, description, path, category: "Diagnostics & maintenance" });
+  if (mode === "erp") return [
+    item("Orphaned Records", "Inspect records with missing references", "/orphaned-records"),
+    item("Inventory Repair", "Review inventory discrepancies", "/inventory-repair"),
+    item("Balance Repair", "Review ledger reconciliation and repair", "/balance-repair"),
+    item("Convergence Reconciliation", "Review source evidence and reconciliations", "/convergence-reconciliation"),
+    item("Import Cycle Diagnostics", "Investigate import-cycle problems", "/import-cycle-diagnostics"),
+    item("Account Migration", "Restricted ledger migration tool", "/account-migration"),
+    item("Deleted Items", "Inspect historical deletions and recovery", "/deleted-items"),
+  ];
+  if (mode === "factory") return [
+    item("Orphaned Records", "Inspect records with missing references", "/factory/orphaned-records"),
+    item("Inventory Repair", "Review inventory discrepancies", "/factory/inventory-repair"),
+    item("Import Cycle Diagnostics", "Investigate import-cycle problems", "/factory/import-cycle-diagnostics"),
+    item("Deleted Items", "Inspect historical deletions and recovery", "/factory/deleted-items"),
+    item("Balance Repair", "Review ledger reconciliation and repair", "/balance-repair"),
+    item("Net Position Details", "Inspect the factory net-position breakdown", "/factory/net-position-details"),
+  ];
+  return [
+    item("Orphaned Records", "Inspect records with missing references", "/properties/orphaned-records"),
+    item("Inventory Repair", "Review inventory discrepancies", "/properties/inventory-repair"),
+    item("Import Cycle Diagnostics", "Investigate import-cycle problems", "/properties/import-cycle-diagnostics"),
+    item("Deleted Items", "Inspect historical deletions and recovery", "/properties/deleted-items"),
+    item("Balance Repair", "Review ledger reconciliation and repair", "/properties/balance-repair"),
+    item("Net Position Details", "Inspect the properties net-position breakdown", "/properties/net-position-details"),
   ];
 }
