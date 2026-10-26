@@ -516,6 +516,11 @@ describe("offload cost corrections with downstream sales", () => {
       status: 409,
       code: "CONTAINER_OFFLOAD_DOWNSTREAM_COST_LOCKED",
     });
+    // A nominally unchanged replay can still disturb average-cost inventory.
+    await expect(executeContainerOffloadLifecycle({ ...input, mode: "replace-only" })).rejects.toMatchObject({
+      status: 409,
+      code: "CONTAINER_OFFLOAD_DOWNSTREAM_COST_LOCKED",
+    });
 
     expect(await stockRow(ctx.locationId, item.id)).toEqual(beforeStock);
     const afterSale = await pool.query<{ total_cost: string }>(
