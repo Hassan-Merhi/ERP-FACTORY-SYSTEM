@@ -167,9 +167,12 @@ const ERP_CONTEXT_ITEMS: NavItem[] = [
 const ERP_ACCOUNTING_CONTEXT_ITEMS: NavItem[] = getAccountingToolLinks("erp").map((item) => ({
   title: item.label, url: item.path, icon: ShieldCheck,
 }));
-const FACTORY_ACCOUNTING_CONTEXT: PageEntry[] = getAccountingToolLinks("factory").map((item) => ({
-  label: item.label, description: item.description, path: item.path, icon: ShieldCheck,
-}));
+const FACTORY_ACCOUNTING_CONTEXT: PageEntry[] = [
+  { label: "Factory Accounting Toolbox", description: "Accounting, audit and maintenance tools", path: "/factory/accounting/toolbox", icon: ShieldCheck },
+  ...getAccountingToolLinks("factory").map((item) => ({
+    label: item.label, description: item.description, path: item.path, icon: ShieldCheck,
+  })),
+];
 const PROPERTIES_ACCOUNTING_CONTEXT: PageEntry[] = getAccountingToolLinks("properties").map((item) => ({
   label: item.label, description: item.description, path: item.path, icon: ShieldCheck,
 }));
