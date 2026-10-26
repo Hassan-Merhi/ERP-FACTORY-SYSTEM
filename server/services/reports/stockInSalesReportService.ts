@@ -392,7 +392,7 @@ async function getSalesRows(filters: StockInSalesReportFilters): Promise<Aggrega
       stockOutValue: sql<string>`COALESCE(SUM(${salesItems.totalCost}), 0)`,
       totalSales: sql<string>`COALESCE(SUM(${salesItems.totalSales}), 0)`,
       costOfSales: sql<string>`COALESCE(SUM(${salesItems.totalCost}), 0)`,
-      costProfit: sql<string>`COALESCE(SUM(${salesItems.profit}), 0)`,
+      costProfit: sql<string>`COALESCE(SUM(${salesItems.totalSales}::numeric - ${salesItems.totalCost}::numeric), 0)`,
     })
     .from(salesItems)
     .innerJoin(vouchers, eq(salesItems.voucherId, vouchers.id))
