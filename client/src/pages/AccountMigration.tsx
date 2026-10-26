@@ -638,7 +638,8 @@ export default function AccountMigration() {
               <CheckCircle className="h-5 w-5" /> Active migrations — move accounts back
             </CardTitle>
             <CardDescription>
-              Return an account after posting transactions in the temporary company. This list remains available after you leave the page.
+              Return an account after posting transactions in the temporary company. This list remains available after
+              you leave the page.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
@@ -653,7 +654,10 @@ export default function AccountMigration() {
                 const source = companies.find((c) => c.id === migration.srcCompanyId);
                 const destination = companies.find((c) => c.id === migration.destCompanyId);
                 return (
-                  <div key={migration.migrationId} className="flex flex-wrap items-center justify-between gap-3 rounded-md border p-3">
+                  <div
+                    key={migration.migrationId}
+                    className="flex flex-wrap items-center justify-between gap-3 rounded-md border p-3"
+                  >
                     <div className="space-y-1">
                       <p className="text-sm font-medium">
                         {source?.name ?? `Company ${migration.srcCompanyId}`} <ArrowRight className="inline h-3 w-3" />{" "}
@@ -694,7 +698,12 @@ export default function AccountMigration() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={!!undoTarget} onOpenChange={(open) => { if (!open) setUndoTarget(null); }}>
+      <Dialog
+        open={!!undoTarget}
+        onOpenChange={(open) => {
+          if (!open) setUndoTarget(null);
+        }}
+      >
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Move accounts back?</DialogTitle>
@@ -708,7 +717,11 @@ export default function AccountMigration() {
             <Button variant="outline" onClick={() => setUndoTarget(null)}>
               Cancel
             </Button>
-            <Button variant="destructive" disabled={undoMutation.isPending || !undoTarget} onClick={() => undoMutation.mutate()}>
+            <Button
+              variant="destructive"
+              disabled={undoMutation.isPending || !undoTarget}
+              onClick={() => undoMutation.mutate()}
+            >
               {undoMutation.isPending ? "Moving back..." : "Confirm move back"}
             </Button>
           </DialogFooter>

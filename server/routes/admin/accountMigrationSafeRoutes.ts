@@ -304,18 +304,13 @@ export function registerAccountMigrationSafeRoutes(app: Express) {
             .select()
             .from(auditLog)
             .where(
-              and(
-                inArray(auditLog.companyId, companyIds),
-                inArray(auditLog.action, [EXECUTE_ACTION, UNDO_ACTION])
-              )
+              and(inArray(auditLog.companyId, companyIds), inArray(auditLog.action, [EXECUTE_ACTION, UNDO_ACTION]))
             )
             .orderBy(desc(auditLog.createdAt))
             .limit(500);
         });
 
-        const undone = new Set(
-          rows.filter((row) => row.action === UNDO_ACTION).map((row) => row.recordIdentifier)
-        );
+        const undone = new Set(rows.filter((row) => row.action === UNDO_ACTION).map((row) => row.recordIdentifier));
         const pending = rows
           .filter((row) => row.action === EXECUTE_ACTION)
           .map((row) => savedMigration(row.changes))

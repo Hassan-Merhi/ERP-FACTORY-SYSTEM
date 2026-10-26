@@ -7,9 +7,7 @@ const safeRoutes = readFileSync("server/routes/admin/accountMigrationSafeRoutes.
 
 describe("account migration source-company picker", () => {
   it("loads source ledgers through the dedicated authorized migration read", () => {
-    expect(page).toContain(
-      "/api/admin/account-migration/accounts/${encodeURIComponent(srcCompanyId)}"
-    );
+    expect(page).toContain("/api/admin/account-migration/accounts/${encodeURIComponent(srcCompanyId)}");
     expect(page).not.toContain("/api/ledger-accounts?companyId=");
   });
 

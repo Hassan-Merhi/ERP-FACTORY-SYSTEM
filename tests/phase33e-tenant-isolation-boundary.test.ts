@@ -499,10 +499,7 @@ describe("Phase 33E :companyId path boundary", () => {
       { companyId: 10, role: "Manager" },
       { companyId: 20, role: "Manager" },
     ]);
-    const manager = await runParam(
-      request({ path: "/api/admin/account-migration/accounts/20", method: "GET" }),
-      "20"
-    );
+    const manager = await runParam(request({ path: "/api/admin/account-migration/accounts/20", method: "GET" }), "20");
     expect(manager.res.body).toMatchObject({ code: "ACCOUNT_MIGRATION_ROLE_REQUIRED" });
     expect(manager.next).not.toHaveBeenCalled();
 
