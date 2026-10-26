@@ -277,7 +277,15 @@ export function ProductionTabPanel({ report }: { report: DailyProductionReportSt
                   </div>
                 )}
 
-                {/* Missing-price diagnostics are intentionally not shown in the Production Overview UI. */}
+                {/* Cost evidence is necessary before relying on displayed profit. */}
+                {!costsHidden && (data?.summary.materialCostUnresolvedBales ?? 0) > 0 && (
+                  <div className="text-xs text-amber-700 dark:text-amber-300" role="status">
+                    Profit is provisional: {data?.summary.materialCostUnresolvedBales} produced bales
+                    ({fmtKg(data?.summary.materialCostUnresolvedKg ?? 0)}) have no verifiable stored
+                    or linked-batch material cost. Verify their costs before using this profit.
+                  </div>
+                )}
+                {/* Missing catalogue-price diagnostics are intentionally not shown here. */
 
                 {/* Row 2 — weight breakdown */}
                 {(() => {
@@ -358,7 +366,7 @@ export function ProductionTabPanel({ report }: { report: DailyProductionReportSt
                   {!costsHidden && (
                     <>
                       <StatRow
-                        label="Batch Rate"
+                        label="Period Avg Rate"
                         value={fmtRate(data?.rawMaterial.blendedCostPerKg ?? 0)}
                         sub="per kg"
                       />
