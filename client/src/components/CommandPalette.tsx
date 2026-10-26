@@ -222,12 +222,6 @@ const FACTORY_HUB_TABS: PageEntry[] = [
     path: "/factory/bales-hub?tab=products",
     icon: Box,
   },
-  {
-    label: "Import History",
-    description: "Bale import history",
-    path: "/factory/bales-hub?tab=imports",
-    icon: Archive,
-  },
   { label: "Proformas", description: "Proforma invoices", path: "/factory/invoicing?tab=proformas", icon: FileText },
   {
     label: "Invoices",
@@ -430,6 +424,19 @@ const adminPages: PageEntry[] = [
   },
 ];
 
+// These are registered in the Factory shell; ERP-only admin paths otherwise
+// redirect to the Factory default page before their component can render.
+const factoryAdminPages: PageEntry[] = [
+  { label: "Factory Settings", description: "Factory configuration", path: "/factory/settings", icon: Settings },
+  { label: "Factory Chatbot Settings", description: "Factory chatbot configuration", path: "/factory/chatbot-settings", icon: Bot },
+  { label: "Deleted Items", description: "Restore or review deleted Factory records", path: "/factory/deleted-items", icon: Trash2 },
+  { label: "Orphaned Records", description: "Factory records missing references", path: "/factory/orphaned-records", icon: LinkIcon },
+  { label: "Inventory Repair", description: "Investigate Factory inventory discrepancies", path: "/factory/inventory-repair", icon: Wrench },
+  { label: "Import Cycle Diagnostics", description: "Inspect Factory import issues", path: "/factory/import-cycle-diagnostics", icon: AlertTriangle },
+  { label: "Account Groups", description: "Factory account group settings", path: "/factory/account-groups", icon: PieChart },
+  { label: "Company Data Reset", description: "Restricted Factory maintenance", path: "/factory/company-data-reset", icon: Wrench },
+];
+
 const intercompanyPages: PageEntry[] = [
   {
     label: "Intercompany Requests",
@@ -569,8 +576,17 @@ export function CommandPalette({
             if (entry.path === "/") return canSeeAdminCommands;
             return erpVis.isItemVisible({ title: entry.label, url: entry.path, icon: LayoutDashboard });
           }),
-          // Hub tabs bypass the sidebar visibility rules, so retail companies filter them here.
-          ...ERP_HUB_TABS.filter((tab) => !isRetailCompany || !isRetailHiddenErpPath(tab.path)),
+          // A link to one part of a composite hub must not disclose another
+          // part that this user's actual ERP feature grants don't permit.
+          ...ERP_HUB_TABS.filter((tab) => {
+            if (isRetailCompany && isRetailHiddenErpPath(tab.path)) return false;
+            const accessPath = tab.path === "/parties?tab=suppliers"
+              ? "/suppliers"
+              : tab.path === "/parties?tab=customers"
+                ? "/customers"
+                : tab.path;
+            return erpVis.isItemVisible({ title: tab.label, url: accessPath, icon: LayoutDashboard });
+          }),
         ],
         [...erpVis.visiblePinnedItems, ...erpVis.visibleUtilityItems, ...ERP_CONTEXT_ITEMS.filter(erpVis.isItemVisible), ...ERP_ACCOUNTING_CONTEXT_ITEMS.filter(erpVis.isItemVisible)]
       ).map((page) =>
@@ -611,9 +627,12 @@ export function CommandPalette({
   // shell: under a factory company the guard redirects the unprefixed path away,
   // so offering them means offering a command that goes somewhere else.
   const visibleAdminPages = useMemo(
-    () => adminPages.filter((page) => !page.erpShellOnly || appMode === "erp"),
+    () => appMode === "factory"
+      ? factoryAdminPages
+      : adminPages.filter((page) => !page.erpShellOnly || appMode === "erp"),
     [appMode]
   );
+  const showIntercompany = !isPOS && (showErp || showFactory);
 
   return (
     <CommandDialog open={open} onOpenChange={setOpen}>
@@ -667,12 +686,14 @@ export function CommandPalette({
           </CommandGroup>
         )}
 
-        <CommandSeparator />
-        <CommandGroup heading="Intercompany">
-          {intercompanyPages.map((p) => (
-            <PaletteItem key={p.path} page={p} onSelect={navigate} />
-          ))}
-        </CommandGroup>
+        {showIntercompany && <CommandSeparator />}
+        {showIntercompany && (
+          <CommandGroup heading="Intercompany">
+            {intercompanyPages.map((p) => (
+              <PaletteItem key={p.path} page={p} onSelect={navigate} />
+            ))}
+          </CommandGroup>
+        )}
 
         <CommandSeparator />
         <CommandGroup heading="AI Assistant">
