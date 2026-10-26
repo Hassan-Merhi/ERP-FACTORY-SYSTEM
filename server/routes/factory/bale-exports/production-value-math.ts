@@ -56,6 +56,79 @@ export function calculateProductionWeightCost({
   return new BatchRateDecimal(producedWeightKg).times(new BatchRateDecimal(batchRateCost));
 }
 
+
+/**
+ * Actual material cost of regular bales produced during a reporting period.
+ *
+ * A bale's persisted total cost is authoritative: it follows the historical
+ * batch that produced the bale, including approved downstream cost cascades.
+ * Legacy records without a usable total can fall back to their persisted bale
+ * rate, and finally their linked batch rate. Never substitute the rate averaged
+ * across OTHER batches or the all-time Balance on Table rate.
+ *
+ * A zero cost without a confirmed zero-cost source is unresolved, NOT free.
+ * Callers must expose unresolved quantities before relying on profit.
+ */
+export type ProducedBaleMaterialCostRow = {
+  weightKg: Decimal.Value;
+  totalCost?: Decimal.Value | null;
+  costPerKg?: Decimal.Value | null;
+  linkedBatchCostPerKg?: Decimal.Value | null;
+};
+
+export function calculateProducedBaleMaterialCost(rows: readonly ProducedBaleMaterialCostRow[]) {
+  const validMoney = (value: Decimal.Value | null | undefined) => {
+    if (value == null || value === "") return null;
+    const amount = new BatchRateDecimal(value);
+    return amount.isFinite() && amount.gte(0) ? amount : null;
+  };
+
+  let weightCost = new BatchRateDecimal(0);
+  let unresolvedKg = new BatchRateDecimal(0);
+  let storedCostBales = 0;
+  let baleRateFallbackBales = 0;
+  let batchRateFallbackBales = 0;
+  let confirmedZeroCostBales = 0;
+  let unresolvedBales = 0;
+
+  for (const bale of rows) {
+    const weight = validMoney(bale.weightKg);
+    if (!weight || !weight.gt(0)) continue;
+
+    const total = validMoney(bale.totalCost);
+    const baleRate = validMoney(bale.costPerKg);
+    const batchRate = validMoney(bale.linkedBatchCostPerKg);
+
+    if (total?.gt(0)) {
+      weightCost = weightCost.plus(total);
+      storedCostBales++;
+    } else if (baleRate?.gt(0)) {
+      weightCost = weightCost.plus(weight.times(baleRate));
+      baleRateFallbackBales++;
+    } else if (batchRate?.gt(0)) {
+      weightCost = weightCost.plus(weight.times(batchRate));
+      batchRateFallbackBales++;
+    } else if (total?.eq(0) && batchRate?.eq(0)) {
+      // A linked batch with an explicitly zero rate confirms a free source.
+      confirmedZeroCostBales++;
+    } else {
+      // Do not silently count an unpriced/legacy bale as profit.
+      unresolvedBales++;
+      unresolvedKg = unresolvedKg.plus(weight);
+    }
+  }
+
+  return {
+    weightCost,
+    storedCostBales,
+    baleRateFallbackBales,
+    batchRateFallbackBales,
+    confirmedZeroCostBales,
+    unresolvedBales,
+    unresolvedKg: unresolvedKg.toNumber(),
+  };
+}
+
 type ProfitArgs = {
   productionValue: Decimal.Value;
   weightCost: Decimal.Value;
