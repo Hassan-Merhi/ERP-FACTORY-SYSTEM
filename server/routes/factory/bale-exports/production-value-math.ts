@@ -41,6 +41,74 @@ export function resolveProductionBalanceWeight({
   );
 }
 
+/**
+ * Value only the material that remains in each individual mix batch.
+ *
+ * Carry-forward batches are separate physical pools: the parent is CLOSED
+ * with used_kg == total_kg and the child carries the leftover. Therefore
+ * include both (unlike the "Original Batches" input KPI) without duplicating kg.
+ *
+ * The stored batch total is preferred over rounded rate × input kg. This keeps
+ * cost allocation precise after landed-cost corrections and top-ups.
+ */
+export type BatchRemainingCostRow = {
+  id: number;
+  totalWeightKg: Decimal.Value;
+  totalCost: Decimal.Value;
+  usedKg: Decimal.Value;
+};
+
+export function calculateBatchRemainingValuation(rows: readonly BatchRemainingCostRow[]) {
+  let remainingWeight = new BatchRateDecimal(0);
+  let remainingValue = new BatchRateDecimal(0);
+  let negativeOrOverusedBatches = 0;
+  let invalidCostBatches = 0;
+  const batches: Array<{
+    id: number;
+    remainingKg: number;
+    batchRate: number;
+    remainingValue: number;
+  }> = [];
+
+  for (const row of rows) {
+    const kg = new BatchRateDecimal(row.totalWeightKg);
+    const cost = new BatchRateDecimal(row.totalCost);
+    const used = new BatchRateDecimal(row.usedKg);
+    if (!kg.isFinite() || !kg.gt(0) || !used.isFinite() || used.lt(0) || used.gt(kg.plus("0.001"))) {
+      negativeOrOverusedBatches++;
+      continue;
+    }
+    const left = BatchRateDecimal.max(0, kg.minus(used));
+    if (left.isZero()) continue;
+    if (!cost.isFinite() || cost.lt(0)) {
+      invalidCostBatches++;
+      continue;
+    }
+    const rate = cost.dividedBy(kg);
+    const value = left.times(rate);
+    remainingWeight = remainingWeight.plus(left);
+    remainingValue = remainingValue.plus(value);
+    batches.push({
+      id: row.id,
+      remainingKg: left.toNumber(),
+      batchRate: rate.toDecimalPlaces(10).toNumber(),
+      remainingValue: value.toDecimalPlaces(2).toNumber(),
+    });
+  }
+
+  const rate = remainingWeight.gt(0)
+    ? remainingValue.dividedBy(remainingWeight).toDecimalPlaces(10)
+    : new BatchRateDecimal(0);
+  return {
+    remainingWeight,
+    remainingValue,
+    weightedRate: rate,
+    negativeOrOverusedBatches,
+    invalidCostBatches,
+    batches,
+  };
+}
+
 type WeightCostArgs = {
   producedWeightKg: Decimal.Value;
   batchRateCost: Decimal.Value;
