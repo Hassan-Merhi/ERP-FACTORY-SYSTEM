@@ -6,7 +6,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
-import { PeriodFilter, PeriodFilterValue, getDefaultPeriodValue } from "@/components/ui/period-filter";
+import { PeriodFilter, PeriodFilterValue, getDefaultPeriodValue, parsePeriodFilterDate } from "@/components/ui/period-filter";
 import { ErpMobileFilters } from "@/components/ui/erp-mobile-filters";
 import { useDateJump } from "@/hooks/use-date-jump";
 
@@ -37,14 +37,37 @@ import {
   type SalesReportFilterControlsProps,
 } from "./salesreportlegacy/SalesReportFilterControls";
 import type { ApiListRow } from "@shared/apiTypes";
+function getInitialSalesReportPeriod(): PeriodFilterValue {
+  if (typeof window === "undefined") return getDefaultPeriodValue("today");
+  const query = new URLSearchParams(window.location.search);
+  if (!query.has("startDate") && !query.has("endDate")) return getDefaultPeriodValue("today");
+  const fromDate = query.get("startDate") ?? "";
+  const toDate = query.get("endDate") ?? "";
+  if (!fromDate && !toDate) return getDefaultPeriodValue("all_time");
+  if (
+    (fromDate && !parsePeriodFilterDate(fromDate)) ||
+    (toDate && !parsePeriodFilterDate(toDate)) ||
+    (fromDate && toDate && fromDate > toDate)
+  ) {
+    return getDefaultPeriodValue("today");
+  }
+  return { fromDate, toDate, preset: "custom" };
+}
+
+function getInitialSalesReportGroups(): string[] {
+  if (typeof window === "undefined") return [];
+  const groupId = new URLSearchParams(window.location.search).get("stockGroupId");
+  return groupId && /^[1-9]\\d*$/.test(groupId) ? [groupId] : [];
+}
+
 export default function SalesReport() {
-  const [periodFilter, setPeriodFilter] = useState<PeriodFilterValue>(() => getDefaultPeriodValue("today"));
+  const [periodFilter, setPeriodFilter] = useState<PeriodFilterValue>(getInitialSalesReportPeriod);
   useDateJump((date) => setPeriodFilter({ fromDate: date, toDate: date, preset: "custom" }));
 
   useSalesReportDateKeyboard(setPeriodFilter);
 
   const [selectedLocations, setSelectedLocations] = useState<string[]>([]);
-  const [selectedStockGroups, setSelectedStockGroups] = useState<string[]>([]);
+  const [selectedStockGroups, setSelectedStockGroups] = useState<string[]>(getInitialSalesReportGroups);
   const [searchTerm, setSearchTerm] = useState("");
   const [grouping, setGrouping] = useState<GroupingType>("daily");
   const [profitFilter, setProfitFilter] = useState<ProfitFilter>("all");
