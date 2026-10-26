@@ -22,7 +22,11 @@ Source inspection before changes confirmed:
 3. Registered `/accounting/toolbox`, `/factory/accounting/toolbox` and `/properties/accounting/toolbox` behind the **same Developer-only route condition** used for the pre-existing accounting pages. The new page is lazy-loaded from `client/src/lazyPages.ts`.
 4. Replaced the 12-row ERP Accounting Reconciliation sidebar group with one Developer-only **Accounting Toolbox** entry. Replaced the 10-row Properties group with one Developer-only entry. Added a Developer-only Factory footer shortcut. Standard Accounting/Finance and Reports groups remain.
 5. Preserved all 12 ERP, 11 Factory and 10 Properties original accounting URLs and components. Kept each directly searchable in the command palette even after the sidebar collapsed. Added mode-correct Developer-only maintenance/diagnostics palette entries for Factory and Properties. ERP existing admin maintenance palette entries remain unchanged.
-6. Kept `shared/factoryAccessRegistry.ts`, ERP page grants, backend authorization, data models, all posting code, production DB and history untouched.
+6. Preserved ERP page grants, server authorization middleware, data models, all posting code, production DB and history. **Post-implementation source review fixed one dead Factory toolbox link:** the existing unprefixed `/balance-repair` is redirected by the Factory company shell before it reaches `FactoryRoutes`. Added a new Developer-only `/factory/balance-repair` route, registered its canonical Developer-level page key in `shared/factoryAccessRegistry.ts`, and updated the Factory toolbox catalog to use that scoped route. The original unprefixed route remains unchanged for compatibility. Factory command search now includes the Toolbox entry as well. This is navigation/routing only; no Balance Repair operation was run.
+
+## Additional Phase 6 source hardening
+
+Reviewing `client/src/app/authenticatedAppRouteGuard.ts` exposed the previously misdirected Factory Balance Repair link. The guard redirects all unprefixed Factory-company URLs other than explicit exceptions to the Factory default page, so the original `/balance-repair` link was not suitable in the Factory toolbox. The new scoped route is restricted to Developer both by its `FactoryRoutes` registration and by the shared Factory access registry. Recheck this path during Claude's guarded-route and server-authorization review.
 
 ## Source-only inspection performed
 
