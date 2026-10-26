@@ -22,6 +22,7 @@ import { isPinnedCompanyRoute } from "../services/security/activeCompanyPermissi
 import { chooseAuthorizedFactoryCompany } from "../services/security/factoryCompanyScopePolicy";
 import { classifyUserLocationConfigurationRoute } from "../services/security/userLocationConfigurationPolicy";
 import { runWithCompanyRequestRuntimeContext } from "../services/security/companyRequestRuntimeContext";
+import { isAccountMigrationSourceReadPath } from "../services/security/accountMigrationRequestPolicy";
 import {
   createTenantDatabaseScope,
   runWithDatabaseScopeRuntimeContext,
@@ -404,7 +405,7 @@ export async function tenantCompanyParamBoundary(req: Request, res: Response, ne
     // before starting a migration. The route itself independently checks role
     // and membership and binds an explicit transaction-local RLS scope.
     // Keep all other :companyId routes pinned to the active company.
-    if (req.method === "GET" && /^\/api\/admin\/account-migration\/accounts\/[1-9]\d*$/.test(req.path)) {
+    if (isAccountMigrationSourceReadPath(req.method, req.path)) {
       if (context.role !== "Admin" && context.role !== "Developer") {
         return res.status(403).json({
           code: "ACCOUNT_MIGRATION_ROLE_REQUIRED",
