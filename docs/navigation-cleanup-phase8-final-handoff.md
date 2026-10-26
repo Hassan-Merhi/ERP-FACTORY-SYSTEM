@@ -75,6 +75,18 @@ This is **manual/source-only review**. It does not establish successful TypeScri
 
 > Audit **all eight phases** on branch `feature/navigation-usage-cleanup` in repository `Hassan-Merhi/ERP-FACTORY-SYSTEM` using `docs/navigation-usage-cleanup-plan.md`, the dated live usage report, and the Phase 3–8 handoff reports. Independently run the repository's relevant **TypeScript, lint, frontend build, navigation/access tests, and CI checks**. Inspect actual route guards, backend authorization, company-mode and role-specific navigation behavior. Fix any code and integration failures on the **same feature branch** and preserve accounting/stock/production/retail behaviour, all old URLs, existing permissions and production data. Specifically verify Cost Centers' special grant, Supplier vs Customer tabs, Factory hidden tabs, Properties developer tools, and POS/Retail route trees. Compare with `main` (the branch was two commits behind during review); coordinate and resolve conflicts **without merging or deploying automatically**. Provide file/commit evidence, full test results, a list of remaining blockers, and recommend whether it is safe for a human to merge. Do not modify production accounting entries or run destructive maintenance actions.
 
+## Post-handoff integration watch — 2026-10-26
+
+GitHub source comparison found **a newly introduced ERP View Only Dashboard restriction on `main`** that was absent from this navigation cleanup branch. The latest main version of `client/src/components/AppSidebar.tsx` hides `/financial-overview` for the effective role `View Only`, and `client/src/routes/ErpRoutes.tsx` explicitly redirects that role away from the Dashboard even if its page grant includes `dashboard`. Because the cleanup branch changed both files, retaining its old behavior during integration would resurrect Dashboard access for View Only.
+
+**Safe, narrowly scoped compatibility fixes committed on this same branch:**
+- `4cb2fcad1bc736528a882a7df668b3ee17955778`: hide `/financial-overview` in the shared ERP sidebar visibility predicate for `View Only`, covering desktop, mobile, recent and command-search navigation that reuse this predicate.
+- `5a39035589b8edf62c4fdc62803eddb142a18120`: match `main`'s explicit `/financial-overview` route guard, redirecting `View Only` to the existing `/tracking` fallback.
+
+The comparison **before these two fixes** reported the cleanup branch 75 commits ahead and 83 behind `main`; the prior watch had reported 73 behind. New `main` changes include ERP View Only Dashboard restrictions, posted-offload cost-integrity protections, and Raw Materials cost export/accounting-model work. The source fixes above preserve the **specific new View Only Dashboard rule only**; they do not incorporate or certify the other `main` changes.
+
+**Remaining blockers:** Claude must still review the full divergent `main` changes and reconcile integration, independently run CI/build/typechecks/tests, and verify role/API authorization, accounting and stock workflows. This watch did **not** run automated checks, rebase, merge, deploy, or write production data. No cleanup-branch PR or independent Claude acceptance evidence was found during this check.
+
 ## 7. Completion criteria and current limitations
 
 The user requested that ChatGPT make source changes on one branch and **not** run CI/tests/builds/merges/deployment because Claude will handle them. The source phase can be marked completed when all changes and the handoff are committed. **The overall ERP cleanup must remain unverified until Claude has independently run acceptance checks, reconciled newer `main` commits and approved each role/workflow regression.**
