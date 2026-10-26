@@ -55,7 +55,12 @@ export function costRowFlags(row: CostRow): string[] {
   if (row.transfer_value_missing > 0) flags.push("TRANSFER_SOURCE_VALUE_UNPROVEN");
   if (row.blocked_sales > 0) flags.push("HISTORICAL_COST_PROOF_BLOCKED");
   if (row.missing_sale_relief > 0) flags.push("LEGACY_SALE_RELIEF_MISSING");
-  if (dec(row.qty_sold).isZero() && dec(row.qty_received).equals(row.qty_stock) && row.transfer_lines > 0) {
+  if (
+    dec(row.qty_sold).isZero() &&
+    dec(row.qty_received).equals(row.qty_stock) &&
+    row.transfer_lines > 0 &&
+    !dec(row.landed).minus(row.stock_value).isZero()
+  ) {
     flags.push("UNSOLD_TRANSFER_VALUE_DIFFERENCE");
   }
   const rawGap = dec(row.landed).minus(row.cogs).minus(row.stock_value);
