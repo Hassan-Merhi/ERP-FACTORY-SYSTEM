@@ -191,13 +191,20 @@ export function useFactoryVisibleSections(user?: FactorySidebarUser): {
     const page = resolveFactoryPage(item.url);
     if (!page) return false;
     if (!factoryPageAllowsRole(page, user?.role)) return false;
+    if (
+      page.key === "factory/cost-centers" &&
+      !["Admin", "Owner", "Developer", "Manager"].includes(user?.role ?? "")
+    ) return false;
     if (page.featureFlag) {
       const defaultOn = !!page.featureFlagDefaultOn;
       const enabled = defaultOn ? settings?.[page.featureFlag] !== false : settings?.[page.featureFlag] === true;
       if (!enabled) return false;
     }
     if (myAccess && !myAccess.fullAccess && !hasFactoryPageKey(page, myAccess.pageKeys)) {
-      return false;
+      // FactoryRoutes explicitly allows account access to open Cost Centers.
+      if (!(page.key === "factory/cost-centers" && myAccess.pageKeys.includes("factory/accounts"))) {
+        return false;
+      }
     }
     return true;
   };
