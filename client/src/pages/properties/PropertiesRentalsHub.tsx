@@ -13,7 +13,8 @@ type RentalTab = (typeof RENTAL_TABS)[number];
 
 export default function PropertiesRentalsHub() {
   const { data: user } = useQuery<AuthMe>({ queryKey: ["/api/auth/me"] });
-  const isDeveloper = (user?.currentRole ?? user?.role) === "Developer";
+  // PropertiesRoutes protects /properties/transfer with user.role.
+  const isDeveloper = user?.role === "Developer";
   const [tab, setTab] = useHubQueryState<RentalTab>({
     key: "tab",
     allowedValues: RENTAL_TABS,
