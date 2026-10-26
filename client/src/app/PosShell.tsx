@@ -138,7 +138,7 @@ export function PosShell({
                 </SidebarGroupLabel>
                 <SidebarGroupContent>
                   <SidebarMenu aria-label="Point of sale navigation">
-                    {posNavItems.map((item) => (
+                    {primaryNavItems.map((item) => (
                       <SidebarMenuItem key={item.label}>
                         <SidebarMenuButton
                           isActive={item.active}
@@ -166,6 +166,52 @@ export function PosShell({
                   </SidebarMenu>
                 </SidebarGroupContent>
               </SidebarGroup>
+              {toolNavItems.length > 0 && (
+                <SidebarGroup className="mt-2 border-t border-sidebar-border/60 p-0 pt-2">
+                  <button
+                    type="button"
+                    aria-expanded={toolsExpanded}
+                    aria-controls="pos-secondary-tools"
+                    onClick={() => setToolsExpanded((expanded) => !expanded)}
+                    className="mb-1 flex min-h-10 w-full items-center justify-between rounded-lg px-3 text-xs font-semibold uppercase tracking-wider text-sidebar-foreground/65 hover:bg-sidebar-accent/40"
+                    data-testid="button-pos-more-tools"
+                  >
+                    More tools
+                    <ChevronDown className={toolsExpanded ? "h-4 w-4 rotate-180" : "h-4 w-4"} aria-hidden="true" />
+                  </button>
+                  {toolsExpanded && (
+                    <SidebarGroupContent id="pos-secondary-tools">
+                      <SidebarMenu aria-label="Additional point of sale tools">
+                    {toolNavItems.map((item) => (
+                      <SidebarMenuItem key={item.label}>
+                        <SidebarMenuButton
+                          isActive={item.active}
+                          onClick={item.onClick}
+                          aria-current={item.active ? "page" : undefined}
+                          data-testid={item.testId}
+                        >
+                          <span data-pos-nav-icon>
+                            <item.icon className="h-4 w-4" aria-hidden="true" />
+                          </span>
+                          <span className="flex-1 truncate">{item.label}</span>
+                          {item.badge !== undefined && item.badge > 0 && (
+                            <Badge
+                              variant={item.active ? "secondary" : "default"}
+                              className="min-w-5 justify-center rounded-full px-1.5 text-[11px]"
+                              aria-label={`${item.badge} unread`}
+                              data-testid="badge-chat-unread-pos"
+                            >
+                              {item.badge}
+                            </Badge>
+                          )}
+                        </SidebarMenuButton>
+                      </SidebarMenuItem>
+                    ))}
+                      </SidebarMenu>
+                    </SidebarGroupContent>
+                  )}
+                </SidebarGroup>
+              )}
             </SidebarContent>
             <SidebarFooter data-pos-sidebar-footer-card className="pb-[max(0.5rem,env(safe-area-inset-bottom))]">
               <div className="space-y-2">
