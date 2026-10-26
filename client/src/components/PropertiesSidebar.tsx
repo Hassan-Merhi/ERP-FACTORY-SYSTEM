@@ -36,10 +36,9 @@ export const PROPERTIES_NAV_SECTIONS: NavSection[] = [
     label: "Rentals",
     color: NAV_COLOR.finance,
     items: [
-      { title: "Properties (Warehouses)", url: "/properties/rentals", icon: Building2 },
-      { title: "Shops Rented", url: "/properties/rentals?tab=shops", icon: Store },
-      { title: "Payments Log", url: "/properties/rentals?tab=payments", icon: ClipboardList },
-      { title: "Cash Transfer", url: "/properties/transfer", icon: ArrowLeftRight },
+      // The Rentals hub already has Warehouses, Shops and Payments tabs.
+      // Keep those views reachable inside the hub, without 3 sidebar copies.
+      { title: "Rentals", url: "/properties/rentals", icon: Building2 },
     ],
   },
   {
@@ -77,7 +76,7 @@ export function getPropertiesVisibleNavSections(isDeveloper: boolean): NavSectio
     ...section,
     items: section.items.filter(
       (item) =>
-        isDeveloper || (!item.url.startsWith("/properties/accounting/") && item.url !== "/properties/transfer")
+        isDeveloper || !item.url.startsWith("/properties/accounting/")
     ),
   })).filter((section) => section.items.length > 0);
 }
