@@ -144,6 +144,7 @@ export function registerSupplierProfitReconciliationRoutes(app: Express) {
         AND ($4::date IS NULL OR v.voucher_date::date >= $4::date)
         AND ($5::date IS NULL OR v.voucher_date::date <= $5::date)
       `;
+      // All seven datasets share the same read-only transaction snapshot and active-company scope.
       const [summary, periods, saleDetails, offloads, otw, inventory, itemBreakdown] = await Promise.all([
         client.query(
           `
