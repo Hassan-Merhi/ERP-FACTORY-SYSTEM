@@ -510,7 +510,7 @@ export function CommandPalette({
         [
           ...ERP_EXTRAS.filter((entry) => {
             if (entry.path === "/") return canSeeAdminCommands;
-            return erpVis.isItemVisible({ title: entry.label, url: entry.path, icon: entry.icon });
+            return erpVis.isItemVisible({ title: entry.label, url: entry.path, icon: LayoutDashboard });
           }),
           // Hub tabs bypass the sidebar visibility rules, so retail companies filter them here.
           ...ERP_HUB_TABS.filter((tab) => !isRetailCompany || !isRetailHiddenErpPath(tab.path)),
@@ -534,7 +534,7 @@ export function CommandPalette({
   const propertiesPages = useMemo(
     () =>
       buildEntries(getPropertiesVisibleNavSections(effectiveRole === "Developer"), [
-        ...PROPERTIES_EXTRAS.filter((entry) => user?.role !== "ERP Tester" || entry.path !== "/my-settings"),
+        ...PROPERTIES_EXTRAS.filter((entry) => user?.role !== "ERP Tester" || entry.path !== "/properties/my-settings"),
         ...(canSeeAdminCommands ? PROPERTIES_ADMIN_EXTRAS : []),
       ]),
     [canSeeAdminCommands, user?.role, effectiveRole]
