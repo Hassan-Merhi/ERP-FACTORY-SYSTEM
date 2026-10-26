@@ -142,8 +142,11 @@ export function DaybookTable({
       });
 
     return (
-      <Table wrapperClassName="max-h-[calc(100dvh-220px)]">
-        <TableHeader className="sticky top-0 z-20 bg-background">
+      <Table
+          className="text-foreground dark:[&_tr]:border-border/70 dark:[&_th]:border-border/70 dark:[&_td]:border-border/70"
+          wrapperClassName="max-h-[calc(100dvh-220px)] border-border/70"
+        >
+        <TableHeader className="sticky top-0 z-20 bg-muted [&_th]:bg-muted [&_th]:text-foreground/90">
           <TableRow>
             <TableHead className="sticky left-0 bg-muted z-10 pl-4">Date / Type</TableHead>
             <TableHead className="text-right">Count</TableHead>
@@ -164,7 +167,7 @@ export function DaybookTable({
                   className="cursor-pointer bg-muted/30 hover:bg-muted/50 font-semibold"
                   onClick={() => toggle(dateKey)}
                 >
-                  <TableCell className="sticky left-0 bg-muted/30 z-10 pl-4">
+                  <TableCell className="sticky left-0 bg-inherit z-10 pl-4">
                     <div className="flex items-center gap-2">
                       {isDateExpanded ? (
                         <ChevronDown className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
@@ -193,7 +196,7 @@ export function DaybookTable({
                     return (
                       <div key={typeKey} style={{ display: "contents" }}>
                         <TableRow className="cursor-pointer hover:bg-muted/40" onClick={() => toggle(typeKey)}>
-                          <TableCell className="sticky left-0 bg-background z-10 pl-10">
+                          <TableCell className="sticky left-0 bg-inherit z-10 pl-10">
                             <div className="flex items-center gap-2">
                               {isTypeExpanded ? (
                                 <ChevronDown className="w-3 h-3 text-muted-foreground shrink-0" />
@@ -219,7 +222,7 @@ export function DaybookTable({
                               const desc = [o.containerNumber, o.locationName].filter(Boolean).join(" — ");
                               return (
                                 <TableRow key={`${typeKey}-offload-${o.id}`} className="bg-muted/20">
-                                  <TableCell className="sticky left-0 bg-muted/20 z-10 pl-16 max-w-0 w-full overflow-hidden">
+                                  <TableCell className="sticky left-0 bg-inherit z-10 pl-16 max-w-0 w-full overflow-hidden">
                                     <div className="truncate text-sm" title={desc || "—"}>
                                       {desc || "—"}
                                     </div>
@@ -256,7 +259,7 @@ export function DaybookTable({
                                   : null);
                               return (
                                 <TableRow key={`${typeKey}-v-${voucher.id}`} className="bg-muted/20">
-                                  <TableCell className="sticky left-0 bg-muted/20 z-10 pl-16 max-w-0 w-full overflow-hidden">
+                                  <TableCell className="sticky left-0 bg-inherit z-10 pl-16 max-w-0 w-full overflow-hidden">
                                     <div className="flex items-center gap-2 min-w-0">
                                       <div className="truncate text-sm" title={vDesc || voucher.voucherNumber}>
                                         {vDesc || voucher.voucherNumber}
@@ -327,8 +330,8 @@ export function DaybookTable({
         return sum + amt;
       }, 0);
       tableRows.push(
-        <TableRow key={`date-sep-${rowDate}`} className="bg-muted/30 pointer-events-none select-none">
-          <TableCell colSpan={hideAmounts ? 4 : 5} className="sticky left-0 bg-muted/30 z-10 py-1.5">
+        <TableRow key={`date-sep-${rowDate}`} className="bg-muted/40 pointer-events-none select-none">
+          <TableCell colSpan={hideAmounts ? 4 : 5} className="sticky left-0 bg-inherit z-10 py-1.5">
             <div className="flex items-center justify-between">
               <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
                 {formatDisplayDate(parseISO(rowDate))}
@@ -357,7 +360,7 @@ export function DaybookTable({
           className={cn("group cursor-pointer", selectedRowId === rid ? "bg-accent/30" : "hover:bg-muted/40")}
           onClick={() => setSelectedRowId(rid)}
         >
-          <TableCell className="font-medium sticky left-0 bg-background z-10">
+          <TableCell className="font-medium sticky left-0 bg-inherit z-10">
             {formatDisplayDate(parseISO(o.offloadedAt.slice(0, 10)))}
           </TableCell>
           <TableCell>
@@ -374,7 +377,7 @@ export function DaybookTable({
             <TableCell className="text-right font-mono font-medium">{formatAmount(Number(o.itemsTotal))}</TableCell>
           )}
           <TableCell className="text-right">
-            <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 touch:opacity-100 [@media(hover:none)]:opacity-100 transition-opacity duration-150">
+            <div className="flex items-center justify-end gap-1 opacity-70 hover:opacity-100 group-hover:opacity-100 focus-within:opacity-100 touch:opacity-100 [@media(hover:none)]:opacity-100 transition-opacity duration-150">
               <Button
                 variant="ghost"
                 size="icon"
@@ -424,7 +427,7 @@ export function DaybookTable({
             setExpandedVoucherId(isExpanded ? null : voucher.id);
           }}
         >
-          <TableCell className="font-medium sticky left-0 bg-background z-10">
+          <TableCell className="font-medium sticky left-0 bg-inherit z-10">
             <div className="flex flex-col">
               <span>{formatDisplayDate(parseISO(voucher.voucherDate))}</span>
               <span className="text-xs text-muted-foreground">{formatDisplayTime(voucher.createdAt)}</span>
@@ -474,7 +477,7 @@ export function DaybookTable({
             {isDvPendingSync ? (
               <span className="text-xs text-amber-600 dark:text-amber-400 italic">Pending sync</span>
             ) : (
-              <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 touch:opacity-100 [@media(hover:none)]:opacity-100 transition-opacity duration-150">
+              <div className="flex items-center justify-end gap-1 opacity-70 hover:opacity-100 group-hover:opacity-100 focus-within:opacity-100 touch:opacity-100 [@media(hover:none)]:opacity-100 transition-opacity duration-150">
                 <Button
                   variant="ghost"
                   size="icon"
@@ -566,9 +569,9 @@ export function DaybookTable({
       );
       if (isExpanded) {
         tableRows.push(
-          <TableRow key={`${dvid}-expand`} className="bg-muted/10">
+          <TableRow key={`${dvid}-expand`} className="bg-muted/25">
             <TableCell colSpan={hideAmounts ? 4 : 5} className="p-0">
-              <div className="px-8 py-3 border-t border-dashed">
+              <div className="px-8 py-3 border-t border-dashed border-border/60 bg-muted/20">
                 {expandedLoading ? (
                   <div className="space-y-1.5">
                     <Skeleton className="h-4 w-full" />
@@ -582,19 +585,19 @@ export function DaybookTable({
                       .filter((e: ViewVoucherEntry) => !e.isStockItem && !e.stockItemId)
                       .map((e: ViewVoucherEntry, idx: number) => (
                         <div key={idx} className="flex items-center justify-between text-sm py-0.5">
-                          <span className="text-muted-foreground truncate max-w-xs">
+                          <span className="text-foreground/85 truncate max-w-xs">
                             {e.accountName ||
                               (e as unknown as ViewVoucherEntry & { supplierName: React.ReactNode }).supplierName ||
                               (e as unknown as ViewVoucherEntry & { employeeName: React.ReactNode }).employeeName ||
                               (e as unknown as ViewVoucherEntry & { assetName: React.ReactNode }).assetName ||
                               "—"}
                             {e.narration && (
-                              <span className="ml-2 text-xs italic text-muted-foreground/60">{e.narration}</span>
+                              <span className="ml-2 text-xs italic text-muted-foreground">{e.narration}</span>
                             )}
                           </span>
                           <div className="flex items-center gap-4 shrink-0 ml-4">
                             {parseFloat(e.debitAmount || "0") > 0 && !hideAmounts && (
-                              <span className="font-mono text-xs text-red-600 dark:text-red-400">
+                              <span className="font-mono text-xs font-medium text-rose-700 dark:text-rose-300">
                                 Dr{" "}
                                 {formatTransactionAmount && e.transactionCurrency
                                   ? formatTransactionAmount(
@@ -605,7 +608,7 @@ export function DaybookTable({
                               </span>
                             )}
                             {parseFloat(e.creditAmount || "0") > 0 && !hideAmounts && (
-                              <span className="font-mono text-xs text-green-600 dark:text-green-400">
+                              <span className="font-mono text-xs font-medium text-emerald-700 dark:text-emerald-300">
                                 Cr{" "}
                                 {formatTransactionAmount && e.transactionCurrency
                                   ? formatTransactionAmount(
@@ -857,8 +860,11 @@ export function DaybookTable({
 
       {/* ── Desktop table (hidden below sm) ── */}
       <div className="hidden sm:block">
-        <Table wrapperClassName="max-h-[calc(100dvh-220px)]">
-          <TableHeader className="sticky top-0 z-20 bg-background">
+        <Table
+          className="text-foreground dark:[&_tr]:border-border/70 dark:[&_th]:border-border/70 dark:[&_td]:border-border/70"
+          wrapperClassName="max-h-[calc(100dvh-220px)] border-border/70"
+        >
+          <TableHeader className="sticky top-0 z-20 bg-muted [&_th]:bg-muted [&_th]:text-foreground/90">
             <TableRow>
               <TableHead className="sticky left-0 bg-muted z-10">Date</TableHead>
               <TableHead>Type</TableHead>
