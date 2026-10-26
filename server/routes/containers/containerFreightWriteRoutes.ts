@@ -26,6 +26,7 @@ import {
 } from "../../services/factory/factoryVoucherCorrection";
 
 import { applyPurchaseOrderItemsUpdate } from "./purchaseOrderItemsUpdate";
+import { assertOffloadedPurchaseOrderChargesUnchanged } from "./offloadedPurchaseOrderCostBasisGuard";
 import { assertZmwPurchaseEditAllowed, convertNativeChargeEdits } from "./purchaseOrderZmwEdit";
 import { storedCents, syncContainerCharges } from "./containerChargeSync";
 import { registerPurchaseOrderDeleteRoute } from "./purchaseOrderDeleteRoute";
@@ -257,21 +258,40 @@ export function registerContainerFreightWriteRoutes(app: Express) {
         db.transaction(async (tx) => {
           // Serialize with other edits and the offload lifecycle on this PO, in the
           // offload lifecycle's lock order: container, then purchase order.
+          let lockedContainer: { id: number; status: string | null } | undefined;
           if (existingPO.containerId != null) {
-            await tx
-              .select({ id: containers.id })
+            [lockedContainer] = await tx
+              .select({ id: containers.id, status: containers.status })
               .from(containers)
               .where(and(eq(containers.id, existingPO.containerId), eq(containers.companyId, existingPO.companyId)))
               .limit(1)
               .for("update");
+            if (!lockedContainer) throw new HttpError(404, "Container not found");
           }
           const [lockedPO] = await tx
-            .select({ id: purchaseOrders.id })
+            .select()
             .from(purchaseOrders)
             .where(and(eq(purchaseOrders.id, id), eq(purchaseOrders.companyId, existingPO.companyId)))
             .limit(1)
             .for("update");
           if (!lockedPO) throw new HttpError(404, "Purchase order not found");
+
+          if (lockedContainer?.status === "OFFLOADED") {
+            assertOffloadedPurchaseOrderChargesUnchanged(lockedPO, {
+              freight: newFreight.toFixed(2),
+              surcharge: newSurcharge.toFixed(2),
+              fumigation: newFumigation.toFixed(2),
+              documentCharges: newDocumentCharges.toFixed(2),
+              discount: newDiscount.toFixed(2),
+              otherCharges: newOtherCharges.toFixed(2),
+            });
+            if (!toMoney(lockedPO.itemsTotal).toDecimalPlaces(2).equals(newItemsTotal.toDecimalPlaces(2))) {
+              throw new HttpError(
+                409,
+                "This container is offloaded. Its purchase item total is locked to its posted inventory receipt."
+              );
+            }
+          }
 
           // Update PO
           const [updated] =
