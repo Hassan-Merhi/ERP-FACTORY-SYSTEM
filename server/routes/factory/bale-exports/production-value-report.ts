@@ -667,9 +667,9 @@ export function registerFactoryProductionValueReportRoutes(app: Express) {
           materialCostUnresolvedBales: hideReportCosts ? 0 : periodMaterialCost.unresolvedBales,
           materialCostUnresolvedKg: hideReportCosts ? 0 : periodMaterialCost.unresolvedKg,
           materialCostStoredBales: hideReportCosts ? 0 : periodMaterialCost.storedCostBales,
-          materialCostRateFallbackBales: hideReportCosts ? 0 : (
-            periodMaterialCost.baleRateFallbackBales + periodMaterialCost.batchRateFallbackBales
-          ),
+          materialCostRateFallbackBales: hideReportCosts
+            ? 0
+            : periodMaterialCost.baleRateFallbackBales + periodMaterialCost.batchRateFallbackBales,
         },
         kgComparison: {
           producedKg: totalBaleWeightKg,
