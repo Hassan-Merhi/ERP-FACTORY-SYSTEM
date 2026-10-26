@@ -58,8 +58,8 @@ function excelDate(key: string): Date | string {
 }
 
 function textValue(value: string): string {
-  const trimmed = value.replace(/[\u0000-\u001F]/g, " ").slice(0, 220);
-  return /^[=+@\-]/.test(trimmed.trimStart()) ? `'${trimmed}` : trimmed;
+  const trimmed = Array.from(value, character => character.charCodeAt(0) < 32 ? " " : character).join("").slice(0, 220);
+  return /^[=+@-]/.test(trimmed.trimStart()) ? `'${trimmed}` : trimmed;
 }
 
 export function compileRows(batches: MixBatchRow[]): CostRow[] {
