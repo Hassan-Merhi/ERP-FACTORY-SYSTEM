@@ -21,7 +21,7 @@ import { readExcel, sheetToJson, createWorkbook, jsonToSheet, writeWorkbook } fr
 import { getClientDate } from "../lib/dateUtils";
 import { MoneyDecimal, moneyString, parseMoneyInput, sumMoney, toMoney } from "../lib/money";
 import { postErpVoucherTx, sessionPostingActor } from "../services/accounting/erpVoucherPosting";
-import { validateHistoricalRate } from "../services/accounting/currencyAmounts";
+import { InvalidExchangeRateError, validateHistoricalRate } from "../services/accounting/currencyAmounts";
 import type Decimal from "decimal.js";
 import { generateInvoicePdf } from "../helpers/generateInvoicePdf";
 import { generateStockPdf } from "../helpers/generateStockPdf";
@@ -592,6 +592,9 @@ export function registerCreditSalesImportRoutes(app: Express) {
       if (sendBaleMirrorMovementRefusal(res, error)) return;
       if (error instanceof PosZmwRateError) {
         return res.status(error.statusCode).json({ code: error.code, message: error.message });
+      }
+      if (error instanceof InvalidExchangeRateError) {
+        return res.status(400).json({ code: "IMPORT_EXCHANGE_RATE_INVALID", message: error.message });
       }
       logger.error("Credit Sales Import error:", { error: error });
       res.status(500).json({ message: getErrorMessage(error) });
