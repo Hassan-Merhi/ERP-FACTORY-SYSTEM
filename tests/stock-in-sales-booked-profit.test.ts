@@ -2,8 +2,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
-const source = (name: string) =>
-  readFileSync(path.resolve(process.cwd(), "server/services/reports", name), "utf8");
+const source = (name: string) => readFileSync(path.resolve(process.cwd(), "server/services/reports", name), "utf8");
 
 describe("Stock In/Sales profit uses posted sale and cost totals", () => {
   it("aggregates signed sales minus COGS, never legacy stored profit", () => {
@@ -24,10 +23,7 @@ describe("Stock In/Sales profit uses posted sale and cost totals", () => {
 
   it("returns consistent sale profit in vouchers and assistant-backed summaries", () => {
     const rootSource = (name: string) => readFileSync(path.resolve(process.cwd(), name), "utf8");
-    for (const file of [
-      "server/routes/globalTransactionRoutes.ts",
-      "server/routes/voucher-entries/reads.ts",
-    ]) {
+    for (const file of ["server/routes/globalTransactionRoutes.ts", "server/routes/voucher-entries/reads.ts"]) {
       const code = rootSource(file);
       expect(code).toContain(
         "profit: sql<string>`(${salesItems.totalSales}::numeric - ${salesItems.totalCost}::numeric)`"
