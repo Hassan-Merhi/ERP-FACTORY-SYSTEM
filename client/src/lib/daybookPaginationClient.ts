@@ -201,7 +201,9 @@ if (typeof window !== "undefined" && !window.__erpDaybookPaginationInstalled) {
       meta.totalPages === null ||
       highestLoadedPage() >= meta.totalPages ||
       hasLoadedEveryRow(meta.total, meta.loadedCount)
-    ) return;
+    ) {
+      return;
+    }
 
     if (autoLoadTimer !== null) clearTimeout(autoLoadTimer);
     autoLoadTimer = setTimeout(() => {
