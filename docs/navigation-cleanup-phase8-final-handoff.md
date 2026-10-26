@@ -87,6 +87,14 @@ The comparison **before these two fixes** reported the cleanup branch 75 commits
 
 **Remaining blockers:** Claude must still review the full divergent `main` changes and reconcile integration, independently run CI/build/typechecks/tests, and verify role/API authorization, accounting and stock workflows. This watch did **not** run automated checks, rebase, merge, deploy, or write production data. No cleanup-branch PR or independent Claude acceptance evidence was found during this check.
 
+### Post-handoff check — 2026-10-26, 15:21 Asia/Beirut
+
+- Compared the unchanged cleanup branch at `4bb766ff` with current `main` before writing; the cleanup branch had **zero new commits** since that prior handoff. GitHub comparison now showed **79 ahead / 92 behind `main`** (previous check: 83 behind), reflecting ongoing unrelated production work.
+- **New verified UI parity gap:** `main` had changed `client/src/app/ErpShell.tsx` to **suppress the Company Daily Rate modal** for `View Only` and display a **View Only read-only status banner**. Both protections were missing from the cleanup branch despite its previous Dashboard restriction backport.
+- Ported only those two `main` shell changes to the existing feature branch, commit `1b4c1c671e188306ccee9f7927e2331952b52b81`. The resulting `ErpShell.tsx` blob matches the current `main` file exactly (`762adf53de9d2f61a4e31a56add3042ef84cb600`). No unrelated shell behavior was changed.
+- **Critical unported security gap:** `main` contains new `server/services/security/erpViewerPagePolicy.ts` and `server/services/security/viewOnlyWritePolicy.ts` and associated backend authorization changes **absent** from the cleanup branch. These are not equivalent to UI restrictions and must be preserved during Claude's reconciliation. This watch intentionally did not attempt to transplant the broader server middleware and authentication changes in isolation.
+- After the shell fix, the branch comparison was **80 ahead / 92 behind `main`** before documentation commits. No independent Claude validation or new branch review findings were observed. No CI, tests, typechecks, builds, merges, rebases, deployments or production data changes were performed.
+
 ## 7. Completion criteria and current limitations
 
 The user requested that ChatGPT make source changes on one branch and **not** run CI/tests/builds/merges/deployment because Claude will handle them. The source phase can be marked completed when all changes and the handoff are committed. **The overall ERP cleanup must remain unverified until Claude has independently run acceptance checks, reconciled newer `main` commits and approved each role/workflow regression.**
