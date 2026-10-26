@@ -190,6 +190,11 @@ export async function exportMixBatchCostAnalysis(
     : `${previousYear}-${String(previousMonthNum).padStart(2, "0")}`;
   const previous = months.find(item => item.key === previousKey);
   const selectedDays = days.filter(item => item.key.startsWith(month));
+  const selectedMonthlyRow = months.findIndex(item => item.key === month) + 5;
+  const monthlyLinkedValue = (column: string, fallback: number): ExcelJS.CellValue =>
+    selectedMonthlyRow >= 5
+      ? { formula: `'Monthly Average'!${column}${selectedMonthlyRow}`, result: fallback }
+      : fallback;
   const weightedAverage = current && current.kg > 0 ? current.cost / current.kg : 0;
   const previousAverage = previous && previous.kg > 0 ? previous.cost / previous.kg : 0;
 
@@ -261,9 +266,9 @@ export async function exportMixBatchCostAnalysis(
     row.getCell(5).value = { formula: `IFERROR(D${n}/C${n},0)`, result: item.kg > 0 ? item.cost / item.kg : 0 };
     // Latest month is first, so the prior calendar month is the next row when present.
     const prior = months[index + 1];
-    const priorDate = new Date(`${item.key}-01T12:00:00Z`);
-    priorDate.setUTCMonth(priorDate.getUTCMonth() - 1);
-    if (prior && prior.key === priorDate.toISOString().slice(0, 7) && prior.kg > 0) {
+    const priorDate = /^\d{4}-\d{2}$/.test(item.key) ? new Date(`${item.key}-01T12:00:00Z`) : null;
+    priorDate?.setUTCMonth(priorDate.getUTCMonth() - 1);
+    if (priorDate && prior && prior.key === priorDate.toISOString().slice(0, 7) && prior.kg > 0 && prior.cost > 0) {
       const delta = item.kg > 0 ? (item.cost / item.kg) / (prior.cost / prior.kg) - 1 : 0;
       row.getCell(6).value = { formula: `IFERROR(E${n}/E${n + 1}-1,0)`, result: Number.isFinite(delta) ? delta : 0 };
     } else {
@@ -282,10 +287,10 @@ export async function exportMixBatchCostAnalysis(
   dashboard.getRow(5).height = 25;
   dashboard.getRow(6).height = 24;
   dashboard.getRow(7).height = 24;
-  dashboardCard(dashboard, "A5:B5", "A6:B7", "WEIGHTED AVG / KG", weightedAverage, RATE_FMT);
-  dashboardCard(dashboard, "C5:D5", "C6:D7", "TOTAL KG MIXED", current?.kg || 0, KG_FMT);
-  dashboardCard(dashboard, "E5:F5", "E6:F7", "TOTAL RECORDED COST", current?.cost || 0, USD_FMT);
-  dashboardCard(dashboard, "G5:H5", "G6:H7", "MIX BATCHES", current?.count || 0, "#,##0");
+  dashboardCard(dashboard, "A5:B5", "A6:B7", "WEIGHTED AVG / KG", monthlyLinkedValue("E", weightedAverage), RATE_FMT);
+  dashboardCard(dashboard, "C5:D5", "C6:D7", "TOTAL KG MIXED", monthlyLinkedValue("C", current?.kg || 0), KG_FMT);
+  dashboardCard(dashboard, "E5:F5", "E6:F7", "TOTAL RECORDED COST", monthlyLinkedValue("D", current?.cost || 0), USD_FMT);
+  dashboardCard(dashboard, "G5:H5", "G6:H7", "MIX BATCHES", monthlyLinkedValue("B", current?.count || 0), "#,##0");
   dashboard.mergeCells("A9:H9");
   dashboard.getCell("A9").value = `DAILY COST BREAKDOWN  ·  ${month}`;
   dashboard.getCell("A9").font = { bold: true, size: 12, color: { argb: WHITE } };
