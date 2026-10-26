@@ -13,6 +13,7 @@ import { Switch, Route, Redirect } from "wouter";
 import type { ShellUser } from "@/app/shellUser";
 import {
   AccountingCreate,
+  AccountingToolbox,
   AccountingOpenItems,
   CashBankReconciliation,
   MonetaryFxAccounting,
@@ -188,6 +189,7 @@ export function FactoryRoutes({ user, myAccess, factoryDefaultPage }: FactoryRou
       <Route path="/factory/stock-query" component={StockQuery} />
       <Route path="/factory/contacts" component={FactoryContacts} />
       <Route path="/factory/accounts" component={FactoryAccounts} />
+      {isDeveloper && <Route path="/factory/accounting/toolbox" component={AccountingToolbox} />}
       {isDeveloper && <Route path="/factory/accounting/open-items" component={AccountingOpenItems} />}
       {isDeveloper && <Route path="/factory/accounting/cash-bank" component={CashBankReconciliation} />}
       {isDeveloper && <Route path="/factory/accounting/monetary-fx" component={MonetaryFxAccounting} />}
