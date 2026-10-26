@@ -37,17 +37,19 @@ describe("read-only supplier inventory cost repair workpaper", () => {
   });
 
   it("explains unchanged-stock cost differences with signed adjustment values", () => {
-    const removed = costRowFlags(item({
-      code: "HMD12059",
-      qty_received: "17",
-      qty_stock: "16",
-      stock_value: "1189.67",
-      landed: "1262.66",
-      adj_qty: "-1",
-      adj_value: "-72.99",
-      transfer_lines: 0,
-      transfer_value_missing: 0,
-    }));
+    const removed = costRowFlags(
+      item({
+        code: "HMD12059",
+        qty_received: "17",
+        qty_stock: "16",
+        stock_value: "1189.67",
+        landed: "1262.66",
+        adj_qty: "-1",
+        adj_value: "-72.99",
+        transfer_lines: 0,
+        transfer_value_missing: 0,
+      })
+    );
     expect(removed).toContain("COST_EXPLAINED_BY_ADJUSTMENT");
     expect(removed).not.toContain("COST_GAP_AFTER_RECORDED_ADJUSTMENTS");
   });
