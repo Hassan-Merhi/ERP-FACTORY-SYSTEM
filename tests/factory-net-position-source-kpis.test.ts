@@ -14,8 +14,17 @@ vi.mock("../server/db", async () => {
         const text = dialect.sqlToQuery(query).sql;
         state.sql.push(text);
 
-        if (text.includes("total_mix_kg")) {
-          return { rows: [{ total_mix_kg: "3000", total_mix_cost: "2601" }] };
+        if (text.includes("AS total_weight_kg") && text.includes("FROM factory_mix_batches")) {
+          return {
+            rows: [{
+              id: 1,
+              total_weight_kg: "3000",
+              total_cost: "2601",
+              used_kg: "1000",
+              needs_replay: false,
+              carry_forward_from_id: null,
+            }],
+          };
         }
         if (text.includes("AS total_kg") && text.includes("FROM factory_bales")) {
           // 1,000 kg of valid bales; 30 kg of REPACKED originals are excluded.
@@ -61,7 +70,7 @@ const context = () => ({
 });
 
 describe("factory net position matches operational source KPIs", () => {
-  it("uses Production Overview's 10dp rate and excludes REPACKED originals", async () => {
+  it("uses the remaining batch's 10dp rate and excludes REPACKED originals", async () => {
     state.scenario = "table";
     state.sql = [];
     const snapshot = await getFactoryBalanceOnTableSnapshot(7, "2026-10-14");
