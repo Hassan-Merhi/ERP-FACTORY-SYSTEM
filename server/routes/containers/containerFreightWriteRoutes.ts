@@ -6,7 +6,7 @@ import { db } from "../../db";
 import { storage } from "../../storage";
 import { requireAuth } from "../../auth";
 import { logAudit } from "../_helpers";
-import { containers, purchaseOrders, vouchers, voucherEntries, ledgerAccounts } from "@shared/schema";
+import { containers, containerOffloads, purchaseOrders, vouchers, voucherEntries, ledgerAccounts } from "@shared/schema";
 import type { InsertPurchaseOrder } from "@shared/schema";
 import { eq, and, inArray } from "drizzle-orm";
 import {
@@ -276,7 +276,14 @@ export function registerContainerFreightWriteRoutes(app: Express) {
             .for("update");
           if (!lockedPO) throw new HttpError(404, "Purchase order not found");
 
-          if (lockedContainer?.status === "OFFLOADED") {
+          const hasActiveOffload = lockedContainer
+            ? (await tx
+                .select({ id: containerOffloads.id })
+                .from(containerOffloads)
+                .where(and(eq(containerOffloads.containerId, lockedContainer.id), eq(containerOffloads.optional, false)))
+                .limit(1)).length > 0
+            : false;
+          if (lockedContainer?.status === "OFFLOADED" || hasActiveOffload) {
             assertOffloadedPurchaseOrderChargesUnchanged(lockedPO, {
               freight: newFreight.toFixed(2),
               surcharge: newSurcharge.toFixed(2),
