@@ -34,7 +34,8 @@ export function FactoryRelatedLinks({
   });
 
   if (!user || !selectedCompany?.id || !access || access.companyId !== selectedCompany.id) return null;
-  const role = user.currentRole ?? user.role ?? "";
+  // FactoryRoutes gates these destinations using user.role, not currentRole.
+  const role = user.role ?? "";
   const visibleLinks = links.filter(({ href }) => {
     const page = resolveFactoryPage(href);
     if (!page || !factoryPageAllowsRole(page, role)) return false;
