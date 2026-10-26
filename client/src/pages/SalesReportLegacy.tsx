@@ -44,6 +44,7 @@ import {
   SalesReportFilterControls,
   type SalesReportFilterControlsProps,
 } from "./salesreportlegacy/SalesReportFilterControls";
+import { SupplierCostReconciliationPanel } from "./salesreportlegacy/SupplierCostReconciliationPanel";
 import type { ApiListRow } from "@shared/apiTypes";
 export default function SalesReport() {
   const [periodFilter, setPeriodFilter] = useState<PeriodFilterValue>(() => getDefaultPeriodValue("today"));
@@ -439,6 +440,8 @@ export default function SalesReport() {
           </DropdownMenuContent>
         </DropdownMenu>
       </PageHeader>
+
+      {!isMultiCompanyMode && <SupplierCostReconciliationPanel />}
 
       {/* Summary Pills */}
       <div className="flex flex-wrap gap-2">
