@@ -23,7 +23,7 @@ import {
   locations,
   users,
 } from "@shared/schema";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { toMoney } from "../../lib/money";
 
 export function registerVoucherEntryReadRoutes(app: Express) {
@@ -141,7 +141,7 @@ export function registerVoucherEntryReadRoutes(app: Express) {
             sellingPrice: salesItems.sellingPrice,
             costPrice: salesItems.costPrice,
             totalSales: salesItems.totalSales,
-            profit: salesItems.profit,
+            profit: sql<string>`(${salesItems.totalSales}::numeric - ${salesItems.totalCost}::numeric)`,
             baseSellingPrice: stockItems.sellingPrice,
             stockItemName: stockItems.name,
             stockItemCode: stockItems.code,
