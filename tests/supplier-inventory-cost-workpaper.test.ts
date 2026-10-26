@@ -48,17 +48,14 @@ describe("read-only supplier inventory cost repair workpaper", () => {
   });
 
   it("has no financial write or apply route", () => {
-    const source = readFileSync(
-      path.resolve(process.cwd(), "scripts/audit-erp-supplier-inventory-cost.ts"),
-      "utf8"
-    );
+    const source = readFileSync(path.resolve(process.cwd(), "scripts/audit-erp-supplier-inventory-cost.ts"), "utf8");
     expect(source).toContain("BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY");
-    expect(source).toContain("if (process.argv.includes(\"--apply\"))");
+    expect(source).toContain('if (process.argv.includes("--apply"))');
     expect(source).not.toMatch(/\b(?:UPDATE|DELETE FROM|INSERT INTO|TRUNCATE)\s+(?:inventory|sales_items|vouchers)\b/i);
   });
 
   it("reproduces the two valuation views without writing off the gap", () => {
-    const purchaseCost = 372853.70;
+    const purchaseCost = 372853.7;
     const cogs = 303022.84;
     const savedStock = 69909.72;
     const stockAtRate = 69909.75;
