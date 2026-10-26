@@ -143,9 +143,9 @@ export function DaybookTable({
 
     return (
       <Table
-          className="text-foreground dark:[&_tr]:border-border/70 dark:[&_th]:border-border/70 dark:[&_td]:border-border/70"
-          wrapperClassName="max-h-[calc(100dvh-220px)] border-border/70"
-        >
+        className="text-foreground dark:[&_tr]:border-border/70 dark:[&_th]:border-border/70 dark:[&_td]:border-border/70"
+        wrapperClassName="max-h-[calc(100dvh-220px)] border-border/70 dark:border-border/70"
+      >
         <TableHeader className="sticky top-0 z-20 bg-muted [&_th]:bg-muted [&_th]:text-foreground/90">
           <TableRow>
             <TableHead className="sticky left-0 bg-muted z-10 pl-4">Date / Type</TableHead>
@@ -862,7 +862,7 @@ export function DaybookTable({
       <div className="hidden sm:block">
         <Table
           className="text-foreground dark:[&_tr]:border-border/70 dark:[&_th]:border-border/70 dark:[&_td]:border-border/70"
-          wrapperClassName="max-h-[calc(100dvh-220px)] border-border/70"
+          wrapperClassName="max-h-[calc(100dvh-220px)] border-border/70 dark:border-border/70"
         >
           <TableHeader className="sticky top-0 z-20 bg-muted [&_th]:bg-muted [&_th]:text-foreground/90">
             <TableRow>
