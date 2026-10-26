@@ -339,10 +339,13 @@ describe("scheduled WhatsApp delivery", () => {
       const resumed = await claimRetryableScheduledWhatsAppOccurrence(retryInput);
       expect(resumed).toMatchObject({ acquired: true, status: "claimed" });
 
-      // Re-claimed after a delivery had started: an abandoned lease is not
-      // treated as a never-started claim.
-      await expireLease(client, resumed!);
+      // A worker that dies after re-claiming a started delivery, before it
+      // sends anything, leaves a recoverable claim once the lease expires.
       await expect(claimRetryableScheduledWhatsAppOccurrence(retryInput)).resolves.toBeNull();
+      await expireLease(client, resumed!);
+      const recovered = await claimRetryableScheduledWhatsAppOccurrence(retryInput);
+      expect(recovered).toMatchObject({ id: resumed!.id, acquired: true, status: "claimed" });
+      expect(recovered!.claimToken).not.toBe(resumed!.claimToken);
 
       // Anything older than the 36-hour retry window is left alone.
       const stale = (await claimScheduledWhatsAppOccurrence(occurrence({ attachmentKeys: ["pdf"] })))!;
