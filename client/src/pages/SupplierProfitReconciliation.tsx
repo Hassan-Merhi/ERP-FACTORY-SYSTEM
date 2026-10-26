@@ -171,7 +171,8 @@ export default function SupplierProfitReconciliation() {
   const isAllTime = period === "all";
   const bridgeGap = totals?.modeledVsRecordedGap ?? 0;
 
-  const salesReportUrl = "/sales-report?" +
+  const salesReportUrl =
+    "/sales-report?" +
     new URLSearchParams({
       startDate: range.from,
       endDate: range.to,
@@ -260,7 +261,13 @@ export default function SupplierProfitReconciliation() {
               {period === "year" && (
                 <label className="space-y-1 text-xs font-medium">
                   <span>Year</span>
-                  <Input type="number" min="2000" max="2100" value={year} onChange={(event) => setYear(event.target.value)} />
+                  <Input
+                    type="number"
+                    min="2000"
+                    max="2100"
+                    value={year}
+                    onChange={(event) => setYear(event.target.value)}
+                  />
                 </label>
               )}
               {period === "custom" && (
@@ -278,9 +285,7 @@ export default function SupplierProfitReconciliation() {
             </CardContent>
           </Card>
 
-          {optionsQuery.isError && (
-            <p className="text-sm text-destructive">{(optionsQuery.error as Error).message}</p>
-          )}
+          {optionsQuery.isError && <p className="text-sm text-destructive">{(optionsQuery.error as Error).message}</p>}
           {reportQuery.isError && (
             <p className="rounded-md border border-destructive/40 p-3 text-sm text-destructive">
               {(reportQuery.error as Error).message}
@@ -348,11 +353,7 @@ export default function SupplierProfitReconciliation() {
                   )}
                   <SummaryRow label="Total profit on the system" value={dollars(totals.storedProfit)} emphasis />
                   {isAllTime && (
-                    <SummaryRow
-                      label="Difference"
-                      value={dollars(bridgeGap)}
-                      attention={Math.abs(bridgeGap) > 0.009}
-                    />
+                    <SummaryRow label="Difference" value={dollars(bridgeGap)} attention={Math.abs(bridgeGap) > 0.009} />
                   )}
                   <SummaryRow
                     label="Amount owed to supplier"
