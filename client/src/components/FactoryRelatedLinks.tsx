@@ -42,6 +42,9 @@ export function FactoryRelatedLinks({
       return false;
     }
     if (page.hideKey && access.hiddenCostFields?.includes(page.hideKey)) return false;
+    // Factory's route guard bypasses per-user allow-lists for privileged
+    // roles, except Cost Centers which has its own explicit route-level grant.
+    if (page.key !== "factory/cost-centers" && ["Admin", "Owner", "Developer"].includes(role)) return true;
     if (access.fullAccess || hasFactoryPageKey(page, access.pageKeys ?? [])) return true;
     // The existing Cost Centers route also accepts access through Accounts.
     return page.key === "factory/cost-centers" && access.pageKeys?.includes("factory/accounts");
