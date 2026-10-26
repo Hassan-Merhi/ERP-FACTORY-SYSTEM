@@ -56,7 +56,6 @@ export function calculateProductionWeightCost({
   return new BatchRateDecimal(producedWeightKg).times(new BatchRateDecimal(batchRateCost));
 }
 
-
 /**
  * Actual material cost of regular bales produced during a reporting period.
  *
