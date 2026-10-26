@@ -98,6 +98,7 @@ import {
   StockItemVouchers,
   StockTransferOrder,
   SupplierProfitCheck,
+  SupplierProfitReconciliation,
   SupplierProformas,
   TrackingHub,
   TransactionJournal,
@@ -383,6 +384,7 @@ export function ErpRoutes({ user }: ErpRoutesProps) {
       )}
 
       {G("/sales-report", "sales_report", SalesReport)}
+      {G("/supplier-profit-reconciliation", "sales_report", SupplierProfitReconciliation)}
       {G("/stock-in-sales-report", "sales_report", StockInSalesReport)}
       {G("/item-market-analysis", "sales_report", ItemMarketAnalysis)}
       {G("/sales-report/detail", "sales_report", SalesReportDetail)}
