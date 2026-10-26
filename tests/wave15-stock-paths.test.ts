@@ -510,11 +510,12 @@ describe("offload cost corrections with downstream sales", () => {
       [voucherId, item.id]
     );
 
-    await expect(executeContainerOffloadLifecycle({ ...input, mode: "replace-only", duties: "4" }))
-      .rejects.toMatchObject({
-        status: 409,
-        code: "CONTAINER_OFFLOAD_DOWNSTREAM_COST_LOCKED",
-      });
+    await expect(
+      executeContainerOffloadLifecycle({ ...input, mode: "replace-only", duties: "4" })
+    ).rejects.toMatchObject({
+      status: 409,
+      code: "CONTAINER_OFFLOAD_DOWNSTREAM_COST_LOCKED",
+    });
 
     expect(await stockRow(ctx.locationId, item.id)).toEqual(beforeStock);
     const afterSale = await pool.query<{ total_cost: string }>(

@@ -422,40 +422,52 @@ export async function executeContainerOffloadLifecycle(
         const affectedItemIds = positiveIds([...previousItems, ...proposedItems].map((item) => item.stockItemId));
         if (affectedItemIds.length > 0) {
           const [salesAfterReceipt, transfersAfterReceipt, canonicalAfterReceipt] = await Promise.all([
-            tx.select({ id: schema.salesItems.id })
+            tx
+              .select({ id: schema.salesItems.id })
               .from(schema.salesItems)
               .innerJoin(schema.vouchers, eq(schema.vouchers.id, schema.salesItems.voucherId))
-              .where(and(
-                eq(schema.vouchers.companyId, input.companyId),
-                eq(schema.vouchers.optional, false),
-                isNull(schema.vouchers.deletedAt),
-                inArray(schema.salesItems.stockItemId, affectedItemIds),
-              ))
+              .where(
+                and(
+                  eq(schema.vouchers.companyId, input.companyId),
+                  eq(schema.vouchers.optional, false),
+                  isNull(schema.vouchers.deletedAt),
+                  inArray(schema.salesItems.stockItemId, affectedItemIds)
+                )
+              )
               .limit(1),
-            tx.select({ id: schema.stockTransferItems.id })
+            tx
+              .select({ id: schema.stockTransferItems.id })
               .from(schema.stockTransferItems)
-              .innerJoin(schema.stockTransferVouchers, eq(schema.stockTransferVouchers.id, schema.stockTransferItems.transferId))
+              .innerJoin(
+                schema.stockTransferVouchers,
+                eq(schema.stockTransferVouchers.id, schema.stockTransferItems.transferId)
+              )
               .innerJoin(schema.vouchers, eq(schema.vouchers.id, schema.stockTransferVouchers.voucherId))
-              .where(and(
-                eq(schema.vouchers.companyId, input.companyId),
-                eq(schema.vouchers.optional, false),
-                isNull(schema.vouchers.deletedAt),
-                eq(schema.stockTransferVouchers.inventoryApplied, true),
-                inArray(schema.stockTransferItems.stockItemId, affectedItemIds),
-              ))
+              .where(
+                and(
+                  eq(schema.vouchers.companyId, input.companyId),
+                  eq(schema.vouchers.optional, false),
+                  isNull(schema.vouchers.deletedAt),
+                  eq(schema.stockTransferVouchers.inventoryApplied, true),
+                  inArray(schema.stockTransferItems.stockItemId, affectedItemIds)
+                )
+              )
               .limit(1),
-            tx.select({ id: schema.canonicalStockMovements.id })
+            tx
+              .select({ id: schema.canonicalStockMovements.id })
               .from(schema.canonicalStockMovements)
-              .where(and(
-                eq(schema.canonicalStockMovements.companyId, input.companyId),
-                inArray(schema.canonicalStockMovements.stockItemId, affectedItemIds),
-                notInArray(schema.canonicalStockMovements.sourceType, [
-                  "container-offload",
-                  "container-reverse-offload",
-                  "container_offload_reverse",
-                  "container_offload_reverse_legacy",
-                ]),
-              ))
+              .where(
+                and(
+                  eq(schema.canonicalStockMovements.companyId, input.companyId),
+                  inArray(schema.canonicalStockMovements.stockItemId, affectedItemIds),
+                  notInArray(schema.canonicalStockMovements.sourceType, [
+                    "container-offload",
+                    "container-reverse-offload",
+                    "container_offload_reverse",
+                    "container_offload_reverse_legacy",
+                  ])
+                )
+              )
               .limit(1),
           ]);
           if (salesAfterReceipt.length || transfersAfterReceipt.length || canonicalAfterReceipt.length) {

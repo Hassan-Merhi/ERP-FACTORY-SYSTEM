@@ -36,7 +36,8 @@ export function offloadEconomicBasisChanged(
       !current ||
       !initial.quantity.toDecimalPlaces(3).equals(current.quantity.toDecimalPlaces(3)) ||
       !initial.value.toDecimalPlaces(2).equals(current.value.toDecimalPlaces(2))
-    ) return true;
+    )
+      return true;
   }
   return false;
 }
