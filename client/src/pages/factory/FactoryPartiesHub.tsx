@@ -51,9 +51,11 @@ export default function FactoryPartiesHub() {
             subtitle="Customers and suppliers of the factory"
             icon={<Users className="h-5 w-5" />}
             showBackButton={false}
-          >
-            <FactoryRelatedLinks links={[{ href: "/factory/contacts", label: "Contacts" }]} />
-          </PageHeader>
+          />
+          <FactoryRelatedLinks
+            className="justify-end pb-2"
+            links={[{ href: "/factory/contacts", label: "Contacts" }]}
+          />
         </div>
         <div className="erp-mobile-scroll-tabs border-b px-4 pb-1 shrink-0">
           <TabsList className="w-max min-w-full sm:min-w-0 sm:w-fit" aria-label="Factory parties sections">
