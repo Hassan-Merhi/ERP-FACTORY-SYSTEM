@@ -31,23 +31,28 @@ export function registerSupplierProfitReconciliationRoutes(app: Express) {
   app.get("/api/supplier-profit-reconciliation/options", requireAuth, requireNonPOS, async (req, res) => {
     const companyId = req.session.currentCompanyId;
     if (!companyId) return res.status(400).json({ message: "No company selected" });
+    const client = await pool.connect();
     try {
-      const [suppliers, groups] = await Promise.all([
-        pool.query(`
-          SELECT DISTINCT s.id, s.legal_name AS name, s.stock_group_id
-          FROM suppliers s JOIN containers c ON c.supplier_id = s.id
-          WHERE c.company_id = $1 AND s.deleted_at IS NULL
-          ORDER BY name, s.id
-        `, [companyId]),
-        pool.query(`
-          SELECT id, name FROM stock_groups
-          WHERE company_id = $1 AND deleted_at IS NULL ORDER BY name, id
-        `, [companyId]),
-      ]);
+      await client.query("BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY");
+      await client.query("SELECT set_config('app.current_company_id', $1, true)", [String(companyId)]);
+      const suppliers = await client.query(`
+        SELECT DISTINCT s.id, s.legal_name AS name, s.stock_group_id
+        FROM suppliers s JOIN containers c ON c.supplier_id = s.id
+        WHERE c.company_id = $1 AND s.deleted_at IS NULL
+        ORDER BY name, s.id
+      `, [companyId]);
+      const groups = await client.query(`
+        SELECT id, name FROM stock_groups
+        WHERE company_id = $1 AND deleted_at IS NULL ORDER BY name, id
+      `, [companyId]);
+      await client.query("ROLLBACK");
       return res.json({ suppliers: suppliers.rows, groups: groups.rows });
     } catch (error) {
+      await client.query("ROLLBACK").catch(() => undefined);
       logger.error("Supplier profit options failed", { error });
       return res.status(500).json({ message: getErrorMessage(error) });
+    } finally {
+      client.release();
     }
   });
 
@@ -103,7 +108,7 @@ export function registerSupplierProfitReconciliationRoutes(app: Express) {
         SELECT i.id, i.code, i.name, g.name AS group_name
         FROM stock_items i
         LEFT JOIN stock_groups g ON g.id=i.stock_group_id AND g.company_id=$1
-        WHERE i.company_id=$1 AND i.deleted_at IS NULL
+        WHERE i.company_id=$1
           AND ($3::integer IS NULL OR i.stock_group_id=$3)
           AND EXISTS (
             SELECT 1 FROM container_offload_items oi
