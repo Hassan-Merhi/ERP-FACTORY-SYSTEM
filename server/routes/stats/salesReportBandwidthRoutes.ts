@@ -144,7 +144,7 @@ async function buildSalesSummary(companyIds: number[], params: SummaryParams): P
         COALESCE(SUM(COALESCE(sales.quantity, 0)::numeric), 0)::float8 AS "totalQty",
         COALESCE(SUM(COALESCE(sales.total_sales, 0)::numeric), 0)::float8 AS "totalSales",
         COALESCE(SUM(COALESCE(sales.total_cost, 0)::numeric), 0)::float8 AS "totalCost",
-        COALESCE(SUM(COALESCE(sales.profit, 0)::numeric), 0)::float8 AS "costProfit",
+        COALESCE(SUM(COALESCE(sales.total_sales, 0)::numeric - COALESCE(sales.total_cost, 0)::numeric), 0)::float8 AS "costProfit",
         COALESCE(
           SUM(
             (
@@ -305,7 +305,7 @@ async function buildComparisonRows(companies: CompanyOption[], req: Request) {
         COALESCE(sg.name, '') AS "stockGroupName",
         COALESCE(SUM(COALESCE(sales.quantity, 0)::numeric), 0)::text AS quantity,
         COALESCE(SUM(COALESCE(sales.total_sales, 0)::numeric), 0)::text AS "totalSales",
-        COALESCE(SUM(COALESCE(sales.profit, 0)::numeric), 0)::text AS "costProfit"
+        COALESCE(SUM(COALESCE(sales.total_sales, 0)::numeric - COALESCE(sales.total_cost, 0)::numeric), 0)::text AS "costProfit"
       FROM sales_items sales
       INNER JOIN vouchers v ON sales.voucher_id = v.id
       INNER JOIN stock_items si ON sales.stock_item_id = si.id
