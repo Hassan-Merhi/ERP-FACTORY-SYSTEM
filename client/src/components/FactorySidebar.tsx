@@ -200,7 +200,8 @@ export function useFactoryVisibleSections(user?: FactorySidebarUser): {
       const enabled = defaultOn ? settings?.[page.featureFlag] !== false : settings?.[page.featureFlag] === true;
       if (!enabled) return false;
     }
-    if (myAccess && !myAccess.fullAccess && !hasFactoryPageKey(page, myAccess.pageKeys)) {
+    const privilegedRole = ["Admin", "Owner", "Developer"].includes(user?.role ?? "");
+    if (!privilegedRole && !myAccess.fullAccess && !hasFactoryPageKey(page, myAccess.pageKeys)) {
       // FactoryRoutes explicitly allows account access to open Cost Centers.
       if (!(page.key === "factory/cost-centers" && myAccess.pageKeys.includes("factory/accounts"))) {
         return false;
