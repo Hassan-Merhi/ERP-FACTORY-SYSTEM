@@ -1,4 +1,7 @@
-import { Building2, ClipboardList, Store } from "lucide-react";
+import { Building2, ClipboardList, Store, ArrowLeftRight } from "lucide-react";
+import { Link } from "wouter";
+import { useQuery } from "@tanstack/react-query";
+import type { AuthMe } from "@shared/apiTypes";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useHubQueryState } from "@/hooks/use-hub-query-state";
 import PropertiesRentalWarehouses from "./PropertiesRentalWarehouses";
@@ -9,6 +12,8 @@ const RENTAL_TABS = ["warehouses", "shops", "payments"] as const;
 type RentalTab = (typeof RENTAL_TABS)[number];
 
 export default function PropertiesRentalsHub() {
+  const { data: user } = useQuery<AuthMe>({ queryKey: ["/api/auth/me"] });
+  const isDeveloper = (user?.currentRole ?? user?.role) === "Developer";
   const [tab, setTab] = useHubQueryState<RentalTab>({
     key: "tab",
     allowedValues: RENTAL_TABS,
@@ -18,6 +23,18 @@ export default function PropertiesRentalsHub() {
 
   return (
     <div className="space-y-4" data-testid="properties-rentals-hub">
+      {isDeveloper && (
+        <nav aria-label="Rental management tools" className="flex justify-end">
+          <Link
+            href="/properties/transfer"
+            className="inline-flex min-h-10 items-center gap-2 rounded-lg border bg-card px-3 text-sm font-medium hover:bg-muted"
+            data-testid="link-properties-rentals-transfer"
+          >
+            <ArrowLeftRight className="h-4 w-4" aria-hidden="true" />
+            Cash Transfer
+          </Link>
+        </nav>
+      )}
       <Tabs value={tab} onValueChange={(value) => setTab(value as RentalTab)}>
         <div className="erp-mobile-scroll-tabs pb-1">
           <TabsList className="w-max min-w-full sm:min-w-0 sm:w-fit" aria-label="Rental sections">
