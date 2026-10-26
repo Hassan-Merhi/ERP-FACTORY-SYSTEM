@@ -6,7 +6,14 @@ import { db } from "../../db";
 import { storage } from "../../storage";
 import { requireAuth } from "../../auth";
 import { logAudit } from "../_helpers";
-import { containers, containerOffloads, purchaseOrders, vouchers, voucherEntries, ledgerAccounts } from "@shared/schema";
+import {
+  containers,
+  containerOffloads,
+  purchaseOrders,
+  vouchers,
+  voucherEntries,
+  ledgerAccounts,
+} from "@shared/schema";
 import type { InsertPurchaseOrder } from "@shared/schema";
 import { eq, and, inArray } from "drizzle-orm";
 import {
@@ -277,14 +284,20 @@ export function registerContainerFreightWriteRoutes(app: Express) {
           if (!lockedPO) throw new HttpError(404, "Purchase order not found");
 
           const hasActiveOffload = lockedContainer
-            ? (await tx
-                .select({ id: containerOffloads.id })
-                .from(containerOffloads)
-                .where(and(eq(containerOffloads.containerId, lockedContainer.id), eq(containerOffloads.optional, false)))
-                .limit(1)).length > 0
+            ? (
+                await tx
+                  .select({ id: containerOffloads.id })
+                  .from(containerOffloads)
+                  .where(
+                    and(eq(containerOffloads.containerId, lockedContainer.id), eq(containerOffloads.optional, false))
+                  )
+                  .limit(1)
+              ).length > 0
             : false;
           if (lockedContainer?.status === "OFFLOADED" || hasActiveOffload) {
-            if (String(req.body.currency ?? lockedPO.currency).toUpperCase() !== String(lockedPO.currency).toUpperCase()) {
+            if (
+              String(req.body.currency ?? lockedPO.currency).toUpperCase() !== String(lockedPO.currency).toUpperCase()
+            ) {
               throw new HttpError(409, "Cannot change purchase currency after stock has been received.");
             }
             assertOffloadedPurchaseOrderChargesUnchanged(lockedPO, {

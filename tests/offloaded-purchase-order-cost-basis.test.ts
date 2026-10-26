@@ -70,9 +70,9 @@ describe("offloaded purchase order cost-basis integrity", () => {
       itemRoute.indexOf("await tx.delete(poLineItems)")
     );
     expect(itemRoute).toContain('const receiptPosted = lockedContainer?.status === "OFFLOADED" || hasActiveOffload');
-    expect(itemRoute).toContain('eq(containerOffloads.optional, false)');
-    expect(chargeRoute).toContain('eq(containerOffloads.optional, false)');
-    expect(itemRoute).toContain('Cannot change purchase currency after stock has been received.');
-    expect(chargeRoute).toContain('Cannot change purchase currency after stock has been received.');
+    expect(itemRoute).toContain("eq(containerOffloads.optional, false)");
+    expect(chargeRoute).toContain("eq(containerOffloads.optional, false)");
+    expect(itemRoute).toContain("Cannot change purchase currency after stock has been received.");
+    expect(chargeRoute).toContain("Cannot change purchase currency after stock has been received.");
   });
 });

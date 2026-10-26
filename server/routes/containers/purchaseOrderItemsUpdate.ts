@@ -1,7 +1,15 @@
 import type { Request } from "express";
 import { eq, and } from "drizzle-orm";
 
-import { containers, containerOffloads, containerCharges, purchaseOrders, poLineItems, vouchers, voucherEntries } from "@shared/schema";
+import {
+  containers,
+  containerOffloads,
+  containerCharges,
+  purchaseOrders,
+  poLineItems,
+  vouchers,
+  voucherEntries,
+} from "@shared/schema";
 
 import { db } from "../../db";
 import { storage } from "../../storage";
@@ -205,11 +213,13 @@ export async function applyPurchaseOrderItemsUpdate(
       // Re-check here after the container lock so an offload that won the race cannot
       // be followed by a stock-item swap against inventory that was already materialized.
       const hasActiveOffload = lockedContainer
-        ? (await tx
-            .select({ id: containerOffloads.id })
-            .from(containerOffloads)
-            .where(and(eq(containerOffloads.containerId, lockedContainer.id), eq(containerOffloads.optional, false)))
-            .limit(1)).length > 0
+        ? (
+            await tx
+              .select({ id: containerOffloads.id })
+              .from(containerOffloads)
+              .where(and(eq(containerOffloads.containerId, lockedContainer.id), eq(containerOffloads.optional, false)))
+              .limit(1)
+          ).length > 0
         : false;
       // The materialized receipt remains posted even after status advances beyond OFFLOADED.
       const receiptPosted = lockedContainer?.status === "OFFLOADED" || hasActiveOffload;
@@ -221,7 +231,10 @@ export async function applyPurchaseOrderItemsUpdate(
           throw new HttpError(409, "Cannot change purchase currency after stock has been received.");
         }
         if (!toMoney(lockedPO.itemsTotal).toDecimalPlaces(2).equals(itemsTotal.toDecimalPlaces(2))) {
-          throw new HttpError(409, "Cannot change an offloaded purchase order item total without reversing the receipt.");
+          throw new HttpError(
+            409,
+            "Cannot change an offloaded purchase order item total without reversing the receipt."
+          );
         }
         assertOffloadedPurchaseOrderChargesUnchanged(lockedPO, {
           freight: freight.toFixed(2),
