@@ -227,6 +227,27 @@ describe("postRetailSupplierPurchase", () => {
     });
   });
 
+  it("receives into oversold stock at the receipt cost", async () => {
+    await withRolledBackPool(async (client) => {
+      const w = await seed(client);
+      const first = await purchase(w);
+      const variantId = first.items[0].variantId;
+      await client.query(
+        "UPDATE retail_variant_inventory SET quantity=-3 WHERE company_id=$1 AND variant_id=$2 AND location_id=$3",
+        [w.companyId, variantId, w.locationId]
+      );
+      const second = await purchase(w, {
+        invoiceReference: "SUP-2",
+        lines: [line({ barcode: first.items[0].barcode, quantity: 10, costPrice: 20 })],
+      });
+      expect(await stock(client, w, variantId)).toEqual({ quantity: "7", average_cost: "20.000000" });
+      expect((await voucherLines(client, second.voucherId)).map((l) => [l.debit, l.credit])).toEqual([
+        ["200.00", "0.00"],
+        ["0.00", "200.00"],
+      ]);
+    });
+  });
+
   it("values foreign-currency invoices at the stored six-decimal rate", async () => {
     await withRolledBackPool(async (client) => {
       const w = await seed(client);
