@@ -100,22 +100,10 @@ export const ERP_NAV_SECTIONS: NavSection[] = [
     ],
   },
   {
-    label: "Accounting Reconciliation",
+    label: "Accounting Tools",
     color: NAV_COLOR.accounting,
-    items: [
-      { title: "Open Items", url: "/accounting/open-items", icon: Receipt },
-      { title: "Bank & Cash Reconciliation", url: "/accounting/cash-bank", icon: Calculator },
-      { title: "Multi-Currency Accounting", url: "/accounting/monetary-fx", icon: Calculator },
-      { title: "Inventory & COGS Accounting", url: "/accounting/erp-inventory", icon: Layers },
-      { title: "Factory Production Accounting", url: "/accounting/factory-production", icon: Layers },
-      { title: "Rental Accounting", url: "/accounting/rentals", icon: Calculator },
-      { title: "Intercompany & Consolidation", url: "/accounting/consolidation", icon: Layers },
-      { title: "Historical Accounting", url: "/accounting/history", icon: CalendarDays },
-      { title: "Financial Statements", url: "/accounting/statements", icon: FileText },
-      { title: "Fiscal Closing & Audit", url: "/accounting/fiscal-review", icon: ShieldCheck },
-      { title: "Unified Accounting Dashboard", url: "/accounting/dashboard", icon: LayoutDashboard },
-      { title: "Unified Accounting Rollout", url: "/accounting/rollout", icon: ShieldCheck },
-    ],
+    devOnly: true,
+    items: [{ title: "Accounting Toolbox", url: "/accounting/toolbox", icon: ShieldCheck }],
   },
   {
     label: "Analytics",
@@ -226,6 +214,7 @@ export function useErpVisibleSections(user?: SidebarUser): {
       selectedCompany?.companyType !== "factory_v2"
     )
       return false;
+    if (item.url === "/accounting/toolbox") return isDeveloper;
     if (item.url === "/net-profit-report") return isDeveloper;
     if (item.url === "/company-transfer") return isDeveloper;
     if (item.url === "/spreadsheet") return isDeveloper;
