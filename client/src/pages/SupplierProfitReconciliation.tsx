@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
-import { AlertTriangle, BarChart3, Download, RefreshCw, ShieldCheck, ChevronDown, ChevronUp } from "lucide-react";
+import { AlertTriangle, BarChart3, Download, RefreshCw, ShieldCheck, ChevronDown, ChevronUp, ExternalLink } from "lucide-react";
 import { useCompany } from "@/contexts/CompanyContext";
 import { companyQueryKey } from "@/lib/companyQueryScope";
 import { PageHeader } from "@/components/PageHeader";
