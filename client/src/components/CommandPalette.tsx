@@ -40,6 +40,7 @@ import {
 import { useAppMode } from "@/contexts/AppModeContext";
 import { isRetailHiddenErpPath, useErpVisibleSections } from "@/components/AppSidebar";
 import { useCompany } from "@/contexts/CompanyContext";
+import { getAccountingToolLinks } from "@/lib/accountingToolboxNavigation";
 import { useFactoryVisibleSections } from "@/components/FactorySidebar";
 import { getPropertiesVisibleNavSections } from "@/components/PropertiesSidebar";
 import type { NavItem, NavSection } from "@/components/sidebar/sidebarPrimitives";
@@ -161,6 +162,17 @@ const ERP_CONTEXT_ITEMS: NavItem[] = [
   { title: "Stock In & Sales", url: "/stock-in-sales-report", icon: BarChart3 },
   { title: "Item Market Analysis", url: "/item-market-analysis", icon: BarChart3 },
 ];
+
+// Keep every original developer accounting destination searchable after collapsing the sidebar.
+const ERP_ACCOUNTING_CONTEXT_ITEMS: NavItem[] = getAccountingToolLinks("erp").map((item) => ({
+  title: item.label, url: item.path, icon: ShieldCheck,
+}));
+const FACTORY_ACCOUNTING_CONTEXT: PageEntry[] = getAccountingToolLinks("factory").map((item) => ({
+  label: item.label, description: item.description, path: item.path, icon: ShieldCheck,
+}));
+const PROPERTIES_ACCOUNTING_CONTEXT: PageEntry[] = getAccountingToolLinks("properties").map((item) => ({
+  label: item.label, description: item.description, path: item.path, icon: ShieldCheck,
+}));
 
 /** Factory routes that aren't in FACTORY_NAV_SECTIONS but were historically in the palette. */
 const FACTORY_EXTRAS_ALWAYS: PageEntry[] = [
@@ -551,7 +563,7 @@ export function CommandPalette({
           // Hub tabs bypass the sidebar visibility rules, so retail companies filter them here.
           ...ERP_HUB_TABS.filter((tab) => !isRetailCompany || !isRetailHiddenErpPath(tab.path)),
         ],
-        [...erpVis.visiblePinnedItems, ...erpVis.visibleUtilityItems, ...ERP_CONTEXT_ITEMS.filter(erpVis.isItemVisible)]
+        [...erpVis.visiblePinnedItems, ...erpVis.visibleUtilityItems, ...ERP_CONTEXT_ITEMS.filter(erpVis.isItemVisible), ...ERP_ACCOUNTING_CONTEXT_ITEMS.filter(erpVis.isItemVisible)]
       ).map((page) =>
         isRetailCompany && page.path === "/vouchers"
           ? { ...page, description: "Payment and receipt vouchers; automatic journals are read-only" }
@@ -564,14 +576,17 @@ export function CommandPalette({
     const accessibleExtras = [...FACTORY_EXTRAS_ALWAYS, ...FACTORY_CONTEXT_SEARCH, ...FACTORY_HUB_TABS].filter((entry) =>
       factoryVis.isPinnedVisible({ url: entry.path })
     );
-    return buildEntries(factoryVis.sections, accessibleExtras);
-  }, [factoryVis.sections, factoryVis.isPinnedVisible]);
+    return buildEntries(factoryVis.sections, [
+      ...accessibleExtras,
+      ...(effectiveRole === "Developer" ? FACTORY_ACCOUNTING_CONTEXT : []),
+    ]);
+  }, [factoryVis.sections, factoryVis.isPinnedVisible, effectiveRole]);
 
   const propertiesPages = useMemo(
     () =>
       buildEntries(getPropertiesVisibleNavSections(effectiveRole === "Developer"), [
         ...PROPERTIES_EXTRAS.filter((entry) => effectiveRole !== "ERP Tester" || entry.path !== "/properties/my-settings"),
-        ...(effectiveRole === "Developer" ? PROPERTIES_DEVELOPER_EXTRAS : []),
+        ...(effectiveRole === "Developer" ? [...PROPERTIES_DEVELOPER_EXTRAS, ...PROPERTIES_ACCOUNTING_CONTEXT] : []),
         ...(canSeeAdminCommands ? PROPERTIES_ADMIN_EXTRAS : []),
       ]),
     [canSeeAdminCommands, effectiveRole]
