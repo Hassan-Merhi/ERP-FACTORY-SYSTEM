@@ -420,67 +420,67 @@ export async function executeContainerOffloadLifecycle(
 
       // Reversing/reposting a receipt can alter stock relief even when total
       // posted value appears unchanged. Never replay after downstream usage.
-        const affectedItemIds = positiveIds([...previousItems, ...proposedItems].map((item) => item.stockItemId));
-        if (affectedItemIds.length > 0) {
-          const [salesAfterReceipt, transfersAfterReceipt, canonicalAfterReceipt] = await Promise.all([
-            tx
-              .select({ id: schema.salesItems.id })
-              .from(schema.salesItems)
-              .innerJoin(schema.vouchers, eq(schema.vouchers.id, schema.salesItems.voucherId))
-              .where(
-                and(
-                  eq(schema.vouchers.companyId, input.companyId),
-                  eq(schema.vouchers.optional, false),
-                  isNull(schema.vouchers.deletedAt),
-                  inArray(schema.salesItems.stockItemId, affectedItemIds)
-                )
+      const affectedItemIds = positiveIds([...previousItems, ...proposedItems].map((item) => item.stockItemId));
+      if (affectedItemIds.length > 0) {
+        const [salesAfterReceipt, transfersAfterReceipt, canonicalAfterReceipt] = await Promise.all([
+          tx
+            .select({ id: schema.salesItems.id })
+            .from(schema.salesItems)
+            .innerJoin(schema.vouchers, eq(schema.vouchers.id, schema.salesItems.voucherId))
+            .where(
+              and(
+                eq(schema.vouchers.companyId, input.companyId),
+                eq(schema.vouchers.optional, false),
+                isNull(schema.vouchers.deletedAt),
+                inArray(schema.salesItems.stockItemId, affectedItemIds)
               )
-              .limit(1),
-            tx
-              .select({ id: schema.stockTransferItems.id })
-              .from(schema.stockTransferItems)
-              .innerJoin(
-                schema.stockTransferVouchers,
-                eq(schema.stockTransferVouchers.id, schema.stockTransferItems.transferId)
+            )
+            .limit(1),
+          tx
+            .select({ id: schema.stockTransferItems.id })
+            .from(schema.stockTransferItems)
+            .innerJoin(
+              schema.stockTransferVouchers,
+              eq(schema.stockTransferVouchers.id, schema.stockTransferItems.transferId)
+            )
+            .innerJoin(schema.vouchers, eq(schema.vouchers.id, schema.stockTransferVouchers.voucherId))
+            .where(
+              and(
+                eq(schema.vouchers.companyId, input.companyId),
+                eq(schema.vouchers.optional, false),
+                isNull(schema.vouchers.deletedAt),
+                eq(schema.stockTransferVouchers.inventoryApplied, true),
+                inArray(schema.stockTransferItems.stockItemId, affectedItemIds)
               )
-              .innerJoin(schema.vouchers, eq(schema.vouchers.id, schema.stockTransferVouchers.voucherId))
-              .where(
-                and(
-                  eq(schema.vouchers.companyId, input.companyId),
-                  eq(schema.vouchers.optional, false),
-                  isNull(schema.vouchers.deletedAt),
-                  eq(schema.stockTransferVouchers.inventoryApplied, true),
-                  inArray(schema.stockTransferItems.stockItemId, affectedItemIds)
-                )
+            )
+            .limit(1),
+          tx
+            .select({ id: schema.canonicalStockMovements.id })
+            .from(schema.canonicalStockMovements)
+            .where(
+              and(
+                eq(schema.canonicalStockMovements.companyId, input.companyId),
+                inArray(schema.canonicalStockMovements.stockItemId, affectedItemIds),
+                notInArray(schema.canonicalStockMovements.sourceType, [
+                  "container-offload",
+                  "container-reverse-offload",
+                  "container_offload_reverse",
+                  "container_offload_reverse_legacy",
+                ])
               )
-              .limit(1),
-            tx
-              .select({ id: schema.canonicalStockMovements.id })
-              .from(schema.canonicalStockMovements)
-              .where(
-                and(
-                  eq(schema.canonicalStockMovements.companyId, input.companyId),
-                  inArray(schema.canonicalStockMovements.stockItemId, affectedItemIds),
-                  notInArray(schema.canonicalStockMovements.sourceType, [
-                    "container-offload",
-                    "container-reverse-offload",
-                    "container_offload_reverse",
-                    "container_offload_reverse_legacy",
-                  ])
-                )
-              )
-              .limit(1),
-          ]);
-          if (salesAfterReceipt.length || transfersAfterReceipt.length || canonicalAfterReceipt.length) {
-            throw new ContainerOffloadLifecycleError(
-              basisChanged
-                ? "Stock from this container has sale, transfer, or adjustment history. Offload costs cannot be rewritten without an audited inventory-and-COGS correction."
-                : "Stock from this container has downstream transactions. The receipt cannot be reversed and replayed; use an audited correction workflow.",
-              409,
-              "CONTAINER_OFFLOAD_DOWNSTREAM_COST_LOCKED"
-            );
-          }
+            )
+            .limit(1),
+        ]);
+        if (salesAfterReceipt.length || transfersAfterReceipt.length || canonicalAfterReceipt.length) {
+          throw new ContainerOffloadLifecycleError(
+            basisChanged
+              ? "Stock from this container has sale, transfer, or adjustment history. Offload costs cannot be rewritten without an audited inventory-and-COGS correction."
+              : "Stock from this container has downstream transactions. The receipt cannot be reversed and replayed; use an audited correction workflow.",
+            409,
+            "CONTAINER_OFFLOAD_DOWNSTREAM_COST_LOCKED"
+          );
         }
+      }
     }
 
     if (requestsCorrection && !OFFLOAD_COST_CORRECTION_ROLES.has(String(input.actorRole ?? ""))) {
