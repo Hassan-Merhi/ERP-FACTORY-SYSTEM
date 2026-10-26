@@ -77,7 +77,7 @@ function DataSection({title,count,children}:{title:string;count:number;children:
     {open&&<CardContent className="px-4 pb-4 pt-0">{children}</CardContent>}
   </Card>;
 }
-function TableWrap({children}:{children:React.ReactNode}) {
+function TableWrap({children}:{children:ReactNode}) {
   return <div className="w-full overflow-x-auto rounded-md border"><table className="w-full text-sm whitespace-nowrap">
     {children}
   </table></div>;
