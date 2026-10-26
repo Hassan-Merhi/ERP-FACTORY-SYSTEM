@@ -49,20 +49,9 @@ export const PROPERTIES_NAV_SECTIONS: NavSection[] = [
     ],
   },
   {
-    label: "Accounting Reconciliation",
+    label: "Accounting Tools",
     color: NAV_COLOR.accounting,
-    items: [
-      { title: "Open Items", url: "/properties/accounting/open-items", icon: ClipboardList },
-      { title: "Bank & Cash Reconciliation", url: "/properties/accounting/cash-bank", icon: Landmark },
-      { title: "Multi-Currency Accounting", url: "/properties/accounting/monetary-fx", icon: Landmark },
-      { title: "Rental Accounting", url: "/properties/accounting/rentals", icon: ClipboardList },
-      { title: "Intercompany & Consolidation", url: "/properties/accounting/consolidation", icon: Landmark },
-      { title: "Historical Accounting", url: "/properties/accounting/history", icon: Clock },
-      { title: "Financial Statements", url: "/properties/accounting/statements", icon: FileText },
-      { title: "Fiscal Closing & Audit", url: "/properties/accounting/fiscal-review", icon: Landmark },
-      { title: "Unified Accounting Dashboard", url: "/properties/accounting/dashboard", icon: Landmark },
-      { title: "Unified Accounting Rollout", url: "/properties/accounting/rollout", icon: Landmark },
-    ],
+    items: [{ title: "Accounting Toolbox", url: "/properties/accounting/toolbox", icon: ClipboardList }],
   },
 ];
 
