@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
-import { AlertTriangle, BarChart3, Download, RefreshCw, ShieldCheck, ChevronDown, ChevronUp, ExternalLink } from "lucide-react";
+import { AlertTriangle, BarChart3, Download, RefreshCw, ShieldCheck, ChevronDown, ChevronUp } from "lucide-react";
 import { useCompany } from "@/contexts/CompanyContext";
 import { companyQueryKey } from "@/lib/companyQueryScope";
 import { PageHeader } from "@/components/PageHeader";
@@ -29,7 +29,7 @@ type Report = {
   periods:{period:string; revenue:number;cogs:number;salesReportProfit:number;storedProfit:number;lines:number}[];
   saleDetails:{id:number;voucherId:number;voucher:string;date:string;code:string;name:string;qty:number;revenue:number;cogs:number;storedProfit:number}[];
   detailsTruncated:boolean;
-  offloads:{containerId:number;number:string;date:string;status:string;quantity:number;landed:number;offloadingCost:number;baseCost:number;fullOffloadCharges:number}[];
+  offloads:{offloadId:number;containerId:number;number:string;date:string;status:string;quantity:number;landed:number;offloadingCost:number;baseCost:number;fullOffloadCharges:number}[];
   otw:{id:number;number:string;date:string;status:string;base:number}[];
   items:{id:number;code:string;name:string;group:string|null;soldQty:number;revenue:number;cogs:number;storedProfit:number;receivedQty:number;received:number;stockQty:number;currentStockValue:number;supplierCount:number;gap:number}[];
   itemsTruncated:boolean;
@@ -42,9 +42,9 @@ const dollars = (n: number | string | null | undefined) =>
 const qty = (n: number) => new Intl.NumberFormat("en-US",{maximumFractionDigits:3}).format(n);
 const isoLocal = (d:Date) => [d.getFullYear(),String(d.getMonth()+1).padStart(2,"0"),String(d.getDate()).padStart(2,"0")].join("-");
 const today = () => isoLocal(new Date());
-const firstDay = (p:string) => p && /^\\d{4}-\\d{2}$/.test(p) ? p+"-01" : "";
+const firstDay = (p:string) => p && /^\d{4}-\d{2}$/.test(p) ? p+"-01" : "";
 const lastDay = (p:string) => {
-  if (!/^\\d{4}-\\d{2}$/.test(p)) return "";
+  if (!/^\d{4}-\d{2}$/.test(p)) return "";
   const [year,month]=p.split("-").map(Number);
   return isoLocal(new Date(year,month,0));
 };
@@ -52,11 +52,11 @@ const cls = "h-9 w-full rounded-md border border-input bg-background px-3 text-s
 function exportCsv(name:string, columns:string[], values:(string|number)[][]) {
   const escape = (value:string|number) => {
     const s=String(value??"");
-    const safe=/^[=+@\\-]/.test(s.trimStart()) ? "'"+s : s;
+    const safe=/^[=+@-]/.test(s.trimStart()) ? "'"+s : s;
     return '"'+safe.replaceAll('"','""')+'"';
   };
   const content=[columns,...values].map(row=>row.map(escape).join(",")).join("\r\n");
-  const url=URL.createObjectURL(new Blob(["\\uFEFF"+content],{type:"text/csv;charset=utf-8;"}));
+  const url=URL.createObjectURL(new Blob(["\uFEFF"+content],{type:"text/csv;charset=utf-8;"}));
   const a=document.createElement("a"); a.href=url; a.download=name; document.body.appendChild(a); a.click(); a.remove();
   URL.revokeObjectURL(url);
 }
@@ -67,7 +67,7 @@ function Kpi({label,value,note,attention}:{label:string;value:string;note?:strin
     {note&&<p className="text-xs text-muted-foreground mt-1">{note}</p>}
   </CardContent></Card>;
 }
-function DataSection({title,count,children}:{title:string;count:number;children:React.ReactNode}) {
+function DataSection({title,count,children}:{title:string;count:number;children:ReactNode}) {
   const [open,setOpen]=useState(true);
   return <Card>
     <CardHeader className="py-3 px-4"><button type="button" onClick={()=>setOpen(!open)} className="w-full flex items-center justify-between gap-2 text-left">
@@ -117,7 +117,7 @@ export default function SupplierProfitReconciliation() {
     if(period==="all")return {from:"",to:""};
     if(period==="day")return {from:day,to:day};
     if(period==="month")return {from:firstDay(month),to:lastDay(month)};
-    if(period==="year")return /^\\d{4}$/.test(year)?{from:year+"-01-01",to:year+"-12-31"}:{from:"",to:""};
+    if(period==="year")return /^\d{4}$/.test(year)?{from:year+"-01-01",to:year+"-12-31"}:{from:"",to:""};
     return {from,to};
   },[period,day,month,year,from,to]);
   const params=useMemo(()=>{
@@ -132,7 +132,7 @@ export default function SupplierProfitReconciliation() {
     queryFn:async()=>{const r=await fetch("/api/supplier-profit-reconciliation/report?"+params,{credentials:"include",cache:"no-store"});
       if(!r.ok)throw new Error((await r.json().catch(()=>({}))).message||"Unable to calculate supplier profit");return r.json();},
     enabled:!!selectedCompany?.id && !!supplierId &&
-      (period!=="year"||/^\\d{4}$/.test(year)) &&
+      (period!=="year"||/^\d{4}$/.test(year)) &&
       (period!=="month"||!!firstDay(month)) &&
       (period!=="custom"||(!range.from||!range.to||range.from<=range.to)),
   });
