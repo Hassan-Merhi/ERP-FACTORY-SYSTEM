@@ -217,6 +217,12 @@ export async function applyPurchaseOrderItemsUpdate(
         throw new HttpError(409, "Reverse the offload before editing native Kwacha purchase quantities or prices.");
       }
       if (receiptPosted) {
+        if (String(req.body.currency ?? lockedPO.currency).toUpperCase() !== String(lockedPO.currency).toUpperCase()) {
+          throw new HttpError(409, "Cannot change purchase currency after stock has been received.");
+        }
+        if (!toMoney(lockedPO.itemsTotal).toDecimalPlaces(2).equals(itemsTotal.toDecimalPlaces(2))) {
+          throw new HttpError(409, "Cannot change an offloaded purchase order item total without reversing the receipt.");
+        }
         assertOffloadedPurchaseOrderChargesUnchanged(lockedPO, {
           freight: freight.toFixed(2),
           surcharge: surcharge.toFixed(2),
