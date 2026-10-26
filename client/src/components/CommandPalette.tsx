@@ -174,6 +174,18 @@ const FACTORY_EXTRAS_ALWAYS: PageEntry[] = [
   },
 ];
 
+/** Factory destinations whose standalone sidebar links are now contextual or pinned. */
+const FACTORY_CONTEXT_SEARCH: PageEntry[] = [
+  { label: "Factory Overview", path: "/factory/production-report", icon: BarChart3 },
+  { label: "Factory Agent Ledger", path: "/factory/agents", icon: Users },
+  { label: "Factory Accounts", path: "/factory/accounts", icon: PieChart },
+  { label: "Factory Vouchers", path: "/factory/vouchers", icon: FileText },
+  { label: "Factory Contacts", path: "/factory/contacts", icon: Users },
+  { label: "Factory Stock Allocation", path: "/factory/stock-allocation-v5", icon: Box },
+  { label: "Factory Sheets & Sacks", path: "/factory/sheets-sacks", icon: Box },
+  { label: "Factory Cost Centers", path: "/factory/cost-centers", icon: PieChart },
+];
+
 /** Factory hub tab entries — each tab in a hub page gets its own searchable entry. */
 const FACTORY_HUB_TABS: PageEntry[] = [
   { label: "Bales", description: "All bale stock", path: "/factory/bales-hub?tab=history", icon: Box },
@@ -509,7 +521,7 @@ export function CommandPalette({
   const { selectedCompany } = useCompany();
   const erpVis = useErpVisibleSections(hasErpAccess && !isPOS ? user : undefined);
   const factoryVis = useFactoryVisibleSections(
-    hasFactoryAccess && !isPOS && user ? { role: user.role ?? undefined } : undefined
+    hasFactoryAccess && !isPOS && user ? { role: user.currentRole ?? user.role ?? undefined } : undefined
   );
 
   const isRetailCompany = selectedCompany?.companyType === "retail";
@@ -535,7 +547,7 @@ export function CommandPalette({
   );
 
   const factoryPages = useMemo(() => {
-    const accessibleExtras = [...FACTORY_EXTRAS_ALWAYS, ...FACTORY_HUB_TABS].filter((entry) =>
+    const accessibleExtras = [...FACTORY_EXTRAS_ALWAYS, ...FACTORY_CONTEXT_SEARCH, ...FACTORY_HUB_TABS].filter((entry) =>
       factoryVis.isPinnedVisible({ url: entry.path })
     );
     return buildEntries(factoryVis.sections, accessibleExtras);
