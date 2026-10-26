@@ -39,6 +39,7 @@ export interface CostRow {
   stock_value: string;
   stock_at_rate: string;
   adj_qty: string;
+  adj_value: string;
   transfer_lines: number;
   transfer_value_missing: number;
   blocked_sales: number;
@@ -57,7 +58,10 @@ export function costRowFlags(row: CostRow): string[] {
   if (dec(row.qty_sold).isZero() && dec(row.qty_received).equals(row.qty_stock) && row.transfer_lines > 0) {
     flags.push("UNSOLD_TRANSFER_VALUE_DIFFERENCE");
   }
-  if (!dec(row.landed).minus(row.cogs).minus(row.stock_value).isZero()) flags.push("COST_GAP");
+  const rawGap = dec(row.landed).minus(row.cogs).minus(row.stock_value);
+  const afterAdjustments = rawGap.plus(row.adj_value);
+  if (!rawGap.isZero() && afterAdjustments.isZero()) flags.push("COST_EXPLAINED_BY_ADJUSTMENT");
+  if (!afterAdjustments.isZero()) flags.push("COST_GAP_AFTER_RECORDED_ADJUSTMENTS");
   return flags;
 }
 
@@ -87,7 +91,8 @@ const QUERY = [
   "FROM inventory i JOIN items it ON it.id=i.stock_item_id",
   "WHERE i.company_id=$1 GROUP BY i.stock_item_id",
   "), adjustments AS MATERIALIZED (",
-  "SELECT m.stock_item_id,SUM(m.quantity_delta::numeric) qty",
+  "SELECT m.stock_item_id,SUM(m.quantity_delta::numeric) qty,",
+  "SUM(m.quantity_delta::numeric*m.unit_cost::numeric) adjustment_value",
   "FROM canonical_stock_movements m JOIN items i ON i.id=m.stock_item_id",
   "WHERE m.company_id=$1 AND m.source_type IN",
   "('stock-adjustment','stock_adjustment_edit_apply','stock_adjustment_edit_reverse',",
@@ -112,7 +117,8 @@ const QUERY = [
   "COALESCE(s.missing_relief,0)::int missing_sale_relief,",
   "COALESCE(st.qty,0)::text qty_stock,COALESCE(st.cost,0)::text stock_value,",
   "COALESCE(st.rate_cost,0)::text stock_at_rate,",
-  "COALESCE(a.qty,0)::text adj_qty,COALESCE(t.n,0)::int transfer_lines,",
+  "COALESCE(a.qty,0)::text adj_qty,COALESCE(a.adjustment_value,0)::text adj_value,",
+  "COALESCE(t.n,0)::int transfer_lines,",
   "COALESCE(t.missing,0)::int transfer_value_missing,",
   "COALESCE(b.n,0)::int blocked_sales,b.reasons blocker",
   "FROM items i LEFT JOIN received r ON r.stock_item_id=i.id",
@@ -142,7 +148,7 @@ export async function auditSupplierCost(company: number, supplier: number, group
     if (repairRun.rowCount !== 1) throw new Error("Historical repair run not found");
 
     const result = await client.query<CostRow>(QUERY, [company, supplier, group, run]);
-    const total = { landed: dec(0), sales: dec(0), cogs: dec(0), profit: dec(0), stock: dec(0), rateStock: dec(0) };
+    const total = { landed: dec(0), sales: dec(0), cogs: dec(0), profit: dec(0), stock: dec(0), rateStock: dec(0), adjustments: dec(0) };
     const items = result.rows.map((r) => {
       total.landed = total.landed.plus(r.landed);
       total.sales = total.sales.plus(r.sales);
@@ -150,6 +156,7 @@ export async function auditSupplierCost(company: number, supplier: number, group
       total.profit = total.profit.plus(r.historical_profit);
       total.stock = total.stock.plus(r.stock_value);
       total.rateStock = total.rateStock.plus(r.stock_at_rate);
+      total.adjustments = total.adjustments.plus(r.adj_value);
       const qtyGap = dec(r.qty_received).minus(r.qty_sold).minus(r.qty_stock);
       return {
         stockItemId: r.id,
@@ -157,6 +164,7 @@ export async function auditSupplierCost(company: number, supplier: number, group
         qtyGap: qtyGap.toFixed(3),
         afterAdjustments: qtyGap.plus(r.adj_qty).toFixed(3),
         costGap: usd(dec(r.landed).minus(r.cogs).minus(r.stock_value)),
+        costGapAfterNominalAdjustments: usd(dec(r.landed).plus(r.adj_value).minus(r.cogs).minus(r.stock_value)),
         blockedSaleLines: Number(r.blocked_sales),
         blocker: r.blocker,
         unrecordedTransferValues: Number(r.transfer_value_missing),
@@ -176,12 +184,15 @@ export async function auditSupplierCost(company: number, supplier: number, group
         stockAtSavedValue: usd(total.stock),
         stockAtRoundedRate: usd(total.rateStock),
         savedValueDifference: usd(total.landed.minus(total.cogs).minus(total.stock)),
+        signedNominalAdjustments: usd(total.adjustments),
+        gapAfterNominalAdjustments: usd(total.landed.plus(total.adjustments).minus(total.cogs).minus(total.stock)),
         roundedRateDifference: usd(total.landed.minus(total.cogs).minus(total.rateStock)),
         manualProfit: usd(total.sales.minus(total.landed).plus(total.rateStock)),
       },
       items,
       repairRules: [
         "Do not post a balancing expense or automatically rewrite 78.89.",
+        "The adjustment tally is diagnostic only: some sources reverse sales or were edited; do not treat the full tally as an independent COGS correction.",
         "Resolve source receipt value, unrecorded transfer values and quantities by item.",
         "Use the historical sales-cost repair engine only for evidence-proven rows.",
         "Correct physical inventory and any perpetual-inventory journal together, under one audited transaction.",
