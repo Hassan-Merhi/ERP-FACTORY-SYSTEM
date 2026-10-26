@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
 import {
-   ERP_PINNED_ITEMS,
+  ERP_PINNED_ITEMS,
   ERP_UTILITY_ITEMS,
   SETTINGS_HIDDEN_ROLES,
   useErpVisibleSections,
