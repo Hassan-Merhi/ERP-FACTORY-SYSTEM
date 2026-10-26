@@ -2,19 +2,20 @@
 import { Link, useLocation } from "wouter";
 import { ArrowUpRight, ClipboardList, FileText, ShieldCheck } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { getAccountingToolLinks, type AccountingToolboxMode, type AccountingToolCategory } from "@/lib/accountingToolboxNavigation";
+import { getAccountingToolLinks, getDeveloperMaintenanceLinks, type AccountingToolboxMode, type AccountingToolCategory } from "@/lib/accountingToolboxNavigation";
 
 const groups: Array<{ title: AccountingToolCategory; icon: typeof ClipboardList }> = [
   { title: "Reconciliation", icon: ClipboardList },
   { title: "Reporting & history", icon: FileText },
   { title: "Release & audit", icon: ShieldCheck },
+  { title: "Diagnostics & maintenance", icon: ClipboardList },
 ];
 
 export default function AccountingToolbox() {
   const [path] = useLocation();
   const mode: AccountingToolboxMode = path.startsWith("/factory/") ? "factory" :
     path.startsWith("/properties/") ? "properties" : "erp";
-  const links = getAccountingToolLinks(mode);
+  const links = [...getAccountingToolLinks(mode), ...getDeveloperMaintenanceLinks(mode)];
   return (
     <main className="container mx-auto max-w-6xl space-y-6 p-4 md:p-6" data-testid="accounting-toolbox">
       <header className="space-y-2">
@@ -22,6 +23,7 @@ export default function AccountingToolbox() {
         <p className="text-sm text-muted-foreground">
           Developer reconciliation, financial reporting, and release review tools.
           These links open the existing pages; no records or calculations are changed here.
+          Some maintenance destinations can modify records if actions are explicitly submitted.
         </p>
       </header>
       <div className="grid gap-4 lg:grid-cols-2">
