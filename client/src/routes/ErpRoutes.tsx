@@ -152,7 +152,7 @@ export function ErpRoutes({ user }: ErpRoutesProps) {
     <Switch>
       <Route path="/">{() => (isAdminOrDev ? <ContainersOTW /> : <Redirect replace to="/tracking" />)}</Route>
       <Route path="/tracking" component={TrackingHub} />
-      {G("/financial-overview", "dashboard", Dashboard)}
+      {R("/financial-overview", effectiveRole !== "View Only" && canAccess("dashboard"), Dashboard)}
 
       {canAccess("pos") ? (
         <Route path="/pos">{() => <POSPage />}</Route>
