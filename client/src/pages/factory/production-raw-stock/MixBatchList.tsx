@@ -94,6 +94,7 @@ export function MixBatchList({
 }: MixBatchListProps) {
   const [showAllMixBatches, setShowAllMixBatches] = useState(false);
   const [isExportingExcel, setIsExportingExcel] = useState(false);
+  const [exportPeriod, setExportPeriod] = useState<"month" | "all-time">("month");
   const [exportMonth, setExportMonth] = useState(() => {
     const now = new Date();
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
@@ -103,9 +104,15 @@ export function MixBatchList({
   const handleExportExcel = async () => {
     setIsExportingExcel(true);
     try {
+      const response = await fetch("/api/factory/mix-batches/cost-sources", {
+        credentials: "same-origin",
+        cache: "no-store",
+      });
+      if (!response.ok) throw new Error("Could not load historical supplier costs. Please try again.");
+      const supplierSources = (await response.json()) as import("./mixBatchCostExport").MixBatchCostSourceRow[];
       const { exportMixBatchCostAnalysis } = await import("./mixBatchCostExport");
-      await exportMixBatchCostAnalysis(mixBatches, exportMonth);
-      toast({ title: "Excel exported", description: "Daily, monthly, dashboard and detailed batch cost sheets downloaded." });
+      await exportMixBatchCostAnalysis(mixBatches, exportPeriod === "all-time" ? "all-time" : exportMonth, supplierSources);
+      toast({ title: "Excel exported", description: "Supplier-by-day costs, daily totals, monthly averages and source details downloaded." });
     } catch (error) {
       toast({
         title: "Excel export failed",
@@ -171,20 +178,31 @@ export function MixBatchList({
 
         <div className="flex w-full flex-col gap-1.5 sm:w-auto">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-            <input
-              type="month"
-              value={exportMonth}
-              onChange={(event) => setExportMonth(event.target.value)}
-              aria-label="Excel dashboard month"
-              title="Dashboard month (the export includes all historical daily and monthly data)"
-              className="h-10 min-w-0 rounded-md border border-input bg-background px-2 text-sm font-medium sm:w-36"
-              data-testid="input-mix-batch-export-month"
-            />
+            <select
+              value={exportPeriod}
+              onChange={(event) => setExportPeriod(event.target.value as "month" | "all-time")}
+              aria-label="Excel cost report period"
+              className="h-10 min-w-0 rounded-md border border-input bg-background px-2 text-sm font-medium"
+              data-testid="select-mix-batch-export-period"
+            >
+              <option value="month">Selected Month</option>
+              <option value="all-time">All Time</option>
+            </select>
+            {exportPeriod === "month" && (
+              <input
+                type="month"
+                value={exportMonth}
+                onChange={(event) => setExportMonth(event.target.value)}
+                aria-label="Excel dashboard month"
+                className="h-10 min-w-0 rounded-md border border-input bg-background px-2 text-sm font-medium sm:w-36"
+                data-testid="input-mix-batch-export-month"
+              />
+            )}
             <Button
               variant="outline"
               size="sm"
               onClick={handleExportExcel}
-              disabled={isLoading || isExportingExcel || mixBatches.length === 0 || !exportMonth}
+              disabled={isLoading || isExportingExcel || mixBatches.length === 0 || (exportPeriod === "month" && !exportMonth)}
               className="h-10 gap-2 border-emerald-500/40 font-semibold text-emerald-700 dark:text-emerald-300"
               data-testid="button-export-mix-batch-cost-excel"
             >
@@ -192,7 +210,9 @@ export function MixBatchList({
               Export Cost Excel
             </Button>
           </div>
-          <span className="text-[10px] text-muted-foreground">Dashboard month · all history included</span>
+          <span className="text-[10px] text-muted-foreground">
+            {exportPeriod === "all-time" ? "All-time dashboard · all suppliers and production dates" : "Selected month dashboard · full historical supplier detail included"}
+          </span>
         </div>
 
         <MixBatchWhatsAppPreview
