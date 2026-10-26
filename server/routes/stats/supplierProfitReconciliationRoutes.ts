@@ -13,10 +13,10 @@ import { getErrorMessage } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
 
 const positiveId = (value: unknown): number | null =>
-  typeof value === "string" && /^[1-9]\\d*$/.test(value) && Number.isSafeInteger(Number(value))
+  typeof value === "string" && /^[1-9]\d*$/.test(value) && Number.isSafeInteger(Number(value))
     ? Number(value) : null;
 const validDate = (value: unknown): value is string =>
-  typeof value === "string" && /^\\d{4}-\\d{2}-\\d{2}$/.test(value)
+  typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value)
     && !Number.isNaN(Date.parse(value)) && new Date(value).toISOString().slice(0, 10) === value;
 const money = (value: unknown) => Number(Number(value ?? 0).toFixed(2));
 
@@ -231,7 +231,7 @@ export function registerSupplierProfitReconciliationRoutes(app: Express) {
       const totals = summary.rows[0] ?? {};
       const inStock = inventory.rows[0] ?? {};
       const offloadRows = offloads.rows.map((r) => ({
-        containerId: r.id, number: r.container_number, date: r.date, status: r.status,
+        offloadId: r.offload_id, containerId: r.id, number: r.container_number, date: r.date, status: r.status,
         quantity: Number(r.quantity), landed: money(r.landed), offloadingCost: money(r.allocated_charges),
         baseCost: money(Number(r.landed)-Number(r.allocated_charges)),
         fullOffloadCharges: money(r.full_offload_charges),
