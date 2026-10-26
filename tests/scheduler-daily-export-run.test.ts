@@ -367,11 +367,7 @@ describe("runDailyExport", () => {
 describe("buildNetPositionZip", () => {
   it("zips one workbook per company", async () => {
     vi.useRealTimers();
-    deps.excel.mockImplementation(
-      async (companyId: number, _name: string, _from: string, _to: string, stream: NodeJS.WritableStream) => {
-        stream.write(Buffer.from(`workbook-${companyId}`));
-      }
-    );
+    deps.excel.mockImplementation(async (companyId: number) => Buffer.from(`workbook-${companyId}`));
     const zip = await buildNetPositionZip(
       [
         { id: 1, name: "Acme & Co" },
@@ -383,8 +379,28 @@ describe("buildNetPositionZip", () => {
     expect(zip.subarray(0, 2).toString()).toBe("PK");
     expect(zip.includes(Buffer.from("NetPosition_Acme___Co_2026-10-20.xlsx"))).toBe(true);
     expect(zip.includes(Buffer.from("NetPosition_Beta_2026-10-20.xlsx"))).toBe(true);
-    expect(deps.excel).toHaveBeenCalledWith(1, "Acme & Co", "2025-10-20", "2026-10-20", expect.anything());
+    expect(deps.excel).toHaveBeenCalledWith(1, "Acme & Co", "2025-10-20", "2026-10-20");
     expect(logger.info).toHaveBeenCalledWith("[NetPositionExport] Added Acme & Co");
     expect(logger.info).toHaveBeenCalledWith("[NetPositionExport] Added Beta");
+  });
+
+  it("finishes the archive without a company whose workbook fails", async () => {
+    vi.useRealTimers();
+    deps.excel.mockImplementation(async (companyId: number) => {
+      if (companyId === 1) throw new Error("query timeout");
+      return Buffer.from(`workbook-${companyId}`);
+    });
+    const zip = await buildNetPositionZip(
+      [
+        { id: 1, name: "Acme" },
+        { id: 2, name: "Beta" },
+      ],
+      "2025-10-20",
+      "2026-10-20"
+    );
+    expect(zip.subarray(0, 2).toString()).toBe("PK");
+    expect(zip.includes(Buffer.from("NetPosition_Acme_2026-10-20.xlsx"))).toBe(false);
+    expect(zip.includes(Buffer.from("NetPosition_Beta_2026-10-20.xlsx"))).toBe(true);
+    expect(logger.error).toHaveBeenCalledWith("[NetPositionExport] Failed for Acme:", { error: "query timeout" });
   });
 });
