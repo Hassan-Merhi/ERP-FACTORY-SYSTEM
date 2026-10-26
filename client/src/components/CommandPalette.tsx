@@ -335,7 +335,13 @@ const PROPERTIES_EXTRAS: PageEntry[] = [
     icon: LayoutDashboard,
   },
   { label: "Properties Analytics", description: "Properties analytics", path: "/properties/analytics", icon: PieChart },
+  { label: "Rental Shops", description: "Shops rented out", path: "/properties/rentals?tab=shops", icon: Users },
+  { label: "Rental Payments", description: "Rentals payment log", path: "/properties/rentals?tab=payments", icon: FileText },
   { label: "My Settings", description: "Personal preferences", path: "/properties/my-settings", icon: Settings },
+];
+
+const PROPERTIES_DEVELOPER_EXTRAS: PageEntry[] = [
+  { label: "Cash Transfer", description: "Transfer funds between properties", path: "/properties/transfer", icon: ArrowLeftRight },
 ];
 
 const PROPERTIES_ADMIN_EXTRAS: PageEntry[] = [
@@ -413,10 +419,18 @@ const intercompanyPages: PageEntry[] = [
 ];
 
 const posPages: PageEntry[] = [
-  { label: "Point of Sale", description: "POS interface", path: "/", icon: ShoppingCart },
+  { label: "Point of Sale", description: "Cashier checkout", path: "/pos", icon: ShoppingCart },
   { label: "POS Daybook", description: "Daily POS log", path: "/pos-daybook", icon: Calendar },
   { label: "Location Inventory", description: "Stock levels by location", path: "/location-inventory", icon: MapPin },
-  { label: "Chat", description: "Internal messaging", path: "/pos-chat", icon: MessageSquare },
+  { label: "Transfer Orders", description: "POS stock transfer orders", path: "/pos-transfer-orders", icon: Truck },
+  { label: "Price List", description: "Location pricing", path: "/pos-price-list", icon: Tag },
+  { label: "Stock Transfer", description: "Transfer stock between locations", path: "/vouchers?tab=transfer", icon: ArrowLeftRight },
+  { label: "Containers OTW", description: "On-the-way containers", path: "/pos-containers", icon: Ship },
+  { label: "My Settings", description: "Personal settings", path: "/pos-settings", icon: Settings },
+];
+const retailPosPages: PageEntry[] = [
+  { label: "Retail POS", description: "Retail checkout", path: "/retail/pos", icon: ShoppingCart },
+  { label: "My Settings", description: "Personal preferences", path: "/my-settings", icon: Settings },
 ];
 
 function navItemToEntry(item: NavItem): PageEntry {
@@ -556,10 +570,11 @@ export function CommandPalette({
   const propertiesPages = useMemo(
     () =>
       buildEntries(getPropertiesVisibleNavSections(effectiveRole === "Developer"), [
-        ...PROPERTIES_EXTRAS.filter((entry) => user?.role !== "ERP Tester" || entry.path !== "/properties/my-settings"),
+        ...PROPERTIES_EXTRAS.filter((entry) => effectiveRole !== "ERP Tester" || entry.path !== "/properties/my-settings"),
+        ...(effectiveRole === "Developer" ? PROPERTIES_DEVELOPER_EXTRAS : []),
         ...(canSeeAdminCommands ? PROPERTIES_ADMIN_EXTRAS : []),
       ]),
-    [canSeeAdminCommands, user?.role, effectiveRole]
+    [canSeeAdminCommands, effectiveRole]
   );
 
   const showErp = !isPOS && hasErpAccess;
@@ -584,7 +599,7 @@ export function CommandPalette({
 
         {isPOS && (
           <CommandGroup heading="POS">
-            {posPages.map((p) => (
+            {(isRetailCompany ? retailPosPages : posPages).map((p) => (
               <PaletteItem key={p.path} page={p} onSelect={navigate} />
             ))}
           </CommandGroup>
