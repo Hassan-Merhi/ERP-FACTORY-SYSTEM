@@ -16,6 +16,7 @@ import { syncPurchaseOrderGitTx } from "../../services/accounting/perpetualInven
 import { usdLineAmounts } from "../../services/factory/factoryVoucherPosting";
 import { editPostedFactoryVoucherTx } from "../../services/factory/factoryVoucherCorrection";
 import { runWithVerifiedPoParentScope } from "../../services/security/parentCompanyPostingScope";
+import { assertOffloadedPurchaseOrderCostBasisUnchanged } from "./offloadedPurchaseOrderCostBasisGuard";
 
 type PurchaseOrderRecord = NonNullable<Awaited<ReturnType<typeof storage.getPurchaseOrderById>>>;
 
@@ -205,27 +206,43 @@ export async function applyPurchaseOrderItemsUpdate(
       }
       if (lockedContainer?.status === "OFFLOADED") {
         const currentLineItems = await tx
-          .select({ stockItemId: poLineItems.stockItemId })
+          .select({
+            id: poLineItems.id,
+            stockItemId: poLineItems.stockItemId,
+            itemName: poLineItems.itemName,
+            quantity: poLineItems.quantity,
+            rate: poLineItems.rate,
+            lineTotal: poLineItems.lineTotal,
+          })
           .from(poLineItems)
           .where(eq(poLineItems.poId, id));
-        const currentStockItemIds = new Set(currentLineItems.map((item) => item.stockItemId));
 
-        for (const item of newItems) {
-          if (item.stockItemId && !currentStockItemIds.has(item.stockItemId)) {
-            throw new HttpError(
-              409,
-              "Cannot change stock items on an offloaded container. The inventory has already been added with the original items. Changing stock items would cause an import cycle imbalance. To fix this, first reverse the container offload, then edit the PO, then re-offload."
-            );
+        assertOffloadedPurchaseOrderCostBasisUnchanged(currentLineItems, valuedItems);
+
+        // The posted rows are historical evidence. Preserve their IDs and only
+        // allow a label edit when the caller supplies the original line ID.
+        const byId = new Map(currentLineItems.map((item) => [item.id, item]));
+        for (const item of req.body.items as PurchaseOrderItemInput[]) {
+          const stored = byId.get(Number(item.id));
+          if (!stored) {
+            if (item.itemName != null) {
+              const matchesExistingLabel = currentLineItems.some((line) => line.itemName === item.itemName);
+              if (!matchesExistingLabel) {
+                throw new HttpError(409, "Name changes on an offloaded purchase line require its original line ID.");
+              }
+            }
+            continue;
+          }
+          if (item.itemName != null && item.itemName !== stored.itemName) {
+            await tx.update(poLineItems).set({ itemName: item.itemName }).where(eq(poLineItems.id, stored.id));
           }
         }
-      }
-
-      // Delete old line items only after the lifecycle locks and offloaded-state recheck.
-      await tx.delete(poLineItems).where(eq(poLineItems.poId, id));
-
-      // Insert new line items
-      if (valuedItems.length > 0) {
-        await tx.insert(poLineItems).values(valuedItems);
+      } else {
+        // Unposted items are safe to replace. Posted item identities are never rebuilt.
+        await tx.delete(poLineItems).where(eq(poLineItems.poId, id));
+        if (valuedItems.length > 0) {
+          await tx.insert(poLineItems).values(valuedItems);
+        }
       }
 
       // Update PO with new items total and charges
