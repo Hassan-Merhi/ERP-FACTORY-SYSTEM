@@ -300,10 +300,10 @@ export default function SalesReport() {
     setSelectedCompanies([]);
   };
 
-  // Keep the reconciliation calculation in the background, but expose one Cost Profit KPI.
-  // On the all-time view this is the reconciled/adjusted profit; filtered views keep their scoped profit.
-  const displayedCostProfit =
-    isAllTimeReconciliationView && cogsReconciliation ? cogsReconciliation.adjustedCostProfit : totals.costProfit;
+  // The primary Cost Profit KPI always equals recorded sales minus recorded COGS.
+  // The separate inventory-based reconciliation is a diagnostic, not a replacement
+  // for the booked profit (especially while historical source coverage is partial).
+  const displayedCostProfit = totals.costProfit;
 
   // Declared after handleClearFilters: the build-time bandwidth transform
   // replaces the block that ends there. Counts what "Clear filters" resets;
