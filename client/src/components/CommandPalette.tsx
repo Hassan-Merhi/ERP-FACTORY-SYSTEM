@@ -599,13 +599,13 @@ export function CommandPalette({
 
   const factoryPages = useMemo(() => {
     const accessibleExtras = [...FACTORY_EXTRAS_ALWAYS, ...FACTORY_CONTEXT_SEARCH, ...FACTORY_HUB_TABS].filter((entry) =>
-      factoryVis.isPinnedVisible({ url: entry.path })
+      factoryVis.isPinnedVisible({ url: entry.path }) && factoryVis.isHubTabVisible(entry.path)
     );
     return buildEntries(factoryVis.sections, [
       ...accessibleExtras,
       ...(effectiveRole === "Developer" ? [...FACTORY_ACCOUNTING_CONTEXT, ...FACTORY_MAINTENANCE_CONTEXT] : []),
     ]);
-  }, [factoryVis.sections, factoryVis.isPinnedVisible, effectiveRole]);
+  }, [factoryVis.sections, factoryVis.isPinnedVisible, factoryVis.isHubTabVisible, effectiveRole]);
 
   const propertiesPages = useMemo(
     () =>
