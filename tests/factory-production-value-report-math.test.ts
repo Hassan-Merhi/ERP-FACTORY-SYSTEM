@@ -93,13 +93,22 @@ describe("Factory production value report math", () => {
     expect(result.profitMarginPct).toBeCloseTo(11.2645, 4);
   });
 
-
   it("costs selected-month production from the bales' recorded material costs, not historical blended rate", () => {
     const result = calculateProducedBaleMaterialCost([
-      { weightKg: "100", totalCost: "60.12", costPerKg: "0.6012", linkedBatchCostPerKg: "0.6012" },
-      { weightKg: "200", totalCost: "149.98", costPerKg: "0.7499", linkedBatchCostPerKg: "0.7499" },
+      {
+        weightKg: "100",
+        totalCost: "60.12",
+        costPerKg: "0.6012",
+        linkedBatchCostPerKg: "0.6012",
+      },
+      {
+        weightKg: "200",
+        totalCost: "149.98",
+        costPerKg: "0.7499",
+        linkedBatchCostPerKg: "0.7499",
+      },
     ]);
-    expect(result.weightCost.toDecimalPlaces(2).toNumber()).toBe(210.10);
+    expect(result.weightCost.toDecimalPlaces(2).toNumber()).toBe(210.1);
     expect(result.storedCostBales).toBe(2);
     expect(result.unresolvedBales).toBe(0);
     // The wrong cumulative method would cost these same bales at 0.6446/kg.
