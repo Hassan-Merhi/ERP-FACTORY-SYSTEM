@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { ScanLine, AlertCircle, Plus } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import { MobileBarcodeScanner } from "@/components/MobileBarcodeScanner";
 import { FactoryMobileScannerPanel, FactoryMobileStatus } from "@/components/ui/factory-mobile";
 import { FactoryBaleProduct } from "@shared/schema";
 
@@ -9,6 +10,7 @@ interface StockEntryScannerProps {
   scanInput: string;
   onScanInputChange: (val: string) => void;
   onScanKeyDown: (e: React.KeyboardEvent) => void;
+  onCameraScan: (barcode: string) => void;
   scanError: string;
   showDropdown: boolean;
   filteredProducts: FactoryBaleProduct[];
@@ -20,6 +22,7 @@ export function StockEntryScanner({
   scanInput,
   onScanInputChange,
   onScanKeyDown,
+  onCameraScan,
   scanError,
   showDropdown,
   filteredProducts,
@@ -82,6 +85,7 @@ export function StockEntryScanner({
       <label htmlFor="factory-stock-entry-scan" className="mb-2 block text-sm font-medium">
         Scan article code or search product
       </label>
+      <MobileBarcodeScanner onScan={onCameraScan} className="mb-2" />
       <div className="relative group">
         <div className="pointer-events-none absolute inset-y-0 left-3 flex items-center">
           <ScanLine className="h-5 w-5 text-muted-foreground transition-colors group-focus-within:text-primary" />
