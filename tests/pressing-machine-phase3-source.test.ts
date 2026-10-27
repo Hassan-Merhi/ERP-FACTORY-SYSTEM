@@ -28,10 +28,10 @@ describe("Pressing Machine Phase 3 integration contract", () => {
     expect(scanner).toContain("deviceCapturedAt");
     expect(scanner).toContain('second: "2-digit"');
   });
-  it("does not falsely claim pressing was completed without a backend confirmation", () => {
-    expect(manager).toContain('kind: "preview"');
-    expect(manager).toContain("NOT yet confirmed or saved");
-    expect(scanner).toContain("Permanent validation, cross-machine duplicate checks and server timestamps arrive in Phase 4");
+  it("keeps the Phase 3 camera separate from Factory stock finalization", () => {
+    expect(manager).toContain("onBarcode={submitPressingConfirmation}");
+    expect(scanner).toContain("Server confirmed:");
+    expect(scanner).toContain("Stock finalization is a separate workflow");
     expect(scanner).not.toContain("POST /api/factory/finalize");
   });
 });
