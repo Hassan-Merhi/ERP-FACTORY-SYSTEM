@@ -334,18 +334,15 @@ ${detailBlockCss}
     .a4-page:last-child { page-break-after: auto; }
 
     .a4-top-half { height: 148.5mm; flex-shrink: 0; overflow: hidden; display: flex; flex-direction: column; }
-    /* Keep the full uploaded banner inside real printer-safe space on the first half. */
-    .a4-preprint-gap { height: 90mm; flex-shrink: 0; overflow: hidden; padding: 6mm 8mm 2mm; display: flex; align-items: center; justify-content: center; }
-    .a4-banner-img { width: 100%; height: 100%; object-fit: contain; object-position: center center; display: block; }
-    /* Move the second banner and its product name lower without extending past the A4 page. */
-    .a4-bottom-half .a4-preprint-gap { height: 97mm; padding: 12mm 8mm 2mm; }
+    .a4-preprint-gap { height: 90mm; flex-shrink: 0; overflow: hidden; }
+    .a4-banner-img { width: 100%; height: 100%; object-fit: cover; display: block; }
     .a4-top-content { height: 58.5mm; flex-shrink: 0; display: flex; flex-direction: row; gap: 6mm; align-items: flex-start; padding: 0 10mm; }
     .a4-detail-left { flex-shrink: 0; width: 76mm; max-height: 58.5mm; overflow: hidden; border: 0.3mm solid #ccc; }
     .a4-name-right { flex: 1; display: flex; align-items: center; justify-content: center; overflow: hidden; height: 58.5mm; }
     .a4-name-right-text { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; text-align: center; font-weight: 900; text-transform: uppercase; letter-spacing: 1.5px; overflow: hidden; font-size: clamp(18pt, 3.5vw, 36pt); line-height: 1.15; color: #000; word-break: break-word; }
 
     .a4-bottom-half { height: 148.5mm; flex-shrink: 0; overflow: hidden; display: flex; flex-direction: column; }
-    .a4-bottom-namebox { height: 51.5mm; width: 100%; display: flex; align-items: center; justify-content: center; padding: 0 10mm; }
+    .a4-bottom-namebox { height: 58.5mm; width: 100%; display: flex; align-items: center; justify-content: center; padding: 0 10mm; }
     .a4-bottom-name-text { width: 100%; text-align: center; font-weight: 900; text-transform: uppercase; letter-spacing: 2px; overflow: hidden; font-size: clamp(28pt, 6vw, 56pt); line-height: 1.15; color: #000; word-break: break-word; }
 
     .print-note { text-align: center; font-size: 9pt; color: #666; padding: 4px; background: #fffbe6; border-bottom: 1px solid #eee; }
