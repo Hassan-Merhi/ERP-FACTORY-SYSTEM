@@ -100,11 +100,11 @@ databaseDescribe("Pressing Scan — simplified user-based PostgreSQL integration
         deviceCapturedAt:new Date().toISOString()},
     });
   }
-  async function baleUnchanged(key:string){
+  async function baleUnchanged(key:string, expectedStatus="PENDING_PRESSING"){
     const [bale]=await rows(sql`SELECT status,weight_kg::text AS weight,pressed_at,finalized_at
       FROM factory_bales WHERE id=${bales[key].id}`);
     expect(bale).toMatchObject({
-      status:"PENDING_PRESSING",weight:"45.500",pressed_at:null,finalized_at:null,
+      status:expectedStatus,weight:"45.500",pressed_at:null,finalized_at:null,
     });
     const [count]=await rows(sql`SELECT COUNT(*)::int AS total FROM vouchers`);
     expect(count.total).toBe(voucherCountBefore);
@@ -130,6 +130,11 @@ databaseDescribe("Pressing Scan — simplified user-based PostgreSQL integration
       ["race",companies.a,"PENDING_PRESSING",false],
       ["void",companies.a,"PENDING_PRESSING",false],
       ["done",companies.a,"IN_STOCK",false],
+      ["reserved",companies.a,"RESERVED_FOR_ORDER",false],
+      ["final",companies.a,"FINALIZED",false],
+      ["sold",companies.a,"SOLD",false],
+      ["dispatched",companies.a,"DISPATCHED",false],
+      ["deleted",companies.a,"DELETED",false],
       ["gone",companies.a,"PENDING_PRESSING",true],
       ["other",companies.b,"PENDING_PRESSING",false],
     ] as Array<[string,number,string,boolean]>){
@@ -238,12 +243,34 @@ databaseDescribe("Pressing Scan — simplified user-based PostgreSQL integration
         requestId:randomUUID()},
     });
     expect(foreign.statusCode).toBeGreaterThanOrEqual(400);
-    expect((await scan(actors.opA1,"done")).body.code).toBe("PRESSING_BALE_NOT_PENDING");
+    expect((await scan(actors.opA1,"deleted")).statusCode).toBe(404);
     expect((await scan(actors.opA1,"gone")).statusCode).toBe(404);
     const unauthorized=await scan(actors.viewA,"two",randomUUID(),a);
     expect(unauthorized.body.code).toBe("PRESSING_WRITE_DENIED");
     const stolen=await scan(actors.opA2,"two",randomUUID(),a);
     expect(stolen.body.code).toBe("PRESSING_ASSIGNMENT_CHANGED");
+  });
+
+  it("records a first pressing scan at every non-deleted inventory stage without stock writes",async()=>{
+    for (const [key,status] of [
+      ["done","IN_STOCK"],
+      ["reserved","RESERVED_FOR_ORDER"],
+      ["final","FINALIZED"],
+      ["sold","SOLD"],
+      ["dispatched","DISPATCHED"],
+    ] as const) {
+      const first=await scan(actors.opA1,key);
+      expect(first.statusCode).toBe(201);
+      expect(first.body).toMatchObject({
+        status:"PRESSING_COMPLETED",
+        referenceNumber:bales[key].ref,
+        inventoryFinalized:false,
+      });
+      await baleUnchanged(key,status);
+      const second=await scan(actors.opA2,key);
+      expect(second.statusCode).toBe(409);
+      expect(second.body.code).toBe("PRESSING_ALREADY_CONFIRMED");
+    }
   });
 
   it("allows one and only one accepted scan in simultaneous user races",async()=>{
