@@ -41,6 +41,29 @@ export function resolveProductionBalanceWeight({
   );
 }
 
+/**
+ * The on-table KPI for a selected report period uses remaining kilograms from
+ * that period's original batches at the period's own weighted-average mix rate.
+ * This is separate from the cumulative as-of WIP / Net Position valuation and
+ * NEVER changes the existing produced-bale Weight Cost or Profit calculation.
+ */
+export function calculatePeriodTableBalance(args: {
+  remainingPeriodKg: Decimal.Value;
+  mixedPeriodWeightKg: Decimal.Value;
+  mixedPeriodCost: Decimal.Value;
+}) {
+  const remainingKg = BatchRateDecimal.max(0, new BatchRateDecimal(args.remainingPeriodKg));
+  const periodRate = calculateCumulativeBatchRate({
+    cumulativeMixWeightKg: args.mixedPeriodWeightKg,
+    cumulativeMixCost: args.mixedPeriodCost,
+  });
+  return {
+    weightKg: remainingKg.toNumber(),
+    costPerKg: periodRate.toNumber(),
+    value: remainingKg.times(periodRate).toDecimalPlaces(2).toNumber(),
+  };
+}
+
 type WeightCostArgs = {
   producedWeightKg: Decimal.Value;
   batchRateCost: Decimal.Value;
