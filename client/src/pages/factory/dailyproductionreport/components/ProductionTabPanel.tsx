@@ -522,7 +522,7 @@ export function ProductionTabPanel({ report }: { report: DailyProductionReportSt
             <CardHeader className="flex flex-row items-center justify-between gap-1 space-y-0 pb-2">
               <CardTitle className="text-xs font-bold uppercase tracking-wide text-violet-700 dark:text-violet-400 flex items-center gap-1.5">
                 <Scale className="h-3.5 w-3.5" />
-                Balance on Table
+                Overall Balance on Table
               </CardTitle>
             </CardHeader>
             <CardContent className="pt-0 space-y-2">
@@ -531,9 +531,6 @@ export function ProductionTabPanel({ report }: { report: DailyProductionReportSt
               ) : (
                 <>
                   <div className="space-y-0.5" data-testid="section-overall-balance-on-table">
-                    <div className="text-[11px] font-bold uppercase tracking-wide text-violet-700 dark:text-violet-400">
-                      Overall Balance on Table
-                    </div>
                     <StatRow label="Weight" value={fmtKg(data?.balanceOnTable.weightKg ?? 0)} />
                     {!costsHidden && (
                       <>
