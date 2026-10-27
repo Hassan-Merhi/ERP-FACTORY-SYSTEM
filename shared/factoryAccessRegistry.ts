@@ -435,6 +435,16 @@ export const FACTORY_ACCESS_REGISTRY: readonly FactoryPageDefinition[] = [
   },
 
   // System / utility pages
+  // Registered separately from Accounts: the Toolbox route is Developer-only
+  // and must be classified before the generic Factory route guard runs.
+  {
+    key: "factory/accounting/toolbox",
+    label: "Accounting Toolbox",
+    group: "Finance",
+    route: "/factory/accounting/toolbox",
+    settingsVisible: false,
+    accessLevel: "developer",
+  },
   // Developer-only canonical destination for the legacy Balance Repair screen.
   // Factory companies redirect unprefixed routes away; use a scoped route here.
   {
