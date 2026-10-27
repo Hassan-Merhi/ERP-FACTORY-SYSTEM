@@ -532,7 +532,7 @@ export function ProductionTabPanel({ report }: { report: DailyProductionReportSt
                 <>
                   <div className="space-y-0.5" data-testid="section-overall-balance-on-table">
                     <div className="text-[11px] font-bold uppercase tracking-wide text-violet-700 dark:text-violet-400">
-                      Overall
+                      Overall Balance on Table
                     </div>
                     <StatRow label="Weight" value={fmtKg(data?.balanceOnTable.weightKg ?? 0)} />
                     {!costsHidden && (
@@ -548,7 +548,7 @@ export function ProductionTabPanel({ report }: { report: DailyProductionReportSt
                   >
                     <div className="flex items-center gap-1 text-[11px] font-bold uppercase tracking-wide text-teal-700 dark:text-teal-400">
                       <Filter className="h-3 w-3 shrink-0" />
-                      Filtered
+                      Filtered Balance on Table
                       <span
                         className="ml-auto text-muted-foreground"
                         title={data?.filteredBalanceOnTable?.direction}
