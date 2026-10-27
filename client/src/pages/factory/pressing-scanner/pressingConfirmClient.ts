@@ -28,7 +28,11 @@ function validReceipt(value: unknown): value is PressingServerReceipt {
     typeof item.productionDate === "string" &&
     typeof item.timezoneName === "string" &&
     typeof item.weightKg === "string" &&
-    typeof item.machineName === "string";
+    typeof item.machineName === "string" &&
+    Number.isSafeInteger(item.machineId) &&
+    Number.isSafeInteger(item.assignmentId) &&
+    typeof item.requestId === "string" &&
+    typeof item.operatorUserId === "string";
 }
 export async function sendQueuedPressingScan(row: PressingQueuedScan): Promise<PressingTransportResult> {
   try {
@@ -36,7 +40,11 @@ export async function sendQueuedPressingScan(row: PressingQueuedScan): Promise<P
       "POST", "/api/factory/pressing-machines/confirm", row.payload, false, 12000
     );
     const receipt: unknown = await response.json();
-    if (!validReceipt(receipt) || receipt.referenceNumber !== row.barcode) {
+    if (!validReceipt(receipt) || receipt.referenceNumber !== row.barcode ||
+        receipt.machineId !== row.payload.machineId ||
+        receipt.assignmentId !== row.payload.assignmentId ||
+        receipt.requestId !== row.requestId ||
+        receipt.operatorUserId !== row.userId) {
       return {
         kind: "retry", code: "PRESSING_BAD_RECEIPT",
         message: "Server response could not be verified. Retrying with the same scan ID.",
