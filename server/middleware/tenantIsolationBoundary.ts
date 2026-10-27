@@ -22,6 +22,7 @@ import { isPinnedCompanyRoute } from "../services/security/activeCompanyPermissi
 import { chooseAuthorizedFactoryCompany } from "../services/security/factoryCompanyScopePolicy";
 import { classifyUserLocationConfigurationRoute } from "../services/security/userLocationConfigurationPolicy";
 import { runWithCompanyRequestRuntimeContext } from "../services/security/companyRequestRuntimeContext";
+import { isAccountMigrationSourceReadPath } from "../services/security/accountMigrationRequestPolicy";
 import {
   createTenantDatabaseScope,
   runWithDatabaseScopeRuntimeContext,
@@ -400,6 +401,20 @@ export async function tenantCompanyParamBoundary(req: Request, res: Response, ne
     if (!companyId) {
       return res.status(400).json({ code: "COMPANY_ID_INVALID", message: "Invalid companyId in request path." });
     }
+    // This read-only Admin tool intentionally chooses a *different* company
+    // before starting a migration. The route itself independently checks role
+    // and membership and binds an explicit transaction-local RLS scope.
+    // Keep all other :companyId routes pinned to the active company.
+    if (isAccountMigrationSourceReadPath(req.method, req.path)) {
+      if (context.role !== "Admin" && context.role !== "Developer") {
+        return res.status(403).json({
+          code: "ACCOUNT_MIGRATION_ROLE_REQUIRED",
+          message: "Admin or Developer access required for account migration.",
+        });
+      }
+      await assertCompaniesAccess(context.userId, [companyId]);
+      return next();
+    }
     const userLocationRoute = context.role === "Developer" ? classifyUserLocationConfigurationRoute(req.path) : null;
     if (userLocationRoute?.companyId === companyId) {
       await assertCompaniesAccess(context.userId, [companyId]);
@@ -418,6 +433,9 @@ export async function tenantCompanyParamBoundary(req: Request, res: Response, ne
     }
     if (error instanceof ActiveCompanyPermissionContextError) {
       return res.status(error.status).json({ code: error.code, message: error.message });
+    }
+    if (error instanceof CompanyAccessError) {
+      return sendCompanyAccessError(res, error);
     }
     return next(error);
   }

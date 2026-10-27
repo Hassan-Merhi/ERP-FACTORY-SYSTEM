@@ -25,10 +25,11 @@ assert.match(client, /for \(let page = 2; page <= totalPages; page \+= 1\)/, "co
 assert.match(client, /entryId/, "entry deep links must bypass normal paging");
 assert.match(client, /voucherId/, "voucher deep links must bypass normal paging");
 assert.match(client, /const pageCache = new Map<number, DaybookPage>\(\)/, "progressive daybook pages must be cached client-side");
-assert.match(client, /handleProgressiveScroll/, "daybook must progressively load as the user scrolls");
-assert.match(client, /AUTOLOAD_THRESHOLD_PX/, "progressive loading must use a near-bottom threshold");
-assert.match(client, /factory-daybook-progress/, "progressive loading status must be available");
-assert.match(client, /scroll to load more/, "progressive loading status must explain the interaction");
+assert.match(client, /scheduleNextPage/, "daybook must automatically schedule remaining pages");
+assert.match(client, /refetchDaybook\(\)/, "automatic paging must refresh Daybook query");
+assert.match(client, /setTimeout/, "automatic paging must wait until the previous response settles");
+assert.doesNotMatch(client, /handleProgressiveScroll/, "scroll-driven loading must be removed");
+assert.doesNotMatch(client, /scroll to load more/, "manual loading prompt must not appear");
 assert.match(client, /JSON\.stringify\(entries\)/, "the cumulative Daybook array contract must be preserved");
 assert.doesNotMatch(client, /factory-daybook-page-previous/, "manual Previous pagination must stay removed");
 assert.doesNotMatch(client, /factory-daybook-page-next/, "manual Next pagination must stay removed");
@@ -90,7 +91,7 @@ console.log(
       checks: [
         "Daybook startup wiring",
         "100-row initial payload",
-        "progressive scroll loading",
+        "automatic background page loading",
         "client-side cumulative page merge",
         "All Time empty-date preservation",
         "legacy array compatibility",

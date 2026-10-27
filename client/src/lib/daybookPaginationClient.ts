@@ -17,7 +17,6 @@ const ENDPOINT = "/api/factory/daybook";
 const ROUTES = new Set(["/factory/daybook", "/properties/daybook"]);
 const DEFAULT_LIMIT = 100;
 const MAX_ACTION_LIMIT = 250;
-const AUTOLOAD_THRESHOLD_PX = 700;
 
 export interface PaginatedDaybookEntry {
   id: number;
@@ -112,7 +111,7 @@ if (typeof window !== "undefined" && !window.__erpDaybookPaginationInstalled) {
   let pendingPage: number | null = null;
   let loadingMore = false;
   let wasOnRoute = ROUTES.has(window.location.pathname);
-  let progressRoot: HTMLDivElement | null = null;
+  let autoLoadTimer: ReturnType<typeof setTimeout> | null = null;
 
   function baseKey(url: URL): string {
     // The server identifies the company through a cookie, not the URL.
@@ -139,12 +138,19 @@ if (typeof window !== "undefined" && !window.__erpDaybookPaginationInstalled) {
 
   function refetchDaybook(): void {
     queryClient.invalidateQueries({
-      predicate: (query) => Array.isArray(query.queryKey) && query.queryKey[0] === ENDPOINT,
+      // The filter-options query shares this endpoint but must not be refetched
+      // for every Daybook page: only the transaction list needs new rows.
+      predicate: (query) =>
+        Array.isArray(query.queryKey) &&
+        query.queryKey[0] === ENDPOINT &&
+        query.queryKey[1] !== "filter-options",
       refetchType: "active",
     });
   }
 
   function clearProgressState(): void {
+    if (autoLoadTimer !== null) clearTimeout(autoLoadTimer);
+    autoLoadTimer = null;
     activeMeta = null;
     activeBaseKey = "";
     pendingPage = null;
@@ -183,60 +189,29 @@ if (typeof window !== "undefined" && !window.__erpDaybookPaginationInstalled) {
     });
   }
 
-  function ensureProgress(): HTMLDivElement {
-    if (progressRoot?.isConnected) return progressRoot;
-    progressRoot = document.createElement("div");
-    progressRoot.id = "erp-factory-daybook-progress";
-    progressRoot.dataset.testid = "factory-daybook-progress";
-    progressRoot.setAttribute("role", "status");
-    progressRoot.setAttribute("aria-live", "polite");
-    Object.assign(progressRoot.style, {
-      position: "fixed",
-      left: "50%",
-      bottom: "18px",
-      transform: "translateX(-50%)",
-      zIndex: "1000",
-      display: "none",
-      alignItems: "center",
-      padding: "7px 10px",
-      border: "1px solid hsl(var(--border))",
-      borderRadius: "10px",
-      background: "hsl(var(--background))",
-      color: "hsl(var(--foreground))",
-      boxShadow: "0 8px 28px rgba(0, 0, 0, 0.14)",
-      fontSize: "12px",
-      fontWeight: "600",
-      pointerEvents: "none",
-      whiteSpace: "nowrap",
-    });
-    document.body.appendChild(progressRoot);
-    return progressRoot;
-  }
-
-  function renderProgress(): void {
-    const root = ensureProgress();
-    // Held in a local and tested inline so the null check narrows: through a
-    // separate `shouldHide` boolean TypeScript cannot see that activeMeta is
-    // non-null past the early return.
+  /**
+   * Continue loading in the background as soon as React Query has consumed the
+   * previous response. The visible Daybook stays usable after the first page,
+   * with no scrolling or manual "Load more" action required.
+   */
+  function scheduleNextPage(expectedKey: string): void {
     const meta = activeMeta;
     if (
       !meta ||
-      !ROUTES.has(window.location.pathname) ||
-      hasDeepLink() ||
       meta.totalPages === null ||
-      meta.totalPages <= 1 ||
+      highestLoadedPage() >= meta.totalPages ||
       hasLoadedEveryRow(meta.total, meta.loadedCount)
     ) {
-      root.style.display = "none";
       return;
     }
 
-    root.style.display = "flex";
-    // `total` is non-null here: a null total hides the indicator above.
-    const total = meta.total ?? meta.loadedCount;
-    root.textContent = loadingMore
-      ? `Loading more… ${meta.loadedCount} of ${total} transactions loaded`
-      : `${meta.loadedCount} of ${total} transactions loaded · scroll to load more`;
+    if (autoLoadTimer !== null) clearTimeout(autoLoadTimer);
+    autoLoadTimer = setTimeout(() => {
+      autoLoadTimer = null;
+      // Don't append results from a previous company, filter, deep link or route.
+      if (activeBaseKey !== expectedKey || !ROUTES.has(window.location.pathname) || hasDeepLink()) return;
+      requestNextPage();
+    }, 0);
   }
 
   function requestNextPage(): void {
@@ -248,35 +223,13 @@ if (typeof window !== "undefined" && !window.__erpDaybookPaginationInstalled) {
     if (nextPage <= 1 || nextPage > meta.totalPages) return;
     pendingPage = nextPage;
     loadingMore = true;
-    renderProgress();
     refetchDaybook();
-  }
-
-  function scrollHost(event: Event): HTMLElement | null {
-    if (event.target instanceof HTMLElement) return event.target;
-    const scrolling = document.scrollingElement;
-    return scrolling instanceof HTMLElement ? scrolling : null;
-  }
-
-  function handleProgressiveScroll(event: Event): void {
-    const meta = activeMeta;
-    if (!meta || loadingMore || hasLoadedEveryRow(meta.total, meta.loadedCount)) return;
-    const host = scrollHost(event);
-    if (!host) return;
-
-    const isDocumentHost =
-      host === document.scrollingElement || host === document.documentElement || host === document.body;
-    if (!isDocumentHost && host.scrollHeight < 600) return;
-
-    const remaining = host.scrollHeight - host.scrollTop - host.clientHeight;
-    if (remaining <= AUTOLOAD_THRESHOLD_PX) requestNextPage();
   }
 
   function handleRouteState(): void {
     const onRoute = ROUTES.has(window.location.pathname);
     if (!onRoute && wasOnRoute) clearProgressState();
     wasOnRoute = onRoute;
-    renderProgress();
   }
 
   window.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
@@ -301,14 +254,12 @@ if (typeof window !== "undefined" && !window.__erpDaybookPaginationInstalled) {
     } catch (error) {
       pendingPage = null;
       loadingMore = false;
-      renderProgress();
       throw error;
     }
 
     if (!response.ok) {
       pendingPage = null;
       loadingMore = false;
-      renderProgress();
       return response;
     }
 
@@ -346,18 +297,16 @@ if (typeof window !== "undefined" && !window.__erpDaybookPaginationInstalled) {
         totalPages: pageMeta.totalPages,
         loadedCount: entries.length,
       };
-      renderProgress();
+      scheduleNextPage(match.key);
 
       return entriesResponse(response, entries);
     } catch {
       pendingPage = null;
       loadingMore = false;
-      renderProgress();
       return response;
     }
   };
 
-  document.addEventListener("scroll", handleProgressiveScroll, true);
   window.addEventListener("popstate", handleRouteState);
   const originalPushState = history.pushState.bind(history);
   history.pushState = (...args) => {

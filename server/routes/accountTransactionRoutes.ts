@@ -25,6 +25,7 @@ import {
 } from "../services/accounting/balances/customerLedgerStatement";
 import { summarizeAccountStatementCurrency } from "../services/accounting/accountStatementCurrency";
 import { projectCustomerStatementLines } from "./factory/customers-core/heldUnfinalizedCustomerCharges";
+import { enrichCustomerLedgerDestinations } from "../services/accounting/balances/customerStatementDestination";
 
 /**
  * The statement body. Lines dated after the server's business date are
@@ -95,13 +96,13 @@ export function registerAccountTransactionRoutes(app: Express) {
           companyId, owner.id, lines, rawStart, effectiveEndDate
         );
         return res.json(
-          statementResponse(projected.rows, {
+          statementResponse(await enrichCustomerLedgerDestinations(companyId, owner.id, projected.rows), {
             preNetBalance: toMoney(preNetBalance).minus(projected.heldBefore).toNumber(),
             asOfDate,
             startDate: rawStart ?? null,
             endDate: effectiveEndDate,
             customerId: owner.id,
-            notInLedger,
+            notInLedger: { ...notInLedger, rows: await enrichCustomerLedgerDestinations(companyId, owner.id, notInLedger.rows) },
           })
         );
       }
@@ -466,12 +467,13 @@ export function registerAccountTransactionRoutes(app: Express) {
         companyId, customerId, mapped, rawStart, effectiveEndDate
       );
       return res.json(
-        statementResponse(projected.rows, {
+        statementResponse(await enrichCustomerLedgerDestinations(companyId, customerId, projected.rows), {
           preNetBalance: toMoney(preNetBalance).minus(projected.heldBefore).toNumber(),
           asOfDate,
           startDate: rawStart ?? null,
           endDate: effectiveEndDate,
-          notInLedger,
+          customerId,
+          notInLedger: { ...notInLedger, rows: await enrichCustomerLedgerDestinations(companyId, customerId, notInLedger.rows) },
         })
       );
     } catch (error: unknown) {

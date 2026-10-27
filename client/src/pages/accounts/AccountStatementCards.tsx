@@ -30,6 +30,8 @@ export function AccountStatementCards({
   closingBalance,
   selectedAccount,
   formatDisplayDate,
+  showCustomerDestination = false,
+  destinationFilter = "all",
 }: AccountStatementCardsProps) {
   const [visibleCount, setVisibleCount] = useState(CARD_PAGE_SIZE);
   const isSupplier = selectedAccount.type === "supplier";
@@ -55,8 +57,13 @@ export function AccountStatementCards({
     return { text, side: isDebit ? "Dr" : "Cr" };
   };
 
-  const rendered = vouchersWithBalance.slice(0, visibleCount);
-  const remaining = vouchersWithBalance.length - visibleCount;
+  const displayedVouchers = !showCustomerDestination || destinationFilter === "all"
+    ? vouchersWithBalance
+    : vouchersWithBalance.filter((row) => destinationFilter === "__none__"
+      ? !row.destination?.trim()
+      : row.destination?.trim() === destinationFilter);
+  const rendered = displayedVouchers.slice(0, visibleCount);
+  const remaining = displayedVouchers.length - visibleCount;
 
   return (
     <div className="space-y-2 md:hidden print:hidden" data-testid="account-statement-cards">
@@ -73,7 +80,7 @@ export function AccountStatementCards({
         </div>
       )}
 
-      <ErpMobileRecordList isEmpty={vouchersWithBalance.length === 0} empty="No transactions in this period.">
+      <ErpMobileRecordList isEmpty={displayedVouchers.length === 0} empty="No transactions for this destination.">
         {rendered.map((voucher) => {
           const isReference = voucher.voucherType === HISTORICAL_REFERENCE_TYPE;
           const amount = amountFor(voucher);
@@ -104,9 +111,9 @@ export function AccountStatementCards({
               }
               valueClassName={amount?.side === "Dr" ? "text-emerald-600" : "text-orange-600"}
               fields={
-                hideBalances || voucher.runningBalance == null
-                  ? []
-                  : [
+                [
+                  ...(showCustomerDestination ? [{ label: "Destination", value: voucher.destination?.trim() || "—" }] : []),
+                  ...(hideBalances || voucher.runningBalance == null ? [] : [
                       {
                         label: "Balance",
                         numeric: true,
@@ -118,8 +125,8 @@ export function AccountStatementCards({
                             </span>
                           </span>
                         ),
-                      },
-                    ]
+                      }]),
+                ]
               }
               onOpen={isReference ? undefined : () => handleOpenVoucher(voucher)}
               openLabel={isReference ? undefined : `Open voucher ${voucher.voucherNumber || description}`}

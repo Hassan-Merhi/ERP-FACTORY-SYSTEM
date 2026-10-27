@@ -56,6 +56,7 @@ export const PartiesHub = lazy(() => import("@/pages/PartiesHub"));
 export const EditSupplier = lazy(() => import("@/pages/EditSupplier"));
 export const SupplierProformas = lazy(() => import("@/pages/SupplierProformas"));
 export const SupplierProfitCheck = lazy(() => import("@/pages/SupplierProfitCheck"));
+export const SupplierProfitReconciliation = lazy(() => import("@/pages/SupplierProfitReconciliation"));
 export const ContainerVerification = lazy(() => import("@/pages/ContainerVerification"));
 export const StockOTW = lazy(() => import("@/pages/StockOTW"));
 export const Customers = lazy(() => import("@/pages/Customers"));

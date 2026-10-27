@@ -674,7 +674,7 @@ export default function Daybook({ user }: { user?: DaybookUser | null } = {}) {
                   <EyeOff className="w-4 h-4" />
                   {showHidden ? "Showing hidden" : "Show hidden"}
                 </Button>
-                <div className="flex border rounded-md overflow-hidden">
+                <div className="flex border border-border/80 rounded-md overflow-hidden bg-muted/20">
                   <Button
                     variant="ghost"
                     size="sm"
@@ -682,7 +682,7 @@ export default function Daybook({ user }: { user?: DaybookUser | null } = {}) {
                       setViewMode("detailed");
                       saveDaybookState({ viewMode: "detailed" });
                     }}
-                    className={cn("rounded-none gap-1.5", viewMode === "detailed" && "bg-muted font-medium")}
+                    className={cn("rounded-none gap-1.5", viewMode === "detailed" && "bg-primary/10 text-primary font-semibold dark:bg-primary/20")}
                     data-testid="button-view-detailed"
                     data-remote-control-safe="true"
                     data-remote-control-action="toggle-view"
@@ -697,7 +697,7 @@ export default function Daybook({ user }: { user?: DaybookUser | null } = {}) {
                       setViewMode("condensed");
                       saveDaybookState({ viewMode: "condensed" });
                     }}
-                    className={cn("rounded-none gap-1.5", viewMode === "condensed" && "bg-muted font-medium")}
+                    className={cn("rounded-none gap-1.5", viewMode === "condensed" && "bg-primary/10 text-primary font-semibold dark:bg-primary/20")}
                     data-testid="button-view-condensed"
                     data-remote-control-safe="true"
                     data-remote-control-action="toggle-view"

@@ -16,7 +16,10 @@ import { ErpMobileRecordCard, ErpMobileRecordList } from "@/components/ui/erp-mo
 
 export function TabTruckLocation() {
   const { data: viewer } = useQuery(authenticatedUserQueryOptions());
-  const isTester = (viewer?.currentRole ?? viewer?.role) === "ERP Tester";
+  const role = viewer?.currentRole ?? viewer?.role;
+  const isTester = role === "ERP Tester";
+  const isViewer = role === "View Only";
+  const restrictedViewer = isTester || isViewer;
   const [companyMode, setCompanyMode] = useState<CompanyViewMode>("session");
   const [waSending, setWaSending] = useState(false);
   const printRef = useRef<HTMLDivElement>(null);
@@ -130,7 +133,7 @@ export function TabTruckLocation() {
       >
         My Company
       </Button>
-      {!isTester && (
+      {!restrictedViewer && (
         <Button
         size="sm"
         variant={companyMode === "all" ? "default" : "outline"}
@@ -169,7 +172,7 @@ export function TabTruckLocation() {
     <div className="space-y-3">
       <div className="flex items-center gap-2 flex-wrap justify-between">
         {modeSelector}
-        {!isTester && (
+        {!restrictedViewer && (
         <Button
           variant="outline"
           size="sm"

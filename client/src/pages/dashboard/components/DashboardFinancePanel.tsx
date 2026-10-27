@@ -30,6 +30,7 @@ export function DashboardFinancePanel({ dashboard }: DashboardFinancePanelProps)
     modePrefix,
     setLocation,
     isFactoryMode,
+    isViewer,
     isAddDialogOpen,
     setIsAddDialogOpen,
     isAddPayableDialogOpen,
@@ -318,7 +319,7 @@ export function DashboardFinancePanel({ dashboard }: DashboardFinancePanelProps)
                 </h3>
                 <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
                   <DialogTrigger asChild>
-                    <Button size="sm" variant="outline" data-testid="button-add-cash-account">
+                    <Button size="sm" variant="outline" disabled={isViewer} data-testid="button-add-cash-account">
                       <Plus className="h-3.5 w-3.5 mr-1" />
                       Add
                     </Button>
@@ -408,12 +409,13 @@ export function DashboardFinancePanel({ dashboard }: DashboardFinancePanelProps)
                     return (
                       <div
                         key={dca.id}
-                        draggable
+                        draggable={!isViewer}
                         onDragStart={() => {
+                          if (isViewer) return;
                           dragCashRef.current = dca.id;
                         }}
                         onDragOver={(e) => e.preventDefault()}
-                        onDrop={() => handleCashDrop(dca.id)}
+                        onDrop={() => !isViewer && handleCashDrop(dca.id)}
                         className="flex items-center gap-2 py-2 px-2 rounded-sm hover-elevate group cursor-grab active:cursor-grabbing"
                         data-testid={`cash-account-row-${dca.id}`}
                       >
@@ -429,7 +431,8 @@ export function DashboardFinancePanel({ dashboard }: DashboardFinancePanelProps)
                           size="icon"
                           variant="ghost"
                           className="ml-1 opacity-100 md:opacity-0 group-hover:opacity-100 touch:opacity-100 transition-opacity shrink-0"
-                          onClick={() => removeAccountMutation.mutate(dca.id)}
+                          onClick={() => !isViewer && removeAccountMutation.mutate(dca.id)}
+                          disabled={isViewer}
                           data-testid={`button-remove-cash-account-${dca.id}`}
                         >
                           <X className="h-3.5 w-3.5" />
@@ -454,7 +457,7 @@ export function DashboardFinancePanel({ dashboard }: DashboardFinancePanelProps)
                 </h3>
                 <Dialog open={isAddPayableDialogOpen} onOpenChange={setIsAddPayableDialogOpen}>
                   <DialogTrigger asChild>
-                    <Button size="sm" variant="outline" data-testid="button-add-payable-account">
+                    <Button size="sm" variant="outline" disabled={isViewer} data-testid="button-add-payable-account">
                       <Plus className="h-3.5 w-3.5 mr-1" />
                       Add
                     </Button>
@@ -540,12 +543,13 @@ export function DashboardFinancePanel({ dashboard }: DashboardFinancePanelProps)
                   {dashboardPayableAccounts.map((account) => (
                     <div
                       key={account.id}
-                      draggable
+                      draggable={!isViewer}
                       onDragStart={() => {
-                        dragPayableRef.current = account.id;
+                        if (isViewer) return;
+                          dragPayableRef.current = account.id;
                       }}
                       onDragOver={(e) => e.preventDefault()}
-                      onDrop={() => handlePayableDrop(account.id)}
+                      onDrop={() => !isViewer && handlePayableDrop(account.id)}
                       className="flex items-center gap-2 py-2 px-2 rounded-sm hover-elevate group cursor-grab active:cursor-grabbing"
                       data-testid={`payable-account-row-${account.id}`}
                     >
@@ -561,7 +565,8 @@ export function DashboardFinancePanel({ dashboard }: DashboardFinancePanelProps)
                         size="icon"
                         variant="ghost"
                         className="ml-1 opacity-100 md:opacity-0 group-hover:opacity-100 touch:opacity-100 transition-opacity shrink-0"
-                        onClick={() => removePayableAccountMutation.mutate(account.id)}
+                        onClick={() => !isViewer && removePayableAccountMutation.mutate(account.id)}
+                          disabled={isViewer}
                         data-testid={`button-remove-payable-account-${account.id}`}
                       >
                         <X className="h-3.5 w-3.5" />

@@ -14,6 +14,7 @@ import {
   BatchRateDecimal,
   calculateProductionProfit,
   calculateProductionWeightCost,
+  calculatePeriodTableBalance,
 } from "./production-value-math";
 import {
   factoryCategories,
@@ -422,10 +423,36 @@ export function registerFactoryProductionValueReportRoutes(app: Express) {
       const balanceCostPerKg = balanceSnapshot.costPerKg;
       const balanceValue = balanceSnapshot.value;
 
-      // Weight Cost follows the same historical batch-rate cutoff shown in Balance on Table:
-      // bales produced in the selected period × cumulative batch rate through that period's end.
+      // Preserve the overall as-of Balance on Table snapshot without changing
+      // Production Weight Cost. Closed mix batches are normally fully used at
+      // creation, so their current "ACTIVE" status is NOT a historical month
+      // balance. For the filtered KPI, compare the physical balances at the
+      // selected period's boundaries. This is period net movement (up/down),
+      // valued at the period's correct original-batch weighted-average rate.
+      const priorDate = from
+        ? (() => {
+            const firstDay = new Date(`${from}T00:00:00Z`);
+            if (!Number.isFinite(firstDay.getTime()) || firstDay.toISOString().slice(0, 10) !== from) {
+              throw new RangeError();
+            }
+            firstDay.setUTCDate(firstDay.getUTCDate() - 1);
+            return firstDay.toISOString().slice(0, 10);
+          })()
+        : null;
+      const beforePeriodSnapshot = priorDate ? await getFactoryBalanceOnTableSnapshot(companyId, priorDate) : null;
+      const filteredTable = calculatePeriodTableBalance({
+        weightAtEndKg: balanceWeightKg,
+        weightBeforePeriodKg: beforePeriodSnapshot?.weightKg ?? 0,
+        mixedPeriodWeightKg: totalMixWeightDecimal,
+        mixedPeriodCost: totalMixCostDecimal,
+      });
+
+      // Weight Cost includes all material converted during the selected period:
+      // regular bales plus wipers and garbage. Those groups are mutually exclusive
+      // in baleRows, so each kilogram is charged once at the historical cumulative
+      // batch rate. This stays separate from the period-only Balance on Table rate.
       const weightCostDecimal = calculateProductionWeightCost({
-        producedWeightKg: totalBaleWeightKg,
+        producedWeightKg: new BatchRateDecimal(totalBaleWeightKg).plus(totalWgWeightKg),
         batchRateCost: balanceBatchRateDecimal,
       });
       // Profit follows the active valuation mode:
@@ -627,12 +654,20 @@ export function registerFactoryProductionValueReportRoutes(app: Express) {
           blendedCostPerKg: hideReportCosts ? 0 : blendedCostPerKg,
           batches: safeBatchRows,
         },
+        // Original overall as-of balance: unchanged and independent of the start filter.
         balanceOnTable: {
           weightKg: balanceWeightKg,
-          // Historical as-of snapshot through the selected end date. The Selling / Cost
-          // toggle only changes finished-production valuation; table material stays at cost.
           costPerKg: hideReportCosts ? 0 : balanceCostPerKg,
           value: hideReportCosts ? 0 : balanceValue,
+        },
+        // Selected period's net physical movement, not today's ACTIVE-only
+        // original batches. A drawdown is identified explicitly on the card.
+        filteredBalanceOnTable: {
+          weightKg: filteredTable.weightKg,
+          netChangeKg: filteredTable.netChangeKg,
+          direction: filteredTable.direction,
+          costPerKg: hideReportCosts ? 0 : filteredTable.costPerKg,
+          value: hideReportCosts ? 0 : filteredTable.value,
         },
         summary: {
           // Keep batchCost as a compatibility alias for older clients. It now carries the

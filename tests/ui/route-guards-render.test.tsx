@@ -78,6 +78,26 @@ describe("ErpRoutes access guard", () => {
     expect(screen.queryByTestId("page-ContainersOTW")).not.toBeInTheDocument();
   });
 
+  it("sends ERP View Only from the home route to Tracking even with old dashboard permission", async () => {
+    const { ErpRoutes } = await import("@/routes/ErpRoutes");
+    const { memory } = mountAt("/", <ErpRoutes user={{ role: "View Only" }} />, [
+      [["/api/my-erp-pages"], { fullAccess: false, pageKeys: ["dashboard", "accounts"] }],
+    ]);
+    expect(await screen.findByTestId("page-TrackingHub")).toBeInTheDocument();
+    expect(memory.history.at(-1)).toBe("/tracking");
+    expect(screen.queryByTestId("page-Dashboard")).not.toBeInTheDocument();
+  });
+
+  it("rejects a direct dashboard URL for ERP View Only even with stale dashboard access", async () => {
+    const { ErpRoutes } = await import("@/routes/ErpRoutes");
+    const { memory } = mountAt("/financial-overview", <ErpRoutes user={{ role: "View Only" }} />, [
+      [["/api/my-erp-pages"], { fullAccess: false, pageKeys: ["dashboard", "accounts"] }],
+    ]);
+    expect(await screen.findByTestId("page-TrackingHub")).toBeInTheDocument();
+    expect(memory.history.at(-1)).toBe("/tracking");
+    expect(screen.queryByTestId("page-Dashboard")).not.toBeInTheDocument();
+  });
+
   it("shows the containers board at the root to an Admin", async () => {
     const { ErpRoutes } = await import("@/routes/ErpRoutes");
     const { memory } = mountAt("/", <ErpRoutes user={{ role: "Admin" }} />);

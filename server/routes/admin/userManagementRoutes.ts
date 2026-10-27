@@ -7,6 +7,7 @@ import { requireAuth, requireRole } from "../../auth";
 import { logAudit } from "../_helpers";
 import { closedPeriodErrorResponse } from "../../lib/closedPeriodError";
 import { sessionRetirementActor } from "../../services/accounting/voucherRetirement";
+import { effectiveErpPageKeys } from "../../services/security/erpViewerPagePolicy";
 import {
   LegacyEmployeeAccountRefusal,
   migrateLegacyEmployeeAccountTx,
@@ -631,12 +632,13 @@ export function registerUserManagementRoutes(app: Express) {
       const pageKeys = await storage.getErpUserPageAccess(companyId, userId);
       // Analytics is part of the Owner role even for existing owners whose
       // per-user page list was saved before this permission was added.
+      const effectivePageKeys = effectiveErpPageKeys(role, pageKeys);
       const visiblePageKeys =
         role === "Owner"
-          ? [...new Set([...pageKeys, "analytics"])]
+          ? [...new Set([...effectivePageKeys, "analytics"])]
           : role === "ERP Tester"
-            ? pageKeys.filter((key) => key !== "settings")
-            : pageKeys;
+            ? effectivePageKeys.filter((key) => key !== "settings")
+            : effectivePageKeys;
       res.json({ pageKeys: visiblePageKeys, fullAccess: false, hiddenErpCostFields });
     } catch (error: unknown) {
       res.status(500).json({ message: getErrorMessage(error) });

@@ -16,11 +16,13 @@ export function ContainerDrawer({
   open,
   onClose,
   sessionCompanyId,
+  readOnly = false,
 }: {
   container: EnrichedContainerRow | null;
   open: boolean;
   onClose: () => void;
   sessionCompanyId: number | null;
+  readOnly?: boolean;
 }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -35,7 +37,7 @@ export function ContainerDrawer({
   const set = <K extends keyof DrawerForm>(field: K, val: DrawerForm[K]) =>
     setForm((prev) => (prev ? { ...prev, [field]: val } : prev));
 
-  const canEdit = sessionCompanyId === null || !container || container.companyId === sessionCompanyId;
+  const canEdit = !readOnly && (sessionCompanyId === null || !container || container.companyId === sessionCompanyId);
 
   const maxOffload = (() => {
     if (!form?.borderDate) return null;
@@ -75,7 +77,7 @@ export function ContainerDrawer({
   });
 
   function handleSave() {
-    if (!container || !form) return;
+    if (!container || !form || !canEdit) return;
     mutation.mutate({
       eta: form.eta || null,
       status: form.status,
@@ -127,7 +129,7 @@ export function ContainerDrawer({
             data-testid="button-save-drawer"
           >
             {mutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Save Changes
+            {readOnly ? "View Only" : "Save Changes"}
           </Button>
         </div>
       </SheetContent>

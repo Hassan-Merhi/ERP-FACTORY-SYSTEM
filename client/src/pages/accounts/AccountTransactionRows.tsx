@@ -28,6 +28,8 @@ export interface AccountTransactionRowsProps {
   closingBalance: number;
   selectedAccount: Account;
   formatDisplayDate: (date: Date | string) => string;
+  showCustomerDestination?: boolean;
+  destinationFilter?: string;
 }
 
 export function AccountTransactionRows({
@@ -44,9 +46,17 @@ export function AccountTransactionRows({
   closingBalance,
   selectedAccount,
   formatDisplayDate,
+  showCustomerDestination = false,
+  destinationFilter = "all",
 }: AccountTransactionRowsProps) {
-  const colSpanMid = appMode === "factory" ? 3 : 2;
-  const totalColumns = 3 + (appMode === "factory" ? 1 : 0) + (hideBalances ? 0 : 3);
+  const showDestination = appMode === "factory" && showCustomerDestination;
+  const colSpanMid = (appMode === "factory" ? 3 : 2) + (showDestination ? 1 : 0);
+  const totalColumns = 3 + (appMode === "factory" ? 1 : 0) + (showDestination ? 1 : 0) + (hideBalances ? 0 : 3);
+  const displayedVouchers = useMemo(() => {
+    if (!showDestination || destinationFilter === "all") return vouchersWithBalance;
+    if (destinationFilter === "__none__") return vouchersWithBalance.filter((v) => !v.destination?.trim());
+    return vouchersWithBalance.filter((v) => v.destination?.trim() === destinationFilter);
+  }, [vouchersWithBalance, showDestination, destinationFilter]);
   const { totalDebit, totalCredit, selectableRows } = useMemo(() => {
     let debit = 0;
     let credit = 0;
@@ -55,11 +65,13 @@ export function AccountTransactionRows({
     for (const voucher of vouchersWithBalance) {
       debit += voucher.totalDebit || 0;
       credit += voucher.totalCredit || 0;
+    }
+    for (const voucher of displayedVouchers) {
       if (voucher.voucherType !== HISTORICAL_REFERENCE_TYPE && voucher.voucherType !== HISTORICAL_FACTORY_INVOICE_TYPE) selectable.push(voucher);
     }
 
     return { totalDebit: debit, totalCredit: credit, selectableRows: selectable };
-  }, [vouchersWithBalance]);
+  }, [vouchersWithBalance, displayedVouchers]);
   const isSupplier = selectedAccount.type === "supplier";
   const isReferenceRow = (v: AccountStatementRow) => v.voucherType === HISTORICAL_REFERENCE_TYPE || v.voucherType === HISTORICAL_FACTORY_INVOICE_TYPE;
   const allSelectableSelected = useMemo(
@@ -67,18 +79,18 @@ export function AccountTransactionRows({
     [selectableRows, selectedVoucherIds]
   );
   const virtualRows = useBoundedTableRows({
-    rowCount: vouchersWithBalance.length,
+    rowCount: displayedVouchers.length,
     rowHeight: ACCOUNT_ROW_HEIGHT,
     minimumRows: 120,
     overscan: 16,
   });
   const renderedVouchers = useMemo(
-    () => vouchersWithBalance.slice(virtualRows.startIndex, virtualRows.endIndex),
-    [vouchersWithBalance, virtualRows.endIndex, virtualRows.startIndex]
+    () => displayedVouchers.slice(virtualRows.startIndex, virtualRows.endIndex),
+    [displayedVouchers, virtualRows.endIndex, virtualRows.startIndex]
   );
 
   const handleSelectAllRows = () => {
-    if (selectableRows.length === vouchersWithBalance.length) {
+    if (selectableRows.length === vouchersWithBalance.length && destinationFilter === "all") {
       toggleSelectAll();
       return;
     }
@@ -120,6 +132,11 @@ export function AccountTransactionRows({
             {appMode === "factory" && (
               <TableHead className="py-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 Notes
+              </TableHead>
+            )}
+            {showDestination && (
+              <TableHead className="w-[150px] py-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground" data-testid="column-customer-destination">
+                Destination
               </TableHead>
             )}
             {!hideBalances && (
@@ -228,6 +245,11 @@ export function AccountTransactionRows({
                     {v.narration}
                   </TableCell>
                 )}
+                {showDestination && (
+                  <TableCell className="py-3 text-xs text-muted-foreground max-w-[210px] truncate" data-testid="cell-customer-destination">
+                    {v.destination?.trim() || "—"}
+                  </TableCell>
+                )}
                 {!hideBalances && (
                   <TableCell className="py-3 text-right font-mono text-sm tabular-nums">
                     {v.totalDebit > 0 ? (
@@ -312,7 +334,7 @@ export function AccountTransactionRows({
               <TableRow className="bg-muted/20 text-xs font-medium text-muted-foreground">
                 <TableCell className="py-2 print:hidden" />
                 <TableCell colSpan={colSpanMid} className="py-2 text-right pr-4 text-xs text-muted-foreground">
-                  Period Total
+                  {showDestination && destinationFilter !== "all" ? "Period Total (all destinations)" : "Period Total"}
                 </TableCell>
                 <TableCell className="py-2 text-right font-mono tabular-nums text-sm">
                   {totalDebit > 0 ? fmt(totalDebit) : "—"}

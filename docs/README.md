@@ -45,6 +45,7 @@ failure, so a correct document cannot quietly become undiscoverable.
 | [unified-accounting-phase13.md](unified-accounting-phase13.md) | Unified accounting (ERP, Factory, Rentals): Phase 13: Fiscal Period Closing & Audit Controls |
 | [unified-accounting-phase14.md](unified-accounting-phase14.md) | Unified accounting (ERP, Factory, Rentals): Phase 14: Unified Net Position & Accounting Dashboard |
 | [unified-accounting-phase15.md](unified-accounting-phase15.md) | Unified accounting (ERP, Factory, Rentals): Phase 15: Integration, Permissions & Controlled Rollout |
+| [audits/mali-hmd-cost-repair-procedure.md](audits/mali-hmd-cost-repair-procedure.md) | Evidence-gated MALI/HMD landed-cost, adjustment, transfer and COGS repair procedure (backend-only) |
 | [audits/historical-sold-bale-cost-reconciliation-review.md](audits/historical-sold-bale-cost-reconciliation-review.md) | Review-only reconciliation of historical sold-bale costs and the guarded pre-invoice recost |
 | [inventory-flow.md](inventory-flow.md) | Stock data model and cost calculation |
 | [inventory-cost-memory-policy.md](inventory-cost-memory-policy.md) | Cost-memory rules for the current implementation |

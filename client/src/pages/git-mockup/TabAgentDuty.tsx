@@ -6,6 +6,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { AlertTriangle, FileX, Building2 } from "lucide-react";
 import { queryClient } from "@/lib/queryClient";
 import { AgentCard } from "./AgentCard";
+import { AgentCardReadOnly } from "./AgentCardReadOnly";
 import type {
   CompanyViewMode,
   AgentDutyResponse,
@@ -18,7 +19,10 @@ const CONF_RANK: Record<AgentDutySummary["matchConfidence"], number> = { exact: 
 
 export function TabAgentDuty() {
   const { data: viewer } = useQuery(authenticatedUserQueryOptions());
-  const isTester = (viewer?.currentRole ?? viewer?.role) === "ERP Tester";
+  const role = viewer?.currentRole ?? viewer?.role;
+  const isTester = role === "ERP Tester";
+  const isViewer = role === "View Only";
+  const restrictedViewer = isTester || isViewer;
   const [companyMode, setCompanyMode] = useState<CompanyViewMode>("session");
 
   const queryUrl =
@@ -32,7 +36,7 @@ export function TabAgentDuty() {
 
   const { data: waSettings } = useQuery<AgentDutyWaSettings>({
     queryKey: ["/api/git/agent-duty-wa-settings"],
-    enabled: !isTester,
+    enabled: !restrictedViewer,
     staleTime: 120_000,
   });
 
@@ -149,7 +153,7 @@ export function TabAgentDuty() {
       >
         My Company
       </Button>
-      {!isTester && (
+      {!restrictedViewer && (
         <Button
         size="sm"
         variant={companyMode === "all" ? "default" : "outline"}
@@ -243,16 +247,20 @@ export function TabAgentDuty() {
                   (agent.openBalance === null || agent.openBalance !== 0)
               )
               .map((agent) => (
-                <AgentCard
-                  key={`${section.companyId}-${agent.agentName}`}
-                  agent={agent}
-                  companyId={section.companyId}
-                  waGroupChatId={
-                    !isTester ? (waSettings?.groups?.[agent.agentName] ||
-                    waSettings?.groups?.[agent.agentName.toUpperCase()] ||
-                    undefined) : undefined
-                  }
-                />
+                isViewer ? (
+                  <AgentCardReadOnly key={`${section.companyId}-${agent.agentName}`} agent={agent} />
+                ) : (
+                  <AgentCard
+                    key={`${section.companyId}-${agent.agentName}`}
+                    agent={agent}
+                    companyId={section.companyId}
+                    waGroupChatId={
+                      !restrictedViewer ? (waSettings?.groups?.[agent.agentName] ||
+                      waSettings?.groups?.[agent.agentName.toUpperCase()] ||
+                      undefined) : undefined
+                    }
+                  />
+                )
               ))
           )}
         </div>

@@ -371,7 +371,7 @@ export async function getSalesForItem(companyId: number, stockItemId: number, li
       sellingPrice: schema.salesItems.sellingPrice,
       costPrice: schema.salesItems.costPrice,
       totalSales: schema.salesItems.totalSales,
-      profit: schema.salesItems.profit,
+      profit: sql<string>`(${schema.salesItems.totalSales}::numeric - ${schema.salesItems.totalCost}::numeric)`,
     })
     .from(schema.salesItems)
     .innerJoin(schema.vouchers, eq(schema.salesItems.voucherId, schema.vouchers.id))
@@ -403,7 +403,7 @@ export async function getBusinessSummary(companyId: number) {
   const salesCols = {
     revenue: sql<string>`COALESCE(SUM(CAST(${schema.salesItems.totalSales} AS NUMERIC)), 0)`,
     cost: sql<string>`COALESCE(SUM(CAST(${schema.salesItems.totalCost} AS NUMERIC)), 0)`,
-    profit: sql<string>`COALESCE(SUM(CAST(${schema.salesItems.profit} AS NUMERIC)), 0)`,
+    profit: sql<string>`COALESCE(SUM((CAST(${schema.salesItems.totalSales} AS NUMERIC) - CAST(${schema.salesItems.totalCost} AS NUMERIC))), 0)`,
     transactionCount: sql<number>`COUNT(DISTINCT ${schema.salesItems.voucherId})`,
     unitsSold: sql<string>`COALESCE(SUM(CAST(${schema.salesItems.quantity} AS NUMERIC)), 0)`,
   };
@@ -444,7 +444,7 @@ export async function getBusinessSummary(companyId: number) {
         itemName: schema.stockItems.name,
         itemCode: schema.stockItems.code,
         totalRevenue: sql<string>`SUM(CAST(${schema.salesItems.totalSales} AS NUMERIC))`,
-        totalProfit: sql<string>`SUM(CAST(${schema.salesItems.profit} AS NUMERIC))`,
+        totalProfit: sql<string>`SUM((CAST(${schema.salesItems.totalSales} AS NUMERIC) - CAST(${schema.salesItems.totalCost} AS NUMERIC)))`,
         totalQty: sql<string>`SUM(CAST(${schema.salesItems.quantity} AS NUMERIC))`,
       })
       .from(schema.salesItems)
