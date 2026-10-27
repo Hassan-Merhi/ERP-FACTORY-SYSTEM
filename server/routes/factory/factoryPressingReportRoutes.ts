@@ -79,6 +79,9 @@ function statusPredicate(status: PressingReportFilters["status"]): string | null
 }
 
 async function report(ctx: QueryCtx, filters: PressingReportFilters) {
+  // Freeze all pages and summary at a server-derived cutoff, not the phone clock.
+  const asOf = filters.asOf ?? new Date().toISOString();
+  filters = { ...filters, asOf };
   const { args, where } = conditions(ctx, filters);
   const currentStatus = statusPredicate(filters.status);
   if (currentStatus) where.push(currentStatus);
@@ -135,7 +138,7 @@ async function report(ctx: QueryCtx, filters: PressingReportFilters) {
     total: Number(count.rows[0]?.total || 0),
     summary: summary.rows[0] ?? { totalBales: 0, totalKg: "0", voidedBales: 0 },
     page: filters.page, limit: filters.limit, mode: filters.mode,
-    asOf: filters.asOf ?? new Date().toISOString(),
+    asOf,
   };
 }
 export function registerFactoryPressingReportRoutes(app: Express): void {
