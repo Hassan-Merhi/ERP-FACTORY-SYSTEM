@@ -86,6 +86,8 @@ export interface ReportData {
   };
   filteredBalanceOnTable: {
     weightKg: number;
+    netChangeKg: number;
+    direction: "increase" | "decrease" | "unchanged";
     costPerKg: number;
     value: number;
   };

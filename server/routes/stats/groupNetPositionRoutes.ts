@@ -70,14 +70,17 @@ export function registerGroupNetPositionRoutes(app: Express) {
       const forceRefresh = String(req.query.refresh || "") === "1";
       const accessKey = [...allowedCompanyIds].sort((a, b) => a - b).join(",");
       const cacheKey = `group-net-position:${asOfDate}:${useCurrentSnapshot ? "live" : "historical"}:${accessKey}`;
-      const cached = forceRefresh ? null : _getCached(cacheKey);
+      // A current group view depends on each member company's live FX rate.
+      // Do not serve a 5-minute snapshot from another process after a rate
+      // revision; historic book snapshots retain the existing cache policy.
+      const cached = forceRefresh || useCurrentSnapshot ? null : _getCached(cacheKey);
       if (cached) {
         res.setHeader("Cache-Control", "no-store");
         return res.json(cached);
       }
 
       const snapshot = await calculateGroupNetPosition(asOfDate, allowedCompanyIds, useCurrentSnapshot);
-      _setCached(cacheKey, snapshot, 5 * 60 * 1000);
+      if (!useCurrentSnapshot) _setCached(cacheKey, snapshot, 5 * 60 * 1000);
       res.setHeader("Cache-Control", "no-store");
       return res.json(snapshot);
     } catch (error: unknown) {

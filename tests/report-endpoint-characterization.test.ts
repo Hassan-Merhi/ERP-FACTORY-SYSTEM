@@ -253,6 +253,13 @@ const VOLATILE_KEYS = new Set([
   // beside it (currentCashBankTranslationDifference, unresolvedAccountCount)
   // stay hashed, so a change to the money still fails here.
   "currentTranslatedLedgerAccountIds",
+  // The monetary FX valuation lists which owner keys (ledger:<id>, bank:<id>,
+  // customer:<id>) it applied or skipped, and the unresolved masters by id.
+  // Raw ids again; the translation figures beside them stay hashed.
+  "currentTranslatedBankAccountIds",
+  "appliedAccountKeys",
+  "skippedAccountKeys",
+  "unresolvedAccounts",
 ]);
 
 function isVolatileKey(key: string): boolean {

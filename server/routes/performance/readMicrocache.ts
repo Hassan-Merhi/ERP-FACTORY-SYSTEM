@@ -8,6 +8,7 @@ import {
   type RealtimeInvalidationTopic,
 } from "../../../shared/realtimeInvalidation";
 import { startReadMicrocacheCoordinator, type ReadMicrocacheInvalidation } from "./readMicrocacheCoordinator";
+import { isFxRateDependentPath } from "../../../shared/fxRateQueryInvalidation";
 
 export const READ_MICROCACHE_TTL_MS = new Map<string, number>([
   ["/api/sales-report", 120_000],
@@ -407,7 +408,13 @@ function readTopicsForPath(path: string): RealtimeInvalidationTopic[] | undefine
 }
 
 function buildReadScope(req: Request): ReadMicrocacheScope {
-  const topics = readTopicsForPath(req.path);
+  const baseTopics = readTopicsForPath(req.path);
+  // Some balances live in the long-lived reference microcache. A company FX
+  // revision must evict their USD read models, while keeping unrelated stock
+  // and supplier caches warm. Shared with the frontend FX query predicate.
+  const topics: RealtimeInvalidationTopic[] | undefined = isFxRateDependentPath(req.path)
+    ? [...new Set<RealtimeInvalidationTopic>([...(baseTopics ?? []), "fx"])]
+    : baseTopics;
   const locationIds = readLocationIds(req);
   const companyIds = req.path === "/api/dashboard/sales-report-all" ? [] : requestCompanyIds(req);
   return {

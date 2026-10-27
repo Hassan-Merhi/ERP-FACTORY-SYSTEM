@@ -42,31 +42,43 @@ export function resolveProductionBalanceWeight({
 }
 
 /**
- * The on-table KPI for a selected report period uses remaining kilograms from
- * that period's original batches at the period's own weighted-average mix rate.
- * This is separate from the cumulative as-of WIP / Net Position valuation and
- * NEVER changes the existing produced-bale Weight Cost or Profit calculation.
+ * Selected-period on-table movement, from two authoritative physical snapshots.
+ *
+ * Most factory "original" mix batches are deliberately COMPLETED/fully used when
+ * created, so current batch.used_kg / status cannot reconstruct historical table
+ * kilograms. Subtract the snapshot immediately before the selected range from
+ * the as-of-end snapshot instead; this includes carries and non-bale output the
+ * same way as the existing overall KPI. Report the magnitude AND the direction:
+ * a net drawdown must never be misrepresented as additional material on hand.
+ *
+ * The monetary rate is the selected period's ORIGINAL batch weighted-average;
+ * the production cost/profit uses its existing cumulative rate independently.
  */
 type PeriodTableBalanceArgs = {
-  remainingPeriodKg: Decimal.Value;
+  weightAtEndKg: Decimal.Value;
+  weightBeforePeriodKg: Decimal.Value;
   mixedPeriodWeightKg: Decimal.Value;
   mixedPeriodCost: Decimal.Value;
 };
 
 export function calculatePeriodTableBalance({
-  remainingPeriodKg,
+  weightAtEndKg,
+  weightBeforePeriodKg,
   mixedPeriodWeightKg,
   mixedPeriodCost,
 }: PeriodTableBalanceArgs) {
-  const remainingKg = BatchRateDecimal.max(0, new BatchRateDecimal(remainingPeriodKg));
+  const netChangeKg = new BatchRateDecimal(weightAtEndKg).minus(weightBeforePeriodKg);
+  const weight = netChangeKg.abs();
   const periodRate = calculateCumulativeBatchRate({
     cumulativeMixWeightKg: mixedPeriodWeightKg,
     cumulativeMixCost: mixedPeriodCost,
   });
   return {
-    weightKg: remainingKg.toNumber(),
+    weightKg: weight.toNumber(),
+    netChangeKg: netChangeKg.toNumber(),
+    direction: netChangeKg.gt(0) ? "increase" as const : netChangeKg.lt(0) ? "decrease" as const : "unchanged" as const,
     costPerKg: periodRate.toNumber(),
-    value: remainingKg.times(periodRate).toDecimalPlaces(2).toNumber(),
+    value: weight.times(periodRate).toDecimalPlaces(2).toNumber(),
   };
 }
 
