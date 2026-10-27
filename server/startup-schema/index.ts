@@ -48,6 +48,7 @@ import { supplierTrackingShopDutyDefaultsSchema } from "./034-supplier-tracking-
 import { posPortDepartureDateSchema } from "./035-pos-port-departure-date";
 import { zambiaHistoricalPurchaseCostSchema } from "./036-zambia-historical-purchase-cost";
 import { factoryPressingMachineTrackingSchema } from "./037-factory-pressing-machine-tracking";
+import { factoryPressingHistoryReportIndexes } from "./038-factory-pressing-history-report";
 
 export const startupMigrations: string[] = [
   ...coreTablesAndColumns,
@@ -96,6 +97,7 @@ export const startupMigrations: string[] = [
   ...zambiaHistoricalPurchaseCostSchema,
   // Phase 1 physical pressing verification: separate from stock finalization.
   ...factoryPressingMachineTrackingSchema,
+  ...factoryPressingHistoryReportIndexes,
 ];
 
 // Re-exported so server/index.ts can bootstrap the journal from the module it
