@@ -135,6 +135,7 @@ export function registerFactoryPressingConfirmRoutes(app: Express): void {
           prior.machineId !== parsed.machineId || prior.assignmentId !== parsed.assignmentId) {
           throw new ConfirmationError(409, "PRESSING_REQUEST_ID_REUSED", "Request ID was already used for another scan");
         }
+        if (prior.voidedAt) throw new ConfirmationError(409, "PRESSING_CONFIRMATION_VOIDED", "That prior scan was voided; a new confirmation request is required");
         return res.json(receipt(prior, true));
       }
 
@@ -174,6 +175,7 @@ export function registerFactoryPressingConfirmRoutes(app: Express): void {
               prior.machineId !== machine.id || prior.assignmentId !== assignment.id) {
             throw new ConfirmationError(409, "PRESSING_REQUEST_ID_REUSED", "Request ID was already used for another scan");
           }
+          if (prior.voidedAt) throw new ConfirmationError(409, "PRESSING_CONFIRMATION_VOIDED", "That prior scan was voided; a new confirmation request is required");
           return { row: prior, replayed: true };
         }
 
@@ -183,11 +185,6 @@ export function registerFactoryPressingConfirmRoutes(app: Express): void {
             isNull(factoryBales.deletedAt))).for("update");
         if (!bale || bale.status === "DELETED") {
           throw new ConfirmationError(404, "PRESSING_BALE_NOT_FOUND", "This reference is not an active factory bale");
-        }
-        // A physical pressing confirmation cannot retroactively claim a bale
-        // that is already in stock, sold, dispatched or finalized.
-        if (bale.status !== "PENDING_PRESSING") {
-          throw new ConfirmationError(422, "PRESSING_BALE_NOT_PENDING", "Only pending-pressing bales can be confirmed");
         }
         const [settings] = await tx.select({ extraSettings: factorySettings.extraSettings })
           .from(factorySettings).where(eq(factorySettings.companyId, companyId)).limit(1);
@@ -207,6 +204,13 @@ export function registerFactoryPressingConfirmRoutes(app: Express): void {
               operatorUserId: alreadyPressed.userId,
               referenceNumber: alreadyPressed.referenceNumber,
             } });
+        }
+
+        // Stock finalization is intentionally independent: do not re-confirm
+        // any bale already finalized, sold or dispatched, even if no earlier
+        // machine scan was recorded.
+        if (bale.status !== "PENDING_PRESSING") {
+          throw new ConfirmationError(422, "PRESSING_BALE_NOT_PENDING", "Only pending-pressing bales can be confirmed");
         }
 
         // Sessions are opened lazily on the first accepted barcode for this
@@ -248,6 +252,7 @@ export function registerFactoryPressingConfirmRoutes(app: Express): void {
               eq(factoryPressingConfirmations.requestId, parsed.requestId))).limit(1);
           if (byRequest && byRequest.userId === userId && byRequest.referenceNumber === reference &&
               byRequest.machineId === machine.id && byRequest.assignmentId === assignment.id) {
+            if (byRequest.voidedAt) throw new ConfirmationError(409, "PRESSING_CONFIRMATION_VOIDED", "That prior scan was voided; use a new request ID");
             return { row: byRequest, replayed: true };
           }
           const [other] = await tx.select().from(factoryPressingConfirmations)
