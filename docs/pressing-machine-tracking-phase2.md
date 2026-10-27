@@ -42,6 +42,10 @@ All POST routes use authenticated, CSRF-protected application request helpers on
 - Machine deactivation acquires a row lock so a concurrent assignment cannot succeed against a newly inactive machine.
 - No Phase 2 endpoint creates pressing confirmations, changes bale statuses, consumes mix material, or posts inventory or accounting.
 
+## Executed verification (2026-10-27, isolated PostgreSQL 16.15)
+
+`tests/pressing-machine-tracking.database.test.ts` runs the real handlers: supervisor creates machines (duplicate code 409); Worker, POS view-only and another company's supervisor are refused; a second company sees only its own machines and operators; three racing reassignments of one operator leave exactly one active assignment with the earlier ones closed in history; deactivating a machine ends its assignments and sessions in one transaction and a later scan with the stale assignment is rejected; the other company cannot toggle it (404). The browser pass on a narrow viewport was not performed in this environment.
+
 ## Validation to run before merge
 
 - `npx vitest run tests/pressing-machine-phase2-access.test.ts tests/pressing-machine-schema-contract.test.ts tests/startup-schema-integrity.test.ts`

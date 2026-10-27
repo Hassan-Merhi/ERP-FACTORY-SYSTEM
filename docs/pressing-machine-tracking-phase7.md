@@ -49,6 +49,10 @@ The analytics API fails with an explicit error when more than 3,000 daily/shift 
 - Machine confirmation idempotency and company+bale lifetime duplicate protection remain unchanged.
 - Existing Phase 1–6 tables and their migrations remain unchanged; **Phase 7 requires no new database migration**.
 
+## Executed verification (2026-10-27, isolated PostgreSQL 16.15)
+
+`tests/pressing-machine-tracking.database.test.ts`: Day 07:00–15:00 and Night 22:00–06:00 in `Africa/Lubumbashi` are accepted; an overlapping shift is `PRESSING_SHIFT_OVERLAP`, a different timezone is `PRESSING_SHIFT_TIMEZONE_CONFLICT`, an invalid IANA name is 400 and a worker is 403; the worker's `/shifts/current` matches the server-side resolver; a confirmation stamps the resolved shift and, when the open session belonged to another shift, closes it and opens a new one (one open session per operator); open downtime makes a scan `PRESSING_MACHINE_DOWN` with no row written, a second open downtime is 409, ending is idempotent, and scanning succeeds after it ends; analytics refuse ranges over 91 days and non-supervisors, and the summary equals the database's active count for the day. Production dates, the report's "today" and analytics now share one factory timezone resolver (`factoryTimezone`): the active shifts' timezone, else Factory settings, else UTC. A live DST transition was not observed; the resolver is unit-tested with `Intl` for a midnight boundary.
+
 ## Verification
 
 Added:

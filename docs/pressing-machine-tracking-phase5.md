@@ -40,7 +40,7 @@ A queue status card under the scanner shows per-operator pending, sending, confi
 - Browser reload during Sending: recover the outstanding row from IndexedDB and send it again with its **original** request ID.
 - While the page is active, recheck every 12 seconds, when the internet reconnects, when the page becomes visible, or when the worker presses Retry pending.
 - Retry up to eight due rows per processing pass. Stop on a continuing transient failure rather than hammer the service.
-- A single local queue worker serializes page requests; the backend unique indexes are the final cross-tab/device concurrency boundary.
+- A single ordered delivery chain per page serializes every HTTP request, including scans captured while an earlier request is still in flight: each saved scan waits its turn, posts its own immutable request ID and reports its **real** server outcome to the scanner (it is not left amber until the next 12-second pass). A scan that a background pass already settled keeps that terminal state; one in backoff is not re-posted early. The backend unique indexes remain the final cross-tab/device concurrency boundary.
 - Before syncing any saved row, `GET /api/factory/pressing-machines/me` must return the original `companyId` and `userId`. Other companies' and other operators' rows are not loaded into the page or replayed.
 
 ## Storage and user-visible limitations
@@ -52,6 +52,12 @@ Once server-confirmed, pressing history is in PostgreSQL permanently, separate f
 The generic ERP `localStorage` offline queue explicitly excludes all `/api/factory/pressing-machines` requests. Pressing must only use the dedicated IndexedDB queue so no duplicate replay mechanism is active.
 
 This implementation does **not** finalize inventory, change bale inventory status, consume mix material, alter costing or create vouchers.
+
+## Executed verification (2026-10-27)
+
+- `client/src/pages/factory/pressing-scanner/usePressingOfflineSync.test.tsx` (jsdom, in-memory IndexedDB stand-in): ordered delivery with real per-scan outcomes, offline store-only behaviour and same-barcode de-duplication, retry with the original request ID, and refusal to replay rows under a different company or operator.
+- `tests/pressing-machine-tracking.database.test.ts`: six concurrent submissions of one request ID produce one row and five `replayed` receipts; a voided request ID returns `PRESSING_CONFIRMATION_VOIDED`.
+- Real IndexedDB behaviour across browser reloads, private mode and quota exhaustion was not exercised on a device in this environment.
 
 ## Verification still required before merge/deploy
 

@@ -37,7 +37,7 @@ Eight new tables are declared in `shared/schema/factory/pressing-machine-trackin
 - Versioned SQL: `migrations/20261027_001_factory_pressing_machine_tracking.sql`; registered in `migrations/meta/_journal.json`.
 - Idempotent startup DDL: `server/startup-schema/037-factory-pressing-machine-tracking.ts`; appended in `server/startup-schema/index.ts`.
 - Drizzle models: `shared/schema/factory/pressing-machine-tracking.ts`, exported by `shared/schema/factory/index.ts`.
-- `factory_bales` gains only a composite unique **index** on `(company_id,id)` so PostgreSQL can enforce the tenant-safe confirmation FK.
+- `factory_bales` gains only a composite unique on `(company_id,id)` so PostgreSQL can enforce the tenant-safe confirmation FK. The runtime DDL creates it as a unique **index** (`factory_bales_pressing_tenant_id_uk`); the Drizzle model declares the same name as a table **constraint** on the canonical `factory_bales` definition in `shared/schema/factoryBilingualTables.ts`. The composite `(company_id, id)` and identity uniques on the pressing tables are likewise table constraints in the Drizzle models: drizzle-kit creates foreign keys before standalone indexes, so `drizzle-kit push` on a fresh database (CI's schema step) failed until they were. `CREATE ... IF NOT EXISTS` keeps the runtime and versioned paths idempotent on either shape.
 
 No migration has been run against production by these source changes. The schema will apply only in an environment where the feature branch is deployed or the versioned runner is explicitly invoked.
 
@@ -50,6 +50,13 @@ Phase 5 offline retries;
 Phase 6 historical reports, saved views and Excel;
 Phase 7 shifts, downtime and analytics;
 Phase 8 supervisor corrections, permissions and full verification.
+
+## Executed verification (2026-10-27, isolated PostgreSQL 16.15)
+
+- `drizzle-kit push --force` on an empty database: succeeded (it failed before the constraint fix above).
+- `migrations/20261027_001` and `_002` applied twice with `psql -v ON_ERROR_STOP=1`: second pass is all `already exists, skipping` notices, no errors.
+- Startup stages 037/038 applied on top of the versioned migration, then every one of the 1,480 startup statements on the same database, then a full `node dist/index.js` boot: `/api/health/db` reported `failureCount: 0` and `verify:startup-migrations` passed with ceiling 0.
+- `tests/pressing-machine-tracking.database.test.ts` exercises the constraints with live data: one active confirmation per bale under racing operators, one active assignment per operator, cross-company FK rejection, UPDATE/DELETE of confirmations and corrections refused by the triggers, void without a prior correction refused.
 
 ## Verification before rollout
 

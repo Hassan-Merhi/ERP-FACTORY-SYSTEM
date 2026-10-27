@@ -93,6 +93,22 @@ npm run verify:migrations
 11. Run offline disconnected scan, reconnect, simulate lost response, switch users/companies; verify no duplicate active confirmation or cross-tenant queued replay.
 12. Test Android/iOS camera availability, invalid references, permission revocation, company switching, daylight-saving and overnight shifts, downtime controls, history filters, and XLSX exports.
 
-**Known readiness limitations:** Native `BarcodeDetector` is not available on every iPhone/browser; a cross-browser bundled decoder and physical device tests are still needed for universal continuous-camera compatibility. Browser-stored offline scans can be lost if IndexedDB data is cleared. Excel export is limited to 30,000 rows/groups per workbook. All eight phases are **source-implemented, not production-validated**.
+## Executed verification (2026-10-27)
 
-No merge or Render deployment has been performed by this phase.
+Environment: Node 22, PostgreSQL 16.15 on a fresh database built by `drizzle-kit push --force`, then the versioned pressing migrations (twice), then all 1,480 startup statements, then a full built-server boot (`failureCount: 0`).
+
+| Check | Result |
+| --- | --- |
+| `npm run check` (TypeScript) | clean (one TS2322 in the confirmation route was fixed) |
+| `tests/pressing-machine-tracking.database.test.ts` | 17/17 — the matrix above: racing operators, request-ID replay, void with mandatory reason by supervisor only, trigger-level immutability, voided-ID refusal, RECONFIRM linkage on rescan, void racing a rescan, report and analytics totals, deactivation |
+| Phase 2–8 source-contract suites, schema and startup-integrity suites, shift helper | 76/76 |
+| Frontend pressing suites (decoder, gate, queue, transport, report client, sync hook, scanner render) | 35/35 |
+| `npm run verify:migrations`, `audit:doc-index`, `audit:write-routes`, `audit:company-scope`, `audit:type-escapes`, `audit:scripts` | pass |
+| `npm run build` (Vite + server bundle verification) | pass; ZXing ships as its own lazily loaded chunk |
+| ESLint on every pressing file | 0 errors, 0 warnings |
+| `tests/route-manifest.test.ts` | manifest regenerated with the 23 pressing routes |
+| API smoke sweep | no 5xx; shapes recorded for the 11 pressing GET routes |
+
+Bugs found and fixed during this pass: `drizzle-kit push` failed on a fresh database because composite FKs referenced bare unique indexes (now table constraints, and the `factory_bales` target is declared on its canonical model); the confirmation route did not compile; production dates could use two different timezones inside one company; scans captured during an in-flight request waited for the 12-second poll instead of reporting their real result; supervisor caches were not keyed by company; the route manifest, doc index and smoke shapes were never updated; stale source-contract assertions.
+
+**Known readiness limitations:** no physical Android/iOS device pass was possible here (camera recognition, torch, autofocus, vibration and audio on real handsets remain to be checked, although iPhone Safari now has a bundled decoder path). Real IndexedDB persistence across reloads, private mode and quota exhaustion was exercised only through an in-memory stand-in. Browser-stored offline scans can be lost if IndexedDB data is cleared. Excel export is limited to 30,000 rows/groups per workbook and the workbook was not opened in a spreadsheet application here. A live DST transition and a true multi-server deployment were not observed; the database constraints are the cross-server boundary. The branch has not been deployed to Render or merged.

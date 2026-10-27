@@ -34,6 +34,10 @@ A browser workbook can consume substantial memory. For stability this implementa
 
 If pressing records are voided by a supervisor during a multi-page export (Phase 8), the query snapshot fixes confirmation-time inclusion but not later correction status. The user should rerun an export after corrections.
 
+## Executed verification (2026-10-27, isolated PostgreSQL 16.15)
+
+`tests/pressing-machine-tracking.database.test.ts`: supervisors see every company record and the summary equals the database's active/voided counts; an operator sees only their own rows and is refused another operator's filter (403); a second company's supervisor sees zero rows; invalid calendar dates and inverted ranges are 400; condensed groups sum to the detailed total; report options return the factory timezone and this company's machines only; saved views are per user and company (another operator cannot list or delete them). Free-text filters are now debounced in the UI. The Excel workbook itself was not opened in a spreadsheet application in this environment; `pressingReportClient.test.ts` covers the page-fetch loop, totals and the 30,000-row refusal.
+
 ## Manual verification before merge
 
 - `npx vitest run tests/pressing-machine-phase6-contract.test.ts tests/startup-schema-integrity.test.ts tests/pressing-machine-schema-contract.test.ts`

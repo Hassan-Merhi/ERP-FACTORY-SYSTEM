@@ -63,6 +63,10 @@ A created completion and its audit record commit within one transaction; they ro
 - **No shift scheduling** yet. Phase 7 will link supervisor-defined shifts.
 - **No supervisor void endpoint** yet. Phase 8 will implement corrections and audit-safe reconfirmations.
 
+## Executed verification (2026-10-27, isolated PostgreSQL 16.15)
+
+`tests/pressing-machine-tracking.database.test.ts`: first scan returns 201 with reference, KG, machine, operator, assignment, session, shift, server time, factory-local date and request ID; the same request ID replays as 200 `replayed: true` with one stored row; the same ID with another barcode is `PRESSING_REQUEST_ID_REUSED`; the same bale from a second operator on another machine is `PRESSING_ALREADY_CONFIRMED` with the original machine/operator; finalized (`IN_STOCK`), soft-deleted, unknown and other-company references are refused; View Only is `PRESSING_WRITE_DENIED`; another operator cannot use this operator's assignment; four racing confirmations of one bale from two operators on two machines yield exactly one 201 and three 409s; six concurrent retries of one request ID yield one row. After every write the source bale is still `PENDING_PRESSING` with its original weight and the voucher count is unchanged.
+
 ## Verification required before merge or deploy
 
 Run `npx vitest run tests/pressing-machine-phase4-contract.test.ts` and `npm run test:frontend -- client/src/pages/factory/pressing-scanner/pressingConfirmClient.test.ts` on a checked-out branch, plus existing Phases 1–3 tests, TypeScript checking and migration validation. Against isolated Postgres, race two workers on different presses confirming the same bale and ensure exactly one 201; repeat the same request ID and expect original 200 with no new rows; alter identity with same ID and expect 409; attempt inactive, cross-company, non-bale, deleted and finalized bales; assert no stock, voucher or mix changes.

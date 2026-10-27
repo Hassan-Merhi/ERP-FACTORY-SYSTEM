@@ -26,23 +26,31 @@ No merge, deploy, or production database changes in this phase.
 
 Phase 3 uses a `PressingScanCapture` / `PressingScanOutcome` contract suitable for the Phase 4 handler, but the current parent sends a preview-only outcome. NO Phase 3 barcode reading is saved or posted to the server. The UI specifically says `NOT yet confirmed or saved`; green “Pressing Completed” is reserved for Phase 4's successfully accepted and committed transaction. No inventory or accounting API is invoked.
 
-## Browser compatibility limitation
+## Decoder engines and browser compatibility
 
-This branch contains NO cross-platform bundled barcode decoder yet. Native `BarcodeDetector` is browser-dependent, and camera support also requires a secure context. On browsers without it (which can include Safari/iPhone), the interface does **not** pretend automatic decoding works: it exposes a visible manual-entry fallback. For reliable automatic scanning on all intended Android and iOS devices, add and pin a supported local decoding library (e.g. ZXing), update the npm lockfile, and exercise a physical device matrix before deployment. Do not load decoder scripts from an unpinned remote CDN.
+`cameraDecoder.ts` exposes one `CameraBarcodeDecoder` interface with two engines:
 
-The camera can continue while the page is in the foreground. Operating systems may suspend browser cameras in the background or when the phone locks. Where available, Screen Wake Lock is requested to reduce screen sleeps, but cannot override OS restrictions.
+1. **Native `BarcodeDetector`** — used when the browser exposes it *and* reports at least one usable bale format (Android Chrome, some desktop browsers). Desktop Linux Chrome exposes the class with no formats and is skipped.
+2. **Bundled ZXing** (`@zxing/browser` 0.2.1 + `@zxing/library` 0.23.0, pinned, loaded on demand as its own Vite chunk) — used everywhere else, notably **iPhone Safari**, which does not ship `BarcodeDetector`. Each camera frame is drawn to a reusable canvas capped at 1280px on its longest edge and decoded for Code 128, Code 39, EAN-13/8, UPC-A/E and QR with `TRY_HARDER` off, so the 220ms polling loop stays responsive on phones.
+
+The scanner shows which engine is active ("Decoder: browser native BarcodeDetector" or "bundled ZXing"). When neither engine can start (no secure context, no camera, or the decoder chunk fails to load) the panel switches to **Manual mode** with an explicit message and the manual-entry form; it never pretends automatic decoding is active. No remote CDN script is loaded.
+
+The camera continues while the page is in the foreground. Operating systems may suspend browser cameras in the background or when the phone locks; the scanner stops the stream on background/tab change/unmount and restarts it on return. Where available, Screen Wake Lock is requested, but cannot override OS restrictions.
+
+**Not verified here:** physical Android and iOS devices were not available in the verification environment. Engine selection, frame handling, duplicate suppression, cleanup and manual fallback are covered by unit and render tests (jsdom); real-camera recognition quality, torch, autofocus, vibration and audio on specific handsets still need a device pass before rollout.
 
 ## Verification
 
 Added tests:
 - `client/src/pages/factory/pressing-scanner/continuousScanGate.test.ts`: suppression, re-arm, different-bale acceptance, manual entry and reset.
-- `client/src/pages/factory/pressing-scanner/cameraDecoder.test.ts`: unsupported detector, format selection and graceful fallback.
+- `client/src/pages/factory/pressing-scanner/cameraDecoder.test.ts`: native-first selection, ZXing fallback when native is absent or reports no formats, frame downscaling, NotFound handling, manual-only when neither engine starts.
+- `client/src/pages/factory/ContinuousPressingScanner.test.tsx`: stream stays open across reads, repeated frames of one barcode submit once, camera and decoder released on background/tab change/stop/unmount, manual entry submits, queued/rejected outcomes never render as confirmations.
 - `tests/pressing-machine-phase3-source.test.ts`: camera-loop, tab cleanup, status, and no unintended stock mutations.
 
 Run on a checked-out branch:
 ```sh
 npm run check
-npm run test:frontend -- client/src/pages/factory/pressing-scanner/continuousScanGate.test.ts client/src/pages/factory/pressing-scanner/cameraDecoder.test.ts
+npm run test:frontend -- client/src/pages/factory/pressing-scanner client/src/pages/factory/ContinuousPressingScanner.test.tsx
 npx vitest run tests/pressing-machine-phase3-source.test.ts
 ```
 
