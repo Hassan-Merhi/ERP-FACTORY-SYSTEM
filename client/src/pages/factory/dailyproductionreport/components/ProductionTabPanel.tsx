@@ -15,6 +15,7 @@ import {
   FlaskConical,
   PackageCheck,
   Scale,
+  Filter,
   TrendingUp,
   TrendingDown,
   Minus,
@@ -328,8 +329,8 @@ export function ProductionTabPanel({ report }: { report: DailyProductionReportSt
 
         <SalaryOverviewSection report={report} />
 
-        {/* ── Four colored boxes ── */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+        {/* Production input/output KPIs, kept separate from table balances. */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
           {/* 1 — Original Batches */}
           <Card
             className="border-amber-200 dark:border-amber-800/50 bg-amber-50/60 dark:bg-amber-950/20"
@@ -513,7 +514,11 @@ export function ProductionTabPanel({ report }: { report: DailyProductionReportSt
             </CardContent>
           </Card>
 
-          {/* 4 — Balance on Table */}
+        </div>
+
+        {/* Independent overall and date-filtered Balance on Table KPIs. */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-4">
+          {/* 4 — Overall Balance on Table (unchanged as-of snapshot) */}
           <Card
             className="border-violet-200 dark:border-violet-800/50 bg-violet-50/60 dark:bg-violet-950/20"
             data-testid="card-balance-on-table"
@@ -521,7 +526,7 @@ export function ProductionTabPanel({ report }: { report: DailyProductionReportSt
             <CardHeader className="flex flex-row items-center justify-between gap-1 space-y-0 pb-2">
               <CardTitle className="text-xs font-bold uppercase tracking-wide text-violet-700 dark:text-violet-400 flex items-center gap-1.5">
                 <Scale className="h-3.5 w-3.5" />
-                Balance on Table
+                Overall Balance on Table
               </CardTitle>
             </CardHeader>
             <CardContent className="pt-0 space-y-0.5">
@@ -533,13 +538,51 @@ export function ProductionTabPanel({ report }: { report: DailyProductionReportSt
                   {!costsHidden && (
                     <>
                       <StatRow
-                        label={preset === "alltime" ? "Cumulative Rate" : "Period Batch Rate"}
+                        label="Cumulative Rate"
                         value={fmtRate(data?.balanceOnTable.costPerKg ?? 0)}
-                        sub={preset === "alltime" ? "per kg" : "per kg, selected period only"}
+                        sub="per kg, as of selected end date"
                       />
                       <StatRow label="Value" value={fmtMoney(data?.balanceOnTable.value ?? 0)} />
                     </>
                   )}
+                </>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* 5 — Filtered Balance on Table (selected date window only) */}
+          <Card
+            className="border-teal-200 dark:border-teal-800/50 bg-teal-50/60 dark:bg-teal-950/20"
+            data-testid="card-filtered-balance-on-table"
+          >
+            <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
+              <CardTitle className="text-xs font-bold uppercase tracking-wide text-teal-700 dark:text-teal-400 flex items-center gap-1.5">
+                <Filter className="h-3.5 w-3.5" />
+                Filtered Balance on Table
+              </CardTitle>
+              <Badge variant="secondary" className="text-[10px] font-medium">
+                {data?.from && data?.to ? `${data.from} – ${data.to}` : "All Time"}
+              </Badge>
+            </CardHeader>
+            <CardContent className="pt-0 space-y-0.5">
+              {isLoading ? (
+                <SkeletonBox />
+              ) : (
+                <>
+                  <StatRow label="Weight" value={fmtKg(data?.filteredBalanceOnTable?.weightKg ?? 0)} />
+                  {!costsHidden && (
+                    <>
+                      <StatRow
+                        label="Period Batch Rate"
+                        value={fmtRate(data?.filteredBalanceOnTable?.costPerKg ?? 0)}
+                        sub="per kg, selected filter only"
+                      />
+                      <StatRow label="Value" value={fmtMoney(data?.filteredBalanceOnTable?.value ?? 0)} />
+                    </>
+                  )}
+                  <div className="pt-2 text-[11px] text-muted-foreground">
+                    Unused material from original batches within the selected date filter.
+                  </div>
                 </>
               )}
             </CardContent>
