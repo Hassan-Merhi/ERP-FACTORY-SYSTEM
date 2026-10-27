@@ -69,7 +69,7 @@ export function registerFactoryPressingMachineManagementRoutes(app: Express) {
       const data = await db.transaction(async tx => {
         // Serialized with pressing confirmations so a user cannot be assigned
         // to different internal stations in an in-flight scan.
-        await tx.execute(sql`SELECT pg_advisory_xact_lock(`${ctx.companyId}`::integer, hashtext(`${ctx.userId}`))`);
+        await tx.execute(sql`SELECT pg_advisory_xact_lock(${ctx.companyId}::integer, hashtext(${ctx.userId}))`);
         const [user] = await tx.select({ active: users.active }).from(users)
           .where(eq(users.id, ctx.userId)).limit(1);
         if (!user?.active)
