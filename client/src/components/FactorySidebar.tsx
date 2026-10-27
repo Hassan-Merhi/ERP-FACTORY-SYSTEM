@@ -281,7 +281,11 @@ export function useFactoryVisibleSections(user?: FactorySidebarUser): {
         const partiesHasVisibleTab =
           !myAccess?.hiddenCostFields?.includes("hide_tab_parties_customers") ||
           !myAccess?.hiddenCostFields?.includes("hide_tab_parties_suppliers");
-        if (item.accessKey === "factory/contacts" && partiesHasVisibleTab && relatedParentVisible("/factory/parties")) {
+        if (
+          item.accessKey === "factory/contacts" &&
+          partiesHasVisibleTab &&
+          relatedParentVisible("/factory/parties")
+        ) {
           return false;
         }
         if (item.accessKey === "factory/cost-centers" && relatedParentVisible("/factory/accounts")) return false;
