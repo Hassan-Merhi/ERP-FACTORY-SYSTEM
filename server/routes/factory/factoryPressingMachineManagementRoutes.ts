@@ -233,7 +233,7 @@ export function registerFactoryPressingMachineManagementRoutes(app: Express): vo
       const outcome = await db.transaction(async tx => {
         // Serializes competing reassignments of the same user. The database
         // partial UNIQUE index remains the final defense against races.
-        await tx.execute(sql`SELECT pg_advisory_xact_lock(`${ctx.companyId}`::integer, hashtext(`${body.userId}`))`);
+        await tx.execute(sql`SELECT pg_advisory_xact_lock(${ctx.companyId}::integer, hashtext(${body.userId}))`);
         const [machine] = await tx.select().from(factoryPressingMachines)
           .where(and(eq(factoryPressingMachines.id, body.machineId),
             eq(factoryPressingMachines.companyId, ctx.companyId))).for("update");
@@ -287,7 +287,7 @@ export function registerFactoryPressingMachineManagementRoutes(app: Express): vo
           .from(factoryPressingAssignments)
           .where(and(eq(factoryPressingAssignments.id, id), eq(factoryPressingAssignments.companyId, ctx.companyId)));
         if (!candidate) throw new PressingManagementError(404, "ASSIGNMENT_NOT_FOUND", "Assignment not found");
-        await tx.execute(sql`SELECT pg_advisory_xact_lock(`${ctx.companyId}`::integer, hashtext(`${candidate.userId}`))`);
+        await tx.execute(sql`SELECT pg_advisory_xact_lock(${ctx.companyId}::integer, hashtext(${candidate.userId}))`);
         const [assignment] = await tx.select().from(factoryPressingAssignments)
           .where(and(eq(factoryPressingAssignments.id, id), eq(factoryPressingAssignments.companyId, ctx.companyId)))
           .for("update");
