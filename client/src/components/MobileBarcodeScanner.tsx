@@ -27,7 +27,9 @@ export function MobileBarcodeScanner({ onScan, disabled = false, className }: Mo
   const [lastDetected, setLastDetected] = useState("");
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const scanHandler = useRef(onScan);
+  const disabledRef = useRef(disabled);
   scanHandler.current = onScan;
+  disabledRef.current = disabled;
 
   useEffect(() => {
     if (!open) return;
@@ -41,6 +43,12 @@ export function MobileBarcodeScanner({ onScan, disabled = false, className }: Mo
 
     const tick = async () => {
       if (canceled) return;
+      // Pause reads during existing page mutations without stopping the stream
+      // or consuming a barcode that has not yet been submitted.
+      if (disabledRef.current) {
+        timeout = setTimeout(() => void tick(), 220);
+        return;
+      }
       const video = videoRef.current;
       if (video?.readyState && video.readyState >= 2 && decoder) {
         try {
