@@ -176,7 +176,11 @@ export function registerFactoryPressingOperationsRoutes(app: Express): void {
         .where(machineId
           ? and(eq(factoryPressingDowntime.companyId, ctx.companyId),eq(factoryPressingDowntime.machineId,machineId))
           : eq(factoryPressingDowntime.companyId,ctx.companyId))
-        .orderBy(desc(factoryPressingDowntime.startedAt)).limit(200);
+        // Open machine stops always appear first even after substantial history.
+        .orderBy(
+          sql`CASE WHEN ${factoryPressingDowntime.endedAt} IS NULL THEN 0 ELSE 1 END`,
+          desc(factoryPressingDowntime.startedAt),
+        ).limit(200);
       return res.json(records);
     } catch (error) { return problem(res, error); }
   });
@@ -327,7 +331,8 @@ export function registerFactoryPressingOperationsRoutes(app: Express): void {
         groups,summary,recordedDowntime:downtime.rows,
         totalDowntimeSeconds:downtime.rows.reduce((n,r)=>n+Number(r.seconds||0),0),
         machineTargets:targets,rateMethod:"OBSERVED_FIRST_TO_LAST_SCAN",
-        note:"Rates measure the observed first-to-last confirmation window, not actual pressing cycle time. Only explicitly logged downtime counts as downtime.",
+        downtimeScope:"MACHINE_AND_DATE_ONLY", timezoneName,
+        note:"Rates are observed first-to-last confirmation windows, NOT mechanical cycle times. Downtime requires an explicit supervisor record and is filtered by date and machine, not by operator/shift.",
       });
     } catch (error) { return problem(res, error); }
   });
