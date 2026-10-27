@@ -7,7 +7,7 @@
  * This endpoint intentionally NEVER calls stock finalization or ERP accounting.
  */
 import type { Express, Request, Response } from "express";
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import { z, ZodError } from "zod";
 import { db } from "../../db";
 import { requireAuth } from "../../auth";
@@ -166,7 +166,7 @@ export function registerFactoryPressingCorrectionRoutes(app: Express): void {
           // Avoid stitching user values into SQL. Company and reference are
           // parameterized; each original correction ID is server-selected.
           const values = ids.map(row => row.id);
-          where.push(sql``${factoryPressingCorrections.confirmationId} = ANY(`${values}::int[])`);
+          where.push(inArray(factoryPressingCorrections.confirmationId, values));
         }
         const rows = await db.select().from(factoryPressingCorrections)
           .where(and(...where)).orderBy(desc(factoryPressingCorrections.createdAt),
