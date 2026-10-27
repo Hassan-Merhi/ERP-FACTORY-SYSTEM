@@ -42,9 +42,7 @@ describe("selected-period Balance on Table", () => {
       resolve(process.cwd(), "server/routes/factory/bale-exports/production-value-report.ts"),
       "utf8"
     );
-    expect(source).toContain(
-      "producedWeightKg: new BatchRateDecimal(totalBaleWeightKg).plus(totalWgWeightKg)"
-    );
+    expect(source).toContain("producedWeightKg: new BatchRateDecimal(totalBaleWeightKg).plus(totalWgWeightKg)");
     expect(source).toContain("batchRateCost: balanceBatchRateDecimal");
     expect(source).toContain("const periodBalanceSelected = Boolean(from && to)");
     expect(source).toContain("weightKg: shownTableWeightKg");
