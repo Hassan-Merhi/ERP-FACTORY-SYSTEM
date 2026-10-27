@@ -158,3 +158,35 @@ export function recordWithState(
     createdAt: record.createdAt,
   };
 }
+
+
+/**
+ * Single IndexedDB transaction for read/modify/write prevents stale tab
+ * responses from overwriting an already confirmed or rejected scan.
+ * A terminal row remains read-only; its original request payload is immutable.
+ */
+export async function transitionPressingScan(
+  actor: PressingActor, requestId: string, state: PressingQueueState,
+  changes: Partial<PressingQueuedScan> = {},
+): Promise<PressingQueuedScan | null> {
+  const db = await openPressingQueue();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE, "readwrite");
+    const store = tx.objectStore(STORE);
+    let outcome: PressingQueuedScan | null = null;
+    const request = store.get(requestId);
+    request.onsuccess = () => {
+      const row = request.result as PressingQueuedScan | undefined;
+      if (!row || row.companyId !== actor.companyId || row.userId !== actor.userId) return;
+      if (row.state === "confirmed" || row.state === "rejected") {
+        outcome = row;
+        return;
+      }
+      outcome = recordWithState(row, state, changes);
+      store.put(outcome);
+    };
+    tx.oncomplete = () => resolve(outcome);
+    tx.onerror = () => reject(tx.error || new Error("Could not update pressing queue status"));
+    tx.onabort = () => reject(tx.error || new Error("Pressing queue update was aborted"));
+  });
+}
