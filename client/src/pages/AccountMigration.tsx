@@ -664,7 +664,7 @@ export default function AccountMigration() {
                         {destination?.name ?? `Company ${migration.destCompanyId}`}
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        {migration.accounts.map((account) => account.originalCode).join(", ")}
+                        {(migration.accounts ?? []).map((account) => account.originalCode).join(", ")}
                       </p>
                     </div>
                     <Button variant="outline" onClick={() => setUndoTarget(migration)}>
