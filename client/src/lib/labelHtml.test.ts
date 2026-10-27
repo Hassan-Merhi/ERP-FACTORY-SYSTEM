@@ -109,7 +109,7 @@ describe("A4 labels", () => {
     expect(html).toContain("padding: 6mm 8mm 2mm;");
     expect(html).toContain(".a4-banner-img { width: 100%; height: 100%; object-fit: contain;");
     expect(html).toContain("object-position: center center;");
-    expect(html).not.toContain("object-fit: cover; display: block; }\n    .a4-top-content");
+    expect(html).not.toMatch(/\.a4-banner-img\s*\{[^}]*object-fit:\s*cover/);
 
     // Each of the two images must use the same unclipped banner layout.
     expect(html.match(/class="a4-banner-img"/g)).toHaveLength(2);
