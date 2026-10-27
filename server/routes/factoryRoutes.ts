@@ -23,6 +23,7 @@ import { registerFactoryPressingMachineManagementRoutes } from "./factory/factor
 import { registerFactoryPressingConfirmRoutes } from "./factory/factoryPressingConfirmationRoutes";
 import { registerFactoryPressingReportRoutes } from "./factory/factoryPressingReportRoutes";
 import { registerFactoryPressingOperationsRoutes } from "./factory/factoryPressingOperationsRoutes";
+import { registerFactoryPressingCorrectionRoutes } from "./factory/factoryPressingCorrectionRoutes";
 import { registerFactoryGroundScanRoutes } from "./factory/factoryGroundScanRoutes";
 import { registerFactoryContainerTrackingRoutes } from "./factory/factoryContainerTrackingRoutes";
 import { registerEndProductionRoutes } from "./factory/endProductionRoutes";
@@ -224,6 +225,7 @@ export function registerFactoryRoutes(app: Express, requireAuth: RequestHandler,
   registerFactoryPressingConfirmRoutes(app);
   registerFactoryPressingReportRoutes(app);
   registerFactoryPressingOperationsRoutes(app);
+  registerFactoryPressingCorrectionRoutes(app);
   registerFactoryGroundScanRoutes(app);
   registerEndProductionRoutes(app, requireAuth);
   registerProductionPlannerRoutes(app);
