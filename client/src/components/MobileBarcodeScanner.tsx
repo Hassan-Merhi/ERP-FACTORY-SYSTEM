@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Camera } from "lucide-react";
+import { Camera, Flashlight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
@@ -25,6 +25,9 @@ export function MobileBarcodeScanner({ onScan, disabled = false, className }: Mo
   const [open, setOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastDetected, setLastDetected] = useState("");
+  const [torchAvailable, setTorchAvailable] = useState(false);
+  const [torchOn, setTorchOn] = useState(false);
+  const trackRef = useRef<MediaStreamTrack | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const scanHandler = useRef(onScan);
   const disabledRef = useRef(disabled);
@@ -46,7 +49,7 @@ export function MobileBarcodeScanner({ onScan, disabled = false, className }: Mo
       // Pause reads during existing page mutations without stopping the stream
       // or consuming a barcode that has not yet been submitted.
       if (disabledRef.current) {
-        timeout = setTimeout(() => void tick(), 220);
+        timeout = setTimeout(() => void tick(), 90);
         return;
       }
       const video = videoRef.current;
@@ -65,7 +68,9 @@ export function MobileBarcodeScanner({ onScan, disabled = false, className }: Mo
       } else {
         gate.frame(null, Date.now());
       }
-      if (!canceled) timeout = setTimeout(() => void tick(), 220);
+      // Schedule only AFTER this decode completes: never overlap expensive
+      // ZXing calls, but avoid adding a quarter-second delay to every frame.
+      if (!canceled) timeout = setTimeout(() => void tick(), decoder?.engine === "native" ? 70 : 90);
     };
 
     const start = async () => {
@@ -74,14 +79,11 @@ export function MobileBarcodeScanner({ onScan, disabled = false, className }: Mo
         return;
       }
       try {
-        decoder = await createCameraDecoder();
-        if (canceled) return;
-        if (!decoder) {
-          setError("Barcode decoding is unavailable on this device. Enter the barcode manually.");
-          return;
-        }
+        // Start the video BEFORE importing the ZXing fallback. On iPhones the
+        // lazy-loaded decoder can take time to download, but camera preview
+        // and automatic focusing can already begin in the meantime.
         const acquired = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: { ideal: "environment" }, width: { ideal: 1280 } },
+          video: { facingMode: { ideal: "environment" }, width: { ideal: 1280 }, height: { ideal: 720 } },
           audio: false,
         });
         if (canceled) {
@@ -93,7 +95,30 @@ export function MobileBarcodeScanner({ onScan, disabled = false, className }: Mo
         if (!video) throw new Error("Camera preview could not open.");
         video.srcObject = acquired;
         await video.play();
-        if (!canceled) void tick();
+        if (canceled) return;
+        const track = acquired.getVideoTracks?.()[0];
+        if (track) {
+          trackRef.current = track;
+          try {
+            const capabilities = track.getCapabilities?.() as MediaTrackCapabilities & { torch?: boolean };
+            setTorchAvailable(capabilities?.torch === true);
+          } catch { /* Flashlight capability is not available on all mobile browsers. */ }
+          if (typeof track.applyConstraints === "function") {
+            // Unsupported advanced focus hints are harmless; let the browser
+            // retain its current camera settings instead of delaying reads.
+            void track.applyConstraints({
+              advanced: [{ focusMode: "continuous" } as MediaTrackConstraintSet],
+            }).catch(() => {});
+          }
+        }
+        decoder = await createCameraDecoder();
+        if (canceled) return;
+        if (!decoder) {
+          acquired.getTracks().forEach((cameraTrack) => cameraTrack.stop());
+          setError("Barcode decoding is unavailable on this device. Enter the barcode manually.");
+          return;
+        }
+        void tick();
       } catch (cause) {
         if (canceled) return;
         const name = cause instanceof DOMException ? cause.name : "";
@@ -116,11 +141,26 @@ export function MobileBarcodeScanner({ onScan, disabled = false, className }: Mo
       if (timeout) clearTimeout(timeout);
       document.removeEventListener("visibilitychange", onVisibilityChange);
       stream?.getTracks().forEach((track) => track.stop());
+      trackRef.current = null;
       if (videoRef.current) videoRef.current.srcObject = null;
       decoder?.dispose();
       gate.reset();
     };
   }, [open]);
+
+  const toggleTorch = async () => {
+    const track = trackRef.current;
+    if (!track || typeof track.applyConstraints !== "function") return;
+    try {
+      const next = !torchOn;
+      await track.applyConstraints({
+        advanced: [{ torch: next } as MediaTrackConstraintSet],
+      });
+      setTorchOn(next);
+    } catch {
+      setTorchAvailable(false);
+    }
+  };
 
   return (
     <>
@@ -136,6 +176,8 @@ export function MobileBarcodeScanner({ onScan, disabled = false, className }: Mo
         onClick={() => {
           setError(null);
           setLastDetected("");
+          setTorchOn(false);
+          setTorchAvailable(false);
           setOpen(true);
         }}
       >
@@ -158,6 +200,12 @@ export function MobileBarcodeScanner({ onScan, disabled = false, className }: Mo
             />
             <div className="pointer-events-none absolute inset-[18%] rounded-md border-2 border-emerald-400/80" />
           </div>
+          {torchAvailable && !error && (
+            <Button type="button" variant="outline" size="sm" onClick={() => void toggleTorch()}>
+              <Flashlight className="mr-2 h-4 w-4" />
+              {torchOn ? "Turn off light" : "Turn on light"}
+            </Button>
+          )}
           {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
           {lastDetected && <p role="status" className="break-all text-sm">Last detected: {lastDetected}</p>}
           <p className="text-xs text-muted-foreground">Close this window to stop the camera. Manual and hardware scanners still work.</p>
