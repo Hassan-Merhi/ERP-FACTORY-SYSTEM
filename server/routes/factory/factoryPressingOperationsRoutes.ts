@@ -303,8 +303,18 @@ export function registerFactoryPressingOperationsRoutes(app: Express): void {
         id:factoryPressingMachines.id,code:factoryPressingMachines.machineCode,
         targetBalesPerHour:factoryPressingMachines.targetBalesPerHour,
       }).from(factoryPressingMachines).where(eq(factoryPressingMachines.companyId,ctx.companyId));
+      const groups = data.rows.map(row => {
+        const elapsedSeconds = Math.max(0,
+          (new Date(row.lastAt).getTime() - new Date(row.firstAt).getTime()) / 1000);
+        const hours = elapsedSeconds / 3600;
+        return {
+          ...row, observedSeconds: elapsedSeconds,
+          balesPerHour: hours > 0 ? Number((Number(row.bales) / hours).toFixed(2)) : null,
+          kgPerHour: hours > 0 ? Number((Number(row.kg) / hours).toFixed(2)) : null,
+        };
+      });
       return res.json({
-        groups:data.rows,summary,recordedDowntime:downtime.rows,
+        groups,summary,recordedDowntime:downtime.rows,
         totalDowntimeSeconds:downtime.rows.reduce((n,r)=>n+Number(r.seconds||0),0),
         machineTargets:targets,rateMethod:"OBSERVED_FIRST_TO_LAST_SCAN",
         note:"Rates measure the observed first-to-last confirmation window, not actual pressing cycle time. Only explicitly logged downtime counts as downtime.",
