@@ -60,14 +60,14 @@ export async function sendQueuedPressingScan(row: PressingQueuedScan): Promise<P
         needsAuth: true,
       };
     }
+    if (isPressingDuplicate(code)) {
+      return { kind: "rejected", code, message };
+    }
     if (status === 0 || status === 408 || status === 429 || status >= 500 || code === "OfflineQueued") {
       return {
         kind: "retry", code,
         message: "Connection or server unavailable. Scan remains saved locally for safe retry.",
       };
-    }
-    if (isPressingDuplicate(code)) {
-      return { kind: "rejected", code, message };
     }
     // 4xx errors (assignment revoked, bale invalid, voided, permission denied)
     // are terminal until supervisor review: never replay them indefinitely.
