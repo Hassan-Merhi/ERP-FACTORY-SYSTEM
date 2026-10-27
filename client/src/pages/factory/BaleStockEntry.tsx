@@ -192,7 +192,7 @@ export default function BaleStockEntry() {
         )}
         {showPressingMachines && (
           <TabsContent value="pressing-machines" className="mt-4 min-w-0">
-            {mountedTabs.has("pressing-machines") && <PressingMachineManagement />}
+            {mountedTabs.has("pressing-machines") && <PressingMachineManagement active={activeTab === "pressing-machines"} />}
           </TabsContent>
         )}
         {showProductionTargets && (
