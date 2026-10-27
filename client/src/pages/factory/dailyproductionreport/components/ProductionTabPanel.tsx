@@ -549,12 +549,17 @@ export function ProductionTabPanel({ report }: { report: DailyProductionReportSt
                     <div className="flex items-center gap-1 text-[11px] font-bold uppercase tracking-wide text-teal-700 dark:text-teal-400">
                       <Filter className="h-3 w-3 shrink-0" />
                       Filtered
-                      <span className="ml-auto text-[10px] normal-case font-medium text-muted-foreground">
-                        {data?.filteredBalanceOnTable?.direction === "decrease"
-                          ? "Decrease"
-                          : data?.filteredBalanceOnTable?.direction === "increase"
-                            ? "Increase"
-                            : "No change"}
+                      <span
+                        className="ml-auto text-muted-foreground"
+                        title={data?.filteredBalanceOnTable?.direction}
+                      >
+                        {data?.filteredBalanceOnTable?.direction === "decrease" ? (
+                          <TrendingDown className="h-3.5 w-3.5 text-red-500" />
+                        ) : data?.filteredBalanceOnTable?.direction === "increase" ? (
+                          <TrendingUp className="h-3.5 w-3.5 text-emerald-500" />
+                        ) : (
+                          <Minus className="h-3.5 w-3.5" />
+                        )}
                       </span>
                     </div>
                     <StatRow label="Weight" value={fmtKg(data?.filteredBalanceOnTable?.weightKg ?? 0)} />
@@ -567,8 +572,8 @@ export function ProductionTabPanel({ report }: { report: DailyProductionReportSt
                         <StatRow label="Value" value={fmtMoney(data?.filteredBalanceOnTable?.value ?? 0)} />
                       </>
                     )}
-                    <div className="truncate text-[10px] text-muted-foreground" title="Net table-weight movement in selected date range">
-                      {data?.from && data?.to ? `${data.from} – ${data.to}` : "All Time"} · net movement
+                    <div className="truncate text-[10px] text-muted-foreground">
+                      {data?.from && data?.to ? `${data.from} – ${data.to}` : "All Time"}
                     </div>
                   </div>
                 </>
