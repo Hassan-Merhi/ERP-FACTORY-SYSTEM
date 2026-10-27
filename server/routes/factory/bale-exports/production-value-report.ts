@@ -14,6 +14,7 @@ import {
   BatchRateDecimal,
   calculateProductionProfit,
   calculateProductionWeightCost,
+  calculatePeriodTableBalance,
 } from "./production-value-math";
 import {
   factoryCategories,
@@ -430,11 +431,14 @@ export function registerFactoryProductionValueReportRoutes(app: Express) {
       // Do not substitute the period rate into production Weight Cost/Profit:
       // that existing calculation uses balanceBatchRateDecimal independently.
       const periodBalanceSelected = Boolean(from && to);
-      const shownTableWeightKg = periodBalanceSelected ? periodOnTableKg : balanceWeightKg;
-      const shownTableRate = periodBalanceSelected ? blendedCostPerKg : balanceCostPerKg;
-      const shownTableValue = periodBalanceSelected
-        ? new BatchRateDecimal(periodOnTableKg).times(blendedCostPerKgDecimal).toDecimalPlaces(2).toNumber()
-        : balanceValue;
+      const periodTable = calculatePeriodTableBalance({
+        remainingPeriodKg: periodOnTableKg,
+        mixedPeriodWeightKg: totalMixWeightDecimal,
+        mixedPeriodCost: totalMixCostDecimal,
+      });
+      const shownTableWeightKg = periodBalanceSelected ? periodTable.weightKg : balanceWeightKg;
+      const shownTableRate = periodBalanceSelected ? periodTable.costPerKg : balanceCostPerKg;
+      const shownTableValue = periodBalanceSelected ? periodTable.value : balanceValue;
 
       // Weight Cost includes all material converted during the selected period:
       // regular bales plus wipers and garbage. Those groups are mutually exclusive
