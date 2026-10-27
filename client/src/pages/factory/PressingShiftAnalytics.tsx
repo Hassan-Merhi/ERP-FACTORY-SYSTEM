@@ -124,7 +124,7 @@ export default function PressingShiftAnalytics({
   const current = useQuery<{ shift: Shift | null; serverTime: string }>({
     queryKey:[ROOT,"shifts-current",...actor],
     queryFn:()=>readJson(ROOT+"/shifts/current"),
-    enabled:active,staleTime:30_000,refetchOnWindowFocus:false,
+    enabled:active,staleTime:30_000,refetchOnWindowFocus:false,refetchInterval:60_000,
   });
   const shifts = useQuery<Shift[]>({
     queryKey:[ROOT,"shifts-list",...actor],
@@ -139,7 +139,7 @@ export default function PressingShiftAnalytics({
   const downtime = useQuery<Downtime[]>({
     queryKey:[ROOT,"downtime",...actor],
     queryFn:()=>readJson(ROOT+"/downtime"),
-    enabled:active&&canManage,staleTime:15_000,refetchOnWindowFocus:false,
+    enabled:active&&canManage,staleTime:15_000,refetchOnWindowFocus:false,refetchInterval:30_000,
   });
   const params = new URLSearchParams({from,to});
   if(machineFilter)params.set("machineId",machineFilter);
