@@ -184,12 +184,10 @@ export function registerFactoryPressingConfirmRoutes(app: Express): void {
             } });
         }
 
-        // Stock finalization is intentionally independent: do not re-confirm
-        // any bale already finalized, sold or dispatched, even if no earlier
-        // machine scan was recorded.
-        if (bale.status !== "PENDING_PRESSING") {
-          throw new ConfirmationError(422, "PRESSING_BALE_NOT_PENDING", "Only pending-pressing bales can be confirmed");
-        }
+        // Physical pressing is independent of inventory lifecycle. Every
+        // active, non-deleted factory bale is eligible for its first pressing
+        // confirmation, including stocked, reserved, sold and dispatched bales.
+        // The company/bale checks and lifetime duplicate guard above still apply.
 
         // The logged-in user is the production operator. No configured
         // shifts, machine downtime or performance targets participate.
