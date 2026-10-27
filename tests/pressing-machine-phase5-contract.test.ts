@@ -54,6 +54,8 @@ describe("Phase 5 pressing offline resilience contract", () => {
     expect(panel).toContain("Only server-confirmed scans count toward production");
     expect(panel).toContain("Retry pending");
     expect(scanner).toContain('last?.outcome === "confirmed"');
+    expect(scanner).toContain("inFlightRef.current += 1");
+    expect(scanner).not.toContain("!submittingRef.current");
     expect(hook).not.toMatch(/(?:update|insert|delete)\(factoryBales\)/);
     expect(transport).not.toContain("/api/factory/finalize");
   });
