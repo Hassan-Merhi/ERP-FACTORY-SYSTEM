@@ -84,6 +84,11 @@ export interface ReportData {
     costPerKg: number;
     value: number;
   };
+  filteredBalanceOnTable: {
+    weightKg: number;
+    costPerKg: number;
+    value: number;
+  };
   kgComparison: {
     producedKg: number;
     mixedKg: number;
