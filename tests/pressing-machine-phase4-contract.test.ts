@@ -62,11 +62,11 @@ describe("Pressing machine Phase 4 transaction safety", () => {
   });
 
   it("never marks a scan as confirmed until the server's receipt arrives", () => {
-    expect(manager).toContain("onBarcode={submitPressingConfirmation}");
-    expect(client).toContain('response.json() as ServerPressingReceipt');
-    expect(client).toContain('receipt.status !== "PRESSING_COMPLETED"');
+    expect(manager).toContain("onBarcode={pressingQueue.submit}");
+    expect(client).toContain("const receipt: unknown = await response.json()");
+    expect(client).toContain('item.status === "PRESSING_COMPLETED"');
     expect(client).toContain('kind: "confirmed"');
-    expect(client).toContain('kind: "duplicate"');
+    expect(client).toContain("isPressingDuplicate(code)");
     expect(scanner).toContain("last.confirmedAt");
     expect(scanner).toContain("Server confirmed:");
   });
