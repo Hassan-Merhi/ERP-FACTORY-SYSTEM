@@ -18,21 +18,22 @@ import {
 import { logger } from "../../lib/logger";
 import { logAudit } from "../helpers/auditHelpers";
 import {
-  intervalsOverlap, isValidTimezone, matchingShift, minutesOfDay,
+  intervalsOverlap, isValidTimezone, matchingShift,
   type PressingShiftDefinition,
 } from "../../services/factory/pressingShiftTime";
 
 const MANAGERS = new Set(["Manager", "Admin", "Owner", "Developer"]);
 const clock = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/);
-const shiftFields = z.object({
+const shiftBase = z.object({
   shiftCode: z.string().trim().min(1).max(50).regex(/^[a-zA-Z0-9_.-]+$/),
   name: z.string().trim().min(1).max(120),
   startLocal: clock,
   endLocal: clock,
   timezoneName: z.string().trim().min(1).max(100).refine(isValidTimezone, "Invalid IANA timezone"),
   active: z.boolean().default(true),
-}).strict().refine(x => x.startLocal !== x.endLocal, "Shift must have nonzero duration");
-const shiftUpdate = shiftFields.partial().extend({ active: z.boolean().optional() }).strict();
+}).strict();
+const shiftFields = shiftBase.refine(x => x.startLocal !== x.endLocal, "Shift must have nonzero duration");
+const shiftUpdate = shiftBase.partial().strict();
 const downtimeStart = z.object({
   machineId: z.number().int().positive(),
   reasonCode: z.enum(["MAINTENANCE","MACHINE_FAULT","MATERIAL_SHORTAGE","POWER_OUTAGE","BREAK","OTHER"]),
@@ -277,10 +278,10 @@ export function registerFactoryPressingOperationsRoutes(app: Express): void {
         'SELECT d.id,d.machine_id AS "machineId",m.name AS "machineName",' +
         'd.reason_code AS "reasonCode",d.started_at AS "startedAt",d.ended_at AS "endedAt",' +
         'GREATEST(0,EXTRACT(EPOCH FROM (LEAST(COALESCE(d.ended_at,NOW()),' +
-        '($3::date+INTERVAL \\'1 day\\')) - GREATEST(d.started_at,$2::date))))::integer AS "seconds"' +
+        "($3::date+INTERVAL '1 day')) - GREATEST(d.started_at,$2::date))))::integer AS \"seconds\"" +
         ' FROM factory_pressing_downtime d JOIN factory_pressing_machines m' +
         ' ON m.id=d.machine_id AND m.company_id=d.company_id' +
-        ' WHERE d.company_id=$1 AND d.started_at < ($3::date+INTERVAL \\'1 day\\')' +
+        " WHERE d.company_id=$1 AND d.started_at < ($3::date+INTERVAL '1 day')" +
         ' AND COALESCE(d.ended_at,NOW()) >= $2::date'+machineParam+
         ' ORDER BY d.started_at DESC LIMIT 3000',downtimeParams
       );
