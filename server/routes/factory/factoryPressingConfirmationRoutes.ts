@@ -4,7 +4,7 @@
  * inside the transaction. No stock, mix cost, voucher or bale state is mutated.
  */
 import type { Express, Request, Response } from "express";
-import { and, desc, eq, isNull, sql } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import { z, ZodError } from "zod";
 import { db } from "../../db";
 import { requireAuth } from "../../auth";
@@ -67,10 +67,6 @@ function isNonBalePriorityProduct(extra: unknown, productId: number | null): boo
   if (!productId || !extra || typeof extra !== "object" || Array.isArray(extra)) return false;
   const excluded = (extra as Record<string, unknown>).nonBalePriorityProductIds;
   return Array.isArray(excluded) && excluded.some(id => Number(id) === productId);
-}
-function isUniqueViolation(error: unknown): boolean {
-  const err = error as { code?: string; cause?: { code?: string } };
-  return err?.code === "23505" || err?.cause?.code === "23505";
 }
 function sendFailure(res: Response, error: unknown): void {
   if (error instanceof ConfirmationError) {
