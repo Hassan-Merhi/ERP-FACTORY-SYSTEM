@@ -353,7 +353,7 @@ describe("startup schema integrity", () => {
     expect(zambiaHistoricalPurchaseCostSchema).toHaveLength(13);
     expect(startupMigrations.slice(
       -zambiaHistoricalPurchaseCostSchema.length - factoryPressingMachineTrackingSchema.length - factoryPressingHistoryReportIndexes.length,
-      -factoryPressingMachineTrackingSchema.length + factoryPressingHistoryReportIndexes.length
+      -factoryPressingMachineTrackingSchema.length - factoryPressingHistoryReportIndexes.length
     )).toEqual(
       zambiaHistoricalPurchaseCostSchema
     );
