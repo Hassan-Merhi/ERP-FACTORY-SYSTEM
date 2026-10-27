@@ -62,7 +62,8 @@ describe("Pressing machine Phase 4 transaction safety", () => {
   });
 
   it("never marks a scan as confirmed until the server's receipt arrives", () => {
-    expect(manager).toContain("onBarcode={pressingQueue.submit}");
+    expect(manager).toContain("onBarcode={cameraRead}");
+    expect(manager).toContain("scanner.submit({");
     expect(client).toContain("const receipt: unknown = await response.json()");
     expect(client).toContain('item.status === "PRESSING_COMPLETED"');
     expect(client).toContain('kind: "confirmed"');
