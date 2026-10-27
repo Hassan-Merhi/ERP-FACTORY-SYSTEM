@@ -580,9 +580,6 @@ export function ProductionTabPanel({ report }: { report: DailyProductionReportSt
                       <StatRow label="Value" value={fmtMoney(data?.filteredBalanceOnTable?.value ?? 0)} />
                     </>
                   )}
-                  <div className="pt-2 text-[11px] text-muted-foreground">
-                    Unused material from original batches within the selected date filter.
-                  </div>
                 </>
               )}
             </CardContent>
