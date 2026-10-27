@@ -153,13 +153,13 @@ export function usePressingOfflineSync(actor: PressingActor | null, active: bool
     const key = companyId + ":" + userId;
     busy.current = true;
     try {
-      await serialized(async () => {
-        if (scopeRef.current !== key) return;
+      const authenticated = await serialized(async () => {
+        if (scopeRef.current !== key) return true;
         if (!(await actorStillAuthenticated(identity))) {
           if (scopeRef.current === key) setSnapshot(prev => ({
             ...prev, error: "Saved scans paused: reconnect as the original company and operator.",
           }));
-          return;
+          return false;
         }
         const rows = await listPressingScans(identity);
         // Recover rows stranded in SYNCING by a crashed browser. These are safe to
@@ -170,8 +170,10 @@ export function usePressingOfflineSync(actor: PressingActor | null, active: bool
           const outcome = await deliver(identity, row);
           if (outcome.state === "pending") break; // avoid repeated network hammering
         }
+        return true;
       });
-      await refresh();
+      // A paused queue keeps its warning visible; refresh would clear it.
+      if (authenticated) await refresh();
     } catch (error) {
       if (scopeRef.current === key) setSnapshot(prev => ({
         ...prev, error: error instanceof Error ? error.message : "Could not sync saved pressing scans",
@@ -216,7 +218,12 @@ export function usePressingOfflineSync(actor: PressingActor | null, active: bool
               error: "Scan stored but not submitted. Confirm the original operator and company session." }));
             return record;
           }
-          return deliver(identity, record);
+          // A background pass may have handled this row while we waited our
+          // turn: respect its terminal state or its retry backoff instead of
+          // posting the same request ID again immediately.
+          const current = (await listPressingScans(identity)).find(r => r.requestId === record.requestId) ?? record;
+          if (current.state !== "pending" || (current.attempts > 0 && current.nextAttemptAt > Date.now())) return current;
+          return deliver(identity, current);
         });
         return outcomeFromRow(settled);
       } finally {
