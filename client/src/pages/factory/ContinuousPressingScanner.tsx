@@ -60,6 +60,7 @@ export function ContinuousPressingScanner({
   onBarcode: (capture: PressingScanCapture) => Promise<PressingScanOutcome>;
 }) {
   const [requested, setRequested] = useState(false);
+  const [retryAttempt, setRetryAttempt] = useState(0);
   const [visible, setVisible] = useState(() => typeof document === "undefined" || !document.hidden);
   const [status, setStatus] = useState<ScannerStatus>("idle");
   const [error, setError] = useState<string | null>(null);
@@ -265,7 +266,7 @@ export function ContinuousPressingScanner({
     };
   // Restart only on assignment, explicit start/stop, tab or browser visibility.
   // Callback is read through a ref so status updates never restart the stream.
-  }, [running, assignment?.assignmentId, handleRead]);
+  }, [running, assignment?.assignmentId, handleRead, retryAttempt]);
 
   const toggleTorch = async () => {
     const track = trackRef.current;
@@ -357,11 +358,9 @@ export function ContinuousPressingScanner({
             </Button>
           )}
           {requested && (activeStatus === "error" || activeStatus === "manual") && (
-            <Button type="button" variant="outline" onClick={() => {
-              setRequested(false);
-              // Explicit stop then start, without asking a worker to leave the tab.
-              setTimeout(() => setRequested(true), 0);
-            }}><RotateCcw className="mr-2 h-4 w-4" />Retry camera</Button>
+            <Button type="button" variant="outline" onClick={() => setRetryAttempt(n => n + 1)}>
+              <RotateCcw className="mr-2 h-4 w-4" />Retry camera
+            </Button>
           )}
           {requested && torchAvailable && (
             <Button type="button" variant="outline" onClick={() => void toggleTorch()}>
