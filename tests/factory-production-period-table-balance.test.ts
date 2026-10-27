@@ -44,9 +44,31 @@ describe("selected-period Balance on Table", () => {
     );
     expect(source).toContain("producedWeightKg: new BatchRateDecimal(totalBaleWeightKg).plus(totalWgWeightKg)");
     expect(source).toContain("batchRateCost: balanceBatchRateDecimal");
-    expect(source).toContain("const periodBalanceSelected = Boolean(from && to)");
-    expect(source).toContain("weightKg: shownTableWeightKg");
-    expect(source).toContain("costPerKg: hideReportCosts ? 0 : shownTableRate");
-    expect(source).toContain("value: hideReportCosts ? 0 : shownTableValue");
+    // The original overall snapshot remains the authoritative cumulative value.
+    expect(source).toContain("weightKg: balanceWeightKg");
+    expect(source).toContain("costPerKg: hideReportCosts ? 0 : balanceCostPerKg");
+    expect(source).toContain("value: hideReportCosts ? 0 : balanceValue");
+    // The filtered snapshot never substitutes itself into profit or the total.
+    expect(source).toContain("filteredBalanceOnTable: {");
+    expect(source).toContain("weightKg: filteredTable.weightKg");
+    expect(source).toContain("costPerKg: hideReportCosts ? 0 : filteredTable.costPerKg");
+    expect(source).toContain("value: hideReportCosts ? 0 : filteredTable.value");
+    expect(source).toContain("remainingMaterialValue: hideReportCosts ? 0 : balanceValue");
+  });
+});
+
+describe("Balance on Table card split", () => {
+  it("shows the overall and filtered balances independently with the same report response", () => {
+    const ui = readFileSync(
+      resolve(process.cwd(), "client/src/pages/factory/dailyproductionreport/components/ProductionTabPanel.tsx"),
+      "utf8"
+    );
+    expect(ui).toContain('data-testid="card-balance-on-table"');
+    expect(ui).toContain('data-testid="card-filtered-balance-on-table"');
+    expect(ui).toContain("data?.balanceOnTable.weightKg");
+    expect(ui).toContain("data?.filteredBalanceOnTable?.weightKg");
+    expect(ui).toContain('label="Cumulative Rate"');
+    expect(ui).toContain('label="Period Batch Rate"');
+    expect(ui).toContain("lg:grid-cols-2");
   });
 });
