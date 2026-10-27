@@ -393,6 +393,8 @@ export function RetailVoucherTransferForm({ isPOS = false }: { isPOS?: boolean }
                   <Barcode className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 </div>
               </form>
+              <MobileBarcodeScanner onScan={(code) => void handleScan(code)} disabled={!sourceId || saving} />
+              </div>
               <div className="text-xs text-muted-foreground">
                 Click an item to add it; click its picture to view all photos. Scanning again adds one more.
               </div>
