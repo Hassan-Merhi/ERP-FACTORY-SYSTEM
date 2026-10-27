@@ -32,7 +32,7 @@ function sendError(res: Response, error: unknown) {
   return res.status(500).json({ code: "PRESSING_ACCESS_FAILED",
     message: "Unable to initialize pressing access. Retry without losing existing scans." });
 }
-async function currentAssignment(companyId: number, userId: string, tx: typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0]) {
+async function currentAssignment(companyId: number, userId: string, tx: Parameters<Parameters<typeof db.transaction>[0]>[0]) {
   const [record] = await tx.select({
     assignmentId: factoryPressingAssignments.id,
     machineId: factoryPressingMachines.id,
@@ -56,7 +56,7 @@ export function registerFactoryPressingMachineManagementRoutes(app: Express) {
       const ctx = await getActiveCompanyPermissionContext(req);
       return res.json({
         companyId: ctx.companyId, userId: ctx.userId,
-        assignment: await currentAssignment(ctx.companyId, ctx.userId, db),
+        assignment: await db.transaction(async tx => currentAssignment(ctx.companyId, ctx.userId, tx)),
       });
     } catch (error) { return sendError(res, error); }
   });
