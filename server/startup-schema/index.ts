@@ -47,6 +47,7 @@ import { spContainerInvoiceCharges } from "./033-sp-container-invoice-charges";
 import { supplierTrackingShopDutyDefaultsSchema } from "./034-supplier-tracking-shop-duty-defaults";
 import { posPortDepartureDateSchema } from "./035-pos-port-departure-date";
 import { zambiaHistoricalPurchaseCostSchema } from "./036-zambia-historical-purchase-cost";
+import { factoryPressingMachineTrackingSchema } from "./037-factory-pressing-machine-tracking";
 
 export const startupMigrations: string[] = [
   ...coreTablesAndColumns,
@@ -93,6 +94,8 @@ export const startupMigrations: string[] = [
   ...posPortDepartureDateSchema,
   // Zambia: additive native-Kwacha purchase columns on tables created in 001.
   ...zambiaHistoricalPurchaseCostSchema,
+  // Phase 1 physical pressing verification: separate from stock finalization.
+  ...factoryPressingMachineTrackingSchema,
 ];
 
 // Re-exported so server/index.ts can bootstrap the journal from the module it
