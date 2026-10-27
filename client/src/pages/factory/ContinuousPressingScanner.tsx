@@ -29,6 +29,9 @@ type ScannerStatus = "idle" | "starting" | "scanning" | "manual" | "error";
 
 type AudioContextLike = AudioContext & { close(): Promise<void> };
 type WebkitAudio = Window & { webkitAudioContext?: typeof AudioContext };
+type ScreenWakeLock = { release(): Promise<void> };
+type ScreenWakeLockNavigator = Navigator & { wakeLock?: { request(type: "screen"): Promise<ScreenWakeLock> } };
+
 type TorchCapabilities = MediaTrackCapabilities & { torch?: boolean; focusMode?: string[] };
 
 const SCAN_POLL_MS = 220;
@@ -169,6 +172,7 @@ export function ContinuousPressingScanner({
     const currentAssignment = assignment;
     let canceled = false;
     let stream: MediaStream | null = null;
+    let screenLock: ScreenWakeLock | null = null;
     let timer: ReturnType<typeof setTimeout> | undefined;
     gateRef.current.reset();
     setStatus("starting");
@@ -230,12 +234,23 @@ export function ContinuousPressingScanner({
           }
         }
         setStatus("scanning");
+        // Where supported, keep the screen awake during deliberate scanning.
+        // Browsers may refuse this request; it is never required for scanning.
+        const wakeLock = (navigator as ScreenWakeLockNavigator).wakeLock;
+        if (wakeLock && !document.hidden) {
+          void wakeLock.request("screen").then(lock => {
+            if (canceled) void lock.release().catch(() => {});
+            else screenLock = lock;
+          }).catch(() => {});
+        }
         void tick(decoder);
       } catch (cause) {
         stream?.getTracks().forEach(track => track.stop());
         stream = null;
-        setStatus("error");
-        setError(cameraErrorMessage(cause));
+        if (!canceled) {
+          setStatus("error");
+          setError(cameraErrorMessage(cause));
+        }
       }
     };
     void start();
@@ -243,6 +258,7 @@ export function ContinuousPressingScanner({
       canceled = true;
       if (timer !== undefined) clearTimeout(timer);
       stream?.getTracks().forEach(track => track.stop());
+      void screenLock?.release().catch(() => {});
       trackRef.current = null;
       if (videoRef.current) videoRef.current.srcObject = null;
       gateRef.current.reset();
@@ -272,7 +288,7 @@ export function ContinuousPressingScanner({
     void handleRead(barcode, assignment);
   };
 
-  const activeStatus = running ? status : requested && !visible ? "idle" : "idle";
+  const activeStatus = running ? status : "idle";
   const badgeColor = last?.outcome === "confirmed" ? "bg-emerald-100 text-emerald-900 border-emerald-400"
     : last?.outcome === "rejected" || last?.outcome === "duplicate"
       ? "bg-red-100 text-red-900 border-red-400"
