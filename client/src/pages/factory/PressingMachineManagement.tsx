@@ -10,6 +10,7 @@ import { useToast } from "@/hooks/use-toast";
 import { ContinuousPressingScanner } from "./ContinuousPressingScanner";
 import { usePressingOfflineSync } from "./pressing-scanner/usePressingOfflineSync";
 import PressingOfflineQueueStatus from "./PressingOfflineQueueStatus";
+import PressingHistoryReport from "./PressingHistoryReport";
 import { useCompany } from "@/contexts/CompanyContext";
 
 const ROOT = "/api/factory/pressing-machines";
@@ -158,7 +159,7 @@ export default function PressingMachineManagement({ active }: { active: boolean 
       <div className="flex flex-wrap items-center gap-2">
         <Factory className="h-6 w-6 text-emerald-500" />
         <h2 className="text-xl font-bold">Pressing Machines</h2>
-        <Badge variant="outline">Offline-safe pressing · Phase 5</Badge>
+        <Badge variant="outline">Pressing history · Phase 6</Badge>
       </div>
       <p className="text-sm text-muted-foreground">
         Assign employees to a press and preserve their assignment history.
@@ -189,6 +190,14 @@ export default function PressingMachineManagement({ active }: { active: boolean 
       />
       {myQuery.data && (
         <PressingOfflineQueueStatus snapshot={pressingQueue.snapshot} retryNow={pressingQueue.retryNow} />
+      )}
+      {myQuery.data && myQuery.data.companyId === selectedCompany?.id && (
+        <PressingHistoryReport
+          key={myQuery.data.companyId + ":" + myQuery.data.userId}
+          active={active}
+          companyId={myQuery.data.companyId}
+          userId={myQuery.data.userId}
+        />
       )}
       {canManage && (
         <>
