@@ -73,14 +73,15 @@ describe("Pressing Machines Phase 8 correction and audit controls", () => {
   it("excludes voids from permanent production and machine analytics", () => {
     expect(report).toContain("COUNT(*) FILTER (WHERE c.voided_at IS NULL)");
     expect(report).toContain("SUM(c.weight_kg) FILTER (WHERE c.voided_at IS NULL)");
-    expect(ops).toContain('"voided_at IS NULL"');
+    expect(routes).not.toContain("registerFactoryPressingOperationsRoutes(app)");
     expect(report).toContain('"c.voided_at IS NOT NULL"');
     expect(report).toContain('c.voided_at AS "voidedAt"');
     expect(queue).toContain("supervisors may subsequently void them");
   });
 
   it("shows an explicit two-step supervisor UI and immutable correction history", () => {
-    expect(history).toContain("canFilterAll && !isCondensed");
+    expect(history).toContain("canSeeEveryone");
+    expect(history).toContain("showCorrections");
     expect(history).toContain("<PressingCorrectionReview");
     expect(ui).toContain("confirmationText.trim().toUpperCase()");
     expect(ui).toContain("reason.trim().length >= 10");
