@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Activity, Clock3, Gauge, PauseCircle, PlayCircle, Plus, RefreshCw } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -102,6 +102,7 @@ export default function PressingShiftAnalytics({
   const [reasonCode,setReason] = useState("MAINTENANCE");
   const [reasonNotes,setNotes] = useState("");
   const [from,setFrom] = useState(dateToday);
+  const initialDateLoaded = useRef(false);
   const [to,setTo] = useState(dateToday);
   const [machineFilter,setMachineFilter] = useState("");
   const [shiftFilter,setShiftFilter] = useState("");
@@ -109,6 +110,17 @@ export default function PressingShiftAnalytics({
   const [targetMachine,setTargetMachine] = useState("");
   const [targetRate,setTargetRate] = useState("");
 
+  const factoryCalendar = useQuery<{ serverToday:string; timeZone:string }>({
+    queryKey:["/api/factory/pressing-machines/report/options","shift-date",...actor],
+    queryFn:()=>readJson(ROOT+"/report/options"),
+    enabled:active&&canManage,staleTime:60_000,refetchOnWindowFocus:false,
+  });
+  useEffect(()=>{
+    const day=factoryCalendar.data?.serverToday;
+    if(!day||initialDateLoaded.current)return;
+    initialDateLoaded.current=true;
+    setFrom(day);setTo(day);
+  },[factoryCalendar.data?.serverToday]);
   const current = useQuery<{ shift: Shift | null; serverTime: string }>({
     queryKey:[ROOT,"shifts-current",...actor],
     queryFn:()=>readJson(ROOT+"/shifts/current"),
