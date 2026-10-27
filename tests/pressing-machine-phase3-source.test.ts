@@ -29,7 +29,7 @@ describe("Pressing Machine Phase 3 integration contract", () => {
     expect(scanner).toContain('second: "2-digit"');
   });
   it("keeps the Phase 3 camera separate from Factory stock finalization", () => {
-    expect(manager).toContain("onBarcode={submitPressingConfirmation}");
+    expect(manager).toContain("onBarcode={pressingQueue.submit}");
     expect(scanner).toContain("Server confirmed:");
     expect(scanner).toContain("Stock finalization is a separate workflow");
     expect(scanner).not.toContain("POST /api/factory/finalize");
