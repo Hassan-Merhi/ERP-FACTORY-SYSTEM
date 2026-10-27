@@ -56,7 +56,7 @@ describe("Pressing Machines Phase 7 integration and safety",()=>{
     expect(ops).toContain('COUNT(*)::integer AS "bales"');
     expect(ops).toContain('SUM(weight_kg)');
     expect(ops).toContain("factory_pressing_downtime d");
-    expect(ops).toContain("rateMethod:\\"OBSERVED_FIRST_TO_LAST_SCAN\\"");
+    expect(ops).toContain('rateMethod:"OBSERVED_FIRST_TO_LAST_SCAN"');
     expect(ops).toContain("observedSeconds");
     expect(ops).toContain("balesPerHour");
     expect(ops).toContain("kgPerHour");
@@ -71,7 +71,7 @@ describe("Pressing Machines Phase 7 integration and safety",()=>{
     expect(ui).toContain("Save schedule");
     expect(ui).toContain("Save Target");
     expect(ui).toContain("Observed h");
-    expect(ui).toContain("not actual pressing cycle time");
+    expect(ui).toContain("not a measured mechanical cycle time");
   });
   it("keeps stock valuation, bale finalization and ERP voucher writes untouched",()=>{
     expect(ops).not.toContain("adjustInventory");
