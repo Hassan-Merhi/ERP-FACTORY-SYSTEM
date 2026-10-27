@@ -50,6 +50,7 @@ export default function PressingHistoryReport({ active, companyId, userId }: His
   const [selectedViewId, setSelectedViewId] = useState("");
   const asOfRef = useRef<string | null>(null);
   const defaultLoaded = useRef<string | null>(null);
+  const datePresetInitialized = useRef(false);
   const keyPrefix = [ROOT, "data", companyId, userId];
 
   function change(values: Partial<PressingReportFilters>) {
@@ -148,6 +149,17 @@ export default function PressingHistoryReport({ active, companyId, userId }: His
     },
     onError: error => toast({ title: "Could not remove saved view", description: errText(error), variant: "destructive" }),
   });
+  // The factory's saved production date can differ from the phone's local date.
+  useEffect(() => {
+    if (datePresetInitialized.current || !optionsQuery.data?.serverToday || !viewsQuery.data) return;
+    datePresetInitialized.current = true;
+    if (!viewsQuery.data.some(view => view.isDefault)) {
+      const serverToday = optionsQuery.data.serverToday;
+      setFilters(old => ({
+        ...old, from: serverToday, to: serverToday, page: 1, asOf: undefined,
+      }));
+    }
+  }, [optionsQuery.data?.serverToday, viewsQuery.data]);
   const isCondensed = filters.mode === "condensed";
   const visibleColumns = isCondensed
     ? columns.filter(col => DEFAULT_CONDENSED.includes(col))
@@ -186,10 +198,14 @@ export default function PressingHistoryReport({ active, companyId, userId }: His
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="flex flex-wrap gap-2">
-          <Button size="sm" variant="outline" onClick={() => change({ from: today(), to: today() })}>Today</Button>
           <Button size="sm" variant="outline" onClick={() => {
-            const month = today().slice(0, 7);
-            change({ from: month + "-01", to: today() });
+            const day = optionsQuery.data?.serverToday || today();
+            change({ from: day, to: day });
+          }}>Today</Button>
+          <Button size="sm" variant="outline" onClick={() => {
+            const day = optionsQuery.data?.serverToday || today();
+            const month = day.slice(0, 7);
+            change({ from: month + "-01", to: day });
           }}>This Month</Button>
           <Button size="sm" variant="outline" onClick={() => change({ from: undefined, to: undefined })}>All Time</Button>
           <Button size="sm" variant={isCondensed ? "outline" : "default"} onClick={() => { change({ mode: "detailed" }); setColumns([...PRESSING_DEFAULT_COLUMNS]); }}>Detailed</Button>
