@@ -105,7 +105,7 @@ export default function PressingOfflineQueueStatus({
                     </span>
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    {timeLabel(row)} · Machine #{row.payload.machineId}
+                    {timeLabel(row)}
                     {row.receipt ? " · " + row.receipt.weightKg + " KG" : ""}
                   </p>
                   {row.lastError && <p className="text-xs text-muted-foreground">{row.lastError}</p>}
