@@ -192,8 +192,8 @@ export default function PressingHistoryReport({ active, companyId, userId }: His
             change({ from: month + "-01", to: today() });
           }}>This Month</Button>
           <Button size="sm" variant="outline" onClick={() => change({ from: undefined, to: undefined })}>All Time</Button>
-          <Button size="sm" variant={isCondensed ? "outline" : "default"} onClick={() => change({ mode: "detailed" })}>Detailed</Button>
-          <Button size="sm" variant={isCondensed ? "default" : "outline"} onClick={() => change({ mode: "condensed" })}>Condensed</Button>
+          <Button size="sm" variant={isCondensed ? "outline" : "default"} onClick={() => { change({ mode: "detailed" }); setColumns([...PRESSING_DEFAULT_COLUMNS]); }}>Detailed</Button>
+          <Button size="sm" variant={isCondensed ? "default" : "outline"} onClick={() => { change({ mode: "condensed" }); setColumns([...DEFAULT_CONDENSED]); }}>Condensed</Button>
         </div>
         <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
           <label className="space-y-1 text-xs">From date
