@@ -81,6 +81,8 @@ export function usePressingOfflineSync(actor: PressingActor | null, active: bool
   const companyId = actor?.companyId ?? null;
   const userId = actor?.userId ?? null;
   const [snapshot, setSnapshot] = useState<PressingQueueSnapshot>(INITIAL);
+  // A different company/user must NEVER see even one paint of prior queue state.
+  const [snapshotScope, setSnapshotScope] = useState<string | null>(null);
   const busy = useRef(false);
   const scopeRef = useRef<string | null>(null);
   const scope = companyId !== null && userId ? companyId + ":" + userId : null;
@@ -91,10 +93,14 @@ export function usePressingOfflineSync(actor: PressingActor | null, active: bool
     const expected = companyId + ":" + userId;
     try {
       const items = await listPressingScans({ companyId, userId });
-      if (scopeRef.current === expected) setSnapshot(summarize(items, null));
+      if (scopeRef.current === expected) {
+        setSnapshot(summarize(items, null));
+        setSnapshotScope(expected);
+      }
     } catch (error) {
       if (scopeRef.current === expected) {
         setSnapshot(prev => ({ ...prev, error: error instanceof Error ? error.message : "Offline queue unavailable" }));
+        setSnapshotScope(expected);
       }
     }
   }, [companyId, userId]);
@@ -207,6 +213,7 @@ export function usePressingOfflineSync(actor: PressingActor | null, active: bool
 
   useEffect(() => {
     setSnapshot(INITIAL); // never show the previous user's/company's local queue
+    setSnapshotScope(null);
     if (!scope) return;
     void refresh();
   }, [scope, refresh]);
@@ -236,7 +243,7 @@ export function usePressingOfflineSync(actor: PressingActor | null, active: bool
   }, [scope, active, syncPending]);
 
   return {
-    snapshot,
+    snapshot: snapshotScope === scope ? snapshot : INITIAL,
     submit,
     refresh,
     retryNow: () => syncPending(true),
