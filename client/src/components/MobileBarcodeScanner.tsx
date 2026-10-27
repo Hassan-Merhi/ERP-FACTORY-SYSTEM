@@ -35,12 +35,14 @@ export function MobileBarcodeScanner({ onScan, disabled = false, className }: Mo
     let timeout: ReturnType<typeof setTimeout> | undefined;
     let stream: MediaStream | undefined;
     let decoder: CameraBarcodeDecoder | null = null;
-    const gate = new ContinuousScanGate();
+    // Re-presenting the same retail item should count again after a brief removal;
+    // suppress duplicate frames while leaving different barcodes immediately scannable.
+    const gate = new ContinuousScanGate(1200, 2);
 
     const tick = async () => {
       if (canceled) return;
       const video = videoRef.current;
-      if (video?.readyState && video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA && decoder) {
+      if (video?.readyState && video.readyState >= 2 && decoder) {
         try {
           const matches = await decoder.detect(video);
           if (canceled) return;
