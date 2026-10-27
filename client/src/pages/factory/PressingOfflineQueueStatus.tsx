@@ -57,7 +57,7 @@ export default function PressingOfflineQueueStatus({
           </div>
           <div className="rounded-md border p-2 text-center">
             <p className="font-semibold text-emerald-700 dark:text-emerald-300">{snapshot.confirmed}</p>
-            <p className="text-xs text-muted-foreground">Server confirmed</p>
+            <p className="text-xs text-muted-foreground">Receipts saved</p>
           </div>
           <div className="rounded-md border p-2 text-center">
             <p className="font-semibold text-red-700 dark:text-red-300">{snapshot.rejected}</p>
@@ -66,7 +66,7 @@ export default function PressingOfflineQueueStatus({
         </div>
         <div className="flex flex-wrap items-center justify-between gap-2">
           <p className="text-xs text-muted-foreground">
-            Only server-confirmed scans count toward production. A pending scan has not been verified.
+            Pending scans are not counted. This device displays original server receipts; supervisors may subsequently void them. Current totals are in Permanent Pressing History.
           </p>
           <Button type="button" size="sm" variant="outline"
             disabled={!snapshot.online || outstanding === 0}
