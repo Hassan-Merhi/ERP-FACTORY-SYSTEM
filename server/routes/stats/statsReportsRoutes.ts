@@ -63,7 +63,7 @@ export function registerStatsReportsRoutes(app: Express) {
           costPrice: salesItems.costPrice,
           totalSales: salesItems.totalSales,
           totalCost: salesItems.totalCost,
-          profit: salesItems.profit,
+          profit: sql<string>`COALESCE(${salesItems.totalSales}::numeric, 0) - COALESCE(${salesItems.totalCost}::numeric, 0)`,
         })
         .from(salesItems)
         .innerJoin(vouchers, eq(salesItems.voucherId, vouchers.id))
@@ -228,7 +228,7 @@ export function registerStatsReportsRoutes(app: Express) {
           itemsTotal: containers.itemsTotal,
           chargesTotal: containers.chargesTotal,
           grandTotal: containers.grandTotal,
-           companyId: containers.companyId,
+          companyId: containers.companyId,
           companyName: companies.name,
         })
         .from(containers)
@@ -298,9 +298,10 @@ export function registerStatsReportsRoutes(app: Express) {
         // CHG-<container>-<id>-<index>, other types -<id>;
         // older rows may have a timestamp suffix instead. Match full container
         // identities, never an ambiguous substring of a container number.
-        const candidates = prefix === "CHG"
-          ? [suffix.replace(/-\\d+-\\d+$/, ""), suffix.replace(/-\\d+$/, "")]
-          : [suffix.replace(/-\\d+$/, "")];
+        const candidates =
+          prefix === "CHG"
+            ? [suffix.replace(/-\\d+-\\d+$/, ""), suffix.replace(/-\\d+$/, "")]
+            : [suffix.replace(/-\\d+$/, "")];
         const containerId = candidates
           .filter((candidate) => candidate !== suffix)
           .map((candidate) => containerLookup.get(`${voucher.companyId}:${candidate}`))
@@ -318,12 +319,8 @@ export function registerStatsReportsRoutes(app: Express) {
         const persistedExtras = offload
           ? toMoney(offload.totalCharges)
               .minus(toMoney(container.chargesTotal))
-              .minus(sumMoney([
-                offload.duties,
-                offload.officeCharges,
-                offload.transportFees,
-                offload.transferCharges,
-              ])).toFixed(2)
+              .minus(sumMoney([offload.duties, offload.officeCharges, offload.transportFees, offload.transferCharges]))
+              .toFixed(2)
           : zero;
         const chargeBreakdown = {
           duties: active?.DUTY ?? offload?.duties ?? zero,
@@ -345,10 +342,16 @@ export function registerStatsReportsRoutes(app: Express) {
         summary: {
           totalContainers: reportContainers.length,
           totalItemsTotal: addInventoryValues(...reportContainers.map((container) => container.itemsTotal)).toNumber(),
-          totalChargesTotal: addInventoryValues(...reportContainers.map((container) => container.chargesTotal)).toNumber(),
+          totalChargesTotal: addInventoryValues(
+            ...reportContainers.map((container) => container.chargesTotal)
+          ).toNumber(),
           totalGrandTotal: addInventoryValues(...reportContainers.map((container) => container.grandTotal)).toNumber(),
-          totalOffloadingCharges: addInventoryValues(...reportContainers.map((container) => container.offloadingCharges)).toNumber(),
-          totalContainerCost: addInventoryValues(...reportContainers.map((container) => container.totalContainerCost)).toNumber(),
+          totalOffloadingCharges: addInventoryValues(
+            ...reportContainers.map((container) => container.offloadingCharges)
+          ).toNumber(),
+          totalContainerCost: addInventoryValues(
+            ...reportContainers.map((container) => container.totalContainerCost)
+          ).toNumber(),
         },
         filters: {
           status: status || null,

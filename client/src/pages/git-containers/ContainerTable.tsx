@@ -19,13 +19,14 @@ interface ContainerTableProps {
   containers: EnrichedContainerRow[];
   colVis: Record<OtwColId, boolean>;
   sessionCompanyId: number | null;
+  readOnly?: boolean;
   onOpenDrawer: (c: EnrichedContainerRow) => void;
   printRef: React.RefObject<HTMLDivElement | null>;
 }
 
 const TRACKING_ROW_HEIGHT = 40;
 
-export function ContainerTable({ containers, colVis, sessionCompanyId, onOpenDrawer, printRef }: ContainerTableProps) {
+export function ContainerTable({ containers, colVis, sessionCompanyId, readOnly = false, onOpenDrawer, printRef }: ContainerTableProps) {
   const isPhone = useErpPhoneLayout();
   const virtualRows = useBoundedTableRows({
     rowCount: containers.length,
@@ -121,7 +122,7 @@ export function ContainerTable({ containers, colVis, sessionCompanyId, onOpenDra
                   {visibleContainers.map((c, visibleIndex) => {
                     const idx = virtualRows.startIndex + visibleIndex;
                     const freight = parseFloat(c.poFreight ?? "0");
-                    const canEditRow = sessionCompanyId === null || c.companyId === sessionCompanyId;
+                    const canEditRow = !readOnly && (sessionCompanyId === null || c.companyId === sessionCompanyId);
 
                     const transUpper = (c.transporter ?? "").toUpperCase();
                     const transDays = transUpper.includes("FARHAT") || transUpper.includes("CONTINENTAL") ? 11 : 14;

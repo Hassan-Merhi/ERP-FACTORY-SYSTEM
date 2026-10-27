@@ -9,6 +9,8 @@ import { hydrateActiveCredentialVersion } from "./services/security/credentialVe
 import { CompanyIsolationError, assertRequestCompanyMatchesSession } from "./services/security/companyIsolationPolicy";
 import { decideExplicitCompanyScope } from "./services/security/companyRequestScopePolicy";
 import { isErpTesterForbiddenApiPath } from "@shared/erpTestCompanyAccess";
+import { isViewOnlyWriteBlocked } from "./services/security/viewOnlyWritePolicy";
+import { canReadAccountMigrationSource } from "./services/security/accountMigrationRequestPolicy";
 
 const EXPECTED_ANONYMOUS_SESSION_REASONS = new Set(["SESSION_REQUIRED", "SESSION_USER_REQUIRED"]);
 
@@ -147,6 +149,12 @@ function authorizeExplicitCompanyScope(req: Request, res: Response): boolean {
 
   const userId = req.session.userId;
   const role = req.session.currentRole;
+
+  // Account Migration is an intentional cross-company Admin read. The global
+  // :companyId guard and the route handler each verify actual user membership
+  // before returning accounts. Do not grant the same override to ordinary
+  // ledger endpoints or write requests.
+  if (canReadAccountMigrationSource(req.method, req.path, role)) return true;
 
   // Developer is the system-wide support/admin role. Its company access is
   // already constrained by the role-specific route policies and canonical
@@ -457,38 +465,6 @@ export async function requirePasswordConfirmation(req: Request, res: Response, n
   }
 }
 
-const VIEW_ONLY_PASSIVE_LIFECYCLE_WRITES = new Set([
-  "PATCH /api/user-presence",
-  "DELETE /api/user-presence",
-  "POST /api/user-presence/leave",
-  "POST /api/screen-feed",
-  "POST /api/screen-feed/pointer",
-  "POST /api/screen-feed/control/tab-heartbeat",
-]);
-
-/**
- * View Only accounts must stay read-only for ERP business data, but a few
- * authenticated writes are transport/lifecycle operations rather than business
- * mutations. These exact paths keep presence, Remote Support capture/control
- * acknowledgements, and the target emergency-stop working without opening a
- * broad /api/screen-feed write exemption.
- *
- * Route-level requireLogin/requireAuth, target-user/session checks, CSRF, and
- * remote-support sensitive-action policies still execute after this middleware.
- */
-function isViewOnlyPassiveLifecycleWrite(req: Request): boolean {
-  const method = req.method.toUpperCase();
-  const path = req.path;
-  if (VIEW_ONLY_PASSIVE_LIFECYCLE_WRITES.has(`${method} ${path}`)) return true;
-  if (method !== "POST") return false;
-
-  return (
-    /^\/api\/screen-feed\/control\/sessions\/[^/]+\/commands\/[^/]+\/result$/.test(path) ||
-    /^\/api\/screen-feed\/control\/sessions\/[^/]+\/keyboard-commands\/[^/]+\/result$/.test(path) ||
-    /^\/api\/screen-feed\/control\/sessions\/[^/]+\/stop$/.test(path)
-  );
-}
-
 /**
  * Sandbox testers can post ordinary ERP test data, but must never reach
  * configuration, maintenance, user management, or non-ERP APIs.
@@ -505,14 +481,8 @@ export function blockErpTesterSettings(req: Request, res: Response, next: NextFu
 }
 
 export function blockViewOnlyWrites(req: Request, res: Response, next: NextFunction) {
-  const method = req.method.toUpperCase();
-  if (method === "GET" || method === "HEAD" || method === "OPTIONS") return next();
-  if (!req.path.startsWith("/api")) return next();
-  if (req.path.startsWith("/api/auth/")) return next();
-  if (isViewOnlyPassiveLifecycleWrite(req)) return next();
-
   const role = req.session?.currentRole;
-  if (role === "View Only") {
+  if (isViewOnlyWriteBlocked(role, req.method, req.path)) {
     logDenied({
       userId: req.session.userId ?? null,
       username: req.session.username ?? null,

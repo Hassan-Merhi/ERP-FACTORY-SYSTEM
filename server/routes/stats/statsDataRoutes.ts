@@ -1,4 +1,5 @@
 import type { Express } from "express";
+import { registerSupplierProfitReconciliationRoutes } from "./supplierProfitReconciliationRoutes";
 import { getErrorMessage } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
 import {
@@ -9,10 +10,20 @@ import {
 } from "../../lib/inventoryMath";
 import { db } from "../../db";
 import { companyStockValue } from "../../services/inventory/stockValuation";
+import { isPerpetualInventoryActive } from "../../services/accounting/perpetualInventory/cutover";
+import { describeInventoryCostBridge } from "../../services/accounting/costBridgeInterpretation";
 import { storage } from "../../storage";
 import { getAccessibleCompanyIds } from "../../security/companyAccessBoundary";
 import { requireAuth, requireNonPOS } from "../../auth";
-import { stockItems, stockGroups, vouchers, salesItems, locations, stockItemLocationPrices, locationPriceGroups } from "@shared/schema";
+import {
+  stockItems,
+  stockGroups,
+  vouchers,
+  salesItems,
+  locations,
+  stockItemLocationPrices,
+  locationPriceGroups,
+} from "@shared/schema";
 import { eq, and, sql, isNull } from "drizzle-orm";
 
 import { getMonthlyData, getStockSummary, getExpenseBreakdown } from "../../services/stats/dashboardStatsService";
@@ -23,6 +34,7 @@ function enhanceSalesReportItem<
     actualSellingPrice: string;
     totalSales: string;
     costProfit: string;
+    totalCost: string;
     quantity: string;
   },
 >(item: T) {
@@ -33,7 +45,9 @@ function enhanceSalesReportItem<
   const configuredProfit = multiplyInventoryValues(subtractInventoryValues(actualPrice, configuredPrice), quantity);
   const totalConfiguredCost = multiplyInventoryValues(configuredPrice, quantity);
   const totalSales = toInventoryDecimal(item.totalSales);
-  const costProfit = toInventoryDecimal(item.costProfit);
+  // Display profit must reconcile to the exact booked line totals. Preserve
+  // stored sales_items.profit as historical evidence; never recost a sale here.
+  const costProfit = subtractInventoryValues(totalSales, toInventoryDecimal(item.totalCost));
   const costProfitPercentage = totalSales.isPositive()
     ? multiplyInventoryValues(divideInventoryValues(costProfit, totalSales), 100)
     : toInventoryDecimal(0);
@@ -43,6 +57,7 @@ function enhanceSalesReportItem<
 
   return {
     ...item,
+    costProfit: costProfit.toString(),
     configuredSellingPrice: configuredPrice.toString(),
     configuredProfit: configuredProfit.toNumber(),
     totalConfiguredCost: totalConfiguredCost.toNumber(),
@@ -65,6 +80,7 @@ const effectiveSalesPriceLocation = sql<number>`COALESCE(
 )`;
 
 export function registerStatsDataRoutes(app: Express) {
+  registerSupplierProfitReconciliationRoutes(app);
   app.get("/api/stats/monthly-data", requireAuth, requireNonPOS, async (req, res) => {
     try {
       const companyId = req.session.currentCompanyId;
@@ -140,7 +156,9 @@ export function registerStatsDataRoutes(app: Express) {
           stockGroupId: stockItems.stockGroupId,
           quantity: salesItems.quantity,
           actualSellingPrice: salesItems.sellingPrice,
-          configuredSellingPrice: sql<string | null>`COALESCE(${stockItemLocationPrices.sellingPrice}, ${stockItems.sellingPrice})`,
+          configuredSellingPrice: sql<
+            string | null
+          >`COALESCE(${stockItemLocationPrices.sellingPrice}, ${stockItems.sellingPrice})`,
           costPrice: salesItems.costPrice,
           totalSales: salesItems.totalSales,
           totalCost: salesItems.totalCost,
@@ -255,6 +273,11 @@ export function registerStatsDataRoutes(app: Express) {
       // Closing stock: the one stock valuation (stockValuation.ts, wave 11),
       // SUM(total_value), not quantity × the rounded average rate.
       const closingStock = dec(await companyStockValue(db, companyId));
+      const perpetualInventoryActive = await isPerpetualInventoryActive(
+        db,
+        companyId,
+        new Date().toISOString().slice(0, 10)
+      );
       const totalSales = dec(row?.total_sales);
       const storedCogs = dec(row?.stored_cogs);
       const reconciledCogs = openingStock
@@ -275,6 +298,7 @@ export function registerStatsDataRoutes(app: Express) {
         reconciliation: subtractInventoryValues(storedCogs, reconciledCogs).toNumber(),
         storedCostProfit: subtractInventoryValues(totalSales, storedCogs).toNumber(),
         adjustedCostProfit: subtractInventoryValues(totalSales, reconciledCogs).toNumber(),
+        ...describeInventoryCostBridge(perpetualInventoryActive),
         formula:
           "Opening Stock + Stock Received + Net Credit/Debit Note Inventory + Stock Adjustment Net - Closing Stock",
       });
@@ -333,7 +357,9 @@ export function registerStatsDataRoutes(app: Express) {
             stockGroupName: stockGroups.name,
             quantity: salesItems.quantity,
             actualSellingPrice: salesItems.sellingPrice,
-            configuredSellingPrice: sql<string | null>`COALESCE(${stockItemLocationPrices.sellingPrice}, ${stockItems.sellingPrice})`,
+            configuredSellingPrice: sql<
+              string | null
+            >`COALESCE(${stockItemLocationPrices.sellingPrice}, ${stockItems.sellingPrice})`,
             costPrice: salesItems.costPrice,
             totalSales: salesItems.totalSales,
             totalCost: salesItems.totalCost,

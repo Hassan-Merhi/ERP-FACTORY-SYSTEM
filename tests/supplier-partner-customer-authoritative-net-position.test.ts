@@ -38,8 +38,9 @@ describe("supplier partner customer Net Position", () => {
   });
 
   it("does not render zero-value cash or bank rows after current translation", () => {
-    const source = read("server/routes/stats/statsMultiCurrencyRoutes.ts");
-    expect(source).toContain(".filter((row) => Math.abs(Number(row.value || 0)) >= 0.005)");
+    // The live translation now lives in the shared monetary overlay.
+    const source = read("server/services/accounting/monetaryFxReportOverlay.ts");
+    expect(source).toContain(".filter((row) => Math.abs(row.value) >= 0.005)");
   });
 
   it("keeps the new SP cash-account labels covered by the shared translation registry and audit", () => {

@@ -197,7 +197,8 @@ export async function completeVoucherPathRequest(
   idempotencyKey: string,
   status: number,
   body: unknown,
-  deterministicSource: boolean
+  deterministicSource: boolean,
+  importFailureRecovery?: { pathname: string; requestId: string | null; fingerprint: string }
 ): Promise<void> {
   if (deterministicSource && status >= 400 && status < 500) {
     await db.execute(sql`
@@ -207,7 +208,44 @@ export async function completeVoucherPathRequest(
     return;
   }
 
-  if (status >= 500) return;
+  if (status >= 500) {
+    // The handler has already returned its error response (and completed any
+    // awaited transaction rollback). A failed import must not strand its batch
+    // forever when there is provably no committed voucher. Never release a
+    // guard if the posting outcome cannot be verified.
+    if (importFailureRecovery) {
+      const { pathname, requestId, fingerprint } = importFailureRecovery;
+      const sourceType = pathname === "/api/credit-sales-import/import"
+        ? "credit-sales-import"
+        : pathname === "/api/pos-import/import"
+          ? "pos-import"
+          : null;
+      if (sourceType && requestId) {
+        const postingKey = `${sourceType}:${companyId}:${requestId}`;
+        const posted = await db.execute(sql`
+          SELECT 1
+          FROM accounting_posting_requests
+          WHERE company_id = ${companyId} AND idempotency_key = ${postingKey}
+          LIMIT 1
+        `);
+        if (posted.rows.length === 0) {
+          await db.execute(sql`
+            DELETE FROM voucher_path_request_guards
+            WHERE company_id = ${companyId}
+              AND idempotency_key = ${idempotencyKey}
+              AND request_fingerprint = ${fingerprint}
+              AND state = 'processing'
+          `);
+          logger.warn("Unblocked failed POS import with no committed voucher", {
+            module: "voucher-path-request-boundary",
+            path: pathname,
+            companyId,
+          });
+        }
+      }
+    }
+    return;
+  }
 
   const responseJson = JSON.stringify(body ?? null);
   await db.execute(sql`
@@ -316,7 +354,14 @@ async function voucherPathPhase5to6Boundary(req: Request, res: Response, next: N
 
   const captured = captureResponse(res);
   res.on("finish", () => {
-    void completeVoucherPathRequest(companyId, idempotencyKey, res.statusCode, captured.read(), phase6).catch(
+    void completeVoucherPathRequest(
+      companyId,
+      idempotencyKey,
+      res.statusCode,
+      captured.read(),
+      phase6,
+      phase6 ? { pathname, requestId: phase5RequestIdentity(req, body), fingerprint } : undefined
+    ).catch(
       (error) => {
         logger.error("Voucher request boundary completion persistence failed", {
           module: "voucher-path-request-boundary",

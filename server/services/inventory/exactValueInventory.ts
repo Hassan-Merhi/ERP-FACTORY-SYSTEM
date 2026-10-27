@@ -2,6 +2,7 @@ import Decimal from "decimal.js";
 import { sql } from "drizzle-orm";
 import type { DbTransaction } from "../../db";
 import { firstRow, resultRows } from "../../lib/queryResult";
+import { clearResolvedNegativeLayers } from "./clearResolvedNegativeLayers";
 
 const ZERO = new Decimal(0);
 const QTY_DP = 3;
@@ -147,6 +148,7 @@ export async function restoreInventoryByExactValue(
         (${companyId}, ${locationId}, ${stockItemId}, ${restoreQty.toFixed(QTY_DP)},
          ${restoreRate.toFixed(RATE_DP)}, ${restoreValue.toFixed(VALUE_DP)}, NOW())
     `);
+    await clearResolvedNegativeLayers(tx, companyId, locationId, stockItemId, restoreQty.toFixed(QTY_DP));
 
     return {
       previousQuantity: 0,
@@ -180,6 +182,7 @@ export async function restoreInventoryByExactValue(
         last_updated = NOW()
     WHERE id = ${existing.id}
   `);
+  await clearResolvedNegativeLayers(tx, companyId, locationId, stockItemId, newQty.toFixed(QTY_DP));
 
   return {
     previousQuantity: currentQty.toNumber(),

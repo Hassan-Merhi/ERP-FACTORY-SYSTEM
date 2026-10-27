@@ -16,6 +16,7 @@ import {
 } from "../../services/accounting/infrastructureVoucherIdentity";
 import {
   assertCompaniesAccess,
+  getAccessibleCompanyIds,
   CompanyAccessError,
   getCompanyAccessContext,
 } from "../../security/companyAccessBoundary";
@@ -280,6 +281,66 @@ function baseAmount(value: string | null | undefined): string {
 }
 
 export function registerAccountMigrationSafeRoutes(app: Express) {
+  // Saved moves remain returnable after the browser navigates away to post
+  // transactions in the temporary company. Expose only the undo identifiers,
+  // not the internal control-reference snapshots stored in the audit row.
+  app.get(
+    "/api/admin/account-migration/pending",
+    requireAuth,
+    requireRole("Admin", "Developer"),
+    async (req: Request, res: Response) => {
+      try {
+        const context = getCompanyAccessContext(req);
+        const accessible = await getAccessibleCompanyIds(context.userId);
+        const companyIds = [...accessible].sort((left, right) => left - right);
+        if (companyIds.length === 0) return res.json([]);
+
+        const rows = await db.transaction(async (tx) => {
+          await tx.execute(sql`SELECT
+            set_config('app.company_scope_maintenance', 'off', true),
+            set_config('app.current_company_id', ${String(context.activeCompanyId)}, true),
+            set_config('app.authorized_company_ids', ${companyIds.join(",")}, true)`);
+          return tx
+            .select()
+            .from(auditLog)
+            .where(
+              and(inArray(auditLog.companyId, companyIds), inArray(auditLog.action, [EXECUTE_ACTION, UNDO_ACTION]))
+            )
+            .orderBy(desc(auditLog.createdAt))
+            .limit(500);
+        });
+
+        const undone = new Set(rows.filter((row) => row.action === UNDO_ACTION).map((row) => row.recordIdentifier));
+        const pending = rows
+          .filter((row) => row.action === EXECUTE_ACTION)
+          .map((row) => savedMigration(row.changes))
+          .filter((saved): saved is SavedMigration => Boolean(saved))
+          .filter(
+            (saved) =>
+              accessible.has(saved.srcCompanyId) &&
+              accessible.has(saved.destCompanyId) &&
+              !undone.has(saved.migrationId)
+          )
+          .slice(0, 100)
+          .map((saved) => ({
+            migrationId: saved.migrationId,
+            srcCompanyId: saved.srcCompanyId,
+            destCompanyId: saved.destCompanyId,
+            accountIds: saved.accountIds,
+            movedVoucherIds: saved.movedVoucherIds,
+            accounts: saved.accounts.map(({ accountId, originalCode, finalCode }) => ({
+              accountId,
+              originalCode,
+              finalCode,
+            })),
+          }));
+        return res.json(pending);
+      } catch (error: unknown) {
+        return respondWithError(res, error);
+      }
+    }
+  );
+
   app.post(
     "/api/admin/account-migration/execute",
     requireAuth,

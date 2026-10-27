@@ -8,6 +8,7 @@ import {
 import { parseRealtimeChatEvent, type RealtimeChatEvent } from "@shared/realtimeChat";
 import { invalidateBandwidthReadCaches, type BandwidthInvalidationScope } from "@/lib/bandwidthInvalidationPolicy";
 import { getRealtimeClientId } from "@/lib/realtimeClientIdentity";
+import { isFxRateDependentQuery } from "@shared/fxRateQueryInvalidation";
 
 // Heavy analytical queries that are intentionally excluded from automatic WS invalidation.
 // These are expensive to compute, have a manual Refresh button, and should not jump
@@ -23,6 +24,7 @@ const STABLE_QUERY_PREFIXES = [
 const TOPIC_QUERY_PREFIXES: Record<RealtimeInvalidationTopic, readonly string[]> = {
   inventory: ["/api/locations", "/api/inventory", "/api/stock", "/api/bales", "/api/location-inventory"],
   pos: ["/api/pos", "/api/sales", "/api/dashboard", "/api/pending-loadings"],
+  fx: [], // matched via the exact-path predicate, not a broad topic prefix
   accounting: [
     "/api/accounts",
     "/api/voucher",
@@ -156,12 +158,17 @@ function queryMatchesPendingInvalidation(
 ): boolean {
   const key = query.queryKey[0];
   if (typeof key !== "string") return true;
-  if (isStableQueryKey(key)) return false;
+  // Heavy reports generally refresh manually, but a committed FX rate is an
+  // explicit monetary-valuation revision: even mounted stable current-USD
+  // reports must update. Other accounting writes retain the old safeguard.
+  if (isStableQueryKey(key) &&
+      !(invalidation.topics.has("fx") && isFxRateDependentQuery(query.queryKey))) return false;
   if (invalidation.blanket) return true;
 
   const isReferenceQuery = TOPIC_QUERY_PREFIXES.reference.some((prefix) => key.startsWith(prefix));
   const matchesTopic = [...invalidation.topics].some((topic) => {
     if (topic === "factory" && isReferenceQuery && !invalidation.topics.has("reference")) return false;
+    if (topic === "fx") return isFxRateDependentQuery(query.queryKey);
     return TOPIC_QUERY_PREFIXES[topic].some((prefix) => key.startsWith(prefix));
   });
   if (!matchesTopic) return false;
@@ -201,7 +208,9 @@ function mergePendingInvalidation(message: RealtimeInvalidationMessage): void {
  */
 function bandwidthScopeFor(invalidation: PendingInvalidation): BandwidthInvalidationScope {
   if (invalidation.blanket) return "all";
-  return invalidation.topics.has("reference") ? "all" : "live";
+  // A rate revision may reprice cached account/customer reference reads as
+  // well as live financial snapshots. Flush both browser cache layers.
+  return invalidation.topics.has("reference") || invalidation.topics.has("fx") ? "all" : "live";
 }
 
 function invalidateActiveQueries(invalidation: PendingInvalidation): void {

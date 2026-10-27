@@ -4,6 +4,7 @@ export const REALTIME_INVALIDATION_TOPICS = [
   "inventory",
   "pos",
   "accounting",
+  "fx",
   "factory",
   "scans",
   "payroll",
@@ -142,7 +143,11 @@ export function classifyRealtimeWrite(url: string, body: unknown): RealtimeWrite
   const locationIds = locationIdsFromWrite(path, body);
   let topics: RealtimeInvalidationTopic[] | undefined;
 
-  if (startsWithAny(path, ["/api/pos", "/api/sales"])) {
+  if (path === "/api/exchange-rates") {
+    // FX changes reprice only current management USD views, not old vouchers.
+    // Separate topic lets other tabs refresh even intentionally stable reports.
+    topics = ["fx"];
+  } else if (startsWithAny(path, ["/api/pos", "/api/sales"])) {
     topics = ["pos", "inventory", "accounting"];
   } else if (startsWithAny(path, ["/api/stock-transfers", "/api/stock-transfer"])) {
     topics = ["inventory", "accounting"];

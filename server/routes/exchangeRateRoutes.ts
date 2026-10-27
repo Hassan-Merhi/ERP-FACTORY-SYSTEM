@@ -14,6 +14,8 @@ import { insertExchangeRateSchema } from "@shared/schema";
 import { normalizeAccountingCurrencyAlias } from "@shared/currencyCatalog";
 import { companyRateValueSchema, companyRateDateSchema } from "@shared/companyRatePolicy";
 import { saveCompanyExchangeRate } from "../services/accounting/exchangeRateWrites";
+import { invalidateCompanyFxRateCaches } from "../services/accounting/invalidateCompanyFxRateCaches";
+import { MonetaryFxError } from "../services/accounting/monetaryFxRates";
 
 type CompanyCurrencyPair = { fromCurrency: string; toCurrency: string };
 
@@ -221,10 +223,18 @@ export function registerExchangeRateRoutes(app: Express) {
         { userId: req.session.userId!, username: req.session.username || "unknown", companyId },
         { fromCurrency, toCurrency, rate: parsed.data.rate, effectiveDate: parsed.data.effectiveDate }
       );
-      // No automatic FX-REVAL journal: report-time cash/bank translation only.
-      // Previously-posted vouchers and historical rates remain unchanged.
+      // This runs AFTER the audited rate transaction commits: no invalidation
+      // on validation failures or rolled-back writes. All consumers (Settings,
+      // daily popup, API clients) share this one backend event.
+      invalidateCompanyFxRateCaches(companyId);
+      // Reporting translations update on next read; no historical voucher,
+      // original currency amount or FX-REVAL journal is written here.
+      res.setHeader("Cache-Control", "private, no-store");
       res.json(rate);
     } catch (error: unknown) {
+      if (error instanceof MonetaryFxError) {
+        return res.status(error.status).json({ code: error.code, message: error.message });
+      }
       res.status(500).json({ message: getErrorMessage(error) });
     }
   });

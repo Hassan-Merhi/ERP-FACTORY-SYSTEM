@@ -2,6 +2,7 @@ import Decimal from "decimal.js";
 import { sql, type SQL } from "drizzle-orm";
 import { logger } from "./lib/logger";
 import { firstRow, resultRows } from "./lib/queryResult";
+import { clearResolvedNegativeLayers } from "./services/inventory/clearResolvedNegativeLayers";
 
 /**
  * The only surface these helpers need from their connection. Typing it
@@ -525,6 +526,9 @@ export async function adjustInventory(
       sourceVoucherId
     );
   }
+  // Legacy reversals may leave shortage metadata after units return to zero
+  // or positive stock. Never allow that metadata to settle a later receipt.
+  await clearResolvedNegativeLayers(tx, companyId, locationId, stockItemId, outcome.newQty.toFixed(QTY_DP));
 
   return resultOf(prevQty, prevValue, outcome, !existing);
 }

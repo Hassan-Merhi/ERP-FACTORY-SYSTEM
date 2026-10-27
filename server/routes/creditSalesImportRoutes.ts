@@ -21,6 +21,7 @@ import { readExcel, sheetToJson, createWorkbook, jsonToSheet, writeWorkbook } fr
 import { getClientDate } from "../lib/dateUtils";
 import { MoneyDecimal, moneyString, parseMoneyInput, sumMoney, toMoney } from "../lib/money";
 import { postErpVoucherTx, sessionPostingActor } from "../services/accounting/erpVoucherPosting";
+import { InvalidExchangeRateError, validateHistoricalRate } from "../services/accounting/currencyAmounts";
 import type Decimal from "decimal.js";
 import { generateInvoicePdf } from "../helpers/generateInvoicePdf";
 import { generateStockPdf } from "../helpers/generateStockPdf";
@@ -233,12 +234,21 @@ export function registerCreditSalesImportRoutes(app: Express) {
         exchangeRate
       );
       assertZmwImportPrices(items, lockedPosCurrency);
+      // The central voucher poster requires ORIGINAL-currency debit/credit fields
+      // for every non-USD sale. CFA was previously omitted here (only ZMW was
+      // included), so every Mali credit import failed before writing a voucher.
+      const nativeRate = lockedPosCurrency.currency === "USD"
+        ? null
+        : validateHistoricalRate(
+            lockedPosCurrency.exchangeRate,
+            `${lockedPosCurrency.currency} credit sales import exchange rate`
+          );
       const nativeTransaction = (total: string) =>
-        lockedPosCurrency.currency === "ZMW"
+        nativeRate
           ? {
-              currency: "ZMW",
-              amount: toMoney(total).times(toMoney(lockedPosCurrency.exchangeRate!)).toFixed(6),
-              rate: lockedPosCurrency.exchangeRate!,
+              currency: lockedPosCurrency.currency,
+              amount: toMoney(total).times(nativeRate).toFixed(lockedPosCurrency.currency === "ZMW" ? 6 : 2),
+              rate: nativeRate.toFixed(),
             }
           : null;
 
@@ -582,6 +592,9 @@ export function registerCreditSalesImportRoutes(app: Express) {
       if (sendBaleMirrorMovementRefusal(res, error)) return;
       if (error instanceof PosZmwRateError) {
         return res.status(error.statusCode).json({ code: error.code, message: error.message });
+      }
+      if (error instanceof InvalidExchangeRateError) {
+        return res.status(400).json({ code: "IMPORT_EXCHANGE_RATE_INVALID", message: error.message });
       }
       logger.error("Credit Sales Import error:", { error: error });
       res.status(500).json({ message: getErrorMessage(error) });

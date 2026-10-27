@@ -39,6 +39,7 @@ describe("factory daybook pagination client", () => {
   });
 
   beforeEach(() => {
+    vi.clearAllTimers();
     harness.previousFetch.mockReset();
     harness.invalidateQueries.mockReset();
     history.replaceState({}, "", "/factory/daybook");
@@ -61,32 +62,37 @@ describe("factory daybook pagination client", () => {
     });
   });
 
-  it("progressively loads the next page near the bottom and merges it into the existing rows", async () => {
+  it("automatically loads every remaining page without scrolling and merges the rows", async () => {
     harness.previousFetch
       .mockResolvedValueOnce(page([{ id: 1 }], 1, 3, 205))
-      .mockResolvedValueOnce(page([{ id: 101 }], 2, 3, 205));
+      .mockResolvedValueOnce(page([{ id: 101 }], 2, 3, 205))
+      .mockResolvedValueOnce(page([{ id: 201 }], 3, 3, 205));
 
     const first = await window.fetch("/api/factory/daybook?txType=SALE");
 
     expect(await first.json()).toEqual([{ id: 1 }]);
     expect(harness.previousFetch.mock.calls[0][0]).toMatch(/pagination=1/);
     expect(harness.previousFetch.mock.calls[0][0]).toMatch(/page=1/);
-    expect(screenText("factory-daybook-progress")).toContain("1 of 205 transactions loaded");
-    expect(document.querySelector("[data-testid='factory-daybook-page-next']")).toBeNull();
+    expect(document.querySelector("[data-testid='factory-daybook-progress']")).toBeNull();
 
-    Object.defineProperty(document.documentElement, "scrollHeight", { configurable: true, value: 1400 });
-    Object.defineProperty(document.documentElement, "clientHeight", { configurable: true, value: 700 });
-    Object.defineProperty(document.documentElement, "scrollTop", { configurable: true, value: 650 });
-    document.documentElement.dispatchEvent(new Event("scroll"));
-
+    // Scrolling no longer drives pagination; the next-page request is automatic.
+    scrollToBottom();
+    expect(harness.invalidateQueries).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(0);
     expect(harness.invalidateQueries).toHaveBeenCalledOnce();
-    expect(screenText("factory-daybook-progress")).toContain("Loading more");
 
     const second = await window.fetch("/api/factory/daybook?txType=SALE");
-
     expect(await second.json()).toEqual([{ id: 1 }, { id: 101 }]);
     expect(harness.previousFetch.mock.calls[1][0]).toMatch(/page=2/);
-    expect(screenText("factory-daybook-progress")).toContain("2 of 205 transactions loaded");
+
+    await vi.advanceTimersByTimeAsync(0);
+    expect(harness.invalidateQueries).toHaveBeenCalledTimes(2);
+
+    const third = await window.fetch("/api/factory/daybook?txType=SALE");
+    expect(await third.json()).toEqual([{ id: 1 }, { id: 101 }, { id: 201 }]);
+    expect(harness.previousFetch.mock.calls[2][0]).toMatch(/page=3/);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(harness.invalidateQueries).toHaveBeenCalledTimes(2);
   });
 
   it("returns an empty list and hides the indicator for an empty result", async () => {
@@ -95,7 +101,7 @@ describe("factory daybook pagination client", () => {
     const response = await window.fetch("/api/factory/daybook?txType=EMPTY");
 
     expect(await response.json()).toEqual([]);
-    expect(progressDisplay()).toBe("none");
+    expect(document.querySelector("[data-testid='factory-daybook-progress']")).toBeNull();
   });
 
   it("treats an envelope without counts as one loaded page rather than an empty result", async () => {
@@ -111,9 +117,9 @@ describe("factory daybook pagination client", () => {
     // The rows still reach the table as an array, and the missing page count is
     // read as "no known next page" instead of "the server reported zero pages".
     expect(await response.json()).toEqual([{ id: 7 }, { id: 8 }]);
-    expect(progressDisplay()).toBe("none");
+    expect(document.querySelector("[data-testid='factory-daybook-progress']")).toBeNull();
 
-    scrollToBottom();
+    await vi.advanceTimersByTimeAsync(0);
     expect(harness.invalidateQueries).not.toHaveBeenCalled();
   });
 
@@ -123,14 +129,13 @@ describe("factory daybook pagination client", () => {
       .mockResolvedValueOnce(page([{ id: 12 }], 2, 2, 2));
 
     await window.fetch("/api/factory/daybook?txType=LAST");
-    scrollToBottom();
+    await vi.advanceTimersByTimeAsync(0);
     expect(harness.invalidateQueries).toHaveBeenCalledOnce();
 
     const last = await window.fetch("/api/factory/daybook?txType=LAST");
     expect(await last.json()).toEqual([{ id: 11 }, { id: 12 }]);
-    expect(progressDisplay()).toBe("none");
-
     harness.invalidateQueries.mockReset();
+    await vi.advanceTimersByTimeAsync(0);
     scrollToBottom();
     expect(harness.invalidateQueries).not.toHaveBeenCalled();
     expect(harness.previousFetch).toHaveBeenCalledTimes(2);
@@ -143,7 +148,7 @@ describe("factory daybook pagination client", () => {
       .mockResolvedValueOnce(page([], 2, 1, 1));
 
     await window.fetch("/api/factory/daybook?txType=SHRANK");
-    scrollToBottom();
+    await vi.advanceTimersByTimeAsync(0);
 
     const stale = await window.fetch("/api/factory/daybook?txType=SHRANK");
 
@@ -164,7 +169,7 @@ describe("factory daybook pagination client", () => {
     // Queue page 2 of company 1, then switch before it is requested. The URL is
     // byte-identical across companies because the company travels in the
     // session cookie.
-    scrollToBottom();
+    await vi.advanceTimersByTimeAsync(0);
     localStorage.setItem("selectedCompanyId", "2");
 
     const switched = await window.fetch("/api/factory/daybook?txType=SCOPE");
@@ -188,15 +193,6 @@ describe("factory daybook pagination client", () => {
     expect(harness.previousFetch.mock.calls.every(([url]) => !String(url).includes("pagination=1"))).toBe(true);
   });
 });
-
-function screenText(testId: string): string {
-  return document.querySelector(`[data-testid='${testId}']`)?.textContent ?? "";
-}
-
-function progressDisplay(): string {
-  const root = document.querySelector<HTMLElement>("[data-testid='factory-daybook-progress']");
-  return root?.style.display ?? "none";
-}
 
 function scrollToBottom(): void {
   Object.defineProperty(document.documentElement, "scrollHeight", { configurable: true, value: 1400 });

@@ -22,6 +22,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import { db, pool } from "../server/db";
 import { adjustInventory, receiveInventoryAtValue, reverseInventoryByExactValue } from "../server/inventoryHelper";
+import { restoreInventoryByExactValue } from "../server/services/inventory/exactValueInventory";
 import { relievedValue } from "../server/services/accounting/perpetualInventory/saleCogs";
 import { createPurchaseOrder } from "../server/storage/containers-store/purchase-orders";
 import { cleanupTestData, closeTestServer, seedTestData, type TestContext } from "./setup";
@@ -87,6 +88,36 @@ beforeEach(async () => {
 });
 
 describe("the costing engine under the negative-stock policy", () => {
+  it("clears only stale shortage metadata when a positive-stock row receives or issues goods", async () => {
+    await move(5, 10);
+    await pool.query(
+      `INSERT INTO inventory_negative_layers (company_id, location_id, stock_item_id, qty, provisional_rate)
+       VALUES ($1, $2, $3, 1, 8)`,
+      [ctx.companyId, ctx.locationId, item]
+    );
+    expect(await layers()).toEqual([[ctx.companyId, "1.000", "8.0000"]]);
+    const receipt = await move(2, 11);
+    expect(receipt.valueDelta).toBe("22.00");
+    expect(await row()).toMatchObject({ q: "7.000", v: "72.00" });
+    expect(await layers()).toEqual([]);
+  });
+
+  it("clears stale shortage metadata after an exact-value historical reversal", async () => {
+    await move(1, 10);
+    await move(-1);
+    await pool.query(
+      `INSERT INTO inventory_negative_layers (company_id, location_id, stock_item_id, qty, provisional_rate)
+       VALUES ($1, $2, $3, 1, 8)`,
+      [ctx.companyId, ctx.locationId, item]
+    );
+    const result = await db.transaction((tx) =>
+      restoreInventoryByExactValue(tx, ctx.companyId, ctx.locationId, item, 1, "10.00")
+    );
+    expect(result.valueDelta).toBe("10.00");
+    expect(await row()).toMatchObject({ q: "1.000", v: "10.00" });
+    expect(await layers()).toEqual([]);
+  });
+
   it("relieves a short issue at the cost memory and goes negative by the same value", async () => {
     await move(10, 6);
     const issued = await move(-15);

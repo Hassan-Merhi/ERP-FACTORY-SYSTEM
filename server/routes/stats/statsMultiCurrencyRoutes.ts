@@ -1,166 +1,19 @@
 import type { Express } from "express";
+import Decimal from "decimal.js";
 import { getErrorMessage } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
-import Decimal from "decimal.js";
 import { requireAuth, requireNonPOS } from "../../auth";
+import { getMonetaryFxValuation } from "../../services/accounting/monetaryFxValuationService";
+import { getMonetaryFxHistoricalRatePreview } from "../../services/accounting/monetaryFxHistoricalRatePreview";
+import { MonetaryFxError } from "../../services/accounting/monetaryFxRates";
+import {
+  applyVerifiedMonetaryFxOverlay,
+  type MonetaryNetPositionPayload,
+} from "../../services/accounting/monetaryFxReportOverlay";
 import {
   getCashBankAccountSummary,
   getCashBankRevaluation,
-  type CashBankCurrencySummary,
 } from "../../services/accounting/cashBankRevaluationService";
-
-function round2(value: number): number {
-  return Math.round((value + Number.EPSILON) * 100) / 100;
-}
-
-/** One account line in a net-position side. */
-type NetPositionAccountRow = {
-  id?: number;
-  /** A bank_accounts line (the report's engine bank rows and their translation). */
-  bankAccountId?: number;
-  name: string;
-  code?: string | null;
-  value: number;
-  category?: string;
-  currencyRevalued?: boolean;
-  nativeBalancesByCurrency?: unknown;
-  historicalBaseBalance?: unknown;
-  currentTranslatedBaseBalance?: unknown;
-  translationDifference?: unknown;
-};
-
-/** One side (for-us / on-us) of the net-position payload. */
-type NetPositionSide = {
-  accounts: NetPositionAccountRow[];
-  total: number;
-  breakdown?: Array<{ name: string; value: number }>;
-};
-
-type NetPositionEquity = {
-  total?: number;
-  includedInNetPosition?: boolean;
-};
-
-type NetPositionBreakdown = {
-  equity?: NetPositionEquity;
-} & Record<string, unknown>;
-
-/** The net-position payload this route re-translates in place. */
-type NetPositionPayload = {
-  forUs?: NetPositionSide;
-  onUs?: NetPositionSide;
-  forUsTotal?: number;
-  onUsTotal?: number;
-  netPosition?: number;
-  netWorth?: number;
-  equity?: NetPositionEquity;
-  netPositionBreakdown?: NetPositionBreakdown;
-  currency?: Record<string, unknown> & {
-    currentCashBankTranslationApplied?: boolean;
-  };
-  currencyRevaluation?: Record<string, unknown>;
-} & Record<string, unknown>;
-
-function rebuildBreakdown(accounts: NetPositionAccountRow[]): Array<{ name: string; value: number }> {
-  const totals = new Map<string, number>();
-  for (const account of accounts) {
-    const category = account.category || "Other";
-    totals.set(category, (totals.get(category) || 0) + Number(account.value || 0));
-  }
-  return [...totals.entries()]
-    .map(([name, value]) => ({ name, value: round2(value) }))
-    .filter((row) => Math.abs(row.value) >= 0.005)
-    .sort((a, b) => Math.abs(b.value) - Math.abs(a.value));
-}
-
-function restoreEquityInclusionContract(payload: NetPositionPayload) {
-  const equity = payload.equity;
-  if (equity && equity.includedInNetPosition == null) {
-    equity.includedInNetPosition = false;
-  }
-
-  const breakdownEquity = payload.netPositionBreakdown?.equity;
-  if (breakdownEquity && breakdownEquity.includedInNetPosition == null) {
-    breakdownEquity.includedInNetPosition = equity?.includedInNetPosition ?? false;
-  }
-
-  return payload;
-}
-
-function applyCurrentCashTranslation(payload: NetPositionPayload, summaries: CashBankCurrencySummary[]) {
-  if (!payload?.forUs || !payload?.onUs) return payload;
-
-  const resolved = summaries.filter((row) => row.currentTranslatedBaseBalance !== null);
-  const resolvedLedgerIds = new Set(resolved.filter((row) => row.accountKind === "ledger").map((row) => row.id));
-  // The report already lists every bank account at its historical base (engine
-  // "bank" rows, carrying bankAccountId): a resolved bank's row is replaced by
-  // its current translation below, exactly like a resolved ledger account, so a
-  // bank is never listed twice. An unresolved bank keeps its historical row.
-  const resolvedBankIds = new Set(resolved.filter((row) => row.accountKind === "bank").map((row) => row.id));
-  const isReplaced = (row: NetPositionAccountRow) =>
-    (row.bankAccountId != null && resolvedBankIds.has(row.bankAccountId)) ||
-    (row.bankAccountId == null && !!row.id && resolvedLedgerIds.has(row.id));
-
-  const oldForUsAccounts = Array.isArray(payload.forUs.accounts) ? payload.forUs.accounts : [];
-  const oldOnUsAccounts = Array.isArray(payload.onUs.accounts) ? payload.onUs.accounts : [];
-  const removedForUs = oldForUsAccounts.filter(isReplaced);
-  const removedOnUs = oldOnUsAccounts.filter(isReplaced);
-
-  const forUsAccounts = oldForUsAccounts.filter((row: NetPositionAccountRow) => !isReplaced(row));
-  const onUsAccounts = oldOnUsAccounts.filter((row: NetPositionAccountRow) => !isReplaced(row));
-
-  let forUsTotal = new Decimal(payload.forUs.total ?? payload.forUsTotal ?? 0);
-  let onUsTotal = new Decimal(payload.onUs.total ?? payload.onUsTotal ?? 0);
-  for (const row of removedForUs) forUsTotal = forUsTotal.minus(row.value || 0);
-  for (const row of removedOnUs) onUsTotal = onUsTotal.minus(row.value || 0);
-
-  for (const summary of resolved) {
-    const translated = new Decimal(summary.currentTranslatedBaseBalance || 0);
-    const accountRow = {
-      id: summary.accountKind === "ledger" ? summary.id : undefined,
-      bankAccountId: summary.accountKind === "bank" ? summary.id : undefined,
-      name: summary.name,
-      code: summary.code,
-      value: translated.abs().toDecimalPlaces(2).toNumber(),
-      category: "Cash / Bank (Current Translation)",
-      currencyRevalued: true,
-      nativeBalancesByCurrency: summary.nativeBalancesByCurrency,
-      historicalBaseBalance: summary.historicalBaseBalance,
-      currentTranslatedBaseBalance: summary.currentTranslatedBaseBalance,
-      translationDifference: summary.translationDifference,
-    };
-    if (translated.gte(0)) {
-      forUsAccounts.push(accountRow);
-      forUsTotal = forUsTotal.plus(translated);
-    } else {
-      onUsAccounts.push(accountRow);
-      onUsTotal = onUsTotal.plus(translated.abs());
-    }
-  }
-
-  const forUsRounded = round2(forUsTotal.toNumber());
-  const onUsRounded = round2(onUsTotal.toNumber());
-  const equityContribution =
-    payload.equity?.includedInNetPosition === true ? new Decimal(payload.equity.total ?? 0) : new Decimal(0);
-  const netPosition = round2(new Decimal(forUsRounded).minus(onUsRounded).plus(equityContribution).toNumber());
-
-  payload.forUs.accounts = forUsAccounts
-    .filter((row) => Math.abs(Number(row.value || 0)) >= 0.005)
-    .sort((a, b) => Number(b.value || 0) - Number(a.value || 0));
-  payload.onUs.accounts = onUsAccounts
-    .filter((row) => Math.abs(Number(row.value || 0)) >= 0.005)
-    .sort((a, b) => Number(b.value || 0) - Number(a.value || 0));
-  payload.forUs.total = forUsRounded;
-  payload.onUs.total = onUsRounded;
-  payload.forUs.breakdown = rebuildBreakdown(payload.forUs.accounts);
-  payload.onUs.breakdown = rebuildBreakdown(payload.onUs.accounts);
-  payload.forUsTotal = forUsRounded;
-  payload.onUsTotal = onUsRounded;
-  payload.netPosition = netPosition;
-  payload.netWorth = netPosition;
-  payload.netPositionLabel = netPosition >= 0 ? "Net Assets" : "Net Liabilities";
-  return payload;
-}
 
 /**
  * Registered from statsRoutes only to keep the top-level route registry small.
@@ -168,67 +21,140 @@ function applyCurrentCashTranslation(payload: NetPositionPayload, summaries: Cas
  * not need the separate Analytics-module permission to view cash/bank balances.
  */
 export function registerStatsMultiCurrencyRoutes(app: Express) {
-  // Register before /api/stats/net-profit. It post-processes the live snapshot so
-  // only actual cash/bank accounts are translated at the current rate. Historical
-  // or date-filtered snapshots remain based on their stored historical amounts.
-  app.use(async (req, res, next) => {
-    if (req.method !== "GET" || req.path !== "/api/stats/net-profit" || req.query.toDate) {
-      return next();
+  // Phase 5: audit-friendly effective rates for a selected company-local date.
+  // Historical ACCOUNT balances remain booked at their original USD basis.
+  // A rate from today must never be applied to today's balances and passed
+  // off as a historical balance-sheet snapshot.
+  app.get("/api/accounts/multi-currency/rates-as-of", requireAuth, requireNonPOS, async (req, res) => {
+    const companyId = req.session.currentCompanyId;
+    if (!companyId) return res.status(400).json({ code: "FX_COMPANY_INVALID", message: "No company selected" });
+    const asOf = req.query.asOf;
+    if (typeof asOf !== "string") {
+      return res.status(400).json({ code: "FX_DATE_INVALID", message: "Provide asOf in YYYY-MM-DD format" });
     }
+    res.setHeader("Cache-Control", "private, no-store");
+    try {
+      return res.json(await getMonetaryFxHistoricalRatePreview(companyId, asOf));
+    } catch (error: unknown) {
+      if (error instanceof MonetaryFxError) {
+        return res.status(error.status).json({ code: error.code, message: error.message });
+      }
+      logger.error("Historical company FX rate preview failed", { companyId, error });
+      return res.status(500).json({ code: "FX_AS_OF_PREVIEW_FAILED", message: getErrorMessage(error) });
+    }
+  });
+
+  // Phase 2: read-only four-category valuation. This does NOT adjust report
+  // totals yet; later phases will integrate uniquely attributed rows.
+  app.get("/api/accounts/multi-currency/monetary-valuation", requireAuth, requireNonPOS, async (req, res) => {
+    const companyId = req.session.currentCompanyId;
+    if (!companyId) return res.status(400).json({ message: "No company selected" });
+    res.setHeader("Cache-Control", "private, no-store");
+    try {
+      return res.json(await getMonetaryFxValuation(companyId));
+    } catch (error: unknown) {
+      logger.error("Unable to calculate read-only monetary FX valuation", { companyId, error });
+      return res.status(500).json({
+        code: "MONETARY_FX_VALUATION_FAILED",
+        message: getErrorMessage(error),
+      });
+    }
+  });
+
+
+  // Register before /api/stats/net-profit. Only the live, unfiltered ERP
+  // snapshot is translated; historical/as-of views retain locked posted USD.
+  // Group Net Position captures this wrapper too, keeping one projection.
+  app.use(async (req, res, next) => {
+    if (req.method !== "GET" || req.path !== "/api/stats/net-profit" || req.query.toDate) return next();
     const companyId = req.session.currentCompanyId;
     if (!companyId) return next();
 
     try {
-      // Engine attribution (wave 10 part 3): bank aggregates hold only the lines
-      // naming the bank and no ledger account, and a linked bank keeps its own
-      // row, so the translated rows partition the lines exactly as the report's
-      // historical ledger and bank rows do.
-      const revaluation = await getCashBankRevaluation(companyId, { attribution: "engine" });
-      const resolvedAccounts = revaluation.accounts.filter((row) => row.currentTranslatedBaseBalance !== null);
-      const currentTranslatedLedgerAccountIds = resolvedAccounts
-        .filter((row) => row.accountKind === "ledger")
-        .map((row) => row.id);
-      const currentTranslatedBankAccountIds = resolvedAccounts
-        .filter((row) => row.accountKind === "bank")
-        .map((row) => row.id);
-      const currentCashBankTranslationDifference = round2(
-        resolvedAccounts.reduce((total, row) => total.plus(row.translationDifference ?? 0), new Decimal(0)).toNumber()
-      );
+      // Pure reporting valuation. No FX-REVAL vouchers are ever posted here.
+      const valuation = await getMonetaryFxValuation(companyId);
       const originalJson = res.json.bind(res);
-      res.json = ((payload) => {
-        // The existing report engine caches its object. Clone before adjusting so
-        // repeated requests never reapply translation to the cached reference.
-        const reportTotalsProvisional = Boolean(payload?.currencyRevaluation?.reportTotalsProvisional);
-        const copy = payload == null ? payload : JSON.parse(JSON.stringify(payload));
-        const translated = applyCurrentCashTranslation(copy, revaluation.accounts);
-        const adjusted = restoreEquityInclusionContract(translated);
-        if (adjusted?.currency) adjusted.currency.currentCashBankTranslationApplied = true;
+      res.json = ((payload: MonetaryNetPositionPayload) => {
+        if (!payload?.forUs || !payload.onUs) return originalJson(payload);
+        // The source report is cached and shared. Clone before overlay so that
+        // repeated reads never apply the same translation a second time.
+        const copy = JSON.parse(JSON.stringify(payload)) as MonetaryNetPositionPayload;
+        const translated = applyVerifiedMonetaryFxOverlay(copy, valuation);
+        const adjusted = translated.payload;
+        if (adjusted.equity && adjusted.equity.includedInNetPosition == null) {
+          adjusted.equity.includedInNetPosition = false;
+        }
+        const isCashBankKey = (key: string) => key.startsWith("ledger:") || key.startsWith("bank:");
+        const cashBankApplied = translated.appliedKeys.some(isCashBankKey);
+        if (adjusted.currency) {
+          if (cashBankApplied) adjusted.currency.currentCashBankTranslationApplied = true;
+          else adjusted.currency.currentCashBankTranslationApplied = false;
+          adjusted.currency.currentMonetaryTranslationApplied = translated.appliedKeys.length > 0;
+        }
+        // Compatibility figures of the former cash/bank-only translation: the
+        // company's current CFA / ZMW quotes (foreign per USD) and the cash/bank
+        // share of the translation difference, both read from the same
+        // valuation so no second rate lookup can disagree with it.
+        const quoteForeignPerUsd = (currency: string): string | null => {
+          const quote = valuation.rates.find((rate) => rate.currency === currency);
+          if (!quote) return null;
+          const rate = new Decimal(quote.rate);
+          if (!rate.isFinite() || rate.lte(0)) return null;
+          return (quote.direction === "FOREIGN_PER_USD" ? rate : new Decimal(1).div(rate))
+            .toDecimalPlaces(10).toFixed(10);
+        };
+        const appliedKeySet = new Set(translated.appliedKeys);
+        const cashBankDifference = valuation.accounts
+          .filter((account) => appliedKeySet.has(account.accountKey) && isCashBankKey(account.accountKey))
+          .reduce((sum, account) => sum.plus(account.translationDifferenceUsd ?? 0), new Decimal(0));
+        const unresolvedAccounts = valuation.accounts
+          .filter((account) => account.provisional && account.eligibility !== "needs_review")
+          .map((account) => ({
+            accountKind: account.accountKind,
+            accountKey: account.accountKey,
+            id: account.id,
+            name: account.name,
+            category: account.category,
+            openingBalanceCurrencyUnresolved: account.unresolvedOpening,
+            openingBookMismatch: account.openingBookMismatch,
+            unresolvedLegacyEntryCount: account.unresolvedEntryCount,
+            currentRateMissing: account.unresolvedCurrencies.some(
+              (currency) => valuation.rateErrorsByCurrency[currency] !== undefined
+            ),
+            unresolvedTranslationCurrencies: account.unresolvedCurrencies,
+          }));
+        const previous = adjusted.currencyRevaluation ?? {};
         adjusted.currencyRevaluation = {
-          currentCfaPerUsd: revaluation.currentCfaPerUsd,
-          currentZmwPerUsd: revaluation.currentZmwPerUsd,
-          unresolvedAccountCount: revaluation.unresolvedAccountCount,
-          unresolvedAccounts: revaluation.accounts
-            .filter((row) => row.totalsProvisional)
-            .map((row) => ({
-              accountKind: row.accountKind,
-              id: row.id,
-              name: row.name,
-              openingBalanceCurrencyUnresolved: row.openingBalanceCurrencyUnresolved,
-              unresolvedLegacyEntryCount: row.unresolvedLegacyEntryCount,
-              currentRateMissing: row.currentRateMissing,
-              unresolvedTranslationCurrencies: row.unresolvedTranslationCurrencies,
-            })),
+          ...previous,
+          valuationMode: "CURRENT",
+          currentCfaPerUsd: quoteForeignPerUsd("CFA"),
+          currentZmwPerUsd: quoteForeignPerUsd("ZMW"),
+          currentCashBankTranslationDifference: cashBankDifference.toDecimalPlaces(2).toNumber(),
+          unresolvedAccounts,
+          currentMonetaryTranslationApplied: translated.appliedKeys.length > 0,
+          currentMonetaryTranslationDifferenceUsd: translated.currentMonetaryTranslationDifferenceUsd,
+          appliedAccountKeys: translated.appliedKeys,
+          skippedAccountKeys: translated.skipped,
+          unresolvedAccountCount: valuation.unresolvedAccountCount,
+          needsReviewCount: valuation.needsReviewCount,
+          rateErrorsByCurrency: valuation.rateErrorsByCurrency,
           appliedToCurrentSnapshotOnly: true,
-          reportTotalsProvisional,
-          currentTranslatedLedgerAccountIds,
-          currentTranslatedBankAccountIds,
-          currentCashBankTranslationDifference,
+          reportTotalsProvisional: Boolean(previous.reportTotalsProvisional) ||
+            valuation.unresolvedAccountCount > 0 || valuation.needsReviewCount > 0,
+          // Compatibility for existing clients that display the monetary
+          // translation status under its former cash/bank-only indicator.
+          currentTranslatedLedgerAccountIds: translated.appliedKeys
+            .filter((key) => key.startsWith("ledger:")).map((key) => Number(key.slice(7))),
+          currentTranslatedBankAccountIds: translated.appliedKeys
+            .filter((key) => key.startsWith("bank:")).map((key) => Number(key.slice(5))),
         };
         return originalJson(adjusted);
       }) as typeof res.json;
     } catch (error) {
-      logger.error("Unable to prepare cash-only Net Position translation:", {
-        error: error,
+      // A missing/out-of-scope rate cannot modify or corrupt the historical
+      // book view. Keep it visible and report the skipped valuation.
+      logger.error("Unable to prepare current monetary Net Position translation", {
+        companyId, error,
       });
     }
     return next();

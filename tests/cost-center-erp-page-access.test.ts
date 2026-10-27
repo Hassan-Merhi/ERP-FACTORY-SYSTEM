@@ -75,6 +75,16 @@ describe("ERP Cost Center server-side feature authorization", () => {
     }
   });
 
+  it("allows ERP View Only accounts to browse cost centers by default but respects explicit page allow-lists", async () => {
+    const allowed = await check("/api/cost-centers/reports/summary", "View Only", []);
+    expect(allowed.next).toHaveBeenCalledOnce();
+    expect(allowed.response.status).not.toHaveBeenCalled();
+
+    const denied = await check("/api/cost-centers/reports/summary", "View Only", ["daybook"]);
+    expect(denied.response.status).toHaveBeenCalledWith(403);
+    expect(denied.next).not.toHaveBeenCalled();
+  });
+
   it("preserves Admin and Developer full-access semantics", async () => {
     for (const role of ["Admin", "Developer"]) {
       const { response, next } = await check("/api/cost-centers", role, []);

@@ -64,6 +64,8 @@ export type StatementQueryResult = {
 };
 
 export interface StatementPage {
+  /** Present when a ledger is customer-owned (or the endpoint is a customer). */
+  customerId?: number;
   transactions: unknown[];
   currencySummary: ReturnType<typeof summarizeAccountStatementCurrency>;
   preNetBalance: number;

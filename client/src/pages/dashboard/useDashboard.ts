@@ -1,4 +1,5 @@
 import { visibleTabInterval } from "@/lib/queryPolicies";
+import { authenticatedUserQueryOptions } from "@/contracts/sessionQueryContracts";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useMemo, useRef, useState } from "react";
 import { useLocation } from "wouter";
@@ -46,6 +47,8 @@ export function useDashboard() {
   const modeApiRequest = getApiRequest(appMode);
   const [, setLocation] = useLocation();
   const isFactoryMode = appMode === "factory";
+  const { data: viewer } = useQuery(authenticatedUserQueryOptions());
+  const isViewer = (viewer?.currentRole ?? viewer?.role) === "View Only";
 
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isAddPayableDialogOpen, setIsAddPayableDialogOpen] = useState(false);
@@ -256,7 +259,7 @@ export function useDashboard() {
 
   const handleCashDrop = (targetId: number) => {
     const fromId = dragCashRef.current;
-    if (fromId === null || fromId === targetId) return;
+    if (isViewer || fromId === null || fromId === targetId) return;
     const ids = displayedCashAccounts.map((d) => d.id);
     const fromIdx = ids.indexOf(fromId);
     const toIdx = ids.indexOf(targetId);
@@ -278,7 +281,7 @@ export function useDashboard() {
 
   const handlePayableDrop = (targetId: number) => {
     const fromId = dragPayableRef.current;
-    if (fromId === null || fromId === targetId) return;
+    if (isViewer || fromId === null || fromId === targetId) return;
     const paIds = dashboardPayableAccounts.map((d) => d.id);
     const fromIdx = paIds.indexOf(fromId);
     const toIdx = paIds.indexOf(targetId);
@@ -352,6 +355,7 @@ export function useDashboard() {
     modePrefix,
     setLocation,
     isFactoryMode,
+    isViewer,
     isAddDialogOpen,
     setIsAddDialogOpen,
     isAddPayableDialogOpen,

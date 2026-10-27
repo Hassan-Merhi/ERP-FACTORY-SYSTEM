@@ -11,6 +11,11 @@ import { computeHistoricalFactoryAssetLiabilityOperations } from "../../../servi
 import { loadFactoryHistoricalCoverage } from "../../../services/factory/netPositionHistoryCoverage";
 import { loadFxWalletHistoryGaps } from "../../../services/factory/netPositionFxWalletCoverage";
 import { finishFactoryNetPosition } from "./netPositionHistoricalResponse";
+import { getMonetaryFxValuation } from "../../../services/accounting/monetaryFxValuationService";
+import {
+  applyVerifiedMonetaryFxOverlay,
+  type MonetaryNetPositionPayload,
+} from "../../../services/accounting/monetaryFxReportOverlay";
 import { computeLiveFactoryPrepaidRent } from "./netPositionLiveRent";
 import {
   fxAgentTablesExist,
@@ -408,7 +413,7 @@ export function registerEmployeeNetPositionRoutes(app: Express) {
       });
       const ledgerOnUsTotal = round2(ledgerOnUs.reduce((s: number, a) => s + a.value, 0));
 
-      const customerItems: { name: string; balanceUsd: number; ledgerAccountId?: number }[] = [];
+      const customerItems: { customerId: number; name: string; balanceUsd: number; ledgerAccountId?: number }[] = [];
 
       if (allCustomersForNP.length > 0) {
         // Match the Parties page's combined ledger + operational balance exactly.
@@ -423,6 +428,7 @@ export function registerEmployeeNetPositionRoutes(app: Express) {
           const balance = (f?.ledger ?? new MoneyDecimal(0)).plus(f?.memoTotal ?? 0);
           if (balance.abs().gte(0.01))
             customerItems.push({
+              customerId: c.id,
               name: c.legalName || `Customer #${c.id}`,
               balanceUsd: round2(balance.toNumber()),
               ledgerAccountId: c.ledgerAccountId || undefined,
@@ -692,6 +698,8 @@ export function registerEmployeeNetPositionRoutes(app: Express) {
             ...(c.ledgerAccountId ? { id: c.ledgerAccountId } : {}),
             name: c.name,
             code: "CUSTOMER_DR",
+            partyKind: "customer",
+            partyId: c.customerId,
             value: round2(c.balanceUsd),
             category: "Customer",
           })),
@@ -767,6 +775,8 @@ export function registerEmployeeNetPositionRoutes(app: Express) {
             ...(c.ledgerAccountId ? { id: c.ledgerAccountId } : {}),
             name: c.name,
             code: "CUSTOMER_CR",
+            partyKind: "customer",
+            partyId: c.customerId,
             value: round2(Math.abs(c.balanceUsd)),
             category: "Customer",
           })),
@@ -827,17 +837,51 @@ export function registerEmployeeNetPositionRoutes(app: Express) {
         payrollPayable: employeeSalariesPayable,
       };
 
-      res.json(
-        await finishFactoryNetPosition({
-          companyId,
-          scope: asOfContext,
-          body: responseBody,
-          valuationMode,
-          historyCoverage,
-          pipelineWarnings: historicalPipeline?.warnings ?? [],
-          assetWarnings: historicalAssets?.warnings ?? [],
-        })
-      );
+      const finished = await finishFactoryNetPosition({
+        companyId,
+        scope: asOfContext,
+        body: responseBody,
+        valuationMode,
+        historyCoverage,
+        pipelineWarnings: historicalPipeline?.warnings ?? [],
+        assetWarnings: historicalAssets?.warnings ?? [],
+      });
+
+      // Factory has substantial nonmonetary stock/WIP/order cost valuations
+      // and historical replay safeguards. Apply only *today's* verified
+      // monetary ledger/customer rows, never its inventory/supplier/operational
+      // memo rows. Pinned secondary companies need a separate authorized
+      // reporting scope; never borrow the ERP session's exchange rate.
+      if (!asOfContext.isHistorical && Number(req.session?.currentCompanyId) === companyId) {
+        try {
+          const valuation = await getMonetaryFxValuation(companyId);
+          const projected = applyVerifiedMonetaryFxOverlay(
+            finished as unknown as MonetaryNetPositionPayload,
+            valuation
+          );
+          const report = projected.payload;
+          if (projected.appliedKeys.length) {
+            report.ledgerAssets = round2(Number(finished.ledgerAssets) + projected.ledgerForUsDelta);
+            report.ledgerLiabilities = round2(Number(finished.ledgerLiabilities) + projected.ledgerOnUsDelta);
+          }
+          report.currencyRevaluation = {
+            valuationMode: "CURRENT",
+            currentMonetaryTranslationApplied: projected.appliedKeys.length > 0,
+            appliedAccountKeys: projected.appliedKeys,
+            skippedAccountKeys: projected.skipped,
+            unresolvedAccountCount: valuation.unresolvedAccountCount,
+            needsReviewCount: valuation.needsReviewCount,
+            rateErrorsByCurrency: valuation.rateErrorsByCurrency,
+            currentMonetaryTranslationDifferenceUsd: projected.currentMonetaryTranslationDifferenceUsd,
+          };
+          return res.json(report);
+        } catch (error) {
+          logger.error("Factory current monetary FX projection unavailable; keeping original USD book", {
+            companyId, error,
+          });
+        }
+      }
+      return res.json(finished);
     } catch (error: unknown) {
       if (error instanceof FactoryNetPositionDateError) {
         return res.status(error.status).json({ code: error.code, message: error.message });
