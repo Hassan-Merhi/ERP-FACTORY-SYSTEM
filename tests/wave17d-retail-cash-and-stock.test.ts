@@ -263,8 +263,9 @@ describe("Retail cash movements in the ledger (decision 2)", () => {
   });
 
   it("journals the shift's cash short at close to Cash Over/Short", async () => {
-    // Expected 100 + 20 − 5.25 + 1 = 115.75; counted 113.75: short 2.00.
-    const closed = await agent.post(`/api/pos/shifts/${shiftId}/close`).send({ closingCash: "113.75" });
+    // The opening float is the cash ledger balance at open (0 here), not the
+    // requested 100: expected 0 + 20 − 5.25 + 1 = 15.75; counted 13.75: short 2.00.
+    const closed = await agent.post(`/api/pos/shifts/${shiftId}/close`).send({ closingCash: "13.75" });
     expect(closed.status).toBe(200);
     expect(closed.body.variance).toBe("-2.00");
     expect(await voucherLines(`RETAIL-OVERSHORT-${shiftId}`)).toEqual([

@@ -53,6 +53,12 @@ interface OtwContainer {
 const PLAN_KEY = ["/api/factory/raw-stock/fixed-production-planner"] as const;
 const OTW_KEY = ["/api/factory/containers?activeOnly=true"] as const;
 const CATEGORIES_KEY = ["/api/factory/supplier-categories"] as const;
+// These private cache keys deliberately do not alias live Factory queries.
+// The planner is a user-controlled snapshot, never an observer of background
+// websocket invalidations, focus/reconnect events, or other pages' refetches.
+const PLAN_SNAPSHOT_KEY = ["fixed-production-planner-snapshot", "plan"] as const;
+const OTW_SNAPSHOT_KEY = ["fixed-production-planner-snapshot", "otw"] as const;
+const CATEGORIES_SNAPSHOT_KEY = ["fixed-production-planner-snapshot", "categories"] as const;
 const apiRequest = getApiRequest("factory");
 
 function displayKg(value: number): string {
@@ -75,14 +81,17 @@ export function FixedProductionPlannerDialog({
     translateFixedProductionPlanner(key, language, params);
   const [inputs, setInputs] = useState<Record<string, string>>({});
   const [hasEdits, setHasEdits] = useState(false);
+  const [isManualRefreshing, setIsManualRefreshing] = useState(false);
   const reportRef = useRef<HTMLDivElement>(null);
   // Freeze displayed stock while the popup is open; only Refresh replaces it.
   const [stockSnapshot, setStockSnapshot] = useState<RawStockRow[] | null>(null);
   const [supplierSnapshot, setSupplierSnapshot] = useState<OffloadSupplierOption[] | null>(null);
 
   const planQuery = useQuery<PlannerRecord>({
-    queryKey: [...PLAN_KEY],
-    enabled: open,
+    queryKey: [...PLAN_SNAPSHOT_KEY],
+    // Do not automatically fetch or react to cache invalidation. Fetch on
+    // opening the dialog or when the user explicitly presses Refresh.
+    enabled: false,
     queryFn: async () => {
       const res = await apiRequest("GET", PLAN_KEY[0]);
       return res.json();
@@ -90,11 +99,12 @@ export function FixedProductionPlannerDialog({
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
     refetchOnMount: false,
-    staleTime: Infinity,
+    staleTime: "static",
+    refetchInterval: false,
   });
   const otwQuery = useQuery<OtwContainer[]>({
-    queryKey: [...OTW_KEY],
-    enabled: open,
+    queryKey: [...OTW_SNAPSHOT_KEY],
+    enabled: false,
     queryFn: async () => {
       const res = await apiRequest("GET", OTW_KEY[0]);
       return res.json();
@@ -102,11 +112,12 @@ export function FixedProductionPlannerDialog({
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
     refetchOnMount: false,
-    staleTime: Infinity,
+    staleTime: "static",
+    refetchInterval: false,
   });
   const categoryQuery = useQuery<FixedPlanCategory[]>({
-    queryKey: [...CATEGORIES_KEY],
-    enabled: open,
+    queryKey: [...CATEGORIES_SNAPSHOT_KEY],
+    enabled: false,
     queryFn: async () => {
       const res = await apiRequest("GET", CATEGORIES_KEY[0]);
       return res.json();
@@ -114,14 +125,28 @@ export function FixedProductionPlannerDialog({
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
     refetchOnMount: false,
-    staleTime: Infinity,
+    staleTime: "static",
+    refetchInterval: false,
   });
 
+  // Each opening starts a single fresh snapshot. Disabled React Query observers
+  // never refetch due to Factory-wide invalidation, polling, or reconnect.
   useEffect(() => {
-    if (!open || rawStockLoading || suppliersLoading || rawStockError || suppliersError || stockSnapshot !== null)
-      return;
-    setStockSnapshot(rawStock);
-    setSupplierSnapshot(suppliers);
+    if (!open) return;
+    void Promise.all([planQuery.refetch(), otwQuery.refetch(), categoryQuery.refetch()]);
+  }, [open, planQuery.refetch, otwQuery.refetch, categoryQuery.refetch]);
+
+  useEffect(() => {
+    if (!open || stockSnapshot !== null) return;
+    // The parent Raw Materials page can already be background-refetching when
+    // this popup opens. Use its last complete cache value instead of waiting
+    // for that unrelated refresh to finish (or capturing a placeholder []).
+    const cachedStock = queryClient.getQueryData<RawStockRow[]>(["/api/factory/raw-stock"]);
+    const cachedSuppliers = queryClient.getQueryData<OffloadSupplierOption[]>(["/api/factory/suppliers"]);
+    if ((rawStockLoading || rawStockError) && !cachedStock) return;
+    if ((suppliersLoading || suppliersError) && !cachedSuppliers) return;
+    setStockSnapshot(cachedStock ?? rawStock);
+    setSupplierSnapshot(cachedSuppliers ?? suppliers);
   }, [open, rawStock, suppliers, rawStockLoading, suppliersLoading, rawStockError, suppliersError, stockSnapshot]);
 
   const planCategories = useMemo(() => categoryQuery.data ?? [], [categoryQuery.data]);
@@ -161,11 +186,12 @@ export function FixedProductionPlannerDialog({
       });
       return res.json() as Promise<PlannerRecord>;
     },
-    onSuccess: async () => {
-      // The saved response contains legacy supplier IDs as well as category keys.
-      // The effect above rehydrates category inputs after updating the query cache.
+    onSuccess: async (savedPlan: PlannerRecord) => {
+      // Saving is a deliberate user action; update this frozen snapshot directly.
+      // Invalidate only the live plan so the parent report stays synchronized.
       setHasEdits(false);
-      await queryClient.invalidateQueries({ queryKey: [...PLAN_KEY] });
+      queryClient.setQueryData([...PLAN_SNAPSHOT_KEY], savedPlan);
+      await queryClient.invalidateQueries({ queryKey: [...PLAN_KEY], exact: true });
       toast({ title: tr("savedTitle"), description: tr("savedInfo") });
     },
     onError: (err: Error) =>
@@ -183,9 +209,10 @@ export function FixedProductionPlannerDialog({
       });
       return res.json() as Promise<PlannerRecord>;
     },
-    onSuccess: async () => {
+    onSuccess: async (unlockedPlan: PlannerRecord) => {
       setHasEdits(false);
-      await queryClient.invalidateQueries({ queryKey: [...PLAN_KEY] });
+      queryClient.setQueryData([...PLAN_SNAPSHOT_KEY], unlockedPlan);
+      await queryClient.invalidateQueries({ queryKey: [...PLAN_KEY], exact: true });
       toast({ title: tr("unlockedTitle"), description: tr("unlockedInfo") });
     },
     onError: (err: Error) =>
@@ -290,6 +317,10 @@ export function FixedProductionPlannerDialog({
     }
   };
 
+  // Ignore background query errors after the original values have been
+  // captured. Only the explicit Refresh button may replace these snapshots.
+  const snapshotError = (stockSnapshot === null && rawStockError) ||
+    (supplierSnapshot === null && suppliersError);
   const locked = planQuery.data?.locked ?? false;
   const ready =
     !!planQuery.data &&
@@ -300,8 +331,7 @@ export function FixedProductionPlannerDialog({
     !planQuery.isFetching &&
     !otwQuery.isFetching &&
     !categoryQuery.isFetching &&
-    !rawStockError &&
-    !suppliersError;
+    !snapshotError;
   const pending = saveMutation.isPending || unlockMutation.isPending || whatsappMutation.isPending;
 
   const saveAndLock = () => {
@@ -397,26 +427,31 @@ export function FixedProductionPlannerDialog({
                 size="sm"
                 onClick={() => {
                   if (hasEdits) setHasEdits(false);
+                  setIsManualRefreshing(true);
                   void (async () => {
-                    await Promise.all([
-                      queryClient.refetchQueries({ queryKey: ["/api/factory/raw-stock"] }),
-                      queryClient.refetchQueries({ queryKey: ["/api/factory/suppliers"] }),
-                      planQuery.refetch(),
-                      otwQuery.refetch(),
-                      categoryQuery.refetch(),
-                    ]);
-                    const latestStock = queryClient.getQueryData<RawStockRow[]>(["/api/factory/raw-stock"]);
-                    const latestSuppliers = queryClient.getQueryData<OffloadSupplierOption[]>([
-                      "/api/factory/suppliers",
-                    ]);
-                    if (latestStock) setStockSnapshot(latestStock);
-                    if (latestSuppliers) setSupplierSnapshot(latestSuppliers);
+                    try {
+                      await Promise.all([
+                        queryClient.refetchQueries({ queryKey: ["/api/factory/raw-stock"], exact: true }),
+                        queryClient.refetchQueries({ queryKey: ["/api/factory/suppliers"], exact: true }),
+                        planQuery.refetch(),
+                        otwQuery.refetch(),
+                        categoryQuery.refetch(),
+                      ]);
+                      const latestStock = queryClient.getQueryData<RawStockRow[]>(["/api/factory/raw-stock"]);
+                      const latestSuppliers = queryClient.getQueryData<OffloadSupplierOption[]>([
+                        "/api/factory/suppliers",
+                      ]);
+                      if (latestStock) setStockSnapshot(latestStock);
+                      if (latestSuppliers) setSupplierSnapshot(latestSuppliers);
+                    } finally {
+                      setIsManualRefreshing(false);
+                    }
                   })();
                 }}
-                disabled={pending}
+                disabled={pending || isManualRefreshing}
                 className="gap-1.5"
               >
-                <RefreshCw className="h-3.5 w-3.5" /> {tr("refresh")}
+                <RefreshCw className={`h-3.5 w-3.5 ${isManualRefreshing ? "animate-spin" : ""}`} /> {tr("refresh")}
               </Button>
               {locked ? (
                 <Button
@@ -436,7 +471,7 @@ export function FixedProductionPlannerDialog({
             </div>
           </div>
 
-          {planQuery.isError || otwQuery.isError || categoryQuery.isError || rawStockError || suppliersError ? (
+          {planQuery.isError || otwQuery.isError || categoryQuery.isError || snapshotError ? (
             <div role="alert" className="rounded-md border border-destructive p-3 text-sm text-destructive">
               {tr("loadError")}
             </div>
@@ -445,8 +480,7 @@ export function FixedProductionPlannerDialog({
           !planQuery.isError &&
           !otwQuery.isError &&
           !categoryQuery.isError &&
-          !rawStockError &&
-          !suppliersError ? (
+          !snapshotError ? (
             <p className="py-6 text-center text-sm text-muted-foreground">{tr("loading")}</p>
           ) : (
             <div className="min-h-0 overflow-auto rounded-lg border">

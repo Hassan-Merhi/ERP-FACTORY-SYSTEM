@@ -240,11 +240,13 @@ describeWithDatabase("Retail POS Wave 2 HTTP + PostgreSQL transaction flow", () 
     expect(saleAccountingRequest?.voucherId).toBe(sale.body.sale.accountingVoucherId);
     const openSummary = await agent.get(`/api/pos/retail/shifts/${shiftId}/summary`);
     expect(openSummary.status).toBe(200);
+    // The opening float is the cash ledger balance (empty here), not the
+    // browser-sent openingCash, so expected cash is the 8 cash sale alone.
     expect(openSummary.body).toMatchObject({
       salesCount: 1,
       cashSales: 8,
       cashRefunds: 0,
-      expectedCash: 13,
+      expectedCash: 8,
     });
 
     const saleReplay = await agent.post("/api/pos/retail/sales").send(saleBody);
@@ -293,11 +295,12 @@ describeWithDatabase("Retail POS Wave 2 HTTP + PostgreSQL transaction flow", () 
       idempotencyKey: "retail-wave1-cash-in-001",
     });
     expect(cashIn.status).toBe(201);
-    expect(cashIn.body.summary.expectedCash).toBe(8);
+    // 0 ledger opening + 8 cash sale - 8 cash refund + 3 cash in.
+    expect(cashIn.body.summary.expectedCash).toBe(3);
 
-    const closedShift = await agent.post(`/api/pos/shifts/${shiftId}/close`).send({ closingCash: 8 });
+    const closedShift = await agent.post(`/api/pos/shifts/${shiftId}/close`).send({ closingCash: 3 });
     expect(closedShift.status).toBe(200);
-    expect(Number(closedShift.body.expectedCash)).toBe(8);
+    expect(Number(closedShift.body.expectedCash)).toBe(3);
     expect(Number(closedShift.body.variance)).toBe(0);
     expect(closedShift.body.salesCount).toBe(1);
     expect(Number(closedShift.body.salesTotal)).toBe(20);
@@ -335,6 +338,8 @@ describeWithDatabase("Retail POS Wave 2 HTTP + PostgreSQL transaction flow", () 
     const openedShift = await agent.post("/api/pos/shifts/open").send({ locationId, openingCash: 0 });
     expect(openedShift.status).toBe(200);
     const shiftId = Number(openedShift.body.id);
+    // The opening float is the cash ledger balance carried from the previous shift.
+    const opening = Number(openedShift.body.openingCash);
 
     // 190 characters: the derived per-payment keys would collide if they were truncated to 191.
     const longKey = `retail-wave1-long-key-${"x".repeat(168)}`;
@@ -356,9 +361,9 @@ describeWithDatabase("Retail POS Wave 2 HTTP + PostgreSQL transaction flow", () 
     expect(salePayments.map((payment: { method: string }) => payment.method).sort()).toEqual(["card", "cash"]);
     expect(new Set(salePayments.map((payment: { id: number }) => payment.id)).size).toBe(2);
 
-    const closedShift = await agent.post(`/api/pos/shifts/${shiftId}/close`).send({ closingCash: 4 });
+    const closedShift = await agent.post(`/api/pos/shifts/${shiftId}/close`).send({ closingCash: opening + 4 });
     expect(closedShift.status).toBe(200);
-    expect(Number(closedShift.body.expectedCash)).toBe(4);
+    expect(Number(closedShift.body.expectedCash)).toBe(opening + 4);
 
     const lateMovement = await agent.post(`/api/pos/retail/shifts/${shiftId}/cash-movements`).send({
       movementType: "cash_out",
@@ -389,6 +394,6 @@ describeWithDatabase("Retail POS Wave 2 HTTP + PostgreSQL transaction flow", () 
 
     const summary = await agent.get(`/api/pos/retail/shifts/${shiftId}/summary`);
     expect(summary.status).toBe(200);
-    expect(summary.body).toMatchObject({ cashSales: 4, cashRefunds: 0, expectedCash: 4 });
+    expect(summary.body).toMatchObject({ cashSales: 4, cashRefunds: 0, expectedCash: opening + 4 });
   }, 30_000);
 });

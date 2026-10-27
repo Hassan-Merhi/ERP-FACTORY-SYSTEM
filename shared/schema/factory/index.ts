@@ -14,6 +14,7 @@ export * from "./workers-payroll";
 export * from "./worker-bonuses";
 export * from "./production-positions";
 export * from "./bale-production-attribution";
+export * from "./pressing-machine-tracking";
 export * from "./production-bonuses";
 export * from "./settings-analytics";
 export * from "./pos-transport";

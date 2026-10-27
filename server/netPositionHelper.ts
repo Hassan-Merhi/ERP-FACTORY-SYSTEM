@@ -37,6 +37,13 @@ export interface NetPositionAccount {
   id?: number;
   /** A bank account line (bank_accounts id); `id` is only ever a ledger account id. */
   bankAccountId?: number;
+  /**
+   * Party lines (balance engine parties): the owner kind and master id, so a
+   * current-rate monetary translation can replace exactly this row by its
+   * canonical owner (customer:id, bank:id) and never by a ledger id.
+   */
+  partyKind?: string;
+  partyId?: number | null;
   name: string;
   code: string;
   value: number;

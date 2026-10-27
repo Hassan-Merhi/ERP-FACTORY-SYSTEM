@@ -10,7 +10,8 @@ import { Input } from "@/components/ui/input";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { useToast } from "@/hooks/use-toast";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { apiRequest } from "@/lib/queryClient";
+import { invalidateExchangeRateReadModels } from "@/lib/invalidateExchangeRateReadModels";
 import { RefreshCw, TrendingUp, Clock } from "lucide-react";
 import { format } from "date-fns";
 import { authenticatedUserQueryOptions } from "@/contracts/sessionQueryContracts";
@@ -162,32 +163,23 @@ export function DailyRateModal({ companyId }: DailyRateModalProps) {
       if (!todayRateCheck?.today || !company?.baseCurrency || !company?.displayCurrency) {
         throw new Error("Company or business date is unavailable. Reload and try again.");
       }
-      return apiRequest("POST", "/api/exchange-rates", {
+      const savedDate = todayRateCheck.today;
+      const response = await apiRequest("POST", "/api/exchange-rates", {
         fromCurrency: company?.baseCurrency,
         toCurrency: company?.displayCurrency,
         rate: data.rate,
-        // Use the company's own business date (from the backend check-today response),
-        // not this browser's local clock — so every user's save lands on the same shared
-        // daily row regardless of their device/timezone.
-        effectiveDate: todayRateCheck.today,
+        // Use the company's own business date from the backend (not the device).
+        effectiveDate: savedDate,
         daily: true,
       });
+      return { response, savedCompanyId: companyId, savedDate };
     },
-    onSuccess: async () => {
-      const today = todayRateCheck?.today;
-      if (!today) return;
-      // Persist "rate set today" so the modal doesn't reappear in any tab or
-      // after remounting until tomorrow.
-      markDoneToday(companyId, today);
-
-      toast({ title: "Today's exchange rate has been set" });
-      queryClient.invalidateQueries({ queryKey: ["/api/exchange-rates"] });
-      await queryClient.refetchQueries({ queryKey: ["/api/exchange-rates/latest"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/exchange-rates/check-today", companyId] });
-      queryClient.invalidateQueries({ queryKey: ["/api/stats/import-cycle-balance"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/accounts/all"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/balance-sheet"] });
+    onSuccess: async ({ savedCompanyId, savedDate }) => {
+      // Only mark today's date after an acknowledged successful server save.
+      markDoneToday(savedCompanyId, savedDate);
+      toast({ title: "Today's exchange rate has been set", description: "Current USD valuation views are refreshing." });
       setIsOpen(false);
+      await invalidateExchangeRateReadModels(savedCompanyId);
     },
     onError: (error: ClientErrorLike) => {
       if ((error as { _handledGlobally?: boolean })?._handledGlobally) return;

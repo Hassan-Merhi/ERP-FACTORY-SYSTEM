@@ -207,8 +207,8 @@ describe("Retail sale posting", () => {
     expect(lines.every((line) => Number(line.d) >= 0 && Number(line.c) >= 0)).toBe(true);
     expect(lines.every((line) => Number(line.d) > 0 || Number(line.c) > 0)).toBe(true);
     const debits = lines.filter((line) => Number(line.d) > 0).map((line) => line.d);
-    // Payments 0.50 + 0.50, then COGS 0.40.
-    expect(debits).toEqual(["0.50", "0.50", "0.40"]);
+    // Payments 0.50 + 0.50; no COGS line until the Retail inventory ledger is opened (4065870).
+    expect(debits).toEqual(["0.50", "0.50"]);
     const sum = (key: "d" | "c") => lines.reduce((acc, line) => acc + Math.round(Number(line[key]) * 100), 0);
     expect(sum("d")).toBe(sum("c"));
   });

@@ -232,7 +232,7 @@ export async function getERPContext(companyId: number) {
     .select({
       totalSales: sql<string>`COALESCE(SUM(CAST(${schema.salesItems.totalSales} AS NUMERIC)), 0)`,
       totalCost: sql<string>`COALESCE(SUM(CAST(${schema.salesItems.totalCost} AS NUMERIC)), 0)`,
-      totalProfit: sql<string>`COALESCE(SUM(CAST(${schema.salesItems.profit} AS NUMERIC)), 0)`,
+      totalProfit: sql<string>`COALESCE(SUM((CAST(${schema.salesItems.totalSales} AS NUMERIC) - CAST(${schema.salesItems.totalCost} AS NUMERIC))), 0)`,
       itemsSold: sql<number>`COUNT(*)`,
     })
     .from(schema.salesItems)
@@ -248,7 +248,7 @@ export async function getERPContext(companyId: number) {
       .select({
         revenue: sql<string>`COALESCE(SUM(CAST(${schema.salesItems.totalSales} AS NUMERIC)), 0)`,
         cost: sql<string>`COALESCE(SUM(CAST(${schema.salesItems.totalCost} AS NUMERIC)), 0)`,
-        profit: sql<string>`COALESCE(SUM(CAST(${schema.salesItems.profit} AS NUMERIC)), 0)`,
+        profit: sql<string>`COALESCE(SUM((CAST(${schema.salesItems.totalSales} AS NUMERIC) - CAST(${schema.salesItems.totalCost} AS NUMERIC))), 0)`,
         transactionCount: sql<number>`COUNT(DISTINCT ${schema.salesItems.voucherId})`,
         unitsSold: sql<string>`COALESCE(SUM(CAST(${schema.salesItems.quantity} AS NUMERIC)), 0)`,
       })
@@ -266,7 +266,7 @@ export async function getERPContext(companyId: number) {
       .select({
         revenue: sql<string>`COALESCE(SUM(CAST(${schema.salesItems.totalSales} AS NUMERIC)), 0)`,
         cost: sql<string>`COALESCE(SUM(CAST(${schema.salesItems.totalCost} AS NUMERIC)), 0)`,
-        profit: sql<string>`COALESCE(SUM(CAST(${schema.salesItems.profit} AS NUMERIC)), 0)`,
+        profit: sql<string>`COALESCE(SUM((CAST(${schema.salesItems.totalSales} AS NUMERIC) - CAST(${schema.salesItems.totalCost} AS NUMERIC))), 0)`,
         transactionCount: sql<number>`COUNT(DISTINCT ${schema.salesItems.voucherId})`,
         unitsSold: sql<string>`COALESCE(SUM(CAST(${schema.salesItems.quantity} AS NUMERIC)), 0)`,
       })
@@ -287,7 +287,7 @@ export async function getERPContext(companyId: number) {
         totalQty: sql<string>`SUM(CAST(${schema.salesItems.quantity} AS NUMERIC))`,
         totalRevenue: sql<string>`SUM(CAST(${schema.salesItems.totalSales} AS NUMERIC))`,
         totalCost: sql<string>`SUM(CAST(${schema.salesItems.totalCost} AS NUMERIC))`,
-        totalProfit: sql<string>`SUM(CAST(${schema.salesItems.profit} AS NUMERIC))`,
+        totalProfit: sql<string>`SUM((CAST(${schema.salesItems.totalSales} AS NUMERIC) - CAST(${schema.salesItems.totalCost} AS NUMERIC)))`,
         avgSellingPrice: sql<string>`AVG(CAST(${schema.salesItems.sellingPrice} AS NUMERIC))`,
         avgConfiguredPrice: sql<string>`AVG(CAST(COALESCE(${schema.salesItems.configuredPrice}, ${schema.salesItems.sellingPrice}) AS NUMERIC))`,
         avgCostPrice: sql<string>`AVG(CAST(${schema.salesItems.costPrice} AS NUMERIC))`,
@@ -371,7 +371,7 @@ export async function getERPContext(companyId: number) {
         totalQty: sql<string>`SUM(CAST(${schema.salesItems.quantity} AS NUMERIC))`,
         totalRevenue: sql<string>`SUM(CAST(${schema.salesItems.totalSales} AS NUMERIC))`,
         totalCost: sql<string>`SUM(CAST(${schema.salesItems.totalCost} AS NUMERIC))`,
-        totalProfit: sql<string>`SUM(CAST(${schema.salesItems.profit} AS NUMERIC))`,
+        totalProfit: sql<string>`SUM((CAST(${schema.salesItems.totalSales} AS NUMERIC) - CAST(${schema.salesItems.totalCost} AS NUMERIC)))`,
       })
       .from(schema.salesItems)
       .innerJoin(schema.vouchers, eq(schema.salesItems.voucherId, schema.vouchers.id))
@@ -386,7 +386,7 @@ export async function getERPContext(companyId: number) {
         totalQty: sql<string>`SUM(CAST(${schema.salesItems.quantity} AS NUMERIC))`,
         totalRevenue: sql<string>`SUM(CAST(${schema.salesItems.totalSales} AS NUMERIC))`,
         totalCost: sql<string>`SUM(CAST(${schema.salesItems.totalCost} AS NUMERIC))`,
-        totalProfit: sql<string>`SUM(CAST(${schema.salesItems.profit} AS NUMERIC))`,
+        totalProfit: sql<string>`SUM((CAST(${schema.salesItems.totalSales} AS NUMERIC) - CAST(${schema.salesItems.totalCost} AS NUMERIC)))`,
       })
       .from(schema.salesItems)
       .innerJoin(schema.vouchers, eq(schema.salesItems.voucherId, schema.vouchers.id))
@@ -407,7 +407,7 @@ export async function getERPContext(companyId: number) {
         totalQty: sql<string>`SUM(CAST(${schema.salesItems.quantity} AS NUMERIC))`,
         totalRevenue: sql<string>`SUM(CAST(${schema.salesItems.totalSales} AS NUMERIC))`,
         totalCost: sql<string>`SUM(CAST(${schema.salesItems.totalCost} AS NUMERIC))`,
-        totalProfit: sql<string>`SUM(CAST(${schema.salesItems.profit} AS NUMERIC))`,
+        totalProfit: sql<string>`SUM((CAST(${schema.salesItems.totalSales} AS NUMERIC) - CAST(${schema.salesItems.totalCost} AS NUMERIC)))`,
       })
       .from(schema.salesItems)
       .innerJoin(schema.vouchers, eq(schema.salesItems.voucherId, schema.vouchers.id))
@@ -601,7 +601,7 @@ export async function getERPContext(companyId: number) {
       stockItemId: schema.salesItems.stockItemId,
       totalQuantity: sql<string>`SUM(CAST(${schema.salesItems.quantity} AS NUMERIC))`,
       totalRevenue: sql<string>`SUM(CAST(${schema.salesItems.totalSales} AS NUMERIC))`,
-      totalProfit: sql<string>`SUM(CAST(${schema.salesItems.profit} AS NUMERIC))`,
+      totalProfit: sql<string>`SUM((CAST(${schema.salesItems.totalSales} AS NUMERIC) - CAST(${schema.salesItems.totalCost} AS NUMERIC)))`,
     })
     .from(schema.salesItems)
     .innerJoin(schema.vouchers, eq(schema.salesItems.voucherId, schema.vouchers.id))
@@ -781,7 +781,7 @@ export async function getERPContext(companyId: number) {
       sellingPrice: schema.salesItems.sellingPrice,
       totalSales: schema.salesItems.totalSales,
       totalCost: schema.salesItems.totalCost,
-      profit: schema.salesItems.profit,
+      profit: sql<string>`(${schema.salesItems.totalSales}::numeric - ${schema.salesItems.totalCost}::numeric)`,
       voucherDate: schema.vouchers.voucherDate,
       voucherNumber: schema.vouchers.voucherNumber,
     })
