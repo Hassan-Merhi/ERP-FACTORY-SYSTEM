@@ -120,7 +120,7 @@ export default function PressingOfflineQueueStatus({
         <p className="text-xs text-muted-foreground">
           Scans are stored on this device until synchronized. Clearing browser storage or
           using private browsing can erase unsynced scans. Permanent server history and
-          date filters are provided separately in Phase 6.
+          date filters are in Permanent Pressing History below.
         </p>
       </CardContent>
     </Card>

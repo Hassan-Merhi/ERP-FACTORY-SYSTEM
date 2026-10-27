@@ -84,6 +84,11 @@ export function usePressingOfflineSync(actor: PressingActor | null, active: bool
   // A different company/user must NEVER see even one paint of prior queue state.
   const [snapshotScope, setSnapshotScope] = useState<string | null>(null);
   const busy = useRef(false);
+  // All HTTP deliveries from this page run strictly one after another on this
+  // chain, in capture order. A barcode scanned while an earlier scan is still
+  // in flight waits its turn and still reports its REAL server outcome to the
+  // scanner, instead of sitting amber until the 12-second poll.
+  const chain = useRef<Promise<unknown>>(Promise.resolve());
   const scopeRef = useRef<string | null>(null);
   const scope = companyId !== null && userId ? companyId + ":" + userId : null;
   scopeRef.current = scope;
@@ -133,6 +138,14 @@ export function usePressingOfflineSync(actor: PressingActor | null, active: bool
     return next || changed;
   }, []);
 
+  // Serialize a unit of network work behind every earlier unit. The returned
+  // promise settles with the work's own result once its turn completes.
+  const serialized = useCallback(<T,>(work: () => Promise<T>): Promise<T> => {
+    const turn = chain.current.then(work, work);
+    chain.current = turn.catch(() => undefined);
+    return turn;
+  }, []);
+
   const syncPending = useCallback(async (force = false) => {
     if (!active || companyId === null || !userId || busy.current) return;
     if (typeof navigator !== "undefined" && !navigator.onLine) return;
@@ -140,21 +153,24 @@ export function usePressingOfflineSync(actor: PressingActor | null, active: bool
     const key = companyId + ":" + userId;
     busy.current = true;
     try {
-      if (!(await actorStillAuthenticated(identity))) {
-        if (scopeRef.current === key) setSnapshot(prev => ({
-          ...prev, error: "Saved scans paused: reconnect as the original company and operator.",
-        }));
-        return;
-      }
-      const rows = await listPressingScans(identity);
-      // Recover rows stranded in SYNCING by a crashed browser. These are safe to
-      // replay with their original immutable idempotency key.
-      for (const row of rows.filter(r => (r.state === "pending" || r.state === "syncing") &&
-        (force || r.nextAttemptAt <= Date.now())).slice(0, 8)) {
-        if (scopeRef.current !== key || (typeof navigator !== "undefined" && !navigator.onLine)) break;
-        const outcome = await deliver(identity, row);
-        if (outcome.state === "pending") break; // avoid repeated network hammering
-      }
+      await serialized(async () => {
+        if (scopeRef.current !== key) return;
+        if (!(await actorStillAuthenticated(identity))) {
+          if (scopeRef.current === key) setSnapshot(prev => ({
+            ...prev, error: "Saved scans paused: reconnect as the original company and operator.",
+          }));
+          return;
+        }
+        const rows = await listPressingScans(identity);
+        // Recover rows stranded in SYNCING by a crashed browser. These are safe to
+        // replay with their original immutable idempotency key.
+        for (const row of rows.filter(r => (r.state === "pending" || r.state === "syncing") &&
+          (force || r.nextAttemptAt <= Date.now())).slice(0, 8)) {
+          if (scopeRef.current !== key || (typeof navigator !== "undefined" && !navigator.onLine)) break;
+          const outcome = await deliver(identity, row);
+          if (outcome.state === "pending") break; // avoid repeated network hammering
+        }
+      });
       await refresh();
     } catch (error) {
       if (scopeRef.current === key) setSnapshot(prev => ({
@@ -163,7 +179,7 @@ export function usePressingOfflineSync(actor: PressingActor | null, active: bool
     } finally {
       busy.current = false;
     }
-  }, [active, companyId, userId, deliver, refresh]);
+  }, [active, companyId, userId, deliver, refresh, serialized]);
 
   const submit = useCallback(async (capture: PressingScanCapture): Promise<PressingScanOutcome> => {
     if (companyId === null || !userId || !active) {
@@ -188,18 +204,22 @@ export function usePressingOfflineSync(actor: PressingActor | null, active: bool
         };
       }
       if (typeof navigator !== "undefined" && !navigator.onLine) return outcomeFromRow(record);
-      if (busy.current) return outcomeFromRow(record);
-      busy.current = true;
+      // Wait for any in-flight delivery, then send THIS saved request with its
+      // immutable ID. If a background pass already settled it, deliver() sees
+      // the terminal row and returns it without a second POST.
       try {
-        if (!(await actorStillAuthenticated(identity))) {
-          setSnapshot(prev => ({ ...prev,
-            error: "Scan stored but not submitted. Confirm the original operator and company session." }));
-          return outcomeFromRow(record);
-        }
-        const settled = await deliver(identity, record);
+        const settled = await serialized(async () => {
+          if (scopeRef.current !== identity.companyId + ":" + identity.userId) return record;
+          if (typeof navigator !== "undefined" && !navigator.onLine) return record;
+          if (!(await actorStillAuthenticated(identity))) {
+            setSnapshot(prev => ({ ...prev,
+              error: "Scan stored but not submitted. Confirm the original operator and company session." }));
+            return record;
+          }
+          return deliver(identity, record);
+        });
         return outcomeFromRow(settled);
       } finally {
-        busy.current = false;
         await refresh();
       }
     } catch (error) {
@@ -209,7 +229,7 @@ export function usePressingOfflineSync(actor: PressingActor | null, active: bool
           " No new pressing confirmation can be assumed. Check connection and local storage.",
       };
     }
-  }, [active, companyId, userId, deliver, refresh]);
+  }, [active, companyId, userId, deliver, refresh, serialized]);
 
   useEffect(() => {
     setSnapshot(INITIAL); // never show the previous user's/company's local queue

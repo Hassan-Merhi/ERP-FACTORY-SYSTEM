@@ -117,9 +117,12 @@ export default function PressingMachineManagement({ active }: { active: boolean 
     active,
   );
   const canManage = myQuery.data?.canManage === true;
+  // Supervisor data is keyed by the authenticated company so switching
+  // companies never paints another tenant's cached machines or employees.
+  const scopedCompanyId = myQuery.data?.companyId ?? null;
   const dashboardQuery = useQuery<Dashboard>({
-    queryKey: [ROOT, "dashboard"],
-    enabled: canManage,
+    queryKey: [ROOT, "dashboard", scopedCompanyId],
+    enabled: canManage && scopedCompanyId !== null,
     queryFn: async () => {
       const response = await fetch(ROOT, { credentials: "include" });
       if (!response.ok) throw new Error("Could not load machine management");
@@ -128,8 +131,8 @@ export default function PressingMachineManagement({ active }: { active: boolean 
     staleTime: 30_000, refetchOnWindowFocus: false,
   });
   const historyQuery = useQuery<HistoricalAssignment[]>({
-    queryKey: [ROOT, "history"],
-    enabled: canManage && showHistory,
+    queryKey: [ROOT, "history", scopedCompanyId],
+    enabled: canManage && showHistory && scopedCompanyId !== null,
     queryFn: async () => {
       const response = await fetch(`${ROOT}/history?limit=200`, { credentials: "include" });
       if (!response.ok) throw new Error("Could not load assignment history");
@@ -154,13 +157,13 @@ export default function PressingMachineManagement({ active }: { active: boolean 
     onError: error => toast({ title: "Could not save", description: errorText(error), variant: "destructive" }),
   });
   const change = (url: string, payload: Record<string, unknown>) => mutation.mutate({ url, payload });
-  const dashboard = dashboardQuery.data;
+  const dashboard = scopedCompanyId === selectedCompany?.id ? dashboardQuery.data : undefined;
   return (
     <div className="space-y-5" data-testid="pressing-machine-management">
       <div className="flex flex-wrap items-center gap-2">
         <Factory className="h-6 w-6 text-emerald-500" />
         <h2 className="text-xl font-bold">Pressing Machines</h2>
-        <Badge variant="outline">Shift analytics · Phase 7</Badge>
+        <Badge variant="outline">Physical pressing only</Badge>
       </div>
       <p className="text-sm text-muted-foreground">
         Assign employees to a press and preserve their assignment history.
