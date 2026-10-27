@@ -125,7 +125,7 @@ export function registerFactoryPressingOperationsRoutes(app: Express): void {
       const ctx = await context(req);
       const body = shiftFields.parse(req.body);
       const created = await db.transaction(async tx => {
-        await tx.execute(sql`SELECT pg_advisory_xact_lock(`${ctx.companyId}`::integer, -2026007)`);
+        await tx.execute(sql`SELECT pg_advisory_xact_lock(${ctx.companyId}::integer, -2026007)`);
         await validateSchedule(tx, ctx.companyId, { ...body, id: 0 });
         const [saved] = await tx.insert(factoryPressingShifts).values({
           companyId: ctx.companyId, ...body, shiftCode: body.shiftCode.toUpperCase(),
@@ -145,7 +145,7 @@ export function registerFactoryPressingOperationsRoutes(app: Express): void {
       const patch = shiftUpdate.parse(req.body);
       if (!Object.keys(patch).length) throw new PressingOperationsError(400, "EMPTY_CHANGE", "No changes supplied");
       const updated = await db.transaction(async tx => {
-        await tx.execute(sql`SELECT pg_advisory_xact_lock(`${ctx.companyId}`::integer, -2026007)`);
+        await tx.execute(sql`SELECT pg_advisory_xact_lock(${ctx.companyId}::integer, -2026007)`);
         const [current] = await tx.select().from(factoryPressingShifts)
           .where(and(eq(factoryPressingShifts.companyId, ctx.companyId),
             eq(factoryPressingShifts.id, shiftId))).for("update");
