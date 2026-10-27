@@ -42,6 +42,7 @@ type HistoryReportProps = {
 export default function PressingHistoryReport({ active, companyId, userId }: HistoryReportProps) {
   const { toast } = useToast();
   const [filters, setFilters] = useState<PressingReportFilters>(initialFilters);
+  const dateInvalid = Boolean(filters.from && filters.to && filters.from > filters.to);
   const [columns, setColumns] = useState<PressingReportColumn[]>([...PRESSING_DEFAULT_COLUMNS]);
   const [showColumns, setShowColumns] = useState(false);
   const [viewName, setViewName] = useState("");
@@ -80,7 +81,7 @@ export default function PressingHistoryReport({ active, companyId, userId }: His
     queryFn: () => fetchPressingReport({
       ...filters, asOf: filters.page === 1 ? undefined : asOfRef.current ?? undefined,
     }),
-    enabled: active, staleTime: Infinity, refetchOnWindowFocus: false, refetchOnReconnect: false,
+    enabled: active && !dateInvalid, staleTime: Infinity, refetchOnWindowFocus: false, refetchOnReconnect: false,
   });
   // Keep page-to-page results pinned to the server's first report snapshot.
   useEffect(() => {
@@ -182,7 +183,6 @@ export default function PressingHistoryReport({ active, companyId, userId }: His
       setExportStatus("");
     }
   };
-  const dateInvalid = Boolean(filters.from && filters.to && filters.from > filters.to);
   return (
     <Card data-testid="pressing-history-report" className="min-w-0">
       <CardHeader className="pb-3">
