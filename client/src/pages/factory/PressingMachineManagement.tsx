@@ -8,7 +8,8 @@ import { Badge } from "@/components/ui/badge";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { ContinuousPressingScanner } from "./ContinuousPressingScanner";
-import { submitPressingConfirmation } from "./pressing-scanner/pressingConfirmClient";
+import { usePressingOfflineSync } from "./pressing-scanner/usePressingOfflineSync";
+import PressingOfflineQueueStatus from "./PressingOfflineQueueStatus";
 
 const ROOT = "/api/factory/pressing-machines";
 type Assignment = { id: number; machineId: number; userId: string; username: string | null; assignedAt: string };
@@ -16,6 +17,8 @@ type Machine = { id: number; machineCode: string; name: string; active: boolean;
 type Operator = { id: string; username: string; role: string };
 type Dashboard = { machines: Machine[]; assignments: Assignment[]; operators: Operator[] };
 type MyMachine = {
+  companyId: number;
+  userId: string;
   canManage: boolean;
   assignment: null | { assignmentId: number; machineCode: string; machineName: string; machineActive: boolean; assignedAt: string };
 };
@@ -102,8 +105,12 @@ export default function PressingMachineManagement({ active }: { active: boolean 
       if (!response.ok) throw new Error("Could not load assigned pressing machine");
       return response.json();
     },
-    staleTime: 30_000, refetchOnWindowFocus: false,
+    staleTime: 0, refetchOnMount: "always", refetchOnWindowFocus: true,
   });
+  const pressingQueue = usePressingOfflineSync(
+    myQuery.data ? { companyId: myQuery.data.companyId, userId: myQuery.data.userId } : null,
+    active,
+  );
   const canManage = myQuery.data?.canManage === true;
   const dashboardQuery = useQuery<Dashboard>({
     queryKey: [ROOT, "dashboard"],
@@ -148,7 +155,7 @@ export default function PressingMachineManagement({ active }: { active: boolean 
       <div className="flex flex-wrap items-center gap-2">
         <Factory className="h-6 w-6 text-emerald-500" />
         <h2 className="text-xl font-bold">Pressing Machines</h2>
-        <Badge variant="outline">Pressing confirmation · Phase 4</Badge>
+        <Badge variant="outline">Offline-safe pressing · Phase 5</Badge>
       </div>
       <p className="text-sm text-muted-foreground">
         Assign employees to a press and preserve their assignment history.
@@ -175,8 +182,11 @@ export default function PressingMachineManagement({ active }: { active: boolean 
       <ContinuousPressingScanner
         active={active}
         assignment={myQuery.data?.assignment ?? null}
-        onBarcode={submitPressingConfirmation}
+        onBarcode={pressingQueue.submit}
       />
+      {myQuery.data && (
+        <PressingOfflineQueueStatus snapshot={pressingQueue.snapshot} retryNow={pressingQueue.retryNow} />
+      )}
       {canManage && (
         <>
           <Card>
