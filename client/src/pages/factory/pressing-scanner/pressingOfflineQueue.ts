@@ -147,7 +147,7 @@ export async function enqueuePressingScan(
   return { record, existing: false };
 }
 export function pressingRetryDelay(attempts: number): number {
-  // Exponential backoff capped at 60 seconds; bounded deterministic jitter.
+  // Exponential backoff capped at 60 seconds; no immediate retry loop.
   return Math.min(60_000, 1500 * 2 ** Math.min(attempts, 6));
 }
 export function recordWithState(
